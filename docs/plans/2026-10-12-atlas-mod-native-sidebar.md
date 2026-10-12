@@ -54,10 +54,13 @@ theme key, so it follows the person's theme (`chartRoom` in `mod/theme.ts`):
 Hex appears only on sprite runs, and only where the run sets both fg and bg (`spriteTile` backs
 fg-only pixels), so their contrast never depends on the terminal theme.
 
-Visuals: frameless sections separated by one blank line; a compact route line (`◆━━━━◉────○`, fixed
-4-column segments) with one plain label row; one row per task (phase name on the first task of a phase);
-plain team rows (`▸` selection, tool, elapsed) with no badge chips, portrait or speech bubble; one gates
-list with a right-aligned `N open` / `all clear`; the band leads with the lead badge and the phase glyph.
+Visuals (11.1.4): round-bordered sections from 40 columns, plain title rows below; a compact route line
+(`◆━━━━◉────○`, fixed 4-column segments) with one plain label row; per phase a header with a 6-cell mini bar
+and N/M, then one row per task with its own status glyph; team rows with a chip showing the readable persona
+or member name (never a two-letter code), mood dot, name, tool and elapsed, plus a portrait with a speech
+bubble for the selected or active member in a tall bordered pane; gates as collapsed group Buttons
+(`Completion gate`, `Dispatch tripwire`, `Tool routing`, `Header contract`) reading `N open` / `clear`; the band
+leads with the lead badge and the phase glyph.
 
 Type: the terminal's own face; hierarchy from bold (section names, current phase), plain, and the muted key.
 Sentence case everywhere, no all-caps labels, no middle-dot meta strings, no arrow suffixes.
@@ -88,7 +91,7 @@ Sentence case everywhere, no all-caps labels, no middle-dot meta strings, no arr
 
 Interaction: every task, member and gate row is a Button (Tab and arrows walk them, Enter acts).
 A task row expands its evidence; a member row makes it the message recipient; a gate row expands its fix
-command and copies it (`$.ui.copy`). Hotkeys: `m` focuses the message field, `g` jumps to gates.
+command and copies it (`$.ui.copy`). Hotkeys: `m` focuses the message field, `g` expands the first gate group with open items (Button `hotkey` props, live while the sidebar holds the focus).
 States: no tasks at all draws one faint "nothing planned" line (phases without tasks are not listed); an empty team says how to dispatch;
 a gate source that failed to read says which file and keeps the last good value dimmed.
 

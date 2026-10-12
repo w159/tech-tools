@@ -329,19 +329,34 @@ const DOT_PULSE: Partial<Record<Mood, string>> = { blocked: GOLD, working: mix(M
 
 const lum = (h: string): number => (parseInt(h.slice(1, 3), 16) * 299 + parseInt(h.slice(3, 5), 16) * 587 + parseInt(h.slice(5, 7), 16) * 114) / 1000;
 
-function badgeMark(key: string): string {
-  const parts = key.split('-');
-  return (parts.length > 1 ? parts.slice(0, 2).map((part) => part[0]).join('') : key.slice(0, 2)).toUpperCase().padEnd(2, ' ');
+const DISPLAY_NAMES: Record<string, string> = {
+  lead: 'Lead agent', explorer: 'Explorer', implementer: 'Implementer', verifier: 'Verifier', planner: 'Planner',
+  runner: 'Runner', 'docs-curator': 'Docs curator', 'docs-auditor': 'Docs auditor', 'completeness-critic': 'Critic',
+  'db-prober': 'DB prober', 'ui-runtime-tester': 'UI tester',
+};
+
+/** Readable name for a persona; unknown personas fall back to the member name, title-cased. */
+export function displayName(persona: string, memberName?: string): string {
+  const known = DISPLAY_NAMES[resolveKey(persona)];
+  if (known) return known;
+  const words = (memberName ?? '').replace(/^atlas:/, '').replace(/[-_]+/g, ' ').trim();
+  return words ? words[0]!.toUpperCase() + words.slice(1) : 'Agent';
 }
 
-/** One 3-cell chip for nick lists: 2-letter mark on the persona colour + a mood dot. */
-export function badge(persona: string, mood: Mood, frame: number): Run[] {
+/** Display width of a badge chip: label plus one space of padding each side. */
+export const badgeWidth = (label: string): number => [...label].length + 2;
+
+/** One chip for nick lists: the readable name on the persona colour + a mood dot. */
+export function badge(persona: string, mood: Mood, frame: number, label?: string): Run[] {
   const c = resolve(persona);
   const bg = grayed(mood === 'failed', c.color, 0.5);
   const fg = lum(bg) > 140 ? '#14161c' : '#ffffff';
+  return [{ text: ` ${label ?? displayName(persona)} `, fg, bg, bold: true }, { text: '●', fg: moodDot(mood, frame) }];
+}
+
+function moodDot(mood: Mood, frame: number): string {
   const odd = Math.abs(Math.trunc(frame)) % 2;
-  const dot = (odd ? DOT_PULSE[mood] : undefined) ?? MOOD_COLOR[mood];
-  return [{ text: badgeMark(resolveKey(persona)), fg, bg, bold: true }, { text: '●', fg: dot }];
+  return (odd ? DOT_PULSE[mood] : undefined) ?? MOOD_COLOR[mood];
 }
 
 /** Rows of runs for a persona sprite; every row has display width spriteWidth(size). Size 's' is the 1-row badge. */

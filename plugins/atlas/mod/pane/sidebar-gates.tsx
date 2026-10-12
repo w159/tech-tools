@@ -1,4 +1,4 @@
-// Sidebar gates section (one row per gate item, fix lines on expand) and advisor notes.
+// Sidebar gates section (status strip, collapsible groups, fix lines) and advisor notes.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { fitRuns, rowOf, type Segment } from '../runs';
 import { chartRoom as C, fitText } from '../theme';
@@ -17,7 +17,7 @@ function lineRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ln:
   const key = `gate:${ln.id}`;
   const isOpen = m.ui.expanded === key;
   const mark = okMark(ln.ok);
-  const parts: Segment[] = [{ t: `${mark.g} `, color: mark.color }, { t: scrub(ln.label) }];
+  const parts: Segment[] = [{ t: `  ${mark.g} `, color: mark.color }, { t: scrub(ln.label) }];
   const onPress = () => (isOpen && ln.fix ? on.copy(ln.fix) : on.toggle(key));
   const extra = isOpen ? [ln.detail, ln.fix ? `fix: ${ln.fix} (press to copy)` : undefined].filter((x): x is string => !!x) : [];
   return [
@@ -29,9 +29,51 @@ function lineRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ln:
 const unavailableRow = (els: ClientElements, g: GateGroup, cols: number): RenderElement[] =>
   g.error ? [rowOf(els, [{ t: `${g.title} unavailable: ${scrub(g.error)}`, color: C.muted }], cols)] : [];
 
-/** One flat list: every gate item is its own row; a source that failed to read adds one dimmed line. */
+const groupOk = (g: GateGroup): boolean => !g.error && g.lines.every((x) => x.ok);
+const openCount = (g: GateGroup): number => g.lines.filter((x) => !x.ok).length;
+const groupKey = (g: GateGroup): string => `group:${g.id}`;
+
+/** One mark per group, so the collapsed section still shows which sources are red. */
+const stripRuns = (g: GateGroup): Segment[] => {
+  const mark = okMark(groupOk(g));
+  return [{ t: mark.g, color: mark.color }, { t: ` ${scrub(g.title)}  `, color: C.muted }];
+};
+
+/** Group a `g` press lands on: the first with an open item, else the first group. */
+export const gateJumpKey = (gates: GateGroup[]): string | null => {
+  const target = gates.find((g) => g.lines.length > 0 && openCount(g) > 0) ?? gates.find((g) => g.lines.length > 0);
+  return target ? groupKey(target) : null;
+};
+
+function groupRow(els: ClientElements, on: SidebarHandlers, g: GateGroup, isOpen: boolean, cols: number): RenderElement {
+  const bad = openCount(g);
+  return els.Button({
+    key: groupKey(g), plain: true, onPress: () => on.toggle(groupKey(g)),
+    children: fitRuns(els, [
+      { t: isOpen ? '▾ ' : '▸ ', color: C.muted },
+      { t: scrub(g.title) },
+      { t: bad ? `  ${bad} open` : '  clear', color: bad ? C.fail : C.ok },
+    ], cols),
+  });
+}
+
+/** The group is open while it or one of its lines is the expanded key. */
+const groupIsOpen = (expanded: string | null, g: GateGroup): boolean =>
+  expanded === groupKey(g) || g.lines.some((ln) => expanded === `gate:${ln.id}`);
+
+/** One group: an optional unavailable line, then a summary row that opens into its line Buttons. */
+function groupRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, g: GateGroup, cols: number): RenderElement[] {
+  const unavailable = unavailableRow(els, g, cols);
+  if (g.lines.length === 0) return unavailable;
+  const isOpen = groupIsOpen(m.ui.expanded, g);
+  const body = isOpen ? g.lines.flatMap((ln) => lineRows(els, m, on, ln, cols)) : [];
+  return [...unavailable, groupRow(els, on, g, isOpen, cols), ...body];
+}
+
+/** Status strip, then collapsed groups ("N open" / "clear") that expand into their lines. */
 export function gateRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number): RenderElement[] {
-  return m.gates.flatMap((g) => [...unavailableRow(els, g, cols), ...g.lines.flatMap((ln) => lineRows(els, m, on, ln, cols))]);
+  const strip = m.gates.length ? [rowOf(els, m.gates.flatMap(stripRuns), cols)] : [];
+  return [...strip, ...m.gates.flatMap((g) => groupRows(els, m, on, g, cols))];
 }
 
 // ---- advisor notes -----------------------------------------------------------

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [11.1.4] - 2026-10-12 -- atlas 11.1.4: rich sidebar restored
+
+Detail: `plugins/atlas/CHANGELOG.md` 11.1.4.
+
+- Mod: bordered sections, readable-name member chips, portrait and speech bubble, per-phase mini bars, grouped collapsible gates, `m` and `g` hotkeys, stale lead and idle members dropped.
+
 ## [11.1.1] - 2026-10-12 -- atlas 11.1.1: accurate cost reporting
 
 Detail: `plugins/atlas/CHANGELOG.md` 11.1.1.

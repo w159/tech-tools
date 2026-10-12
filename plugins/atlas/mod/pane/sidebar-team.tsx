@@ -2,9 +2,11 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import type { SquadAgent } from '../contract';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
-import { fitRuns, rowOf, type Segment } from '../runs';
+import { fromSprite, fitRuns, rowOf, type Segment } from '../runs';
+import { badge, displayName } from '../sprites/api';
 import { chartRoom as C, fitText, textWidth } from '../theme';
 import { ageStr, scrub } from './chrome';
+import { portraitFor } from './sidebar-portrait';
 import { pad, type SidebarHandlers, type SidebarModel } from './sidebar-types';
 
 const isLeadName = (n: string): boolean => n === 'lead' || n.startsWith('lead-');
@@ -32,6 +34,14 @@ function mateOf(s: LiveSnapshot, e: Entry): Mate {
   return { ...e, mood: moodOf(a, e.state), text: e.text ?? defaultText(a?.tool, e.state), line: lineOf(s, a, e), since: sinceOf(a) };
 }
 
+/** A parked, idle or finished member whose last note is older than this drops off the roster. */
+const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
+const RESTING_STATES: ReadonlySet<string> = new Set(['parked', 'idle', 'dead', 'finished']);
+function isStale(a: SquadAgent, now: number): boolean {
+  const at = a.lastNoteTs ? Date.parse(a.lastNoteTs) : NaN;
+  return RESTING_STATES.has(a.state) && Number.isFinite(at) && now - at > STALE_AFTER_MS;
+}
+
 const leadText = (tool: string | null | undefined): string => tool || 'idle';
 
 function leadEntry(s: LiveSnapshot, working: number): Entry {
@@ -40,10 +50,12 @@ function leadEntry(s: LiveSnapshot, working: number): Entry {
 }
 
 export function mates(s: LiveSnapshot): Mate[] {
-  const squad = s.squad.filter((a: SquadAgent) => !isLeadName(a.name));
+  const squad = s.squad.filter((a: SquadAgent) => !isLeadName(a.name) && !isStale(a, s.now));
   const working = squad.filter((a) => a.state === 'running' || a.state === 'spawning').length;
   // Other sessions' leads ("lead-01a118") are never teammates of this one.
-  const others = s.members.filter((x) => !x.ended_at && !isLeadName(x.name));
+  // A roster entry with role "lead" is a lead whatever its name ("selffix"): herdr.ts leaves it out of the
+  // squad, so without this check it surfaced here as an idle "unknown" teammate forever (nothing ever sets ended_at).
+  const others = s.members.filter((x) => !x.ended_at && x.role !== 'lead' && !isLeadName(x.name));
   const entries: Entry[] = [
     leadEntry(s, working),
     ...squad.map((a) => ({ name: a.name, persona: a.persona, state: a.state })),
@@ -72,14 +84,21 @@ function ageTail(parts: Segment[], age: string, cols: number): Segment[] {
   return age && gap >= 1 ? [{ t: ' '.repeat(gap) + age, color: C.muted }] : [];
 }
 
-/** `▸ name  tool  1m12`; a member with no tool reads its state ("idle"). */
-function memberRow(els: ClientElements, m: SidebarModel, on: SidebarHandlers, x: Mate, nameW: number, cols: number): RenderElement {
+/** `▸ [Name chip]● name  tool  1m12`: the chip is the persona's readable name; a member with no tool reads its state. */
+const pulseFrame = (m: SidebarModel, x: Mate): number => (x.mood === 'working' ? (m.tick ?? 0) : 0);
+
+function memberSegments(m: SidebarModel, x: Mate, nameW: number): Segment[] {
   const sel = isSelected(x, m.ui.recipient);
-  const parts: Segment[] = [
+  return [
     { t: sel ? '▸ ' : '  ', color: C.focus },
-    { t: pad(fitText(x.name, nameW), nameW), color: sel ? C.focus : undefined, bold: sel },
+    ...badge(x.persona, x.mood, pulseFrame(m, x), displayName(x.persona, x.name)).map(fromSprite),
+    { t: ` ${pad(fitText(x.name, nameW), nameW)}`, color: sel ? C.focus : undefined, bold: sel },
     { t: `  ${scrub(x.text)}`, color: C.muted },
   ];
+}
+
+function memberRow(els: ClientElements, m: SidebarModel, on: SidebarHandlers, x: Mate, nameW: number, cols: number): RenderElement {
+  const parts = memberSegments(m, x, nameW);
   const age = x.since ? ageStr(m.snapshot.now - x.since) : '';
   parts.push(...ageTail(parts, age, cols));
   return els.Button({ key: `member:${x.name}`, plain: true, onPress: () => on.selectRecipient(x.name), children: fitRuns(els, parts, cols) });
@@ -104,15 +123,16 @@ export function teamSummary(s: LiveSnapshot): string {
   return working ? `lead is conducting ${working}` : 'lead is idle';
 }
 
-export function teamRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number): RenderElement[] {
+export function teamRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number, bordered: boolean): RenderElement[] {
   const list = mates(m.snapshot);
   const shown = visibleMates(list, teamCap(m.rows), m.ui.recipient);
-  const nameW = Math.min(12, Math.max(4, ...shown.map((x) => x.name.length)));
+  const nameW = Math.min(cols < 40 ? 8 : 12, Math.max(4, ...shown.map((x) => x.name.length)));
   const more = list.length - shown.length;
   return [
     ...(list.length === 1 ? [rowOf(els, [{ t: NOBODY_HINT, color: C.muted }], cols)] : []),
     ...shown.map((x) => memberRow(els, m, on, x, nameW, cols)),
     ...(more > 0 ? [rowOf(els, [{ t: `  +${more} more`, color: C.muted }], cols)] : []),
+    ...portraitFor(els, m, list, cols, bordered),
     messageInput(els, m, on, cols),
   ];
 }

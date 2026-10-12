@@ -28,7 +28,7 @@ claude plugin test plugins/atlas
 Expectation is two-tier:
 
 - **Mod lines must be fully green.** The mod test files load and pass,
-  309 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
+  336 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
   and `mod/sprites/sprites.test.ts`, which injects `memFs` from
   `mod/test_helpers.ts` instead of importing `node:fs`, which the host forbids).
 - **Colony/omp residuals are expected failures of the walk.** 169 pre-existing

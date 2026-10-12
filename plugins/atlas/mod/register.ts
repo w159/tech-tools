@@ -506,6 +506,12 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 		toggle: (key) => guarded(() => update($, expandedState, (cur) => (cur === key ? null : key))),
 		draftChange: (text) => guarded(() => update($, draftState, () => text)),
 		send: (text) => guarded(() => sendNote($, text)),
+		focus: (key) => guarded(() => $.ui.focus({ requestId: PANE_ID, key })),
+		expand: (key) =>
+			guarded(async () => {
+				await update($, expandedState, () => key);
+				await $.ui.focus({ requestId: PANE_ID, key });
+			}),
 		copy: (text) =>
 			guarded(async () => {
 				const res = await $.ui.copy({ text, surface });

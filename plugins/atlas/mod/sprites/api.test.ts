@@ -1,7 +1,7 @@
 // Sprite API gallery: every persona x mood x size renders rows of the exact width,
 // personas have distinct silhouettes (renderer independent), and moods animate across frames.
 import { describe, expect, test } from 'claude-code/testing';
-import { badge, frameCount, MOODS, PERSONA_KEYS, personaStyle, spriteRows, spriteWidth, speechBubble, type Run, type SpriteSize } from './api';
+import { badge, badgeWidth, displayName, frameCount, MOODS, PERSONA_KEYS, personaStyle, spriteRows, spriteWidth, speechBubble, type Run, type SpriteSize } from './api';
 
 const SIZES: SpriteSize[] = ['s', 'm', 'l'];
 const BIG_SIZES = ['m', 'l'] as const;
@@ -61,7 +61,7 @@ describe('sprite api', () => {
       const rows = spriteRows(p, m, f, s);
       expect(rows.length).toBe(HEIGHT[s]);
       expect(spriteWidth(s)).toBe(WIDTH[s]);
-      for (const r of rows) expect(width(r)).toBe(WIDTH[s]);
+      if (s !== 's') for (const r of rows) expect(width(r)).toBe(WIDTH[s]); // the s chip is as wide as its name
     }
   });
 
@@ -76,11 +76,21 @@ describe('sprite api', () => {
 
   test('size s is the 1-row badge chip', () => {
     const b = badge('explorer', 'working', 0);
-    expect(width(b)).toBe(3);
-    expect(b[0]?.text).toBe('EX');
+    expect(width(b)).toBe(badgeWidth('Explorer') + 1);
+    expect(b[0]?.text).toBe(' Explorer ');
     expect(b[0]?.bg).toBe(personaStyle('explorer').color);
     expect(key(spriteRows('explorer', 'working', 0, 's'))).toBe(key([b]));
-    expect(badge('db-prober', 'idle', 0)[0]?.text).toBe('DP');
+  });
+
+  test('badge and display names read as people, not keys', () => {
+    expect(badge('db-prober', 'idle', 0)[0]?.text).toBe(' DB prober ');
+    expect(badge('lead', 'idle', 0, 'Lead agent')[0]?.text).toBe(' Lead agent ');
+    expect(displayName('lead')).toBe('Lead agent');
+    expect(displayName('atlas:implementer')).toBe('Implementer');
+    expect(displayName('unknown', 'selffix')).toBe('Selffix');
+    expect(displayName('unknown', 'impl-ui')).toBe('Impl ui');
+    expect(displayName('unknown')).toBe('Agent');
+    for (const p of PERSONA_KEYS) expect(badge(p, 'idle', 0)[0]?.text.trim().length).toBeGreaterThan(2);
     expect(key([badge('explorer', 'idle', 0)])).not.toBe(key([badge('explorer', 'failed', 0)]));
   });
 

@@ -30,7 +30,7 @@ describe('parseGates', () => {
 
 describe('headerGroup / gatesError / openGateCount', () => {
   test('header states', () => {
-    expect(headerGroup(null)).toEqual({ id: 'header', title: 'Header', lines: [] });
+    expect(headerGroup(null)).toEqual({ id: 'header', title: 'Header contract', lines: [] });
     expect(headerGroup({ matched: true, phase: null }).lines[0]?.detail).toBe('declared phase: unknown');
     expect(headerGroup({ matched: false, phase: 'x' }).lines[0]).toMatchObject({ ok: false, detail: 'first line did not match the ATLAS header pattern' });
   });

@@ -6,12 +6,12 @@ import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } 
 
 const mk = (kind: string) => (props: Record<string, unknown>) => ({ kind, props });
 const els = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button'), Input: mk('Input') } as unknown as ClientElements;
-const on: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {} };
+const on: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {} };
 
 const gates: GateGroup[] = [
-  { id: 'completion', title: 'Completion', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }] },
-  { id: 'header', title: 'Header', lines: [{ id: 'hdr', label: 'header matched', ok: true }], error: 'findings.json unreadable' },
-  { id: 'routing', title: 'Routing', lines: [] },
+  { id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }] },
+  { id: 'header', title: 'Header contract', lines: [{ id: 'hdr', label: 'header matched', ok: true }], error: 'findings.json unreadable' },
+  { id: 'routing', title: 'Tool routing', lines: [] },
 ];
 const it = (id: string, status: string, owner: string | null = null) => ({ id, content: `task ${id} with some longer content to fit`, status, owner, evidence: status === 'completed' ? 'ev ' + id : null, live: true });
 const model = (over: Partial<SidebarModel>, snap: LiveSnapshot = busySnap()): SidebarModel => ({
@@ -29,6 +29,10 @@ const cases: Record<string, SidebarModel> = {
   empty: model({}, { ...busy, squad: [], members: [], activity: {}, comms: [], todoGroups: [] }),
   midrun: model({ tick: 3 }, { ...busy, todoGroups }),
   gatesExpanded: model({ ui: { recipient: null, expanded: 'gate:verify', draft: '' } }),
+  groupExpanded: model({ ui: { recipient: null, expanded: 'group:completion', draft: '' } }),
+  customName: model({}, { ...busy, members: [], squad: [{ ...busy.squad[0]!, name: 'selffix-worker', persona: 'unknown' }] }),
+  cols38: model({ columns: 38 }, { ...busy, todoGroups }),
+  cols50: model({ columns: 50, tick: 1 }, { ...busy, todoGroups }),
   taskExpandedMore: model({ ui: { recipient: null, expanded: 'task:c', draft: 'draft' } }, { ...busy, todoGroups }),
   advisorAll: model({ ui: { recipient: null, expanded: 'advisor:more', draft: '' } }, { ...busy, todoGroups }),
   portrait: model({ ui: { recipient: name, expanded: null, draft: '' }, tick: 2 }),

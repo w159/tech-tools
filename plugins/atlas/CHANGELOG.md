@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [11.1.4] - 2026-10-12 -- atlas 11.1.4: rich sidebar restored
+
+- Sidebar returns to the richer 11.1.0 design: round-bordered sections (plain below 40 columns), member chips with readable names, a portrait with a speech bubble for the selected or active member, per-phase mini bars, and gates grouped into collapsed Buttons that expand into line Buttons.
+- Hotkeys wired: `m` focuses the message field, `g` opens the first gate group with open items.
+- Team: roster entries with role `lead` (for example `selffix`) and members idle or finished for over 2 hours no longer stay listed.
+- Gate titles: `Completion gate`, `Dispatch tripwire` (was `Inline-op tripwire`), `Tool routing`, `Header contract`.
+
 ## [11.1.3] - 2026-10-12 -- atlas 11.1.3: real glyph on every task row
 
 - Every task row shows its own status glyph (done, in progress, pending, blocked); follow-on tasks in a phase no longer show a dot. The phase name still appears on the first task only.

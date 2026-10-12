@@ -17,7 +17,7 @@ export function bandTree(els: ClientElements, { snapshot: s, openGates, columns,
   const working = s.squad.filter((a) => WORKING.has(a.state)).length;
   const glyph = s.contract.phases.find((p) => p.id === s.phase)?.glyph ?? '◉';
   const runs: Segment[] = [
-    ...badge('lead', working ? 'working' : 'idle', tick).map(fromSprite),
+    ...badge('lead', working ? 'working' : 'idle', tick, 'Lead agent').map(fromSprite),
     { t: ` ${glyph} `, color: C.focus, bold: true },
     { t: `${s.phase} ${done} of ${total}`, color: C.focus, bold: true },
     working ? { t: `   ${spin(tick)} ${working} working`, color: C.live } : { t: '   0 working', color: C.muted },

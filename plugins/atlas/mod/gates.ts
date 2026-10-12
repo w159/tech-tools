@@ -36,10 +36,10 @@ export const gatesError = (reason: string): GateGroup => ({ id: 'completion', ti
 
 /** The `header` group: whether the last reply opened with the contract header, and its declared phase. */
 export function headerGroup(check: HeaderCheck): GateGroup {
-  if (check === null) return { id: 'header', title: 'Header', lines: [] };
+  if (check === null) return { id: 'header', title: 'Header contract', lines: [] };
   return {
     id: 'header',
-    title: 'Header',
+    title: 'Header contract',
     lines: [{
       id: 'header-matched',
       label: 'Last reply header matched',

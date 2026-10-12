@@ -24,6 +24,11 @@ describe('bandTree', () => {
     expect(first.props.color).toMatch(HEX);
     expect(first.props.backgroundColor).toMatch(HEX);
   });
+  test('the lead chip reads "Lead agent", never a two-letter code', () => {
+    const text = line(bandTree(els, { snapshot, openGates: 0, columns: 120 }) as unknown as Node);
+    expect(text).toContain('Lead agent');
+    expect(text).not.toMatch(/\bLE\b/);
+  });
   test('no hex colour without a background, no dim stacked on colour', () => {
     const tree = bandTree(els, { snapshot, openGates: 1, columns: 120 }) as unknown as Node;
     for (const t of texts(tree)) {

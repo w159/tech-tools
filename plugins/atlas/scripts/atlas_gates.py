@@ -106,7 +106,7 @@ def completion_group(session: str, root: Path, transcript: str) -> dict:
 
 
 def tripwire_group(session: str) -> dict:
-    g = {"id": "tripwire", "title": "Inline-op tripwire", "lines": []}
+    g = {"id": "tripwire", "title": "Dispatch tripwire", "lines": []}
     conn = _ro_conn()
     try:
         armed = atlas_db.is_orchestrating(conn, session)
@@ -187,7 +187,7 @@ def build(session: str, root: str, transcript: str = "") -> dict:
             "Completion gate",
             lambda: completion_group(session, Path(root), transcript),
         ),
-        ("tripwire", "Inline-op tripwire", lambda: tripwire_group(session)),
+        ("tripwire", "Dispatch tripwire", lambda: tripwire_group(session)),
         ("routing", "Tool routing", lambda: routing_group(session)),
     )
     groups = []

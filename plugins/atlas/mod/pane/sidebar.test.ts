@@ -31,10 +31,12 @@ const on: SidebarHandlers = {
   draftChange: (t) => calls.push(`draft:${t}`),
   send: (t) => calls.push(`send:${t}`),
   copy: (t) => calls.push(`copy:${t}`),
+  focus: (k) => calls.push(`focus:${k}`),
+  expand: (k) => calls.push(`expand:${k}`),
 };
 
 const gates: GateGroup[] = [
-  { id: 'completion', title: 'Completion', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }] },
+  { id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }] },
   { id: 'header', title: 'Header', lines: [{ id: 'hdr', label: 'header matched', ok: true }], error: 'findings.json unreadable' },
 ];
 
@@ -57,22 +59,24 @@ describe('sidebar tree', () => {
     expect(textOf(root)).toContain(`Atlas  implement, `);
   });
 
-  test('tasks are one row each; the phase name shows on the first task only, empty phases are not listed', () => {
+  test('each phase has a mini-bar header; tasks are one row each with their own status glyph', () => {
     const snap = busySnap();
     const it = (id: string, status: string) => ({ id, content: `task ${id}`, status, owner: id === 'a' ? 'bob' : null, evidence: null, live: true });
-    const todoGroups = [{ phase: 'implement', dept: '', glyph: '', done: 0, total: 3, items: [it('a', 'in_progress'), it('b', 'pending'), it('c', 'completed')] }] as any;
+    const todoGroups = [{ phase: 'implement', dept: '', glyph: '', done: 1, total: 3, items: [it('a', 'in_progress'), it('b', 'pending'), it('c', 'completed')] }] as any;
     const root = sidebarTree(els, model({}, { ...snap, todoGroups }), on) as unknown as Node;
-    const a = textOf(button(root, 'task:a'));
-    const b = textOf(button(root, 'task:b'));
-    const c = textOf(button(root, 'task:c'));
-    expect(a).toMatch(/^◉ implement +task a +bob$/);
-    expect(b).toMatch(/^○ {11}task b$/);
-    expect(c).toMatch(/^✓ {11}task c$/);
+    expect(textOf(root)).toMatch(/implement .* 1\/3/);
+    expect(textOf(button(root, 'task:a'))).toMatch(/^ {2}◉ task a +bob$/);
+    expect(textOf(button(root, 'task:b'))).toMatch(/^ {2}○ task b$/);
+    expect(textOf(button(root, 'task:c'))).toMatch(/^ {2}✓ task c$/);
     expect(textOf(root)).not.toContain('research  ');
   });
 
-  test('no frame characters anywhere', () => {
-    for (const columns of [30, 60, 120]) expect(textOf(sidebarTree(els, model({ columns }), on) as unknown as Node)).not.toMatch(/[╭╮╰╯│]/);
+  test('sections are bordered from 40 columns up and plain below', () => {
+    const borders = (columns: number) =>
+      all(sidebarTree(els, model({ columns }), on) as unknown as Node).filter((n) => n.props.borderStyle === 'round' && n.props.borderColor === 'promptBorder').length;
+    expect(borders(60)).toBeGreaterThanOrEqual(3);
+    expect(borders(40)).toBeGreaterThanOrEqual(3);
+    expect(borders(38)).toBe(0);
   });
 
   test('a phase with no tasks says nothing planned', () => {
@@ -103,9 +107,14 @@ describe('sidebar tree', () => {
     expect(calls).toContain('draft:he');
   });
 
-  test('gate with a fix expands on first press and copies on the second', () => {
-    const first = sidebarTree(els, model({ ui: { recipient: null, expanded: null, draft: '' } }), on) as unknown as Node;
-    button(first, 'gate:verify').props.onPress();
+  test('gate group opens into line Buttons; a fix line expands, then copies', () => {
+    const closed = sidebarTree(els, model(), on) as unknown as Node;
+    expect(all(closed).some((n) => n.kind === 'Button' && n.props.key === 'gate:verify')).toBe(false);
+    expect(textOf(button(closed, 'group:completion'))).toBe('▸ Completion gate  1 open');
+    button(closed, 'group:completion').props.onPress();
+    expect(calls).toContain('toggle:group:completion');
+    const grp = sidebarTree(els, model({ ui: { recipient: null, expanded: 'group:completion', draft: '' } }), on) as unknown as Node;
+    button(grp, 'gate:verify').props.onPress();
     expect(calls).toContain('toggle:gate:verify');
     const open = sidebarTree(els, model({ ui: { recipient: null, expanded: 'gate:verify', draft: '' } }), on) as unknown as Node;
     expect(textOf(open)).toContain('no verified finding');
@@ -138,15 +147,26 @@ describe('sidebar tree', () => {
     expect(t).toContain('+2 more');
   });
 
-  test('gates: right-aligned open count, one row per item, no group summary, armed info is not a failure', () => {
-    const g: GateGroup[] = [{ id: 'tripwire', title: 'Tripwire', lines: [{ id: 'armed', label: 'Orchestration armed', ok: true, detail: 'not armed' }, { id: 'inline', label: 'Inline ops', ok: false }] }];
-    const root = sidebarTree(els, model({ gates: g }), on) as unknown as Node;
-    const t = textOf(root);
+  test('gates: collapsed groups with counts, a status strip, armed info is not a failure', () => {
+    const g: GateGroup[] = [{ id: 'tripwire', title: 'Dispatch tripwire', lines: [{ id: 'armed', label: 'Orchestration armed', ok: true, detail: 'not armed' }, { id: 'inline', label: 'Inline ops', ok: false }] }];
+    const t = textOf(sidebarTree(els, model({ gates: g }), on) as unknown as Node);
     expect(t).toMatch(/Gates +1 open/);
-    expect(t).toContain('✗ Inline ops');
-    expect(t).toContain('✓ Orchestration armed');
-    expect(t).not.toContain('Tripwire');
+    expect(t).toContain('✗ Dispatch tripwire');
+    expect(t).toContain('▸ Dispatch tripwire  1 open');
+    expect(t).not.toContain('Inline ops');
     expect(textOf(sidebarTree(els, model({ gates: [] }), on) as unknown as Node)).toMatch(/Gates +all clear/);
+    const clear: GateGroup[] = [{ id: 'routing', title: 'Tool routing', lines: [{ id: 'r', label: 'r', ok: true }] }];
+    expect(textOf(sidebarTree(els, model({ gates: clear }), on) as unknown as Node)).toContain('▸ Tool routing  clear');
+  });
+
+  test('hotkeys: m focuses the message field, g expands the first group with open items', () => {
+    const root = sidebarTree(els, model(), on) as unknown as Node;
+    expect(button(root, 'hotkey:m').props.hotkey).toBe('m');
+    expect(button(root, 'hotkey:g').props.hotkey).toBe('g');
+    button(root, 'hotkey:m').props.onPress();
+    button(root, 'hotkey:g').props.onPress();
+    expect(calls).toContain('focus:msg');
+    expect(calls).toContain('expand:group:completion');
   });
 
   test('advisor notes are their own section: first 2, +N more, press expands', () => {
@@ -165,27 +185,52 @@ describe('sidebar tree', () => {
 
   const HEX = /^#[0-9a-f]{6}$/i;
 
+  const usesHexOrBg = (t: Node) => HEX.test(t.props.color ?? '') || t.props.backgroundColor !== undefined;
+
   const expectThemeColours = (t: Node) => {
-    expect(HEX.test(t.props.color ?? '')).toBe(false);
-    expect(t.props.backgroundColor).toBeUndefined();
+    // Hex only on sprite and chip runs, which always set their own background too.
+    if (usesHexOrBg(t)) expect(HEX.test(t.props.backgroundColor ?? '')).toBe(true);
     expect(t.props.dimColor).toBeUndefined();
   };
 
-  test('colours are theme keys: never hex, never dim on colour', () => {
+  test('colours are theme keys; hex appears only with its own background; never dim on colour', () => {
     for (const columns of [30, 60]) {
       const root = sidebarTree(els, model({ columns, ui: { recipient: null, expanded: 'gate:verify', draft: '' } }), on) as unknown as Node;
       all(root).filter((n) => n.kind === 'Text').forEach(expectThemeColours);
     }
   });
 
-  test('team header summarises the lead; rows are plain with a selection mark and no badge chips', () => {
+  test('team rows carry a readable-name chip, never a two-letter code', () => {
     const root = sidebarTree(els, model(), on) as unknown as Node;
     expect(textOf(root)).toMatch(/Team +lead is (conducting \d+|idle)/);
     const rows = all(root).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('member:'));
     expect(rows.length).toBeGreaterThan(1);
-    expect(textOf(rows[0]!)).toMatch(/^▸ lead/);
-    expect(textOf(rows[1]!)).toMatch(/^ {2}\S/);
-    for (const r of rows) expect(kids(r).some((t) => HEX.test(t.props.backgroundColor ?? ''))).toBe(false);
+    expect(textOf(rows[0]!)).toMatch(/^▸ +Lead agent/);
+    for (const r of rows) {
+      expect(textOf(r)).not.toMatch(/\b[A-Z]{2}\b/);
+      expect(kids(r).some((t) => HEX.test(t.props.backgroundColor ?? ''))).toBe(true);
+    }
+  });
+
+  test('a custom member name reads on the chip', () => {
+    const snap = busySnap();
+    const t = textOf(sidebarTree(els, model({}, { ...snap, squad: [{ ...snap.squad[0]!, name: 'selffix-worker', persona: 'unknown' }], members: [], activity: {} }), on) as unknown as Node);
+    expect(t).toContain('Selffix worker');
+  });
+
+  test('a roster lead with an ordinary name is not listed as a teammate', () => {
+    const snap = busySnap();
+    const t = textOf(sidebarTree(els, model({}, { ...snap, squad: [], members: [{ name: 'selffix', role: 'lead' }], activity: {}, comms: [] }), on) as unknown as Node);
+    expect(t).not.toContain('selffix');
+    expect(t).toContain('nobody dispatched yet');
+  });
+
+  test('portrait with a speech bubble shows for the selected member only in a tall bordered pane', () => {
+    const name = busySnap().squad[0]!.name;
+    const ui = { recipient: name, expanded: null, draft: '' };
+    const rowsOf = (m: SidebarModel) => all(sidebarTree(els, m, on) as unknown as Node).filter((n) => n.kind === 'Box' && n.props.flexDirection === 'row').length;
+    expect(rowsOf(model({ ui, rows: 40 }))).toBeGreaterThan(rowsOf(model({ ui, rows: 20 })));
+    expect(rowsOf(model({ ui, rows: 40 }))).toBeGreaterThan(rowsOf(model({ ui, rows: 40, columns: 38 })));
   });
 
   test('empty team says how to dispatch', () => {
