@@ -1,5 +1,20 @@
 # Changelog
 
+## [11.0.1] - 2026-10-12 -- atlas 11.0.1: mod shows true data, state in $.state, animated spinner
+
+The mod band, `/atlas-cc` and the turn receipt drew, but almost every value was wrong. Fixed in `plugins/atlas/mod/`:
+
+- Header phase: `headerPhaseOf` read a bracketed `[phase]`; it now takes the first phase word of the live `ATLAS | <glyph> <phase> | ...` header (shared `PHASE_RE` from `restyle.tsx`).
+- Phantom agents: `data/herdr.ts` `mergeSquad` skips any member with role `lead` (past leads such as `selffix` showed as "running"); a member with no pane and no note is `parked`, not running.
+- Board: `data/todos.ts` keeps open (pending/in_progress) items from any session, so a new session shows the backlog instead of `0/0`; completed items stay session-scoped.
+- Roster: `snapshot.ts` re-reads channel members on every build (was once at boot).
+- Band geometry: `clientPropsFor` matches the engine's `mod/band.tsx` module path.
+- herdr polling runs only after the Command Center was opened; a `ui.fault` hook and the boot/rebuild catches now log to the debug log instead of failing silently.
+- State: snapshot, tab, usage, task agents, header phase/misses, last-seen seq, kill switch, interactive and pane-opened flags live in `$.state` (contract `plugins/atlas/types/index.d.ts`, named by `plugin.json` `"types"`); drawings redraw from state reads, and the blanket `$.ui.invalidate('ui.render')` is gone. Registrar signatures changed (`registerRestyle(on)`, `registerNotify(on, { soundEnabled })`, routing deps take the snapshot).
+- Spinner: the globe advances on a 250 ms `$.state` tick (`atlas.spinnerTick`) that redraws only the Spinner and stops when it unmounts.
+
+Evidence: `claude plugin test plugins/atlas` 239 pass, 0 mod failures (169 remaining failures are omp/colony bun tests the mod runner cannot load); `claude plugin validate plugins/atlas` passed; `tsc -p mod --noEmit` exit 0. Live (`claude --plugin-dir plugins/atlas`, tmux 180 cols): band `⟦RESEARCH 0/12⟧`, `no live agents` (was phantom `selffix`), Command Center `ARCHIVE 12 open`, no refusals in the debug log. Not yet observed live: spinner animation and header-phase change (need a logged-in turn).
+
 ## [11.0.0] - 2026-10-12 -- atlas 11.0.0: mod text-first, live render proven
 
 Marketplace version bumped with atlas `10.5.1` -> `11.0.0` (`plugins/atlas/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`).
