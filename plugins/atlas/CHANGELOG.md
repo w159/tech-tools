@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [11.1.1] - 2026-10-12 -- atlas 11.1.1: accurate cost reporting
+
 ### Cost accuracy
 
 - Turn receipt (`mod/restyle.tsx`): the dollar figure is now this turn's cost, `turn $X`, the engine's session cost (`$.session.usage().cost.usd`) at turn end minus its value at `turn.start`; it was the session's running total drawn on every turn. No dollar figure is drawn when the host keeps no cost ledger. Tokens are the turn's own `input / output (+cached)` from `turn.complete` usage; the old `48k tok` was context-window fill and is now labelled `ctx N%`.

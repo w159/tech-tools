@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [11.1.1] - 2026-10-12 -- atlas 11.1.1: accurate cost reporting
+
+Detail: `plugins/atlas/CHANGELOG.md` 11.1.1.
+
+- Mod: the turn receipt shows this turn's cost (engine session cost at turn end minus at turn start) as `turn $X`, never the session total and never a figure when the host keeps no ledger; receipt tokens are the turn's own usage and context fill is labelled `ctx N%`. The bytes/4 "tokens kept" estimate is replaced by measured bytes, and the atlas-doctor skill no longer pins a third-party price.
+
 ## [11.1.0] - 2026-10-12 -- atlas 11.1.0: native interactive sidebar, theme-aware colors, subagent gate fix
 
 Detail: `plugins/atlas/CHANGELOG.md` 11.1.0.
