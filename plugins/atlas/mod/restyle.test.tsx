@@ -19,6 +19,7 @@ import {
   type ReceiptTracker,
 } from './restyle'
 import type { AtlasSnapshot } from './contract'
+import { memState } from './test_helpers'
 
 // ---- fixtures ----
 
@@ -203,11 +204,12 @@ const fakeOn = (regs: Reg[]): On =>
     return { catch: () => undefined }
   }) as unknown as On
 
-const fake$ = (over: { env?: string } = {}): { $: EngineInterface; suggested: string[] } => {
+const fake$ = (over: { env?: string; snapshot?: AtlasSnapshot | null } = {}): { $: EngineInterface; suggested: string[] } => {
   const suggested: string[] = []
   return {
     $: {
       env: { get: async () => over.env },
+      state: memState({ 'atlas/snapshot': over.snapshot ?? null }),
       agent: { list: async () => [] },
       prompt: { suggest: async (a: { text: string }) => { suggested.push(a.text); return { isShown: true } } },
     } as unknown as EngineInterface,
@@ -220,7 +222,7 @@ const fakeE = (component: string, props: Record<string, unknown> = {}) =>
 
 test('registerRestyle wires the five sites; without a snapshot every site no-ops', async () => {
   const regs: Reg[] = []
-  registerRestyle(fakeOn(regs), { getSnapshot: () => null })
+  registerRestyle(fakeOn(regs))
   expect(regs.length).toBe(5)
   expect(regs[0]?.matcher?.component).toBe('Spinner')
   expect(regs[1]?.matcher?.component).toBe('ToolUse')
@@ -234,17 +236,17 @@ test('registerRestyle wires the five sites; without a snapshot every site no-ops
 
 test('ATLAS_MOD=off no-ops every site even with a live snapshot', async () => {
   const regs: Reg[] = []
-  registerRestyle(fakeOn(regs), { getSnapshot: () => snap() })
+  registerRestyle(fakeOn(regs))
   for (const r of regs) {
-    expect(await r.hook(fake$({ env: 'off' }).$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
+    expect(await r.hook(fake$({ env: 'off', snapshot: snap() }).$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
   }
 })
 
 test('live spinner draws and PromptHint appends the tail and suggests the next step', async () => {
   const regs: Reg[] = []
   const todos = [{ id: 't1', content: 'ship restyle sites', status: 'in_progress', owner: 'Restyle' }]
-  const harness = fake$()
-  registerRestyle(fakeOn(regs), { getSnapshot: () => snap({ todos }) })
+  const harness = fake$({ snapshot: snap({ todos }) })
+  registerRestyle(fakeOn(regs))
 
   const drawn = await regs[0]?.hook(harness.$, fakeE('Spinner', { word: 'Sauteing', message: null }), echoNext)
   expect(drawn).not.toBe(SENTINEL)

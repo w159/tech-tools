@@ -8,6 +8,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { intentToArgv } from './intents';
 import { register } from './register';
+import { memState } from './test_helpers';
 
 // ---- structural event shapes (d.ts: SessionStartInput, RenderInputOf, UiMessageArgument) ----
 
@@ -85,10 +86,7 @@ function stubEngine(env: Record<string, string> = {}) {
       exists: async () => false,
       list: async () => [],
     },
-    state: {
-      get: async () => ({ value: undefined, version: 0 }),
-      set: async () => ({ isSet: true as const, version: 1 }),
-    },
+    state: memState(),
     ui: {
       log: () => rec.ui.push('log'),
       toast: () => rec.ui.push('toast'),

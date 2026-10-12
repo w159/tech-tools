@@ -7,6 +7,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { On } from 'claude-code';
 import { registerHeaderDrift, registerPromptReinforce, registerRouting } from './routing';
 import type { Persona } from './contract';
+import { memState } from './test_helpers';
 
 // Structural mirrors of the event shapes the handlers read (d.ts: AgentSpawnInput,
 // TurnStepInput, TurnCompleteInput, PromptSubmitInput).
@@ -67,7 +68,15 @@ function captureOn() {
     if (hook === undefined) throw new Error(`no ${name} handler registered`);
     return hook as Handler<E>; // stored by the registration above
   };
-  return { on, pick };
+  // The engine stub: only $.state, which routing reads and writes.
+  const state = memState();
+  const $ = { state };
+  const stateOf = async (key: string) => (await state.get({ plugin: 'atlas', key })).value;
+  /** [name, persona] of every task agent routing recorded into $.state. */
+  const recorded = async () =>
+    ((await stateOf('taskAgents')) as Array<{ name: string; persona: string }> | undefined ?? []).map((a) => [a.name, a.persona]);
+  const misses = async () => ((await stateOf('headerMisses')) as number | undefined) ?? 0;
+  return { on, pick, $, recorded, misses };
 }
 
 const persona: Persona = {
@@ -104,11 +113,11 @@ type StepHook = (
  * the stream beneath (d.ts HookStream): an empty generator whose return value
  * is the fake next's result. No chunks are faked; the hook forwards all.
  */
-async function runStep(hook: Handler<'turn.step'>, e: StepEvent, next: (input: StepEvent) => unknown): Promise<void> {
+async function runStep($: unknown, hook: Handler<'turn.step'>, e: StepEvent, next: (input: StepEvent) => unknown): Promise<void> {
   // `next(e)` is faked as the stream beneath (d.ts HookStream): an empty
   // generator whose return value is the fake next's result.
   const gen = (hook as unknown as StepHook)(
-    undefined,
+    $,
     e,
     (input) =>
       (async function* () {
@@ -121,85 +130,78 @@ async function runStep(hook: Handler<'turn.step'>, e: StepEvent, next: (input: S
 }
 
 function routingDeps(over: Partial<{ getPersonas: () => Persona[] }> = {}) {
-  const recorded: Array<[string, string]> = [];
   const drift: string[] = [];
   const deps = {
     getPersonas: () => [persona],
-    recordAgent: (agentId: string, p: string) => recorded.push([agentId, p]),
     logDrift: (msg: string) => drift.push(msg),
     ...over,
   };
-  return { deps, recorded, drift };
+  return { deps, drift };
 }
 
 describe('registerRouting agent.spawn', () => {
   test('passes an omitted model through untouched and records the agent', async () => {
-    const { on, pick } = captureOn();
-    const { deps, recorded } = routingDeps();
+    const { on, pick, $, recorded, misses } = captureOn();
+    const { deps } = routingDeps();
     registerRouting(on, deps);
-    const result = await pick('agent.spawn')(undefined, spawnInput(), spawnNext);
+    const result = await pick('agent.spawn')($, spawnInput(), spawnNext);
     expect(result).toEqual({ model: 'parent-model', agentId: 'agent-1' });
-    expect(recorded).toEqual([['agent-1', 'implementer']]);
+    expect(await recorded()).toEqual([['agent-1', 'implementer']]);
   });
 
   test('passes an inherit model through untouched and records the agent', async () => {
-    const { on, pick } = captureOn();
-    const { deps, recorded } = routingDeps();
+    const { on, pick, $, recorded, misses } = captureOn();
+    const { deps } = routingDeps();
     registerRouting(on, deps);
-    const result = await pick('agent.spawn')(undefined, spawnInput({ model: 'inherit' }), spawnNext);
+    const result = await pick('agent.spawn')($, spawnInput({ model: 'inherit' }), spawnNext);
     expect(result).toEqual({ model: 'inherit', agentId: 'agent-1' });
-    expect(recorded).toEqual([['agent-1', 'implementer']]);
+    expect(await recorded()).toEqual([['agent-1', 'implementer']]);
   });
 
   test('passes an explicit model through untouched, records the agent, and notes the drift', async () => {
-    const { on, pick } = captureOn();
-    const { deps, recorded, drift } = routingDeps();
+    const { on, pick, $, recorded, misses } = captureOn();
+    const { deps, drift } = routingDeps();
     registerRouting(on, deps);
-    const result = await pick('agent.spawn')(undefined, spawnInput({ model: 'opus' }), spawnNext);
+    const result = await pick('agent.spawn')($, spawnInput({ model: 'opus' }), spawnNext);
     expect(result).toEqual({ model: 'opus', agentId: 'agent-1' });
-    expect(recorded).toEqual([['agent-1', 'implementer']]);
+    expect(await recorded()).toEqual([['agent-1', 'implementer']]);
     expect(drift).toEqual(['agent.spawn: atlas:implementer asked for model opus, pinned haiku']);
   });
 
   test('leaves a fork untouched', async () => {
-    const { on, pick } = captureOn();
-    const { deps, recorded, drift } = routingDeps();
+    const { on, pick, $, recorded, misses } = captureOn();
+    const { deps, drift } = routingDeps();
     registerRouting(on, deps);
-    const result = await pick('agent.spawn')(undefined, spawnInput({ fork: true }), spawnNext);
+    const result = await pick('agent.spawn')($, spawnInput({ fork: true }), spawnNext);
     expect(result).toEqual({ model: 'parent-model', agentId: 'agent-1' });
-    expect(recorded).toEqual([]);
+    expect(await recorded()).toEqual([]);
     expect(drift).toEqual([]);
   });
 
   test('routes no persona for unknown roles but records them for the band', async () => {
-    const { on, pick } = captureOn();
-    const { deps, recorded, drift } = routingDeps();
+    const { on, pick, $, recorded, misses } = captureOn();
+    const { deps, drift } = routingDeps();
     registerRouting(on, deps);
     for (const subagentType of ['atlas:nobody', 'armada:core', 'general-purpose', 'task']) {
-      const result = await pick('agent.spawn')(undefined, spawnInput({ subagentType }), spawnNext);
+      const result = await pick('agent.spawn')($, spawnInput({ subagentType }), spawnNext);
       expect(result).toEqual({ model: 'parent-model', agentId: 'agent-1' });
     }
     // No persona routing and no drift, yet every spawn shows in the band
     // (persona 'unknown' resolves through mergeSquad's personaOf).
-    expect(recorded).toEqual([
-      ['agent-1', 'unknown'],
-      ['agent-1', 'unknown'],
-      ['agent-1', 'unknown'],
-      ['agent-1', 'unknown'],
-    ]);
+    // (the fake spawn reuses one agentId, so $.state holds a single entry)
+    expect(await recorded()).toEqual([['agent-1', 'unknown']]);
     expect(drift).toEqual([]);
   });
 
   test('fails open when getPersonas throws', async () => {
-    const { on, pick } = captureOn();
+    const { on, pick, $ } = captureOn();
     registerRouting(on, {
       getPersonas: () => {
         throw new Error('boom');
       },
-      recordAgent: () => {},
       logDrift: () => {},
     });
-    const result = await pick('agent.spawn')(undefined, spawnInput(), spawnNext);
+    const result = await pick('agent.spawn')($, spawnInput(), spawnNext);
     expect(result).toEqual({ model: 'parent-model', agentId: 'agent-1' });
   });
 });
@@ -216,58 +218,56 @@ describe('registerRouting turn.step', () => {
 
   /** Registers routing, records agent-1 via a spawn, returns the turn.step handler. */
   async function recordedStep() {
-    const { on, pick } = captureOn();
+    const { on, pick, $, recorded, misses } = captureOn();
     const { deps } = routingDeps();
     registerRouting(on, deps);
-    await pick('agent.spawn')(undefined, spawnInput(), spawnNext); // records agent-1
-    return pick('turn.step');
+    await pick('agent.spawn')($, spawnInput(), spawnNext); // records agent-1
+    return { step: pick('turn.step'), $ };
   }
 
   test('pins the recorded persona effort onto the request', async () => {
-    const step = await recordedStep();
+    const { step, $ } = await recordedStep();
     const seen: StepEvent[] = [];
-    await runStep(step, stepInput(), (e) => (seen.push(e), { response: true }));
+    await runStep($, step, stepInput(), (e) => (seen.push(e), { response: true }));
     expect(seen).toHaveLength(1);
     expect(seen[0]!.effort).toBe('medium');
   });
 
   test('leaves unrecorded agents untouched', async () => {
-    const step = await recordedStep();
+    const { step, $ } = await recordedStep();
     const seen: StepEvent[] = [];
-    await runStep(step, stepInput({ agentId: 'agent-2' }), (e) => (seen.push(e), { response: true }));
+    await runStep($, step, stepInput({ agentId: 'agent-2' }), (e) => (seen.push(e), { response: true }));
     expect(seen).toHaveLength(1);
     expect(seen[0]!.effort).toBeUndefined();
   });
 
   test('pins nothing when the persona effort is not low/medium/high', async () => {
-    const { on, pick } = captureOn();
+    const { on, pick, $, recorded, misses } = captureOn();
     registerRouting(on, {
       getPersonas: () => [{ ...persona, effort: 'xhigh' }],
-      recordAgent: () => {},
       logDrift: () => {},
     });
-    await pick('agent.spawn')(undefined, spawnInput(), spawnNext);
+    await pick('agent.spawn')($, spawnInput(), spawnNext);
     const seen: StepEvent[] = [];
-    await runStep(pick('turn.step'), stepInput(), (e) => (seen.push(e), { response: true }));
+    await runStep($, pick('turn.step'), stepInput(), (e) => (seen.push(e), { response: true }));
     expect(seen).toHaveLength(1);
     expect(seen[0]!.effort).toBeUndefined();
   });
 
   test('records an inherit-model persona so its effort is pinned', async () => {
-    const { on, pick } = captureOn();
+    const { on, pick, $, recorded, misses } = captureOn();
     registerRouting(on, {
       getPersonas: () => [{ ...persona, model: 'inherit' }],
-      recordAgent: () => {},
       logDrift: () => {},
     });
-    await pick('agent.spawn')(undefined, spawnInput(), spawnNext);
+    await pick('agent.spawn')($, spawnInput(), spawnNext);
     const seen: StepEvent[] = [];
-    await runStep(pick('turn.step'), stepInput(), (e) => (seen.push(e), { response: true }));
+    await runStep($, pick('turn.step'), stepInput(), (e) => (seen.push(e), { response: true }));
     expect(seen[0]!.effort).toBe('medium');
   });
 
   test('fails open when getPersonas throws on turn.step', async () => {
-    const { on, pick } = captureOn();
+    const { on, pick, $, recorded, misses } = captureOn();
     let calls = 0;
     registerRouting(on, {
       getPersonas: () => {
@@ -275,12 +275,11 @@ describe('registerRouting turn.step', () => {
         if (calls > 1) throw new Error('boom');
         return [persona];
       },
-      recordAgent: () => {},
       logDrift: () => {},
     });
-    await pick('agent.spawn')(undefined, spawnInput(), spawnNext); // records agent-1
+    await pick('agent.spawn')($, spawnInput(), spawnNext); // records agent-1
     const seen: StepEvent[] = [];
-    await runStep(pick('turn.step'), stepInput(), (e) => (seen.push(e), { response: true }));
+    await runStep($, pick('turn.step'), stepInput(), (e) => (seen.push(e), { response: true }));
     expect(seen).toHaveLength(1);
     expect(seen[0]!.effort).toBeUndefined();
   });
@@ -292,73 +291,69 @@ describe('registerHeaderDrift', () => {
     ...(agentId === undefined ? {} : { agentId }),
   });
 
-  test('counts a miss when the first line breaks the pattern', () => {
-    const { on, pick } = captureOn();
-    let misses = 0;
-    registerHeaderDrift(on, { pattern: () => '^ATLAS \\|', onMiss: () => misses++ });
-    pick('turn.complete')(undefined, answer('no header here'), () => ({ text: 'x' }));
-    expect(misses).toBe(1);
+  test('counts a miss when the first line breaks the pattern', async () => {
+    const { on, pick, $, recorded, misses } = captureOn();
+    registerHeaderDrift(on, { pattern: () => '^ATLAS \\|' });
+    await pick('turn.complete')($, answer('no header here'), () => ({ text: 'x' }));
+    expect(await misses()).toBe(1);
   });
 
-  test('counts no miss when the first line matches', () => {
-    const { on, pick } = captureOn();
-    let misses = 0;
-    registerHeaderDrift(on, { pattern: () => '^ATLAS \\|', onMiss: () => misses++ });
-    pick('turn.complete')(undefined, answer('ATLAS | 🔧 implement | x'), () => ({ text: 'x' }));
-    expect(misses).toBe(0);
+  test('counts no miss when the first line matches', async () => {
+    const { on, pick, $, recorded, misses } = captureOn();
+    registerHeaderDrift(on, { pattern: () => '^ATLAS \\|' });
+    await pick('turn.complete')($, answer('ATLAS | 🔧 implement | x'), () => ({ text: 'x' }));
+    expect(await misses()).toBe(0);
   });
 
-  test('skips subagent turns', () => {
-    const { on, pick } = captureOn();
-    let misses = 0;
-    registerHeaderDrift(on, { pattern: () => '^ATLAS \\|', onMiss: () => misses++ });
-    pick('turn.complete')(undefined, answer('subagent answer', 'agent-1'), () => ({ text: 'x' }));
-    expect(misses).toBe(0);
+  test('skips subagent turns', async () => {
+    const { on, pick, $, recorded, misses } = captureOn();
+    registerHeaderDrift(on, { pattern: () => '^ATLAS \\|' });
+    await pick('turn.complete')($, answer('subagent answer', 'agent-1'), () => ({ text: 'x' }));
+    expect(await misses()).toBe(0);
   });
 
-  test('never throws on a broken pattern and still moves the answer on', () => {
-    const { on, pick } = captureOn();
-    let misses = 0;
-    registerHeaderDrift(on, { pattern: () => '(', onMiss: () => misses++ });
-    const result = pick('turn.complete')(undefined, answer('anything'), () => ({ text: 'kept' }));
-    expect(misses).toBe(0);
+  test('never throws on a broken pattern and still moves the answer on', async () => {
+    const { on, pick, $, recorded, misses } = captureOn();
+    registerHeaderDrift(on, { pattern: () => '(' });
+    const result = await pick('turn.complete')($, answer('anything'), () => ({ text: 'kept' }));
+    expect(await misses()).toBe(0);
     expect(result).toEqual({ text: 'kept' });
   });
 });
 
 describe('registerPromptReinforce', () => {
-  test('adds the line as context and never alters the user text', () => {
-    const { on, pick } = captureOn();
+  test('adds the line as context and never alters the user text', async () => {
+    const { on, pick, $, recorded, misses } = captureOn();
     registerPromptReinforce(on, { line: () => 'keep the header' });
     const seen: SubmitEvent[] = [];
-    pick('prompt.submit')(undefined, { text: 'user prompt', context: ['prior'] }, (e) => (seen.push(e), { text: e.text }));
+    await pick('prompt.submit')($, { text: 'user prompt', context: ['prior'] }, (e) => (seen.push(e), { text: e.text }));
     expect(seen).toHaveLength(1);
     expect(seen[0]!.text).toBe('user prompt');
     expect(seen[0]!.context).toEqual(['prior', 'keep the header']);
   });
 
-  test('adds context when none was present and skips on a null line', () => {
-    const { on, pick } = captureOn();
+  test('adds context when none was present and skips on a null line', async () => {
+    const { on, pick, $, recorded, misses } = captureOn();
     let line: string | null = 'reminder';
     registerPromptReinforce(on, { line: () => line });
     const seen: SubmitEvent[] = [];
-    pick('prompt.submit')(undefined, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
+    await pick('prompt.submit')($, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
     expect(seen[0]!.context).toEqual(['reminder']);
     line = null;
-    pick('prompt.submit')(undefined, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
+    await pick('prompt.submit')($, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
     expect(seen[1]!.context).toBeUndefined();
     expect(seen[1]!.text).toBe('p');
   });
 
-  test('fails open when line() throws', () => {
-    const { on, pick } = captureOn();
+  test('fails open when line() throws', async () => {
+    const { on, pick, $, recorded, misses } = captureOn();
     registerPromptReinforce(on, {
       line: () => {
         throw new Error('boom');
       },
     });
     const seen: SubmitEvent[] = [];
-    pick('prompt.submit')(undefined, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
+    await pick('prompt.submit')($, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
     expect(seen).toHaveLength(1);
     expect(seen[0]!.text).toBe('p');
     expect(seen[0]!.context).toBeUndefined();
