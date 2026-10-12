@@ -35,7 +35,7 @@
   "author": "w159",
   "license": "Apache-2.0",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "node-blumira": "file:../../mcp_node/node-blumira",
     "zod": "^3.25.0"
   },
