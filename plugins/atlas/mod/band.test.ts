@@ -1,80 +1,50 @@
-// Tests for band.tsx buildConveyor usage honesty (unknown vs measured zero):
-// null figures render `ctx --` / `-- tok` / `$--`; a measured 0 still renders
-// 0; an absent usage prop falls back to the snapshot numbers (old behavior).
+// Native band: one line led by the lead badge and phase glyph, `<phase> n of m`, working count, gates.
 import { describe, expect, test } from 'claude-code/testing';
-import { buildConveyor, type BandProps } from './band';
-import type { AtlasSnapshot } from './contract';
+import type { ClientElements } from 'claude-code';
+import { bandTree } from './band';
+import { busySnap } from './live_fixture';
+import { chartRoom, textWidth } from './theme';
 
-function snap(over: Partial<AtlasSnapshot> = {}): AtlasSnapshot {
-  return {
-    root: '/r',
-    sessionId: 's',
-    channel: null,
-    contract: { phases: [], headerFirstLinePattern: '', itemPhasePrefix: '', todoPhases: [] },
-    personas: [],
-    todos: [],
-    counts: { done: 0, total: 0, byPhase: {} },
-    phase: 'research',
-    phaseSource: 'default',
-    notes: [],
-    members: [],
-    squad: [{ name: 'aa-1', persona: 'unknown', state: 'running', source: 'task' }],
-    unread: 0,
-    tokens: 0,
-    costUsd: 0,
-    contextPct: 0,
-    headerMisses: 0,
-    now: 0,
-    ...over,
-  };
-}
+type Node = { kind: string; props: Record<string, any> };
+const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
+const els = { Box: mk('Box'), Text: mk('Text') } as unknown as ClientElements;
+const texts = (n: Node): Node[] => (n.props.children as Node[]).filter((c) => c.kind === 'Text');
+const line = (n: Node): string => texts(n).map((t) => t.props.children).join('');
+const HEX = /^#[0-9a-f]{6}$/i;
 
-const textOf = (w: number, s: AtlasSnapshot, usage?: BandProps['usage']) =>
-  buildConveyor(s, w, usage).segs.map((seg) => seg.text).join('');
-
-describe('conveyor usage honesty', () => {
-  test('unmeasured figures render as dashes, never as zeros', () => {
-    const text = textOf(200, snap(), { tokens: null, costUsd: null, contextPct: null });
-    expect(text).toContain('ctx --');
-    expect(text).toContain('-- tok');
-    expect(text).toContain('$--');
-    expect(text).not.toContain('0%');
-    expect(text).not.toContain('0 tok');
-    expect(text).not.toContain('$0.00');
+describe('bandTree', () => {
+  const snapshot = busySnap();
+  test('shows phase, progress, working agents and gates', () => {
+    const tree = bandTree(els, { snapshot, openGates: 2, columns: 120 }) as unknown as Node;
+    expect(line(tree)).toMatch(/\S+ \d+ of \d+ +\S+ \d+ working +2 gates open$/);
+    expect(texts(tree).at(-1)?.props.color).toBe(chartRoom.fail);
   });
-
-  test('a measured zero still renders as zero', () => {
-    const text = textOf(200, snap(), { tokens: 0, costUsd: 0, contextPct: 0 });
-    expect(text).toContain('0%');
-    expect(text).toContain('0 tok');
-    expect(text).toContain('$0.00');
+  test('a lead badge chip with its own fg and bg leads the line', () => {
+    const first = texts(bandTree(els, { snapshot, openGates: 0, columns: 120 }) as unknown as Node)[0]!;
+    expect(first.props.color).toMatch(HEX);
+    expect(first.props.backgroundColor).toMatch(HEX);
   });
-
-  test('measured nonzero figures render their values', () => {
-    const text = textOf(200, snap(), { tokens: 15000, costUsd: 0.05, contextPct: 12 });
-    expect(text).toContain('12%');
-    expect(text).toContain('15k tok');
-    expect(text).toContain('$0.05');
+  test('no hex colour without a background, no dim stacked on colour', () => {
+    const tree = bandTree(els, { snapshot, openGates: 1, columns: 120 }) as unknown as Node;
+    for (const t of texts(tree)) {
+      if (HEX.test(t.props.color ?? '')) expect(t.props.backgroundColor).toBeDefined();
+      expect(t.props.dimColor).toBeUndefined();
+    }
   });
-
-  test('absent usage prop falls back to the snapshot numbers', () => {
-    const text = textOf(200, snap({ tokens: 3000, costUsd: 0.02, contextPct: 5 }));
-    expect(text).toContain('5%');
-    expect(text).toContain('3k tok');
-    expect(text).toContain('$0.02');
+  test('count matches the route tasks and skips advisor notes', () => {
+    const g = (phase: string, st: string[]) => ({ phase, dept: '', glyph: '', done: 0, total: st.length, items: st.map((status, i) => ({ id: `${phase}${i}`, content: 'x', status, owner: null, evidence: null, live: true })) });
+    const snap = { ...snapshot, counts: { done: 0, total: 35, byPhase: {} }, todoGroups: [g('research', ['completed', 'pending']), g('advisor', ['pending', 'pending'])] } as any;
+    expect(line(bandTree(els, { snapshot: snap, openGates: 0, columns: 120 }) as unknown as Node)).toContain('1 of 2');
   });
-
-  test('a squad with a live agent is drawn instead of the empty text', () => {
-    const text = textOf(200, snap());
-    expect(text).not.toContain('no live agents');
-    expect(text).toContain('aa-1');
+  test('no open gates reads all clear in success, one is singular', () => {
+    const quiet = bandTree(els, { snapshot, openGates: 0, columns: 120 }) as unknown as Node;
+    expect(texts(quiet).at(-1)?.props.color).toBe(chartRoom.ok);
+    expect(line(quiet)).toContain('all clear');
+    expect(line(bandTree(els, { snapshot, openGates: 1, columns: 120 }) as unknown as Node)).toContain('1 gate open');
   });
-
-  test('an all-idle squad keeps the empty-state text', () => {
-    const text = textOf(
-      200,
-      snap({ squad: [{ name: 'aa-1', persona: 'unknown', state: 'finished', source: 'task' }] }),
-    );
-    expect(text).toContain('no live agents');
+  test('never wider than the band', () => {
+    for (const columns of [10, 24, 30, 40, 80]) {
+      expect(textWidth(line(bandTree(els, { snapshot, openGates: 3, columns }) as unknown as Node))).toBeLessThanOrEqual(columns);
+    }
   });
 });

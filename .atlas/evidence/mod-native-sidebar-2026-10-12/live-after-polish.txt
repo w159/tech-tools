@@ -1,0 +1,60 @@
+     Context Index: This semantic index (titles, types, files, tokens) is usually sufficient to understand past work.
+
+     When you need implementation details, rationale, or debugging context:
+       - Fetch by ID: get_observations([IDs]) for observations visible in this index
+       - Search history: Use the mem-search skill for past decisions, bugs, and deeper research
+       - Trust this index over re-reading code for past decisions and learnings
+
+     Context Economics
+       Loading: 50 observations (29,951 tokens to read)
+       Work investment: 174,458 tokens spent on research, building, and decisions
+       Your savings: 144,507 tokens (83% reduction from reuse)
+
+
+
+     [Terminal preview truncated. The model received the full selected context; additional observations are not shown here.]
+     Oct 12, 2026
+
+     ../../../../../../private/tmp/claude-501/bundled-skills/2.1.296/890893f1ff7b6364a8644d9da78f5ea0/plugin-authoring/examples/band.tsx
+       #37569  11:56 AM  ○  Claude Plugin Authoring Examples Available in Bundled Skills (~303t) (⌕ 2,246t)
+     plugins/atlas/colony/herdr-web-ui/src/components/TerminalInput.tsx
+       #37570  11:57 AM  ○  Colony Web UI Components Use Button and Interactive UI Patterns (~268t) (⌕ 1,785t)
+     ...
+     </persisted-output>
+  ⎿  SessionStart:startup says: Atlas ready
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────✕─╮
+│  Atlas  research, 0 of 0 done                                                                                                                                                                        │
+│ ◉──────────────────────────────────────○──────────────────────────────────────○─────────────────────────────────────○──────────────────────────────────────○──────────────────────────────────────○  │
+│ research                             theory                                  test                                validate                              implement                             verify  │
+│                                                                                                                                                                                                      │
+│  ○ research  nothing planned                                                                                                                                                                         │
+│  ○ theory    nothing planned                                                                                                                                                                         │
+│  ○ test      nothing planned                                                                                                                                                                         │
+│  ○ validate  nothing planned                                                                                                                                                                         │
+│  ○ implement nothing planned                                                                                                                                                                         │
+│  ○ verify    nothing planned                                                                                                                                                                         │
+│                                                                                                                                                                                                      │
+│  Team  1 member                                                                                                                                                                                      │
+│  ▸ lead     idle                                                                                                                                                                                     │
+│    selffix  idle                                                                                                                                                                                     │
+│ To lead: type a message, Enter sends                                                                                                                                                                 │
+│                                                                                                                                                                                                      │
+│  Gates  all clear                                                                                                                                                                                    │
+│  ▸ Completion gate  clear                                                                                                                                                                            │
+│  ▸ Inline-op tripwire  clear                                                                                                                                                                         │
+│  ▸ Tool routing  clear                                                                                                                                                                               │
+│  Advisor notes  3                                                                                                                                                                                    │
+│    advisor[concern]: When SpriteReadable renders sprites to images for review, make it render at terminal cell aspect (each cell ≈1:2 wide:tall, half-blocks ▀▄ gi…                                  │
+│    advisor[concern]: ted67b0b4 / t040298d4 / te4be87b4 belong to session 40fd3319 — not your session and not the prior one (01a122d2); likely another live claude …                                  │
+│    +1 more                                                                                                                                                                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+Atlas  research 0 of 0   0 working   0 gates open                                                                                                                                                   [-]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ next: advisor[concern]: When SpriteReadable renders sprites to images f…
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁 tech-tools | 🤖 Opus 5.5 | 🧠 ░░░░░░░░░░ --%                                                                                                                           Not logged in · Run /login
+  context-mode  ●  saves ~98% of context window
+  fallow impact  off
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 2 agents · /atlas-cc Command Center · /atlas-say @name …
+

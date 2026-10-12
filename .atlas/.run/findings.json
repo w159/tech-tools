@@ -5425,5 +5425,994 @@
     "status": "verified",
     "verified_at": "2026-10-12T08:47:34+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "MODV-a",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "claude plugin validate plugins/atlas prints Validation passed",
+    "evidence": [
+      "live run 2026-10-12"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:19:19+00:00",
+    "verified_by": "ModVerifier"
+  },
+  {
+    "id": "MODV-b",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "no non-'did not load' (fail); mod tests pass for band,theme,restyle,register,register-agents,routing,discipline,squad,svg,pane/channel",
+    "evidence": [
+      "/tmp/ver-test.txt: band 9, theme 7, restyle 16, register 9, register-agents 8, routing 15, discipline 11, squad 3, svg 13, pane/channel 2 pass; 0 fail; no mod file failed to load (259 pass/169 fail all 'did not load' outside mod/)"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas 2>&1 | grep -E '^\\(fail\\)' | grep -v 'did not load'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:19:19+00:00",
+    "verified_by": "ModVerifier"
+  },
+  {
+    "id": "MODV-c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "no U+2B22/U+25E2/glyph.hex under plugins/atlas/mod",
+    "evidence": [
+      "python scan of mod/**: hits []"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 rglob scan for \\u2b22 \\u25e2 glyph.hex",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:19:19+00:00",
+    "verified_by": "ModVerifier"
+  },
+  {
+    "id": "MODV-d",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "no git stash entries; diff = 20 modified + 4 new files, all under plugins/atlas/mod or types/index.d.ts",
+    "evidence": [
+      "git stash list empty; git diff --stat 20 files"
+    ],
+    "doc_refs": [],
+    "reproduction": "git stash list; git diff --stat; git status --short",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:19:19+00:00",
+    "verified_by": "ModVerifier"
+  },
+  {
+    "id": "MODV-e",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "discipline.ts takes no $ across import (deps.reinforce(snapshot) only); all 3 hooks gated by isActive (isModOn&&isInteractive, isModOn from ATLAS_MOD!=off at session.start) and wrapped try/catch; fail-open tests pass",
+    "evidence": [
+      "plugins/atlas/mod/discipline.ts:60-140; register.ts:275,289; discipline.test.ts 'ATLAS_MOD=off', 'fails open' pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code; claude plugin test plugins/atlas (discipline.test.ts 11 pass)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:19:19+00:00",
+    "verified_by": "ModVerifier"
+  },
+  {
+    "id": "MODV-f",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "registerPromptReinforce has no caller in plugins/atlas",
+    "evidence": [
+      "grep -rn registerPromptReinforce plugins/atlas -> rc=1 (only .scratch/atlas-live/ModHonest/register_before.ts scratch copy)"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -rn registerPromptReinforce plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:19:19+00:00",
+    "verified_by": "ModVerifier"
+  },
+  {
+    "id": "MODV-g",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "live tmux smoke: band+pane render, /atlas-cc opens 5-tab pane, no error lines, single atlas-cc registration (--plugin-dir overrides installed)",
+    "evidence": [
+      "/tmp/ver.log: 'atlas@inline loaded', one '$.command.register (atlas): /atlas-cc listed'; error regex matches only the events: list and injected memory text"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux -L ver ... claude --debug-file /tmp/ver.log --plugin-dir plugins/atlas; send /atlas-cc",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:19:19+00:00",
+    "verified_by": "ModVerifier"
+  },
+  {
+    "id": "mod-band",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Band redesign",
+    "evidence": [
+      "ModVerifier MODV-a..g: validate passed; mod tests 259 pass no mod fails; glyph grep empty; live tmux band+pane rendered 0 faults"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:20:18+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-pane",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center pane redesign",
+    "evidence": [
+      "ModVerifier MODV-a..g: validate passed; mod tests 259 pass no mod fails; glyph grep empty; live tmux band+pane rendered 0 faults"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:20:18+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-restyle",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Restyle sites",
+    "evidence": [
+      "ModVerifier MODV-a..g: validate passed; mod tests 259 pass no mod fails; glyph grep empty; live tmux band+pane rendered 0 faults"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:20:18+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-discipline",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Context discipline hooks",
+    "evidence": [
+      "ModVerifier MODV-a..g: validate passed; mod tests 259 pass no mod fails; glyph grep empty; live tmux band+pane rendered 0 faults"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:20:18+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-cleanup",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Cleanup cutover",
+    "evidence": [
+      "ModVerifier MODV-a..g: validate passed; mod tests 259 pass no mod fails; glyph grep empty; live tmux band+pane rendered 0 faults"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:20:18+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "wave2-a",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "claude plugin validate plugins/atlas passes",
+    "evidence": [
+      "claude plugin validate -> 'Validation passed' (README install-line advice only)"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:52:54+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-b",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "plugin test fail-filter empty; 7 named mod test files all pass lines",
+    "evidence": [
+      "/tmp/w2test.txt: 317 pass; fail-filter 0 lines; per-file pass: validity 29, band 13, snapshot 10, sprites/api 4, pane/layout 16, discipline 11, register 9; 0 failing mod/ files (169 fails = colony/omp 'did not load')"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas 2>&1 | grep -E '^\\(fail\\)' | grep -v 'did not load'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:52:54+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_wt.py e2e in temp repo + test_atlas_wt.py pass",
+    "evidence": [
+      "pytest 6 passed; temp repo: add ok, merge refused rc=1 without verified finding, after atlas_finding stamp merge rc=0, worker/* branch list empty, worktree removed"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_atlas_wt.py -q; mktemp repo: atlas_wt.py add/commit/merge",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:52:54+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-d-gate",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "completion_gate (q) blocks on unmerged worker branch, passes with none, ATLAS_WT_GATE=off honoured",
+    "evidence": [
+      "temp repo w/ isolated ATLAS_DB: none -> silent rc0; unmerged -> decision block '(q) Unmerged worker branches: worker/ag1 (+1)'; ATLAS_WT_GATE=off -> silent"
+    ],
+    "doc_refs": [],
+    "reproduction": "completion_gate.py via stdin Stop payload, orchestrating session in temp ATLAS_DB",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:52:54+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-e",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "no $ crosses a module import in mod/register.ts",
+    "evidence": [
+      "register.ts:8-19 imports only claude-code atom/read/update + types and sibling modules; no $ passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -n '^import' plugins/atlas/mod/register.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:52:54+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-f",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "layout tests assert no row wider than columns at 80/120/200 for band, colony, channel",
+    "evidence": [
+      "pane/layout.test.ts:19-22,26-28 rowW<=cols (cell-width reduce, orchestra.tsx:39) for 44/80/120/200; channel test:60-66 logW+nicks<=cols and renderLog rowWidth<=logW; band.test.ts:12,25 width<=w at 80/120/200. Caveat: channel nick list/header/composer rows not width-asserted individually"
+    ],
+    "doc_refs": [],
+    "reproduction": "read plugins/atlas/mod/pane/layout.test.ts, band.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:52:55+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-g",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "no U+2B22/U+25E2 glyph under mod/",
+    "evidence": [
+      "grep -rlE '\\u2b22|\\u25e2' mod -> none (only codepoint-range checks in orchestra.tsx:34 and theme.test.ts)"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -rlE '\\u2b22|\\u25e2' plugins/atlas/mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:52:55+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-h",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "band height budget: idle 1, live 2, 3 only blocked/failed, capped by maxRows",
+    "evidence": [
+      "band.tsx:196-209 buildBand: row2 only if workers>0&&cap>=2, row3 only if row3!==null (blocked/failed) && cap>=3; cap=min(3,maxRows); band.test.ts idle=1, live=2, cap 1/2 respected. Caveat: no unit test positively asserts 3 rows for blocked"
+    ],
+    "doc_refs": [],
+    "reproduction": "read plugins/atlas/mod/band.tsx:182-209, band.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T11:52:55+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-d-regression",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hooks/test_atlas_wt.py lacks 'import _test_isolation': test_atlas_contract TestIsolationContract fails",
+    "evidence": [
+      "pytest 1 failed/812 passed: hooks/test_atlas_contract.py:1609 missing ['hooks/test_atlas_wt.py']"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-12T11:52:55+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave2-nicklist-dup",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Channel nick list shows both 'lead' and 'lead-<id>' for same orchestrator",
+    "evidence": [
+      "mod/pane/channel.tsx:239 seeds Set with 'lead'; :240-243 add member/squad/comms names with no isLead normalisation (isLead at :31 exists, unused for dedupe)"
+    ],
+    "doc_refs": [],
+    "reproduction": "read plugins/atlas/mod/pane/channel.tsx:237-244",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-12T11:52:55+00:00",
+    "verified_by": "WaveVerifier"
+  },
+  {
+    "id": "wave3-a",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "claude plugin validate plugins/atlas passes",
+    "evidence": [
+      "Validation passed (README install-line warning only)"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave3-b",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "plugin test: 0 non-did-not-load fails; 10 named mod test files pass (21/44/16/7/13/7/17/8/9/11)",
+    "evidence": [
+      "/tmp/w3test.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas 2>&1 | grep -E '^\\(fail\\)' | grep -v 'did not load'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave3-c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Board: unphased -> UNSORTED, no ARCHIVE; DEPT fallback is phase.toUpperCase",
+    "evidence": [
+      "plugins/atlas/mod/data/todos.ts:76,96,106; pane/validity.test.ts:156; data/todos.test.ts:177"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave3-d",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Band rows <= columns-4 at 80/100/120/160/200 incl blocked row3, no raw id, pill from contractProgress",
+    "evidence": [
+      "plugins/atlas/mod/band.tsx:132-136,216-220; independent bun run max==limit"
+    ],
+    "doc_refs": [],
+    "reproduction": "temp bun test on buildBand (removed)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave3-e",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "parseTranscript on real subagent transcript yields 4-line tail; parseMuxStatus parses live atlas_mux status",
+    "evidence": [
+      "mod/data/sessions.ts:40,77"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun parseTranscript(agent-*.jsonl); parseMuxStatus(atlas_mux.py status --run x)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave3-f",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Sprites: api.test geometry+silhouette pass; sheet shows distinct personas",
+    "evidence": [
+      "mod/sprites/api.test.ts 8 pass; /tmp/sprites-sheet.png"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave3-g",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "No dollar in import specifiers; no U+2B22/U+25E2 under mod",
+    "evidence": [
+      "grep empty"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -rn glyph bytes under plugins/atlas/mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave3-h",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "tsc --noEmit -p plugins/atlas/mod prints nothing",
+    "evidence": [
+      "empty output"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/mod && ~/.atlas/colony/herdr-web-ui/node_modules/.bin/tsc --noEmit -p .",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave3-i",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "test_atlas_wt 6 pass; isolation contract 3 pass; contract file 92 pass",
+    "evidence": [
+      "pytest output"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_atlas_wt.py plugins/atlas/hooks/test_atlas_contract.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave2-d-regression",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "TestIsolationContract passes 3/3",
+    "evidence": [
+      "pytest 3 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -k TestIsolationContract -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "wave2-nicklist-dup",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "channel.test.ts: lead-<id> and lead collapse to one nick - passes",
+    "evidence": [
+      "mod/pane/channel.test.ts pass line"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:13:07+00:00",
+    "verified_by": "Wave3Verifier"
+  },
+  {
+    "id": "verify-band-blocked",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "band row logic C1-C3 confirmed, C4 partial, C5 runner is claude plugin test plugins/atlas",
+    "evidence": [
+      "plugins/atlas/mod/band.tsx:219-233,92,101,197-213; plugins/atlas/mod/band.test.ts:43-48; plugins/atlas/mod/live_fixture.ts; plugins/atlas/mod/TESTING.md:11-14"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas -> mod/band.test.ts 14 pass (359 pass/169 fail overall, fails are colony/omp bun:test files)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T12:15:35+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "final2-a",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "claude plugin validate plugins/atlas passes",
+    "evidence": [
+      "Validation passed (README install-line warning only)"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-b",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "plugin test: no non-load fails; 13 named mod suites all pass, 0 fail",
+    "evidence": [
+      "/tmp/fv2_test.txt: 412 pass/169 fail all (fail) lines are did-not-load; band 24, props-budget 20, register-open 1, validity 45, layout 21, channel 7, orchestration 12, sessions 10, todos 21, snapshot 13, sprites/api 8, register-agents 13, discipline 11"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas 2>&1 | grep -E \"^\\(fail\\)\" | grep -v \"did not load\"",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "props over real .atlas data far under 100000",
+    "evidence": [
+      "band 597; colony 1413; channel 6291; board 6498; squad 5048; collab 1588 chars"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun /tmp/fv2_props.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-d",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "real todos.json fresh session: contractProgress [] and no contract group has advisor/carried rows",
+    "evidence": [
+      "1412 raw rows (509 advisor,163 carried); contractProgress=[]; only group is dedicated advisor (47 rows)"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun /tmp/fv2_props.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-e",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "no verified lifecycle without finding naming that worker",
+    "evidence": [
+      "orchestration.test.ts lifecycle tests: persona-word-only finding does not verify; prefix not matched; 12 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas (mod/data/orchestration.test.ts)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-f",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "host-listed running worker stays live regardless of lead",
+    "evidence": [
+      "register-agents.test.ts: stale workers > liveness is the host list only ... whatever the lead does (pass)"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-g",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "chip( gone from mod; badge( in orchestra.tsx:214 and channel.tsx:317",
+    "evidence": [
+      "grep chip( empty; orchestra.tsx:214, channel.tsx:317"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -rn \"chip(\" plugins/atlas/mod; grep -n \"badge(\" plugins/atlas/mod/pane/{orchestra,channel}.tsx",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-h",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dispatch gate: pytest subsets + 3 payloads",
+    "evidence": [
+      "453 passed/3 skipped; test_dispatch_tripwire 225 passed; atlas:explorer allow, Explore deny with paste block, NUDGE=off allow"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks -q -k \"dispatch or tripwire or contract or isolation\"; python3 /tmp/fv2_gate.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-i",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "tsc --noEmit clean",
+    "evidence": [
+      "exit 0, no output"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/mod && ~/.atlas/colony/herdr-web-ui/node_modules/.bin/tsc --noEmit -p .",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-j",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "no $ exported/imported across modules; no U+2B22/U+25E2 in mod",
+    "evidence": [
+      "ctx_search export/import with $: 0 matches; byte grep empty; $ helpers in discipline.ts/restyle.tsx are file-local"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -rnE bytes e2 ac a2 / e2 97 a2 plugins/atlas/mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-k",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "test_atlas_wt.py passes",
+    "evidence": [
+      "6 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_atlas_wt.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "final2-l",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "whole hooks dir green",
+    "evidence": [
+      "1410 passed, 3 skipped, 322 subtests, 0 failures"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks -q 2>&1 | tail -15",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:04:07+00:00",
+    "verified_by": "FinalVerifier2"
+  },
+  {
+    "id": "live-final-2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Final tree: validate, mod tests, tsc, hooks green; live two-worker run in Ghostty tab 2 with injected names",
+    "evidence": [
+      ".atlas/evidence/mod-final2-2026-10-12/ (validate, test-full, tsc, hooks); live run /tmp/w10.log screenshots"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas && claude plugin test plugins/atlas | grep -E \"^\\(fail\\)\" | grep -v \"did not load\"; python3 -m pytest plugins/atlas/hooks -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T13:57:42+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "dedup-cpwidth-11.0.4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "cpWidth/Mood dedup + dead exports removed",
+    "evidence": [
+      "claude plugin test plugins/atlas: 421 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T15:26:43+00:00",
+    "verified_by": "atlas:implementer"
+  },
+  {
+    "id": "dedup-cpwidth-11.0.4-lead",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "lead re-run: cpWidth/Mood dedup",
+    "evidence": [
+      "claude plugin test plugins/atlas run by lead after DedupCpWidth and CommentChangelog: 421 pass, 169 fail (colony/omp bun:test residuals)"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T15:27:36+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "verify-11.0.4-cleanup",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod cleanup verified by test gate",
+    "evidence": [
+      ".atlas/evidence/2026-10-12-mod-dedup-cleanup.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T15:29:25+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "DOCTOR-2026-10-12",
+    "surface": "hooks,dashboard,selffix,omp",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-doctor source fixes: formatter, hook JSON, dashboard singleton, selffix sweep, gate (m) prewarn, channel-open diagnostics",
+    "evidence": [
+      "pytest plugins/atlas/hooks: 1435 passed, 3 skipped",
+      "scripts unittest dashboard+selffix: 94 OK",
+      "omp bun test channels+gen-agents: 21 pass 0 fail",
+      "test_atlas_contract: 93 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T15:45:10+00:00",
+    "verified_by": "lead-40fd3319"
+  },
+  {
+    "id": "tripwire-agent-id",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Tripwire treats hooks with agent_id as subagent calls (implementer writes no longer denied)",
+    "evidence": [
+      "plugins/atlas/hooks/test_dispatch_tripwire.py::SubagentDenyTierSkipTest.test_edit_from_subagent_carrying_agent_id_and_parent_transcript_is_not_denied"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_dispatch_tripwire test_delegation_prewarn test_worker_exemption test_worker_inbox",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T16:13:53+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-sidebar-view",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Native sidebar view module renders route, tasks per phase, team, gates within width",
+    "evidence": [
+      "plugins/atlas/mod/pane/sidebar.test.ts (10 pass); tsc exit 0"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas; cd plugins/atlas && bunx tsc --noEmit -p tsconfig.json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T16:17:46+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-gates-script",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_gates.py prints completion/tripwire/routing gate groups as JSON in 0.37s; completion_gate.evaluate shared with the Stop hook",
+    "evidence": [
+      "plugins/atlas/hooks/test_atlas_gates.py (4 OK); hooks suite 1443 OK per implementer"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_atlas_gates; python3 plugins/atlas/scripts/atlas_gates.py --session <id> --root <repo> --json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T16:24:32+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-native-live",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Live 2.1.296: native sidebar takes keyboard focus (ctrl+x tab), Tab walks rows, Enter expands, Input sends a note to the lead board",
+    "evidence": [
+      ".atlas/evidence/mod-native-sidebar-2026-10-12/live-gates-and-input.txt; .atlas/evidence/mod-native-sidebar-2026-10-12/board-note.jsonl"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux new-session -d -x 200 -y 60 \"claude --plugin-dir plugins/atlas\"; ctrl+x tab; Tab x N; type; Enter; grep the text in .atlas/.run/board/human.jsonl",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T16:28:35+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-sidebar-polish-live",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Post-polish live sidebar: counts agree, names under waypoints, team filtered, gates collapsed with open count, advisor section, fits one screen, 0 refusals",
+    "evidence": [
+      ".atlas/evidence/mod-native-sidebar-2026-10-12/live-after-polish.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux new-session -d -x 200 -y 60 \"claude --plugin-dir plugins/atlas --debug-file /tmp/d.log\"; capture-pane; grep -c refused /tmp/d.log",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T16:32:00+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-theme-keys-sprites",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Sidebar/band use Claude theme keys (body text default fg) plus sprite badges, phase glyphs, bordered sections; renders under dark and light themes, 0 refusals",
+    "evidence": [
+      ".atlas/evidence/mod-native-sidebar-2026-10-12/final-light.txt; theme-dark.ansi; theme-light.ansi; sidebar.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas; tmux ... claude --plugin-dir plugins/atlas --settings {\"theme\":\"light\"}",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T16:44:00+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-complexity-refactor",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Introduced complexity cleared: fallow audit verdict pass (0 introduced findings, 0 clones); golden tests prove output unchanged; live sidebar layout identical",
+    "evidence": [
+      ".atlas/evidence/mod-native-sidebar-2026-10-12/after-refactor.txt; *.golden.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "fallow audit; claude plugin test plugins/atlas; diff final-light.txt after-refactor.txt",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T16:59:36+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

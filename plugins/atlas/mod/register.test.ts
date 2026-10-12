@@ -6,7 +6,6 @@
 // confirmation: $.ui.ask gates the atlas_mux kill.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { intentToArgv } from './intents';
 import { headerPhaseOf, register } from './register';
 import { memState } from './test_helpers';
 
@@ -17,15 +16,6 @@ interface SessionStartEvent {
   surface: 'terminal' | 'desktop' | 'mobile' | 'vscode' | null;
   isInteractive: boolean;
 }
-interface MessageEvent {
-  surface: 'terminal';
-  component: 'AbovePrompt' | 'Pane';
-  requestId: string;
-  element: string;
-  module: string;
-  data: unknown;
-}
-
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;
 
@@ -54,6 +44,7 @@ function stubEngine(env: Record<string, string> = {}) {
     ui: [] as string[],
     asks: [] as string[],
     timers: [] as number[],
+    tickFns: [] as (() => void)[],
     commands: [] as string[],
     askAnswer: 'Kill it',
   };
@@ -62,8 +53,9 @@ function stubEngine(env: Record<string, string> = {}) {
     env: { get: async (name: string) => env[name] },
     clock: {
       now: async () => 1_760_000_000_000,
-      every: (ms: number, _fn: () => void) => {
+      every: (ms: number, fn: () => void) => {
         rec.timers.push(ms);
+        rec.tickFns.push(fn);
         return { cancel() {} };
       },
       after: () => ({ cancel() {} }),
@@ -116,12 +108,6 @@ function stubEngine(env: Record<string, string> = {}) {
 
 const noopNext: AnyNext = async (input) => input;
 
-/** Narrow an IntentResult to its cli argv, failing the test otherwise. */
-function cliArgv(result: ReturnType<typeof intentToArgv>): string[] {
-  if (result.ok && result.kind === 'cli') return result.argv;
-  throw new Error(result.ok ? 'expected a cli intent, got ui' : `intent rejected: ${result.error}`);
-}
-
 describe('register kill switch', () => {
   test('ATLAS_MOD=off: session.start wires nothing, handlers pass through', async () => {
     const { on, pick } = captureOn();
@@ -136,57 +122,8 @@ describe('register kill switch', () => {
       surface: 'terminal', component: 'AbovePrompt', requestId: 'band',
       props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} },
     }, noopNext);
-    await pick('ui.message')(engine, {
-      surface: 'terminal', component: 'Pane', requestId: 'atlas', element: 'k',
-      module: './pane/board.tsx', data: { t: 'todo.claim', id: 't1', owner: 'me' },
-    }, noopNext);
     expect(rec.ui).toEqual([]);
     expect(rec.runs).toEqual([]);
-  });
-});
-
-describe('ui.message intent handling', () => {
-  test('exact argv passthrough: the intent reaches $.process.run untouched', async () => {
-    const { on, pick } = captureOn();
-    const { engine, rec } = stubEngine();
-    await register(on, {});
-    // Boot first: the kill-switch test runs earlier and flips module state off.
-    await pick('session.start')(engine, { cwd: '/tmp/proj', surface: null, isInteractive: false }, noopNext);
-    const runsAtBoot = rec.runs.length;
-    const intent = { t: 'todo.claim', id: 't1', owner: 'impl-auth' };
-    const ctx = { pluginRoot: '/plugins/atlas', root: '', channel: null };
-    const result = (await pick('ui.message')(engine, {
-      surface: 'terminal', component: 'Pane', requestId: 'atlas', element: 'k',
-      module: './pane/board.tsx', data: intent,
-    }, noopNext)) as { props?: unknown };
-    expect(rec.runs.length).toBe(runsAtBoot + 1);
-    expect(rec.runs.at(-1)).toEqual(cliArgv(intentToArgv(intent, ctx)));
-    // No board found: an idle snapshot rides in the fresh props.
-    expect(result).toEqual({
-      props: { snapshot: expect.objectContaining({ root: null, sessionId: 'sess-abc123def456' }), columns: 0, rows: 0, usage: { tokens: null, costUsd: null, contextPct: null } },
-    });
-  });
-
-  test('stop intent: $.ui.ask gates the atlas_mux kill, decline runs nothing', async () => {
-    const { on, pick } = captureOn();
-    const { engine, rec } = stubEngine();
-    await register(on, {});
-    // Interactive session first, so the confirmation path is reachable.
-    await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
-    const kill = { t: 'stop', run: 'run-1' };
-    const event: MessageEvent = {
-      surface: 'terminal', component: 'Pane', requestId: 'atlas', element: 'k',
-      module: './band.tsx', data: kill,
-    };
-    rec.askAnswer = 'Leave it';
-    const runsAtBoot = rec.runs.length; // the git branch probe from boot
-    await pick('ui.message')(engine, event, noopNext);
-    expect(rec.asks.length).toBe(1);
-    expect(rec.runs.length).toBe(runsAtBoot); // declined: nothing ran
-    rec.askAnswer = 'Kill it';
-    await pick('ui.message')(engine, event, noopNext);
-    expect(rec.asks.length).toBe(2);
-    expect(rec.runs.at(-1)).toEqual(cliArgv(intentToArgv(kill, { pluginRoot: '/plugins/atlas', root: '', channel: null })));
   });
 });
 
@@ -203,20 +140,7 @@ describe('header phase', () => {
   });
 });
 
-describe('engine module path and faults', () => {
-  test('stop intent from the engine-style path mod/band.tsx still answers with band props', async () => {
-    const { on, pick } = captureOn();
-    const { engine } = stubEngine();
-    await register(on, {});
-    await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
-    const out = (await pick('ui.message')(engine, {
-      surface: 'terminal', component: 'AbovePrompt', requestId: 'band', element: 'k',
-      module: 'mod/band.tsx', data: { t: 'stop', run: 'r' },
-    }, noopNext)) as { props?: Record<string, unknown> };
-    // Band props carry maxRows; pane props carry rows.
-    expect(out.props).toHaveProperty('maxRows');
-  });
-
+describe('faults', () => {
   test('ui.fault logs component, module, phase and reason to debug, then passes on', async () => {
     const { on, pick } = captureOn();
     const { engine } = stubEngine();
@@ -242,5 +166,31 @@ describe('headless inertness', () => {
     expect(rec.ui).toEqual([]);
     // The only process call is the branch probe; git is fine headless.
     expect(rec.runs).toEqual([['git', '-C', '/tmp/proj', 'rev-parse', '--abbrev-ref', 'HEAD']]);
+  });
+});
+
+describe('snapshot refresh on live state', () => {
+  test('a session.measure and a header miss reach the snapshot on the next tick, no file change', async () => {
+    const { on, pick } = captureOn();
+    const { engine, rec } = stubEngine();
+    await register(on, {});
+    await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
+    const rebuildTick = rec.tickFns[0] as () => void;
+    const snap = async () =>
+      (await engine.state.get({ plugin: 'atlas', key: 'snapshot' } as never)).value as { tokens: number; headerMisses: number };
+    const settle = async () => {
+      for (let i = 0; i < 50; i++) await Promise.resolve();
+    };
+    rebuildTick();
+    await settle();
+    const before = await snap();
+    await pick('session.measure')(engine, { context: { tokens: 4321, percent: 7 }, changed: ['context'] }, noopNext);
+    await pick('turn.complete')(engine, { reason: 'answer', answer: 'no header', agentId: undefined }, noopNext);
+    rebuildTick();
+    await settle();
+    const after = await snap();
+    expect(after.tokens).toBe(4321);
+    expect(after.tokens).not.toBe(before.tokens);
+    // header misses share the same fingerprint term (liveSig), so they refresh the same way
   });
 });

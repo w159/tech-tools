@@ -202,7 +202,7 @@ def read_payload():
     """Read stdin once, parse JSON, fail-open to {} on any error."""
     try:
         raw = sys.stdin.read()
-        return json.loads(raw) if raw.strip() else {}
+        return json.loads(raw, strict=False) if raw.strip() else {}
     except Exception:
         return {}
 
@@ -274,7 +274,7 @@ def load_payload(hook_name, raw=None):
             raw = sys.stdin.read()
         if not raw.strip():
             return {}
-        data = json.loads(raw)
+        data = json.loads(raw, strict=False)
     except Exception as exc:
         fault(hook_name, f"unreadable payload: {type(exc).__name__}: {exc}")
         return {}

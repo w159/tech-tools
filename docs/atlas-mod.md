@@ -1,8 +1,10 @@
 # Atlas mod (Claude Code)
 
-Last verified against the source tree on 2026-10-10 (the unreleased atlas 11.0.0 line; installed releases before it have no mod): `claude plugin test plugins/atlas` loads and passes all 17 mod test files — 215 pass / 0 fail (the full plugin walk reports 384 tests / 186 files, 215 pass / 169 fail; every failure is a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file importing `bun:test`, which the plugin test host forbids — documented expected residual, those suites stay on `bun test`); `claude plugin validate --json plugins/atlas` returns success with 0 errors and 0 warnings; `bunx tsc --noEmit -p tsconfig.json` (include widened to `[hooks, types, tests, mod]`) exits 0 over 60 mod files. Live render is verified as of 2026-10-10: a tmux capture of a fresh `claude --plugin-dir plugins/atlas` session (Claude Code 2.1.296) shows the plain-text AbovePrompt band with zero `ui.render … refused` lines. The earlier refusals came from `undefined` values reaching the Client props through `channels.ts` `parseNote` and `herdr.ts` `mergeSquad`; the fix is a `completeProps` deep undefined-strip sanitizer in `plugins/atlas/mod/props.ts` (`contract.ts` is chmod-locked read-only and so cannot host the helper), routed through every Client mount and every `ui.message` answer in `register.ts`. Paths are relative to `plugins/atlas/` unless they start with `docs/`.
+Last verified against the source tree on 2026-10-12 (the unreleased atlas line; `plugins/atlas/CHANGELOG.md` Unreleased > Mod: native sidebar): `claude plugin test plugins/atlas` passes 309 tests across the mod test files. The full plugin walk also reports 169 failures, all pre-existing `plugins/atlas/colony/**` or `plugins/atlas/omp/**` files importing `bun:test`, which the plugin test host forbids (those suites stay on `bun test`). Live render is verified on 2026-10-12 in a Claude Code 2.1.296 session: ctrl+x tab focuses the sidebar, Tab and arrows walk its rows, Enter sends a note (`.atlas/evidence/mod-native-sidebar-2026-10-12/`). Fullscreen docked placement is not yet live-verified. Paths are relative to `plugins/atlas/` unless they start with `docs/`.
 
-The Atlas mod is an in-process UI plugin module for Claude Code mods (Claude Code 2.1.287+). It brings the Colony, the IRC channel, the durable TODO board, the persona roster and the operating-contract progress into the Claude Code terminal, with Atlas branding (accent teal `#2fbd9f`, the hex-cube mark). It is the Claude-side twin of the omp channel widget (`omp/channel-view.ts`, `ATLAS_CHANNELS=off`); omp is a separate harness and stays as it is. The browser Command Center (`docs/atlas-workboard.md`) remains the browser front door; the mod is the in-terminal view and links out to the browser for terminals and deep control.
+The mod was redesigned in 11.0.2 to 11.0.4 around `Client` panes and then replaced, in the unreleased line, by native elements: one docked sidebar and a one-line band. The Client panes (colony, squad, board, channel, collab, orchestra, sprites), the `/atlas-sprites` command and the Client props budget (`mod/props.ts`) were removed. Restyles, context discipline, agent identity labels, the orchestration data plane and the isolated-worker workflow below are unchanged by that replacement. Every section below is read from the current `mod/` source tree.
+
+The Atlas mod is an in-process UI plugin module for Claude Code mods (Claude Code 2.1.287+). It brings the operating-contract route, the persona roster, the durable TODO board and a message field to the lead channel into the Claude Code terminal, with Atlas branding. It is the Claude-side twin of the omp channel widget (`omp/channel-view.ts`, `ATLAS_CHANNELS=off`); omp is a separate harness and stays as it is. The browser Command Center (`docs/atlas-workboard.md`) remains the browser front door; the mod is the in-terminal view.
 
 Design rationale and decision log: `docs/plans/2026-10-09-atlas-mod.md`.
 
@@ -11,42 +13,60 @@ Design rationale and decision log: `docs/plans/2026-10-09-atlas-mod.md`.
 - Claude Code 2.1.287 or newer (mods). On older versions the `modules` key is ignored and the rest of the plugin keeps working.
 - The mod is wired by the `modules` entry in `hooks/hooks.json` (`hooks/hooks.json:192`, `"../mod/register.ts"` — the validator resolves `modules` paths hooks/-relative), in the same file as the existing 21 hook bindings. `register(on, options)` in `mod/register.ts` is the entry point; `claude plugin validate --json plugins/atlas` passes (success true, 0 errors).
 - The mod runs in-process. Hook modules get no Node APIs: every file, process and network call goes through the mods `$` API. Pure logic modules take an injected `FsLike` (see `mod/contract.ts`) so they stay testable without a live session.
-- Lifecycle: the mod loads silently at session start and opens nothing unasked. The always-on surface is the plain-text status band below; `/atlas-cc` opens the Command Center explicitly, and `/atlas-sprites` is the only opt-in art pane. The early-wave `logo.ts` (pixel logo) was deleted, and the decorative block art of the old colony globe/map is gone by default — the Command Center renders text rows, not pixel art.
+- Lifecycle: the mod loads at session start and opens the docked sidebar without taking the keyboard (`register.ts:535-537`); `/atlas-cc` focuses it, reopening it if it was closed. The band is always on. The early-wave `logo.ts` (pixel logo) was deleted.
 - Where it runs: the CLI and the Desktop Code tab. Rendering is text-first everywhere; `Raster`/`Image` are not used by the mod. `claude -p` and the Agent SDK run mod hooks but draw nothing, so every `ui.*` call no-ops cleanly there — the persona routing below still applies in headless workers.
-- Kill switch: `ATLAS_MOD=off` disables the mod (band, pane, restyles, routing), matching `ATLAS_CHANNELS=off` for the omp widget. The plugin's hooks and CLIs are unaffected.
+- Kill switch: `ATLAS_MOD=off` disables the mod (band, sidebar, restyles, routing), matching `ATLAS_CHANNELS=off` for the omp widget. The plugin's hooks and CLIs are unaffected.
 
 ## Surfaces
 
-### The band: contract track (always on)
+## Surfaces
 
-An `AbovePrompt` `Client` surface rendered as plain text (no `Raster`), always on, redrawn at 10 fps while Claude is working or the pane has focus, 2 fps when idle, stopped while hidden. Rows:
+Both surfaces are drawn with native elements (`$.ui.resolve(e)` from the `ui.render` hooks in `mod/register.ts:584-607`), not `Client` surface modules. A `Client` only receives keys after a mouse click, so in a live Claude Code 2.1.296 session ctrl+x tab could not focus the earlier Command Center pane and its tab hotkeys typed into the prompt. Native Buttons and Inputs join the engine focus ring. Live check: `.atlas/evidence/mod-native-sidebar-2026-10-12/` (`live-gates-and-input.txt`, `live-after-polish.txt`, `board-note.jsonl`).
 
-1. **Contract track (text).** Phase nodes come from `todoPhases` plus `done` in `contracts/operating-contract.json`, drawn as text glyphs: finished phases solid, the current phase an inverse-video capsule with its `n/m`, remaining phases dashed. `blocked` marks the track red. Hovering a phase node reveals a card with that phase's items (absolute `Box`, `hover` + `scope` — no hook runs).
-2. **Squad and usage.** The live member count with a state summary, then the unread channel mail count, the context gauge, session cost and session tokens, all as text. Clicking the mail count opens the Channel tab.
+### The band (always on)
 
-The band's phase comes from the last header in `turn.complete` (matched with the contract's `headerFirstLinePattern`), else the session's first `in_progress` item, else `research`; counts come from the session's todo slice, refiltered only when `todos.json`'s mtime changes. The band stays right when a reply forgets its header. Fewer than 3 available rows collapse to the track.
+One native line above the prompt, `Atlas  <phase> n of m   N working   N gates open` (`mod/band.tsx:14-21` `bandTree`), drawn only for the terminal surface in an interactive session with the mod on (`register.ts:584-588`). `n of m` is `routeCounts(s.todoGroups, s.contract)`, the same tasks the sidebar route shows; `N working` counts squad agents in state `running` or `spawning`; `N gates open` is `openGateCount` over the gate groups (`mod/gates.ts:43-44`). Runs are cut to `props.bodyColumns` with `fitText` (`band.tsx:22-29`).
 
-The band's usage figures are honest about unknown: tokens / cost / context fill render `ctx --` · `-- tok` · `$--` until `session.measure` carries a value (d.ts `SessionMeasureInput`: `context.tokens`/`percent` are absent before the first API response, `cost.usd` without a ledger). `null` is "not measured yet"; a measured `0` still renders `0%` / `0 tok` / `$0.00`. `register.ts` holds the figures per-figure nullable (`UsageUnknown` prop on `BandProps`) and resets them at `session.start`; the snapshot's numeric contract fields fall back to measured-or-0 for the other consumers.
+The phase comes from the last header in `turn.complete` (matched with the contract's `headerFirstLinePattern`), else the session's first `in_progress` item, else `research`. Usage figures (tokens, cost, context fill) are held per-figure nullable in `$.state` (`usage`, `null` means not measured yet) and feed the snapshot; the band line itself no longer prints them.
 
-### Command Center (`/atlas-cc`)
+### The sidebar (`mod/pane/sidebar.tsx`)
 
-The Command Center opens only when the user asks: from the `/atlas-cc` command or a `ui.message` click — the mod never auto-opens it. It renders as text rows (no pixel art, no opening logo animation). Five full-height tabs:
+One docked `Pane` with id `atlas` (`PANE_OPEN = { id: 'atlas', title: 'Atlas', columns: 44, rows: 32 }`, `register.ts:33`), drawn with Claude Code theme keys (`chartRoom` in `mod/theme.ts` maps roles to `subtle`, `claude`, `suggestion`, `success`, `error`, `warning`, `promptBorder`; body text takes the terminal default), so it reads on light and dark themes. Hex colors appear only on sprite badges and portraits, which carry their own background. Sections are framed with rounded borders, phases use the contract glyphs with a `▰▱` bar, and team rows lead with persona badges (`mod/sprites/api.ts` `badge`, `spriteRows`, `speechBubble`). It opens at session start without taking the keyboard (`register.ts:535-537`), and the host seats it docked only when the terminal is fullscreen and wide enough. `columns`/`rows` are a size request, not a grant: `sidebarTree` lays out to `props.bodyColumns` and `props.scroll.bodyRows` (`register.ts:595-604`). Sections, top to bottom (`sidebar.tsx:259-281` `sidebarTree`):
 
-- **Colony.** Text rows, one district per contract phase (archive, observatory, lab, scanning gate, forge, tribunal, harbour). Every agent is listed by name in its persona colour at the district of the todo item it owns, with its state; the lead row is marked. A channel note appears inline with its first 28 characters (amber highlight for notes to the lead). 15 minutes of silence marks a member as `stuck` in its state column. Hovering an agent shows a nameplate (persona, `model·effort`, task, last-note age); clicking opens an inspector card with the last channel lines, the todo item and evidence, and three actions: **Steer** (a note, or a herdr prompt for an idle pane), **Open pane** (a link to the herdr web UI) and **Stop run** (destructive, confirmed). Dragging one agent onto another pre-addresses a message. Left/right cycles agents, enter inspects, `Esc` returns to the prompt.
-- **Channel.** A nick list (nick, state dot, unread count) beside the message log: persona-coloured nicks, an amber stripe on mentions of `lead` or `human`, exit notes as system lines, joins and parts from registry changes. Notes over three lines fold with a hover-reveal; fenced code and markdown render richly. A typing indicator shows while that agent's `turn.step` is in flight. The composer has Tab nick completion, an `@target` prefix parse and a channel select; Enter runs the `atlas_todo.py note` argv. Away from the tab, a note to the lead raises a toast naming the sender (an optional chime is off by default).
-- **Board.** One kanban column per contract phase plus Done; cards show the owner's name in its persona colour, content, age and an evidence tick. Dragging a card to another phase changes its status, onto an agent claims it, and to Done asks for an evidence note. Each drag posts an intent through `surface.post`; the hooks module validates it, runs the CLI and hands fresh props back, so the card snaps into place without flicker. Column headers carry mini progress bars; the current phase's column is lit to match the band.
-- **Squad.** One text card per persona (role, pinned `model`, `effort`, colour, tools posture, and live count, tokens and cost this session), the task-type matrix from the table below with hover highlight, and a drift panel: header misses this session, effort pins the mod applied to forks, unpinned spawns that inherited opus (with a cost badge), and frontmatter-versus-omp mismatches. The header's tokens/cost figures are per-figure honest like the band's: `-- tok · $--` until `session.measure` carries a value (the same nullable `usage` prop the band receives, via the pane props in `register.ts`); a measured `0` still renders `0 tok · $0.00`.
-- **Collab.** The collaboration tab, implemented in `mod/pane/collab.tsx` with shared pane components in `mod/pane/sprites.tsx`.
-- **Sprites (`/atlas-sprites`).** The only opt-in art surface: the persona sprite gallery, opened explicitly by the `/atlas-sprites` command and never by the mod itself.
+- **Route.** Header `Atlas  <phase>, D of T done`, then the operating-contract phases as a track with the current phase marked (`routeLines`, `sidebar.tsx:53`).
+- **Tasks.** Every phase with its tasks, each a Button; Enter toggles the row open (`taskRows`, `sidebar.tsx:91-117`).
+- **Team.** The lead plus this session's members, capped by pane height (6 rows at `rows >= 30`, 4 at `>= 20`, else 2; the rest fold into `+N more`, `teamCap`, `sidebar.tsx:153`). Each member is a Button that selects the message recipient (press again to deselect; the lead is the default). Under the list is an `Input` ("type a message, Enter sends"); Enter posts a note to the selected member or the lead (`sidebar.tsx:183-189`).
+- **Gates.** Header `N open` or `all clear`, then one summary line per group (completion conditions, inline-op tripwire, tool routing, last-reply header), collapsed by default. Enter on a group expands it; Enter on a line shows its detail and fix command; Enter on an open line that has a fix copies the command (`gateRows`, `sidebar.tsx:196-234`).
+- **Advisor notes.** The two most recent notes, with a `+N more` row (`ADVISOR_SHOWN = 2`, `sidebar.tsx:236-252`).
+
+Keys: ctrl+x tab focuses the sidebar, Tab and the arrow keys walk its rows, Enter acts on the focused row. `/atlas-cc` opens the sidebar with `focus: true` and it stays until the person closes it (Esc or the close mark); closing clears `paneOpened` so `/atlas-cc` reopens it (`register.ts:610-621`). There are no tabs, no digit hotkeys and no tab argument.
+
+**Messaging.** `sendNote` (`register.ts:424-447`) builds the same `{t:'note'}` intent `/atlas-say` uses, resolves it with `intentToArgv` (`mod/intents.ts`) and runs `atlas_todo.py note` through `$.process.run`. On success it clears `sidebarDraft` and toasts `Sent to <who>`; on a missing board or a nonzero exit it toasts the reason and keeps the draft.
+
+**Gate sources.** `scripts/atlas_gates.py --session <id> --root <repo> --json` prints three independent groups, completion, tripwire and routing (`atlas_gates.py:108` `tripwire_group`, `:156` `routing_group`, `:190-191`); an exception in one group sets that group's `error` and the others still print. The completion group calls `completion_gate.evaluate()` (`atlas_gates.py:93`), the same function the Stop hook uses. `runGates` (`register.ts:402`) runs it at session start, on a 30 s clock (`GATES_MS`) and after rebuilds, and `parseGates` (`mod/gates.ts:10`) validates the shape; a missing script, nonzero exit or bad JSON becomes one error group (`gatesError`). The `header` group is not from the script: `mod/discipline.ts:146-153` tests the first line of each answer turn against `headerFirstLinePattern` and stores `{matched, phase}` in `lastHeader`; `headerGroup` (`gates.ts:27`) renders it as "Last reply header matched".
+
+**`$.state` keys** (atoms declared at `register.ts:53-57`; handlers and ticks write, render hooks only read): `sidebarRecipient` (selected member or `null` for the lead), `sidebarExpanded` (the one expanded task, group or gate key, or `null`), `sidebarDraft` (message text), `gates` (script groups) and `lastHeader` (header check, also declared in `discipline.ts:42`).
+
+**Not live-verified.** Fullscreen docked placement has not been observed: the live captures above are the inline pane in the classic renderer. Whether the host seats the pane docked beside a fullscreen transcript is documented behavior (`register.ts:30-32,535`), not an observation.
 
 ### Restyled built-in sites
 
-- **`Spinner`** becomes a text spinner with the phase capsule and what is actually happening, from `tool.call` events tagged with the agent id.
-- **`ToolUse` for `Agent`/`Task` on atlas personas** becomes a deployment card (nameplate, `model`/`effort` badges, dispatch name) that tracks `$.agent.list()` status live: running, waiting, completed, failed. Hovering reveals the dispatch GOAL and DELIVERABLE lines.
-- **`AssistantMessage`** renders its header line as a coloured phase pill with `n/m`. Hovering the pill shows the contract track as it stood at that reply, so scrolling back shows the run's progress history. A reply with no header gets a dim "inferred" pill.
-- **`TurnDuration`** becomes a turn receipt: duration, phase moves, completions, agents, tokens, cost.
-- **`PromptHint`** shows contextual chords; `$.prompt.suggest` offers the next contract step after a turn, which the user takes with Tab.
-- Toasts for a subagent completed or failed, a note to the lead, a todo completed. They fire on answer-turn boundaries: `mod/notify.ts` registers `on('turn.complete', { reason: 'answer' }, …)`, wired in `mod/register.ts:216` as `registerNotify(on, { getSnapshot, soundEnabled })`. An opt-in sound pack (`atlas_mod_sound` in `.claude-plugin/plugin.json`, off by default, read as `options.atlas_mod_sound === true`) ships its assets in `mod/fx/`.
+- **`Spinner`** (`mod/restyle.tsx` `spinnerTree`) becomes an 8-frame braille globe (`⠋⠙⠹⠸⠼⠴⠦⠧`, 120ms/frame) next to the phase capsule and a progress bar; when any squad member is `running`/`spawning` it appends a live agent count (`N agent(s)`) and the first such agent's current task.
+- **`ToolUse` for `Agent`/`Task` on atlas personas** (`toolUseTree`) becomes a deployment card — `▸ <name> <persona> <model>·<effort> · <status>` — that tracks `$.agent.list()` status live: spawning, running, waiting (input), completed, failed, killed. A finished `Bash`/`Read`/`Grep` call whose output is 8000 bytes or more (`NOISY`, `NOISY_BYTES`) collapses instead to a one-line `<tool> <target> ▸ <size>` summary (`noisyTree`) rather than drawing the raw output.
+- **`AssistantMessage`** renders its header line as a coloured phase pill with `n/m`. A reply with no header gets a dim "inferred" pill.
+- **`TurnDuration`** becomes a one-line receipt (`durationTree`): duration, phase move, completions this turn, live agent count, tokens, cost.
+- **`PromptHint`** shows contextual chords (`/atlas-cc Command Center · /atlas-say @name …`); `$.prompt.suggest` offers the next contract step after a turn, which the user takes with Tab.
+- Toasts for a subagent completed or failed, a note to the lead, a todo completed. They fire on answer-turn boundaries: `mod/notify.ts` registers `on('turn.complete', { reason: 'answer' }, …)`, wired in `mod/register.ts` as `registerNotify(on, { getSnapshot, soundEnabled })`. An opt-in sound pack (`atlas_mod_sound` in `.claude-plugin/plugin.json`, off by default, read as `options.atlas_mod_sound === true`) ships its assets in `mod/fx/`.
+
+### Context discipline (`mod/discipline.ts`, new in 11.0.2)
+
+Gated by `ATLAS_MOD!=off` plus an interactive session; every hook fails open (a throw never blocks a tool, prompt or answer) and only ever adds model-only context or a rate-limited toast — it never rewrites what the user typed. Wired by `registerDiscipline(on, { reinforce })` in `register.ts:275`:
+
+- **Heavy inline calls.** A `Read`/`Grep`/`Glob`/`Bash` call whose tool-result text is 4000 characters (`HEAVY_CHARS`) or more, with no `Task`/`Agent` dispatch yet this turn, counts as one heavy inline call. On the 4th (`HEAVY_LIMIT`) in the same turn, Atlas toasts `atlas: 4 heavy inline <Tool> calls — delegate to <role>` (Read/Grep/Glob -> `atlas:explorer`, Bash -> `atlas:runner`); at `turn.complete` it also calls `$.prompt.suggest({ text: "Dispatch <role> to do that reading and return only findings" })` if the turn still never delegated. A turn that grew the context by 30,000 tokens or more (`BIG_TURN_TOKENS`) inline, with at least one heavy call and no delegation, gets a second toast naming the tokens added. A `Task`/`Agent` call resets the heavy counter for the rest of the turn.
+- **Contract drift.** If the session's `headerFirstLinePattern` does not match the first line of an answer turn, Atlas toasts `atlas: reply is missing the ATLAS | <phase> | <state> header`.
+- **Toast rate limit.** Every toast above shares one 30-second minimum gap (`TOAST_GAP_MS`): whichever rule fires first in that window wins, the rest are silently skipped until the gap passes.
+- **Vague-prompt sharpening.** A composer prompt at or under 60 characters (`VAGUE_MAX_CHARS`) and 8 words (`VAGUE_MAX_WORDS`), with no path-like token, file extension, digit, quote or acceptance word (`test`/`should`/`must`/`until`/`expect`/`passes`), gets an `atlas facts: repo <root>; branch <b>; phase <p>; open todos: …` line appended to the model's context for that turn only (`prompt.submit`'s `context` array) — the text shown to the user, and sent to the model as the visible prompt, is unchanged.
+- **Test coverage.** `discipline.test.ts` covers `isVague`, `factsLine` and the hook wiring. The delegation-suggestion toast (heavy-call limit -> `$.prompt.suggest`) is exercised only by that unit test; it has not yet been observed in a live session.
 
 ## Data plane
 
@@ -57,12 +77,31 @@ All data is read from `<root>/.atlas/.run/`; the mod itself writes nothing to di
 | TODO board | `todos.json` `{version, items[{id, content, status, owner, session_id, phase?, archived, evidence}]}` | Filter `session_id == $.session.id()` and `!archived`, plus in-progress items owned by channel members. Phase comes from `phase` or the `[<phase>] ` content prefix. The file is replaced atomically, so the reader polls `stat` mtime, never per frame |
 | IRC channel | `board/<owner>.jsonl` lines `{ts, seq, owner, to, item, text, channel, kind?, delivery?}` | Filter `channel == <lead channel>`, sort by `seq,ts`, keep a per-file byte cursor from `stat.size`. The viewer never calls `atlas_todo.py inbox`, which drains the lead's mail |
 | Channel roster | `channels.json` `channels[name].members[{name, role, pane_id, pid, ended_at, exit_code}]` | The lead channel is the entry whose `lead` equals `lead-<first 6 of the session id>`, else `<folder>@<branch>` |
-| Colony panes | herdr unix socket (unreachable from `$`) | `$.process.run(['python3', <plugin>/scripts/atlas_herdr.py, 'status'])` every 5 s, only while the Colony tab is visible |
+| Colony panes | herdr unix socket (unreachable from `$`) | `$.process.run(['python3', <plugin>/scripts/atlas_herdr.py, 'status'])` every 5 s, only after the sidebar has been opened (`paneOpened`) |
 | In-session subagents | `$.agent.list()` plus `agent.spawn`/`turn.complete` events | Native; the primary source for Task subagents. `register.ts` re-syncs the squad from `$.agent.list()` (d.ts `EngineInterface.agent.list`, lines 3180–3187; `AgentInfo.status`, line 545) on every rebuild, so host-spawned agents appear even when their `agent.spawn` event was missed; status maps to band states (`pending`→`spawning`, `waiting`→`input`, `completed`→`finished`, `killed`→`dead`) and unknown statuses read `running` |
 | Personas | `agents/*.md` frontmatter (`model`, `effort`, `color`) | Read once at session start; the single source, no copied table |
 | Contract | `contracts/operating-contract.json` (`phases[].id/glyph`, `todoPhases`, `headerFirstLinePattern`) | Track order and the header regex |
+| Orchestration (new 11.0.3) | `agent.spawn`, `tool.call` start/end, `turn.step`, `turn.complete` host events, folded by `mod/data/orchestration.ts` `deriveOrchestration` with `channels.json` members/notes, `.atlas/.run/findings.json` and `python3 scripts/atlas_wt.py status` JSON | Per-agent activity (tool, elapsed, mood, last line), the comms log, the squad count behind the band's `N working`, each worker's lifecycle stage, and the kept-tokens savings meter |
+| Worker sessions (`sessions`, new 11.0.4) | In-session subagent transcript tails (`<home>/.claude/projects/<slug>/<sessionId>/subagents/agent-<id>.jsonl`, last `TAIL_BYTES=131072` bytes read with `tail -c`, parsed by `mod/data/sessions.ts` `parseTranscript`) merged with `python3 scripts/atlas_mux.py status` worker rows (`parseMuxStatus`), de-duplicated by name (first source wins, `mergeSessions`) | Session data only; the Colony multiplexer view that rendered it was removed with the Client panes; each `Session` carries `transport: 'subagent'\|'claude-bg'\|'tmux'\|'herdr'`, `state`, `since` and up to 4 tail lines (each clipped to 120 chars, ANSI stripped) — covered by `data/sessions.test.ts` fixture strings, not a live running background session |
+| Todo groups and contract progress (`todoGroups`, `contractProgress`, `backlog`, new 11.0.4) | `todos.json` re-sliced by `mod/data/todos.ts` `groupTodos` (groups by contract phase, unphased items to `phase: 'unsorted'`/`dept: 'UNSORTED'`, live items first within a group) and `contractProgress` (done/total per phase, **this session's** todos only) | the sidebar's Tasks section (`todoGroups`) and the band's `n of m` (`routeCounts`); `backlog` is the separate global done/total count for the Board's collapsed-items line and is never read by the pill |
+Merged member state reuses the dashboard states (`scripts/atlas_dash_colony.py`): `running`, `idle`, `stuck` (15 minutes silent with an open todo), `parked`, `finished`, `dead`, plus **input** from herdr's blocked state. Missing files fail open: a surface renders empty rather than erroring. Liveness itself comes only from the host agent list, never from the lead's own turn state — a background worker keeps running after the lead's turn ends, and `syncAgentsFromList` only marks a spawn-recorded entry the host no longer lists as `finished` once its `agent.spawn` time is older than `SPAWN_GRACE_MS` (15 s, `register.ts:85`) — an unlisted entry inside that window is presumed still starting up, not gone.
 
-Merged member state reuses the dashboard states (`scripts/atlas_dash_colony.py`): `running`, `idle`, `stuck` (15 minutes silent with an open todo), `parked`, `finished`, `dead`, plus **input** from herdr's blocked state. Missing files fail open: a surface renders empty rather than erroring.
+**Agent identity labels.** `syncAgentsFromList` (`register.ts:159-195`) names each squad row by the first of: the name recorded at `agent.spawn` (`e.name`, threaded through `routing.ts:85`'s `onSpawn` call into `Orch.meta[id].name`), else the teammate id's local part before `@`, else the recorded or type-inferred persona — skipped when the persona is `unknown` or the generic `general-purpose` host type, so a dispatch that never got a real persona falls through instead of showing that label — else the first 3 words of the Agent call's task description (`slugOf`), else the persona again, else the lowercased agent type (`typeLabel`), else the agent id's first 6 characters as a last resort; a 4-char id suffix is appended when two rows would otherwise share the same label.
+
+**Rebuild fingerprint.** `rebuildTick` redraws only when `dataFingerprint` (`register.ts:172-195`) changes, on a 1.5s poll. As of 11.0.2 the fingerprint covers, besides the `todos.json`/`channels.json`/board-note `stat` signatures: the host agent list (`$.agent.list()` `id:status` pairs, so a subagent finishing — which writes no file — still triggers a redraw), the live usage state, the header-derived phase, and the header-miss counter.
+
+## Isolated-worker workflow (`scripts/atlas_wt.py`, new in 11.0.3)
+
+One git worktree and branch per parallel `atlas:implementer` dispatch, so concurrent writers never collide in the main working tree. Naming contract: branch `worker/<agent>`, worktree `.atlas/wt/<agent>` (repo-root relative). The script never pushes, never force-deletes a branch, never resets, and never touches the main tree outside the merge itself; every refusal exits 1 with the exact reason on stderr (`scripts/atlas_wt.py:1-20`).
+
+- `add <agent> [--base main]` — creates (or reuses, idempotently) the worktree and branch.
+- `status` — prints a JSON array, one row per `worker/*` branch: `{agent, branch, worktree, head, ahead, behind, dirty, verified_finding, merged}`. This is the same JSON `mod/data/orchestration.ts` `parseWt` reads for the Colony/Channel lifecycle and merge-queue display.
+- `merge <agent>` — refuses unless `.atlas/.run/findings.json` holds a `verified` entry whose title or evidence names the branch or agent, refuses on a dirty worktree or zero commits ahead; otherwise does a `--no-ff` merge, removes the worktree, deletes the branch, and aborts cleanly (restoring the tree) on a merge conflict.
+- `prune` — runs `git worktree prune`, then deletes branches that are fully merged with no worktree left.
+
+**Protocol** (`agents/implementer.md` Worktree dispatch; `skills/atlas-orchestrate/references/implementation-units.md` Worktree protocol section): the lead runs `atlas_wt.py add <name>` per parallel implementer before dispatch; the dispatch brief names the worktree path as the only place that implementer edits, tests and commits (it `cd`s there first, confirms `git rev-parse --abbrev-ref HEAD` is the named branch, commits only unit-scoped files, never touches the main tree, never merges, never pushes); the lead dispatches one `atlas:verifier` per branch against that worktree; only after a `verified` finding does the lead run `atlas_wt.py merge <name>`, one branch at a time, then rerun tests once on the merged tree.
+
+**Enforcement.** `hooks/completion_gate.py` condition (q) (`_unmerged_worker_branches`, `completion_gate.py:777-831`) blocks "done" while `atlas_wt.py status` reports a `worker/*` branch with unmerged commits or a dirty worktree, naming "unmerged worker branches; verify each, then atlas_wt.py merge <agent>". `ATLAS_WT_GATE=off` disables it; the condition fails open on any internal error.
 
 ## Personas, models and effort
 
@@ -86,13 +125,13 @@ Source of truth is `agents/*.md` frontmatter (13 agents; all set `model`, `effor
 | Department work | `armada-<dept>` | inherit (unpinned) | inherit |
 | Architecture, synthesis, final judgment | main thread | opus | high |
 
-On omp the same agents carry a `thinkingLevel` (the policy page is `skills/atlas-orchestrate/references/squad-and-tiers.md`); `atlas:implementer` is `low` in frontmatter but `medium` in `omp/atlas-agents.ts`, and the Squad tab flags that mismatch.
+On omp the same agents carry a `thinkingLevel` (the policy page is `skills/atlas-orchestrate/references/squad-and-tiers.md`); `atlas:implementer` is `low` in frontmatter but `medium` in `omp/atlas-agents.ts`. Nothing in the sidebar flags that mismatch now.
 
 How the mod applies the matrix:
 
-- `agent.spawn`: for `subagentType` `atlas:<role>`, records the agentId→persona mapping; the model passes through untouched (the agent definition's own frontmatter pin decides it). Forks are skipped, and an explicit non-inherit model on a known role is logged as Squad drift, never rewritten. Per-call model overrides on `atlas:*` stay denied by `hooks/dispatch_tripwire.py`; the mod adds no second gate.
+- `agent.spawn`: for `subagentType` `atlas:<role>`, records the agentId→persona mapping; the model passes through untouched (the agent definition's own frontmatter pin decides it). Forks are skipped, and an explicit non-inherit model on a known role is never rewritten. Per-call model overrides on `atlas:*` stay denied by `hooks/dispatch_tripwire.py`; the mod adds no second gate.
 - `turn.step`: when the agent maps to a persona, `next({...e, effort: <frontmatter effort>})`. Normal atlas spawns already get their frontmatter effort, so the gain is forks of `planner`/`completeness-critic`/`docs-curator`, which otherwise inherit the opus parent's effort. The model is left alone to keep the prompt cache.
-- Unpinned spawns (armada departments, the generic `task`) that inherit opus get a cost badge in the Squad drift panel.
+- Unpinned spawns (armada departments, the generic `task`) that inherit opus are not rewritten (the Squad drift panel was removed with the Client panes).
 
 ## Managed policy and fail-open behaviour
 
@@ -120,53 +159,51 @@ Fail open, stated precisely:
 
 Everything the mod can change, all user-initiated:
 
-- Todo add, claim, status and complete (complete requires an evidence note) — `atlas_todo.py`.
-- Channel notes: the Channel composer, the Steer input, and dragging a board card onto an agent (claim).
-- **Steer**: a herdr prompt into an idle pane — `atlas_herdr.py prompt --pane --text`.
-- **Stop run (destructive)**: `atlas_mux.py kill --run R` closes the whole run workspace and every pane in it. A `$.ui.ask` confirmation lists every worker that will die before anything happens.
-- The one automatic process call is the Colony tab's 5-second `atlas_herdr.py status` poll, which is read-only per its docstring (`ps`, socket pings, health probes on loopback ports).
+- Todo add, claim, status and complete (complete requires an evidence note) through `atlas_todo.py`, via `/atlas-todo`.
+- Channel notes: the sidebar Team message field and `/atlas-say` (`register.ts:424-447`).
+- Automatic process calls: the 5-second `atlas_herdr.py status` poll (read-only per its docstring) and the 30-second `atlas_gates.py` run (`GATES_MS`, no side effects, DB opened read-only). The earlier Steer and Stop run controls were removed with the Colony pane.
 - The mod makes no `$.http` calls, and its links point only at localhost (the herdr web UI). Python children do their own I/O outside the mods API (see the permission boundary above).
 
 ## File map
 
 ```
 plugins/atlas/mod/
-|-- contract.ts      # shared types and BRAND tokens, imported by every module
-|-- register.ts      # entry point: export function register(on, options); wired from hooks.json "modules"
-|-- register.test.ts # colocated tests for the register wiring
-|-- theme.ts         # colour tokens and theme keys
-|-- band.tsx         # AbovePrompt band: text contract track and status line
+|-- contract.ts      # shared types and BRAND tokens
+|-- register.ts      # entry point: register(on, options); wired from hooks.json "modules"; $.state atoms, gates run, sendNote, ui.render hooks
+|-- register.test.ts, register-sidebar.test.ts, register-open.test.ts, register-agents.test.ts # register wiring
+|-- theme.ts         # chartRoom palette, width-safe glyph allowlist, fitText/textWidth
+|-- band.tsx         # AbovePrompt band: one native line (bandTree)
+|-- gates.ts         # parseGates, gatesError, headerGroup, openGateCount (pure)
+|-- pane/
+|   |-- sidebar.tsx  #   sidebarTree: route, tasks, team + message field, gates, advisor notes
+|   |-- sidebar.test.ts
+|   `-- chrome.tsx   #   shared helpers (ageStr, scrub)
+|-- orchestra-types.ts # LiveSnapshot, Mood, ActivityEntry, CommsEntry, LifecycleEntry, TodoGroup
 |-- routing.ts       # agent.spawn persona recording, turn.step effort pin, roster events
 |-- restyle.tsx      # Spinner, ToolUse, AssistantMessage, TurnDuration, PromptHint sites
-|-- props.ts         # completeProps: deep undefined and array-hole strip for Client props surfaces
-|-- props.test.ts    # regression tests for the completeProps live-failure class
+|-- discipline.ts    # context discipline: heavy-inline-call toasts, contract drift, vague-prompt facts, lastHeader
 |-- notify.ts        # toasts and next-step suggestion on answer-turn boundaries
-|-- intents.ts       # board drag intents posted through surface.post
-|-- snapshot.ts      # session snapshot for the notify path
+|-- intents.ts       # note/todo intents resolved to atlas_todo.py argv
+|-- snapshot.ts      # session snapshot
+|-- live_fixture.ts  # busySnap()/idleSnap() orchestration fixtures
 |-- svg.ts           # Svg/Text fallback rendering
 |-- data/            # readers for the .atlas/.run plane; all fail open on missing files
-|   |-- root.ts      #   root resolution (boardRoot rule)
-|   |-- todos.ts     #   todos.json: session filter, archived filter, phase prefix, mtime poll
-|   |-- channels.ts  #   channels.json registry and board/<owner>.jsonl notes (byte cursor)
-|   |-- personas.ts  #   agents/*.md frontmatter
-|   |-- collab.ts   #   collab board claims and handoffs reader
-|   `-- herdr.ts     #   atlas_herdr.py status poll (5 s, Colony tab visible only)
-|-- pane/            # the /atlas-cc Command Center tabs (Client surfaces)
-|   |-- colony.tsx   #   diorama
-|   |-- channel.tsx  #   IRC client
-|   |-- board.tsx    #   kanban
-|   |-- squad.tsx    #   persona roster and drift panel
-|   |-- collab.tsx   #   collab tab
-|   `-- sprites.tsx  #   shared pane components
-|-- sprites/         # persona sprite grids (portrait 16x16, field 8x12, mini 4x4) with state frames — rendered only by the opt-in /atlas-sprites pane
+|   |-- root.ts, todos.ts, channels.ts, personas.ts, collab.ts, orchestration.ts, sessions.ts, herdr.ts
+|-- sprites/         # persona art modules, used by restyle.tsx and svg.ts only
 `-- fx/              # optional sound pack assets ($.audio.play)
-```
 
 Colocated `*.test.ts` files use the `claude-code/testing` kit.
 
+## Honesty and known defects
+
+- **Claude-Code-only.** Both surfaces are drawn by the `ui.render` mod dispatch on the `AbovePrompt` and `Pane` components. omp has no such vocabulary and keeps its own `atlas-channel` widget (`omp/channel-view.ts`).
+- **Observed live (2026-10-12, Claude Code 2.1.296, inline pane):** ctrl+x tab focus on the sidebar, Tab and arrow row walking, a message sent from the Team field landing as a board note, and gate groups expanding (`.atlas/evidence/mod-native-sidebar-2026-10-12/`).
+- **Not live-verified:** fullscreen docked placement; any tmux-specific behavior; the context-discipline delegation-suggestion toast (unit test only).
+- **Sprites.** `mod/sprites/` remains and is imported by `restyle.tsx` and `svg.ts`; no pane draws it and `/atlas-sprites` no longer exists.
+
 ## See also
 
-- `docs/atlas-colony.md` — the herdr colony the Colony tab mirrors
+- `docs/atlas-colony.md` — the herdr colony
 - `docs/atlas-channels.md` — channel names, registry and delivery rules
 - `docs/atlas-workboard.md` — the browser Command Center (dashboard) the mod complements
 - `docs/atlas-harness-parity.md` — the harness parity matrix, including the Claude mod vs omp widget row

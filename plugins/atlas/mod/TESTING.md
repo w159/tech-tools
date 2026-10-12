@@ -14,10 +14,10 @@ claude plugin test plugins/atlas
 ```
 
 From the repo root. This loads the plugin the way the engine does and runs each
-test file; it exercises the mod (hooks, rendered trees, `Client` modules), not a
-surface's paint.
+test file; it exercises the mod (hooks and the rendered native element trees of the band and
+sidebar), not a surface's paint.
 
-## Measured state (2026-10-10)
+## Measured state (2026-10-12)
 
 Full run from the repo root:
 
@@ -27,14 +27,13 @@ claude plugin test plugins/atlas
 
 Expectation is two-tier:
 
-- **Mod lines must be fully green.** All 17 mod test files load and pass —
-  215 pass / 0 fail (includes `mod/sprites/sprites.test.ts`, which injects
-  `memFs` from `mod/test_helpers.ts` instead of importing `node:fs`, which the
-  host forbids).
-- **Colony/omp residuals are expected failures of the walk.** The full plugin
-  walk reports 384 tests / 186 files, 215 pass / 169 fail; every failure is a
-  `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file importing
-  `bun:test`, which the mod test host forbids. Those suites stay on
+- **Mod lines must be fully green.** The mod test files load and pass,
+  309 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
+  and `mod/sprites/sprites.test.ts`, which injects `memFs` from
+  `mod/test_helpers.ts` instead of importing `node:fs`, which the host forbids).
+- **Colony/omp residuals are expected failures of the walk.** 169 pre-existing
+  load failures, each a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file
+  importing `bun:test`, which the mod test host forbids. Those suites stay on
   `bun test` and are not mod regressions.
 
 Host facts: `claude plugin test [dir]` requires a plugin directory whose
@@ -78,8 +77,10 @@ test('rebuilds when a watched file changes', async $ => {
 });
 ```
 
-For UI tests, mount the band with `$.ui.mount({ component: ..., props: makeSnapshot(), surface })`
-and drive it by key; pass `mock.clock(on)` when the component schedules work.
+For UI tests, call the pure tree builders (`bandTree`, `sidebarTree`) with a recording
+elements object and handler stubs, as `mod/pane/sidebar.test.ts` does; pass
+`mock.clock(on)` when the component schedules work. Live key behavior (ctrl+x tab,
+Tab, arrows, Enter) is checked in a real session, not here.
 
 ## Conventions
 

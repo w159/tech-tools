@@ -202,7 +202,7 @@ def main() -> int:
         return 0
     try:
         raw = sys.stdin.read()
-        payload = json.loads(raw) if raw.strip() else {}
+        payload = json.loads(raw, strict=False) if raw.strip() else {}
     except ValueError as exc:
         _record(exc)
         return 0

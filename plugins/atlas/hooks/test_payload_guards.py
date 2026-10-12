@@ -47,6 +47,40 @@ class PayloadGuardTest(unittest.TestCase):
                         )
                         self.assertEqual(lines, [], r.stderr)
 
+    def test_raw_control_char_payload_is_parsed(self):
+        # A raw TAB inside a JSON string is invalid under strict parsing; hooks must still parse it.
+        stdin = '{"tool_name": "Bash", "tool_input": {"command": "a\tb"}, "session_id": "s"}'
+        for hook in [
+            "connector_credential_watch",
+            "docs_drift_watch",
+            "recall_gate",
+            "session_boot",
+            "worker_report_gate",
+            "delegation_prewarn",
+        ]:
+            with self.subTest(hook=hook), tempfile.TemporaryDirectory() as home:
+                env = {
+                    **os.environ,
+                    "ATLAS_HOME": home,
+                    "ATLAS_DB": os.path.join(home, "atlas.db"),
+                    "ATLAS_HOOKSTATE_DIR": os.path.join(home, "hookstate"),
+                    "ATLAS_DASHBOARD": "off",
+                    "ATLAS_COLONY": "off",
+                }
+                r = subprocess.run(
+                    [sys.executable, os.path.join(HERE, hook + ".py")],
+                    input=stdin,
+                    text=True,
+                    capture_output=True,
+                    env=env,
+                    timeout=60,
+                    cwd=home,
+                )
+                self.assertNotIn("control character", r.stderr)
+                fp = os.path.join(home, "hook-faults.jsonl")
+                faults = open(fp).read() if os.path.exists(fp) else ""
+                self.assertNotIn("control character", faults)
+
 
 if __name__ == "__main__":
     unittest.main()

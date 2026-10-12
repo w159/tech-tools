@@ -1,0 +1,64 @@
+       #37743            ↻  Session Parsers and Data Helpers Refactor Dispatched: Data and Gate Logic Complexity Reduction (~481t) (⚒ 4,332t)
+     plugins/atlas/mod/data/orchestration.ts
+       #37744            ↻  Orchestration Derivation Refactor Dispatched: Major Complexity Reduction in Central Logic (~555t) (⚒ 4,436t)
+     General
+       #37783            ⚖  Coverage Pipeline Infeasible: CRAP Threshold Enforcement Shifted to CC ≤ 4 Requirement (~584t) (⚖ 1,241t)
+     #S8076 Atlas mod complexity reduction under zero-coverage CRAP constraint: investigate coverage integration feasibility, establish cyclomatic complexity ceiling, refactor five modules
+     (orchestration, register, discipline, sidebar, sessions/gates/sprites), and track progress with golden characterization tests. (Oct 12 at 12:52 PM)
+
+
+
+     ---
+
+     Previously
+
+     A: Now my own full verification.
+
+
+     Access 215k tokens of past research & decisions for just 24,652t. Use the claude-mem skill to access memories by ID.
+
+     View Observations Live @ http://localhost:37777
+     ✨ 30 Day Free Trial — memory runs off-plan. Get up to 100% more usage from your plan https://cmem.ai/pro?from=session-start
+  ⎿  SessionStart:startup says: Atlas ready
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────✕─╮
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  │
+│ │🔍 Atlas  research, 0 of 0 done                                                                                                                                                                  │  │
+│ │🔍────────────────────────────────────💡────────────────────────────────────🧪─────────────────────────────────────📋────────────────────────────────────🔧────────────────────────────────────✅│  │
+│ │research                            theory                                 test                                 validate                             implement                             verify│  │
+│ │🔍 research  nothing planned                                                                                                                                                                     │  │
+│ │💡 theory    nothing planned                                                                                                                                                                     │  │
+│ │🧪 test      nothing planned                                                                                                                                                                     │  │
+│ │📋 validate  nothing planned                                                                                                                                                                     │  │
+│ │🔧 implement nothing planned                                                                                                                                                                     │  │
+│ │✅ verify    nothing planned                                                                                                                                                                     │  │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  │
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  │
+│ │Team  1 member                                                                                                                                                                                   │  │
+│ │▸LE● lead    · idle                                                                                                                                                                              │  │
+│ │ UN● selffix · idle                                                                                                                                                                              │  │
+│ │To lead: type a message, Enter sends                                                                                                                                                             │  │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  │
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  │
+│ │✓ Gates  all clear                                                                                                                                                                               │  │
+│ │✓ Completion gate  ✓ Inline-op tripwire  ✓ Tool routing  ✓ Header                                                                                                                                │  │
+│ │▸ Completion gate  clear                                                                                                                                                                         │  │
+│ │▸ Inline-op tripwire  clear                                                                                                                                                                      │  │
+│ │▸ Tool routing  clear                                                                                                                                                                            │  │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  │
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  │
+│ │✦ Advisor notes  3                                                                                                                                                                               │  │
+│ │  advisor[concern]: When SpriteReadable renders sprites to images for review, make it render at terminal cell aspect (each cell ≈1:2 wide:tall, half-blocks ▀▄ gi…                               │  │
+│ │  advisor[concern]: ted67b0b4 / t040298d4 / te4be87b4 belong to session 40fd3319 — not your session and not the prior one (01a122d2); likely another live claude …                               │  │
+│ │  +1 more                                                                                                                                                                                        │  │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+LE● 🔍 research 0 of 0   0 working   all clear                                                                                                                                                      [-]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ next: advisor[concern]: When SpriteReadable renders sprites to images f…
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁 tech-tools | 🤖 Opus 5.5 | 🧠 ░░░░░░░░░░ --%                                                                                                                           Not logged in · Run /login
+  context-mode  ●  saves ~98% of context window                                                   tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tracking
+  fallow impact  off
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 2 agents · /atlas-cc Command Center · /atlas-say @nam…
+

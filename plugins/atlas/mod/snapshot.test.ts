@@ -6,6 +6,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { SquadAgent, TodoItem } from './contract';
 import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs, makeSnapshot } from './test_helpers';
 import { SnapshotBuilder } from './snapshot';
+import { EMPTY_ORCH, onComplete, onHeavy, onSpawn, onToolEnd, onToolStart, type WtRow } from './data/orchestration';
 
 const ROOT = '/r';
 const CWD = '/r/sub';
@@ -101,7 +102,7 @@ describe('SnapshotBuilder', () => {
     const snap = await b.build(live());
     expect(snap.todos.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4']);
     expect(snap.todos.every((t) => !t.archived)).toBe(true);
-    expect(snap.todos.find((t) => t.id === 't3')?.phase).toBe('research'); // stamped from prefix default
+    expect(snap.todos.find((t) => t.id === 't3')?.phase).toBeUndefined(); // unphased stays unphased
   });
 
   test('counts: done/total and per-phase buckets over the session slice', async () => {
@@ -111,7 +112,7 @@ describe('SnapshotBuilder', () => {
       done: 0,
       total: 4,
       byPhase: {
-        research: { done: 0, total: 3 },
+        research: { done: 0, total: 1 }, // t3/t4 are unphased: totals only, no phase bucket
         theory: { done: 0, total: 1 },
         test: { done: 0, total: 0 },
         validate: { done: 0, total: 0 },
@@ -214,7 +215,8 @@ describe('SnapshotBuilder', () => {
     const b = new SnapshotBuilder(fs, PLUGIN);
     await b.init('/nowhere/deep', {}, 'def45678', 'tech-tools', 'main');
     const snap = await b.build(live({ headerPhase: 'implement', headerMisses: 2, now: FIXTURE_EPOCH_MS + 5000 }));
-    expect(snap).toEqual(makeSnapshot({
+    expect({ ...snap }).toEqual({
+      ...makeSnapshot({
       root: null,
       sessionId: 'def45678',
       channel: null,
@@ -236,6 +238,86 @@ describe('SnapshotBuilder', () => {
       contextPct: 12,
       headerMisses: 2,
       now: FIXTURE_EPOCH_MS + 5000,
+    }),
+    activity: { lead: { tool: null, since: FIXTURE_EPOCH_MS + 5000, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' } },
+    comms: [],
+    lifecycle: [],
+    savings: { delegatedCalls: 0, inlineHeavyCalls: 0, estTokensKept: 0 },
+    sessions: [],
+    todoGroups: [],
+    contractProgress: [],
+    backlog: { done: 0, total: 0 },
+    });
+  });
+
+  test('orchestration: orch events, wt rows and findings feed activity/comms/lifecycle/savings', async () => {
+    const { fs, b } = await newBuilder();
+    await fs.write(`${ROOT}/.atlas/.run/findings.json`, JSON.stringify([{ id: 'f1', title: 'verified worker/impl-auth', evidence: [], status: 'verified' }]));
+    let orch = onSpawn(EMPTY_ORCH, 'a1', 'edit auth', FIXTURE_EPOCH_MS);
+    orch = onToolStart(orch, 'a1', 'Edit', FIXTURE_EPOCH_MS + 1000);
+    orch = onToolEnd(orch, 'a1', 4000, FIXTURE_EPOCH_MS + 2000);
+    orch = onComplete(orch, 'a1', { reason: 'answer', answer: 'done editing', tokens: 900 }, FIXTURE_EPOCH_MS + 3000);
+    orch = onHeavy(orch);
+    const wt: WtRow[] = [{ agent: 'impl-auth', branch: 'worker/impl-auth', worktree: null, ahead: 0, behind: 0, dirty: false, verified_finding: 'f1', merged: true }];
+    const squad: SquadAgent[] = [{ name: 'impl-auth', persona: 'implementer', state: 'finished', source: 'task' }];
+    const snap = await b.build(live({ orch, names: { a1: 'impl-auth' }, listed: [{ id: 'a1', status: 'completed' }], taskAgents: squad, wt, now: FIXTURE_EPOCH_MS + 4000 }));
+    expect(snap.activity['impl-auth']).toMatchObject({ toolCount: 1, tokens: 900, mood: 'done', lastLine: 'done editing' });
+    expect(snap.comms.map((c) => c.kind)).toEqual(expect.arrayContaining(['dispatch', 'report', 'merge']));
+    expect(snap.lifecycle.find((l) => l.agent === 'impl-auth')).toEqual({ agent: 'impl-auth', stage: 'merged', branch: 'worker/impl-auth' });
+    expect(snap.savings).toEqual({ delegatedCalls: 1, inlineHeavyCalls: 1, estTokensKept: 1000 });
+  });
+
+  test('todoGroups: unsorted holds only session-origin unphased items; other-session backlog without a phase and advisor notes stay out', async () => {
+    const { fs, b } = await newBuilder();
+    await fs.write(TODOS, JSON.stringify({
+      version: 1,
+      items: [
+        { id: 't1', content: '[research] map mod surface', status: 'pending', session_id: SESSION },
+        { id: 't3', content: 'write guard', status: 'in_progress', session_id: 'other-session', owner: 'impl-auth', origin: 'manual' },
+        { id: 't4', content: 'unphased mine', status: 'pending', session_id: SESSION, origin: 'session' },
+        { id: 'a1', content: 'advisor[concern]: watch the pids', status: 'pending', session_id: SESSION, origin: 'advisor' },
+        { id: 't5', content: '[verify] done thing', status: 'completed', session_id: SESSION, archived: true },
+      ],
     }));
+    const snap = await b.build(live());
+    expect(snap.todoGroups.map((g) => g.phase)).toEqual(['research', 'unsorted', 'advisor']);
+    expect(snap.todoGroups.find((g) => g.phase === 'unsorted')?.items.map((i) => i.id)).toEqual(['t4']);
+    expect(snap.todoGroups.find((g) => g.phase === 'advisor')).toMatchObject({ dept: 'ADVISOR NOTES', total: 1 });
+    expect(snap.todoGroups.find((g) => g.phase === 'research')).toMatchObject({ dept: 'ARCHIVE', total: 1 });
+    expect(snap.todoGroups.flatMap((g) => g.items.map((i) => i.id))).not.toContain('t5');
+    expect(snap.contractProgress).toEqual([{ phase: 'research', done: 0, total: 1 }]); // advisor + unphased never count
+  });
+
+  test('contractProgress is session-scoped and moves when a session todo completes', async () => {
+    const { fs, b } = await newBuilder();
+    const before = await b.build(live());
+    expect(before.contractProgress).toEqual([{ phase: 'research', done: 0, total: 1 }, { phase: 'theory', done: 0, total: 1 }]);
+    await fs.write(TODOS, JSON.stringify({
+      version: 1,
+      items: [
+        { id: 't1', content: '[research] map mod surface', status: 'completed', session_id: SESSION },
+        { id: 't2', content: '[theory] pick channel model', status: 'in_progress', session_id: SESSION },
+        { id: 'g1', content: '[research] other session job', status: 'pending', session_id: 'other-session' },
+      ],
+    }));
+    const after = await b.build(live());
+    expect(after.contractProgress).toEqual([{ phase: 'research', done: 1, total: 1 }, { phase: 'theory', done: 0, total: 1 }]);
+    expect(after.backlog.total).toBe(3); // global backlog is a separate count
+  });
+
+  test('sessions pass through; raw agent ids in notes/comms/activity resolve to labels', async () => {
+    const { fs, b } = await newBuilder();
+    await fs.write(BOARD, [
+      line({ seq: 1, ts: FIXTURE_EPOCH_MS, owner: 'a529730494759bac3', to: 'a1b2c3d4e5f60718a', text: 'ping peer' }),
+      line({ seq: 2, ts: FIXTURE_EPOCH_MS + 1, owner: LEAD, to: 'a529730494759bac3', text: 'go ahead' }),
+      '',
+    ].join('\n'));
+    const sessions = [{ name: 'explorer', transport: 'subagent' as const, state: 'running' as const, since: FIXTURE_EPOCH_MS, tail: ['x'], agentId: 'a529730494759bac3' }];
+    const snap = await b.build(live({ sessions, names: { a529730494759bac3: 'explorer' } }));
+    expect(snap.sessions).toEqual(sessions);
+    const peer = snap.comms.find((c) => c.text === 'ping peer');
+    expect(peer).toMatchObject({ from: 'explorer', to: 'worker' }); // unmapped raw id: never hex, the label `worker`
+    expect(snap.comms.find((c) => c.text === 'go ahead')).toMatchObject({ from: 'lead', to: 'explorer' });
+    expect(JSON.stringify([snap.comms, snap.activity])).not.toMatch(/a[0-9a-f]{16}/);
   });
 });

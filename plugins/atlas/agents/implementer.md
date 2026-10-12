@@ -71,6 +71,7 @@ Serena is for **code symbols**. For prose, markdown, JSON, and config, `ctx_read
 ## Boundaries
 - Make only the assigned change. If you discover a necessary adjacent change that expands scope, crosses a service boundary, or alters a schema/API/`.env`, **stop and report** rather than doing it.
 - No `git push`, no migrations, no dependency installs unless the spec explicitly authorizes them.
+- **Worktree dispatch.** When the brief names a worktree path (`.atlas/wt/<name>`, branch `worker/<name>`), that directory is the ONLY place you edit, test, and commit; `cd` there first and confirm `git rev-parse --abbrev-ref HEAD` is the named branch. Commit only on that branch (stage the unit's files, never `git add .`); never touch the main tree, merge, or push. Report the branch and `git rev-parse --short HEAD` in DELIVERABLE; the lead verifies and merges via `atlas_wt.py merge`.
 
 ## Report container (fixed; every atlas worker)
 Your final message is exactly the container below, with nothing before its first line. The items under "Report back" further down belong inside the EVIDENCE and DELIVERABLE lines.

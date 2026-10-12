@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from "
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { leadName, reviseForChannel, sanitizeName } from "./channels";
+import { defaultRun, leadName, reviseForChannel, sanitizeName } from "./channels";
 import { registerWorkerReport } from "./worker-report";
 
 process.env.ATLAS_HOME = mkdtempSync(join(tmpdir(), "channels-test-home-"));
@@ -110,4 +110,23 @@ test("a failing board records a fault and leaves the dispatch untouched (no thro
 	const before = existsSync(faults) ? readFileSync(faults, "utf8").length : 0;
 	expect(reviseForChannel({ tasks: [{ agent: "task", task: "x" }] }, { cwd, env: {}, run: () => undefined })).toBeUndefined();
 	expect(readFileSync(faults, "utf8").slice(before)).toContain('"hook":"channels"');
+});
+
+test("defaultRun: real channel-open succeeds in a fresh repo", () => {
+	const dir = repo();
+	const out = defaultRun(["python3", SCRIPT, "channel-open", "--root", dir, "--lead", "lead-t1", "--members", "a-1"], dir);
+	expect(JSON.parse(out as string).channel.name).toContain("lead-t1");
+});
+
+test("defaultRun failure: fault carries exit code and stderr head", () => {
+	const dir = repo();
+	const faults = join(process.env.ATLAS_HOME as string, "hook-faults.jsonl");
+	const out = reviseForChannel(
+		{ tasks: [{ agent: "x", task: "t" }] },
+		{ cwd: dir, env: {}, run: (_a, cwd) => defaultRun(["sh", "-c", "echo boom-cause >&2; exit 3"], cwd) },
+	);
+	expect(out).toBeUndefined();
+	const last = readFileSync(faults, "utf8").trim().split("\n").pop() as string;
+	expect(last).toContain("exit 3");
+	expect(last).toContain("boom-cause");
 });

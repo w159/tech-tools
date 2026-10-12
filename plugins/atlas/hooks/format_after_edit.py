@@ -5,7 +5,7 @@ Matches Edit / Write / MultiEdit / NotebookEdit. Picks a formatter by file exten
 using the project's own config, and is a no-op when the formatter is not installed. Meant
 to run ASYNC (hooks.json sets "async": true) so it never blocks the agentic loop. It
 never blocks a tool call; a formatter that fails is a quiet skip (not a hook
-crash) - but the skip is recorded (friction row + fault row), never silent.
+crash) - but the skip is recorded (friction row; fault row only for crashes/timeouts), never silent.
 
 Why this matters for an orchestrator: a uniform, formatter-clean tree means diffs stay
 minimal and reviewers (and verifier subagents) see only real changes, not whitespace noise.
@@ -65,6 +65,25 @@ PRETTIER_EXTS = {
 }
 
 
+def _local_prettier(path: str, cwd: str) -> str | None:
+    """Nearest node_modules/.bin/prettier walking up from the edited file, then from
+    cwd. Resolving from cwd alone missed monorepo/worktree layouts where the hook cwd
+    is not the package root."""
+    seen: set[str] = set()
+    for start in (os.path.dirname(os.path.abspath(path)), os.path.abspath(cwd)):
+        d = start
+        while d not in seen:
+            seen.add(d)
+            local = os.path.join(d, "node_modules", ".bin", "prettier")
+            if os.path.isfile(local) and os.access(local, os.X_OK):
+                return local
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+    return None
+
+
 def candidates_for(path: str, cwd: str) -> list[list[str]]:
     """Ordered formatter argv candidates for this file (path appended by caller)."""
     ext = os.path.splitext(path)[1].lower()
@@ -77,8 +96,8 @@ def candidates_for(path: str, cwd: str) -> list[list[str]]:
         return out
     if ext in PRETTIER_EXTS:
         out = []
-        local = os.path.join(cwd, "node_modules", ".bin", "prettier")
-        if os.path.isfile(local) and os.access(local, os.X_OK):
+        local = _local_prettier(path, cwd)
+        if local:
             out.append([local, "--write", "--log-level", "warn"])
         if shutil.which("prettier"):
             out.append(["prettier", "--write", "--log-level", "warn"])
@@ -111,26 +130,38 @@ def file_path_from(data: dict) -> str | None:
     return fp
 
 
+# Reasons that are environment/input state, not hook failures: friction row only.
+# "missing" = no formatter installed; "parse" = file is syntactically broken mid-edit.
+# Real crashes ("crash") and timeouts also write a fault row.
+QUIET_REASONS = {"missing", "parse"}
+PARSE_MARKERS = ("parse", "syntax", "unexpected token")
+
+
 def _record_skip(data: dict, fp: str, reason: str) -> None:
-    """One cheap friction row per skip (`formatter_skipped:<reason>`, ext in snippet) so
-    formatter latency/failures are measurable, plus one fault row (F6): a failed
-    formatter used to be fully invisible - the run believed formatting happened
-    while the file stayed unformatted. Never raises; exit stays 0."""
+    """Friction row (`formatter_skipped:<reason>`, ext in snippet) so skips stay
+    measurable. "missing" is recorded once per session+extension. Only real
+    failures (crash, timeout) also write a fault row. Never raises; exit stays 0."""
+    ext = os.path.splitext(fp)[1].lower() or "(none)"
     try:
         import atlas_db  # noqa: E402  (lazy: only on the skip path)
 
         conn = atlas_db.connect()
         try:
-            atlas_db.record_friction(
-                conn,
-                data.get("session_id") or "",
-                "formatter_skipped:" + reason,
-                snippet=os.path.splitext(fp)[1].lower() or "(none)",
-            )
+            category = "formatter_skipped:" + reason
+            sid = data.get("session_id") or ""
+            seen = reason == "missing" and conn.execute(
+                "SELECT 1 FROM friction_events WHERE session_id=? AND category=? "
+                "AND snippet=? LIMIT 1",
+                (sid, category, ext),
+            ).fetchone()
+            if not seen:
+                atlas_db.record_friction(conn, sid, category, snippet=ext)
         finally:
             conn.close()
     except Exception:
         pass  # DB unavailable: the skip stays quiet, exit stays 0
+    if reason in QUIET_REASONS:
+        return
     atlas_hook_guard.fault(
         "format_after_edit",
         "formatter skipped: %s for %s (no candidate succeeded)" % (reason, fp),
@@ -164,12 +195,13 @@ def main() -> int:
             # Silent on success. A formatter that ran is not news; announcing it on
             # every edit is the highest-frequency noise source in the plugin.
             return 0
-        reasons.add("parse")  # non-zero (e.g. syntax error mid-edit): try the next
+        err = (getattr(proc, "stderr", "") or "").lower()
+        # Syntax error mid-edit is input state; anything else non-zero is a crash.
+        reasons.add("parse" if any(m in err for m in PARSE_MARKERS) else "crash")
     # Every candidate failed or was absent: a skip, not a hook crash, so the
-    # process still exits 0 - but the skip is recorded (friction row + fault
-    # row) so the pattern is measurable instead of silent.
+    # process still exits 0; the skip is always recorded (see _record_skip).
     reason = next(
-        (r for r in ("timeout", "parse", "missing") if r in reasons), "missing"
+        (r for r in ("timeout", "crash", "parse", "missing") if r in reasons), "missing"
     )
     _record_skip(data, fp, reason)
     return 0

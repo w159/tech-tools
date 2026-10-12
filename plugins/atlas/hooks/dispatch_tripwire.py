@@ -27,9 +27,9 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
-import shutil
 
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -112,7 +112,7 @@ def _verifier_slot(tinput):
     """The watch slot for one verifier dispatch: subagent type + sibling name
     (the named-dispatch identity). Parallel verifiers in one session each get
     their own slot instead of sharing a baseline (friction F5)."""
-    return "%s|%s" % (
+    return "{}|{}".format(
         str(tinput.get("subagent_type") or ""),
         str(tinput.get("name") or tinput.get("description") or ""),
     )
@@ -125,7 +125,7 @@ def _stash_findings_count(root, session, slot):
     stashes; a different session's state is discarded."""
     if root is None:
         return
-    try:
+    with contextlib.suppress(Exception):
         path = _watch_path(root)
         path.parent.mkdir(parents=True, exist_ok=True)
         state = {}
@@ -143,8 +143,6 @@ def _stash_findings_count(root, session, slot):
             json.dumps({"session_id": session, "counts": counts}),
             encoding="utf-8",
         )
-    except Exception:
-        pass  # advisory only
 
 
 def _verdict_missing(root, session, slot):
@@ -170,11 +168,14 @@ def _verdict_missing(root, session, slot):
 def _in_subagent(payload):
     """True when this hook is firing inside a dispatched subagent.
 
-    Subagent transcripts live at `<session-dir>/subagents/agent-<id>.jsonl`,
-    which is the only reliable marker in the payload: a subagent's session_id
-    (`agent-xxxxx`) has no run row, so nothing in the observability DB can
-    answer this.
+    Claude Code stamps `agent_id` on every hook fired inside a subagent and
+    documents it as THE marker (absent on the main thread). Builds that still
+    hand a subagent the parent's transcript_path would otherwise read as the
+    lead, so `agent_id` is checked first; the `/subagents/` transcript path
+    is kept for builds that predate the field.
     """
+    if payload.get("agent_id"):
+        return True
     return "/subagents/" in str(payload.get("transcript_path") or "").replace("\\", "/")
 
 
@@ -192,7 +193,7 @@ def _deny_nested_dispatch(tool):
         "findings.json, its context is unreachable). Do the work yourself with the "
         "tools you have. If it genuinely needs another role, stop and say so in your "
         "final report -- name the role and the exact task -- and let the orchestrator "
-        "dispatch it. (%s)" % tool
+        f"dispatch it. ({tool})"
     )
 
 
@@ -209,10 +210,8 @@ def _system_temp_roots():
     tempfile.gettempdir() can report either form."""
     roots = set()
     for candidate in (tempfile.gettempdir(), "/tmp", "/private/tmp"):
-        try:
+        with contextlib.suppress(Exception):
             roots.add(os.path.realpath(candidate).replace("\\", "/").rstrip("/"))
-        except Exception:
-            pass
     return roots
 
 
@@ -314,7 +313,7 @@ _SPEC_HINTS = {
 def _spec_skeleton(missing):
     """Paste-ready lines for exactly the labels `missing` (entries may end ' (empty)')."""
     labels = [m.replace(" (empty)", "") for m in missing]
-    return "\n".join("%s %s" % (label, _SPEC_HINTS[label]) for label in labels)
+    return "\n".join(f"{label} {_SPEC_HINTS[label]}" for label in labels)
 
 
 SPEC_DENIES_RELPATH = (".atlas", ".run", "spec_denies")
@@ -410,14 +409,13 @@ def _toolkit_gap_reason(tool, gap):
             f"unless a symbol edit needs it`. Without it {gap} greps the tree."
         )
     return (
-        "DENY - this %s dispatch is missing the code-nav TOOLS block. "
+        f"DENY - this {tool} dispatch is missing the code-nav TOOLS block. "
         "Paste subagent-kit.md / tool-routing.md: one batched ToolSearch that "
         "includes lean-ctx (ctx_compose/ctx_search/ctx_read) AND serena "
         "(activate_project, get_symbols_overview, find_symbol, and for "
         "implementers replace_symbol_body), plus context-mode for noisy "
         "output. The subagent must run that before Read/Grep/Bash; serena "
-        "down -> lean-ctx only, never Bash grep. Without it %s greps the tree."
-        % (tool, gap)
+        f"down -> lean-ctx only, never Bash grep. Without it {gap} greps the tree."
     )
 
 
@@ -461,14 +459,12 @@ def _mechanical_tier():
     """(agent, maxSteps) from contracts/worker-protocol.json; defaults on any problem."""
     if "tier" not in _PROTOCOL_CACHE:
         agent, max_steps = "runner", 7
-        try:
+        with contextlib.suppress(Exception):
             tier = json.loads(_PROTOCOL_FILE.read_text(encoding="utf-8")).get(
                 "mechanicalTier", {}
             )
             agent = str(tier.get("agent") or agent)
             max_steps = int(tier.get("maxSteps") or max_steps)
-        except Exception:
-            pass
         _PROTOCOL_CACHE["tier"] = (agent, max_steps)
     return _PROTOCOL_CACHE["tier"]
 
@@ -486,10 +482,9 @@ def _runner_steps_problem(tinput):
     m = re.search(r"(?im)^[ \t]*STEPS[ \t]*:", prompt)
     if not m:
         return (
-            "DENY - an atlas:%s dispatch must carry numbered STEPS: the runner is "
+            f"DENY - an atlas:{agent} dispatch must carry numbered STEPS: the runner is "
             "the mechanical tier and follows exact steps, it makes no decisions. "
-            "Add a STEPS: block with numbered lines (1. ..., 2. ...), at most %d."
-            % (agent, max_steps)
+            f"Add a STEPS: block with numbered lines (1. ..., 2. ...), at most {max_steps}."
         )
     count = 0
     rest = prompt[m.end() :].split("\n")[1:]  # lines after the STEPS: line
@@ -503,15 +498,13 @@ def _runner_steps_problem(tinput):
             count += 1
     if count == 0:
         return (
-            "DENY - the STEPS: block of this atlas:%s dispatch has no numbered "
-            "lines. Write each step as a numbered line (1. ..., 2. ...), at most %d."
-            % (agent, max_steps)
+            f"DENY - the STEPS: block of this atlas:{agent} dispatch has no numbered "
+            f"lines. Write each step as a numbered line (1. ..., 2. ...), at most {max_steps}."
         )
     if count > max_steps:
         return (
-            "DENY - this atlas:%s dispatch has %d numbered STEPS but the cap is %d. "
-            "Split the work into several runner dispatches of at most %d steps each."
-            % (agent, count, max_steps, max_steps)
+            f"DENY - this atlas:{agent} dispatch has {count} numbered STEPS but the cap is {max_steps}. "
+            f"Split the work into several runner dispatches of at most {max_steps} steps each."
         )
     return None
 
@@ -543,7 +536,7 @@ def _frontmatter_model(agent):
     if not _SAFE_AGENT_NAME.match(agent or ""):
         return None
     try:
-        text = (AGENTS_DIR / ("%s.md" % agent)).read_text(encoding="utf-8")
+        text = (AGENTS_DIR / (f"{agent}.md")).read_text(encoding="utf-8")
     except Exception:
         return None
     lines = text.splitlines()
@@ -584,6 +577,179 @@ def _name_missing(tinput):
     return agent
 
 
+# `name` for an unnamed atlas:* dispatch (ATLAS_AUTONAME=off restores the deny).
+# _pre_tool_use records the agent here; main() injects the slug via updatedInput.
+_PENDING_AUTONAME = [""]
+AUTONAME_MAX = 24
+AUTONAMES_RELPATH = (".atlas", ".run", "autonames")
+
+
+_PENDING_REPORT = [False]
+DEFAULT_REPORT_LINE = "REPORT: file:line findings first, then one line per file touched; end with STATUS: DONE"
+_NAME_STOPWORDS = {
+    "the",
+    "a",
+    "an",
+    "of",
+    "for",
+    "to",
+    "and",
+    "in",
+    "on",
+    "with",
+    "all",
+}
+
+
+def _name_base(role, description):
+    """`<role>-<up to 3 words>` within AUTONAME_MAX, shortened at word boundaries.
+    A `label: text` description uses the text (the label usually echoes the role);
+    a leading word echoing the role (explore/explorer/implement...) is dropped."""
+    desc = str(description or "")
+    _, sep, tail = desc.partition(":")
+    if sep and re.search(r"[a-z0-9]", tail, re.I):
+        desc = tail
+    words = [w for w in re.split(r"[^a-z0-9]+", desc.lower()) if w]
+    while words and len(words[0]) >= 4 and words[0][:4] == role.lower()[:4]:
+        words = words[1:]
+    words = [w for w in words if w not in _NAME_STOPWORDS][:3]
+    role = re.sub(r"[^a-z0-9]+", "-", role.lower()).strip("-") or "worker"
+    while words and len(role) + 1 + len("-".join(words)) > AUTONAME_MAX:
+        words.pop()
+    return "-".join([role, *words])[:AUTONAME_MAX].rstrip("-")
+
+
+AUTONAME_INFLIGHT_SECS = (
+    10  # unspawned slug is held this long; a denied call's slug lapses
+)
+
+
+@contextlib.contextmanager
+def _name_state(root, session):
+    """Per-session `{"reserved": [name], "inflight": [[name, role, ts]]}` under the
+    project `.atlas/.run/autonames` (else the temp dir), flock-serialised because
+    the parallel calls of one batch run their hooks concurrently."""
+    import hashlib
+
+    store = (root or Path(tempfile.gettempdir())).joinpath(
+        *AUTONAMES_RELPATH
+    ) / hashlib.sha256(str(session or "").encode()).hexdigest()
+    store.parent.mkdir(parents=True, exist_ok=True)
+    with open(str(store) + ".lock", "a") as lock:
+        try:
+            import fcntl
+
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        except (
+            ImportError
+        ):  # ponytail: no lock off POSIX, a same-ms batch race can repeat a name
+            pass
+        try:
+            state = json.loads(store.read_text())
+        except (OSError, ValueError):
+            state = {}
+        state.setdefault("reserved", [])
+        state.setdefault("inflight", [])
+        yield state
+        store.write_text(json.dumps(state))
+
+
+def _autoname(root, session, agent, description):
+    """`<role>-<description slug>` (<= 24 chars, [a-z0-9-]), unique per session:
+    a repeat gets -2, -3... A name is only COMPUTED here against spawned
+    (`reserved`) names and this batch's not-yet-spawned (`inflight`) ones; it is
+    reserved by `_reserve_name` once the dispatch really spawns, so a call a later
+    PreToolUse hook denies burns nothing once its in-flight hold lapses."""
+    import time
+
+    role = agent.split(":", 1)[-1]
+    base = _name_base(role, description)
+    now = time.time()
+    with _name_state(root, session) as st:
+        st["inflight"] = [
+            e for e in st["inflight"] if now - e[2] < AUTONAME_INFLIGHT_SECS
+        ]
+        used = set(st["reserved"]) | {e[0] for e in st["inflight"]}
+        name, n = base, 1
+        while name in used:
+            n += 1
+            suffix = f"-{n}"
+            name = base[: AUTONAME_MAX - len(suffix)].rstrip("-") + suffix
+        st["inflight"].append([name, role, now])
+    return name
+
+
+def _reserve_name(payload):
+    """Post-allow spawn signal: PostToolUse:Agent carries the final `name`;
+    SubagentStart carries only `agent_type`, so it promotes the oldest in-flight
+    slug of that role (FIFO). Fail-open."""
+    try:
+        cwd = payload.get("cwd")
+        root = find_root(Path(cwd if isinstance(cwd, str) and cwd else os.getcwd()))
+        name = str((payload.get("tool_input") or {}).get("name") or "")
+        role = str(payload.get("agent_type") or "").split(":", 1)[-1].lower()
+        with _name_state(root, payload.get("session_id")) as st:
+            hit = next(
+                (e for e in st["inflight"] if (e[0] == name if name else e[1] == role)),
+                None,
+            )
+            if hit:
+                st["inflight"].remove(hit)
+            name = name or (hit[0] if hit else "")
+            if name and name not in st["reserved"]:
+                st["reserved"].append(name)
+    except Exception as exc:
+        _record_fault(exc)
+
+
+# Built-in (non-atlas) agent types. An armed orchestrator that dispatches one of
+# these runs workers on the stock Claude agent setup, outside Atlas's roles,
+# models and guardrails. ATLAS_BUILTIN_AGENT_NUDGE=off disables the deny.
+BUILTIN_ROLE = {
+    "explore": "atlas:explorer",
+    "plan": "atlas:planner",
+    "general-purpose": "atlas:implementer",
+    "": "atlas:implementer",
+}
+
+
+def _builtin_agent(tinput):
+    """The built-in subagent_type (lowercased, '' when absent) of a dispatch that
+    should have been an atlas:* role, else None."""
+    agent = str(tinput.get("subagent_type") or "").strip().lower()
+    if os.environ.get("ATLAS_BUILTIN_AGENT_NUDGE", "on").lower() == "off":
+        return None
+    return agent if agent in BUILTIN_ROLE else None
+
+
+def _role_block(agent):
+    """Ready-to-paste dispatch for `agent` (an atlas:* role): the call line plus
+    every block the gate checks (TOOLS, the six spec blocks, STEPS for the runner)."""
+    role = agent.split(":", 1)[-1]
+    if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp":
+        tools = (
+            "TOOLS: use lean-ctx via its xd:// devices (write JSON to xd://mcp__lean_ctx_ctx_search, "
+            "_ctx_read, _ctx_glob); noisy output via context-mode ctx_execute"
+        )
+    else:
+        tools = (
+            "TOOLS: one batched ToolSearch select of lean-ctx (ctx_compose, ctx_search, ctx_read) "
+            "and serena (activate_project, get_symbols_overview, find_symbol), plus context-mode "
+            "ctx_execute for noisy output, before any Read/Grep/Bash"
+        )
+    lines = [
+        f'Agent(subagent_type="{agent}", name="<slice>-{role}", description="<3-5 words>", prompt=',
+        tools,
+    ]
+    lines.append(_spec_skeleton([b[0] for b in REQUIRED_SPEC_BLOCKS]))
+    if role == _mechanical_tier()[0]:
+        lines.append(
+            f"STEPS: 1. <exact step> 2. <exact step> (numbered, at most {_mechanical_tier()[1]})"
+        )
+    lines.append(")")
+    return "\n".join(lines)
+
+
 OMP_AGENTS_DIR = Path(__file__).resolve().parent.parent / "omp" / "agents"
 
 
@@ -597,7 +763,7 @@ def _omp_pinned_models(agent):
     if not _SAFE_AGENT_NAME.match(agent or ""):
         return []
     try:
-        text = (OMP_AGENTS_DIR / ("%s.md" % agent)).read_text(encoding="utf-8")
+        text = (OMP_AGENTS_DIR / (f"{agent}.md")).read_text(encoding="utf-8")
     except Exception:
         return []
     lines = text.splitlines()
@@ -823,57 +989,92 @@ def _pre_tool_use(
                 conn, atlas_db, session, tool, tinput, code, session_model
             )
 
+        unnamed = _name_missing(tinput or {})
+        # (c00) Built-in agent types bypass Atlas's roles, models and guardrails.
+        stock = _builtin_agent(tinput or {})
+        if stock is not None:
+            role = BUILTIN_ROLE[stock]
+            deny(
+                "builtin_agent",
+                "DENY - this {} dispatch uses the built-in agent '{}', which runs "
+                "outside Atlas's roles, model tiers and tool guardrails. Use the "
+                "atlas role instead: read-only research -> atlas:explorer; edits -> "
+                "atlas:implementer; planning -> atlas:planner; verification -> "
+                "atlas:verifier; mechanical steps -> atlas:runner. For this call, "
+                "paste:\n{}\nSet ATLAS_BUILTIN_AGENT_NUDGE=off to disable this check.".format(
+                    tool, stock or "(default general-purpose)", _role_block(role)
+                ),
+            )
+            return
         # (c0) A dispatch with no sibling name never joins the colony: without
         # a name it is absent from the sibling roster (no SendMessage in, no
         # addressed board notes) and its report is unattributable.
-        unnamed = _name_missing(tinput or {})
         if unnamed:
-            deny(
-                "name",
-                "DENY - this %s dispatch to %s carries no `name`. Named dispatches "
-                "are the colony: only a named sibling appears on the sibling roster "
-                "and can SendMessage the others, its report stays attributable, and "
-                "board notes can be addressed to it. Re-dispatch with "
-                "name: <role>-<slice> (e.g. auth-explorer)." % (tool, unnamed),
-            )
-            return
+            if os.environ.get("ATLAS_AUTONAME", "on").lower() != "off":
+                # Injected, not denied: main() names the dispatch if every later
+                # check passes (a denied dispatch never runs, so never needs one).
+                _PENDING_AUTONAME[0] = unnamed
+            else:
+                deny(
+                    "name",
+                    f"DENY - this {tool} dispatch to {unnamed} carries no `name`. Named dispatches "
+                    "are the colony: only a named sibling appears on the sibling roster "
+                    "and can SendMessage the others, its report stays attributable, and "
+                    "board notes can be addressed to it. Re-issue the same call with the "
+                    "Agent tool's `name` argument set (a tool argument, not prompt text): "
+                    f"name: <role>-<slice> (e.g. auth-explorer). Ready-to-paste call:\n{_role_block(unnamed)}",
+                )
+                return
         # (c1) A per-call model override drifts the colony's cost/runtime tier.
         override = _model_override(tinput or {}, session_model)
         if override:
             over_agent, declared, given = override
             deny(
                 "model_override",
-                "DENY - this %s dispatch to %s overrides model with '%s'. The agent "
-                "definition pins model: %s; per-role models are the colony's "
+                f"DENY - this {tool} dispatch to {over_agent} overrides model with '{given}'. The agent "
+                f"definition pins model: {declared}; per-role models are the colony's "
                 "cost/runtime contract and a per-call override drifts it quietly. "
                 "Drop the `model` param and re-dispatch. Wrong tier for the job? "
-                "Fix the definition, not the dispatch."
-                % (tool, over_agent, given, declared),
+                "Fix the definition, not the dispatch.",
             )
             return
         # (c) A dispatch that never names the toolset gets a subagent that greps.
         gap = _toolkit_gap(tinput or {})
         if gap:
-            deny("toolkit", _toolkit_gap_reason(tool, gap))
+            deny(
+                "toolkit",
+                _toolkit_gap_reason(tool, gap) + "\nPaste:\n" + _role_block(gap),
+            )
             return
         unbounded = _unbounded_dispatch(tinput or {})
+        if (
+            unbounded
+            and unbounded[1] == ["REPORT:"]
+            and unbounded[2] <= 1
+            and os.environ.get("ATLAS_AUTONAME", "on").lower() != "off"
+        ):
+            # Only the REPORT: line is absent: main() injects it, so a parallel
+            # batch is never split by a one-shot advisory/deny on one call.
+            _PENDING_REPORT[0] = True
+            unbounded = None
         if unbounded:
             agent, missing, goals = unbounded
             if goals > 1:
                 deny(
                     "multi_goal",
-                    "DENY - this %s dispatch carries %d GOAL: blocks. One dispatch is "
+                    f"DENY - this {tool} dispatch carries {goals} GOAL: blocks. One dispatch is "
                     "ONE bounded task - that is what keeps a subagent's context small "
-                    "and its runtime short. Split it into %d dispatches, each with its "
+                    f"and its runtime short. Split it into {goals} dispatches, each with its "
                     "own GOAL, DELIVERABLE, and SUCCESS CRITERIA; independent ones can "
-                    "run in the same parallel wave." % (tool, goals, goals),
+                    "run in the same parallel wave.",
                 )
             else:
                 reason = (
-                    "DENY - this %s dispatch to %s is unbounded: missing %s. Each block "
+                    "DENY - this {} dispatch to {} is unbounded: missing {}. Each block "
                     "is a line-start `LABEL: text` (labels in a shared batch context "
-                    "count for every task). Add exactly:\n%s\nThen re-dispatch."
-                    % (tool, agent, ", ".join(missing), _spec_skeleton(missing))
+                    "count for every task). Add exactly:\n{}\nThen re-dispatch.".format(
+                        tool, agent, ", ".join(missing), _spec_skeleton(missing)
+                    )
                 )
                 if _spec_advisory_claimed(root, session):
                     # F11: the first spec offense per session is taught, not
@@ -883,22 +1084,28 @@ def _pre_tool_use(
                     _advisory(
                         "[atlas] ADVISORY - first unbounded-dispatch offense this "
                         "session, so this dispatch proceeds, but the next one is "
-                        "denied. Missing %s. Add exactly:\n%s\nEach block is a "
-                        "line-start `LABEL: text`."
-                        % (", ".join(missing), _spec_skeleton(missing))
+                        "denied. Missing {}. Add exactly:\n{}\nEach block is a "
+                        "line-start `LABEL: text`.".format(
+                            ", ".join(missing), _spec_skeleton(missing)
+                        )
                     )
                 else:
                     deny("spec", reason)
             return
         steps_problem = _runner_steps_problem(tinput or {})
         if steps_problem:
-            deny("steps", steps_problem)
+            deny(
+                "steps",
+                steps_problem
+                + "\nPaste:\n"
+                + _role_block(str((tinput or {}).get("subagent_type"))),
+            )
         return
     # (b) Editing production target code inline is the sharpest violation.
     if tool in EDIT_TOOLS and not _is_orchestration_path(path):
         _deny(
             "DENY - atlas orchestrators never edit target code inline. "
-            "Route this %s of %s to atlas:implementer." % (tool, path)
+            f"Route this {tool} of {path} to atlas:implementer."
         )
         return
     # (a) Too many inline ops with no intervening dispatch. Read-only investigation
@@ -931,12 +1138,12 @@ def _pre_tool_use(
         return
     if count >= DENY_THRESHOLD:
         _deny(
-            "DENY - %d inline ops since your last dispatch. Orchestrators delegate: "
+            f"DENY - {count} inline ops since your last dispatch. Orchestrators delegate: "
             "the work happens in subagents so this session's context stays clean. "
             "Dispatch the next step to atlas:explorer (investigation) or "
             "atlas:implementer (edits). Right-size it - one bounded change is ONE "
             "implementer dispatch, not a squad. (Your own docs/ and .atlas/ writes "
-            "are not counted here; only unsanctioned inline work is.)" % count
+            "are not counted here; only unsanctioned inline work is.)"
         )
 
 
@@ -957,7 +1164,7 @@ def _arm_orchestrating(conn, atlas_db, session, cwd):
     try:
         atlas_db.mark_orchestrating(conn, session, cwd)
     except Exception:
-        try:
+        with contextlib.suppress(Exception):
             conn.rollback()
             atlas_db.record_friction(
                 conn,
@@ -965,8 +1172,6 @@ def _arm_orchestrating(conn, atlas_db, session, cwd):
                 "orchestration_flag_arm_failed",
                 snippet="mark_orchestrating raised; run not flagged",
             )
-        except Exception:
-            pass
 
 
 # Footprint arming. Prompt arming (prompt_optimizer.arm_orchestration) is a regex
@@ -1022,12 +1227,12 @@ def _footprint_arm(conn, atlas_db, session, cwd):
                 "hookSpecificOutput": {
                     "hookEventName": "PostToolUse",
                     "additionalContext": (
-                        "[atlas] This session has now edited %d distinct code files "
+                        f"[atlas] This session has now edited {len(paths)} distinct code files "
                         "inline: that is multi-file work, so the delegation tripwires "
                         "are now armed for this run. Dispatch the remaining work to "
                         "atlas:implementer as a named dispatch (name=<slice>, with the "
                         "GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP CONDITIONS/"
-                        "REPORT spec) instead of editing further inline." % len(paths)
+                        "REPORT spec) instead of editing further inline."
                     ),
                 }
             }
@@ -1053,15 +1258,16 @@ def _read_json(path):
 def _lean_hits(servers):
     """Server keys (dict) or enabled names (list) that look like lean-ctx:
     the key, or a dict spec's command, containing 'lean-ctx' or 'lean_ctx'."""
-    try:
+    with contextlib.suppress(Exception):
         if isinstance(servers, dict):
             return [
                 key
                 for key, spec in servers.items()
                 if any(
                     token
-                    in "%s %s"
-                    % (key, spec.get("command", "") if isinstance(spec, dict) else "")
+                    in "{} {}".format(
+                        key, spec.get("command", "") if isinstance(spec, dict) else ""
+                    )
                     for token in LEAN_CTX_TOKENS
                 )
             ]
@@ -1072,8 +1278,6 @@ def _lean_hits(servers):
                 if isinstance(name, str)
                 and any(token in name for token in LEAN_CTX_TOKENS)
             ]
-    except Exception:
-        pass
     return []
 
 
@@ -1087,7 +1291,7 @@ def _lean_ctx_server_key(root):
     the Grep/Glob deny must downgrade to the one-time nudge. Unreadable config
     fails open: None, never an exception."""
     home = Path.home()
-    try:
+    with contextlib.suppress(Exception):
         # (1) <project>/.mcp.json
         mcp = _read_json(root / ".mcp.json")
         hits = _lean_hits((mcp or {}).get("mcpServers"))
@@ -1130,8 +1334,6 @@ def _lean_ctx_server_key(root):
             hits = _lean_hits(home_settings.get("enabledMcpjsonServers"))
             if hits:
                 return hits[0]
-    except Exception:
-        pass  # fail open: unknown availability must nudge, never deny
     return None
 
 
@@ -1292,10 +1494,27 @@ def _exploration_deny(command, server):
         return None
     tools = {_EXPLORATION_TOOL.get(t[0], "ctx_shell") for t in segments}
     tool = tools.pop() if len(tools) == 1 else "ctx_shell"
+    hint = _exploration_rewrite(segments[0]) if len(segments) == 1 else None
     return (
-        f"DENY - this Bash command only reads files: use lean-ctx `{tool}` "
+        f"DENY - this Bash command only reads files: use lean-ctx `{tool}`"
+        f"{' as ' + hint if hint else ''} "
         f'(not loaded? ToolSearch("select:mcp__{server}__{tool}")).'
     )
+
+
+def _exploration_rewrite(tokens):
+    """Concrete ctx_* call for one simple read command, or None (text only)."""
+    name, args = tokens[0], [t for t in tokens[1:] if not t.startswith("-")]
+    if name in ("cat", "head", "tail") and args:
+        return f"`ctx_read path={args[-1]}`"
+    if name in ("grep", "rg", "ag") and args:
+        where = f" path={args[1]}" if len(args) > 1 else ""
+        return f"`ctx_search pattern={args[0]}{where}`"
+    if name in ("ls", "tree"):
+        return f"`ctx_tree path={args[0] if args else '.'}`"
+    if name in ("find", "fd") and args:
+        return f"`ctx_glob pattern={args[-1]}`"
+    return None
 
 
 def _native_tool_policy(payload):
@@ -1326,7 +1545,7 @@ def _native_tool_policy(payload):
                 return False, None  # allow; deny tiers are off too
             server = _lean_ctx_server_key(root)
             if shutil.which("lean-ctx") and server:
-                selector = "mcp__%s__%s" % (server, replacement)
+                selector = f"mcp__{server}__{replacement}"
                 _deny(
                     f"DENY - native {tool} is disabled in docs/ projects. lean-ctx MCP "
                     f'(server "{server}") is configured for this project, so the '
@@ -1479,7 +1698,9 @@ def _channel_dispatch(payload):
     if str(tinput.get("subagent_type") or "").startswith("atlas:"):
         goal = re.search(r"^\s*GOAL:\s*(.+)$", prompt, re.M)
         title = goal.group(1).strip() if goal else " ".join(prompt.split())[:80]
-        try:  # contract C4: one owned todo per atlas member; never blocks the dispatch
+        with contextlib.suppress(
+            Exception
+        ):  # contract C4: one owned todo per atlas member; never blocks the dispatch
             atlas_todo.add(
                 root,
                 title,
@@ -1488,8 +1709,6 @@ def _channel_dispatch(payload):
                 owner=name,
                 channel=chan["name"],
             )
-        except Exception:
-            pass
     brief = atlas_todo.channel_brief(root, chan["name"], lead, name)
     return {**tinput, "prompt": f"{prompt}\n\n{brief}"}
 
@@ -1522,12 +1741,55 @@ def _is_deny(out):
         return False
 
 
+def _inject_name(payload, out):
+    """Complete the atlas:* dispatch `_pre_tool_use` accepted: name an unnamed one
+    and append the default REPORT: line to a prompt that lacks only that block, on
+    the payload's tool_input (so the channel step sees both) and in `out` as
+    updatedInput + allow. Fail-open, recorded."""
+    agent, _PENDING_AUTONAME[0] = _PENDING_AUTONAME[0], ""
+    report, _PENDING_REPORT[0] = _PENDING_REPORT[0], False
+    if not agent and not report:
+        return out
+    try:
+        tinput = payload.get("tool_input") or {}
+        updated = dict(tinput)
+        if agent:
+            cwd = payload.get("cwd")
+            root = find_root(Path(cwd if isinstance(cwd, str) and cwd else os.getcwd()))
+            updated["name"] = _autoname(
+                root, payload.get("session_id"), agent, tinput.get("description")
+            )
+        if report:
+            updated["prompt"] = f"{tinput.get('prompt') or ''}\n\n{DEFAULT_REPORT_LINE}"
+        payload["tool_input"] = updated
+        return _merge_updated_input(out, updated)
+    except Exception as exc:
+        _record_fault(exc)
+        return out
+
+
 def main():
     raw = sys.stdin.read()
-    payload = json.loads(raw)  # may raise -> caught below
+    try:
+        payload = json.loads(
+            raw, strict=False
+        )  # raw control chars in strings are tolerated
+    except ValueError as exc:  # JSONDecodeError subclasses ValueError
+        # Same fail-open path as the __main__ handler: observable, never a deny.
+        sys.stderr.write(f"[atlas] dispatch_tripwire fail-open: {exc}\n")
+        _record_fault(exc)
+        return
     payload = payload if isinstance(payload, dict) else {}
     if isinstance(payload, dict) and isinstance(payload.get("cwd"), str):
         _PAYLOAD_CWD[0] = payload["cwd"]
+    if payload.get("hook_event_name") == "SubagentStart":
+        _reserve_name(payload)
+        return
+    if (
+        payload.get("hook_event_name", "PostToolUse") == "PostToolUse"
+        and payload.get("tool_name") in DISPATCH_TOOLS
+    ):
+        _reserve_name(payload)
 
     # Worker inbox: an atlas_mux worker's headless pane never reads its tty, so
     # dashboard messages queued for it on the board are delivered here, as
@@ -1555,6 +1817,7 @@ def main():
     finally:
         out = _merge_context(buf.getvalue(), inbox)
         if dispatch and not _is_deny(out):
+            out = _inject_name(payload, out)
             # An allowed dispatch opens the lead's subchannel; a denied one never ran.
             try:
                 updated = _channel_dispatch(payload)
@@ -1610,8 +1873,8 @@ def _device_args_overwrite(payload):
     if not isinstance(obj, dict) or not obj or not set(obj) <= _DEVICE_ARG_KEYS:
         return False
     _deny(
-        "DENY - this looks like device arguments written over %s; send them to the "
-        "xd:// device path instead." % os.path.basename(path)
+        f"DENY - this looks like device arguments written over {os.path.basename(path)}; send them to the "
+        "xd:// device path instead."
     )
     return True
 
@@ -1778,11 +2041,14 @@ def _run(payload):
             return
 
         atlas_db.log_event(conn, run_id, tool, "main", 1, path)
-        if tool in EDIT_TOOLS and not _in_subagent(payload):
-            # Prompt arming is a regex heuristic; an unflagged session that grows
-            # into multi-file code work is armed from the footprint it left.
-            if _footprint_arm(conn, atlas_db, session, payload.get("cwd")):
-                return
+        # Prompt arming is a regex heuristic; an unflagged session that grows
+        # into multi-file code work is armed from the footprint it left.
+        if (
+            tool in EDIT_TOOLS
+            and not _in_subagent(payload)
+            and _footprint_arm(conn, atlas_db, session, payload.get("cwd"))
+        ):
+            return
         if tool not in INLINE_TOOLS:
             return  # MultiEdit/NotebookEdit are logged for the footprint only
         count = atlas_db.inline_ops_since_last_dispatch(conn, run_id)
@@ -1792,11 +2058,11 @@ def _run(payload):
             if _is_worker() or not atlas_db.is_orchestrating(conn, session):
                 return  # WS1: non-orchestration sessions are logged but never nagged
             if edit_to_target:
-                msg = "STOP - route this %s of %s to atlas:implementer." % (tool, path)
+                msg = f"STOP - route this {tool} of {path} to atlas:implementer."
             else:
                 msg = (
-                    "STOP - %d inline ops, no dispatch. Route the next step to "
-                    "atlas:explorer / atlas:implementer." % count
+                    f"STOP - {count} inline ops, no dispatch. Route the next step to "
+                    "atlas:explorer / atlas:implementer."
                 )
             out = {
                 "hookSpecificOutput": {
@@ -1817,9 +2083,7 @@ if __name__ == "__main__":
         # fail-open: never block a session. But surface the failure on stderr
         # so a silent misfire is observable instead of invisible, matching
         # auto_skill/memory_capture, and persist it for the dashboard.
-        try:
+        with contextlib.suppress(Exception):
             sys.stderr.write(f"[atlas] dispatch_tripwire fail-open: {exc}\n")
-        except Exception:
-            pass
         _record_fault(exc)
     sys.exit(0)

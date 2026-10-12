@@ -1,0 +1,29 @@
+Validating plugin manifest: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/.claude-plugin/plugin.json
+
+  ❯ types ./types/index.d.ts declares on $: nothing (no EngineInterface member)
+  ❯ types ./types/index.d.ts declares state: atlas.snapshot, atlas.tab, atlas.usage, atlas.taskAgents, atlas.headerPhase, atlas.headerMisses, atlas.lastSeenSeq, atlas.isModOn, atlas.isInteractive, atlas.paneOpened, atlas.spinnerTick, atlas.discipline, atlas.orch
+
+Validating hooks: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/hooks.json
+
+  ❯ ../mod/register.ts hooks: agent.spawn, turn.step, turn.complete, tool.call, prompt.submit, turn.complete{reason=answer, isAborted=false}, ui.render{component=Spinner}, ui.render{component=ToolUse}, ui.render{component=AssistantMessage}, ui.render{component=TurnDuration}, ui.render{component=PromptHint}, turn.complete{reason=answer}, session.start, session.measure, turn.complete{reason=answer}, ui.render{component=AbovePrompt}, ui.render{component=Pane}, ui.fault, ui.message, command.run{command=atlas-cc}, ui.close, command.run{command=atlas-say}, command.run{command=atlas-todo}, command.run{command=atlas-sprites}
+  ❯ ../mod/register.ts answers its own command: command.run{command=atlas-cc}
+  ❯ ../mod/register.ts answers its own command: command.run{command=atlas-say}
+  ❯ ../mod/register.ts answers its own command: command.run{command=atlas-todo}
+  ❯ ../mod/register.ts answers its own command: command.run{command=atlas-sprites}
+  ❯ ../mod/register.ts gating hook without .catch: agent.spawn
+  ❯ ../mod/register.ts gating hook without .catch: tool.call
+  ❯ ../mod/register.ts gating hook without .catch: prompt.submit
+  ❯ ../mod/register.ts gating hook without .catch: ui.close
+  ❯ ../mod/register.ts calls: $.agent.list, $.audio.play, $.clock.every, $.clock.now, $.command.register, $.env.get, $.fs.exists (via engineFs), $.fs.list (via dataFingerprint, engineFs), $.fs.read (via engineFs), $.fs.stat (via engineFs, gatherSessions, statSig), $.process.run, $.prompt.suggest, $.session.id, $.state.get, $.state.set, $.ui.ask, $.ui.close, $.ui.log, $.ui.open, $.ui.resolve, $.ui.toast
+  ❯ ../mod/register.ts env writes: nothing
+  ❯ ../mod/register.ts env reads: ATLAS_MOD, ATLAS_PROJECT_ROOT, HOME
+  ❯ ../mod/register.ts state writes: atlas.discipline, atlas.headerMisses, atlas.headerPhase, atlas.isInteractive, atlas.isModOn, atlas.lastSeenSeq, atlas.orch, atlas.paneOpened, atlas.snapshot, atlas.spinnerTick, atlas.tab, atlas.taskAgents, atlas.usage
+  ❯ ../mod/register.ts state reads: atlas.discipline, atlas.headerMisses, atlas.headerPhase, atlas.isInteractive, atlas.isModOn, atlas.lastSeenSeq, atlas.orch, atlas.paneOpened, atlas.snapshot, atlas.spinnerTick, atlas.tab, atlas.taskAgents, atlas.usage
+  ❯ ../mod/register.ts surface modules: mod/band.tsx, mod/pane/board.tsx, mod/pane/channel.tsx, mod/pane/collab.tsx, mod/pane/colony.tsx, mod/pane/sprites.tsx, mod/pane/squad.tsx
+
+ℹ Advice (does not change the verdict):
+
+  ❯ /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/README.md: This README has no line that installs "atlas" from a marketplace. Add the install line, which works in one step on Claude Code 2.1.275 or later. Validate the folder that holds its marketplace.json to have <owner>/<repo> filled in, and the name its marketplace lists it under.
+      /plugin install atlas --marketplace <owner>/<repo>
+
+✔ Validation passed

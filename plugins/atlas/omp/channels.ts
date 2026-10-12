@@ -7,6 +7,8 @@
  * `agent_name`; where an omp release does not expose it the subagent still drains by running the inbox command.
  * Claude Code does the same in hooks/dispatch_tripwire.py. Fail open: a dispatch is never blocked by the board.
  */
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as nodePath from "node:path";
 
 import { taskItems, recordFault } from "./hook-bridge";
@@ -28,9 +30,32 @@ export function leadName(sessionId: string | undefined, env: Record<string, stri
 
 export type ChannelRunner = (argv: string[], cwd: string) => string | undefined;
 
-const defaultRun: ChannelRunner = (argv, cwd) => {
-	const { code, stdout } = runCaptureSync(argv, { cwd, timeoutMs: 15_000 });
-	return code === 0 ? stdout : undefined;
+/** Why the last default run failed (exit code or timeout, plus stderr head); parseOpen folds it into the fault. */
+let lastFailure = "";
+
+/** Runs argv with stderr captured to a temp file, so a failure reports its cause instead of "no output". */
+export const defaultRun: ChannelRunner = (argv, cwd) => {
+	const dir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "atlas-chan-"));
+	const errFile = nodePath.join(dir, "err");
+	try {
+		const { code, stdout } = runCaptureSync(["sh", "-c", '"$@" 2>"$ATLAS_CHANNEL_STDERR"', "sh", ...argv], {
+			cwd,
+			timeoutMs: 15_000,
+			env: { ATLAS_CHANNEL_STDERR: errFile },
+		});
+		if (code === 0) return stdout;
+		let stderr = "";
+		try {
+			stderr = fs.readFileSync(errFile, "utf8").trim().slice(0, 300);
+		} catch {
+			/* no stderr file: the shell never started */
+		}
+		const how = code === null ? "timeout/signal after 15s" : `exit ${code}`;
+		lastFailure = `${how}; stderr: ${stderr || "(empty)"}`;
+		return undefined;
+	} finally {
+		fs.rmSync(dir, { recursive: true, force: true });
+	}
 };
 
 /** Called once a dispatch has opened the lead's channel: the live view subscribes here. */
@@ -67,7 +92,9 @@ function memberName(item: Item): string {
 /** channel-open output -> briefs + channel name; undefined (and a recorded fault) when it is empty or not JSON. */
 function parseOpen(out: string | undefined, cwd: string): { briefs: Record<string, string>; channel: string } | undefined {
 	if (!out) {
-		recordFault("channels", "channel-open produced no output (non-zero exit or timeout)", "ChannelOpen", cwd);
+		const cause = lastFailure || "no output";
+		lastFailure = "";
+		recordFault("channels", `channel-open failed: ${cause}`, "ChannelOpen", cwd);
 		return undefined;
 	}
 	try {

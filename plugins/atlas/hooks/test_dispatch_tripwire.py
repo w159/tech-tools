@@ -587,7 +587,7 @@ class TripwireTest(unittest.TestCase):
                 "Agent",
                 {"subagent_type": "atlas:explorer", "prompt": TOOLS_BLOCK + no_report},
             ),
-            self.env,
+            dict(self.env, ATLAS_AUTONAME="off"),  # on: REPORT is injected instead
         )
         self.assertEqual(r.returncode, 0)
         self.assertIn('"permissionDecision": "deny"', r.stdout)
@@ -737,12 +737,13 @@ class TripwireTest(unittest.TestCase):
     def test_pre_toolkit_guard_ignores_forks_and_foreign_agents(self):
         """A fork inherits the parent's already-loaded tools; non-atlas agents carry
         their own contract. Denying either would block work this guard is not about."""
+        env = dict(self.env, ATLAS_BUILTIN_AGENT_NUDGE="off")
         for agent in ("fork", "general-purpose", "Explore"):
             r = run_hook(
                 self._pre_payload(
                     "Agent", {"subagent_type": agent, "prompt": "do the thing"}
                 ),
-                self.env,
+                env,
             )
             self.assertEqual(r.stdout.strip(), "", "denied a %s dispatch" % agent)
 
@@ -878,6 +879,18 @@ class TripwireTest(unittest.TestCase):
         )
         self.assertEqual(p.returncode, 0)
         self.assertIn("[atlas] dispatch_tripwire fail-open:", p.stderr)
+
+    def test_invalid_json_stdin_exits_zero_without_deny(self):
+        for raw in ("", "{", '{"tool_name": "Grep",', "\x00not json"):
+            p = subprocess.run(
+                [sys.executable, HOOK],
+                input=raw,
+                capture_output=True,
+                text=True,
+                env=self.env,
+            )
+            self.assertEqual(p.returncode, 0, raw)
+            self.assertNotIn("deny", p.stdout, raw)
 
     def test_hooks_json_pretooluse_registers_tripwire_and_keeps_bash_advisor(self):
         import json
@@ -1582,6 +1595,20 @@ class SubagentDenyTierSkipTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIsNone(self._decision(r.stdout))
 
+    def test_edit_from_subagent_carrying_agent_id_and_parent_transcript_is_not_denied(
+        self,
+    ):
+        # Claude Code 2.1.296 fires subagent hooks with agent_id and the parent's
+        # transcript_path; the path alone made atlas:implementer read as the lead.
+        payload = self._payload(
+            "Write", {"file_path": "src/app.ts"}, self.main_transcript
+        )
+        payload["agent_id"] = "a7bb2a9dc1db9efad"
+        payload["agent_type"] = "atlas:implementer"
+        r = run_hook(payload, self.env)
+        self.assertEqual(r.returncode, 0)
+        self.assertIsNone(self._decision(r.stdout))
+
     def test_same_edit_from_the_main_transcript_is_still_denied(self):
         r = run_hook(
             self._payload("Edit", {"file_path": "src/app.ts"}, self.main_transcript),
@@ -2231,12 +2258,191 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")
 
-    def test_missing_name_is_denied(self):
-        r = self._dispatch(name="")
-        self.assertEqual(r.returncode, 0)
-        self.assertEqual(
-            json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"], "deny"
+    def _unnamed(self, env=None, **extra):
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)  # project root
+        env = dict(self.env if env is None else env)
+        env.pop("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", None)
+        tinput = {"subagent_type": "atlas:explorer", "prompt": self.SPEC, **extra}
+        return run_hook(
+            {
+                "session_id": "sess-1",
+                "cwd": self.tmp,
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": tinput,
+            },
+            env,
         )
+
+    def _updated(self, r):
+        return json.loads(r.stdout)["hookSpecificOutput"]["updatedInput"]
+
+    def test_missing_name_is_injected_not_denied(self):
+        r = self._unnamed(description="Map band rows", name="")
+        self.assertEqual(r.returncode, 0)
+        spec = json.loads(r.stdout)["hookSpecificOutput"]
+        self.assertEqual(spec["hookEventName"], "PreToolUse")
+        self.assertEqual(spec["permissionDecision"], "allow")
+        self.assertEqual(spec["updatedInput"]["name"], "explorer-map-band-rows")
+        self.assertEqual(spec["updatedInput"]["subagent_type"], "atlas:explorer")
+
+    def test_injected_name_is_unique_per_session(self):
+        names = [
+            self._updated(self._unnamed(description="Map band rows"))["name"]
+            for _ in range(3)
+        ]
+        self.assertEqual(
+            names,
+            [
+                "explorer-map-band-rows",
+                "explorer-map-band-rows-2",
+                "explorer-map-band-rows-3",
+            ],
+        )
+
+    def test_injected_name_is_capped_and_slugged(self):
+        name = self._updated(
+            self._unnamed(
+                description="A very LONG description!! with $ymbols everywhere"
+            )
+        )["name"]
+        self.assertLessEqual(len(name), 24)
+        self.assertRegex(name, r"^explorer-[a-z0-9-]+$")
+
+    def test_named_dispatch_passes_through_untouched(self):
+        r = self._unnamed(name="auth-explorer", description="Map band rows")
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_autoname_off_denies_with_paste_block(self):
+        r = self._unnamed(env=dict(self.env, ATLAS_AUTONAME="off"))
+        self.assertEqual(self._dec(r), "deny")
+        self.assertIn("SendMessage", r.stdout)
+        self.assertIn("<role>-<slice>", r.stdout)
+        self.assertNotIn("updatedInput", r.stdout)
+
+    def test_teams_env_does_not_inject_name(self):
+        r = run_hook(
+            {
+                "session_id": "sess-1",
+                "cwd": self.tmp,
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:explorer", "prompt": self.SPEC},
+            },
+            dict(self.env, CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="1"),
+        )
+        self.assertNotIn("updatedInput", r.stdout)
+        store = os.path.join(self.tmp, ".atlas", ".run", "autonames")
+        self.assertFalse(
+            os.path.isdir(store) and os.listdir(store)
+        )  # demands/holds nothing
+
+    def _age_inflight(self, secs):
+        import glob
+
+        for f in glob.glob(
+            os.path.join(self.tmp, ".atlas", ".run", "autonames", "*[!k]")
+        ):
+            st = json.loads(open(f).read())
+            for e in st["inflight"]:
+                e[2] -= secs
+            with open(f, "w") as fh:
+                fh.write(json.dumps(st))
+
+    def test_denied_call_does_not_burn_the_name(self):
+        d = "Map band rows"
+        self.assertEqual(
+            self._updated(self._unnamed(description=d))["name"],
+            "explorer-map-band-rows",
+        )
+        # a later PreToolUse hook (recall gate) denied it: no spawn, no reserve; hold lapses
+        self._age_inflight(60)
+        self.assertEqual(
+            self._updated(self._unnamed(description=d))["name"],
+            "explorer-map-band-rows",
+        )
+
+    def test_parallel_same_description_calls_get_distinct_names(self):
+        d = "Map band rows"
+        a = self._updated(self._unnamed(description=d))["name"]
+        b = self._updated(self._unnamed(description=d))["name"]
+        self.assertEqual([a, b], ["explorer-map-band-rows", "explorer-map-band-rows-2"])
+
+    def test_spawn_reserves_name_via_subagent_start_and_post(self):
+        d = "Map band rows"
+        self._unnamed(description=d)
+        run_hook(
+            {
+                "session_id": "sess-1",
+                "cwd": self.tmp,
+                "hook_event_name": "SubagentStart",
+                "agent_id": "a1",
+                "agent_type": "atlas:explorer",
+            },
+            self.env,
+        )
+        self._age_inflight(60)
+        self.assertEqual(
+            self._updated(self._unnamed(description=d))["name"],
+            "explorer-map-band-rows-2",
+        )
+        run_hook(  # PostToolUse backstop reserves by the executed name
+            {
+                "session_id": "sess-1",
+                "cwd": self.tmp,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"name": "explorer-map-band-rows-2"},
+            },
+            self.env,
+        )
+        self._age_inflight(60)
+        self.assertEqual(
+            self._updated(self._unnamed(description=d))["name"],
+            "explorer-map-band-rows-3",
+        )
+
+    def test_invalid_unnamed_dispatch_still_denies_without_injecting(self):
+        r = self._unnamed(prompt=SPEC_BLOCK, description="Map band rows")  # no TOOLS
+        self.assertEqual(self._dec(r), "deny")
+        self.assertNotIn("updatedInput", r.stdout)
+
+    def test_slug_drops_role_echo_and_label_and_cuts_at_word_boundary(self):
+        a = self._updated(
+            self._unnamed(description="explore-boardgroups: board todo grouping")
+        )["name"]
+        b = self._updated(self._unnamed(description="explore-bandcap: row cap"))["name"]
+        self.assertEqual(a, "explorer-board-todo")
+        self.assertEqual(b, "explorer-row-cap")
+        self.assertNotIn("explore-", a)
+        self.assertNotEqual(a[:12], b[:12])
+        echo = self._updated(
+            self._unnamed(description="explorer explore map band rows")
+        )["name"]
+        self.assertEqual(echo, "explorer-map-band-rows")
+
+    def _no_report(self, **extra):
+        return self._unnamed(
+            prompt="\n".join(
+                ln for ln in self.SPEC.splitlines() if not ln.startswith("REPORT:")
+            ),
+            **extra,
+        )
+
+    def test_missing_report_is_injected_for_every_call_of_a_batch(self):
+        for expected in ("explorer-map-band-rows", "explorer-map-band-rows-2"):
+            upd = self._updated(self._no_report(description="Map band rows"))
+            self.assertEqual(upd["name"], expected)
+            self.assertIn("\nREPORT: file:line findings first", upd["prompt"])
+            self.assertTrue(upd["prompt"].rstrip().endswith("end with STATUS: DONE"))
+
+    def test_missing_report_is_not_injected_when_autoname_off(self):
+        r = self._no_report(env=dict(self.env, ATLAS_AUTONAME="off"), name="x-explorer")
+        self.assertNotIn("file:line findings first", r.stdout)
+
+    def test_missing_name_is_denied_when_autoname_off(self):
+        r = self._unnamed(env=dict(self.env, ATLAS_AUTONAME="off"), name="")
+        self.assertEqual(self._dec(r), "deny")
         self.assertIn("SendMessage", r.stdout)
         self.assertIn("<role>-<slice>", r.stdout)
 
@@ -2250,7 +2456,7 @@ class ColonyDenyTest(unittest.TestCase):
         # every colony guard.
         r = self._pre(
             {
-                "subagent_type": "Explore",
+                "subagent_type": "fork",
                 "model": "opus",
                 "prompt": "do the thing",
             }
@@ -2311,9 +2517,9 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
         self.assertEqual(p.stdout.strip(), "")
 
-    def test_teams_env_unset_or_not_1_still_denies_unnamed(self):
-        # Only the exact value "1" stands the guard down. The env is stripped
-        # explicitly so a leaked host value cannot mask the deny.
+    def test_teams_env_unset_or_not_1_still_names_unnamed(self):
+        # Only the exact value "1" stands the injection down. The env is stripped
+        # explicitly so a leaked host value cannot mask the behaviour.
         env = {
             k: v
             for k, v in self.env.items()
@@ -2321,6 +2527,7 @@ class ColonyDenyTest(unittest.TestCase):
         }
         payload = {
             "session_id": "sess-1",
+            "cwd": self.tmp,
             "hook_event_name": "PreToolUse",
             "tool_name": "Agent",
             "tool_input": {"subagent_type": "atlas:implementer", "prompt": self.SPEC},
@@ -2328,11 +2535,91 @@ class ColonyDenyTest(unittest.TestCase):
         for teams_env in (env, dict(env, CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="0")):
             r = run_hook(payload, teams_env)
             self.assertEqual(r.returncode, 0)
-            self.assertEqual(
-                json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"],
-                "deny",
-            )
-            self.assertIn("SendMessage", r.stdout)
+            self.assertEqual(self._dec(r), "allow")
+            self.assertTrue(self._updated(r)["name"].startswith("implementer"))
+
+    def _dec(self, r):
+        return json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"]
+
+    def test_unnamed_atlas_deny_is_paste_ready_without_restart_advice(self):
+        env = {
+            k: v
+            for k, v in self.env.items()
+            if k != "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"
+        }
+        env["ATLAS_AUTONAME"] = "off"
+        r = run_hook(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:explorer", "prompt": self.SPEC},
+            },
+            env,
+        )
+        self.assertEqual(self._dec(r), "deny")
+        reason = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("name: <role>-<slice>", reason)
+        self.assertIn('Agent(subagent_type="atlas:explorer"', reason)
+        self.assertIn("REPORT:", reason)
+        self.assertIn("TOOLS:", reason)
+        self.assertNotIn("restart", reason.lower())
+
+    def test_teams_env_lets_unnamed_atlas_dispatch_through(self):
+        # Naming under agent teams launches a teammate (docs), so the gate must not ask for it.
+        env = dict(self.env, CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="1")
+        r = run_hook(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:explorer", "prompt": self.SPEC},
+            },
+            env,
+        )
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_builtin_agents_are_denied_every_time_with_role_mapping(self):
+        cases = (
+            ("Explore", "atlas:explorer"),
+            ("Plan", "atlas:planner"),
+            ("general-purpose", "atlas:implementer"),
+            ("", "atlas:implementer"),
+        )
+        for builtin, role in cases:
+            for _ in range(2):  # no one-shot leniency: same answer every time
+                r = self._pre({"subagent_type": builtin, "prompt": "look around"})
+                self.assertEqual(self._dec(r), "deny", builtin)
+                reason = json.loads(r.stdout)["hookSpecificOutput"][
+                    "permissionDecisionReason"
+                ]
+                self.assertIn(f'Agent(subagent_type="{role}"', reason)
+                self.assertIn("ATLAS_BUILTIN_AGENT_NUDGE=off", reason)
+
+    def test_builtin_agent_opt_out_allows(self):
+        env = dict(self.env, ATLAS_BUILTIN_AGENT_NUDGE="off")
+        r = run_hook(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "Explore", "prompt": "look around"},
+            },
+            env,
+        )
+        self.assertEqual(r.stdout.strip(), "")
+
+    def test_toolkit_deny_carries_paste_block(self):
+        r = self._pre(
+            {
+                "subagent_type": "atlas:explorer",
+                "name": "x-explorer",
+                "prompt": "GOAL: x",
+            }
+        )
+        reason = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("TOOLS block", reason)
+        self.assertIn('Agent(subagent_type="atlas:explorer"', reason)
 
 
 class ColonyGuardUnitTest(unittest.TestCase):
@@ -3190,9 +3477,35 @@ class AtlasAgentDefinitionTest(unittest.TestCase):
         import dispatch_tripwire as dt
 
         reason = dt._exploration_deny("cat src/a.py", "lean-ctx")
+        assert reason is not None
         self.assertIn("ctx_read", reason)
         self.assertIn("only reads files", reason)
-        self.assertLess(len(reason.encode()), 160)  # was 343 bytes
+        self.assertIn("ctx_read path=src/a.py", reason)
+        self.assertLess(len(reason.encode()), 220)  # was 343 bytes
+
+    def test_exploration_deny_rewrites_common_commands(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        deny = lambda c: dt._exploration_deny(c, "lean-ctx")  # noqa: E731
+        self.assertIn("ctx_read path=Y", deny("cd X && cat Y"))
+        self.assertIn("ctx_search pattern=P path=D", deny("grep -rn P D"))
+        self.assertIn("ctx_tree path=.", deny("ls -la"))
+        self.assertIn("ctx_glob pattern=*.py", deny("find . -name *.py"))
+
+    def test_main_parses_payload_with_raw_control_char(self):
+        import io
+
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        raw = '{"hook_event_name": "Noop", "x": "a\tb"}'  # raw TAB inside a string
+        with (
+            patch("sys.stdin", io.StringIO(raw)),
+            patch.object(dt, "_record_fault") as fault,
+        ):
+            dt.main()
+        fault.assert_not_called()
 
 
 class NameRequirementTmuxTest(unittest.TestCase):
@@ -3317,6 +3630,7 @@ class ModelAutofillPinTest(unittest.TestCase):
             result = self.dt._model_override(
                 {"subagent_type": "atlas:docs-curator", "model": "opus"}
             )
+        assert result is not None
         self.assertEqual(result[0], "atlas:docs-curator")
         self.assertEqual(result[2], "opus")
 

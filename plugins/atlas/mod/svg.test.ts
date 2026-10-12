@@ -10,7 +10,7 @@ const TODO: PhaseId[] = ['research', 'implement', 'verify']
 
 /** Glyphs chosen so the assignment's example line reproduces byte for byte. */
 const THREE_PHASES = [
-  { id: 'research' as PhaseId, glyph: '⬢' },
+  { id: 'research' as PhaseId, glyph: '◆' },
   { id: 'implement' as PhaseId, glyph: '🔧' },
   { id: 'verify' as PhaseId, glyph: '🔍' },
 ]
@@ -131,7 +131,7 @@ describe('squadSvg', () => {
 describe('trackText', () => {
   test('implement 3/5 matches the band format exactly', () => {
     expect(trackText(snap())).toBe(
-      'ATLAS ⬢ research ◆━◆━⟦implement 3/5⟧┄◇ verify ┄◇ done',
+      'ATLAS ◆ research ◆━◆━⟦implement 3/5⟧┄◇ verify ┄◇ done',
     )
   })
 
@@ -145,7 +145,7 @@ describe('trackText', () => {
 
   test('blocked names the halt in a capsule and keeps the done tail', () => {
     expect(trackText(snap({ phase: 'blocked' }))).toBe(
-      'ATLAS ⬢ research ◆━⛔ ⟦blocked⟧┄◇ implement ┄◇ verify ┄◇ done',
+      'ATLAS ◆ research ◆━⛔ ⟦blocked⟧┄◇ implement ┄◇ verify ┄◇ done',
     )
   })
 
@@ -160,6 +160,6 @@ describe('trackText', () => {
       todoPhases: ['research', 'implement'],
       counts: { done: 8, total: 8, byPhase: { research: { done: 3, total: 3 }, implement: { done: 5, total: 5 } } },
     })
-    expect(trackText(s)).toBe('ATLAS ⬢ research ◆━🔧 implement ◆━◆ done')
+    expect(trackText(s)).toBe('ATLAS ◆ research ◆━🔧 implement ◆━◆ done')
   })
 })

@@ -1245,6 +1245,19 @@ class NoNestedSubagentsContract(unittest.TestCase):
                     missing.append("%s -> %s" % (path.name, tool))
         self.assertEqual(missing, [], "agents that can still dispatch: %s" % missing)
 
+    def test_omp_workers_and_brief_template_exclude_dispatch(self):
+        """omp twin of the disallowedTools check: generated omp agents carry
+        `spawns: "none"`, and the brief template tells generic `task` workers
+        (which no atlas definition covers) not to dispatch."""
+        missing = [
+            p.name
+            for p in sorted((PLUGIN_ROOT / "omp" / "agents").glob("*.md"))
+            if 'spawns: "none"' not in p.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(missing, [], "omp agents that can still spawn: %s" % missing)
+        kit = PLUGIN_ROOT / "skills/atlas-orchestrate/references/subagent-kit.md"
+        self.assertIn("You do not dispatch subagents", kit.read_text(encoding="utf-8"))
+
     def test_every_agent_spec_says_it_does_not_dispatch(self):
         """Frontmatter is the belt; the prose stops the agent burning turns
         fighting a deny it did not expect."""

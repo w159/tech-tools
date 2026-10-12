@@ -55,6 +55,14 @@ Multiple `atlas:implementer` calls for genuinely independent units in the same r
 
 **Commit ownership:** worktree-isolated implementers may stage and commit inside their own worktree branch (unit-scoped: stage only the unit's files, never `git add .`); the orchestrator merges those branches in dependency order. Shared-tree workers never commit; the orchestrator commits each unit after verification.
 
+**Worktree protocol (`scripts/atlas_wt.py` - the default for parallel writers).** Branch `worker/<agent>`, worktree `.atlas/wt/<agent>`; the script never pushes, never forces, and refuses with the exact reason.
+
+1. Lead, per parallel implementer, before dispatch: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_wt.py" add <name> [--base main]` (idempotent).
+2. The dispatch brief names the worktree path as the ONLY place the worker edits and runs its gate; the worker commits only on its own branch and reports branch + head sha. It never touches the main tree, never merges, never pushes.
+3. Lead dispatches one `atlas:verifier` per branch against that worktree; the verifier records `atlas_finding.py --status verified` with the branch (`worker/<name>`) or agent name in the title or evidence.
+4. Only after that finding: lead runs `atlas_wt.py merge <name>`, ONE branch at a time (`--no-ff`; refuses without a verified finding, on a dirty worktree, or with no commits; aborts and restores the tree on conflict; then removes the worktree and branch). Then rerun the tests ONCE on the merged tree.
+5. `atlas_wt.py status` (JSON) lists every worker branch with ahead/behind, dirty, verified finding and merged; `prune` drops stale metadata. The completion gate blocks (q) while any worker branch is unmerged or dirty (`ATLAS_WT_GATE=off` opts out).
+
 **After the wave, integrate in dependency order - never trust the reports alone:**
 
 1. Wait for every worker in the wave.

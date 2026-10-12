@@ -1,0 +1,64 @@
+     When you need implementation details, rationale, or debugging context:
+       - Fetch by ID: get_observations([IDs]) for observations visible in this index
+       - Search history: Use the mem-search skill for past decisions, bugs, and deeper research
+       - Trust this index over re-reading code for past decisions and learnings
+
+     Context Economics
+       Loading: 50 observations (26,399 tokens to read)
+       Work investment: 161,036 tokens spent on research, building, and decisions
+       Your savings: 134,637 tokens (84% reduction from reuse)
+
+
+
+     [Terminal preview truncated. The model received the full selected context; additional observations are not shown here.]
+     Oct 12, 2026
+
+     plugins/atlas/hooks/dispatch_tripwire.py
+       #37582  12:03 PM  ○  PreToolUse Gate Logic Located in dispatch_tripwire.py:1104; Test Suite Covers Orchestrator vs. Worker Distinction (~484t) (⌕ 1,352t)
+       #37583            ○  PreToolUse Gate Logic: _is_worker() Check Exempts Headless Workers; Implementer Subagents Not Recognized as Workers (~490t) (⌕ 3,934t)
+       #37584  12:04 PM  ○  PreToolUse Gate Distinguishes Main Transcript from Subagent Transcript; Subagents Exempt from Edit Denial (~470t) (⌕ 1,810t)
+     ...
+     </persisted-output>
+  ⎿  SessionStart:startup says: Atlas ready
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────✕─╮
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  │
+│ │🔍 Atlas  research, 0 of 0 done                                                                                                                                                                  │  │
+│ │🔍────────────────────────────────────💡────────────────────────────────────🧪─────────────────────────────────────📋────────────────────────────────────🔧────────────────────────────────────✅│  │
+│ │research                            theory                                 test                                 validate                             implement                             verify│  │
+│ │🔍 research  nothing planned                                                                                                                                                                     │  │
+│ │💡 theory    nothing planned                                                                                                                                                                     │  │
+│ │🧪 test      nothing planned                                                                                                                                                                     │  │
+│ │📋 validate  nothing planned                                                                                                                                                                     │  │
+│ │🔧 implement nothing planned                                                                                                                                                                     │  │
+│ │✅ verify    nothing planned                                                                                                                                                                     │  │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  │
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  │
+│ │Team  1 member                                                                                                                                                                                   │  │
+│ │▸LE● lead    · idle                                                                                                                                                                              │  │
+│ │ UN● selffix · idle                                                                                                                                                                              │  │
+│ │To lead: type a message, Enter sends                                                                                                                                                             │  │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  │
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  │
+│ │✓ Gates  all clear                                                                                                                                                                               │  │
+│ │✓ Completion gate  ✓ Inline-op tripwire  ✓ Tool routing  ✓ Header                                                                                                                                │  │
+│ │▸ Completion gate  clear                                                                                                                                                                         │  │
+│ │▸ Inline-op tripwire  clear                                                                                                                                                                      │  │
+│ │▸ Tool routing  clear                                                                                                                                                                            │  │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  │
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮  │
+│ │✦ Advisor notes  3                                                                                                                                                                               │  │
+│ │  advisor[concern]: When SpriteReadable renders sprites to images for review, make it render at terminal cell aspect (each cell ≈1:2 wide:tall, half-blocks ▀▄ gi…                               │  │
+│ │  advisor[concern]: ted67b0b4 / t040298d4 / te4be87b4 belong to session 40fd3319 — not your session and not the prior one (01a122d2); likely another live claude …                               │  │
+│ │  +1 more                                                                                                                                                                                        │  │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+LE● 🔍 research 0 of 0   0 working   all clear                                                                                                                                                      [-]
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ next: advisor[concern]: When SpriteReadable renders sprites to images f…
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁 tech-tools | 🤖 Opus 5.5 | 🧠 ░░░░░░░░░░ --%                                                                                                                           Not logged in · Run /login
+  context-mode  ●  saves ~98% of context window                                                   tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tracking
+  fallow impact  off
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 2 agents · /atlas-cc Command Center · /atlas-say @nam…
+

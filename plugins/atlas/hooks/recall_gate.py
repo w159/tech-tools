@@ -280,7 +280,7 @@ def _decide(data: dict) -> str | None:
 def main() -> int:
     try:
         raw = sys.stdin.read()
-        data = json.loads(raw) if raw.strip() else {}
+        data = json.loads(raw, strict=False) if raw.strip() else {}
         if not isinstance(data, dict):
             data = {}  # non-dict JSON (null, list) is not a payload
     except (json.JSONDecodeError, ValueError):

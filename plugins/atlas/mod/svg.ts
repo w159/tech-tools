@@ -36,7 +36,7 @@ const phaseFraction = (s: AtlasSnapshot, p: PhaseId): string => {
 }
 
 const glyphOf = (s: AtlasSnapshot, p: PhaseId): string =>
-  s.contract.phases.find((ph) => ph.id === p)?.glyph ?? '⬢'
+  s.contract.phases.find((ph) => ph.id === p)?.glyph ?? '◆'
 
 /**
  * The contract track as an SVG document: a rail with one diamond per
@@ -134,7 +134,7 @@ export function squadSvg(s: AtlasSnapshot, w: number): string {
 
 /**
  * One-line plain fallback, e.g. for research done and implement at 3/5:
- *   ATLAS ⬢ research ◆━◆━⟦implement 3/5⟧┄◇ verify ┄◇ done
+ *   ATLAS ◆ research ◆━◆━⟦implement 3/5⟧┄◇ verify ┄◇ done
  * Done phases render glyph+name+diamond with a rail out, the current phase a
  * ⟦name n/m⟧ capsule behind its rail-in diamond, future phases ┄◇, and the
  * trailing done diamond closes the line.

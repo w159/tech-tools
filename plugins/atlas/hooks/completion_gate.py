@@ -149,6 +149,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -336,6 +337,15 @@ def _delegation_exempt():
         )
     except (OSError, ValueError, KeyError, TypeError):
         return None
+
+
+def _is_delegation_code(path: str, dirs: tuple, exts: tuple) -> bool:
+    """True when `path` is code that counts toward the (m) delegation mandate
+    (not under an exempt dir, no exempt extension). Shared with
+    delegation_prewarn.py so the warning and the gate use one predicate."""
+    return not (
+        path.endswith(exts) or any(path.startswith(d + "/") or f"/{d}/" in path for d in dirs)
+    )
 
 
 def _nondocs_changed(changed_paths: list) -> bool:
@@ -712,15 +722,7 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
         if exempt is None:
             return []  # contract unreadable: fail open, never block
         dirs, exts = exempt
-        code_paths = [
-            p
-            for p in paths
-            if p
-            and not (
-                p.endswith(exts)
-                or any(p.startswith(d + "/") or f"/{d}/" in p for d in dirs)
-            )
-        ]
+        code_paths = [p for p in paths if p and _is_delegation_code(p, dirs, exts)]
         code_paths += _shell_dirty_edits(root, session_id)
         # URI-shaped records (agent:// IRC, xd:// devices) are not files: drop
         # them before the existence check so they can neither block nor be
@@ -773,6 +775,40 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
             conn.close()
 
 
+_WT_SCRIPT = SCRIPTS_DIR / "atlas_wt.py"
+
+
+def _unmerged_worker_branches(root: Path) -> list:
+    """(q) Rows from `atlas_wt.py status` for worker/* branches with commits not
+    yet merged or a dirty worktree. ATLAS_WT_GATE=off disables; fail-open."""
+    if _switch_off("ATLAS_WT_GATE"):
+        return []
+    try:
+        p = subprocess.run(
+            [sys.executable, str(_WT_SCRIPT), "--root", str(root), "status"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        if p.returncode != 0:
+            return []
+        return [r for r in json.loads(p.stdout) if not r["merged"] or r["dirty"]]
+    except Exception:  # noqa: BLE001 -- fail open
+        return []
+
+
+def _unmerged_reason_part(rows: list) -> str:
+    names = ", ".join(
+        f"{r['branch']} (+{r['ahead']}{', dirty' if r['dirty'] else ''})" for r in rows
+    )
+    return (
+        f"  (q) Unmerged worker branches: {names}. Dispatch a verifier per branch "
+        "against its worktree, then merge one at a time: "
+        f"python3 {_WT_SCRIPT} merge <agent> (rerun tests once on the merged tree). "
+        "Opt out: ATLAS_WT_GATE=off."
+    )
+
+
 # F8: one-line gist per gate letter. A letter that already blocked once this
 # session re-blocks as `(<letter>) still open: <gist>` instead of repeating the
 # full multi-line clause (which the model has already read this session).
@@ -793,6 +829,7 @@ _GISTS: dict[str, str] = {
     "n": "status header missing; start the reply with the atlas header",
     "o": "required phases missing; add the phase markers",
     "p": "colony channel unused; post one board note per worker",
+    "q": "unmerged worker branches; verify each, then atlas_wt.py merge <agent>",
 }
 
 
@@ -814,6 +851,7 @@ def _reason(
     missing_header: bool = False,
     missing_phases: list | None = None,
     colony_missing: bool = False,
+    unmerged_branches: list | None = None,
     session_id: str = "",
     colony_workers: int | None = None,
     repeat: list | None = None,
@@ -1000,6 +1038,8 @@ def _reason(
         )
     if colony_missing:
         emit("p", _colony_reason_part(colony_workers))
+    if unmerged_branches:
+        emit("q", _unmerged_reason_part(unmerged_branches))
     body = "\n".join(text for _, text in tagged)
     if tagged and all(letter in delta for letter, _ in tagged):
         # F8: every failing letter was fully stated this session -- ship the
@@ -1028,6 +1068,193 @@ def _reason(
         "and the exact command + expected output to verify it. Do not declare success.\n"
         '"Unverified" is not a completion state. A diff or a file:line is not proof that it works.'
     )
+
+
+def _delegation_state(data: dict, root: Path) -> tuple[bool, list, str]:
+    """(missing_delegation, delegation_paths, solo_note) for (m); read-only."""
+    session = str(data.get("session_id") or "")
+    delegation_paths = _missing_delegation(
+        session, str(data.get("transcript_path") or ""), root
+    )
+    missing_delegation = bool(delegation_paths)
+    # ATLAS_MODE=solo fast path: direct main-thread changes to at most 5
+    # non-docs source files are acknowledged, not demanded into a
+    # dispatch. The triggering-path list is unchanged (it is already the
+    # non-docs code paths); only what the gate does with it relaxes.
+    solo = _solo_mode()
+    solo_delegation_note = ""
+    if solo and delegation_paths and len(delegation_paths) <= 5:
+        missing_delegation = False
+        solo_delegation_note = (
+            "(m) solo mode: direct changes acknowledged for "
+            f"{len(delegation_paths)} files; verifier still required for "
+            "shipped work"
+        )
+    return missing_delegation, delegation_paths, solo_delegation_note
+
+
+def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
+    """Evaluate gate letters a..q for an ORCHESTRATING session. Read-only:
+    no markers, no block records, no DB writes. main() and atlas_gates.py share
+    it. Returns every computed value plus `failed`, the failing letters."""
+    solo = _solo_mode()
+    session = str(data.get("session_id") or "")
+    run_paths = _run_written_paths(data.get("session_id", ""), root)
+    code_changed = _nondocs_changed(run_paths)
+    # (a)/(b) only apply once this run has shipped non-docs code. A
+    # research-only or docs-only run has no evidence/verification to
+    # produce, so manufacturing a findings.json entry to satisfy an
+    # inapplicable gate is the defect, not the fix. Both are further
+    # scoped to THIS RUN's own window via `started`: evidence/findings
+    # left over from an earlier session must not satisfy today's gate.
+    started = _run_started_at(str(data.get("session_id") or ""))
+    ok_a = _check_evidence(root, started) if code_changed else True
+    ok_b = _check_findings(root, started) if code_changed else True
+    ok_c = _check_changelog(root)
+    ok_d = _check_roadmap(root)
+    ok_e = _check_readme(root)
+    ok_h = _check_roadmap_reconciled(root)
+    # (f) Docs drift BLOCKS: THIS RUN's own writes shipped code and
+    # docs/CHANGELOG.md was not among them. The primary signal is
+    # tool-call-scoped and therefore blind to docs written by a
+    # Bash-invoked script. Cross-check
+    # git before blocking so a run whose docs ARE current is not stopped.
+    drift = _docs_drift(run_paths) if code_changed else False
+    if drift and _docs_moved_in_git(root):
+        drift = False
+    # (g) Law 5 -- verifier coverage. Only when THIS RUN's own writes
+    # touched non-docs code: block if implementer dispatches outnumber
+    # verifier dispatches. An implementer still in flight, or one that
+    # shipped no diff, contributes nothing to run_paths, so it cannot
+    # trip this. Fail-open: the helper returns 0 on any atlas_db
+    # import/DB error, so condition (g) silently passes.
+    # (g) Verifier coverage, with test-run credit. An implementer is
+    # "paired" by an independent atlas:verifier dispatch OR by a `verified`
+    # findings.json entry written during this run -- a deterministic test is
+    # the stronger evidence of the two, and demanding a second subagent for a
+    # one-file change is what turned every simple task into a wave.
+    # (i) Todo drain and (j) worktree close-out: both are run-scoped and
+    # fail-open, and neither fires on a run that shipped no code.
+    # Drain signals, first one to report open items wins: the transcript
+    # TodoWrite (what the harness actually tracked), the durable board
+    # todo_capture mirrors (which also catches a later CLI re-plan the
+    # transcript never saw), then the `LEDGER | n/m` line the orchestrator
+    # must emit when TodoWrite is unavailable (auto mode).
+    open_todos = (
+        _open_todos(str(data.get("transcript_path") or "")) if code_changed else 0
+    )
+    if code_changed and open_todos == 0:
+        open_todos = _board_open_todos(root, str(data.get("session_id") or ""))
+    if code_changed and open_todos == 0:
+        open_todos = _ledger_open_todos(str(data.get("transcript_path") or ""))
+    # (k) Plan mandate. (i) enforces draining a list, so a run that never
+    # made one passed it trivially -- an absent list has zero open items.
+    # (k) closes that gap on code-shipping runs only.
+    missing_plan = code_changed and not _has_todo_plan(
+        str(data.get("transcript_path") or ""),
+        root,
+        str(data.get("session_id") or ""),
+    )
+    worktrees = (
+        _leftover_worktrees(root)
+        if code_changed and _run_used_worktrees(data.get("session_id", ""))
+        else []
+    )
+    # (l) Naming: dated records must sort chronologically. Not gated on
+    # code_changed -- a docs-only run that files a misnamed plan is exactly
+    # the case worth catching.
+    # F2: (l) items name file targets; drop any that are gone by block
+    # time instead of telling the model to rename a phantom.
+    name_violations = [
+        nv for nv in _docs_name_violations(root) if _target_exists(nv[0], root)
+    ]
+    unverified = 0
+    if code_changed:
+        session = data.get("session_id", "")
+        unverified = max(
+            0,
+            _unpaired_implementer_dispatches(session)
+            - _test_verified_this_run(
+                root, session, str(data.get("transcript_path") or "")
+            ),
+        )
+        if solo and unverified > 0:
+            # ATLAS_MODE=solo: one executed test command pairs one
+            # implementer without a stamped findings entry. Never a
+            # blanket exemption -- no executed test, no credit.
+            unverified = max(
+                0,
+                unverified
+                - _test_run_credit(
+                    root, session, str(data.get("transcript_path") or "")
+                ),
+            )
+    # (n)/(o)/(p): the contract-visibility conditions. Each is evaluated for
+    # orchestrating, non-sidechain sessions only (this point is past the
+    # unflagged early return), is skipped while a dispatch is in flight
+    # (past the in-flight return above), honors its own kill switch, fails
+    # open on any error, and blocks AT MOST ONCE per session: a letter whose
+    # marker already exists counts as satisfied, and the marker is created
+    # when the block that names it is emitted (below).
+    sidechain = _payload_is_sidechain(data)
+    contract = None if sidechain else _contract_doc()
+    header_failing = (
+        not sidechain
+        and _status_header_would_block(data, contract)
+        and not _contract_block_used("n", session, root)
+    )
+    phases_missing = (
+        []
+        if sidechain or not code_changed or _contract_block_used("o", session, root)
+        else _missing_required_phases(root, session, contract)
+    )
+    colony_workers = None
+    colony_failing = False
+    if (
+        not sidechain
+        and not _switch_off(_SWITCH_COLONY)
+        and not _contract_block_used("p", session, root)
+    ):
+        colony_workers = _colony_workers_dispatched(session)
+        colony_failing = (
+            colony_workers is not None
+            and colony_workers >= 2
+            and not _colony_channel_used(root, session, started)
+        )
+    wt_unmerged = [] if sidechain else _unmerged_worker_branches(root)
+    failed = [
+        letter
+        for letter, failing in (
+            ("a", not ok_a),
+            ("b", not ok_b),
+            ("c", not ok_c),
+            ("d", not ok_d),
+            ("e", not ok_e),
+            ("f", drift),
+            ("g", unverified > 0),
+            ("h", not ok_h),
+            ("i", open_todos > 0),
+            ("j", bool(worktrees)),
+            ("k", missing_plan),
+            ("l", bool(name_violations)),
+            ("m", missing_delegation),
+            ("n", header_failing),
+            ("o", bool(phases_missing)),
+            ("p", colony_failing),
+            ("q", bool(wt_unmerged)),
+        )
+        if failing
+    ]
+    return {"ok_a": ok_a, "ok_b": ok_b, "ok_c": ok_c, "ok_d": ok_d, "ok_e": ok_e,
+            "ok_h": ok_h, "drift": drift, "unverified": unverified,
+            "open_todos": open_todos, "missing_plan": missing_plan,
+            "worktrees": worktrees, "name_violations": name_violations,
+            "header_failing": header_failing, "phases_missing": phases_missing,
+            "colony_failing": colony_failing, "colony_workers": colony_workers,
+            "wt_unmerged": wt_unmerged, "missing_delegation": missing_delegation,
+            "started": started, "failed": failed}
+
+
 
 
 def main() -> int:
@@ -1074,23 +1301,9 @@ def main() -> int:
         if root is None:
             return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
         session = str(data.get("session_id") or "")
-        delegation_paths = _missing_delegation(
-            session, str(data.get("transcript_path") or ""), root
+        missing_delegation, delegation_paths, solo_delegation_note = (
+            _delegation_state(data, root)
         )
-        missing_delegation = bool(delegation_paths)
-        # ATLAS_MODE=solo fast path: direct main-thread changes to at most 5
-        # non-docs source files are acknowledged, not demanded into a
-        # dispatch. The triggering-path list is unchanged (it is already the
-        # non-docs code paths); only what the gate does with it relaxes.
-        solo = _solo_mode()
-        solo_delegation_note = ""
-        if solo and delegation_paths and len(delegation_paths) <= 5:
-            missing_delegation = False
-            solo_delegation_note = (
-                "(m) solo mode: direct changes acknowledged for "
-                f"{len(delegation_paths)} files; verifier still required for "
-                "shipped work"
-            )
         if not _session_is_orchestrating(session):
             if missing_delegation and not _has_in_flight_dispatch(data):
                 _record_gate_block(session, ["m"])
@@ -1117,172 +1330,17 @@ def main() -> int:
         # earlier session must never block a run that touched nothing.
         # Fail-open: any DB error yields an empty path list -> treated the
         # same as "wrote nothing", never a false block.
-        run_paths = _run_written_paths(data.get("session_id", ""), root)
-        code_changed = _nondocs_changed(run_paths)
-        # (a)/(b) only apply once this run has shipped non-docs code. A
-        # research-only or docs-only run has no evidence/verification to
-        # produce, so manufacturing a findings.json entry to satisfy an
-        # inapplicable gate is the defect, not the fix. Both are further
-        # scoped to THIS RUN's own window via `started`: evidence/findings
-        # left over from an earlier session must not satisfy today's gate.
-        started = _run_started_at(str(data.get("session_id") or ""))
-        ok_a = _check_evidence(root, started) if code_changed else True
-        ok_b = _check_findings(root, started) if code_changed else True
-        ok_c = _check_changelog(root)
-        ok_d = _check_roadmap(root)
-        ok_e = _check_readme(root)
-        ok_h = _check_roadmap_reconciled(root)
-        # (f) Docs drift BLOCKS: THIS RUN's own writes shipped code and
-        # docs/CHANGELOG.md was not among them. The primary signal is
-        # tool-call-scoped and therefore blind to docs written by a
-        # Bash-invoked script. Cross-check
-        # git before blocking so a run whose docs ARE current is not stopped.
-        drift = _docs_drift(run_paths) if code_changed else False
-        if drift and _docs_moved_in_git(root):
-            drift = False
-        # (g) Law 5 -- verifier coverage. Only when THIS RUN's own writes
-        # touched non-docs code: block if implementer dispatches outnumber
-        # verifier dispatches. An implementer still in flight, or one that
-        # shipped no diff, contributes nothing to run_paths, so it cannot
-        # trip this. Fail-open: the helper returns 0 on any atlas_db
-        # import/DB error, so condition (g) silently passes.
-        # (g) Verifier coverage, with test-run credit. An implementer is
-        # "paired" by an independent atlas:verifier dispatch OR by a `verified`
-        # findings.json entry written during this run -- a deterministic test is
-        # the stronger evidence of the two, and demanding a second subagent for a
-        # one-file change is what turned every simple task into a wave.
-        # (i) Todo drain and (j) worktree close-out: both are run-scoped and
-        # fail-open, and neither fires on a run that shipped no code.
-        # Drain signals, first one to report open items wins: the transcript
-        # TodoWrite (what the harness actually tracked), the durable board
-        # todo_capture mirrors (which also catches a later CLI re-plan the
-        # transcript never saw), then the `LEDGER | n/m` line the orchestrator
-        # must emit when TodoWrite is unavailable (auto mode).
-        open_todos = (
-            _open_todos(str(data.get("transcript_path") or "")) if code_changed else 0
-        )
-        if code_changed and open_todos == 0:
-            open_todos = _board_open_todos(root, str(data.get("session_id") or ""))
-        if code_changed and open_todos == 0:
-            open_todos = _ledger_open_todos(str(data.get("transcript_path") or ""))
-        # (k) Plan mandate. (i) enforces draining a list, so a run that never
-        # made one passed it trivially -- an absent list has zero open items.
-        # (k) closes that gap on code-shipping runs only.
-        missing_plan = code_changed and not _has_todo_plan(
-            str(data.get("transcript_path") or ""),
-            root,
-            str(data.get("session_id") or ""),
-        )
-        worktrees = (
-            _leftover_worktrees(root)
-            if code_changed and _run_used_worktrees(data.get("session_id", ""))
-            else []
-        )
-        # (l) Naming: dated records must sort chronologically. Not gated on
-        # code_changed -- a docs-only run that files a misnamed plan is exactly
-        # the case worth catching.
-        # F2: (l) items name file targets; drop any that are gone by block
-        # time instead of telling the model to rename a phantom.
-        name_violations = [
-            nv for nv in _docs_name_violations(root) if _target_exists(nv[0], root)
-        ]
-        unverified = 0
-        if code_changed:
-            session = data.get("session_id", "")
-            unverified = max(
-                0,
-                _unpaired_implementer_dispatches(session)
-                - _test_verified_this_run(
-                    root, session, str(data.get("transcript_path") or "")
-                ),
-            )
-            if solo and unverified > 0:
-                # ATLAS_MODE=solo: one executed test command pairs one
-                # implementer without a stamped findings entry. Never a
-                # blanket exemption -- no executed test, no credit.
-                unverified = max(
-                    0,
-                    unverified
-                    - _test_run_credit(
-                        root, session, str(data.get("transcript_path") or "")
-                    ),
-                )
-        # (n)/(o)/(p): the contract-visibility conditions. Each is evaluated for
-        # orchestrating, non-sidechain sessions only (this point is past the
-        # unflagged early return), is skipped while a dispatch is in flight
-        # (past the in-flight return above), honors its own kill switch, fails
-        # open on any error, and blocks AT MOST ONCE per session: a letter whose
-        # marker already exists counts as satisfied, and the marker is created
-        # when the block that names it is emitted (below).
-        sidechain = _payload_is_sidechain(data)
-        contract = None if sidechain else _contract_doc()
-        header_failing = (
-            not sidechain
-            and _status_header_would_block(data, contract)
-            and not _contract_block_used("n", session, root)
-        )
-        phases_missing = (
-            []
-            if sidechain or not code_changed or _contract_block_used("o", session, root)
-            else _missing_required_phases(root, session, contract)
-        )
-        colony_workers = None
-        colony_failing = False
-        if (
-            not sidechain
-            and not _switch_off(_SWITCH_COLONY)
-            and not _contract_block_used("p", session, root)
-        ):
-            colony_workers = _colony_workers_dispatched(session)
-            colony_failing = (
-                colony_workers is not None
-                and colony_workers >= 2
-                and not _colony_channel_used(root, session, started)
-            )
-        if (
-            ok_a
-            and ok_b
-            and ok_c
-            and ok_d
-            and ok_e
-            and ok_h
-            and not drift
-            and unverified == 0
-            and open_todos == 0
-            and not worktrees
-            and not missing_plan
-            and not name_violations
-            and not missing_delegation
-            and not header_failing
-            and not phases_missing
-            and not colony_failing
-        ):
-            # Silence on pass is the contract: the gate speaks only when it
-            # blocks. No advisory, no "not evaluated" narration -- any output
-            # here reads as a prompt for another turn.
+        ev = evaluate(data, root, missing_delegation)
+        (ok_a, ok_b, ok_c, ok_d, ok_e, ok_h) = (ev[k] for k in ("ok_a", "ok_b", "ok_c", "ok_d", "ok_e", "ok_h"))
+        drift, unverified, open_todos = ev["drift"], ev["unverified"], ev["open_todos"]
+        missing_plan, worktrees = ev["missing_plan"], ev["worktrees"]
+        name_violations, header_failing = ev["name_violations"], ev["header_failing"]
+        phases_missing, colony_failing = ev["phases_missing"], ev["colony_failing"]
+        colony_workers, wt_unmerged = ev["colony_workers"], ev["wt_unmerged"]
+        failed = ev["failed"]
+        if not failed:
+            # Silence on pass is the contract: the gate speaks only when it blocks.
             return 0
-        failed = [
-            letter
-            for letter, failing in (
-                ("a", not ok_a),
-                ("b", not ok_b),
-                ("c", not ok_c),
-                ("d", not ok_d),
-                ("e", not ok_e),
-                ("f", drift),
-                ("g", unverified > 0),
-                ("h", not ok_h),
-                ("i", open_todos > 0),
-                ("j", bool(worktrees)),
-                ("k", missing_plan),
-                ("l", bool(name_violations)),
-                ("m", missing_delegation),
-                ("n", header_failing),
-                ("o", bool(phases_missing)),
-                ("p", colony_failing),
-            )
-            if failing
-        ]
         count, loop_exhausted = _block_loop_state(session, failed)
         if loop_exhausted:
             # F4: the allowed Stop is stated, not silent. The model-facing
@@ -1326,6 +1384,7 @@ def main() -> int:
             missing_header=header_failing,
             missing_phases=phases_missing,
             colony_missing=colony_failing,
+            unmerged_branches=wt_unmerged,
             session_id=session,
             colony_workers=colony_workers,
             repeat=repeat,
@@ -1420,6 +1479,7 @@ _CONDITION_NAMES: dict[str, str] = {
     "n": "status header missing",
     "o": "required phases missing",
     "p": "colony channel unused",
+    "q": "unmerged worker branches",
 }
 
 

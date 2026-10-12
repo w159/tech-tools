@@ -1,12 +1,13 @@
 // Routing enforcement for the Atlas mod: record agentId→persona so turn.step
 // can pin the persona's effort (persona model pins live in the agent
 // definitions' own frontmatter, honored natively — never rewritten here),
-// count header-format misses, and reinforce the contract on every prompt.
+// count header-format misses.
 //
 // Event shapes mirror plugins/atlas/.claude-plugin/types/claude-code/index.d.ts
 // (AgentSpawnInput, TurnStepInput, TurnCompleteInput, PromptSubmitInput).
 import { atom, read, update } from 'claude-code';
 import type { On } from 'claude-code';
+import { EMPTY_ORCH, LEAD, onComplete, onSpawn, onStep } from './data/orchestration';
 import type { AtlasSnapshot, Persona, SquadAgent } from './contract';
 
 const ATLAS_PREFIX = 'atlas:';
@@ -22,6 +23,7 @@ const isRoutableEffort = (effort: string): effort is RoutableEffort =>
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
 const taskAgentsState = atom({ plugin: 'atlas', key: 'taskAgents' } as const, []);
 const headerMissesState = atom({ plugin: 'atlas', key: 'headerMisses' } as const, 0);
+const orchState = atom({ plugin: 'atlas', key: 'orch' } as const, EMPTY_ORCH);
 
 export interface RoutingDeps {
   /** Personas of the snapshot read from $.state (null before the first build). */
@@ -30,10 +32,11 @@ export interface RoutingDeps {
 }
 
 /** Track a spawned agent as a live task agent (capped at 64). */
-function withAgent(agents: SquadAgent[], agentId: string, persona: string): SquadAgent[] {
+function withAgent(agents: SquadAgent[], agentId: string, persona: string, task?: string): SquadAgent[] {
+  const extra = task ? { task } : {};
   return agents.some((a) => a.name === agentId)
-    ? agents.map((a) => (a.name === agentId ? { ...a, persona } : a))
-    : [...agents, { name: agentId, persona, state: 'running' as const, source: 'task' as const }].slice(-64);
+    ? agents.map((a) => (a.name === agentId ? { ...a, persona, ...extra } : a))
+    : [...agents, { name: agentId, persona, state: 'running' as const, source: 'task' as const, ...extra }].slice(-64);
 }
 
 /**
@@ -76,7 +79,10 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
       if (persona) byAgent.set(result.agentId, persona.name);
       try {
         const agentId = result.agentId;
-        await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? 'unknown'));
+        const label = e.subagentType.replace(ATLAS_PREFIX, '').toLowerCase();
+        await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? (label || 'unknown'), e.description));
+        const now = await $.clock.now();
+        await update($, orchState, (o) => onSpawn(o, agentId, e.description || e.prompt, now, { ...(e.name ? { name: e.name } : {}), type: e.subagentType }));
       } catch {
         // recording never blocks a spawn
       }
@@ -86,6 +92,12 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
 
   on('turn.step', async function* ($, e, next) {
     let effort: RoutableEffort | undefined;
+    try {
+      const now = await $.clock.now();
+      await update($, orchState, (o) => onStep(o, e.agentId ?? LEAD, now));
+    } catch {
+      // the activity feed never blocks a step
+    }
     try {
       if (e.agentId !== undefined) {
         const name = byAgent.get(e.agentId);
@@ -111,6 +123,13 @@ export interface HeaderDriftDeps {
 export function registerHeaderDrift(on: On, deps: HeaderDriftDeps): void {
   on('turn.complete', async ($, e, next) => {
     try {
+      const now = await $.clock.now();
+      const tokens = (e.usage?.input_tokens ?? 0) + (e.usage?.output_tokens ?? 0);
+      await update($, orchState, (o) => onComplete(o, e.agentId ?? LEAD, { reason: e.reason, answer: e.answer, tokens }, now));
+    } catch {
+      // the activity feed never blocks an answer
+    }
+    try {
       if (e.agentId === undefined) {
         const firstLine = e.answer.split('\n', 1)[0] ?? '';
         if (!new RegExp(deps.pattern(await read($, snapshotState))).test(firstLine)) {
@@ -121,27 +140,5 @@ export function registerHeaderDrift(on: On, deps: HeaderDriftDeps): void {
       // a drift check never blocks the answer
     }
     return next(e);
-  });
-}
-
-export interface PromptReinforceDeps {
-  line: (snapshot: AtlasSnapshot | null) => string | null;
-}
-
-/**
- * Adds the contract reminder line as model-only context on every prompt
- * submission. Never alters the user's text (e.text is untouched) and never
- * blocks a prompt.
- */
-export function registerPromptReinforce(on: On, deps: PromptReinforceDeps): void {
-  on('prompt.submit', async ($, e, next) => {
-    let context: readonly string[] | undefined;
-    try {
-      const line = deps.line(await read($, snapshotState));
-      if (line) context = [...(e.context ?? []), line];
-    } catch {
-      context = undefined;
-    }
-    return context !== undefined ? next({ ...e, context }) : next(e);
   });
 }

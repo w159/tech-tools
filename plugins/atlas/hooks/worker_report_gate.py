@@ -193,7 +193,7 @@ def main():
         or os.environ.get("ATLAS_GATE_REPORT") == "off"
     ):
         return
-    p = json.load(sys.stdin)
+    p = json.loads(sys.stdin.read(), strict=False)
     if not isinstance(p, dict) or p.get("hook_event_name") != "SubagentStop":
         return
     if p.get("stop_hook_active"):

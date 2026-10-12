@@ -1,0 +1,1158 @@
+
+colony/herdr-web-ui/scripts/generate-protocol-types.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/generate-protocol-types.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/generate-protocol-types.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/phone-setup.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/phone-setup.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/phone-setup.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/phone-setup.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/phone-setup.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/phone-setup.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/plugin-port.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/plugin-port.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/plugin-port.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/plugin-runtime.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/plugin-runtime.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/plugin-runtime.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/plugin.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/plugin.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/plugin.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/release-notes.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/release-notes.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/release-notes.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/windows-plugin.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/windows-plugin.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/windows-plugin.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/access.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/access.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/access.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/agent-name.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/agent-name.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/agent-name.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/api.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/api.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/api.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/atlas-gateway.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/atlas-gateway.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/atlas-gateway.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/atlas-landing.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/atlas-landing.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/atlas-landing.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/attach-held.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/attach-held.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/attach-held.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/attach-output.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/attach-output.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/attach-output.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/chat-history.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/chat-history.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/chat-history.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/claude-session.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/claude-session.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/claude-session.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/claude-store.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/claude-store.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/claude-store.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex-binding.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex-binding.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/codex-binding.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex-images.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex-images.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/codex-images.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex-processes.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex-processes.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/codex-processes.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/codex.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex.test.ts: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/colony/herdr-web-ui/server/codex.test.ts, compiled line 669 `const { createCodexTranscriptParser } = await import("./codex.ts");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+colony/herdr-web-ui/server/collector.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/collector.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/collector.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/commands.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/commands.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/commands.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/completion.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/completion.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/completion.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/conversation-metadata.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/conversation-metadata.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/conversation-metadata.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/conversation.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/conversation.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/conversation.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/device-access.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/device-access.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/device-access.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/devices.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/devices.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/devices.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/directories.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/directories.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/directories.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/file-view.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/file-view.test.ts: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/colony/herdr-web-ui/server/file-view.test.ts, compiled line 55 `const { mkdirSync } = await import("node:fs");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+colony/herdr-web-ui/server/files.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/files.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/files.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/gjc-runtime.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/gjc-runtime.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/gjc-runtime.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/gjc.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/gjc.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/gjc.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/herdr-marker.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/herdr-marker.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/herdr-marker.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/herdr-update.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/herdr-update.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/herdr-update.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/herdr/client.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/herdr/client.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/herdr/client.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/machine-proxy.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/machine-proxy.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/machine-proxy.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/machine-update.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/machine-update.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/machine-update.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/machines-refresh.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/machines-refresh.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/machines-refresh.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/machines.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/machines.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/machines.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/mirror-input.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/mirror-input.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/mirror-input.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/mirror.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/mirror.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/mirror.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo-prompt.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo-prompt.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo-prompt.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo-records.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo-records.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo-records.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo-status.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo-status.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo-status.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo-tasks.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo-tasks.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo-tasks.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omp.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omp.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omp.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/output-window.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/output-window.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/output-window.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/output.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/output.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/output.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/paste.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/paste.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/paste.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pi-models.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pi-models.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pi-models.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pi-tree.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pi-tree.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pi-tree.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pi.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pi.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pi.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pi.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pi.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pi.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/process-start.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/process-start.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/process-start.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/prompt.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/prompt.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/prompt.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/prompt.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/prompt.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/prompt.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pty/session.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pty/session.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pty/session.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/push.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/push.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/push.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/reattach.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/reattach.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/reattach.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/remote-bundle.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/remote-bundle.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/remote-bundle.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/secret.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/secret.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/secret.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/shell-agent.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/shell-agent.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/shell-agent.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/skill-activity.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/skill-activity.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/skill-activity.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/submit.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/submit.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/submit.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/tailscale.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/tailscale.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/tailscale.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/take-over.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/take-over.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/take-over.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/tool-output.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/tool-output.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/tool-output.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/updater.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/updater.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/updater.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/usage.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/usage.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/usage.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/voice.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/voice.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/voice.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/windows-native.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/windows-native.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/windows-native.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/shared/patch.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/shared/patch.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/shared/patch.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/shared/secret-prompt.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/shared/secret-prompt.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/shared/secret-prompt.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/atlas-bridge.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/atlas-bridge.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/atlas-bridge.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/alertSound.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/alertSound.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/alertSound.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/api.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/api.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/api.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/authLink.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/authLink.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/authLink.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/bridgeProgress.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/bridgeProgress.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/bridgeProgress.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/checklist.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/checklist.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/checklist.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/compose.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/compose.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/compose.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/composerDraft.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/composerDraft.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/composerDraft.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/conversationFetch.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/conversationFetch.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/conversationFetch.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/dagPane.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/dagPane.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/dagPane.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/diff.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/diff.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/diff.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/directoryGroups.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/directoryGroups.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/directoryGroups.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/draft.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/draft.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/draft.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/droplet.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/droplet.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/droplet.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/edgeSwipe.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/edgeSwipe.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/edgeSwipe.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/filePaths.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/filePaths.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/filePaths.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/fontFaces.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/fontFaces.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/fontFaces.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/fontFamily.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/fontFamily.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/fontFamily.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/goals.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/goals.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/goals.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/greeting.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/greeting.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/greeting.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/headerCrumb.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/headerCrumb.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/headerCrumb.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/heldRows.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/heldRows.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/heldRows.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/i18n.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/i18n.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/i18n.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/install.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/install.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/install.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/keyboard.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/keyboard.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/keyboard.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/keys.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/keys.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/keys.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/machineNotice.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/machineNotice.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/machineNotice.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/markdown.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/markdown.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/markdown.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/mentions.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/mentions.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/mentions.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/messageQueue.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/messageQueue.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/messageQueue.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/modelName.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/modelName.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/modelName.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/needsInput.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/needsInput.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/needsInput.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/notificationTarget.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/notificationTarget.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/notificationTarget.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/notifications.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/notifications.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/notifications.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/omoTasks.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/omoTasks.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/omoTasks.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/osc52.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/osc52.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/osc52.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/paletteSearch.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/paletteSearch.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/paletteSearch.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/paneName.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/paneName.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/paneName.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/phone.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/phone.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/phone.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/promptAnswer.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/promptAnswer.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/promptAnswer.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/push.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/push.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/push.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/runningVersion.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/runningVersion.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/runningVersion.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/settings.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/settings.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/settings.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/shortcuts.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/shortcuts.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/shortcuts.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/snapshot.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/snapshot.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/snapshot.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/snapshotRequests.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/snapshotRequests.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/snapshotRequests.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/sshOutput.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/sshOutput.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/sshOutput.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/status.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/status.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/status.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/tabName.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/tabName.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/tabName.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/tabStripScroll.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/tabStripScroll.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/tabStripScroll.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalBoxGlyphs.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalBoxGlyphs.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalBoxGlyphs.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalDraft.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalDraft.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalDraft.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalFileLinks.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalFileLinks.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalFileLinks.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalGlyphs.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalGlyphs.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalGlyphs.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalWidths.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalWidths.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalWidths.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/todos.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/todos.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/todos.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/toolVerbs.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/toolVerbs.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/toolVerbs.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/transcript.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/transcript.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/transcript.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/turnRevision.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/turnRevision.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/turnRevision.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/updateProgress.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/updateProgress.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/updateProgress.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/usage.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/usage.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/usage.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/voice.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/voice.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/voice.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/wakeLock.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/wakeLock.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/wakeLock.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/workBlocks.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/workBlocks.test.ts: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/colony/herdr-web-ui/src/lib/workBlocks.test.ts, compiled line 94 `const { isLiveWorkTurn } = await import("./workBlocks.ts");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+colony/herdr-web-ui/src/lib/worktreeName.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/worktreeName.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/worktreeName.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/ws.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/ws.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/ws.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/motion.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/motion.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/motion.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/pwa-notification.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/pwa-notification.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/pwa-notification.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/pwa.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/pwa.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/pwa.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+mod/band.test.ts:
+(pass) band row budget > idle session is exactly 1 row at 80 cols [1.79ms]
+(pass) band row budget > live workers: 3 rows at most, none wider than 80 [0.81ms]
+(pass) band row budget > maxRows caps the band at 80 cols [0.30ms]
+(pass) band row budget > idle session is exactly 1 row at 120 cols [0.17ms]
+(pass) band row budget > live workers: 3 rows at most, none wider than 120 [0.32ms]
+(pass) band row budget > maxRows caps the band at 120 cols [0.28ms]
+(pass) band row budget > idle session is exactly 1 row at 200 cols [0.19ms]
+(pass) band row budget > live workers: 3 rows at most, none wider than 200 [0.41ms]
+(pass) band row budget > maxRows caps the band at 200 cols [0.29ms]
+(pass) band row budget > two rows with live workers and nobody blocked or failed [0.20ms]
+(pass) band row budget > three rows when a worker is blocked or failed and maxRows >= 3 [0.26ms]
+(pass) band row budget > row 2 carries the latest comms line when room allows [0.18ms]
+(pass) band row budget > unmeasured context renders a dim dot, a measured zero stays zero [0.18ms]
+(pass) band row budget > fmtElapsed [0.12ms]
+(pass) screenshot defect: clipped chips, global count, raw ids > every row fits and no chip is cut mid-text at 80 cols [0.58ms]
+(pass) screenshot defect: clipped chips, global count, raw ids > every row fits and no chip is cut mid-text at 100 cols [0.35ms]
+(pass) screenshot defect: clipped chips, global count, raw ids > every row fits and no chip is cut mid-text at 120 cols [0.36ms]
+(pass) screenshot defect: clipped chips, global count, raw ids > every row fits and no chip is cut mid-text at 160 cols [0.37ms]
+(pass) screenshot defect: clipped chips, global count, raw ids > every row fits and no chip is cut mid-text at 200 cols [0.36ms]
+(pass) screenshot defect: clipped chips, global count, raw ids > phase pill shows the session count from contractProgress [0.22ms]
+(pass) screenshot defect: clipped chips, global count, raw ids > raw ids resolve to the session label, else `worker` (never hex) [0.22ms]
+(pass) live defects: stale workers and ticker ids > finished workers: chip without a ticking counter for 10 s, then gone; lead stops conducting [0.42ms]
+(pass) live defects: stale workers and ticker ids > conducting N counts only live workers [0.24ms]
+(pass) live defects: stale workers and ticker ids > ticker shows only dispatch/report/say/merge and resolves hex ids (never aa42eb or a synthetic leave) [0.32ms]
+
+mod/data/channels.test.ts:
+(pass) read: filters channel, sorts by seq then ts, caps at the last 500 [3.15ms]
+(pass) read: cursor re-reads only grown files, resets on shrink, skips unchanged ones [0.48ms]
+(pass) read: tolerates blank and torn lines between valid ones [0.17ms]
+(pass) read: missing board dir and missing files resolve to [] [0.15ms]
+(pass) systemLine: exit kind renders *** quit with the code from the text, undefined otherwise [0.35ms]
+(pass) formatNote: HH:MM owner → to │ text, collapsed; missing ts/to fall back [2.51ms]
+(pass) readRoster: first present candidate wins; unreadable/missing file yields null [0.85ms]
+(pass) unreadCount: counts newer notes to the owners or all, excluding their own [0.23ms]
+
+mod/data/collab.test.ts:
+(pass) activeClaims keeps latest claim per owner [1.43ms]
+(pass) activeClaims drops owner with exit note [0.31ms]
+(pass) activeClaims drops finished and dead squad agents [0.22ms]
+(pass) activeClaims reads paths defensively when absent [0.20ms]
+(pass) findConflicts detects exact and prefix overlap [0.33ms]
+(pass) findConflicts ignores non-overlap and same-owner pairs [0.19ms]
+(pass) collabEvents maps notes past sinceSeq and synthesizes conflicts [0.39ms]
+(pass) collabEvents suppresses conflicts from claims at or before sinceSeq [0.21ms]
+(pass) collabSummary counts claims, conflicts, blocked, handoffs, idleWithWork [0.21ms]
+(pass) malformed and unknown-kind notes are ignored everywhere [0.20ms]
+
+mod/data/herdr.test.ts:
+(pass) parseHerdrStatus reads the real status envelope (no agents key) [1.93ms]
+(pass) parseHerdrStatus maps agent rows (agents() shape) and tolerates missing fields [0.40ms]
+(pass) parseHerdrStatus survives tracebacks, CLI errors and wrapped stdout [0.44ms]
+(pass) live members with fresh notes run; a working herdr pane runs too [0.56ms]
+(pass) an idle herdr pane reads idle [0.15ms]
+(pass) herdr agent_status blocked -> input, even past the stuck window [0.15ms]
+(pass) 15 min without a note -> stuck (with or without a herdr pane) [0.18ms]
+(pass) exit note -> finished (exit 0) / failed (nonzero) [0.17ms]
+(pass) registry exit_code settles the state even without a note [0.14ms]
+(pass) ended_at without any exit record -> dead [0.10ms]
+(pass) a live herdr pane outranks a stale exit note (revived worker) [0.18ms]
+(pass) persona derives from name or role prefix, else unknown [0.40ms]
+(pass) the lead is not a squad sprite [0.17ms]
+(pass) a member whose role is lead is not a squad sprite, whatever its name [0.14ms]
+(pass) a member with no pane and no note is parked, never running [0.11ms]
+(pass) task agents win same-name clashes and borrow colony pane ids and notes [0.29ms]
+(pass) unknown personas on task agents get derived, and task states pass through untouched [0.17ms]
+
+mod/data/orchestration.test.ts:
+(pass) lifecycle: reported -> verifying -> verified -> merged > a finished explorer with no matching finding stays reported [2.10ms]
+(pass) lifecycle: reported -> verifying -> verified -> merged > a verified finding that names the worker label verifies it [0.50ms]
+(pass) lifecycle: reported -> verifying -> verified -> merged > a finding that names only the persona word does not verify a specific worker [0.38ms]
+(pass) lifecycle: reported -> verifying -> verified -> merged > a longer label is not matched by its prefix; non-verified statuses do not verify [0.30ms]
+(pass) lifecycle: reported -> verifying -> verified -> merged > verifying while a verifier dispatched against the worker is still running [0.33ms]
+(pass) lifecycle: reported -> verifying -> verified -> merged > merged only from wt merged=true (or a merge note), never from a persona-substring branch [0.31ms]
+(pass) finished workers and comms labels > host status completed beats a stale running mood; since freezes at the first-seen finish time, tool clears [0.99ms]
+(pass) finished workers and comms labels > a worker the host no longer lists is finished when its own turn.complete arrived or its squad row is finished [0.36ms]
+(pass) finished workers and comms labels > two spawns in the same millisecond keep both dispatch and join lines (defect C) [0.68ms]
+(pass) finished workers and comms labels > the report line skips a bare STATUS marker and keeps the first informative line (defect D) [0.29ms]
+(pass) finished workers and comms labels > the report line skips a `STEPS: n/n` bookkeeping line and takes the finding, prose or heading (live run) [0.25ms]
+(pass) finished workers and comms labels > failed and killed hosts read failed [0.24ms]
+(pass) finished workers and comms labels > comms never carry a raw id: names map, then the spawn label, then `worker` [0.33ms]
+
+mod/data/personas.test.ts:
+(pass) parseFrontmatter > parses the real agents/implementer.md head [1.80ms]
+(pass) parseFrontmatter > keeps colons inside values and stops at the closing fence [0.28ms]
+(pass) parseFrontmatter > returns empty for files without a frontmatter fence [0.38ms]
+(pass) parseFrontmatter > strips quoted values and handles CRLF [0.16ms]
+(pass) loadPersonas > reads agents/*.md via FsLike, skips non-md, defaults missing fields [0.50ms]
+(pass) loadContract > maps the operating contract fields [0.35ms]
+(pass) loadContract > throws a contextual error on malformed JSON [0.24ms]
+(pass) personaColor > maps frontmatter colour names to dashboard-token hexes [0.17ms]
+(pass) personaColor > armada departments wear the subagent token, unknown goes idle [0.12ms]
+(pass) personaColor > resolves persona names, with or without the atlas: prefix [0.11ms]
+(pass) PERSONA_COLORS > every colour used in agents/*.md frontmatter is covered [0.22ms]
+(pass) ROUTING_MATRIX > copies the plan section 5 table [0.30ms]
+(pass) stableHue > is deterministic, hex-shaped, and distinct across dispatch names [0.44ms]
+
+mod/data/root.test.ts:
+(pass) boardRoot honours ATLAS_PROJECT_ROOT only when it holds .atlas [1.43ms]
+(pass) boardRoot walks ancestors to the nearest .atlas [0.38ms]
+(pass) boardRoot stops at the filesystem root and after 12 levels [0.39ms]
+(pass) leadChannelName leads with the sid6 name, then the folder@branch fallback [0.50ms]
+
+mod/data/sessions.test.ts:
+(pass) parseTranscript > last assistant text lines, ANSI stripped, in-flight tool last [1.69ms]
+(pass) parseTranscript > finished tool: no in-flight line; max 4 lines; garbage => empty [0.64ms]
+(pass) parseMuxStatus > workers become sessions with transport, state and tail [0.37ms]
+(pass) parseMuxStatus > malformed output is no sessions [0.18ms]
+(pass) sessions plumbing > merge de-duplicates by name, first source wins [0.20ms]
+(pass) sessions plumbing > id -> label: mapped name, else raw id truncated to 6, labels untouched [0.22ms]
+(pass) sessions plumbing > transcript path uses the cwd slug [0.22ms]
+(pass) real subagent transcript > tail is the worker output (text lines + in-flight tool), not the task description in the first user row [0.24ms]
+(pass) real subagent transcript > layout is <slug>/<lead session id>/subagents/agent-<agentId>.jsonl, the id as $.agent.list gives it [0.10ms]
+(pass) real subagent transcript > no transcript yet: empty tail [0.09ms]
+
+mod/data/todos.test.ts:
+(pass) readTodos > keeps session items, drops other sessions completed items [1.76ms]
+(pass) readTodos > keeps the open backlog (pending/in_progress) from any session [0.33ms]
+(pass) readTodos > drops archived even when session matches [0.22ms]
+(pass) readTodos > open items stay across sessions regardless of owner; archived never [0.23ms]
+(pass) readTodos > stamps phase: field wins over prefix; unknown prefix and no prefix stay unphased [0.18ms]
+(pass) readTodos > cache hit: same mtime returns cached items without re-reading [0.30ms]
+(pass) readTodos > changed mtime re-reads and refreshes the cache [0.25ms]
+(pass) readTodos > missing file => empty items, zero-mtime cache, and a stable second read [0.21ms]
+(pass) readTodos > corrupt JSON => empty items, cached by mtime, recovers when file changes [0.31ms]
+(pass) readTodos > non-array items field => empty [0.14ms]
+(pass) computeCounts > totals overall and per phase [0.38ms]
+(pass) groupTodos / contractProgress > unphased item lands in unsorted, not ARCHIVE; dept + glyph from contract; live first [0.41ms]
+(pass) groupTodos / contractProgress > completed backlog of other sessions is not live [0.14ms]
+(pass) groupTodos / contractProgress > contractProgress counts only this session, omits empty phases [0.16ms]
+(pass) groupTodos / contractProgress > advisor / carried / manual-unphased rows never reach contract groups or progress; advisors collapse to one group [0.33ms]
+(pass) carried rows re-stamped to the current session (defect A) > a fresh session with only carried phased rows has no groups and no progress [0.14ms]
+(pass) carried rows re-stamped to the current session (defect A) > own session rows still count beside carried ones [0.16ms]
+(pass) carried rows re-stamped to the current session (defect A) > an id with no rows of its own yields no progress [0.10ms]
+(pass) currentPhase > header wins over in_progress items [0.11ms]
+(pass) currentPhase > first in_progress item phase next [0.12ms]
+(pass) currentPhase > falls back to research with default source [0.12ms]
+
+mod/discipline.test.ts:
+(pass) heavy inline meter > toasts once at the limit, suggests the role after the answer [2.95ms]
+(pass) heavy inline meter > light calls, subagent calls and a delegation never count [0.62ms]
+(pass) heavy inline meter > ATLAS_MOD=off and headless sessions stay silent [0.57ms]
+(pass) heavy inline meter > fails open: a throwing engine never breaks the tool, the answer or the prompt [0.57ms]
+(pass) contract drift + token growth > a main-loop answer without the header toasts; a good header and subagents do not [0.18ms]
+(pass) contract drift + token growth > toasts are rate-limited [0.14ms]
+(pass) contract drift + token growth > a turn that added many tokens inline without delegating toasts [0.14ms]
+(pass) prompt sharpening > vague prompt gets facts plus the reinforce line; text untouched [0.19ms]
+(pass) prompt sharpening > specific, slash, quoted and non-composer prompts get no facts [0.21ms]
+(pass) prompt sharpening > git failure fails open: the prompt still goes through [0.10ms]
+(pass) prompt sharpening > pure helpers [0.13ms]
+
+mod/intents.test.ts:
+(pass) argv head invariant > every cli intent begins python3 + <pluginRoot>/scripts/<script>.py [1.90ms]
+(pass) exact argv per intent variant > todo.phase -> atlas_todo status --id --status --root [0.54ms]
+(pass) exact argv per intent variant > todo.claim -> atlas_todo claim --id --owner --root [0.21ms]
+(pass) exact argv per intent variant > todo.complete -> atlas_todo complete --id --evidence --root [0.18ms]
+(pass) exact argv per intent variant > note -> atlas_todo note --root --channel --owner --to + positional text [0.14ms]
+(pass) exact argv per intent variant > steer -> atlas_herdr prompt --pane --text [0.12ms]
+(pass) exact argv per intent variant > stop -> atlas_mux kill --run [0.11ms]
+(pass) ui intents > tab accepts every contract tab and returns kind ui [0.26ms]
+(pass) ui intents > tab rejects unknown tabs [0.11ms]
+(pass) ui intents > inspect returns kind ui with the agent name [0.13ms]
+(pass) injection attempts rejected > spaces, ;, $(), backticks, newlines in ids/owner/to/agent/paneId/run are rejected [0.77ms]
+(pass) injection attempts rejected > injection payloads in the channel are rejected [0.23ms]
+(pass) injection attempts rejected > null channel is rejected [0.09ms]
+(pass) injection attempts rejected > real channel format <name>@<branch>/lead-<id> is accepted [0.09ms]
+(pass) text caps and empties > 2000 chars accepted, 2001 rejected [0.19ms]
+(pass) text caps and empties > empty and whitespace-only text rejected [0.24ms]
+(pass) text caps and empties > non-string fields rejected [0.24ms]
+(pass) validation edges > stop without run rejected [0.08ms]
+(pass) validation edges > unknown t rejected [0.17ms]
+(pass) validation edges > unknown phase rejected [0.10ms]
+(pass) validation edges > missing ids/owner/to/agent/paneId rejected [0.11ms]
+
+mod/notify.test.ts:
+(pass) diffSnapshots > null prev yields no events (first sight) [1.28ms]
+(pass) diffSnapshots > no change yields no events [0.35ms]
+(pass) diffSnapshots > agent running -> finished toasts complete [0.36ms]
+(pass) diffSnapshots > agent running -> failed toasts fail, and stays put (no repeat) [0.28ms]
+(pass) diffSnapshots > new agent spawn is not a completion [0.23ms]
+(pass) diffSnapshots > new note to lead yields sender + 60-char preview; non-lead notes ignored [0.20ms]
+(pass) diffSnapshots > note to human counts as addressed to the human [0.16ms]
+(pass) diffSnapshots > todo becomes completed once [0.20ms]
+(pass) diffSnapshots > phase advance yields phase event with new phase [0.13ms]
+(pass) diffSnapshots > multiple events at once [0.13ms]
+(pass) diffSnapshots > malformed snapshots never throw [0.32ms]
+(pass) nextStepSuggestion > first open todo in contract phase order, prefix stripped [0.20ms]
+(pass) nextStepSuggestion > completed todos skipped, later phase returned as-is [0.11ms]
+(pass) nextStepSuggestion > todo without phase falls back to snapshot phase [0.11ms]
+(pass) nextStepSuggestion > null when nothing open [0.14ms]
+
+mod/pane/channel.test.ts:
+(pass) hhmm renders the local clock from ISO, epoch seconds and epoch ms [1.64ms]
+(pass) hhmm keeps bare clock strings and falls back on garbage [0.29ms]
+(pass) log rows never exceed the width at 80/120/200 columns [2.82ms]
+(pass) long lines hang-indent under the message body [0.26ms]
+(pass) wide glyphs count two cells and mentions are highlighted [0.17ms]
+(pass) collab matrix groups lead>worker, worker>lead and worker>worker [1.53ms]
+(pass) lead-<id> and lead collapse to one nick in the nick list, directed lines and mentions [0.27ms]
+
+mod/pane/layout.test.ts:
+(pass) colony layout > busy colony fits 44 cols x 20 rows (40% of 50) [3.06ms]
+(pass) colony layout > panels do not overlap at 44 cols [1.97ms]
+(pass) colony layout > busy colony fits 80 cols x 20 rows (40% of 50) [0.98ms]
+(pass) colony layout > panels do not overlap at 80 cols [1.50ms]
+(pass) colony layout > busy colony fits 120 cols x 20 rows (40% of 50) [0.85ms]
+(pass) colony layout > panels do not overlap at 120 cols [1.09ms]
+(pass) colony layout > busy colony fits 200 cols x 20 rows (40% of 50) [0.79ms]
+(pass) colony layout > panels do not overlap at 200 cols [1.01ms]
+(pass) colony layout > one panel per session with name, transport tag, state, elapsed and the tail [1.16ms]
+(pass) colony layout > big sprites only appear from BIG_ROWS rows up [0.68ms]
+(pass) colony layout > kept-tokens meter beneath the panels [0.56ms]
+(pass) colony layout > no sessions is one honest sentence and no meters [0.23ms]
+(pass) channel layout > log, gutter and nick list fit 44 cols [4.34ms]
+(pass) channel layout > log, gutter and nick list fit 80 cols [0.26ms]
+(pass) channel layout > log, gutter and nick list fit 120 cols [0.20ms]
+(pass) channel layout > log, gutter and nick list fit 200 cols [0.19ms]
+(pass) colony panel truth > an explorer panel carries the EX badge, never the old L placeholder [0.47ms]
+(pass) colony panel truth > header pill uses session progress; the board backlog is separate and labelled [0.73ms]
+(pass) colony panel truth > a worker with no output yet shows its task; once it writes, the transcript tail replaces it [0.62ms]
+(pass) board: advisor notes stay collapsed and out of the header count > one `advisor notes N open` line, no rows until expanded [0.49ms]
+(pass) board: advisor notes stay collapsed and out of the header count > expanding shows the rows under that line [0.34ms]
+
+mod/pane/validity.test.ts:
+(pass) tree validity (documented element rules) > colony follows the element table at 80 cols [5.29ms]
+(pass) tree validity (documented element rules) > colony (open) follows the element table at 80 cols [0.97ms]
+(pass) tree validity (documented element rules) > squad follows the element table at 80 cols [1.10ms]
+(pass) tree validity (documented element rules) > board follows the element table at 80 cols [0.58ms]
+(pass) tree validity (documented element rules) > board (open) follows the element table at 80 cols [0.26ms]
+(pass) tree validity (documented element rules) > channel follows the element table at 80 cols [14.00ms]
+(pass) tree validity (documented element rules) > collab follows the element table at 80 cols [0.95ms]
+(pass) tree validity (documented element rules) > sprites follows the element table at 80 cols [1.42ms]
+(pass) tree validity (documented element rules) > band follows the element table at 80 cols [0.97ms]
+(pass) tree validity (documented element rules) > colony follows the element table at 120 cols [1.19ms]
+(pass) tree validity (documented element rules) > colony (open) follows the element table at 120 cols [1.22ms]
+(pass) tree validity (documented element rules) > squad follows the element table at 120 cols [0.76ms]
+(pass) tree validity (documented element rules) > board follows the element table at 120 cols [0.28ms]
+(pass) tree validity (documented element rules) > board (open) follows the element table at 120 cols [0.29ms]
+(pass) tree validity (documented element rules) > channel follows the element table at 120 cols [0.63ms]
+(pass) tree validity (documented element rules) > collab follows the element table at 120 cols [0.30ms]
+(pass) tree validity (documented element rules) > sprites follows the element table at 120 cols [2.35ms]
+(pass) tree validity (documented element rules) > band follows the element table at 120 cols [0.31ms]
+(pass) tree validity (documented element rules) > colony follows the element table at 200 cols [1.18ms]
+(pass) tree validity (documented element rules) > colony (open) follows the element table at 200 cols [1.19ms]
+(pass) tree validity (documented element rules) > squad follows the element table at 200 cols [0.68ms]
+(pass) tree validity (documented element rules) > board follows the element table at 200 cols [0.27ms]
+(pass) tree validity (documented element rules) > board (open) follows the element table at 200 cols [0.26ms]
+(pass) tree validity (documented element rules) > channel follows the element table at 200 cols [0.65ms]
+(pass) tree validity (documented element rules) > collab follows the element table at 200 cols [0.28ms]
+(pass) tree validity (documented element rules) > sprites follows the element table at 200 cols [2.35ms]
+(pass) tree validity (documented element rules) > band follows the element table at 200 cols [0.31ms]
+(pass) tree validity (documented element rules) > the checker flags a Box in a Button, a keyed Text, unknown props and types [0.19ms]
+(pass) tree validity (documented element rules) > colony: a worker is one pressable and a press (click or Enter) inspects it [1.31ms]
+(pass) Board / Colony / Channel with the live fixture > board: no row wider than 80 columns and no raw agent id [0.59ms]
+(pass) Board / Colony / Channel with the live fixture > colony: no row wider than 80 columns and no raw agent id [1.72ms]
+(pass) Board / Colony / Channel with the live fixture > channel: no row wider than 80 columns and no raw agent id [0.93ms]
+(pass) Board / Colony / Channel with the live fixture > board: no row wider than 120 columns and no raw agent id [0.57ms]
+(pass) Board / Colony / Channel with the live fixture > colony: no row wider than 120 columns and no raw agent id [7.08ms]
+(pass) Board / Colony / Channel with the live fixture > channel: no row wider than 120 columns and no raw agent id [0.58ms]
+(pass) Board / Colony / Channel with the live fixture > board: no row wider than 200 columns and no raw agent id [0.29ms]
+(pass) Board / Colony / Channel with the live fixture > colony: no row wider than 200 columns and no raw agent id [1.20ms]
+(pass) Board / Colony / Channel with the live fixture > channel: no row wider than 200 columns and no raw agent id [1.11ms]
+(pass) Board / Colony / Channel with the live fixture > board: unphased items are UNSORTED and no ARCHIVE group appears [0.54ms]
+(pass) Board / Colony / Channel with the live fixture > board: the live in-progress row opens an evidence field that completes the todo [0.44ms]
+(pass) Board / Colony / Channel with the live fixture > board: empty groups give one honest sentence [0.15ms]
+(pass) Board / Colony / Channel with the live fixture > board: footer says how to take keyboard focus; header counts only the contract progress [0.16ms]
+(pass) Board / Colony / Channel with the live fixture > colony: a panel per session with its tail lines [0.62ms]
+(pass) Board / Colony / Channel with the live fixture > colony: no sessions is one honest sentence [0.35ms]
+(pass) Board / Colony / Channel with the live fixture > channel: worker>worker lines show with the peer marker and one lead nick [0.42ms]
+
+mod/parallel-attribution.test.ts:
+(pass) parallel workers dispatched in one message > each worker gets its own dispatch, join, report and quit, attributed by agent id [6.89ms]
+(pass) parallel workers dispatched in one message > same when a rebuild lands between the host listing the agents and the spawn hook recording them [1.60ms]
+(pass) parallel workers dispatched in one message > same when the host list drops a worker once it completed [1.09ms]
+(pass) parallel workers dispatched in one message > same with both [1.26ms]
+(pass) parallel workers dispatched in one message > a turn.complete without agentId: the host row that completed names the worker [1.27ms]
+
+mod/props-budget.test.ts:
+(pass) props slices stay small on a real-size board > sanity: the fixture really is large (the old whole-snapshot props are far over the engine limit) [7.54ms]
+(pass) props slices stay small on a real-size board > band props <= 40000 chars [0.52ms]
+(pass) props slices stay small on a real-size board > colony tab props <= 40000 chars [0.37ms]
+(pass) props slices stay small on a real-size board > channel tab props <= 40000 chars [13.41ms]
+(pass) props slices stay small on a real-size board > board tab props <= 40000 chars [0.58ms]
+(pass) props slices stay small on a real-size board > squad tab props <= 40000 chars [0.19ms]
+(pass) props slices stay small on a real-size board > collab tab props <= 40000 chars [0.45ms]
+(pass) props slices stay small on a real-size board > band props carry no pane-only data and pane props no band-only slice [1.35ms]
+(pass) props slices stay small on a real-size board > each tab gets only its own slice [1.33ms]
+(pass) props slices stay small on a real-size board > board keeps counts for everything it does not ship [0.38ms]
+(pass) withinBudget > passes props through when small, no note [0.25ms]
+(pass) withinBudget > falls back to the minimal set with a note when over budget (never throws) [0.19ms]
+(pass) withinBudget > the stripped snapshot is tiny [1.89ms]
+(pass) register answers ui.message with sliced props > band: answer props <= 40000 chars on a real-size snapshot [3.72ms]
+(pass) register answers ui.message with sliced props > colony: answer props <= 40000 chars on a real-size snapshot [1.41ms]
+(pass) register answers ui.message with sliced props > channel: answer props <= 40000 chars on a real-size snapshot [1.38ms]
+(pass) register answers ui.message with sliced props > board: answer props <= 40000 chars on a real-size snapshot [1.16ms]
+(pass) register answers ui.message with sliced props > squad: answer props <= 40000 chars on a real-size snapshot [0.99ms]
+(pass) register answers ui.message with sliced props > collab: answer props <= 40000 chars on a real-size snapshot [0.94ms]
+(pass) register answers ui.message with sliced props > anything still over budget after slicing falls back to a minimal set and logs it [1.82ms]
+
+mod/props.test.ts:
+(pass) explicit undefined dropped > top-level undefined key is absent [1.58ms]
+(pass) explicit undefined dropped > nested undefined key is absent [0.29ms]
+(pass) explicit undefined dropped > undefined inside arrays is dropped [0.23ms]
+(pass) array holes dropped > sparse array hole reads undefined and is removed [0.27ms]
+(pass) engine-legal falsy values preserved > null, false, 0 and empty string survive [0.15ms]
+(pass) ChannelNote shape (channels.parseNote) > optional keys absent, required fields intact [0.26ms]
+(pass) idempotency > completeProps twice equals once [0.17ms]
+
+mod/register-agents.test.ts:
+(pass) register agent-list sync > host agents land in the squad with mapped states and unknown usage pre-measure [5.27ms]
+(pass) register agent-list sync > an unknown AgentStatus reads as running [0.55ms]
+(pass) register agent-list sync > a measured zero replaces the unknowns on the mount [0.54ms]
+(pass) register agent-list sync > a measure with absent fields leaves the figures unknown [0.42ms]
+(pass) register agent-list sync > usage and task agents survive a re-register: they live in $.state, not module variables [1.26ms]
+(pass) register agent-list sync > a missing agent surface keeps spawn-recorded agents [0.52ms]
+(pass) syncAgentsFromList identity > labels by persona/type with the description as task, never the raw host id [0.28ms]
+(pass) syncAgentsFromList identity > generic agents are labelled by a short slug of the Agent description; teammates and personas keep their names [0.16ms]
+(pass) syncAgentsFromList identity > duplicate labels get a short id suffix; unlisted spawn records are kept [0.12ms]
+(pass) syncAgentsFromList dispatch identity > the Agent call name labels the worker and the spawn type (atlas:explorer) is its persona, even for a teammate-typed row [0.12ms]
+(pass) stale workers > host status completed/failed/killed wins over a spawn-recorded running entry [0.20ms]
+(pass) stale workers > liveness is the host list only: listed pending/running/waiting stay live whatever the lead does; completed/failed/killed finish [0.18ms]
+(pass) stale workers > a spawn-recorded entry the host does not list expires only once its spawn is older than 15 s [0.25ms]
+
+mod/register-open.test.ts:
+(pass) pane open requests keyboard focus on every path > /atlas-cc, /atlas-cc board (twice, pane already open) and a tab press all pass focus: true [4.53ms]
+
+mod/register.test.ts:
+(pass) register kill switch > ATLAS_MOD=off: session.start wires nothing, handlers pass through [2.60ms]
+(pass) ui.message intent handling > exact argv passthrough: the intent reaches $.process.run untouched [2.36ms]
+(pass) ui.message intent handling > stop intent: $.ui.ask gates the atlas_mux kill, decline runs nothing [0.67ms]
+(pass) header phase > reads the phase from the live `ATLAS | <glyph> <phase> | <state>` header [0.26ms]
+(pass) header phase > null when the line misses the contract pattern or the pattern is empty [0.15ms]
+(pass) engine module path and faults > stop intent from the engine-style path mod/band.tsx still answers with band props [0.43ms]
+(pass) engine module path and faults > ui.fault logs component, module, phase and reason to debug, then passes on [0.27ms]
+(pass) headless inertness > headless session.start: no ui.*, no timers, no commands, next(e) flows [0.42ms]
+(pass) snapshot refresh on live state > a session.measure and a header miss reach the snapshot on the next tick, no file change [0.98ms]
+
+mod/restyle.test.tsx:
+(pass) formatDuration and fmtTok [1.24ms]
+(pass) capsule and phaseCount read the phase slice [0.27ms]
+(pass) spinner renders globe, capsule, meter and squad activity [0.31ms]
+(pass) spinner keeps a one-cell gap between the capsule/bar and the verb [0.10ms]
+(pass) spinner globe cycles through the 8 slots [0.14ms]
+(pass) deployment card for atlas persona Task rows [0.22ms]
+(pass) non-atlas tool rows keep the engine drawing [0.15ms]
+(pass) header line becomes a coloured pill with the body kept [0.24ms]
+(pass) headerless reply gets a dim inferred pill; other blocks stay engine-drawn [0.15ms]
+(pass) turn receipt with phase transition and tracker memory [0.18ms]
+(pass) next contract step suggestion branches [0.14ms]
+(pass) registerRestyle wires the five sites; without a snapshot every site no-ops [1.58ms]
+(pass) ATLAS_MOD=off no-ops every site even with a live snapshot [0.50ms]
+(pass) live spinner draws and PromptHint appends the tail and suggests the next step [0.46ms]
+(pass) spinner globe advances per timer tick and the timer stops once the Spinner unmounts [0.67ms]
+(pass) noisy tool: huge Bash output collapses to a one-line size badge; small/running keeps engine row [0.22ms]
+
+mod/routing.test.ts:
+(pass) registerRouting agent.spawn > passes an omitted model through untouched and records the agent [10.06ms]
+(pass) registerRouting agent.spawn > passes an inherit model through untouched and records the agent [0.47ms]
+(pass) registerRouting agent.spawn > passes an explicit model through untouched, records the agent, and notes the drift [0.38ms]
+(pass) registerRouting agent.spawn > leaves a fork untouched [0.31ms]
+(pass) registerRouting agent.spawn > routes no persona for unknown roles but records them for the band [0.46ms]
+(pass) registerRouting agent.spawn > fails open when getPersonas throws [0.24ms]
+(pass) registerRouting turn.step > pins the recorded persona effort onto the request [0.51ms]
+(pass) registerRouting turn.step > leaves unrecorded agents untouched [0.26ms]
+(pass) registerRouting turn.step > pins nothing when the persona effort is not low/medium/high [0.24ms]
+(pass) registerRouting turn.step > records an inherit-model persona so its effort is pinned [0.18ms]
+(pass) registerRouting turn.step > fails open when getPersonas throws on turn.step [0.19ms]
+(pass) registerHeaderDrift > counts a miss when the first line breaks the pattern [0.30ms]
+(pass) registerHeaderDrift > counts no miss when the first line matches [0.16ms]
+(pass) registerHeaderDrift > skips subagent turns [0.13ms]
+(pass) registerHeaderDrift > never throws on a broken pattern and still moves the answer on [0.19ms]
+
+mod/snapshot.test.ts:
+(pass) SnapshotBuilder > init resolves root via ancestor walk and pins the lead channel [4.56ms]
+(pass) SnapshotBuilder > filter: own session plus the open backlog of any session, never archived [2.61ms]
+(pass) SnapshotBuilder > counts: done/total and per-phase buckets over the session slice [3.59ms]
+(pass) SnapshotBuilder > phase precedence: header beats todo; no signal falls back to default [1.17ms]
+(pass) SnapshotBuilder > todo mtime cache lives on the instance: unchanged mtime reuses the parsed array [2.06ms]
+(pass) SnapshotBuilder > notes, squad and unread merge from board, roster, herdr and task agents [2.36ms]
+(pass) SnapshotBuilder > roster is re-read on every build: a new member appears, a read error keeps the last roster [2.09ms]
+(pass) SnapshotBuilder > live pass-throughs land on every snapshot field [2.54ms]
+(pass) SnapshotBuilder > no .atlas root: idle snapshot, never throws [0.49ms]
+(pass) SnapshotBuilder > orchestration: orch events, wt rows and findings feed activity/comms/lifecycle/savings [2.13ms]
+(pass) SnapshotBuilder > todoGroups: unsorted holds only session-origin unphased items; other-session backlog without a phase and advisor notes stay out [1.14ms]
+(pass) SnapshotBuilder > contractProgress is session-scoped and moves when a session todo completes [0.54ms]
+(pass) SnapshotBuilder > sessions pass through; raw agent ids in notes/comms/activity resolve to labels [0.49ms]
+
+mod/sprites/api.test.ts:
+(pass) sprite api > every persona, mood, size and frame has the exact cell geometry [146.18ms]
+(pass) sprite api > runs never overflow the sprite and padding carries no colour [510.03ms]
+(pass) sprite api > size s is the 1-row badge chip [0.29ms]
+(pass) sprite api > personas have distinct silhouettes at m and l (cell and pixel level) [1.61ms]
+(pass) sprite api > lead silhouette has a crown row on top, narrower than the head [0.33ms]
+(pass) sprite api > personas are visually distinct and moods animate [0.77ms]
+(pass) sprite api > persona aliases resolve and unknown falls back [0.12ms]
+(pass) sprite api > speech bubble rows share one width within maxCols [0.22ms]
+
+mod/sprites/grid.test.ts:
+(pass) frameToRuns > empty frame has no rows [1.53ms]
+(pass) frameToRuns > pairs rows into ▀ runs: top pixel as color, bottom as backgroundColor [0.40ms]
+(pass) frameToRuns > bottom-only pixel is ▄ with its colour [0.21ms]
+(pass) frameToRuns > merges neighbours with identical glyph, colour and background [0.20ms]
+(pass) frameToRuns > both transparent is a plain space (space runs merge) [0.14ms]
+(pass) frameToRuns > bg paints fully transparent cells [0.15ms]
+(pass) frameToRuns > maxRuns folds neighbour pairs, keeping the left run colours [0.14ms]
+(pass) frameToCells > emits one {x,y,fg} per lit pixel, transparent pixels absent [0.18ms]
+(pass) frameToCells > skips transparent pixels entirely (no bg fill in the real API) [0.13ms]
+(pass) frameToSvg > one <rect> per horizontal colour run, scaled [0.17ms]
+(pass) frameToSvg > same-colour runs separated by transparent pixels stay distinct [0.17ms]
+(pass) tint > replaces the accent-stripe key "a", leaves other keys intact [0.12ms]
+(pass) tint > does not mutate the input and adds "a" when missing [0.13ms]
+(pass) validateSpriteSet > accepts a complete set with no problems [0.47ms]
+(pass) validateSpriteSet > rejects frames with wrong rows and row width per size [0.43ms]
+(pass) validateSpriteSet > requires >=2 frames per state [0.46ms]
+(pass) validateSpriteSet > rejects chars not in the palette (except ".") [0.36ms]
+
+mod/sprites/sprites.test.ts:
+(pass) sprites > structural validity > lead set is valid [1.88ms]
+(pass) sprites > structural validity > runner set is valid [0.55ms]
+(pass) sprites > structural validity > explorer set is valid [0.53ms]
+(pass) sprites > structural validity > planner set is valid [0.67ms]
+(pass) sprites > structural validity > implementer set is valid [0.35ms]
+(pass) sprites > structural validity > verifier set is valid [0.27ms]
+(pass) sprites > structural validity > completeness-critic set is valid [0.26ms]
+(pass) sprites > structural validity > rls-privilege-audit set is valid [0.23ms]
+(pass) sprites > structural validity > db-prober set is valid [0.23ms]
+(pass) sprites > structural validity > ui-runtime-tester set is valid [0.22ms]
+(pass) sprites > structural validity > docs-curator set is valid [0.21ms]
+(pass) sprites > structural validity > docs-auditor set is valid [0.24ms]
+(pass) sprites > structural validity > schema-inventory set is valid [0.23ms]
+(pass) sprites > structural validity > naming-glossary-audit set is valid [0.22ms]
+(pass) sprites > structural validity > armada set is valid [0.21ms]
+(pass) sprites > structural validity > unknown set is valid [0.21ms]
+(pass) sprites > persona coverage > agents fixture lists every persona as a .md file [0.28ms]
+(pass) sprites > persona coverage > armada has a SPRITES key [0.11ms]
+(pass) sprites > persona coverage > completeness-critic has a SPRITES key [0.08ms]
+(pass) sprites > persona coverage > db-prober has a SPRITES key [0.08ms]
+(pass) sprites > persona coverage > docs-auditor has a SPRITES key [0.08ms]
+(pass) sprites > persona coverage > docs-curator has a SPRITES key [0.08ms]
+(pass) sprites > persona coverage > explorer has a SPRITES key [0.09ms]
+(pass) sprites > persona coverage > implementer has a SPRITES key [0.08ms]
+(pass) sprites > persona coverage > naming-glossary-audit has a SPRITES key [0.07ms]
+(pass) sprites > persona coverage > planner has a SPRITES key [0.08ms]
+(pass) sprites > persona coverage > rls-privilege-audit has a SPRITES key [0.09ms]
+(pass) sprites > persona coverage > runner has a SPRITES key [0.07ms]
+(pass) sprites > persona coverage > schema-inventory has a SPRITES key [0.08ms]
+(pass) sprites > persona coverage > ui-runtime-tester has a SPRITES key [0.09ms]
+(pass) sprites > persona coverage > verifier has a SPRITES key [0.08ms]
+
+mod/squad.test.ts:
+(pass) squad header usage honesty > unmeasured figures render as dashes, never as zeros [1.24ms]
+(pass) squad header usage honesty > a measured zero still renders as zero [0.30ms]
+(pass) squad header usage honesty > measured nonzero figures render their values [0.25ms]
+
+mod/svg.test.ts:
+(pass) trackSvg > research start: capsule 0/4, current diamond accent, futures hollow [1.84ms]
+(pass) trackSvg > implement 3/5: mid track, done diamonds in ok colour, marker at 6/8 [0.73ms]
+(pass) trackSvg > blocked: fail-coloured capsule, red diamonds at the rail end [0.60ms]
+(pass) trackSvg > empty snapshot: no phases, no squad, zero counts, still well-formed [0.54ms]
+(pass) trackSvg > deterministic: identical input, identical bytes [0.25ms]
+(pass) squadSvg > chips carry the mini sprite rects, persona accent and names [19.26ms]
+(pass) squadSvg > empty squad is an empty but well-formed document [0.30ms]
+(pass) squadSvg > unknown persona and odd states fall back instead of throwing [0.26ms]
+(pass) trackText > implement 3/5 matches the band format exactly [0.20ms]
+(pass) trackText > research start leads with the current capsule [0.10ms]
+(pass) trackText > blocked names the halt in a capsule and keeps the done tail [0.10ms]
+(pass) trackText > empty snapshot degrades to the done tail [0.09ms]
+(pass) trackText > all done closes with the filled diamond [0.09ms]
+
+mod/theme.test.ts:
+(pass) bar clamps and rounds [1.83ms]
+(pass) meterColor steps ok / input / fail [0.43ms]
+(pass) lerp interpolates [0.35ms]
+(pass) dim scales hex and passes non-hex through [0.34ms]
+(pass) phase and state colours resolve from BRAND [0.26ms]
+(pass) every glyph and state glyph is exactly 1 cell wide [0.95ms]
+(pass) blink domain [0.24ms]
+
+omp/advisor.test.ts:
+(fail) the file did not load
+  omp/advisor.test.ts: cannot import "bun:test" (from omp/advisor.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/agent-guard.test.ts:
+(fail) the file did not load
+  omp/agent-guard.test.ts: cannot import "bun:test" (from omp/agent-guard.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/channel-view.test.ts:
+(fail) the file did not load
+  omp/channel-view.test.ts: cannot import "node:fs" (from omp/channel-view.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/channels.test.ts:
+(fail) the file did not load
+  omp/channels.test.ts: cannot import "bun:test" (from omp/channels.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/contracts.test.ts:
+(fail) the file did not load
+  omp/contracts.test.ts: cannot import "bun:test" (from omp/contracts.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/core-fixes.test.ts:
+(fail) the file did not load
+  omp/core-fixes.test.ts: cannot import "bun:test" (from omp/core-fixes.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/delegation-gate.test.ts:
+(fail) the file did not load
+  omp/delegation-gate.test.ts: cannot import "bun:test" (from omp/delegation-gate.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/delegation.test.ts:
+(fail) the file did not load
+  omp/delegation.test.ts: cannot import "bun:test" (from omp/delegation.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/extension.test.ts:
+(fail) the file did not load
+  omp/extension.test.ts: cannot import "bun:test" (from omp/extension.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/gen-agents.test.ts:
+(fail) the file did not load
+  omp/gen-agents.test.ts: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/omp/gen-agents.test.ts, compiled line 178 `const { resolveModelRoleValue } = await import(OMP_RESOLVER);`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+omp/hook-bridge-session.test.ts:
+(fail) the file did not load
+  omp/hook-bridge-session.test.ts: cannot import "bun:test" (from omp/hook-bridge-session.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/hook-bridge.test.ts:
+(fail) the file did not load
+  omp/hook-bridge.test.ts: cannot import "bun:test" (from omp/hook-bridge.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/index.test.ts:
+(fail) the file did not load
+  omp/index.test.ts: cannot import "bun:test" (from omp/index.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/mandates.test.ts:
+(fail) the file did not load
+  omp/mandates.test.ts: cannot import "node:fs" (from omp/mandates.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/proc.test.ts:
+(fail) the file did not load
+  omp/proc.test.ts: cannot import "bun:test" (from omp/proc.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/run-state.test.ts:
+(fail) the file did not load
+  omp/run-state.test.ts: cannot import "bun:test" (from omp/run-state.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/scope.test.ts:
+(fail) the file did not load
+  omp/scope.test.ts: cannot import "node:fs" (from omp/scope.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/shell-route.test.ts:
+(fail) the file did not load
+  omp/shell-route.test.ts: cannot import "bun:test" (from omp/shell-route.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/stop-bridge.test.ts:
+(fail) the file did not load
+  omp/stop-bridge.test.ts: cannot import "bun:test" (from omp/stop-bridge.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/style.test.ts:
+(fail) the file did not load
+  omp/style.test.ts: cannot import "bun:test" (from omp/style.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/worker-report.test.ts:
+(fail) the file did not load
+  omp/worker-report.test.ts: cannot import "bun:test" (from omp/worker-report.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/workers.test.ts:
+(fail) the file did not load
+  omp/workers.test.ts: cannot import "bun:test" (from omp/workers.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+ 418 pass
+ 169 fail
+Ran 587 tests across 199 files. [2.84s]

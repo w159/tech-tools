@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import contextlib
+import fcntl
 import hmac
 import json
 import os
@@ -26,6 +28,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, unquote
@@ -1291,6 +1294,10 @@ def write_env_updates(updates: dict):
 # --- singleton daemon -------------------------------------------------------
 
 
+def _ts() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def _pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
@@ -1377,12 +1384,12 @@ def dashboard_url(port: int | None = None) -> str:
     return f"http://{LOOPBACK}:{port or DEFAULT_PORT}/"
 
 
-def _health_payload(port: int) -> dict | None:
+def _health_payload(port: int, timeout: float = 2.0) -> dict | None:
     try:
         import urllib.request
 
         with urllib.request.urlopen(
-            f"http://{LOOPBACK}:{port}/api/health", timeout=0.8
+            f"http://{LOOPBACK}:{port}/api/health", timeout=timeout
         ) as r:
             return json.loads(r.read().decode())
     except Exception:
@@ -1505,8 +1512,38 @@ def _reclaim_temp_listener(port: int, health: dict, want_db: str) -> bool:
     return False
 
 
+LOG_ROTATE_BYTES = 5 * 1024 * 1024
+
+
+def _open_log() -> "object":
+    """Append handle for the daemon log; a log past LOG_ROTATE_BYTES moves to dashboard.log.1 first."""
+    with contextlib.suppress(OSError):
+        if LOG_PATH.stat().st_size > LOG_ROTATE_BYTES:
+            os.replace(LOG_PATH, LOG_PATH.with_name(LOG_PATH.name + ".1"))
+    return open(LOG_PATH, "a", encoding="utf-8")
+
+
+def _patient_health(port: int, tries: int = 3) -> dict | None:
+    """/api/health with retries: one slow answer from a busy-but-alive daemon must not read as dead."""
+    for i in range(tries):
+        h = _health_payload(port)
+        if h:
+            return h
+        time.sleep(0.2 * (i + 1))
+    return None
+
+
 def ensure_daemon(port: int | None = None) -> dict:
+    """Start the shared dashboard unless a healthy one already answers. One flock per port
+    serialises concurrent sessions so two SessionStarts cannot both spawn."""
     port = port or DEFAULT_PORT
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(STATE_DIR / f"dashboard-{int(port)}.lock", "a") as lockf:
+        fcntl.flock(lockf, fcntl.LOCK_EX)  # released when the file closes
+        return _ensure_daemon_locked(port)
+
+
+def _ensure_daemon_locked(port: int) -> dict:
     url = dashboard_url(port)
     want_db = dashboard_db_path()
 
@@ -1522,7 +1559,10 @@ def ensure_daemon(port: int | None = None) -> dict:
         }
 
     if _port_open(LOOPBACK, port):
-        h = _health_payload(port) or {}
+        h = _patient_health(port) or {}
+        if not h:
+            # Port is bound but /api/health never answered: replace it (unhealthy).
+            print(f"[atlas-dashboard] {_ts()} replacing :{port}: listener unhealthy", file=sys.stderr)
         same_db = _daemon_db_ok(port)
         reclaimed = False
         if h and not same_db:
@@ -1554,13 +1594,18 @@ def ensure_daemon(port: int | None = None) -> dict:
                 "db_path": want_db,
             }
         if not reclaimed:
+            if h:
+                print(
+                    f"[atlas-dashboard] {_ts()} replacing :{port}: daemon version {h.get('version')!r} "
+                    f"older than launcher {_plugin_manifest().get('version')!r}",
+                    file=sys.stderr,
+                )
             stop_daemon(port)
             time.sleep(0.25)
             if _port_open(LOOPBACK, port):
                 return {"ok": False, "error": "port_still_held", "port": port}
 
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    logf = open(LOG_PATH, "a", encoding="utf-8")
+    logf = _open_log()
     env = os.environ.copy()
     env.pop("ATLAS_DB", None)
     env["ATLAS_DASHBOARD_PORT"] = str(port)
@@ -2211,8 +2256,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # client hung up mid-reply; nothing to send to
 
     def _html(self, code: int, html: str):
         body = html.encode("utf-8")
@@ -2262,7 +2310,11 @@ class Handler(BaseHTTPRequestHandler):
         return self._bytes(200, svg, "image/svg+xml; charset=utf-8")
 
     def log_message(self, format, *args):  # noqa: A002 - base-class signature
-        sys.stderr.write("[atlas-dashboard] " + (format % args) + "\n")
+        line = format % args
+        # Liveness probes fire every few seconds from every session; only failures are worth a line.
+        if re.search(r'"GET /(api/(v2/)?)?health[ ?]', line) and line.rstrip().split()[-2:-1] == ["200"]:
+            return
+        sys.stderr.write(f"[atlas-dashboard] {_ts()} {line}\n")
 
     # -- central security guard (every route, every method) ------------------
 
@@ -2521,6 +2573,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 return self._json(200, snapshot(project_id=project_id))
             except Exception as e:
+                traceback.print_exc()
+                sys.stderr.flush()
                 return self._json(500, {"ok": False, "error": str(e)})
         if u.path == "/api/projects":
             qs = parse_qs(u.query)

@@ -4,6 +4,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { AgentInfo, EngineInterface, On } from 'claude-code'
 import {
+  noisyTree,
   HINT_TAIL,
   assistantTree,
   capsule,
@@ -99,22 +100,26 @@ test('spinner renders globe, capsule, meter and squad activity', () => {
     squad: [{ name: 'impl-auth', persona: 'implementer', state: 'running', source: 'task', task: 'editing hooks/completion_gate.py' }],
   })
   const text = stringsOf(spinnerTree(s, { word: 'Sauteing', message: null }, 0))
-  expect(text).toContain('◐')
+  expect(text).toContain('⠋')
   expect(text).toContain('⟦implement 3/5⟧')
   expect(text).toContain('▰▰▰▱▱')
   expect(text).toContain('Sauteing')
   expect(text).toContain('impl-auth editing hooks/completion_gate.py')
 })
 
+test('spinner keeps a one-cell gap between the capsule/bar and the verb', () => {
+  const text = stringsOf(spinnerTree(snap(), { word: 'Twisting', message: null }, 0))
+  expect(text).toContain('▰▰▰▱▱ Twisting')
+})
+
 test('spinner globe cycles through the 8 slots', () => {
   const s = snap()
   const at = (tickMs: number) => stringsOf(spinnerTree(s, { word: 'w', message: null }, tickMs))
-  // GLOBE = ['◐','◒','◓','◑'], two 250 ms ticks per glyph = the documented 8-frame cycle.
-  expect(at(0)).toContain('◐')
-  expect(at(500)).toContain('◒')
-  expect(at(1000)).toContain('◓')
-  expect(at(1500)).toContain('◑')
-  expect(at(2000)).toContain('◐') // the 8-frame cycle wraps at 2 s
+  // 8 braille frames, one per 120 ms tick, wrapping.
+  expect(at(0)).toContain('⠋')
+  expect(at(120)).toContain('⠙')
+  expect(at(7 * 120)).toContain('⠧')
+  expect(at(8 * 120)).toContain('⠋')
 })
 
 // ---- ToolUse deployment card ----
@@ -151,14 +156,14 @@ test('header line becomes a coloured pill with the body kept', () => {
   const tree = assistantTree(snap(), { text: 'ATLAS | 🔧 implement 3/5 | shipping restyle\n\nBody text here.', isFirstOfReply: true })
   expect(tree).not.toBeNull()
   const text = stringsOf(tree)
-  expect(text).toContain('⬢ implement 3/5')
+  expect(text).toContain('▸ implement 3/5')
   expect(text).toContain('Body text here.')
   expect(text).not.toContain('ATLAS |')
 })
 
 test('headerless reply gets a dim inferred pill; other blocks stay engine-drawn', () => {
   const text = stringsOf(assistantTree(snap(), { text: 'just prose', isFirstOfReply: true }))
-  expect(text).toContain('⬢ implement · inferred')
+  expect(text).toContain('▸ implement · inferred')
   expect(text).toContain('just prose')
   expect(assistantTree(snap(), { text: 'more prose' })).toBeNull()
   expect(assistantTree(snap(), { text: 'ATLAS | 🔧 implement 3/5 | x', isSummary: true })).toBeNull()
@@ -169,9 +174,9 @@ test('headerless reply gets a dim inferred pill; other blocks stay engine-drawn'
 test('turn receipt with phase transition and tracker memory', () => {
   const tracker: ReceiptTracker = { phase: 'research', done: 0 }
   const text = stringsOf(durationTree(snap(), { durationMs: 252_000 }, tracker))
-  expect(text).toContain('⬢')
+  expect(text).toContain('▸')
   expect(text).toContain('4m12s')
-  expect(text).toContain('research → implement')
+  expect(text).toContain('research ▸ implement')
   expect(text).toContain('+3 done')
   expect(text).toContain('48k tok')
   expect(text).toContain('$0.31')
@@ -293,8 +298,8 @@ test('spinner globe advances per timer tick and the timer stops once the Spinner
     seen.push(await frameAt())
   }
   expect(h.ticks).toEqual([1, 2, 3, 4, 5, 6])
-  expect(seen[0]).not.toBe(seen[2]) // two ticks per glyph (the 8-frame cycle)
-  expect(new Set(seen).size).toBe(4) // all 4 globe glyphs over successive ticks
+  expect(seen[0]).not.toBe(seen[1]) // one glyph per tick
+  expect(new Set(seen).size).toBe(7) // 7 distinct braille frames over 7 draws
 
   // turn over: the Spinner unmounts, so the next tick finds no draw since the last one and stops
   h.timers.fire() // draw happened since previous fire (frameAt above): still writes
@@ -303,4 +308,14 @@ test('spinner globe advances per timer tick and the timer stops once the Spinner
   expect(h.timers.cancelled).toBe(1)
   await frameAt() // the next turn restarts exactly one timer
   expect(h.timers.started).toBe(2)
+})
+
+test('noisy tool: huge Bash output collapses to a one-line size badge; small/running keeps engine row', () => {
+  const base = { tool: 'Bash', input: { command: 'npm test' }, isRunning: false, isErrored: false, isInterrupted: false }
+  const text = stringsOf(noisyTree({ ...base, output: { stdout: 'x'.repeat(20000) } })!)
+  expect(text).toContain('Bash npm test')
+  expect(text).toContain('▸ 20.0kB')
+  expect(noisyTree({ ...base, output: { stdout: 'ok' } })).toBeNull()
+  expect(noisyTree({ ...base, isRunning: true, output: 'x'.repeat(20000) })).toBeNull()
+  expect(noisyTree({ ...base, tool: 'Edit', output: 'x'.repeat(20000) })).toBeNull()
 })

@@ -19,7 +19,29 @@ function readToken() {
   return value && value !== "__ATLAS_TOKEN__" ? value : "";
 }
 
-const TOKEN = readToken();
+let TOKEN = readToken();
+// A daemon restart mints a new token, so an open tab's copy goes stale and every poll 401s. Re-scrape
+// the index once per stale answer; while that fails, stay quiet for AUTH_BACKOFF_MS instead of looping.
+const AUTH_BACKOFF_MS = 60000;
+let authDeadUntil = 0;
+let refreshing = null;
+async function refreshToken() {
+  refreshing ??= (async () => {
+    try {
+      const res = await fetch(PREFIX + "/", { credentials: "same-origin", cache: "no-store" });
+      const m = /<meta\s+name="atlas-token"\s+content="([^"]*)"/i.exec(await res.text());
+      const next = m && m[1] !== "__ATLAS_TOKEN__" ? m[1] : "";
+      if (res.ok && next && next !== TOKEN) {
+        TOKEN = next;
+        return true;
+      }
+    } catch (_err) {
+      // daemon down: fall through to backoff
+    }
+    return false;
+  })().finally(() => { refreshing = null; });
+  return refreshing;
+}
 // Same-origin gateway prefix (<meta name="atlas-base" content="/atlas">); empty when served standalone.
 const PREFIX = ((document.querySelector('meta[name="atlas-base"]') || {}).content || "").replace(/\/+$/, "");
 const BASE = PREFIX + "/api/v2/";
@@ -67,7 +89,8 @@ function dropHidden(node) {
   return node;
 }
 
-async function request(method, path, params, body) {
+async function request(method, path, params, body, retried = false) {
+  if (Date.now() < authDeadUntil) throw new ApiError(401, "bad_token", "The dashboard token is stale.", "Reload the page to obtain a fresh token.");
   const headers = { Accept: "application/json" };
   if (TOKEN) headers["X-Atlas-Token"] = TOKEN;
   const init = { method, headers, credentials: "same-origin" };
@@ -92,6 +115,10 @@ async function request(method, path, params, body) {
   }
   if (!res.ok || (data && data.ok === false)) {
     const d = data || {};
+    if (res.status === 401 && d.error === "bad_token") {
+      if (!retried && (await refreshToken())) return request(method, path, params, body, true);
+      authDeadUntil = Date.now() + AUTH_BACKOFF_MS;
+    }
     const err = new ApiError(res.status, d.error || res.statusText || "Request failed", d.why || "", d.do || d.hint || "");
     err.data = d;
     throw err;
@@ -131,6 +158,7 @@ export const api = {
     let pollTimer = null;
     let closed = false;
     let failures = 0;
+    let reopenMs = 2500;
 
     const setMode = (mode) => {
       if (api.mode === mode) return;
@@ -164,6 +192,7 @@ export const api = {
       source = new EventSource(BASE + "stream" + (text ? "?" + text : ""));
       source.onopen = () => {
         failures = 0;
+        reopenMs = 2500;
         stopPolling();
         setMode("live");
       };
@@ -189,7 +218,11 @@ export const api = {
         if (source && source.readyState === 2) {
           source.close();
           source = null;
-          if (!closed) setTimeout(open, 5000);
+          if (!closed) {
+            // a closed stream is usually a stale token (401): re-scrape it, then back off up to 60s
+            reopenMs = Math.min(reopenMs * 2, AUTH_BACKOFF_MS);
+            refreshToken().finally(() => setTimeout(open, reopenMs));
+          }
         }
       };
     };

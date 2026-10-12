@@ -6,9 +6,11 @@ import type {
   AtlasSnapshot, ChannelMember, ChannelNote, Contract, FsLike, Persona, PhaseId, SquadAgent,
 } from './contract';
 import { boardRoot, leadChannelName } from './data/root';
-import { computeCounts, currentPhase, readTodos, type TodosCache } from './data/todos';
+import { computeCounts, contractProgress, currentPhase, groupTodos, readTodos, type TodosCache } from './data/todos';
 import { NoteReader, readRoster, unreadCount } from './data/channels';
 import { loadContract, loadPersonas } from './data/personas';
+import { deriveOrchestration, EMPTY_ORCH, type Orch, type WtRow } from './data/orchestration';
+import type { LiveSnapshot, Session } from './orchestra-types';
 import { mergeSquad, parseHerdrStatus } from './data/herdr';
 
 /** Contract stand-in when <pluginRoot>/contracts/operating-contract.json is missing/corrupt. */
@@ -35,6 +37,8 @@ export class SnapshotBuilder {
   private members: ChannelMember[] = [];
   private notes: NoteReader | null = null;
   private todoCache: TodosCache | undefined; // mtime cache kept on the instance across builds
+  private mergedAt: Record<string, number> = {}; // first time an agent was seen merged (stable comms ts)
+  private finishedAt: Record<string, number> = {}; // first time a worker was seen finished (frozen elapsed)
 
   constructor(private readonly fs: FsLike, private readonly pluginRoot: string) {}
 
@@ -89,7 +93,18 @@ export class SnapshotBuilder {
     usage: { tokens: number | null; costUsd: number | null; contextPct: number | null };
     lastSeenSeq: number;
     now: number;
-  }): Promise<AtlasSnapshot> {
+    orch?: Orch;                       // event-fed activity/comms/stages (register.ts reads the orch atom)
+    names?: Record<string, string>;    // raw agent id -> squad display name
+    listed?: { id: string; status: string }[]; // $.agent.list
+    wt?: WtRow[];                      // parseWt(atlas_wt.py status stdout)
+    sessions?: Session[];              // register.ts: subagent transcript tails + atlas_mux workers
+  }): Promise<LiveSnapshot> {
+    const orchestrate = (notes: ChannelNote[], squad: SquadAgent[], findingsText: string) =>
+      deriveOrchestration({
+        orch: live.orch ?? EMPTY_ORCH, names: live.names ?? {}, listed: live.listed ?? [], squad, notes,
+        members: this.members, leadNames: this.candidates, findingsText, wt: live.wt ?? [],
+        heavyTotal: (live.orch ?? EMPTY_ORCH).heavyCalls, now: live.now, mergedAt: this.mergedAt, finishedAt: this.finishedAt,
+      });
     const passthrough = {
       root: this.root,
       sessionId: this.sessionId,
@@ -116,6 +131,11 @@ export class SnapshotBuilder {
         members: [],
         squad: [],
         unread: 0,
+        sessions: live.sessions ?? [],
+        todoGroups: [],
+        contractProgress: [],
+        backlog: { done: 0, total: 0 },
+        ...orchestrate([], [], ''),
       };
     }
     // Re-read the roster so joins/leaves appear; keep the last good one on error.
@@ -132,7 +152,10 @@ export class SnapshotBuilder {
       : [];
     const { panes } = parseHerdrStatus(live.herdrStdout ?? '');
     const phase = currentPhase(read.items, live.headerPhase);
+    const squad = mergeSquad(this.members, notes, panes, live.taskAgents, live.now);
+    const findingsText = (await this.fs.read(`${this.root}/.atlas/.run/findings.json`).catch(() => undefined)) ?? '';
     return {
+      ...orchestrate(notes, squad, findingsText),
       ...passthrough,
       channel: this.channel,
       todos: read.items,
@@ -141,8 +164,12 @@ export class SnapshotBuilder {
       phaseSource: phase.source,
       notes,
       members: this.members,
-      squad: mergeSquad(this.members, notes, panes, live.taskAgents, live.now),
+      squad,
       unread: unreadCount(notes, live.lastSeenSeq, [this.candidates[0] ?? '']),
+      sessions: live.sessions ?? [],
+      todoGroups: groupTodos(read.items, this.contract, this.sessionId),
+      contractProgress: contractProgress(read.items, this.contract, this.sessionId),
+      backlog: read.backlog,
     };
   }
 }

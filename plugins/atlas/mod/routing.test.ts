@@ -5,7 +5,7 @@
 // paths.
 import { describe, expect, test } from 'claude-code/testing';
 import type { On } from 'claude-code';
-import { registerHeaderDrift, registerPromptReinforce, registerRouting } from './routing';
+import { registerHeaderDrift, registerRouting } from './routing';
 import type { Persona } from './contract';
 import { memState } from './test_helpers';
 
@@ -187,9 +187,9 @@ describe('registerRouting agent.spawn', () => {
       expect(result).toEqual({ model: 'parent-model', agentId: 'agent-1' });
     }
     // No persona routing and no drift, yet every spawn shows in the band
-    // (persona 'unknown' resolves through mergeSquad's personaOf).
+    // (persona = the lowercased subagentType, so the band never shows a raw id).
     // (the fake spawn reuses one agentId, so $.state holds a single entry)
-    expect(await recorded()).toEqual([['agent-1', 'unknown']]);
+    expect(await recorded()).toEqual([['agent-1', 'task']]);
     expect(drift).toEqual([]);
   });
 
@@ -318,44 +318,5 @@ describe('registerHeaderDrift', () => {
     const result = await pick('turn.complete')($, answer('anything'), () => ({ text: 'kept' }));
     expect(await misses()).toBe(0);
     expect(result).toEqual({ text: 'kept' });
-  });
-});
-
-describe('registerPromptReinforce', () => {
-  test('adds the line as context and never alters the user text', async () => {
-    const { on, pick, $, recorded, misses } = captureOn();
-    registerPromptReinforce(on, { line: () => 'keep the header' });
-    const seen: SubmitEvent[] = [];
-    await pick('prompt.submit')($, { text: 'user prompt', context: ['prior'] }, (e) => (seen.push(e), { text: e.text }));
-    expect(seen).toHaveLength(1);
-    expect(seen[0]!.text).toBe('user prompt');
-    expect(seen[0]!.context).toEqual(['prior', 'keep the header']);
-  });
-
-  test('adds context when none was present and skips on a null line', async () => {
-    const { on, pick, $, recorded, misses } = captureOn();
-    let line: string | null = 'reminder';
-    registerPromptReinforce(on, { line: () => line });
-    const seen: SubmitEvent[] = [];
-    await pick('prompt.submit')($, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
-    expect(seen[0]!.context).toEqual(['reminder']);
-    line = null;
-    await pick('prompt.submit')($, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
-    expect(seen[1]!.context).toBeUndefined();
-    expect(seen[1]!.text).toBe('p');
-  });
-
-  test('fails open when line() throws', async () => {
-    const { on, pick, $, recorded, misses } = captureOn();
-    registerPromptReinforce(on, {
-      line: () => {
-        throw new Error('boom');
-      },
-    });
-    const seen: SubmitEvent[] = [];
-    await pick('prompt.submit')($, { text: 'p' }, (e) => (seen.push(e), { text: e.text }));
-    expect(seen).toHaveLength(1);
-    expect(seen[0]!.text).toBe('p');
-    expect(seen[0]!.context).toBeUndefined();
   });
 });

@@ -52,7 +52,7 @@ Full laws, decision gate, TodoWrite rules, and mid-run steering: **load `referen
 
 ## The loop (load full text when running a wave)
 
-Orient → Plan (+ TodoWrite) → Dispatch (parallel) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done. **Implementation-unit discipline** governs every implementer dispatch: idempotency check before redoing a unit, an explicit per-unit evidence strategy (`proof-first` / `characterization` / `no-test-exception`) named in the prompt, independent-unit waves isolated via `atlas-worktree`, and a machine-readable per-unit evidence receipt folded into findings.json. Full checklists: `references/implementation-units.md`.
+Orient → Plan (+ TodoWrite) → Dispatch (parallel) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done. **Implementation-unit discipline** governs every implementer dispatch: idempotency check before redoing a unit, an explicit per-unit evidence strategy (`proof-first` / `characterization` / `no-test-exception`) named in the prompt, independent-unit waves isolated via `atlas-worktree`, and a machine-readable per-unit evidence receipt folded into findings.json. **Parallel implementers work on isolated branches:** lead `atlas_wt.py add <name>` per worker (branch `worker/<name>`, worktree `.atlas/wt/<name>`), a verifier per branch, then `atlas_wt.py merge <name>` one at a time only after the verified finding, tests rerun once on the merged tree (protocol: `references/implementation-units.md`; gate (q) blocks unmerged branches). Full checklists: `references/implementation-units.md`.
 
 Full loop, fan-out mechanisms, and definition of done: **load `references/the-loop.md`**.
 
@@ -70,7 +70,7 @@ Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-a
 
 ## Automation (hooks)
 
-17 hook programs / 21 bindings auto-load via `hooks/hooks.json` (including the fallow agent gate and the `worker_report_gate` SubagentStop check). Fail-open on missing deps. Key enforcers: `session_boot`, `prompt_optimizer` (+ arm-early), `bash_advisor`, `fallow_gate`, `dispatch_tripwire`, `completion_gate`, `recall_gate`, `todo_capture`, `worker_report_gate`, `format_after_edit`, `docs_drift_watch`, `connector_credential_watch`, `ingest_session`, `memory_capture`, `chronicle_facet`, `nudge`, `atlas_doctor`. Full contract/env: **load `references/hooks-automation.md`**. JS/TS fallow usage: **load `references/fallow-tools.md`**.
+17 hook programs / 22 bindings auto-load via `hooks/hooks.json` (including the fallow agent gate and the `worker_report_gate` SubagentStop check). Fail-open on missing deps. Key enforcers: `session_boot`, `prompt_optimizer` (+ arm-early), `bash_advisor`, `fallow_gate`, `dispatch_tripwire`, `completion_gate`, `recall_gate`, `todo_capture`, `worker_report_gate`, `format_after_edit`, `docs_drift_watch`, `connector_credential_watch`, `ingest_session`, `memory_capture`, `chronicle_facet`, `nudge`, `atlas_doctor`. Full contract/env: **load `references/hooks-automation.md`**. JS/TS fallow usage: **load `references/fallow-tools.md`**.
 
 ## Solo mode (ATLAS_MODE=solo)
 

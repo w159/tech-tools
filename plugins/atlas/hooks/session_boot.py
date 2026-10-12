@@ -64,7 +64,7 @@ def ensure_dashboard():
             [sys.executable, script, "ensure"],
             capture_output=True,
             text=True,
-            timeout=8,
+            timeout=15,
             env=env,
         )
         if res.returncode != 0:
@@ -775,7 +775,7 @@ def main():
     payload = {}
     with contextlib.suppress(Exception):
         raw = sys.stdin.read()
-        payload = json.loads(raw) if raw.strip() else {}
+        payload = json.loads(raw, strict=False) if raw.strip() else {}
     payload = payload if isinstance(payload, dict) else {}
 
     # Observability DB lifecycle -- fail-open; must not block boot.

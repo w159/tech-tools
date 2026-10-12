@@ -4,7 +4,7 @@
 // file, computeCounts, currentPhase precedence.
 import { describe, expect, test } from 'claude-code/testing';
 import type { Contract, FsLike, TodoItem } from '../contract';
-import { computeCounts, currentPhase, readTodos } from './todos';
+import { DEPT, computeCounts, contractProgress, currentPhase, groupTodos, readTodos } from './todos';
 
 const CONTRACT: Contract = {
   phases: [],
@@ -87,7 +87,7 @@ describe('readTodos', () => {
     expect(items.map(i => i.id)).toEqual(['a', 'b']);
   });
 
-  test('stamps phase: field wins over prefix; unknown prefix and no prefix => research', async () => {
+  test('stamps phase: field wins over prefix; unknown prefix and no prefix stay unphased', async () => {
     const { fs } = memFs(board([
       item({ id: 'a', phase: 'implement', content: '[research] overridden' }),
       item({ id: 'b', content: '[test] prefixed' }),
@@ -95,7 +95,7 @@ describe('readTodos', () => {
       item({ id: 'd', content: 'plain content' }),
     ]));
     const { items } = await readTodos(fs, '/r', 's1', [], CONTRACT);
-    expect(items.map(i => i.phase)).toEqual(['implement', 'test', 'research', 'research']);
+    expect(items.map(i => i.phase)).toEqual(['implement', 'test', undefined, undefined]);
   });
 
   test('cache hit: same mtime returns cached items without re-reading', async () => {
@@ -167,6 +167,77 @@ describe('computeCounts', () => {
     expect(counts.byPhase.research?.done).toBe(1);
     expect(counts.byPhase.implement).toEqual({ done: 1, total: 1 });
     expect(counts.byPhase.theory).toEqual({ done: 0, total: 0 });
+  });
+});
+
+describe('groupTodos / contractProgress', () => {
+  const phased = item; // item() spreads `phase` from over; no content prefix needed
+  const GLYPHED: Contract = { ...CONTRACT, phases: [{ id: 'implement', glyph: 'I' }, { id: 'research', glyph: 'R' }] };
+
+  test('unphased item lands in unsorted, not ARCHIVE; dept + glyph from contract; live first', () => {
+    const groups = groupTodos([
+      phased({ id: 'a', status: 'completed', phase: 'implement' }),
+      phased({ id: 'b', status: 'pending', phase: 'implement' }),
+      phased({ id: 'c', status: 'pending' }),
+    ], GLYPHED, 's1');
+    expect(groups.map(g => g.phase)).toEqual(['implement', 'unsorted']);
+    expect(groups[0]).toMatchObject({ dept: 'FORGE', glyph: 'I', done: 1, total: 2 });
+    expect(groups[0]?.items.map(i => i.id)).toEqual(['b', 'a']); // open before completed
+    expect(groups[1]).toMatchObject({ dept: 'UNSORTED', glyph: '·' });
+    expect(DEPT.research).toBe('ARCHIVE');
+  });
+
+  test('completed backlog of other sessions is not live', () => {
+    const [g] = groupTodos([phased({ id: 'a', session_id: 'old', status: 'completed', phase: 'test' }), phased({ id: 'b', session_id: 'old', status: 'pending', phase: 'test' })], CONTRACT, 's1');
+    expect(g?.items.map(i => [i.id, i.live])).toEqual([['b', true], ['a', false]]);
+  });
+
+  test('contractProgress counts only this session, omits empty phases', () => {
+    const items = [
+      phased({ id: 'a', status: 'completed', phase: 'test' }),
+      phased({ id: 'b', status: 'pending', phase: 'test' }),
+      phased({ id: 'c', session_id: 'old', status: 'completed', phase: 'verify' }),
+      phased({ id: 'd' }),
+    ];
+    expect(contractProgress(items, CONTRACT, 's1')).toEqual([{ phase: 'test', done: 1, total: 2 }]);
+  });
+
+  test('advisor / carried / manual-unphased rows never reach contract groups or progress; advisors collapse to one group', () => {
+    const o = (id: string, origin: string, over: Partial<TodoItem> = {}) => ({ ...item({ id, ...over }), origin }) as TodoItem;
+    const items = [
+      o('s-ph', 'session', { phase: 'test', status: 'completed' }),
+      o('s-un', 'session'),
+      o('adv1', 'advisor'),
+      o('adv2', 'advisor', { phase: 'test' }),
+      o('adv3', 'advisor', { status: 'completed' }),
+      o('car', 'carried', { session_id: 'old' }),
+      o('man', 'manual'),
+      o('man-ph', 'manual', { phase: 'verify', session_id: 'old' }),
+    ];
+    const groups = groupTodos(items, CONTRACT, 's1');
+    expect(groups.map(g => g.phase)).toEqual(['test', 'verify', 'unsorted', 'advisor']);
+    expect(groups.find(g => g.phase === 'unsorted')?.items.map(i => i.id)).toEqual(['s-un']);
+    expect(groups.find(g => g.phase === 'test')?.items.map(i => i.id)).toEqual(['s-ph']);
+    expect(groups.at(-1)).toMatchObject({ phase: 'advisor', total: 2 });
+    expect(contractProgress(items, CONTRACT, 's1')).toEqual([{ phase: 'test', done: 1, total: 1 }]);
+  });
+});
+
+describe('carried rows re-stamped to the current session (defect A)', () => {
+  const car = (id: string, phase: TodoItem['phase']) => ({ ...item({ id, phase, status: 'pending', session_id: 's-new' }), origin: 'carried' }) as TodoItem;
+  const sess = (id: string, phase: TodoItem['phase']) => ({ ...item({ id, phase, status: 'pending', session_id: 's-new' }), origin: 'session' }) as TodoItem;
+  test('a fresh session with only carried phased rows has no groups and no progress', () => {
+    const items = [car('r', 'research'), car('i', 'implement'), car('v', 'verify')];
+    expect(contractProgress(items, CONTRACT, 's-new')).toEqual([]);
+    expect(groupTodos(items, CONTRACT, 's-new')).toEqual([]);
+  });
+  test('own session rows still count beside carried ones', () => {
+    const items = [car('r', 'research'), sess('t', 'test')];
+    expect(contractProgress(items, CONTRACT, 's-new')).toEqual([{ phase: 'test', done: 0, total: 1 }]);
+    expect(groupTodos(items, CONTRACT, 's-new').map(g => g.phase)).toEqual(['test']);
+  });
+  test('an id with no rows of its own yields no progress', () => {
+    expect(contractProgress([sess('t', 'test')], CONTRACT, 'fresh-made-up')).toEqual([]);
   });
 });
 

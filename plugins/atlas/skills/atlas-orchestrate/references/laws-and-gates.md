@@ -14,6 +14,8 @@ Laws, decision gate, visible plan, steering
 6. **Gate writes - and gate completion.** Subagents may freely **run and read** (start dev servers, hit routes, drive the browser, run the suite, issue read-only DB queries). Stop for explicit approval before anything that **writes**: edits committed as a deliverable, migrations, deletes, `git push`, dependency installs, `.env*` changes, or anything crossing >1 service boundary. Completion is gated too - see "Definition of done."
 7. **Scaffold per-root, never the workspace root.** Detect the *project root* and the *codebase roots* inside it; artifacts live under those (`docs/` per root), never in a parent holding multiple unrelated projects. See `references/scaffolding.md`.
 
+**Writer isolation is concrete:** parallel implementers each get `atlas_wt.py add <name>` (branch `worker/<name>`, worktree `.atlas/wt/<name>`), a verifier per branch, and the lead merges with `atlas_wt.py merge <name>` one at a time only after the verified finding, rerunning tests once on the merged tree. Protocol: `implementation-units.md` section 3. The completion gate blocks (q) on unmerged worker branches (`ATLAS_WT_GATE=off` opts out).
+
 
 ## The decision gate (mechanical - run this FIRST, every task)
 

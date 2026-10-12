@@ -306,6 +306,39 @@ def _cleanup(top, wt, branch, drop_branch=True):
         _git(["branch", "-D", branch], top)
 
 
+_SWEEP_TERMINAL = ("rejected", "applied", "verified")
+_SWEEP_BUSY = ("queued", "running", "verifying", "ready")
+
+
+def sweep_stale(conn, days=7, dry_run=False) -> list[dict]:
+    """Remove selffix worktrees older than `days` whose finding is terminal or gone.
+    Kept: younger trees, and anything queued/running/verifying/ready or still
+    open/accepted/regressed. Removal reuses _cleanup."""
+    out = []
+    cutoff = time.time() - days * 86400
+    for wt in sorted((_home() / "worktrees").glob("*-selffix-*")):
+        m = re.search(r"-selffix-(\d+)$", wt.name)
+        if not m or not wt.is_dir() or wt.stat().st_mtime > cutoff:
+            continue
+        f = _row(conn, int(m[1]))
+        if f and (
+            f["status"] not in _SWEEP_TERMINAL or f.get("fix_state") in _SWEEP_BUSY
+        ):
+            out.append({"worktree": str(wt), "action": "keep", "why": "finding active"})
+            continue
+        rc, common = _git(
+            ["rev-parse", "--path-format=absolute", "--git-common-dir"], wt
+        )
+        if rc:
+            out.append({"worktree": str(wt), "action": "keep", "why": "repo not found"})
+            continue
+        why = "finding missing" if not f else f"finding {f['status']}"
+        out.append({"worktree": str(wt), "action": "remove", "why": why})
+        if not dry_run:
+            _cleanup(os.path.dirname(common), str(wt), f"atlas/selffix-{m[1]}")
+    return out
+
+
 def _start(conn, f, top) -> str:
     """queued/none -> running. Returns a one-line outcome."""
     fid = f["id"]
@@ -490,6 +523,14 @@ def tick(conn=None) -> dict:
     conn = conn or atlas_db.connect()
     notes: list[str] = []
     try:
+        try:  # cheap age sweep under the lock; never blocks the tick
+            notes += [
+                f"swept {r['worktree']} ({r['why']})"
+                for r in sweep_stale(conn)
+                if r["action"] == "remove"
+            ]
+        except Exception as e:
+            notes.append(f"sweep failed: {e}")
         if own:
             atlas_db.init(conn)
             try:
@@ -721,7 +762,17 @@ def main(argv=None) -> int:
         "--dry-run", action="store_true", help="print picks; create nothing"
     )
     ap.add_argument("--tick", action="store_true", help="run one real tick")
+    ap.add_argument(
+        "--sweep", action="store_true", help="remove stale terminal worktrees (>7d)"
+    )
     a = ap.parse_args(argv)
+    if a.sweep:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        for r in sweep_stale(conn, dry_run=a.dry_run):
+            verb = ("WOULD " if a.dry_run else "") + r["action"].upper()
+            print(f"{verb}  {r['worktree']}  -- {r['why']}")
+        return 0
     if a.tick:
         print(json.dumps(tick(), indent=2))
         return 0

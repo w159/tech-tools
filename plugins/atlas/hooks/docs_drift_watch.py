@@ -118,7 +118,7 @@ def _cached_changed_paths(root: Path, state: dict) -> list:
 def main() -> int:
     try:
         raw = sys.stdin.read()
-        data = json.loads(raw) if raw.strip() else {}
+        data = json.loads(raw, strict=False) if raw.strip() else {}
     except (json.JSONDecodeError, ValueError):
         return 0
     if not isinstance(data, dict):

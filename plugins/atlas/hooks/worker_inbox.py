@@ -352,7 +352,11 @@ def identity(payload=None, env=None):
     if name:
         return name, root, ()
     sid = str(payload.get("session_id") or "")
-    if sid and "/subagents/" not in str(payload.get("transcript_path") or ""):
+    # agent_id marks a subagent (documented); the path is the pre-field fallback.
+    in_subagent = bool(payload.get("agent_id")) or "/subagents/" in str(
+        payload.get("transcript_path") or ""
+    )
+    if sid and not in_subagent:
         lead = todo.lead_name(sid)
         if any(
             c.get("lead") == lead for c in todo._reg_read(root)["channels"].values()

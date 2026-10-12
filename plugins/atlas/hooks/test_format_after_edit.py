@@ -262,7 +262,7 @@ class MainInProcessTest(unittest.TestCase):
 
         class Proc:
             returncode = 1
-            stderr = "error: cannot parse"
+            stderr = "Segmentation fault"
 
         with (
             mock.patch.object(format_after_edit.shutil, "which", return_value="/x"),
@@ -297,9 +297,8 @@ class MainInProcessTest(unittest.TestCase):
             returncode = 1
 
         cases = {
-            "parse": dict(return_value=Bad()),
+            "crash": dict(return_value=Bad()),
             "timeout": dict(side_effect=subprocess.TimeoutExpired("x", 55)),
-            "missing": dict(side_effect=FileNotFoundError("x")),
         }
         for reason, kw in cases.items():
             before_rows = len(self._skip_rows())
@@ -316,6 +315,56 @@ class MainInProcessTest(unittest.TestCase):
             faults = atlas_faults.load()
             self.assertEqual(len(faults), before_faults + 1, reason)
             self.assertIn("formatter skipped: " + reason, str(faults[-1]), reason)
+
+    def _faults_and_rows(self, which, run_kw, sid="s1", target=None):
+        import atlas_faults
+
+        bf, br = len(atlas_faults.load()), len(self._skip_rows())
+        payload = _payload("Edit", target or self.target, cwd=self.tmp)
+        payload["session_id"] = sid
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value=which),
+            mock.patch.object(format_after_edit.subprocess, "run", **run_kw),
+        ):
+            self._run_main(payload)
+        return len(atlas_faults.load()) - bf, len(self._skip_rows()) - br
+
+    def test_missing_is_one_friction_row_per_session_ext_and_no_fault(self):
+        a = self._faults_and_rows(None, {}, sid="dedupe")
+        b = self._faults_and_rows(None, {}, sid="dedupe")
+        c = self._faults_and_rows(None, {}, sid="other")
+        self.assertEqual((a, b, c), ((0, 1), (0, 0), (0, 1)))
+
+    def test_runtime_filenotfound_is_missing_no_fault(self):
+        r = self._faults_and_rows(
+            "/x", dict(side_effect=FileNotFoundError("x")), sid="fnf"
+        )
+        self.assertEqual(r[0], 0)
+
+    def test_parse_error_is_friction_only_no_fault(self):
+        class Proc:
+            returncode = 2
+            stderr = "error: Failed to parse x.py:99:27: missing closing quote"
+
+        r = self._faults_and_rows("/x", dict(return_value=Proc()), sid="p")
+        self.assertEqual(r, (0, 1))
+
+    def test_prettier_resolved_from_file_ancestor_not_cwd(self):
+        root = tempfile.mkdtemp()
+        bin_dir = os.path.join(root, "node_modules", ".bin")
+        os.makedirs(bin_dir)
+        prettier = os.path.join(bin_dir, "prettier")
+        with open(prettier, "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(prettier, 0o755)
+        sub = os.path.join(root, "pkg", "src")
+        os.makedirs(sub)
+        elsewhere = tempfile.mkdtemp()
+        with mock.patch.object(format_after_edit.shutil, "which", return_value=None):
+            cands = format_after_edit.candidates_for(
+                os.path.join(sub, "a.ts"), elsewhere
+            )
+        self.assertEqual(cands[0][0], prettier)
 
     def test_skip_with_db_unavailable_still_exits_zero(self):
         import atlas_db

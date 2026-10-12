@@ -57,7 +57,7 @@ TOOLS FORBIDDEN: package installs - migrations - .env edits - git push  (+ Write
 DELIVERABLE: <exact artifact: a report, a diff, a findings entry path>
 SUCCESS CRITERIA: <bullets, each independently checkable, each with required evidence>
 OUT OF SCOPE: <bullets, what NOT to touch>
-STOP CONDITIONS: <when to halt and report back rather than push through>
+STOP CONDITIONS: <when to halt and report back rather than push through>. You do not dispatch subagents; if the work needs splitting, report it in NEXT.
 REPORT: (required, every atlas dispatch) the final message is the fixed container below and nothing else.
   STATUS: DONE | FAILED | BLOCKED   (first non-empty line; pattern ^STATUS: (DONE|FAILED|BLOCKED)\s*$)
   STEPS: <done>/<total>
@@ -88,7 +88,7 @@ For how to slice work into stages and when to fan out at all, see `multi-stage-p
   override at dispatch time with a stated reason; "this feels hard" is not one. An underspecified
   prompt is the usual cause, and the fix is the prompt.
 - Read-only roles (explore, verify, db-probe, ui-test) -> `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]`.
-- Parallel editors of the same tree -> `isolation: "worktree"` so they don't collide.
+- Parallel editors of the same tree -> `atlas_wt.py add <name>` per writer (worktree `.atlas/wt/<name>`, branch `worker/<name>`); the brief names that path as the ONLY place the worker edits and demands branch + head sha in the report. Verifier per branch, then `atlas_wt.py merge <name>` one at a time (see `implementation-units.md`). Harness `isolation: "worktree"` remains acceptable where the lead cannot pre-create worktrees.
 - Cap long/background jobs with a turn budget. Spawn all independent jobs in ONE message.
 - **Subagents never talk to the user.** They cannot use AskUserQuestion; a subagent that
   hits a genuinely user-owned decision (destructive action, scope fork, missing
