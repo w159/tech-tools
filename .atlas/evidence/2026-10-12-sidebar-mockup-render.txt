@@ -1,0 +1,40 @@
+--- populated
+Atlas  implement, 2 of 5 done
+◆━━━━◆━━━━◆━━━━◆━━━━◉────○
+research theory test validate implement verify
+ 
+✓ research  map auth path
+✓ test      failing tripwire test
+◉ implement sidebar module                          impl-ui
+·           gate data                            impl-gates
+○ verify    live tmux check
+ 
+Team                                   lead is conducting 1
+▸ lead        Agent                                     now
+  explorer-1  Grep                                      now
+  impl-auth   input
+  runner-1    failed
+To lead  [ type a message, Enter sends ]
+ 
+Gates                                                2 open
+✗ verification coverage: run the hooks suite
+✗ todos open: 4
+✓ header matched (implement)
+✓ routing: 38 lean-ctx, 0 bypassed
+--- empty
+Atlas  implement, 0 of 0 done
+◆━━━━◆━━━━◆━━━━◆━━━━◉────○
+research theory test validate implement verify
+ 
+nothing planned
+ 
+Team                                           lead is idle
+nobody dispatched yet, ask the lead to start a worker
+▸ lead  idle
+To lead  [ type a message, Enter sends ]
+ 
+Gates                                                2 open
+✗ verification coverage: run the hooks suite
+✗ todos open: 4
+✓ header matched (implement)
+✓ routing: 38 lean-ctx, 0 bypassed

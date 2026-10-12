@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [11.1.2] - 2026-10-12 -- atlas 11.1.2: sidebar matches the plan mockup
+
+- Sidebar matches the plan mockup: frameless sections, compact route line, task rows only, plain team rows, single gates list.
+- Route: `Atlas  <phase>, D of T done`, then `◆━━━━◆━━━━◉────○` with fixed 4-column segments and one plain label row. Tasks: one row each (status glyph, phase on first task, title, owner); `nothing planned` when empty. Team: right-aligned `lead is conducting N` / `lead is idle`, `▸` selection rows with tool and elapsed, no badge chips, portrait or bubble. Gates: right-aligned `N open` / `all clear` and one row per item, no duplicate summary. Advisor notes are frameless. Theme-key colors, Buttons, handlers and hotkeys unchanged.
+- Known gap: member rows show the tool name only; the activity data carries no target (file or command).
+
 ## [11.1.1] - 2026-10-12 -- atlas 11.1.1: accurate cost reporting
 
 ### Cost accuracy
