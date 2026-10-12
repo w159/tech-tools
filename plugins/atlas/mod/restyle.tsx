@@ -38,7 +38,7 @@ const phaseCol = (phase: PhaseId): string => {
  *  upgrade via sprites/grid.ts frameToCells when the pixel globe is wanted. */
 const GLOBE = ['◐', '◒', '◓', '◑'] as const
 
-const PHASE_RE = /\b(research|theory|test|validate|implement|verify|done|blocked)\b/
+export const PHASE_RE = /\b(research|theory|test|validate|implement|verify|done|blocked)\b/
 
 // ---- pure formatters (exported for tests) ----
 

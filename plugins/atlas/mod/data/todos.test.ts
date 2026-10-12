@@ -45,14 +45,26 @@ const item = (over: Partial<TodoItem>): TodoItem => ({
 });
 
 describe('readTodos', () => {
-  test('keeps session items, drops other sessions', async () => {
+  test('keeps session items, drops other sessions completed items', async () => {
+    // Completed stays session-scoped so the done count is this session's.
     const { fs } = memFs(board([
-      item({ id: 'a', session_id: 's1' }),
-      item({ id: 'b', session_id: 's2' }),
-      item({ id: 'c', session_id: undefined }), // no session_id
+      item({ id: 'a', session_id: 's1', status: 'completed' }),
+      item({ id: 'b', session_id: 's2', status: 'completed' }),
+      item({ id: 'c', session_id: undefined, status: 'completed' }), // no session_id
     ]));
     const { items } = await readTodos(fs, '/r', 's1', [], CONTRACT);
     expect(items.map(i => i.id)).toEqual(['a']);
+  });
+
+  test('keeps the open backlog (pending/in_progress) from any session', async () => {
+    const { fs } = memFs(board([
+      item({ id: 'a', session_id: 'old', status: 'pending' }),
+      item({ id: 'b', session_id: undefined, status: 'in_progress' }),
+      item({ id: 'c', session_id: 'old', status: 'completed' }),
+      item({ id: 'd', session_id: 'old', status: 'pending', archived: true }),
+    ]));
+    const { items } = await readTodos(fs, '/r', 's1', [], CONTRACT);
+    expect(items.map(i => i.id)).toEqual(['a', 'b']);
   });
 
   test('drops archived even when session matches', async () => {
@@ -64,15 +76,15 @@ describe('readTodos', () => {
     expect(items.map(i => i.id)).toEqual(['b']);
   });
 
-  test('keeps in_progress items owned by channel members across sessions', async () => {
+  test('open items stay across sessions regardless of owner; archived never', async () => {
     const { fs } = memFs(board([
       item({ id: 'a', session_id: 'other', status: 'in_progress', owner: 'DataTodos' }),
       item({ id: 'b', session_id: 'other', status: 'in_progress', owner: 'Stranger' }),
-      item({ id: 'c', session_id: 'other', status: 'pending', owner: 'DataTodos' }),
+      item({ id: 'c', session_id: 'other', status: 'completed', owner: 'DataTodos' }),
       item({ id: 'd', session_id: 'other', status: 'in_progress', owner: 'DataTodos', archived: true }),
     ]));
     const { items } = await readTodos(fs, '/r', 's1', ['DataTodos', 'lead-01a122'], CONTRACT);
-    expect(items.map(i => i.id)).toEqual(['a']);
+    expect(items.map(i => i.id)).toEqual(['a', 'b']);
   });
 
   test('stamps phase: field wins over prefix; unknown prefix and no prefix => research', async () => {

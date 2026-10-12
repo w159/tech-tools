@@ -174,6 +174,16 @@ test('the lead is not a squad sprite', () => {
   expect(out[0]?.name).toBe('impl-auth');
 });
 
+test('a member whose role is lead is not a squad sprite, whatever its name', () => {
+  const out = mergeSquad([member({ name: 'selffix', role: 'lead' }), member({ name: 'impl-auth' })], [], [], [], NOW);
+  expect(out.map((a) => a.name)).toEqual(['impl-auth']);
+});
+
+test('a member with no pane and no note is parked, never running', () => {
+  const out = mergeSquad([member({ name: 'impl-auth' })], [], [], [], NOW);
+  expect(out[0]?.state).toBe('parked');
+});
+
 test('task agents win same-name clashes and borrow colony pane ids and notes', () => {
   const task = squad({ name: 'impl-auth', persona: 'implementer', state: 'parked', model: 'sonnet', effort: 'low' });
   const other = squad({ name: 'tri-old1', persona: 'unknown', state: 'finished' });

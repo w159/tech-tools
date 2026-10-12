@@ -11,7 +11,7 @@ import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './c
 import { completeProps } from './props';
 import { PHASES, intentToArgv } from './intents';
 import { registerRouting, registerHeaderDrift, registerPromptReinforce } from './routing';
-import { registerRestyle } from './restyle';
+import { PHASE_RE, registerRestyle } from './restyle';
 import { registerNotify } from './notify';
 
 const REBUILD_MS = 1500;
@@ -21,7 +21,7 @@ const SPRITES_PANE_ID = 'atlas-sprites';
 const BAND_KEY = 'atlas-band';
 const PANE_KEY = 'atlas-pane';
 const SPRITES_KEY = 'atlas-sprites';
-const BAND_MODULE = './band.tsx';
+const BAND_FILE = 'band.tsx';
 const STOP_CONFIRM = ['Kill it', 'Leave it'] as const;
 
 type PaneTab = 'colony' | 'channel' | 'board' | 'squad' | 'collab';
@@ -33,6 +33,7 @@ let interactive = false;
 let builder: SnapshotBuilder | null = null;
 let snapshot: AtlasSnapshot | null = null;
 let tab: PaneTab = 'colony';
+let paneOpened = false; // herdrTick stays idle until the pane has been opened
 let herdrStdout = '';
 let headerPhase: PhaseId | null = null;
 let headerMisses = 0;
@@ -59,27 +60,25 @@ function folderOf(cwd: string): string {
 	return cut < 0 ? stripped : stripped.slice(cut + 1);
 }
 
-/** PhaseId the answer's header first line pins (`# atlas: [implement] ...`), else null. */
-function headerPhaseOf(answer: string): PhaseId | null {
-	const contract = snapshot?.contract;
-	if (!contract || contract.headerFirstLinePattern === '') return null;
+/** PhaseId the answer's header first line pins (`ATLAS | <glyph> <phase>[ n/m] | <state>`), else null. */
+export function headerPhaseOf(answer: string, pattern: string): PhaseId | null {
+	if (pattern === '') return null;
 	const firstLine = answer.split('\n', 1)[0] ?? '';
 	let re: RegExp;
 	try {
-		re = new RegExp(contract.headerFirstLinePattern);
+		re = new RegExp(pattern);
 	} catch {
 		return null;
 	}
 	if (!re.test(firstLine)) return null;
-	const m = /\[([a-z]+)\]/i.exec(firstLine);
-	const phase = m?.[1]?.toLowerCase();
+	const phase = PHASE_RE.exec(firstLine)?.[1];
 	return phase !== undefined && (PHASES as readonly string[]).includes(phase) ? (phase as PhaseId) : null;
 }
 
 /** Fresh Client props for the posting instance (band or pane geometry). */
 function clientPropsFor(module: string): Record<string, unknown> {
 	if (snapshot === null) return {};
-	if (module === BAND_MODULE) {
+	if (module.endsWith(BAND_FILE)) { // engine reports the path under the plugin folder, e.g. mod/band.tsx
 		return completeProps({ snapshot, columns: bandGeom.columns, maxRows: bandGeom.maxRows, usage });
 	}
 	return completeProps({ snapshot, columns: paneGeom.columns, rows: paneGeom.rows, usage });
@@ -188,7 +187,8 @@ async function rebuild($: EngineInterface): Promise<void> {
 		snapshot = snap;
 		for (const note of snap.notes) if (note.seq > lastSeenSeq) lastSeenSeq = note.seq;
 		if (interactive) $.ui.invalidate('ui.render');
-	} catch {
+	} catch (err) {
+		$.ui.log(`atlas: rebuild failed: ${String(err)}`, { to: 'debug' });
 		// keep the last good snapshot
 	}
 }
@@ -202,9 +202,9 @@ async function rebuildTick($: EngineInterface): Promise<void> {
 	await rebuild($);
 }
 
-/** 5 s tick: herdr pane status, only while the Colony tab is showing. */
+/** 5 s tick: herdr pane status, only once the pane was opened and the Colony tab is showing. */
 async function herdrTick($: EngineInterface): Promise<void> {
-	if (tab !== 'colony' || snapshot === null) return;
+	if (!paneOpened || tab !== 'colony' || snapshot === null) return;
 	const out = await $.process
 		.run(['python3', `${$.plugin.root}/scripts/atlas_herdr.py`, 'status'])
 		.catch(() => undefined);
@@ -264,6 +264,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			// and its agents are its own.
 			usage = { tokens: null, costUsd: null, contextPct: null };
 			taskAgents = [];
+			paneOpened = false;
 			if (!modOn) return next(e);
 			interactive = e.isInteractive;
 			builder = new SnapshotBuilder(engineFs($), $.plugin.root);
@@ -283,8 +284,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 					void herdrTick($);
 				});
 			}
-		} catch {
+		} catch (err) {
 			// a failed boot must not block the session
+			$.ui.log(`atlas: boot failed: ${String(err)}`, { to: 'debug' });
 		}
 		return next(e);
 	});
@@ -310,7 +312,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			if (!modOn) return next(e);
 			for (const msg of pendingDrift.splice(0)) $.ui.log(msg, { to: 'debug' });
 			if (e.agentId === undefined) {
-				headerPhase = headerPhaseOf(e.answer);
+				headerPhase = headerPhaseOf(e.answer, snapshot?.contract.headerFirstLinePattern ?? '');
 			} else {
 				for (const agent of taskAgents) {
 					if (agent.name === e.agentId) agent.state = 'finished';
@@ -355,6 +357,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		}
 	});
 
+	// A Client this plugin drew failed: surface it in the debug log.
+	on('ui.fault', ($, e, next) => {
+		$.ui.log(`atlas: ${e.component} ${e.module} ${e.phase}: ${e.reason}`, { to: 'debug' });
+		return next(e);
+	});
+
 	// Client posts: validate the intent, run it, answer with fresh props.
 	on('ui.message', async ($, e, next) => {
 		try {
@@ -382,6 +390,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			if (res.kind === 'ui') {
 				if (res.tab !== undefined) tab = res.tab as PaneTab;
 				else tab = 'colony'; // inspect: focus the colony
+				paneOpened = true;
 				await $.ui.open({ id: PANE_ID, title: 'Atlas' });
 				return { props: clientPropsFor(e.module) };
 			}
@@ -398,6 +407,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	on('command.run', { command: 'atlas-cc' }, async ($, e) => {
 		const arg = e.args.trim().toLowerCase();
 		if (arg === 'colony' || arg === 'channel' || arg === 'board' || arg === 'squad' || arg === 'collab') tab = arg;
+		paneOpened = true;
 		await $.ui.open({ id: PANE_ID, title: 'Atlas' });
 		void rebuild($);
 		return {};

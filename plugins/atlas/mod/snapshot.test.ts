@@ -96,10 +96,10 @@ describe('SnapshotBuilder', () => {
     expect((await b2.build(live())).root).toBe('/over');
   });
 
-  test('session filter: own session plus member in_progress, never archived', async () => {
+  test('filter: own session plus the open backlog of any session, never archived', async () => {
     const { b } = await newBuilder();
     const snap = await b.build(live());
-    expect(snap.todos.map((t) => t.id)).toEqual(['t1', 't2', 't3']);
+    expect(snap.todos.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4']);
     expect(snap.todos.every((t) => !t.archived)).toBe(true);
     expect(snap.todos.find((t) => t.id === 't3')?.phase).toBe('research'); // stamped from prefix default
   });
@@ -109,9 +109,9 @@ describe('SnapshotBuilder', () => {
     const snap = await b.build(live());
     expect(snap.counts).toEqual({
       done: 0,
-      total: 3,
+      total: 4,
       byPhase: {
-        research: { done: 0, total: 2 },
+        research: { done: 0, total: 3 },
         theory: { done: 0, total: 1 },
         test: { done: 0, total: 0 },
         validate: { done: 0, total: 0 },
@@ -182,6 +182,18 @@ describe('SnapshotBuilder', () => {
     expect(veri?.state).toBe('idle');
     expect(veri?.persona).toBe('verifier');
     expect(snap.squad.find((s) => s.name === LEAD)).toBeUndefined();
+  });
+
+  test('roster is re-read on every build: a new member appears, a read error keeps the last roster', async () => {
+    const { fs, b } = await newBuilder();
+    expect((await b.build(live())).members.map((m) => m.name)).not.toContain('late-joiner');
+    const channels = `${ROOT}/.atlas/.run/channels.json`;
+    fs.write(channels, JSON.stringify({ channels: { [LEAD]: { members: [{ name: 'late-joiner', role: 'atlas:implementer' }, { name: LEAD, role: 'lead' }] } } }));
+    expect((await b.build(live())).members.map((m) => m.name)).toEqual(['late-joiner', LEAD]);
+    const broken = { ...fs, read: async (p: string) => { if (p === channels) throw new Error('boom'); return fs.read(p); } };
+    const keep = new SnapshotBuilder(broken, PLUGIN);
+    await keep.init(CWD, {}, SESSION, 'tech-tools', 'main');
+    expect((await keep.build(live())).members.length).toBe(0); // never throws
   });
 
   test('live pass-throughs land on every snapshot field', async () => {

@@ -118,6 +118,12 @@ export class SnapshotBuilder {
         unread: 0,
       };
     }
+    // Re-read the roster so joins/leaves appear; keep the last good one on error.
+    const roster = await readRoster(this.fs, this.root, this.candidates).catch(() => undefined);
+    if (roster !== undefined) {
+      this.channel = roster.channel;
+      this.members = roster.members;
+    }
     const memberNames = this.members.map((m) => m.name);
     const read = await readTodos(this.fs, this.root, this.sessionId, memberNames, this.contract, this.todoCache);
     this.todoCache = read.cache;

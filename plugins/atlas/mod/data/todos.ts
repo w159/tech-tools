@@ -30,9 +30,9 @@ function resolvePhase(item: TodoItem, contract: Contract): PhaseId | undefined {
 }
 
 /**
- * Read and slice the session's todos. Keep items where
- * `session_id === sessionId` or (status 'in_progress' and owner in memberNames),
- * and never archived. `phase` is stamped on every returned item from the field
+ * Read and slice the board's todos. Keep non-archived items that are open
+ * (status 'pending' or 'in_progress', any session: the backlog) or belong to
+ * this session (so completed counts stay session-scoped). `phase` is stamped on every returned item from the field
  * or the content prefix. Missing or corrupt file => empty list, never throws.
  * Cache is reused verbatim (no re-filter, no re-read) while stat mtimeMs is
  * unchanged; it is only valid for the same root/session/memberNames context.
@@ -62,7 +62,7 @@ export async function readTodos(
   const items = parsed
     .filter(it => !it.archived)
     .filter(it => it.session_id === sessionId ||
-      (it.status === 'in_progress' && it.owner !== undefined && memberNames.includes(it.owner)))
+      it.status === 'pending' || it.status === 'in_progress')
     .map(it => ({ ...it, phase: resolvePhase(it, contract) ?? 'research' as PhaseId }));
   const next: TodosCache = { mtimeMs: st ? st.mtimeMs : 0, items };
   return { items, cache: next };

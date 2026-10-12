@@ -7,7 +7,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { intentToArgv } from './intents';
-import { register } from './register';
+import { headerPhaseOf, register } from './register';
 
 // ---- structural event shapes (d.ts: SessionStartInput, RenderInputOf, UiMessageArgument) ----
 
@@ -189,6 +189,44 @@ describe('ui.message intent handling', () => {
     await pick('ui.message')(engine, event, noopNext);
     expect(rec.asks.length).toBe(2);
     expect(rec.runs.at(-1)).toEqual(cliArgv(intentToArgv(kill, { pluginRoot: '/plugins/atlas', root: '', channel: null })));
+  });
+});
+
+describe('header phase', () => {
+  const PATTERN = '^ATLAS \\| \\S+ (research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)? \\| \\S';
+  test('reads the phase from the live `ATLAS | <glyph> <phase> | <state>` header', () => {
+    expect(headerPhaseOf('ATLAS | 🏁 done | shipped\nbody', PATTERN)).toBe('done');
+    expect(headerPhaseOf('ATLAS | 🔨 implement 2/5 | writing', PATTERN)).toBe('implement');
+  });
+  test('null when the line misses the contract pattern or the pattern is empty', () => {
+    expect(headerPhaseOf('hello done', PATTERN)).toBeNull();
+    expect(headerPhaseOf('ATLAS | 🏁 done | x', '')).toBeNull();
+  });
+});
+
+describe('engine module path and faults', () => {
+  test('stop intent from the engine-style path mod/band.tsx still answers with band props', async () => {
+    const { on, pick } = captureOn();
+    const { engine } = stubEngine();
+    await register(on, {});
+    await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
+    const out = (await pick('ui.message')(engine, {
+      surface: 'terminal', component: 'AbovePrompt', requestId: 'band', element: 'k',
+      module: 'mod/band.tsx', data: { t: 'stop', run: 'r' },
+    }, noopNext)) as { props?: Record<string, unknown> };
+    // Band props carry maxRows; pane props carry rows.
+    expect(out.props).toHaveProperty('maxRows');
+  });
+
+  test('ui.fault logs component, module, phase and reason to debug, then passes on', async () => {
+    const { on, pick } = captureOn();
+    const { engine } = stubEngine();
+    const logs: unknown[][] = [];
+    (engine.ui as unknown as { log: (...a: unknown[]) => void }).log = (...a) => { logs.push(a); };
+    await register(on, {});
+    const e = { surface: 'terminal', component: 'Pane', requestId: 'atlas', element: 'k', module: 'mod/pane/board.tsx', phase: 'load', reason: 'boom' };
+    expect(await pick('ui.fault')(engine, e, noopNext)).toEqual(e);
+    expect(logs).toEqual([['atlas: Pane mod/pane/board.tsx load: boom', { to: 'debug' }]]);
   });
 });
 

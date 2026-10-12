@@ -137,7 +137,9 @@ function colonyState(
     return quietPastStuck ? 'stuck' : status === 'idle' ? 'idle' : 'running';
   }
   if (noteExitCode !== null) return noteExitCode === 0 ? 'finished' : 'failed';
-  // ponytail: no-note members read as running (ChannelMember has no joined timestamp to age from)
+  // No live pane and no note: nothing proves it is working, and ChannelMember has no joined
+  // timestamp to age from. 'parked' (not 'idle', which means a live idle herdr pane).
+  if (lastAtMs === undefined) return 'parked';
   return quietPastStuck ? 'stuck' : 'running';
 }
 
@@ -173,8 +175,9 @@ export function mergeSquad(
   const colony: SquadAgent[] = [];
   for (const m of Array.isArray(members) ? members : []) {
     const name = typeof m?.name === 'string' ? m.name : '';
-    // The lead is the titan in the band (plan §3.1), not a squad sprite.
-    if (!name || name === 'lead' || name.startsWith('lead-')) continue;
+    // The lead is the titan in the band (plan §3.1), not a squad sprite. A lead can carry any
+    // member name (e.g. 'selffix'), so role is the authority; the name prefix covers role-less rows.
+    if (!name || m.role === 'lead' || name === 'lead' || name.startsWith('lead-')) continue;
     const last = lastNote.get(name);
     const exit = exitNote.get(name);
     const pane = (m.pane_id ? panes.find((p) => p.id === m.pane_id) : undefined)
