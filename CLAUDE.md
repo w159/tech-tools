@@ -90,6 +90,7 @@ to implement or "make it take effect."
 | Update project knowledge | Edit `docs/…` |
 | "Make my install pick this up" | Ship source; tell user to reinstall — **no cache writes** |
 | Ambiguous develop vs operate | Default to **develop source**; confirm only if truly ambiguous |
+| Dispatch any `atlas:*` agent | Put a line-anchored `TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read) + serena (activate_project, find_symbol); context-mode for noisy output.` line in the prompt (omp: `ToolSearch` waived) or the dispatch is denied (`dispatch_denied:toolkit`) |
 
 ---
 
