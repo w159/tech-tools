@@ -5,7 +5,9 @@
 // constraints honored: static imports only, `$` flows only through top-level
 // `function` declarations and handler parameters, and no ui.* call runs unless
 // a person is at the prompt (hooks also run headless, surface null).
+import { atom, read, update } from 'claude-code';
 import type { EngineInterface, On, PluginOptions } from 'claude-code';
+import type { PaneTab, Usage } from '../types';
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
 import { completeProps } from './props';
@@ -24,32 +26,36 @@ const SPRITES_KEY = 'atlas-sprites';
 const BAND_FILE = 'band.tsx';
 const STOP_CONFIRM = ['Kill it', 'Leave it'] as const;
 
-type PaneTab = 'colony' | 'channel' | 'board' | 'squad' | 'collab';
+// ---- session state ($.state: per-session, versioned, survives module reload) --
+// Contract in types/index.d.ts. Render hooks read these (a write redraws exactly
+// the readers); only handlers and ticks write, never a render hook. The scan
+// that validates `$.state` keys needs each atom declared in the file that reads
+// it, so routing.ts, notify.ts and restyle.tsx re-declare the few they read.
+// usage: null = 'not measured yet' (rendered `--`); 0 stays a legitimate value.
 
-// ---- module state (plugin-scoped, shared across hook dispatches) ------------
+const isModOn = atom({ plugin: 'atlas', key: 'isModOn' } as const, true); // ATLAS_MOD kill switch, set at session.start
+const isInteractive = atom({ plugin: 'atlas', key: 'isInteractive' } as const, false);
+const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
+const tabState = atom({ plugin: 'atlas', key: 'tab' } as const, 'colony');
+const usageState = atom({ plugin: 'atlas', key: 'usage' } as const, { tokens: null, costUsd: null, contextPct: null });
+const taskAgentsState = atom({ plugin: 'atlas', key: 'taskAgents' } as const, []);
+const headerPhaseState = atom({ plugin: 'atlas', key: 'headerPhase' } as const, null);
+const lastSeenSeqState = atom({ plugin: 'atlas', key: 'lastSeenSeq' } as const, 0);
+const paneOpenedState = atom({ plugin: 'atlas', key: 'paneOpened' } as const, false); // herdrTick stays idle until the pane has been opened
+const headerMissesState = atom({ plugin: 'atlas', key: 'headerMisses' } as const, 0);
 
-let modOn = true; // ATLAS_MOD kill switch, evaluated at session.start
-let interactive = false;
+// ---- module caches left out of $.state ---------------------------------------
+// builder: a class instance with methods, not JSON (a reload leaves it null until
+//   the next session.start). herdrStdout / lastFingerprint: derived perf caches
+//   that refill on the next tick. bandGeom / paneGeom: written by render hooks
+//   (which may not write state) and read back by ui.message. pendingDrift: a
+//   transient queue drained by the next handler that has `$`.
 let builder: SnapshotBuilder | null = null;
-let snapshot: AtlasSnapshot | null = null;
-let tab: PaneTab = 'colony';
-let paneOpened = false; // herdrTick stays idle until the pane has been opened
 let herdrStdout = '';
-let headerPhase: PhaseId | null = null;
-let headerMisses = 0;
-let lastSeenSeq = 0;
 let lastFingerprint = '';
-// Unknown until session.measure carries a value: null = 'not measured yet',
-// rendered `--`; 0 stays a legitimate measured value.
-let usage: { tokens: number | null; costUsd: number | null; contextPct: number | null } = {
-	tokens: null,
-	costUsd: null,
-	contextPct: null,
-};
 let bandGeom = { columns: 0, maxRows: 0 };
 let paneGeom = { columns: 0, rows: 0 };
-let taskAgents: SquadAgent[] = [];
-let pendingDrift: string[] = []; // drained to $.ui.log by a handler that has $
+let pendingDrift: string[] = [];
 
 // ---- pure helpers (no $) ----------------------------------------------------
 
@@ -61,7 +67,8 @@ function folderOf(cwd: string): string {
 }
 
 /** PhaseId the answer's header first line pins (`ATLAS | <glyph> <phase>[ n/m] | <state>`), else null. */
-export function headerPhaseOf(answer: string, pattern: string): PhaseId | null {
+export function headerPhaseOf(answer: string, snapshot: AtlasSnapshot | null): PhaseId | null {
+	const pattern = snapshot?.contract.headerFirstLinePattern ?? '';
 	if (pattern === '') return null;
 	const firstLine = answer.split('\n', 1)[0] ?? '';
 	let re: RegExp;
@@ -76,7 +83,7 @@ export function headerPhaseOf(answer: string, pattern: string): PhaseId | null {
 }
 
 /** Fresh Client props for the posting instance (band or pane geometry). */
-function clientPropsFor(module: string): Record<string, unknown> {
+function clientPropsFor(module: string, snapshot: AtlasSnapshot | null, usage: Usage): Record<string, unknown> {
 	if (snapshot === null) return {};
 	if (module.endsWith(BAND_FILE)) { // engine reports the path under the plugin folder, e.g. mod/band.tsx
 		return completeProps({ snapshot, columns: bandGeom.columns, maxRows: bandGeom.maxRows, usage });
@@ -84,15 +91,9 @@ function clientPropsFor(module: string): Record<string, unknown> {
 	return completeProps({ snapshot, columns: paneGeom.columns, rows: paneGeom.rows, usage });
 }
 
-/** Track a spawned atlas persona as a live task agent (capped). */
-function recordAgent(agentId: string, persona: string): void {
-	const existing = taskAgents.find((a) => a.name === agentId);
-	if (existing !== undefined) {
-		existing.persona = persona;
-		return;
-	}
-	taskAgents.push({ name: agentId, persona, state: 'running', source: 'task' });
-	if (taskAgents.length > 64) taskAgents = taskAgents.slice(-64);
+/** Fresh Client props from the current state (handlers and ui.message answers). */
+async function clientPropsNow($: EngineInterface, module: string): Promise<Record<string, unknown>> {
+	return clientPropsFor(module, await read($, snapshotState), await read($, usageState));
 }
 
 /** AgentStatus (d.ts EngineInterface $.agent.list) -> band AgentState. */
@@ -109,7 +110,10 @@ const LIST_STATE: Record<string, AgentState> = {
 /** Sync the squad's task agents with the host's own agent list (ground truth,
  * catches spawns the agent.spawn hook missed); spawn-recorded entries not yet
  * listed stay as the instant fallback. Never throws. */
-function syncAgentsFromList(listed: readonly { id: string; name?: string; status: string }[]): void {
+function syncAgentsFromList(
+	listed: readonly { id: string; name?: string; status: string }[],
+	taskAgents: readonly SquadAgent[],
+): SquadAgent[] {
 	const known = new Set<string>();
 	const mapped: SquadAgent[] = [];
 	for (const a of listed) {
@@ -122,7 +126,7 @@ function syncAgentsFromList(listed: readonly { id: string; name?: string; status
 			source: 'task',
 		});
 	}
-	taskAgents = [...mapped, ...taskAgents.filter((t) => !known.has(t.name))].slice(-64);
+	return [...mapped, ...taskAgents.filter((t) => !known.has(t.name))].slice(-64);
 }
 
 // ---- $-carrying top-level functions ----------------------------------------
@@ -152,7 +156,7 @@ async function statSig($: EngineInterface, path: string): Promise<string> {
 
 /** Todos + channels + board note-file fingerprint: what a rebuild is due on. */
 async function dataFingerprint($: EngineInterface): Promise<string> {
-	const root = snapshot?.root;
+	const root = (await read($, snapshotState))?.root;
 	if (root === undefined || root === null || root === '') return 'no-root';
 	const base = `${root.replace(/\/+$/, '')}/.atlas/.run`;
 	const parts = [await statSig($, `${base}/todos.json`), await statSig($, `${base}/channels.json`)];
@@ -169,24 +173,26 @@ async function dataFingerprint($: EngineInterface): Promise<string> {
 async function rebuild($: EngineInterface): Promise<void> {
 	if (builder === null) return;
 	try {
-		syncAgentsFromList(await $.agent.list());
+		const listed = await $.agent.list();
+		await update($, taskAgentsState, (agents) => syncAgentsFromList(listed, agents));
 	} catch {
 		// no agent list in this harness: keep spawn-recorded agents
 	}
 	try {
 		const now = await $.clock.now();
+		const lastSeenSeq = await read($, lastSeenSeqState);
 		const snap = await builder.build({
-			headerPhase,
-			headerMisses,
-			taskAgents,
+			headerPhase: await read($, headerPhaseState),
+			headerMisses: await read($, headerMissesState),
+			taskAgents: await read($, taskAgentsState),
 			herdrStdout,
-			usage,
+			usage: await read($, usageState),
 			lastSeenSeq,
 			now,
 		});
-		snapshot = snap;
-		for (const note of snap.notes) if (note.seq > lastSeenSeq) lastSeenSeq = note.seq;
-		if (interactive) $.ui.invalidate('ui.render');
+		// The snapshot write redraws the band, pane and restyles that read it.
+		await update($, snapshotState, () => snap);
+		await update($, lastSeenSeqState, (seq) => snap.notes.reduce((hi, note) => Math.max(hi, note.seq), seq));
 	} catch (err) {
 		$.ui.log(`atlas: rebuild failed: ${String(err)}`, { to: 'debug' });
 		// keep the last good snapshot
@@ -197,14 +203,14 @@ async function rebuild($: EngineInterface): Promise<void> {
 async function rebuildTick($: EngineInterface): Promise<void> {
 	if (builder === null) return;
 	const fingerprint = await dataFingerprint($);
-	if (fingerprint === lastFingerprint && snapshot !== null) return;
+	if (fingerprint === lastFingerprint && (await read($, snapshotState)) !== null) return;
 	lastFingerprint = fingerprint;
 	await rebuild($);
 }
 
 /** 5 s tick: herdr pane status, only once the pane was opened and the Colony tab is showing. */
 async function herdrTick($: EngineInterface): Promise<void> {
-	if (!paneOpened || tab !== 'colony' || snapshot === null) return;
+	if (!(await read($, paneOpenedState)) || (await read($, tabState)) !== 'colony' || (await read($, snapshotState)) === null) return;
 	const out = await $.process
 		.run(['python3', `${$.plugin.root}/scripts/atlas_herdr.py`, 'status'])
 		.catch(() => undefined);
@@ -230,43 +236,41 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// Sibling registrars, wired by their real signatures. Persona routing pins
 	// model/effort and records spawned agents; the header-drift counter and the
 	// prompt reinforce line read the live contract; restyles and turn-boundary
-	// notifications read the live snapshot. (register has no `$`, so drift logs
-	// queue and a handler drains them.)
+	// notifications read the snapshot from $.state themselves. (register has no
+	// `$`, so drift logs queue and a handler drains them.)
 	registerRouting(on, {
-		getPersonas: () => snapshot?.personas ?? [],
-		recordAgent,
+		getPersonas: (snapshot) => snapshot?.personas ?? [],
 		logDrift: (msg) => {
 			pendingDrift.push(msg);
 		},
 	});
 	registerHeaderDrift(on, {
-		pattern: () => snapshot?.contract.headerFirstLinePattern ?? '',
-		onMiss: () => {
-			headerMisses += 1;
-		},
+		pattern: (snapshot) => snapshot?.contract.headerFirstLinePattern ?? '',
 	});
 	registerPromptReinforce(on, {
-		line: () =>
+		line: (snapshot) =>
 			snapshot?.contract.headerFirstLinePattern
 				? `atlas contract: open replies with a header line matching ${snapshot.contract.headerFirstLinePattern} (phase: ${snapshot.phase})`
 				: null,
 	});
-	registerRestyle(on, { getSnapshot: () => snapshot });
-	registerNotify(on, { getSnapshot: () => snapshot, soundEnabled: () => options.atlas_mod_sound === true });
+	registerRestyle(on);
+	registerNotify(on, { soundEnabled: () => options.atlas_mod_sound === true });
 
 	// Session boot: read the kill switch, resolve the board, build the first
 	// snapshot, start timers and register commands — interactive sessions only;
 	// headless (-p / SDK) stays inert.
 	on('session.start', async ($, e, next) => {
 		try {
-			modOn = (await $.env.get('ATLAS_MOD').catch(() => undefined)) !== 'off';
+			const modOn = (await $.env.get('ATLAS_MOD').catch(() => undefined)) !== 'off';
+			await update($, isModOn, () => modOn);
 			// A fresh session is unmeasured again, whatever an earlier one measured,
 			// and its agents are its own.
-			usage = { tokens: null, costUsd: null, contextPct: null };
-			taskAgents = [];
-			paneOpened = false;
+			await update($, usageState, () => ({ tokens: null, costUsd: null, contextPct: null }));
+			await update($, taskAgentsState, () => []);
+			await update($, paneOpenedState, () => false);
 			if (!modOn) return next(e);
-			interactive = e.isInteractive;
+			const interactive = e.isInteractive;
+			await update($, isInteractive, () => interactive);
 			builder = new SnapshotBuilder(engineFs($), $.plugin.root);
 			const sessionId = await $.session.id();
 			const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
@@ -292,13 +296,13 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	});
 
 	// Usage figures (tokens / cost / context fill), pushed after each turn.
-	on('session.measure', (_$, e, next) => {
-		if (modOn) {
-			usage = {
+	on('session.measure', async ($, e, next) => {
+		if (await read($, isModOn)) {
+			await update($, usageState, (usage) => ({
 				tokens: e.context.tokens ?? usage.tokens,
 				costUsd: e.cost?.usd ?? usage.costUsd,
 				contextPct: e.context.percent ?? usage.contextPct,
-			};
+			}));
 		}
 		return next(e);
 	});
@@ -307,16 +311,18 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// keeps this a distinct registration beside routing.ts's un-matchered
 	// turn.complete drift counter); task agents finish per turn; queued
 	// routing-drift lines reach the debug log here, where `$` exists.
-	on('turn.complete', { reason: 'answer' }, ($, e, next) => {
+	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		try {
-			if (!modOn) return next(e);
+			if (!(await read($, isModOn))) return next(e);
 			for (const msg of pendingDrift.splice(0)) $.ui.log(msg, { to: 'debug' });
 			if (e.agentId === undefined) {
-				headerPhase = headerPhaseOf(e.answer, snapshot?.contract.headerFirstLinePattern ?? '');
+				const phase = headerPhaseOf(e.answer, await read($, snapshotState));
+				await update($, headerPhaseState, () => phase);
 			} else {
-				for (const agent of taskAgents) {
-					if (agent.name === e.agentId) agent.state = 'finished';
-				}
+				const agentId = e.agentId;
+				await update($, taskAgentsState, (agents) =>
+					agents.map((agent) => (agent.name === agentId ? { ...agent, state: 'finished' as const } : agent)),
+				);
 			}
 		} catch {
 			// a drift check never blocks the answer
@@ -326,7 +332,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// The band above the prompt (terminal + interactive only).
 	on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-		if (!modOn || snapshot === null || !interactive || e.surface !== 'terminal') return next(e);
+		if (e.surface !== 'terminal' || !(await read($, isModOn)) || !(await read($, isInteractive))) return next(e);
+		const snapshot = await read($, snapshotState);
+		if (snapshot === null) return next(e);
+		const usage = await read($, usageState);
 		bandGeom = { columns: e.props.bodyColumns, maxRows: e.props.maxRows };
 		const { Client } = $.ui.resolve(e);
 		return Client({ key: BAND_KEY, module: './band.tsx', props: completeProps({ snapshot, columns: e.props.bodyColumns, maxRows: e.props.maxRows, usage }) });
@@ -334,7 +343,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// The docked command-center pane and the sprites gallery pane.
 	on('ui.render', { component: 'Pane' }, async ($, e, next) => {
-		if (!modOn || snapshot === null || e.surface !== 'terminal') return next(e);
+		if (e.surface !== 'terminal' || !(await read($, isModOn))) return next(e);
+		const snapshot = await read($, snapshotState);
+		if (snapshot === null) return next(e);
+		const usage = await read($, usageState);
 		paneGeom = { columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows };
 		const { Client } = $.ui.resolve(e);
 		if (e.requestId === SPRITES_PANE_ID) {
@@ -343,7 +355,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (e.requestId !== PANE_ID) return next(e);
 		const props = completeProps({ snapshot, columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows, usage });
 		// module must be a string literal in source: the host reads it off the tree.
-		switch (tab) {
+		switch (await read($, tabState)) {
 			case 'channel':
 				return Client({ key: PANE_KEY, module: './pane/channel.tsx', props });
 			case 'board':
@@ -366,18 +378,19 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// Client posts: validate the intent, run it, answer with fresh props.
 	on('ui.message', async ($, e, next) => {
 		try {
-			if (!modOn) return next(e);
+			if (!(await read($, isModOn))) return next(e);
 			const raw = e.data as { t?: unknown; run?: unknown } | null;
 			if (raw !== null && typeof raw === 'object' && raw.t === 'stop') {
-				if (!interactive) {
+				if (!(await read($, isInteractive))) {
 					$.ui.log('atlas: stopping a run needs an interactive session');
 					return next(e);
 				}
 				const answer = await $.ui.ask(`Stop run ${String(raw.run ?? '')}?`, STOP_CONFIRM);
 				if (answer !== STOP_CONFIRM[0]) {
-					return { props: clientPropsFor(e.module) }; // declined: nothing ran
+					return { props: await clientPropsNow($, e.module) }; // declined: nothing ran
 				}
 			}
+			const snapshot = await read($, snapshotState);
 			const res = intentToArgv(e.data, {
 				pluginRoot: $.plugin.root,
 				root: snapshot?.root ?? '',
@@ -388,16 +401,16 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 				return next(e);
 			}
 			if (res.kind === 'ui') {
-				if (res.tab !== undefined) tab = res.tab as PaneTab;
-				else tab = 'colony'; // inspect: focus the colony
-				paneOpened = true;
+				const nextTab = res.tab !== undefined ? (res.tab as PaneTab) : 'colony'; // inspect: focus the colony
+				await update($, tabState, () => nextTab);
+				await update($, paneOpenedState, () => true);
 				await $.ui.open({ id: PANE_ID, title: 'Atlas' });
-				return { props: clientPropsFor(e.module) };
+				return { props: await clientPropsNow($, e.module) };
 			}
 			const out = await $.process.run(res.argv);
 			if (out.exitCode !== 0) $.ui.log(`atlas: ${out.stderr.trim() || `exit ${out.exitCode}`}`);
 			await rebuild($);
-			return { props: clientPropsFor(e.module) };
+			return { props: await clientPropsNow($, e.module) };
 		} catch {
 			return next(e);
 		}
@@ -406,8 +419,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// /atlas-cc [tab] — open (or retitle to) the command center.
 	on('command.run', { command: 'atlas-cc' }, async ($, e) => {
 		const arg = e.args.trim().toLowerCase();
-		if (arg === 'colony' || arg === 'channel' || arg === 'board' || arg === 'squad' || arg === 'collab') tab = arg;
-		paneOpened = true;
+		if (arg === 'colony' || arg === 'channel' || arg === 'board' || arg === 'squad' || arg === 'collab') {
+			await update($, tabState, () => arg);
+		}
+		await update($, paneOpenedState, () => true);
 		await $.ui.open({ id: PANE_ID, title: 'Atlas' });
 		void rebuild($);
 		return {};
@@ -417,6 +432,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	on('command.run', { command: 'atlas-say' }, async ($, e) => {
 		const text = e.args.trim();
 		if (text === '') return { text: 'usage: /atlas-say <message>' };
+		const snapshot = await read($, snapshotState);
 		const res = intentToArgv(
 			{ t: 'note', channel: snapshot?.channel ?? '', to: 'lead', text },
 			{ pluginRoot: $.plugin.root, root: snapshot?.root ?? '', channel: snapshot?.channel ?? null },
@@ -431,6 +447,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	on('command.run', { command: 'atlas-todo' }, async ($, e) => {
 		const text = e.args.trim();
 		if (text === '') return { text: 'usage: /atlas-todo <text>' };
+		const snapshot = await read($, snapshotState);
 		const out = await $.process.run([
 			'python3',
 			`${$.plugin.root}/scripts/atlas_todo.py`,

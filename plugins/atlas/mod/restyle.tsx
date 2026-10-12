@@ -3,15 +3,15 @@
 // Every site falls back to the engine's own drawing (`next(e)`) when the snapshot is
 // missing, ATLAS_MOD=off, or anything in the draw path throws: restyles decorate, never break.
 
+import { atom, read } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from './contract'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
 import { bar, dim, glyph, phaseColor, stateColor } from './theme'
 
-/** What register.ts hands the restyles: the live snapshot, or null outside an atlas session. */
-export interface RestyleDeps {
-  getSnapshot: () => AtlasSnapshot | null
-}
+// The live snapshot is read from $.state while drawing, so a snapshot write redraws
+// exactly the restyled sites (null outside an atlas session).
+const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null)
 
 // ---- structural props the tree builders read (sites' real props satisfy these) ----
 
@@ -206,26 +206,26 @@ export function nextStepText(snap: AtlasSnapshot): string | null {
  *  `cache` holds the per-registration ATLAS_MOD read; registerRestyle owns one.
  *  ponytail: read once per registration (one per session); a mid-session flip
  *  to off is picked up on reload. */
-async function ready($: EngineInterface, deps: RestyleDeps, cache: { envOff?: boolean }): Promise<AtlasSnapshot | null> {
+async function ready($: EngineInterface, cache: { envOff?: boolean }): Promise<AtlasSnapshot | null> {
   if (cache.envOff === undefined) cache.envOff = (await $.env.get('ATLAS_MOD')) === 'off'
-  return cache.envOff ? null : deps.getSnapshot()
+  return cache.envOff ? null : await read($, snapshotState)
 }
 
-export function registerRestyle(on: On, deps: RestyleDeps): void {
+export function registerRestyle(on: On): void {
   const cache: { envOff?: boolean } = {}
   const lastSuggest: { text?: string } = {}
   const tracker: ReceiptTracker = {}
 
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
     try {
-      const snap = await ready($, deps, cache)
+      const snap = await ready($, cache)
       return snap ? spinnerTree(snap, e.props, Date.now()) : next(e)
     } catch { return next(e) }
   })
 
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
     try {
-      const snap = await ready($, deps, cache)
+      const snap = await ready($, cache)
       if (!snap) return next(e)
       const agents = await $.agent.list().catch(() => [] as AgentInfo[])
       return toolUseTree(snap, e.props, agents) ?? next(e)
@@ -234,21 +234,21 @@ export function registerRestyle(on: On, deps: RestyleDeps): void {
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     try {
-      const snap = await ready($, deps, cache)
+      const snap = await ready($, cache)
       return snap ? (assistantTree(snap, e.props) ?? next(e)) : next(e)
     } catch { return next(e) }
   })
 
   on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => {
     try {
-      const snap = await ready($, deps, cache)
+      const snap = await ready($, cache)
       return snap ? durationTree(snap, e.props, tracker) : next(e)
     } catch { return next(e) }
   })
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     try {
-      const snap = await ready($, deps, cache)
+      const snap = await ready($, cache)
       if (!snap) return next(e)
       if (!e.props.isDraft && !e.props.isWorking) {
         const text = nextStepText(snap)

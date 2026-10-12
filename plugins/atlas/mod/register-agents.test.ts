@@ -5,6 +5,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { register } from './register';
+import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;
@@ -41,9 +42,10 @@ interface Rec {
 }
 
 /** Engine stub with an injectable agent list (null = no agent surface at all). */
-function stubEngine(listed: unknown[] | null): { engine: EngineInterface; rec: Rec } {
+function stubEngine(listed: unknown[] | null, state = memState()): { engine: EngineInterface; rec: Rec } {
   const rec: Rec = { mounts: [] };
   const $: Record<string, unknown> = {
+    state,
     plugin: { name: 'atlas', root: '/plugins/atlas' },
     env: { get: async () => undefined },
     clock: {
@@ -146,6 +148,27 @@ describe('register agent-list sync', () => {
     await pick('session.measure')(engine, { context: {}, cost: undefined }, noopNext);
     await pick('ui.render', 'AbovePrompt')(engine, BAND_EVENT, noopNext);
     expect(mountAt(rec, 1).usage).toEqual({ tokens: null, costUsd: null, contextPct: null });
+  });
+
+  test('usage and task agents survive a re-register: they live in $.state, not module variables', async () => {
+    const state = memState();
+    const first = captureOn();
+    const { engine } = stubEngine([], state);
+    await boot(first.on, engine, first.pick);
+    await first.pick('session.measure')(engine, { context: { tokens: 7, percent: 3 }, cost: { usd: 0.5 } }, noopNext);
+    await first.pick('agent.spawn')(engine, { subagentType: 'task', fork: false, model: undefined }, async () => ({ agentId: 'spawn-9' }));
+    await first.pick('ui.message')(engine, {
+      surface: 'terminal', component: 'Pane', requestId: 'atlas', module: './band.tsx',
+      data: { t: 'todo.claim', id: 't1', owner: 'me' },
+    }, noopNext); // folds the spawn record into the snapshot
+
+    // A hot reload: new module registration, same session state, no session.start.
+    const second = captureOn();
+    const reloaded = stubEngine([], state);
+    await register(second.on, {});
+    await second.pick('ui.render', 'AbovePrompt')(reloaded.engine, BAND_EVENT, noopNext);
+    expect(mountAt(reloaded.rec, 0).usage).toEqual({ tokens: 7, costUsd: 0.5, contextPct: 3 });
+    expect(taskSquad(mountAt(reloaded.rec, 0))).toEqual([['spawn-9', 'running']]);
   });
 
   test('a missing agent surface keeps spawn-recorded agents', async () => {

@@ -8,6 +8,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { intentToArgv } from './intents';
 import { headerPhaseOf, register } from './register';
+import { memState } from './test_helpers';
 
 // ---- structural event shapes (d.ts: SessionStartInput, RenderInputOf, UiMessageArgument) ----
 
@@ -85,10 +86,7 @@ function stubEngine(env: Record<string, string> = {}) {
       exists: async () => false,
       list: async () => [],
     },
-    state: {
-      get: async () => ({ value: undefined, version: 0 }),
-      set: async () => ({ isSet: true as const, version: 1 }),
-    },
+    state: memState(),
     ui: {
       log: () => rec.ui.push('log'),
       toast: () => rec.ui.push('toast'),
@@ -193,14 +191,15 @@ describe('ui.message intent handling', () => {
 });
 
 describe('header phase', () => {
+  const snapWith = (pattern: string) => ({ contract: { headerFirstLinePattern: pattern } }) as unknown as Parameters<typeof headerPhaseOf>[1];
   const PATTERN = '^ATLAS \\| \\S+ (research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)? \\| \\S';
   test('reads the phase from the live `ATLAS | <glyph> <phase> | <state>` header', () => {
-    expect(headerPhaseOf('ATLAS | 🏁 done | shipped\nbody', PATTERN)).toBe('done');
-    expect(headerPhaseOf('ATLAS | 🔨 implement 2/5 | writing', PATTERN)).toBe('implement');
+    expect(headerPhaseOf('ATLAS | 🏁 done | shipped\nbody', snapWith(PATTERN))).toBe('done');
+    expect(headerPhaseOf('ATLAS | 🔨 implement 2/5 | writing', snapWith(PATTERN))).toBe('implement');
   });
   test('null when the line misses the contract pattern or the pattern is empty', () => {
-    expect(headerPhaseOf('hello done', PATTERN)).toBeNull();
-    expect(headerPhaseOf('ATLAS | 🏁 done | x', '')).toBeNull();
+    expect(headerPhaseOf('hello done', snapWith(PATTERN))).toBeNull();
+    expect(headerPhaseOf('ATLAS | 🏁 done | x', snapWith(''))).toBeNull();
   });
 });
 

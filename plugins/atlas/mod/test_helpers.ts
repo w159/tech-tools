@@ -25,6 +25,39 @@ export const FIXTURE_CONTRACT: Contract = {
   itemPhasePrefix: '[<phase>] ',
 };
 
+// ---- memState ----
+
+/**
+ * In-memory `$.state` for engine stubs: versioned get/set with `ifVersion`
+ * (a miss returns isSet false). Pass one instance to two stubs to simulate a
+ * module reload, since real state outlives the plugin's code. `seed` maps
+ * 'plugin/key' to an initial value (version 1).
+ */
+type StateRef = { plugin: string; key: string; id?: string };
+type StateCell = { value: unknown; version: number };
+
+/** A conditional write misses when `ifVersion` is given and the cell moved on. */
+function isStaleWrite(held: StateCell, ifVersion: number | undefined): boolean {
+  return ifVersion !== undefined && ifVersion !== held.version;
+}
+
+export function memState(seed: Record<string, unknown> = {}) {
+  const cells = new Map<string, StateCell>(
+    Object.entries(seed).map(([ref, value]) => [`${ref}/`, { value, version: 1 }]),
+  );
+  const heldAt = (ref: StateRef): StateCell => cells.get(`${ref.plugin}/${ref.key}/${ref.id ?? ''}`) ?? { value: undefined, version: 0 };
+  return {
+    get: async (ref: StateRef) => heldAt(ref),
+    set: async (ref: StateRef, value: unknown, options?: { ifVersion?: number }) => {
+      const held = heldAt(ref);
+      if (isStaleWrite(held, options?.ifVersion)) return { isSet: false, version: held.version };
+      const version = held.version + 1;
+      cells.set(`${ref.plugin}/${ref.key}/${ref.id ?? ''}`, { value: JSON.parse(JSON.stringify(value)), version });
+      return { isSet: true, version };
+    },
+  };
+}
+
 // ---- memFs ----
 
 export interface MemFs extends FsLike {

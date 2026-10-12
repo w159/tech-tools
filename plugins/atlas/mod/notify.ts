@@ -1,6 +1,7 @@
 // notify.ts — turn-boundary notifications: toast squad agents finishing/failing,
 // notes addressed to the lead or the human, completed todos, and phase advances
 // (advance.wav when sound is on); suggests the next contract step at turn end.
+import { atom, read } from 'claude-code';
 import type { On } from 'claude-code';
 import type { AtlasSnapshot, PhaseId } from './contract';
 
@@ -72,20 +73,23 @@ export function nextStepSuggestion(s: AtlasSnapshot): string | null {
 	return `${phase}: ${text}`;
 }
 
+// The live snapshot is read from $.state (declared here for the key scan).
+const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
+
 let lastSnapshot: AtlasSnapshot | null = null;
 
 /**
  * Registers answer-turn-boundary notifications. `on` is the mod's On; deps
- * inject the snapshot reader and the sound toggle. Toasts and the next-step
+ * inject the sound toggle (the snapshot is read from $.state). Toasts and the next-step
  * suggestion fire on answer-turn boundaries. Notifications never break the turn.
  */
 export function registerNotify(
 	on: On,
-	deps: { getSnapshot: () => AtlasSnapshot | null; soundEnabled: () => boolean },
+	deps: { soundEnabled: () => boolean },
 ): void {
-	on('turn.complete', { reason: 'answer' }, ($, e, next) => {
+	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		try {
-			const snap = deps.getSnapshot();
+			const snap = await read($, snapshotState);
 			if (snap) {
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {
