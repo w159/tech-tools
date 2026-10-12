@@ -203,10 +203,25 @@ const fakeOn = (regs: Reg[]): On =>
     return { catch: () => undefined }
   }) as unknown as On
 
-const fake$ = (over: { env?: string } = {}): { $: EngineInterface; suggested: string[] } => {
+const fake$ = (over: { env?: string } = {}): { $: EngineInterface; suggested: string[]; timers: { fire: () => void; cancelled: number; started: number }; ticks: number[] } => {
   const suggested: string[] = []
+  const ticks: number[] = []
+  const timers = { fire: () => undefined as void, cancelled: 0, started: 0 }
   return {
+    timers,
+    ticks,
     $: {
+      state: {
+        get: async () => ({ value: ticks[ticks.length - 1], version: ticks.length }),
+        set: async (_ref: unknown, value: number) => { ticks.push(value); return { isSet: true, version: ticks.length } },
+      },
+      clock: {
+        every: (_ms: number, fn: () => void) => {
+          timers.started += 1
+          timers.fire = fn
+          return { cancel: () => { timers.cancelled += 1 } }
+        },
+      },
       env: { get: async () => over.env },
       agent: { list: async () => [] },
       prompt: { suggest: async (a: { text: string }) => { suggested.push(a.text); return { isShown: true } } },
@@ -254,4 +269,32 @@ test('live spinner draws and PromptHint appends the tail and suggests the next s
   const tail = (rewritten as { props?: { tail?: string } } | undefined)?.props?.tail
   expect(tail).toBe(HINT_TAIL)
   expect(harness.suggested[0]).toBe('check: Restyle ship restyle sites')
+})
+
+test('spinner globe advances per timer tick and the timer stops once the Spinner unmounts', async () => {
+  const regs: Reg[] = []
+  const h = fake$()
+  registerRestyle(fakeOn(regs), { getSnapshot: () => snap() })
+  const props = { word: 'Sauteing', message: null }
+  const frameAt = async () => stringsOf(await regs[0]?.hook(h.$, fakeE('Spinner', props), echoNext)).charAt(0)
+
+  const seen = [await frameAt()]
+  await frameAt() // a second draw must not start a second timer
+  expect(h.timers.started).toBe(1)
+  for (let i = 0; i < 6; i++) {
+    h.timers.fire()
+    await Promise.resolve()
+    seen.push(await frameAt())
+  }
+  expect(h.ticks).toEqual([1, 2, 3, 4, 5, 6])
+  expect(seen[0]).not.toBe(seen[2]) // two ticks per glyph (the 8-frame cycle)
+  expect(new Set(seen).size).toBe(4) // all 4 globe glyphs over successive ticks
+
+  // turn over: the Spinner unmounts, so the next tick finds no draw since the last one and stops
+  h.timers.fire() // draw happened since previous fire (frameAt above): still writes
+  h.timers.fire() // no draw in between: cancels, writes nothing
+  expect(h.ticks.length).toBe(7)
+  expect(h.timers.cancelled).toBe(1)
+  await frameAt() // the next turn restarts exactly one timer
+  expect(h.timers.started).toBe(2)
 })

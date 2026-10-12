@@ -37,6 +37,9 @@ const phaseCol = (phase: PhaseId): string => {
  *  ponytail: text glyphs, not a Raster 4x2 — Raster is terminal-only and needs blit plumbing;
  *  upgrade via sprites/grid.ts frameToCells when the pixel globe is wanted. */
 const GLOBE = ['◐', '◒', '◓', '◑'] as const
+const GLOBE_TICK_MS = 250
+// contract: types/spinner-state.d.ts (PluginState.atlas.spinnerTick)
+const SPINNER_TICK = { plugin: 'atlas', key: 'spinnerTick' } as const
 
 const PHASE_RE = /\b(research|theory|test|validate|implement|verify|done|blocked)\b/
 
@@ -216,10 +219,30 @@ export function registerRestyle(on: On, deps: RestyleDeps): void {
   const lastSuggest: { text?: string } = {}
   const tracker: ReceiptTracker = {}
 
+  // The engine caches a ui.render answer, so the globe would freeze between data changes.
+  // Reading $.state while drawing subscribes this one instance: each tick write redraws
+  // only the Spinner. The timer runs only while the Spinner is mounted (a turn is working).
+  const ticker: { n: number; isDrawn: boolean; cancel?: () => void } = { n: 0, isDrawn: false }
+
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
     try {
       const snap = await ready($, deps, cache)
-      return snap ? spinnerTree(snap, e.props, Date.now()) : next(e)
+      if (!snap) return next(e)
+      const { value } = await $.state.get(SPINNER_TICK)
+      ticker.isDrawn = true
+      if (!ticker.cancel) {
+        const handle = $.clock.every(GLOBE_TICK_MS, () => {
+          // Each tick write redraws a mounted Spinner, which sets isDrawn again. A tick that
+          // finds it unset means the Spinner unmounted (turn over): stop, nothing ticks idle.
+          // (routing.ts already owns the one matcherless turn.complete hook, so no second.)
+          if (!ticker.isDrawn) { ticker.cancel?.(); ticker.cancel = undefined; return }
+          ticker.isDrawn = false
+          ticker.n += 1
+          void $.state.set(SPINNER_TICK, ticker.n).catch(() => undefined)
+        })
+        ticker.cancel = () => handle.cancel()
+      }
+      return spinnerTree(snap, e.props, (value ?? 0) * GLOBE_TICK_MS)
     } catch { return next(e) }
   })
 
