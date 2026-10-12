@@ -17,6 +17,8 @@ import {
   registerRestyle,
   spinnerTree,
   toolUseTree,
+  turnCostText,
+  turnTokensText,
   type ReceiptTracker,
 } from './restyle'
 import type { AtlasSnapshot } from './contract'
@@ -172,16 +174,33 @@ test('headerless reply gets a dim inferred pill; other blocks stay engine-drawn'
 // ---- TurnDuration receipt ----
 
 test('turn receipt with phase transition and tracker memory', () => {
-  const tracker: ReceiptTracker = { phase: 'research', done: 0 }
-  const text = stringsOf(durationTree(snap(), { durationMs: 252_000 }, tracker))
+  const tracker: ReceiptTracker = { phase: 'research', done: 0, costStart: 1.2, usage: { input_tokens: 12_400, output_tokens: 1_100, cache_read_input_tokens: 0 } }
+  const text = stringsOf(durationTree(snap(), { durationMs: 252_000 }, tracker, 1.32))
   expect(text).toContain('▸')
   expect(text).toContain('4m12s')
   expect(text).toContain('research ▸ implement')
   expect(text).toContain('+3 done')
-  expect(text).toContain('48k tok')
-  expect(text).toContain('$0.31')
+  expect(text).toContain('12k in / 1k out')
+  expect(text).toContain('turn $0.12')
+  expect(text).toContain('ctx 41%')
+  expect(text).not.toContain('48k')
+  expect(text).not.toContain('$0.31')
   expect(tracker.phase).toBe('implement')
   expect(tracker.done).toBe(3)
+})
+
+test('turn cost is the delta of two engine readings; a missing reading prints no dollars', () => {
+  expect(turnCostText(1.2, 1.32)).toBe('turn $0.12')
+  expect(turnCostText(null, 1.32)).toBeNull()
+  expect(turnCostText(1.2, null)).toBeNull()
+  const text = stringsOf(durationTree(snap({ costUsd: 0 }), { durationMs: 1000 }, {}, null))
+  expect(text).not.toContain('$')
+})
+
+test('receipt tokens come from turn usage, never context fill', () => {
+  expect(turnTokensText(null)).toBeNull()
+  expect(turnTokensText({ input_tokens: 800, output_tokens: 90, cache_read_input_tokens: 5000 })).toBe('800 in / 90 out (+5k cached)')
+  expect(stringsOf(durationTree(snap({ tokens: 48_000 }), { durationMs: 1000 }, {}, null))).not.toContain('tok')
 })
 
 // ---- prompt suggestion ----
@@ -247,21 +266,36 @@ const fakeE = (component: string, props: Record<string, unknown> = {}) =>
 test('registerRestyle wires the five sites; without a snapshot every site no-ops', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
-  expect(regs.length).toBe(5)
+  expect(regs.length).toBe(7)
   expect(regs[0]?.matcher?.component).toBe('Spinner')
   expect(regs[1]?.matcher?.component).toBe('ToolUse')
   expect(regs[2]?.matcher?.component).toBe('AssistantMessage')
   expect(regs[3]?.matcher?.component).toBe('TurnDuration')
   expect(regs[4]?.matcher?.component).toBe('PromptHint')
-  for (const r of regs) {
+  for (const r of regs.slice(0, 5)) {
     expect(await r.hook(fake$().$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
   }
+})
+
+test('turn hooks record the cost baseline and the main loop usage; the receipt prints the delta', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const costs: Array<{ usd: number } | undefined> = [{ usd: 1.2 }, { usd: 1.32 }]
+  const harness = fake$({ snapshot: snap({ costUsd: 0 }) })
+  const $ = { ...(harness.$ as object), session: { usage: async () => ({ cost: costs.shift() }) } } as unknown as EngineInterface
+  await regs[5]?.hook($, {}, echoNext)
+  const usage = { input_tokens: 3000, output_tokens: 500, cache_read_input_tokens: 0 }
+  await regs[6]?.hook($, { usage }, echoNext)
+  await regs[6]?.hook($, { usage: { ...usage, input_tokens: 9 }, agentId: 'sub' }, echoNext)
+  const text = stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 1000 }), echoNext))
+  expect(text).toContain('turn $0.12')
+  expect(text).toContain('3k in / 500 out')
 })
 
 test('ATLAS_MOD=off no-ops every site even with a live snapshot', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
-  for (const r of regs) {
+  for (const r of regs.slice(0, 5)) {
     expect(await r.hook(fake$({ env: 'off', snapshot: snap() }).$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
   }
 })

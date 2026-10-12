@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Cost accuracy
+
+- Turn receipt (`mod/restyle.tsx`): the dollar figure is now this turn's cost, `turn $X`, the engine's session cost (`$.session.usage().cost.usd`) at turn end minus its value at `turn.start`; it was the session's running total drawn on every turn. No dollar figure is drawn when the host keeps no cost ledger. Tokens are the turn's own `input / output (+cached)` from `turn.complete` usage; the old `48k tok` was context-window fill and is now labelled `ctx N%`.
+- Savings: the `estTokensKept` figure (bytes / 4, an unmeasured counterfactual) is replaced by the measured `keptBytes`.
+- `skills/atlas-doctor/SKILL.md` and `docs/atlas-turn-scoring.md` no longer pin a third-party price; atlas does not compute that cost.
+- Known gap: `snapshot.costUsd` still coerces an unknown cost to 0 because `mod/contract.ts` is locked read-only (`uchg`); nothing renders it any more.
+
 ## [11.1.0] - 2026-10-12 -- atlas 11.1.0: native interactive sidebar, theme-aware colors, subagent gate fix
 
 ### Mod: native sidebar

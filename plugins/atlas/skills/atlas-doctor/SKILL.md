@@ -111,8 +111,8 @@ miner reads model-scored replies (`turn_scores`), so score first:
 4. Apply the fix to that surface (Phase 4), then `--baseline`, and later
    `--remeasure` re-runs the miner and reports improved|no_change|regressed.
 
-Cost: input tokens only, about $0.042 per million (`~/.claude` transcripts are
-small; a 14-day pass is cents). Privacy: transcript excerpts are sent to
+Cost: input tokens only, billed at the provider's current rate (see the provider's
+pricing page); atlas does not compute this cost. Privacy: transcript excerpts are sent to
 api.typesafe.ai with secrets scrubbed; `ATLAS_TYPESAFE_SCORING=off` disables
 scoring. Thresholds are constants in `atlas_doctor.py` (see
 `docs/atlas-turn-scoring.md`).

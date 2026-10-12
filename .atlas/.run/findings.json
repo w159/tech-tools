@@ -6414,5 +6414,22 @@
     "status": "verified",
     "verified_at": "2026-10-12T16:59:36+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-cost-accuracy",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Cost figures: per-turn delta of engine cost, turn usage tokens, no $ without a ledger, bytes/4 savings removed, pinned price removed",
+    "evidence": [
+      "plugins/atlas/mod/restyle.test.tsx (per-turn delta, missing ledger, null cost, usage tokens); claude plugin test 336 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas; fallow audit",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T17:21:40+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

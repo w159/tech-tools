@@ -90,7 +90,8 @@ rows in the last 7 days, last scored time). It never counts as a failure.
 
 ## Cost and privacy
 
-Billing is input tokens only, about $0.042 per million. All questions for one
+Billing is input tokens only, at the provider's current rate (see the provider's
+pricing page); atlas does not compute this cost. All questions for one
 reply share one call. Transcript excerpts (reply, request, and for
 `next_turn_correction` the next user message) are sent to api.typesafe.ai after
 the secret scrub used by ingest. Set `ATLAS_TYPESAFE_SCORING=off` to stop.

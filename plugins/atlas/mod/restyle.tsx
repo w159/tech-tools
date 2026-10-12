@@ -20,7 +20,9 @@ export interface ToolUsePropsLike { tool: string; output?: unknown; input: unkno
 export interface AssistantPropsLike { text: string; isFirstOfReply?: boolean; isSummary?: true }
 export interface TurnDurationPropsLike { durationMs: number }
 /** Turn-over-turn memory for the TurnDuration receipt (owned by one registerRestyle call). */
-export interface ReceiptTracker { phase?: PhaseId; done?: number }
+export interface ReceiptTracker { phase?: PhaseId; done?: number; costStart?: number | null; usage?: TurnUsageLike | null }
+/** The token counts a turn.complete carries (the API's own spelling). */
+export interface TurnUsageLike { input_tokens: number; output_tokens: number; cache_read_input_tokens: number }
 
 // ---- plain element builders (StyledElement is plain data; no DOM, no globals) ----
 
@@ -206,16 +208,34 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike): R
  return { type: 'Box', props: { flexDirection: 'column' }, children: kids }
 }
 
-// ---- TurnDuration: `▸ 4m12s · research ▸ implement · +3 done · 2 agents · 48k tok · $0.31` ----
+// ---- TurnDuration: `▸ 4m12s · research ▸ implement · +3 done · 2 agents · 12k in / 1k out · turn $0.12` ----
 
-export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker): RenderElement {
+/** This turn's dollar cost: the engine's session total at turn end minus at turn start.
+ *  null when either reading is absent (the host keeps no ledger): no figure beats a guessed one. */
+export function turnCostText(start: number | null | undefined, end: number | null | undefined): string | null {
+ if (start == null || end == null || end < start) return null
+ return `turn $${(end - start).toFixed(2)}`
+}
+
+/** Tokens the turn spent, as the API reported them on turn.complete (never context-window fill). */
+export function turnTokensText(usage: TurnUsageLike | null | undefined): string | null {
+ if (!usage) return null
+ const cached = usage.cache_read_input_tokens > 0 ? ` (+${fmtTok(usage.cache_read_input_tokens)} cached)` : ''
+ return `${fmtTok(usage.input_tokens)} in / ${fmtTok(usage.output_tokens)} out${cached}`
+}
+
+function receiptFigures(snap: AtlasSnapshot, tracker: ReceiptTracker, costNow: number | null): string[] {
+ const ctx = snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null
+ return [turnTokensText(tracker.usage), ctx, turnCostText(tracker.costStart, costNow)].filter((part): part is string => part !== null)
+}
+
+export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, costNow: number | null = null): RenderElement {
  const parts: string[] = [formatDuration(props.durationMs)]
  parts.push(tracker.phase && tracker.phase !== snap.phase ? `${tracker.phase} ▸ ${snap.phase}` : snap.phase)
  const delta = snap.counts.done - (tracker.done ?? snap.counts.done)
  if (delta > 0) parts.push(`+${delta} done`)
  if (snap.squad.length > 0) parts.push(`${snap.squad.length} agents`)
- if (snap.tokens > 0) parts.push(`${fmtTok(snap.tokens)} tok`)
- if (snap.costUsd > 0) parts.push(`$${snap.costUsd.toFixed(2)}`)
+ parts.push(...receiptFigures(snap, tracker, costNow))
  tracker.phase = snap.phase
  tracker.done = snap.counts.done
  return txt({ dimColor: true },
@@ -248,6 +268,11 @@ export function nextStepText(snap: AtlasSnapshot): string | null {
 async function ready($: EngineInterface, cache: { envOff?: boolean }): Promise<AtlasSnapshot | null> {
  if (cache.envOff === undefined) cache.envOff = (await $.env.get('ATLAS_MOD')) === 'off'
  return cache.envOff ? null : await read($, snapshotState)
+}
+
+/** The engine-measured session cost in USD, or null where the host keeps no ledger. */
+async function sessionCostUsd($: EngineInterface): Promise<number | null> {
+ try { return (await $.session.usage()).cost?.usd ?? null } catch { return null }
 }
 
 export function registerRestyle(on: On): void {
@@ -301,7 +326,7 @@ export function registerRestyle(on: On): void {
  on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => {
   try {
    const snap = await ready($, cache)
-   return snap ? durationTree(snap, e.props, tracker) : next(e)
+   return snap ? durationTree(snap, e.props, tracker, await sessionCostUsd($)) : next(e)
   } catch { return next(e) }
  })
 
@@ -318,5 +343,17 @@ export function registerRestyle(on: On): void {
    }
    return next({ ...e, props: { ...e.props, tail: HINT_TAIL } })
   } catch { return next(e) }
+ })
+
+ // Per-turn figures: cost baseline at turn start, token counts from the main loop's turn.complete.
+ on('turn.start', async ($, e, next) => {
+  tracker.costStart = await sessionCostUsd($)
+  tracker.usage = null
+  return next(e)
+ })
+
+ on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
+  if (e.agentId === undefined) tracker.usage = e.usage ?? null
+  return next(e)
  })
 }

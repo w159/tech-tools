@@ -15,7 +15,7 @@ function idleSnap(over: Partial<LiveSnapshot> = {}): LiveSnapshot {
     counts: { done: 0, total: 0, byPhase: {} }, phase: 'research', phaseSource: 'default',
     notes: [], members: [], squad: [], unread: 0, tokens: 0, costUsd: 0, contextPct: 12, headerMisses: 0, now: NOW,
     activity: { lead: { tool: null, since: NOW, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' } },
-    comms: [], lifecycle: [], savings: { delegatedCalls: 0, inlineHeavyCalls: 0, estTokensKept: 0 },
+    comms: [], lifecycle: [], savings: { delegatedCalls: 0, inlineHeavyCalls: 0, keptBytes: 0 },
     sessions: [], todoGroups: [], contractProgress: [], backlog: { done: 0, total: 0 },
     ...over,
   };
@@ -50,7 +50,7 @@ export function busySnap(over: Partial<LiveSnapshot> = {}): LiveSnapshot {
       { agent: 'impl-auth', stage: 'working', branch: 'worker/impl-auth' },
       { agent: 'runner-1', stage: 'rejected' },
     ],
-    savings: { delegatedCalls: 14, inlineHeavyCalls: 1, estTokensKept: 18_400 },
+    savings: { delegatedCalls: 14, inlineHeavyCalls: 1, keptBytes: 73_600 },
     sessions: [
       { name: 'explorer-1', transport: 'subagent', state: 'running', since: NOW - 42_000, agentId: 'a529730494759bac3', tail: ['reading auth/middleware.ts', 'found 3 call sites in auth/', '> Grep token_ttl'] },
       { name: 'impl-auth', transport: 'claude-bg', state: 'blocked', since: NOW - 90_000, pid: 'bf184718', tail: ['need a decision on the token ttl'] },

@@ -242,7 +242,7 @@ describe('SnapshotBuilder', () => {
     activity: { lead: { tool: null, since: FIXTURE_EPOCH_MS + 5000, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' } },
     comms: [],
     lifecycle: [],
-    savings: { delegatedCalls: 0, inlineHeavyCalls: 0, estTokensKept: 0 },
+    savings: { delegatedCalls: 0, inlineHeavyCalls: 0, keptBytes: 0 },
     sessions: [],
     todoGroups: [],
     contractProgress: [],
@@ -264,7 +264,7 @@ describe('SnapshotBuilder', () => {
     expect(snap.activity['impl-auth']).toMatchObject({ toolCount: 1, tokens: 900, mood: 'done', lastLine: 'done editing' });
     expect(snap.comms.map((c) => c.kind)).toEqual(expect.arrayContaining(['dispatch', 'report', 'merge']));
     expect(snap.lifecycle.find((l) => l.agent === 'impl-auth')).toEqual({ agent: 'impl-auth', stage: 'merged', branch: 'worker/impl-auth' });
-    expect(snap.savings).toEqual({ delegatedCalls: 1, inlineHeavyCalls: 1, estTokensKept: 1000 });
+    expect(snap.savings).toEqual({ delegatedCalls: 1, inlineHeavyCalls: 1, keptBytes: 4000 });
   });
 
   test('todoGroups: unsorted holds only session-origin unphased items; other-session backlog without a phase and advisor notes stay out', async () => {

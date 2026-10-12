@@ -107,7 +107,7 @@ export interface LifecycleEntry {
   worktree?: string;
   item?: string;
 }
-export interface Savings { delegatedCalls: number; inlineHeavyCalls: number; estTokensKept: number }
+export interface Savings { delegatedCalls: number; inlineHeavyCalls: number; keptBytes: number }
 export interface Session {
   name: string;
   transport: 'subagent' | 'claude-bg' | 'tmux' | 'herdr';

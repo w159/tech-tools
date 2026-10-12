@@ -412,6 +412,6 @@ export function deriveOrchestration(i: DeriveInput) {
   const resolve = makeResolver(i);
   const rows = [...noteRows(i, resolve), ...synthRows(i, resolve)];
   const lifecycle = deriveLifecycle(i, rows);
-  const savings = { delegatedCalls: i.orch.delegatedCalls, inlineHeavyCalls: i.heavyTotal, estTokensKept: Math.round(i.orch.keptBytes / 4) };
+  const savings = { delegatedCalls: i.orch.delegatedCalls, inlineHeavyCalls: i.heavyTotal, keptBytes: i.orch.keptBytes };
   return { activity, comms: dedupeComms(rows).slice(-MAX_COMMS), lifecycle, savings };
 }
