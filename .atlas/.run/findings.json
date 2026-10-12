@@ -5332,5 +5332,98 @@
     "status": "open",
     "verified_at": "2026-10-10T09:43:08+00:00",
     "verified_by": "lead, from an observed session deny"
+  },
+  {
+    "id": "iterate-10.5.0-batch",
+    "surface": "docs",
+    "category": "documentation",
+    "severity": "medium",
+    "title": "Atlas 10.5.0 iteration wave: gate fixes, 3 new skills, solo mode, colony verbs",
+    "evidence": [
+      "baseline: python3 plugins/atlas/hooks/test_atlas_contract.py -> Ran 60 tests, FAILED (failures=4): DocsMatchCodeContract x3 (manifest/marketplace/readme counts), InstalledParityContract x1 (old install cache differs)",
+      "after docs reconcile: python3 plugins/atlas/hooks/test_atlas_contract.py -> Ran 60 tests, OK (skipped=3); DocsMatchCodeContract green",
+      "skills on disk: ls plugins/atlas/skills | wc -l = 50 (atlas-status, atlas-run-watch, atlas-tour added; atlas-tour disable-model-invocation: true)"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md [10.5.0]",
+      "docs/CHANGELOG.md [10.5.0]",
+      "plugins/atlas/README.md The skill fleet (50 skills)",
+      "docs/ROADMAP.md Deferred backlog: atlas 10.5.0 wave"
+    ],
+    "reproduction": "python3 plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "repo",
+    "status": "verified",
+    "verified_at": "2026-10-10T12:56:31+00:00",
+    "verified_by": "DocsReconcile"
+  },
+  {
+    "id": "wave-10.5.0-verifier",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 10.5.0 wave independently verified; 1 refuted sub-item (colony wave write non-atomic)",
+    "evidence": [
+      "completion_gate.py:1723-1732 seen-<letter> delta markers keyed letter+session+root-digest; :355-372 _target_exists fail-open (OSError->True); :313-321 _solo_mode unset-unchanged; :1320-1325 fail-open stdout line; test_completion_gate.py:3486-3500 (p) ts cutoff both directions; hooks suite 1365 pass/3 skip",
+      "dispatch_tripwire.py:618-640 _pin_selectors + :700-707 override-matches-none; test_genuine_override_still_denies_on_role_pin; test_empty_tools_block_is_still_denied; probe: advisory marker per-session (s1 True, s1 again False->deny, s2 fresh True)",
+      "fallow_gate.py _AUDIT_TIMEOUT=60 + :256-265 unparseable-verdict notice; format_after_edit.py:114-152 _record_skip friction+fault rows on timeout/parse/missing; bash_advisor.py _SECRETS + FTC/GLBA/Reg S-P warning line; probe: echo token, printenv PATH, piped env grep, Bearer <TOKEN> docs all None",
+      "atlas_dash_colony.py:667-714 resume/cancel handlers, :690-699 cancel refuses finished, --hard delegates to kill whose lead_not_killable guard at :849 precedes; :544-546 wave path rooted; test_atlas_dash_colony_wave.py 14 tests incl resume-noop-without-hold, lead-not-killable",
+      "atlas-status/run-watch/tour frontmatter parse (yaml keys incl allowed-tools), rootrefs resolve, no bare scripts/ refs; skill-finder.md 51 Auto/Manual rows == CHANGELOG claim; findings-schema.md 13 fields == build_entry 1:1 (atlas_finding.py:73-88), atomic os.replace claim true (:65-70)",
+      "atlas_status.py:72-73 is_verified=status+evidence, :115-128 verified/assumed split, :20+135+142 atlas_todo.load/counts reuse; no env secret reads",
+      "DOCS GAP: docs/atlas-colony.md:100-101 documents ONLY send+kill; missing pause/resume/cancel route rows, colony_wave.json, roster queued/wave fields; no other docs page covers colony routes",
+      "test_atlas_contract.py:629/635/648 skip reason verified as install-cache version (cache/atlas/<manifest version> absent for 10.5.0), not drift; colony+contract suites 102 pass/3 skip"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks -q  # 1365 passed, 3 skipped",
+    "proposed_fix": "atlas_dash_colony.py:558-561 _wave_write uses plain write_text: make tmp+os.replace atomic like atlas_finding.py:65-70; read-modify-write races between concurrent pause/cancel can drop a hold flag, and torn write fails open to no-hold in _wave_read",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-10T13:07:57+00:00",
+    "verified_by": "atlas:verifier (WaveVerifier, independent)"
+  },
+  {
+    "id": "fix-30c8adc-verifier",
+    "surface": "backend",
+    "category": "verification",
+    "severity": "low",
+    "title": "30c8adc independent re-verification: 5 of 6 fix surfaces verified; 2 caveats (squad pane stale zeros pre-measure; no regression test for unreadable-Stop-payload FAIL-OPEN branch)",
+    "evidence": [
+      "mod/register.ts:170-176,196-203: $.agent.list() added inside rebuild, not a new hot loop; rebuildTick (REBUILD_MS=1500, register.ts:17,279) gates rebuild on dataFingerprint change",
+      "mod/register.ts:121-126: persona preserved from spawn record, unlisted spawn-records kept, cap slice(-64); session.start:265-266 resets usage+taskAgents then rebuild:273 re-syncs from host list",
+      "mod/band.tsx:132-166 buildConveyor per-figure null checks -> 'ctx --'/'-- tok'/'$--'; absent usage prop falls back to snapshot numbers; snapshot.ts:100-102 measured-or-0 for contract fields",
+      "mod/routing.ts:57-66 records generic task spawns persona 'unknown'; herdr.ts:197 mergeSquad resolves unknown via personaOf, no crash",
+      "completion_gate.py:1034-1056 live subprocess: malformed JSON -> exit 0 + FAIL-OPEN line; binary -> exit 0 + FAIL-OPEN line; EMPTY stdin -> exit 0 SILENT (readable={} branch)",
+      "omp bun test: 373 pass/0 fail/22 files EXIT=0; renderOmpStyle() probe: 9621 chars, no CLAUDE_CODE_ENABLE_TODO_TOOLS, no ENABLE_TOOL_SEARCH; style.test.ts:152-157 pins strip+source",
+      "claude plugin test: 226 pass/169 fail, all 169 failing files colony/ or omp/ bun:test load residuals, zero under mod/",
+      "CAVEAT 1: mod/pane/squad.tsx:227 renders snapshot.tokens/costUsd which are ?? 0 pre-measure (snapshot.ts:100-102) -> Squad tab still shows '0 tok / $0.00' unmeasured; CAVEAT 2: no test pins the new unreadable-Stop-payload FAIL-OPEN branch (message string exists only at completion_gate.py:1053; FailOpenVisibleTest test_completion_gate.py:3591-3606 covers the crash path, not this branch)",
+      "CAVEAT 3: host agent appearance on an idle board is deferred until next dataFingerprint change (no rebuild trigger on agent.spawn/turn.complete); spawn-record fallback covers atlas spawns only"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/omp && bun test  ->  373 pass / 0 fail; claude plugin test . (plugins/atlas) -> 226 pass / 169 fail all load residuals; printf '{not json' | python3 plugins/atlas/hooks/completion_gate.py -> exit 0 + FAIL-OPEN stdout",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-11T04:44:22+00:00",
+    "verified_by": "VerifyFixCommit"
+  },
+  {
+    "id": "atlas-11.0.0-mod-textfirst",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod text-first + 11.0.0",
+    "evidence": [
+      ".atlas/.run/live-mod-boot2.txt plain text band no starfield",
+      ".atlas/.run/live-mod-cc2.txt + cc3 /atlas-cc text rows, no half-block grid, cc2==cc3",
+      "claude plugin test plugins/atlas: 229 pass / 169 bun:test residual; tsc exit 0",
+      "commit 19d4880d 8 files +224/-794; plugin.json+marketplace.json 11.0.0"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-12T08:47:34+00:00",
+    "verified_by": "lead"
   }
 ]

@@ -48,7 +48,6 @@ interface Refs {
   zones: Zone[];
 }
 
-const TITAN = '▟█▙';
 const LIVE_STATES: { readonly [k in AgentState]?: true } = { spawning: true, running: true, idle: true, input: true, stuck: true };
 
 /** Per-instance mutable refs (tick + click zones), keyed by surface. */
@@ -115,17 +114,10 @@ export function buildTrack(snap: AtlasSnapshot, glow: string, flash: boolean): {
   return { segs, phases, nodeX };
 }
 
-/** Row 2: deterministic parallax starfield; the titan's x is overall progress. */
-function buildField(w: number, tick: number, progress: number): { stars: string; tx: number } {
-  const drift = Math.floor(tick / 3);
-  let stars = '';
-  for (let x = 0; x < w; x++) {
-    const n = (Math.imul(x + 1, 2654435761) ^ Math.imul(drift + 7, 40503)) >>> 0;
-    const m = n % 13;
-    stars += m < 2 ? glyph.star : m === 2 ? glyph.starDim : m === 3 ? glyph.spark : m === 4 ? glyph.dot : ' ';
-  }
-  const tx = Math.max(0, Math.min(w - TITAN.length, Math.round(progress * (w - TITAN.length))));
-  return { stars, tx };
+/** Row 2: plain-text progress line (the starfield/titan art was removed by verdict). */
+function buildProgress(snap: AtlasSnapshot): string {
+  const pct = snap.counts.total > 0 ? Math.round((snap.counts.done / snap.counts.total) * 100) : 0;
+  return `${snap.counts.done}/${snap.counts.total} done${snap.counts.total > 0 ? ` · ${pct}%` : ''}`;
 }
 
 /** Row 3: live agents in persona colour, then mail, context gauge, tokens and cost. */
@@ -171,7 +163,7 @@ export function buildConveyor(snap: AtlasSnapshot, w: number, usage: UsageUnknow
     const persona = snap.personas.find(p => p.name === a.persona);
     const pc = persona?.color ?? BRAND.subagent;
     const sg =
-      a.state === 'running' ? glyph.play : a.state === 'spawning' ? glyph.star : a.state === 'input' ? glyph.starDim : glyph.dot;
+      a.state === 'running' ? glyph.play : a.state === 'spawning' ? glyph.diamond : a.state === 'input' ? glyph.hollow : glyph.dot;
     const parts: Seg[] = [
       { text: glyph.dot.replace(glyph.dot, '◢'), color: pc, bold: true },
       { text: ` ${a.name}`, color: pc },
@@ -251,13 +243,12 @@ const Band: ClientModule = (props, surface) => {
       }
     });
   }
-  const tick = refsFor.get(surface)?.tick ?? 0;
   const breath = blink(500) === 1;
   const glow = breath ? BRAND.focus : BRAND.accent;
 
   const track = buildTrack(snap, glow, breath);
   const tSegs = clipSegs(track.segs, w);
-  const field = buildField(w, tick, snap.counts.total > 0 ? snap.counts.done / snap.counts.total : 0);
+  const progress = buildProgress(snap);
   const conv = buildConveyor(snap, w, bp.usage);
   const cSegs = clipSegs(conv.segs, w);
   const refs = refsFor.get(surface);
@@ -318,16 +309,9 @@ const Band: ClientModule = (props, surface) => {
         ))}
       </Box>
       {full && (
-        <Box height={1} position="relative">
-          <Text color={BRAND.dim} dimColor>
-            {field.stars}
-          </Text>
-          <Box position="absolute" top={0} left={field.tx}>
-            <Text color={glow} bold>
-              {TITAN}
-            </Text>
-          </Box>
-        </Box>
+        <Text color={BRAND.dim} dimColor>
+          {progress}
+        </Text>
       )}
       {full && (
         <Box flexDirection="row">

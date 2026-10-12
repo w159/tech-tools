@@ -1,5 +1,11 @@
 # Changelog
 
+## [11.0.0] - 2026-10-12 -- atlas 11.0.0: mod text-first, live render proven
+
+Marketplace version bumped with atlas `10.5.1` -> `11.0.0` (`plugins/atlas/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`).
+
+The mod band and the `/atlas-cc` Command Center are text-first: the band is an always-on plain-text status line, and the Command Center renders text rows — the decorative block art (pixel logo, 8-frame globe, pixel colony) is removed by default, and persona sprites remain only behind the explicit opt-in `/atlas-sprites` pane. The mod loads silently (no auto-open); `/atlas-cc` opens the Command Center only on command or click. The early-wave `logo.ts` is deleted. Live render is proven (`.atlas/.run/live-mod-boot.txt`, `.atlas/.run/live-mod-cc.txt`); `docs/atlas-mod.md` is updated to match the verified behaviour.
+
 ## Unreleased - 2026-10-09 -- atlas Claude Code mod implemented in source (gated 11.0.0)
 
 The atlas Claude Code mod is now implemented in this tree: a new mod module `plugins/atlas/mod/` (the contract-track band, the `/atlas` Command Center with Colony/Channel/Board/Squad tabs, restyled built-in sites, persona model/effort routing, sprites including 16 validated personas, a Collab pane), with entrypoint `plugins/atlas/mod/register.ts` (~399 lines; unit-tested 4/4 by `plugins/atlas/mod/register.test.ts`), wired by the `modules` entry at `plugins/atlas/hooks/hooks.json:192` (its path now corrected to `../mod/register.ts` so the shipped validator resolves it; landing this run), typed at `plugins/atlas/types/index.d.ts` (the plugin adds a `types` entry and an `atlas_mod_sound` boolean userConfig, default false), documented in `docs/atlas-mod.md`, and covered by the new tests `plugins/atlas/scripts/test_atlas_collab.py` and `plugins/atlas/scripts/test_atlas_herdr_prompt.py`. Unit-verified this run: `bunx tsc --noEmit -p tsconfig.json` exit 0 in `plugins/atlas/mod`; routing 23/23, data/todos 13/0, sprites 46/46.

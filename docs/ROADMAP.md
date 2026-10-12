@@ -99,8 +99,10 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   with Colony, Channel, Board, Squad and Collab tabs, restyled built-in sites, persona
   model/effort routing), entrypoint `register.ts` wired by the `modules` entry in
   `hooks/hooks.json:192`, documented in `docs/atlas-mod.md`. Implemented in the source tree; mod tests use the
-  `claude-code/testing` kit. Not yet observed in a live session (the plan's stage 0
-  checks); ships as atlas 11.0.0. OPEN WORK on it: five sprite persona files
+  `claude-code/testing` kit. Live render is proven as of 2026-10-12 (`.atlas/.run/live-mod-boot.txt`, `.atlas/.run/live-mod-cc.txt`),
+  and the text-first conversion landed this wave: the band is an always-on plain-text status line and the Command Center
+  renders text rows — the decorative block art is removed by default, and persona sprites remain only behind the explicit
+  `/atlas-sprites` pane; the mod loads silently (no auto-open). Ships as atlas 11.0.0. OPEN WORK on it: five sprite persona files
   (`sprites/{armada,docsauditor,docscurator,implementer,unknown}.ts`) are
   byte-identical from line 16-686 (fallow dup:c77b3abb6f87acd9) — nine personas share
   lines 467-686: they render the same sprite; add a distinctness assertion to
