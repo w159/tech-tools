@@ -1,7 +1,7 @@
 // Worktree merges: a finished worker whose worktree merged gets one `merge` comms row.
 import { describe, expect, test } from 'claude-code/testing';
 import type { SquadAgent } from '../contract';
-import { deriveOrchestration, EMPTY_ORCH, onComplete, onSpawn, onToolStart, type DeriveInput, type WtRow } from './orchestration';
+import { deriveOrchestration, EMPTY_ORCH, onComplete, onSpawn, onToolEnd, onToolStart, type DeriveInput, type WtRow } from './orchestration';
 
 const NOW = 1_760_000_000_000;
 
@@ -101,5 +101,25 @@ describe('finished workers and comms labels', () => {
     const anon = onSpawn(EMPTY_ORCH, hex, 'map', NOW);
     expect(deriveOrchestration(base({ orch: anon })).comms.flatMap((c) => [c.from, c.to])).not.toContain('aa42eb');
     expect(deriveOrchestration(base({ orch: anon })).comms.some((c) => c.to === 'worker' || c.from === 'worker')).toBe(true);
+  });
+});
+
+describe('activity truth', () => {
+  test('startedAt is set once at first sight and survives tool start/end; since tracks the current tool', () => {
+    let o = onSpawn(EMPTY_ORCH, 'a1', 'map', NOW);
+    o = onToolStart(o, 'a1', 'Grep', NOW + 1_000);
+    o = onToolEnd(o, 'a1', NOW + 2_000);
+    o = onToolStart(o, 'a1', 'Read', NOW + 3_000);
+    expect(o.activity.a1?.startedAt).toBe(NOW);
+    expect(o.activity.a1?.since).toBe(NOW + 3_000);
+    expect(onToolStart(EMPTY_ORCH, 'b2', 'Grep', NOW + 9).activity.b2?.startedAt).toBe(NOW + 9);
+  });
+
+  test('tool start records a target: file basename, else the first 40 chars of a command', () => {
+    const o = onSpawn(EMPTY_ORCH, 'a1', 'map', NOW);
+    expect(onToolStart(o, 'a1', 'Edit', NOW, { file_path: '/repo/src/deep/foo.ts' }).activity.a1?.target).toBe('foo.ts');
+    const cmd = onToolStart(o, 'a1', 'Bash', NOW, { command: 'npm run build --workspaces --if-present && echo done\nsecond' });
+    expect(cmd.activity.a1?.target).toBe('npm run build --workspaces --if-present ');
+    expect(onToolStart(o, 'a1', 'Grep', NOW).activity.a1?.target).toBeUndefined();
   });
 });

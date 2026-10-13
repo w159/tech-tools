@@ -229,6 +229,18 @@ test('turn.start records the cost baseline; the receipt prints the delta', async
   expect(text).toContain('$0.12')
 })
 
+test('receipt duration is capped by the mod-owned turn timer when the host figure is larger', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const ticks = [1_000_000, 1_077_000]
+  const harness = fake$({ snapshot: snap() })
+  const $ = { ...(harness.$ as object), clock: { now: async () => ticks.shift() } } as unknown as EngineInterface
+  await regs[4]?.hook($, {}, echoNext)
+  const text = stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 542_000 }), echoNext))
+  expect(text).toContain('1m17s')
+  expect(text).not.toContain('9m02s')
+})
+
 test('ATLAS_MOD=off no-ops every site even with a live snapshot', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))

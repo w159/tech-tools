@@ -228,7 +228,7 @@ describe('SnapshotBuilder', () => {
       contextPct: 12,
       now: FIXTURE_EPOCH_MS + 5000,
     }),
-    activity: { lead: { tool: null, since: FIXTURE_EPOCH_MS + 5000, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' } },
+    activity: { lead: { tool: null, since: FIXTURE_EPOCH_MS + 5000, startedAt: FIXTURE_EPOCH_MS + 5000, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' } },
     comms: [],
     todoGroups: [],
     });

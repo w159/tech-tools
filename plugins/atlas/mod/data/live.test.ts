@@ -19,3 +19,14 @@ test('host-finished worker is done even when its activity mood is blocked', () =
   s.activity['probe-park'] = { mood: 'blocked', tool: null, since: NOW, lastLine: 'awaits lead reply' } as (typeof s.activity)[string];
   expect(liveWorkers(s, NOW).find((w) => w.name === 'probe-park')?.state).toBe('done');
 });
+
+test('liveWorkers carries startedAt, target, and a distinct parked state outside the working count', () => {
+  const s = busySnap();
+  s.activity['explorer-1'] = { ...s.activity['explorer-1']!, since: NOW - 3_000, startedAt: NOW - 300_000, target: 'auth.ts' };
+  s.squad.push({ name: 'sleeper', persona: 'explorer', state: 'parked', source: 'task' });
+  const ws = liveWorkers(s, NOW);
+  const ex = ws.find((w) => w.name === 'explorer-1')!;
+  expect([ex.startedAt, ex.since, ex.target]).toEqual([NOW - 300_000, NOW - 3_000, 'auth.ts']);
+  expect(ws.find((w) => w.name === 'sleeper')?.state).toBe('parked');
+  expect(activeCount(ws)).toBe(2);
+});

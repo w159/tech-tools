@@ -42,6 +42,7 @@ test('press a member, type, submit: the note goes to that member and the draft c
     requestId: 'atlas',
     props: { title: 'Atlas', isFocused: true, bodyColumns: 44, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} } as never,
   });
+  await ui.press({ key: 'tab:team' }); // the pane opens on route
   await ui.press({ key: 'worker:impl-a' });
   await ui.input({ key: 'msg', text: 'ping', kind: 'change' });
   await ui.input({ key: 'msg', text: 'ping' });
@@ -81,11 +82,11 @@ test('hotkey tab c sets the view to channel', async ($, on) => {
     plugin: 'atlas', surface: 'terminal', component: 'Pane', requestId: 'atlas',
     props: { title: 'Atlas', isFocused: true, bodyColumns: 56, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} } as never,
   });
-  expect((await ui.find({ key: 'tab:team' }))?.props.dimColor).toBe(false);
+  expect((await ui.find({ key: 'tab:route' }))?.props.dimColor).toBe(false); // route is the default tab
   expect((await ui.find({ key: 'tab:channel' }))?.props.hotkey).toBe('c');
   await ui.press({ key: 'tab:channel' });
   expect((await ui.find({ key: 'tab:channel' }))?.props.dimColor).toBe(false);
-  expect((await ui.find({ key: 'tab:team' }))?.props.dimColor).toBe(true);
+  expect((await ui.find({ key: 'tab:route' }))?.props.dimColor).toBe(true);
 });
 
 /** The team view's worker row as drawn after `ms` more mocked time (a working row carries the spinner frame). */
@@ -95,6 +96,7 @@ async function workerRowAfter($: Engine, clock: { advance(ms: number): Promise<u
     plugin: 'atlas', surface: 'terminal', component: 'Pane', requestId: 'atlas',
     props: { title: 'Atlas', isFocused: true, bodyColumns: 120, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} } as never,
   });
+  await ui.press({ key: 'tab:team' });
   const text = (await ui.find({ key: 'worker:impl-a' }))?.text ?? '';
   await ui.unmount();
   return text;
