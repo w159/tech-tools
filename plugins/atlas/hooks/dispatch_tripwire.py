@@ -357,6 +357,27 @@ def _advisory(msg):
     )
 
 
+def _scope_mismatch_note(tinput):
+    """Advisory only: a `SCOPE: <class>/<effort>` line names the expected team; note a role outside it."""
+    m = re.search(r"^SCOPE:\s*([\w-]+)/(\w+)\s*$", str(tinput.get("prompt") or ""), re.M)
+    if not m:
+        return ""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        from atlas_resolve import resolve
+
+        roles = [t["role"] for t in resolve(m.group(1), m.group(2))["team"]]
+    except Exception as exc:  # advisory must never break a dispatch
+        return f"[atlas] ADVISORY - SCOPE {m.group(1)}/{m.group(2)} did not resolve: {exc}"
+    agent = str(tinput.get("subagent_type") or "").split(":")[-1]
+    if agent in roles:
+        return ""
+    return (
+        f"[atlas] ADVISORY - SCOPE {m.group(1)}/{m.group(2)} expects roles {roles}, "
+        f"but this dispatch is to '{agent}'. Proceeding; align the team or drop the SCOPE line."
+    )
+
+
 def _toolkit_gap(tinput):
     """An atlas:* dispatch whose prompt never orders real code-nav tools.
 
@@ -1120,6 +1141,10 @@ def _pre_tool_use(
                 + "\nPaste:\n"
                 + _role_block(str((tinput or {}).get("subagent_type"))),
             )
+        else:
+            note = _scope_mismatch_note(tinput or {})
+            if note:
+                _advisory(note)
         return
     # (b) Editing production target code inline is the sharpest violation.
     if tool in EDIT_TOOLS and not _is_orchestration_path(path):

@@ -1,0 +1,373 @@
+{
+ "_doc": "Scope matrix: (task_class, effort) -> team shape. Read by scripts/atlas_resolve.py and omp/resolve.ts. Role effort must equal agents/<role>.md frontmatter. tools_profile: read | edit | exec.",
+ "classes": {
+  "implement": {
+   "low": {
+    "team": [
+     {
+      "role": "implementer",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "edit"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "implementer",
+      "count": 2,
+      "effort": "medium",
+      "tools_profile": "edit"
+     },
+     {
+      "role": "verifier",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "worktree",
+    "max_parallel": 3
+   },
+   "high": {
+    "team": [
+     {
+      "role": "planner",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read"
+     },
+     {
+      "role": "implementer",
+      "count": 3,
+      "effort": "medium",
+      "tools_profile": "edit"
+     },
+     {
+      "role": "verifier",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "worktree",
+    "max_parallel": 5
+   }
+  },
+  "fix": {
+   "low": {
+    "team": [
+     {
+      "role": "implementer",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "edit"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "explorer",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read"
+     },
+     {
+      "role": "implementer",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "edit"
+     },
+     {
+      "role": "verifier",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 2
+   },
+   "high": {
+    "team": [
+     {
+      "role": "explorer",
+      "count": 2,
+      "effort": "low",
+      "tools_profile": "read"
+     },
+     {
+      "role": "implementer",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "edit"
+     },
+     {
+      "role": "verifier",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "worktree",
+    "max_parallel": 4
+   }
+  },
+  "verify": {
+   "low": {
+    "team": [
+     {
+      "role": "verifier",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "verifier",
+      "count": 2,
+      "effort": "medium",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 2
+   },
+   "high": {
+    "team": [
+     {
+      "role": "verifier",
+      "count": 2,
+      "effort": "medium",
+      "tools_profile": "exec"
+     },
+     {
+      "role": "completeness-critic",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 3
+   }
+  },
+  "audit": {
+   "low": {
+    "team": [
+     {
+      "role": "explorer",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "explorer",
+      "count": 2,
+      "effort": "low",
+      "tools_profile": "read"
+     },
+     {
+      "role": "completeness-critic",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 3
+   },
+   "high": {
+    "team": [
+     {
+      "role": "explorer",
+      "count": 3,
+      "effort": "low",
+      "tools_profile": "read"
+     },
+     {
+      "role": "completeness-critic",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read"
+     },
+     {
+      "role": "rls-privilege-audit",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 5
+   }
+  },
+  "docs": {
+   "low": {
+    "team": [
+     {
+      "role": "docs-curator",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "edit"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "docs-curator",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "edit"
+     },
+     {
+      "role": "docs-auditor",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 2
+   },
+   "high": {
+    "team": [
+     {
+      "role": "docs-curator",
+      "count": 2,
+      "effort": "low",
+      "tools_profile": "edit"
+     },
+     {
+      "role": "docs-auditor",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 3
+   }
+  },
+  "db": {
+   "low": {
+    "team": [
+     {
+      "role": "db-prober",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "db-prober",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read"
+     },
+     {
+      "role": "rls-privilege-audit",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 2
+   },
+   "high": {
+    "team": [
+     {
+      "role": "db-prober",
+      "count": 2,
+      "effort": "low",
+      "tools_profile": "read"
+     },
+     {
+      "role": "rls-privilege-audit",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read"
+     },
+     {
+      "role": "verifier",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 4
+   }
+  },
+  "ui-test": {
+   "low": {
+    "team": [
+     {
+      "role": "ui-runtime-tester",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "ui-runtime-tester",
+      "count": 2,
+      "effort": "low",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 2
+   },
+   "high": {
+    "team": [
+     {
+      "role": "ui-runtime-tester",
+      "count": 3,
+      "effort": "low",
+      "tools_profile": "exec"
+     },
+     {
+      "role": "verifier",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 4
+   }
+  }
+ }
+}
