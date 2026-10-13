@@ -71,11 +71,11 @@ const MAX_WORKERS = 4;
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 // Mirror of PHASE_FRAMES in mod/theme.ts (module-private there); channel-view.test.ts asserts equality via spin().
 const PHASE_FRAMES: Record<string, string[]> = {
-	research: ["◜", "◝", "◞", "◟"],
-	theory: ["✶", "✷", "✸", "✹"],
-	test: ["⠁", "⠂", "⠄", "⡀"],
-	implement: ["⣾", "⣽", "⣻", "⢿"],
-	verify: ["◐", "◓", "◑", "◒"],
+	research: ["◜", "◠", "◝", "◞", "◡", "◟"],
+	theory: ["✶", "✷", "✸", "✹", "✺", "✻"],
+	test: ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠"],
+	implement: ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟"],
+	verify: ["◐", "◓", "◑", "◒", "◔", "◕"],
 };
 
 export function spinFrame(n: number, phase?: string): string {
