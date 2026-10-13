@@ -59,6 +59,29 @@ class WorkerReportGateTest(unittest.TestCase):
             env=env or self.env,
         )
 
+    def test_stop_marks_known_member_finished(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["impl-1"])
+        self.run_hook(
+            payload(
+                agent_name="impl-1",
+                agent_type="atlas:implementer",
+                cwd=root,
+                last_assistant_message=COMPLIANT,
+            )
+        )
+        mem = [
+            m
+            for c in todo._reg_read(root)["channels"].values()
+            for m in c["members"]
+            if m["name"] == "impl-1"
+        ]
+        self.assertEqual([m.get("exit_code") for m in mem], [0])
+
     def test_compliant_is_silent(self):
         r = self.run_hook(payload(last_assistant_message=COMPLIANT))
         self.assertEqual(r.returncode, 0)

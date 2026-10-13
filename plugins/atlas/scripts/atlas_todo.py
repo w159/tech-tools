@@ -1138,6 +1138,64 @@ def ensure_main(root: Optional[str] = None) -> dict:
     )
 
 
+def reap_channels(
+    root: Optional[str],
+    now: Optional[float] = None,
+    max_idle: float = 86400,
+    keep: Optional[str] = None,
+    dry_run: bool = False,
+) -> dict:
+    """Archive then delete dead lead channels; prune dead main-channel members.
+    A lead channel is dead when every member has exit_code or no activity for max_idle
+    and no member holds a live pid (pid_matches). `keep` names a lead whose channel is
+    never reaped. Archive line goes to .atlas/.run/archive/channels-YYYYMM.jsonl first.
+    Returns {reaped, archived_path, kept}."""
+    now = time.time() if now is None else now
+    keep = _sanitize_owner(keep) if keep else None
+
+    def stale(m: dict, chan: dict) -> bool:
+        if "exit_code" in m:
+            return True
+        return now - float(chan.get("last_activity") or 0) > max_idle
+
+    def live(m: dict) -> bool:
+        return bool(m.get("pid")) and pid_matches(m.get("pid"), m.get("pid_start"))
+
+    arch_dir = Path(_resolve_base(root)) / BOARD_DIR / "archive"
+    arch = arch_dir / f"channels-{time.strftime('%Y%m', time.gmtime(now))}.jsonl"
+    dead: List[dict] = []
+
+    def fn(reg: dict) -> int:
+        for name, chan in list(reg["channels"].items()):
+            if chan.get("kind") == "main":
+                chan["members"] = [
+                    m for m in chan["members"] if not stale(m, chan) or live(m)
+                ]
+                continue
+            if chan.get("kind") != "lead" or (keep and chan.get("lead") == keep):
+                continue
+            mem = chan.get("members", [])
+            if any(live(m) for m in mem) or not all(stale(m, chan) for m in mem):
+                continue
+            dead.append(chan)
+        if dead and not dry_run:
+            arch_dir.mkdir(parents=True, exist_ok=True)
+            with arch.open("a", encoding="utf-8") as f:  # archive before delete
+                for c in dead:
+                    f.write(json.dumps(c) + "\n")
+            for c in dead:
+                del reg["channels"][c["name"]]
+        return len(dead)
+
+    n = _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
+    return {
+        "reaped": 0 if dry_run else n,
+        "would_reap": n if dry_run else 0,
+        "archived_path": str(arch) if n and not dry_run else None,
+        "kept": len(_reg_read(root)["channels"]),
+    }
+
+
 def open_lead_channel(
     root: Optional[str],
     lead_name: str,
@@ -1164,7 +1222,12 @@ def open_lead_channel(
         sub["last_activity"] = time.time()
         return dict(sub)
 
-    return _reg_update(root, fn, timeout)
+    out = _reg_update(root, fn, timeout)
+    try:  # once per lead session; cheap and idempotent, never blocks opening
+        reap_channels(root, keep=lead)
+    except Exception:
+        pass
+    return out
 
 
 def join(
@@ -1584,10 +1647,12 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--exit"
             or a == "--kind"
             or a == "--paths"
+            or a == "--max-idle"
+            or a == "--keep"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
-        elif a == "--force" or a == "--unique" or a == "--json":
+        elif a == "--force" or a == "--unique" or a == "--json" or a == "--dry-run":
             flags[a[2:]] = "1"
             i += 1
         else:
@@ -1765,6 +1830,16 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                         for m in members
                     },
                 }
+        elif cmd == "channel-reap":
+            out = {
+                "ok": True,
+                **reap_channels(
+                    find_root(root) if root else root,
+                    max_idle=float(flags.get("max-idle", 86400)),
+                    keep=flags.get("keep"),
+                    dry_run=bool(flags.get("dry-run")),
+                ),
+            }
         elif cmd == "channel-board":
             out = {
                 "ok": True,

@@ -187,6 +187,35 @@ def check_report(msg, agent_type, cwd, report):
     return problems
 
 
+def finish_member(p):
+    """Mark the stopping agent's channel member finished and drop it from its channel,
+    so channels.json stops accumulating. Fail-open. The payload carries no member name
+    for Claude Task subagents, only omp's `agent_name`; agent_id is tried as a fallback."""
+    try:
+        sys.path.insert(
+            0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        )
+        import atlas_todo
+        import worker_inbox
+
+        cwd = p.get("cwd")
+        root = atlas_todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
+        for key in ("agent_name", "agent_id"):
+            who = worker_inbox._member_for(atlas_todo, root, str(p.get(key) or ""))
+            if who:
+                atlas_todo.mark_finished(root, who, 0)
+                for ch in list(atlas_todo._reg_read(root)["channels"]):
+                    atlas_todo.leave(root, ch, who)
+                return
+    except Exception as exc:
+        try:
+            import atlas_faults
+
+            atlas_faults.record("worker_report_gate.finish_member", exc)
+        except Exception:
+            pass
+
+
 def main():
     if (
         os.environ.get("ATLAS_GATE") == "off"
@@ -208,8 +237,10 @@ def main():
         report = json.load(f)["report"]
     problems = check_report(msg, agent_type, p.get("cwd"), report)
     if not problems:
+        finish_member(p)
         return
     if not marker_claimed(p.get("agent_id") or "unknown"):
+        finish_member(p)  # blocked once already: this is the final report
         return
     reason = (
         "Your final message is not the atlas report container ("

@@ -59,6 +59,47 @@ class ChannelModel(unittest.TestCase):
     def drain(self, name, **kw):
         return worker_inbox.drain(self.root, name, **kw)
 
+    def _dead_lead(self, name="old", pid=None):
+        todo.open_lead_channel(self.root, name, ["w1"])
+        todo.mark_finished(self.root, "w1", 0)
+        todo.mark_finished(self.root, name, 0)
+        if pid:
+            todo._reg_update(
+                self.root,
+                lambda r: r["channels"][f"{self.main}/{name}"]["members"][0].update(
+                    pid=pid, pid_start=todo.pid_start(pid)
+                )
+                or r["channels"][f"{self.main}/{name}"]["members"][0].pop("exit_code"),
+            )
+
+    def test_reap_archives_and_removes_dead_lead_channel_idempotently(self):
+        self._dead_lead()
+        out = todo.reap_channels(self.root, now=time.time() + 90000)
+        self.assertEqual(out["reaped"], 1)
+        names = list(todo._reg_read(self.root)["channels"])
+        self.assertNotIn(f"{self.main}/old", names)
+        self.assertIn(self.main, names)  # main channel never reaped
+        lines = Path(out["archived_path"]).read_text().splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(json.loads(lines[0])["name"], f"{self.main}/old")
+        self.assertEqual(todo.reap_channels(self.root, now=time.time() + 90000)["reaped"], 0)
+
+    def test_reap_live_pid_and_keep_block_reaping(self):
+        self._dead_lead("old", pid=os.getpid())
+        later = time.time() + 90000
+        self.assertEqual(todo.reap_channels(self.root, now=later)["reaped"], 0)
+        self._dead_lead("mine")
+        self.assertEqual(todo.reap_channels(self.root, now=later, keep="mine")["reaped"], 0)
+
+    def test_reap_prunes_finished_main_members_and_dry_run_is_inert(self):
+        self._dead_lead()
+        out = todo.reap_channels(self.root, now=time.time() + 90000, dry_run=True)
+        self.assertEqual((out["reaped"], out["would_reap"]), (0, 1))
+        self.assertIn(f"{self.main}/old", list(todo._reg_read(self.root)["channels"]))
+        todo.reap_channels(self.root, now=time.time() + 90000)
+        mainc = todo.get_channel(self.root, self.main)
+        self.assertEqual([m["name"] for m in mainc["members"]], [])
+
     def test_mark_finished_works_in_either_order_with_leave(self):
         chan = todo.open_lead_channel(self.root, "L", ["A", "B"])["name"]
         todo.leave(self.root, chan, "A")
