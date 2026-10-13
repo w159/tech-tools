@@ -674,7 +674,7 @@ MAX_MODEL = {"haiku", "sonnet"}
 
 # Only the roles that render an independent verdict against evidence they were not
 # handed get medium. Everything else executes a clear spec at low.
-MEDIUM_EFFORT_ROLES = {"verifier", "completeness-critic", "rls-privilege-audit"}
+MEDIUM_EFFORT_ROLES = {"implementer", "verifier", "completeness-critic", "rls-privilege-audit"}
 
 # Claude Code's agent palette, confirmed against the shipped CLI binary: the
 # frontmatter value is a KEY into

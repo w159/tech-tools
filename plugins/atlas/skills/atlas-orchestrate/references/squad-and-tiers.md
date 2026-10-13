@@ -23,7 +23,7 @@ frontmatter key).
 
 | Effort | Use for | Agents |
 |---|---|---|
-| **low** | executing a clear spec: mapping, implementing, cataloguing, curating, running a gate, running exact steps | `runner`, `explorer`, `planner`, `implementer`, `docs-auditor`, `docs-curator`, `db-prober`, `ui-runtime-tester`, `schema-inventory`, `naming-glossary-audit` |
+| **low** | executing a clear spec: mapping, cataloguing, curating, running a gate, running exact steps | `runner`, `explorer`, `planner`, `docs-auditor`, `docs-curator`, `db-prober`, `ui-runtime-tester`, `schema-inventory`, `naming-glossary-audit` |
 | **medium** | rendering an independent verdict against evidence you did not hand them | `verifier`, `completeness-critic`, `rls-privilege-audit` |
 
 Raising a subagent's effort is a last resort after the prompt has been tightened and still fails.
@@ -68,3 +68,9 @@ Dispatch constantly. Three complementary sets:
 This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; 17 hook programs / 22 bindings ship (16 under `hooks/`, plus `atlas_doctor.py` physically under `scripts/`) and all auto-load via `hooks/hooks.json` on install (no manual step).
 
 
+
+## Deterministic team shape (scope matrix)
+
+`contracts/scope-matrix.json` maps `(task_class, effort)` to team (role, count, effort, tools profile), isolation and max_parallel. `scripts/atlas_resolve.py <class> <effort> [--paths a,b]` and `omp/resolve.ts` read it identically. Put `SCOPE: <class>/<effort>` in a dispatch prompt and the tripwire adds an advisory (never a deny) when the role is outside the resolved team.
+
+Tier source of truth: role effort in the matrix equals `agents/<role>.md` frontmatter. Drift resolved: `implementer` is **medium** in both frontmatter and omp `ATLAS_THINKING_LEVELS` (it writes code; low was the only code-writing agent below medium). omp may render a Claude `low` as `off`.
