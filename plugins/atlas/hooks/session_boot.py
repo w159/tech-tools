@@ -75,6 +75,13 @@ def ensure_dashboard():
             return None
         state = "ready" if data.get("already_running") else "started"
         return f"dashboard: {url} ({state})"
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(Exception):
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import atlas_hook_guard
+
+            atlas_hook_guard.fault("session_boot", "dashboard ensure exceeded 15s")
+        return None
     except Exception:
         return None
 

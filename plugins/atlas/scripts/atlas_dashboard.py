@@ -1556,7 +1556,13 @@ def ensure_daemon(port: int | None = None) -> dict:
     port = port or DEFAULT_PORT
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with open(STATE_DIR / f"dashboard-{int(port)}.lock", "a") as lockf:
-        fcntl.flock(lockf, fcntl.LOCK_EX)  # released when the file closes
+        # Non-blocking: a blocking flock behind another session's slow start outlasted
+        # session_boot's 15s guard and failed silently. The holder is already ensuring.
+        try:
+            fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)  # released when the file closes
+        except OSError:  # BlockingIOError (EWOULDBLOCK/EAGAIN)
+            print("dashboard: another session is starting it", file=sys.stderr)
+            return {"ok": True, "starting": True, "port": port}
         return _ensure_daemon_locked(port)
 
 

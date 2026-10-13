@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
+import fcntl
 import io
+import time
 import sys
 import tempfile
 import unittest
@@ -40,6 +42,26 @@ class EnsureReuseTests(unittest.TestCase):
         res, stop, _ = self._ensure(h)
         stop.assert_called_once()
         self.assertFalse(res.get("already_running", False))
+
+
+class EnsureLockBusyTests(unittest.TestCase):
+    def test_busy_lock_returns_promptly_without_spawning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                mock.patch.object(d, "STATE_DIR", Path(tmp)),
+                mock.patch.object(d.subprocess, "Popen") as popen,
+                open(Path(tmp) / "dashboard-7998.lock", "a") as held,
+            ):
+                fcntl.flock(held, fcntl.LOCK_EX)
+                err = io.StringIO()
+                t0 = time.monotonic()
+                with contextlib.redirect_stderr(err):
+                    res = d.ensure_daemon(7998)
+                elapsed = time.monotonic() - t0
+        self.assertLess(elapsed, 2)
+        self.assertTrue(res["ok"])
+        self.assertIn("another session is starting it", err.getvalue())
+        popen.assert_not_called()
 
 
 class LogTests(unittest.TestCase):
