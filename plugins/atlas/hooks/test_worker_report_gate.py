@@ -107,6 +107,28 @@ class WorkerReportGateTest(unittest.TestCase):
         ]
         self.assertEqual([m.get("exit_code") for m in mem], [0])
 
+    def test_stop_without_last_message_still_finishes_member(self):
+        # Real Claude SubagentStop of a background atlas:explorer: no
+        # last_assistant_message key at all (keys: agent_id, agent_type, ...).
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["explorer-ab12"])
+        todo.set_member_agent_id(root, "explorer-ab12", "aae39746167210093")
+        p = payload(agent_id="aae39746167210093", agent_type="atlas:explorer", cwd=root)
+        del p["last_assistant_message"]
+        self.run_hook(p)
+        mem = [
+            m
+            for c in todo._reg_read(root)["channels"].values()
+            for m in c["members"]
+            if m["name"] == "explorer-ab12"
+        ]
+        self.assertEqual([m.get("exit_code") for m in mem], [0])
+        self.assertTrue(all("ended_at" in m for m in mem))
+
     def test_compliant_is_silent(self):
         r = self.run_hook(payload(last_assistant_message=COMPLIANT))
         self.assertEqual(r.returncode, 0)

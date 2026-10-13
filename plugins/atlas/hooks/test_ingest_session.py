@@ -254,6 +254,32 @@ class FacetFreshnessTest(_HookTestCase):
         self.assertEqual(self._message_count(), 2)
 
 
+class SessionEndLeadTest(unittest.TestCase):
+    def test_session_end_marks_lead_finished_and_reaps(self):
+        # SessionEnd payload from Claude Code carries session_id + cwd; no transcript needed.
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp())
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        sid = "abc123def456"
+        lead = todo.lead_name(sid)
+        todo.open_lead_channel(root, lead, ["explorer-ab12"])
+        todo.mark_finished(root, "explorer-ab12", 0)
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_LEAD_NAME"}
+        subprocess.run(
+            [sys.executable, HOOK],
+            input=json.dumps(
+                {"hook_event_name": "SessionEnd", "session_id": sid, "cwd": root}
+            ),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        # lead and its only subagent are finished, so the reaper archived the channel
+        chans = todo._reg_read(root)["channels"]
+        self.assertEqual([c for c in chans if c.endswith("/" + lead)], [])
+
+
 class NoTranscriptTest(_HookTestCase):
     def test_empty_stdin_returns_early(self):
         self._run_main(None)

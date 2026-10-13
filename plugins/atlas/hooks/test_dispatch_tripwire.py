@@ -1002,6 +1002,50 @@ class InProcessTest(unittest.TestCase):
         self._run_main(p)
         self.assertEqual(todo.member_for_agent_id(root, "a41e91e5560395790"), "impl-1")
 
+    def test_real_claude_payloads_join_member_to_agent_id_by_tool_use_id(self):
+        # Real Claude Code shapes (captured live): PostToolUse:Agent tool_input is the
+        # ORIGINAL input (no `name`; the autonamer's name lives only in PreToolUse
+        # updatedInput) and tool_response is a dict {isAsync, status, agentId, ...}.
+        # Only tool_use_id is common to Pre and Post.
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=self.tmp))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        tuid = "toolu_012ado6mEt6TyaaXaNqDGEEM"
+        orig = {
+            "description": "Background sleep probe",
+            "prompt": "GOAL: sleep\nSTOP: after",
+            "subagent_type": "atlas:explorer",
+        }
+        pre = {
+            "hook_event_name": "PreToolUse",
+            "cwd": root,
+            "session_id": "sess-real",
+            "tool_name": "Agent",
+            "tool_use_id": tuid,
+            "tool_input": {**orig, "name": "explorer-ab12"},  # after _inject_name
+        }
+        with patch.dict(os.environ, {"ATLAS_CHANNELS": "on"}):
+            self.assertIsNotNone(self.dt._channel_dispatch(pre))
+        post = {
+            "hook_event_name": "PostToolUse",
+            "cwd": root,
+            "session_id": "sess-real",
+            "tool_name": "Agent",
+            "tool_use_id": tuid,
+            "tool_input": orig,
+            "tool_response": {
+                "isAsync": True,
+                "status": "async_launched",
+                "agentId": "aae39746167210093",
+                "description": "Background sleep probe",
+            },
+        }
+        self._run_main(post)
+        self.assertEqual(
+            todo.member_for_agent_id(root, "aae39746167210093"), "explorer-ab12"
+        )
+
     def _fresh_run(self, session_id, mark_orch=False):
         conn = self.atlas_db.connect(self.db_path)
         pid = self.atlas_db.register_project(conn, "/repo/x")

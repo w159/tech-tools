@@ -732,12 +732,19 @@ def _record_agent_id(payload):
         found = re.search(
             r"agentId\W+([0-9a-f]{8,})", json.dumps(payload.get("tool_response"))
         )
-        if not (name and found):
+        if not found:
             return
         import atlas_todo
 
         cwd = payload.get("cwd")
         root = atlas_todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
+        # Real Claude PostToolUse carries the ORIGINAL tool_input (the autonamed
+        # `name` was injected via PreToolUse updatedInput), so join on tool_use_id.
+        name = name or atlas_todo.member_for_tool_use_id(
+            root, str(payload.get("tool_use_id") or "")
+        )
+        if not name:
+            return
         atlas_todo.set_member_agent_id(root, name, found.group(1))
     except Exception as exc:
         _record_fault(exc)
@@ -1740,6 +1747,8 @@ def _channel_dispatch(payload):
     chan = atlas_todo.open_lead_channel(
         root, lead, [name], timeout=atlas_todo.CHANNEL_LOCK_TIMEOUT_S
     )
+    if payload.get("tool_use_id"):  # the join key for PostToolUse (no name there)
+        atlas_todo.set_member_tool_use_id(root, name, payload["tool_use_id"])
     if str(tinput.get("subagent_type") or "").startswith("atlas:"):
         goal = re.search(r"^\s*GOAL:\s*(.+)$", prompt, re.M)
         title = goal.group(1).strip() if goal else " ".join(prompt.split())[:80]
@@ -1811,6 +1820,7 @@ def _inject_name(payload, out):
     except Exception as exc:
         _record_fault(exc)
         return out
+
 
 
 def main():
