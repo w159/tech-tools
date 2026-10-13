@@ -18,7 +18,8 @@ import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 
 export const WIDGET_KEY = "atlas-channel";
-const MAX_NOTES = 8; // omp caps a widget at 10 lines: title + notes + roster
+const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + header + workers + notes + roster; notes are trimmed first
+const MAX_NOTES = 8;
 const MAX_LINE = 110;
 const POLL_MS = 1500;
 const LINGER_MS = 15_000;
@@ -248,7 +249,8 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		const notes = readChannelNotes(info.root, info.channel);
 		const live = liveWorkers(info.root, info.channel);
 		const head = [headerLine(info.root, live.length), ...workerLines(live, tickN, now())];
-		const lines = [`atlas channel ${info.channel}`, ...head, ...notes.slice(-Math.max(1, 9 - head.length)).map(n => formatNote(n)), rosterLine(info.members, finished())];
+		const lines = [`atlas channel ${info.channel}`, ...head, ...(noteRoom => (noteRoom > 0 ? notes.slice(-noteRoom) : [])
+				)(Math.max(0, MAX_LINES - 2 - head.length)).map(n => formatNote(n)), rosterLine(info.members, finished())];
 		const key = lines.join("\n");
 		if (key !== painted) ui.setWidget(WIDGET_KEY, lines);
 		painted = key;

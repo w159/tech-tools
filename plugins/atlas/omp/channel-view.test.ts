@@ -261,6 +261,18 @@ test("a linked-worktree cwd reads the MAIN repo board, where atlas_todo.py write
 	view.stop();
 });
 
+test("widget never exceeds omp's 10-line cap with 6 workers and 8 notes; roster stays last", () => {
+	const names = Array.from({ length: 6 }, (_, i) => `w${i}`);
+	const root = atlasFixture(names.map(name => ({ name, joined: 1 })), [{ status: "pending", phase: "verify" }]);
+	for (let i = 0; i < 8; i++) appendFileSync(join(root, ".atlas", ".run", "board", "a.jsonl"), `${JSON.stringify({ ts: i, seq: i + 1, owner: "a", to: "all", text: `n${i}`, channel: CHAN })}\n`);
+	const { calls, ui, view } = harness({ ATLAS_PROJECT_ROOT: root });
+	view.open(ui, { channel: CHAN, members: names, cwd: root });
+	expect(calls[0]!.length).toBeLessThanOrEqual(10);
+	expect(calls[0]![1]).toStartWith("ATLAS");
+	expect(calls[0]!.at(-1)).toStartWith("members:");
+	view.stop();
+});
+
 test("widget paints header first and advances spinner per poll", () => {
 	const root = atlasFixture([{ name: "w1", joined: 1 }], [{ status: "pending", phase: "verify" }]);
 	const { calls, ui, timers, view } = harness({ ATLAS_PROJECT_ROOT: root });
