@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## [12.1.1] - 2026-10-13 -- hook counts and README list include edit_read_nudge
+
+### Fixed
+- Hook counts (19 hook programs / 25 bindings) in plugin.json and README, and `edit_read_nudge.py` in the README hook list, so DocsMatchCodeContract passes. Detail in README hook list.
+
 ## [12.1.0] - 2026-10-13 -- colony reaper, scope resolver, branded band, omp parity
 
 ### Added
