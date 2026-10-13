@@ -253,6 +253,39 @@ class MainInProcessTest(unittest.TestCase):
         self.assertTrue(any("ruff" in c for c in ran))
         prn.assert_not_called()
 
+    def test_file_outside_cwd_does_nothing(self):
+        """Edits outside the payload cwd: no formatter, no friction row, no fault."""
+        import atlas_faults
+
+        other = tempfile.mkdtemp()
+        outside = os.path.join(other, "x.py")
+        with open(outside, "w") as f:
+            f.write("x = 1\n")
+        bf, br = len(atlas_faults.load()), len(self._skip_rows())
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value="/bin/x"),
+            mock.patch.object(format_after_edit.subprocess, "run") as run,
+        ):
+            rc = self._run_main(_payload("Edit", outside, cwd=self.tmp))
+        self.assertEqual(rc, 0)
+        run.assert_not_called()
+        self.assertEqual(len(atlas_faults.load()), bf)
+        self.assertEqual(len(self._skip_rows()), br)
+
+    def test_file_inside_cwd_still_formats(self):
+        class FakeProc:
+            returncode = 0
+
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value="/bin/x"),
+            mock.patch.object(
+                format_after_edit.subprocess, "run", return_value=FakeProc()
+            ) as run,
+        ):
+            rc = self._run_main(_payload("Edit", self.target, cwd=self.tmp))
+        self.assertEqual(rc, 0)
+        run.assert_called()
+
     def test_formatter_failure_writes_one_fault_row(self):
         """No formatter succeeded: exit 0 (a skip, not a crash) AND exactly one
         fault row - F6: the failure used to be fully invisible."""
@@ -329,11 +362,11 @@ class MainInProcessTest(unittest.TestCase):
             self._run_main(payload)
         return len(atlas_faults.load()) - bf, len(self._skip_rows()) - br
 
-    def test_missing_is_one_friction_row_per_session_ext_and_no_fault(self):
+    def test_no_candidate_formatter_is_silent_per_session_and_ext(self):
         a = self._faults_and_rows(None, {}, sid="dedupe")
         b = self._faults_and_rows(None, {}, sid="dedupe")
         c = self._faults_and_rows(None, {}, sid="other")
-        self.assertEqual((a, b, c), ((0, 1), (0, 0), (0, 1)))
+        self.assertEqual((a, b, c), ((0, 0), (0, 0), (0, 0)))
 
     def test_runtime_filenotfound_is_missing_no_fault(self):
         r = self._faults_and_rows(
