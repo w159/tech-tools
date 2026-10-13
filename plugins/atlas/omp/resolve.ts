@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 const MATRIX = nodePath.resolve(import.meta.dir, "..", "contracts", "scope-matrix.json");
 
 /** Sorted, de-duplicated, posix-normalized, no leading "./" (matches python normalize_paths). */
-export function normalizePaths(paths: string[] = []): string[] {
+function normalizePaths(paths: string[] = []): string[] {
 	const set = new Set(paths.map(p => p.trim()).filter(Boolean).map(p => nodePath.posix.normalize(p)));
 	return [...set].sort();
 }

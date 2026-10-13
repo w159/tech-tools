@@ -24,7 +24,9 @@
     "format_after_edit.py",
     "docs_drift_watch.py",
     "dispatch_tripwire.py",
-    "connector_credential_watch.py"
+    "connector_credential_watch.py",
+    "delegation_prewarn.py",
+    "edit_read_nudge.py"
   ],
   "bridgedSessionEnd": [
     "completion_gate.py",

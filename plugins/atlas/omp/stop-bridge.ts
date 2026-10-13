@@ -55,6 +55,7 @@ import {
 	runHook,
 	SESSION_END_EVENTS,
 } from "./hook-bridge";
+import { TODO_SCRIPT } from "./channels";
 import { runCapture } from "./proc";
 import { runStateArgv } from "./run-state";
 
@@ -205,6 +206,8 @@ export interface StopBridgeDeps {
 	cache?: TranscriptCache;
 	/** Detached, never-awaited spawn of `argv` with `stdinFile` as its stdin. Tests inject a recorder. */
 	spawnDetached?(argv: string[], opts: DetachedOpts): void;
+	/** Detached, fail-open `atlas_todo.py channel-reap --root <cwd>` run at lead shutdown. Tests inject a recorder. */
+	reap?(cwd: string): void;
 	/** Base directory for the per-ingest owned dirs; default os.tmpdir(). Tests pass a per-test dir. */
 	tmpDir?: string;
 	/** Converter used for the detached ingest, which converts into the spawn's own directory; default omp_transcript.py. */
@@ -305,6 +308,15 @@ export function startDetached(argv: string[], opts: DetachedOpts): { unref(): vo
 
 function spawnDetachedReal(argv: string[], opts: DetachedOpts): void {
 	startDetached(argv, opts)?.unref();
+}
+
+/** Real reaper: detached, output discarded, fail open (channel-reap is bounded by its own --max-idle logic). */
+function reapReal(cwd: string): void {
+	try {
+		Bun.spawn(["python3", TODO_SCRIPT, "channel-reap", "--root", cwd], { cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
+	} catch {
+		// fail open: stale channels get reaped by the next lead
+	}
 }
 
 /** Removes a directory this bridge just made for one ingest, only if it is empty after its known files are gone. */
@@ -500,6 +512,8 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			const bridgeCtx = ctx as BridgeCtx;
 			const sub = bridgeCtx.agent?.kind === "sub";
 			if (sub) await markSubFinished(bridgeCtx);
+			// Only the lead reaps dead channels: a worker's shutdown must not touch its parent's live channel.
+			else if (!off() && !env().ATLAS_WORKER_NAME) (deps.reap ?? reapReal)(bridgeCtx.cwd);
 			await ingest(sub ? "SubagentStop" : "SessionEnd", bridgeCtx, sub ? "sub" : "main", SHUTDOWN_CONVERT_TIMEOUT_MS);
 		} catch {
 			// fail open: shutdown must never throw into omp

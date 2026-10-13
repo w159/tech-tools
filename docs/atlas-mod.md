@@ -33,13 +33,13 @@ The phase comes from the last header in `turn.complete` (matched with the contra
 
 One `Pane` with id `atlas`. Placement: the pane docks itself, unasked, only on the first render that knows the viewport, only when the terminal is fullscreen and at least 110 columns wide (`register.ts:34,37` `DOCK_MIN_COLUMNS`, `shouldDock`, checked once via `paneChecked`); it opens undocked at `PANE_DOCK` (56 columns, auto rows). Everywhere else the pane stays closed until `/atlas-cc`, which opens a focused, closable 12-row inline pane (`register.ts:32` `PANE_ON_DEMAND`) and closes with Esc or the close mark (clearing `paneOpenedState` so `/atlas-cc` reopens it next time, `register.ts:636-639`).
 
-**Tab strip** (`sidebar.tsx:20-44` `tabStrip`). Four plain hotkey Buttons, the current one bold and inverse, separated by a dim ` │ ` pipe, plus a right-pushed hint (`Tab/↑↓ move · Enter act`) when the pane is at least 60 columns inside:
+**Tab strip** (`sidebar.tsx:20-44` `tabStrip`). Four plain hotkey Buttons, the current one bold and inverse, separated by a dim ` │ ` pipe, plus a right-pushed hint (`r t c g tabs · ↑↓ Enter`) when the pane is at least 60 columns inside:
 
 ```
 r: ◎ route │ t: ● team │ c: ✉ channel │ g: ✗ 2
 ```
 
-The gates tab label is `✗ N` (error color) when gates are open, else `✓ gates`. Exactly one view renders below the strip at a time (`sidebar.tsx:46` `VIEWS` map), switched by `on.setView` (hotkeys `r`/`t`/`c`/`g` live while the pane holds focus) or the Tab/arrow-key focus ring.
+The gates tab label is `✗ N` (error color) when gates are open, else `✓ gates`. Exactly one view renders below the strip at a time (`sidebar.tsx:46` `VIEWS` map), switched by `on.setView` (hotkeys `r`/`t`/`c`/`g` live while the pane holds focus) or the arrow-key focus ring.
 
 - **Route** (`pane/sidebar-route.tsx` `routeRows`). One phase rail, never truncated: `◎ research ✓ ─ … ─ ⚒ implement ◉` (glyph + name + state mark per phase, collapsing to glyph + mark only when the full form would overflow, `railRuns`), then the current phase's header (`⚒ implement 1/3`) and its items. Each item is one row: status mark (`✓`/`⏸`/`◉`/`○`), title, a 12-char-fit owner tag, and — for a blocked owner — the reason read live from `liveWorkers()` (`blockedReason`, `itemSegments`). Enter toggles a row's evidence line. Completed items are hidden below 80 columns.
 - **Team** (`pane/sidebar-team.tsx` `teamRows`). An aligned worker table, failures and blocked workers always sorted first (never folded), each row: a state mark (`✗`/`⏸`/`✓`/blank for working), name, persona/role, a `now` column (`awaits lead reply` / `failed` / `done` / the live tool or `working`), and right-aligned age. A lead summary row and a message `Input` (`▸ to <recipient>`, Enter sends) sit above/below the table (`leadRow`, `messageInput`).

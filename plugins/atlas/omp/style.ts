@@ -180,6 +180,29 @@ export function renderOmpStyle(
 	return text;
 }
 
+const CONTRACT_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "operating-contract.json");
+
+/**
+ * Minimal header rule for when the full style cannot be rendered or ATLAS_STYLE=off: session_boot.py skips its own
+ * header rule under ATLAS_HARNESS=omp, so without this omp sessions would have none. Glyphs come from the operating
+ * contract (single source); an unreadable contract still yields the bare rule.
+ */
+function renderHeaderFallback(path: string = CONTRACT_PATH): string {
+	let phases = "";
+	try {
+		const doc: unknown = JSON.parse(fs.readFileSync(path, "utf8"));
+		const list = doc && typeof doc === "object" && "phases" in doc && Array.isArray(doc.phases) ? doc.phases : [];
+		phases = list
+			.filter((p): p is { id: string; glyph: string } => typeof p?.id === "string" && typeof p?.glyph === "string")
+			.map(p => `${p.glyph} ${p.id}`)
+			.join(", ");
+	} catch {
+		/* bare rule */
+	}
+	const rule = "Open every reply with the header line `ATLAS | <glyph> <phase> | <state>`" + (phases ? `, phase and glyph one of: ${phases}.` : ".");
+	return `${STYLE_BEGIN}\n${rule}\n${STYLE_END}`;
+}
+
 /** The omp lead addendum as its own marked block; undefined when the file is missing or blank. */
 export function renderOmpAddendum(path: string = ADDENDUM_PATH): string | undefined {
 	try {
@@ -195,6 +218,7 @@ export interface StyleDeps {
 	stylePath?: string;
 	namesPath?: string;
 	addendumPath?: string;
+	contractPath?: string;
 	/** The session's currently callable tool names; undefined (or a throw) means availability is unknown. */
 	activeTools?: () => string[] | undefined;
 }
@@ -221,23 +245,26 @@ export function registerStyle(pi: Pick<ExtensionAPI, "on">, deps: StyleDeps = {}
 	pi.on("before_agent_start", (event, ctx) => {
 		try {
 			if (ctx.agent.kind !== "main") return undefined;
-			if ((deps.env ?? process.env).ATLAS_STYLE === "off") return undefined;
+			const styleOff = (deps.env ?? process.env).ATLAS_STYLE === "off";
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			const has = (marker: string) => base.some(entry => typeof entry === "string" && entry.includes(marker));
 			const additions: string[] = [];
 			if (!has(STYLE_BEGIN)) {
-				if (frozen.style === undefined) {
+				if (styleOff) frozen.style ??= renderHeaderFallback(deps.contractPath);
+				else if (frozen.style === undefined) {
 					let active: string[] | undefined;
 					try {
 						active = deps.activeTools?.();
 					} catch {
 						active = undefined; // availability unknown: render with the static bareTools map
 					}
+					// a failed render gets the minimal header rule instead of nothing; not frozen, so the next turn retries the full style
 					frozen.style = renderOmpStyle(deps.stylePath, deps.namesPath, active);
+					if (!frozen.style) additions.push(renderHeaderFallback(deps.contractPath));
 				}
 				if (frozen.style) additions.push(frozen.style);
 			}
-			if (!has(ADDENDUM_BEGIN)) {
+			if (!styleOff && !has(ADDENDUM_BEGIN)) {
 				frozen.addendum ??= renderOmpAddendum(deps.addendumPath);
 				if (frozen.addendum) additions.push(frozen.addendum);
 			}

@@ -33,6 +33,7 @@ function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[];
 	const payloads: Record<string, unknown>[] = [];
 	const spawns: Spawn[] = [];
 	const converts: { sessionFile: string; out: string }[] = [];
+	const reaps: string[] = [];
 	const handlers: Record<string, Handler[]> = {};
 	const api = { on: (name: string, h: Handler) => (handlers[name] ??= []).push(h) };
 	const run: HookRunner =
@@ -65,6 +66,7 @@ function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[];
 		env: opts.env ?? {},
 		now: opts.now,
 		tmpDir: dir,
+		reap: cwd => reaps.push(cwd),
 		spawnDetached: (argv, o) => {
 			log.push("spawn");
 			spawns.push({ argv, opts: o });
@@ -80,8 +82,20 @@ function harness(opts: { stdout?: Record<string, string>; hooks?: BridgedHook[];
 		return first;
 	};
 	const stop = (extra: Record<string, unknown> = {}, c: Ctx = ctx()) => emit("session_stop", { session_id: "s-1", session_file: join(dir, "s-1.jsonl"), stop_hook_active: false, ...extra }, c);
-	return { handlers, ctx, emit, stop, log, payloads, spawns, converts, cache };
+	return { handlers, ctx, emit, stop, log, payloads, spawns, converts, cache, reaps };
 }
+
+test("lead shutdown reaps dead channels; worker env and subagent shutdown do not", async () => {
+	const lead = harness();
+	await lead.emit("session_shutdown", {}, lead.ctx("main", "m-1"));
+	expect(lead.reaps).toEqual([dir]);
+	const worker = harness({ env: { ATLAS_WORKER_NAME: "impl-1" } });
+	await worker.emit("session_shutdown", {}, worker.ctx("main", "w-1"));
+	expect(worker.reaps).toEqual([]);
+	const sub = harness();
+	await sub.emit("session_shutdown", {}, sub.ctx("sub", "a-1"));
+	expect(sub.reaps).toEqual([]);
+});
 
 test("Stop payload is the Claude shape and the transcript is converted before ANY hook runs", async () => {
 	const h = harness();

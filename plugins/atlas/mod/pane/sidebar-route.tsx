@@ -3,7 +3,7 @@ import type { ClientElements, RenderElement } from 'claude-code';
 import type { LiveSnapshot, TodoGroup } from '../orchestra-types';
 import { liveWorkers } from '../data/live';
 import { fitRuns, rowOf, type Segment } from '../runs';
-import { chartRoom as C, contractGlyph, fitText, glyph, textWidth } from '../theme';
+import { chartRoom as C, contractGlyph, fitText, glyph, spin, textWidth } from '../theme';
 import { scrub } from './chrome';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 
@@ -11,13 +11,15 @@ type Todo = TodoGroup['items'][number];
 
 const DONE_MIN_COLS = 80;
 const phaseGlyph = (s: LiveSnapshot, id: string): string => contractGlyph(s.contract.phases.find((p) => p.id === id)?.glyph ?? glyph.ring);
-const stateOf = (i: number, cur: number) => (i < cur ? { g: '✓', color: C.ok } : i === cur ? { g: '◉', color: C.focus } : { g: '○', color: C.muted });
+const stateOf = (i: number, cur: number, mark: string) => (i < cur ? { g: '✓', color: C.ok } : i === cur ? { g: mark, color: C.focus } : { g: '○', color: C.muted });
 
 /** `◎ research ✓ ─ … ─ ⚒ implement ◉`; when that overflows, `◎✓ ─ … ─ ⚒◉` (glyph + state only). */
-function railRuns(s: LiveSnapshot, phases: string[], cur: number, cols: number): Segment[] {
+function railRuns(s: LiveSnapshot, phases: string[], cur: number, cols: number, tick?: number): Segment[] {
+  // The current mark pulses through the phase's frames while the spinner ticks; static ◉ when no tick is supplied.
+  const mark = tick === undefined ? '◉' : spin(tick, phases[cur]);
   const build = (full: boolean): Segment[] =>
     phases.flatMap((p, i): Segment[] => {
-      const st = stateOf(i, cur);
+      const st = stateOf(i, cur, mark);
       const bold = i === cur;
       return [
         ...(i ? [{ t: ' ─ ', color: i <= cur ? C.ok : C.muted }] : []),
@@ -66,7 +68,7 @@ export function routeRows(els: ClientElements, m: SidebarModel, on: SidebarHandl
   const s = m.snapshot;
   const phases = s.contract.todoPhases.map(String);
   if (phases.length === 0) return [];
-  const rail = rowOf(els, railRuns(s, phases, phases.indexOf(s.phase), inner), inner);
+  const rail = rowOf(els, railRuns(s, phases, phases.indexOf(s.phase), inner, m.tick), inner);
   const group = s.todoGroups.find((g) => g.phase === s.phase);
   if (!group || group.items.length === 0) return [rail, rowOf(els, [{ t: 'nothing planned', color: C.faint }], inner)];
   const shown = group.items.filter((it) => it.status !== 'completed' || inner >= DONE_MIN_COLS);

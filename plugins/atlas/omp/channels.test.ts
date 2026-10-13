@@ -112,6 +112,28 @@ test("a failing board records a fault and leaves the dispatch untouched (no thro
 	expect(readFileSync(faults, "utf8").slice(before)).toContain('"hook":"channels"');
 });
 
+test("a missing atlas_todo.py records ONE actionable stale-install fault across 3 dispatches", () => {
+	const cwd = repo();
+	const faults = join(process.env.ATLAS_HOME as string, "hook-faults.jsonl");
+	const before = existsSync(faults) ? readFileSync(faults, "utf8").length : 0;
+	let ran = 0;
+	const opts = { cwd, env: {}, script: join(cwd, "nope", "atlas_todo.py"), run: () => (ran++, undefined) };
+	for (let i = 0; i < 3; i++) expect(reviseForChannel({ tasks: [{ agent: "task", task: "x" }] }, opts)).toBeUndefined();
+	const added = readFileSync(faults, "utf8").slice(before).trim().split("\n");
+	expect(added.length).toBe(1);
+	expect(added[0]).toContain("atlas omp install is stale");
+	expect(added[0]).toContain("reinstall atlas in omp");
+	expect(ran).toBe(0);
+});
+
+test("identical channel-open failures dedupe per session", () => {
+	const cwd = repo();
+	const faults = join(process.env.ATLAS_HOME as string, "hook-faults.jsonl");
+	const before = existsSync(faults) ? readFileSync(faults, "utf8").length : 0;
+	for (let i = 0; i < 3; i++) reviseForChannel({ tasks: [{ agent: "task", task: "x" }] }, { cwd, env: {}, run: () => undefined });
+	expect(readFileSync(faults, "utf8").slice(before).trim().split("\n").length).toBe(1);
+});
+
 test("defaultRun: real channel-open succeeds in a fresh repo", () => {
 	const dir = repo();
 	const out = defaultRun(["python3", SCRIPT, "channel-open", "--root", dir, "--lead", "lead-t1", "--members", "a-1"], dir);

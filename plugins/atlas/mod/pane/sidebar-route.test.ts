@@ -49,6 +49,15 @@ describe('routeRows', () => {
   });
 });
 
+describe('rail pulse', () => {
+  test('current-phase mark alternates on tick, static without one', () => {
+    const at = (tick?: number) => text(routeRows(els, { ...model(80), tick }, on, 80)[0]);
+    expect(at(0)).not.toBe(at(1));
+    expect(at(0)).toBe(at(4));
+    expect(at(undefined)).toContain('◉');
+  });
+});
+
 describe('gateRows', () => {
   test('one row per group, line rows only when expanded', () => {
     const out = gateRows(els, model(44), on, 44).map(text);

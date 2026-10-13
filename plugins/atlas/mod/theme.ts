@@ -116,9 +116,19 @@ export function blink(periodMs = 500): 0 | 1 {
 /** Braille spinner frames (one cell each). */
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 
-/** Spinner frame for an animation counter (any integer). */
-export function spin(frame: number): string {
- return SPIN[Math.abs(Math.floor(frame)) % SPIN.length] ?? SPIN[0];
+/** Per-phase activity frames (one cell each); phases not listed use SPIN. */
+const PHASE_FRAMES: Readonly<Record<string, readonly string[]>> = {
+ research: ['◜', '◝', '◞', '◟'],
+ theory: ['✶', '✷', '✸', '✹'],
+ test: ['⠁', '⠂', '⠄', '⡀'],
+ implement: ['⣾', '⣽', '⣻', '⢿'],
+ verify: ['◐', '◓', '◑', '◒'],
+}
+
+/** Spinner frame for an animation counter (any integer), from the phase's frame table when it has one. */
+export function spin(frame: number, phase?: string): string {
+ const frames = (phase && PHASE_FRAMES[phase]) || SPIN
+ return frames[Math.abs(Math.floor(frame)) % frames.length] ?? SPIN[0]
 }
 /** Inclusive code point span. */
 export type Span = readonly [number, number];

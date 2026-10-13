@@ -14,7 +14,7 @@ import * as nodePath from "node:path";
 import { taskItems, recordFault } from "./hook-bridge";
 import { runCaptureSync } from "./proc";
 
-const TODO_SCRIPT = nodePath.resolve(import.meta.dir, "..", "scripts", "atlas_todo.py");
+export const TODO_SCRIPT = nodePath.resolve(import.meta.dir, "..", "scripts", "atlas_todo.py");
 const BAD_NAME = /[^A-Za-z0-9_.-]/g;
 
 /** Same sanitising as atlas_todo._sanitize_owner. */
@@ -67,7 +67,7 @@ export type OnChannelOpen = (info: { channel: string; members: string[]; cwd: st
  */
 export function reviseForChannel(
 	input: Record<string, unknown>,
-	opts: { cwd: string; sessionId?: string; env?: Record<string, string | undefined>; run?: ChannelRunner; onOpen?: OnChannelOpen },
+	opts: { cwd: string; sessionId?: string; env?: Record<string, string | undefined>; run?: ChannelRunner; onOpen?: OnChannelOpen; script?: string },
 ): Record<string, unknown> | undefined {
 	const env = opts.env ?? process.env;
 	if (env.ATLAS_CHANNELS === "off") return undefined;
@@ -89,19 +89,29 @@ function memberName(item: Item): string {
 	return sanitizeName(item.name as string);
 }
 
+/** Faults already recorded this process (one omp process = one session), keyed by cwd + text: a persistent cause is one row, not one per dispatch. */
+const seenFaults = new Set<string>();
+
+function faultOnce(message: string, cwd: string): void {
+	const key = `${cwd}\0${message}`;
+	if (seenFaults.has(key)) return;
+	seenFaults.add(key);
+	recordFault("channels", message, "ChannelOpen", cwd);
+}
+
 /** channel-open output -> briefs + channel name; undefined (and a recorded fault) when it is empty or not JSON. */
 function parseOpen(out: string | undefined, cwd: string): { briefs: Record<string, string>; channel: string } | undefined {
 	if (!out) {
 		const cause = lastFailure || "no output";
 		lastFailure = "";
-		recordFault("channels", `channel-open failed: ${cause}`, "ChannelOpen", cwd);
+		faultOnce(`channel-open failed: ${cause}`, cwd);
 		return undefined;
 	}
 	try {
 		const doc = JSON.parse(out);
 		return { briefs: doc.briefs ?? {}, channel: String(doc.channel?.name ?? "") };
 	} catch (error) {
-		recordFault("channels", String(error), "ChannelOpen", cwd);
+		faultOnce(String(error), cwd);
 		return undefined;
 	}
 }
@@ -137,13 +147,19 @@ function injectBriefs(
 function openAndInject(
 	revised: Item,
 	items: Item[],
-	opts: { cwd: string; sessionId?: string; run?: ChannelRunner; onOpen?: OnChannelOpen },
+	opts: { cwd: string; sessionId?: string; run?: ChannelRunner; onOpen?: OnChannelOpen; script?: string },
 	env: Record<string, string | undefined>,
 ): Item | undefined {
+	const script = opts.script ?? TODO_SCRIPT;
+	// A stale omp install lacks the script (python exits 2): say so once, with the fix, instead of a vague failure per dispatch.
+	if (!fs.existsSync(script)) {
+		faultOnce(`atlas omp install is stale: ${script} missing; reinstall atlas in omp`, opts.cwd);
+		return undefined;
+	}
 	const run = opts.run ?? defaultRun;
 	const names = items.map(memberName);
 	const out = run(
-		["python3", TODO_SCRIPT, "channel-open", "--root", opts.cwd, "--lead", leadName(opts.sessionId, env), "--members", names.join(",")],
+		["python3", script, "channel-open", "--root", opts.cwd, "--lead", leadName(opts.sessionId, env), "--members", names.join(",")],
 		opts.cwd,
 	);
 	const parsed = parseOpen(out, opts.cwd);

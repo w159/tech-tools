@@ -54,22 +54,34 @@ test("main session gets the translated style appended exactly once, then the lea
 	expect(run(result?.systemPrompt ?? [])).toBeUndefined();
 });
 
+test("ATLAS_STYLE=off and a failed render still append the minimal header rule, glyphs from the contract", () => {
+	const contract = JSON.parse(readFileSync(join(import.meta.dir, "..", "contracts", "operating-contract.json"), "utf8"));
+	const check = (systemPrompt?: string[]) => {
+		const rule = systemPrompt?.[1] ?? "";
+		expect(rule).toContain("ATLAS | <glyph> <phase> | <state>");
+		for (const p of contract.phases) expect(rule).toContain(`${p.glyph} ${p.id}`);
+		expect(systemPrompt?.length).toBe(2); // no style, no addendum
+	};
+	check(harness({ ATLAS_STYLE: "off" })(["base"])?.systemPrompt);
+	check(harness({}, join(dir, "missing.md"), join(dir, "none.md"))(["base"])?.systemPrompt);
+});
+
 test("subagents never receive the style", () => {
 	expect(harness()(["base"], "sub")).toBeUndefined();
 });
 
 test("ATLAS_STYLE=off disables injection", () => {
-	expect(harness({ ATLAS_STYLE: "off" })(["base"])).toBeUndefined();
+	expect(harness({ ATLAS_STYLE: "off" })(["base"])?.systemPrompt?.[1]).not.toContain("Atlas output style"); // only the header fallback
 });
 
 test("missing or malformed style source fails open: no style block, and the independent addendum still arrives", () => {
 	const none = join(dir, "absent-addendum.md");
-	expect(harness({}, join(dir, "absent.md"), none)(["base"])).toBeUndefined();
-	expect(harness({}, join(dir, "absent.md"))(["base"])?.systemPrompt?.length).toBe(2); // addendum only
+	expect(harness({}, join(dir, "absent.md"), none)(["base"])?.systemPrompt?.length).toBe(2); // header fallback only
+	expect(harness({}, join(dir, "absent.md"))(["base"])?.systemPrompt?.length).toBe(3); // header fallback + addendum
 	const bad = join(dir, "bad.md");
 	writeFileSync(bad, "---\nname: x\nno closing fence\n");
 	expect(loadStyleBody(bad)).toBeUndefined();
-	expect(harness({}, bad, none)(["base"])).toBeUndefined();
+	expect(harness({}, bad, none)(["base"])?.systemPrompt?.length).toBe(2);
 });
 
 test("the omp lead addendum is its own marked block after the style block, main session only", () => {
@@ -285,7 +297,8 @@ test("a render that failed (unreadable sources) is not frozen: the next turn ret
 	const bad = join(dir, "later.md");
 	registerStyle(api as unknown as Pick<ExtensionAPI, "on">, { env: {}, stylePath: bad, addendumPath: join(dir, "none.md"), activeTools: () => active.current });
 	const turn = () => (handlers.before_agent_start as Handler)({ systemPrompt: ["base"], prompt: "hi" }, { agent: { kind: "main" } });
-	expect(turn()).toBeUndefined(); // style missing
+	expect(turn()?.systemPrompt?.[1]).not.toContain("Atlas output style"); // style missing: header fallback only
 	writeFileSync(bad, "---\nname: x\n---\nbody\n");
+	expect(turn()?.systemPrompt?.[1]).toContain("Atlas output style");
 	expect(turn()?.systemPrompt?.length).toBe(2); // now readable: rendered, not stuck on the earlier failure
 });
