@@ -1145,7 +1145,9 @@ def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
         actions.append(f"reset marketplace clone to origin/{branch}")
 
     mkt_ver = marketplace_plugin_version(clone, plugin_name)
+    cur_ver_dir = os.path.basename(reg.get("installPath", "").rstrip("/")) if reg else None
     if mkt_ver and reg and reg["version"] != mkt_ver:
+        cur_ver_dir = mkt_ver  # cache_dir basename below
         cache_dir = os.path.join(PLUGINS_DIR, "cache", mkt_name, plugin_name, mkt_ver)
         if not os.path.exists(os.path.join(cache_dir, ".claude-plugin", "plugin.json")):
             shutil.copytree(
@@ -1190,21 +1192,12 @@ def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
             actions.append(f"re-registered omp {plugin_name} at {mkt_ver}")
 
     # Quarantine every cached version dir the registry no longer points at.
-    cur_ver_dir = None
-    try:
-        _, creg = find_registration(
-            _load_json(os.path.join(PLUGINS_DIR, "installed_plugins.json")), plugin_name
-        )
-        if creg:
-            cur_ver_dir = os.path.basename(creg.get("installPath", "").rstrip("/"))
-    except Exception:
-        pass
     plugin_cache = os.path.join(PLUGINS_DIR, "cache", mkt_name, plugin_name)
     stale = list(ctx.get("stale_assets") or [])
     if cur_ver_dir and os.path.isdir(plugin_cache):
         stale += [
             os.path.join(plugin_cache, v)
-            for v in sorted(os.listdir(plugin_cache))
+            for v in os.listdir(plugin_cache)
             if v != cur_ver_dir and os.path.isdir(os.path.join(plugin_cache, v))
         ]
     if stale:

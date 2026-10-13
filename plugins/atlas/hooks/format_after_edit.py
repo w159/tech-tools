@@ -32,6 +32,7 @@ Stdlib only.
 from __future__ import annotations
 
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
@@ -149,14 +150,11 @@ def _record_skip(data: dict, fp: str, reason: str) -> None:
         try:
             category = "formatter_skipped:" + reason
             sid = data.get("session_id") or ""
-            seen = (
-                reason == "missing"
-                and conn.execute(
-                    "SELECT 1 FROM friction_events WHERE session_id=? AND category=? "
-                    "AND snippet=? LIMIT 1",
-                    (sid, category, ext),
-                ).fetchone()
-            )
+            seen = reason == "missing" and conn.execute(
+                "SELECT 1 FROM friction_events WHERE session_id=? AND category=? "
+                "AND snippet=? LIMIT 1",
+                (sid, category, ext),
+            ).fetchone()
             if not seen:
                 atlas_db.record_friction(conn, sid, category, snippet=ext)
         finally:
@@ -180,9 +178,7 @@ def main() -> int:
     cwd = data.get("cwd") or os.getcwd()
     # Files outside the session cwd (other repos, OneDrive) are not atlas's to
     # format; touching them produced hundreds of friction rows a day. No row, no fault.
-    root = os.path.realpath(cwd)
-    real = os.path.realpath(fp)
-    if real != root and not real.startswith(root.rstrip(os.sep) + os.sep):
+    if not pathlib.Path(os.path.realpath(fp)).is_relative_to(os.path.realpath(cwd)):
         return 0
     reasons: set[str] = set()
     cands = candidates_for(fp, cwd)
