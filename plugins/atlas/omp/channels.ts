@@ -163,7 +163,10 @@ function openAndInject(
 		opts.cwd,
 	);
 	const parsed = parseOpen(out, opts.cwd);
-	if (!parsed || !injectBriefs(run, opts.cwd, items, names, parsed)) return undefined;
+	if (!parsed) return undefined;
+	const changed = injectBriefs(run, opts.cwd, items, names, parsed);
+	// The channel is open (members registered) even when every item already carried a CHANNEL block, e.g. the model
+	// copied a prior brief: the live view must still mount.
 	opts.onOpen?.({ channel: parsed.channel, members: names, cwd: opts.cwd });
-	return revised;
+	return changed ? revised : undefined;
 }

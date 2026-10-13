@@ -248,6 +248,19 @@ test("worker rows cap at 4 with +N more", () => {
 	expect(rows[4]).toBe("+3 more");
 });
 
+test("a linked-worktree cwd reads the MAIN repo board, where atlas_todo.py writes channels.json", () => {
+	const main = atlasFixture([{ name: "w1", joined: 1 }], [{ status: "pending", phase: "verify" }]);
+	mkdirSync(join(main, ".git", "worktrees", "wt"), { recursive: true });
+	writeFileSync(join(main, ".git", "worktrees", "wt", "commondir"), "../..\n");
+	const wt = mkdtempSync(join(tmpdir(), "chan-view-wt-"));
+	mkdirSync(join(wt, ".atlas"), { recursive: true }); // a stray .atlas in the worktree must not win
+	writeFileSync(join(wt, ".git"), `gitdir: ${join(main, ".git", "worktrees", "wt")}\n`);
+	const { calls, ui, view } = harness();
+	view.open(ui, { channel: CHAN, members: ["w1"], cwd: wt });
+	expect(calls[0]?.[1]).toContain("1 live");
+	view.stop();
+});
+
 test("widget paints header first and advances spinner per poll", () => {
 	const root = atlasFixture([{ name: "w1", joined: 1 }], [{ status: "pending", phase: "verify" }]);
 	const { calls, ui, timers, view } = harness({ ATLAS_PROJECT_ROOT: root });

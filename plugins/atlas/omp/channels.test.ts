@@ -27,6 +27,15 @@ test("leadName: env wins, else lead-<session short id>, sanitised", () => {
 	expect(sanitizeName("a b/c")).toBe("a_b_c");
 });
 
+test("an item that already carries a CHANNEL block (model copied a prior brief) still opens the live view", () => {
+	const cwd = repo();
+	const opened: string[][] = [];
+	const input = { tasks: [{ agent: "task", name: "Beta", task: "do\n\nCHANNEL: stale" }] };
+	const revised = reviseForChannel(input, { cwd, sessionId: "sess123456", env: {}, onOpen: i => opened.push(i.members) });
+	expect(revised).toBeUndefined();
+	expect(opened).toEqual([["Beta"]]);
+});
+
 test("dispatch opens <main>/<lead>, registers members, injects the CHANNEL block per item", () => {
 	const cwd = repo();
 	const main = `${basename(cwd)}@feature/x`;

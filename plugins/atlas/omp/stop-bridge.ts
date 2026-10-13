@@ -55,7 +55,7 @@ import {
 	runHook,
 	SESSION_END_EVENTS,
 } from "./hook-bridge";
-import { TODO_SCRIPT } from "./channels";
+import { TODO_SCRIPT, leadName } from "./channels";
 import { runCapture } from "./proc";
 import { runStateArgv } from "./run-state";
 
@@ -208,6 +208,8 @@ export interface StopBridgeDeps {
 	spawnDetached?(argv: string[], opts: DetachedOpts): void;
 	/** Detached, fail-open `atlas_todo.py channel-reap --root <cwd>` run at lead shutdown. Tests inject a recorder. */
 	reap?(cwd: string): void;
+	/** Awaited, fail-open `atlas_todo.py member-finish` for the lead, run BEFORE reap: channel-reap keeps a channel whose lead has no exit_code. */
+	finishLead?(cwd: string, lead: string): Promise<void>;
 	/** Base directory for the per-ingest owned dirs; default os.tmpdir(). Tests pass a per-test dir. */
 	tmpDir?: string;
 	/** Converter used for the detached ingest, which converts into the spawn's own directory; default omp_transcript.py. */
@@ -316,6 +318,15 @@ function reapReal(cwd: string): void {
 		Bun.spawn(["python3", TODO_SCRIPT, "channel-reap", "--root", cwd], { cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
 	} catch {
 		// fail open: stale channels get reaped by the next lead
+	}
+}
+
+/** Marks the lead member finished (exit 0) so the reap that follows can remove its channel; fail open. */
+async function finishLeadReal(cwd: string, lead: string): Promise<void> {
+	try {
+		await runCapture(["python3", TODO_SCRIPT, "member-finish", "--root", cwd, "--agent", lead, "--exit", "0"], { timeoutMs: 1_500 });
+	} catch {
+		// fail open: the next lead's reap handles an unfinished channel by idle age
 	}
 }
 
@@ -513,7 +524,11 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			const sub = bridgeCtx.agent?.kind === "sub";
 			if (sub) await markSubFinished(bridgeCtx);
 			// Only the lead reaps dead channels: a worker's shutdown must not touch its parent's live channel.
-			else if (!off() && !env().ATLAS_WORKER_NAME) (deps.reap ?? reapReal)(bridgeCtx.cwd);
+			else if (!off() && !env().ATLAS_WORKER_NAME) {
+				const sid = bridgeCtx.sessionManager?.getSessionId?.();
+				await (deps.finishLead ?? finishLeadReal)(bridgeCtx.cwd, leadName(typeof sid === "string" ? sid : undefined, env()));
+				(deps.reap ?? reapReal)(bridgeCtx.cwd);
+			}
 			await ingest(sub ? "SubagentStop" : "SessionEnd", bridgeCtx, sub ? "sub" : "main", SHUTDOWN_CONVERT_TIMEOUT_MS);
 		} catch {
 			// fail open: shutdown must never throw into omp

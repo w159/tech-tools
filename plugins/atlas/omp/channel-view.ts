@@ -145,10 +145,25 @@ export function rosterLine(members: string[], finished: Set<string>): string {
 	return `members: ${members.length - done} working, ${done} finished`;
 }
 
-/** Board root for a cwd: ATLAS_PROJECT_ROOT, else the nearest ancestor holding `.atlas`. */
+/** Main repo root of a linked git worktree dir (`.git` file -> gitdir -> commondir), else undefined. Mirrors atlas_todo._worktree_main_root. */
+function worktreeMainRoot(dir: string): string | undefined {
+	try {
+		const gitdir = /^gitdir:\s*(.+)$/m.exec(readFileSync(nodePath.join(dir, ".git"), "utf8"))?.[1]?.trim();
+		if (!gitdir) return undefined;
+		const priv = nodePath.resolve(dir, gitdir);
+		const common = readFileSync(nodePath.join(priv, "commondir"), "utf8").trim();
+		return common ? nodePath.dirname(nodePath.resolve(priv, common)) : undefined;
+	} catch {
+		return undefined; // plain repo (`.git` is a directory) or unreadable: fall through
+	}
+}
+
+/** Board root for a cwd: ATLAS_PROJECT_ROOT, else the nearest ancestor holding `.atlas` (a linked worktree maps to its main repo, like atlas_todo.find_root). */
 function boardRoot(cwd: string, env: Record<string, string | undefined>): string {
 	if (env.ATLAS_PROJECT_ROOT) return env.ATLAS_PROJECT_ROOT;
 	for (let dir = cwd; ; dir = nodePath.dirname(dir)) {
+		const main = worktreeMainRoot(dir);
+		if (main) return main;
 		if (existsSync(nodePath.join(dir, ".atlas"))) return dir;
 		if (nodePath.dirname(dir) === dir) return cwd;
 	}
