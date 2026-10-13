@@ -95,7 +95,7 @@ type Col = { id: 'name' | 'role' | 'now' | 'age' | 'tools'; head: string; cap: n
 function layout(ws: LiveWorker[], now: number, tools: (w: LiveWorker) => number, inner: number): { cols: Col[]; gap: number; last: number } {
   const ids: Col['id'][] = inner >= 70 ? ['name', 'role', 'now', 'age', 'tools'] : inner >= 50 ? ['name', 'now', 'age'] : ['name', 'now'];
   const text: Record<Col['id'], (w: LiveWorker) => string> = {
-    name: (w) => w.name, role: (w) => w.role, now: nowText, age: (w) => shortAge(now - w.since), tools: (w) => String(tools(w)),
+    name: (w) => w.name, role: (w) => w.role, now: nowText, age: (w) => shortAge(now - w.startedAt), tools: (w) => String(tools(w)),
   };
   const spec: Record<Col['id'], [string, number, number, boolean?]> = {
     name: ['agent', 14, 5], role: ['role', 12, 4], now: ['now', 18, 3], age: ['age', 4, 3, true], tools: ['tools', 5, 5, true],
@@ -159,7 +159,7 @@ export function teamRows(els: ClientElements, m: SidebarModel, on: SidebarHandle
     const [g, color] = STATE_LOOK[w.state];
     const key = `worker:${w.name}`;
     const open = m.ui.expanded === key;
-    const val: Record<Col['id'], string> = { name: w.name, role: w.role, now: nowText(w), age: shortAge(s.now - w.since), tools: String(toolCount(w)) };
+    const val: Record<Col['id'], string> = { name: w.name, role: w.role, now: nowText(w), age: shortAge(s.now - w.startedAt), tools: String(toolCount(w)) };
     const parts: Segment[] = [
       { t: w.state === 'working' ? spin(m.tick ?? 0) : g, color, bold: w.state !== 'working' },
       { t: spawned(w) ? '▸ ' : '  ', color: C.focus },
@@ -178,7 +178,7 @@ export function teamRows(els: ClientElements, m: SidebarModel, on: SidebarHandle
     }));
     if (open) {
       rows.push(rowOf(els, [{ t: '  ' + fitText(scrub(w.lastLine).replace(/\s+/g, ' ') || w.state, inner - 2), color: C.muted }], inner));
-      rows.push(rowOf(els, [{ t: '  ' + fitText(`since ${shortAge(s.now - w.since)} ago · ${toolCount(w)} tools`, inner - 2), color: C.muted }], inner));
+      rows.push(rowOf(els, [{ t: '  ' + fitText(`since ${shortAge(s.now - w.startedAt)} ago · ${toolCount(w)} tools`, inner - 2), color: C.muted }], inner));
     }
   }
   rows.push(leadRow(els, ws, inner), messageInput(els, m, on, inner));

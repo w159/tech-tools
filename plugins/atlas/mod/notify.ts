@@ -37,7 +37,7 @@ export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): 
 		if (was === undefined) {
 			if (w.state === 'working') events.push({ type: 'agent-spawn', name: w.name });
 		} else if (w.state === 'done') {
-			const age = next.now - w.since;
+			const age = next.now - w.startedAt;
 			events.push({ type: 'agent-complete', name: w.name, age: age > 0 ? formatDuration(age) : '', lastLine: w.lastLine });
 		} else if (w.state === 'failed') events.push({ type: 'agent-fail', name: w.name, lastLine: w.lastLine });
 		else if (w.state === 'blocked') events.push({ type: 'agent-blocked', name: w.name, lastLine: w.lastLine });

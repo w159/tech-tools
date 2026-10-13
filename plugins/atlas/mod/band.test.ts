@@ -52,6 +52,18 @@ describe('bandTree', () => {
     expect(t).toMatch(/^⚑ idle · implement \d+\/\d+ · 0 open$/);
     expect(t).not.toMatch(BRAILLE);
   });
+  test('worker age counts from startedAt, not the current tool', () => {
+    const snapshot = busySnap();
+    snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, since: NOW - 2_000, startedAt: NOW - 125_000 };
+    expect(line(bandTree(els, { snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 120, tick: 3 }) as unknown as Node)).toContain('explorer-1 Grep 2m');
+  });
+  test('idle after a finished turn never prints a stale done phase; open gates read blocked; parked is idle', () => {
+    const snapshot = busySnap({ squad: [{ name: 'p', persona: 'explorer', state: 'parked', source: 'task' }], activity: {}, phase: 'done' as never });
+    const idle = (gates: unknown[]) => line(bandTree(els, { snapshot, live: liveWorkers(snapshot, NOW), gates: gates as never, columns: 120, tick: 3 }) as unknown as Node);
+    expect(idle([])).toMatch(/^⚑ idle/);
+    expect(idle([])).not.toContain('done');
+    expect(idle([gate])).toMatch(/^⚑ blocked/);
+  });
   test('working worker carries a spinner frame', () => {
     expect(row(120)).toMatch(BRAILLE);
   });

@@ -96,10 +96,10 @@ type ToolResult = { text?: string };
 const bytesOf = (result: ToolResult): number => result.text?.length ?? 0;
 const isHeavyCall = (tool: string, bytes: number): boolean => ROLE[tool] !== undefined && bytes >= HEAVY_CHARS;
 
-async function trackToolStart($: EngineInterface, agent: string, tool: string): Promise<void> {
+async function trackToolStart($: EngineInterface, agent: string, tool: string, input?: unknown): Promise<void> {
   try {
     const t = await $.clock.now();
-    await update($, orchState, (o) => onToolStart(o, agent, tool, t));
+    await update($, orchState, (o) => onToolStart(o, agent, tool, t, input));
   } catch {
     // the activity feed never blocks a tool
   }
@@ -226,7 +226,7 @@ export interface DisciplineDeps {
 export function registerDiscipline(on: On, deps: DisciplineDeps): void {
   on('tool.call', async ($, e, next) => {
     const agent = e.agentId ?? LEAD;
-    await trackToolStart($, agent, e.tool);
+    await trackToolStart($, agent, e.tool, e); // tool args ride flat on the event, like routing.ts reads Agent args
     const result = await next(e);
     await trackToolEnd($, agent);
     await meterHeavy($, e, result);

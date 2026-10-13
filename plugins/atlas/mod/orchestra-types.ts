@@ -3,8 +3,11 @@
 import type { AtlasSnapshot, PhaseId } from './contract';
 
 // Shared shapes live in the self-contained types contract; re-exported so mod code keeps one import site.
-import type { Mood, ActivityEntry, CommsEntry, TodoGroup as ContractTodoGroup } from '../types';
-export type { Mood, ActivityEntry, CommsEntry };
+import type { Mood, ActivityEntry as ContractActivityEntry, CommsEntry, TodoGroup as ContractTodoGroup } from '../types';
+export type { Mood, CommsEntry };
+
+/** Contract entry plus: startedAt (first sight, never moves) and target (what the current tool touches). `since` stays the current-tool time. */
+export type ActivityEntry = ContractActivityEntry & { startedAt?: number; target?: string };
 
 /** Contract TodoGroup plus the props-slice marker (rows left out to keep Client props small). */
 export type TodoGroup = ContractTodoGroup & { hidden?: { live: number; liveDone: number; archived: number } };

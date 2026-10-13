@@ -46,7 +46,7 @@ const answerLine = (text: string): string => {
   return line.length > 160 ? `${line.slice(0, 159)}…` : line;
 };
 
-const blank = (now: number): ActivityEntry => ({ tool: null, since: now, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' });
+const blank = (now: number): ActivityEntry => ({ tool: null, since: now, startedAt: now, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' });
 
 function withComm(o: Orch, entry: Omit<CommsEntry, 'seq'>): CommsEntry[] {
   const seq = (o.comms[o.comms.length - 1]?.seq ?? 0) + 1;
@@ -72,12 +72,19 @@ export function onSpawn(o: Orch, id: string, text: string, now: number, meta?: S
 const workingStage = (o: Orch, agent: string): Orch['stage'] =>
   agent !== LEAD && o.stage[agent] !== 'reported' ? { ...o.stage, [agent]: 'working' } : o.stage;
 
+/** What a tool call touches: a file's basename, else the first 40 chars of the command's first line. `input` is the open args bag of the tool.call event. */
+const strOf = (v: unknown): string => (typeof v === 'string' ? v : '');
+const targetOf = (input: unknown): string | undefined => {
+  const a = (input ?? {}) as Record<string, unknown>;
+  return strOf(a.file_path).split('/').pop() || strOf(a.command).split('\n', 1)[0]?.slice(0, 40) || undefined;
+};
+
 /** tool.call in flight (before next). */
-export function onToolStart(o: Orch, agent: string, tool: string, now: number): Orch {
+export function onToolStart(o: Orch, agent: string, tool: string, now: number, input?: unknown): Orch {
   const prev = o.activity[agent] ?? blank(now);
   return {
     ...o,
-    activity: { ...o.activity, [agent]: { ...prev, tool, since: now, toolCount: prev.toolCount + 1, mood: 'working' } },
+    activity: { ...o.activity, [agent]: { ...prev, tool, since: now, target: targetOf(input), toolCount: prev.toolCount + 1, mood: 'working' } },
     stage: workingStage(o, agent),
   };
 }
@@ -87,7 +94,7 @@ export function onToolEnd(o: Orch, agent: string, now: number): Orch {
   const prev = o.activity[agent] ?? blank(now);
   return {
     ...o,
-    activity: { ...o.activity, [agent]: { ...prev, tool: null, since: now, mood: 'thinking' } },
+    activity: { ...o.activity, [agent]: { ...prev, tool: null, since: now, target: undefined, mood: 'thinking' } },
   };
 }
 

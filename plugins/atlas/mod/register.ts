@@ -64,7 +64,7 @@ const draftState = atom({ plugin: 'atlas', key: 'sidebarDraft' } as const, '');
 const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0); // written by restyle's ticker; renders only read it
 const lastHeaderState = atom({ plugin: 'atlas', key: 'lastHeader' } as const, null);
 const gatesState = atom({ plugin: 'atlas', key: 'gates' } as const, []);
-const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'team');
+const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'route'); // docs and the tab strip list route first
 
 // ---- module caches left out of $.state ---------------------------------------
 // builder: a class instance with methods, not JSON (a reload leaves it null until
@@ -657,7 +657,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// The person closed the pane (Esc or the close mark): /atlas-cc opens it again next time.
 	on('ui.close', async ($, e, next) => {
-		if (e.id === PANE_ID) await update($, paneOpenedState, () => false);
+		if (e.id === PANE_ID) {
+			await update($, paneOpenedState, () => false);
+			await update($, viewState, () => 'route'); // reopen on the first tab, not the last one used
+		}
 		return next(e);
 	});
 

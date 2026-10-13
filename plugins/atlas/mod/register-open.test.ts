@@ -80,4 +80,13 @@ describe('sidebar open requests', () => {
     await pick('command.run|atlas-cc')(engine, { args: '' }, noopNext);
     expect(opens[1]).toMatchObject({ id: 'atlas', rows: 12, closeOnEscape: true, focus: true });
   });
+
+  test('closing the pane resets the tab to route', async () => {
+    const { on, pick } = captureOn();
+    const { engine } = stubEngine();
+    await register(on, {});
+    await engine.state.set({ plugin: 'atlas', key: 'atlasView' }, 'gates');
+    await pick('ui.close')(engine, { id: 'atlas' }, noopNext);
+    expect((await engine.state.get({ plugin: 'atlas', key: 'atlasView' })).value).toBe('route');
+  });
 });

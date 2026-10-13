@@ -21,24 +21,27 @@ const age = (ms: number) => (ms < 60_000 ? `${Math.max(0, Math.floor(ms / 1000))
 function worker(w: LiveWorker, tick: number, now: number, ages: boolean): Segment {
   if (w.state === 'blocked') return { t: `⏸ ${w.name} awaits input`, color: C.warn };
   if (w.state === 'failed') return { t: `✗ ${w.name}`, color: C.fail };
-  const tail = [w.tool, ages ? age(now - w.since) : null].filter(Boolean).join(' ');
+  const tail = [w.tool, ages ? age(now - w.startedAt) : null].filter(Boolean).join(' ');
   return { t: `${spin(tick)} ${w.name}${tail ? ` ${tail}` : ''}`, color: C.live };
+}
+
+/** The nothing-live row. 'done' lingers as the phase after a final reply: not worth printing while idle. */
+function idleParts(phase: string, count: string, open: number): Segment[] {
+  return [{ t: open ? '⚑ blocked' : '⚑ idle', color: open ? C.fail : C.muted }, SEP,
+    ...(phase === 'done' ? [] : [{ t: `${phase} ${count}`, color: C.focus }, SEP]),
+    { t: `${open} open`, color: open ? C.fail : C.muted }];
 }
 
 export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick }: BandModel): RenderElement {
   const { done, total } = routeCounts(s.todoGroups, s.contract);
   const open = openGateCount(gates);
-  const shown = live.filter((w) => w.state !== 'done');
+  const shown = live.filter((w) => w.state !== 'done' && w.state !== 'parked'); // parked workers are resting, not live work
   const count = `${done}/${total}`;
   const glyph = contractGlyph(s.contract.phases.find((p) => p.id === s.phase)?.glyph ?? '');
   const phase: Segment = { t: `${glyph} ${s.phase} ${count}`, color: C.focus, bold: true };
   const gate = (t: string): Segment => ({ t, color: C.fail });
 
-  if (!shown.length) {
-    const idle: Segment[] = [{ t: '⚑ idle', color: C.muted }, SEP, { t: `${s.phase} ${count}`, color: C.focus }, SEP,
-      { t: `${open} open`, color: open ? C.fail : C.muted }];
-    return rowOf(els, idle, columns);
-  }
+  if (!shown.length) return rowOf(els, idleParts(s.phase, count, open), columns);
   if (columns < MID) {
     const parts: Segment[] = [phase, SEP, { t: `${activeCount(shown)} working`, color: C.live }];
     if (open) parts.push(SEP, gate(`✗${open}`));
