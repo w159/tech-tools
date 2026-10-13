@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 import atlas_db  # noqa: E402
 import session_boot  # noqa: E402
+import testenv  # noqa: E402
 
 BOOT = os.path.join(os.path.dirname(__file__), "session_boot.py")
 
@@ -67,8 +68,15 @@ class MainInProcessTest(unittest.TestCase):
         self.db = os.path.join(self.tmp, "atlas.db")
         # Never let boot reach the real dashboard daemon (ensure would stop/respawn it).
         self.env = dict(
-            os.environ, ATLAS_DB=self.db, ATLAS_DASHBOARD="off", ATLAS_COLONY="off"
+            testenv.scrub(dict(os.environ)),
+            ATLAS_DB=self.db,
+            ATLAS_DASHBOARD="off",
+            ATLAS_COLONY="off",
         )
+        # run_main_inprocess patches with clear=False, so scrub the live env too.
+        self._saved_environ = dict(os.environ)
+        testenv.scrub()
+        self.addCleanup(self._restore_environ)
         # Pre-inject mock curator/memory so main()'s import is a no-op and
         # apply_transitions / load_snapshot do not touch the real filesystem.
         self._curator = mock.MagicMock()
@@ -83,6 +91,10 @@ class MainInProcessTest(unittest.TestCase):
             session_boot, "plugin_enabled", return_value=False
         )
         self._plugins.start()
+
+    def _restore_environ(self):
+        os.environ.clear()
+        os.environ.update(self._saved_environ)
 
     def tearDown(self):
         self._plugins.stop()
@@ -674,6 +686,7 @@ class DocsStructureRepairTest(unittest.TestCase):
     """
 
     def setUp(self):
+        self.addCleanup(os.environ.update, testenv.scrub())
         self.tmp = tempfile.mkdtemp()
         subprocess.run(["git", "init", "-q", self.tmp], check=True, capture_output=True)
         with open(os.path.join(self.tmp, "README.md"), "w", encoding="utf-8") as fh:
@@ -739,6 +752,7 @@ class RecallMandateTest(unittest.TestCase):
 
     setUp = MainInProcessTest.setUp
     tearDown = MainInProcessTest.tearDown
+    _restore_environ = MainInProcessTest._restore_environ
 
     def _context(self, enabled, mandates=""):
         self._plugins.stop()
@@ -1114,6 +1128,32 @@ class EnsureDashboardTempEnvTest(unittest.TestCase):
         out, run = self._run(HOME="/Users/someone")
         run.assert_called_once()
         self.assertIn("dashboard:", out)
+
+    def test_ensure_timeout_records_hook_fault(self):
+        import atlas_hook_guard
+
+        exc = subprocess.TimeoutExpired(cmd="ensure", timeout=15)
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k
+            not in (
+                "ATLAS_DASHBOARD",
+                "ATLAS_DASHBOARD_PORT",
+                "ATLAS_HOME",
+                "ATLAS_DASHBOARD_DB",
+            )
+        }
+        env["HOME"] = "/Users/someone"
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch("subprocess.run", side_effect=exc),
+            mock.patch.object(atlas_hook_guard, "fault") as fault,
+        ):
+            out = session_boot.ensure_dashboard()
+        self.assertIsNone(out)
+        fault.assert_called_once()
+        self.assertEqual(fault.call_args.args[0], "session_boot")
 
 
 if __name__ == "__main__":

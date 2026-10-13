@@ -24,6 +24,7 @@ sys.path.insert(0, HERE)
 import atlas_db  # noqa: E402
 import atlas_hook_guard  # noqa: E402
 import memory_capture  # noqa: E402
+import testenv  # noqa: E402
 
 
 class MemoryCaptureScopeTest(unittest.TestCase):
@@ -119,6 +120,7 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
     silently swallowed by a bare `except Exception: sys.exit(0)`."""
 
     def setUp(self):
+        self.addCleanup(os.environ.update, testenv.scrub())
         self.tmp = tempfile.mkdtemp()
         self.db = os.path.join(self.tmp, "atlas.db")
         self.conn = atlas_db.connect(self.db)
@@ -283,6 +285,7 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         self._orig_env_db = os.environ.get("ATLAS_DB")
         self._orig_env_cap = os.environ.get("ATLAS_MEMORY_CAPTURE")
         os.environ["ATLAS_DB"] = self.db
+        self._orig_injected = testenv.scrub()
 
         import atlas_memory
 
@@ -312,6 +315,7 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = orig
+        os.environ.update(self._orig_injected)
 
     def _run_main(self, stdin_str):
         sys.stdin = io.StringIO(stdin_str)
@@ -710,6 +714,7 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
         return calls
 
     def setUp(self):
+        self.addCleanup(os.environ.update, testenv.scrub())
         self.tmp = tempfile.mkdtemp()
         self.db = os.path.join(self.tmp, "atlas.db")
         self.conn = atlas_db.connect(self.db)
@@ -918,6 +923,9 @@ SECRET_SHAPES = [
 
 class MemoryCaptureRedactionTest(unittest.TestCase):
     """AuditConnectors F8: secrets in captured user text never reach MEMORY.md."""
+
+    def setUp(self):
+        self.addCleanup(os.environ.update, testenv.scrub())
 
     def test_every_secret_shape_is_redacted(self):
         import atlas_memory
