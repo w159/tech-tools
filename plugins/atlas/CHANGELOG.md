@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased
+## 12.1.2
 
 ### Fixed
+- Band worker spinner now visibly animates: phase frame tables have 6 frames so 1/2/4 s samples no longer alias (mod/theme.ts).
+- Claude subagent members are finished on SubagentStop: the member is joined to agent_id via tool_use_id (PostToolUse tool_input carries no name), and stops without last_assistant_message still finish the member.
+- Claude lead member is finished and its channel reaped on SessionEnd (ingest_session.py).
+- omp channel widget reads the main repo registry from linked worktrees, mounts whenever channel-open succeeds, stays within omp's 10-line widget cap, and uses the same 6-frame table.
+- omp lead member is finished before the shutdown channel-reap.
 - Claude subagent and lead channel members now finish. Real hook payloads showed (1) PostToolUse:Agent carries the original `tool_input` (no autonamed `name`), so the member is joined to `agentId` via `tool_use_id` recorded at PreToolUse; (2) a background atlas agent's SubagentStop has no `last_assistant_message`, which made `worker_report_gate` exit before `finish_member`; (3) SessionEnd now marks the lead finished and runs `reap_channels`.
 
 ## [12.1.1] - 2026-10-13 -- hook counts and README list include edit_read_nudge
