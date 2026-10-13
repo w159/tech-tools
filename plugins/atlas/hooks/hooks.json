@@ -57,6 +57,16 @@
         ]
       },
       {
+        "matcher": "Edit|edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/edit_read_nudge.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task",
         "hooks": [
           {
@@ -95,6 +105,16 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/delegation_prewarn.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read|read|mcp__.*ctx_read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/edit_read_nudge.py\"",
             "timeout": 10
           }
         ]
