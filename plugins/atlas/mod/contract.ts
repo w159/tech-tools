@@ -61,6 +61,7 @@ export interface SquadAgent {
   persona: string;       // persona name or 'armada-<dept>' or 'unknown'
   state: AgentState;
   source: 'task' | 'colony';
+  transport?: string;    // atlas_mux.py transport (tmux|herdr|claude-bg) for mux-launched workers
   task?: string;         // todo item content
   item?: string;         // todo item id
   lastNoteTs?: string;
@@ -86,37 +87,8 @@ export interface AtlasSnapshot {
   notes: ChannelNote[];                    // sorted by seq,ts; last 500
   members: ChannelMember[];
   squad: SquadAgent[];
-  unread: number;
-  tokens: number;
-  costUsd: number;
   contextPct: number;
-  headerMisses: number;
   now: number;                             // epoch ms at build
-}
-
-/** Intents a Client posts via surface.post; the hooks module validates and runs the CLI. */
-export type Intent =
-  | { t: 'todo.phase'; id: string; phase: PhaseId }
-  | { t: 'todo.claim'; id: string; owner: string }
-  | { t: 'todo.complete'; id: string; evidence: string }
-  | { t: 'note'; channel: string; to: string; text: string }
-  | { t: 'steer'; paneId: string; text: string }
-  | { t: 'stop'; run?: string }
-  | { t: 'tab'; tab: 'colony' | 'channel' | 'board' | 'squad' | 'collab' }
-  | { t: 'inspect'; agent: string };
-
-// ---- sprites ----
-export type SpriteState = 'idle' | 'working' | 'spawn' | 'input' | 'done' | 'failed' | 'stuck' | 'killed';
-export type SpriteSize = 'portrait' | 'field' | 'mini';
-/** A frame is an array of equal-length row strings; each char is a palette key; '.' is transparent. */
-export type Frame = string[];
-export type Frames = Record<SpriteState, Frame[]>; // >=2 frames per state
-export interface SpriteSet {
-  persona: string;
-  palette: Record<string, string>; // key char -> '#rrggbb' ('.' reserved transparent)
-  portrait: Frames;                // 16 wide x 16 tall pixels
-  field: Frames;                   // 8 wide x 12 tall pixels
-  mini: Frames;                    // 4 wide x 4 tall pixels
 }
 
 // ---- injectable IO (data readers are pure over this; register.ts adapts $.fs) ----

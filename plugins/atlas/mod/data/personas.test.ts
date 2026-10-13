@@ -111,7 +111,7 @@ describe('loadContract', () => {
     });
     const contract = await loadContract(fs, ROOT);
     expect(contract.todoPhases).toEqual(['research', 'implement']);
-    expect(contract.phases[0]).toEqual({ id: 'research', glyph: '🔍' });
+    expect(contract.phases[0]).toEqual({ id: 'research', glyph: '◎' });
     expect(contract.headerFirstLinePattern).toContain('^ATLAS');
     expect(contract.itemPhasePrefix).toBe('[<phase>] ');
   });

@@ -166,13 +166,3 @@ export function systemLine(n: ChannelNote): string | undefined {
 	const code = n.text.match(/\bexit (\d+)\b/)?.[1] ?? String(n.seq);
 	return `*** ${n.owner || '?'} has quit (exit ${code})`;
 }
-
-/** Notes newer than `lastSeenSeq` addressed to one of `forOwners` (or to everyone), excluding their own notes. */
-export function unreadCount(notes: ChannelNote[], lastSeenSeq: number, forOwners: string[]): number {
-	return notes.filter(
-		(n) =>
-			n.seq > lastSeenSeq &&
-			!(n.owner && forOwners.includes(n.owner)) &&
-			(!n.to || n.to === 'all' || forOwners.includes(n.to)),
-	).length;
-}

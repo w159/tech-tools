@@ -3,7 +3,7 @@
 // {version, items[]}, replaced atomically by scripts/atlas_todo.py, so the
 // poll key is stat mtimeMs (plan §2, docs/plans/2026-10-09-atlas-mod.md).
 import type { AtlasSnapshot, Contract, FsLike, PhaseCount, PhaseId, TodoItem } from '../contract';
-import type { ContractProgress, TodoGroup } from '../orchestra-types';
+import type { TodoGroup } from '../orchestra-types';
 
 /** Phase -> department label (the single copy; pane/board.tsx imports it). */
 export const DEPT: Record<string, string> = {
@@ -17,7 +17,7 @@ export const DEPT: Record<string, string> = {
 };
 
 /** Reusable read result: items already filtered + phase-stamped for one (root, session, members) caller. */
-export interface TodosCache { mtimeMs: number; items: TodoItem[]; backlog: { done: number; total: number } }
+export interface TodosCache { mtimeMs: number; items: TodoItem[] }
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -56,10 +56,10 @@ export async function readTodos(
   memberNames: string[],
   contract: Contract,
   cache?: TodosCache,
-): Promise<{ items: TodoItem[]; cache: TodosCache; backlog: TodosCache['backlog'] }> {
+): Promise<{ items: TodoItem[]; cache: TodosCache }> {
   const path = `${root.replace(/\/+$/, '')}/.atlas/.run/todos.json`;
   const st = await fs.stat(path).catch(() => undefined);
-  if (cache && cache.mtimeMs === (st ? st.mtimeMs : 0)) return { items: cache.items, cache, backlog: cache.backlog };
+  if (cache && cache.mtimeMs === (st ? st.mtimeMs : 0)) return { items: cache.items, cache };
 
   // stat undefined => file missing (FsLike read would throw); skip the read.
   const raw = st === undefined ? undefined : await fs.read(path).catch(() => undefined);
@@ -71,15 +71,14 @@ export async function readTodos(
     } catch { // corrupt JSON => empty list
     }
   }
-  const live = parsed.filter(it => !it.archived);
-  const backlog = { done: live.filter(it => it.status === 'completed').length, total: live.length };
   // Unphased items stay unphased (grouped as 'unsorted'); never defaulted to a real phase.
-  const items = live
+  const items = parsed
+    .filter(it => !it.archived)
     .filter(it => it.session_id === sessionId ||
       it.status === 'pending' || it.status === 'in_progress')
     .map(it => ({ ...it, phase: resolvePhase(it, contract) }));
-  const next: TodosCache = { mtimeMs: st ? st.mtimeMs : 0, items, backlog };
-  return { items, cache: next, backlog };
+  const next: TodosCache = { mtimeMs: st ? st.mtimeMs : 0, items };
+  return { items, cache: next };
 }
 
 /** Board rows carry `origin` (session|carried|manual|advisor) at runtime; TodoItem (locked contract) does not declare it. */
@@ -136,16 +135,6 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
     groups.push({ phase: 'advisor', dept: 'ADVISOR NOTES', glyph: '·', items: advisors, done: 0, total: advisors.length });
   }
   return groups;
-}
-
-/** done/total per contract phase over THIS session's non-advisor phased todos (phases with none are omitted). */
-export function contractProgress(items: TodoItem[], contract: Contract, sessionId: string): ContractProgress[] {
-  const out: ContractProgress[] = [];
-  for (const phase of contract.todoPhases) {
-    const mine = items.filter(it => it.session_id === sessionId && !notOwn(it) && resolvePhase(it, contract) === phase);
-    if (mine.length > 0) out.push({ phase, done: mine.filter(it => it.status === 'completed').length, total: mine.length });
-  }
-  return out;
 }
 
 /** AtlasSnapshot['counts']: done/total overall and per contract.todoPhases phase. */

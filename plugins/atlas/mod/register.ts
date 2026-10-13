@@ -11,15 +11,15 @@ import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
 import { PHASES, intentToArgv } from './intents';
 import { bandTree } from './band';
+import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
-import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
-import { registerRouting, registerHeaderDrift } from './routing';
+import { gatesError, headerGroup, parseGates } from './gates';
+import { registerRouting, registerCompletion } from './routing';
 import { registerDiscipline } from './discipline';
 import { PHASE_RE, registerRestyle } from './restyle';
 import { registerNotify } from './notify';
+import { parseMuxStatus } from './data/mux';
 import { EMPTY_ORCH, onComplete, parseWt, type SpawnMeta, type WtRow } from './data/orchestration';
-import type { Session } from './orchestra-types';
-import { TAIL_BYTES, labelFor, mergeSessions, parseMuxStatus, parseTranscript, subagentSession, transcriptPath } from './data/sessions';
 
 const REBUILD_MS = 1500;
 const WT_MS = 5000;
@@ -27,10 +27,20 @@ const MUX_MS = 5000;
 const HERDR_MS = 5000;
 const GATES_MS = 30_000;
 const PANE_ID = 'atlas';
-// Docked beside a fullscreen transcript the pane is a narrow column; inline above the prompt it
-// asks for 32 rows, enough for the compact sidebar (route, tasks, team, gates) without scrolling. The session.start open asks no keyboard (the person did not ask for it);
-// /atlas-cc asks for focus and the pane stays until the person closes it.
-const PANE_OPEN = { id: PANE_ID, title: 'Atlas', columns: 44, rows: 32 } as const;
+// The auto open (first render with a viewport) is docked only and asks no keyboard; /atlas-cc opens a
+// 12-row pane on demand, takes focus, and Esc closes it.
+const PANE_DOCK = { id: PANE_ID, title: 'Atlas', columns: 56 } as const;
+const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: true, focus: true } as const;
+const TICK_MS = 250;
+const DOCK_MIN_COLUMNS = 110;
+
+/** The pane opens by itself only docked: a fullscreen terminal wide enough to leave the transcript its room. */
+export const shouldDock = (v: { isFullscreen?: boolean; columns: number }): boolean => v.isFullscreen === true && v.columns >= DOCK_MIN_COLUMNS;
+
+/** Toast why a pane waits undrawn, once per open call. */
+const toastUnplaced = ($: EngineInterface) => (r: { isPlaced: boolean; reason?: string }): void => {
+	if (!r.isPlaced && r.reason) $.ui.toast(`atlas: ${r.reason}`, { timeoutMs: 6000 });
+};
 
 // ---- session state ($.state: per-session, versioned, survives module reload) --
 // Contract in types/index.d.ts. Render hooks read these (a write redraws exactly
@@ -46,9 +56,7 @@ const usageState = atom({ plugin: 'atlas', key: 'usage' } as const, { tokens: nu
 const taskAgentsState = atom({ plugin: 'atlas', key: 'taskAgents' } as const, []);
 const orchState = atom({ plugin: 'atlas', key: 'orch' } as const, EMPTY_ORCH);
 const headerPhaseState = atom({ plugin: 'atlas', key: 'headerPhase' } as const, null);
-const lastSeenSeqState = atom({ plugin: 'atlas', key: 'lastSeenSeq' } as const, 0);
 const paneOpenedState = atom({ plugin: 'atlas', key: 'paneOpened' } as const, false); // herdrTick stays idle until the pane has been opened
-const headerMissesState = atom({ plugin: 'atlas', key: 'headerMisses' } as const, 0);
 // Sidebar UI state and gate data: handlers write, the Pane render hook reads.
 const recipientState = atom({ plugin: 'atlas', key: 'sidebarRecipient' } as const, null);
 const expandedState = atom({ plugin: 'atlas', key: 'sidebarExpanded' } as const, null);
@@ -56,6 +64,7 @@ const draftState = atom({ plugin: 'atlas', key: 'sidebarDraft' } as const, '');
 const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0); // written by restyle's ticker; renders only read it
 const lastHeaderState = atom({ plugin: 'atlas', key: 'lastHeader' } as const, null);
 const gatesState = atom({ plugin: 'atlas', key: 'gates' } as const, []);
+const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'team');
 
 // ---- module caches left out of $.state ---------------------------------------
 // builder: a class instance with methods, not JSON (a reload leaves it null until
@@ -67,17 +76,15 @@ let herdrStdout = '';
 let lastFingerprint = '';
 let wtAt = -Infinity; // last atlas_wt.py status run (ms clock)
 let wtRows: WtRow[] = [];
-// Session sources (derived caches, refill on the next tick): transcript tails keyed by agent id
-// (re-read only when the file's mtime:size moved) and the last atlas_mux.py status rows.
-let sessionCwd = '';
+let muxStdout = '';
+let muxAgents: SquadAgent[] = [];
 let sessionUuid = '';
-let tailCache: Record<string, { sig: string; tail: string[] }> = {};
 /** raw host agent id -> display name, kept across rebuilds: a finished agent drops out of the host list but its id must keep resolving. */
 let nameMemo: Record<string, string> = {};
-let muxAt = -Infinity;
-let muxRows: Session[] = [];
 let gatesBusy = false;
 let pendingDrift: string[] = [];
+let paneChecked = false; // the unasked pane open is decided once per session
+let tickTimer: { cancel(): void } | null = null;
 /** A spawn-recorded agent the host list does not (yet) contain is only presumed gone after this long. */
 const SPAWN_GRACE_MS = 15_000;
 
@@ -255,12 +262,12 @@ async function dataFingerprint($: EngineInterface): Promise<string> {
 		.catch(() => '-');
 	// Usage, header phase and header misses move on session.measure / turn.complete
 	// with no file change; they feed the snapshot, so they belong here too.
-	const liveSig = `${JSON.stringify(await read($, usageState))}:${await read($, headerPhaseState)}:${await read($, headerMissesState)}`;
+	const liveSig = `${JSON.stringify(await read($, usageState))}:${await read($, headerPhaseState)}`;
 	// Tool calls, moods and comms move on events with no file change; a 5 s bucket
 	// keeps the elapsed counters fresh while anything is working.
 	const orch = await read($, orchState);
 	const acts = Object.entries(orch.activity);
-	const orchSig = `${orch.comms.length}:${orch.heavyCalls}:${acts.map(([k, a]) => `${k}=${a.tool ?? ''}${a.toolCount}${a.mood}`).join(',')}:${acts.some(([, a]) => a.tool !== null) ? Math.floor((await $.clock.now()) / 5000) : 0}`;
+	const orchSig = `${orch.comms.length}:${acts.map(([k, a]) => `${k}=${a.tool ?? ''}${a.toolCount}${a.mood}`).join(',')}:${acts.some(([, a]) => a.tool !== null) ? Math.floor((await $.clock.now()) / 5000) : 0}`;
 	const root = (await read($, snapshotState))?.root;
 	if (root === undefined || root === null || root === '') return `no-root|${agentSig}|${liveSig}`;
 	const base = `${root.replace(/\/+$/, '')}/.atlas/.run`;
@@ -285,67 +292,8 @@ async function worktrees($: EngineInterface, now: number): Promise<WtRow[]> {
 	return wtRows;
 }
 
-const cachedTail = (id: string): string[] => tailCache[id]?.tail ?? [];
-
-/** Last TAIL_BYTES of a transcript, parsed; `fallback` when tail fails. */
-async function readTranscriptTail($: EngineInterface, path: string, fallback: string[]): Promise<string[]> {
-	const out = await $.process.run(['tail', '-c', String(TAIL_BYTES), path]).catch(() => undefined);
-	return out?.exitCode === 0 ? parseTranscript(out.stdout).tail : fallback;
-}
-
-/** Re-read a transcript tail only when the file's mtime:size moved. */
-async function refreshTail($: EngineInterface, path: string, id: string): Promise<void> {
-	const st = await $.fs.stat(path).catch(() => undefined);
-	if (st === undefined) return;
-	const sig = `${st.mtimeMs}:${st.size}`;
-	if (tailCache[id]?.sig === sig) return;
-	tailCache[id] = { sig, tail: await readTranscriptTail($, path, cachedTail(id)) };
-}
-
-async function agentTail($: EngineInterface, home: string, id: string): Promise<string[]> {
-	if (home !== '' && sessionUuid !== '') await refreshTail($, transcriptPath(home, sessionCwd, sessionUuid, id), id);
-	return cachedTail(id);
-}
-
-/** Last path segment ('' for none), e.g. the run id of a `<folder>/<run>` channel. */
-const lastSegment = (path: string | null | undefined): string => (path ?? '').split('/').pop() ?? '';
-
 /** Snapshot root, '' when no board is in view. */
 const rootOf = (snap: AtlasSnapshot | null): string => snap?.root || '';
-
-/** Root + run id for atlas_mux.py, null when no board is in view. */
-function muxTarget(snap: AtlasSnapshot | null): { root: string; run: string } | null {
-	const root = rootOf(snap);
-	const run = lastSegment(snap?.channel);
-	return root !== '' && run !== '' ? { root, run } : null;
-}
-
-/** atlas_mux.py status rows, re-run at most every MUX_MS. */
-async function refreshMux($: EngineInterface, now: number): Promise<void> {
-	const target = muxTarget(await read($, snapshotState));
-	if (target === null || now - muxAt < MUX_MS) return;
-	muxAt = now;
-	const out = await $.process.run(['python3', `${$.plugin.root}/scripts/atlas_mux.py`, '--root', target.root, 'status', '--run', target.run]).catch(() => undefined);
-	muxRows = out?.exitCode === 0 ? parseMuxStatus(out.stdout, now) : [];
-}
-
-/** Tails of the host's subagent transcripts plus atlas_mux.py workers, de-duplicated by name. Never throws. */
-async function gatherSessions(
-	$: EngineInterface,
-	rows: readonly { id: string; status: string }[],
-	names: Record<string, string>,
-	now: number,
-): Promise<Session[]> {
-	try {
-		const home = (await $.env.get('HOME').catch(() => undefined)) ?? '';
-		const subs: Session[] = [];
-		for (const a of rows.slice(-16)) subs.push(subagentSession(a, labelFor(a.id, names), await agentTail($, home, a.id), now));
-		await refreshMux($, now);
-		return mergeSessions(subs, muxRows);
-	} catch {
-		return [];
-	}
-}
 
 /** Rebuild the snapshot from disk + live state; never throws. */
 async function rebuild($: EngineInterface): Promise<void> {
@@ -372,7 +320,7 @@ async function rebuild($: EngineInterface): Promise<void> {
 					(acc, a) =>
 						acc.stage[a.id] === undefined || acc.stage[a.id] === 'reported'
 							? acc
-							: onComplete(acc, a.id, { reason: HOST_DONE[a.status] ?? 'answer', answer: tailCache[a.id]?.tail.slice(-1)[0] ?? '', tokens: 0 }, spawnNow),
+							: onComplete(acc, a.id, { reason: HOST_DONE[a.status] ?? 'answer', answer: '', tokens: 0 }, spawnNow),
 					o,
 				),
 			);
@@ -382,25 +330,20 @@ async function rebuild($: EngineInterface): Promise<void> {
 	}
 	try {
 		const now = await $.clock.now();
-		const lastSeenSeq = await read($, lastSeenSeqState);
-		const sessions = await gatherSessions($, listed, names, now);
 		const snap = await builder.build({
 			headerPhase: await read($, headerPhaseState),
-			headerMisses: await read($, headerMissesState),
 			taskAgents: await read($, taskAgentsState),
+			mux: muxAgents,
 			herdrStdout,
 			usage: await read($, usageState),
-			lastSeenSeq,
 			now,
 			orch: await read($, orchState),
 			names: { ...nameMemo },
 			listed,
 			wt: await worktrees($, now),
-			sessions,
 		});
 		// The snapshot write redraws the band, pane and restyles that read it.
 		await update($, snapshotState, () => snap);
-		await update($, lastSeenSeqState, (seq) => snap.notes.reduce((hi, note) => Math.max(hi, note.seq), seq));
 	} catch (err) {
 		$.ui.log(`atlas: rebuild failed: ${String(err)}`, { to: 'debug' });
 		// keep the last good snapshot
@@ -424,6 +367,20 @@ async function herdrTick($: EngineInterface): Promise<void> {
 		.catch(() => undefined);
 	if (out === undefined || out.stdout === herdrStdout) return;
 	herdrStdout = out.stdout;
+	await rebuild($);
+}
+
+/** 5 s tick: atlas_mux.py status of the lead channel's run (`--run` is the channel's last segment); rebuilds when its stdout moved. */
+async function muxTick($: EngineInterface): Promise<void> {
+	const snap = await read($, snapshotState);
+	const root = rootOf(snap);
+	const run = snap?.channel?.split('/').pop() ?? '';
+	if (root === '' || run === '') return;
+	const out = await $.process.run(['python3', `${$.plugin.root}/scripts/atlas_mux.py`, '--root', root, 'status', '--run', run]).catch(() => undefined);
+	const stdout = out?.exitCode === 0 ? out.stdout : '';
+	if (stdout === muxStdout) return;
+	muxStdout = stdout;
+	muxAgents = parseMuxStatus(stdout);
 	await rebuild($);
 }
 
@@ -507,6 +464,7 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 		draftChange: (text) => guarded(() => update($, draftState, () => text)),
 		send: (text) => guarded(() => sendNote($, text)),
 		focus: (key) => guarded(() => $.ui.focus({ requestId: PANE_ID, key })),
+		setView: (v) => guarded(() => update($, viewState, () => v)),
 		expand: (key) =>
 			guarded(async () => {
 				await update($, expandedState, () => key);
@@ -529,8 +487,8 @@ async function gateGroups($: EngineInterface): Promise<GateGroup[]> {
 
 export async function register(on: On, options: PluginOptions): Promise<void> {
 	// Sibling registrars, wired by their real signatures. Persona routing pins
-	// model/effort and records spawned agents; the header-drift counter and the
-	// prompt reinforce line read the live contract; restyles and turn-boundary
+	// model/effort and records spawned agents and turn completions; the
+	// prompt reinforce line reads the live contract; restyles and turn-boundary
 	// notifications read the snapshot from $.state themselves. (register has no
 	// `$`, so drift logs queue and a handler drains them.)
 	registerRouting(on, {
@@ -539,9 +497,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			pendingDrift.push(msg);
 		},
 	});
-	registerHeaderDrift(on, {
-		pattern: (snapshot) => snapshot?.contract.headerFirstLinePattern ?? '',
-	});
+	registerCompletion(on);
 	registerDiscipline(on, {
 		reinforce: (snapshot) =>
 			snapshot?.contract.headerFirstLinePattern
@@ -563,15 +519,16 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			await update($, usageState, () => ({ tokens: null, costUsd: null, contextPct: null }));
 			await update($, taskAgentsState, () => []);
 			await update($, paneOpenedState, () => false);
+			paneChecked = false;
 			if (!modOn) return next(e);
 			const interactive = e.isInteractive;
 			await update($, isInteractive, () => interactive);
 			builder = new SnapshotBuilder(engineFs($), $.plugin.root);
 			const sessionId = await $.session.id();
-			sessionCwd = e.cwd;
 			sessionUuid = sessionId;
-			tailCache = {};
 			nameMemo = {};
+			muxStdout = '';
+			muxAgents = [];
 			const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
 			await builder.init(e.cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(e.cwd), await gitBranch($, e.cwd));
 			await rebuild($);
@@ -585,13 +542,21 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 				$.clock.every(HERDR_MS, () => {
 					void herdrTick($);
 				});
+				$.clock.every(MUX_MS, () => {
+					void muxTick($);
+				});
 				$.clock.every(GATES_MS, () => {
 					void runGates($);
 				});
 				void runGates($);
-				// Unasked: the engine seats it docked when the terminal is fullscreen and wide enough.
-				await update($, paneOpenedState, () => true);
-				await $.ui.open(PANE_OPEN);
+				// The tick only runs while a worker is live, so an idle session redraws nothing.
+				tickTimer?.cancel();
+				tickTimer = $.clock.every(TICK_MS, () => {
+					void (async () => {
+						const snap = await read($, snapshotState);
+						if (snap && activeCount(liveWorkers(snap, Date.now())) > 0) await update($, spinnerTickState, (n) => n + 1);
+					})().catch(() => undefined);
+				});
 			}
 		} catch (err) {
 			// a failed boot must not block the session
@@ -639,9 +604,19 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// The band above the prompt: bordered section (terminal + interactive only).
 	on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
 		if (e.surface !== 'terminal' || e.props.hasSurvey || !(await read($, isModOn)) || !(await read($, isInteractive))) return next(e);
+		// Unasked, the pane docks only beside a fullscreen transcript wide enough for it; checked once, at the first render that knows the viewport.
+		if (!paneChecked && e.viewport) {
+			paneChecked = true;
+			if (shouldDock(e.viewport)) {
+				await update($, paneOpenedState, () => true);
+				void $.ui.open(PANE_DOCK).then(toastUnplaced($));
+			}
+		}
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
-		return bandTree($.ui.resolve(e), { snapshot, openGates: openGateCount(await gateGroups($)), columns: e.props.bodyColumns, maxRows: e.props.maxRows, tick: await read($, spinnerTickState) });
+		const gates = await gateGroups($);
+		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState) });
+		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
 	});
 
 	// The Atlas sidebar: a native tree, so its elements join the engine's focus ring.
@@ -652,7 +627,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return sidebarTree($.ui.resolve(e), {
 			snapshot,
 			gates: await gateGroups($),
-			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState) },
+			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
 			tick: await read($, spinnerTickState),
@@ -668,9 +643,16 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// /atlas-cc — open the sidebar and give it the keyboard; it stays until the person closes it.
 	on('command.run', { command: 'atlas-cc' }, async ($) => {
 		await update($, paneOpenedState, () => true);
-		await $.ui.open({ ...PANE_OPEN, focus: true });
+		toastUnplaced($)(await $.ui.open(PANE_ON_DEMAND));
 		void rebuild($);
 		return {};
+	});
+
+	// Session over: the spinner clock stops.
+	on('session.end', (_$, e, next) => {
+		tickTimer?.cancel();
+		tickTimer = null;
+		return next(e);
 	});
 
 	// The person closed the pane (Esc or the close mark): /atlas-cc opens it again next time.

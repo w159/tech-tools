@@ -4,6 +4,7 @@
 // test kit can drive them from memory. No Node imports: mod modules run sandboxed.
 import type { Contract, FsLike, Persona, PhaseId } from '../contract';
 import { BRAND } from '../contract';
+import { contractGlyph } from '../theme';
 
 /** Frontmatter colour name -> hex, mirroring the dashboard token palette (dashboard_ui/css/tokens.css). */
 export const PERSONA_COLORS: Record<string, string> = {
@@ -115,7 +116,7 @@ export async function loadContract(fs: FsLike, pluginRoot: string): Promise<Cont
     throw new Error(`operating contract is not valid JSON: ${path} (${err instanceof Error ? err.message : String(err)})`);
   }
   return {
-    phases: (json.phases ?? []).map((p) => ({ id: (p.id ?? 'research') as PhaseId, glyph: p.glyph ?? '' })),
+    phases: (json.phases ?? []).map((p) => ({ id: (p.id ?? 'research') as PhaseId, glyph: contractGlyph(p.glyph ?? '') })),
     todoPhases: (json.todoPhases ?? []) as PhaseId[],
     headerFirstLinePattern: json.headerFirstLinePattern ?? '',
     itemPhasePrefix: json.itemPhasePrefix ?? '[<phase>] ',

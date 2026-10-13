@@ -169,11 +169,7 @@ const DEFAULT_SNAPSHOT: AtlasSnapshot = {
   notes: DEFAULT_NOTES,
   members: DEFAULT_MEMBERS,
   squad: DEFAULT_SQUAD,
-  unread: 0,
-  tokens: 15_000,
-  costUsd: 0.05,
   contextPct: 12,
-  headerMisses: 0,
   now: FIXTURE_EPOCH_MS,
 };
 

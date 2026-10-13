@@ -1,0 +1,8 @@
+# mod-cc-12.0.0 rerun (Verify2)
+1. PASS hooks: `python3 -m unittest discover` -> "Ran 1447 tests in 98.722s / OK (skipped=3)". `test_status_contract`: "Ran 7 tests ... OK"; `test_omp_ignores_claude_output_style ... ` ran, OK.
+   session_boot.py:996-1001 active_style = ATLAS_OUTPUT_STYLE when ATLAS_HARNESS=="omp" else read_output_style(); :1008 `if ATLAS_HARNESS != "omp": lines.extend(status_contract_lines(active_style))`; :265-280 status_contract_lines always returns the header rule (plain, or STYLE OVERRIDE variant for non-atlas outputStyle) -> emits under Claude Code regardless of outputStyle.
+2. PASS source: `ps` shows tmux session cmd `claude --plugin-dir /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas`; /plugins shows "1 mod active · atlas"; live log "atlas: plugin.json changed — reloaded (modules: mod/register.ts ...)" (hot reload from repo source). ~/.claude/debug does not exist; no cache path used.
+3. PASS live: during run band `⚑ done 0/0 ▱▱▱▱▱ · ⠦ probe-v2 0s · ✗2 gates · ▸ /atlas-cc` (braille + probe-v2; team row `⠦▸ probe-v2 explorer working`). After reply band `⚑ idle · done 0/0 · 2 open`. /atlas-cc + t team row: `✓▸ probe-v2    explorer  done  20s  4  1. Bash sleep 20 ...`. Closed with Ctrl+X x.
+   Note: band during run began with "done" label (`⚑ done 0/0 ▱▱▱▱▱ …`) - cosmetic, criteria met.
+4. PASS (mod): `claude plugin test plugins/atlas` -> 251 pass / 169 fail, 200 files. All 169 fails are "(fail) the file did not load: cannot import bun:test" in colony/ (147) and omp/ (22); mod-file fail count = 0 (mod tests pass).
+VERDICT: verified (item 4 residual: non-mod harness load failures are out of scope for mod-cc).

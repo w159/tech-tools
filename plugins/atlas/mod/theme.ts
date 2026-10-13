@@ -187,3 +187,10 @@ export const chartRoom = {
 /** Backdrop for sprite cells that carry only a foreground: sprites are self-contained
  * (fg + bg), so they stay legible whatever the terminal theme is. */
 export const spriteTile = '#1b1f27';
+
+const CONTRACT_GLYPH: Record<string, string> = { '🔍': '◎', '💡': '◇', '🧪': '⚗', '📋': '☰', '🔧': '⚒', '✅': '✓', '🏁': '⚑', '⛔': '■' };
+
+/** Map an operating-contract phase emoji to a single-cell glyph; other single-cell glyphs pass through, anything else becomes '·'. */
+export function contractGlyph(raw: string): string {
+ return CONTRACT_GLYPH[raw] ?? (textWidth(raw) === 1 ? raw : glyph.dot);
+}

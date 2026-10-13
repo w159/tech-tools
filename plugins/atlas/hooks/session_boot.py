@@ -263,13 +263,14 @@ def read_output_style(settings_path=None):
 
 
 def status_contract_lines(active_style=""):
-    """Style-override hedge only. The status header, ledger, done-check and scope
-    rules live once in output-styles/atlas-orchestrator.md (Claude Code applies it
-    force-for-plugin; omp injects it from omp/style.ts), so boot repeats them only
-    when settings.json outputStyle replaces that style."""
+    """The header rule is always emitted (the mod may hide the header; the hook
+    cannot know). When settings.json outputStyle replaces the atlas style, the
+    override hedge also restates ledger/done/scope rules."""
     style = (active_style or "").strip()
     if not style or style == ATLAS_OUTPUT_STYLE:
-        return []
+        return [
+            f"Every substantive reply opens `ATLAS | <glyph> <phase> | <state>` ({_STATUS_GLYPHS})."
+        ]
     return [
         f"STYLE OVERRIDE: outputStyle is {style!r}, not {ATLAS_OUTPUT_STYLE!r}; it may suppress the atlas style. "
         f"Every substantive reply opens `ATLAS | <glyph> <phase> | <state>` ({_STATUS_GLYPHS}); "
@@ -1004,7 +1005,8 @@ def main():
         "atlas:verifier) -> docs (atlas:docs-curator); evidence before any done claim. "
         "Route execution to atlas:<role> subagents; invoke atlas-orchestrate for multi-step or whole-codebase work.",
     ]
-    lines.extend(status_contract_lines(active_style))
+    if os.environ.get("ATLAS_HARNESS") != "omp":  # omp/style.ts injects the header rule itself
+        lines.extend(status_contract_lines(active_style))
     # claude-mem recall mandate: armed only when the claude-mem plugin (its MCP
     # search server) is enabled; a bare CLI/module cannot be called as a tool.
     recall = (

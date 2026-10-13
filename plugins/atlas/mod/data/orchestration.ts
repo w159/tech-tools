@@ -1,12 +1,15 @@
 // Orchestration data for the Atlas mod: per-agent activity, lead<->worker comms,
-// agent lifecycle and delegation savings. Pure: register/routing/discipline feed
+// and worktree-merge comms rows. Pure: register/routing/discipline feed
 // events through the reducers (state lives in the `orch` $.state atom, JSON only),
-// SnapshotBuilder calls deriveOrchestration() to fold that with board notes,
-// findings.json and git output into the AtlasSnapshot fields. No `$` here.
+// SnapshotBuilder calls deriveOrchestration() to fold that with board notes
+// and git output into the AtlasSnapshot fields. No `$` here.
 import type { ChannelMember, ChannelNote, SquadAgent } from '../contract';
-import type { ActivityEntry, CommsEntry, LifecycleEntry, Mood } from '../orchestra-types';
-import { labelFor } from './sessions';
+import type { ActivityEntry, CommsEntry, Mood } from '../orchestra-types';
 import { isRawId } from '../theme';
+
+const RAW_ID = /^a?[0-9a-f]{16}$/;
+/** Human label for an id: mapped name, else a label unchanged, else a raw id truncated to 6 chars. */
+const labelFor = (id: string, names: Record<string, string>): string => (names[id] ? names[id] : RAW_ID.test(id) ? id.slice(0, 6) : id);
 
 export const LEAD = 'lead';
 const MAX_COMMS_TEXT = 300; // board notes are free text: clip so a snapshot (and the Client props cut from it) stays small
@@ -20,17 +23,11 @@ export interface Orch {
   stage: Record<string, 'spawned' | 'working' | 'reported'>;
   /** agent id -> what the Agent call said at spawn: its `name` (the worker label) and `subagentType` (the persona source). */
   meta: Record<string, SpawnMeta>;
-  delegatedCalls: number;
-  keptBytes: number;
-  heavyCalls: number;
 }
 
 export interface SpawnMeta { name?: string; type?: string; at?: number } // at: spawn time (ms)
 
-export const EMPTY_ORCH: Orch = { activity: {}, comms: [], stage: {}, meta: {}, delegatedCalls: 0, keptBytes: 0, heavyCalls: 0 };
-
-/** One heavy inline Read/Grep/Glob/Bash result by the lead (feeds savings.inlineHeavyCalls). */
-export const onHeavy = (o: Orch): Orch => ({ ...o, heavyCalls: o.heavyCalls + 1 });
+export const EMPTY_ORCH: Orch = { activity: {}, comms: [], stage: {}, meta: {} };
 
 const firstLine = (text: string): string => {
   const line = (text.split('\n').find((l) => l.trim() !== '') ?? '').replace(/\s+/g, ' ').trim();
@@ -82,17 +79,15 @@ export function onToolStart(o: Orch, agent: string, tool: string, now: number): 
     ...o,
     activity: { ...o.activity, [agent]: { ...prev, tool, since: now, toolCount: prev.toolCount + 1, mood: 'working' } },
     stage: workingStage(o, agent),
-    delegatedCalls: o.delegatedCalls + Number(agent !== LEAD),
   };
 }
 
-/** tool.call answered: the agent is between tools. `bytes` = output size. */
-export function onToolEnd(o: Orch, agent: string, bytes: number, now: number): Orch {
+/** tool.call answered: the agent is between tools. */
+export function onToolEnd(o: Orch, agent: string, now: number): Orch {
   const prev = o.activity[agent] ?? blank(now);
   return {
     ...o,
     activity: { ...o.activity, [agent]: { ...prev, tool: null, since: now, mood: 'thinking' } },
-    keptBytes: o.keptBytes + (agent !== LEAD ? bytes : 0),
   };
 }
 
@@ -131,7 +126,7 @@ export function onComplete(o: Orch, agent: string, e: Completion, now: number): 
   return { ...next, comms: REPORTING_REASONS.has(e.reason) ? reportComms(next, agent, mood, line, now) : o.comms };
 }
 
-// ---- worktree / findings parsing -------------------------------------------------
+// ---- worktree parsing --------------------------------------------------------------
 
 /** One row of `python3 scripts/atlas_wt.py status` (JSON list). */
 export interface WtRow { agent: string; branch: string; worktree: string | null; ahead: number; behind: number; dirty: boolean; verified_finding: string | null; merged: boolean }
@@ -146,48 +141,12 @@ export function parseWt(out: string): WtRow[] {
   }
 }
 
-/** `hay` is only what a finding may name a worker in: id, title, evidence, worker. */
-type Finding = { id: string; status: string; hay: string };
-
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-};
-
-const findingRows = (data: unknown): unknown[] => {
-  if (Array.isArray(data)) return data;
-  const nested = (data as { findings?: unknown } | null | undefined)?.findings;
-  return Array.isArray(nested) ? nested : [];
-};
-
-const isRecord = (r: unknown): r is Record<string, unknown> => r !== null && typeof r === 'object';
-
-const toFinding = (row: Record<string, unknown>): Finding => {
-  const s = (k: string): string => (typeof row[k] === 'string' ? (row[k] as string) : '');
-  const evidence = Array.isArray(row.evidence) ? row.evidence.join(' ') : s('evidence');
-  return { id: s('id'), status: s('status').toLowerCase(), hay: `${s('id')} ${s('title')} ${s('worker')} ${evidence}`.toLowerCase() };
-};
-
-function parseFindings(text: string): Finding[] {
-  return findingRows(parseJson(text)).filter(isRecord).map(toFinding);
-}
-
-/** `key` appears in `hay` as a whole token (`worker/key` counts; `key-2` and `monkey` do not). */
-const names = (hay: string, key: string): boolean =>
-  new RegExp(`(^|[^a-z0-9_-])${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9_-])`).test(hay);
-
 /** A label that is only the persona word (`explorer`, `explorer-a06f`) names a role, not one worker. */
 const roleOnly = (label: string, persona: string): boolean => {
   const l = label.toLowerCase();
   const p = persona.toLowerCase();
   return l === p || l === 'unknown' || (p !== '' && new RegExp(`^${p.replace(/[^a-z0-9]/g, '.')}-[0-9a-f]{4}$`).test(l));
 };
-
-const REJECTED = new Set(['rejected', 'failed', 'fail', 'refuted']);
-const VERIFYING = new Set(['verifying', 'in_progress', 'pending', 'running']);
 
 // ---- derive ----------------------------------------------------------------------
 
@@ -199,22 +158,18 @@ export interface DeriveInput {
   notes: readonly ChannelNote[];
   members: readonly ChannelMember[];
   leadNames: readonly string[]; // channel names that mean 'lead'
-  findingsText: string;
   wt: readonly WtRow[];
-  heavyTotal: number;
   now: number;
   mergedAt: Record<string, number>; // builder-held memo: first time an agent was seen merged
   finishedAt?: Record<string, number>; // builder-held memo: first time a worker was seen finished (freezes its elapsed counter)
 }
 
 
-type Stage = (typeof STAGE_RANK)[number];
+type Stage = Orch['stage'][string];
 type Row = CommsEntry & { o: number }; // o: stable tiebreak (notes < synthesized < merge)
 type AgentRec = { name: string; ids: string[]; squad?: SquadAgent };
 
-const STAGE_RANK = ['spawned', 'working', 'reported', 'verifying', 'verified', 'rejected', 'merged'] as const;
-const rank = (s: Stage): number => STAGE_RANK.indexOf(s);
-const isReported = (s: Stage): boolean => rank(s) >= 2;
+const isReported = (s: Stage): boolean => s === 'reported';
 
 const SQUAD_MOOD: Partial<Record<SquadAgent['state'], Mood>> = { input: 'blocked', finished: 'done', failed: 'failed', dead: 'failed', running: 'working' };
 const squadMood = (state: SquadAgent['state']): Mood => SQUAD_MOOD[state] ?? 'idle';
@@ -315,15 +270,9 @@ function dedupeComms(rows: Row[]): CommsEntry[] {
   return comms;
 }
 
-// ---- lifecycle ---------------------------------------------------------------------
+// ---- worktree merges ---------------------------------------------------------------
 
-const TERMINAL_SQUAD = new Set<string>(['finished', 'failed', 'dead']);
-const SQUAD_STAGE = new Map<string, Stage>([['finished', 'reported'], ['running', 'working']]);
-const FINDING_STAGE = new Map<string, Stage>([
-  ['verified', 'verified'],
-  ...[...REJECTED].map((s): [string, Stage] => [s, 'rejected']),
-  ...[...VERIFYING].map((s): [string, Stage] => [s, 'verifying']),
-]);
+const SQUAD_STAGE: Record<string, Stage> = { finished: 'reported', running: 'working' };
 
 function collectAgents(i: DeriveInput): AgentRec[] {
   const agents = new Map<string, AgentRec>(i.squad.map((s): [string, AgentRec] => [s.name, { name: s.name, ids: [s.name], squad: s }]));
@@ -336,19 +285,9 @@ function collectAgents(i: DeriveInput): AgentRec[] {
   return [...agents.values()];
 }
 
-const hasReported = (i: DeriveInput, a: AgentRec): boolean => a.ids.some((id) => i.orch.stage[id] === 'reported');
-const isLiveVerifier = (i: DeriveInput, a: AgentRec): boolean => a.squad?.persona === 'verifier' && !TERMINAL_SQUAD.has(a.squad.state) && !hasReported(i, a);
-const dispatchText = (i: DeriveInput, a: AgentRec): string =>
-  [a.squad?.task ?? '', ...i.orch.comms.filter((c) => c.kind === 'dispatch' && a.ids.includes(c.to)).map((c) => c.text)].join(' ').toLowerCase();
-
-/** A verifier still running names its target in its dispatch: that target is `verifying`. */
-const verifierTexts = (i: DeriveInput, agents: readonly AgentRec[]): string[] => agents.filter((a) => isLiveVerifier(i, a)).map((a) => dispatchText(i, a));
-
 const liveStage = (i: DeriveInput, a: AgentRec): Stage | undefined => a.ids.map((id) => i.orch.stage[id]).find((s) => s !== undefined);
-const squadStage = (squad: SquadAgent | undefined): Stage => SQUAD_STAGE.get(squad?.state as string) ?? 'spawned';
-const bumpFinished = (stage: Stage, squad: SquadAgent | undefined): Stage => (squad?.state === 'finished' && rank(stage) < 2 ? 'reported' : stage);
-
-const initialStage = (i: DeriveInput, a: AgentRec): Stage => bumpFinished(liveStage(i, a) ?? squadStage(a.squad), a.squad);
+const squadStage = (squad: SquadAgent | undefined): Stage => SQUAD_STAGE[squad?.state as string] ?? 'spawned';
+const reported = (i: DeriveInput, a: AgentRec): boolean => a.squad?.state === 'finished' || isReported(liveStage(i, a) ?? squadStage(a.squad));
 
 /** Names that identify THIS worker: its label (unless that is just the persona word) and its raw ids. */
 function identityKeys(a: AgentRec): string[] {
@@ -360,58 +299,18 @@ function identityKeys(a: AgentRec): string[] {
 const findTree = (wt: readonly WtRow[], keys: readonly string[]): WtRow | undefined =>
   wt.find((t) => keys.some((k) => t.agent.toLowerCase() === k || t.branch.toLowerCase() === `worker/${k}`));
 
-function treeFinding(findings: readonly Finding[], tree: WtRow | undefined): Finding | undefined {
-  const linked = tree?.verified_finding;
-  if (!linked) return undefined;
-  return findings.find((x) => x.id === linked && x.status === 'verified');
-}
-
-function pickFinding(findings: readonly Finding[], keys: readonly string[], tree: WtRow | undefined): Finding | undefined {
-  const hit = findings.filter((x) => keys.some((k) => names(x.hay, k)));
-  return hit[hit.length - 1] ?? treeFinding(findings, tree);
-}
-
-const applyFinding = (stage: Stage, f: Finding | undefined): Stage => (f !== undefined && isReported(stage) ? (FINDING_STAGE.get(f.status) ?? stage) : stage);
-const applyVerifying = (stage: Stage, texts: readonly string[], keys: readonly string[]): Stage =>
-  stage === 'reported' && texts.some((t) => keys.some((k) => names(t, k))) ? 'verifying' : stage;
-
-const isMerged = (rows: readonly Row[], name: string, tree: WtRow | undefined): boolean => Boolean(tree?.merged) || mergeSeen(rows, name);
-
-function pushMergeRow(i: DeriveInput, rows: Row[], name: string, tree: WtRow | undefined): void {
-  const ts = (i.mergedAt[name] ??= i.now);
-  rows.push({ o: 2e6, seq: 0, ts, from: LEAD, to: name, text: `merged ${tree?.branch ?? 'work'}`, kind: 'merge' });
-}
-
-function applyMerge(i: DeriveInput, rows: Row[], name: string, stage: Stage, tree: WtRow | undefined): Stage {
-  if (!isReported(stage) || !isMerged(rows, name, tree)) return stage;
-  if (!mergeSeen(rows, name)) pushMergeRow(i, rows, name, tree);
-  return 'merged';
-}
-
-const treeFields = (tree: WtRow | undefined): Pick<LifecycleEntry, 'branch' | 'worktree'> =>
-  tree === undefined ? {} : { branch: tree.branch, ...(tree.worktree !== null ? { worktree: tree.worktree } : {}) };
-const itemField = (squad: SquadAgent | undefined): Pick<LifecycleEntry, 'item'> => (squad?.item !== undefined ? { item: squad.item } : {});
-
-function lifecycleFor(i: DeriveInput, rows: Row[], findings: readonly Finding[], texts: readonly string[], a: AgentRec): LifecycleEntry {
-  const keys = identityKeys(a);
-  const tree = findTree(i.wt, keys);
-  let stage = applyFinding(initialStage(i, a), pickFinding(findings, keys, tree));
-  stage = applyMerge(i, rows, a.name, applyVerifying(stage, texts, keys), tree);
-  return { agent: a.name, stage, ...treeFields(tree), ...itemField(a.squad) };
-}
-
-function deriveLifecycle(i: DeriveInput, rows: Row[]): LifecycleEntry[] {
-  const findings = parseFindings(i.findingsText);
-  const agents = collectAgents(i);
-  const texts = verifierTexts(i, agents);
-  return agents.map((a) => lifecycleFor(i, rows, findings, texts, a));
+/** A reported worker whose worktree merged gets one `merge` comms row (unless a board note already carries it). */
+function pushMergeRow(i: DeriveInput, rows: Row[], a: AgentRec): void {
+  const tree = findTree(i.wt, identityKeys(a));
+  if (!tree?.merged || !reported(i, a) || mergeSeen(rows, a.name)) return;
+  const ts = (i.mergedAt[a.name] ??= i.now);
+  rows.push({ o: 2e6, seq: 0, ts, from: LEAD, to: a.name, text: `merged ${tree.branch}`, kind: 'merge' });
 }
 
 export function deriveOrchestration(i: DeriveInput) {
   const activity = deriveActivity(i);
   const resolve = makeResolver(i);
   const rows = [...noteRows(i, resolve), ...synthRows(i, resolve)];
-  const lifecycle = deriveLifecycle(i, rows);
-  const savings = { delegatedCalls: i.orch.delegatedCalls, inlineHeavyCalls: i.heavyTotal, keptBytes: i.orch.keptBytes };
-  return { activity, comms: dedupeComms(rows).slice(-MAX_COMMS), lifecycle, savings };
+  for (const a of collectAgents(i)) pushMergeRow(i, rows, a);
+  return { activity, comms: dedupeComms(rows).slice(-MAX_COMMS) };
 }

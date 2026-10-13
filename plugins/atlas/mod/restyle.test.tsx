@@ -5,23 +5,18 @@ import { expect, test } from 'claude-code/testing'
 import type { AgentInfo, EngineInterface, On } from 'claude-code'
 import {
   noisyTree,
-  HINT_TAIL,
   assistantTree,
-  capsule,
   durationTree,
   formatDuration,
-  fmtTok,
-  nextStepText,
   personaFor,
-  phaseCount,
   registerRestyle,
-  spinnerTree,
+  spinnerSuffix,
   toolUseTree,
   turnCostText,
-  turnTokensText,
   type ReceiptTracker,
 } from './restyle'
 import type { AtlasSnapshot } from './contract'
+import { textWidth } from './theme'
 import { memState } from './test_helpers'
 
 // ---- fixtures ----
@@ -44,11 +39,7 @@ const snap = (over: Partial<AtlasSnapshot> = {}): AtlasSnapshot => ({
   notes: [],
   members: [],
   squad: [],
-  unread: 0,
-  tokens: 48000,
-  costUsd: 0.31,
   contextPct: 41,
-  headerMisses: 0,
   now: 0,
   ...over,
 })
@@ -78,50 +69,25 @@ const engineNext = async (x?: unknown) => (x === undefined ? undefined : SENTINE
 
 // ---- formatters ----
 
-test('formatDuration and fmtTok', () => {
+test('formatDuration', () => {
   expect(formatDuration(12_000)).toBe('12s')
   expect(formatDuration(252_000)).toBe('4m12s')
   expect(formatDuration(3_720_000)).toBe('1h2m')
-  expect(fmtTok(48_000)).toBe('48k')
-  expect(fmtTok(820)).toBe('820')
-  expect(fmtTok(2_500_000)).toBe('2.5M')
 })
 
-test('capsule and phaseCount read the phase slice', () => {
-  const pc = phaseCount(snap(), 'implement')
-  expect(pc.done).toBe(3)
-  expect(pc.total).toBe(5)
-  expect(capsule(snap())).toBe('⟦implement 3/5⟧')
-  expect(capsule(snap({ counts: { done: 0, total: 0, byPhase: {} } }), 'research')).toBe('⟦research⟧')
+test('receipt duration is the turn durationMs, not session time', () => {
+  expect(stringsOf(durationTree(snap(), { durationMs: 77_000 }, {}, null))).toContain('1m17s')
 })
 
 // ---- Spinner ----
 
-test('spinner renders globe, capsule, meter and squad activity', () => {
-  const s = snap({
-    squad: [{ name: 'impl-auth', persona: 'implementer', state: 'running', source: 'task', task: 'editing hooks/completion_gate.py' }],
-  })
-  const text = stringsOf(spinnerTree(s, { word: 'Sauteing', message: null }, 0))
-  expect(text).toContain('⠋')
-  expect(text).toContain('⟦implement 3/5⟧')
-  expect(text).toContain('▰▰▰▱▱')
-  expect(text).toContain('Sauteing')
-  expect(text).toContain('impl-auth editing hooks/completion_gate.py')
-})
+const worker = (name: string, state: string) => ({ name, persona: 'implementer', state, source: 'task', task: '' }) as AtlasSnapshot['squad'][number]
 
-test('spinner keeps a one-cell gap between the capsule/bar and the verb', () => {
-  const text = stringsOf(spinnerTree(snap(), { word: 'Twisting', message: null }, 0))
-  expect(text).toContain('▰▰▰▱▱ Twisting')
-})
-
-test('spinner globe cycles through the 8 slots', () => {
-  const s = snap()
-  const at = (tickMs: number) => stringsOf(spinnerTree(s, { word: 'w', message: null }, tickMs))
-  // 8 braille frames, one per 120 ms tick, wrapping.
-  expect(at(0)).toContain('⠋')
-  expect(at(120)).toContain('⠙')
-  expect(at(7 * 120)).toContain('⠧')
-  expect(at(8 * 120)).toContain('⠋')
+test('spinner suffix names working workers, blocked first, and is empty when idle', () => {
+  expect(spinnerSuffix(snap())).toBe('')
+  expect(spinnerSuffix(snap({ squad: [worker('impl-auth', 'running')] }))).toBe(' · impl-auth')
+  const text = spinnerSuffix(snap({ squad: [worker('a', 'running'), worker('b', 'input'), worker('c', 'running'), worker('d', 'running')] }))
+  expect(text).toBe(' · ⏸ b · a · c')
 })
 
 // ---- ToolUse deployment card ----
@@ -154,65 +120,47 @@ test('non-atlas tool rows keep the engine drawing', () => {
 
 // ---- AssistantMessage pill ----
 
-test('header line becomes a coloured pill with the body kept', () => {
-  const tree = assistantTree(snap(), { text: 'ATLAS | 🔧 implement 3/5 | shipping restyle\n\nBody text here.', isFirstOfReply: true })
-  expect(tree).not.toBeNull()
-  const text = stringsOf(tree)
-  expect(text).toContain('▸ implement 3/5')
+test('header line is drawn styled in place with the body kept', () => {
+  const first = 'ATLAS | 🔧 implement 3/5 | shipping restyle'
+  const text = stringsOf(assistantTree(snap(), { text: `${first}\n\nBody text here.`, isFirstOfReply: true }))
+  expect(text).toContain(' ATLAS ')
+  expect(text).toContain('implement')
+  expect(text).toContain('3/5')
+  expect(text).toContain('shipping restyle')
   expect(text).toContain('Body text here.')
-  expect(text).not.toContain('ATLAS |')
+  expect(text).toContain('ATLAS | ')
+  expect(text).toContain(first)
 })
 
-test('headerless reply gets a dim inferred pill; other blocks stay engine-drawn', () => {
-  const text = stringsOf(assistantTree(snap(), { text: 'just prose', isFirstOfReply: true }))
-  expect(text).toContain('▸ implement · inferred')
-  expect(text).toContain('just prose')
-  expect(assistantTree(snap(), { text: 'more prose' })).toBeNull()
+test('header row fits one line at 60 columns with both pipes', () => {
+  const row = assistantTree(snap(), { text: `ATLAS | 🔧 implement 3/5 | ${'x'.repeat(120)}`, isFirstOfReply: true }, 60) as { type: string }
+  expect(row.type).toBe('Box')
+  const line = stringsOf(row)
+  expect(textWidth(line)).toBeLessThanOrEqual(60)
+  expect(line).toContain('ATLAS | ')
+  expect(line.split('|').length).toBe(3)
+})
+
+test('headerless or summary replies return null (engine-drawn)', () => {
+  expect(assistantTree(snap(), { text: 'just prose', isFirstOfReply: true })).toBeNull()
   expect(assistantTree(snap(), { text: 'ATLAS | 🔧 implement 3/5 | x', isSummary: true })).toBeNull()
 })
 
 // ---- TurnDuration receipt ----
 
-test('turn receipt with phase transition and tracker memory', () => {
-  const tracker: ReceiptTracker = { phase: 'research', done: 0, costStart: 1.2, usage: { input_tokens: 12_400, output_tokens: 1_100, cache_read_input_tokens: 0 } }
-  const text = stringsOf(durationTree(snap(), { durationMs: 252_000 }, tracker, 1.32))
-  expect(text).toContain('▸')
-  expect(text).toContain('4m12s')
-  expect(text).toContain('research ▸ implement')
-  expect(text).toContain('+3 done')
-  expect(text).toContain('12k in / 1k out')
-  expect(text).toContain('turn $0.12')
-  expect(text).toContain('ctx 41%')
-  expect(text).not.toContain('48k')
-  expect(text).not.toContain('$0.31')
-  expect(tracker.phase).toBe('implement')
+test('turn receipt: done delta, workers, ctx, cost', () => {
+  const tracker: ReceiptTracker = { done: 0, costStart: 1.2 }
+  const text = stringsOf(durationTree(snap({ squad: [worker('a', 'running')] }), { durationMs: 252_000 }, tracker, 1.32))
+  expect(text).toBe('▸ 4m12s · +3 done · 1 workers · ctx 41% · $0.12')
   expect(tracker.done).toBe(3)
 })
 
-test('turn cost is the delta of two engine readings; a missing reading prints no dollars', () => {
-  expect(turnCostText(1.2, 1.32)).toBe('turn $0.12')
+test('turn cost is the delta of two engine readings; a missing or zero reading prints no dollars', () => {
+  expect(turnCostText(1.2, 1.32)).toBe('$0.12')
   expect(turnCostText(null, 1.32)).toBeNull()
-  expect(turnCostText(1.2, null)).toBeNull()
-  const text = stringsOf(durationTree(snap({ costUsd: 0 }), { durationMs: 1000 }, {}, null))
+  expect(turnCostText(1.2, 1.2)).toBeNull()
+  const text = stringsOf(durationTree(snap(), { durationMs: 1000 }, {}, null))
   expect(text).not.toContain('$')
-})
-
-test('receipt tokens come from turn usage, never context fill', () => {
-  expect(turnTokensText(null)).toBeNull()
-  expect(turnTokensText({ input_tokens: 800, output_tokens: 90, cache_read_input_tokens: 5000 })).toBe('800 in / 90 out (+5k cached)')
-  expect(stringsOf(durationTree(snap({ tokens: 48_000 }), { durationMs: 1000 }, {}, null))).not.toContain('tok')
-})
-
-// ---- prompt suggestion ----
-
-test('next contract step suggestion branches', () => {
-  const wip = snap({ todos: [{ id: 't1', content: 'ship restyle sites', status: 'in_progress', owner: 'Restyle' }] })
-  expect(nextStepText(wip)).toBe('check: Restyle ship restyle sites')
-  const pending = snap({ todos: [{ id: 't2', content: 'verify mod', status: 'pending' }], counts: { done: 5, total: 5, byPhase: {} } })
-  expect(nextStepText(pending)).toBe('next: verify mod')
-  const none = snap({ counts: { done: 5, total: 5, byPhase: {} } })
-  expect(nextStepText(none)).toBe('atlas: record evidence and close the run')
-  expect(nextStepText(snap({ counts: { done: 0, total: 0, byPhase: {} } }))).toBeNull()
 })
 
 // ---- registration wiring ----
@@ -228,8 +176,7 @@ const fakeOn = (regs: Reg[]): On =>
     return { catch: () => undefined }
   }) as unknown as On
 
-const fake$ = (over: { env?: string; snapshot?: AtlasSnapshot | null } = {}): { $: EngineInterface; suggested: string[]; timers: { fire: () => void; cancelled: number; started: number }; ticks: number[] } => {
-  const suggested: string[] = []
+const fake$ = (over: { env?: string; snapshot?: AtlasSnapshot | null } = {}): { $: EngineInterface; timers: { fire: () => void; cancelled: number; started: number }; ticks: number[] } => {
   const ticks: number[] = []
   const mem = memState({ 'atlas/snapshot': over.snapshot ?? null })
   const spinnerRecording = {
@@ -254,94 +201,66 @@ const fake$ = (over: { env?: string; snapshot?: AtlasSnapshot | null } = {}): { 
       env: { get: async () => over.env },
       state: spinnerRecording,
       agent: { list: async () => [] },
-      prompt: { suggest: async (a: { text: string }) => { suggested.push(a.text); return { isShown: true } } },
     } as unknown as EngineInterface,
-    suggested,
   }
 }
 
 const fakeE = (component: string, props: Record<string, unknown> = {}) =>
   ({ surface: 'terminal', component, requestId: 'r1', props })
 
-test('registerRestyle wires the five sites; without a snapshot every site no-ops', async () => {
+test('registerRestyle wires the four sites; without a snapshot every site no-ops', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
-  expect(regs.length).toBe(7)
-  expect(regs[0]?.matcher?.component).toBe('Spinner')
-  expect(regs[1]?.matcher?.component).toBe('ToolUse')
-  expect(regs[2]?.matcher?.component).toBe('AssistantMessage')
-  expect(regs[3]?.matcher?.component).toBe('TurnDuration')
-  expect(regs[4]?.matcher?.component).toBe('PromptHint')
-  for (const r of regs.slice(0, 5)) {
+  expect(regs.length).toBe(5)
+  expect(regs.slice(0, 4).map((r) => r.matcher?.component)).toEqual(['Spinner', 'ToolUse', 'AssistantMessage', 'TurnDuration'])
+  for (const r of regs.slice(0, 4)) {
     expect(await r.hook(fake$().$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
   }
 })
 
-test('turn hooks record the cost baseline and the main loop usage; the receipt prints the delta', async () => {
+test('turn.start records the cost baseline; the receipt prints the delta', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
   const costs: Array<{ usd: number } | undefined> = [{ usd: 1.2 }, { usd: 1.32 }]
-  const harness = fake$({ snapshot: snap({ costUsd: 0 }) })
+  const harness = fake$({ snapshot: snap() })
   const $ = { ...(harness.$ as object), session: { usage: async () => ({ cost: costs.shift() }) } } as unknown as EngineInterface
-  await regs[5]?.hook($, {}, echoNext)
-  const usage = { input_tokens: 3000, output_tokens: 500, cache_read_input_tokens: 0 }
-  await regs[6]?.hook($, { usage }, echoNext)
-  await regs[6]?.hook($, { usage: { ...usage, input_tokens: 9 }, agentId: 'sub' }, echoNext)
+  await regs[4]?.hook($, {}, echoNext)
   const text = stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 1000 }), echoNext))
-  expect(text).toContain('turn $0.12')
-  expect(text).toContain('3k in / 500 out')
+  expect(text).toContain('$0.12')
 })
 
 test('ATLAS_MOD=off no-ops every site even with a live snapshot', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
-  for (const r of regs.slice(0, 5)) {
+  for (const r of regs.slice(0, 4)) {
     expect(await r.hook(fake$({ env: 'off', snapshot: snap() }).$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
   }
 })
 
-test('live spinner draws and PromptHint appends the tail and suggests the next step', async () => {
+test('live spinner passes the suffix through next', async () => {
   const regs: Reg[] = []
-  const todos = [{ id: 't1', content: 'ship restyle sites', status: 'in_progress', owner: 'Restyle' }]
-  const harness = fake$({ snapshot: snap({ todos }) })
+  const harness = fake$({ snapshot: snap({ squad: [worker('impl-auth', 'running')] }) })
   registerRestyle(fakeOn(regs))
-
   const drawn = await regs[0]?.hook(harness.$, fakeE('Spinner', { word: 'Sauteing', message: null }), echoNext)
-  expect(drawn).not.toBe(SENTINEL)
-  expect(stringsOf(drawn)).toContain('⟦implement 3/5⟧')
-
-  const rewritten = await regs[4]?.hook(harness.$, fakeE('PromptHint', { isDraft: false, isWorking: false, hint: '' }), echoNext)
-  const tail = (rewritten as { props?: { tail?: string } } | undefined)?.props?.tail
-  expect(tail).toBe(HINT_TAIL)
-  expect(harness.suggested[0]).toBe('check: Restyle ship restyle sites')
+  expect((drawn as { props?: { suffix?: string } }).props?.suffix).toBe(' · impl-auth')
 })
 
-test('spinner globe advances per timer tick and the timer stops once the Spinner unmounts', async () => {
+test('AssistantMessage draws the contract header on one styled row and keeps the body', async () => {
   const regs: Reg[] = []
-  const h = fake$({ snapshot: snap() })
   registerRestyle(fakeOn(regs))
-  const props = { word: 'Sauteing', message: null }
-  const frameAt = async () => stringsOf(await regs[0]?.hook(h.$, fakeE('Spinner', props), echoNext)).charAt(0)
+  const text = 'ATLAS | ⚒ implement 3/5 | dedup cpWidth\n\nBody text here.'
+  const drawn = await regs[2]?.hook(fake$({ snapshot: snap() }).$, fakeE('AssistantMessage', { text, isFirstOfReply: true }), echoNext)
+  expect(drawn).not.toBe(SENTINEL)
+  const out = stringsOf(drawn)
+  for (const s of ['ATLAS', 'implement', '3/5', 'dedup cpWidth', 'Body text here.']) expect(out).toContain(s)
+})
 
-  const seen = [await frameAt()]
-  await frameAt() // a second draw must not start a second timer
-  expect(h.timers.started).toBe(1)
-  for (let i = 0; i < 6; i++) {
-    h.timers.fire()
-    await Promise.resolve()
-    seen.push(await frameAt())
-  }
-  expect(h.ticks).toEqual([1, 2, 3, 4, 5, 6])
-  expect(seen[0]).not.toBe(seen[1]) // one glyph per tick
-  expect(new Set(seen).size).toBe(7) // 7 distinct braille frames over 7 draws
-
-  // turn over: the Spinner unmounts, so the next tick finds no draw since the last one and stops
-  h.timers.fire() // draw happened since previous fire (frameAt above): still writes
-  h.timers.fire() // no draw in between: cancels, writes nothing
-  expect(h.ticks.length).toBe(7)
-  expect(h.timers.cancelled).toBe(1)
-  await frameAt() // the next turn restarts exactly one timer
-  expect(h.timers.started).toBe(2)
+test('header-less AssistantMessage keeps the engine drawing with no pill', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const drawn = await regs[2]?.hook(fake$({ snapshot: snap() }).$, fakeE('AssistantMessage', { text: 'just prose', isFirstOfReply: true }), engineNext)
+  expect(drawn).toBe(SENTINEL)
+  expect(stringsOf(drawn)).not.toContain('inferred')
 })
 
 test('noisy tool: huge Bash output collapses to a one-line size badge; small/running keeps engine row', () => {

@@ -22,7 +22,7 @@ function setup(opts: { modOn?: boolean; interactive?: boolean; gitFails?: boolea
   const hooks = new Map<string, Hook>();
   const on = ((event: string, a: unknown, b?: unknown) => hooks.set(event, (b ?? a) as Hook)) as unknown as On;
   registerDiscipline(on, { reinforce: () => 'reinforce-line' });
-  const rec = { toasts: [] as string[], suggests: [] as string[], now: 1_000_000 };
+  const rec = { toasts: [] as string[], now: 1_000_000 };
   const $ = {
     state: memState({
       'atlas/isModOn': opts.modOn ?? true,
@@ -31,7 +31,6 @@ function setup(opts: { modOn?: boolean; interactive?: boolean; gitFails?: boolea
     }),
     clock: { now: async () => rec.now },
     ui: { toast: (t: string) => rec.toasts.push(t) },
-    prompt: { suggest: async (a: { text: string }) => (rec.suggests.push(a.text), { isShown: true }) },
     process: {
       run: async () => {
         if (opts.gitFails) throw new Error('no git');
@@ -52,13 +51,11 @@ function setup(opts: { modOn?: boolean; interactive?: boolean; gitFails?: boolea
 }
 
 describe('heavy inline meter', () => {
-  test('toasts once at the limit, suggests the role after the answer', async () => {
-    const { rec, call, answer } = setup();
+  test('toasts once at the limit', async () => {
+    const { rec, call } = setup();
     for (let i = 0; i < HEAVY_LIMIT + 2; i++) await call('Read', HEAVY_CHARS);
     expect(rec.toasts).toHaveLength(1);
     expect(rec.toasts[0]).toContain('atlas:explorer');
-    await answer(GOOD);
-    expect(rec.suggests).toEqual([expect.stringContaining('atlas:explorer')]);
   });
 
   test('light calls, subagent calls and a delegation never count', async () => {
@@ -70,7 +67,6 @@ describe('heavy inline meter', () => {
     await call('Bash', HEAVY_CHARS);
     await answer(GOOD);
     expect(rec.toasts).toEqual([]);
-    expect(rec.suggests).toEqual([]);
   });
 
   test('ATLAS_MOD=off and headless sessions stay silent', async () => {
@@ -80,8 +76,7 @@ describe('heavy inline meter', () => {
       await answer('no header');
       expect((await submit('fix it')).context).toBeUndefined();
       expect(rec.toasts).toEqual([]);
-      expect(rec.suggests).toEqual([]);
-    }
+      }
   });
 
   test('fails open: a throwing engine never breaks the tool, the answer or the prompt', async () => {

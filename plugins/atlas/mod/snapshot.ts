@@ -6,11 +6,11 @@ import type {
   AtlasSnapshot, ChannelMember, ChannelNote, Contract, FsLike, Persona, PhaseId, SquadAgent,
 } from './contract';
 import { boardRoot, leadChannelName } from './data/root';
-import { computeCounts, contractProgress, currentPhase, groupTodos, readTodos, type TodosCache } from './data/todos';
-import { NoteReader, readRoster, unreadCount } from './data/channels';
+import { computeCounts, currentPhase, groupTodos, readTodos, type TodosCache } from './data/todos';
+import { NoteReader, readRoster } from './data/channels';
 import { loadContract, loadPersonas } from './data/personas';
 import { deriveOrchestration, EMPTY_ORCH, type Orch, type WtRow } from './data/orchestration';
-import type { LiveSnapshot, Session } from './orchestra-types';
+import type { LiveSnapshot } from './orchestra-types';
 import { mergeSquad, parseHerdrStatus } from './data/herdr';
 
 /** Contract stand-in when <pluginRoot>/contracts/operating-contract.json is missing/corrupt. */
@@ -87,35 +87,28 @@ export class SnapshotBuilder {
   /** Rebuild every AtlasSnapshot field from disk state + live hook state. Never throws. */
   async build(live: {
     headerPhase: PhaseId | null;
-    headerMisses: number;
     taskAgents: SquadAgent[];
+    mux?: SquadAgent[];                // parseMuxStatus(atlas_mux.py status stdout)
     herdrStdout?: string;
-    usage: { tokens: number | null; costUsd: number | null; contextPct: number | null };
-    lastSeenSeq: number;
+    usage: { contextPct: number | null };
     now: number;
     orch?: Orch;                       // event-fed activity/comms/stages (register.ts reads the orch atom)
     names?: Record<string, string>;    // raw agent id -> squad display name
     listed?: { id: string; status: string }[]; // $.agent.list
     wt?: WtRow[];                      // parseWt(atlas_wt.py status stdout)
-    sessions?: Session[];              // register.ts: subagent transcript tails + atlas_mux workers
   }): Promise<LiveSnapshot> {
-    const orchestrate = (notes: ChannelNote[], squad: SquadAgent[], findingsText: string) =>
+    const orchestrate = (notes: ChannelNote[], squad: SquadAgent[]) =>
       deriveOrchestration({
         orch: live.orch ?? EMPTY_ORCH, names: live.names ?? {}, listed: live.listed ?? [], squad, notes,
-        members: this.members, leadNames: this.candidates, findingsText, wt: live.wt ?? [],
-        heavyTotal: (live.orch ?? EMPTY_ORCH).heavyCalls, now: live.now, mergedAt: this.mergedAt, finishedAt: this.finishedAt,
+        members: this.members, leadNames: this.candidates, wt: live.wt ?? [],
+        now: live.now, mergedAt: this.mergedAt, finishedAt: this.finishedAt,
       });
     const passthrough = {
       root: this.root,
       sessionId: this.sessionId,
       contract: this.contract,
       personas: this.personas,
-      // Measured-or-0 for the snapshot's numeric contract fields; the band gets
-      // the true unknown-ness via the nullable usage prop (contract.ts locked).
-      tokens: live.usage.tokens ?? 0,
-      costUsd: live.usage.costUsd ?? 0,
       contextPct: live.usage.contextPct ?? 0,
-      headerMisses: live.headerMisses,
       now: live.now,
     };
     // No usable root (init never found one, or failed): idle snapshot.
@@ -130,12 +123,8 @@ export class SnapshotBuilder {
         notes: [],
         members: [],
         squad: [],
-        unread: 0,
-        sessions: live.sessions ?? [],
         todoGroups: [],
-        contractProgress: [],
-        backlog: { done: 0, total: 0 },
-        ...orchestrate([], [], ''),
+        ...orchestrate([], []),
       };
     }
     // Re-read the roster so joins/leaves appear; keep the last good one on error.
@@ -152,10 +141,9 @@ export class SnapshotBuilder {
       : [];
     const { panes } = parseHerdrStatus(live.herdrStdout ?? '');
     const phase = currentPhase(read.items, live.headerPhase);
-    const squad = mergeSquad(this.members, notes, panes, live.taskAgents, live.now);
-    const findingsText = (await this.fs.read(`${this.root}/.atlas/.run/findings.json`).catch(() => undefined)) ?? '';
+    const squad = mergeSquad(this.members, notes, panes, [...live.taskAgents, ...(live.mux ?? [])], live.now);
     return {
-      ...orchestrate(notes, squad, findingsText),
+      ...orchestrate(notes, squad),
       ...passthrough,
       channel: this.channel,
       todos: read.items,
@@ -165,11 +153,7 @@ export class SnapshotBuilder {
       notes,
       members: this.members,
       squad,
-      unread: unreadCount(notes, live.lastSeenSeq, [this.candidates[0] ?? '']),
-      sessions: live.sessions ?? [],
       todoGroups: groupTodos(read.items, this.contract, this.sessionId),
-      contractProgress: contractProgress(read.items, this.contract, this.sessionId),
-      backlog: read.backlog,
     };
   }
 }

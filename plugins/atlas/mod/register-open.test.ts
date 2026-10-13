@@ -1,13 +1,13 @@
-// The sidebar opens unasked at session.start (no keyboard request) and /atlas-cc opens it with
-// focus and without closeOnEscape or holdToasts, so it stays until the person closes it.
+// The sidebar never opens unasked unless docked (fullscreen, >= 110 columns), decided at the first
+// render with a viewport; /atlas-cc opens it on demand with focus and Esc-to-close.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { register } from './register';
+import { register, shouldDock } from './register';
 import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;
-interface OpenArgs { id: string; focus?: true; closeOnEscape?: true; holdToasts?: true }
+interface OpenArgs { id: string; focus?: true; closeOnEscape?: true; holdToasts?: true; columns?: number; rows?: number; title?: string }
 
 function handlerKey(event: string, matcher: Record<string, unknown> | undefined): string {
   return matcher === undefined ? event : `${event}|${String(matcher.command ?? matcher.component ?? '')}`;
@@ -37,6 +37,8 @@ function stubEngine() {
       log: () => {},
       invalidate: () => {},
       open: async (args: OpenArgs) => { opens.push(args); return { isPlaced: true as const }; },
+      toast: () => {},
+      resolve: () => { throw new Error('no drawing in test'); },
       close: async () => {},
     },
     command: { register: async (spec: { name: string }) => ({ command: spec.name }) },
@@ -47,22 +49,35 @@ function stubEngine() {
 const noopNext: AnyNext = async (input) => input;
 
 describe('sidebar open requests', () => {
-  test('session.start opens without focus; /atlas-cc (twice) opens with focus and nothing that closes it', async () => {
+  test('shouldDock: fullscreen and >= 110 columns only', () => {
+    expect(shouldDock({ isFullscreen: true, columns: 160 })).toBe(true);
+    expect(shouldDock({ isFullscreen: true, columns: 110 })).toBe(true);
+    expect(shouldDock({ isFullscreen: true, columns: 100 })).toBe(false);
+    expect(shouldDock({ isFullscreen: false, columns: 160 })).toBe(false);
+    expect(shouldDock({ columns: 160 })).toBe(false);
+  });
+
+  async function renderBand(viewport: { columns: number; rows: number; isFullscreen: boolean }) {
     const { on, pick } = captureOn();
     const { engine, opens } = stubEngine();
     await register(on, {});
     await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
-    expect(opens.length).toBe(1);
-    expect(opens[0]).toMatchObject({ id: 'atlas' });
-    expect(opens[0]?.focus).toBeUndefined();
-    const cc = pick('command.run|atlas-cc');
-    await cc(engine, { args: '' }, noopNext);
-    await cc(engine, { args: '' }, noopNext);
-    expect(opens.length).toBe(3);
-    for (const o of opens.slice(1)) {
-      expect(o).toMatchObject({ id: 'atlas', focus: true });
-      expect(o.closeOnEscape).toBeUndefined();
-      expect(o.holdToasts).toBeUndefined();
-    }
+    const e = { surface: 'terminal', viewport, props: { hasSurvey: false, bodyColumns: viewport.columns } };
+    // the drawing itself is not under test (no resolve in the stub); only the unasked open is
+    await pick('ui.render|AbovePrompt')(engine, e, noopNext).catch(() => undefined);
+    await pick('ui.render|AbovePrompt')(engine, e, noopNext).catch(() => undefined);
+    return { opens, pick, engine };
+  }
+
+  test('no auto open at 100 columns non-fullscreen or fullscreen-narrow', async () => {
+    expect((await renderBand({ columns: 100, rows: 40, isFullscreen: false })).opens).toEqual([]);
+    expect((await renderBand({ columns: 100, rows: 40, isFullscreen: true })).opens).toEqual([]);
+  });
+
+  test('opens once docked at 160 fullscreen; /atlas-cc opens 12 rows with focus and Esc-close', async () => {
+    const { opens, pick, engine } = await renderBand({ columns: 160, rows: 40, isFullscreen: true });
+    expect(opens).toEqual([{ id: 'atlas', title: 'Atlas', columns: 56 }]);
+    await pick('command.run|atlas-cc')(engine, { args: '' }, noopNext);
+    expect(opens[1]).toMatchObject({ id: 'atlas', rows: 12, closeOnEscape: true, focus: true });
   });
 });

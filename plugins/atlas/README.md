@@ -249,19 +249,22 @@ Row-by-row status and how each surface is created, read, updated, and deleted:
 
 The plugin ships an in-process mods module (`mod/`, wired by the `modules` entry in
 `hooks/hooks.json`; needs Claude Code 2.1.287+) that draws two native-element surfaces
-(no `Client` panes): a one-line band above the prompt, `Atlas  <phase> n of m   N working
-N gates open`, and a docked Atlas sidebar opened at session start. The sidebar shows the
-operating-contract route with every phase and its tasks, the team (lead plus this
-session's members) with a message field that posts a note to the selected member or the
-lead, gates (completion conditions, inline-op tripwire, tool routing, last-reply header)
-collapsed per group with fix commands that copy on press, and advisor notes. ctrl+x tab
-focuses it, Tab and the arrows walk its rows, Enter acts; `/atlas-cc` opens and focuses
-it. Gate readings come from `scripts/atlas_gates.py --session --root --json`, which
-shares `evaluate()` with the Stop hook (`hooks/completion_gate.py`); the header check
-comes from `mod/discipline.ts`. Fullscreen docked placement is not yet live-verified.
-Restyled spinner/tool/dispatch sites and a context-discipline module nudge heavy inline
-reads toward subagent delegation and sharpen vague prompts with repo facts. The mod
-reads `.atlas/.run/` and changes state only through the existing CLIs;
+(no `Client` panes): a one-row band above the prompt (phase + progress bar + up to 3
+named live workers + gate count, collapsing to narrower tiers below 60 columns, idle
+to `⚑ idle` with none running) and an Atlas sidebar with a hotkey tab strip — `r: route
+│ t: team │ c: channel │ g: gates` — over exactly one view at a time. Route shows the
+operating-contract rail and the current phase's tasks; Team is a worker table (failures
+and blocked workers always on top) plus a message field; Channel is an IRC-style log of
+board notes; Gates groups completion conditions, inline-op tripwire, tool routing and
+the last-reply header check, with fix commands that copy on press. The pane docks itself
+only in a fullscreen terminal at 110+ columns; otherwise it stays closed until
+`/atlas-cc`, which opens a focused 12-row inline pane. Gate readings come from
+`scripts/atlas_gates.py --session --root --json`, which shares `evaluate()` with the
+Stop hook (`hooks/completion_gate.py`); the header check comes from `mod/discipline.ts`.
+The contract header (`ATLAS | <phase> | <sentence>`) is restyled onto the reply itself;
+restyled spinner/tool/turn-receipt sites and a context-discipline module nudge heavy
+inline reads toward subagent delegation and sharpen vague prompts with repo facts. The
+mod reads `.atlas/.run/` and changes state only through the existing CLIs;
 `ATLAS_MOD=off` disables it. Full detail: `docs/atlas-mod.md`.
 
 Parallel implementer dispatches get git-worktree isolation via `scripts/atlas_wt.py`

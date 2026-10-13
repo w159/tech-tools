@@ -1,12 +1,12 @@
 // Tests for mod/snapshot.ts under the claude-code testing kit.
 // Covers: root/lead-channel resolution, session filter + counts, phase
 // precedence (header > todo > default), instance-held mtime cache, notes/
-// roster/squad/unread merge, live pass-throughs, and the no-root idle snapshot.
+// roster/squad merge, live pass-throughs, and the no-root idle snapshot.
 import { describe, expect, test } from 'claude-code/testing';
 import type { SquadAgent, TodoItem } from './contract';
 import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs, makeSnapshot } from './test_helpers';
 import { SnapshotBuilder } from './snapshot';
-import { EMPTY_ORCH, onComplete, onHeavy, onSpawn, onToolEnd, onToolStart, type WtRow } from './data/orchestration';
+import { EMPTY_ORCH, onComplete, onSpawn, onToolEnd, onToolStart, type WtRow } from './data/orchestration';
 
 const ROOT = '/r';
 const CWD = '/r/sub';
@@ -69,11 +69,9 @@ async function newBuilder() {
 function live(over: Partial<Parameters<SnapshotBuilder['build']>[0]> = {}) {
   return {
     headerPhase: null,
-    headerMisses: 0,
     taskAgents: [] as SquadAgent[],
     herdrStdout: undefined as string | undefined,
-    usage: { tokens: 15000, costUsd: 0.05, contextPct: 12 } as { tokens: number | null; costUsd: number | null; contextPct: number | null },
-    lastSeenSeq: 0,
+    usage: { contextPct: 12 } as { contextPct: number | null },
     now: FIXTURE_EPOCH_MS,
     ...over,
   };
@@ -154,7 +152,7 @@ describe('SnapshotBuilder', () => {
     expect(third.todos.map((t) => t.id)).toEqual(first.todos.map((t) => t.id));
   });
 
-  test('notes, squad and unread merge from board, roster, herdr and task agents', async () => {
+  test('notes and squad merge from board, roster, herdr and task agents', async () => {
     const { b } = await newBuilder();
     const taskAgents: SquadAgent[] = [
       { name: 'impl-auth', persona: 'implementer', state: 'running', source: 'task', item: 't2' },
@@ -166,13 +164,11 @@ describe('SnapshotBuilder', () => {
         { pane_id: 'pane-2', agent: 'veri-auth', status: 'idle' },
       ],
     });
-    const snap = await b.build(live({ lastSeenSeq: 1, taskAgents, herdrStdout, now: FIXTURE_EPOCH_MS + 5000 }));
+    const snap = await b.build(live({ taskAgents, herdrStdout, now: FIXTURE_EPOCH_MS + 5000 }));
     // notes: other-channel lines dropped, sorted by seq, ts normalised
     expect(snap.notes.map((n) => n.seq)).toEqual([1, 2, 3]);
     expect(snap.notes[1]!.channel).toBe(LEAD);
     expect(snap.notes[1]!.ts).toBe(new Date(FIXTURE_EPOCH_MS + 1000).toISOString());
-    // unread: seq>1, not the lead's own, to all or to the lead
-    expect(snap.unread).toBe(1);
     // squad: task agent wins the name clash and borrows colony info; lead excluded
     const impl = snap.squad.find((s) => s.name === 'impl-auth');
     expect(impl?.source).toBe('task');
@@ -199,11 +195,8 @@ describe('SnapshotBuilder', () => {
 
   test('live pass-throughs land on every snapshot field', async () => {
     const { b } = await newBuilder();
-    const snap = await b.build(live({ headerMisses: 2, now: FIXTURE_EPOCH_MS + 5000 }));
-    expect(snap.tokens).toBe(15000);
-    expect(snap.costUsd).toBe(0.05);
+    const snap = await b.build(live({ now: FIXTURE_EPOCH_MS + 5000 }));
     expect(snap.contextPct).toBe(12);
-    expect(snap.headerMisses).toBe(2);
     expect(snap.now).toBe(FIXTURE_EPOCH_MS + 5000);
   });
 
@@ -214,7 +207,7 @@ describe('SnapshotBuilder', () => {
     });
     const b = new SnapshotBuilder(fs, PLUGIN);
     await b.init('/nowhere/deep', {}, 'def45678', 'tech-tools', 'main');
-    const snap = await b.build(live({ headerPhase: 'implement', headerMisses: 2, now: FIXTURE_EPOCH_MS + 5000 }));
+    const snap = await b.build(live({ headerPhase: 'implement', now: FIXTURE_EPOCH_MS + 5000 }));
     expect({ ...snap }).toEqual({
       ...makeSnapshot({
       root: null,
@@ -232,39 +225,26 @@ describe('SnapshotBuilder', () => {
       notes: [],
       members: [],
       squad: [],
-      unread: 0,
-      tokens: 15000,
-      costUsd: 0.05,
       contextPct: 12,
-      headerMisses: 2,
       now: FIXTURE_EPOCH_MS + 5000,
     }),
     activity: { lead: { tool: null, since: FIXTURE_EPOCH_MS + 5000, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' } },
     comms: [],
-    lifecycle: [],
-    savings: { delegatedCalls: 0, inlineHeavyCalls: 0, keptBytes: 0 },
-    sessions: [],
     todoGroups: [],
-    contractProgress: [],
-    backlog: { done: 0, total: 0 },
     });
   });
 
-  test('orchestration: orch events, wt rows and findings feed activity/comms/lifecycle/savings', async () => {
-    const { fs, b } = await newBuilder();
-    await fs.write(`${ROOT}/.atlas/.run/findings.json`, JSON.stringify([{ id: 'f1', title: 'verified worker/impl-auth', evidence: [], status: 'verified' }]));
+  test('orchestration: orch events and wt rows feed activity and comms', async () => {
+    const { b } = await newBuilder();
     let orch = onSpawn(EMPTY_ORCH, 'a1', 'edit auth', FIXTURE_EPOCH_MS);
     orch = onToolStart(orch, 'a1', 'Edit', FIXTURE_EPOCH_MS + 1000);
-    orch = onToolEnd(orch, 'a1', 4000, FIXTURE_EPOCH_MS + 2000);
+    orch = onToolEnd(orch, 'a1', FIXTURE_EPOCH_MS + 2000);
     orch = onComplete(orch, 'a1', { reason: 'answer', answer: 'done editing', tokens: 900 }, FIXTURE_EPOCH_MS + 3000);
-    orch = onHeavy(orch);
     const wt: WtRow[] = [{ agent: 'impl-auth', branch: 'worker/impl-auth', worktree: null, ahead: 0, behind: 0, dirty: false, verified_finding: 'f1', merged: true }];
     const squad: SquadAgent[] = [{ name: 'impl-auth', persona: 'implementer', state: 'finished', source: 'task' }];
     const snap = await b.build(live({ orch, names: { a1: 'impl-auth' }, listed: [{ id: 'a1', status: 'completed' }], taskAgents: squad, wt, now: FIXTURE_EPOCH_MS + 4000 }));
     expect(snap.activity['impl-auth']).toMatchObject({ toolCount: 1, tokens: 900, mood: 'done', lastLine: 'done editing' });
     expect(snap.comms.map((c) => c.kind)).toEqual(expect.arrayContaining(['dispatch', 'report', 'merge']));
-    expect(snap.lifecycle.find((l) => l.agent === 'impl-auth')).toEqual({ agent: 'impl-auth', stage: 'merged', branch: 'worker/impl-auth' });
-    expect(snap.savings).toEqual({ delegatedCalls: 1, inlineHeavyCalls: 1, keptBytes: 4000 });
   });
 
   test('todoGroups: unsorted holds only session-origin unphased items; other-session backlog without a phase and advisor notes stay out', async () => {
@@ -285,36 +265,16 @@ describe('SnapshotBuilder', () => {
     expect(snap.todoGroups.find((g) => g.phase === 'advisor')).toMatchObject({ dept: 'ADVISOR NOTES', total: 1 });
     expect(snap.todoGroups.find((g) => g.phase === 'research')).toMatchObject({ dept: 'ARCHIVE', total: 1 });
     expect(snap.todoGroups.flatMap((g) => g.items.map((i) => i.id))).not.toContain('t5');
-    expect(snap.contractProgress).toEqual([{ phase: 'research', done: 0, total: 1 }]); // advisor + unphased never count
   });
 
-  test('contractProgress is session-scoped and moves when a session todo completes', async () => {
-    const { fs, b } = await newBuilder();
-    const before = await b.build(live());
-    expect(before.contractProgress).toEqual([{ phase: 'research', done: 0, total: 1 }, { phase: 'theory', done: 0, total: 1 }]);
-    await fs.write(TODOS, JSON.stringify({
-      version: 1,
-      items: [
-        { id: 't1', content: '[research] map mod surface', status: 'completed', session_id: SESSION },
-        { id: 't2', content: '[theory] pick channel model', status: 'in_progress', session_id: SESSION },
-        { id: 'g1', content: '[research] other session job', status: 'pending', session_id: 'other-session' },
-      ],
-    }));
-    const after = await b.build(live());
-    expect(after.contractProgress).toEqual([{ phase: 'research', done: 1, total: 1 }, { phase: 'theory', done: 0, total: 1 }]);
-    expect(after.backlog.total).toBe(3); // global backlog is a separate count
-  });
-
-  test('sessions pass through; raw agent ids in notes/comms/activity resolve to labels', async () => {
+  test('raw agent ids in notes/comms/activity resolve to labels', async () => {
     const { fs, b } = await newBuilder();
     await fs.write(BOARD, [
       line({ seq: 1, ts: FIXTURE_EPOCH_MS, owner: 'a529730494759bac3', to: 'a1b2c3d4e5f60718a', text: 'ping peer' }),
       line({ seq: 2, ts: FIXTURE_EPOCH_MS + 1, owner: LEAD, to: 'a529730494759bac3', text: 'go ahead' }),
       '',
     ].join('\n'));
-    const sessions = [{ name: 'explorer', transport: 'subagent' as const, state: 'running' as const, since: FIXTURE_EPOCH_MS, tail: ['x'], agentId: 'a529730494759bac3' }];
-    const snap = await b.build(live({ sessions, names: { a529730494759bac3: 'explorer' } }));
-    expect(snap.sessions).toEqual(sessions);
+    const snap = await b.build(live({ names: { a529730494759bac3: 'explorer' } }));
     const peer = snap.comms.find((c) => c.text === 'ping peer');
     expect(peer).toMatchObject({ from: 'explorer', to: 'worker' }); // unmapped raw id: never hex, the label `worker`
     expect(snap.comms.find((c) => c.text === 'go ahead')).toMatchObject({ from: 'lead', to: 'explorer' });

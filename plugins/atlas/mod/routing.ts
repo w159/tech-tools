@@ -1,7 +1,7 @@
 // Routing enforcement for the Atlas mod: record agentId→persona so turn.step
 // can pin the persona's effort (persona model pins live in the agent
-// definitions' own frontmatter, honored natively — never rewritten here),
-// count header-format misses.
+// definitions' own frontmatter, honored natively — never rewritten here)
+// and feed turn completions into the orchestration state.
 //
 // Event shapes mirror plugins/atlas/.claude-plugin/types/claude-code/index.d.ts
 // (AgentSpawnInput, TurnStepInput, TurnCompleteInput, PromptSubmitInput).
@@ -22,7 +22,6 @@ const isRoutableEffort = (effort: string): effort is RoutableEffort =>
 // these re-declare refs register.ts owns.
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
 const taskAgentsState = atom({ plugin: 'atlas', key: 'taskAgents' } as const, []);
-const headerMissesState = atom({ plugin: 'atlas', key: 'headerMisses' } as const, 0);
 const orchState = atom({ plugin: 'atlas', key: 'orch' } as const, EMPTY_ORCH);
 
 export interface RoutingDeps {
@@ -39,6 +38,17 @@ function withAgent(agents: SquadAgent[], agentId: string, persona: string, task?
     : [...agents, { name: agentId, persona, state: 'running' as const, source: 'task' as const, ...extra }].slice(-64);
 }
 
+/** The worker name an atlas dispatch puts on its prompt's first line (`name: probe-slow`): the Agent tool has no `name` parameter for a plain subagent. */
+export const promptName = (prompt: string): string | undefined => /^\s*name:\s*([\w.-]+)/i.exec(prompt)?.[1];
+
+const CALL_TTL_MS = 5000;
+interface AgentCall { id: string; name: string; description: string; type: string; at: number }
+
+/** The Agent call `name` that matches this spawn: by tool_use_id (the engine's shared id), else the newest call with the same description + subagent type inside CALL_TTL_MS. */
+const matchCall = (calls: readonly AgentCall[], spawn: { tool_use_id?: string; description: string; subagentType: string }, now: number): string | undefined =>
+  (calls.find((c) => spawn.tool_use_id && c.id === spawn.tool_use_id)
+    ?? [...calls].reverse().find((c) => now - c.at <= CALL_TTL_MS && c.description === spawn.description && c.type === spawn.subagentType))?.name;
+
 /**
  * Wires persona routing: `agent.spawn` records agentId→persona for matched
  * atlas roles (models pass through untouched — the agent definition's own
@@ -50,6 +60,23 @@ function withAgent(agents: SquadAgent[], agentId: string, persona: string, task?
 export function registerRouting(on: On, deps: RoutingDeps): void {
   // agentId -> persona name, recorded on spawn, read on turn.step.
   const byAgent = new Map<string, string>();
+  // Agent/Task tool calls carrying a `name`, awaiting their agent.spawn (the Agent tool's own name, which agent.spawn may lack).
+  let calls: AgentCall[] = [];
+
+  on('tool.call', { tool: /^(Agent|Task)$/ }, async ($, e, next) => {
+    try {
+      const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+      const a = e as unknown as Record<string, unknown>; // SAFETY: a RegExp matcher cannot narrow e; Agent/Task args are an open string-keyed bag, every read goes through str()
+      const name = str(a.name);
+      if (name) {
+        const at = await $.clock.now();
+        calls = [...calls.filter((c) => at - c.at <= CALL_TTL_MS), { id: str(a.tool_use_id), name, description: str(a.description), type: str(a.subagent_type), at }].slice(-16);
+      }
+    } catch {
+      // name capture never blocks a dispatch
+    }
+    return next(e);
+  });
 
   on('agent.spawn', async ($, e, next) => {
     let persona: Persona | undefined;
@@ -82,7 +109,8 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
         const label = e.subagentType.replace(ATLAS_PREFIX, '').toLowerCase();
         await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? (label || 'unknown'), e.description));
         const now = await $.clock.now();
-        await update($, orchState, (o) => onSpawn(o, agentId, e.description || e.prompt, now, { ...(e.name ? { name: e.name } : {}), type: e.subagentType }));
+        const name = e.name || matchCall(calls, e, now) || promptName(e.prompt);
+        await update($, orchState, (o) => onSpawn(o, agentId, e.description || e.prompt, now, { ...(name ? { name } : {}), type: e.subagentType }));
       } catch {
         // recording never blocks a spawn
       }
@@ -111,16 +139,8 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
   });
 }
 
-export interface HeaderDriftDeps {
-  pattern: (snapshot: AtlasSnapshot | null) => string;
-}
-
-/**
- * Counts main-loop answers whose first line breaks the contract's header
- * pattern (headerFirstLinePattern). Subagent turns carry no header, so their
- * completions are skipped. Never throws; the answer always moves on.
- */
-export function registerHeaderDrift(on: On, deps: HeaderDriftDeps): void {
+/** Feeds each completed turn (main loop or subagent) into the orchestration state. Never throws; the answer always moves on. */
+export function registerCompletion(on: On): void {
   on('turn.complete', async ($, e, next) => {
     try {
       const now = await $.clock.now();
@@ -128,16 +148,6 @@ export function registerHeaderDrift(on: On, deps: HeaderDriftDeps): void {
       await update($, orchState, (o) => onComplete(o, e.agentId ?? LEAD, { reason: e.reason, answer: e.answer, tokens }, now));
     } catch {
       // the activity feed never blocks an answer
-    }
-    try {
-      if (e.agentId === undefined) {
-        const firstLine = e.answer.split('\n', 1)[0] ?? '';
-        if (!new RegExp(deps.pattern(await read($, snapshotState))).test(firstLine)) {
-          await update($, headerMissesState, (n) => n + 1);
-        }
-      }
-    } catch {
-      // a drift check never blocks the answer
     }
     return next(e);
   });

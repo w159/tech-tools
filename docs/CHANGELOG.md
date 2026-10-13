@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## [12.0.0] - 2026-10-13 -- atlas 12.0.0: Command Center redesign
+
+Detail: `plugins/atlas/CHANGELOG.md` 12.0.0.
+
+- Header: the contract header (`ATLAS | <phase> | <sentence>`) now actually draws on the reply, pipes kept.
+- Band: one borderless status row (was three bordered gutter rows), built from the same live-worker list the Team tab reads.
+- Pane: a hotkey tab strip (route/team/channel/gates) over one view; docks only when fullscreen and 110+ columns, else `/atlas-cc` opens a 12-row inline pane.
+- Removed: `svg.ts`, the per-persona sprite modules, the session/collab data readers, the portrait panel, and other Client-pane leftovers that drew nothing.
+- Sprite review moved to `scripts/sprite_review.ts`, rendering the same fold the terminal paints.
+- `claude plugin test plugins/atlas`: 249 pass, 0 mod fail (169 expected non-mod `colony/**`/`omp/**` residual); `tsc --noEmit` 0 errors.
+
 ## [11.1.7] - 2026-10-13 -- atlas 11.1.7: quiet hooks, honest boot, repaired installs
 
 Detail: `plugins/atlas/CHANGELOG.md` 11.1.7.

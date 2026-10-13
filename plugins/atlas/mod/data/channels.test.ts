@@ -1,7 +1,7 @@
 // Tests for plugins/atlas/mod/data/channels.ts — pure logic over an in-memory FsLike (claude-code/testing kit).
 import { expect, test } from 'claude-code/testing';
 import type { ChannelNote, FsLike } from '../contract';
-import { formatNote, NoteReader, readRoster, systemLine, unreadCount } from './channels';
+import { formatNote, NoteReader, readRoster, systemLine } from './channels';
 
 /** In-memory FsLike over `${root}/.atlas/.run/...`; counts read() calls so cursor behaviour is observable. */
 class MemFs implements FsLike {
@@ -150,17 +150,4 @@ test('readRoster: first present candidate wins; unreadable/missing file yields n
 	const broken = new MemFs();
 	broken.files.set(`${ROOT}/.atlas/.run/channels.json`, '{oops');
 	expect(await readRoster(broken, ROOT, ['proj@main'])).toEqual({ channel: null, members: [] });
-});
-
-test('unreadCount: counts newer notes to the owners or all, excluding their own', () => {
-	const notes: ChannelNote[] = [
-		{ ts: '', seq: 1, owner: 'lead', to: 'all', text: 'old', channel: 'c' },
-		{ ts: '', seq: 5, owner: 'lead-1', to: 'all', text: 'mine', channel: 'c' },
-		{ ts: '', seq: 6, owner: 'fix-1', to: 'all', text: 'shout', channel: 'c' },
-		{ ts: '', seq: 7, owner: 'fix-2', to: 'lead-1', text: 'dm', channel: 'c' },
-		{ ts: '', seq: 8, owner: 'fix-2', to: 'other', text: 'not-mine', channel: 'c' },
-		{ ts: '', seq: 9, owner: 'fix-3', text: 'broadcast-no-to', channel: 'c' },
-	];
-	expect(unreadCount(notes, 4, ['lead-1'])).toBe(3); // 6, 7, 9 — not 5 (own), not 8 (to other)
-	expect(unreadCount(notes, 9, ['lead-1'])).toBe(0);
 });

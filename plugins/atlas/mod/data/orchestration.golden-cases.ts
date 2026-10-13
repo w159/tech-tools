@@ -1,10 +1,10 @@
 // Cases for the orchestration characterization test (frozen output lives in orchestration.golden-fixture.ts).
 import type { SquadAgent } from '../contract';
-import { deriveOrchestration, onComplete, onHeavy, onSpawn, onStep, onToolEnd, onToolStart, parseWt, EMPTY_ORCH, type DeriveInput, type Orch } from './orchestration';
+import { deriveOrchestration, onComplete, onSpawn, onStep, onToolEnd, onToolStart, parseWt, EMPTY_ORCH, type DeriveInput, type Orch } from './orchestration';
 
 const NOW = 1_760_000_000_000;
 const base = (over: Partial<DeriveInput>): DeriveInput => ({
-  orch: EMPTY_ORCH, names: {}, listed: [], squad: [], notes: [], members: [], leadNames: [], findingsText: '[]', wt: [], heavyTotal: 0, now: NOW + 60_000, mergedAt: {}, finishedAt: {}, ...over,
+  orch: EMPTY_ORCH, names: {}, listed: [], squad: [], notes: [], members: [], leadNames: [], wt: [], now: NOW + 60_000, mergedAt: {}, finishedAt: {}, ...over,
 });
 
 function rich(): Record<string, unknown> {
@@ -16,10 +16,10 @@ function rich(): Record<string, unknown> {
   o = onSpawn(o, ids[3]!, 'anon task', NOW + 2);
   o = onSpawn(o, ids[4]!, 'fails', NOW + 3, { name: 'boom-worker' });
   o = onToolStart(o, ids[0]!, 'Grep', NOW + 10);
-  o = onToolEnd(o, ids[0]!, 4000, NOW + 11);
+  o = onToolEnd(o, ids[0]!, NOW + 11);
   o = onStep(o, ids[0]!, NOW + 12);
   o = onToolStart(o, 'lead', 'Read', NOW + 13);
-  o = onHeavy(onToolEnd(o, 'lead', 99, NOW + 14));
+  o = onToolEnd(o, 'lead', NOW + 14);
   o = onStep(o, ids[1]!, NOW + 15);
   o = onToolStart(o, ids[1]!, 'Bash', NOW + 16);
   o = onStep(o, ids[1]!, NOW + 17);
@@ -45,19 +45,13 @@ function rich(): Record<string, unknown> {
     { seq: 5, ts: '2026-10-12T10:00:07Z', owner: 'x', text: 'join', kind: 'join' },
     { seq: 6, ts: '2026-10-12T10:00:08Z', owner: 'x', text: 'disp', kind: 'dispatch' },
   ] as unknown as DeriveInput['notes'];
-  const findings = JSON.stringify({ findings: [
-    { id: 'f1', status: 'Verified', title: 'explore-band mapped', evidence: ['ok'] },
-    { id: 'f2', status: 'rejected', title: 'boom-worker', worker: 'boom-worker' },
-    { id: 'f3', status: 'verifying', evidence: 'blocked-one trace' },
-    { id: 'f4', status: 'verified', title: 'tree link' }, 7, null,
-  ] });
   const wt = parseWt(JSON.stringify([
     { agent: 'impl-merge', branch: 'worker/impl-merge', worktree: '/wt/x', ahead: 1, behind: 0, dirty: false, verified_finding: 'f4', merged: true },
     { agent: 'run-one', branch: 'worker/run-one', worktree: null, ahead: 0, behind: 0, dirty: true, verified_finding: null, merged: false },
   ]));
   const members = [{ name: 'boss', role: 'lead' }, { name: 'w', role: 'worker' }] as unknown as DeriveInput['members'];
   const input = base({
-    orch: o, notes, squad, wt, findingsText: findings, members, leadNames: ['lead-1'], heavyTotal: 9,
+    orch: o, notes, squad, wt, members, leadNames: ['lead-1'],
     names: { [ids[0]!]: 'explore-band', [ids[1]!]: 'verify-band', [ids[2]!]: 'impl-merge', [ids[4]!]: 'boom-worker' },
     listed: [{ id: ids[1]!, status: 'waiting' }, { id: ids[4]!, status: 'failed' }, { id: ids[2]!, status: 'completed' }, { id: ids[3]!, status: 'running' }],
   });
@@ -76,7 +70,6 @@ function cases(): Record<string, unknown> {
     rich: rich(),
     emptyDerive: deriveOrchestration(base({})),
     wtBad: [parseWt('nope'), parseWt('{}'), parseWt('[1,{"agent":"a","branch":"b"},{"agent":1}]')],
-    badFindings: [deriveOrchestration(base({ findingsText: 'nope' })).lifecycle, deriveOrchestration(base({ findingsText: '{"findings":3}' })).lifecycle],
     working: deriveOrchestration(base({ orch: working, names: { a1: 'explore' }, listed: [{ id: 'a1', status: 'running' }] })),
     stepKeep: onStep(working, 'a1', NOW + 5),
     completes: ['answer', 'error', 'refusal', 'aborted', 'other'].map((reason) => onComplete(working, 'a1', { reason, answer: 'STATUS: DONE\nbody', tokens: 2 }, NOW + 9)),

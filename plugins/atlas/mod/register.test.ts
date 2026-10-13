@@ -170,14 +170,14 @@ describe('headless inertness', () => {
 });
 
 describe('snapshot refresh on live state', () => {
-  test('a session.measure and a header miss reach the snapshot on the next tick, no file change', async () => {
+  test('a session.measure reaches the snapshot on the next tick, no file change', async () => {
     const { on, pick } = captureOn();
     const { engine, rec } = stubEngine();
     await register(on, {});
     await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
     const rebuildTick = rec.tickFns[0] as () => void;
     const snap = async () =>
-      (await engine.state.get({ plugin: 'atlas', key: 'snapshot' } as never)).value as { tokens: number; headerMisses: number };
+      (await engine.state.get({ plugin: 'atlas', key: 'snapshot' } as never)).value as { contextPct: number };
     const settle = async () => {
       for (let i = 0; i < 50; i++) await Promise.resolve();
     };
@@ -185,12 +185,10 @@ describe('snapshot refresh on live state', () => {
     await settle();
     const before = await snap();
     await pick('session.measure')(engine, { context: { tokens: 4321, percent: 7 }, changed: ['context'] }, noopNext);
-    await pick('turn.complete')(engine, { reason: 'answer', answer: 'no header', agentId: undefined }, noopNext);
     rebuildTick();
     await settle();
     const after = await snap();
-    expect(after.tokens).toBe(4321);
-    expect(after.tokens).not.toBe(before.tokens);
-    // header misses share the same fingerprint term (liveSig), so they refresh the same way
+    expect(after.contextPct).toBe(7);
+    expect(after.contextPct).not.toBe(before.contextPct);
   });
 });

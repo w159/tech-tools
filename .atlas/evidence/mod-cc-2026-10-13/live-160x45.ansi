@@ -1,0 +1,252 @@
+## idle
+[91m ▐[40m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [37mv2.1.296[39m
+[91m▝▜[40m█████[49m█▀[39m  [37mFable[39m [37m5.1[39m [37mwith[39m [37mmedium[39m [37meffort[39m [37m·[39m [37mClaude[39m [37mMax[39m
+[91m ▝▝[39m   [91m▝▝[39m   [37m/private/tmp/atlas-live[39m
+
+[37m [39m [37m⎿[39m [37m SessionStart:startup[39m [37msays:[39m [37m#[39m [37mclaude-mem[39m [37mstatus[39m
+
+     [37mThis[39m [37mproject[39m [37mhas[39m [37mno[39m [37mmemory[39m [37myet.[39m [37mThe[39m [37mcurrent[39m [37msession[39m [37mwill[39m [37mseed[39m [37mit;[39m [37msubsequent[39m [37msessions[39m [37mwill[39m [37mreceive[39m [37mauto-injected[39m [37mcontext[39m [37mfor[39m [37mrelevant[39m [37mpast[39m [37mwork.[39m
+
+     [37mMemory[39m [37minjection[39m [37mstarts[39m [37mon[39m [37myour[39m [37msecond[39m [37msession[39m [37min[39m [37ma[39m [37mproject.[39m
+
+     [37m`/learn-codebase`[39m [37mis[39m [37mavailable[39m [37mif[39m [37mthe[39m [37muser[39m [37mwants[39m [37mto[39m [37mfront-load[39m [37mthe[39m [37mentire[39m [37mrepo[39m [37minto[39m [37mmemory[39m [37min[39m [37ma[39m [37msingle[39m [37mpass[39m [37m(~5[39m [37mminutes[39m [37mon[39m [37ma[39m [37mtypical[39m [37mrepo,[39m [37moptional).[39m
+     [37mOtherwise[39m [37mmemory[39m [37mbuilds[39m [37mpassively[39m [37mas[39m [37mwork[39m [37mhappens.[39m
+
+     [37mLive[39m [37mactivity:[39m [37mhttp://localhost:37777[39m
+     [37m✨[39m [37m30[39m [37mDay[39m [37mFree[39m [37mTrial[39m [37m—[39m [37mmemory[39m [37mruns[39m [37moff-plan.[39m [37mGet[39m [37mup[39m [37mto[39m [37m100%[39m [37mmore[39m [37musage[39m [37mfrom[39m [37myour[39m [37mplan[39m [37mhttps://cmem.ai/pro?from=welcome-hint[39m
+     [37mHow[39m [37mit[39m [37mworks:[39m [37m`/how-it-works`[39m
+
+     [37mThis[39m [37mmessage[39m [37mdisappears[39m [37monce[39m [37mthe[39m [37mfirst[39m [37mobservation[39m [37mlands.[39m
+
+     [37mView[39m [37mObservations[39m [37mLive[39m [37m@[39m [37mhttp://localhost:37777[39m
+     [37m✨[39m [37m30[39m [37mDay[39m [37mFree[39m [37mTrial[39m [37m—[39m [37mmemory[39m [37mruns[39m [37moff-plan.[39m [37mGet[39m [37mup[39m [37mto[39m [37m100%[39m [37mmore[39m [37musage[39m [37mfrom[39m [37myour[39m [37mplan[39m [37mhttps://cmem.ai/pro?from=session-start[39m
+[37m [39m [37m⎿[39m [37m SessionStart:startup[39m [37msays:[39m [37mAtlas[39m [37mready[39m
+[37m⚑[39m [37midle[39m [37m·[39m [91mresearch[39m [91m0/0[37m ·[39m [37m0[39m [37mopen[39m                                                                                                                              [37m[-][39m
+
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ 
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-live[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[90m░░░░░░░░░░ --%[0m                                                                                [37mCtrl+Y to paste deleted text[39m
+  [1m[90m⏱️  5h: [32m░░░░░░░░░░ 3%[0m[37m [1m[90m3h44m left[0m                                                                                                                         [92m]8;id=1rltbrf;https://claude.ai/code/session_01EoCgECGac8CJRmJnT7xqt2?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  7d: [33m█████░░░░░ 54%[0m[37m [1m[90m1d12h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [93m⏵⏵ auto mode on[39m [37m(shift+tab to cycle) · ← 3 agents[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+## turn1
+[91m ▐[40m▛███▛█[39m[49m   [1mClaude[0m [1mCode[0m [37mv2.1.296[39m
+[91m▝▜[40m█████[49m█▀[39m  [37mFable[39m [37m5.1[39m [37mwith[39m [37mmedium[39m [37meffort[39m [37m·[39m [37mClaude[39m [37mMax[39m
+[91m ▝▝[39m   [91m▝▝[39m   [37m/private/tmp/atlas-live[39m
+
+[37m [39m [37m⎿[39m [37m SessionStart:startup[39m [37msays:[39m [37m#[39m [37mclaude-mem[39m [37mstatus[39m
+
+     [37mThis[39m [37mproject[39m [37mhas[39m [37mno[39m [37mmemory[39m [37myet.[39m [37mThe[39m [37mcurrent[39m [37msession[39m [37mwill[39m [37mseed[39m [37mit;[39m [37msubsequent[39m [37msessions[39m [37mwill[39m [37mreceive[39m [37mauto-injected[39m [37mcontext[39m [37mfor[39m [37mrelevant[39m [37mpast[39m [37mwork.[39m
+
+     [37mMemory[39m [37minjection[39m [37mstarts[39m [37mon[39m [37myour[39m [37msecond[39m [37msession[39m [37min[39m [37ma[39m [37mproject.[39m
+
+     [37m`/learn-codebase`[39m [37mis[39m [37mavailable[39m [37mif[39m [37mthe[39m [37muser[39m [37mwants[39m [37mto[39m [37mfront-load[39m [37mthe[39m [37mentire[39m [37mrepo[39m [37minto[39m [37mmemory[39m [37min[39m [37ma[39m [37msingle[39m [37mpass[39m [37m(~5[39m [37mminutes[39m [37mon[39m [37ma[39m [37mtypical[39m [37mrepo,[39m [37moptional).[39m
+     [37mOtherwise[39m [37mmemory[39m [37mbuilds[39m [37mpassively[39m [37mas[39m [37mwork[39m [37mhappens.[39m
+
+     [37mLive[39m [37mactivity:[39m [37mhttp://localhost:37777[39m
+     [37m✨[39m [37m30[39m [37mDay[39m [37mFree[39m [37mTrial[39m [37m—[39m [37mmemory[39m [37mruns[39m [37moff-plan.[39m [37mGet[39m [37mup[39m [37mto[39m [37m100%[39m [37mmore[39m [37musage[39m [37mfrom[39m [37myour[39m [37mplan[39m [37mhttps://cmem.ai/pro?from=welcome-hint[39m
+     [37mHow[39m [37mit[39m [37mworks:[39m [37m`/how-it-works`[39m
+
+     [37mThis[39m [37mmessage[39m [37mdisappears[39m [37monce[39m [37mthe[39m [37mfirst[39m [37mobservation[39m [37mlands.[39m
+
+     [37mView[39m [37mObservations[39m [37mLive[39m [37m@[39m [37mhttp://localhost:37777[39m
+     [37m✨[39m [37m30[39m [37mDay[39m [37mFree[39m [37mTrial[39m [37m—[39m [37mmemory[39m [37mruns[39m [37moff-plan.[39m [37mGet[39m [37mup[39m [37mto[39m [37m100%[39m [37mmore[39m [37musage[39m [37mfrom[39m [37myour[39m [37mplan[39m [37mhttps://cmem.ai/pro?from=session-start[39m
+[37m [39m [37m⎿[39m [37m SessionStart:startup[39m [37msays:[39m [37mAtlas[39m [37mready[39m
+
+[37m[100m❯ [97mUse the Agent tool with subagent_type atlas:explorer, name probe-explorer, description "list files", prompt: list the files in this directory in one line. [39m
+  [97mThen reply in one line.[39m
+
+[91m[49m✢[39m [93mG[91menerating [39m
+[37m⚑ idle · [91mresearch 0/0[37m · 0 open[39m                                                                                                                              [37m[-][39m
+
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ [39m
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-live[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[90m░░░░░░░░░░ --%[0m                                                                                                         [92m]8;id=1rltbrf;https://claude.ai/code/session_01EoCgECGac8CJRmJnT7xqt2?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m░░░░░░░░░░ 3%[0m[37m [1m[90m3h41m left[0m
+  [1m[90m⏱️  7d: [33m█████░░░░░ 54%[0m[37m [1m[90m1d12h left[0m
+  [37mcontext-mode  ●  saves ~98% of context[39m [37mwindow[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m [39m [38;5;145moff[39m
+  [93m⏵⏵[39m [93mauto[39m [93mmode[39m [93mon[37m (shift+tab[39m [37mto[39m [37mcycle)[39m [37m·[39m [37m←[39m [37m3[39m [37magents[39m
+
+
+
+
+
+
+
+
+## dispatch
+     [37mOtherwise[39m [37mmemory[39m [37mbuilds[39m [37mpassively[39m [37mas[39m [37mwork[39m [37mhappens.[39m
+
+     [37mLive[39m [37mactivity:[39m [37mhttp://localhost:37777[39m
+     [37m✨[39m [37m30[39m [37mDay[39m [37mFree[39m [37mTrial[39m [37m—[39m [37mmemory[39m [37mruns[39m [37moff-plan.[39m [37mGet[39m [37mup[39m [37mto[39m [37m100%[39m [37mmore[39m [37musage[39m [37mfrom[39m [37myour[39m [37mplan[39m [37mhttps://cmem.ai/pro?from=welcome-hint[39m
+     [37mHow[39m [37mit[39m [37mworks:[39m [37m`/how-it-works`[39m
+
+     [37mThis[39m [37mmessage[39m [37mdisappears[39m [37monce[39m [37mthe[39m [37mfirst[39m [37mobservation[39m [37mlands.[39m
+
+     [37mView[39m [37mObservations[39m [37mLive[39m [37m@[39m [37mhttp://localhost:37777[39m
+     [37m✨[39m [37m30[39m [37mDay[39m [37mFree[39m [37mTrial[39m [37m—[39m [37mmemory[39m [37mruns[39m [37moff-plan.[39m [37mGet[39m [37mup[39m [37mto[39m [37m100%[39m [37mmore[39m [37musage[39m [37mfrom[39m [37myour[39m [37mplan[39m [37mhttps://cmem.ai/pro?from=session-start[39m
+[37m [39m [37m⎿[39m [37m SessionStart:startup[39m [37msays:[39m [37mAtlas[39m [37mready[39m
+
+[37m[100m❯ [97mUse the Agent tool with subagent_type atlas:explorer, name probe-explorer, description "list files", prompt: list the files in this directory in one line. [39m
+  [97mThen reply in one line.[39m
+
+[92m[49m⏺[39m [1m[30m[106matlas:explorer[0m(list files)
+[37m  ⎿  [39mBackgrounded agent[37m (↓ to manage · ctrl+o to expand)[39m
+[1;7m[38;5;79m ATLAS [0m| [1m[38;5;117m🔍 research[0m | DISPATCH -> atlas:explorer (probe-explorer · haiku/low) (list files in /private/tmp/atlas-live), waiting on its return.
+
+⏺ Ran [1m14[0m stop hooks [37m(ctrl+o to expand)[39m
+  [37m⎿  [39mStop hook feedback: Atlas self-improvement check: if this turn produced a reusable decision, fix, or gotcha, capture it (claude-mem observation_add
+  or a note under .agents/) so the next session starts ahead. If you changed behavior or structure, confirm docs/ still matches
+  (CHANGELOG/ROADMAP/architecture).
+[1;7m[38;5;79m ATLAS [0m| [1m[38;5;117m🔍 research[0m | still waiting on atlas:explorer (probe-explorer), no change.
+[38;5;79m▸ [37m15s · ctx 10% · $0.04[39m
+
+[37m› Message from @atlas-explorer (ctrl+o to expand)[39m
+[1;7m[38;5;79m ATLAS [0m| [1m[38;5;79m🏁 done[0m | probe-explorer returned: `.atlas .git .serena README.md` (from `ls -a /private/tmp/atlas-live`).
+
+[92m⏺[39m Agent "list files" finished[37m · 7s[39m
+[37m⚑ idle · [91mresearch 0/0[37m · 0 open[39m                                                                                                                              [37m[-][39m
+
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ 
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-live[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(97.5k/1M)[0m                                                                                              [92m]8;id=1rltbrf;https://claude.ai/code/session_01EoCgECGac8CJRmJnT7xqt2?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m░░░░░░░░░░ 4%[0m[37m [1m[90m3h41m left[0m
+  [1m[90m⏱️  7d: [33m█████░░░░░ 54%[0m[37m [1m[90m1d12h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [93m⏵⏵ auto mode on[37m (shift+tab to cycle) · /tasks to see subagents · ← 3 agents[39m
+
+
+
+
+
+## worker-running
+[100m  [97mThen reply in one line.[39m
+
+[92m[49m⏺[39m [1m[30m[106matlas:explorer[0m(list files)
+[37m  ⎿  [39mBackgrounded agent[37m (↓ to manage · ctrl+o to expand)[39m
+[1;7m[38;5;79m ATLAS [0m| [1m[38;5;117m🔍 research[0m | DISPATCH -> atlas:explorer (probe-explorer · haiku/low) (list files in /private/tmp/atlas-live), waiting on its return.
+
+⏺ Ran [1m14[0m stop hooks [37m(ctrl+o to expand)[39m
+  [37m⎿  [39mStop hook feedback: Atlas self-improvement check: if this turn produced a reusable decision, fix, or gotcha, capture it (claude-mem observation_add
+  or a note under .agents/) so the next session starts ahead. If you changed behavior or structure, confirm docs/ still matches
+  (CHANGELOG/ROADMAP/architecture).
+[1;7m[38;5;79m ATLAS [0m| [1m[38;5;117m🔍 research[0m | still waiting on atlas:explorer (probe-explorer), no change.
+[38;5;79m▸ [37m15s · ctx 10% · $0.29[39m
+
+[37m› Message from @atlas-explorer (ctrl+o to expand)[39m
+[1;7m[38;5;79m ATLAS [0m| [1m[38;5;79m🏁 done[0m | probe-explorer returned: `.atlas .git .serena README.md` (from `ls -a /private/tmp/atlas-live`).
+
+[92m⏺[39m Agent "list files" finished[37m · 7s[39m
+
+[37m[100m❯ [97mUse the Agent tool with subagent_type atlas:explorer, name probe-slow, description "slow scan", prompt: read every file under [39m
+  [97m/Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/mod one by one and summarize each in a sentence. Then reply in one line.[39m
+
+[92m[49m⏺[39m [1m[30m[106matlas:explorer[0m(slow scan)
+[37m  ⎿  [39mBackgrounded agent[37m (↓ to manage · ctrl+o to expand)[39m
+[1;7m[38;5;79m ATLAS [0m| [1m[38;5;117m🔍 research[0m | DISPATCH -> atlas:explorer (probe-slow · haiku/low) (read and summarize every file under plugins/atlas/mod), waiting on its return.
+[38;5;79m▸ [37m9s · ctx 10% · $0.29[39m
+[37m⚑ idle · [91mresearch 0/0[37m · 0 open[39m                                                                                                                              [37m[-][39m
+
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ 
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-live[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(99.3k/1M)[0m                                                                                              [92m]8;id=1rltbrf;https://claude.ai/code/session_01EoCgECGac8CJRmJnT7xqt2?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m░░░░░░░░░░ 4%[0m[37m [1m[90m3h40m left[0m
+  [1m[90m⏱️  7d: [33m█████░░░░░ 54%[0m[37m [1m[90m1d12h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [93m⏵⏵ auto mode on[37m (shift+tab to cycle) · ← 3 agents[39m
+
+[1m  ⏺ main[0m
+[37m [39m [37m◯[39m [37matlas:explorer[39m  [37mslow[39m [37mscan[39m                                                                                                             [37m18s · ↓ 81.0k tokens[39m
+
+
+
+
+
+
+
+## 100x30 idle
+[92m⏺[39m Agent "list files" finished[37m ·[39m [37m7s[39m
+
+[37m[100m❯ [97mUse the Agent tool with subagent_type atlas:explorer, name probe-slow, description "slow scan", [39m
+  [97mprompt: read every file under /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/mod one[39m
+  [97mby one and summarize each in a sentence. Then reply in one line.[39m
+
+[92m[49m⏺[39m [1m[30m[106matlas:explorer[0m(slow scan)
+[37m [39m [37m⎿[39m [37m [39mBackgrounded agent[37m (↓[39m [37mto[39m [37mmanage[39m [37m·[39m [37mctrl+o[39m [37mto[39m [37mexpand)[39m
+[1;7m[38;5;79m ATLAS[0m| [1m[38;5;117m🔍[0m         | DISPATCH -> atlas:explorer (probe-slow · haiku/low) (read and summarize every
+[1;7m[38;5;79m [0m       [1m[38;5;117mresearch[0m     file under plugins/atlas/mod), waiting on its return.
+[38;5;79m▸[39m [37m9s[39m [37m·[39m [37mctx[39m [37m10%[39m [37m·[39m [37m$0.14[39m
+
+[37m›[39m [37mMessage[39m [37mfrom[39m [37m@atlas-explorer[39m [37m(ctrl+o[39m [37mto[39m [37mexpand)[39m
+[1;7m[38;5;79m ATLAS[0m| [1m[38;5;79m🏁[0m     |probe-slow returned one-sentence summaries for 83 files under plugins/atlas/mod
+[1;7m[38;5;79m [0m       [1m[38;5;79mdone[0m    (data 17, fixtures 6, fx 5, pane 14, sprites 10, top level 31), with the caveat that
+                it summarized from file headers rather than full reads, and excluded node_modules.
+
+[92m⏺[39m Agent "slow scan" finished[37m ·[39m [37m38s[39m
+[37m⚑[39m [37midle[39m [37m·[39m [91mresearch[39m [91m0/0[37m ·[39m [37m0[39m [37mopen[39m                                                                  [37m[-][39m
+
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [2mshow[0m [2mme[0m [2mthe[0m [2mfull[0m [2mfile[0m [2mlist[0m [2mfrom[0m [2mprobe-slow[0m
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁[0m [1m[36matlas-live[90m |[0m[37m [1m[35m🤖[0m [1m[35mFable[0m [1m[35m5.1[90m |[0m[37m 🧠[39m [1m[32m█░░░░░░░░░[0m [1m[32m10%[0m[37m [1m[90m(103.2k/1M)[0m                                 [92m]8;id=1rltbrf;https://claude.ai/code/session_01EoCgECGac8CJRmJnT7xqt2?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️[0m  [1m[90m5h:[0m [1m[32m░░░░░░░░░░[0m [1m[32m5%[0m[37m [1m[90m3h39m[0m [1m[90mleft[0m
+  [1m[90m⏱️[0m  [1m[90m7d:[0m [1m[33m█████░░░░░[0m [1m[33m54%[0m[37m [1m[90m1d12h[0m [1m[90mleft[0m
+  [37mcontext-mode[39m  [37m●[39m  [37msaves[39m [37m~98%[39m [37mof[39m [37mcontext[39m [37mwindow[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m [39m [38;5;145moff[39m
+  [93m⏵⏵[39m [93mauto[39m [93mmode[39m [93mon[37m (shift+tab[39m [37mto[39m [37mcycle)[39m [37m·[39m [37m/tasks[39m [37mto[39m [37msee[39m [37msubagents[39m [37m·[39m [37m←[39m [37m3[39m [37magents[39m
+
+
+## 100x30 post-turn
+
+[92m⏺[39m Agent "slow scan" finished[37m ·[39m [37m38s[39m
+
+[37m[100m❯ [97mUse the Agent tool with subagent_type atlas:explorer, name probe-explorer, description "list [39m
+  [97mfiles", prompt: list the files in this directory in one line. Then reply in one line.[39m
+
+[92m[49m⏺[39m [1m[30m[106matlas:explorer[0m(list files)
+[37m  ⎿  [39mBackgrounded agent[37m (↓ to manage · ctrl+o to expand)[39m
+[1;7m[38;5;79m ATLAS[0m| [1m[38;5;117m🔍 [0m       |DISPATCH -> atlas:explorer (probe-explorer · haiku/low) (list files in
+[1;7m[38;5;79m [0m       [1m[38;5;117mresearch[0m   /private/tmp/atlas-live), waiting on its return.
+[38;5;79m▸ [37m6s · ctx 11% · $0.04[39m
+
+[37m› Message from @atlas-explorer (ctrl+o to expand)[39m
+[1;7m[38;5;79m ATLAS[0m| [1m[38;5;79m🏁 [0m    | probe-explorer returned: `.atlas .git .serena README.md` (from `ls -a
+[1;7m[38;5;79m [0m       [1m[38;5;79mdone[0m     /private/tmp/atlas-live`).
+
+[92m⏺[39m Agent "list files" finished[37m · 6s[39m
+[37m⚑ idle · [91mresearch 0/0[37m · 0 open[39m                                                                  [37m[-][39m
+
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m❯ [2mUse the Agent tool with subagent_type atlas:explorer, name probe-slow, description "slow scan"[0m
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-live[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 11%[0m[37m [1m[90m(105.7k/1M)[0m                                 [92m]8;id=1rltbrf;https://claude.ai/code/session_01EoCgECGac8CJRmJnT7xqt2?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m░░░░░░░░░░ 5%[0m[37m [1m[90m3h39m left[0m
+  [1m[90m⏱️  7d: [33m█████░░░░░ 54%[0m[37m [1m[90m1d12h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m [39m [38;5;145moff[39m
+  [93m⏵⏵[39m [93mauto[39m [93mmode[39m [93mon[37m (shift+tab[39m [37mto[39m [37mcycle)[39m [37m·[39m [37m/tasks[39m [37mto[39m [37msee[39m [37msubagents[39m [37m·[39m [37m←[39m [37m3[39m [37magents[39m
+
+
+

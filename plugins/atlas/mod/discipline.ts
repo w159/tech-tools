@@ -10,7 +10,7 @@ import type { On, EngineInterface } from 'claude-code';
 import type { AtlasSnapshot } from './contract';
 import { PHASE_RE } from './restyle';
 import type { HeaderCheck } from './gates';
-import { EMPTY_ORCH, LEAD, onHeavy, onToolEnd, onToolStart } from './data/orchestration';
+import { EMPTY_ORCH, LEAD, onToolEnd, onToolStart } from './data/orchestration';
 
 /** Inline tool output at or above this many chars (~1k tokens) counts as heavy. */
 export const HEAVY_CHARS = 4000;
@@ -105,12 +105,10 @@ async function trackToolStart($: EngineInterface, agent: string, tool: string): 
   }
 }
 
-async function trackToolEnd($: EngineInterface, e: ToolEvent, agent: string, result: ToolResult): Promise<void> {
+async function trackToolEnd($: EngineInterface, agent: string): Promise<void> {
   try {
     const t = await $.clock.now();
-    const bytes = bytesOf(result);
-    await update($, orchState, (o) => onToolEnd(o, agent, bytes, t));
-    if (e.agentId === undefined && isHeavyCall(e.tool, bytes)) await update($, orchState, onHeavy);
+    await update($, orchState, (o) => onToolEnd(o, agent, t));
   } catch {
     // the activity feed never blocks a tool
   }
@@ -202,10 +200,6 @@ async function checkHeader($: EngineInterface, answer: string): Promise<void> {
   if (!check.matched) await toastOnce($, 'atlas: reply is missing the ATLAS | <phase> | <state> header');
 }
 
-function suggestDelegation($: EngineInterface, d: Discipline, role: string): void {
-  if (d.heavy >= HEAVY_LIMIT && !d.delegated) void $.prompt.suggest({ text: `Dispatch ${role} to do that reading and return only findings` });
-}
-
 async function nudgeBigTurn($: EngineInterface, usage: TurnUsage, d: Discipline, role: string): Promise<void> {
   const grew = grewTokens(usage);
   if (grew >= BIG_TURN_TOKENS && d.heavy > 0 && !d.delegated) {
@@ -217,7 +211,6 @@ async function auditTurn($: EngineInterface, e: { answer: string; usage?: TurnUs
   await checkHeader($, e.answer);
   const d = await read($, disciplineState);
   const role = ROLE[d.hint] ?? 'atlas:explorer';
-  suggestDelegation($, d, role);
   await nudgeBigTurn($, e.usage, d, role);
   await patch($, () => ({ heavy: 0, delegated: false }));
 }
@@ -235,7 +228,7 @@ export function registerDiscipline(on: On, deps: DisciplineDeps): void {
     const agent = e.agentId ?? LEAD;
     await trackToolStart($, agent, e.tool);
     const result = await next(e);
-    await trackToolEnd($, e, agent, result);
+    await trackToolEnd($, agent);
     await meterHeavy($, e, result);
     return result;
   });

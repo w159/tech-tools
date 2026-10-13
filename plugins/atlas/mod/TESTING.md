@@ -17,7 +17,7 @@ From the repo root. This loads the plugin the way the engine does and runs each
 test file; it exercises the mod (hooks and the rendered native element trees of the band and
 sidebar), not a surface's paint.
 
-## Measured state (2026-10-12)
+## Measured state (2026-10-13, atlas 12.0.0)
 
 Full run from the repo root:
 
@@ -28,13 +28,15 @@ claude plugin test plugins/atlas
 Expectation is two-tier:
 
 - **Mod lines must be fully green.** The mod test files load and pass,
-  336 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
-  and `mod/sprites/sprites.test.ts`, which injects `memFs` from
+  249 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
+  and `mod/sprites/sprites.golden.test.ts`, which injects `memFs` from
   `mod/test_helpers.ts` instead of importing `node:fs`, which the host forbids).
 - **Colony/omp residuals are expected failures of the walk.** 169 pre-existing
   load failures, each a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file
   importing `bun:test`, which the mod test host forbids. Those suites stay on
   `bun test` and are not mod regressions.
+
+`bunx tsc --noEmit -p plugins/atlas/mod/tsconfig.json` is 0 errors.
 
 Host facts: `claude plugin test [dir]` requires a plugin directory whose
 `hooks/hooks.json` names a module (`claude plugin test mod` fails with "no

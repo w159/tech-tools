@@ -6,7 +6,7 @@ import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } 
 
 const mk = (kind: string) => (props: Record<string, unknown>) => ({ kind, props });
 const els = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button'), Input: mk('Input') } as unknown as ClientElements;
-const on: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {} };
+const on: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {} };
 
 const gates: GateGroup[] = [
   { id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }] },
@@ -15,7 +15,7 @@ const gates: GateGroup[] = [
 ];
 const it = (id: string, status: string, owner: string | null = null) => ({ id, content: `task ${id} with some longer content to fit`, status, owner, evidence: status === 'completed' ? 'ev ' + id : null, live: true });
 const model = (over: Partial<SidebarModel>, snap: LiveSnapshot = busySnap()): SidebarModel => ({
-  snapshot: { ...snap, phase: 'implement', now: NOW }, gates, ui: { recipient: null, expanded: null, draft: '' }, columns: 60, rows: 40, ...over,
+  snapshot: { ...snap, phase: 'implement', now: NOW }, gates, ui: { recipient: null, expanded: null, draft: '', view: 'team' }, columns: 60, rows: 40, ...over,
 });
 const busy = busySnap();
 const todoGroups = [
@@ -25,21 +25,23 @@ const todoGroups = [
 ] as any;
 const name = busy.squad[0]!.name;
 
+const ui = (over: Partial<SidebarModel['ui']> = {}): SidebarModel['ui'] => ({ recipient: null, expanded: null, draft: '', view: 'team', ...over });
+const v = (view: SidebarModel['ui']['view'], over: Partial<SidebarModel> = {}, snap: LiveSnapshot = { ...busy, todoGroups }) => model({ ui: ui({ view }), ...over }, snap);
+
 const cases: Record<string, SidebarModel> = {
-  empty: model({}, { ...busy, squad: [], members: [], activity: {}, comms: [], todoGroups: [] }),
-  midrun: model({ tick: 3 }, { ...busy, todoGroups }),
-  gatesExpanded: model({ ui: { recipient: null, expanded: 'gate:verify', draft: '' } }),
-  groupExpanded: model({ ui: { recipient: null, expanded: 'group:completion', draft: '' } }),
-  customName: model({}, { ...busy, members: [], squad: [{ ...busy.squad[0]!, name: 'selffix-worker', persona: 'unknown' }] }),
-  cols38: model({ columns: 38 }, { ...busy, todoGroups }),
-  cols50: model({ columns: 50, tick: 1 }, { ...busy, todoGroups }),
-  taskExpandedMore: model({ ui: { recipient: null, expanded: 'task:c', draft: 'draft' } }, { ...busy, todoGroups }),
-  advisorAll: model({ ui: { recipient: null, expanded: 'advisor:more', draft: '' } }, { ...busy, todoGroups }),
-  portrait: model({ ui: { recipient: name, expanded: null, draft: '' }, tick: 2 }),
-  cols30: model({ columns: 30 }, { ...busy, todoGroups }),
-  cols60: model({ columns: 60, rows: 20 }, { ...busy, todoGroups }),
-  cols120: model({ columns: 120, rows: 24 }),
+  empty: model({ ui: ui() }, { ...busy, squad: [], members: [], activity: {}, comms: [], todoGroups: [] }),
+  team: v('team', { tick: 3 }),
+  teamPortrait: v('team', { ui: ui({ recipient: name }), tick: 2 }),
+  teamCustomName: v('team', {}, { ...busy, members: [], squad: [{ ...busy.squad[0]!, name: 'selffix-worker', persona: 'unknown' }] }),
+  channel: v('channel'),
+  route: v('route'),
+  gates: v('gates'),
+  gatesExpanded: v('gates', { ui: ui({ view: 'gates', expanded: 'gate:verify' }) }),
+  cols38: v('team', { columns: 38 }),
+  cols30: v('route', { columns: 30 }),
+  cols50: v('channel', { columns: 50, tick: 1 }),
+  cols120: v('team', { columns: 120, rows: 24 }),
 };
 
 export const serializeGolden = (): string =>
-  JSON.stringify(Object.fromEntries(Object.entries(cases).map(([k, v]) => [k, sidebarTree(els, v, on)])), null, 1);
+  JSON.stringify(Object.fromEntries(Object.entries(cases).map(([k, m]) => [k, sidebarTree(els, m, on)])), null, 1);

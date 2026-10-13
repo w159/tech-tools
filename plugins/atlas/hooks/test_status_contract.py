@@ -28,10 +28,11 @@ import session_boot  # noqa: E402
 
 
 class StatusContractLinesTest(unittest.TestCase):
-    def test_style_in_force_repeats_nothing(self):
-        # The style file carries header/ledger/done/scope once; boot must not restate it.
-        self.assertEqual(session_boot.status_contract_lines(""), [])
-        self.assertEqual(session_boot.status_contract_lines("Atlas Orchestrator"), [])
+    def test_header_rule_always_emitted(self):
+        for style in ("", "Atlas Orchestrator"):
+            blob = "\n".join(session_boot.status_contract_lines(style))
+            self.assertIn("ATLAS | <glyph>", blob)
+            self.assertNotIn("STYLE OVERRIDE", blob)
 
     def test_override_warns_on_concise(self):
         blob = "\n".join(session_boot.status_contract_lines("concise"))

@@ -1,31 +1,46 @@
-// notify.ts — turn-boundary notifications: toast squad agents finishing/failing,
+// notify.ts — turn-boundary notifications: toast workers spawning/finishing/failing/blocked,
 // notes addressed to the lead or the human, completed todos, and phase advances
-// (advance.wav when sound is on); suggests the next contract step at turn end.
+// (advance.wav when sound is on); the one prompt.suggest: reply to a blocked worker, else the in-progress todo.
 import { atom, read } from 'claude-code';
 import type { On } from 'claude-code';
 import type { AtlasSnapshot, PhaseId } from './contract';
+import { liveWorkers } from './data/live';
+import type { LiveWorker } from './data/live';
+import type { LiveSnapshot } from './orchestra-types';
+import { formatDuration } from './restyle';
 
 export type NotifyEvent =
-	| { type: 'agent-complete'; name: string }
-	| { type: 'agent-fail'; name: string }
+	| { type: 'agent-spawn'; name: string }
+	| { type: 'agent-complete'; name: string; age: string; lastLine: string }
+	| { type: 'agent-fail'; name: string; lastLine: string }
+	| { type: 'agent-blocked'; name: string; lastLine: string }
 	| { type: 'note'; sender: string; preview: string }
 	| { type: 'todo-done'; text: string }
 	| { type: 'phase'; phase: PhaseId };
+
+/** Squad + activity as live workers; a snapshot without orchestration fields reads as activity-free. */
+const workersOf = (s: AtlasSnapshot): LiveWorker[] =>
+	liveWorkers({ activity: {}, comms: [], todoGroups: [], ...s, squad: (s.squad ?? []).filter((a) => a?.name) } as LiveSnapshot, s.now);
+
+const fit = (text: string, n: number): string => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 
 /** Pure diff of successive snapshots; null prev (first sight) yields nothing. Never throws. */
 export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): NotifyEvent[] {
 	if (!prev) return [];
 	const events: NotifyEvent[] = [];
 
-	// Squad agents: toast the transition into finished/failed, once per agent.
-	const prevState = new Map<string, string>();
-	for (const a of prev.squad ?? []) if (a?.name) prevState.set(a.name, a.state ?? '');
-	for (const a of next.squad ?? []) {
-		if (!a?.name) continue;
-		const before = prevState.get(a.name);
-		if (before === undefined || before === a.state) continue;
-		if (a.state === 'finished') events.push({ type: 'agent-complete', name: a.name });
-		else if (a.state === 'failed') events.push({ type: 'agent-fail', name: a.name });
+	// Workers: toast spawn and the transition into done/failed/blocked, once per change.
+	const before = new Map(workersOf(prev).map((w) => [w.name, w.state]));
+	for (const w of workersOf(next)) {
+		const was = before.get(w.name);
+		if (was === w.state) continue;
+		if (was === undefined) {
+			if (w.state === 'working') events.push({ type: 'agent-spawn', name: w.name });
+		} else if (w.state === 'done') {
+			const age = next.now - w.since;
+			events.push({ type: 'agent-complete', name: w.name, age: age > 0 ? formatDuration(age) : '', lastLine: w.lastLine });
+		} else if (w.state === 'failed') events.push({ type: 'agent-fail', name: w.name, lastLine: w.lastLine });
+		else if (w.state === 'blocked') events.push({ type: 'agent-blocked', name: w.name, lastLine: w.lastLine });
 	}
 
 	// New notes addressed to the lead or the human (seq not seen before).
@@ -52,25 +67,13 @@ export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): 
 	return events;
 }
 
-/** Next contract step as `<phase>: <item text>` (e.g. `verify: dispatch atlas:verifier on impl-auth`), or null. */
+/** The one prompt suggestion: reply to the first blocked worker, else the in-progress todo as `<phase>: <title>`, else null. */
 export function nextStepSuggestion(s: AtlasSnapshot): string | null {
-	const order: Record<string, number> = {};
-	(s.contract?.phases ?? []).forEach((p, i) => {
-		order[p?.id ?? ''] = i;
-	});
-	const rank = (t: { phase?: PhaseId }): number => {
-		const at = t.phase ? order[t.phase] : undefined;
-		return at === undefined ? Number.MAX_SAFE_INTEGER : at;
-	};
-	const open = (s.todos ?? [])
-		.filter((t) => t?.id && t.status !== 'completed' && !t.archived)
-		.sort((a, b) => rank(a) - rank(b));
-	const next = open[0];
-	if (!next) return null;
-	const phase = next.phase ?? s.phase;
+	const blocked = workersOf(s).find((w) => w.state === 'blocked');
+	if (blocked) return `reply ${blocked.name}: ${blocked.lastLine}`;
+	const t = (s.todos ?? []).find((x) => x?.id && x.status === 'in_progress' && !x.archived);
 	// ponytail: strip any "[phase] " prefix generically instead of parsing contract.itemPhasePrefix
-	const text = (next.content ?? '').replace(/^\[[^\]]*\]\s*/, '');
-	return `${phase}: ${text}`;
+	return t ? `${t.phase ?? s.phase}: ${(t.content ?? '').replace(/^\[[^\]]*\]\s*/, '')}` : null;
 }
 
 // The live snapshot is read from $.state (declared here for the key scan).
@@ -93,11 +96,17 @@ export function registerNotify(
 			if (snap) {
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {
+						case 'agent-spawn':
+							$.ui.toast(`▸ ${ev.name} spawned`);
+							break;
 						case 'agent-complete':
-							$.ui.toast(`✓ ${ev.name}`);
+							$.ui.toast(`✓ ${ev.name}${ev.age ? ` ${ev.age}` : ''}${ev.lastLine ? ` · ${fit(ev.lastLine, 40)}` : ''}`);
 							break;
 						case 'agent-fail':
-							$.ui.toast(`✗ ${ev.name}`);
+							$.ui.toast(`✗ ${ev.name} ${ev.lastLine}`.trimEnd());
+							break;
+						case 'agent-blocked':
+							$.ui.toast(`⏸ ${ev.name} blocked: ${ev.lastLine}`.trimEnd());
 							break;
 						case 'note':
 							$.ui.toast(`${ev.sender}: ${ev.preview}`);
@@ -106,7 +115,6 @@ export function registerNotify(
 							$.ui.toast(`✓ ${ev.text}`);
 							break;
 						case 'phase':
-							$.ui.toast(`→ ${ev.phase}`);
 							if (deps.soundEnabled()) {
 								void $.audio.play({ asset: 'mod/fx/advance.wav' }).catch(() => {});
 							}

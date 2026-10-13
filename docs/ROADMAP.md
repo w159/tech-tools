@@ -94,82 +94,18 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
   after ranked gaps are presented to and confirmed by the user via
   docs/plans/2026-10-10-claude-code-native-parity.md; the mod ships as atlas 11.0.0 only
   after its stage-0 live checks.
-- [in-progress] Atlas Claude Code mod (2026-10-09): an in-process UI module in
-  `plugins/atlas/mod/` (contract-track band above the prompt, `/atlas-cc` Command Center
-  with Colony, Channel, Board, Squad and Collab tabs, restyled built-in sites, persona
-  model/effort routing), entrypoint `register.ts` wired by the `modules` entry in
-  `hooks/hooks.json:192`, documented in `docs/atlas-mod.md`. Implemented in the source tree; mod tests use the
-  `claude-code/testing` kit. Live render is proven as of 2026-10-12 (`.atlas/.run/live-mod-boot.txt`, `.atlas/.run/live-mod-cc.txt`),
-  and the text-first conversion landed this wave: the band is an always-on plain-text status line and the Command Center
-  renders text rows — the decorative block art is removed by default, and persona sprites remain only behind the explicit
-  `/atlas-sprites` pane; the mod loads silently (no auto-open). Ships as atlas 11.0.0. Redesigned in 11.0.2
-  (2026-10-12): the band is three rows with ` ATLAS `/` USAGE `/` SQUAD ` gutter chips, collapsing to one row under
-  80 columns or `maxRows < 3` (`band.tsx:298`); the Command Center tabs take digit 1-5/arrow keys, Enter inspects,
-  Esc closes; restyles add a braille spinner with a live agent count and a one-line summary for noisy
-  `Bash`/`Read`/`Grep` output at or above 8000 bytes; a new context-discipline module (`mod/discipline.ts`) toasts
-  on heavy uncovered inline reads and vague prompts; squad rows are labelled by teammate id, else persona, else
-  lowercased agent type, else a 6-char id; the rebuild fingerprint now covers the live agent list and usage. None
-  of this has an omp counterpart (no `ui.render`/`AbovePrompt`/`Pane` vocabulary there). OPEN WORK on it: five sprite persona files
-  (`sprites/{armada,docsauditor,docscurator,implementer,unknown}.ts`) are
-  byte-identical from line 16-686 (fallow dup:c77b3abb6f87acd9) — nine personas share
-  lines 467-686: they render the same sprite; add a distinctness assertion to
-  `sprites.test.ts` and either give those personas their own frames or collapse them
-  onto one shared sprite with a documented reason; the duplication is baselined
-  (`fallow-baselines/dupes.json`) pending that fix. The early-wave `logo.ts` was
-  never wired by the entrypoint and is deleted.
-  Redesigned again in 11.0.3 (2026-10-12): the three-gutter-row band is replaced by an adaptive height
-  budget — 1 row idle, 2 rows while any worker is live (worker chips plus the latest comms line), a 3rd
-  row only for a blocked or failed worker, capped at `maxRows` and a hard `BAND_MAX_ROWS = 3`
-  (`band.tsx:46`, `buildBand`). The Command Center pane now opens as a narrow right-docked size
-  *request* (`register.ts:28` `PANE_OPEN` `{columns:44, rows:12}`) that the host may not grant exactly.
-  New `mod/data/orchestration.ts` folds `agent.spawn`/`tool.call`/`turn.complete` events with
-  `channels.json`, board notes, `.atlas/.run/findings.json` and `scripts/atlas_wt.py status` into
-  per-agent activity, a comms log, and each worker's lifecycle stage. The Colony tab (new
-  `mod/pane/orchestra.tsx`) draws a lead status card and per-worker cards with a lifecycle track
-  (`spawned > working > reported > verifying > verified > merged`), a merge-queue row, and a
-  kept-tokens meter; big sprites and the lead's speech bubble appear only at pane `rows >= 24`
-  (`BIG_ROWS`). The Channel tab is rebuilt as an IRC client (header/topic, nick list with sprites at
-  `columns >= 64`, `HH:MM` log with dispatch/report/join/leave markers and `@mention` highlighting,
-  typing indicator, composer through the same `/atlas-say` note path). New
-  `mod/sprites/api.ts` exports (`spriteRows`, `speechBubble`, `personaStyle`). New
-  `mod/pane/validity.test.ts` draws every pane module and checks the tree against the documented
-  element table, including the rule that a `Button`/`Text` may only hold strings and `Text` children.
-  New isolated-worker workflow `scripts/atlas_wt.py` (`add`/`status`/`merge`/`prune`; branch
-  `worker/<agent>`, worktree `.atlas/wt/<agent>`; `merge` refuses without a `verified` findings.json
-  entry and never pushes), documented in `agents/implementer.md`,
-  `skills/atlas-orchestrate/references/implementation-units.md`, and enforced by completion-gate
-  condition (q) (`ATLAS_WT_GATE=off`). Honesty: Claude-Code-only (no omp `ui.render` counterpart);
-  turn-level behavior observed live in one Ghostty session with two generic `general-purpose`
-  workers only; sprites at `rows >= 24` and the delegation toast are unit-tested only, not yet live;
-  known live defects are a duplicated lead nick in the Channel nick list and workers showing as
-  generic `general-purpose` labels instead of their persona name. Ships as atlas 11.0.3
-  (`plugins/atlas/CHANGELOG.md` [11.0.3]).
-  Wave 3, 2026-10-12, ships as atlas 11.0.4 (`plugins/atlas/CHANGELOG.md` [11.0.4]): Board
-  (`mod/pane/board.tsx`) is rewritten from the kanban-column model to a scroll list grouped by
-  `snapshot.todoGroups`, with unphased items in an `unsorted`/`UNSORTED` group rather than a
-  default real phase; Colony (`mod/pane/colony.tsx` + `orchestra.tsx`) gains a session multiplexer
-  — one bordered panel per `snapshot.sessions` entry with a live tail and a steer/stop control —
-  sourced from `mod/data/sessions.ts` (merged subagent transcript tails + `atlas_mux.py status`
-  rows, each tagged by transport); Channel's direction marker is now traffic-aware (lead/worker/
-  worker-to-worker, not lead-only) and `canonNick`/`isLead` fold every `lead-<id>` to one human
-  `lead` label; the band's phase pill reads session-scoped `contractProgress`, never the board-wide
-  `backlog` count, and `buildBand` now reserves a `HOST_GUTTER = 4`-column strip so band text never
-  draws under a host terminal's own pane toggle (gutter width itself unverified live); `sprites/api.ts`
-  swaps the 6/10/14px procedural `s`/`m`/`l` sprites for hand-drawn `m`/`l` art (`sprites/art.ts`) plus
-  a new one-row `badge()` nick chip, now wired into both the Channel nick list (`pane/channel.tsx:317`)
-  and the Colony panel headers (`pane/orchestra.tsx:214`), replacing the old `chrome.tsx` `chip()`
-  placeholder at both call sites; only the Colony lead's big sprite still uses the larger hand-drawn art. Honesty: the previously
-  reported blank-rows-below-the-prompt issue was investigated and the mod adds no padding of its own
-  (open/close of `/atlas-cc` returns to the baseline row count) — the likely cause is Claude Code's
-  classic renderer shrinking its agent panel plus a 5-7 row custom statusline; recommended fix is the
-  [fullscreen renderer](https://code.claude.com/docs/en/fullscreen) and a constant-height statusline.
-  Turn-level behavior under tmux remains unverified (no tmux login available this wave); every live
-  check ran in the user's Ghostty tab only, same as 11.0.3. `mod/data/sessions.ts` (transcript tail,
-  `atlas_mux.py status` parsing) and the Colony multiplexer panels are covered by `data/sessions.test.ts`
-  fixtures and `live_fixture.ts` only, not a live running background session. No reusable PNG
-  contact-sheet sprite-review script exists yet — the ad-hoc one used to eyeball the new `m`/`l` art
-  lived only at a scratch path (`/tmp/spr*`) and was not committed; a reusable version belongs under
-  `plugins/atlas/scripts/` if this review is repeated.
+- [planned] Hook friction consolidation (added 2026-10-13, after atlas 12.0.0): the
+  dashboard-ensure non-blocking lock, the format_after_edit cwd guard and the
+  hookstate 7-day sweep (all `plugins/atlas/CHANGELOG.md` 11.1.6/11.1.7) each
+  silence one source of hook-fault/friction-row noise independently; no pass
+  has looked at `friction_events` and hook-fault rows as one population to
+  find the next-largest remaining source the way the 468-of-478
+  "formatter skipped: missing" finding (11.1.7) did. The other half of todo
+  teca63cae (control-character tolerance in hook payload parsing, beyond the
+  dashboard-ensure timeout already shipped) is still open and belongs in the
+  same pass. Needs a plan doc under `docs/plans/` before implementation: pull
+  a fresh `friction_events`/hook-fault count from a live install, rank
+  sources, and decide fix-at-source vs. suppress-the-row per source.
 - [in-progress] Colony rebuild on herdr (2026-10-07, atlas 10.1.2): vendored
   herdr-web-ui + pinned herdr 0.9.3, `/atlas/**` gateway, herdr transport,
   `atlas_remote.py`, `session_boot.ensure_colony` are documented in
@@ -247,7 +183,6 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 - `hooks/todo_capture.py` dead-hook root cause (TodoWrite load failure).
 - Compound-packs follow-up audit.
 - Colony tmux transport live parity test.
-- Sprite dedupe ~2.5k lines.
 - `atlas_dashboard.py` monolith extraction.
 - Friction-event stream + findings dedupe (F15).
 - Review fleet mode + session handoff registry + onboard-team mode (P5).
@@ -258,7 +193,7 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
 
 - Migrate vendor credentials out of `pluginConfigs` into `~/.config/atlas/atlas.env` (chmod 600); regulated credentials under GLBA / FTC Safeguards. The loaders' `pluginConfigs` read is a fallback only.
 - `atlas_doctor.py` `apply_fixes` still copies into the Claude plugin cache on a version mismatch.
-- Claude Code has no equivalent of the omp terminal channel view. The atlas Claude Code mod (Colony, IRC channel, TODO board, persona sprites, contract track) is now implemented in the source tree: `plugins/atlas/mod/`, wired by the `modules` entry in `hooks/hooks.json:192`, documented in `docs/atlas-mod.md` (tracked as in progress above). Gate-verified in source 2026-10-10: `claude plugin test plugins/atlas` loads and passes all 17 mod test files (215 pass / 0 fail; the 169 remaining failures of the full walk are `plugins/atlas/colony/**` and `plugins/atlas/omp/**` bun:test files, an expected residual), `claude plugin validate --json plugins/atlas` returns success with 0 errors and 0 warnings, and `bunx tsc --noEmit -p tsconfig.json` exits 0 over 60 mod files. It ships as **atlas 11.0.0** only after its stage 0 live checks (animated `Client` band in iTerm2 and herdr, per-subagent `turn.step` effort). If they fail, no 11.0.0.
+- Claude Code has no equivalent of the omp terminal channel view. The atlas Claude Code mod is implemented in the source tree: `plugins/atlas/mod/`, wired by the `modules` entry in `hooks/hooks.json`, documented in `docs/atlas-mod.md` (Command Center redesign shipped as atlas 12.0.0, see `plugins/atlas/CHANGELOG.md` 12.0.0 and `docs/CHANGELOG.md` 12.0.0 for the current surface).
 - Unaddressed P1s from the review: `atlas_mux` report truncation at 600 chars; herdr spawn lock; transport re-decision; selffix metric verification; `dispatch_tripwire.py` `_CLAUSE_START` ReDoS; `completion_gate.py` test-runner regex.
 - fallow at 10.4.3: the real complexity findings and the introduced duplicate were refactored. The CRAP-only findings (cyclomatic < 12, cognitive <= 15, no coverage data) are accepted in `fallow-baselines/health.json`. Adding dashboard JS coverage would retire them.
 

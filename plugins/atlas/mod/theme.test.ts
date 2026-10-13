@@ -1,6 +1,6 @@
 // Self-check for the band's theme helpers (run: claude plugin test <dir>).
 import { expect, test } from 'claude-code/testing';
-import { bar, barParts, blink, dim, glyph, lerp, meterColor, phaseColor, STATE_GLYPH, stateColor } from './theme';
+import { bar, barParts, blink, contractGlyph, dim, glyph, textWidth, lerp, meterColor, phaseColor, STATE_GLYPH, stateColor } from './theme';
 
 test('bar clamps and rounds', () => {
   expect(bar(0, 10)).toBe('▱▱▱▱▱▱▱▱▱▱');
@@ -66,4 +66,11 @@ test('every glyph and state glyph is exactly 1 cell wide', () => {
 
 test('blink domain', () => {
   expect([0, 1]).toContain(blink(500));
+});
+
+test('contractGlyph maps every contract emoji to one cell', () => {
+  for (const e of ['🔍', '💡', '🧪', '📋', '🔧', '✅', '🏁', '⛔']) expect([e, textWidth(contractGlyph(e))]).toEqual([e, 1]);
+  expect(contractGlyph('🔍')).toBe('◎');
+  expect(contractGlyph('🦄')).toBe('·');
+  expect(contractGlyph('※')).toBe('※');
 });

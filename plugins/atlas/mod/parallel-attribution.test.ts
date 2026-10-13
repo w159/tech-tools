@@ -60,7 +60,7 @@ function harness() {
     ui: {
       log: () => {},
       invalidate: () => {},
-      open: async () => {},
+      open: async () => ({ isPlaced: true }),
       close: async () => {},
     },
     agent: { list: async () => listed },

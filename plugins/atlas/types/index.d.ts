@@ -89,34 +89,13 @@ export interface AtlasSnapshot {
   notes: ChannelNote[];                    // sorted by seq,ts; last 500
   members: ChannelMember[];
   squad: SquadAgent[];
-  unread: number;
-  tokens: number;
-  costUsd: number;
   contextPct: number;
-  headerMisses: number;
   now: number;                             // epoch ms at build
 }
 
 export type Mood = 'idle' | 'working' | 'thinking' | 'blocked' | 'done' | 'failed' | 'celebrate';
 export interface ActivityEntry { tool: string | null; since: number; toolCount: number; tokens: number | null; mood: Mood; lastLine: string }
 export interface CommsEntry { seq: number; ts: number; from: string; to: string; text: string; kind: 'say' | 'dispatch' | 'report' | 'merge' | 'join' | 'leave' }
-export interface LifecycleEntry {
-  agent: string;
-  stage: 'spawned' | 'working' | 'reported' | 'verifying' | 'verified' | 'merged' | 'rejected';
-  branch?: string;
-  worktree?: string;
-  item?: string;
-}
-export interface Savings { delegatedCalls: number; inlineHeavyCalls: number; keptBytes: number }
-export interface Session {
-  name: string;
-  transport: 'subagent' | 'claude-bg' | 'tmux' | 'herdr';
-  state: 'running' | 'idle' | 'blocked' | 'done' | 'failed';
-  since: number;
-  tail: string[];
-  agentId?: string;
-  pid?: string;
-}
 export interface TodoGroup {
   phase: PhaseId | 'unsorted' | 'advisor';
   dept: string;
@@ -125,17 +104,11 @@ export interface TodoGroup {
   done: number;
   total: number;
 }
-export interface ContractProgress { phase: PhaseId; done: number; total: number }
 /** Copy of mod/orchestra-types.ts LiveSnapshot. */
 export type LiveSnapshot = AtlasSnapshot & {
   activity: Record<string, ActivityEntry>;
   comms: CommsEntry[];
-  lifecycle: LifecycleEntry[];
-  savings: Savings;
-  sessions: Session[];
   todoGroups: TodoGroup[];
-  contractProgress: ContractProgress[];
-  backlog: { done: number; total: number };
 };
 /** Event-fed orchestration state (mod/data/orchestration.ts Orch). */
 export interface Orch {
@@ -143,9 +116,6 @@ export interface Orch {
   comms: CommsEntry[];
   stage: Record<string, 'spawned' | 'working' | 'reported'>;
   meta: Record<string, { name?: string; type?: string }>;
-  delegatedCalls: number;
-  keptBytes: number;
-  heavyCalls: number;
 }
 
 export type PaneTab = 'colony' | 'channel' | 'board' | 'squad' | 'collab';
@@ -163,8 +133,6 @@ declare module 'claude-code' {
 			usage: Usage;
 			taskAgents: SquadAgent[];
 			headerPhase: PhaseId | null;
-			headerMisses: number;
-			lastSeenSeq: number;
 			isModOn: boolean;
 			isInteractive: boolean;
 			paneOpened: boolean;
@@ -174,6 +142,7 @@ declare module 'claude-code' {
 			sidebarRecipient: string | null;
 			sidebarExpanded: string | null;
 			sidebarDraft: string;
+			atlasView: 'team' | 'channel' | 'route' | 'gates';
 			gates: { id: 'completion' | 'tripwire' | 'routing' | 'header'; title: string; lines: { id: string; label: string; ok: boolean; detail?: string; fix?: string }[]; error?: string }[];
 			lastHeader: { matched: boolean; phase: string | null } | null;
 		};

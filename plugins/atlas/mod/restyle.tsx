@@ -7,7 +7,9 @@ import { atom, read } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from './contract'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
-import { bar, dim, glyph, phaseColor, stateColor } from './theme'
+import { fitText, glyph, phaseColor, stateColor, textWidth } from './theme'
+import { activeCount, liveWorkers } from './data/live'
+import type { LiveWorker } from './data/live'
 
 // The live snapshot is read from $.state while drawing, so a snapshot write redraws
 // exactly the restyled sites (null outside an atlas session).
@@ -15,14 +17,11 @@ const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null)
 
 // ---- structural props the tree builders read (sites' real props satisfy these) ----
 
-export interface SpinnerPropsLike { word: string; message: string | null }
 export interface ToolUsePropsLike { tool: string; output?: unknown; input: unknown; isRunning: boolean; isErrored: boolean; isInterrupted: boolean }
 export interface AssistantPropsLike { text: string; isFirstOfReply?: boolean; isSummary?: true }
 export interface TurnDurationPropsLike { durationMs: number }
 /** Turn-over-turn memory for the TurnDuration receipt (owned by one registerRestyle call). */
-export interface ReceiptTracker { phase?: PhaseId; done?: number; costStart?: number | null; usage?: TurnUsageLike | null }
-/** The token counts a turn.complete carries (the API's own spelling). */
-export interface TurnUsageLike { input_tokens: number; output_tokens: number; cache_read_input_tokens: number }
+export interface ReceiptTracker { done?: number; costStart?: number | null }
 
 // ---- plain element builders (StyledElement is plain data; no DOM, no globals) ----
 
@@ -35,16 +34,8 @@ const phaseCol = (phase: PhaseId): string => {
  try { return phaseColor(phase) || BRAND.accent } catch { return BRAND.accent }
 }
 
-/** Braille spinner: 8 one-cell frames.
- *  ponytail: text glyphs, not a Raster 4x2 — Raster is terminal-only and needs blit plumbing;
- *  upgrade via sprites/grid.ts frameToCells when the pixel globe is wanted. */
-const GLOBE = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧'] as const
-const GLOBE_TICK_MS = 120
 // Width-safe brand mark (1 cell everywhere).
 const MARK = '▸'
-// contract: types/index.d.ts (PluginState.atlas.spinnerTick)
-const SPINNER_TICK = { plugin: 'atlas', key: 'spinnerTick' } as const
-
 export const PHASE_RE = /\b(research|theory|test|validate|implement|verify|done|blocked)\b/
 
 // ---- pure formatters (exported for tests) ----
@@ -57,22 +48,6 @@ export function formatDuration(ms: number): string {
  return `${Math.floor(m / 60)}h${m % 60}m`
 }
 
-export function fmtTok(n: number): string {
- if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
- if (n >= 1000) return `${Math.round(n / 1000)}k`
- return String(Math.round(n))
-}
-
-export function phaseCount(snap: AtlasSnapshot, phase: PhaseId): { done: number; total: number } {
- return snap.counts.byPhase[phase] ?? { done: 0, total: 0 }
-}
-
-/** `⟦implement 3/5⟧` — the phase capsule (counts omitted when the phase has no items). */
-export function capsule(snap: AtlasSnapshot, phase: PhaseId = snap.phase): string {
- const { done, total } = phaseCount(snap, phase)
- return total > 0 ? `⟦${phase} ${done}/${total}⟧` : `⟦${phase}⟧`
-}
-
 /** The persona behind an `atlas:<name>` subagentType, from the snapshot's roster. */
 export function personaFor(snap: AtlasSnapshot, subagentType?: string): Persona | undefined {
  if (!subagentType || !subagentType.startsWith('atlas:')) return undefined
@@ -80,22 +55,19 @@ export function personaFor(snap: AtlasSnapshot, subagentType?: string): Persona 
  return snap.personas.find((p) => p.name === name)
 }
 
-// ---- Spinner: `◐ ⟦implement 3/5⟧ ▰▰▰▱▱ Sauteing · impl-auth editing hooks/…` ----
+// ---- Spinner: the engine's own spinner plus ` · ⏸ blocked · working tool` (header/band own phase and counts) ----
 
-export function spinnerTree(snap: AtlasSnapshot, props: SpinnerPropsLike, tickMs: number): RenderElement {
- const { done, total } = phaseCount(snap, snap.phase)
- const frame = GLOBE[Math.floor(tickMs / GLOBE_TICK_MS) % GLOBE.length] ?? '⠋'
- const activity: string[] = [props.message || props.word]
- const live = snap.squad.filter((a) => a.state === 'running' || a.state === 'spawning')
- if (live.length > 0) activity.push(`${live.length} agent${live.length === 1 ? '' : 's'}`)
- for (const a of live.slice(0, 1)) activity.push(`${a.name} ${a.task ?? ''}`.trim())
- const meter = total > 0 ? ` ${bar((done / total) * 100, 5)}` : ''
- return txt({},
-  txt({ color: BRAND.accent }, `${frame} `),
-  txt({ color: phaseCol(snap.phase), inverse: true, bold: true }, `${capsule(snap)}${meter}`),
-  txt({}, ' '),
-  txt({ dimColor: true }, activity.join(` ${glyph.dot} `)),
- )
+/** Squad + activity as live workers; a bare AtlasSnapshot has no activity, so every worker reads as working. */
+const workersOf = (snap: AtlasSnapshot): LiveWorker[] => liveWorkers({ activity: {}, comms: [], todoGroups: [], ...snap }, snap.now)
+
+export function spinnerSuffix(snap: AtlasSnapshot): string {
+ const ws = workersOf(snap)
+ const blocked = ws.find((w) => w.state === 'blocked')
+ const parts = [
+  ...(blocked ? [`⏸ ${blocked.name}`] : []),
+  ...ws.filter((w) => w.state === 'working').slice(0, 2).map((w) => `${w.name} ${w.tool ?? ''}`.trim()),
+ ]
+ return parts.length ? ` ${glyph.dot} ${parts.join(` ${glyph.dot} `)}` : ''
 }
 
 // ---- ToolUse: deployment card for persona spawns; one-line summary for huge Bash/Read/Grep output ----
@@ -176,87 +148,63 @@ export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents
  )
 }
 
-// ---- AssistantMessage: header line as a coloured phase pill; else a dim inferred pill ----
+// ---- AssistantMessage: the ATLAS contract header drawn on one styled row; headerless replies stay engine-drawn ----
 
-/** ` ▸ implement 3/5 ` pill, reply body kept under it (header line swapped for the pill). */
-export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike): RenderElement | null {
+/** `ATLAS | ⚒ implement 3/5 | sentence` — the header line drawn in place verbatim, body kept under it. */
+export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0): RenderElement | null {
  if (props.isSummary || !props.text) return null
  const first = props.text.split('\n', 1)[0] ?? ''
  let re: RegExp
  try { re = new RegExp(snap.contract.headerFirstLinePattern) } catch { return null }
- if (!re.test(first)) {
-  if (!props.isFirstOfReply) return null
-  let inferred: string
-  try { inferred = dim(phaseCol(snap.phase), 0.55) || BRAND.dim } catch { inferred = BRAND.dim }
-  return {
-   type: 'Box',
-   props: { flexDirection: 'column' },
-   children: [
-    txt({ color: inferred, dimColor: true }, `${MARK} ${snap.phase} · inferred`),
-    { type: 'Markdown', props: { text: props.text } },
-   ],
-  }
- }
- const phase = (PHASE_RE.exec(first)?.[1] ?? snap.phase) as PhaseId
- const nm = /(\d+)\s*\/\s*(\d+)/.exec(first)
- const count = nm && nm[1] && nm[2] ? ` ${nm[1]}/${nm[2]}` : ''
+ if (!re.test(first)) return null
+ const [, mid = '', ...tail] = first.split('|')
+ const phase = (PHASE_RE.exec(mid)?.[1] ?? snap.phase) as PhaseId
+ const nm = /(\d+)\s*\/\s*(\d+)/.exec(mid)
+ const label = (nm ? mid.replace(nm[0], '') : mid).trim()
  const rest = props.text.slice(first.length).replace(/^\n/, '')
+ const fixed = { wrap: 'truncate-end' }
  const kids: RenderNode[] = [
-  txt({ color: phaseCol(phase), inverse: true, bold: true }, ` ${MARK} ${phase}${count} `),
+  txt({ ...fixed, color: BRAND.accent, inverse: true, bold: true }, ' ATLAS '),
+  txt(fixed, '| '),
+  txt({ ...fixed, color: phaseCol(phase), bold: true }, label),
  ]
- if (rest.trim()) kids.push({ type: 'Markdown', props: { text: rest } })
- return { type: 'Box', props: { flexDirection: 'column' }, children: kids }
+ if (nm) kids.push(txt({ ...fixed, color: BRAND.dim, dimColor: true }, ` ${nm[1]}/${nm[2]}`))
+ const sentence = tail.join('|').trim()
+ if (sentence) {
+  kids.push(txt(fixed, ' | '))
+  const used = kids.reduce<number>((n, k) => n + textWidth((k as { children: string[] }).children[0] ?? ''), 0)
+  // ponytail: columns 0 = width unknown, sentence drawn whole; the truncate-end wrap is the backstop.
+  kids.push(txt({ wrap: 'truncate-end' }, columns > used ? fitText(sentence, columns - used) : sentence))
+ }
+ const row: RenderElement = { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: kids }
+ if (!rest.trim()) return row
+ return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
 }
 
-// ---- TurnDuration: `▸ 4m12s · research ▸ implement · +3 done · 2 agents · 12k in / 1k out · turn $0.12` ----
+// ---- TurnDuration: `▸ 4m12s · +3 done · 2 workers · ctx 41% · $0.12` ----
 
 /** This turn's dollar cost: the engine's session total at turn end minus at turn start.
- *  null when either reading is absent (the host keeps no ledger): no figure beats a guessed one. */
+ *  null when either reading is absent or the delta is 0: no figure beats a guessed one. */
 export function turnCostText(start: number | null | undefined, end: number | null | undefined): string | null {
- if (start == null || end == null || end < start) return null
- return `turn $${(end - start).toFixed(2)}`
-}
-
-/** Tokens the turn spent, as the API reported them on turn.complete (never context-window fill). */
-export function turnTokensText(usage: TurnUsageLike | null | undefined): string | null {
- if (!usage) return null
- const cached = usage.cache_read_input_tokens > 0 ? ` (+${fmtTok(usage.cache_read_input_tokens)} cached)` : ''
- return `${fmtTok(usage.input_tokens)} in / ${fmtTok(usage.output_tokens)} out${cached}`
-}
-
-function receiptFigures(snap: AtlasSnapshot, tracker: ReceiptTracker, costNow: number | null): string[] {
- const ctx = snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null
- return [turnTokensText(tracker.usage), ctx, turnCostText(tracker.costStart, costNow)].filter((part): part is string => part !== null)
+ if (start == null || end == null || end <= start) return null
+ return `$${(end - start).toFixed(2)}`
 }
 
 export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, costNow: number | null = null): RenderElement {
- const parts: string[] = [formatDuration(props.durationMs)]
- parts.push(tracker.phase && tracker.phase !== snap.phase ? `${tracker.phase} ▸ ${snap.phase}` : snap.phase)
  const delta = snap.counts.done - (tracker.done ?? snap.counts.done)
- if (delta > 0) parts.push(`+${delta} done`)
- if (snap.squad.length > 0) parts.push(`${snap.squad.length} agents`)
- parts.push(...receiptFigures(snap, tracker, costNow))
- tracker.phase = snap.phase
+ const active = activeCount(workersOf(snap))
+ const parts = [
+  formatDuration(props.durationMs),
+  delta > 0 ? `+${delta} done` : null,
+  active > 0 ? `${active} workers` : null,
+  snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,
+  turnCostText(tracker.costStart, costNow),
+ ].filter((part): part is string => part !== null)
  tracker.done = snap.counts.done
  return txt({ dimColor: true },
   txt({ color: BRAND.accent }, `${MARK} `),
   parts.join(' · '),
  )
-}
-
-// ---- PromptHint: contextual chords + the next contract step as the box's dim suggestion ----
-
-export const HINT_TAIL = `/atlas-cc Command Center ${glyph.dot} /atlas-say @name …`
-
-/** The next contract step to propose after a turn (`check: impl-auth …`), or null when none. */
-export function nextStepText(snap: AtlasSnapshot): string | null {
- const wip = snap.todos.find((td) => td.status === 'in_progress')
- const open = snap.todos.find((td) => td.status === 'pending')
- const pick = wip ?? open
- if (!pick) return snap.counts.total > 0 ? 'atlas: record evidence and close the run' : null
- const who = wip?.owner ? ` ${wip.owner}` : ''
- const text = `${wip ? 'check' : 'next'}:${who} ${pick.content}`
- return text.length > 72 ? `${text.slice(0, 71)}…` : text
 }
 
 // ---- registration ----
@@ -277,33 +225,14 @@ async function sessionCostUsd($: EngineInterface): Promise<number | null> {
 
 export function registerRestyle(on: On): void {
  const cache: { envOff?: boolean } = {}
- const lastSuggest: { text?: string } = {}
  const tracker: ReceiptTracker = {}
 
- // The engine caches a ui.render answer, so the globe would freeze between data changes.
- // Reading $.state while drawing subscribes this one instance: each tick write redraws
- // only the Spinner. The timer runs only while the Spinner is mounted (a turn is working).
- const ticker: { n: number; isDrawn: boolean; cancel?: () => void } = { n: 0, isDrawn: false }
-
+ // The clock that bumps spinnerTick lives in register.ts; reading it while drawing
+ // subscribes this Spinner instance so each tick redraws the globe.
  on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
   try {
    const snap = await ready($, cache)
-   if (!snap) return next(e)
-   const { value } = await $.state.get(SPINNER_TICK)
-   ticker.isDrawn = true
-   if (!ticker.cancel) {
-    const handle = $.clock.every(GLOBE_TICK_MS, () => {
-     // Each tick write redraws a mounted Spinner, which sets isDrawn again. A tick that
-     // finds it unset means the Spinner unmounted (turn over): stop, nothing ticks idle.
-     // (routing.ts already owns the one matcherless turn.complete hook, so no second.)
-     if (!ticker.isDrawn) { ticker.cancel?.(); ticker.cancel = undefined; return }
-     ticker.isDrawn = false
-     ticker.n += 1
-     void $.state.set(SPINNER_TICK, ticker.n).catch(() => undefined)
-    })
-    ticker.cancel = () => handle.cancel()
-   }
-   return spinnerTree(snap, e.props, (value ?? 0) * GLOBE_TICK_MS)
+   return next(snap ? { ...e, props: { ...e.props, suffix: spinnerSuffix(snap) } } : e)
   } catch { return next(e) }
  })
 
@@ -319,7 +248,7 @@ export function registerRestyle(on: On): void {
  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
   try {
    const snap = await ready($, cache)
-   return snap ? (assistantTree(snap, e.props) ?? next(e)) : next(e)
+   return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0) ?? next(e)) : next(e)
   } catch { return next(e) }
  })
 
@@ -330,30 +259,9 @@ export function registerRestyle(on: On): void {
   } catch { return next(e) }
  })
 
- on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
-  try {
-   const snap = await ready($, cache)
-   if (!snap) return next(e)
-   if (!e.props.isDraft && !e.props.isWorking) {
-    const text = nextStepText(snap)
-    if (text && text !== lastSuggest.text) {
-     lastSuggest.text = text
-     void $.prompt.suggest({ text }).catch(() => undefined)
-    }
-   }
-   return next({ ...e, props: { ...e.props, tail: HINT_TAIL } })
-  } catch { return next(e) }
- })
-
- // Per-turn figures: cost baseline at turn start, token counts from the main loop's turn.complete.
+ // Cost baseline at turn start; the receipt prints the delta.
  on('turn.start', async ($, e, next) => {
   tracker.costStart = await sessionCostUsd($)
-  tracker.usage = null
-  return next(e)
- })
-
- on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
-  if (e.agentId === undefined) tracker.usage = e.usage ?? null
   return next(e)
  })
 }

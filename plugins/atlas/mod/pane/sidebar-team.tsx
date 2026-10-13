@@ -1,12 +1,12 @@
-// Sidebar team section: plain member rows (selection, activity, elapsed) and the message field.
+// Sidebar team view: an aligned worker table (failures first, never folded), the lead summary row and the message field.
 import type { ClientElements, RenderElement } from 'claude-code';
 import type { SquadAgent } from '../contract';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
-import { fromSprite, fitRuns, rowOf, type Segment } from '../runs';
-import { badge, displayName } from '../sprites/api';
-import { chartRoom as C, fitText, textWidth } from '../theme';
-import { ageStr, scrub } from './chrome';
-import { portraitFor } from './sidebar-portrait';
+import { fitRuns, rowOf, type Segment } from '../runs';
+import { chartRoom as C, fitText, spin, textWidth } from '../theme';
+import { liveWorkers, type LiveWorker } from '../data/live';
+import { personaColor } from '../data/personas';
+import { scrub } from './chrome';
 import { pad, type SidebarHandlers, type SidebarModel } from './sidebar-types';
 
 const isLeadName = (n: string): boolean => n === 'lead' || n.startsWith('lead-');
@@ -70,60 +70,71 @@ export function mates(s: LiveSnapshot): Mate[] {
 /** The lead's row mood, shared with the band's dot so the two never disagree. */
 export const leadMood = (s: LiveSnapshot): Mood => mates(s)[0]!.mood;
 
-/**
- * Cap on Team rows so Gates and the message field stay near the fold; the rest fold into "+N more".
- * Measured: with route, 4 gate groups and advisor notes the sidebar is ~33 rows at 4 members, so 6 members need 36+.
- */
-const teamCap = (rows: number): number => (rows >= 36 ? 6 : rows >= 28 ? 4 : 2);
+const NOBODY_HINT = 'nobody dispatched yet, ask the lead to start a worker';
+/** A dispatch edge younger than this marks a worker as spawned this turn. */
+const SPAWN_MS = 90_000;
 
-/** First `cap` mates, with the selected recipient swapped in when it falls past the cap. */
-function visibleMates(list: Mate[], cap: number, recipient: string | null): Mate[] {
-  const shown = list.slice(0, cap);
-  const picked = list.find((x) => x.name === recipient);
-  if (picked && !shown.includes(picked)) shown[shown.length - 1] = picked;
-  return shown;
+const STATE_LOOK = { failed: ['✗', C.fail], blocked: ['⏸', C.warn], done: ['✓', C.ok], working: ['', C.live] } as const;
+
+/** 3s / 40s / 2m / 1h. */
+function shortAge(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
 }
 
-const isSelected = (x: Mate, recipient: string | null): boolean => recipient === x.name || (x.name === 'lead' && recipient === null);
+const nowText = (w: LiveWorker): string =>
+  w.state === 'blocked' ? 'awaits lead reply' : w.state === 'failed' ? 'failed' : w.state === 'done' ? 'done' : w.tool || 'working';
 
-/** Right-aligned elapsed time, only when the row has a free column for it. */
-function ageTail(parts: Segment[], age: string, cols: number): Segment[] {
-  const gap = cols - parts.reduce((n, p) => n + textWidth(p.t), 0) - textWidth(age);
-  return age && gap >= 1 ? [{ t: ' '.repeat(gap) + age, color: C.muted }] : [];
+const cell = (t: string, w: number, right = false): string => {
+  const f = fitText(t, w);
+  return right ? ' '.repeat(Math.max(0, w - textWidth(f))) + f : pad(f, w);
+};
+
+type Col = { id: 'name' | 'role' | 'now' | 'age' | 'tools'; head: string; cap: number; min: number; right?: boolean; w: number };
+
+function layout(ws: LiveWorker[], now: number, tools: (w: LiveWorker) => number, inner: number): { cols: Col[]; gap: number; last: number } {
+  const ids: Col['id'][] = inner >= 70 ? ['name', 'role', 'now', 'age', 'tools'] : inner >= 50 ? ['name', 'now', 'age'] : ['name', 'now'];
+  const text: Record<Col['id'], (w: LiveWorker) => string> = {
+    name: (w) => w.name, role: (w) => w.role, now: nowText, age: (w) => shortAge(now - w.since), tools: (w) => String(tools(w)),
+  };
+  const spec: Record<Col['id'], [string, number, number, boolean?]> = {
+    name: ['agent', 14, 5], role: ['role', 12, 4], now: ['now', 18, 3], age: ['age', 4, 3, true], tools: ['tools', 5, 5, true],
+  };
+  const cols = ids.map((id): Col => {
+    const [head, cap, min, right] = spec[id];
+    return { id, head, cap, min, right, w: Math.min(cap, Math.max(textWidth(head), ...ws.map((w) => textWidth(text[id](w))))) };
+  });
+  const gap = inner >= 70 ? 2 : 1;
+  const left = () => inner - 3 - cols.reduce((n, c) => n + c.w + gap, 0);
+  const shrinkable = ['now', 'name', 'role'] as const;
+  while (left() < 8) {
+    const c = shrinkable.map((id) => cols.find((x) => x.id === id)).filter((x): x is Col => !!x && x.w > x.min).sort((a, b) => b.w - a.w)[0];
+    if (!c) break;
+    c.w--;
+  }
+  return { cols, gap, last: Math.max(0, left()) };
 }
 
-/** `▸ [Name chip]● name  tool  1m12`: the chip is the persona's readable name; a member with no tool reads its state. */
-const pulseFrame = (m: SidebarModel, x: Mate): number => (x.mood === 'working' ? (m.tick ?? 0) : 0);
-
-function memberSegments(m: SidebarModel, x: Mate, nameW: number): Segment[] {
-  const sel = isSelected(x, m.ui.recipient);
-  return [
-    { t: sel ? '▸ ' : '  ', color: C.focus },
-    ...badge(x.persona, x.mood, pulseFrame(m, x), displayName(x.persona, x.name)).map(fromSprite),
-    { t: ` ${pad(fitText(x.name, nameW), nameW)}`, color: sel ? C.focus : undefined, bold: sel },
-    { t: `  ${scrub(x.text)}`, color: C.muted },
-  ];
-}
-
-function memberRow(els: ClientElements, m: SidebarModel, on: SidebarHandlers, x: Mate, nameW: number, cols: number): RenderElement {
-  const parts = memberSegments(m, x, nameW);
-  const age = x.since ? ageStr(m.snapshot.now - x.since) : '';
-  parts.push(...ageTail(parts, age, cols));
-  return els.Button({ key: `member:${x.name}`, plain: true, onPress: () => on.selectRecipient(x.name), children: fitRuns(els, parts, cols) });
+function leadRow(els: ClientElements, ws: LiveWorker[], cols: number): RenderElement {
+  const n = (s: LiveWorker['state']) => ws.filter((w) => w.state === s).length;
+  const running = n('working');
+  return rowOf(els, [
+    { t: '●', color: running ? C.live : C.muted },
+    { t: ' lead', bold: true },
+    { t: `  running ${running} · ${n('done')} done · ${n('blocked')} blocked`, color: C.muted },
+  ], cols);
 }
 
 function messageInput(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number): RenderElement {
   return els.Input({
     key: 'msg',
-    label: fitText(`To ${m.ui.recipient ?? 'lead'}`, cols),
-    placeholder: cols < 40 ? 'message' : 'type a message, Enter sends',
+    label: '▸ to ' + (m.ui.recipient ?? 'lead'),
+    placeholder: 'message · Enter sends',
     value: m.ui.draft,
     onInput: (v: string) => on.draftChange(v),
     onSubmit: (v: string) => on.send(v),
   });
 }
-
-const NOBODY_HINT = 'nobody dispatched yet, ask the lead to start a worker';
 
 /** Right-aligned summary beside the Team header. */
 export function teamSummary(s: LiveSnapshot): string {
@@ -131,16 +142,45 @@ export function teamSummary(s: LiveSnapshot): string {
   return working ? `lead is conducting ${working}` : 'lead is idle';
 }
 
-export function teamRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number, bordered: boolean): RenderElement[] {
-  const list = mates(m.snapshot);
-  const shown = visibleMates(list, teamCap(m.rows), m.ui.recipient);
-  const nameW = Math.min(cols < 40 ? 8 : 12, Math.max(4, ...shown.map((x) => x.name.length)));
-  const more = list.length - shown.length;
-  return [
-    ...(list.length === 1 ? [rowOf(els, [{ t: NOBODY_HINT, color: C.muted }], cols)] : []),
-    ...shown.map((x) => memberRow(els, m, on, x, nameW, cols)),
-    ...(more > 0 ? [rowOf(els, [{ t: `  +${more} more`, color: C.muted }], cols)] : []),
-    ...portraitFor(els, m, list, cols, bordered),
-    messageInput(els, m, on, cols),
-  ];
+export function teamRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number): RenderElement[] {
+  const s = m.snapshot;
+  const ws = liveWorkers(s, s.now);
+  const toolCount = (w: LiveWorker): number => s.activity[w.name]?.toolCount ?? 0;
+  const spawned = (w: LiveWorker): boolean => s.comms.some((c) => c.kind === 'dispatch' && c.to === w.name && s.now - c.ts <= SPAWN_MS);
+  const { cols, gap, last } = layout(ws, s.now, toolCount, inner);
+  const sp = ' '.repeat(gap);
+  const rows: RenderElement[] = [];
+  if (inner >= 50 && ws.length) {
+    const h = (t: string, w: number, right = false): Segment => ({ t: cell(t, w, right) + sp, color: C.muted });
+    rows.push(rowOf(els, [{ t: 'st ', color: C.muted }, ...cols.map((c) => h(c.head, c.w, c.right)), ...(last ? [{ t: fitText('last line', last), color: C.muted }] : [])], inner));
+  }
+  if (!ws.length) rows.push(rowOf(els, [{ t: NOBODY_HINT, color: C.muted }], inner));
+  for (const w of ws) {
+    const [g, color] = STATE_LOOK[w.state];
+    const key = `worker:${w.name}`;
+    const open = m.ui.expanded === key;
+    const val: Record<Col['id'], string> = { name: w.name, role: w.role, now: nowText(w), age: shortAge(s.now - w.since), tools: String(toolCount(w)) };
+    const parts: Segment[] = [
+      { t: w.state === 'working' ? spin(m.tick ?? 0) : g, color, bold: w.state !== 'working' },
+      { t: spawned(w) ? '▸ ' : '  ', color: C.focus },
+      ...cols.flatMap((c): Segment[] => [{
+        t: cell(c.id === 'name' ? scrub(val.name) : val[c.id], c.w, c.right) + sp,
+        color: c.id === 'name' ? personaColor(w.role) : c.id === 'now' && w.state !== 'working' ? color : c.id === 'role' || c.id === 'age' || c.id === 'tools' ? C.muted : undefined,
+        bold: c.id === 'name',
+      }]),
+      ...(last ? [{ t: fitText(scrub(w.lastLine).replace(/\s+/g, ' '), last), color: C.muted }] : []),
+    ];
+    rows.push(els.Button({
+      key,
+      plain: true,
+      onPress: () => { on.selectRecipient(w.name); on.toggle(key); },
+      children: fitRuns(els, parts, inner),
+    }));
+    if (open) {
+      rows.push(rowOf(els, [{ t: '  ' + fitText(scrub(w.lastLine).replace(/\s+/g, ' ') || w.state, inner - 2), color: C.muted }], inner));
+      rows.push(rowOf(els, [{ t: '  ' + fitText(`since ${shortAge(s.now - w.since)} ago · ${toolCount(w)} tools`, inner - 2), color: C.muted }], inner));
+    }
+  }
+  rows.push(leadRow(els, ws, inner), messageInput(els, m, on, inner));
+  return rows;
 }

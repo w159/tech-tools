@@ -3,7 +3,9 @@
 // first-sight (null prev) yielding [], and malformed snapshots never throwing.
 import { describe, expect, test } from 'claude-code/testing';
 import type { AtlasSnapshot, ChannelNote, SquadAgent, TodoItem } from './contract';
-import { diffSnapshots, nextStepSuggestion } from './notify';
+import type { EngineInterface, On } from 'claude-code';
+import { memState } from './test_helpers';
+import { diffSnapshots, nextStepSuggestion, registerNotify } from './notify';
 
 function snap(over: Partial<AtlasSnapshot> = {}): AtlasSnapshot {
 	return {
@@ -29,11 +31,7 @@ function snap(over: Partial<AtlasSnapshot> = {}): AtlasSnapshot {
 		notes: [],
 		members: [],
 		squad: [],
-		unread: 0,
-		tokens: 0,
-		costUsd: 0,
 		contextPct: 0,
-		headerMisses: 0,
 		now: 0,
 		...over,
 	};
@@ -63,18 +61,25 @@ describe('diffSnapshots', () => {
 
 	test('agent running -> finished toasts complete', () => {
 		expect(diffSnapshots(snap({ squad: [agent('a', 'running')] }), snap({ squad: [agent('a', 'finished')] }))).toEqual([
-			{ type: 'agent-complete', name: 'a' },
+			{ type: 'agent-complete', name: 'a', age: '', lastLine: '' },
 		]);
 	});
 
 	test('agent running -> failed toasts fail, and stays put (no repeat)', () => {
 		const failed = snap({ squad: [agent('a', 'failed')] });
-		expect(diffSnapshots(snap({ squad: [agent('a', 'running')] }), failed)).toEqual([{ type: 'agent-fail', name: 'a' }]);
+		expect(diffSnapshots(snap({ squad: [agent('a', 'running')] }), failed)).toEqual([{ type: 'agent-fail', name: 'a', lastLine: '' }]);
 		expect(diffSnapshots(failed, snap({ squad: [agent('a', 'failed')] }))).toEqual([]);
 	});
 
-	test('new agent spawn is not a completion', () => {
+	test('new working agent toasts spawn; a new already-finished one is not a completion', () => {
+		expect(diffSnapshots(snap(), snap({ squad: [agent('a', 'running')] }))).toEqual([{ type: 'agent-spawn', name: 'a' }]);
 		expect(diffSnapshots(snap(), snap({ squad: [agent('a', 'finished')] }))).toEqual([]);
+	});
+
+	test('agent turning blocked toasts blocked', () => {
+		expect(diffSnapshots(snap({ squad: [agent('a', 'running')] }), snap({ squad: [agent('a', 'input')] }))).toEqual([
+			{ type: 'agent-blocked', name: 'a', lastLine: '' },
+		]);
 	});
 
 	test('new note to lead yields sender + 60-char preview; non-lead notes ignored', () => {
@@ -106,8 +111,8 @@ describe('diffSnapshots', () => {
 		const prev = snap({ squad: [agent('a', 'running'), agent('b', 'running')], phase: 'research' });
 		const next = snap({ squad: [agent('a', 'finished'), agent('b', 'failed')], phase: 'implement' });
 		expect(diffSnapshots(prev, next)).toEqual([
-			{ type: 'agent-complete', name: 'a' },
-			{ type: 'agent-fail', name: 'b' },
+			{ type: 'agent-fail', name: 'b', lastLine: '' },
+			{ type: 'agent-complete', name: 'a', age: '', lastLine: '' },
 			{ type: 'phase', phase: 'implement' },
 		]);
 	});
@@ -130,6 +135,7 @@ describe('diffSnapshots', () => {
 		const settled = snap({ todos: [todo('t1', 'completed')] });
 		expect(() => diffSnapshots(settled, junk)).not.toThrow();
 		expect(diffSnapshots(settled, junk)).toEqual([
+			{ type: 'agent-spawn', name: 'a' },
 			{ type: 'note', sender: 'unknown', preview: '' },
 			{ type: 'note', sender: 'impl-auth', preview: 'ok' },
 		]);
@@ -137,28 +143,39 @@ describe('diffSnapshots', () => {
 });
 
 describe('nextStepSuggestion', () => {
-	test('first open todo in contract phase order, prefix stripped', () => {
-		const s = snap({
-			todos: [
-				todo('t2', 'pending', '[verify] dispatch atlas:verifier on impl-auth', 'verify'),
-				todo('t1', 'pending', 'do research things', 'research'),
-			],
-		});
-		expect(nextStepSuggestion(s)).toBe('research: do research things');
+	test('blocked worker wins: reply <name>: <lastLine>', () => {
+		const s = snap({ squad: [agent('impl', 'input')], todos: [todo('t1', 'in_progress', 'x')] });
+		expect(nextStepSuggestion(s)).toBe('reply impl: ');
+		const live = { ...s, activity: { impl: { mood: 'blocked', tool: null, since: 0, lastLine: 'need path?' } } };
+		expect(nextStepSuggestion(live as unknown as AtlasSnapshot)).toBe('reply impl: need path?');
 	});
 
-	test('completed todos skipped, later phase returned as-is', () => {
-		const s = snap({ todos: [todo('t1', 'completed', 'done thing', 'research'), todo('t2', 'in_progress', 'dispatch atlas:verifier on impl-auth', 'verify')] });
-		expect(nextStepSuggestion(s)).toBe('verify: dispatch atlas:verifier on impl-auth');
+	test('first in_progress todo, prefix stripped, phase falls back to snapshot phase', () => {
+		const s = snap({ phase: 'implement', todos: [todo('t0', 'pending', 'later'), todo('t1', 'in_progress', '[verify] dispatch verifier', 'verify'), todo('t2', 'in_progress', 'write code')] });
+		expect(nextStepSuggestion(s)).toBe('verify: dispatch verifier');
+		expect(nextStepSuggestion(snap({ phase: 'implement', todos: [todo('t2', 'in_progress', 'write code')] }))).toBe('implement: write code');
 	});
 
-	test('todo without phase falls back to snapshot phase', () => {
-		const s = snap({ phase: 'implement', todos: [todo('t1', 'pending', 'write code', undefined)] });
-		expect(nextStepSuggestion(s)).toBe('implement: write code');
-	});
-
-	test('null when nothing open', () => {
+	test('null when nothing blocked or in progress', () => {
 		expect(nextStepSuggestion(snap())).toBeNull();
-		expect(nextStepSuggestion(snap({ todos: [todo('t1', 'completed')] }))).toBeNull();
+		expect(nextStepSuggestion(snap({ todos: [todo('t1', 'pending'), todo('t2', 'completed')] }))).toBeNull();
+	});
+});
+
+describe('registerNotify', () => {
+	test('toasts ✗ for a failed worker and makes the single suggestion', async () => {
+		let hook: (d: unknown, e: unknown, n: (x?: unknown) => unknown) => Promise<unknown> = async () => undefined;
+		registerNotify(((_p: unknown, _m: unknown, h: typeof hook) => { hook = h; return { catch: () => undefined }; }) as unknown as On, { soundEnabled: () => false });
+		const toasts: string[] = [];
+		const suggested: string[] = [];
+		const mem = memState({ 'atlas/snapshot': null });
+		const $ = { state: mem, ui: { toast: (t: string) => toasts.push(t) }, prompt: { suggest: async (a: { text: string }) => (suggested.push(a.text), { isShown: true }) } } as unknown as EngineInterface;
+		const put = (s: AtlasSnapshot) => (mem.set as (...a: unknown[]) => Promise<unknown>)({ plugin: 'atlas', key: 'snapshot' }, s);
+		await put(snap({ squad: [agent('a', 'running')], todos: [todo('t1', 'in_progress', 'build')] }));
+		await hook($, {}, async (x) => x);
+		await put(snap({ squad: [agent('a', 'failed')], todos: [todo('t1', 'in_progress', 'build')] }));
+		await hook($, {}, async (x) => x);
+		expect(toasts).toEqual(['✗ a']);
+		expect(suggested).toEqual(['research: build', 'research: build']);
 	});
 });

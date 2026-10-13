@@ -6431,5 +6431,142 @@
     "status": "verified",
     "verified_at": "2026-10-12T17:21:40+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "format_after_edit cwd guard + 7314 friction-row fix",
+    "evidence": [
+      "plugins/atlas/hooks/test_format_after_edit.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_format_after_edit  # Ran 53 tests OK",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T10:51:49+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_doctor --fix repairs omp install and quarantines non-registered cache versions",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_doctor.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_doctor  # Ran 119 tests OK",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T10:51:49+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dashboard ensure LOCK_NB + session_boot timeout fault",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_dashboard_singleton.py",
+      "plugins/atlas/hooks/test_session_boot.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_dashboard_singleton  # Ran 9 OK",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T10:51:49+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hooks/testenv.py scrubs settings-injected ATLAS_* in hook tests",
+    "evidence": [
+      "plugins/atlas/hooks/testenv.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && ATLAS_MEMORY_CAPTURE=off ATLAS_DOCS_REPAIR=off python3 -m unittest test_memory_capture test_session_boot  # Ran 101 OK",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T10:51:49+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "mod-cc-12.0.0",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center redesign live verification",
+    "evidence": [
+      ".atlas/evidence/mod-cc-2026-10-13/verify-run.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-13T16:42:58+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-cc-12.0.0-rerun",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center redesign: rejections fixed (omp boot rule, parked worker idle)",
+    "evidence": [
+      "claude plugin test plugins/atlas: 251 pass, 0 mod fail; tsc 0; hooks unittest OK; fallow dead_code 0; live band \u2691 idle after probe-park, header ATLAS | \ud83c\udfc1 done | ... with pipes"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T16:52:13+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "mod-cc-12.0.0",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center redesign live verification (rerun)",
+    "evidence": [
+      ".atlas/evidence/mod-cc-2026-10-13/verify-rerun.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T16:56:19+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mod-cc-12.0.0-names-mux",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Agent name via tool.call correlation; mux status feed restored",
+    "evidence": [
+      "claude plugin test plugins/atlas 255 pass/0 mod fail; routing.test.ts + data/mux.test.ts; live band \u2834 probe-named Bash 1s"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T17:15:38+00:00",
+    "verified_by": "lead"
   }
 ]

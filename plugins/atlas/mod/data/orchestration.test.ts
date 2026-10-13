@@ -1,57 +1,36 @@
-// Lifecycle truth: a worker is only `verified` when findings.json says so about that exact worker.
+// Worktree merges: a finished worker whose worktree merged gets one `merge` comms row.
 import { describe, expect, test } from 'claude-code/testing';
 import type { SquadAgent } from '../contract';
 import { deriveOrchestration, EMPTY_ORCH, onComplete, onSpawn, onToolStart, type DeriveInput, type WtRow } from './orchestration';
 
 const NOW = 1_760_000_000_000;
-const finding = (o: Record<string, unknown>): string => JSON.stringify([{ id: 'f1', title: '', evidence: [], status: 'verified', ...o }]);
 
-function stageOf(label: string, persona: string, opts: { findings?: string; wt?: WtRow[]; extra?: SquadAgent[]; verifying?: boolean } = {}): string | undefined {
-  const o = { findings: '[]', wt: [] as WtRow[], extra: [] as SquadAgent[], ...opts };
+function mergeRows(label: string, persona: string, wt: WtRow[], finished = true): string[] {
   let orch = onSpawn(EMPTY_ORCH, 'a1111111111111111', 'map things', NOW, { name: label, type: `atlas:${persona}` });
-  orch = onComplete(orch, 'a1111111111111111', { reason: 'answer', answer: 'done', tokens: 1 }, NOW + 1);
-  const squad: SquadAgent[] = [{ name: label, persona, state: 'finished', source: 'task' }, ...o.extra];
+  if (finished) orch = onComplete(orch, 'a1111111111111111', { reason: 'answer', answer: 'done', tokens: 1 }, NOW + 1);
+  const squad: SquadAgent[] = [{ name: label, persona, state: finished ? 'finished' : 'running', source: 'task' }];
   const input: DeriveInput = {
-    orch, names: { a1111111111111111: label }, listed: [{ id: 'a1111111111111111', status: 'completed' }], squad, notes: [], members: [], leadNames: [],
-    findingsText: o.findings, wt: o.wt, heavyTotal: 0, now: NOW + 2, mergedAt: {},
+    orch, names: { a1111111111111111: label }, listed: [{ id: 'a1111111111111111', status: finished ? 'completed' : 'running' }], squad, notes: [], members: [], leadNames: [],
+    wt, now: NOW + 2, mergedAt: {},
   };
-  return deriveOrchestration(input).lifecycle.find((l) => l.agent === label)?.stage;
+  return deriveOrchestration(input).comms.filter((c) => c.kind === 'merge').map((c) => c.text);
 }
 
-describe('lifecycle: reported -> verifying -> verified -> merged', () => {
-  test('a finished explorer with no matching finding stays reported', () => {
-    expect(stageOf('explorer', 'explorer')).toBe('reported');
-    expect(stageOf('explore-band-rows', 'explorer')).toBe('reported');
+describe('worktree merges', () => {
+  const row = (agent: string, merged: boolean): WtRow => ({ agent, branch: `worker/${agent}`, worktree: null, ahead: 0, behind: 0, dirty: false, verified_finding: null, merged });
+  test('a finished worker with a merged worktree gets one merge row', () => {
+    expect(mergeRows('explore-band-rows', 'explorer', [row('explore-band-rows', true)])).toEqual(['merged worker/explore-band-rows']);
   });
-  test('a verified finding that names the worker label verifies it', () => {
-    expect(stageOf('explore-band-rows', 'explorer', { findings: finding({ title: 'band rows mapped by explore-band-rows' }) })).toBe('verified');
-    expect(stageOf('explore-band-rows', 'explorer', { findings: finding({ evidence: ['branch worker/explore-band-rows ok'] }) })).toBe('verified');
-  });
-  test('a finding that names only the persona word does not verify a specific worker', () => {
-    expect(stageOf('explore-band-rows', 'explorer', { findings: finding({ title: 'explorer verified the map' }) })).toBe('reported');
-    expect(stageOf('explorer', 'explorer', { findings: finding({ title: 'explorer verified the map', worker: 'explorer' }) })).toBe('reported');
-    expect(stageOf('explorer-a06f', 'explorer', { findings: finding({ title: 'explorer-a06f is fine' }) })).toBe('reported');
-  });
-  test('a longer label is not matched by its prefix; non-verified statuses do not verify', () => {
-    expect(stageOf('explore-band', 'explorer', { findings: finding({ title: 'explore-band-rows ok' }) })).toBe('reported');
-    expect(stageOf('explore-band-rows', 'explorer', { findings: finding({ title: 'explore-band-rows', status: 'rejected' }) })).toBe('rejected');
-  });
-  test('verifying while a verifier dispatched against the worker is still running', () => {
-    const verifier: SquadAgent = { name: 'verify-band', persona: 'verifier', state: 'running', source: 'task', task: 'verify explore-band-rows output' };
-    expect(stageOf('explore-band-rows', 'explorer', { extra: [verifier] })).toBe('verifying');
-    expect(stageOf('explore-band-rows', 'explorer', { extra: [{ ...verifier, state: 'finished' }] })).toBe('reported');
-  });
-  test('merged only from wt merged=true (or a merge note), never from a persona-substring branch', () => {
-    const row = (agent: string, merged: boolean): WtRow => ({ agent, branch: `worker/${agent}`, worktree: null, ahead: 0, behind: 0, dirty: false, verified_finding: null, merged });
-    expect(stageOf('explore-band-rows', 'explorer', { wt: [row('explore-band-rows', true)] })).toBe('merged');
-    expect(stageOf('explore-band-rows', 'explorer', { wt: [row('explore-band-rows', false)] })).toBe('reported');
-    expect(stageOf('explore-band-rows', 'explorer', { wt: [row('explorer', true)] })).toBe('reported');
+  test('no merge row while the worktree is unmerged, the worker still runs, or only a persona-named branch merged', () => {
+    expect(mergeRows('explore-band-rows', 'explorer', [row('explore-band-rows', false)])).toEqual([]);
+    expect(mergeRows('explore-band-rows', 'explorer', [row('explore-band-rows', true)], false)).toEqual([]);
+    expect(mergeRows('explore-band-rows', 'explorer', [row('explorer', true)])).toEqual([]);
   });
 });
 
 describe('finished workers and comms labels', () => {
   const base = (over: Partial<DeriveInput>): DeriveInput => ({
-    orch: EMPTY_ORCH, names: {}, listed: [], squad: [], notes: [], members: [], leadNames: [], findingsText: '[]', wt: [], heavyTotal: 0, now: NOW + 60_000, mergedAt: {}, ...over,
+    orch: EMPTY_ORCH, names: {}, listed: [], squad: [], notes: [], members: [], leadNames: [], wt: [], now: NOW + 60_000, mergedAt: {}, ...over,
   });
   const working = (id: string) => onToolStart(onSpawn(EMPTY_ORCH, id, 'map', NOW, { name: 'explore', type: 'atlas:explorer' }), id, 'Grep', NOW + 1_000);
 
