@@ -702,6 +702,26 @@ def _reserve_name(payload):
         _record_fault(exc)
 
 
+def _record_agent_id(payload):
+    """PostToolUse:Agent knows the dispatch name (tool_input.name) and the launch
+    result's `agentId: <hex>`; SubagentStop later carries only that id. Store the
+    pair on the channel member so the stop can finish it. Fail-open."""
+    try:
+        name = str((payload.get("tool_input") or {}).get("name") or "")
+        found = re.search(
+            r"agentId\W+([0-9a-f]{8,})", json.dumps(payload.get("tool_response"))
+        )
+        if not (name and found):
+            return
+        import atlas_todo
+
+        cwd = payload.get("cwd")
+        root = atlas_todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
+        atlas_todo.set_member_agent_id(root, name, found.group(1))
+    except Exception as exc:
+        _record_fault(exc)
+
+
 # Built-in (non-atlas) agent types. An armed orchestrator that dispatches one of
 # these runs workers on the stock Claude agent setup, outside Atlas's roles,
 # models and guardrails. ATLAS_BUILTIN_AGENT_NUDGE=off disables the deny.
@@ -1790,6 +1810,7 @@ def main():
         and payload.get("tool_name") in DISPATCH_TOOLS
     ):
         _reserve_name(payload)
+        _record_agent_id(payload)
 
     # Worker inbox: an atlas_mux worker's headless pane never reads its tty, so
     # dashboard messages queued for it on the board are delivered here, as

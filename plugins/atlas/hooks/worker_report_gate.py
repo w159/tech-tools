@@ -200,8 +200,12 @@ def finish_member(p):
 
         cwd = p.get("cwd")
         root = atlas_todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
+        # agent_id -> member is recorded at PostToolUse:Agent (dispatch_tripwire).
+        by_id = atlas_todo.member_for_agent_id(root, str(p.get("agent_id") or ""))
         for key in ("agent_name", "agent_id"):
-            who = worker_inbox._member_for(atlas_todo, root, str(p.get(key) or ""))
+            who = by_id or worker_inbox._member_for(
+                atlas_todo, root, str(p.get(key) or "")
+            )
             if who:
                 atlas_todo.mark_finished(root, who, 0)
                 for ch in list(atlas_todo._reg_read(root)["channels"]):

@@ -982,6 +982,26 @@ class InProcessTest(unittest.TestCase):
             "tool_input": _named(tinput),
         }
 
+    def test_post_agent_records_agent_id_on_member(self):
+        # tool_response shape copied from this repo's session transcript: the async
+        # launch result text carries "agentId: <hex> (internal ID ...)".
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=self.tmp))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["impl-1"])
+        text = (
+            "Async agent launched successfully.\n"
+            "agentId: a41e91e5560395790 (internal ID - do not mention to user.)\n"
+        )
+        p = self._post("Agent", {"name": "impl-1"})
+        p.update(
+            cwd=root,
+            tool_response={"content": [{"type": "text", "text": text}]},
+        )
+        self._run_main(p)
+        self.assertEqual(todo.member_for_agent_id(root, "a41e91e5560395790"), "impl-1")
+
     def _fresh_run(self, session_id, mark_orch=False):
         conn = self.atlas_db.connect(self.db_path)
         pid = self.atlas_db.register_project(conn, "/repo/x")

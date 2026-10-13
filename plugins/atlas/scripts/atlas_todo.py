@@ -1355,6 +1355,38 @@ def set_member_handles(
         return 0
 
 
+def set_member_agent_id(root: Optional[str], name: str, agent_id: str) -> int:
+    """Record a Claude subagent's agent_id on every registry entry of member `name`.
+    SubagentStop carries agent_id but not the dispatch name; PostToolUse:Agent knows both.
+    Returns entries updated; fail-open (0)."""
+    n = _sanitize_owner(name)
+
+    def fn(reg: dict) -> int:
+        hit = 0
+        for chan in reg["channels"].values():
+            for m in chan["members"]:
+                if m["name"] == n:
+                    m["agent_id"] = str(agent_id)
+                    hit += 1
+        return hit
+
+    try:
+        return _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
+    except Exception:
+        return 0
+
+
+def member_for_agent_id(root: Optional[str], agent_id: str) -> Optional[str]:
+    """Member name whose recorded agent_id matches, else None."""
+    if not agent_id:
+        return None
+    for chan in _reg_read(root)["channels"].values():
+        for m in chan["members"]:
+            if m.get("agent_id") == agent_id:
+                return m["name"]
+    return None
+
+
 def _with_activity(root: Optional[str], chans: List[dict]) -> List[dict]:
     last: Dict[str, float] = {}
     for r in notes(root):
