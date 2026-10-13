@@ -1167,7 +1167,46 @@ def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
         _save_json(installed_path, installed)
         actions.append(f"re-registered {key} at {mkt_ver}")
 
-    stale = ctx.get("stale_assets") or []
+    # omp keeps its own registry and cache; repair drift the same way.
+    omp_reg_path = os.path.join(_omp_plugins_dir(), "installed_plugins.json")
+    if mkt_ver and os.path.exists(omp_reg_path):
+        omp_installed = _load_json(omp_reg_path)
+        _, oreg = find_registration(omp_installed, plugin_name)
+        if oreg and oreg.get("version") != mkt_ver:
+            omp_dir = os.path.join(
+                _omp_plugins_dir(),
+                "cache",
+                "plugins",
+                f"{mkt_name}___{plugin_name}___{mkt_ver}",
+            )
+            if not os.path.exists(os.path.join(omp_dir, ".claude-plugin", "plugin.json")):
+                shutil.copytree(
+                    os.path.join(clone, "plugins", plugin_name),
+                    omp_dir,
+                    dirs_exist_ok=True,
+                )
+            oreg.update(installPath=omp_dir, version=mkt_ver)
+            _save_json(omp_reg_path, omp_installed)
+            actions.append(f"re-registered omp {plugin_name} at {mkt_ver}")
+
+    # Quarantine every cached version dir the registry no longer points at.
+    cur_ver_dir = None
+    try:
+        _, creg = find_registration(
+            _load_json(os.path.join(PLUGINS_DIR, "installed_plugins.json")), plugin_name
+        )
+        if creg:
+            cur_ver_dir = os.path.basename(creg.get("installPath", "").rstrip("/"))
+    except Exception:
+        pass
+    plugin_cache = os.path.join(PLUGINS_DIR, "cache", mkt_name, plugin_name)
+    stale = list(ctx.get("stale_assets") or [])
+    if cur_ver_dir and os.path.isdir(plugin_cache):
+        stale += [
+            os.path.join(plugin_cache, v)
+            for v in sorted(os.listdir(plugin_cache))
+            if v != cur_ver_dir and os.path.isdir(os.path.join(plugin_cache, v))
+        ]
     if stale:
         stamp = trash_stamp if trash_stamp is not None else int(time.time())
         trash = os.path.join(PLUGINS_DIR, f"{TRASH_PREFIX}{stamp}")

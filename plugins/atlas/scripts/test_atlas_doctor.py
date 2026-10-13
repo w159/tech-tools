@@ -313,6 +313,39 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertEqual(entry["version"], "2.3.0")
         self.assertTrue(entry["installPath"].endswith("2.3.0"))
 
+    def _ctx(self):
+        return {
+            "expected_repo": "w159/tech-tools",
+            "mkt_name": "tech-tools",
+            "key": "atlas@tech-tools",
+            "reg": {"version": "1.0.1"},
+            "clone": self.clone,
+        }
+
+    def test_fix_repairs_drifted_omp_registry(self):
+        omp = os.environ["ATLAS_OMP_PLUGINS_DIR"]
+        old = os.path.join(omp, "cache", "plugins", "tech-tools___atlas___11.0.0")
+        write_json(
+            os.path.join(omp, "installed_plugins.json"),
+            {"plugins": {"atlas@tech-tools": [{"version": "11.0.0", "installPath": old}]}},
+        )
+        atlas_doctor.apply_fixes(self._ctx(), "atlas")
+        with open(os.path.join(omp, "installed_plugins.json")) as f:
+            e = json.load(f)["plugins"]["atlas@tech-tools"][0]
+        self.assertEqual(e["version"], "2.3.0")
+        self.assertTrue(os.path.isfile(os.path.join(e["installPath"], ".claude-plugin", "plugin.json")))
+
+    def test_fix_without_omp_registry_adds_no_omp_action(self):
+        actions = atlas_doctor.apply_fixes(self._ctx(), "atlas")
+        self.assertFalse(any("omp" in a for a in actions))
+
+    def test_fix_quarantines_non_registered_cache_versions(self):
+        cache = os.path.join(self.plugins, "cache", "tech-tools", "atlas")
+        write_json(os.path.join(cache, "0.9.0", ".claude-plugin", "plugin.json"), {})
+        atlas_doctor.apply_fixes(self._ctx(), "atlas")
+        # registry now points at 2.3.0; 1.0.1 and 0.9.0 are stale, 2.3.0 stays
+        self.assertEqual(os.listdir(cache), ["2.3.0"])
+
     def test_missing_registration_reports_and_does_not_crash(self):
         write_json(
             os.path.join(self.plugins, "installed_plugins.json"),
@@ -733,7 +766,9 @@ class AtlasDoctorTest(unittest.TestCase):
         open(orphan, "w").close()
         _, ctx = atlas_doctor.run_checks("atlas")
         actions = atlas_doctor.apply_fixes(ctx, "atlas")
-        self.assertTrue(any("cleared" in a for a in actions))
+        # the orphaned 1.0.1 dir is no longer the registered version, so it is
+        # quarantined whole (marker included) rather than cleared in place
+        self.assertTrue(any("quarantined" in a or "cleared" in a for a in actions))
         self.assertFalse(os.path.exists(orphan))
 
     def test_main_fix_runs_fix_and_rechecks(self):
