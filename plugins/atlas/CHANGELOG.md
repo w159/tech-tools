@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Claude subagent and lead channel members now finish. Real hook payloads showed (1) PostToolUse:Agent carries the original `tool_input` (no autonamed `name`), so the member is joined to `agentId` via `tool_use_id` recorded at PreToolUse; (2) a background atlas agent's SubagentStop has no `last_assistant_message`, which made `worker_report_gate` exit before `finish_member`; (3) SessionEnd now marks the lead finished and runs `reap_channels`.
+
 ## [12.1.1] - 2026-10-13 -- hook counts and README list include edit_read_nudge
 
 ### Fixed

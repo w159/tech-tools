@@ -220,6 +220,7 @@ def finish_member(p):
             pass
 
 
+
 def main():
     if (
         os.environ.get("ATLAS_GATE") == "off"
@@ -232,10 +233,12 @@ def main():
     if p.get("stop_hook_active"):
         return
     agent_type = str(p.get("agent_type") or "")
-    if not agent_type.startswith("atlas:"):
-        return
     msg = p.get("last_assistant_message")
-    if not isinstance(msg, str) or not msg.strip():
+    if not agent_type.startswith("atlas:") or not isinstance(msg, str) or not msg.strip():
+        # Nothing to check, but the stop still ends a known channel member (background
+        # agents' real SubagentStop carries no last_assistant_message). finish_member
+        # is a no-op for an agent that is not a registered member.
+        finish_member(p)
         return
     with open(PROTOCOL, encoding="utf-8") as f:
         report = json.load(f)["report"]

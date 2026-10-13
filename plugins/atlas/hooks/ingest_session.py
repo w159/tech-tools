@@ -86,11 +86,28 @@ def _refresh_facet(path, session_id, session_ingest):
         atlas_faults.record("ingest_session.facet", exc)
 
 
+def _finish_lead(payload):
+    """SessionEnd: mark this session's lead member finished and reap dead channels
+    (what omp's session_shutdown does). Fail-open."""
+    if payload.get("hook_event_name") != "SessionEnd":
+        return
+    try:
+        import atlas_todo
+
+        cwd = payload.get("cwd")
+        root = atlas_todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
+        atlas_todo.mark_finished(root, atlas_todo.lead_name(payload.get("session_id")), 0)
+        atlas_todo.reap_channels(root)
+    except Exception as exc:
+        atlas_faults.record("ingest_session._finish_lead", exc)
+
+
 def main():
     if os.environ.get("ATLAS_INGEST", "on").lower() == "off":
         return
     payload = atlas_hook_guard.read_payload()
     payload = payload if isinstance(payload, dict) else {}
+    _finish_lead(payload)
     if not atlas_hook_guard.should_run(payload, "ingest_session", kind="capture"):
         return
     path = payload.get("transcript_path")

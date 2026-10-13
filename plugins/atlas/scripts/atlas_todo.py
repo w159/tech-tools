@@ -1376,6 +1376,38 @@ def set_member_agent_id(root: Optional[str], name: str, agent_id: str) -> int:
         return 0
 
 
+def set_member_tool_use_id(root: Optional[str], name: str, tool_use_id: str) -> int:
+    """Record the dispatching tool_use_id on member `name`: the one key PreToolUse
+    (which knows the injected name) and PostToolUse (which knows the agentId) share.
+    Fail-open (0)."""
+    n = _sanitize_owner(name)
+
+    def fn(reg: dict) -> int:
+        hit = 0
+        for chan in reg["channels"].values():
+            for m in chan["members"]:
+                if m["name"] == n:
+                    m["tool_use_id"] = str(tool_use_id)
+                    hit += 1
+        return hit
+
+    try:
+        return _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
+    except Exception:
+        return 0
+
+
+def member_for_tool_use_id(root: Optional[str], tool_use_id: str) -> Optional[str]:
+    """Member name dispatched by `tool_use_id`, else None."""
+    if not tool_use_id:
+        return None
+    for chan in _reg_read(root)["channels"].values():
+        for m in chan["members"]:
+            if m.get("tool_use_id") == tool_use_id:
+                return m["name"]
+    return None
+
+
 def member_for_agent_id(root: Optional[str], agent_id: str) -> Optional[str]:
     """Member name whose recorded agent_id matches, else None."""
     if not agent_id:
