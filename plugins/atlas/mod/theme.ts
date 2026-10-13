@@ -116,13 +116,15 @@ export function blink(periodMs = 500): 0 | 1 {
 /** Braille spinner frames (one cell each). */
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 
-/** Per-phase activity frames (one cell each); phases not listed use SPIN. */
+/** Per-phase activity frames (one cell each); phases not listed use SPIN.
+ *  Six frames, not four: the tick is 250 ms, so a 4-frame table repeats every 1 s and any
+ *  whole-second sample (a screenshot, a person glancing) always saw the same glyph. */
 const PHASE_FRAMES: Readonly<Record<string, readonly string[]>> = {
- research: ['◜', '◝', '◞', '◟'],
- theory: ['✶', '✷', '✸', '✹'],
- test: ['⠁', '⠂', '⠄', '⡀'],
- implement: ['⣾', '⣽', '⣻', '⢿'],
- verify: ['◐', '◓', '◑', '◒'],
+ research: ['◜', '◠', '◝', '◞', '◡', '◟'],
+ theory: ['✶', '✷', '✸', '✹', '✺', '✻'],
+ test: ['⠁', '⠂', '⠄', '⡀', '⢀', '⠠'],
+ implement: ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟'],
+ verify: ['◐', '◓', '◑', '◒', '◔', '◕'],
 }
 
 /** Spinner frame for an animation counter (any integer), from the phase's frame table when it has one. */

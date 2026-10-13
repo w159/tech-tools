@@ -87,9 +87,16 @@ describe('bandTree', () => {
   test('phase frames: implement cycles single-width frames and wraps', () => {
     const f = Array.from({ length: 8 }, (_, i) => spin(i, 'implement'));
     expect(f.every((c) => textWidth(c) === 1)).toBe(true);
-    expect(f[4]).toBe(f[0]);
+    expect(f[6]).toBe(f[0]);
     expect(f[0]).not.toBe(f[1]);
     expect(spin(2, 'unknown')).toBe(spin(2));
+  });
+  test('phase frames differ between whole-second samples at the 250 ms tick', () => {
+    for (const phase of ['research', 'theory', 'test', 'implement', 'verify']) {
+      const seen = new Set([0, 8, 16, 24].map((tick) => spin(tick, phase))); // 2 s apart
+      expect(seen.size).toBeGreaterThan(2);
+      expect(spin(4, phase)).not.toBe(spin(0, phase)); // 1 s apart
+    }
   });
   test('no border', () => {
     const snapshot = busySnap();

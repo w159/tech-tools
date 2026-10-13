@@ -53,7 +53,7 @@ describe('rail pulse', () => {
   test('current-phase mark alternates on tick, static without one', () => {
     const at = (tick?: number) => text(routeRows(els, { ...model(80), tick }, on, 80)[0]);
     expect(at(0)).not.toBe(at(1));
-    expect(at(0)).toBe(at(4));
+    expect(at(0)).toBe(at(6)); // phase tables are six frames
     expect(at(undefined)).toContain('◉');
   });
 });
