@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [11.1.7] - 2026-10-13 -- quiet hooks, honest boot, repaired installs
+
+- `format_after_edit`: an edited file outside the hook payload's cwd (another repo, OneDrive) returns before any formatter lookup and writes no fault, no friction row and no output; the selffix 7314 change (no friction row when no formatter applies) is on main. New tests in `hooks/test_format_after_edit.py`. Background: 468 of 478 hook faults in 24h were "formatter skipped: missing" rows written by a pre-11.1.0 install.
+- `atlas_doctor.py --fix`: repairs a drifted omp install the same way as the Claude install (stages the marketplace-clone plugin into the omp cache and re-registers version and installPath), and quarantines every cached plugin version dir that is not the registered one, so a stale copy can no longer run the doctor or the hooks. Tests in `scripts/test_atlas_doctor.py`.
+- Dashboard ensure: the per-port singleton lock is taken non-blocking; when another session holds it, `ensure` prints "dashboard: another session is starting it" to stderr and returns `{"ok": true, "starting": true}` instead of waiting behind the holder past session_boot's 15-second guard. `session_boot` now records a `session_boot` hook fault on that timeout instead of swallowing it. Tests in `scripts/test_atlas_dashboard_singleton.py` and `hooks/test_session_boot.py`. The other half of todo teca63cae (control-character tolerance in hook payload parsing) is split into its own item.
+- Tests: new `hooks/testenv.py` scrubs the seven `ATLAS_*` knobs a user's settings.json injects into every child process (`ATLAS_MEMORY_CAPTURE`, `ATLAS_DOCS_REPAIR` and five more); `test_memory_capture.py` and `test_session_boot.py` call it, so the suite passes with those knobs set to off (was 11 failures and 1 error).
+
 ## [11.1.6] - 2026-10-12 -- hook guard hardening
 
 - Hook guard: hookstate session files are swept after 7 days (was 1 day) without touching fresher ones; new `hooks/test_hookstate_sweep.py`. Audit confirmed strict=False on every stdin JSON parse, the 1 MiB hook-faults cap, and the Bash exploration deny rewrite hint already present.

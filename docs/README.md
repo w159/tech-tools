@@ -10,7 +10,7 @@ docs/
 ├── atlas-harness-parity.md  atlas-turn-scoring.md  atlas-workboard.md
 ├── mcp-gateway-design.md  panos-connector-design.md  plugin-development-scope.md
 ├── architecture/  audits/  decisions/  features/  lessons/
-└── plans/  specs/  standards/  superpowers/  wiki/
+└── plans/  specs/  standards/  superpowers/  wiki/  (wiki/glossary.md: canonical atlas terms)
 ```
 
 ## How to use

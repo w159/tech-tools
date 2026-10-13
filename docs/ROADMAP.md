@@ -236,6 +236,7 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ### Deferred backlog: atlas 10.5.0 wave (added 2026-10-10)
 
+- Hook payload parsing tolerates raw control characters in all remaining hooks (split from todo teca63cae; the dashboard ensure half, the non-blocking singleton lock and the recorded boot timeout, shipped in atlas 11.1.7).
 - Per-wave cost/token ledger + rollup (persona P2).
 - `atlas-release` changelog assembly from merged PRs (P6).
 - Sweep historical-duplicate detection + contributor reply kit (P6).

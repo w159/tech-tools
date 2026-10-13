@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## [11.1.7] - 2026-10-13 -- atlas 11.1.7: quiet hooks, honest boot, repaired installs
+
+Detail: `plugins/atlas/CHANGELOG.md` 11.1.7.
+
+- Hooks: `format_after_edit` ignores files outside the payload cwd; the 7314 friction-row fix lands on main.
+- Doctor: `--fix` repairs the omp install and quarantines non-registered cache versions.
+- Boot: dashboard ensure takes its singleton lock non-blocking; a 15-second ensure timeout is recorded as a hook fault.
+- Tests: `hooks/testenv.py` scrubs settings-injected `ATLAS_*` knobs so the hook suite passes under a real install's environment.
+- Docs: `docs/wiki/glossary.md` added (hook fault, friction row, quiet reason, selffix branch, omp bridge, boot window, singleton lock, stale asset).
+
+## [11.1.6] - 2026-10-12 -- hook guard hardening
+
+Detail: `plugins/atlas/CHANGELOG.md` 11.1.6.
+
 ## [11.1.5] - 2026-10-12 -- atlas 11.1.5: Health page tells the truth
 
 Detail: `plugins/atlas/CHANGELOG.md` 11.1.5. Also: sidebar polish (route label alignment, shared gate count including unreadable sources, stale roster fix, band lead dot mood, portrait and team-cap row thresholds).

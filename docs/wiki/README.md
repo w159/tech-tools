@@ -6,6 +6,7 @@ graph.json. See references/graphify-wiring.md for the producer pipeline.
 
 ## What lives here
 
+- `glossary.md` - canonical atlas terms (hook fault, friction row, boot window, ...)
 - `onboarding.md` - first-day guide for a new agent or developer
 - `runbooks/` - operational runbooks (one per recurring operation)
 - `diagrams/` - graphify-rendered HTML/SVG diagrams
