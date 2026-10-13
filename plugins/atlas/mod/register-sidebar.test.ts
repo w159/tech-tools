@@ -117,3 +117,25 @@ test('the spinner tick advances with a live worker', async ($, on) => {
   expect(before).not.toBe('');
   expect(await workerRowAfter($, clock, 250)).not.toBe(before);
 });
+
+/** The AbovePrompt band's worker glyph as drawn after `ms` more mocked time. */
+async function bandGlyphAfter($: Engine, clock: { advance(ms: number): Promise<unknown> }, ms: number): Promise<string> {
+  await clock.advance(ms);
+  const ui = await $.ui.mount({
+    plugin: 'atlas', surface: 'terminal', component: 'AbovePrompt', requestId: 'band',
+    props: { bodyColumns: 160, hasSurvey: false } as never,
+  });
+  const text = JSON.stringify([typeof ui.drawn, ui.drawn, (await ui.findAll({})).map((n) => n.text)]);
+  await ui.unmount();
+  return text;
+}
+
+test('the band worker glyph moves between 2 s samples while a worker runs', async ($, on) => {
+  const clock = await boot(on, [AGENT]);
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never); // the host's own AbovePrompt
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
+  const rows = [await bandGlyphAfter($, clock, 0)];
+  for (let i = 0; i < 6; i++) rows.push(await bandGlyphAfter($, clock, 2000));
+  expect(rows[0]).toContain('impl-a'); // the band drew the worker, not an empty tree
+  expect(new Set(rows).size).toBeGreaterThan(2);
+});
