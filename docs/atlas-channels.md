@@ -105,13 +105,36 @@ Both channel GETs need `X-Atlas-Token` because they expose message text. 503 `ch
 
 **omp terminal view (2026-10-09).** On omp the lead's terminal shows an `atlas-channel` widget while `task` subagents run (`omp/channel-view.ts`): channel name, the last 8 notes as `from -> to: text`, and a working/finished roster. It stays up while any member is unfinished, closes after 3 quiet polls with all members finished (or 30 minutes), and clears 15 s later. omp's own IRC relay card hides lead<->child messages and expires after 10 s; atlas shows that traffic through the board mirror of `write agent://`. Workers are now required to post at start, on shared-contract changes, and before their final report. `ATLAS_CHANNELS=off` disables the widget.
 
+## Channel lifecycle (12.1.0)
+
+- **Finish.** On Claude Code the `SubagentStop` payload carries no member name, only `agent_id`. `dispatch_tripwire` records the `agent_id` to member mapping at dispatch; `worker_report_gate.finish_member` looks the stopping agent up by `agent_name` (omp) then `agent_id`, calls `mark_finished(root, who, 0)` and `leave`s every channel. It runs on the final report, also after the first block. Fail-open; errors go to `atlas_faults`.
+- **Reap.** `python3 plugins/atlas/scripts/atlas_todo.py channel-reap --root <project> [--max-idle SECONDS] [--keep LEAD] [--dry-run]` (default `--max-idle` 86400). A lead channel is dead when no member holds a live pid and every member has an `exit_code` or the channel has had no activity for `--max-idle`; `--keep` protects one lead. Each dead channel is appended as a JSON line to `.atlas/.run/archive/channels-YYYYMM.jsonl` before it is deleted from `channels.json`. Stale members of the main channel are pruned the same way. Output: `{ok, reaped, would_reap, archived_path, kept}`.
+- **Triggers.** (A) `channel-open` runs the reaper once per lead session, keeping the opener's channel. (B) omp lead shutdown (`omp/stop-bridge.ts`) spawns `channel-reap` detached and fail-open; workers (`ATLAS_WORKER_NAME` set) never reap. A foreground Claude `Agent` call may lack an `agentId`, so trigger B and the age-based reaper cover those members.
+
+## Scope resolver (12.1.0)
+
+The matrix maps (task class, effort) to a team shape: roles, counts, per-role effort, `tools_profile` (`read`, `edit`, `exec`), isolation and `max_parallel`. It lives in `plugins/atlas/contracts/scope-matrix.json`; role effort must equal the effort in `agents/<role>.md` frontmatter. One matrix feeds both harnesses.
+
+```
+python3 plugins/atlas/scripts/atlas_resolve.py <class> <effort> [--paths]
+```
+
+`omp/resolve.ts` reads the same file. A dispatch prompt may carry a line-anchored `SCOPE: <class>/<effort>`; `dispatch_tripwire` resolves it and, when the dispatched agent is not one of the expected roles, adds an `[atlas] ADVISORY - SCOPE ... expects roles ...` note. It never denies; an unresolvable pair gets an advisory too.
+
+## omp parity notes (12.1.0)
+
+- Bridged hooks: `delegation_prewarn.py` and `edit_read_nudge.py` are in `contracts/hook-bridge.json`.
+- Header fallback: with `ATLAS_STYLE=off` or a failed style render, `omp/style.ts` injects a minimal `ATLAS | <glyph> <phase> | <state>` rule, because `session_boot.py` skips its own header rule under `ATLAS_HARNESS=omp`.
+- Stale install: `omp/channels.ts` checks that `scripts/atlas_todo.py` exists next to the plugin; if not it records one fault ("atlas omp install is stale ... reinstall atlas in omp") per cwd instead of one per dispatch.
+- Widget header: the `atlas-channel` widget (`omp/channel-view.ts`) leads with `ATLAS <phase> n/m <bar> . N live . M gates` and one row per live worker (4 shown, then `+N more`). The gate count is a todo-based proxy, not the Claude gate script (see ROADMAP).
+
 ## Limits
 
 - One project root and one branch per main channel; the registry lives in the project's `.atlas/.run/`, so a channel never spans projects.
 - Presence in the dashboard is the member's live herdr state, or "posted Nm ago" from its newest message; members without a herdr pane are not drawn as agents.
 - Delivery to a worker happens on its next tool call (hook) or its next `inbox` run; there is no push into a busy pane.
 - The omp agent-id to member match is fuzzy by design (see above); it is not confirmed against every omp release.
-- Nothing prunes the registry; `leave` removes a member (`atlas_todo.leave`), channels stay.
+- Dead lead channels are reaped (see Channel lifecycle); live and recently active channels stay. `leave` removes a member (`atlas_todo.leave`).
 - Completion gate (p) counts channel activity per run: a board note on this run's lead channel (`<main>/lead-<first 6 of the session id>`), at or after the run start, whose owner is a registered or departed member that is not a lead, or IRC/`SendMessage` traffic, satisfies it. A lead's own note, another lead's channel and a non-member's note do not count; two or more atlas workers with none still block, once per session. `agent://` traffic logged under sibling run ids of the same session also counts, the block message names the one fix command, and after `BLOCK_LOOP_LIMIT=3` identical consecutive blocks the 4th Stop is allowed and `gate_block_loop` friction is recorded. See `docs/atlas-harness-parity.md`, gate (p).
 - The note `owner` is self-asserted: a process that knows a registered member's name can post as it and be delivered to the lead. Workers started outside `atlas_launch`, `atlas_mux spawn` or a dispatch are not registered; their notes land on the main channel.
 - The omp lead has no `CLAUDE_ENV_FILE` equivalent for its bash tool yet, so `atlas_mux spawn` run from an omp lead registers its workers in `<main>/lead`, not in the lead's `lead-<sid6>` subchannel.

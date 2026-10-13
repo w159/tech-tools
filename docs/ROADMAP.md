@@ -170,6 +170,15 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
+### Follow-ups: atlas 12.1.0 (added 2026-10-13)
+
+Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (the old "nothing prunes the registry" limit), scope resolver, branded band, omp widget header. See `docs/CHANGELOG.md` 12.1.0.
+
+- [planned] omp widget gate count is a todo-based proxy (`omp/channel-view.ts`), not the `atlas_gates.py` groups the Claude mod shows. Wire the real gate script or label the number.
+- [planned] The mod pane's Tab key does not cycle tabs; only `r t c g` and the arrow-key focus ring switch views. Bind Tab if wanted.
+- [planned] A foreground Claude `Agent` call may not carry an `agentId`, so `SubagentStop` cannot map it to a member; the age-based reaper (trigger A at channel open, trigger B at omp lead shutdown) covers those members. Confirm with a live foreground dispatch.
+- [planned] The `SCOPE: <class>/<effort>` check in `dispatch_tripwire` is advisory. After one release of advisory data, decide whether a mismatch becomes a deny.
+
 ### Deferred backlog: atlas 10.5.0 wave (added 2026-10-10)
 
 - Hook payload parsing tolerates raw control characters in all remaining hooks (split from todo teca63cae; the dashboard ensure half, the non-blocking singleton lock and the recorded boot timeout, shipped in atlas 11.1.7).

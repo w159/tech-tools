@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## [12.1.0] - 2026-10-13 -- colony reaper, scope resolver, branded band, omp parity
+
+### Added
+- `scripts/atlas_todo.py` `reap_channels()` and the `channel-reap [--max-idle S] [--keep LEAD] [--dry-run]` CLI (default idle 86400 s): a lead channel is dead when every member has an `exit_code` or the channel has been idle past `--max-idle`, and no member holds a live pid. Dead channels are appended to `.atlas/.run/archive/channels-YYYYMM.jsonl` and then deleted; stale members of the main channel are pruned. `channel_open` runs it once with `keep=<opening lead>` (59eebe95).
+- `contracts/scope-matrix.json` (task class x effort -> team shape), `scripts/atlas_resolve.py <class> <effort> [--paths]`, `omp/resolve.ts`; `dispatch_tripwire` reads a line-anchored `SCOPE: <class>/<effort>` in a dispatch prompt and emits an ADVISORY naming the expected roles when the dispatched agent is outside them. Advisory only, never a deny. Tests: `hooks/test_atlas_resolve.py`, `omp/resolve.test.ts` (53329d86).
+- `hooks/edit_read_nudge.py` (PreToolUse `Edit|edit|MultiEdit` + PostToolUse `Read|read|ctx_read`): advisory-only nudge when an edit targets a file read only via ctx_read; pi-lens read-guard does not credit ctx_read, so it says to read with the builtin `read path="<file>:N-M"` first. Per-session reads live in hookstate (`reads.ctx` / `reads.builtin`) (e9a12494).
+- Band (`mod/band.tsx`, `mod/theme.ts`): inverse ` ATLAS ` brand pill at >= 60 columns, per-phase activity frames via `spin(frame, phase)` (research, theory, test, implement, verify; other phases use the default spinner), tool target (file basename or first 40 chars of the command) on workers at >= 100 columns, meter colored by `meterColor(pct)` with `barParts` (e56294e3).
+- `omp/channel-view.ts`: ATLAS header row in the `atlas-channel` widget (phase, progress bar, live count, gates) and a live-worker roster with `+N more` (0f738da0).
+- `omp/stop-bridge.ts`: detached, fail-open `channel-reap` at lead shutdown (skipped when `ATLAS_WORKER_NAME` is set) (e56294e3).
+
+### Changed
+- `agents/implementer.md` effort is `medium`; `references/squad-and-tiers.md` lists the resolver (53329d86).
+- Mod: Route is the default pane tab and reopening the pane resets to it (`register.ts` `viewState`) (d59094ad).
+- `contracts/hook-bridge.json` bridges `delegation_prewarn.py` and `edit_read_nudge.py` to omp (e56294e3).
+- omp `omp/style.ts`: when `ATLAS_STYLE=off` or the full style fails to render, a minimal `ATLAS | <glyph> <phase> | <state>` header rule built from `contracts/operating-contract.json` is injected, since `session_boot.py` skips its own rule under `ATLAS_HARNESS=omp` (e56294e3).
+
+### Fixed
+- `dispatch_tripwire` records the Claude subagent `agent_id` to colony member mapping; `worker_report_gate.finish_member` tries `agent_name`, then `agent_id`, marks the member finished and leaves its channels on `SubagentStop`. Fail-open (2e5a04d4, 59eebe95).
+- Mod: worker age is `startedAt` (first sight), not the per-tool `since`; a `parked` state is excluded from live work in the band; idle band shows `blocked` when gates are open and hides a lingering `done` phase; the receipt duration is `min(host, now - turnStart)` from a mod-owned timer (`restyle.tsx`) (d59094ad).
+- omp `channels.ts`: a missing `scripts/atlas_todo.py` (stale omp install) records one `atlas omp install is stale ... reinstall atlas in omp` fault per cwd; other channel faults are deduped per cwd and text (e56294e3).
+
 ## [12.0.0] - 2026-10-13 -- Command Center redesign: one header, one band row, tabbed pane
 
 - Header: `AssistantMessage` draws the contract header as `ATLAS | <phase>[ n/m] | <sentence>` on one styled row, pipes kept (`mod/restyle.tsx:153-182` `assistantTree`); a non-matching first line stays engine-drawn (no "inferred" pill).

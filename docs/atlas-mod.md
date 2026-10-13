@@ -23,9 +23,11 @@ Both surfaces are drawn with native elements (`$.ui.resolve(e)` from the `ui.ren
 
 One borderless row above the prompt (`mod/band.tsx` `bandTree`), drawn only for the terminal surface in an interactive session with the mod on (`register.ts:582-583`). Cut to `props.bodyColumns` with `rowOf`/`fitRuns` (`mod/runs.ts`). Three width tiers, all built from `routeCounts`, `openGateCount` and the one `liveWorkers()` list:
 
-- **Idle** (no live worker): `⚑ idle · <phase> n/m · N open` (`band.tsx:37-41`).
-- **Narrow** (< 60 columns): `<phase> n/m · N working[ · ✗N]` (`band.tsx:42-46`).
-- **Mid and up** (>= 60 columns): phase pill + a 5-cell bar (`done/total`), up to 3 named live workers (`⏸ <name> awaits input` / `✗ <name>` / `<spinner> <name> <tool>[ <age>]`), a `+N` overflow count, a gate count, and — at >= 100 columns, with worker ages shown too — a trailing `▸ /atlas-cc` hint (`band.tsx:47-55`).
+- **Idle** (no live worker): `[ATLAS] ⚑ idle · <phase> n/m · N open`; with open gates it reads `⚑ blocked`, and a lingering `done` phase is not printed (`band.tsx` `idleParts`).
+- **Narrow** (< 60 columns): `<phase> n/m · N working[ · ✗N]`, no brand pill.
+- **Mid and up** (>= 60 columns): the inverse bold ` ATLAS ` brand pill (`BRAND_PILL`), phase pill, a 5-cell meter (`done/total`, filled part colored by `meterColor`, remainder muted, `theme.ts` `barParts`), up to 3 named live workers (`⏸ <name> awaits input` / `✗ <name>` / `<frame> <name> <tool> [<target>] <age>`), a `+N` overflow count, a gate count, and, at >= 100 columns, the tool and its target plus a trailing `▸ /atlas-cc` hint.
+
+Worker segment details (12.1.0). The spinner frame comes from the current phase (`theme.ts` `PHASE_FRAMES`: research, theory, test, implement, verify each have a 4-frame set; other phases use the default). The target is the file basename of the tool call's `file_path`, else the first 40 characters of the first line of its `command` (`data/orchestration.ts` `targetOf`), fitted to 16 cells. The age is `now - startedAt`, the time since the worker was first seen, not since its last tool call (`since` still moves every call). A worker whose state is `parked` is resting: it sorts after `working` and is excluded from the band's live list.
 
 The phase comes from the last header in `turn.complete` (matched with the contract's `headerFirstLinePattern`), else the session's first `in_progress` item, else `research` (`register.ts:97-111` `headerPhaseOf`). The spinner tick (`spinnerTickState`) only advances while `liveWorkers()` has an active entry (`register.ts:529-536`), so an idle session redraws nothing.
 
@@ -164,6 +166,11 @@ plugins/atlas/mod/
 ```
 
 Colocated `*.test.ts` files use the `claude-code/testing` kit. `scripts/sprite_review.ts` (one level up, `plugins/atlas/scripts/`) is the sprite review CLI; it is not a mod module.
+
+## Route default tab and turn timer (12.1.0)
+
+- The `atlasView` atom defaults to `route`, matching the tab strip order; closing the pane resets it to `route` so `/atlas-cc` reopens on the first tab (`register.ts` `viewState`).
+- The turn receipt duration is `min(host durationMs, now - turnStart)`. The mod stamps `turnStart` from `$.clock.now()` at turn start (`restyle.tsx` `ReceiptTracker.turnStart`, `durationTree`); the host figure was seen reading 9m02s for a 77s turn. Without a clock the host figure is used.
 
 ## Honesty and known defects
 

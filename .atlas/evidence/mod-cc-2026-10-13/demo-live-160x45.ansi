@@ -1,0 +1,156 @@
+### 1. idle band
+[37m⚑[39m [37midle[39m [37m·[39m [91mresearch[39m [91m0/0[37m ·[39m [37m0[39m [37mopen[39m                                                                                                                              [37m[-][39m
+[37m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m [37mclaude-code-mods-redesign-demo[39m [37m─
+[39m❯ [2mTry[0m [2m"fix[0m [2mlint[0m [2merrors"[0m
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁[0m [1m[36matlas-demo[90m |[0m[37m [1m[35m🤖[0m [1m[35mFable[0m [1m[35m5.1[90m |[0m[37m 🧠[39m [1m[90m░░░░░░░░░░[0m [1m[90m--%[0m                                                                                                         [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [37mcontext-mode[39m  [37m●[39m  [37msaves[39m [37m~98%[39m [37mof[39m [37mcontext[39m [37mwindow[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m [39m [38;5;145moff[39m
+  [95m⏵⏵[39m [95maccept[39m [95medits[39m [95mon[37m (shift+tab[39m [37mto[39m [37mcycle)[39m [37m·[39m [37m←[39m [37m3[39m [37magents[39m
+
+### 2. pane open, team tab, idle
+│ [37mnobody[39m [37mdispatched yet, ask the lead to start a worker[39m                                                                                                        │
+│ [37m●[1m[39m lead[0m[37m  running 0 · 0 done · 0 blocked[39m                                                                                                                       │
+│ ▸ to lead: [37mmessage · Enter sends[39m                                                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[37m⚑ idle · [91mresearch 0/0[37m · 0 open[39m                                                                                                                              [37m[-][39m
+[37m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+[39m❯ 
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁[0m [1m[36matlas-demo[90m |[0m[37m [1m[35m🤖[0m [1m[35mFable[0m [1m[35m5.1[90m |[0m[37m 🧠[39m [1m[90m░░░░░░░░░░[0m [1m[90m--%[0m                                                                                                         [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 25%[0m [1m[90m0h38m left[0m
+  [1m[90m⏱️  7d: [33m██████░░░░ 60%[0m[37m [1m[90m1d9h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m [39m [38;5;145moff[39m
+  [95m⏵⏵[39m [95maccept[39m [95medits[39m [95mon[37m (shift+tab[39m [37mto[39m [37mcycle)[39m [37m·[39m [37m←[39m [37m3[39m [37magents[39m
+
+### 3. prompt typed, pane still open
+  it. When the agent returns, reply with the ATLAS header line and one short sentence.Dispatch exactly one Agent now: subagent_type atlas:explorer, name
+  demo-explorer. Its prompt must be exactly: "ROLE: probe worker for a UI demo. GOAL: run Bash sleep 45 once, then reply with the single word done. TOOLS:
+  ToolSearch lean-ctx (ctx_search, ctx_read) + serena (find_symbol); none needed beyond Bash. DELIVERABLE: the word done. STOP CONDITIONS: after the sleep."
+  Call no other tool before the Agent call except one claude-mem search if the gate requires it. When the agent returns, reply with the ATLAS header line and
+  one short sentence.
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-demo[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[90m░░░░░░░░░░ --%[0m                                                                                                         [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 25%[0m[37m [1m[90m0h38m left[0m
+  [1m[90m⏱️[0m  [1m[90m7d:[0m [1m[33m██████░░░░[0m [1m[33m60%[0m[37m [1m[90m1d9h[0m [1m[90mleft[0m
+  [37mcontext-mode[39m  [37m●[39m  [37msaves[39m [37m~98%[39m [37mof[39m [37mcontext[39m [37mwindow[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m [39m [38;5;145moff[39m
+  [95m⏵⏵[39m [95maccept[39m [95medits[39m [95mon[37m (shift+tab[39m [37mto[39m [37mcycle)[39m
+
+### 4. team tab while demo-explorer runs
+│[0m ▸ to lead: [37mmessage · Enter sends[39m                                                                                                                             [2m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[0;1m[91m◎ research 0/0[0m[91m ▱▱▱▱▱[37m · [94m⠧ explorer 0s[37m · ▸ /atlas-cc[39m                                                                                                          [37m[-][39m
+[37m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+❯ [39m
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-demo[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(101.5k/1M)[0m                                                                                             [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 25%[0m[37m [1m[90m0h37m left[0m
+  [1m[90m⏱️  7d: [33m██████░░░░ 60%[0m[37m [1m[90m1d9h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [95m⏵⏵ accept edits on[37m (shift+tab to cycle) · ← 3 agents[39m
+[1m  ⏺ main[0m
+[37m [39m [37m◯[39m [37matlas:explorer[39m  [37mdemo-explorer[39m                                                                                                                           [37m2s[39m
+
+### 4b. team tab 5s later (age advances)
+│[0m ▸ to lead: [37mmessage · Enter sends[39m                                                                                                                             [2m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[0;1m[91m◎ research 0/0[0m[91m ▱▱▱▱▱[37m · [94m⠧ explorer Bash 3s[37m · [91m✗3 gates[37m · ▸ /atlas-cc[39m                                                                                          [37m[-][39m
+[37m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+[39m❯ 
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-demo[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(102.4k/1M)[0m                                                                                             [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 26%[0m[37m [1m[90m0h37m left[0m
+  [1m[90m⏱️  7d: [33m██████░░░░ 60%[0m[37m [1m[90m1d9h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [95m⏵⏵ accept edits on[37m (shift+tab to cycle) · ← 3 agents[39m
+[1m  ⏺ main[0m
+[37m  ◯ atlas:explorer[39m  [37mdemo-explorer[39m                                                                                                          [37m7s · ↓ 60.2k tokens[39m
+
+### 5. channel tab while worker runs
+│[0m ▸ to lead: [37mmessage · Enter sends[39m                                                                                                                             [2m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[0;1m[91m◎ research 0/0[0m[91m ▱▱▱▱▱[37m · [94m⠴ explorer Bash 4s[37m · [91m✗3 gates[37m · ▸ /atlas-cc[39m                                                                                          [37m[-][39m
+[37m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+[39m❯ c
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-demo[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(102.4k/1M)[0m                                                                                             [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 26%[0m[37m [1m[90m0h37m left[0m
+  [1m[90m⏱️  7d: [33m██████░░░░ 60%[0m[37m [1m[90m1d9h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [95m⏵⏵ accept edits on[37m (shift+tab to cycle)[39m
+[1m  ⏺ main[0m
+[37m  ◯ atlas:explorer[39m  [37mdemo-explorer[39m                                                                                                          [37m9s · ↓ 60.2k tokens[39m
+
+### 6. route tab while worker runs
+│[0m ▸ to lead: [37mmessage · Enter sends[39m                                                                                                                             [2m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[0;1m[91m◎ research 0/0[0m[91m ▱▱▱▱▱[37m · [94m⠸ explorer Bash 4s[37m · [91m✗3 gates[37m · ▸ /atlas-cc[39m                                                                                          [37m[-][39m
+[37m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+[39m❯ cr
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-demo[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(102.4k/1M)[0m                                                                                             [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 26%[0m[37m [1m[90m0h37m left[0m
+  [1m[90m⏱️  7d: [33m██████░░░░ 60%[0m[37m [1m[90m1d9h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [95m⏵⏵ accept edits on[37m (shift+tab to cycle)[39m
+[1m  ⏺ main[0m
+[37m  ◯ atlas:explorer[39m  [37mdemo-explorer[39m                                                                                                         [37m11s · ↓ 60.2k tokens[39m
+
+### 7. gates tab while worker runs
+│[0m ▸ to lead: [37mmessage · Enter sends[39m                                                                                                                             [2m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[0;1m[91m◎ research 0/0[0m[91m ▱▱▱▱▱[37m · [94m⠙ explorer Bash 4s[37m · [91m✗3 gates[37m · ▸ /atlas-cc[39m                                                                                          [37m[-][39m
+[37m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+[39m❯ crg
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-demo[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(102.4k/1M)[0m                                                                                             [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 26%[0m[37m [1m[90m0h37m left[0m
+  [1m[90m⏱️  7d: [33m██████░░░░ 60%[0m[37m [1m[90m1d9h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [95m⏵⏵ accept edits on[37m (shift+tab to cycle)[39m
+[1m  ⏺ main[0m
+[37m  ◯ atlas:explorer[39m  [37mdemo-explorer[39m                                                                                                         [37m13s · ↓ 60.2k tokens[39m
+
+### 8. pane closed: band alone while worker runs
+[39m  [1m[36m📁 atlas-demo[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(102.4k/1M)[0m                                                                                             [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 26%[0m[37m [1m[90m0h37m left[0m
+  [1m[90m⏱️  7d: [33m██████░░░░ 60%[0m[37m [1m[90m1d9h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [95m⏵⏵ accept edits on[37m (shift+tab to cycle)[39m
+[1m  ⏺ main[0m
+[37m  ◯ atlas:explorer[39m  [37mdemo-explorer[39m                                                                                                         [37m15s · ↓ 60.2k tokens[39m
+
+### 9. finished turn: header row, receipt, band
+  or a note under .agents/) so the next session starts ahead. If you changed behavior or structure, confirm docs/ still matches
+  (CHANGELOG/ROADMAP/architecture).
+[1;7m[38;5;79m ATLAS [0m| [1m[38;5;117m🔍 research[0m | still waiting on demo-explorer, no change
+Nothing new since the dispatch; the agent's completion notification has not arrived yet.
+[38;5;79m▸ [37m19s · 1 workers · ctx 10% · $1.79[39m
+[2m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m[37m✕[2m[39m─╮
+│[0m [94mr[37m: ◎ route │ [94mt[39m: [1;7m● team[0m[37m │ [94mc[37m: ✉ channel │ [94mg[37m: ✗ 3[39m                                                                                      [37mr t c g tabs · ↑↓ Enter[39m  [2m│
+│[0m [37mst agent     role      now   age  tools  last line[39m                                                                                                           [2m│
+│[0m [94m⠧[91m▸ [1m[38;5;116mexplorer  [0m[37mexplorer  [39mBash  [37m15s      1  [39m                                                                                                                    [2m│
+│[0m [94m●[1m[39m lead[0m[37m  running 1 · 0 done · 0 blocked[39m                                                                                                                       [2m│
+│[0m ▸ to lead: [37mmessage · Enter sends[39m                                                                                                                             [2m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[0;1m[91m◎ research 0/0[0m[91m ▱▱▱▱▱[37m · [94m⠧ explorer Bash 15s[37m · [91m✗3 gates[37m · ▸ /atlas-cc[39m                                                                                         [37m[-][39m
+[37m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+[39m❯ crg
+[37m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[36m📁 atlas-demo[90m |[0m[37m [1m[35m🤖 Fable 5.1[90m |[0m[37m 🧠 [1m[32m█░░░░░░░░░ 10%[0m[37m [1m[90m(102.4k/1M)[0m                                                                                             [92m]8;id=vlb16g;https://claude.ai/code/session_01B6kzn9MVTF1qSu4yWWDSe4?from=cli\/rc[39m]8;;\
+  [1m[90m⏱️  5h: [32m██░░░░░░░░ 26%[0m[37m [1m[90m0h37m left[0m
+  [1m[90m⏱️  7d: [33m██████░░░░ 60%[0m[37m [1m[90m1d9h left[0m
+  [37mcontext-mode  ●  saves ~98% of context window[39m
+  [1m[38;5;59m[48;5;231m fallow [0m[37m [38;5;145mimpact[37m  [38;5;145moff[39m
+  [95m⏵⏵ accept edits on[37m (shift+tab to cycle)[39m
+[1m  ⏺ main[0m
+[37m  ◯ atlas:explorer[39m  [37mdemo-explorer[39m                                                                                                         [37m22s · ↓ 60.2k tokens[39m
+

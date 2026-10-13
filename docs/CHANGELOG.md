@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## [12.1.0] - 2026-10-13 -- atlas 12.1.0: colony reaper, scope resolver, branded band, omp parity
+
+Detail: `plugins/atlas/CHANGELOG.md` 12.1.0. Docs: `docs/atlas-channels.md` (Channel lifecycle, Scope resolver, omp parity notes), `docs/atlas-mod.md` (band, route tab, turn timer).
+
+Added
+- Channel reaper: `atlas_todo.py channel-reap [--max-idle S] [--keep LEAD] [--dry-run]` archives dead lead channels to `.atlas/.run/archive/channels-YYYYMM.jsonl` before deleting them (59eebe95). Baseline before: 32 channels, 535 members, 444 never finished (`.atlas/evidence/optimize-2026-10-13/baseline.md`).
+- Scope resolver: `contracts/scope-matrix.json`, `scripts/atlas_resolve.py <class> <effort> [--paths]`, `omp/resolve.ts`, and an advisory `SCOPE: <class>/<effort>` dispatch line checked in `dispatch_tripwire` (53329d86).
+- `edit_read_nudge` advisory hook (e9a12494).
+- Band: ATLAS brand pill, per-phase activity frames, tool target on the live-worker segment, severity-colored meter (e56294e3).
+- omp widget: ATLAS status header (phase, progress bar, live-worker count, gates) and live roster rows (0f738da0; `.atlas/evidence/optimize-2026-10-13/omp-widget-before-after.md`).
+
+Changed
+- Implementer agent effort is `medium` (53329d86, `agents/implementer.md`).
+- Route is the default pane tab, and reopening the pane returns to it (d59094ad).
+- omp: `delegation_prewarn.py` and `edit_read_nudge.py` are bridged (`contracts/hook-bridge.json`); lead shutdown spawns a detached `channel-reap`; a failed or disabled style render falls back to a minimal header rule (e56294e3).
+- Opening a lead channel reaps dead channels first, keeping the opener's own (59eebe95).
+
+Fixed
+- Claude `SubagentStop` now finishes the colony member: `dispatch_tripwire` records the `agent_id` to member mapping and `worker_report_gate.finish_member` marks it finished and leaves its channels (2e5a04d4, 59eebe95).
+- Band worker age counts from first sight (`startedAt`), not the last tool call; parked workers no longer count as live; the receipt duration is capped by a mod-owned turn timer after the host showed 9m02s for a 77s turn (d59094ad).
+- omp: a stale install missing `scripts/atlas_todo.py` records one deduped "install is stale" fault per cwd instead of one fault per dispatch (e56294e3).
+
 ## [12.0.0] - 2026-10-13 -- atlas 12.0.0: Command Center redesign
 
 Detail: `plugins/atlas/CHANGELOG.md` 12.0.0.
@@ -12,6 +34,7 @@ Detail: `plugins/atlas/CHANGELOG.md` 12.0.0.
 - Removed: `svg.ts`, the per-persona sprite modules, the session/collab data readers, the portrait panel, and other Client-pane leftovers that drew nothing.
 - Sprite review moved to `scripts/sprite_review.ts`, rendering the same fold the terminal paints.
 - `claude plugin test plugins/atlas`: 249 pass, 0 mod fail (169 expected non-mod `colony/**`/`omp/**` residual); `tsc --noEmit` 0 errors.
+- Live demo capture of the installed 12.0.0 mod (idle band, four pane tabs, band and team table during a real `atlas:explorer` run, header row, receipt): `.atlas/evidence/mod-cc-2026-10-13/demo-live-160x45.md`. Noted there: with the pane open, typed text goes to the pane input until Ctrl+X x returns focus to the composer.
 
 ## [11.1.7] - 2026-10-13 -- atlas 11.1.7: quiet hooks, honest boot, repaired installs
 
