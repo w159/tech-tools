@@ -1,9 +1,11 @@
 import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WIDGET_KEY, createChannelView, finishedMembers, formatNote, readChannelNotes, registerChannelView, rosterLine } from "./channel-view";
+import { WIDGET_KEY, createChannelView, headerLine, liveWorkers, spinFrame, workerLines, finishedMembers, formatNote, readChannelNotes, registerChannelView, rosterLine } from "./channel-view";
 import { isTerminalYield, registerStopBridge } from "./stop-bridge";
 import { registerWorkerReport } from "./worker-report";
+import { readFileSync } from "node:fs";
+import { spin } from "../mod/theme";
 import { expect, test } from "bun:test";
 
 const CHAN = "repo@main/lead-abc";
@@ -154,7 +156,8 @@ test("ATLAS_CHANNELS=off: no widget, no timers", () => {
 test("a missing board still renders title + roster and never throws", () => {
 	const { calls, ui, view } = harness();
 	view.open(ui, { channel: CHAN, members: ["A"], cwd: join(tmpdir(), "no-such-repo-xyz") });
-	expect(calls[0]).toEqual([`atlas channel ${CHAN}`, "members: 1 working, 0 finished"]);
+	expect(calls[0]?.[0]).toBe(`atlas channel ${CHAN}`);
+	expect(calls[0]?.at(-1)).toBe("members: 1 working, 0 finished");
 	view.stop();
 	expect(calls.at(-1)).toBeUndefined();
 });
@@ -207,4 +210,51 @@ test("a sub's terminal yield marks its member finished in channels.json (real at
 	}
 	await handlers.tool_execution_end[0]({ toolName: "yield", isError: false, result: { details: { status: "success" } } }, sub);
 	expect([...finishedMembers(repo, chan)]).toEqual(["Alpha"]);
+});
+
+function atlasFixture(members: Array<Record<string, unknown>>, todos: Array<Record<string, unknown>>) {
+	const f = fixture();
+	const run = join(f.root, ".atlas", ".run");
+	writeFileSync(join(run, "channels.json"), JSON.stringify({ version: 1, channels: { [CHAN]: { members } } }));
+	writeFileSync(join(run, "todos.json"), JSON.stringify({ version: 1, items: todos }));
+	return f.root;
+}
+
+test("header carries ATLAS, the contract phase glyph, progress and live/gate counts; finished members are not live", () => {
+	const root = atlasFixture(
+		[{ name: "lead-abc", role: "lead", joined: 1 }, { name: "w1", joined: 1 }, { name: "w2", joined: 1, exit_code: 0 }, { name: "w3", joined: 1, ended_at: 2 }],
+		[{ status: "completed" }, { status: "in_progress", phase: "implement" }, { status: "pending" }],
+	);
+	const live = liveWorkers(root, CHAN);
+	expect(live.map(w => w.name)).toEqual(["w1"]);
+	const glyph = JSON.parse(readFileSync(join(import.meta.dir, "..", "contracts", "operating-contract.json"), "utf8")).phases.find((p: { id: string }) => p.id === "implement").glyph;
+	const h = headerLine(root, live.length);
+	expect(h).toContain("ATLAS");
+	expect(h).toContain(`${glyph} implement 1/3`);
+	expect(h).toContain("1 live");
+	expect(h).toContain("2 gates");
+});
+
+test("spinner differs between consecutive polls and matches mod/theme.ts frames", () => {
+	const w = [{ name: "a", joined: 1 }];
+	expect(workerLines(w, 0, 5000)[0]).not.toBe(workerLines(w, 1, 5000)[0]);
+	for (const ph of ["research", "theory", "test", "implement", "verify", "done"]) for (let i = 0; i < 12; i++) expect(spinFrame(i, ph)).toBe(spin(i, ph));
+});
+
+test("worker rows cap at 4 with +N more", () => {
+	const ws = Array.from({ length: 7 }, (_, i) => ({ name: `w${i}`, joined: 1 }));
+	const rows = workerLines(ws, 0, 5000);
+	expect(rows.length).toBe(5);
+	expect(rows[4]).toBe("+3 more");
+});
+
+test("widget paints header first and advances spinner per poll", () => {
+	const root = atlasFixture([{ name: "w1", joined: 1 }], [{ status: "pending", phase: "verify" }]);
+	const { calls, ui, timers, view } = harness({ ATLAS_PROJECT_ROOT: root });
+	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
+	timers.iv?.();
+	expect(calls[0]?.[1]).toStartWith("ATLAS");
+	expect(calls.length).toBe(2);
+	expect(calls[0]?.[2]).not.toBe(calls[1]?.[2]);
+	view.stop();
 });

@@ -65,6 +65,81 @@ export function formatNote(n: Note, max = MAX_LINE): string {
 	return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
+const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
+const MAX_WORKERS = 4;
+const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+// Mirror of PHASE_FRAMES in mod/theme.ts (module-private there); channel-view.test.ts asserts equality via spin().
+const PHASE_FRAMES: Record<string, string[]> = {
+	research: ["◜", "◝", "◞", "◟"],
+	theory: ["✶", "✷", "✸", "✹"],
+	test: ["⠁", "⠂", "⠄", "⡀"],
+	implement: ["⣾", "⣽", "⣻", "⢿"],
+	verify: ["◐", "◓", "◑", "◒"],
+};
+
+export function spinFrame(n: number, phase?: string): string {
+	const f = (phase && PHASE_FRAMES[phase]) || SPIN;
+	return f[Math.abs(Math.floor(n)) % f.length] ?? SPIN[0];
+}
+
+/** phase id -> glyph from contracts/operating-contract.json (the single glyph table); {} when unreadable. */
+function phaseGlyphs(): Record<string, string> {
+	try {
+		const raw = JSON.parse(readFileSync(nodePath.join(PLUGIN_ROOT, "contracts", "operating-contract.json"), "utf8"));
+		return Object.fromEntries((raw.phases as Array<{ id: string; glyph: string }>).map(p => [p.id, p.glyph]));
+	} catch {
+		return {};
+	}
+}
+
+export interface LiveWorker {
+	name: string;
+	joined?: number;
+}
+
+/** Members of `channel` still running: no ended_at, no exit_code, not the lead. */
+export function liveWorkers(root: string, channel: string): LiveWorker[] {
+	try {
+		const reg = JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "channels.json"), "utf8"));
+		const ms: Array<{ name?: string; role?: string; joined?: number; ended_at?: unknown; exit_code?: unknown }> = reg?.channels?.[channel]?.members ?? [];
+		return ms
+			.filter(m => m.name && m.role !== "lead" && m.ended_at === undefined && m.exit_code === undefined)
+			.map(m => ({ name: String(m.name), joined: m.joined }));
+	} catch {
+		return [];
+	}
+}
+
+function ageOf(joined: number | undefined, nowMs: number): string {
+	if (!joined) return "?";
+	const s = Math.max(0, Math.floor(nowMs / 1000 - joined));
+	return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`;
+}
+
+/** `ATLAS <glyph> <phase> <done>/<total> <bar> · <n> live · <g> gates` from todos.json; "gates" = open (unfinished) todos. */
+export function headerLine(root: string, live: number): string {
+	let items: Array<{ status?: string; phase?: string; archived?: boolean }> = [];
+	try {
+		items = JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "todos.json"), "utf8")).items ?? [];
+	} catch {
+		// no board yet: zeroes
+	}
+	items = items.filter(i => !i.archived);
+	const done = items.filter(i => i.status === "completed").length;
+	const open = items.filter(i => i.status !== "completed");
+	const phase = (open.find(i => i.status === "in_progress" && i.phase) ?? open.find(i => i.phase))?.phase ?? "research";
+	const w = 8;
+	const fill = items.length ? Math.round((done / items.length) * w) : 0;
+	const bar = "█".repeat(fill) + "░".repeat(w - fill);
+	return `ATLAS ${phaseGlyphs()[phase] ?? "·"} ${phase} ${done}/${items.length} ${bar} · ${live} live · ${open.length} gates`;
+}
+
+export function workerLines(workers: LiveWorker[], tickN: number, nowMs: number): string[] {
+	const rows = workers.slice(0, MAX_WORKERS).map(w => `${spinFrame(tickN)} ${w.name} ${ageOf(w.joined, nowMs)}`);
+	if (workers.length > MAX_WORKERS) rows.push(`+${workers.length - MAX_WORKERS} more`);
+	return rows;
+}
+
 export function rosterLine(members: string[], finished: Set<string>): string {
 	const done = members.filter(m => finished.has(m)).length;
 	return `members: ${members.length - done} working, ${done} finished`;
@@ -144,6 +219,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	let lastSeq = -1;
 	let quiet = 0;
 	let painted = "";
+	let tickN = 0;
 
 	const stopPoll = () => {
 		if (poll !== undefined) clearIv(poll);
@@ -155,7 +231,9 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	const paint = (): number => {
 		if (!ui || !info) return lastSeq;
 		const notes = readChannelNotes(info.root, info.channel);
-		const lines = [`atlas channel ${info.channel}`, ...notes.map(n => formatNote(n)), rosterLine(info.members, finished())];
+		const live = liveWorkers(info.root, info.channel);
+		const head = [headerLine(info.root, live.length), ...workerLines(live, tickN, now())];
+		const lines = [`atlas channel ${info.channel}`, ...head, ...notes.slice(-Math.max(1, 9 - head.length)).map(n => formatNote(n)), rosterLine(info.members, finished())];
 		const key = lines.join("\n");
 		if (key !== painted) ui.setWidget(WIDGET_KEY, lines);
 		painted = key;
@@ -182,6 +260,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	// `yield`, stop-bridge.ts) and stops after QUIET_POLLS polls with everyone finished and no new note, or at MAX_MS.
 	const tick = () => {
 		try {
+			tickN++;
 			const seq = paint();
 			const done = finished();
 			const allDone = !!info && info.members.every(m => done.has(m));
