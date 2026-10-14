@@ -33,14 +33,15 @@ const need = (value: string | undefined, label: string): string => {
 
 const muxArgv = (pluginRoot: string, ...rest: string[]): string[] => ["python3", nodePath.join(pluginRoot, "scripts", "atlas_mux.py"), ...rest];
 
-function spawnArgv(p: TeamParams, pluginRoot: string): string[] {
+function spawnArgv(p: TeamParams, pluginRoot: string, sessionId?: string): string[] {
 	const argv = muxArgv(pluginRoot, "spawn-team", "--class", need(p.class, "class"), "--effort", need(p.effort, "effort"), "--task", need(p.task, "task"), "--harness", "omp");
-	return argv.concat(p.paths?.length ? ["--paths", p.paths.join(",")] : []);
+	// --session pins the team wave and channel to this lead; without it mux falls back to the latest run (possibly a stale worker's).
+	return argv.concat(p.paths?.length ? ["--paths", p.paths.join(",")] : [], sessionId ? ["--session", sessionId] : []);
 }
 
 /** argv for atlas_mux.py; throws on a missing required field so the model gets a clear message. */
-export function teamArgv(p: TeamParams, pluginRoot: string): string[] {
-	if (p.action === "spawn") return spawnArgv(p, pluginRoot);
+export function teamArgv(p: TeamParams, pluginRoot: string, sessionId?: string): string[] {
+	if (p.action === "spawn") return spawnArgv(p, pluginRoot, sessionId);
 	const argv = muxArgv(pluginRoot, p.action, "--team", need(p.team, "team"));
 	return argv.concat(p.action === "wait" && p.timeout !== undefined ? ["--timeout", String(p.timeout)] : []);
 }
@@ -141,7 +142,7 @@ function teamToolDef(T: any, pluginRoot: string, run: TeamRunner, env: Record<st
 			// wait blocks up to its own timeout; give the child a margin so mux reports the timeout itself.
 			const ms = ((p.action === "wait" ? (p.timeout ?? 600) : 60) + 30) * 1000;
 			beforeRun(p, ctx);
-			const { stdout } = await run(teamArgv(p, pluginRoot), ctx.cwd, ms);
+			const { stdout } = await run(teamArgv(p, pluginRoot, sessionIdOf(ctx)), ctx.cwd, ms);
 			afterRun(p, ctx, stdout);
 			return { content: [{ type: "text" as const, text: stdout.trim() || '{"ok": false, "error": "no output"}' }], details: undefined };
 		},

@@ -18,6 +18,24 @@ test("spawn argv carries class, effort, task, paths and the omp harness", () => 
 	]);
 });
 
+test("spawn argv passes the lead session id when known and omits --session otherwise", () => {
+	const spawn = { action: "spawn" as const, class: "audit", effort: "medium", task: "t" };
+	expect(teamArgv(spawn, ROOT, "sess-lead").slice(-2)).toEqual(["--session", "sess-lead"]);
+	expect(teamArgv(spawn, ROOT)).not.toContain("--session");
+	expect(teamArgv(spawn, ROOT, "")).not.toContain("--session");
+});
+
+test("execute passes ctx session id to spawn-team", async () => {
+	const seen: string[][] = [];
+	let def: any;
+	const pi = { registerTool: (d: unknown) => (def = d), typebox: { Type: new Proxy({}, { get: () => () => ({}) }) } };
+	registerTeamTool(pi as any, ROOT, async argv => (seen.push(argv), { code: 0, stdout: '{"ok": true}' }), {});
+	await def.execute("i", { action: "spawn", class: "audit", effort: "low", task: "t" }, undefined, undefined, { cwd: "/tmp", sessionManager: { getSessionId: () => "sess-lead" } });
+	await def.execute("i", { action: "spawn", class: "audit", effort: "low", task: "t" }, undefined, undefined, { cwd: "/tmp" });
+	expect(seen[0].slice(-2)).toEqual(["--session", "sess-lead"]);
+	expect(seen[1]).not.toContain("--session");
+});
+
 test("wait and reap argv", () => {
 	expect(teamArgv({ action: "wait", team: "t1", timeout: 5 }, ROOT).slice(2)).toEqual(["wait", "--team", "t1", "--timeout", "5"]);
 	expect(teamArgv({ action: "reap", team: "t1" }, ROOT).slice(2)).toEqual(["reap", "--team", "t1"]);
