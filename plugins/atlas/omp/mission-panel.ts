@@ -20,9 +20,16 @@ const cyan = paint(36);
 const dim = paint(2);
 const inverse = paint(7);
 
+/** A lane's current tool (active) or the last one it ran (inactive, drawn dim between calls). */
+export interface LaneTool {
+	tool: string;
+	target: string;
+	active: boolean;
+}
 export interface PanelWorker {
 	name: string;
 	secs: number;
+	tool?: LaneTool;
 }
 export interface PanelModel {
 	width: number;
@@ -64,10 +71,17 @@ function headerText(m: PanelModel, inner: number): string {
 	return left + " ".repeat(Math.max(1, inner - 2 - left.length - right.length)) + right;
 }
 
-function laneText(w: PanelWorker, m: PanelModel): string {
+/** Lane text split at the tool column so the row can dim just the tool part between calls. */
+function laneText(w: PanelWorker, m: PanelModel): { head: string; tool: string } {
 	const fill = Math.max(1, Math.min(BAR_CELLS, Math.ceil((w.secs / BAR_FULL_S) * BAR_CELLS)));
 	const bar = "▰".repeat(fill) + "▱".repeat(BAR_CELLS - fill);
-	return `▌ ${fit(w.name, NAME_W)} ${m.laneSpin} ▕${bar}▏ ${age(w.secs)} working`;
+	const tool = w.tool ? `${w.tool.tool} ${w.tool.target}`.trim() : "working";
+	return { head: `▌ ${fit(w.name, NAME_W)} ${m.laneSpin} ▕${bar}▏ ${age(w.secs)} `, tool };
+}
+
+function laneRow(w: PanelWorker, m: PanelModel, row: Row): string {
+	const { head, tool } = laneText(w, m);
+	return row(head + tool, 1, cyan, w.tool && !w.tool.active ? { from: [...head].length, paint: dim } : undefined);
 }
 
 function footerText(m: PanelModel): string {
@@ -85,10 +99,13 @@ export function renderPanel(m: PanelModel): string[] {
 	const inner = Math.max(20, m.width - 2);
 	const edge = borderPaint(m);
 	const side = edge("│");
-	// head: leading chars of the already-fitted body that get an accent color (ATLAS chip, lane bar)
-	const row: Row = (text, head = 0, accent = s => s) => {
-		const body = fit(` ${text}`, inner);
-		return `${side}${body.slice(0, 1)}${accent(body.slice(1, 1 + head))}${body.slice(1 + head)}${side}`;
+	// head: leading chars of the already-fitted body that get an accent color (ATLAS chip, lane bar); tail: chars from
+	// `tail.from` on get `tail.paint` (a lane's idle tool). Split by code point so the ANSI never moves a border.
+	const row: Row = (text, head = 0, accent = s => s, tail) => {
+		const cs = [...fit(` ${text}`, inner)];
+		const cut = tail ? Math.min(cs.length, Math.max(1 + head, 1 + tail.from)) : cs.length;
+		const rest = cs.slice(cut).join("");
+		return `${side}${cs[0]}${accent(cs.slice(1, 1 + head).join(""))}${cs.slice(1 + head, cut).join("")}${rest && tail ? tail.paint(rest) : rest}${side}`;
 	};
 	const top = edge(`╭${"─".repeat(inner)}╮`);
 	const bottom = edge(`╰${"─".repeat(inner)}╯`);
@@ -98,7 +115,7 @@ export function renderPanel(m: PanelModel): string[] {
 	return [top, row(headerText(m, inner), 5, inverse), ...middleRows(m, row), row(footerText(m)), bottom];
 }
 
-type Row = (text: string, head?: number, accent?: (s: string) => string) => string;
+type Row = (text: string, head?: number, accent?: (s: string) => string, tail?: { from: number; paint: (s: string) => string }) => string;
 
 /** Lanes win the budget over the ticker; "+N more" and the ticker take what is left. */
 function middleRows(m: PanelModel, row: Row): string[] {
@@ -108,7 +125,7 @@ function middleRows(m: PanelModel, row: Row): string[] {
 	const moreRoom = room - shown;
 	const more = moreRows(hidden, moreRoom, row);
 	const ticker = tickerRows(m.notes, moreRoom - more.length, row);
-	return [...m.workers.slice(0, shown).map(w => row(laneText(w, m), 1, cyan)), ...more, ...ticker];
+	return [...m.workers.slice(0, shown).map(w => laneRow(w, m, row)), ...more, ...ticker];
 }
 
 const moreRows = (hidden: number, room: number, row: Row): string[] => (hidden > 0 && room >= 1 ? [row(`+${hidden} more`, 40, dim)] : []);

@@ -54,7 +54,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { readFileSync, statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { registerAgentGuard } from "./agent-guard";
-import { registerChannelView } from "./channel-view";
+import { registerChannelView, registerLaneToolRecorder } from "./channel-view";
 import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { registerTeamTool } from "./team-tool";
@@ -745,8 +745,10 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	// Live channel view above the editor while task subagents run (omp's irc:relay card lasts 10s and hides lead<->child).
 	const channelView = registerChannelView(pi);
 	registerWorkerReport(pi, { onChannelOpen: channelView.open });
+	// Team workers and task subs write their current tool; the lead's lanes read it (channel-view.ts laneTool).
+	registerLaneToolRecorder(pi);
 	registerAdvisorGate(pi, defaultAdvisorDeps());
-	registerTeamTool(pi, PLUGIN_ROOT);
+	registerTeamTool(pi, PLUGIN_ROOT, undefined, process.env, channelView.open);
 	register(pi, {
 		runState,
 		// getActiveTools() is omp's enabled set (top-level names plus live xd://
