@@ -77,9 +77,11 @@ test('background launch card: live worker spins as running, never a stale comple
   expect(text).not.toContain('✓')
 })
 
-test('background launch card: ended worker shows done · STATUS line · duration', async () => {
+test('background launch card: ended worker shows a done row: STATUS line · duration', async () => {
   const e = launched('completed')
-  expect(strings(await sites().ToolUse!(engine([e.agent]), e, next))).toContain('done · STATUS: DONE · 29s')
+  const out = strings(await sites().ToolUse!(engine([e.agent]), e, next))
+  expect(out).toContain(' done  ')
+  expect(out).toContain('STATUS: DONE · 29s')
 })
 
 test('a call still being written reads pending, not completed', async () => {

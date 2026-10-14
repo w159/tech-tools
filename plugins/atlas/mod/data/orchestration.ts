@@ -25,7 +25,7 @@ export interface Orch {
   meta: Record<string, SpawnMeta>;
 }
 
-export interface SpawnMeta { name?: string; type?: string; at?: number } // at: spawn time (ms)
+export interface SpawnMeta { name?: string; type?: string; at?: number; scope?: string } // at: spawn time (ms); scope: prompt `SCOPE:` value
 
 export const EMPTY_ORCH: Orch = { activity: {}, comms: [], stage: {}, meta: {} };
 
@@ -61,7 +61,7 @@ export function onSpawn(o: Orch, id: string, text: string, now: number, meta?: S
   const dispatched = withComm(o, { ts: now, from: LEAD, to: id, text: line || 'task dispatched', kind: 'dispatch' });
   return {
     ...o,
-    activity: { ...o.activity, [id]: blank(now) },
+    activity: { ...o.activity, [id]: { ...blank(now), ...(meta?.scope ? { scope: meta.scope } : {}) } },
     stage: { ...o.stage, [id]: 'spawned' },
     meta: { ...o.meta, [id]: { ...meta, at: now } },
     comms: withComm({ ...o, comms: dispatched }, { ts: now, from: id, to: 'all', text: 'joined', kind: 'join' }),
@@ -81,12 +81,20 @@ export const targetOf = (input: unknown): string | undefined => {
   return [baseOf(a.file_path), baseOf(a.path), headOf(a.command), headOf(a.pattern), headOf(a.query)].find(Boolean);
 };
 
+const CALL_WINDOW_MS = 60_000;
+const MAX_CALLS = 48; // ring cap: the sparkline only shows the last minute
+
+/** Tool start times within the last minute, `now` appended, capped at MAX_CALLS. */
+export const pushCall = (calls: readonly number[] | undefined, now: number): number[] =>
+  [...(calls ?? []).filter((t) => now - t < CALL_WINDOW_MS), now].slice(-MAX_CALLS);
+
 /** tool.call in flight (before next). */
 export function onToolStart(o: Orch, agent: string, tool: string, now: number, input?: unknown): Orch {
   const prev = o.activity[agent] ?? blank(now);
+  const next = { ...prev, tool, since: now, target: targetOf(input), toolCount: prev.toolCount + 1, mood: 'working' as const, calls: pushCall(prev.calls, now) };
   return {
     ...o,
-    activity: { ...o.activity, [agent]: { ...prev, tool, since: now, target: targetOf(input), toolCount: prev.toolCount + 1, mood: 'working' } },
+    activity: { ...o.activity, [agent]: next },
     stage: workingStage(o, agent),
   };
 }
@@ -213,7 +221,7 @@ function settle(a: ActivityEntry, mood: Mood, memo: Record<string, number>, name
 
 /** A worker with no in-process events (a team pane): its tool / last tool / target come from its pane log via the squad row. */
 const squadOnlyEntry = (s: SquadAgent & TeamTool, now: number): ActivityEntry => ({
-  tool: s.tool ?? null, ...definedOf({ lastTool: s.lastTool, target: s.target, startedAt: s.startedAt }),
+  tool: s.tool ?? null, ...definedOf({ lastTool: s.lastTool, target: s.target, startedAt: s.startedAt, calls: s.calls }),
   since: now, toolCount: 0, tokens: s.tokens ?? null, mood: squadMood(s.state), lastLine: '',
 });
 const definedOf = <T extends object>(o: T): Partial<T> => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;

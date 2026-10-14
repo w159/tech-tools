@@ -1,11 +1,11 @@
-// Transcript restyles for parallel work: worker cards, wave strips, channel bubbles.
-// Pure tree builders (plain element data); restyle.tsx wires them to ToolUse / ToolGroup /
-// UserMessage and falls back to next(e) on null or a throw.
+// Transcript restyles for parallel work: filled worker cards (Mocha truecolor, coloured left stripe),
+// wave strips, channel bubbles. Pure tree builders (plain element data); restyle.tsx wires them to
+// ToolUse / ToolGroup / UserMessage and falls back to next(e) on null or a throw.
 
 import type { RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from '../contract'
 import type { AgentState } from '../contract'
-import { fitText, glyph, stateColor } from '../theme'
+import { fitText, glyph, MOCHA as M, stateColor, textWidth } from '../theme'
 
 export interface CallLike { tool: string; input: unknown; output?: unknown; isRunning: boolean; isErrored: boolean; isInterrupted: boolean }
 type AgentInput = { subagent_type?: string; subagentType?: string; name?: string; description?: string; prompt?: string; model?: string; effort?: string }
@@ -56,45 +56,67 @@ export function phaseOf(c: CallLike, s: AgentState): { mark: string; color: stri
  return phases.find(([on]) => on)?.[1] ?? { mark: '✓', color: s === 'finished' ? BRAND.ok : colorOf(s), state: 'finished' }
 }
 
-const tierNode = (i: AgentInput): RenderNode => {
- const tier = [i.model, i.effort].filter(Boolean).join('·')
- return tier ? t({ color: BRAND.dim }, ` ${glyph.dot} ${tier}`) : ''
-}
-const statusNode = (color: string, mark: string, label: string) => t({ color, bold: true }, ` ${mark}${label ? ` ${label}` : ''}`)
+const tierOf = (i: AgentInput): string => [i.model, i.effort].filter(Boolean).join('·')
 
-const headerLine = (i: AgentInput, role: string, name: string | undefined, status: RenderNode) =>
- t({ wrap: 'truncate-end' },
-  t({ color: BRAND.accent, bold: true }, '◆ '), t({ color: BRAND.text, bold: true }, `${i.name ?? name ?? role} `),
-  t({ color: BRAND.subagent }, `${glyph.dot} ${role}`), tierNode(i), status)
+/** Card hue per settled state (Mocha): running green, failed red, interrupted yellow, finished teal. */
+const CARD_HUE: Partial<Record<AgentState, string>> = { running: M.green, failed: M.red, dead: M.yellow }
+const cardHue = (s: AgentState): string => CARD_HUE[s] ?? M.teal
 
-/** Result row: the worker's outcome when known, else the call's own result; null while running or empty. */
-const resultRow = (c: CallLike, color: string, fit: ReturnType<typeof fitter>, outcome = ''): RenderNode | null => {
- if (c.isRunning) return null
- const r = outcome || callResult(c)
- return r ? t({ wrap: 'truncate-end', color }, fit(r, 4)) : null
+type Run = { t: string; color?: string; bg?: string; bold?: boolean }
+const cell = (r: Run): RenderNode => t({ ...(r.color ? { color: r.color } : {}), ...(r.bg ? { backgroundColor: r.bg } : {}), ...(r.bold ? { bold: true } : {}) }, r.t)
+
+/** One filled card row: the coloured `▌` stripe, then runs, padded to `width` on `bg` (0 = unknown width). */
+function cardRow(hue: string, bg: string, width: number, runs: Run[]): RenderElement {
+ const used = 1 + runs.reduce((n, r) => n + textWidth(r.t), 0)
+ const fill: Run[] = width > used ? [{ t: ' '.repeat(width - used), bg }] : []
+ return el('Box', { flexDirection: 'row', flexShrink: 0 }, ...[{ t: '▌', color: hue, bg }, ...runs, ...fill].map(cell))
 }
+
+/** Result text: the worker's outcome when known, else the call's own result; '' while running. */
+const resultText = (c: CallLike, outcome = ''): string => (c.isRunning ? '' : (outcome || callResult(c)).replace(/^done · /, '')) // the row label already says done
 const callResult = (c: CallLike): string => (c.isInterrupted ? 'interrupted' : resultLine(c.output))
 
 const fitter = (width: number) => (s: string, pad: number) => (width > pad ? fitText(s, width - pad) : s)
-const boxProps = (color: string, width: number) => ({ borderStyle: 'round', borderColor: color, flexDirection: 'column', paddingX: 1, ...(width > 0 ? { width } : {}) })
+const label = (word: string): Run => ({ t: ` ${word.padEnd(5)} `, color: M.muted, bg: M.panel })
 
-/** Card extras: `mark` replaces the status glyph (a spinner frame), `outcome` is the worker's result line. */
-export interface CardExtra { mark?: string; outcome?: string }
+/** Card extras: `mark` replaces the status glyph (a spinner frame), `outcome` is the worker's result line,
+ * `now` what a running worker is doing (tool, target, age), `wave` the strip number it was dispatched in. */
+export interface CardExtra { mark?: string; outcome?: string; now?: string; wave?: number }
 
-/** Bordered card for an atlas:* dispatch; null leaves non-atlas calls to the engine. `width` 0 = unknown. */
-export function workerCard(c: CallLike, state: AgentState, width = 0, name?: string, label = '', extra: CardExtra = {}): RenderElement | null {
+/** `now` row of a running worker: what it is doing, else the host status word. */
+const nowRow = (word: string, extra: CardExtra, hue: string, width: number): RenderElement =>
+ cardRow(hue, M.panel, width, [label('now'), { t: fitter(width)(extra.now || word || 'running', 9), color: M.muted, bg: M.panel }])
+
+/** `done`/`fail` row with the result once settled; null when there is none. */
+function endRow(c: CallLike, state: AgentState, extra: CardExtra, hue: string, width: number): RenderElement | null {
+ const r = resultText(c, extra.outcome)
+ return r ? cardRow(hue, M.panel, width, [label(state === 'failed' ? 'fail' : 'done'), { t: fitter(width)(r, 9), color: hue, bg: M.panel }]) : null
+}
+
+/** Header row: the state-coloured chip (`⣾ name`) then `role · tier · wave N`. */
+function headRow(i: AgentInput, role: string, name: string | undefined, mark: string, hue: string, width: number, wave?: number): RenderElement {
+ const who = i.name ?? name ?? role
+ const meta = [role, tierOf(i), wave ? `wave ${wave}` : ''].filter(Boolean).join(' · ')
+ return cardRow(hue, M.panel2, width, [{ t: ` ${mark} ${who} `, color: M.base, bg: hue, bold: true }, { t: fitter(width)(` ${meta} `, 24), color: M.text, bg: M.panel2 }])
+}
+
+const markOf = (p: { mark: string; state: AgentState }, extra: CardExtra): string => (p.state === 'running' && extra.mark) || p.mark
+const cardBox = (width: number, lines: Array<RenderElement | null>): RenderElement =>
+ el('Box', { flexDirection: 'column', flexShrink: 0, backgroundColor: M.panel, ...(width > 0 ? { width } : {}) }, ...lines.filter((l): l is RenderElement => l !== null))
+
+/** Filled card for an atlas:* dispatch; null leaves non-atlas calls to the engine. `width` 0 = unknown. */
+export function workerCard(c: CallLike, state: AgentState, width = 0, name?: string, word = '', extra: CardExtra = {}): RenderElement | null {
  if (!isAtlasWorker(c)) return null
  const i = inputOf(c)
  const role = typeOf(i).slice('atlas:'.length)
  const phase = phaseOf(c, state)
- const color = phase.color
- const fit = fitter(width)
- const lines = [
-  headerLine(i, role, name, statusNode(color, phase.state === 'running' && extra.mark ? extra.mark : phase.mark, label)),
-  t({ wrap: 'truncate-end', color: BRAND.dim }, fit(goalLine(i), 4)),
-  resultRow(c, color, fit, extra.outcome),
- ].filter((l): l is RenderNode => l !== null)
- return el('Box', boxProps(color, width), ...lines)
+ const hue = cardHue(phase.state)
+ const running = phase.state === 'running'
+ return cardBox(width, [
+  headRow(i, role, name, markOf(phase, extra), hue, width, extra.wave),
+  cardRow(hue, M.panel, width, [label('goal'), { t: fitter(width)(goalLine(i), 9), color: M.text, bg: M.panel }]),
+  running ? nowRow(word, extra, hue, width) : endRow(c, phase.state, extra, hue, width),
+ ])
 }
 
 /** Side by side when each card gets >= 40 columns, else stacked; w is the per-card width (0 = unknown). */
@@ -112,16 +134,15 @@ const waveHeader = (calls: ReadonlyArray<CallLike>, n: number) => {
 export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: number): RenderElement | null {
  if (calls.length < 2 || !calls.every(isAtlasWorker)) return null
  const { side, w } = waveLayout(columns, calls.length)
- const cards = calls.map((c) => workerCard(c, phaseOf(c, 'finished').state, w) as RenderElement)
+ const cards = calls.map((c) => workerCard(c, phaseOf(c, 'finished').state, w, undefined, '', { wave: n }) as RenderElement)
  return el('Box', { flexDirection: 'column' }, waveHeader(calls, n),
   el('Box', { flexDirection: side ? 'row' : 'column', flexWrap: 'wrap' }, ...cards))
 }
 
-/** One-line row for a background atlas worker's task-notification: `◆ wave-a · explorer done · STATUS: DONE · 29s`. */
+/** One-row filled card for a background atlas worker's task-notification: stripe, `✔ wave-a` chip, role, outcome. */
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean): RenderElement {
- return t({ wrap: 'truncate-end' },
-  t({ color: BRAND.accent, bold: true }, '◆ '), t({ color: BRAND.text, bold: true }, `${name} `),
-  t({ color: BRAND.subagent }, `${glyph.dot} ${role} `), t({ color: failed ? BRAND.fail : BRAND.ok }, outcome))
+ const hue = failed ? M.red : M.teal
+ return cardRow(hue, M.panel2, 0, [{ t: ` ${failed ? '✖' : '✔'} ${name} `, color: M.base, bg: hue, bold: true }, { t: ` ${role} `, color: M.muted, bg: M.panel2 }, { t: `${outcome} `, color: hue, bg: M.panel2 }])
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */

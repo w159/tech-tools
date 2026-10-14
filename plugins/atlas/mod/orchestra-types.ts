@@ -7,11 +7,13 @@ import type { Mood, ActivityEntry as ContractActivityEntry, CommsEntry, TodoGrou
 export type { Mood, CommsEntry };
 
 /** Contract entry plus: startedAt (first sight, never moves), target (what the current or last tool touched) and
- * lastTool (the tool answered last, kept between calls). `since` stays the current-tool time. */
-export type ActivityEntry = ContractActivityEntry & { startedAt?: number; target?: string; lastTool?: string };
+ * lastTool (the tool answered last, kept between calls). `since` stays the current-tool time. calls: recent tool
+ * start times (ms, last minute, the band's sparkline); scope: the dispatch prompt's `SCOPE:` value (`audit/medium`). */
+export type ActivityEntry = ContractActivityEntry & { startedAt?: number; target?: string; lastTool?: string; calls?: number[]; scope?: string };
 
-/** A team pane worker's tool, read from its pane log onto its squad row (it raises no in-process events). */
-export type TeamTool = { tool?: string; lastTool?: string; target?: string; startedAt?: number };
+/** A team pane worker's tool, read from its pane log onto its squad row (it raises no in-process events);
+ * uses: tool_use blocks in the log so far, calls: their sight times (register.ts turns new uses into calls). */
+export type TeamTool = { tool?: string; lastTool?: string; target?: string; startedAt?: number; uses?: number; calls?: number[] };
 
 /** Contract TodoGroup plus the props-slice marker (rows left out to keep Client props small). */
 export type TodoGroup = ContractTodoGroup & { hidden?: { live: number; liveDone: number; archived: number } };

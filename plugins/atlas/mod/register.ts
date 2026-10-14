@@ -20,7 +20,7 @@ import { PHASE_RE, registerRestyle } from './restyle';
 import { registerNotify } from './notify';
 import { ownRows, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { TeamTool } from './orchestra-types';
-import { EMPTY_ORCH, onComplete, parseWt, type SpawnMeta, type WtRow } from './data/orchestration';
+import { EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
 
 const REBUILD_MS = 1500;
 const WT_MS = 5000;
@@ -80,6 +80,7 @@ let wtRows: WtRow[] = [];
 let muxStdout = '';
 let muxAgents: (SquadAgent & TeamTool)[] = [];
 let muxFirstSeen: Record<string, number> = {}; // team worker name -> first mux sight (ms), its lane's start
+let muxCalls: Record<string, { uses: number; calls: number[] }> = {}; // team worker name -> pane-log tool_use count and call times (sparkline)
 let sessionUuid = '';
 /** raw host agent id -> display name, kept across rebuilds: a finished agent drops out of the host list but its id must keep resolving. */
 let nameMemo: Record<string, string> = {};
@@ -382,7 +383,7 @@ async function muxTick($: EngineInterface): Promise<void> {
 	if (runs.length === 0) return;
 	const outs = await Promise.all(runs.map((r) => muxStatus($, root, r)));
 	const agents = await withPaneTools($, root, ownRows(outs.flatMap(parseMuxStatus), own));
-	const sig = `${outs.join('\n')}|${agents.map((a) => `${a.tool ?? ''}${a.lastTool ?? ''}${a.target ?? ''}`).join(',')}`;
+	const sig = `${outs.join('\n')}|${agents.map((a) => `${a.tool ?? ''}${a.lastTool ?? ''}${a.target ?? ''}${a.uses ?? ''}`).join(',')}`;
 	if (sig === muxStdout) return;
 	muxStdout = sig;
 	muxAgents = agents;
@@ -408,6 +409,14 @@ async function muxRuns($: EngineInterface, root: string, snap: AtlasSnapshot): P
 	return { runs, own: new Set([...teams.flatMap((t) => t.members), ...snap.members.map((m) => m.name)]) };
 }
 
+/** Tool uses that appeared in a pane log since the last read become calls at `now` (the first read is the baseline). */
+function paneCalls(name: string, uses: number, now: number): number[] {
+	const prev = (muxCalls[name] ??= { uses, calls: [] });
+	for (let n = prev.uses; n < uses; n++) prev.calls = pushCall(prev.calls, now);
+	prev.uses = uses;
+	return prev.calls;
+}
+
 /** Running team workers get their tool / last tool / target from their pane log (the pane feed writes stream-json there)
  * and a first-seen start, so the lane's age counts up. ponytail: reads each running worker's whole log every MUX_MS;
  * tail-read if logs grow past a few MB. */
@@ -417,7 +426,9 @@ async function withPaneTools($: EngineInterface, root: string, agents: SquadAgen
 	return Promise.all(
 		agents.map(async (a) => {
 			const startedAt = (muxFirstSeen[a.name] ??= now);
-			return a.state === 'running' ? { ...a, startedAt, ...paneTool((await $.fs.read(`${logs}/${a.name}.log`).catch(() => undefined)) ?? '') } : a;
+			if (a.state !== 'running') return a;
+			const pane = paneTool((await $.fs.read(`${logs}/${a.name}.log`).catch(() => undefined)) ?? '');
+			return { ...a, startedAt, ...pane, calls: paneCalls(a.name, pane.uses ?? 0, now) };
 		}),
 	);
 }
@@ -568,6 +579,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			muxStdout = '';
 			muxAgents = [];
 			muxFirstSeen = {};
+			muxCalls = {};
 			const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
 			await builder.init(e.cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(e.cwd), await gitBranch($, e.cwd));
 			await rebuild($);
@@ -654,7 +666,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);
-		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows });
+		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, costUsd: (await read($, usageState)).costUsd });
 		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
 	});
 

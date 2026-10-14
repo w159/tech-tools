@@ -123,21 +123,30 @@ test('header line is drawn styled in place with the body kept', () => {
   const first = 'ATLAS | 🔧 implement 3/5 | shipping restyle'
   const text = stringsOf(assistantTree(snap(), { text: `${first}\n\nBody text here.`, isFirstOfReply: true }))
   expect(text).toContain(' ATLAS ')
-  expect(text).toContain('implement')
+  expect(text).toContain('IMPLEMENT')
   expect(text).toContain('3/5')
   expect(text).toContain('shipping restyle')
   expect(text).toContain('Body text here.')
-  expect(text).toContain('ATLAS | ')
-  expect(text).toContain(first)
+  expect(text).not.toContain('|')
 })
 
-test('header row fits one line at 60 columns with both pipes', () => {
-  const row = assistantTree(snap(), { text: `ATLAS | 🔧 implement 3/5 | ${'x'.repeat(120)}`, isFirstOfReply: true }, 60) as { type: string }
-  expect(row.type).toBe('Box')
-  const line = stringsOf(row)
+type Pill = { props: Record<string, unknown>; children: string[] }
+const pillsOf = (text: string, columns: number): Pill[] => (assistantTree(snap(), { text, isFirstOfReply: true }, columns) as unknown as { children: Pill[] }).children
+
+test('header is filled pills: brand on violet, phase on its hue, then the state text, no pipe', () => {
+  const [brand, phase, ...rest] = pillsOf('ATLAS | 🔧 implement 3/5 | shipping restyle', 120)
+  expect(brand!.children[0]).toBe(' ◆ ATLAS ')
+  expect(brand!.props).toMatchObject({ backgroundColor: '#cba6f7', color: '#1e1e2e', bold: true })
+  expect(phase!.children[0]).toBe(' ⚒ IMPLEMENT ')
+  expect(phase!.props).toMatchObject({ backgroundColor: '#fab387', color: '#1e1e2e' })
+  expect(rest.map((p) => p.children[0]).join('')).toBe(' 3/5 shipping restyle')
+})
+
+test('header row fits one line at 60 columns; under 60 only the two pills stay', () => {
+  const line = stringsOf({ type: 'Box', props: {}, children: pillsOf(`ATLAS | 🔧 implement 3/5 | ${'x'.repeat(120)}`, 60) })
   expect(textWidth(line)).toBeLessThanOrEqual(60)
-  expect(line).toContain('ATLAS | ')
-  expect(line.split('|').length).toBe(3)
+  expect(line).not.toContain('|')
+  expect(pillsOf('ATLAS | ✅ verify | started', 50)).toHaveLength(2)
 })
 
 test('headerless or summary replies return null (engine-drawn)', () => {
@@ -263,7 +272,7 @@ test('AssistantMessage draws the contract header on one styled row and keeps the
   const drawn = await regs[2]?.hook(fake$({ snapshot: snap() }).$, fakeE('AssistantMessage', { text, isFirstOfReply: true }), echoNext)
   expect(drawn).not.toBe(SENTINEL)
   const out = stringsOf(drawn)
-  for (const s of ['ATLAS', 'implement', '3/5', 'dedup cpWidth', 'Body text here.']) expect(out).toContain(s)
+  for (const s of ['ATLAS', 'IMPLEMENT', '3/5', 'dedup cpWidth', 'Body text here.']) expect(out).toContain(s)
 })
 
 test('header-less AssistantMessage keeps the engine drawing with no pill', async () => {

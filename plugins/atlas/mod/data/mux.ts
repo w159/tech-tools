@@ -77,12 +77,13 @@ const blocksOf = (line: string): Block[] => {
 const isUse = (b: Block): boolean => b.type === 'tool_use' && typeof b.name === 'string';
 
 /** A team worker's tool from its pane log (`.atlas/.run/logs/<name>.log`, stream-json): the last tool_use is `tool`
- * while no tool_result answers it, else `lastTool`; {} when the log holds no tool call. */
+ * while no tool_result answers it, else `lastTool`; `uses` counts every tool_use; {} when the log holds no tool call. */
 export function paneTool(log: string): TeamTool {
   const blocks = log.split('\n').flatMap(blocksOf);
-  const use = blocks.filter(isUse).pop();
+  const uses = blocks.filter(isUse);
+  const use = uses[uses.length - 1];
   if (!use) return {};
   const answered = blocks.some((b) => b.type === 'tool_result' && b.tool_use_id === use.id);
   const target = targetOf(use.input);
-  return { [answered ? 'lastTool' : 'tool']: use.name as string, ...(target ? { target } : {}) };
+  return { [answered ? 'lastTool' : 'tool']: use.name as string, ...(target ? { target } : {}), uses: uses.length };
 }

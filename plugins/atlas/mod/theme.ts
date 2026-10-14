@@ -58,6 +58,31 @@ export function dim(hex: string, f: number): string {
  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
+const rgbOf = (hex: string): number[] => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) || 0);
+
+/** #rrggbb between a (t=0) and b (t=1), t clamped. */
+export function mix(a: string, b: string, t: number): string {
+ const k = Math.max(0, Math.min(1, t));
+ const [x, y] = [rgbOf(a), rgbOf(b)];
+ return `#${x.map((v, i) => Math.round(v + ((y[i] ?? 0) - v) * k).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Catppuccin Mocha truecolor palette for the filled surfaces (band, cards, reply pills): they paint their own
+ * background, so they read the same on light and dark terminals. */
+export const MOCHA = {
+ panel: '#11111b', panel2: '#181825', base: '#1e1e2e', text: '#cdd6f4', muted: '#6c7086', dim: '#45475a',
+ violet: '#cba6f7', teal: '#94e2d5', sky: '#89dceb', blue: '#89b4fa', green: '#a6e3a1', peach: '#fab387',
+ red: '#f38ba8', yellow: '#f9e2af', pink: '#f5c2e7', grey: '#585b70', grey2: '#313244', white: '#ffffff',
+} as const;
+
+const PHASE_HUES: Record<string, string> = {
+ research: MOCHA.blue, theory: MOCHA.violet, test: MOCHA.yellow, validate: MOCHA.sky,
+ implement: MOCHA.peach, verify: MOCHA.green, done: MOCHA.teal, blocked: MOCHA.red,
+};
+
+/** Mocha hue of a contract phase (unknown ids read violet). */
+export const phaseHue = (phase: string): string => PHASE_HUES[phase] ?? MOCHA.violet;
+
 const PHASE_COLORS = {
  research: BRAND.working,
  theory: BRAND.subagent,

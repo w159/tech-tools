@@ -28,15 +28,15 @@ claude plugin test plugins/atlas
 Expectation is two-tier:
 
 - **Mod lines must be fully green.** The mod test files load and pass,
-  249 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
+  299 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
   and `mod/sprites/sprites.golden.test.ts`, which injects `memFs` from
   `mod/test_helpers.ts` instead of importing `node:fs`, which the host forbids).
-- **Colony/omp residuals are expected failures of the walk.** 169 pre-existing
+- **Colony/omp residuals are expected failures of the walk.** 171 pre-existing
   load failures, each a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file
   importing `bun:test`, which the mod test host forbids. Those suites stay on
   `bun test` and are not mod regressions.
 
-`bunx tsc --noEmit -p plugins/atlas/mod/tsconfig.json` is 0 errors.
+`bunx tsc --noEmit -p plugins/atlas/mod/tsconfig.json` reports one pre-existing error (`pane/sidebar-team.tsx` indexes its state glyph table with `parked`); nothing else.
 
 Host facts: `claude plugin test [dir]` requires a plugin directory whose
 `hooks/hooks.json` names a module (`claude plugin test mod` fails with "no

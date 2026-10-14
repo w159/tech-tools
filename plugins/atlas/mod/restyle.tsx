@@ -7,7 +7,9 @@ import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from './contract'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
-import { fitText, formatDuration, glyph, phaseColor, stateColor, textWidth } from './theme'
+import { contractGlyph, fitText, formatDuration, glyph, MOCHA, phaseHue, textWidth } from './theme'
+import { MARK as BRAND_MARK, shortTool } from './band'
+import type { ActivityEntry, LiveSnapshot } from './orchestra-types'
 import { activeCount, liveWorkers } from './data/live'
 import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
@@ -33,11 +35,6 @@ export interface ReceiptTracker { done?: number; costStart?: number | null; turn
 type ElemProps = Record<string, string | number | boolean>
 // 10+ call sites across the five sites: locks the StyledElement plain-data shape in one place.
 const txt = (props: ElemProps, ...children: RenderNode[]): RenderElement => ({ type: 'Text', props, children })
-
-// theme wrapper used at three sites; the try/catch is the never-throw acceptance contract
-const phaseCol = (phase: PhaseId): string => {
- try { return phaseColor(phase) || BRAND.accent } catch { return BRAND.accent }
-}
 
 // Width-safe brand mark (1 cell everywhere).
 const MARK = '▸'
@@ -140,12 +137,58 @@ export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents
  if (!persona) return null
  const status = agentStatus(agents, { ...input, subagentType: input.subagentType ?? input.subagent_type }, props)
  const call = { ...props, input: { model: persona.model, effort: persona.effort, ...input } }
- return workerCard(call, status.state, columns > 8 ? columns - 2 : 0, status.name ?? persona.name, status.label, extra)
+ const now = nowOf(snap, status.name ?? input.name)
+ return workerCard(call, status.state, columns > 8 ? columns - 2 : 0, status.name ?? persona.name, status.label, { ...(now ? { now } : {}), ...extra })
+}
+
+const activityOf = (snap: AtlasSnapshot, name?: string): ActivityEntry | undefined => (snap as Partial<LiveSnapshot>).activity?.[name ?? '']
+
+/** `ctx_read register.ts` from the tool in flight, else the last one; '' before the first call. */
+const doingOf = (a: ActivityEntry): string => {
+ const tool = a.tool ?? a.lastTool
+ return tool ? `${shortTool(tool)} ${a.target ?? ''}`.trim() : ''
+}
+
+/** What a live worker is doing, from the snapshot's activity: `ctx_read register.ts   ·   1m12s · 9 tools`. */
+function nowOf(snap: AtlasSnapshot, name?: string): string {
+ const a = activityOf(snap, name)
+ if (!a) return ''
+ return [doingOf(a), `${formatDuration(snap.now - (a.startedAt ?? a.since))} · ${a.toolCount} tools`].filter(Boolean).join('   ·   ')
 }
 
 // ---- AssistantMessage: the ATLAS contract header drawn on one styled row; headerless replies stay engine-drawn ----
 
-/** `ATLAS | ⚒ implement 3/5 | sentence` — the header line drawn in place verbatim, body kept under it. */
+const PILL_NARROW = 60 // below this many columns the header keeps its two pills only
+const fixed = { wrap: 'truncate-end' }
+const isNarrow = (columns: number): boolean => columns > 0 && columns < PILL_NARROW
+const firstText = (k: RenderNode): string => (k as { children: string[] }).children[0] ?? ''
+
+/** ` ◆ ATLAS ` on violet and ` ⚒ IMPLEMENT ` on the phase hue, both dark bold text. */
+function pills(mid: string, phase: PhaseId): RenderNode[] {
+ const mark = contractGlyph(mid.trim().split(/\s+/)[0] ?? '')
+ return [
+  txt({ ...fixed, color: MOCHA.base, backgroundColor: MOCHA.violet, bold: true }, ` ${BRAND_MARK} ATLAS `),
+  txt({ ...fixed, color: MOCHA.base, backgroundColor: phaseHue(phase), bold: true }, ` ${mark} ${phase.toUpperCase()} `),
+ ]
+}
+
+/** ` 3/5` muted, then ` sentence` cut to `room` cells. ponytail: room <= 0 (width unknown) draws it whole; the
+ * truncate-end wrap is the backstop. */
+function tailOf(nm: RegExpExecArray | null, sentence: string, room: number): RenderNode[] {
+ const count = nm ? ` ${nm[1]}/${nm[2]}` : ''
+ const left = room - textWidth(count) - 1
+ const rest = sentence ? ` ${left > 0 ? fitText(sentence, left) : sentence}` : ''
+ return [txt({ ...fixed, color: MOCHA.muted }, count), txt(fixed, rest)].filter((k) => firstText(k) !== '')
+}
+
+/** Filled pills then the state text, never a glued pipe; under 60 columns the two pills only. */
+function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, sentence: string, columns: number): RenderNode[] {
+ const kids = pills(mid, phase)
+ if (isNarrow(columns)) return kids
+ return [...kids, ...tailOf(nm, sentence, columns - kids.reduce<number>((n, k) => n + textWidth(firstText(k)), 0))]
+}
+
+/** `ATLAS | ⚒ implement 3/5 | sentence` drawn in place as filled pills, body kept under it. */
 export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0): RenderElement | null {
  if (props.isSummary || !props.text) return null
  const first = props.text.split('\n', 1)[0] ?? ''
@@ -155,22 +198,9 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  const [, mid = '', ...tail] = first.split('|')
  const phase = (PHASE_RE.exec(mid)?.[1] ?? snap.phase) as PhaseId
  const nm = /(\d+)\s*\/\s*(\d+)/.exec(mid)
- const label = (nm ? mid.replace(nm[0], '') : mid).trim()
  const rest = props.text.slice(first.length).replace(/^\n/, '')
- const fixed = { wrap: 'truncate-end' }
- const kids: RenderNode[] = [
-  txt({ ...fixed, color: BRAND.accent, inverse: true, bold: true }, ' ATLAS '),
-  txt(fixed, '| '),
-  txt({ ...fixed, color: phaseCol(phase), bold: true }, label),
- ]
- if (nm) kids.push(txt({ ...fixed, color: BRAND.dim, dimColor: true }, ` ${nm[1]}/${nm[2]}`))
- const sentence = tail.join('|').trim()
- if (sentence) {
-  kids.push(txt(fixed, ' | '))
-  const used = kids.reduce<number>((n, k) => n + textWidth((k as { children: string[] }).children[0] ?? ''), 0)
-  // ponytail: columns 0 = width unknown, sentence drawn whole; the truncate-end wrap is the backstop.
-  kids.push(txt({ wrap: 'truncate-end' }, columns > used ? fitText(sentence, columns - used) : sentence))
- }
+ const kids = headerPills(mid, phase, nm, tail.join('|').trim(), columns)
+
  const row: RenderElement = { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: kids }
  if (!rest.trim()) return row
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
