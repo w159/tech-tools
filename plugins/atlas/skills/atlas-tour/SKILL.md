@@ -1,6 +1,6 @@
 ---
 name: atlas-tour
-description: Guide a one-time, plain-language first-session walkthrough of atlas - the orchestrator style, one dispatch, one gate event, and one tiny real task run end to end with the file each step touches. Use on a first session with atlas, when atlas terms draw a blank, or when asked how atlas works. Run once per project; do not re-tour unless asked.
+description: "One-time first-session walkthrough of atlas: orchestrator style, one dispatch, one gate event, one tiny task. Use on a first session or when asked how atlas works."
 allowed-tools: Read, Glob, Grep, Bash
 disable-model-invocation: true
 ---

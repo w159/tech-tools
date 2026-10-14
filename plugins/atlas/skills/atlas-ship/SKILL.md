@@ -1,6 +1,6 @@
 ---
 name: atlas-ship
-description: "Ships finished work: verifies a clean tree with a fresh-context atlas:verifier, makes the local commit, then stops for explicit confirmation before any push or PR open. Stops at the local commit when no remote exists. Use when verified, gate-passing work is ready to commit and optionally push or open a PR."
+description: "Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR. Use when verified work is ready to commit or open a PR."
 when_to_use: "ship it, push this, open a PR, ready to merge, finish and commit"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[exclude:<paths>] [description-only] [babysit:off|checkpoint]'

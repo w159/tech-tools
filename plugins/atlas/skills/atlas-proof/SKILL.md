@@ -1,6 +1,6 @@
 ---
 name: atlas-proof
-description: "Publishes, reads, comments on or edits project markdown as a human-review workflow: places a doc or PR for review, records anchored comments and suggestions in a sidecar file, and collects reviewer feedback back into the docs. Use when sharing a plan, spec or draft for review or acting on its comments; not for proofreading or proofs."
+description: "Human-review workflow for project markdown: publishes a doc for review, records anchored comments in a sidecar file, folds feedback back. Use to share a plan, spec or draft for review; not proofreading."
 when_to_use: "share for review, put this up for review, comment on this doc, review round-trip, publish handoff"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<file or PR to publish/review/collect, and what to do>'

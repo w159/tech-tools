@@ -1,6 +1,6 @@
 ---
 name: atlas-test-browser
-description: "Runs a fast, read-only browser smoke check of routes affected by the current branch or PR diff, reporting Pass, Fail or Skip per route with console and network evidence. Never fixes. Use when a quick check that changed routes still render is needed."
+description: "Read-only browser smoke check of routes affected by the current diff: Pass, Fail or Skip per route with console and network evidence. Never fixes. Use for a quick render check."
 when_to_use: "smoke test, check changed routes, does it load, console errors, quick browser check"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[PR number, branch name, 'current', or --port PORT]"

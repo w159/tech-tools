@@ -1,6 +1,6 @@
 ---
 name: atlas-babysit-pr
-description: "Watches one open GitHub PR's CI until merge-ready, classifies failures as flaky or genuine, and runs a bounded repair loop that commits locally and asks before pushing. Never merges or force-pushes. Use when an open PR needs CI watched and genuine failures repaired."
+description: "Watches one open GitHub PR's CI to merge-ready, classifies failures flaky or genuine, repairs in a bounded loop, asks before pushing. Never merges. Use when an open PR needs CI watched."
 when_to_use: "babysit this PR, watch CI, fix red checks on the PR, get PR green, flaky test vs real failure"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 ---

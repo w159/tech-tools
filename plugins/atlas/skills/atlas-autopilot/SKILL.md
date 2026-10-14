@@ -1,6 +1,6 @@
 ---
 name: atlas-autopilot
-description: "Runs atlas's consent-gated autonomous pipeline: takes an implementation-ready plan or diagnosed fix, executes it through atlas-orchestrate, simplifies, reviews report-only, applies high-confidence fixes under a bounded budget, then hard-stops after the local commit. Use when the user wants a plan or fix executed end to end autonomously with a confirmation stop before any push, PR or merge."
+description: "Consent-gated autonomous pipeline: runs a ready plan or diagnosed fix via atlas-orchestrate, simplifies, reviews, fixes under a budget, stops at the local commit. Use to run a plan end to end."
 when_to_use: "autopilot, run the whole pipeline, execute this plan end to end, plan to commit, lfg, hands-off build"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[plan-path | debug finding | task description] [budget:3]'

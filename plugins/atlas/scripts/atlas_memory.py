@@ -316,11 +316,16 @@ def filter_for_recall(entries: List[str]) -> List[str]:
         if _JUNK_SCOPE.match(_scope_of(text)):
             continue
         key = _dedupe_key(text)
-        if key in seen:
+        # Same lesson re-captured with a different lead-in shares its tail.
+        tail = (
+            ("tail:" + " ".join(text.split()).lower()[-40:]) if len(text) >= 50 else key
+        )
+        if key in seen or tail in seen:
             continue
         if total + len(text) > RECALL_MAX_CHARS and kept:
             break
         seen.add(key)
+        seen.add(tail)
         kept.append(text)
         total += len(text)
         if len(kept) >= RECALL_MAX_ENTRIES:

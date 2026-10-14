@@ -464,6 +464,16 @@ class RecallFilterTest(unittest.TestCase):
         ]
         self.assertEqual(len(atlas_memory.filter_for_recall(entries)), 1)
 
+    def test_the_same_lesson_with_different_lead_ins_collapses_to_one(self):
+        """Re-captures that share the lesson text but not the lead-in share a tail."""
+        tail = "I never checked how SpriteReadable renders."
+        entries = [
+            "Assumption to avoid (p): - **Not done:** the note is closed but " + tail,
+            "Assumption to avoid (p): Treat it as open: " + tail,
+            "Assumption to avoid (p): - `t2b1` (cell-aspect): " + tail,
+        ]
+        self.assertEqual(len(atlas_memory.filter_for_recall(entries)), 1)
+
     def test_entry_count_is_capped(self):
         entries = ["Assumption to avoid (p): distinct lesson %d" % i for i in range(40)]
         self.assertLessEqual(

@@ -1,6 +1,6 @@
 ---
 name: atlas-sweep
-description: "Ingests new feedback from configured sources (GitHub issues), acknowledges, clusters and triages it, verifies claimed fixes merged, and folds results into a rolling docs/features/ triage doc. Never auto-closes, auto-replies or pushes without confirmation. Use when new issues or feedback need sweeping and triage."
+description: "Ingests new feedback (GitHub issues), triages it, verifies claimed fixes merged, updates a docs/features/ triage doc. Never auto-closes or replies. Use when new issues or feedback need triage."
 when_to_use: "triage issues, feedback sweep, new GitHub issues, backlog triage, what came in"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[setup|reconfigure] [mode:non-interactive]'

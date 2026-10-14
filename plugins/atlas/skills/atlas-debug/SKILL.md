@@ -1,6 +1,6 @@
 ---
 name: atlas-debug
-description: "Diagnoses a reproducible bug, exception, stack trace or bad output and fixes the root cause with evidence rather than patching the symptom. Use when the actual cause of a failure must be found and fixed."
+description: "Diagnoses a reproducible bug, exception, stack trace or bad output and fixes the root cause with evidence. Use when the cause of a failure must be found and fixed."
 when_to_use: "bug, exception, stack trace, test failure, wrong output, regression, why is this failing, root cause"
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[context] [stack] [symptom] [paste error/log]'

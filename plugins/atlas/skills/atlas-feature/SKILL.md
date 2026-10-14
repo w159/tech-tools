@@ -1,6 +1,6 @@
 ---
 name: atlas-feature
-description: "Implements a feature end to end across UI, API and data by dispatching the atlas squad in parallel and closing with an independent verifier, shipping with evidence rather than 'should work'. Use when asked to implement or add a feature or build new functionality."
+description: "Implements a feature end to end across UI, API and data by dispatching the atlas squad in parallel and closing with an independent verifier. Use when asked to implement or add a feature."
 when_to_use: "implement a feature, add a feature that, build new functionality, full-stack feature"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[feature] [acceptance criteria] [stack] [constraints]'

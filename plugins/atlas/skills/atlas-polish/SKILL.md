@@ -1,6 +1,6 @@
 ---
 name: atlas-polish
-description: "Refines an already-working UI through live, user-directed browser iteration: observes with atlas:ui-runtime-tester and applies small visual, CSS and animation changes via atlas:implementer. Use when a built surface needs spacing, transition or micro-interaction polish; not for new functionality."
+description: "Refines a working UI through live browser iteration with small visual, CSS and animation changes. Use for spacing, transition or micro-interaction polish."
 when_to_use: "polish the UI, tweak spacing, animation, visual refinement, make it feel better, final UI touches"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[branch or worktree to polish; blank = current checkout]'

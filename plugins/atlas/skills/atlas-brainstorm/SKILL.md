@@ -1,6 +1,6 @@
 ---
 name: atlas-brainstorm
-description: "Elicits requirements for a WHAT before any HOW through one-question-at-a-time dialogue, then writes a requirements-only artifact to docs/plans/ and never writes product code. Use when a feature idea or request is vague and needs scoping before planning with atlas-plan."
+description: "Elicits requirements (WHAT, not HOW) one question at a time into a docs/plans/ artifact; writes no product code. Use when a feature idea is vague and needs scoping before atlas-plan."
 when_to_use: "brainstorm, flesh out this idea, what should we build, scope this feature, requirements discovery, product requirements"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<the idea, feature, or request to brainstorm>'

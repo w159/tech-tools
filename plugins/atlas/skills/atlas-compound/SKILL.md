@@ -1,6 +1,6 @@
 ---
 name: atlas-compound
-description: "Captures exactly one durable, verified engineering lesson into docs/lessons/ after passing an eligibility gate (solved, verified, non-obvious), checking overlap with existing lessons and re-verifying cited file:line claims. Use when a problem was just solved and verified and a future engineer would repeat the mistake without a note."
+description: "Captures one durable, verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use after solving and verifying a problem a future engineer would repeat."
 when_to_use: "record this lesson, capture what we learned, write up the root cause, post-mortem note, institutional knowledge"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<optional context: what was solved and why it was non-obvious>'

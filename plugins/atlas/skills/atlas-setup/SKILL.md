@@ -1,6 +1,6 @@
 ---
 name: atlas-setup
-description: "Manual skill for the atlas lifecycle: onboard (scaffold docs/ and .atlas/, recommend next steps), install (wire claude-mem, context-mode, hooks), connectors (vendor MCP setup) and repair (fix a broken install). Use when first bringing atlas online, setting up a workspace, or fixing atlas; pass --fix to auto-repair."
+description: "Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair. Use to bring atlas online or fix it; --fix auto-repairs."
 when_to_use: "first run, set up atlas, SSOT scaffolding, tooling install, vendor connectors, what to run next, subagents not launching, plugin acting like an older version"
 disable-model-invocation: true
 user-invocable: true

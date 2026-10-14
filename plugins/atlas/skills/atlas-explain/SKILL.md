@@ -1,6 +1,6 @@
 ---
 name: atlas-explain
-description: "Explains how or why existing code behaves, answered in chat with file:line evidence from an atlas:explorer trace; read-only, writes no artifacts, marks inference as such. Use when asked how something works, why something happens, to explain a module or call path, or what a file or message means."
+description: "Explains how or why existing code behaves, in chat, with file:line evidence from an atlas:explorer trace; read-only. Use when asked how something works or what code means."
 when_to_use: "how does X work, why does Y happen, explain this code, wtf does this do, what is this, walk me through"
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[question, concept, file, diff ref, or work window; blank = your last message]'

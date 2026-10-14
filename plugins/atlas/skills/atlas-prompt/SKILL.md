@@ -1,6 +1,6 @@
 ---
 name: atlas-prompt
-description: "Rewrites a vague coding request into a structured, environment-aware prompt an AI agent can execute, asking up to three questions first when scope is ambiguous. Use when a request is underspecified and needs sharpening before execution."
+description: "Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous. Use when a request is underspecified."
 when_to_use: "improve my prompt, rewrite this request, make this actionable, vague ask, prompt engineering"
 allowed-tools: Read, Glob, Grep, Bash, Write
 argument-hint: '<the vague request to sharpen>'

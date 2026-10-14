@@ -1,6 +1,6 @@
 ---
 name: atlas-resolve-pr-feedback
-description: "Evaluates and resolves PR review feedback: triages each thread as fix, reply or needs-human, applies approved fixes via atlas:implementer with verification, drafts replies, and stops for confirmation before pushing or posting. Use when a PR has open review comments to address."
+description: "Resolves PR review feedback: triages each thread (fix, reply, needs-human), applies approved fixes, drafts replies, confirms before pushing or posting. Use when a PR has open review comments."
 when_to_use: "address review comments, respond to reviewers, resolve PR threads, fix review feedback"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[PR number, comment URL, or blank for current branch PR]'
