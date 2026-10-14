@@ -176,6 +176,19 @@ export function groupByWorkspace(agents, workspaces) {
 
 // ---- layers (MASTER 9.14): name the first layer that is down, nothing else ----
 
+const herdrLayer = (herd, backend) => {
+  if (!herd) return { state: "unknown", reason: "", backend };
+  const h = herd.herdr || {};
+  return { state: h.reachable ? "up" : "down", reason: h.reason || "", backend };
+};
+
+const webuiLive = (w) => ({ state: w.healthy ? "up" : "down", url: w.url || "", authRequired: Boolean(w.auth_required) });
+
+const webuiLayer = (herd, noWebUi) => {
+  if (noWebUi) return { state: "unknown", url: "", authRequired: false, none: true };
+  return herd && herd.web_ui ? webuiLive(herd.web_ui) : { state: "unknown", url: "", authRequired: false };
+};
+
 function layersFrom(src, daemonUp, daemonError) {
   const herd = src.herd;
   const hstat = src.hstat; // GET herd/status: { backend, web_ui: boolean }; null until loaded or when the call fails
@@ -183,8 +196,8 @@ function layersFrom(src, daemonUp, daemonError) {
   return {
     daemon: { state: daemonUp ? "up" : "down", reason: daemonError || "" },
     // Key kept as "herdr" (other code keys on it); it is the agent runtime layer for either backend.
-    herdr: herd ? { state: herd.herdr && herd.herdr.reachable ? "up" : "down", reason: (herd.herdr && herd.herdr.reason) || "", backend: (hstat && hstat.backend) || "" } : { state: "unknown", reason: "", backend: (hstat && hstat.backend) || "" },
-    webui: noWebUi ? { state: "unknown", url: "", authRequired: false, none: true } : herd && herd.web_ui ? { state: herd.web_ui.healthy ? "up" : "down", url: herd.web_ui.url || "", authRequired: Boolean(herd.web_ui.auth_required) } : { state: "unknown", url: "", authRequired: false },
+    herdr: herdrLayer(herd, (hstat && hstat.backend) || ""),
+    webui: webuiLayer(herd, noWebUi),
   };
 }
 

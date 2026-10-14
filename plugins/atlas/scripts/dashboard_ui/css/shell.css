@@ -27,7 +27,7 @@ html[data-rail="collapsed"] { --rail-w: 56px; }
 .nav-link { position: relative; display: flex; align-items: center; gap: var(--s-2); width: 100%; height: var(--ctl-h); padding: 0 var(--s-2); border-radius: var(--r-2); color: var(--text-dim); background: none; border: 0; text-align: left; font-size: var(--fs-sm); font-weight: 450; }
 .nav-link:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
 .nav-link[aria-current="page"] { background: var(--surface-3); color: var(--text); font-weight: 550; }
-.nav-link[aria-current="page"]::before { content: ""; position: absolute; left: -8px; top: 6px; bottom: 6px; width: 2px; background: var(--accent); border-radius: 2px; }
+.nav-link[aria-current="page"]::before { content: ""; position: absolute; inset: 6px auto 6px -8px; width: 2px; background: var(--accent); border-radius: 2px; }
 .nav-link .icon { width: 16px; height: 16px; }
 .nav-badges { margin-left: auto; display: inline-flex; gap: var(--s-1); }
 .nav-count { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; color: var(--text-dim); }
@@ -85,7 +85,7 @@ html[data-inspector="overlay"] .inspector { position: fixed; top: 0; right: 0; b
 .drawer-foot { flex: none; }
 .drawer > .tabs { padding: 0 var(--s-3); flex: none; }
 .sheet-handle { display: none; }
-.insp-head { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.insp-head { display: flex; align-items: center; column-gap: var(--s-2); min-width: 0; }
 .insp-head h2 { font-size: var(--fs-lg); }
 .insp-panels { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 0; }
 .insp-panel, .insp-panel-host { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: var(--s-3); }
@@ -121,8 +121,8 @@ html[data-inspector="overlay"] .inspector { position: fixed; top: 0; right: 0; b
   .topbar .mobile-project { flex: 1; min-width: 0; display: block; }
   .live-pill { padding: 0 var(--s-2); }
   .strip-band { grid-area: band; display: block; height: 40px; overflow-x: auto; overflow-y: hidden; background: var(--chrome); border-bottom: 1px solid var(--border); padding: 0 var(--s-3); scrollbar-width: none; }
-  .strip-band .fleet-strip .sr-only { position: static; width: auto; height: auto; margin: 0; clip: auto; overflow: visible; white-space: nowrap; font-size: 12px; color: var(--text-dim, inherit); order: 2; }
   .strip-band .fleet-strip { height: 40px; flex-wrap: nowrap; width: max-content; }
+  .strip-band .sr-only { position: static; width: auto; height: auto; margin: 0; clip: auto; overflow: visible; white-space: nowrap; font-size: 12px; color: var(--text-dim, inherit); order: 2; }
   .tabbar { grid-area: tabs; display: flex; background: var(--chrome); border-top: 1px solid var(--border); z-index: var(--z-chrome); }
   .tabbar a, .tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; border: 0; background: none; color: var(--text-dim); font-size: var(--fs-2xs); font-weight: 550; text-decoration: none; }
   .tabbar [aria-current="page"] { color: var(--accent-text); }
@@ -139,14 +139,14 @@ html[data-inspector="overlay"] .inspector { position: fixed; top: 0; right: 0; b
 @media (max-width: 767px) { .topbar .mobile-brand { display: flex; } }
 
 /* ---- framed fallback (data-shell="framed"): no rail, no app chrome; 40px context bar ---- */
-html[data-shell="framed"] .app { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 40px minmax(0, 1fr); grid-template-areas: "top insp" "main insp"; }
-html[data-shell="framed"] .rail, html[data-shell="framed"] .tabbar, html[data-shell="framed"] .strip-band, html[data-shell="framed"] .palette-btn, html[data-shell="framed"] .version-chip, html[data-shell="framed"] .btn-theme, html[data-shell="framed"] .btn-density, html[data-shell="framed"] .mobile-project, html[data-shell="framed"] .topbar .mobile-brand { display: none; }
-html[data-shell="framed"] .topbar { padding: 0 var(--s-3); }
-html[data-shell="framed"] .topbar .strip-host { display: flex; }
-html[data-shell="framed"] .ctx-title { display: block; }
-html[data-shell="framed"] .live-pill .live-text, html[data-shell="framed"] .attn .attn-text { display: inline; }
+[data-shell="framed"] .app { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 40px minmax(0, 1fr); grid-template-areas: "top insp" "main insp"; }
+[data-shell="framed"] .rail, [data-shell="framed"] .tabbar, [data-shell="framed"] .strip-band, [data-shell="framed"] .palette-btn, [data-shell="framed"] .version-chip, [data-shell="framed"] .btn-theme, [data-shell="framed"] .btn-density, [data-shell="framed"] .mobile-project, [data-shell="framed"] .mobile-brand { display: none; }
+[data-shell="framed"] .topbar { padding: 0 var(--s-3); }
+[data-shell="framed"] .strip-host { display: flex; }
+[data-shell="framed"] .ctx-title { display: block; }
+[data-shell="framed"] .live-text, [data-shell="framed"] .attn-text { display: inline; }
 @media (max-width: 767px) {
-  html[data-shell="framed"] .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 40px minmax(0, 1fr); grid-template-areas: "top" "main"; }
+  [data-shell="framed"] .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 40px minmax(0, 1fr); grid-template-areas: "top" "main"; }
 }
 
 /* ---- polish: brand lockup, split attention pills ---- */
@@ -156,9 +156,8 @@ html[data-shell="framed"] .live-pill .live-text, html[data-shell="framed"] .attn
 .brand-name { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
 .brand-sub { font-size: var(--fs-2xs); letter-spacing: .14em; text-transform: uppercase; margin-top: 3px; }
 html[data-rail="collapsed"] .rail-head { padding: 0 var(--s-3); }
-.attn-group { display: inline-flex; gap: var(--s-2); align-items: center; }
 .attn[data-level="findings"] { --pill-c: var(--text-dim); background: var(--surface-2); }
 .attn[data-level="findings"][data-sev="fail"] { --pill-c: var(--st-fail); background: color-mix(in srgb, var(--st-fail) 12%, var(--chrome)); }
 .attn[data-level="findings"][data-sev="warn"] { --pill-c: var(--text-dim); }
 .attn-pop h4 { margin: var(--s-2) var(--s-3) var(--s-1); font-size: var(--fs-xs); color: var(--text-dim); font-weight: 550; }
-.fleet-cell:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fleet-strip button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

@@ -473,7 +473,7 @@ function buildAttention() {
   if (d.failed.length) pills.push(pill("fail", d.failed.length, "failed", (b) => openAttention(b, "failed")));
   if (d.items.length) pills.push(pill("findings", d.items.length, d.items.length === 1 ? "item needs you" : "items need you", (b) => openAttention(b, "findings"), { "data-sev": d.itemsFail ? "fail" : "warn" }));
   if (!pills.length) pills.push(h("button", { class: "attn", type: "button", "data-level": "ok", "aria-label": "All clear", onClick: (e) => openAttention(e.currentTarget, "agents") }, icon("check"), h("span", { class: "attn-text" }, "All clear")));
-  if (changed("attn", [d.needs.map((a) => a.key), d.failed.map((a) => a.key), d.items.map((i) => [i.title, i.severity])])) clear(host).appendChild(h("div", { class: "attn-group" }, pills));
+  if (changed("attn", [d.needs.map((a) => a.key), d.failed.map((a) => a.key), d.items.map((i) => [i.title, i.severity])])) clear(host).appendChild(h("div", { class: "pg-inline" }, pills));
   if (d.needs.length > lastNeeds) announce(d.needs.length + (d.needs.length === 1 ? " agent needs" : " agents need") + " input");
   lastNeeds = d.needs.length;
   const n = d.needs.length;

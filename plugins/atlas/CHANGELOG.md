@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- dashboard data (2026-10-14 runtime audit, `docs/audits/2026-10-14-atlas-runtime-audit.md`): Projects counts live agents by project root, matching the Agents page; Overview labels silent failures as occurrences and Health shows "N distinct, M occurrences"; Channels hides fixture, scratch, home dot-dir and missing roots plus idle leads replaced by a newer lead (no data deleted); Activity and Improve fold empty, scratch, worktree and e2e roots into "Unattributed"; project lists require a real project root (own `.git`, or `docs/`, `pyproject.toml`, `package.json` outside another repo); `/api/projects?editable=1` no longer hides projects idle over 14 days; the HTTP `Server` header carries the plugin.json version instead of `AtlasDashboard/1.2`; remeasure of a finding the miner no longer reports returns 200 `not_reproduced` instead of 422.
+- dashboard frontend: workspace groups with no label fall back to the folder name or "Unassigned"; Terminal is in the nav and mobile tabs and saved aliases to it survive; `agents?lens=colony` opens the Colony page; Settings shows an error with Retry when the project list fails to load; the mobile idle strip shows its "N idle" text.
+- `atlas_rig.py`: the `rig ps` probe is cached for 3 s under a lock with a 3 s timeout, and timed-out probes kill their process group. `/api/v2/channels` had spawned one uncached `rig ps` per project root and could hang for minutes; it now answers in under 3 s.
+
+## 12.4.3 (2026-10-14)
+
+### Fixed
+
+- dashboard: fallow new-only findings cleared, no behavior change. Branching in `layersFrom`, `captureDisplay`, the capture poll tick, `failureAction`, `fixCommands`, `failureTone` and the dismiss handler moved into small helpers; shell.css duplicate blocks and complex selectors simplified (the attention pill wrapper now reuses `.pg-inline`).
+
 ## 12.4.2 (2026-10-14)
 
 ### Added
@@ -17,6 +31,7 @@ OpenRig seat backend. The colony's worker panes now run on [OpenRig](https://ope
 ### Fixed
 
 - omp advisor gate: captures nit and unrated notes too, caps stop refusals per user turn instead of per session, and reminds the model of open advisor items at each prompt so `done` is not reached with them open. Contract text (orchestrator output style, operating-contract) lists open advisor items as a not-done condition.
+
 - Colony boot no longer swallows failures silently: `ensure_colony()` appends `<ts> ensure_colony: <stage> <reason>` to `$ATLAS_HOME/colony-boot.log` when `ensure_server()` fails, when no backend is available, or when boot raises (terminal output unchanged).
 - `atlas_herdr ensure` no longer claims Atlas cannot start herdr; the message says autostart failed or is disabled and points at `colony-boot.log`.
 - Dashboard reaper (`reap_tick`) logs swallowed errors at WARNING via the `atlas.dashboard` logger, once per distinct message per process.

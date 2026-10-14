@@ -24,12 +24,16 @@ function commandFromNext(f) {
 }
 
 // Commands to copy for one silent-failure row; [] means no concrete command exists.
+const field = (f, k) => hasText(f && f[k]);
+const staleList = (subs) => (staleInstallCommand(subs) ? [staleInstallCommand(subs)] : []);
+const isBackfillKind = (kind) => kind === 'ingest_stalled' || /chronicle/.test(kind);
+
 export function fixCommands(f, subs) {
-  const kind = hasText(f && f.kind);
+  const kind = field(f, 'kind');
   const byKind = [
-    [/omp install is stale/.test(hasText(f && f.sample)), () => [OMP_UPGRADE]],
-    [kind === 'hook_crash', () => (staleInstallCommand(subs) ? [staleInstallCommand(subs)] : [])],
-    [kind === 'ingest_stalled' || /chronicle/.test(kind), () => [...BACKFILL]],
+    [/omp install is stale/.test(field(f, 'sample')), () => [OMP_UPGRADE]],
+    [kind === 'hook_crash', () => staleList(subs)],
+    [isBackfillKind(kind), () => [...BACKFILL]],
   ];
   const hit = byKind.filter(([on]) => on).map(([, run]) => run()).find((c) => c.length);
   return hit || commandFromNext(f);
@@ -38,19 +42,23 @@ export function fixCommands(f, subs) {
 // Kinds that are not atlas faults (agent tool-use mistakes, external causes): informational, not "happening now".
 const NOT_ATLAS_FAULT = ['tool_error_unclassified', 'tool_misuse', 'tool_env', 'tool_user_code', 'tool_error_legacy'];
 
+const isActive = (f) => Boolean(f) && f.state === 'active';
+
 export function failureTone(f) {
-  if (NOT_ATLAS_FAULT.includes(hasText(f && f.kind))) return 'info';
-  return f && f.state === 'active' ? 'warn' : 'info';
+  if (NOT_ATLAS_FAULT.includes(field(f, 'kind'))) return 'info';
+  return isActive(f) ? 'warn' : 'info';
 }
 
 // Read-only inspection commands are diagnostics, not fixes.
 const isDiagnostic = (cmds) => cmds.every((c) => /^tail\s/.test(c));
 
 // The one action a card offers. type: copy | link | none. A card never gets a dead button.
+const has = (f, k) => Boolean(f && f[k]);
+const copyFix = (cmds) => ({ type: 'copy', label: isDiagnostic(cmds) ? 'Copy diagnostic command' : 'Copy fix command', text: cmds.join('\n') });
+
 export function failureAction(f, subs) {
-  if (f && f.finding_id) return { type: 'link', label: 'Open in Improve', target: `improve?finding=${encodeURIComponent(f.finding_id)}` };
-  if (f && f.session_id) return { type: 'copy', label: 'Copy session id', text: String(f.session_id) };
+  if (has(f, 'finding_id')) return { type: 'link', label: 'Open in Improve', target: `improve?finding=${encodeURIComponent(f.finding_id)}` };
+  if (has(f, 'session_id')) return { type: 'copy', label: 'Copy session id', text: String(f.session_id) };
   const cmds = fixCommands(f, subs);
-  if (cmds.length) return { type: 'copy', label: isDiagnostic(cmds) ? 'Copy diagnostic command' : 'Copy fix command', text: cmds.join('\n') };
-  return { type: 'none' };
+  return cmds.length ? copyFix(cmds) : { type: 'none' };
 }

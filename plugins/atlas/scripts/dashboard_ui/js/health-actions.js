@@ -17,17 +17,20 @@ export function actionButton(f, subs, navigate) {
   return btn;
 }
 
+const dismissBody = (f, undo) => (undo ? { id: f.id, undo: true } : { id: f.id });
+const failLabel = (err) => `Failed: ${(err && err.error) || 'retry'}`;
+
 // Persists the dismissal server side, then lets the caller refresh. A recurrence re-opens the item.
 export function dismissButton(f, api, onDone, undo = false) {
   const btn = h('button', { type: 'button', class: 'btn btn-ghost', title: undo ? 'Show this item again' : 'Hide until it happens again' }, undo ? 'Restore' : 'Dismiss');
   btn.addEventListener('click', async () => {
     btn.disabled = true;
     try {
-      await api.post('/api/v2/dismiss', undo ? { id: f.id, undo: true } : { id: f.id });
+      await api.post('/api/v2/dismiss', dismissBody(f, undo));
       onDone();
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = `Failed: ${(err && err.error) || 'retry'}`;
+      btn.textContent = failLabel(err);
     }
   });
   return btn;
