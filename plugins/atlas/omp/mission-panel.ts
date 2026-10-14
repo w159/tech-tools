@@ -1,26 +1,48 @@
 /**
- * Mission Control panel for the omp widget: the same framed look as the Claude band (mod/), as plain lines.
- * omp renders widget strings through pi-tui Text, which is ANSI aware, so border/chip/lane accents are colored.
+ * Mission Control panel for the omp widget, drawn in Catppuccin Mocha truecolor after the design prototype
+ * (.atlas/evidence/optimize-2026-10-13/design/proto.py band_running / band_idle): gradient title bar, chevron phase
+ * rail, lanes with state chip + tool chip + eighth-block bar + sparkline, an IRC ticker and a gates footer.
+ * omp renders widget strings through pi-tui Text, which is ANSI aware. Every line is clipped by code point OUTSIDE
+ * escape sequences and filled with the panel background, so no line is wider than `width` and no escape is ever cut.
  * Pure: renderPanel(model) -> lines. Gate status comes from a throttled async cache over atlas_gates.py.
  */
 import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
 import type { GateGroup } from "../mod/pane/sidebar";
 
-const PHASES = ["research", "theory", "test", "implement", "verify", "done"];
-const MAX_LANES = 4;
-const NAME_W = 12;
-const BAR_CELLS = 10;
+type Rgb = readonly [number, number, number];
+const hx = (s: string): Rgb => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
+const PANEL = hx("#11111b");
+const PANEL2 = hx("#181825");
+const BASE = hx("#1e1e2e");
+const TXT = hx("#cdd6f4");
+const MUT = hx("#6c7086");
+const DIM = hx("#45475a");
+const VIOLET = hx("#cba6f7");
+const TEAL = hx("#94e2d5");
+const SKY = hx("#89dceb");
+const BLUE = hx("#89b4fa");
+const GREEN = hx("#a6e3a1");
+const PEACH = hx("#fab387");
+const RED = hx("#f38ba8");
+const YEL = hx("#f9e2af");
+const PINK = hx("#f5c2e7");
+const WHITE: Rgb = [255, 255, 255];
+const PHASES: Array<[string, Rgb]> = [["research", BLUE], ["theory", VIOLET], ["test", YEL], ["implement", PEACH], ["verify", GREEN], ["done", TEAL]];
+const NICKS = [PINK, PEACH, YEL, GREEN, TEAL, SKY, BLUE, VIOLET];
+const EIGHTHS = " ▏▎▍▌▋▊▉█";
+const SPARK = "▁▂▃▄▅▆▇█";
+const MAX_LANES = 5;
 const BAR_FULL_S = 120; // a lane bar fills over two minutes
 const GATES_TTL_MS = 10_000;
 
-const paint = (code: number) => (s: string) => `\x1b[${code}m${s}\x1b[0m`;
-const red = paint(31);
-const green = paint(32);
-const cyan = paint(36);
-const dim = paint(2);
-const inverse = paint(7);
+const RST = "\x1b[0m";
+const fg = (c: Rgb) => `\x1b[38;2;${c[0]};${c[1]};${c[2]}m`;
+const bg = (c: Rgb) => `\x1b[48;2;${c[0]};${c[1]};${c[2]}m`;
+const lerp = (a: Rgb, b: Rgb, t: number): Rgb => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * t)) as unknown as Rgb;
+const seg = (text: string, f?: Rgb, b: Rgb = PANEL, bold = false) => `${bold ? "\x1b[1m" : ""}${f ? fg(f) : ""}${bg(b)}${text}${RST}`;
+const chip = (text: string, col: Rgb) => seg(` ${text} `, BASE, col, true);
 
-/** A lane's current tool (active) or the last one it ran (inactive, drawn dim between calls). */
+/** A lane's current tool (active) or the last one it ran (inactive, between calls). */
 export interface LaneTool {
 	tool: string;
 	target: string;
@@ -29,7 +51,15 @@ export interface LaneTool {
 export interface PanelWorker {
 	name: string;
 	secs: number;
+	role?: string;
 	tool?: LaneTool;
+	spark?: number[]; // tool calls per time bucket, oldest first
+}
+export interface PanelNote {
+	from: string;
+	to: string;
+	text: string;
+	ts?: number; // epoch seconds; shown as HH:MM when it is a real clock value
 }
 export interface PanelModel {
 	width: number;
@@ -37,100 +67,253 @@ export interface PanelModel {
 	phase: string;
 	spin: string; // current-phase spinner frame
 	laneSpin: string;
+	tick: number; // drives the current-phase shimmer
 	done: number;
 	total: number;
 	workers: PanelWorker[];
-	notes: string[]; // already `from > to: text`, oldest first
+	notes: PanelNote[]; // oldest first
 	gates: GateGroup[] | null;
+	channel?: string; // `<repo>@<branch>/<lead>`
+	team?: string; // `<class>/<effort>`
+	elapsedSecs?: number;
 	idle?: { workers: number; minutes: number };
 }
 
-/** Pad or cut (with an ellipsis) to exactly `w` code points; every glyph used here is one column wide. */
-function fit(s: string, w: number): string {
-	const cs = [...s];
-	return cs.length > w ? `${cs.slice(0, Math.max(0, w - 1)).join("")}…` : s + " ".repeat(w - cs.length);
+const ANSI_SPLIT = /(\x1b\[[0-9;]*m)/;
+/** Visible columns: code points outside escape sequences (every glyph this panel draws is one column wide). */
+export const visibleWidth = (s: string) => [...s.replace(/\x1b\[[0-9;]*m/g, "")].length;
+
+/** Cut to `w` columns between escape sequences, then fill the rest with the panel background. */
+function fitLine(s: string, w: number): string {
+	let out = "";
+	let n = 0;
+	for (const part of s.split(ANSI_SPLIT)) {
+		if (part.startsWith("\x1b[")) out += part;
+		else {
+			const take = [...part].slice(0, Math.max(0, w - n));
+			out += take.join("");
+			n += take.length;
+		}
+	}
+	return out + RST + (n < w ? seg(" ".repeat(w - n)) : "");
 }
 
-const age = (secs: number) => (secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m`);
-const miniBar = (done: number, total: number, cells: number) => {
-	const fill = total ? Math.round((done / total) * cells) : 0;
-	return "▰".repeat(fill) + "▱".repeat(cells - fill);
-};
+/** Pad or cut (with an ellipsis) to exactly `w` code points. */
+function cut(s: string, w: number): string {
+	const cs = [...s];
+	if (w <= 0) return "";
+	return cs.length > w ? `${cs.slice(0, w - 1).join("")}…` : s + " ".repeat(w - cs.length);
+}
 
-function gatesText(g: GateGroup[] | null): string {
+const age = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`);
+const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+const roleOf = (name: string) => name.replace(/-[^-]*$/, "") || name;
+
+/** Full-width title: `left` and `right` in bold base color over a per-cell gradient from `a` to `b`. */
+function gradBar(left: string, right: string, w: number, a: Rgb, b: Rgb): string {
+	const r = [...right].length < w - 4 ? [...right] : [];
+	const l = [...cut(` ${left}`, w - r.length)];
+	const cells = [...l, ...r];
+	return `\x1b[1m${fg(BASE)}${cells.map((ch, i) => bg(lerp(a, b, i / Math.max(1, w - 1))) + ch).join("")}${RST}`;
+}
+
+type RailMode = "full" | "short";
+type RailLook = { tick: number; spin: string; idle: boolean };
+
+/** The current phase: a shimmering filled pill with the phase spinner (a steady ◆ when idle). */
+function currentPill(name: string, col: Rgb, m: RailLook): string {
+	const shimmer = m.idle ? col : lerp(col, WHITE, 0.25 + 0.25 * ((m.tick % 4) / 3));
+	return seg(` ${m.idle ? "◆" : m.spin} ${name.toUpperCase()} `, BASE, shimmer, true);
+}
+
+function pill(i: number, cur: number, m: RailLook, mode: RailMode): string {
+	const [name, col] = PHASES[i]!;
+	const label = mode === "full" ? name : name.slice(0, 3);
+	if (i < cur) return seg(` ✓ ${label} `, BASE, lerp(col, PANEL, 0.45));
+	if (i > cur) return seg(` ${label} `, MUT, PANEL2);
+	return currentPill(name, col, m);
+}
+
+/** Chevron pills; abbreviated names when the full rail does not fit. */
+function rail(phase: string, w: number, m: RailLook): string {
+	const cur = Math.max(0, PHASES.findIndex(p => p[0] === phase));
+	const build = (mode: RailMode) =>
+		seg(" ") + PHASES.map((p, i) => pill(i, cur, m, mode) + seg(i < PHASES.length - 1 ? "▶" : " ", i < cur ? p[1] : DIM)).join("");
+	const full = build("full");
+	return visibleWidth(full) <= w ? full : build("short");
+}
+
+/** One bar cell: full block, the eighth-block edge, or empty track; filled cells take the gradient color. */
+function barCell(i: number, width: number, cells: number, a: Rgb, b: Rgb): string {
+	const whole = Math.floor(cells);
+	const ch = i < whole ? "█" : i === whole ? EIGHTHS[Math.floor((cells - whole) * 8)]! : " ";
+	return fg(i <= whole ? lerp(a, b, i / Math.max(1, width - 1)) : DIM) + bg(PANEL2) + ch;
+}
+
+function bar(frac: number, width: number, a: Rgb, b: Rgb): string {
+	const cells = Math.max(0, Math.min(1, frac)) * width;
+	return Array.from({ length: width }, (_, i) => barCell(i, width, cells, a, b)).join("") + RST;
+}
+
+function spark(counts: number[] | undefined, width: number, col: Rgb): string {
+	const vals = (counts ?? []).slice(-width);
+	const padded = [...Array(Math.max(0, width - vals.length)).fill(0), ...vals] as number[];
+	const max = Math.max(1, ...padded);
+	return padded.map(v => (v ? seg(SPARK[Math.max(1, Math.round((v / max) * 7))]!, col) : seg(SPARK[0]!, DIM))).join("");
+}
+
+interface LaneCols {
+	name: number;
+	role: number;
+	target: number;
+	bar: number;
+	spark: number;
+}
+const FIXED = 30; // lead 1 + state chip 7 + glyph 3 + tool chip 12 + age 7
+
+/** Column widths for `w`: optional columns join by priority as room allows. */
+function laneCols(w: number): LaneCols {
+	const c: LaneCols = { name: 12, role: 0, target: 12, bar: 0, spark: 0 };
+	let rest = w - FIXED - c.name - c.target - 1;
+	const grow = (k: keyof LaneCols, by: number, need = by) => {
+		if (rest >= need) (c[k] += by), (rest -= need);
+	};
+	grow("bar", 10, 12);
+	grow("name", 6);
+	grow("spark", 12, 14);
+	grow("role", 12);
+	grow("target", 12);
+	grow("bar", 18);
+	c.target += Math.max(0, Math.min(rest, 8)); // the rest stays empty so bars line up like the design
+	return c;
+}
+
+/** RUN: a tool in flight; THINK: between calls (tool and target muted); START: no tool recorded yet. */
+interface LaneLook {
+	label: string;
+	col: Rgb;
+	glyph: string;
+	tool: string;
+	target: string;
+	ink: Rgb;
+	toolInk: Rgb;
+}
+function laneLook(t: LaneTool | undefined, spin: string): LaneLook {
+	if (!t) return { label: "START", col: SKY, glyph: "◌", tool: "working", target: "", ink: TXT, toolInk: SKY };
+	return t.active
+		? { label: "RUN", col: GREEN, glyph: spin, tool: t.tool, target: t.target, ink: TXT, toolInk: GREEN }
+		: { label: "THINK", col: YEL, glyph: "◷", tool: t.tool, target: t.target, ink: MUT, toolInk: MUT };
+}
+
+const roleCell = (wk: PanelWorker, c: LaneCols) => (c.role ? seg(`${cut(wk.role ?? roleOf(wk.name), c.role - 1)} `, MUT) : "");
+
+/** Elapsed bar (fills over BAR_FULL_S) and the tool-call sparkline, each only when its column fits. */
+function meterCells(wk: PanelWorker, c: LaneCols, col: Rgb): string {
+	const meter = c.bar ? seg(" ") + bar(wk.secs / BAR_FULL_S, c.bar, lerp(col, PANEL, 0.1), lerp(col, WHITE, 0.35)) + seg(" ") : "";
+	return meter + (c.spark ? seg(" ") + spark(wk.spark, c.spark, col) + seg(" ") : "");
+}
+
+function laneRow(wk: PanelWorker, m: PanelModel, c: LaneCols): string {
+	const k = laneLook(wk.tool, m.laneSpin);
+	const head = seg(" ") + chip(cut(k.label, 5), k.col) + seg(` ${k.glyph} `, k.col) + seg(`${cut(wk.name, c.name - 1)} `, TXT, PANEL, true);
+	const tool = seg(` ${cut(k.tool, 10)} `, k.toolInk, PANEL2, true) + seg(` ${cut(k.target, c.target)}`, k.ink);
+	return head + roleCell(wk, c) + tool + meterCells(wk, c, k.col) + seg(age(wk.secs).padStart(7), MUT);
+}
+
+const nick = (name: string) => seg(name, NICKS[[...name].reduce((n, ch) => n + ch.codePointAt(0)!, 0) % NICKS.length], PANEL, true);
+const hhmm = (ts?: number) => (ts && ts > 1e9 ? new Date(ts * 1000).toTimeString().slice(0, 5) : "");
+
+function noteSeg(n: PanelNote, text = n.text): string {
+	const t = hhmm(n.ts);
+	return (t ? seg(`${t} `, DIM) : "") + nick(n.from) + seg(" → ", MUT) + nick(n.to) + seg(`: ${text}   `, TXT);
+}
+
+/** `parts` with older note `n` in front, its text cut to `room`, when at least 16 columns of text fit. */
+function withCutNote(parts: string[], n: PanelNote, room: number): string[] {
+	const text = room - visibleWidth(noteSeg(n, ""));
+	return text >= 16 ? [noteSeg(n, cut(n.text, text - 3).trimEnd()), ...parts] : parts;
+}
+
+/** The newest notes that fit in `room`, oldest first; one older note may join with its text cut. */
+function tickerNotes(notes: PanelNote[], room: number): string[] {
+	const parts: string[] = [];
+	let used = 0;
+	for (const n of [...notes].reverse()) {
+		const whole = noteSeg(n);
+		if (parts.length && used + visibleWidth(whole) > room) return withCutNote(parts, n, room - used);
+		parts.unshift(whole);
+		used += visibleWidth(whole);
+	}
+	return parts;
+}
+
+function tickerRow(m: PanelModel, w: number): string {
+	const head = seg(" ") + chip(`#${(m.channel ?? "lead").split("/").at(-1)}`, VIOLET) + seg(" ");
+	return head + tickerNotes(m.notes, w - visibleWidth(head)).join("");
+}
+
+const gateChip = (g: GateGroup) => (groupOpenCount(g) ? chip(`✖ ${g.id}`, RED) : chip(`✔ ${g.id}`, GREEN)) + seg(" ");
+
+/** Whole chips while they fit in `room`, then `+N` for the rest; fixed order (the title still counts open gates). */
+function fitChips(chips: string[], room: number): string {
+	let out = "";
+	for (const [i, c] of chips.entries()) {
+		if (visibleWidth(out + c) + 4 > room && i < chips.length - 1) return out + seg(`+${chips.length - i}`, MUT);
+		out += c;
+	}
+	return out;
+}
+
+function footerRow(m: PanelModel, w: number): string {
+	const s = seg(" ") + seg("tasks ", MUT) + bar(m.total ? m.done / m.total : 0, 18, GREEN, TEAL) + seg(` ${m.done}/${m.total}  `, TXT);
+	return s + (m.gates === null ? chip("gates …", DIM) : fitChips(m.gates.map(gateChip), w - visibleWidth(s)));
+}
+
+function gatesBrief(g: GateGroup[] | null): string {
 	if (g === null) return "gates …";
 	const open = g.reduce((n, x) => n + groupOpenCount(x), 0);
-	return open ? `gates ✗${open}` : "gates ✓";
+	return open ? `✖ ${open} gates` : "✔ gates";
 }
 
-function headerText(m: PanelModel, inner: number): string {
-	const rail = PHASES.map((p, i) => `${i === PHASES.indexOf(m.phase) ? m.spin : i < PHASES.indexOf(m.phase) ? "●" : "○"} ${p}`).join(" ─ ");
-	const right = `${m.done}/${m.total} tasks · ${gatesText(m.gates)}`;
-	const full = `ATLAS  ${rail}`;
-	const left = full.length + 2 + right.length <= inner - 2 ? full : `ATLAS  ${m.spin} ${m.phase}`;
-	return left + " ".repeat(Math.max(1, inner - 2 - left.length - right.length)) + right;
+function titleRow(m: PanelModel, w: number): string {
+	const scope = m.channel ? `   ${m.channel.replace(/\/[^/]*$/, "")}` : "";
+	const left = `◢◤ ATLAS  ·  mission control${scope}${m.team ? `  ·  ${m.team}` : ""}`;
+	const right = `◷ ${clock(m.elapsedSecs ?? 0)}   ${m.workers.length} live   ${gatesBrief(m.gates)} `;
+	return gradBar(left, right, w, VIOLET, SKY);
 }
 
-/** Lane text split at the tool column so the row can dim just the tool part between calls. */
-function laneText(w: PanelWorker, m: PanelModel): { head: string; tool: string } {
-	const fill = Math.max(1, Math.min(BAR_CELLS, Math.ceil((w.secs / BAR_FULL_S) * BAR_CELLS)));
-	const bar = "▰".repeat(fill) + "▱".repeat(BAR_CELLS - fill);
-	const tool = w.tool ? `${w.tool.tool} ${w.tool.target}`.trim() : "working";
-	return { head: `▌ ${fit(w.name, NAME_W)} ${m.laneSpin} ▕${bar}▏ ${age(w.secs)} `, tool };
+/** Spare budget becomes the design's breathing room: under the rail, then between the lanes and the extras. */
+function breathe(lanes: string[], extras: string[], room: number): string[] {
+	const spare = room - lanes.length - extras.length;
+	const gap = spare >= 2 && extras.length ? [seg(" ")] : [];
+	return [...(spare >= 1 ? [seg(" ")] : []), ...lanes, ...gap, ...extras];
 }
 
-function laneRow(w: PanelWorker, m: PanelModel, row: Row): string {
-	const { head, tool } = laneText(w, m);
-	return row(head + tool, 1, cyan, w.tool && !w.tool.active ? { from: [...head].length, paint: dim } : undefined);
+/** Lanes win the `room` over "+N more", which wins over the ticker. */
+function middleRows(m: PanelModel, w: number, room: number): string[] {
+	const shown = Math.min(m.workers.length, MAX_LANES, room);
+	const cols = laneCols(w);
+	const lanes = m.workers.slice(0, shown).map(wk => laneRow(wk, m, cols));
+	const more = m.workers.length > shown ? [seg(` +${m.workers.length - shown} more`, MUT)] : [];
+	const extras = [...more, ...(m.notes.length ? [tickerRow(m, w)] : [])].slice(0, room - lanes.length);
+	return breathe(lanes, extras, room);
 }
 
-function footerText(m: PanelModel): string {
-	const gates = m.gates === null ? "gates …" : m.gates.map(g => `${groupOpenCount(g) ? "✗" : "✓"} ${g.id}`).join(" ");
-	return `todos ${miniBar(m.done, m.total, 9)} ${m.done}/${m.total}  ${gates}`;
+function idleRows(idle: { workers: number; minutes: number }, gates: GateGroup[] | null, w: number): string[] {
+	const right = `last run: ${idle.workers} workers · ${idle.minutes} min · ${gatesBrief(gates)} `;
+	return [gradBar("◢◤ ATLAS  ·  idle", right, w, hx("#585b70"), hx("#313244")), rail("done", w, { tick: 0, spin: "◆", idle: true })];
 }
 
-/** Border color tracks state: red when a gate is open, green when all pass, dim while unknown or idle. */
-function borderPaint(m: PanelModel): (s: string) => string {
-	if (m.idle || m.gates === null) return dim;
-	return m.gates.some(g => groupOpenCount(g)) ? red : green;
+/** Title, rail and footer always show; the middle rows take what is left of maxLines. */
+function liveRows(m: PanelModel, w: number): string[] {
+	const railLine = rail(m.phase, w, { tick: m.tick, spin: m.spin, idle: false });
+	return [titleRow(m, w), railLine, ...middleRows(m, w, Math.max(0, m.maxLines - 3)), footerRow(m, w)];
 }
 
 export function renderPanel(m: PanelModel): string[] {
-	const inner = Math.max(20, m.width - 2);
-	const edge = borderPaint(m);
-	const side = edge("│");
-	// head: leading chars of the already-fitted body that get an accent color (ATLAS chip, lane bar); tail: chars from
-	// `tail.from` on get `tail.paint` (a lane's idle tool). Split by code point so the ANSI never moves a border.
-	const row: Row = (text, head = 0, accent = s => s, tail) => {
-		const cs = [...fit(` ${text}`, inner)];
-		const cut = tail ? Math.min(cs.length, Math.max(1 + head, 1 + tail.from)) : cs.length;
-		const rest = cs.slice(cut).join("");
-		return `${side}${cs[0]}${accent(cs.slice(1, 1 + head).join(""))}${cs.slice(1 + head, cut).join("")}${rest && tail ? tail.paint(rest) : rest}${side}`;
-	};
-	const top = edge(`╭${"─".repeat(inner)}╮`);
-	const bottom = edge(`╰${"─".repeat(inner)}╯`);
-	if (m.idle) {
-		return [top, row(`ATLAS  ○ idle · last run: ${m.idle.workers} workers, ${m.idle.minutes} min`, 5, inverse), bottom];
-	}
-	return [top, row(headerText(m, inner), 5, inverse), ...middleRows(m, row), row(footerText(m)), bottom];
+	const w = Math.max(20, m.width);
+	return (m.idle ? idleRows(m.idle, m.gates, w) : liveRows(m, w)).map(s => fitLine(s, w));
 }
-
-type Row = (text: string, head?: number, accent?: (s: string) => string, tail?: { from: number; paint: (s: string) => string }) => string;
-
-/** Lanes win the budget over the ticker; "+N more" and the ticker take what is left. */
-function middleRows(m: PanelModel, row: Row): string[] {
-	const room = m.maxLines - 4;
-	const shown = Math.min(m.workers.length, MAX_LANES, Math.max(0, room));
-	const hidden = m.workers.length - shown;
-	const moreRoom = room - shown;
-	const more = moreRows(hidden, moreRoom, row);
-	const ticker = tickerRows(m.notes, moreRoom - more.length, row);
-	return [...m.workers.slice(0, shown).map(w => laneRow(w, m, row)), ...more, ...ticker];
-}
-
-const moreRows = (hidden: number, room: number, row: Row): string[] => (hidden > 0 && room >= 1 ? [row(`+${hidden} more`, 40, dim)] : []);
-
-const tickerRows = (notes: string[], room: number, row: Row): string[] => (notes.length && room >= 1 ? [row(`#lead  ${notes.slice(-2).join(" · ")}`)] : []);
 
 /** Last gate groups from atlas_gates.py; re-runs at most once per GATES_TTL_MS and never blocks a paint. */
 export interface GatesCache {

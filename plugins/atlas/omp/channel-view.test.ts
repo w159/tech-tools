@@ -1,8 +1,8 @@
 import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WIDGET_KEY, createChannelView, laneTool, liveWorkers, registerLaneToolRecorder, spinFrame, todoSummary, finishedMembers, formatNote, readChannelNotes, registerChannelView } from "./channel-view";
-import { createGatesCache, renderPanel, type PanelModel } from "./mission-panel";
+import { WIDGET_KEY, createChannelView, laneCalls, laneTool, sparkBuckets, liveWorkers, registerLaneToolRecorder, spinFrame, todoSummary, finishedMembers, formatNote, readChannelNotes, registerChannelView } from "./channel-view";
+import { createGatesCache, renderPanel, visibleWidth, type PanelModel } from "./mission-panel";
 import { isTerminalYield, registerStopBridge } from "./stop-bridge";
 import { registerWorkerReport } from "./worker-report";
 import { readFileSync } from "node:fs";
@@ -11,6 +11,8 @@ import { expect, test } from "bun:test";
 
 const CHAN = "repo@main/lead-abc";
 const plain = (ls?: string[]) => (ls ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+/** A lane row: state chip, glyph, then the worker name. */
+const lane = (name: string) => new RegExp(`(START|RUN|THINK)\\s+\\S ${name}\\s`);
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "chan-view-"));
@@ -64,8 +66,8 @@ test("task returns first (async spawn): widget keeps polling, shows late notes, 
 	const { calls, ui, timers, view } = harness();
 	f.note("lead-abc", "A", "scope: do the thing");
 	view.open(ui, { channel: CHAN, members: ["A", "B"], cwd: f.root }); // the task tool call itself returns right after this
-	expect(plain(calls[0])).toContain("lead-abc > A: scope: do the thing");
-	expect(plain(calls[0])).toContain("▌ A");
+	expect(plain(calls[0])).toContain("lead-abc → A: scope: do the thing");
+	expect(plain(calls[0])).toMatch(lane("A"));
 	expect(timers.iv).toBeDefined();
 
 	// no member has posted yet; many polls later (minutes) the view is still up and still polling
@@ -76,18 +78,18 @@ test("task returns first (async spawn): widget keeps polling, shows late notes, 
 	f.note("A", "B", "touching shared.ts"); // child <-> child, written after the tool ended
 	f.note("B", "lead-abc", "start: reading it"); // child -> lead
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("A > B: touching shared.ts");
-	expect(plain(calls.at(-1))).toContain("B > lead-abc: start: reading it");
+	expect(plain(calls.at(-1))).toContain("A → B: touching shared.ts");
+	expect(plain(calls.at(-1))).toContain("B → lead-abc: start: reading it");
 
 	f.finish(["A"]);
 	for (let i = 0; i < 5; i++) timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("▌ B");
-	expect(plain(calls.at(-1))).not.toContain("▌ A");
+	expect(plain(calls.at(-1))).toMatch(lane("B"));
+	expect(plain(calls.at(-1))).not.toMatch(lane("A"));
 	expect(timers.iv).toBeDefined(); // B still working
 
 	f.finish(["A", "B"]);
 	timers.iv?.(); // quiet poll 1
-	expect(plain(calls.at(-1))).toContain("idle · last run: 2 workers");
+	expect(plain(calls.at(-1))).toContain("last run: 2 workers");
 	timers.iv?.(); // quiet poll 2
 	expect(timers.iv).toBeDefined();
 	timers.iv?.(); // quiet poll 3
@@ -140,7 +142,7 @@ test("a new dispatch during the linger keeps the widget and merges the roster", 
 	view.open(ui, { channel: CHAN, members: ["B"], cwd: f.root }); // second wave, same channel
 	expect(timers.to).toBeUndefined();
 	expect(timers.iv).toBeDefined();
-	expect(plain(calls.at(-1))).toContain("▌ B");
+	expect(plain(calls.at(-1))).toMatch(lane("B"));
 });
 
 test("ATLAS_CHANNELS=off: no widget, no timers", () => {
@@ -154,8 +156,8 @@ test("ATLAS_CHANNELS=off: no widget, no timers", () => {
 test("a missing board still renders title + roster and never throws", () => {
 	const { calls, ui, view } = harness();
 	view.open(ui, { channel: CHAN, members: ["A"], cwd: join(tmpdir(), "no-such-repo-xyz") });
-	expect(calls[0]?.[0]).toContain("╭");
-	expect(plain(calls[0])).toContain("▌ A");
+	expect(plain([calls[0]![0]!])).toContain("ATLAS");
+	expect(plain(calls[0])).toMatch(lane("A"));
 	view.stop();
 	expect(calls.at(-1)).toBeUndefined();
 });
@@ -171,7 +173,7 @@ test("wiring: a task dispatch opens the view; session_shutdown clears it", () =>
 	registerWorkerReport(pi, { env: { ATLAS_WORKER_SCHEMA: "off" }, channelRun, onChannelOpen: view.open });
 	const ctx = { cwd: f.root, ui, agent: { kind: "main" }, sessionManager: { getSessionId: () => "abc123" } };
 	handlers.tool_call[0]({ toolName: "task", input: { tasks: [{ agent: "task", name: "A", task: "t" }] } }, ctx);
-	expect(plain(calls.at(-1))).toContain("▌ A");
+	expect(plain(calls.at(-1))).toMatch(lane("A"));
 	expect(timers.iv).toBeDefined();
 	handlers.session_shutdown[0]({}, ctx);
 	expect(calls.at(-1)).toBeUndefined();
@@ -272,19 +274,19 @@ test("a linked-worktree cwd reads the MAIN repo board, where atlas_todo.py write
 	writeFileSync(join(wt, ".git"), `gitdir: ${join(main, ".git", "worktrees", "wt")}\n`);
 	const { calls, ui, view } = harness();
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: wt });
-	expect(plain(calls[0])).toContain("▌ w1");
+	expect(plain(calls[0])).toMatch(lane("w1"));
 	view.stop();
 });
 
-test("widget never exceeds omp's 10-line cap with 6 workers and 8 notes; footer stays above the bottom border", () => {
+test("widget never exceeds omp's 10-line cap with 6 workers and 8 notes; footer is the last line", () => {
 	const names = Array.from({ length: 6 }, (_, i) => `w${i}`);
 	const root = atlasFixture(names.map(name => ({ name, joined: 1 })), [{ status: "pending", phase: "verify" }]);
 	for (let i = 0; i < 8; i++) appendFileSync(join(root, ".atlas", ".run", "board", "a.jsonl"), `${JSON.stringify({ ts: i, seq: i + 1, owner: "a", to: "all", text: `n${i}`, channel: CHAN })}\n`);
 	const { calls, ui, view } = harness({ ATLAS_PROJECT_ROOT: root });
 	view.open(ui, { channel: CHAN, members: names, cwd: root });
 	expect(calls[0]!.length).toBeLessThanOrEqual(10);
-	expect(plain([calls[0]![1]])).toContain("ATLAS");
-	expect(plain([calls[0]!.at(-2)!])).toContain("todos");
+	expect(plain([calls[0]![0]!])).toContain("ATLAS");
+	expect(plain([calls[0]!.at(-1)!])).toContain("tasks");
 	view.stop();
 });
 
@@ -293,59 +295,85 @@ test("widget paints header first and advances spinner per poll", () => {
 	const { calls, ui, timers, view } = harness({ ATLAS_PROJECT_ROOT: root });
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
 	timers.iv?.();
-	expect(plain([calls[0]![1]])).toContain("ATLAS");
+	expect(plain([calls[0]![0]!])).toContain("ATLAS");
 	expect(calls.length).toBe(2);
-	expect(calls[0]?.[2]).not.toBe(calls[1]?.[2]);
+	expect(calls[0]?.[1]).not.toBe(calls[1]?.[1]); // rail: phase spinner + shimmer
 	view.stop();
 });
 
 const model = (over: Partial<PanelModel> = {}): PanelModel => ({
-	width: 120, maxLines: 10, phase: "research", spin: "◜", laneSpin: "⠋", done: 0, total: 2,
-	workers: [{ name: "mc-one", secs: 11 }, { name: "mc-two", secs: 11 }],
-	notes: ["lead > mc-two: sleep loop", "mc-two > all: joined"],
-	gates: [{ id: "completion", title: "c", lines: [] }, { id: "tripwire", title: "t", lines: [] }, { id: "routing", title: "r", lines: [] }],
+	width: 120, maxLines: 10, phase: "implement", spin: "⣾", laneSpin: "⠋", tick: 1, done: 5, total: 9,
+	workers: [
+		{ name: "explorer-a324", secs: 72, tool: { tool: "ctx_search", target: "dispatch_tripwire.py", active: true }, spark: [1, 3, 5, 2, 6, 7, 4, 2, 5, 6, 3, 1] },
+		{ name: "implementer-band", secs: 48, role: "implementer", tool: { tool: "Edit", target: "mod/band.tsx", active: false } },
+		{ name: "verifier-ui", secs: 12 },
+	],
+	notes: [{ from: "explorer-a324", to: "implementer-band", text: "found 3 call sites" }, { from: "implementer-band", to: "all", text: "band.tsx compiles" }],
+	gates: [{ id: "completion", title: "c", lines: [] }, { id: "tripwire", title: "t", lines: [] }, { id: "routing", title: "r", lines: [{ id: "a", label: "a", ok: false }] }],
+	channel: "tech-tools@main/lead-a47cc5", team: "audit/medium", elapsedSecs: 161,
 	...over,
 });
+const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complete SGR sequence
 
-test("panel at width 120 with 2 workers: borders, rail, 2 lanes with bars, ticker, gates footer", () => {
-	const lines = renderPanel(model()).map(l => plain([l]));
-	expect(lines[0]).toStartWith("╭");
-	expect(lines.at(-1)).toStartWith("╰");
-	expect(lines[1]).toContain("ATLAS");
-	expect(lines[1]).toContain("◜ research ─ ○ theory ─ ○ test ─ ○ implement ─ ○ verify ─ ○ done");
-	expect(lines[1]).toContain("0/2 tasks · gates ✓");
-	expect(lines.filter(l => l.includes("▕") && l.includes("▏")).length).toBe(2);
-	expect(lines.join("\n")).toContain("#lead  lead > mc-two: sleep loop · mc-two > all: joined");
-	expect(lines.at(-2)).toContain("✓ completion ✓ tripwire ✓ routing");
-	expect(lines.length).toBe(7);
+test("panel: gradient title, chevron rail, state + tool chips, eighth-block bars, sparkline, ticker, gate chips", () => {
+	const lines = renderPanel(model());
+	const p = lines.map(l => plain([l]));
+	expect(p[0]).toContain("◢◤ ATLAS  ·  mission control   tech-tools@main  ·  audit/medium");
+	expect(p[0]).toContain("◷ 02:41   3 live   ✖ 1 gates");
+	expect(new Set(lines[0]!.match(/48;2;\d+;\d+;\d+/g)).size).toBeGreaterThan(20); // per-cell gradient
+	expect(p[1]).toContain(" ✓ research ▶ ✓ theory ▶ ✓ test ▶ ⣾ IMPLEMENT ▶ verify ▶ done");
+	expect(p[3]).toMatch(/ RUN {4}⠋ explorer-a324 +explorer +ctx_search +dispatch_tripwire\.py/);
+	expect(p[3]).toMatch(/█+[▏▎▍▌▋▊▉]? *[▁▂▃▄▅▆▇█]{12} +1m12s *$/);
+	expect(p[4]).toMatch(/ THINK  ◷ implementer-band +implementer +Edit +mod\/band\.tsx/);
+	expect(p[5]).toMatch(/ START  ◌ verifier-ui +verifier +working/);
+	expect(p[2]).toBe(" ".repeat(120)); // spacer under the rail
+	expect(p[6]).toBe(" ".repeat(120));
+	expect(p[7]).toContain("#lead-a47cc5  explorer-a324 → implementer-band: found 3 call sites   implementer-band → all: band.tsx compiles");
+	expect(p[8]).toMatch(/tasks █+.* 5\/9 {3}✔ completion {3}✔ tripwire {3}✖ routing/);
+	expect(lines).toHaveLength(9);
+	expect(lines[8]).toContain("48;2;243;139;168m ✖ routing"); // filled red chip
 });
 
-test("panel never exceeds the line budget or the given width, whatever the load", () => {
-	for (const width of [40, 80, 120, 160]) for (const n of [0, 1, 4, 6, 9]) for (const maxLines of [5, 7, 10]) {
-		const m = model({ width, maxLines, workers: Array.from({ length: n }, (_, i) => ({ name: `worker-number-${i}`, secs: 500 })), notes: ["x".repeat(300), "y".repeat(300)] });
-		const lines = renderPanel(m);
+test("panel: <= maxLines, visible width exactly `width` at 60..200, no broken escapes, whatever the load", () => {
+	for (let width = 60; width <= 200; width += 7) for (const n of [0, 1, 4, 6, 9]) for (const maxLines of [5, 7, 10]) {
+		const workers = Array.from({ length: n }, (_, i) => ({ name: `worker-number-${i}-${"é".repeat(30)}`, secs: 500, tool: { tool: "x".repeat(40), target: "y".repeat(90), active: i % 2 === 0 } }));
+		const lines = renderPanel(model({ width, maxLines, workers, notes: [{ from: "a", to: "b", text: "z".repeat(300) }] }));
 		expect(lines.length).toBeLessThanOrEqual(maxLines);
-		for (const l of lines) expect([...plain([l])].length).toBeLessThanOrEqual(width);
+		for (const l of lines) {
+			expect(visibleWidth(l)).toBe(width);
+			expect(l).toMatch(ESCAPE_OK);
+		}
 	}
 });
 
-test("panel with 6 workers: 4 lanes + '+2 more' + ticker fit in 10 lines; short budgets drop the ticker first", () => {
+test("panel with 6 workers: 5 lanes + '+1 more' + ticker fill 10 lines; short budgets drop the ticker first", () => {
 	const six = Array.from({ length: 6 }, (_, i) => ({ name: `w${i}`, secs: 5 }));
-	const full = plain(renderPanel(model({ workers: six })));
-	expect(full).toContain("+2 more");
-	expect(full).toContain("#lead");
+	const full = renderPanel(model({ workers: six }));
+	expect(full).toHaveLength(10);
+	expect(plain(full)).toContain("+1 more");
+	expect(plain(full)).toContain("#lead-a47cc5");
 	const tight = plain(renderPanel(model({ workers: six, maxLines: 8 })));
 	expect(tight).not.toContain("#lead");
-	expect(tight).toContain("▌ w3");
+	expect(tight).toMatch(lane("w4"));
+	expect(tight).toContain("tasks");
 });
 
-test("panel: idle is a 3-line frame; an open gate shows an X in header and footer", () => {
-	const idle = renderPanel(model({ workers: [], idle: { workers: 2, minutes: 3 } }));
-	expect(idle.length).toBe(3);
-	expect(plain(idle)).toContain("ATLAS  ○ idle · last run: 2 workers, 3 min");
-	const bad = plain(renderPanel(model({ gates: [{ id: "completion", title: "c", lines: [{ id: "a", label: "a", ok: false }] }] })));
-	expect(bad).toContain("gates ✗1");
-	expect(bad).toContain("✗ completion");
+test("panel idle: 2 lines, dim gradient title with the last-run summary, completed rail", () => {
+	const idle = renderPanel(model({ workers: [], idle: { workers: 2, minutes: 3 }, gates: [] }));
+	expect(idle).toHaveLength(2);
+	expect(plain([idle[0]!])).toMatch(/^ ◢◤ ATLAS {2}· {2}idle +last run: 2 workers · 3 min · ✔ gates $/);
+	expect(plain([idle[1]!])).toContain("✓ research ▶ ✓ theory ▶ ✓ test ▶ ✓ implement ▶ ✓ verify ▶ ◆ DONE");
+	expect(idle[0]).toContain("48;2;88;91;112m"); // #585b70 dim gradient start
+});
+
+test("panel at 60 columns abbreviates the rail and still shows every lane's name and tool", () => {
+	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
+	expect(p[1]).toContain("✓ res ▶ ✓ the ▶ ✓ tes ▶ ⣾ IMPLEMENT ▶ ver ▶ don");
+	expect(p[3]).toMatch(/RUN {4}⠋ explorer-a… +ctx_search/);
+});
+
+test("sparkBuckets: tool calls per 10s bucket over the last 2 minutes, oldest first", () => {
+	expect(sparkBuckets([100, 105, 115, 1, 121, -500], 120)).toEqual([1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1]); // future and stale calls drop
 });
 
 test("gates cache runs the command at most once per 10s across 20 paints and never blocks", async () => {
@@ -400,27 +428,24 @@ test("team lanes: last tool_use from each worker's stream-json log, mcp prefix s
 	const { calls, ui, timers, view } = harness();
 	view.open(ui, { channel: CHAN, members: ["audit-1", "audit-2", "audit-3"], cwd: f.root });
 	const out = plain(calls.at(-1));
-	expect(out).toContain("Bash echo hi");
-	expect(out).toContain("ctx_search where is the widget mounted from the t");
+	expect(out).toMatch(/THINK .* audit-1 .*Bash\s+echo hi/); // answered: between calls
+	expect(out).toMatch(/ctx_search\s+where is the widget/);
 	expect(out).not.toContain("mcp__");
-	expect(out).toContain("Edit mission-panel.ts");
-	const raw = (calls.at(-1) ?? []).join("\n");
-	expect(raw).toContain("\x1b[2mBash echo hi"); // answered: dim
-	expect(raw).not.toContain("\x1b[2mEdit mission-panel.ts"); // in flight: normal
+	expect(out).toMatch(/RUN .* audit-3 .*Edit\s+mission-panel\.ts/); // in flight
 	const widths = (calls.at(-1) ?? []).map(l => [...stripAnsi(l)].length);
 	expect(new Set(widths).size).toBe(1); // ANSI in a lane never skews the frame
 
 	live(f.root, ["audit-1", "audit-2", "audit-3"], ["audit-2"]); // audit-2 posted its exit
 	timers.iv?.();
 	expect(plain(calls.at(-1))).not.toContain("audit-2");
-	expect(plain(calls.at(-1))).toContain("▌ audit-3");
+	expect(plain(calls.at(-1))).toMatch(lane("audit-3"));
 
 	live(f.root, ["audit-1", "audit-2", "audit-3"], ["audit-1", "audit-2", "audit-3"]);
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("idle · last run: 3 workers");
+	expect(plain(calls.at(-1))).toContain("last run: 3 workers");
 	writeFileSync(join(f.root, ".atlas", ".run", "channels.json"), JSON.stringify({ version: 1, channels: {} })); // atlas_team reap drops the channel
 	timers.iv?.();
-	expect(plain(calls.at(-1))).not.toContain("▌ audit"); // finished stays finished: lanes never resurrect
+	expect(plain(calls.at(-1))).not.toMatch(lane("audit-\\d")); // finished stays finished: lanes never resurrect
 });
 
 test("a team reaped between polls (channel gone after it was seen) ends every lane", () => {
@@ -428,10 +453,10 @@ test("a team reaped between polls (channel gone after it was seen) ends every la
 	live(f.root, ["w1", "w2"]);
 	const { calls, ui, timers, view } = harness();
 	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root });
-	expect(plain(calls.at(-1))).toContain("▌ w1");
+	expect(plain(calls.at(-1))).toMatch(lane("w1"));
 	writeFileSync(join(f.root, ".atlas", ".run", "channels.json"), JSON.stringify({ version: 1, channels: {} }));
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("idle · last run: 2 workers");
+	expect(plain(calls.at(-1))).toContain("last run: 2 workers");
 });
 
 test("omp workers and task subs record their own tool: worker env name or sub id, active on call, dim after result", () => {
@@ -444,6 +469,11 @@ test("omp workers and task subs record their own tool: worker env name or sub id
 	expect(laneTool(f.root, "audit-1")).toEqual({ tool: "bash", target: "sleep 5", active: true });
 	worker.tool_result?.({ toolName: "bash", toolCallId: "c1", input: { command: "sleep 5" } }, main);
 	expect(laneTool(f.root, "audit-1")).toEqual({ tool: "bash", target: "sleep 5", active: false });
+	worker.tool_call?.({ toolName: "read", toolCallId: "c1b", input: { path: "/a" } }, main);
+	const calls = laneCalls(f.root, "audit-1"); // sparkline history: one timestamp per call, results add none
+	expect(calls).toHaveLength(2);
+	expect(Math.abs(calls[1]! - Date.now() / 1000)).toBeLessThan(5);
+	expect(laneCalls(f.root, "../evil")).toEqual([]);
 
 	const lead: Record<string, H> = {};
 	registerLaneToolRecorder({ on: (ev: string, h: H) => void (lead[ev] = h) } as never, {});
@@ -453,4 +483,17 @@ test("omp workers and task subs record their own tool: worker env name or sub id
 	expect(laneTool(f.root, "Probe")).toEqual({ tool: "read", target: "c.ts", active: true });
 	lead.tool_call?.({ toolName: "read", toolCallId: "c4", input: { path: "x" } }, { cwd: f.root, agent: { kind: "sub", id: "../evil", name: "x" } });
 	expect(laneTool(f.root, "../evil")).toBeUndefined();
+});
+
+test("team lanes take class/effort and roles from the live team record; channels.json's generic 'subagent' never shows", () => {
+	const root = atlasFixture([{ name: "lead-abc", role: "lead" }, { name: "explorer-127a", role: "subagent", joined: 1 }], [{ status: "pending", phase: "research" }]);
+	mkdirSync(join(root, ".atlas", ".run", "teams"), { recursive: true });
+	writeFileSync(join(root, ".atlas", ".run", "teams", "t1.json"), JSON.stringify({ channel: CHAN, class: "audit", effort: "medium", members: [{ name: "explorer-127a", role: "scout" }] }));
+	const { calls, ui, view } = harness({ ATLAS_PROJECT_ROOT: root });
+	view.open(ui, { channel: CHAN, members: ["explorer-127a"], cwd: root });
+	const out = plain(calls.at(-1));
+	expect(out).toContain("repo@main  ·  audit/medium");
+	expect(out).toMatch(/explorer-127a +scout /);
+	expect(out).not.toContain("subagent");
+	view.stop();
 });
