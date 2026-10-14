@@ -9,9 +9,9 @@ import type { LiveSnapshot } from './orchestra-types';
 import { activeCount, callBuckets, type LiveWorker } from './data/live';
 import { routeCounts } from './data/todos';
 import { groupOpenCount, openGateCount } from './gates';
-import type { GateGroup } from './pane/sidebar-types';
+import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { chip, eighthBar, gradientBar, merge, nickColor, padRow, seg, sparkline, spread } from './paint';
-import { rowOf, type Segment } from './runs';
+import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
 import { fitText, formatDuration, MOCHA as M, mix, phaseHue, spin, textWidth } from './theme';
 
@@ -28,6 +28,15 @@ const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 const RAIL_SKIP = new Set(['validate', 'blocked']);
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
+
+/** Footer button presses: open (or focus) the Atlas pane on a view, or fold the board. Absent in fixtures that wire neither. */
+export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void };
+/** The band's controls: hotkeys press only while the band holds the keyboard (ctrl+x, Tab, or a click), and are unique within it. */
+export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = [
+  { id: 'route', key: 'r', label: 'route' }, { id: 'team', key: 't', label: 'team' }, { id: 'channel', key: 'c', label: 'channel' },
+  { id: 'gates', key: 'g', label: 'gates' }, { id: 'board', key: 'o', label: 'board' },
+];
+const BAND_HINT = `click or ctrl+x Tab, then ${BAND_BUTTONS.map((b) => b.key).join(' ')} `;
 
 type Ctx = { s: LiveSnapshot; rail: string; cols: number; tick: number; full: boolean; now: number; done: number; total: number; open: number; gates: GateGroup[]; cost: number | null; todoExpanded: boolean };
 
@@ -160,9 +169,28 @@ function ticker(c: Ctx): Segment[] {
 const gateChip = (g: GateGroup): Segment[] => [groupOpenCount(g) || g.error ? chip(`✖ ${g.id}`, M.red) : chip(`✔ ${g.id}`, M.green), seg(' ')];
 const hasGateData = (g: GateGroup): boolean => g.lines.length > 0 || !!g.error;
 
-function footer(c: Ctx): Segment[] {
-  const tasks = [seg(' '), seg('tasks ', M.muted), ...eighthBar(c.done / Math.max(1, c.total), 18, M.green, M.teal), seg(` ${c.done}/${c.total}  `, M.text)];
-  return spread([...tasks, ...c.gates.filter(hasGateData).flatMap(gateChip)], [seg('ctrl+x tab  r t c g  /atlas-cc ', M.muted)], c.cols);
+const taskBar = (c: Ctx, barW: number): Segment[] => [seg(' '), seg('tasks ', M.muted), ...(barW ? eighthBar(c.done / Math.max(1, c.total), barW, M.green, M.teal) : []), seg(` ${c.done}/${c.total}  `, M.text)];
+const buttonWidth = (b: { label: string }): number => 3 + textWidth(b.label) + 2; // engine draws `k: label`, two cells between buttons
+
+/** Task bar, gate chips, then the five control Buttons (a row of real clickable keys), the hint flush right when it fits.
+ * Gate chips go first when the row is tight, then the bar. Without handlers: the bar and chips only. */
+function footer(els: ClientElements, c: Ctx, on?: BandHandlers): Segment[] | RenderElement {
+  const chips = c.gates.filter(hasGateData).flatMap(gateChip);
+  if (!on) return padRow([...taskBar(c, 18), ...chips], c.cols);
+  const keysW = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0);
+  const left = [taskBar(c, 18).concat(chips), taskBar(c, 18), taskBar(c, 0)].find((l) => runsWidth(l) + keysW <= c.cols) ?? taskBar(c, 0);
+  const hint = textWidth(BAND_HINT) + 1 <= c.cols - runsWidth(left) - keysW ? BAND_HINT : '';
+  const press = (id: SidebarView | 'board'): (() => void) => (id === 'board' ? on.toggleTodos : () => on.openView(id));
+  const buttons = BAND_BUTTONS.map((b) => els.Button({
+    key: `band:${b.id}`, plain: true, hotkey: b.key, label: b.label, onPress: press(b.id),
+    children: [els.Text({ color: M.text, backgroundColor: M.panel, children: b.label })],
+  }));
+  const gap = c.cols - runsWidth(left) - keysW - textWidth(hint);
+  const sep = (i: number): RenderElement => els.Text({ backgroundColor: M.panel, children: i ? '  ' : '' });
+  return els.Box({
+    flexDirection: 'row', flexShrink: 0,
+    children: [...fitRuns(els, left, c.cols), ...buttons.flatMap((b, i) => [sep(i), b]), els.Text({ backgroundColor: M.panel, children: ' '.repeat(Math.max(0, gap)) + hint })],
+  });
 }
 
 // ---- row budget --------------------------------------------------------------------
@@ -189,8 +217,9 @@ export function planRows(maxRows: number, nLanes: number, hasTicker: boolean): {
 
 // ---- assembly ----------------------------------------------------------------------
 
-const panel = (els: ClientElements, rows: Segment[][], cols: number): RenderElement =>
-  els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: M.panel, children: rows.map((r) => rowOf(els, r, cols)) });
+type Row = Segment[] | RenderElement;
+const panel = (els: ClientElements, rows: Row[], cols: number): RenderElement =>
+  els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: M.panel, children: rows.map((r) => (Array.isArray(r) ? rowOf(els, r, cols) : r)) });
 
 /** `last wave: N workers · 4m12s · ✔ ok` over the most recent spawn burst only, empty when no worker ever ran. */
 function lastWave(c: Ctx, all: LiveWorker[]): string {
@@ -227,10 +256,12 @@ function boardRows(c: Ctx, maxRows: number, fixed: number): Segment[][] {
   return todoRows(c.s.todos, { cols: c.cols, tick: c.tick, expanded: list, maxRows: list ? room - 3 : 1 });
 }
 
-/** Idle: the dim title and the settled rail, then the board when there is one. */
-function idleRows(c: Ctx, all: LiveWorker[], maxRows: number): Segment[][] {
+/** Idle: the dim title and the settled rail, then the board when there is one, then the control buttons. */
+function idleRows(els: ClientElements, c: Ctx, all: LiveWorker[], maxRows: number, on?: BandHandlers): Row[] {
   const title = idleTitle(c, all);
-  return maxRows >= 2 ? [title, padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, false), c.cols), ...boardRows(c, maxRows, 2)] : [title];
+  if (maxRows < 2) return [title];
+  const controls = on && maxRows >= 3 && c.cols >= MID ? [footer(els, c, on)] : []; // the keys must stay reachable while idle
+  return [title, padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, false), c.cols), ...boardRows(c, maxRows, 2 + controls.length), ...controls];
 }
 
 /** <80 columns or <3 rows: the title row alone, phase and counts in it. */
@@ -240,23 +271,23 @@ function narrowRow(c: Ctx, shown: LiveWorker[]): Segment[] {
 }
 
 /** Title, rail, as many lanes as fit, then "+N more", ticker and footer per `planRows`. */
-function fullRows(c: Ctx, all: LiveWorker[], shown: LiveWorker[], maxRows: number): Segment[][] {
+function fullRows(els: ClientElements, c: Ctx, all: LiveWorker[], shown: LiveWorker[], maxRows: number, on?: BandHandlers): Row[] {
   const board = boardRows(c, maxRows - 3, 2); // keep title, rail and one lane
   const plan = planRows(maxRows - board.length, shown.length, c.s.comms.length > 0);
-  const rows: Segment[][] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, true), c.cols), ...board, ...shown.slice(0, plan.lanes).map((w) => lane(w, c))];
+  const rows: Row[] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, true), c.cols), ...board, ...shown.slice(0, plan.lanes).map((w) => lane(w, c))].map((r) => (Array.isArray(r) ? merge(r) : r));
   if (plan.more) rows.push(padRow([seg(`   +${shown.length - plan.lanes} more`, M.muted)], c.cols));
   if (plan.ticker) rows.push(ticker(c));
-  if (plan.footer) rows.push(footer(c));
+  if (plan.footer) rows.push(footer(els, c, on));
   return rows;
 }
 
-export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12, costUsd = null, lastPhase = null, todoExpanded = false }: BandModel): RenderElement {
+export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12, costUsd = null, lastPhase = null, todoExpanded = false }: BandModel, on?: BandHandlers): RenderElement {
   const { done, total } = routeCounts(s.todoGroups, s.contract);
   const all = live.filter((w) => w.state !== 'parked'); // parked workers are resting
   const shown = all.filter((w) => w.state !== 'done');
   const cols = Math.max(1, columns);
   const c: Ctx = { s, rail: railPhase(s, lastPhase), cols, tick, full: cols >= FULL, now: s.now, done, total, open: openGateCount(gates), gates, cost: costUsd, todoExpanded };
-  if (!shown.length) return panel(els, idleRows(c, all, maxRows), cols);
+  if (!shown.length) return panel(els, idleRows(els, c, all, maxRows, on), cols);
   if (cols < MID || maxRows < 3) return panel(els, [narrowRow(c, shown)], cols);
-  return panel(els, fullRows(c, all, shown, maxRows).map(merge), cols);
+  return panel(els, fullRows(els, c, all, shown, maxRows, on), cols);
 }

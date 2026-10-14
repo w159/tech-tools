@@ -56,7 +56,7 @@ describe('Mission Control band', () => {
     expect(rows[0]).toMatch(/◷ \d\d:\d\d/);
     expect(rows[0]).toContain('ctx 12%');
     expect(rows[0]).toContain('$0.41');
-    for (const s of ['RUN ', 'WAIT', 'FAIL', 'explorer-1', 'Grep', '#lead-1', 'need a decision on the token ttl', 'tasks', '✖ completion', '/atlas-cc']) expect(all).toContain(s);
+    for (const s of ['RUN ', 'WAIT', 'FAIL', 'explorer-1', 'Grep', '#lead-1', 'need a decision on the token ttl', 'tasks', '✖ completion']) expect(all).toContain(s);
     expect(rows).toHaveLength(7); // title + rail + blocked, failed, working lanes + ticker + footer
   });
   test('title bar is a truecolor gradient: every cell filled, colours move left to right', () => {

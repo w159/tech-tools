@@ -10,7 +10,7 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code';
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
 import { PHASES, intentToArgv } from './intents';
-import { bandTree, railPhase } from './band';
+import { bandTree, railPhase, type BandHandlers } from './band';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { gatesError, headerGroup, parseGates } from './gates';
@@ -506,11 +506,14 @@ async function sendNote($: EngineInterface, text: string): Promise<void> {
 	void rebuild($);
 }
 
+/** Run a handler's async work, reporting a failure as a toast instead of an unhandled rejection. */
+const guardedBy = ($: EngineInterface) => (fn: () => Promise<unknown>): void => {
+	fn().catch((err: unknown) => $.ui.toast(`atlas: ${String(err)}`, { timeoutMs: 6000 }));
+};
+
 /** Closures for the sidebar view: each writes $.state (never the render hook) and reports failures as toasts. */
 function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandlers {
-	const guarded = (fn: () => Promise<unknown>): void => {
-		fn().catch((err: unknown) => $.ui.toast(`atlas: ${String(err)}`, { timeoutMs: 6000 }));
-	};
+	const guarded = guardedBy($);
 	return {
 		selectRecipient: (name) => guarded(() => update($, recipientState, (cur) => (cur === name ? null : name))),
 		toggle: (key) => guarded(() => update($, expandedState, (cur) => (cur === key ? null : key))),
@@ -529,6 +532,22 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 				const res = await $.ui.copy({ text, surface });
 				$.ui.toast(res.isCopied ? 'Copied' : 'Copy failed', { timeoutMs: 3000 });
 			}),
+	};
+}
+
+/** Band footer presses: open (or focus) the pane on a view, as /atlas-cc does, or fold the board. */
+function bandHandlers($: EngineInterface): BandHandlers {
+	const guarded = guardedBy($);
+	return {
+		openView: (v) =>
+			guarded(async () => {
+				// Open first, before any await: the engine counts the open as asked (placed at any width) only while the press is behind it.
+				const opened = $.ui.open(PANE_ON_DEMAND);
+				await update($, viewState, () => v);
+				await update($, paneOpenedState, () => true);
+				toastUnplaced($)(await opened);
+			}),
+		toggleTodos: () => guarded(async () => { const open = await todoExpanded($); await update($, todoExpandedState, () => !open); }),
 	};
 }
 
@@ -672,7 +691,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);
 		lastRailPhase = railPhase(snapshot, lastRailPhase); // a blocked reply keeps the phase lit before it
-		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, costUsd: (await read($, usageState)).costUsd, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($) });
+		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, costUsd: (await read($, usageState)).costUsd, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($) }, bandHandlers($));
 		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
 	});
 

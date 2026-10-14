@@ -58,8 +58,8 @@ describe('sidebar shell', () => {
   });
 
   test('the hint shows only when the inner width is 60 or more', () => {
-    expect(textOf(tree({ columns: 90 }))).toContain('r t c g tabs · ↑↓ Enter');
-    expect(textOf(tree({ columns: 50 }))).not.toContain('r t c g tabs');
+    expect(textOf(tree({ columns: 90 }))).toContain('press r t c g · Tab ↑↓ · Esc closes');
+    expect(textOf(tree({ columns: 50 }))).not.toContain('press r t c g');
   });
 
   test('plain column: no borderStyle at any width (the host pane draws the one frame)', () => {
