@@ -138,6 +138,7 @@ atlas_mux.py reap --team T
 - **wait** polls until every member has an exit note on the board or `--timeout` passes. Output per member: `exit`, `duration_s`, last `STATUS:` line; plus `notes_worker_to_worker`. Exit code 1 when any member is unfinished.
 - **reap** stops this team's workers only (kills the tmux session, or `claude stop` per claude-bg worker), writes exit notes for workers that never posted one, runs the channel reaper and moves the team record to `.atlas/.run/teams/archive/`.
 - **Pane feed.** `claude -p` prints nothing until it ends, so a tmux worker runs with `--output-format stream-json --verbose` and `scripts/atlas_panefeed.py` renders each event: a branded ATLAS header (name, role, team, channel, goal), one line per tool call with its main argument, and the result. `run-worker` keeps the result text for the board.
+- **Team view (12.3.0).** spawn-team puts every worker in one tiled window of session `atlas-<team_id>` (no idle lead shell), sizes the panes, tags each with `@atlas_worker` and `@atlas_role`, and styles that session only: heavy pane borders labeled with the worker, and an ATLAS status bar with live and done counts and elapsed time. The pane feed repaints in place in truecolor: a gradient header sized to the pane, the goal and peers, one row per event with a tool chip and the unwrapped argument (lean-ctx `-c` and `S=...;` prefixes stripped, peer notes as peer rows), and a sticky status line that ends as DONE or FAILED. Each wave is logged with a `wave_id`, each lead gets its own team channel, omp workers run with `--no-session` so they exit, and `reap` is idempotent and removes the worker briefs. The Claude band and the omp widget read team lanes (current tool, target, sparkline) from the pane logs. Set `CLAUDE_CODE_TMUX_TRUECOLOR=1` and `COLORTERM=truecolor` when the lead runs inside tmux (see `docs/atlas-mod.md`).
 - **omp tool.** `omp/team-tool.ts` registers `atlas_team` (`action: spawn | wait | reap`, plus `class`, `effort`, `paths`, `task`, `team`, `timeout`), which shells out to `atlas_mux.py` and returns its JSON. It is not registered in worker sessions (`ATLAS_WORKER_NAME` set), so workers cannot spawn teams.
 
 ### SCOPE gate (12.2.0)
@@ -146,6 +147,7 @@ atlas_mux.py reap --team T
 
 - `ATLAS_SCOPE_GATE=off` downgrades the deny to an `[atlas] ADVISORY (ATLAS_SCOPE_GATE=off)` note.
 - A broken resolver fails open and records an `atlas_faults` entry.
+- Since 12.3.0 the deny tier runs on every turn, not only the first, and a missing SCOPE denies before the first-offense spec advisory is emitted.
 - Burst advisory: a 2nd `atlas:*` dispatch within `ATLAS_BURST_SECS` (default 10) of the previous one adds an advisory to run the team with spawn-team, wait and reap. `ATLAS_BURST_SECS=0` silences it.
 
 ## omp parity notes (12.1.0)

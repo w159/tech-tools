@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 12.3.0
+
+Folds in the unreleased 12.2.1 fixes.
+
+### Added
+- Bold truecolor Mission Control band (`mod/band.tsx`): gradient title bar, phase pills, state and tool chips, eighth-block elapsed bars, per-worker sparklines, IRC ticker and gate chips.
+- Filled worker cards and notification rows in the transcript, plus a pill reply header (`mod/`).
+- tmux team in one tiled, styled window; the truecolor pane feed (`scripts/atlas_panefeed.py`) shows tool chips, unwrapped commands and a sticky status line.
+- omp bold Mission Control widget with team lanes, live tool and target, and sparklines.
+
+### Changed
+- The SCOPE gate in `dispatch_tripwire` fires on every turn and runs before the first-offense spec advisory.
+- Team waves are logged with a `wave_id`, panes are sized, and each lead gets its own team channel.
+- mod lanes keep the last tool, the phase rail follows the live phase, cards show result lines, and team lanes are read from pane logs.
+
+### Fixed
+- omp team workers run with `--no-session` and exit when done.
+- `atlas_mux.py reap` is idempotent and removes worker briefs.
+- `atlas_doctor.py` resolves its own plugin and marketplace and ignores formatter skips and other installs.
+- omp `atlas_team` passes the lead session to `spawn-team`.
+
 ## 12.2.0
 
 ### Added

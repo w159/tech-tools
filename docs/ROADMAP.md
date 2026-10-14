@@ -180,6 +180,12 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 - [planned] omp worker panes have no streaming feed; `atlas_panefeed.py` renders only the Claude `stream-json` output.
 - [planned] Hook latency: merging the per-event hooks into one process could cut about 100 ms per Edit call.
 
+### Follow-ups: atlas 12.3.0 (added 2026-10-13)
+
+- [planned] The engine folds 2+ background dispatches into one "N background agents launched" row that plugins cannot restyle; batch results show on the notification rows instead.
+- [planned] claude-harness team workers record no call timestamps, so the omp widget draws no sparklines for them.
+- [planned] omp worker panes are still plain output; they have no stream-json feed for `atlas_panefeed.py` to render.
+
 ### Deferred backlog: atlas 10.5.0 wave (added 2026-10-10)
 
 - Hook payload parsing tolerates raw control characters in all remaining hooks (split from todo teca63cae; the dashboard ensure half, the non-blocking singleton lock and the recorded boot timeout, shipped in atlas 11.1.7).

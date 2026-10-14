@@ -32,6 +32,12 @@ Width tiers: >= 120 columns full; 80-119 drops role and target from the lanes; <
 
 Pane floor: the engine places an unasked pane only from 144 columns (`register.ts` `DOCK_MIN_COLUMNS = 144`); below that the band is the only always-on surface.
 
+Look since 12.3.0: the band is a filled Catppuccin Mocha truecolor panel. The title bar is a gradient (scope, wave, elapsed, live count, context, cost); the phase rail is chevron pills with a shimmering current pill that follows the live phase; each lane carries a state chip, a filled tool chip, an eighth-block elapsed bar and a per-worker tool-call sparkline (a ring buffer fed by `onToolStart` and by tool uses read from team pane logs). A lane keeps its last tool, dimmed, between calls. The ticker is an IRC-style feed with hashed nick colors; the footer is a tasks bar plus gate chips. An idle band is two rows.
+
+#### Truecolor in tmux
+
+When Claude Code runs inside tmux, set `CLAUDE_CODE_TMUX_TRUECOLOR=1` and `COLORTERM=truecolor` in its environment. Without them the band, cards and reply header are quantized to the 256-color palette.
+
 Worker segment details (12.1.0). The spinner frame comes from the current phase (`theme.ts` `PHASE_FRAMES`: research, theory, test, implement, verify each have a 4-frame set; other phases use the default). The target is the file basename of the tool call's `file_path`, else the first 40 characters of the first line of its `command` (`data/orchestration.ts` `targetOf`), fitted to 16 cells. The age is `now - startedAt`, the time since the worker was first seen, not since its last tool call (`since` still moves every call). A worker whose state is `parked` is resting: it sorts after `working` and is excluded from the band's live list.
 
 The phase comes from the last header in `turn.complete` (matched with the contract's `headerFirstLinePattern`), else the session's first `in_progress` item, else `research` (`register.ts:97-111` `headerPhaseOf`). The spinner tick (`spinnerTickState`) only advances while `liveWorkers()` has an active entry (`register.ts:529-536`), so an idle session redraws nothing.
@@ -43,6 +49,8 @@ The phase comes from the last header in `turn.complete` (matched with the contra
 - **Worker card** (`workerCard`): an `Agent`/`Task` call to an `atlas:*` role renders as a card with the phase mark, worker name, role, the prompt's `GOAL:` line (else the description) and, when finished, the first line of the result.
 - **Wave strip** (`waveTree`): a tool group of 2+ calls that are all atlas `Agent`/`Task` dispatches renders as a wave header plus one worker card per call, side by side when the width allows.
 - **Channel bubble** (`bubbleTree`): a message another agent sent renders as a bar-edged `#atlas <from> > lead` bubble (up to 8 lines) instead of raw text.
+
+Since 12.3.0 worker cards are filled stripe cards with a state chip and goal, now and done rows (the done row is the first result line); background-agent notification rows use the same style, and a background batch also gets a wave strip. The reply header is drawn as brand and phase pills with no pipe. Limit: the engine folds 2+ background dispatches into one "N background agents launched" row that a plugin cannot restyle; each result still shows on its own notification row.
 
 ### The sidebar (`mod/pane/sidebar.tsx`)
 
