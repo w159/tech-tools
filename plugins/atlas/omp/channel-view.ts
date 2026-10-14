@@ -12,17 +12,17 @@
  * TERMINAL `yield` sets ended_at in channels.json (stop-bridge.ts isTerminalYield). Polling stops after QUIET_POLLS (3)
  * polls with every member finished and no new note, or after MAX_MS (30 min) regardless; the widget then clears
  * LINGER_MS (15s) later. ATLAS_CHANNELS=off: never shown. Fails soft everywhere.
- * Rendering lives in mission-panel.ts: framed Mission Control panel, gates from a 10s-throttled async atlas_gates.py
- * cache; omp widget strings go through pi-tui Text, which is ANSI aware, so borders and accents are colored.
+ * Rendering lives in mission-panel.ts: truecolor Mission Control panel, gates from a 10s-throttled async atlas_gates.py
+ * cache; omp widget strings go through pi-tui Text, which is ANSI aware.
  */
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, writeFileSync } from "node:fs";
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { type GatesCache, type LaneTool, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
+import { type GatesCache, type LaneTool, type PanelNote, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
 import { gatesArmed } from "./scope";
 
 export const WIDGET_KEY = "atlas-channel";
-const MAX_LINES = 10; // omp MAX_WIDGET_LINES: frame + header + lanes + ticker + footer, collapsed by renderPanel
+const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
 const MAX_NOTES = 8;
 const MAX_LINE = 110;
 const POLL_MS = 1500;
@@ -92,6 +92,7 @@ export function spinFrame(n: number, phase?: string): string {
 export interface LiveWorker {
 	name: string;
 	joined?: number;
+	role?: string;
 }
 
 /** Members of `channel` still running: no ended_at, no exit_code, not the lead. */
@@ -101,7 +102,7 @@ export function liveWorkers(root: string, channel: string): LiveWorker[] {
 		const ms: Array<{ name?: string; role?: string; joined?: number; ended_at?: unknown; exit_code?: unknown }> = reg?.channels?.[channel]?.members ?? [];
 		return ms
 			.filter(m => m.name && m.role !== "lead" && m.ended_at === undefined && m.exit_code === undefined)
-			.map(m => ({ name: String(m.name), joined: m.joined }));
+			.map(m => ({ name: String(m.name), joined: m.joined, role: m.role }));
 	} catch {
 		return [];
 	}
@@ -120,9 +121,60 @@ function idleSummary(workers: PanelWorker[], members: number, elapsedMs: number)
 const maxSeq = (notes: Note[]) => notes.reduce((m, n) => Math.max(m, n.seq ?? 0), 0);
 
 /** Lane rows: running members; before the registry lists anyone, the dispatched members not yet finished. */
-function panelWorkers(root: string, live: LiveWorker[], pending: string[], nowMs: number): PanelWorker[] {
+function panelWorkers(root: string, live: LiveWorker[], pending: string[], nowMs: number, roles: Record<string, string>): PanelWorker[] {
 	const src: LiveWorker[] = live.length ? live : pending.map(name => ({ name }));
-	return src.map(w => ({ name: w.name, secs: w.joined ? Math.max(0, Math.floor(nowMs / 1000 - w.joined)) : 0, tool: laneTool(root, w.name) }));
+	return src.map(w => ({
+		name: w.name,
+		role: roles[w.name] ?? (w.role === "subagent" ? undefined : w.role), // channels.json says only "subagent"
+		secs: w.joined ? Math.max(0, Math.floor(nowMs / 1000 - w.joined)) : 0,
+		tool: laneTool(root, w.name),
+		spark: sparkBuckets(laneCalls(root, w.name), nowMs / 1000),
+	}));
+}
+
+const SPARK_BUCKETS = 12;
+const SPARK_SPAN_S = 120;
+const MAX_CALLS = 64;
+
+/** Tool-call counts per SPARK_SPAN_S/SPARK_BUCKETS-second bucket over the last SPARK_SPAN_S, oldest first. */
+export function sparkBuckets(calls: number[], nowSecs: number): number[] {
+	const out = Array(SPARK_BUCKETS).fill(0) as number[];
+	const step = SPARK_SPAN_S / SPARK_BUCKETS;
+	for (const ts of calls) {
+		const back = Math.floor((nowSecs - ts) / step);
+		if (back >= 0 && back < SPARK_BUCKETS) out[SPARK_BUCKETS - 1 - back]++;
+	}
+	return out;
+}
+
+/** `<class>/<effort>` and member roles from the live team record (.atlas/.run/teams/<id>.json) of `channel`. */
+function teamInfo(root: string, channel: string): { team?: string; roles: Record<string, string> } {
+	const rec = teamRecords(root).find(r => r.channel === channel);
+	if (!rec) return { roles: {} }; // task subs have no team record: no class/effort, roles from names
+	return { team: rec.class && rec.effort ? `${rec.class}/${rec.effort}` : undefined, roles: memberRoles(rec.members) };
+}
+
+/** Live team records; a torn record reads as {} and an absent teams dir as []. */
+function teamRecords(root: string): Record<string, unknown>[] {
+	const dir = nodePath.join(root, ".atlas", ".run", "teams");
+	try {
+		return readdirSync(dir)
+			.filter(f => f.endsWith(".json"))
+			.map(f => readRecord(nodePath.join(dir, f)));
+	} catch {
+		return [];
+	}
+}
+
+function memberRoles(members: unknown): Record<string, string> {
+	const rows = (Array.isArray(members) ? members : []).map(asRecord);
+	return Object.fromEntries(rows.filter(m => typeof m.name === "string" && typeof m.role === "string").map(m => [m.name, m.role])) as Record<string, string>;
+}
+
+/** A board note as a ticker entry: one line, cut to 100 code points. */
+function panelNote(n: Note): PanelNote {
+	const text = (n.text ?? "").replace(/\s+/g, " ").trim();
+	return { from: n.owner ?? "?", to: n.to ?? "all", text: [...text].length > 100 ? `${[...text].slice(0, 99).join("")}…` : text, ts: n.ts };
 }
 
 // ---- per-lane current tool -------------------------------------------------------------------------------------------
@@ -190,14 +242,25 @@ function lastStreamTool(text: string): LaneTool | undefined {
 	return last && { tool: last.tool, target: last.target, active: last.active };
 }
 
-/** <name>.tool.json written by registerLaneToolRecorder; undefined when absent or malformed. */
-function recordedTool(root: string, name: string): LaneTool | undefined {
+/** <name>.tool.json written by registerLaneToolRecorder; {} when absent or malformed. */
+function readRecord(file: string): Record<string, unknown> {
 	try {
-		const rec = asRecord(JSON.parse(readFileSync(nodePath.join(logsDir(root), `${name}.tool.json`), "utf8")));
-		return typeof rec.tool === "string" ? { tool: rec.tool, target: String(rec.target ?? ""), active: rec.active === true } : undefined;
+		return asRecord(JSON.parse(readFileSync(file, "utf8")));
 	} catch {
-		return undefined; // no recorder file: a claude worker
+		return {}; // no recorder file: a claude worker
 	}
+}
+const recordFile = (root: string, name: string) => nodePath.join(logsDir(root), `${name}.tool.json`);
+const callTimes = (rec: Record<string, unknown>) => (Array.isArray(rec.calls) ? rec.calls.filter((t): t is number => typeof t === "number") : []);
+
+function recordedTool(root: string, name: string): LaneTool | undefined {
+	const rec = readRecord(recordFile(root, name));
+	return typeof rec.tool === "string" ? { tool: rec.tool, target: String(rec.target ?? ""), active: rec.active === true } : undefined;
+}
+
+/** Recent tool-call times (epoch seconds) of a lane that records its own tools; [] for a claude worker. */
+export function laneCalls(root: string, name: string): number[] {
+	return LANE_NAME_RE.test(name) ? callTimes(readRecord(recordFile(root, name))) : [];
 }
 
 function loggedTool(root: string, name: string): LaneTool | undefined {
@@ -243,8 +306,10 @@ export function registerLaneToolRecorder(pi: Pick<ExtensionAPI, "on">, env: Reco
 			const dir = name && event.toolName ? recorderDir(ctx, env) : undefined;
 			if (!dir) return undefined;
 			mkdirSync(dir, { recursive: true });
-			const rec = { tool: shortTool(String(event.toolName)), target: toolTarget(event.input), active, ts: Date.now() / 1000 };
-			writeFileSync(nodePath.join(dir, `${name}.tool.json`), JSON.stringify(rec));
+			const file = nodePath.join(dir, `${name}.tool.json`);
+			const ts = Date.now() / 1000;
+			const calls = [...callTimes(readRecord(file)), ...(active ? [ts] : [])].slice(-MAX_CALLS); // sparkline history
+			writeFileSync(file, JSON.stringify({ tool: shortTool(String(event.toolName)), target: toolTarget(event.input), active, ts, calls }));
 		} catch {
 			// fail soft: a lane without a tool still renders "working"
 		}
@@ -364,6 +429,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	let poll: unknown;
 	let linger: unknown;
 	let openedAt = 0;
+	let startedAt = 0; // first open of this channel: the title clock survives the re-mount before each team wait
 	let lastSeq = -1;
 	let quiet = 0;
 	let painted = "";
@@ -400,18 +466,23 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		const pending = info.members.filter(m => !fin.has(m));
 		const todos = todoSummary(info.root, info.sessionId);
 		refreshGates(info);
-		const workers = panelWorkers(info.root, liveWorkers(info.root, info.channel), pending, now());
+		const team = teamInfo(info.root, info.channel);
+		const workers = panelWorkers(info.root, liveWorkers(info.root, info.channel), pending, now(), team.roles);
 		const lines = renderPanel({
 			width: panelWidth(columns()),
 			maxLines: MAX_LINES,
 			phase: todos.phase,
 			spin: spinFrame(tickN, todos.phase),
 			laneSpin: spinFrame(tickN),
+			tick: tickN,
 			done: todos.done,
 			total: todos.total,
 			workers,
-			notes: notes.map(n => formatNote(n, 60)),
+			notes: notes.map(panelNote),
 			gates: gates.read(),
+			channel: info.channel,
+			team: team.team,
+			elapsedSecs: Math.max(0, Math.floor((now() - startedAt) / 1000)),
 			idle: idleSummary(workers, info.members.length, now() - openedAt),
 		});
 		const key = lines.join("\n");
@@ -463,6 +534,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 				if (!same) {
 					ended = new Set();
 					seenChannel = false;
+					startedAt = now();
 				}
 				ui = u;
 				info = { ...i, members, root: boardRoot(i.cwd, env) };

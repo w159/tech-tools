@@ -396,9 +396,12 @@ function armRunstate(root: string, sessionId: string) {
 	return sh;
 }
 
-// F11: the FIRST spec-shape offense per session is advisory - it proceeds (no block) with additionalContext.
+// SCOPE has no first-offense grace (dispatch_tripwire 5d66170f): a spec-less AND scope-less call denies for SCOPE and
+// leaves the one-time spec advisory unspent. F11: the FIRST scoped spec-shape offense is advisory - it proceeds (no
+// block) with additionalContext.
 async function expectFirstOffenseIsAdvisory(fire: Fire) {
-	const first = await fire("task", task(`${SPEC_TOOLS}just fix it`));
+	expect(String((await fire("task", task(`${SPEC_TOOLS}just fix it`)))?.reason)).toContain("has no `SCOPE: <class>/<effort>` line");
+	const first = await fire("task", task(`${SPEC_TOOLS}${SCOPED}just fix it`));
 	expect(first?.block ?? false).toBe(false);
 	expect(String(first?.additionalContext)).toMatch(/^\[atlas\] ADVISORY - first unbounded-dispatch offense/);
 }
@@ -406,13 +409,14 @@ async function expectFirstOffenseIsAdvisory(fire: Fire) {
 // the SECOND spec-less dispatch in the same session ("real-sess", stable) denies with the old reason;
 // a two-GOAL bundle and an inline production edit deny; a docs edit passes.
 async function expectSecondOffenseAndEdges(fire: Fire) {
-	expect(String((await fire("task", task(`${SPEC_TOOLS}just fix it once more`)))?.reason)).toContain("unbounded: missing GOAL:");
+	expect(String((await fire("task", task(`${SPEC_TOOLS}${SCOPED}just fix it once more`)))?.reason)).toContain("unbounded: missing GOAL:");
 	expect(String((await fire("task", task(`${SPEC_TOOLS}${WELL_FORMED_SPEC}GOAL: and also rewrite billing\n`)))?.reason)).toContain("2 GOAL: blocks");
 	expect(String((await fire("edit", { path: "src/a.py", input: "x" }))?.reason)).toContain("never edit target code inline");
 	expect(await fire("edit", { path: "docs/CHANGELOG.md", input: "x" })).toBeUndefined();
 }
 
 const SPEC_TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
+const SCOPED = "SCOPE: fix/low\n";
 const WELL_FORMED_SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\nREPORT: structured result\nSCOPE: fix/low\n";
 const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
 
