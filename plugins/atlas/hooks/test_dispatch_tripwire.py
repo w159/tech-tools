@@ -4041,6 +4041,42 @@ class ScopeGateTest(unittest.TestCase):
         self.assertIsNone(self._decision(self._dispatch("atlas:explorer", env=worker))[0])
         self.assertIsNone(self._decision(self._dispatch("general-purpose-x"))[0])
 
+    def test_f_deny_tier_survives_the_first_stop(self):
+        # Live 12.2.0: the first Stop finalizes the run and no new run opens, so a
+        # deny tier keyed on an OPEN run went inert for every later turn.
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.finalize_run(conn, atlas_db.current_run_id(conn, "sess-1"))
+        self.assertIsNone(atlas_db.current_run_id(conn, "sess-1"))
+        conn.close()
+        decision, reason = self._decision(self._dispatch("atlas:explorer"))
+        self.assertEqual(decision, "deny")
+        self.assertIn("SCOPE: <class>/<effort>", reason)
+
+    def test_g_missing_scope_denies_even_on_first_spec_offense(self):
+        # The one-time spec advisory must not wave through a dispatch with no SCOPE,
+        # and must stay unspent so the corrected retry still gets it.
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        payload = {
+            "session_id": "sess-1",
+            "cwd": self.tmp,
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "tool_input": {
+                "subagent_type": "atlas:explorer",
+                "name": COLONY_NAME,
+                "prompt": TOOLS_BLOCK + "GOAL: map the auth path.\n",
+            },
+        }
+        decision, reason = self._decision(run_hook(payload, self.env))
+        self.assertEqual(decision, "deny")
+        self.assertIn("SCOPE: <class>/<effort>", reason)
+        payload["tool_input"]["prompt"] += "SCOPE: audit/low\n"
+        decision, note = self._decision(run_hook(payload, self.env))
+        self.assertIsNone(decision)
+        self.assertIn("ADVISORY", note)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1109,9 +1109,12 @@ def _pre_tool_use(
     # The deny tier is independently kill-switchable; the advisory tier persists.
     if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
         return
-    run_id = atlas_db.current_run_id(conn, session)
+    # The first Stop finalizes the run and nothing reopens it, so keying on an
+    # OPEN run turned the deny tier off for every later turn. Use the latest
+    # run, the same row is_orchestrating() and dispatch logging already read.
+    run_id = atlas_db.current_or_last_run_id(conn, session)
     if run_id is None:
-        return  # no active run -> nothing to gate
+        return  # session never had a run -> nothing to gate
     if _is_worker():
         return  # a headless worker is a leaf: its lead owns delegation
     if not atlas_db.is_orchestrating(conn, session):
@@ -1211,7 +1214,15 @@ def _pre_tool_use(
                         tool, agent, ", ".join(missing), _spec_skeleton(missing)
                     )
                 )
-                if _spec_advisory_claimed(root, session):
+                scope_problem = _scope_problem(tinput or {})
+                if (
+                    scope_problem
+                    and os.environ.get("ATLAS_SCOPE_GATE", "on").lower() != "off"
+                ):
+                    # SCOPE has no first-offense grace. Checked before the claim
+                    # so the one-time spec advisory stays unspent for the retry.
+                    deny("scope", scope_problem)
+                elif _spec_advisory_claimed(root, session):
                     # F11: the first spec offense per session is taught, not
                     # denied - the deny-then-rewrite round-trip is the expensive
                     # enforcement point. Advisory rides as 200+additionalContext
@@ -2172,9 +2183,11 @@ def _run(payload):
                 atlas_db.mark_used_worktrees(conn, session)
             return
 
-        run_id = atlas_db.current_run_id(conn, session)
+        # Latest run, open or finalized: post-Stop turns must still feed the
+        # inline-op count the deny tier reads (see _pre_tool_use).
+        run_id = atlas_db.current_or_last_run_id(conn, session)
         if run_id is None:
-            return  # no active run for inline ops; boot hook will create one
+            return  # no run yet for inline ops; boot hook will create one
 
         if tool not in INLINE_TOOLS and tool not in EDIT_TOOLS:
             return
