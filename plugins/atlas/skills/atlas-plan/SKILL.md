@@ -35,6 +35,7 @@ Reference map (read each when its phase says so):
 | `references/intake.md` | Phase 0 - source precedence, Product Contract preservation, depth tiers, bug routing, resume |
 | `references/research.md` | Phase 1 - grep-first learnings research, Compound Pack consult, grounding dispatch, research boundaries |
 | `references/units.md` | Phase 2 - resolved-vs-deferred inventory, challenge pass, U<N> unit contract |
+| `references/tracer-slices.md` | Phase 2 - vertical slices, one failing check per unit, blocking edges, one fresh worker per unit |
 | `references/plan-sections.md` | Phase 3 - artifact section contract, path/naming, Verification Contract, DoD, docs-curator write |
 | `references/handoff.md` | Phase 4 - mandatory completeness-critic review, verification, handoff to atlas-orchestrate |
 

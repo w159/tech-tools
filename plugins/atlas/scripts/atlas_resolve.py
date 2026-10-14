@@ -38,6 +38,9 @@ def resolve(task_class, effort, paths=None):
 
 
 def main(argv):
+    if argv[:1] in (["-h"], ["--help"]):
+        print("usage: atlas_resolve.py <class> <effort> [--paths a,b]")
+        return 0
     if len(argv) < 2:
         print("usage: atlas_resolve.py <class> <effort> [--paths a,b]", file=sys.stderr)
         return 2

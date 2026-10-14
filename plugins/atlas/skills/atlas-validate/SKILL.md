@@ -42,7 +42,7 @@ Dispatch `plugin-dev:plugin-validator` over the resolved plugin root. Instruct i
 - `keywords` array (if present): all entries are lowercase hyphenated strings.
 - `README.md` present at the plugin root.
 
-Collect every finding as: check name, result (PASS / FAIL / WARN), and the specific `file:line` or path evidence.
+Collect every finding as: check name, result (PASS / FAIL / WARN), and the specific `file:line` or path evidence. Done when the validator returns and its findings are collected.
 
 ## 3. Skill quality checks (plugin-dev:skill-reviewer)
 
@@ -54,16 +54,17 @@ For each skill listed under `skills` in the plugin manifest (and any skill found
 - Bundled asset files referenced in the SKILL.md actually exist in the skill folder.
 - No single asset file exceeds 5 MB.
 
-Collect findings in the same format: check name, result, `file:line` evidence.
+Then, for the atlas plugin, run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate_skills.py"` (frontmatter, name, description trigger clause, size budget, dangling refs, script `--help`, unknown skill/agent names, banned characters, step completion lines). Each FAIL row is a FAIL finding with its `[rule]` as evidence.
+
+Collect findings in the same format: check name, result, `file:line` evidence. Done when every skill has a verdict.
 
 ## 4. Content quality checks
 
 Perform these directly (no subagent required):
 
 - **ASCII-only**: scan all `.md`, `.json`, and `.sh` files in the plugin for non-ASCII characters (em dash U+2014, en dash U+2013, curly quotes U+2018/U+2019/U+201C/U+201D, ellipsis U+2026). Report any hit as FAIL with `file:line:column` and the offending character codepoint.
-- `agents` and `skills` arrays: every listed path resolves to a real file or directory on disk. Flag any path that does not exist as a broken reference.
-- **Frontmatter on skill files**: every `SKILL.md` file under `skills/` must have YAML frontmatter with non-empty `name` and `description` fields. FAIL any file missing either.
-- **Skill names**: every skill directory under `skills/` starts with `atlas-` and uses only lowercase letters, numbers, and hyphens.
+
+Done when every scanned file is classified PASS or FAIL.
 
 ## 5. Report findings
 
@@ -83,11 +84,11 @@ Failed:       <n>
 Overall:      PASS / FAIL
 ```
 
-The overall result is PASS only when zero checks are FAIL. WARNs do not block a PASS verdict.
+Done when the summary block is printed. The overall result is PASS only when zero checks are FAIL. WARNs do not block a PASS verdict.
 
 ## 6. Proposed fixes (no auto-apply)
 
-For every FAIL, propose the specific minimal fix: the field to add, the character to replace, the path to create, or the value to correct. Do not write, move, or delete any file automatically. Present each fix as a discrete, copy-pasteable action.
+For every FAIL, propose the specific minimal fix: the field to add, the character to replace, the path to create, or the value to correct. Do not write, move, or delete any file automatically. Present each fix as a discrete, copy-pasteable action. Done when every FAIL has a proposed fix.
 
 ## VERIFY (evidence required)
 

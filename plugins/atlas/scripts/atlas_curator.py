@@ -309,6 +309,9 @@ def status() -> Dict[str, Any]:
 def _cli():
     import sys
 
+    if sys.argv[1:2] in (["-h"], ["--help"]):
+        print("Usage: atlas_curator.py [run|status|pin|unpin|restore]")
+        sys.exit(0)
     if len(sys.argv) < 2:
         print("Usage: atlas_curator.py [run|status|pin|unpin|restore]", file=sys.stderr)
         sys.exit(2)

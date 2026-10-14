@@ -45,6 +45,8 @@ Four hard rules. Violating any of them invalidates the run:
 
 ## Phase 1: Baseline gate (blocks everything)
 
+**Atlas-on-atlas work** (hooks, scripts, skills) measures with the shipped tools: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/bench_hooks.py" -n 20` for hook latency, and `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_scorecard.py" run --root "${CLAUDE_PLUGIN_ROOT}" --out before.json`, then the same after the change and `atlas_scorecard.py diff before.json after.json`. Their verdicts (improved, regressed, same) are the delta.
+
 **Scope the measurement.** Name the workload invocation (the exact command), the metric extracted from its output, and the direction that counts as improvement. If no harness exists, build one (a script that runs the workload and prints the metric as a number) - or reject under gate 2. Add the harness path to the immutable list: the experiment must not modify it.
 
 **Clean-tree check.** Run `git status --porcelain` and check the files the experiment may touch. If any are dirty, name them and ask the user to commit or stash before continuing; a dirty baseline poisons the delta.
