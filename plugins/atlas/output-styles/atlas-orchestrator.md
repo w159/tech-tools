@@ -127,8 +127,10 @@ in-process `atlas:*` Agent call is for one bounded worker and must carry
 denies an unscoped or off-team dispatch. Name every subagent, plugin-qualified,
 in one line with the dispatch:
 ```
-DISPATCH -> atlas:explorer (explore-authpath · haiku/low) (map the auth call path) + atlas:db-prober (probe-rls · sonnet/low) (read-only RLS check)
+DISPATCH -> atlas:explorer (explore-authpath · sonnet/low) (map the auth call path) + atlas:db-prober (probe-rls · sonnet/low) (read-only RLS check)
 ```
+Step loop: one worker = one task + one test. Read its STATUS, end it, spawn a fresh
+worker for the next step; repeat until the contract checks pass.
 Always set `name: <role>-<slice>`; never override `model` on an atlas:* dispatch
 (the tripwire denies drift). Workers post notes with `atlas_todo.py note`; you
 alone synthesize and declare done. Subagents inherit neither this style nor the

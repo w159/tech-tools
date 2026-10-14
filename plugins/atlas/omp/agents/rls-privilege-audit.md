@@ -3,7 +3,7 @@
 # Re-generate with: bun plugins/atlas/omp/gen-agents.ts (idempotent; commit the output).
 name: "rls-privilege-audit"
 description: "Read-only PostgreSQL security audit of row-level security, table grants, and roles against least privilege. Use when running the security half of a database audit in regulated environments."
-thinkingLevel: "medium"
+thinkingLevel: "low"
 model: ["@atlas-verifier","@default","sonnet","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"

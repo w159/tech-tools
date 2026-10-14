@@ -701,7 +701,7 @@ test("the Claude-format pin (`model: sonnet`) passes too, in any case", () => {
 	const h = harness();
 	expect(spawnHandler(h)(pinSpawn("implementer", ["sonnet"]), h.ctx)).toBeUndefined();
 	expect(spawnHandler(h)(pinSpawn("implementer", ["Sonnet"]), h.ctx)).toBeUndefined();
-	expect(spawnHandler(h)(pinSpawn("docs-auditor", ["haiku"]), h.ctx)).toBeUndefined(); // that agent pins haiku
+	expect(spawnHandler(h)(pinSpawn("docs-auditor", ["sonnet"]), h.ctx)).toBeUndefined();
 });
 
 test("a parent-model injection passes for any provider, with or without a level on either side", () => {
@@ -726,7 +726,7 @@ test("the rewrite carries each tier's own pinned list", () => {
 	const live = "anthropic/claude-opus-5-5:medium";
 	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.model).toEqual(["@atlas-verifier", "@default", "sonnet", "@smol"]);
 	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.note).toBe("atlas: verifier pinned to @atlas-verifier");
-	expect(spawnHandler(h)(pinSpawn("runner", [live]), h.ctx)?.model).toEqual(["@atlas-mechanic", "haiku", "@smol"]);
+	expect(spawnHandler(h)(pinSpawn("runner", [live]), h.ctx)?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
 	expect(spawnHandler(h)(pinSpawn("explorer", []), h.ctx)?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
 });
 
@@ -772,7 +772,7 @@ test("isInheritedSelector: equal, or one `:level` suffix on either side, never t
 
 test("frontmatterModelFor reads the Claude-format pin and fails open to empty", () => {
 	expect(frontmatterModelFor("implementer")).toBe("sonnet");
-	expect(frontmatterModelFor("docs-auditor")).toBe("haiku");
+	expect(frontmatterModelFor("docs-auditor")).toBe("sonnet");
 	expect(frontmatterModelFor("not-an-agent")).toBe("");
 	expect(frontmatterModelFor("../index")).toBe("");
 });

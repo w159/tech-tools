@@ -2,7 +2,7 @@
 name: schema-inventory
 description: "Read-only PostgreSQL catalog inventory that enumerates tables, columns, types, constraints, indexes, and RLS flags from the live database. Use when running the schema half of a database audit."
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
-model: haiku
+model: sonnet
 effort: low
 color: cyan
 ---

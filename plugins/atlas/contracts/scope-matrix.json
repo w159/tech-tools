@@ -7,7 +7,7 @@
      {
       "role": "implementer",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "edit"
      }
     ],
@@ -19,13 +19,13 @@
      {
       "role": "implementer",
       "count": 2,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "edit"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      }
     ],
@@ -43,13 +43,13 @@
      {
       "role": "implementer",
       "count": 3,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "edit"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      }
     ],
@@ -63,7 +63,7 @@
      {
       "role": "implementer",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "edit"
      }
     ],
@@ -81,13 +81,13 @@
      {
       "role": "implementer",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "edit"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      }
     ],
@@ -105,13 +105,13 @@
      {
       "role": "implementer",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "edit"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      }
     ],
@@ -125,7 +125,7 @@
      {
       "role": "verifier",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      }
     ],
@@ -137,7 +137,7 @@
      {
       "role": "verifier",
       "count": 2,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      }
     ],
@@ -149,13 +149,13 @@
      {
       "role": "verifier",
       "count": 2,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      },
      {
       "role": "completeness-critic",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "read"
      }
     ],
@@ -187,7 +187,7 @@
      {
       "role": "completeness-critic",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "read"
      }
     ],
@@ -205,13 +205,13 @@
      {
       "role": "completeness-critic",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "read"
      },
      {
       "role": "rls-privilege-audit",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "read"
      }
     ],
@@ -293,7 +293,7 @@
      {
       "role": "rls-privilege-audit",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "read"
      }
     ],
@@ -311,13 +311,13 @@
      {
       "role": "rls-privilege-audit",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "read"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      }
     ],
@@ -361,7 +361,7 @@
      {
       "role": "verifier",
       "count": 1,
-      "effort": "medium",
+      "effort": "low",
       "tools_profile": "exec"
      }
     ],

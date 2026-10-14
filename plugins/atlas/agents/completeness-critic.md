@@ -2,7 +2,7 @@
 name: completeness-critic
 description: "Pre-done completeness auditor that hunts unverified claims, unread sources, unexercised paths, and unmet requirements, and returns a gap list; refutes 'done' on a load-bearing gap. Defers docs-drift to docs-auditor. Never fixes. Use when work is about to be declared done and its completeness needs an independent check."
 model: sonnet
-effort: medium
+effort: low
 color: red
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
 ---

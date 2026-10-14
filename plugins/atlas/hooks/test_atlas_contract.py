@@ -670,11 +670,11 @@ VALID_EFFORT = {"low", "medium", "high", "xhigh"}
 
 # Subagents execute a spec the orchestrator already wrote. Opus is the orchestrator's
 # tier; a subagent that needs it is a symptom of an underspecified prompt.
-MAX_MODEL = {"haiku", "sonnet"}
+MAX_MODEL = {"sonnet"}  # workers are sonnet only: deterministic task + test, then report
 
-# Only the roles that render an independent verdict against evidence they were not
-# handed get medium. Everything else executes a clear spec at low.
-MEDIUM_EFFORT_ROLES = {"implementer", "verifier", "completeness-critic", "rls-privilege-audit"}
+# Every worker runs sonnet at low effort. Claude Code has no per-subagent thinking
+# switch and Sonnet 5.5 cannot turn thinking off, so effort is the only lever.
+MEDIUM_EFFORT_ROLES = set()  # nothing defaults above low; the lead escalates, workers do not
 
 # Claude Code's agent palette, confirmed against the shipped CLI binary: the
 # frontmatter value is a KEY into
@@ -727,7 +727,7 @@ class AgentTierContract(unittest.TestCase):
             bad, [], "opus is the orchestrator's tier, not a subagent's: %s" % bad
         )
 
-    def test_only_verdict_roles_get_medium_effort(self):
+    def test_every_worker_defaults_to_low_effort(self):
         bad = []
         for path in _agent_files():
             fm = _frontmatter(path)

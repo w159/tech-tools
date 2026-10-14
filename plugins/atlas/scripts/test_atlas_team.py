@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """spawn-team: deterministic team expansion, max_parallel semaphore, wait/reap."""
+
 import contextlib
 import io
 import json
@@ -53,7 +54,9 @@ class TeamTests(unittest.TestCase):
             atlas_mux.atlas_todo.note(
                 root, m["name"], "STATUS: DONE\nexit 0", to="lead", kind="report"
             )
-        ns = type("N", (), {"root": root, "team": rec["team_id"], "timeout": 5, "poll": 0.1})
+        ns = type(
+            "N", (), {"root": root, "team": rec["team_id"], "timeout": 5, "poll": 0.1}
+        )
         self.assertEqual(atlas_mux.cmd_wait(ns), 0)
         self.assertEqual(atlas_mux.cmd_reap(ns), 0)
         self.assertFalse((d / f"{rec['team_id']}.json").exists())
@@ -70,7 +73,9 @@ class TeamTests(unittest.TestCase):
         briefs = [d / f"{rec['team_id']}-{m['name']}.prompt" for m in rec["members"]]
         for b in briefs:
             b.write_text("brief")
-        ns = type("N", (), {"root": root, "team": rec["team_id"], "timeout": 1, "poll": 0.1})
+        ns = type(
+            "N", (), {"root": root, "team": rec["team_id"], "timeout": 1, "poll": 0.1}
+        )
 
         def reap():
             buf = io.StringIO()
@@ -84,7 +89,9 @@ class TeamTests(unittest.TestCase):
         rc, again = reap()
         self.assertEqual(0, rc)
         self.assertTrue(again["ok"] and again["already_reaped"])
-        self.assertEqual(str(d / "archive" / f"{rec['team_id']}.json"), again["archived"])
+        self.assertEqual(
+            str(d / "archive" / f"{rec['team_id']}.json"), again["archived"]
+        )
 
     def test_reap_without_a_record_recovers_members_and_cleans(self):
         """Live: the record was gone, reap said 'no team record' and left the worker unfinished."""
@@ -120,10 +127,17 @@ class WaveAndChannelTests(unittest.TestCase):
         pid = atlas_db.register_project(conn, self.root)
         self.sid = "abc123ef-0000-4000-8000-" + os.urandom(6).hex()
         self.run_id = atlas_db.start_run(conn, pid, self.sid)
-        conn.execute("UPDATE runs SET ended_at=1 WHERE id=?", (self.run_id,))  # Stop already finalized it
+        conn.execute(
+            "UPDATE runs SET ended_at=1 WHERE id=?", (self.run_id,)
+        )  # Stop already finalized it
         conn.commit()
         conn.close()
-        for k in ("CLAUDE_SESSION_ID", "ATLAS_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "ATLAS_LEAD_NAME"):
+        for k in (
+            "CLAUDE_SESSION_ID",
+            "ATLAS_SESSION_ID",
+            "CLAUDE_CODE_SESSION_ID",
+            "ATLAS_LEAD_NAME",
+        ):
             os.environ.pop(k, None)
 
     def _rows(self, team_id):
@@ -151,7 +165,11 @@ class WaveAndChannelTests(unittest.TestCase):
         """live-230: team t1ad516 logged 4x (12 rows for 3 members), every row model NULL."""
         rec = atlas_mux.build_team("audit", "medium", None, "w2", team_id="twave2")
         results = [
-            {"name": m["name"], "ok": True, "model": "haiku" if m["role"] == "explorer" else "sonnet"}
+            {
+                "name": m["name"],
+                "ok": True,
+                "model": "haiku" if m["role"] == "explorer" else "sonnet",
+            }
             for m in rec["members"]
         ]
         for _ in range(3):
@@ -159,12 +177,16 @@ class WaveAndChannelTests(unittest.TestCase):
         conn = self.db.connect()
         try:
             rows = conn.execute(
-                "SELECT agent_type, model FROM dispatches WHERE wave_id=? ORDER BY id", ("twave2",)
+                "SELECT agent_type, model FROM dispatches WHERE wave_id=? ORDER BY id",
+                ("twave2",),
             ).fetchall()
         finally:
             conn.close()
         self.assertEqual(
-            sorted((f"atlas:{m['role']}", "haiku" if m["role"] == "explorer" else "sonnet") for m in rec["members"]),
+            sorted(
+                (f"atlas:{m['role']}", "haiku" if m["role"] == "explorer" else "sonnet")
+                for m in rec["members"]
+            ),
             sorted(rows),
         )
 
@@ -194,8 +216,23 @@ class WaveAndChannelTests(unittest.TestCase):
             print(json.dumps({"ok": True, "name": ns.name}))
             return 0
 
-        ns = type("N", (), dict(root=self.root, task_file=None, task="t", paths=None, cls="audit", effort="medium",
-                                team_id="tlvl1", dry_run=False, session=self.sid, harness="omp", poll=0))
+        ns = type(
+            "N",
+            (),
+            dict(
+                root=self.root,
+                task_file=None,
+                task="t",
+                paths=None,
+                cls="audit",
+                effort="medium",
+                team_id="tlvl1",
+                dry_run=False,
+                session=self.sid,
+                harness="omp",
+                poll=0,
+            ),
+        )
         try:
             with (
                 mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn),
@@ -206,7 +243,7 @@ class WaveAndChannelTests(unittest.TestCase):
         finally:
             os.environ.pop("ATLAS_SESSION_ID", None)
         levels = {agent: thinking for agent, thinking, _ in seen.values()}
-        self.assertEqual({"explorer": "low", "completeness-critic": "medium"}, levels)
+        self.assertEqual({"explorer": "low", "completeness-critic": "low"}, levels)
         self.assertTrue(all(effort is None for *_, effort in seen.values()))
 
     def test_reap_closes_the_team_channel_while_its_lead_session_lives(self):
@@ -215,14 +252,21 @@ class WaveAndChannelTests(unittest.TestCase):
         names = ["explorer-aaaa", "explorer-bbbb"]
         chan = atlas_mux.atlas_todo.open_lead_channel(self.root, lead, names)["name"]
         rec = atlas_mux.build_team("audit", "medium", None, "r", team_id="treap1")
-        rec.update(created=0.0, transport="tmux", channel=chan, lead=lead,
-                   members=[{"name": n, "role": "explorer"} for n in names])
+        rec.update(
+            created=0.0,
+            transport="tmux",
+            channel=chan,
+            lead=lead,
+            members=[{"name": n, "role": "explorer"} for n in names],
+        )
         d = pathlib.Path(self.root) / atlas_mux.TEAMS_REL
         d.mkdir(parents=True)
         (d / "treap1.json").write_text(json.dumps(rec))
         for n in names:
             atlas_mux.atlas_todo.mark_finished(self.root, n, 0)
-        ns = type("N", (), {"root": self.root, "team": "treap1", "timeout": 1, "poll": 0.1})
+        ns = type(
+            "N", (), {"root": self.root, "team": "treap1", "timeout": 1, "poll": 0.1}
+        )
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.assertEqual(0, atlas_mux.cmd_reap(ns))
