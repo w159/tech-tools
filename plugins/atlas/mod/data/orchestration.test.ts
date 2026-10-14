@@ -115,6 +115,13 @@ describe('activity truth', () => {
     expect(onToolStart(EMPTY_ORCH, 'b2', 'Grep', NOW + 9).activity.b2?.startedAt).toBe(NOW + 9);
   });
 
+  test('tool end keeps the answered tool as lastTool and its target', () => {
+    let o = onSpawn(EMPTY_ORCH, 'a1', 'map', NOW);
+    o = onToolStart(o, 'a1', 'mcp__lean-ctx__ctx_shell', NOW + 1_000, { command: 'sleep 5' });
+    o = onToolEnd(o, 'a1', NOW + 2_000);
+    expect([o.activity.a1?.tool, o.activity.a1?.lastTool, o.activity.a1?.target]).toEqual([null, 'mcp__lean-ctx__ctx_shell', 'sleep 5']);
+  });
+
   test('tool start records a target: file basename, else the first 40 chars of a command', () => {
     const o = onSpawn(EMPTY_ORCH, 'a1', 'map', NOW);
     expect(onToolStart(o, 'a1', 'Edit', NOW, { file_path: '/repo/src/deep/foo.ts' }).activity.a1?.target).toBe('foo.ts');

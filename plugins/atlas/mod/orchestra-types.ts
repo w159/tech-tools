@@ -6,8 +6,12 @@ import type { AtlasSnapshot, PhaseId } from './contract';
 import type { Mood, ActivityEntry as ContractActivityEntry, CommsEntry, TodoGroup as ContractTodoGroup } from '../types';
 export type { Mood, CommsEntry };
 
-/** Contract entry plus: startedAt (first sight, never moves) and target (what the current tool touches). `since` stays the current-tool time. */
-export type ActivityEntry = ContractActivityEntry & { startedAt?: number; target?: string };
+/** Contract entry plus: startedAt (first sight, never moves), target (what the current or last tool touched) and
+ * lastTool (the tool answered last, kept between calls). `since` stays the current-tool time. */
+export type ActivityEntry = ContractActivityEntry & { startedAt?: number; target?: string; lastTool?: string };
+
+/** A team pane worker's tool, read from its pane log onto its squad row (it raises no in-process events). */
+export type TeamTool = { tool?: string; lastTool?: string; target?: string; startedAt?: number };
 
 /** Contract TodoGroup plus the props-slice marker (rows left out to keep Client props small). */
 export type TodoGroup = ContractTodoGroup & { hidden?: { live: number; liveDone: number; archived: number } };

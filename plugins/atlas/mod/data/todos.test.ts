@@ -232,8 +232,13 @@ describe('carried rows re-stamped to the current session (defect A)', () => {
 });
 
 describe('currentPhase', () => {
-  test('header wins over in_progress items', () => {
-    const items = [{ ...item({ status: 'in_progress', content: '[test] t' }), phase: 'test' as const }];
+  test('the active todo wins over the reply header (live 12.2.0: rail read verify during a research task)', () => {
+    const items = [{ ...item({ status: 'in_progress', content: '[research] r' }), phase: 'research' as const }];
+    expect(currentPhase(items, 'verify')).toEqual({ phase: 'research', source: 'todo' });
+  });
+
+  test('with no active todo the header phase is used', () => {
+    const items = [{ ...item({ status: 'pending', content: '[test] t' }), phase: 'test' as const }];
     expect(currentPhase(items, 'implement')).toEqual({ phase: 'implement', source: 'header' });
   });
 

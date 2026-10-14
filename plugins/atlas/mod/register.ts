@@ -18,7 +18,8 @@ import { registerRouting, registerCompletion } from './routing';
 import { registerDiscipline } from './discipline';
 import { PHASE_RE, registerRestyle } from './restyle';
 import { registerNotify } from './notify';
-import { parseMuxStatus } from './data/mux';
+import { ownRows, paneTool, parseMuxStatus, teamsOf } from './data/mux';
+import type { TeamTool } from './orchestra-types';
 import { EMPTY_ORCH, onComplete, parseWt, type SpawnMeta, type WtRow } from './data/orchestration';
 
 const REBUILD_MS = 1500;
@@ -77,7 +78,8 @@ let lastFingerprint = '';
 let wtAt = -Infinity; // last atlas_wt.py status run (ms clock)
 let wtRows: WtRow[] = [];
 let muxStdout = '';
-let muxAgents: SquadAgent[] = [];
+let muxAgents: (SquadAgent & TeamTool)[] = [];
+let muxFirstSeen: Record<string, number> = {}; // team worker name -> first mux sight (ms), its lane's start
 let sessionUuid = '';
 /** raw host agent id -> display name, kept across rebuilds: a finished agent drops out of the host list but its id must keep resolving. */
 let nameMemo: Record<string, string> = {};
@@ -370,18 +372,54 @@ async function herdrTick($: EngineInterface): Promise<void> {
 	await rebuild($);
 }
 
-/** 5 s tick: atlas_mux.py status of the lead channel's run (`--run` is the channel's last segment); rebuilds when its stdout moved. */
+/** 5 s tick: atlas_mux.py status of the lead channel's run (`--run` is the channel's last segment) and of each
+ * spawn-team team on that channel (a team registers under its team id); rebuilds when the output or a pane tool moved. */
 async function muxTick($: EngineInterface): Promise<void> {
 	const snap = await read($, snapshotState);
 	const root = rootOf(snap);
-	const run = snap?.channel?.split('/').pop() ?? '';
-	if (root === '' || run === '') return;
-	const out = await $.process.run(['python3', `${$.plugin.root}/scripts/atlas_mux.py`, '--root', root, 'status', '--run', run]).catch(() => undefined);
-	const stdout = out?.exitCode === 0 ? out.stdout : '';
-	if (stdout === muxStdout) return;
-	muxStdout = stdout;
-	muxAgents = parseMuxStatus(stdout);
+	if (root === '' || snap === null) return;
+	const { runs, own } = await muxRuns($, root, snap);
+	if (runs.length === 0) return;
+	const outs = await Promise.all(runs.map((r) => muxStatus($, root, r)));
+	const agents = await withPaneTools($, root, ownRows(outs.flatMap(parseMuxStatus), own));
+	const sig = `${outs.join('\n')}|${agents.map((a) => `${a.tool ?? ''}${a.lastTool ?? ''}${a.target ?? ''}`).join(',')}`;
+	if (sig === muxStdout) return;
+	muxStdout = sig;
+	muxAgents = agents;
 	await rebuild($);
+}
+
+/** `--root` is a `status` option: before the subcommand argparse rejects it (exit 2), which kept every mux row out. */
+async function muxStatus($: EngineInterface, root: string, run: string): Promise<string> {
+	const out = await $.process.run(['python3', `${$.plugin.root}/scripts/atlas_mux.py`, 'status', '--run', run, '--root', root]).catch(() => undefined);
+	return out?.exitCode === 0 ? out.stdout : '';
+}
+
+/** Status runs: the board channel's, plus each `.atlas/.run/teams/<id>.json` team on the board channel or on this
+ * session's lead channel (`<folder>@<branch>/lead-<session6>`, which the board channel need not be). `own`: the
+ * worker names this session may show (team members and board members). */
+async function muxRuns($: EngineInterface, root: string, snap: AtlasSnapshot): Promise<{ runs: string[]; own: Set<string> }> {
+	const dir = `${root.replace(/\/+$/, '')}/.atlas/.run/teams`;
+	const names = (await $.fs.list(dir).catch(() => [])).map((e) => e.name).filter((n) => n.endsWith('.json'));
+	const records = await Promise.all(names.map(async (name) => ({ name, text: (await $.fs.read(`${dir}/${name}`).catch(() => undefined)) ?? '' })));
+	const board = snap.channel ?? '';
+	const teams = teamsOf(records, [board, `lead-${snap.sessionId.slice(0, 6)}`]);
+	const runs = [...(board ? [board.split('/').pop() ?? board] : []), ...teams.map((t) => t.id)];
+	return { runs, own: new Set([...teams.flatMap((t) => t.members), ...snap.members.map((m) => m.name)]) };
+}
+
+/** Running team workers get their tool / last tool / target from their pane log (the pane feed writes stream-json there)
+ * and a first-seen start, so the lane's age counts up. ponytail: reads each running worker's whole log every MUX_MS;
+ * tail-read if logs grow past a few MB. */
+async function withPaneTools($: EngineInterface, root: string, agents: SquadAgent[]): Promise<(SquadAgent & TeamTool)[]> {
+	const logs = `${root.replace(/\/+$/, '')}/.atlas/.run/logs`;
+	const now = await $.clock.now();
+	return Promise.all(
+		agents.map(async (a) => {
+			const startedAt = (muxFirstSeen[a.name] ??= now);
+			return a.state === 'running' ? { ...a, startedAt, ...paneTool((await $.fs.read(`${logs}/${a.name}.log`).catch(() => undefined)) ?? '') } : a;
+		}),
+	);
 }
 
 /** Current branch of `cwd` (fall back to 'main' outside a repo). */
@@ -504,7 +542,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 				? `atlas contract: open replies with a header line matching ${snapshot.contract.headerFirstLinePattern} (phase: ${snapshot.phase})`
 				: null,
 	});
-	registerRestyle(on);
+	registerRestyle(on); // its turn.start also drops the previous turn's header phase
 	registerNotify(on, { soundEnabled: () => options.atlas_mod_sound === true });
 
 	// Session boot: read the kill switch, resolve the board, build the first
@@ -529,6 +567,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			nameMemo = {};
 			muxStdout = '';
 			muxAgents = [];
+			muxFirstSeen = {};
 			const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
 			await builder.init(e.cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(e.cwd), await gitBranch($, e.cwd));
 			await rebuild($);

@@ -138,6 +138,15 @@ describe('header phase', () => {
     expect(headerPhaseOf('hello done', snapWith(PATTERN))).toBeNull();
     expect(headerPhaseOf('ATLAS | 🏁 done | x', snapWith(''))).toBeNull();
   });
+  test('a new turn drops the previous turn\'s header phase (live 12.2.0: rail kept a stale "done")', async () => {
+    const { on, pick } = captureOn();
+    const { engine } = stubEngine();
+    await register(on, {});
+    const ref = { plugin: 'atlas', key: 'headerPhase' } as const;
+    await engine.state.set(ref, 'done');
+    await pick('turn.start')(engine, { text: 'next task', turnId: 't2' }, noopNext);
+    expect((await engine.state.get(ref)).value ?? null).toBeNull();
+  });
 });
 
 describe('faults', () => {

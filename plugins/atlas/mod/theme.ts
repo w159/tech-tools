@@ -206,3 +206,12 @@ const CONTRACT_GLYPH: Record<string, string> = { '🔍': '◎', '💡': '◇', '
 export function contractGlyph(raw: string): string {
  return CONTRACT_GLYPH[raw] ?? (textWidth(raw) === 1 ? raw : glyph.dot);
 }
+
+/** `12s`, `4m12s`, `1h2m`. */
+export function formatDuration(ms: number): string {
+ const s = Math.max(0, Math.round(ms / 1000))
+ if (s < 60) return `${s}s`
+ const m = Math.floor(s / 60)
+ if (m < 60) return `${m}m${String(s % 60).padStart(2, '0')}s`
+ return `${Math.floor(m / 60)}h${m % 60}m`
+}

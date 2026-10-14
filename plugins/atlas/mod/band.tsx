@@ -68,9 +68,11 @@ function laneGlyph(w: LiveWorker, c: Ctx): string {
 /** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
 export const shortTool = (tool: string): string => tool.replace(/^mcp__.*__/, '');
 
+/** The tool in flight; between calls the last one, dimmed, so the cell never blanks out. */
 function laneTool(w: LiveWorker): string {
-  if (w.tool) return shortTool(w.tool);
-  return w.state === 'blocked' ? 'queued' : '-';
+  const tool = w.tool ?? w.lastTool;
+  if (tool) return shortTool(tool);
+  return w.state === 'blocked' ? 'queued' : 'starting';
 }
 
 /** One worker lane: accent, name, role, glyph+tool, target, elapsed bar, age, state word. */
@@ -80,7 +82,7 @@ function lane(w: LiveWorker, c: Ctx): Segment[] {
   const [fill, rest] = barParts((elapsed / REF_MS) * 100, 10);
   const parts: Segment[] = [seg('▌', color), seg(` ${padTo(w.name, 18)} `, undefined, true)];
   if (c.full) parts.push(seg(`${padTo(w.role, 12)} `, C.muted));
-  parts.push(seg(`${laneGlyph(w, c)} ${padTo(laneTool(w), 12)} `, color));
+  parts.push(seg(`${laneGlyph(w, c)} `, color), seg(`${padTo(laneTool(w), 12)} `, w.tool ? color : C.muted));
   if (c.full) parts.push(seg(`${padTo(w.target ?? '', 24)} `, C.muted));
   parts.push(seg('▕', C.faint), seg(fill, meterColor((elapsed / REF_MS) * 100)), seg(rest, C.muted), seg('▏', C.faint));
   parts.push(seg(` ${age(elapsed).padStart(4)} `, C.muted), seg(w.state, color));

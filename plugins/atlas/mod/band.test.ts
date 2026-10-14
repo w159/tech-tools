@@ -111,4 +111,15 @@ describe('Mission Control panel', () => {
     snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: 'mcp__lean-ctx__ctx_shell', target: 'sleep 5' } as never;
     expect(panel(160, { snapshot, live: liveWorkers(snapshot, NOW) }).all).toMatch(/ctx_shell\s+sleep 5/);
   });
+
+  test('between calls the lane keeps the last tool and target, dimmed, never "-"', () => {
+    const snapshot = busySnap();
+    snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: null, lastTool: 'mcp__lean-ctx__ctx_shell', target: 'sleep 5', mood: 'thinking' };
+    const { node, all } = panel(160, { snapshot, live: liveWorkers(snapshot, NOW) });
+    expect(all).toMatch(/ctx_shell\s+sleep 5/);
+    expect(all).not.toMatch(/ - {10}/);
+    const lane = (node.props.children as Node[]).find((r) => text(r).includes('explorer-1'))!;
+    const cell = (lane.props.children as Node[]).find((t) => String(t.props.children).startsWith('ctx_shell'))!;
+    expect(cell.props.color).toBe('subtle');
+  });
 });

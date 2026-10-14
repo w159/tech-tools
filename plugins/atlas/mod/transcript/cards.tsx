@@ -42,12 +42,16 @@ export function resultLine(output: unknown): string {
 
 const colorOf = (s: AgentState): string => { try { return stateColor(s) || BRAND.idle } catch { return BRAND.idle } }
 
-/** First matching call flag wins (errored, then interrupted, then running); no flag means finished. */
+/** Worker states that are still live after the Agent call itself returned (a background launch). */
+const LIVE: ReadonlySet<AgentState> = new Set<AgentState>(['running', 'spawning', 'input'])
+const isLive = (c: CallLike, s: AgentState): boolean => c.isRunning || LIVE.has(s)
+
+/** First matching flag wins (errored, then interrupted, then running or a live worker); none means finished. */
 export function phaseOf(c: CallLike, s: AgentState): { mark: string; color: string; state: AgentState } {
  const phases: Array<[boolean, { mark: string; color: string; state: AgentState }]> = [
   [c.isErrored, { mark: '✗', color: BRAND.fail, state: 'failed' }],
   [c.isInterrupted, { mark: '⏸', color: BRAND.input, state: 'dead' }],
-  [c.isRunning, { mark: glyph.dot, color: BRAND.working, state: 'running' }],
+  [isLive(c, s), { mark: glyph.dot, color: BRAND.working, state: 'running' }],
  ]
  return phases.find(([on]) => on)?.[1] ?? { mark: '✓', color: s === 'finished' ? BRAND.ok : colorOf(s), state: 'finished' }
 }
@@ -63,27 +67,32 @@ const headerLine = (i: AgentInput, role: string, name: string | undefined, statu
   t({ color: BRAND.accent, bold: true }, '◆ '), t({ color: BRAND.text, bold: true }, `${i.name ?? name ?? role} `),
   t({ color: BRAND.subagent }, `${glyph.dot} ${role}`), tierNode(i), status)
 
-/** Result row for a finished call; null while running or when there is nothing to show. */
-const resultRow = (c: CallLike, color: string, fit: ReturnType<typeof fitter>): RenderNode | null => {
+/** Result row: the worker's outcome when known, else the call's own result; null while running or empty. */
+const resultRow = (c: CallLike, color: string, fit: ReturnType<typeof fitter>, outcome = ''): RenderNode | null => {
  if (c.isRunning) return null
- const r = c.isInterrupted ? 'interrupted' : resultLine(c.output)
+ const r = outcome || callResult(c)
  return r ? t({ wrap: 'truncate-end', color }, fit(r, 4)) : null
 }
+const callResult = (c: CallLike): string => (c.isInterrupted ? 'interrupted' : resultLine(c.output))
 
 const fitter = (width: number) => (s: string, pad: number) => (width > pad ? fitText(s, width - pad) : s)
 const boxProps = (color: string, width: number) => ({ borderStyle: 'round', borderColor: color, flexDirection: 'column', paddingX: 1, ...(width > 0 ? { width } : {}) })
 
+/** Card extras: `mark` replaces the status glyph (a spinner frame), `outcome` is the worker's result line. */
+export interface CardExtra { mark?: string; outcome?: string }
+
 /** Bordered card for an atlas:* dispatch; null leaves non-atlas calls to the engine. `width` 0 = unknown. */
-export function workerCard(c: CallLike, state: AgentState, width = 0, name?: string, label = ''): RenderElement | null {
+export function workerCard(c: CallLike, state: AgentState, width = 0, name?: string, label = '', extra: CardExtra = {}): RenderElement | null {
  if (!isAtlasWorker(c)) return null
  const i = inputOf(c)
  const role = typeOf(i).slice('atlas:'.length)
- const { mark, color } = phaseOf(c, state)
+ const phase = phaseOf(c, state)
+ const color = phase.color
  const fit = fitter(width)
  const lines = [
-  headerLine(i, role, name, statusNode(color, mark, label)),
+  headerLine(i, role, name, statusNode(color, phase.state === 'running' && extra.mark ? extra.mark : phase.mark, label)),
   t({ wrap: 'truncate-end', color: BRAND.dim }, fit(goalLine(i), 4)),
-  resultRow(c, color, fit),
+  resultRow(c, color, fit, extra.outcome),
  ].filter((l): l is RenderNode => l !== null)
  return el('Box', boxProps(color, width), ...lines)
 }
@@ -106,6 +115,13 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
  const cards = calls.map((c) => workerCard(c, phaseOf(c, 'finished').state, w) as RenderElement)
  return el('Box', { flexDirection: 'column' }, waveHeader(calls, n),
   el('Box', { flexDirection: side ? 'row' : 'column', flexWrap: 'wrap' }, ...cards))
+}
+
+/** One-line row for a background atlas worker's task-notification: `◆ wave-a · explorer done · STATUS: DONE · 29s`. */
+export function notificationTree(name: string, role: string, outcome: string, failed: boolean): RenderElement {
+ return t({ wrap: 'truncate-end' },
+  t({ color: BRAND.accent, bold: true }, '◆ '), t({ color: BRAND.text, bold: true }, `${name} `),
+  t({ color: BRAND.subagent }, `${glyph.dot} ${role} `), t({ color: failed ? BRAND.fail : BRAND.ok }, outcome))
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */
