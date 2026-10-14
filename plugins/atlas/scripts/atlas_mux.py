@@ -1401,6 +1401,15 @@ def _root(args) -> str:
     return os.path.abspath(args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd())
 
 
+def _team_thinking(harness: str, role: str) -> str | None:
+    """omp team member --thinking: the role's Claude `effort:` so one team runs one tier on both harnesses. The omp
+    definition's thinkingLevel is the `task`-sub tier and is "off" for explorer-class roles, which left omp team
+    members thinking-off while the same Claude team ran at low. None for claude (its definition already applies)."""
+    if harness != "omp":
+        return None
+    return _frontmatter(_agents_dir("claude", None) / f"{role}.md")[0].get("effort") or None
+
+
 def cmd_spawn_team(args) -> int:
     root = _root(args)
     task = Path(args.task_file).read_text(encoding="utf-8") if args.task_file else (args.task or "")
@@ -1440,8 +1449,8 @@ def cmd_spawn_team(args) -> int:
         pf.write_text(team_brief(rec, member, root, chan, lead), encoding="utf-8")
         ns = argparse.Namespace(
             run=rec["team_id"], name=member["name"], harness=args.harness, agent=member["role"],
-            prompt_file=str(pf), model=None, effort=None, thinking=None, agents_dir=None,
-            permission_mode=None, command_override=None, omp_extension=None, root=root, cwd=None,
+            prompt_file=str(pf), model=None, effort=None, thinking=_team_thinking(args.harness, member["role"]),
+            agents_dir=None, permission_mode=None, command_override=None, omp_extension=None, root=root, cwd=None,
             team=rec,
         )
         buf = io.StringIO()
@@ -1527,6 +1536,18 @@ def _recover_team(root: str, team_id: str) -> dict | None:
     return {"team_id": team_id, "members": [{"name": n} for n in sorted(names)], "transport": "tmux"}
 
 
+def _release_team_channel(root: str, rec: dict) -> None:
+    """The team channel is the lead's own session channel (_team_lead), and the lead's member row carries no exit
+    until its SessionEnd, so reap_channels never found it dead while the lead lived (omp live: channels_reaped 0).
+    Once every other member has exited, the lead leaves it so the reap below archives and closes it; a still-running
+    member (a `task` sub on the same channel) keeps the lead in and the channel open. The next open re-adds the lead."""
+    name, lead = rec.get("channel"), rec.get("lead")
+    chan = atlas_todo.get_channel(root, name) if name and lead else None
+    others = [m for m in (chan or {}).get("members", []) if m.get("name") != lead]
+    if others and all("exit_code" in m for m in others):
+        atlas_todo.leave(root, name, lead)
+
+
 def cmd_reap(args) -> int:
     root = _root(args)
     if not NAME_RE.match(args.team or ""):
@@ -1553,6 +1574,7 @@ def cmd_reap(args) -> int:
     elif _tmux("has-session", "-t", session).returncode == 0:
         killed = _tmux("kill-session", "-t", session).returncode == 0
     _kill_notes(root, names)  # exit note + mark_finished + leave for any worker that never posted its own
+    _release_team_channel(root, rec)
     reaped = atlas_todo.reap_channels(root)
     if state == "live":
         arch.mkdir(parents=True, exist_ok=True)

@@ -71,11 +71,11 @@ function teamView(rec: unknown): TeamView | undefined {
 	return typeof r.channel === "string" && members.length ? { channel: r.channel, members } : undefined;
 }
 
-/** The live (unarchived) team record; reap moves it to teams/archive, so a reaped team never re-mounts. */
-function teamRecordView(root: string, team: string | undefined): TeamView | undefined {
+/** A team record under .atlas/.run/teams (`sub` "archive" after reap); undefined when absent or the id is unsafe. */
+function teamRecordView(root: string, team: string | undefined, sub = ""): TeamView | undefined {
 	if (!team || !TEAM_ID_RE.test(team)) return undefined;
 	try {
-		return teamView(JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "teams", `${team}.json`), "utf8")));
+		return teamView(JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "teams", sub, `${team}.json`), "utf8")));
 	} catch {
 		return undefined;
 	}
@@ -116,12 +116,17 @@ function teamToolDef(T: any, pluginRoot: string, run: TeamRunner, env: Record<st
 			// fail soft: the tool result matters more than the widget
 		}
 	};
-	const show = (ctx: TeamCtx, view: TeamView | undefined) => {
-		if (view && ctx.ui) safeOpen(ctx.ui, { ...view, cwd: ctx.cwd, sessionId: sessionIdOf(ctx) });
+	const show = (ctx: TeamCtx, view: TeamView | undefined, reaped = false) => {
+		if (view && ctx.ui) safeOpen(ctx.ui, { ...view, cwd: ctx.cwd, sessionId: sessionIdOf(ctx), ...(reaped ? { reaped } : {}) });
 	};
+	const root = (ctx: TeamCtx) => env.ATLAS_PROJECT_ROOT || ctx.cwd;
 	// The lead's wait is its poll: re-mount from the live team record before it blocks.
-	const beforeRun = (p: TeamParams, ctx: TeamCtx) => p.action === "wait" && show(ctx, teamRecordView(env.ATLAS_PROJECT_ROOT || ctx.cwd, p.team));
-	const afterRun = (p: TeamParams, ctx: TeamCtx, stdout: string) => p.action === "spawn" && show(ctx, teamView(lastJson(stdout)));
+	const beforeRun = (p: TeamParams, ctx: TeamCtx) => p.action === "wait" && show(ctx, teamRecordView(root(ctx), p.team));
+	// Reap archived the record and closed the channel: mount the idle panel (last wave) for the linger window.
+	const afterRun = (p: TeamParams, ctx: TeamCtx, stdout: string) => {
+		if (p.action === "spawn") show(ctx, teamView(lastJson(stdout)));
+		if (p.action === "reap") show(ctx, teamRecordView(root(ctx), p.team, "archive"), true);
+	};
 	return {
 		name: "atlas_team",
 		label: "Atlas team",

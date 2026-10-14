@@ -18,7 +18,7 @@
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, writeFileSync } from "node:fs";
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { type GatesCache, type LaneTool, type PanelNote, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
+import { type GatesCache, type IdleWave, type LaneTool, type PanelNote, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
 import { gatesArmed } from "./scope";
 
 export const WIDGET_KEY = "atlas-channel";
@@ -35,6 +35,8 @@ export interface ChannelOpenInfo {
 	members: string[];
 	cwd: string;
 	sessionId?: string;
+	/** atlas_team reap: every member is finished, so the view mounts straight into the idle panel. */
+	reaped?: boolean;
 }
 export interface WidgetUi {
 	setWidget(key: string, content: string[] | undefined): void;
@@ -59,6 +61,7 @@ export interface ViewDeps {
 	clearTimeout?: (h: unknown) => void;
 	columns?: () => number | undefined; // terminal width; default process.stdout.columns, else 120
 	gates?: GatesCache; // default: atlas_gates.py through spawnText, armed projects only
+	headerPhase?: () => string | undefined; // the lead's latest ATLAS header phase this turn (registerChannelView)
 }
 export interface ChannelView {
 	/** A `task` dispatch opened (or reused) the lead's channel. */
@@ -97,15 +100,9 @@ export interface LiveWorker {
 
 /** Members of `channel` still running: no ended_at, no exit_code, not the lead. */
 export function liveWorkers(root: string, channel: string): LiveWorker[] {
-	try {
-		const reg = JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "channels.json"), "utf8"));
-		const ms: Array<{ name?: string; role?: string; joined?: number; ended_at?: unknown; exit_code?: unknown }> = reg?.channels?.[channel]?.members ?? [];
-		return ms
-			.filter(m => m.name && m.role !== "lead" && m.ended_at === undefined && m.exit_code === undefined)
-			.map(m => ({ name: String(m.name), joined: m.joined, role: m.role }));
-	} catch {
-		return [];
-	}
+	return (channelMembers(root, channel) ?? [])
+		.filter(m => m.ended_at === undefined && m.exit_code === undefined)
+		.map(m => ({ name: String(m.name), joined: m.joined, role: m.role }));
 }
 
 /** Panel width for a terminal of `columns` (pi-tui Text pads one cell each side); 120 when unknown. */
@@ -113,9 +110,34 @@ function panelWidth(columns: number | undefined): number {
 	return Math.max(40, (columns ?? 122) - 2);
 }
 
-/** Set only when no lane is left: the "last run" line of the idle panel. */
-function idleSummary(workers: PanelWorker[], members: number, elapsedMs: number): { workers: number; minutes: number } | undefined {
-	return workers.length ? undefined : { workers: members, minutes: Math.round(elapsedMs / 60_000) };
+type RegMember = { name?: string; role?: string; joined?: number; ended_at?: unknown; exit_code?: unknown };
+
+/** channels.json `channels` map; {} when the registry is missing or unreadable. */
+type RegChannels = Record<string, { members?: RegMember[] } | undefined>;
+function registryChannels(root: string): RegChannels {
+	try {
+		return asRecord(asRecord(JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "channels.json"), "utf8"))).channels) as RegChannels;
+	} catch {
+		return {};
+	}
+}
+
+const workerRows = (members: RegMember[] = []) => members.filter(m => m.name && m.role !== "lead");
+
+/** Worker rows of `channel` in channels.json (the lead excluded); undefined when the channel is not listed. */
+function channelMembers(root: string, channel: string): RegMember[] | undefined {
+	const chan = registryChannels(root)[channel];
+	return chan && workerRows(chan.members);
+}
+
+const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+
+/** The wave so far from registry rows: member count, first join to last finish (now while running), non-zero exits. */
+function waveOf(rows: RegMember[], nowSecs: number): IdleWave {
+	const joined = rows.map(m => num(m.joined)).filter((t): t is number => t !== undefined);
+	const ends = rows.map(m => num(m.ended_at) ?? nowSecs);
+	const secs = joined.length ? Math.max(0, Math.round(Math.max(...ends) - Math.min(...joined))) : undefined;
+	return { workers: rows.length, secs, failed: rows.filter(m => (num(m.exit_code) ?? 0) !== 0).length };
 }
 
 const maxSeq = (notes: Note[]) => notes.reduce((m, n) => Math.max(m, n.seq ?? 0), 0);
@@ -188,8 +210,11 @@ const LANE_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/; // atlas_mux NAME_RE: also keeps a
 
 const logsDir = (root: string) => nodePath.join(root, ".atlas", ".run", "logs");
 
-/** `mcp__<server>__<tool>` -> `<tool>`; other names unchanged. */
-const shortTool = (name: string) => name.replace(/^mcp__.*__/, "");
+/**
+ * `mcp__<server>__<tool>` (Claude) -> `<tool>`; omp mints `mcp__<server>_<tool>` (tool-bridge.ts mintMCPToolName), where the
+ * server/tool split is ambiguous, so its last `_` word stands in (`mcp__claude_mem_mcp_search_search` -> `search`).
+ */
+const shortTool = (name: string) => (name.startsWith("mcp__") ? (name.includes("__", 5) ? name.replace(/^mcp__.*__/, "") : (name.split("_").at(-1) || name)) : name);
 
 const asRecord = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
 const firstText = (vals: unknown[]): string | undefined => vals.find((v): v is string => typeof v === "string" && v !== "");
@@ -200,6 +225,29 @@ function toolTarget(input: unknown): string {
 	const p = firstText([i.file_path, i.path]);
 	if (p) return nodePath.basename(p);
 	return (firstText([i.command, i.pattern, i.query]) ?? "").replace(/\s+/g, " ").trim().slice(0, TARGET_MAX);
+}
+
+const XD_PREFIX = "xd://";
+
+/** JSON object in a `write` body; {} when it is not one. */
+function jsonBody(content: unknown): Record<string, unknown> {
+	try {
+		return asRecord(JSON.parse(String(content ?? "")));
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Chip and target of ONE tool event. omp runs a device tool as `write xd://<tool>` with the tool's JSON args as the
+ * body, so that event is <tool> with its own args as the target, not `write` of a file named after the tool.
+ */
+function laneToolOf(toolName: string, input: unknown): { tool: string; target: string } {
+	const i = asRecord(input);
+	if (toolName === "write" && typeof i.path === "string" && i.path.startsWith(XD_PREFIX)) {
+		return { tool: shortTool(i.path.slice(XD_PREFIX.length)), target: toolTarget(jsonBody(i.content)) };
+	}
+	return { tool: shortTool(toolName), target: toolTarget(input) };
 }
 
 function readTail(file: string, bytes: number): string {
@@ -232,7 +280,7 @@ function streamBlocks(raw: string): StreamBlock[] {
 const isToolUse = (b: StreamBlock): b is StreamBlock & { name: string } => b.type === "tool_use" && !!b.name;
 const answers = (b: StreamBlock, last: StreamTool) => b.type === "tool_result" && b.tool_use_id === last.id;
 function applyBlock(last: StreamTool | undefined, b: StreamBlock): StreamTool | undefined {
-	if (isToolUse(b)) return { tool: shortTool(b.name), target: toolTarget(b.input), active: true, id: b.id };
+	if (isToolUse(b)) return { ...laneToolOf(b.name, b.input), active: true, id: b.id };
 	return last && answers(b, last) ? { ...last, active: false } : last;
 }
 
@@ -309,7 +357,7 @@ export function registerLaneToolRecorder(pi: Pick<ExtensionAPI, "on">, env: Reco
 			const file = nodePath.join(dir, `${name}.tool.json`);
 			const ts = Date.now() / 1000;
 			const calls = [...callTimes(readRecord(file)), ...(active ? [ts] : [])].slice(-MAX_CALLS); // sparkline history
-			writeFileSync(file, JSON.stringify({ tool: shortTool(String(event.toolName)), target: toolTarget(event.input), active, ts, calls }));
+			writeFileSync(file, JSON.stringify({ ...laneToolOf(String(event.toolName), event.input), active, ts, calls }));
 		} catch {
 			// fail soft: a lane without a tool still renders "working"
 		}
@@ -319,8 +367,11 @@ export function registerLaneToolRecorder(pi: Pick<ExtensionAPI, "on">, env: Reco
 	pi.on("tool_result", record(false) as never);
 }
 
-/** This session's todo progress, scoped like the Claude mod (mod/data/todos.ts): other sessions' rows and advisor notes never count. */
-export function todoSummary(root: string, sessionId?: string): { done: number; total: number; phase: string } {
+/**
+ * This session's todo progress, scoped like the Claude mod (mod/data/todos.ts): other sessions' rows and advisor notes
+ * never count. `phase` is the in_progress item's contract phase only (mod currentPhase); absent, the header decides.
+ */
+export function todoSummary(root: string, sessionId?: string): { done: number; total: number; phase?: string } {
 	let items: Array<{ status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string }> = [];
 	try {
 		items = JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "todos.json"), "utf8")).items ?? [];
@@ -329,9 +380,12 @@ export function todoSummary(root: string, sessionId?: string): { done: number; t
 	}
 	items = items.filter(i => !i.archived && i.origin !== "advisor" && (!sessionId || i.session_id === sessionId));
 	const open = items.filter(i => i.status !== "completed");
-	const phase = (open.find(i => i.status === "in_progress" && i.phase) ?? open.find(i => i.phase))?.phase ?? "research";
+	const phase = items.find(i => i.status === "in_progress")?.phase;
 	return { done: items.length - open.length, total: items.length, phase };
 }
+
+/** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */
+const railPhase = (todo: string | undefined, header: string | undefined): string => todo ?? header ?? "research";
 
 /** Main repo root of a linked git worktree dir (`.git` file -> gitdir -> commondir), else undefined. Mirrors atlas_todo._worktree_main_root. */
 function worktreeMainRoot(dir: string): string | undefined {
@@ -439,6 +493,8 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	// drops it from channels.json) finishes everyone. Without this the pending fallback repaints every reaped lane.
 	let ended = new Set<string>();
 	let seenChannel = false;
+	// Outlives clear(): reap closes the channel (registry rows gone) and often lands after the linger already cleared.
+	let wave: (IdleWave & { channel: string }) | undefined;
 
 	const stopPoll = () => {
 		if (poll !== undefined) clearIv(poll);
@@ -458,6 +514,17 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	const refreshGates = (i: ChannelOpenInfo & { root: string }) => {
 		if (deps.gates || gatesArmed(i.cwd, env)) gates.refresh(i.sessionId ?? "-", i.root);
 	};
+	const header = deps.headerPhase ?? (() => undefined);
+	const trackWave = (i: ChannelOpenInfo & { root: string }) => {
+		const rows = channelMembers(i.root, i.channel) ?? [];
+		if (rows.length) wave = { channel: i.channel, ...waveOf(rows, now() / 1000) };
+	};
+	const lastWave = (i: ChannelOpenInfo): IdleWave => (wave?.channel === i.channel ? wave : { workers: i.members.length, failed: 0 });
+	/** Track the wave from the registry; once no lane is left, the idle panel shows it (or just the roster size). */
+	const idleWave = (i: ChannelOpenInfo & { root: string }, lanes: number): IdleWave | undefined => {
+		trackWave(i);
+		return lanes ? undefined : lastWave(i);
+	};
 	/** Paint the widget when its lines changed; returns the highest note seq seen. */
 	const paint = (): number => {
 		if (!ui || !info) return lastSeq;
@@ -465,14 +532,15 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		const fin = finished();
 		const pending = info.members.filter(m => !fin.has(m));
 		const todos = todoSummary(info.root, info.sessionId);
+		const phase = railPhase(todos.phase, header());
 		refreshGates(info);
 		const team = teamInfo(info.root, info.channel);
 		const workers = panelWorkers(info.root, liveWorkers(info.root, info.channel), pending, now(), team.roles);
 		const lines = renderPanel({
 			width: panelWidth(columns()),
 			maxLines: MAX_LINES,
-			phase: todos.phase,
-			spin: spinFrame(tickN, todos.phase),
+			phase,
+			spin: spinFrame(tickN, phase),
 			laneSpin: spinFrame(tickN),
 			tick: tickN,
 			done: todos.done,
@@ -483,7 +551,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 			channel: info.channel,
 			team: team.team,
 			elapsedSecs: Math.max(0, Math.floor((now() - startedAt) / 1000)),
-			idle: idleSummary(workers, info.members.length, now() - openedAt),
+			idle: idleWave(info, workers.length),
 		});
 		const key = lines.join("\n");
 		if (key !== painted) ui.setWidget(WIDGET_KEY, lines);
@@ -536,6 +604,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 					seenChannel = false;
 					startedAt = now();
 				}
+				if (i.reaped) for (const m of members) ended.add(m);
 				ui = u;
 				info = { ...i, members, root: boardRoot(i.cwd, env) };
 				openedAt = now();
@@ -550,11 +619,55 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	};
 }
 
+const RAIL_PHASES = new Set(["research", "theory", "test", "implement", "verify", "done"]);
+let headerRe: RegExp | null | undefined;
+
+/** contracts/operating-contract.json headerFirstLinePattern (group 1 is the phase); null when unreadable. */
+function headerPattern(): RegExp | null {
+	if (headerRe === undefined) {
+		try {
+			headerRe = new RegExp(JSON.parse(readFileSync(nodePath.join(PLUGIN_ROOT, "contracts", "operating-contract.json"), "utf8")).headerFirstLinePattern);
+		} catch {
+			headerRe = null; // no contract: the rail falls back to todos, then research
+		}
+	}
+	return headerRe;
+}
+
+/** First text block of an assistant message; "" for anything else. */
+function assistantText(message: unknown): string {
+	const m = asRecord(message);
+	const blocks = m.role === "assistant" && Array.isArray(m.content) ? m.content.map(asRecord) : [];
+	return firstText(blocks.filter(b => b.type === "text").map(b => b.text)) ?? "";
+}
+
+const firstLineOf = (s: string) => s.trimStart().split("\n", 1)[0] ?? "";
+const railPhaseName = (p: string | undefined) => (p && RAIL_PHASES.has(p) ? p : undefined);
+
+/** Rail phase an assistant message's ATLAS header pins (mod/register.ts headerPhaseOf); undefined when none. */
+function headerPhaseOf(message: unknown): string | undefined {
+	return railPhaseName(headerPattern()?.exec(firstLineOf(assistantText(message)))?.[1]);
+}
+
+type PhaseCtx = { agent?: { kind?: string } };
+const isSub = (ctx: PhaseCtx | undefined) => ctx?.agent?.kind === "sub";
+
 export function registerChannelView(pi: Pick<ExtensionAPI, "on">, deps: ViewDeps = {}): ChannelView {
-	const view = createChannelView(deps);
+	// The lead's latest header phase this turn; a new prompt (before_agent_start) starts a turn without one.
+	let turnPhase: string | undefined;
+	const view = createChannelView({ headerPhase: () => turnPhase, ...deps });
 	pi.on("session_shutdown", () => {
 		view.stop();
 		return undefined;
 	});
+	pi.on("before_agent_start", ((_e: unknown, ctx: PhaseCtx) => {
+		if (!isSub(ctx)) turnPhase = undefined;
+		return undefined;
+	}) as never);
+	pi.on("message_end", ((e: { message?: unknown }, ctx: PhaseCtx) => {
+		const phase = isSub(ctx) ? undefined : headerPhaseOf(e?.message);
+		if (phase) turnPhase = phase;
+		return undefined;
+	}) as never);
 	return view;
 }
