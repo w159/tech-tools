@@ -14,30 +14,41 @@ import type { SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types
 export type { GateGroup, GateLine, SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';
 
 const HINT_MIN_INNER = 60;
-const HINT = 'r t c g tabs · ↑↓ Enter';
+/** Only the keys the strip draws: r t c g always, o when the board toggle is wired. Hotkeys press while this pane holds the keyboard. */
+const hintFor = (on: SidebarHandlers): string => `press r t c g${on.toggleTodos ? ' o' : ''} · Tab ↑↓ · Esc closes`;
 
-type Tab = { v: SidebarView; key: string; label: string };
+const stripWidth = (ts: { label: string }[]): number => ts.reduce((n, t) => n + textWidth(t.label) + 6, -3);
+const gatesLabels = (open: number): { label: string; short: string } => (open ? { label: `✗ ${open}`, short: `gates ✗${open}` } : { label: '✓ gates', short: 'gates' });
+type TabSpec = { v: SidebarView; key: string; label: string; short: string };
 
-const tabList = (open: number): Tab[] => [
-  { v: 'route', key: 'r', label: '◎ route' },
-  { v: 'team', key: 't', label: '● team' },
-  { v: 'channel', key: 'c', label: '✉ channel' },
-  { v: 'gates', key: 'g', label: open ? `✗ ${open}` : '✓ gates' },
-];
+/** The four view tabs and the board label, glyphs dropped when five buttons with them overflow a docked 56-column pane.
+ * `used` is the strip's width so far (labels, `k: ` prefixes, separators); `boardW` the board button's full width. */
+function tabSpecs(open: number, inner: number, hasBoard: boolean): { tabs: TabSpec[]; board: string; used: number; boardW: number } {
+  const tabs: TabSpec[] = [
+    { v: 'route', key: 'r', label: '◎ route', short: 'route' },
+    { v: 'team', key: 't', label: '● team', short: 'team' },
+    { v: 'channel', key: 'c', label: '✉ channel', short: 'channel' },
+    { v: 'gates', key: 'g', ...gatesLabels(open) },
+  ];
+  const compact = stripWidth(tabs) + 13 * +hasBoard > inner;
+  const shown = tabs.map((t) => ({ ...t, label: compact ? t.short : t.label }));
+  const board = ['▤ board', 'board'][+compact]!;
+  return { tabs: shown, board, used: stripWidth(shown), boardW: (6 + textWidth(board)) * +hasBoard };
+}
 
 /** The optional board toggle after the four tabs. */
-function todosTab(els: ClientElements, on: SidebarHandlers): RenderElement[] {
+function todosTab(els: ClientElements, on: SidebarHandlers, board: string): RenderElement[] {
   if (!on.toggleTodos) return [];
-  return [els.Text({ dimColor: true, children: ' │ ' }), els.Button({ key: 'tab:todos', plain: true, hotkey: 'o', dimColor: true, children: [els.Text({ children: '▤ board' })], label: '▤ board', onPress: on.toggleTodos })];
+  return [els.Text({ dimColor: true, children: ' │ ' }), els.Button({ key: 'tab:todos', plain: true, hotkey: 'o', dimColor: true, children: [els.Text({ children: board })], label: board, onPress: on.toggleTodos })];
 }
 
 /** The right-aligned hint, only when the pane is wide enough and the gap fits. */
-function hintCells(els: ClientElements, inner: number, gap: number): RenderElement[] {
-  if (inner < HINT_MIN_INNER || gap < 1) return [];
-  return [els.Text({ children: ' '.repeat(gap) }), els.Text({ dimColor: true, children: HINT })];
+function hintCells(els: ClientElements, inner: number, gap: number, hint: string): RenderElement[] {
+  if (inner < HINT_MIN_INNER || gap < 2) return [];
+  return [els.Text({ children: ' '.repeat(gap) }), els.Text({ dimColor: true, children: hint })];
 }
 
-function tabButtons(els: ClientElements, tabs: Tab[], model: SidebarModel, on: SidebarHandlers): RenderElement[] {
+function tabButtons(els: ClientElements, tabs: TabSpec[], model: SidebarModel, on: SidebarHandlers): RenderElement[] {
   const children: RenderElement[] = [];
   tabs.forEach((t, i) => {
     const cur = t.v === model.ui.view;
@@ -53,10 +64,10 @@ function tabButtons(els: ClientElements, tabs: Tab[], model: SidebarModel, on: S
 
 /** The tab strip: four plain hotkey Buttons (the current one bold), then a dim hint pushed to the right edge when there is room. */
 function tabStrip(els: ClientElements, model: SidebarModel, on: SidebarHandlers, inner: number): RenderElement {
-  const tabs = tabList(openGateCount(model.gates));
-  const used = tabs.reduce((n, t) => n + textWidth(t.label) + 6, -3);
-  const gap = inner - used - textWidth(HINT) - (on.toggleTodos ? 12 : 0);
-  const children = [...tabButtons(els, tabs, model, on), ...todosTab(els, on), ...hintCells(els, inner, gap)];
+  const { tabs, board, used, boardW } = tabSpecs(openGateCount(model.gates), inner, !!on.toggleTodos);
+  const hint = hintFor(on);
+  const gap = inner - used - textWidth(hint) - boardW; // the board button: separator 3, `o: ` 3, label
+  const children = [...tabButtons(els, tabs, model, on), ...todosTab(els, on, board), ...hintCells(els, inner, gap, hint)];
   return els.Box({ key: 'tabs', flexDirection: 'row', flexShrink: 0, children });
 }
 

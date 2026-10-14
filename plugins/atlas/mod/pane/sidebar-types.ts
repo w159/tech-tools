@@ -20,9 +20,9 @@ export type SidebarHandlers = {
   draftChange(text: string): void;
   send(text: string): void;
   copy(text: string): void;
-  /** Move the keyboard focus ring onto the element drawn under `key` (hotkey `m`). */
+  /** Move the keyboard focus ring onto the element drawn under `key` (no hotkey: reached with Tab and the arrows). */
   focus(key: string): void;
-  /** Expand `key` (never collapse it) and focus it (hotkey `g`). */
+  /** Expand `key` (never collapse it) and focus it (no hotkey: a row press). */
   expand(key: string): void;
   /** Switch the pane view (hotkeys r/t/c/g). */
   setView(v: SidebarView): void;
