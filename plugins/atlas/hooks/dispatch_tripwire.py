@@ -2230,7 +2230,7 @@ def _run(payload):
     try:
         try:
             conn = atlas_db.connect()
-            atlas_db.init(conn)
+            atlas_db.init(conn, backfill=False)
         except Exception:
             _emit_nudge(nudge)  # DB down: the allowed call still gets its nudge
             raise
@@ -2282,6 +2282,7 @@ def _run(payload):
                         tinput, payload.get("session_model") or ""
                     )["model"]
                     or None,
+                    wave_id=atlas_db.next_wave_id(conn, dispatch_run_id),
                 )
             agent_type = str(tinput.get("subagent_type", ""))
             if agent_type.startswith(("atlas:", "atlas-")):

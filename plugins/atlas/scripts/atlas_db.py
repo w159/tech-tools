@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS events (
   context TEXT, is_inline_op INTEGER, path TEXT);
 CREATE TABLE IF NOT EXISTS dispatches (
   id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, ts REAL,
-  agent_type TEXT, model TEXT, wave_id INTEGER);
+  agent_type TEXT, model TEXT, wave_id TEXT);
 CREATE TABLE IF NOT EXISTS metrics (
   run_id INTEGER PRIMARY KEY, inline_ops INTEGER, dispatches INTEGER,
   parallel_waves INTEGER, in_flight_peak INTEGER, est_context_tokens INTEGER,
@@ -148,12 +148,18 @@ def db_path():
     return os.environ.get("ATLAS_DB") or os.path.join(atlas_home(), "atlas.db")
 
 
+# Bump when init() gains DDL or a migration. A DB whose PRAGMA user_version is
+# at least this skips all of it, so the per-tool-call hook pays one pragma read
+# instead of ~30 CREATE IF NOT EXISTS statements and a dozen failing ALTERs.
+SCHEMA_VERSION = 1
+
+
 def connect(path=None):
     path = path or db_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    # timeout= already installs the 5s busy handler; a PRAGMA busy_timeout is redundant.
     conn = sqlite3.connect(path, timeout=5.0)
     conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -165,7 +171,40 @@ def ensure_ingest_files(conn):
     conn.execute(SCHEMA[start : SCHEMA.index(";", start) + 1])
 
 
-def init(conn):
+def _schema_current(conn):
+    return conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION
+
+
+def _migrate_wave_id_text(conn):
+    """dispatches.wave_id was INTEGER, but atlas_mux stores TEXT team ids in it.
+    Rebuild the table with TEXT affinity, keeping every row (ints become '3').
+    Fresh DBs already get TEXT from SCHEMA, so this is a no-op there."""
+    cols = {
+        r[1]: (r[2] or "").upper()
+        for r in conn.execute("PRAGMA table_info(dispatches)")
+    }
+    if cols.get("wave_id") == "TEXT":
+        return
+    conn.executescript(
+        "BEGIN;"
+        "CREATE TABLE dispatches_new (id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL, ts REAL,"
+        " agent_type TEXT, model TEXT, wave_id TEXT);"
+        "INSERT INTO dispatches_new(id,run_id,ts,agent_type,model,wave_id)"
+        " SELECT id,run_id,ts,agent_type,model,wave_id FROM dispatches;"
+        "DROP TABLE dispatches;"
+        "ALTER TABLE dispatches_new RENAME TO dispatches;"
+        "COMMIT;"
+    )
+
+
+def init(conn, backfill=True):
+    """Create/migrate the schema. When PRAGMA user_version already matches, only
+    the run-kind backfill can run (hooks that fire per tool call pass
+    backfill=False: it scans `messages`, and only ingest changes its inputs)."""
+    if _schema_current(conn):
+        if backfill:
+            backfill_run_kinds(conn)
+        return
     conn.executescript(SCHEMA)
     conn.commit()
     # Idempotent migration: add kind column to pre-existing DBs. Fresh DBs
@@ -249,7 +288,13 @@ def init(conn):
             conn.commit()
         except sqlite3.OperationalError:
             pass  # column already present
-    backfill_run_kinds(conn)
+    _migrate_wave_id_text(conn)
+    conn.execute(
+        f"PRAGMA user_version={SCHEMA_VERSION}"
+    )  # int literal: pragmas take no params
+    conn.commit()
+    if backfill:
+        backfill_run_kinds(conn)
 
 
 def backfill_run_kinds(conn):
@@ -460,13 +505,56 @@ def resolve_agent_type(tinput, default=DEFAULT_AGENT_TYPE):
     return default
 
 
+_MODEL_FAMILIES = ("opus", "sonnet", "haiku")
+WAVE_GAP_S = (
+    10.0  # spawns further apart than this start a new wave (mod/band.tsx WAVE_GAP_MS)
+)
+
+
+def normalize_model(model):
+    """Alias family of a model id, so one model is one value in `dispatches.model`:
+    `anthropic/claude-sonnet-5-5:medium` -> `sonnet`. A provider prefix and a
+    `:thinking` suffix are dropped; an id with no known family is kept as given
+    (minus those two decorations), and blank stays None."""
+    m = (model or "").strip()
+    if not m:
+        return None
+    bare = m.rsplit("/", 1)[-1].split(":", 1)[0].lower()
+    return next((f for f in _MODEL_FAMILIES if f in bare), bare or None)
+
+
+def next_wave_id(conn, run_id, now=None):
+    """Wave id for an Agent/Task dispatch: the previous dispatch's wave when it
+    landed within WAVE_GAP_S (same spawn burst, as the band counts waves), else
+    the run's next `w<n>`. Team waves keep the id atlas_mux gave them."""
+    now = time.time() if now is None else now
+    last = conn.execute(
+        "SELECT ts, wave_id FROM dispatches WHERE run_id=? ORDER BY id DESC LIMIT 1",
+        (run_id,),
+    ).fetchone()
+    if last and last[1] and now - (last[0] or 0) <= WAVE_GAP_S:
+        return str(last[1])
+    n = conn.execute(
+        "SELECT COUNT(DISTINCT wave_id) FROM dispatches WHERE run_id=? AND wave_id LIKE 'w%'",
+        (run_id,),
+    ).fetchone()[0]
+    return f"w{n + 1}"
+
+
 def log_dispatch(conn, run_id, agent_type, model=None, wave_id=None):
     """Record one dispatch. A blank agent_type (an unnamed default Task) is
-    stored as DEFAULT_AGENT_TYPE, never ''."""
+    stored as DEFAULT_AGENT_TYPE, never ''. The model is stored as its alias
+    family (normalize_model)."""
     agent_type = (agent_type or "").strip() or DEFAULT_AGENT_TYPE
     conn.execute(
         "INSERT INTO dispatches(run_id,ts,agent_type,model,wave_id) VALUES(?,?,?,?,?)",
-        (run_id, time.time(), agent_type, model, wave_id),
+        (
+            run_id,
+            time.time(),
+            agent_type,
+            normalize_model(model),
+            None if wave_id is None else str(wave_id),
+        ),
     )
     eid = log_event(conn, run_id, agent_type, "main", 0)
     return eid

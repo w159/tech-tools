@@ -1453,7 +1453,7 @@ def _team_lead(session_id: str | None, team_id: str) -> str:
 
 
 def _log_wave(rec: dict, run_id, results=()) -> bool:
-    """One dispatches row per member with wave_id=team_id (TEXT in the INTEGER-affinity column) and the
+    """One dispatches row per member with wave_id=team_id (a TEXT column) and the
     model its spawn resolved (`results`, from supervise). Idempotent per (run, team, member): the table
     has no member column, so a role's existing rows fill its first slots (member names are deterministic
     per team id, live-230 logged t1ad516 4x on respawns). Fail-open."""
