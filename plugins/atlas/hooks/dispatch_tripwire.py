@@ -27,16 +27,26 @@ import io
 import json
 import os
 import re
-import shutil
 import sys
-import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from pathlib import Path  # noqa: E402
 
-import atlas_hook_guard  # noqa: E402
 from docs_drift import find_root  # noqa: E402
+
+
+def __getattr__(name):
+    # PEP 562: shutil, tempfile and atlas_hook_guard cost ~10ms of import on every
+    # tool call and are needed only on rare branches, so they load on first use.
+    # Module-attribute access (tests patch dt.shutil.which) still works.
+    if name in ("shutil", "tempfile", "atlas_hook_guard"):
+        import importlib
+
+        mod = importlib.import_module(name)
+        globals()[name] = mod
+        return mod
+    raise AttributeError(name)
 
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
@@ -208,6 +218,8 @@ def _system_temp_roots():
     """Realpaths of the system temp dir plus the common macOS/Linux aliases
     (/tmp, /private/tmp), since /tmp is a symlink to /private/tmp on macOS and
     tempfile.gettempdir() can report either form."""
+    import tempfile
+
     roots = set()
     for candidate in (tempfile.gettempdir(), "/tmp", "/private/tmp"):
         with contextlib.suppress(Exception):
@@ -651,6 +663,7 @@ def _name_state(root, session):
     project `.atlas/.run/autonames` (else the temp dir), flock-serialised because
     the parallel calls of one batch run their hooks concurrently."""
     import hashlib
+    import tempfile
 
     store = (root or Path(tempfile.gettempdir())).joinpath(
         *AUTONAMES_RELPATH
@@ -1588,6 +1601,8 @@ def _native_tool_policy(payload):
     if tool not in contract:
         return False, None
     mode, replacement = contract[tool]
+    import shutil
+
     try:
         root = find_root(Path(payload.get("cwd") or os.getcwd()))
         if root is None or not (root / "docs").is_dir():
@@ -1948,6 +1963,8 @@ def _gates_armed(payload):
 
 def _record_fault(exc, hook="dispatch_tripwire"):
     """Persist a fail-open crash (never raises)."""
+    import atlas_hook_guard
+
     atlas_hook_guard.fault(hook, exc, _PAYLOAD_CWD[0] or os.getcwd())
 
 

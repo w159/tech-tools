@@ -333,6 +333,28 @@ def _member_for(todo, root, agent):
     return None
 
 
+def _no_registry_possible(cwd):
+    """True only when no channels.json can exist for this cwd: none in cwd or any of
+    the 8 ancestors (atlas_todo.find_root walks at most 7), and no linked-worktree
+    `.git` file that could remap the root elsewhere. Lets identity() skip the
+    ~25ms atlas_todo import on the many sessions that never opened a channel;
+    anything uncertain returns False and takes the full path."""
+    try:
+        d = os.path.abspath(cwd or os.getcwd())
+        for _ in range(8):
+            if os.path.isfile(os.path.join(d, ".git")):
+                return False
+            if os.path.exists(os.path.join(d, ".atlas", ".run", "channels.json")):
+                return False
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+        return True
+    except Exception:
+        return False
+
+
 def identity(payload=None, env=None):
     """(name, root, aliases) of whoever this hook fires for, or None.
 
@@ -345,8 +367,10 @@ def identity(payload=None, env=None):
     marker = worker_env(env)
     if marker:
         return marker[0], marker[1], ()
-    todo = _todo()
     cwd = payload.get("cwd")
+    if _no_registry_possible(cwd if isinstance(cwd, str) and cwd else None):
+        return None  # no registry: no member, no lead channel (see below)
+    todo = _todo()
     root = todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
     name = _member_for(todo, root, str(payload.get("agent_name") or ""))
     if name:

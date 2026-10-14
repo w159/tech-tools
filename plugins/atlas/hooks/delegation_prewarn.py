@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -28,20 +27,40 @@ def _marker(session_id: str) -> Path:
     safe = (
         "".join(c for c in session_id if c.isalnum() or c in "-_")[:80] or "nosession"
     )
-    return Path(tempfile.gettempdir()) / f"atlas-delegation-prewarn-{safe}"
+    return Path(_temp_root()) / f"atlas-delegation-prewarn-{safe}"
 
 
-def should_warn(payload: dict) -> bool:
-    import completion_gate as cg
+def _temp_root() -> str:
+    """tempfile.gettempdir() without the 9ms tempfile import: TMPDIR/TEMP/TMP, else /tmp."""
+    if os.name != "posix":
+        import tempfile
 
-    if os.environ.get("ATLAS_GATE", "").lower() == "off" or cg._solo_mode():
-        return False
+        return tempfile.gettempdir()
+    for var in ("TMPDIR", "TEMP", "TMP"):
+        value = os.environ.get(var)
+        if value:
+            return os.path.abspath(value)
+    return "/tmp"
+
+
+def _cheap_reject(payload: dict) -> bool:
+    """The pure checks, run before the heavy completion_gate import."""
+    if os.environ.get("ATLAS_GATE", "").lower() == "off":
+        return True
     # agent_id is the documented subagent marker; the path is the pre-field fallback.
     if payload.get("agent_id") or "/subagents/" in str(
         payload.get("transcript_path") or ""
     ).replace("\\", "/"):
+        return True
+    return payload.get("tool_name") not in {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+
+
+def should_warn(payload: dict) -> bool:
+    if _cheap_reject(payload):
         return False
-    if payload.get("tool_name") not in {"Edit", "Write", "MultiEdit", "NotebookEdit"}:
+    import completion_gate as cg
+
+    if cg._solo_mode():
         return False
     path = str((payload.get("tool_input") or {}).get("file_path") or "")
     exempt = cg._delegation_exempt()
@@ -53,10 +72,12 @@ def should_warn(payload: dict) -> bool:
 def main() -> int:
     try:
         payload = json.loads(sys.stdin.read(), strict=False)
-        if not should_warn(payload):
+        if _cheap_reject(payload):
             return 0
         marker = _marker(str(payload.get("session_id") or ""))
         if marker.exists():
+            return 0  # already warned this session: skip the completion_gate import
+        if not should_warn(payload):
             return 0
         marker.touch()
         print(

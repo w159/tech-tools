@@ -357,6 +357,33 @@ class AtlasDoctorTest(unittest.TestCase):
     def test_hook_mode_always_exits_zero(self):
         self.assertEqual(atlas_doctor.main(["--hook"]), 0)
 
+    def test_hook_reuses_a_healthy_verdict_but_never_an_unhealthy_one(self):
+        healthy = ([{"check": "x", "ok": True, "detail": ""}], {})
+        sick = ([{"check": "x", "ok": False, "detail": "boom"}], {})
+        with mock.patch.dict(os.environ, {"ATLAS_DOCTOR_HOOK_TTL_MIN": "30"}):
+            with mock.patch.object(
+                atlas_doctor, "run_checks", return_value=healthy
+            ) as rc:
+                atlas_doctor.main(["--hook"])
+                atlas_doctor.main(["--hook"])  # inside the TTL: skipped
+                self.assertEqual(rc.call_count, 1)
+                atlas_doctor.main(["--hook", "--fix"])  # --fix is never skipped
+                self.assertEqual(rc.call_count, 2)
+            with mock.patch.dict(os.environ, {"ATLAS_DOCTOR_HOOK_TTL_MIN": "0"}):
+                with mock.patch.object(
+                    atlas_doctor, "run_checks", return_value=healthy
+                ) as rc:
+                    atlas_doctor.main(["--hook"])  # TTL 0 disables the stamp
+                    self.assertEqual(rc.call_count, 1)
+            with mock.patch.object(atlas_doctor, "run_checks", return_value=sick) as rc:
+                os.remove(atlas_doctor._hook_stamp_path())
+                for _ in range(2):  # unhealthy: warns on every session
+                    out = io.StringIO()
+                    with contextlib.redirect_stdout(out):
+                        atlas_doctor.main(["--hook"])
+                    self.assertIn("ATLAS-DOCTOR WARNING", out.getvalue())
+                self.assertEqual(rc.call_count, 2)
+
     def test_context_tooling_missing_marker_fails(self):
         root = tempfile.mkdtemp()
         with open(os.path.join(root, "AGENTS.md"), "w") as f:

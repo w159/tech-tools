@@ -33,6 +33,58 @@ STATE_PATH = os.environ.get("ATLAS_DOCTOR_STATE") or os.path.join(
     atlas_db.atlas_home(), "doctor-state.json"
 )
 
+# --hook runs on every SessionStart. A healthy verdict is reused for this many
+# minutes per (plugin install, project) so back-to-back sessions skip the full
+# check; an unhealthy verdict is never reused, so its warning repeats. 0 disables.
+HOOK_TTL_MIN_DEFAULT = 30
+# True only inside the --hook run: the WARN-only TypeSafe scoring-error query is
+# invisible there (hook output lists failing non-warn checks only) but costs
+# ~35ms of imports, so it is skipped. The explicit CLI keeps it.
+HOOK_MODE = False
+
+
+def _hook_stamp_path():
+    # Derived per call: tests (and ATLAS_DOCTOR_STATE) re-point STATE_PATH at runtime.
+    return os.path.join(os.path.dirname(STATE_PATH), "doctor-hook-stamp.json")
+
+
+def _hook_stamp_key(plugin):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    project = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    return "|".join((plugin, root, project))
+
+
+def _hook_stamp_fresh(plugin):
+    """True when the last --hook run for this key was healthy and recent."""
+    try:
+        ttl = float(os.environ.get("ATLAS_DOCTOR_HOOK_TTL_MIN", HOOK_TTL_MIN_DEFAULT))
+        if ttl <= 0:
+            return False
+        with open(_hook_stamp_path()) as f:
+            entry = json.load(f).get(_hook_stamp_key(plugin)) or {}
+        age = time.time() - float(entry.get("t", 0))
+        return entry.get("ok") is True and 0 <= age < ttl * 60
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def _hook_stamp_write(plugin, ok):
+    try:
+        try:
+            with open(_hook_stamp_path()) as f:
+                stamps = json.load(f)
+            if not isinstance(stamps, dict):
+                stamps = {}
+        except (OSError, ValueError):
+            stamps = {}
+        stamps[_hook_stamp_key(plugin)] = {"t": time.time(), "ok": bool(ok)}
+        # keep the file bounded: newest 50 keys
+        keep = sorted(stamps, key=lambda k: stamps[k].get("t", 0))[-50:]
+        _save_json(_hook_stamp_path(), {k: stamps[k] for k in keep})
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass  # the stamp is an optimization; losing it only costs one full check
+
+
 # --- maintenance caps (keep the plugin's own footprint bounded across runs) ---
 # Per-run trash dirs (apply_fixes quarantines stale assets into one) grow
 # forever without a cap; keep the N newest and prune the rest.
@@ -342,9 +394,10 @@ def check_typesafe_scoring(now=None):
                 last = conn.execute(
                     "SELECT MAX(scored_at) FROM turn_scores"
                 ).fetchone()[0]
-                import turn_scoring  # lazy: pulls in the ingest/client modules
+                if not HOOK_MODE:
+                    import turn_scoring  # lazy: pulls in the ingest/client modules
 
-                errs, last_err = turn_scoring.recent_errors(conn, now)
+                    errs, last_err = turn_scoring.recent_errors(conn, now)
             finally:
                 conn.close()
         except Exception:
@@ -3007,6 +3060,11 @@ def main(argv=None):
             )
         return 0
 
+    global HOOK_MODE
+    if args.hook and not args.fix:
+        if _hook_stamp_fresh(args.plugin):
+            return 0
+        HOOK_MODE = True
     try:
         results, ctx = run_checks(args.plugin)
     except Exception as e:
@@ -3017,6 +3075,8 @@ def main(argv=None):
         atlas_faults.record("atlas_doctor", e)
         record_hook_verdict(args.plugin, [{"check": "run_checks"}])
         return 0
+    finally:
+        HOOK_MODE = False  # the light mode covers only the first run_checks
     failed = [r for r in results if not r["ok"] and r.get("severity") != "warn"]
 
     if args.fix and failed:
@@ -3035,6 +3095,7 @@ def main(argv=None):
 
     if args.hook:
         record_hook_verdict(args.plugin, failed)
+        _hook_stamp_write(args.plugin, not failed)
         if failed:
             print(
                 f"ATLAS-DOCTOR WARNING: {args.plugin} plugin is unhealthy - "

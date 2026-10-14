@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Hook latency: hooks.json runs every hook with `python3 -S` (stdlib only; skips site, ~5ms each); dispatch_tripwire, recall_gate, delegation_prewarn and docs_drift import tempfile/shutil/subprocess/atlas_hook_guard/completion_gate lazily; worker_inbox skips the atlas_todo import when no channel registry can exist; delegation_prewarn checks its once-per-session marker before importing completion_gate.
+- `atlas_doctor.py --hook` reuses a healthy verdict for 30 min per (plugin install, project) (`ATLAS_DOCTOR_HOOK_TTL_MIN`, 0 disables; unhealthy verdicts are never reused) and skips the WARN-only TypeSafe error query. The explicit CLI and `--fix` are unchanged.
+- New `scripts/bench_hooks.py`: per-event and per-hook median/p90 latency harness (`--root` for A/B against another tree).
+
 ## 12.1.3
 
 ### Fixed

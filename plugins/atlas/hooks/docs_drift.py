@@ -12,7 +12,6 @@ Stdlib only.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 __all__ = ["find_root", "docs_drift", "git_changed_paths"]
@@ -73,6 +72,9 @@ def git_changed_paths(root: Path) -> list:
     caller can fail-closed -- silently passing docs-drift when git is
     genuinely unavailable would let unverified code ship.
     """
+    # Lazy: find_root runs on every tool call; only the git helper needs subprocess.
+    import subprocess
+
     try:
         root_bytes = subprocess.check_output(
             ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
