@@ -12,25 +12,20 @@ Exit 0: healthy or remediated. Exit 1: problems remain. Exit 2: internal error.
 is safe to wire into SessionStart.
 """
 
-import argparse
 import json
 import os
-import re
-import hashlib
-import shutil
-import subprocess
 import sys
 import time
-from datetime import datetime, timezone
-
-import atlas_db
 
 # --- environment (overridable so tests never touch the real install) ---
 PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.expanduser(
     "~/.claude/plugins"
 )
+# Same resolution as atlas_db.atlas_home(), inlined so the SessionStart stamp
+# fast path below can run before atlas_db (sqlite3, ~45 ms) is imported.
 STATE_PATH = os.environ.get("ATLAS_DOCTOR_STATE") or os.path.join(
-    atlas_db.atlas_home(), "doctor-state.json"
+    os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas"),
+    "doctor-state.json",
 )
 
 # --hook runs on every SessionStart. A healthy verdict is reused for this many
@@ -66,6 +61,22 @@ def _hook_stamp_fresh(plugin):
         return entry.get("ok") is True and 0 <= age < ttl * 60
     except (OSError, ValueError, TypeError, AttributeError):
         return False
+
+
+# The SessionStart binding is exactly `atlas_doctor.py --hook`; a fresh healthy
+# stamp means main() would return 0 right away, so skip the heavy imports too.
+# Any other argv takes the normal path through main().
+if __name__ == "__main__" and sys.argv[1:] == ["--hook"] and _hook_stamp_fresh("atlas"):
+    sys.exit(0)
+
+import argparse  # noqa: E402 -- after the stamp fast path on purpose
+import hashlib  # noqa: E402
+import re  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+
+import atlas_db  # noqa: E402
 
 
 def _hook_stamp_write(plugin, ok):

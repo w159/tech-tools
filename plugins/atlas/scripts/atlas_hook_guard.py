@@ -25,12 +25,14 @@ wedge a session is worse than no guard at all.
 """
 
 import contextlib
-import hashlib
 import json
 import os
 import sys
-import tempfile
 import time
+
+# hashlib (~3 ms) and tempfile (~8 ms: shutil, random) are imported inside
+# emit() and _save_state(): every hook imports this module, most calls never
+# reach either function.
 
 try:
     import fcntl
@@ -154,6 +156,8 @@ def _save_state(session_id, state):
         # Write-then-rename: os.replace is atomic on POSIX and Windows, so a
         # reader never observes a partially written state file even without
         # the lock (e.g. the fcntl-unavailable fallback path).
+        import tempfile
+
         fd, tmp_path = tempfile.mkstemp(dir=state_dir, prefix=".tmp-", suffix=".json")
         try:
             with os.fdopen(fd, "w") as f:
@@ -378,6 +382,8 @@ def emit(payload, hook_name, message):
     try:
         session_id = payload.get("session_id")
         if session_id:
+            import hashlib
+
             digest = hashlib.sha256(
                 message.strip().encode("utf-8", "replace")
             ).hexdigest()[:16]
