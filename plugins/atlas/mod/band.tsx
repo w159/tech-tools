@@ -39,14 +39,16 @@ function spread(left: Segment[], right: Segment[], cols: number): Segment[] {
 function phaseRail(s: LiveSnapshot, tick: number, compact: boolean, animate = true): Segment[] {
   const ids = s.contract.phases.map((p) => p.id as string).filter((id) => !RAIL_SKIP.has(id));
   const at = ids.indexOf(s.phase);
-  const out: Segment[] = [];
-  ids.forEach((id, i) => {
-    if (i > 0) out.push(RAIL_SEP);
-    if (i === at) out.push(seg(`${animate ? spin(tick, id) : '◉'} ${id}`, animate ? C.live : C.focus, true));
-    else if (i < at) out.push(seg(compact ? '✓' : `✓ ${id}`, C.ok));
-    else out.push(seg(compact ? '○' : `○ ${id}`, C.muted));
-  });
-  return out;
+  return ids.flatMap((id, i) => [...(i ? [RAIL_SEP] : []), railStep(id, i - at, tick, compact, animate)]);
+}
+
+/** One rail cell; `rel` is its position relative to the current phase (0 current, <0 past, >0 future). */
+const railNow = (id: string, tick: number, animate: boolean): Segment => (animate ? seg(`${spin(tick, id)} ${id}`, C.live, true) : seg(`◉ ${id}`, C.focus, true));
+const railPast = (id: string, compact: boolean): Segment => seg(compact ? '✓' : `✓ ${id}`, C.ok);
+const railFuture = (id: string, compact: boolean): Segment => seg(compact ? '○' : `○ ${id}`, C.muted);
+function railStep(id: string, rel: number, tick: number, compact: boolean, animate: boolean): Segment {
+  if (rel === 0) return railNow(id, tick, animate);
+  return rel < 0 ? railPast(id, compact) : railFuture(id, compact);
 }
 
 const gateWord = (open: number): string => `gates ${open ? `✗${open}` : '✓'}`;
@@ -63,8 +65,11 @@ function laneGlyph(w: LiveWorker, c: Ctx): string {
   return w.state === 'failed' ? '✗' : spin(c.tick, c.s.phase);
 }
 
+/** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
+export const shortTool = (tool: string): string => tool.replace(/^mcp__.*__/, '');
+
 function laneTool(w: LiveWorker): string {
-  if (w.tool) return w.tool;
+  if (w.tool) return shortTool(w.tool);
   return w.state === 'blocked' ? 'queued' : '-';
 }
 
@@ -91,29 +96,37 @@ function ticker(c: Ctx): Segment[] {
   return parts;
 }
 
+const gateChip = (g: GateGroup): Segment => (groupOpenCount(g) ? seg(` ✗ ${g.id}`, C.warn) : seg(` ✓ ${g.id}`, C.ok));
+const hasGateData = (g: GateGroup): boolean => g.lines.length > 0 || !!g.error;
+
+function todoBar(c: Ctx): Segment[] {
+  const pct = (c.done / Math.max(1, c.total)) * 100;
+  const [fill, rest] = barParts(pct, 9);
+  return [seg('todos ', C.muted), seg(fill, c.total ? meterColor(pct) : C.focus), seg(rest, C.muted), seg(` ${c.done}/${c.total}`, C.muted)];
+}
+
 function footer(c: Ctx): Segment[] {
-  const [fill, rest] = barParts((c.done / Math.max(1, c.total)) * 100, 9);
-  const left: Segment[] = [seg('todos ', C.muted), seg(fill, c.total ? meterColor((c.done / c.total) * 100) : C.focus), seg(rest, C.muted), seg(` ${c.done}/${c.total}`, C.muted)];
-  for (const g of c.gates.filter((x) => x.lines.length || x.error)) left.push(seg(groupOpenCount(g) ? ` ✗ ${g.id}` : ` ✓ ${g.id}`, groupOpenCount(g) ? C.warn : C.ok));
+  const left = [...todoBar(c), ...c.gates.filter(hasGateData).map(gateChip)];
   return spread(left, [seg('/atlas-cc pane · r t c g tabs', C.faint)], c.inner);
 }
+
+/** Whether the ticker and footer stay: drop the ticker first, then the footer, until `need` lane rows fit. */
+function chrome(room: number, need: number, hasTicker: boolean): [boolean, boolean] {
+  for (const [t, f] of [[hasTicker, true], [false, true], [false, false]] as const) if (room - +t - +f >= need) return [t, f];
+  return [false, false];
+}
+
+/** Hidden workers beat the ticker: trade it for the "+N more" row. */
+const tradesTicker = (kept: boolean, nLanes: number, slots: number): boolean => kept && nLanes > slots && slots < 2;
+const needsMore = (nLanes: number, slots: number): boolean => nLanes > slots && slots >= 2;
 
 /** How many lanes, ticker and footer rows fit `maxRows` (border 2 + header 1 are fixed). */
 export function planRows(maxRows: number, nLanes: number, hasTicker: boolean): { lanes: number; ticker: boolean; footer: boolean; more: boolean } {
   const room = Math.max(0, maxRows - 3);
-  let ticker = hasTicker;
-  let footer = true;
-  const need = Math.min(1, nLanes);
-  while (room - (ticker ? 1 : 0) - (footer ? 1 : 0) < need && (ticker || footer)) {
-    if (ticker) ticker = false;
-    else footer = false;
-  }
-  let slots = room - (ticker ? 1 : 0) - (footer ? 1 : 0);
-  if (nLanes > slots && slots < 2 && ticker) { // hidden workers beat the ticker: trade it for the "+N more" row
-    ticker = false;
-    slots += 1;
-  }
-  const more = nLanes > slots && slots >= 2;
+  const [kept, footer] = chrome(room, Math.min(1, nLanes), hasTicker);
+  const ticker = kept && !tradesTicker(kept, nLanes, room - 1 - +footer);
+  const slots = room - +ticker - +footer;
+  const more = needsMore(nLanes, slots);
   return { lanes: more ? slots - 1 : Math.min(nLanes, slots), ticker, footer, more };
 }
 
@@ -123,16 +136,39 @@ const frame = (els: ClientElements, rows: Segment[][], inner: number, color: str
     children: rows.map((r) => rowOf(els, r, inner)),
   });
 
-/** Idle panel body: brand, compact rail, and what the last run did. */
-function idleRow(c: Ctx, live: LiveWorker[]): Segment[] {
-  const word = c.open ? 'blocked' : 'idle';
-  const wcolor = c.open ? C.warn : C.muted;
-  const n = live.length;
-  const mins = n ? Math.max(1, Math.round((c.now - Math.min(...live.map((w) => w.startedAt))) / 60_000)) : 0;
+/** `· last run: N workers, M min, ok|K failed`, empty when no worker ever ran. */
+function lastRun(c: Ctx, live: LiveWorker[]): string {
+  if (!live.length) return '';
+  const mins = Math.max(1, Math.round((c.now - Math.min(...live.map((w) => w.startedAt))) / 60_000));
   const failed = live.filter((w) => w.state === 'failed').length;
-  const last = n ? ` · last run: ${n} workers, ${mins} min, ${failed ? `${failed} failed` : 'ok'}` : '';
-  const left: Segment[] = [BRAND_CHIP, seg(' '), ...(c.inner >= MID ? [...phaseRail(c.s, c.tick, true, false), seg(' ')] : []), seg(word, wcolor, true)];
-  return [...left, seg(c.inner >= MID ? last : '', C.muted), ...(c.open ? [seg(` · gates ✗${c.open}`, C.warn)] : [])];
+  return ` · last run: ${live.length} workers, ${mins} min, ${failed ? `${failed} failed` : 'ok'}`;
+}
+
+/** Idle panel body: brand, compact rail, and what the last run did. */
+const idleWord = (c: Ctx): Segment => (c.open ? seg('blocked', C.warn, true) : seg('idle', C.muted, true));
+const idleGates = (c: Ctx): Segment[] => (c.open ? [seg(` · gates ✗${c.open}`, C.warn)] : []);
+function idleRow(c: Ctx, live: LiveWorker[]): Segment[] {
+  const wide = c.inner >= MID;
+  return [BRAND_CHIP, seg(' '), ...(wide ? [...phaseRail(c.s, c.tick, true, false), seg(' ')] : []), idleWord(c), seg(wide ? lastRun(c, live) : '', C.muted), ...idleGates(c)];
+}
+
+const openChip = (c: Ctx, lead: Segment[]): Segment[] => (c.open ? [...lead, DOT, seg(`✗${c.open}`, C.warn)] : lead);
+const bandColor = (c: Ctx, shown: LiveWorker[]): string => (c.open || shown.some((w) => w.state === 'blocked') ? C.warn : C.live);
+
+/** <80 columns: one header row only. */
+function narrowRows(c: Ctx, shown: LiveWorker[]): Segment[][] {
+  const left = [BRAND_CHIP, seg(` ${c.s.phase} ${c.done}/${c.total}`, C.focus, true), DOT, seg(`${activeCount(shown)} working`, C.live)];
+  return [openChip(c, left)];
+}
+
+/** Header, as many lanes as fit, then "+N more", ticker and footer per `planRows`. */
+function fullRows(c: Ctx, shown: LiveWorker[], maxRows: number): Segment[][] {
+  const plan = planRows(maxRows, shown.length, c.s.comms.length > 0);
+  const rows: Segment[][] = [headerRow(c), ...shown.slice(0, plan.lanes).map((w) => lane(w, c))];
+  if (plan.more) rows.push([seg(`  +${shown.length - plan.lanes} more`, C.muted)]);
+  if (plan.ticker) rows.push(ticker(c));
+  if (plan.footer) rows.push(footer(c));
+  return rows;
 }
 
 export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12 }: BandModel): RenderElement {
@@ -143,15 +179,5 @@ export function bandTree(els: ClientElements, { snapshot: s, live, gates, column
   const c: Ctx = { s, inner: Math.max(1, columns - 2), tick, full: columns >= FULL, now: s.now, done, total, open, gates };
   if (maxRows < 3) return rowOf(els, [BRAND_CHIP, seg(` ${s.phase} ${done}/${total}`, C.focus), ...(open ? [seg(` ✗${open}`, C.warn)] : [])], columns);
   if (!shown.length) return frame(els, [idleRow(c, all)], c.inner, open ? C.warn : C.muted);
-  const color = open || shown.some((w) => w.state === 'blocked') ? C.warn : C.live;
-  if (columns < MID) {
-    const left = [BRAND_CHIP, seg(` ${s.phase} ${done}/${total}`, C.focus, true), DOT, seg(`${activeCount(shown)} working`, C.live)];
-    return frame(els, [open ? [...left, DOT, seg(`✗${open}`, C.warn)] : left], c.inner, color);
-  }
-  const plan = planRows(maxRows, shown.length, s.comms.length > 0);
-  const rows: Segment[][] = [headerRow(c), ...shown.slice(0, plan.lanes).map((w) => lane(w, c))];
-  if (plan.more) rows.push([seg(`  +${shown.length - plan.lanes} more`, C.muted)]);
-  if (plan.ticker) rows.push(ticker(c));
-  if (plan.footer) rows.push(footer(c));
-  return frame(els, rows, c.inner, color);
+  return frame(els, columns < MID ? narrowRows(c, shown) : fullRows(c, shown, maxRows), c.inner, bandColor(c, shown));
 }

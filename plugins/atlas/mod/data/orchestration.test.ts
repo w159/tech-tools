@@ -122,4 +122,10 @@ describe('activity truth', () => {
     expect(cmd.activity.a1?.target).toBe('npm run build --workspaces --if-present ');
     expect(onToolStart(o, 'a1', 'Grep', NOW).activity.a1?.target).toBeUndefined();
   });
+
+  test('MCP tools take path, pattern and query as the target', () => {
+    const o = onSpawn(EMPTY_ORCH, 'a1', 'map', NOW);
+    const target = (input: unknown) => onToolStart(o, 'a1', 'mcp__x__ctx', NOW, input).activity.a1?.target;
+    expect([target({ path: '/repo/band.tsx' }), target({ pattern: 'foo\nbar' }), target({ query: 'meaning' })]).toEqual(['band.tsx', 'foo', 'meaning']);
+  });
 });

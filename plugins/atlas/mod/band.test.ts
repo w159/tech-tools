@@ -1,7 +1,7 @@
 // Mission Control panel: framed multi-row band, width tiers, row budget, idle state.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { bandTree, planRows } from './band';
+import { bandTree, planRows, shortTool } from './band';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
 import { textWidth } from './theme';
@@ -100,5 +100,15 @@ describe('Mission Control panel', () => {
   });
   test('idle with open gates reads blocked', () => {
     expect(panel(160, { snapshot: idleSnap(), live: [], gates: [gate] }).all).toContain('blocked');
+  });
+  test('shortTool strips mcp server prefixes', () => {
+    expect(shortTool('mcp__lean-ctx__ctx_shell')).toBe('ctx_shell');
+    expect(shortTool('mcp__plugin_context-mode_context-mode__ctx_execute')).toBe('ctx_execute');
+    expect(shortTool('Edit')).toBe('Edit');
+  });
+  test('lane shows the short MCP tool name', () => {
+    const snapshot = busySnap();
+    snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: 'mcp__lean-ctx__ctx_shell', target: 'sleep 5' } as never;
+    expect(panel(160, { snapshot, live: liveWorkers(snapshot, NOW) }).all).toMatch(/ctx_shell\s+sleep 5/);
   });
 });

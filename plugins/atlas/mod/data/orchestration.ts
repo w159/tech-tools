@@ -72,11 +72,13 @@ export function onSpawn(o: Orch, id: string, text: string, now: number, meta?: S
 const workingStage = (o: Orch, agent: string): Orch['stage'] =>
   agent !== LEAD && o.stage[agent] !== 'reported' ? { ...o.stage, [agent]: 'working' } : o.stage;
 
-/** What a tool call touches: a file's basename, else the first 40 chars of the command's first line. `input` is the open args bag of the tool.call event. */
+/** What a tool call touches: a file or path basename, else the first 40 chars of the command, pattern or query first line. `input` is the open args bag of the tool.call event. */
 const strOf = (v: unknown): string => (typeof v === 'string' ? v : '');
+const baseOf = (v: unknown): string => strOf(v).split('/').pop() ?? '';
+const headOf = (v: unknown): string => strOf(v).split('\n', 1)[0]?.slice(0, 40) ?? '';
 const targetOf = (input: unknown): string | undefined => {
   const a = (input ?? {}) as Record<string, unknown>;
-  return strOf(a.file_path).split('/').pop() || strOf(a.command).split('\n', 1)[0]?.slice(0, 40) || undefined;
+  return [baseOf(a.file_path), baseOf(a.path), headOf(a.command), headOf(a.pattern), headOf(a.query)].find(Boolean);
 };
 
 /** tool.call in flight (before next). */
