@@ -151,23 +151,8 @@
           },
           {
             "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/stop_tail.py\"",
             "timeout": 60
-          },
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/chronicle_facet.py\"",
-            "timeout": 30
-          },
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_capture.py\"",
-            "timeout": 30
-          },
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py\"",
-            "timeout": 15
           }
         ]
       }

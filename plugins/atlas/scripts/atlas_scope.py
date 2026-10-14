@@ -17,8 +17,9 @@ two marker lists stay identical.
 from __future__ import annotations
 
 import os
-import sqlite3
-from urllib.parse import quote
+
+# sqlite3 and urllib.parse (~5 ms) load inside _has_dispatch_history: most hook calls
+# return from the project-marker walk in gates_armed() before reaching it.
 
 SCRATCH_ROOTS = ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders")
 PROJECT_MARKERS = (
@@ -48,6 +49,9 @@ def _has_dispatch_history(paths: tuple[str, str]) -> bool:
         db = os.environ.get("ATLAS_DB") or os.path.expanduser("~/.atlas/atlas.db")
         if not os.path.isfile(db):
             return False
+        import sqlite3
+        from urllib.parse import quote
+
         conn = sqlite3.connect(f"file:{quote(db)}?mode=ro", uri=True, timeout=1)
         try:
             return conn.execute(_HISTORY_SQL, paths).fetchone() is not None

@@ -35,7 +35,7 @@ import sys
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 )
-import worker_inbox  # noqa: E402  (same-dir hook module; stdlib-only, lazy atlas_todo)
+
 
 # Per-session "recall satisfied" markers (tests point this at a temp dir).
 def _temp_root() -> str:
@@ -253,6 +253,8 @@ def _decide(data: dict) -> str | None:
         # grant the MCP approval a claude-mem recall needs, so arming would deny-loop
         # them to `done` with no note; exempt them like the subagents above, same leaf
         # marker as the 10.4.1 dispatch-tripwire worker exemption.
+        import worker_inbox  # lazy: pathlib/time load only once the cheap checks pass
+
         if worker_inbox.is_worker_env():
             return None
         if (

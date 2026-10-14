@@ -22,11 +22,14 @@ from __future__ import annotations
 
 import json
 import os
-import re
-import shutil
-import subprocess
 import sys
-from typing import Any
+
+# typing is not imported (1.7 ms): annotations are strings under __future__, and the
+# JSON payload values are plain `object` here.
+
+# re, shutil, subprocess and bash_advisor (tempfile, ~15 regexes) are imported inside
+# the functions that need them: nearly every call is not a git commit/push and
+# returns from main() before any of them is used (~20 ms of cold-start import).
 
 # Default matches fallow's gate floor (gate-marker agent landed in v2.85.0).
 _DEFAULT_MIN_VERSION = "2.85.0"
@@ -35,7 +38,6 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 import atlas_hook_guard  # noqa: E402
-from bash_advisor import _git_subcommands  # noqa: E402  (one git parser for both hooks)
 
 # Worst case in-hook time: npx probe + version probe + audit must stay under the
 # hooks.json timeout for this hook (300s), or the harness kills us before the
@@ -58,7 +60,7 @@ def _env_off(name: str) -> bool:
     )
 
 
-def _command_from(payload: dict[str, Any]) -> str:
+def _command_from(payload: dict[str, object]) -> str:
     if payload.get("tool_name") not in (None, "Bash"):
         return ""
     command = (payload.get("tool_input") or {}).get("command") or ""
@@ -66,11 +68,19 @@ def _command_from(payload: dict[str, Any]) -> str:
 
 
 def _is_git_commit_or_push(command: str) -> bool:
+    if (
+        "git" not in command
+    ):  # _git_subcommands yields nothing without it: skip the import
+        return False
+    from bash_advisor import _git_subcommands  # one git parser for both hooks
+
     return any(sub in _GATED_SUBCOMMANDS for sub in _git_subcommands(command))
 
 
 def _version_tuple(text: str) -> tuple[int, ...] | None:
     """Parse leading X.Y.Z from a version string; None if unusable."""
+    import re
+
     m = re.match(r"(\d+)(?:\.(\d+))?(?:\.(\d+))?", text.strip())
     if not m:
         return None
@@ -90,6 +100,9 @@ def _below_floor(version: str, floor: str) -> bool:
 
 def _resolve_runner() -> tuple[list[str], str] | None:
     """Return (argv_prefix, description) for invoking fallow, or None."""
+    import shutil
+    import subprocess
+
     path = shutil.which("fallow")
     if path:
         return [path], path
@@ -113,6 +126,8 @@ def _resolve_runner() -> tuple[list[str], str] | None:
 
 
 def _fallow_version(runner: list[str]) -> str:
+    import subprocess
+
     try:
         res = subprocess.run(
             runner + ["--version"],
@@ -129,8 +144,12 @@ def _fallow_version(runner: list[str]) -> str:
     return raw.split()[0] if raw else ""
 
 
-def _run_audit(runner: list[str], cwd: str | None) -> tuple[int, dict[str, Any], str]:
+def _run_audit(
+    runner: list[str], cwd: str | None
+) -> tuple[int, dict[str, object], str]:
     """Run fallow audit. Returns (exit_code, parsed_json_or_empty, stderr_text)."""
+    import subprocess
+
     try:
         res = subprocess.run(
             runner
@@ -153,7 +172,7 @@ def _run_audit(runner: list[str], cwd: str | None) -> tuple[int, dict[str, Any],
     except OSError as exc:
         return 127, {}, str(exc)
 
-    parsed: dict[str, Any] = {}
+    parsed: dict[str, object] = {}
     stdout = (res.stdout or "").strip()
     if stdout:
         try:

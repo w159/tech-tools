@@ -302,7 +302,11 @@ class NudgeHooksJsonBindingTest(unittest.TestCase):
         with open(hj) as f:
             data = json.load(f)
         stop_blob = json.dumps(data.get("hooks", {}).get("Stop", []))
-        self.assertIn("nudge.py", stop_blob)
+        # nudge runs inside the folded Stop tail runner (stop_tail.TAIL), not its own process.
+        self.assertIn("stop_tail.py", stop_blob)
+        import stop_tail
+
+        self.assertIn("nudge", stop_tail.TAIL)
 
 
 if __name__ == "__main__":
