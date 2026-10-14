@@ -109,6 +109,25 @@ class MainInProcessTest(unittest.TestCase):
 
     # --- additionalContext + systemMessage emission -----------------------
 
+    def test_context_carries_absolute_team_flow_commands(self):
+        """live-230: CLAUDE_PLUGIN_ROOT is unset in the lead's Bash, so `${CLAUDE_PLUGIN_ROOT}` commands
+        ran the repo's scripts. Boot prints the installed root's absolute resolver/spawn-team commands;
+        omp passes its own root in CLAUDE_PLUGIN_ROOT."""
+        own = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
+        for env_root, want in ((None, own), ("/opt/omp/atlas", "/opt/omp/atlas")):
+            env = dict(self.env)
+            env.pop("CLAUDE_PLUGIN_ROOT", None)
+            if env_root:
+                env["CLAUDE_PLUGIN_ROOT"] = env_root
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
+                _, out = run_main_inprocess({"session_id": "s1", "cwd": self.tmp}, env)
+            ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+            self.assertIn(f'python3 "{want}/scripts/atlas_resolve.py" <class> <effort>', ctx)
+            self.assertIn(f'python3 "{want}/scripts/atlas_mux.py" spawn-team', ctx)
+            self.assertIn(f'python3 "{want}/scripts/atlas_mux.py" wait --team', ctx)
+            self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", ctx)
+
     def test_main_emits_contract_and_system_message_absent_deps(self):
         """No deps present -> contract emitted, systemMessage asks to run atlas."""
         with (

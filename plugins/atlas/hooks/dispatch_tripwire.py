@@ -370,9 +370,12 @@ def _advisory(msg):
 
 
 _SCOPE_LINE = re.compile(r"^SCOPE:\s*([\w-]+)/(\w+)\s*$", re.M)
-RESOLVE_CMD = 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort> --paths a,b'
+# Absolute paths of THIS plugin's scripts: ${CLAUDE_PLUGIN_ROOT} is expanded only by the hook runner,
+# never in the lead's Bash, where it ran the repo's scripts instead of the installed ones (live-230).
+_OWN_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+RESOLVE_CMD = f'python3 "{_OWN_SCRIPTS / "atlas_resolve.py"}" <class> <effort> --paths a,b'
 SPAWN_TEAM_CMD = (
-    'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class C --effort E '
+    f'python3 "{_OWN_SCRIPTS / "atlas_mux.py"}" spawn-team --class C --effort E '
     '--paths a,b --task "..."'
 )
 # Measured over 7 days: resolver invoked 0 times, SCOPE on 8 of 166 dispatches. Advice did not move it; a deny does.
@@ -1073,6 +1076,62 @@ def _is_read_only_call(tool, tinput):
     return tool == "Bash" and _is_read_only_bash((tinput or {}).get("command"))
 
 
+_MUX_TEAM_VERBS = ("spawn-team", "wait", "reap")
+_SHELL_OPS = {"&&", "||", ";", "|", "&", ";;", "|&"}
+
+
+def _team_mux_verb(tool, tinput):
+    """'spawn-team' / 'wait' / 'reap' / 'resolve' when a Bash call is solely an atlas_mux.py team call
+    or an atlas_resolve.py lookup
+    (`[cd ... &&] [VAR=v] python3 .../atlas_mux.py <verb> ...`, optionally piped into read-only
+    commands, /dev/null and fd redirects allowed); "" otherwise. spawn-team IS the dispatch path,
+    so the inline-op gate must treat it as one (live-230: it denied the launcher itself)."""
+    import shlex
+
+    command = (tinput or {}).get("command") if tool == "Bash" else None
+    if not isinstance(command, str):
+        return ""
+    # lean-ctx's PreToolUse rewrites Bash to `lean-ctx -c '<cmd>'`; PostToolUse sees the wrapped form.
+    with contextlib.suppress(ValueError):
+        words = shlex.split(command)
+        if len(words) == 3 and words[0].rsplit("/", 1)[-1] == "lean-ctx" and words[1] == "-c":
+            command = words[2]
+    if _SHELL_SUBSTITUTION.search(command):
+        return ""
+    stripped = _HARMLESS_REDIRECT.sub(" ", command)
+    try:  # quote-aware, so a `;` or `&&` inside --task "..." is not an operator
+        lex = shlex.shlex(stripped, posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        tokens = list(lex)
+    except ValueError:
+        return ""
+    segments, cur = [], []
+    for tok in tokens:
+        if tok in _SHELL_OPS:
+            segments.append(cur)
+            cur = []
+        elif tok and set(tok) <= set("<>&|();"):
+            return ""  # any redirect left after stripping /dev/null + fd dups writes a file
+        else:
+            cur.append(tok)
+    segments = [s for s in segments + [cur] if s]
+    verb = ""
+    for seg in segments:
+        while seg and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[0]):
+            seg = seg[1:]  # env assignment prefix (LEAN_CTX_DISABLED=1 ...)
+        if not seg or seg[0] == "cd":
+            continue
+        is_python = re.match(r"^python3?(\.\d+)?$", seg[0].rsplit("/", 1)[-1])
+        script = seg[1].rsplit("/", 1)[-1] if is_python and len(seg) > 1 else ""
+        if script == "atlas_mux.py" and len(seg) > 2 and seg[2] in _MUX_TEAM_VERBS:
+            verb = "spawn-team" if "spawn-team" in (verb, seg[2]) else seg[2]
+        elif script == "atlas_resolve.py":  # the read-only resolver step that precedes spawn-team
+            verb = verb or "resolve"
+        elif not _is_exploration_shell(shlex.join(seg)):
+            return ""
+    return verb
+
+
 def _dispatch_attribution(tinput, session_model=""):
     """Who a dispatch is for: agent, sibling name and the model it would run on
     (an explicit per-call `model`, else the definition's pin, else the parent's)."""
@@ -1259,8 +1318,8 @@ def _pre_tool_use(
     # (a) Too many inline ops with no intervening dispatch. Read-only investigation
     # (Read/Grep/Glob, exploration-only or read-only-git Bash) is neither counted
     # (see _run) nor blocked here: the threshold polices drift into edits, not looking.
-    if _is_read_only_call(tool, tinput or {}):
-        return
+    if _is_read_only_call(tool, tinput or {}) or _team_mux_verb(tool, tinput):
+        return  # a team launch/wait/reap is the dispatch path itself, never inline drift
     # Fail CLOSED on DB error: an unverified count must never let an inline
     # op past the hard limit mid-orchestration. The broad __main__ fail-open
     # covers garbage stdin / connect failures, not this trust decision.
@@ -2197,6 +2256,15 @@ def _run(payload):
             # threshold. Logging it with is_inline_op=0 would be worse: that value is
             # the dispatch marker, so it would reset the count.
             return
+
+        verb = _team_mux_verb(tool, tinput)
+        if verb == "spawn-team":
+            # A team launch is a dispatch: the is_inline_op=0 marker resets the count even when
+            # spawn-team could not attribute its own wave rows to this run.
+            atlas_db.log_event(conn, run_id, "atlas_mux:spawn-team", "main", 0)
+            _arm_orchestrating(conn, atlas_db, session, payload.get("cwd"))
+        if verb:
+            return  # wait/reap only observe the team: not inline work, not a dispatch
 
         atlas_db.log_event(conn, run_id, tool, "main", 1, path)
         # Prompt arming is a regex heuristic; an unflagged session that grows

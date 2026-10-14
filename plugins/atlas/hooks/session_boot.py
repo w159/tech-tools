@@ -279,6 +279,21 @@ def status_contract_lines(active_style=""):
     ]
 
 
+def team_flow_line():
+    """The default team flow as runnable commands with THIS plugin's absolute root. The lead's Bash
+    never has CLAUDE_PLUGIN_ROOT, so a `${CLAUDE_PLUGIN_ROOT}` command ran the repo's scripts (live-230).
+    Hooks get the root in the env (omp passes its own); else derive it from this file."""
+    root = os.environ.get("CLAUDE_PLUGIN_ROOT") or os.path.dirname(
+        os.path.dirname(os.path.realpath(__file__))
+    )
+    mux = f'python3 "{root}/scripts/atlas_mux.py"'
+    return (
+        f'Team flow (absolute paths, use verbatim): python3 "{root}/scripts/atlas_resolve.py" '
+        f'<class> <effort> --paths a,b ; {mux} spawn-team --class C --effort E --paths a,b --task "..." ; '
+        f"{mux} wait --team T ; {mux} reap --team T"
+    )
+
+
 def plugin_enabled(name, root=None):
     """Claude Code plugin enablement (enabledPlugins); False on any error."""
     try:
@@ -1007,6 +1022,7 @@ def main():
     ]
     if os.environ.get("ATLAS_HARNESS") != "omp":  # omp/style.ts injects the header rule itself
         lines.extend(status_contract_lines(active_style))
+    lines.append(team_flow_line())
     # claude-mem recall mandate: armed only when the claude-mem plugin (its MCP
     # search server) is enabled; a bare CLI/module cannot be called as a tool.
     recall = (

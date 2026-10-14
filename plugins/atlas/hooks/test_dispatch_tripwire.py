@@ -3448,6 +3448,73 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         self.assertIn('"permissionDecision": "deny"', r.stdout)
 
 
+class TeamMuxDispatchTest(ReadOnlyInvestigationTest):
+    """live-230: the inline-op gate denied `atlas_mux.py spawn-team`, the sanctioned team launcher.
+    spawn-team IS a dispatch (never denied, resets the count); wait/reap never count."""
+
+    MUX = '"/opt/plug/atlas/scripts/atlas_mux.py"'
+    SPAWN = (
+        f"python3 {MUX} spawn-team --class audit --effort medium --paths /etc "
+        '--task "read 3 files; sleep 4 && post a note"'
+    )
+
+    def _saturate(self):
+        for _ in range(8):
+            self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
+        self.assertEqual(self._count(), 8)
+
+    def test_spawn_team_past_threshold_is_not_denied_and_resets_the_count(self):
+        self._saturate()
+        r = self._call("PreToolUse", "Bash", {"command": self.SPAWN})
+        self.assertNotIn('"permissionDecision": "deny"', r.stdout)
+        self._call("PostToolUse", "Bash", {"command": self.SPAWN})
+        self.assertEqual(self._count(), 0)
+
+    def test_wait_and_reap_are_never_denied_or_counted(self):
+        self._saturate()
+        for cmd in (
+            'python3 "/opt/plug/atlas/scripts/atlas_resolve.py" audit medium --paths /etc',
+            f"python3 {self.MUX} wait --team t1 2>&1",
+            f"cd /repo && LEAN_CTX_DISABLED=1 python3 {self.MUX} reap --team t1 | tail -5",
+        ):
+            r = self._call("PreToolUse", "Bash", {"command": cmd})
+            self.assertNotIn('"permissionDecision": "deny"', r.stdout, cmd)
+            self._call("PostToolUse", "Bash", {"command": cmd})
+        self.assertEqual(self._count(), 8)
+
+    def test_lean_ctx_wrapped_spawn_team_post_still_resets(self):
+        """live-231: lean-ctx's PreToolUse rewrites Bash to `lean-ctx -c '<cmd>'`, so PostToolUse
+        saw the wrapped command and logged spawn-team/wait/reap as inline ops."""
+        self._saturate()
+        wrapped = "/opt/homebrew/bin/lean-ctx -c " + __import__("shlex").quote(self.SPAWN)
+        self._call("PostToolUse", "Bash", {"command": wrapped})
+        self.assertEqual(self._count(), 0)
+        wait = "/opt/homebrew/bin/lean-ctx -c " + __import__("shlex").quote(f"python3 {self.MUX} wait --team t1")
+        self._call("PostToolUse", "Bash", {"command": wait})
+        self.assertEqual(self._count(), 0)
+
+    def test_mux_call_chained_with_a_mutation_still_counts(self):
+        self._saturate()
+        for cmd in (
+            f"touch x && python3 {self.MUX} wait --team t1",
+            f"python3 {self.MUX} spawn-team --class a --effort b > out.json",
+            f"python3 {self.MUX} spawn --run r --name n",
+        ):
+            r = self._call("PreToolUse", "Bash", {"command": cmd})
+            self.assertIn('"permissionDecision": "deny"', r.stdout, cmd)
+
+    def test_guidance_commands_carry_this_plugins_absolute_scripts(self):
+        """CLAUDE_PLUGIN_ROOT is unset in the lead's Bash: leads ran the repo's scripts, not the install."""
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        scripts = Path(dt.__file__).resolve().parents[1] / "scripts"
+        for cmd, script in ((dt.RESOLVE_CMD, "atlas_resolve.py"), (dt.SPAWN_TEAM_CMD, "atlas_mux.py")):
+            self.assertNotIn("CLAUDE_PLUGIN_ROOT", cmd)
+            self.assertIn(f'python3 "{scripts / script}"', cmd)
+            self.assertTrue((scripts / script).is_file())
+
+
 class ScopeTest(unittest.TestCase):
     """Scope skips only soft policy denies; bookkeeping and hard denies still run."""
 

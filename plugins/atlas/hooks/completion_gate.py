@@ -2208,6 +2208,16 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
             for n, c in atlas_todo._reg_read(str(root))["channels"].items()
             if c.get("kind") == "lead" and c.get("lead") == lead
         }
+        # `atlas_mux reap` closes a tmux team's channel (it leaves the registry) and archives the team
+        # record, so a reaped team's members are known only from that record (live-230: 12 notes, (p) fired).
+        teams = Path(root) / ".atlas" / ".run" / "teams"
+        for rec_path in [*teams.glob("*.json"), *teams.glob("archive/*.json")]:
+            try:
+                team = json.loads(rec_path.read_text(encoding="utf-8"))
+                if team.get("lead") == lead and team.get("channel"):
+                    chans.setdefault(team["channel"], set()).update(m["name"] for m in team["members"])
+            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                continue
         if notes_dir.is_dir():
             for path in sorted(notes_dir.glob("*" + atlas_todo.NOTE_FILE_SUFFIX)):
                 try:
