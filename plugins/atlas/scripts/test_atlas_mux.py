@@ -2388,7 +2388,7 @@ class TeamWindowTests(unittest.TestCase):
 
     REC = {"team_id": "t9", "class": "audit", "effort": "medium", "created": 100}
 
-    def drive(self, names, fail_split=False):
+    def drive(self, names, fail_split=False, width=200):
         from unittest import mock
 
         import atlas_mux
@@ -2401,6 +2401,8 @@ class TeamWindowTests(unittest.TestCase):
             ok = subprocess.CompletedProcess(argv, 0, "", "")
             if verb == "has-session":
                 return subprocess.CompletedProcess(argv, 0 if state["session"] else 1, "", "")
+            if verb == "list-panes" and "-s" not in argv:  # the team window's panes: its width per pane
+                return subprocess.CompletedProcess(argv, 0, f"{width}\n" * max(1, len(state["panes"])), "")
             if verb == "list-panes":
                 return subprocess.CompletedProcess(argv, 0, "".join(f"{n}\t0\t1\n" for n in state["panes"]), "")
             if verb == "split-window" and fail_split:
@@ -2436,10 +2438,26 @@ class TeamWindowTests(unittest.TestCase):
         splits = [c for c in calls if c[0] == "split-window"]
         self.assertEqual(2, len(splits))
         self.assertTrue(all(c[c.index("-t") + 1] == "atlas-t9:atlas-t9" for c in splits))
-        self.assertEqual(3, sum(1 for c in calls if c[:2] == ["select-layout", "-t"] and c[-1] == "tiled"))
+        layouts = [c[-1] for c in calls if c[:2] == ["select-layout", "-t"]]
+        # 200 cols cannot give 3 side-by-side panes 70 cols each
+        self.assertEqual(["even-horizontal", "even-horizontal", "main-horizontal"], layouts)
         tags = [c for c in calls if c[0] == "set-option" and c[-2] in ("@atlas_worker", "@atlas_role")]
         self.assertTrue(all(c[1] == "-p" for c in tags))
         self.assertEqual(["a", "b", "c"], [c[-1] for c in tags if c[-2] == "@atlas_worker"])
+
+    def test_layout_by_worker_count_and_window_width(self):
+        import atlas_mux
+
+        pick = atlas_mux._team_layout
+        self.assertEqual("even-horizontal", pick(2, 120))
+        self.assertEqual("even-horizontal", pick(3, 212))
+        self.assertEqual("main-horizontal", pick(3, 200))
+        self.assertEqual("tiled", pick(4, 400))
+        self.assertEqual("tiled", pick(6, 400))
+        _, calls = self.drive(["a", "b", "c"], width=240)
+        self.assertEqual("even-horizontal", [c for c in calls if c[0] == "select-layout"][-1][-1])
+        _, calls = self.drive(["a", "b", "c", "d"])
+        self.assertEqual("tiled", [c for c in calls if c[0] == "select-layout"][-1][-1])
 
     def test_styling_is_scoped_to_the_team_session_never_global(self):
         _, calls = self.drive(["a", "b"])

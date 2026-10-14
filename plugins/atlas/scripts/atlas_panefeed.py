@@ -33,6 +33,7 @@ PEACH, RED, YEL, PINK, BASE = _hx("#fab387"), _hx("#f38ba8"), _hx("#f9e2af"), _h
 SPIN = "⣾⣽⣻⢿⡿⣟⣯⣷"
 EIGHTHS = " ▏▎▍▌▋▊▉█"
 CHIP_W = 10
+_USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
 # tool input fields worth showing, first match wins
 _ARG_KEYS = ("file_path", "path", "command", "pattern", "query", "description", "url", "prompt")
 
@@ -54,31 +55,30 @@ def seg(text: str, f=None, b=None, bold: bool = False) -> tuple:
 
 
 def paint(segs, width: int) -> str:
-    """Segments left to right, cut at `width - 1` cells; EL paints the rest of the line in the panel
-    color. Text never reaches the last column, so the line never wraps and tmux never marks it as
-    wrapped (capture-pane -J would join it to the next row)."""
-    out, left = [], width - 1
+    """Segments left to right, cut and padded to exactly `width` cells in the panel color. Every cell
+    is written: capture-pane drops EL-cleared cells, so an EL-filled bar captured short. The live
+    feed places each row with CUP, so a full row never wraps (checked: capture-pane -J keeps it
+    separate)."""
+    out, left = [], width
     for text, f, b, bold in segs:
         if left <= 0:
             break
         text = text.replace("\t", " ")[:left]
         left -= len(text)
         out.append((ESC + "1m" if bold else "") + (fg(f) if f else "") + bg(b or PANEL) + text + RST)
-    return "".join(out) + bg(PANEL) + ESC + "K" + RST
+    return "".join(out) + bg(PANEL) + " " * left + RST
 
 
 def gradient_bar(left: str, right: str, width: int, a=GREEN, b=TEAL) -> str:
-    """Full-width gradient title bar, `left` text at the start and `right` flush right when it fits.
-    The last column is filled by EL in the end color (see paint)."""
-    cols = width - 1
+    """Exactly `width` cells of gradient title bar, `left` text at the start and `right` flush right
+    when it fits."""
+    cols = width
     cells = list((" " + left)[:cols].ljust(cols))
     tail = right + " "
     if len(left) + len(tail) + 2 <= cols:
         cells[cols - len(tail) :] = tail
-    span = max(1, cols)
-    return "".join(
-        bg(lerp(a, b, i / span)) + fg(BASE) + ESC + "1m" + ch for i, ch in enumerate(cells)
-    ) + bg(b) + ESC + "K" + RST
+    span = max(1, cols - 1)
+    return "".join(bg(lerp(a, b, i / span)) + fg(BASE) + ESC + "1m" + ch for i, ch in enumerate(cells)) + RST
 
 
 def chip(label: str, color) -> tuple:
@@ -333,13 +333,21 @@ def peers_of(prompt: str) -> list:
     return [n for n in names if n and n != "(none)"]
 
 
+# header gradient per worker role (substring match: "completeness-critic" is a critic)
+_ROLE_GRADIENT = (("explorer", TEAL, SKY), ("implementer", PEACH, YEL), ("verifier", GREEN, TEAL), ("critic", VIOLET, PINK))
+
+
+def role_gradient(role: str) -> tuple:
+    return next(((a, b) for key, a, b in _ROLE_GRADIENT if key in str(role).lower()), (GREEN, TEAL))
+
+
 def header(name: str, role: str, team: str, channel: str, goal: str, width: int = 0, peers=()) -> str:
     """Three painted header rows (gradient bar, goal, channel + peers) and a blank one."""
     width = width or shutil.get_terminal_size((100, 30)).columns
     chan = "#" + (channel.rsplit("/", 1)[-1] or "-") if channel else "#-"
     first = (goal.strip().splitlines() or [""])[0]
     rows = [
-        gradient_bar(f"◢◤ ATLAS  {name}", f"{role} · wave {team}", width),
+        gradient_bar(f"◢◤ ATLAS  {name}", f"{role} · wave {team}", width, *role_gradient(role)),
         paint([seg(" goal ", MUT), seg(first, TXT)], width),
         paint([seg(f" {chan}", VIOLET, None, True), seg("  peers: " + (" · ".join(peers) or "none"), VIOLET)], width),
         paint([], width),
@@ -431,7 +439,10 @@ class Feed:
         head = self._header(width).split("\n")
         room = max(0, height - len(head) - 2 - spare)
         body = [paint(r, width) for r in list(self.rows)[-room:]] if room else []
-        lines = [paint([], width)] * spare + head + body + [paint([], width)] * (room - len(body))
+        gap = room - len(body)
+        # a dim spacer under the newest row marks where the feed grows; the status stays at the bottom
+        filler = ([paint([seg(" · · ·", DIM)], width)] if gap else []) + [paint([], width)] * max(0, gap - 1)
+        lines = [paint([], width)] * spare + head + body + filler
         lines += [paint([], width), self._status(width)]
         out = "".join(f"{ESC}{i + 1};1H{ln}" for i, ln in enumerate(lines[:height]))
         if self.painted_size != (width, height):
@@ -456,10 +467,13 @@ class Feed:
     def _count(self, event: dict) -> None:
         msg = event.get("message") or {}
         blocks = msg.get("content") or []
-        self.tools += sum(1 for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use")
+        # one per tool_use row plus one per peer-note row, so the count matches the rows shown
+        self.tools += sum(len(_tool_rows(b, None)) for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use")
         usage = msg.get("usage") or {}
-        if isinstance(usage.get("output_tokens"), int):
-            self.usage[msg.get("id") or len(self.usage)] = usage["output_tokens"]
+        total = sum(v for k, v in usage.items() if k in _USAGE_KEYS and isinstance(v, int))
+        if total:
+            # stream-json repeats a message's usage once per content block: keyed by id, counted once
+            self.usage[msg.get("id") or len(self.usage)] = total
 
     def event(self, event: dict) -> None:
         if event.get("type") == "assistant":

@@ -636,6 +636,21 @@ def _split_team_window(session: str, name: str, pane: str) -> subprocess.Complet
     return res
 
 
+def _team_layout(count: int, width: int) -> str:
+    """Side by side while each pane keeps >= 70 cols, else one wide pane over the rest; 4+ tile."""
+    if count == 3:
+        return "even-horizontal" if (width - 2) // 3 >= 70 else "main-horizontal"
+    return "even-horizontal" if count <= 2 else "tiled"
+
+
+def _relayout_team(session: str) -> None:
+    win = f"{session}:{session}"
+    res = _tmux("list-panes", "-t", win, "-F", "#{window_width}")
+    widths = [int(w) for w in res.stdout.split() if w.isdigit()] if res.returncode == 0 else []
+    width = widths[0] if widths else int(_lead_size().split("x")[0])
+    _tmux("select-layout", "-t", win, _team_layout(max(1, len(widths)), width))
+
+
 def _open_team_pane(session: str, name: str, pane: str, team: dict) -> str | None:
     """Team mode of _open_window (caller holds its lock): a tiled pane tagged @atlas_worker/@atlas_role."""
     if _tmux("has-session", "-t", session).returncode != 0:
@@ -649,7 +664,7 @@ def _open_team_pane(session: str, name: str, pane: str, team: dict) -> str | Non
     pane_id = res.stdout.strip()
     _tmux("set-option", "-p", "-t", pane_id, "@atlas_worker", name)
     _tmux("set-option", "-p", "-t", pane_id, "@atlas_role", str(team.get("role") or ""))
-    _tmux("select-layout", "-t", f"{session}:{session}", "tiled")
+    _relayout_team(session)
     return None
 
 

@@ -77,21 +77,21 @@ class RowTests(unittest.TestCase):
         self.assertIn("plan A", row)
         self.assertNotIn("more", row)
 
-    def test_rows_are_cut_to_width_never_wrapped(self):
-        """Text stops one cell short of the edge; EL fills the last column (no wrap flag for -J)."""
+    def test_rows_fill_the_exact_width_never_wrapped(self):
+        """Every cell is painted explicitly (capture-pane drops EL-cleared cells, so EL-filled bars
+        looked short); the feed positions each row with CUP, so a full row never wraps."""
         long = tool("Bash", command="echo " + "x" * 500)
         for width in (20, 40, 77):
-            for line in pf.render_event(long, width):
-                self.assertEqual(len(plain(line)), width - 1)
-                self.assertTrue(line.endswith("\x1b[K\x1b[0m"))
+            for line in pf.render_event(long, width) + [pf.paint([pf.seg("short")], width)]:
+                self.assertEqual(len(plain(line)), width)
                 self.assertNotIn("\n", line)
 
     def test_header_spans_the_pane_width(self):
         for width in (60, 96, 158):
             rows = pf.header("explorer-a324", "explorer", "t3", "x@main/lead-a47cc5", "Map callers\nmore", width, ["b", "c"]).split("\n")
             bar = plain(rows[0])
-            self.assertEqual(len(bar), width - 1)
-            self.assertIn("\x1b[K", rows[0])
+            self.assertEqual(len(bar), width)
+            self.assertTrue(all(len(plain(r)) == width for r in rows))
             self.assertTrue(bar.startswith(" ◢◤ ATLAS  explorer-a324"))
             self.assertTrue(bar.endswith("explorer · wave t3 "))
             self.assertIn("goal Map callers", plain(rows[1]))
@@ -103,7 +103,15 @@ class RowTests(unittest.TestCase):
         self.assertIn("1m12s · 9 tools · 3.1k tok", plain(pf.status_row("run", 0, 72, 9, 3100, 96)))
         self.assertIn("✔ DONE · 35s · 9 tools", plain(pf.status_row("done", 0, 35, 9, 0, 96)))
         self.assertIn("✖ FAILED", plain(pf.status_row("fail", 0, 35, 9, 0, 96)))
-        self.assertEqual(len(plain(pf.status_row("run", 3, 5, 1, 0, 30))), 29)
+        for width in (30, 77, 200):
+            for state in ("run", "done", "fail"):
+                self.assertEqual(len(plain(pf.status_row(state, 3, 5, 1, 0, width))), width)
+
+    def test_header_gradient_takes_the_role_color(self):
+        for role, color in (("explorer", pf.TEAL), ("implementer", pf.PEACH), ("verifier", pf.GREEN),
+                            ("completeness-critic", pf.VIOLET)):
+            bar = pf.header("w", role, "t", "", "g", 80).split("\n")[0]
+            self.assertTrue(bar.startswith(pf.bg(color)), role)
 
     def test_brief_goal_and_peers(self):
         brief = "You are w (x), one of 3.\nPeers: a-1, b-2.\n\n# Task\nRead 3 files.\nmore\n"
@@ -135,6 +143,37 @@ class PaneFeedTests(unittest.TestCase):
         text = plain(buf.getvalue())
         self.assertIn("◢◤ ATLAS  w1", text)
         self.assertRegex(text, r"✔ DONE · \d+s · [1-9]\d* tools")
+
+    def test_tokens_sum_input_output_and_cache_once_per_message(self):
+        feed = pf.Feed("w1", out=io.StringIO(), live=False)
+        usage = {"input_tokens": 3, "cache_creation_input_tokens": 2000, "cache_read_input_tokens": 10000, "output_tokens": 400}
+        for block in ({"type": "text", "text": "x"}, {"type": "tool_use", "name": "Read", "input": {}}):
+            # stream-json repeats the message (and its usage) once per content block
+            feed.event({"type": "assistant", "message": {"id": "m1", "usage": usage, "content": [block]}})
+        self.assertIn("12.4k tok", plain(feed._status(120)))
+
+    def test_tool_count_matches_the_tool_and_peer_rows(self):
+        feed = pf.Feed("w1", out=io.StringIO(), live=False)
+        feed.event(tool("Bash", command=LIVE_CMD))  # one Bash row and two peer rows
+        feed.event(tool("ToolSearch", query="select:x"))
+        feed.event({"type": "assistant", "message": {"content": [{"type": "text", "text": "thinking"}]}})
+        self.assertEqual(feed.tools, 4)
+        self.assertIn(" 4 tools ", plain(feed._status(120)))
+
+    def test_live_feed_spacer_then_status_on_the_last_row(self):
+        from unittest import mock
+        buf = io.StringIO()
+        feed = pf.Feed("w1", "explorer", "t", "", "# Task\ngo", out=buf, live=True)
+        with mock.patch.object(pf.Feed, "_size", return_value=(60, 14)):
+            feed.event(tool("Read", file_path="/etc/hosts"))
+        frame = buf.getvalue().rsplit("\x1b[2J", 1)[-1]
+        rows = {int(m.group(1)): plain(m.group(2)) for m in __import__("re").finditer(r"\x1b\[(\d+);1H(.*?)(?=\x1b\[\d+;1H|$)", frame)}
+        self.assertEqual(sorted(rows), list(range(1, 15)))
+        self.assertTrue(all(len(r) == 60 for r in rows.values()))
+        self.assertIn("hosts", rows[5])
+        self.assertEqual(rows[6].strip(), "· · ·")
+        self.assertTrue(all(not rows[i].strip() for i in range(7, 14)))
+        self.assertIn("working", rows[14])
 
     def test_result_text_matches_final_result(self):
         res = [e for e in self.events() if e["type"] == "result"][-1]
