@@ -408,8 +408,9 @@ class SpawnClaudeTests(Base):
         base, cargv = _fake_harness_argv(self.state)
         self.assertEqual("claude", base)
         self.assertEqual(
-            ["-p", "--agent", "atlas:explorer", "--model", "haiku", "--effort", "low"],
-            cargv[:7],
+            ["-p", "--output-format", "stream-json", "--verbose", "--agent", "atlas:explorer",
+             "--model", "haiku", "--effort", "low"],
+            cargv[:10],
         )
         self.assertNotIn(
             "env", cargv
@@ -440,6 +441,9 @@ class SpawnClaudeTests(Base):
         self.assertEqual(
             [
                 "-p",
+                "--output-format",
+                "stream-json",
+                "--verbose",
                 "--agent",
                 "atlas:explorer",
                 "--model",
