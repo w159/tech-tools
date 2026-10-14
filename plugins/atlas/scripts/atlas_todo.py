@@ -50,7 +50,7 @@ from typing import Any, Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from atlas_memory import LockTimeout, _file_lock  # noqa: E402
 
-STATUSES = ("pending", "in_progress", "completed")
+STATUSES = ("pending", "in_progress", "completed", "blocked")
 ORIGINS = ("session", "carried", "manual", "advisor")
 _KEEP_ORIGINS = (
     "manual",
@@ -393,6 +393,7 @@ def add(
     phase: Optional[str] = None,
     owner: Optional[str] = None,
     channel: Optional[str] = None,
+    role: Optional[str] = None,
 ) -> dict:
     content = (content or "").strip()
     if not content:
@@ -435,6 +436,8 @@ def add(
             item["phase"] = norm
         if channel:
             item["channel"] = str(channel).strip()
+        if role:
+            item["role"] = str(role).strip()
         board["items"].append(item)
         save(root, board)
         return {"ok": True, "item": item, "counts": counts(board, session_id)}
@@ -563,6 +566,8 @@ def set_status(
                 item["evidence"] = evidence
         else:
             item["completed_at"] = None
+            if status == "blocked" and evidence:
+                item["evidence"] = evidence
         _touch(item)
         save(root, board)
         return {"ok": True, "item": item, "counts": counts(board)}

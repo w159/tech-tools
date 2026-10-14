@@ -18,7 +18,8 @@
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, writeFileSync } from "node:fs";
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { type GatesCache, type IdleWave, type LaneTool, type PanelNote, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
+import type { PanelTodo } from "./todo-panel";
+import { type GatesCache,type IdleWave, type LaneTool, type PanelNote, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 
@@ -377,18 +378,27 @@ export function registerLaneToolRecorder(pi: Pick<ExtensionAPI, "on">, env: Reco
  * This session's todo progress, scoped like the Claude mod (mod/data/todos.ts): other sessions' rows and advisor notes
  * never count. `phase` is the in_progress item's contract phase only (mod currentPhase); absent, the header decides.
  */
-export function todoSummary(root: string, sessionId?: string): { done: number; total: number; phase?: string } {
-	let items: Array<{ status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string }> = [];
+type BoardRow = { status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string; content?: string; owner?: string; evidence?: string };
+function sessionTodos(root: string, sessionId?: string): BoardRow[] {
+	let items: BoardRow[] = [];
 	try {
 		items = JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "todos.json"), "utf8")).items ?? [];
 	} catch {
 		// no board yet: zeroes
 	}
-	items = items.filter(i => !i.archived && i.origin !== "advisor" && (!sessionId || i.session_id === sessionId));
+	return items.filter(i => !i.archived && i.origin !== "advisor" && (!sessionId || i.session_id === sessionId));
+}
+
+export function todoSummary(root: string, sessionId?: string): { done: number; total: number; phase?: string } {
+	const items = sessionTodos(root, sessionId);
 	const open = items.filter(i => i.status !== "completed");
 	const phase = items.find(i => i.status === "in_progress")?.phase;
 	return { done: items.length - open.length, total: items.length, phase };
 }
+
+/** The same session slice as rows for the board panel. */
+export const todoItems = (root: string, sessionId?: string): PanelTodo[] =>
+	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined }));
 
 /** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */
 const railPhase = (todo: string | undefined, header: string | undefined): string => todo ?? header ?? "research";
@@ -558,6 +568,8 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 			team: team.team,
 			elapsedSecs: Math.max(0, Math.floor((now() - startedAt) / 1000)),
 			idle: idleWave(info, workers.length),
+			todos: todoItems(info.root, info.sessionId),
+			todosExpanded: env.ATLAS_TODO_EXPANDED === "1",
 		});
 		const key = lines.join("\n");
 		if (key !== painted) ui.setWidget(WIDGET_KEY, lines);

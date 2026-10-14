@@ -64,3 +64,4 @@ NEXT: <exact question for the lead if BLOCKED or FAILED; else none>
 - Direct answer to the GOAL.
 - Open questions / anything you couldn't resolve.
 Keep it compact and reference-dense. No file contents unless a few lines are essential.
+Your board item id is in the prompt (BOARD ITEM: <id>); at start run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" status --id <id> --status in_progress`.

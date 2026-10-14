@@ -80,3 +80,4 @@ NEXT: <exact question for the lead if BLOCKED or FAILED; else none>
 - The verdict + a one-line reason.
 - The evidence you personally gathered: command output lines, the query result, the `file:line` you confirmed.
 - Any side effect or scope creep you noticed. Do not propose or apply a fix - that's the implementer's job.
+Your board item id is in the prompt (BOARD ITEM: <id>); at start run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" status --id <id> --status in_progress`.

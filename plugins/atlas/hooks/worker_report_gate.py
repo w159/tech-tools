@@ -187,10 +187,32 @@ def check_report(msg, agent_type, cwd, report):
     return problems
 
 
-def finish_member(p):
+def close_board_item(atlas_todo, root, who, msg, report):
+    """Settle the member's open dispatch todo from its valid report: DONE completes it
+    with the first EVIDENCE item, BLOCKED/FAILED marks it blocked. No-op without a report."""
+    if not msg:
+        return
+    lines = msg.splitlines()
+    first = next((ln for ln in lines if ln.strip()), "")
+    status = first.split(":", 1)[-1].strip()
+    ev = sections(lines, report["textFields"]).get("EVIDENCE", "")
+    ev = next((ln.strip() for ln in ev.splitlines() if NUMBERED_RE.match(ln)), "")[:300]
+    for item in reversed(atlas_todo.load(root).get("items", [])):
+        if item.get("owner") == who and item.get("status") != "completed":
+            atlas_todo.set_status(
+                root,
+                item["id"],
+                "completed" if status == "DONE" else "blocked",
+                evidence=ev,
+            )
+            return
+
+
+def finish_member(p, msg=None, report=None):
     """Mark the stopping agent's channel member finished and drop it from its channel,
     so channels.json stops accumulating. Fail-open. The payload carries no member name
-    for Claude Task subagents, only omp's `agent_name`; agent_id is tried as a fallback."""
+    for Claude Task subagents, only omp's `agent_name`; agent_id is tried as a fallback.
+    A valid report (`msg`, `report`) also settles the member's board item."""
     try:
         sys.path.insert(
             0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
@@ -207,6 +229,8 @@ def finish_member(p):
                 atlas_todo, root, str(p.get(key) or "")
             )
             if who:
+                if report:
+                    close_board_item(atlas_todo, root, who, msg, report)
                 atlas_todo.mark_finished(root, who, 0)
                 for ch in list(atlas_todo._reg_read(root)["channels"]):
                     atlas_todo.leave(root, ch, who)
@@ -218,7 +242,6 @@ def finish_member(p):
             atlas_faults.record("worker_report_gate.finish_member", exc)
         except Exception:
             pass
-
 
 
 def main():
@@ -234,7 +257,11 @@ def main():
         return
     agent_type = str(p.get("agent_type") or "")
     msg = p.get("last_assistant_message")
-    if not agent_type.startswith("atlas:") or not isinstance(msg, str) or not msg.strip():
+    if (
+        not agent_type.startswith("atlas:")
+        or not isinstance(msg, str)
+        or not msg.strip()
+    ):
         # Nothing to check, but the stop still ends a known channel member (background
         # agents' real SubagentStop carries no last_assistant_message). finish_member
         # is a no-op for an agent that is not a registered member.
@@ -244,7 +271,7 @@ def main():
         report = json.load(f)["report"]
     problems = check_report(msg, agent_type, p.get("cwd"), report)
     if not problems:
-        finish_member(p)
+        finish_member(p, msg, report)
         return
     if not marker_claimed(p.get("agent_id") or "unknown"):
         finish_member(p)  # blocked once already: this is the final report

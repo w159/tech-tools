@@ -116,3 +116,4 @@ Put these items inside the container above (EVIDENCE and DELIVERABLE lines); do 
 - What you changed: the diff summary (files + the gist), not the full diff.
 - Verification: the exact gate commands run and their **actual** result (paste the pass/fail lines, not the whole log).
 - Anything you deliberately left out of scope, and any uncertainty.
+Your board item id is in the prompt (BOARD ITEM: <id>); at start run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" status --id <id> --status in_progress`.

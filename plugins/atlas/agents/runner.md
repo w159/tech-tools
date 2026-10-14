@@ -56,3 +56,4 @@ DELIVERABLE: <the output the dispatch's DELIVERABLE asked for, or: none>
 NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
 ```
 On omp the same fields are returned as the structured result.
+Your board item id is in the prompt (BOARD ITEM: <id>); at start run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" status --id <id> --status in_progress`.

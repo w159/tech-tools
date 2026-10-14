@@ -26,6 +26,26 @@ const panel = (columns: number, over: Record<string, unknown> = {}) => {
 const idleSnap = () => busySnap({ squad: [], activity: {}, comms: [] });
 const laneOf = (rowNodes: Node[], name: string): Node => rowNodes.find((r) => text(r).includes(name))!;
 
+const boardTodos = [
+  { id: 'a', content: 'map the auth flow', status: 'completed', owner: 'explorer-1', evidence: '1. rg auth -> 3 hits' },
+  { id: 'b', content: 'edit auth middleware', status: 'in_progress', owner: 'impl-auth' },
+  { id: 'c', content: 'add ttl config', status: 'pending' },
+];
+
+describe('band board panel', () => {
+  test('collapsed bar sits under the rail and costs one row', () => {
+    const base = panel(160).rows;
+    const { rows } = panel(160, { snapshot: busySnap({ todos: boardTodos as any }) });
+    expect(rows).toHaveLength(base.length + 1);
+    expect(rows[2]).toContain('1/3');
+    expect(rows[2]).toContain('impl-auth: edit auth middleware');
+  });
+  test('expanded lists every item', () => {
+    const { rows } = panel(160, { snapshot: busySnap({ todos: boardTodos as any }), todoExpanded: true, maxRows: 14 });
+    expect(rows.slice(2, 5).map((r) => r.trim().slice(0, 1))).toEqual(['✔', expect.any(String), '○']);
+  });
+});
+
 describe('Mission Control band', () => {
   test('full tier: filled panel with gradient title, rail, lanes, ticker and footer', () => {
     const { node, rows, all } = panel(160, { gates: [gate] });

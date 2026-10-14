@@ -82,6 +82,33 @@ class WorkerReportGateTest(unittest.TestCase):
         ]
         self.assertEqual([m.get("exit_code") for m in mem], [0])
 
+    def _board_item_after(self, msg):
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["impl-1"])
+        todo.add(root, "do it", owner="impl-1", origin="dispatch")
+        self.run_hook(
+            payload(
+                agent_name="impl-1",
+                agent_type="atlas:implementer",
+                cwd=root,
+                last_assistant_message=msg,
+            )
+        )
+        return todo.load(root)["items"][0]
+
+    def test_done_report_completes_board_item_with_evidence(self):
+        item = self._board_item_after(COMPLIANT)
+        self.assertEqual(item["status"], "completed")
+        self.assertIn("ls -> ok", item["evidence"])
+
+    def test_blocked_report_marks_board_item_blocked(self):
+        msg = COMPLIANT.replace("STATUS: DONE", "STATUS: BLOCKED")
+        self.assertEqual(self._board_item_after(msg)["status"], "blocked")
+
     def test_stop_with_only_agent_id_finishes_mapped_member(self):
         # Claude's SubagentStop carries agent_id + agent_type, never the member name.
         sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
