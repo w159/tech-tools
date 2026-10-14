@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+import _test_isolation  # noqa: F401,E402
 import atlas_panefeed as pf  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "claude_stream.jsonl"

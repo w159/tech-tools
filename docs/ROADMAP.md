@@ -170,14 +170,15 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## Backlog
 
-### Follow-ups: atlas 12.1.0 (added 2026-10-13)
+### Follow-ups: atlas 12.1.0 and 12.2.0 (added 2026-10-13)
 
-Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (the old "nothing prunes the registry" limit), scope resolver, branded band, omp widget header. See `docs/CHANGELOG.md` 12.1.0.
+Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (the old "nothing prunes the registry" limit), scope resolver, branded band, omp widget header. Shipped in 12.2.0: SCOPE deny on `atlas:*` dispatches, real gate status in the omp widget (replaces the todo-based proxy). See `docs/CHANGELOG.md`.
 
-- [planned] omp widget gate count is a todo-based proxy (`omp/channel-view.ts`), not the `atlas_gates.py` groups the Claude mod shows. Wire the real gate script or label the number.
-- [planned] The mod pane's Tab key does not cycle tabs; only `r t c g` and the arrow-key focus ring switch views. Bind Tab if wanted.
+- [planned] The mod pane's Tab key has no engine action, so Tab does not cycle tabs; only `r t c g` and the arrow-key focus ring switch views.
 - [planned] A foreground Claude `Agent` call may not carry an `agentId`, so `SubagentStop` cannot map it to a member; the age-based reaper (trigger A at channel open, trigger B at omp lead shutdown) covers those members. Confirm with a live foreground dispatch.
-- [planned] The `SCOPE: <class>/<effort>` check in `dispatch_tripwire` is advisory. After one release of advisory data, decide whether a mismatch becomes a deny.
+- [planned] omp Mission Control lanes lack role and current tool (`omp/mission-panel.ts`); the Claude band shows both.
+- [planned] omp worker panes have no streaming feed; `atlas_panefeed.py` renders only the Claude `stream-json` output.
+- [planned] Hook latency: merging the per-event hooks into one process could cut about 100 ms per Edit call.
 
 ### Deferred backlog: atlas 10.5.0 wave (added 2026-10-10)
 

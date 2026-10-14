@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 12.2.0
+
+### Added
+- Mission Control band (`mod/band.tsx`): the band is a framed multi-row panel with a header phase rail, one lane per live worker (spinner, name, role, tool, target, elapsed bar that fills over two minutes), a 2-row channel ticker and a gates/todos footer. Width tiers: >= 120 full, 80-119 no role/target, < 80 header only; a short row budget drops lanes, then the ticker, then the footer. An unasked pane is placed only from 144 columns (`DOCK_MIN_COLUMNS`).
+- Transcript worker cards, wave strips and channel bubbles (`mod/transcript/cards.tsx`): atlas dispatches render as cards with role, GOAL line and result; a parallel group of 2+ atlas dispatches renders as a wave strip; agent messages render as `#atlas <from> > lead` bubbles.
+- `atlas_mux.py spawn-team --class C --effort E [--paths] --task|--task-file`: a team sized by the scope resolver, spawned as tmux panes (session `atlas-<team_id>`, `max_parallel` semaphore), with `wait --team T` (exit, duration, last STATUS per member) and `reap --team T` (kill session, exit notes, channel reap, archive record). Falls back to `claude-bg` when tmux is missing.
+- Branded live pane feed (`scripts/atlas_panefeed.py`): tmux workers run `claude -p --output-format stream-json --verbose`, and the pane shows an ATLAS header plus one line per tool call and the result.
+- omp `atlas_team` tool (`omp/team-tool.ts`): `spawn | wait | reap` for an omp lead; not registered in worker sessions.
+- omp Mission Control widget (`omp/mission-panel.ts`): framed panel, phase rail, worker lanes, channel ticker, and real gate status from `atlas_gates.py` (async, 10 s cache).
+- `scripts/bench_hooks.py`: per-event and per-hook median/p90 latency harness (`--root` for A/B against another tree).
+
+### Changed
+- Resolver plus tmux team is the default orchestration flow (output style, `atlas-orchestrate` skill references, omp lead addendum).
+- `dispatch_tripwire` denies an `atlas:*` dispatch without a resolvable `SCOPE: <class>/<effort>` line, or whose role is in the matrix but not on the resolved team. `ATLAS_SCOPE_GATE=off` downgrades the deny to an advisory. A 2nd atlas dispatch within `ATLAS_BURST_SECS` (default 10, 0 disables) gets an advisory to use spawn-team.
+- Lanes show short MCP tool names (`mcp__lean-ctx__ctx_shell` reads `ctx_shell`) and targets from `file_path`, `path`, `command`, `pattern` or `query`.
+- Hook speed: hooks.json runs every hook with `python3 -S`; hot hooks and `atlas_hook_guard` import lazily and exit early; `atlas_doctor.py --hook` reuses a healthy verdict for 30 min (`ATLAS_DOCTOR_HOOK_TTL_MIN`, 0 disables) and checks the stamp before heavy imports. Measured against 12.1.3 with `bench_hooks.py`: SessionStart about -60%, Edit call -26%, Bash call -27% (`.atlas/evidence/optimize-2026-10-13/baseline-r2.md`).
+
+### Fixed
+- A missing formatter in `format_after_edit` is no longer recorded as a hook fault.
+- `scripts/test_atlas_panefeed.py` imports `_test_isolation`, so the test-isolation contract passes.
+
 ## 12.1.3
 
 ### Fixed

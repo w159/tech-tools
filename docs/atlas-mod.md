@@ -21,15 +21,28 @@ Both surfaces are drawn with native elements (`$.ui.resolve(e)` from the `ui.ren
 
 ### The band (always on)
 
-One borderless row above the prompt (`mod/band.tsx` `bandTree`), drawn only for the terminal surface in an interactive session with the mod on (`register.ts:582-583`). Cut to `props.bodyColumns` with `rowOf`/`fitRuns` (`mod/runs.ts`). Three width tiers, all built from `routeCounts`, `openGateCount` and the one `liveWorkers()` list:
+Since 12.2.0 the band is the "Mission Control" panel: a framed multi-row block above the prompt (`mod/band.tsx` `bandTree`), drawn only for the terminal surface in an interactive session with the mod on. `register.ts` hands it the snapshot, the `liveWorkers()` list, the gate groups, the column count, a row budget (`maxRows`) and the spinner tick. Rows, top to bottom:
 
-- **Idle** (no live worker): `[ATLAS] ⚑ idle · <phase> n/m · N open`; with open gates it reads `⚑ blocked`, and a lingering `done` phase is not printed (`band.tsx` `idleParts`).
-- **Narrow** (< 60 columns): `<phase> n/m · N working[ · ✗N]`, no brand pill.
-- **Mid and up** (>= 60 columns): the inverse bold ` ATLAS ` brand pill (`BRAND_PILL`), phase pill, a 5-cell meter (`done/total`, filled part colored by `meterColor`, remainder muted, `theme.ts` `barParts`), up to 3 named live workers (`⏸ <name> awaits input` / `✗ <name>` / `<frame> <name> <tool> [<target>] <age>`), a `+N` overflow count, a gate count, and, at >= 100 columns, the tool and its target plus a trailing `▸ /atlas-cc` hint.
+- **Header rail**: brand pill, a phase rail over research, theory, test, implement, verify, done (`validate` and `blocked` are not drawn as rail stops), the `done/total` meter and the live worker count.
+- **Worker lanes**: one lane per live worker with spinner, name, role, current tool and target, and an elapsed bar that fills over two minutes (`REF_MS`). MCP tools show their bare name (`band.tsx` `shortTool`: `mcp__lean-ctx__ctx_shell` reads `ctx_shell`); the target is the basename of `file_path` or `path`, else the first 40 characters of `command`, `pattern` or `query` (`data/orchestration.ts` `targetOf`). Workers that do not fit collapse into a `+N more` row.
+- **Channel ticker**: the newest channel notes (2 rows, `TICKER_ROWS`).
+- **Footer**: open gates and todos.
+
+Width tiers: >= 120 columns full; 80-119 drops role and target from the lanes; < 80 draws the header row only. When `maxRows` is short, `planRows` drops lanes first, then the ticker, then the footer; hidden workers win over the ticker (the ticker row is traded for `+N more`).
+
+Pane floor: the engine places an unasked pane only from 144 columns (`register.ts` `DOCK_MIN_COLUMNS = 144`); below that the band is the only always-on surface.
 
 Worker segment details (12.1.0). The spinner frame comes from the current phase (`theme.ts` `PHASE_FRAMES`: research, theory, test, implement, verify each have a 4-frame set; other phases use the default). The target is the file basename of the tool call's `file_path`, else the first 40 characters of the first line of its `command` (`data/orchestration.ts` `targetOf`), fitted to 16 cells. The age is `now - startedAt`, the time since the worker was first seen, not since its last tool call (`since` still moves every call). A worker whose state is `parked` is resting: it sorts after `working` and is excluded from the band's live list.
 
 The phase comes from the last header in `turn.complete` (matched with the contract's `headerFirstLinePattern`), else the session's first `in_progress` item, else `research` (`register.ts:97-111` `headerPhaseOf`). The spinner tick (`spinnerTickState`) only advances while `liveWorkers()` has an active entry (`register.ts:529-536`), so an idle session redraws nothing.
+
+### Transcript cards (12.2.0)
+
+`mod/transcript/cards.tsx` holds pure tree builders that `restyle.tsx` wires into the ToolUse, ToolGroup and UserMessage sites; on `null` or a throw the site falls back to `next(e)`.
+
+- **Worker card** (`workerCard`): an `Agent`/`Task` call to an `atlas:*` role renders as a card with the phase mark, worker name, role, the prompt's `GOAL:` line (else the description) and, when finished, the first line of the result.
+- **Wave strip** (`waveTree`): a tool group of 2+ calls that are all atlas `Agent`/`Task` dispatches renders as a wave header plus one worker card per call, side by side when the width allows.
+- **Channel bubble** (`bubbleTree`): a message another agent sent renders as a bar-edged `#atlas <from> > lead` bubble (up to 8 lines) instead of raw text.
 
 ### The sidebar (`mod/pane/sidebar.tsx`)
 

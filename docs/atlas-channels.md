@@ -119,14 +119,41 @@ The matrix maps (task class, effort) to a team shape: roles, counts, per-role ef
 python3 plugins/atlas/scripts/atlas_resolve.py <class> <effort> [--paths]
 ```
 
-`omp/resolve.ts` reads the same file. A dispatch prompt may carry a line-anchored `SCOPE: <class>/<effort>`; `dispatch_tripwire` resolves it and, when the dispatched agent is not one of the expected roles, adds an `[atlas] ADVISORY - SCOPE ... expects roles ...` note. It never denies; an unresolvable pair gets an advisory too.
+`omp/resolve.ts` reads the same file. Since 12.2.0 every `atlas:*` dispatch must carry a line-anchored `SCOPE: <class>/<effort>` (see SCOPE gate below).
+
+## Team flow: resolver plus tmux team (12.2.0)
+
+The default orchestration flow is: classify the task, resolve its team, then run 2+ workers as a tmux team instead of serial in-process dispatches. The orchestrator output style, `atlas-orchestrate` skill references and `omp/lead-addendum.md` describe this flow.
+
+Commands (`plugins/atlas/scripts/atlas_mux.py`):
+
+```
+atlas_mux.py spawn-team --class C --effort E [--paths a,b] (--task "..." | --task-file F) [--team-id T] [--harness claude|omp] [--dry-run] [--poll S]
+atlas_mux.py wait --team T [--timeout 600] [--poll 1]
+atlas_mux.py reap --team T
+```
+
+- **spawn-team** sizes the team from `atlas_resolve` (roles, counts, `max_parallel`), writes a team record to `.atlas/.run/teams/<team_id>.json`, opens the lead channel, writes one brief per member and spawns them under a `max_parallel` semaphore. `--dry-run` prints the team without spawning. An existing team id is refused.
+- **Transports.** With `ATLAS_COLONY_TRANSPORT` unset, spawn-team uses `tmux` when it is on PATH (session `atlas-<team_id>`, one window per worker); without tmux it falls back to `claude-bg` and says so in `transport_note`. `ATLAS_COLONY_TRANSPORT=herdr|tmux|claude-bg` overrides. omp workers always run as panes (herdr when its server is up, else tmux).
+- **wait** polls until every member has an exit note on the board or `--timeout` passes. Output per member: `exit`, `duration_s`, last `STATUS:` line; plus `notes_worker_to_worker`. Exit code 1 when any member is unfinished.
+- **reap** stops this team's workers only (kills the tmux session, or `claude stop` per claude-bg worker), writes exit notes for workers that never posted one, runs the channel reaper and moves the team record to `.atlas/.run/teams/archive/`.
+- **Pane feed.** `claude -p` prints nothing until it ends, so a tmux worker runs with `--output-format stream-json --verbose` and `scripts/atlas_panefeed.py` renders each event: a branded ATLAS header (name, role, team, channel, goal), one line per tool call with its main argument, and the result. `run-worker` keeps the result text for the board.
+- **omp tool.** `omp/team-tool.ts` registers `atlas_team` (`action: spawn | wait | reap`, plus `class`, `effort`, `paths`, `task`, `team`, `timeout`), which shells out to `atlas_mux.py` and returns its JSON. It is not registered in worker sessions (`ATLAS_WORKER_NAME` set), so workers cannot spawn teams.
+
+### SCOPE gate (12.2.0)
+
+`hooks/dispatch_tripwire.py` denies an `atlas:*` dispatch when the prompt has no `SCOPE: <class>/<effort>` line, when the pair does not resolve, or when the dispatched role is in the matrix but not on the resolved team. Roles the matrix never names only need the line. The deny text lists the classes and efforts and the resolve and spawn-team commands. Measured before the change: resolver invoked 0 times and SCOPE on 8 of 166 dispatches over 7 days.
+
+- `ATLAS_SCOPE_GATE=off` downgrades the deny to an `[atlas] ADVISORY (ATLAS_SCOPE_GATE=off)` note.
+- A broken resolver fails open and records an `atlas_faults` entry.
+- Burst advisory: a 2nd `atlas:*` dispatch within `ATLAS_BURST_SECS` (default 10) of the previous one adds an advisory to run the team with spawn-team, wait and reap. `ATLAS_BURST_SECS=0` silences it.
 
 ## omp parity notes (12.1.0)
 
 - Bridged hooks: `delegation_prewarn.py` and `edit_read_nudge.py` are in `contracts/hook-bridge.json`.
 - Header fallback: with `ATLAS_STYLE=off` or a failed style render, `omp/style.ts` injects a minimal `ATLAS | <glyph> <phase> | <state>` rule, because `session_boot.py` skips its own header rule under `ATLAS_HARNESS=omp`.
 - Stale install: `omp/channels.ts` checks that `scripts/atlas_todo.py` exists next to the plugin; if not it records one fault ("atlas omp install is stale ... reinstall atlas in omp") per cwd instead of one per dispatch.
-- Widget header: the `atlas-channel` widget (`omp/channel-view.ts`) leads with `ATLAS <phase> n/m <bar> . N live . M gates` and one row per live worker (4 shown, then `+N more`). The gate count is a todo-based proxy, not the Claude gate script (see ROADMAP).
+- Widget header: the `atlas-channel` widget (`omp/channel-view.ts`) leads with `ATLAS <phase> n/m <bar> . N live . M gates` and one row per live worker (4 shown, then `+N more`). Since 12.2.0 the widget renders the Mission Control panel (`omp/mission-panel.ts`): framed, phase rail, up to 4 worker lanes with 10-cell elapsed bars, channel ticker, and real gate status from `scripts/atlas_gates.py` (async, cached 10 s, armed projects only) instead of the old todo-based proxy. omp lanes do not yet show role or tool (see ROADMAP).
 
 ## Limits
 
