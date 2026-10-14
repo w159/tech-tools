@@ -178,7 +178,8 @@ def _atlas_todo():
 
 def _notes(root, owner=None, to="lead"):
     recs = _atlas_todo().notes(root, to=to)
-    return [r for r in recs if owner is None or r.get("owner") == owner]
+    # run-worker's automatic start note is covered by test_atlas_colony_notes; these tests pin the report contract
+    return [r for r in recs if r.get("kind") != "start" and (owner is None or r.get("owner") == owner)]
 
 
 def _texts(recs):
@@ -436,6 +437,8 @@ class SpawnClaudeTests(Base):
         self.assertIn("new-window -d -t atlas-r1 -n Alpha exec ", calls)
         self.assertIn("run-worker", calls)
 
+        import atlas_mux
+
         recs = _wait_exit(self.root, "Alpha")
         base, argv = _fake_harness_argv(self.state)
         self.assertEqual("claude", base)
@@ -451,6 +454,8 @@ class SpawnClaudeTests(Base):
                 "opus",
                 "--effort",
                 "high",
+                "--allowedTools",
+                ",".join(atlas_mux.WORKER_MCP_ALLOW),
                 "--permission-mode",
                 "acceptEdits",
                 "colonize the pane",
@@ -1388,7 +1393,7 @@ class RunWorkerTests(Base):
         """Single writer: every board line is an atlas_todo.note record, nothing mux-shaped."""
         rc, _, err = self.run_worker("--command-override", "echo one")
         self.assertEqual(0, rc, err)
-        lines = _read_board(self.board_file("Zeta"))
+        lines = [r for r in _read_board(self.board_file("Zeta")) if r.get("kind") != "start"]
         self.assertEqual(1, len(lines))  # one report note: output + exit 0
         for rec in lines:
             # atlas_todo.note records: base keys plus the channel stamp (channel work)
@@ -1630,7 +1635,7 @@ class NotesInteropTests(Base):
             text=True,
             timeout=60,
         )
-        texts = [n.get("text") for n in json.loads(p.stdout).get("notes", [])]
+        texts = [n.get("text") for n in json.loads(p.stdout).get("notes", []) if n.get("kind") != "start"]
         self.assertIn("raw-worker-stream\nexit 0", texts)
         self.assertIn("alpha done, note to lead", texts)
         self.assertEqual(2, len(texts))

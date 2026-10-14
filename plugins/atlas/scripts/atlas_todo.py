@@ -1834,7 +1834,11 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 channel=flags.get("channel") or None,
             )
         elif cmd == "note":
-            owner = flags.get("owner", "").strip()
+            # a launched worker's pane pins ROOT/CHANNEL/WORKER_NAME: root and channel already default
+            # from env inside note(), so only the owner needs the same fallback here
+            owner = (
+                flags.get("owner") or os.environ.get("ATLAS_WORKER_NAME") or ""
+            ).strip()
             if not owner:
                 out = {"ok": False, "error": "owner_required"}
             else:

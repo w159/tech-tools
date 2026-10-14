@@ -109,6 +109,19 @@ FORWARDED_ENV = (
     # only when it is truthy (see _bg_brief)
     "ATLAS_TASKS_MIRROR",
 )
+# Read/navigation MCP tools a pane claude worker may call without a prompt (live 12.3.1: unlisted MCP tools were
+# denied in -p mode and workers fell back from mcp__lean-ctx__ctx_shell to Bash).
+WORKER_MCP_ALLOW = (
+    "mcp__lean-ctx__*",
+    "mcp__plugin_context-mode_context-mode__*",
+    "mcp__serena__activate_project",
+    "mcp__serena__get_symbols_overview",
+    "mcp__serena__find_symbol",
+    "mcp__serena__find_referencing_symbols",
+    "mcp__serena__find_declaration",
+    "mcp__serena__find_implementations",
+    "mcp__serena__get_diagnostics_for_file",
+)
 # omp prints one of these per unreachable MCP server; the run itself is fine.
 NOISE_RE = re.compile(
     r"^(Warning: MCP server .* its tools are unavailable|Extension error\b)"
@@ -432,7 +445,8 @@ def harness_argv(
             argv += ["--model", model]
         if level:
             argv += ["--effort", level]
-        return argv + ["--permission-mode", permission_mode, prompt]
+        # --allowedTools is variadic: another flag must follow it so it cannot swallow the prompt
+        return argv + ["--allowedTools", ",".join(WORKER_MCP_ALLOW), "--permission-mode", permission_mode, prompt]
     argv = ["omp", "-p"]
     if model:
         argv.append(f"--model={model}")
@@ -1017,6 +1031,11 @@ def cmd_run_worker(args) -> int:
 
     log.write(f"$ {shlex.join(argv)}\n")
     log.flush()
+    # guaranteed start note: the board shows the worker even when the model skips its own
+    try:
+        atlas_todo.note(root, args.name, f"start: {args.agent} worker {args.name} running", to=lead, channel=channel or None, kind="start")
+    except OSError as exc:
+        log.write(f"start note failed: {exc}\n")
     feed.start()
     try:
         proc = subprocess.Popen(
@@ -1335,23 +1354,18 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     todo = Path(__file__).resolve().with_name("atlas_todo.py")
     peers = [m["name"] for m in rec["members"] if m["name"] != member["name"]]
 
-    def note_cmd(to: str) -> str:
-        return (
-            f"python3 {todo} note --root {shlex.quote(root)} --channel {shlex.quote(chan)} "
-            f"--owner {shlex.quote(member['name'])} --to {shlex.quote(to)} '<text>'"
-        )
-
     scope = ", ".join(rec["file_scope"]) or "(whole project; stay read-mostly)"
+    me = member["name"]
+    # root/channel/owner come from the pane env (atlas_todo note defaults them), so the path appears once
     return (
-        f"You are {member['name']} ({member['role']}), one of {len(rec['members'])} parallel workers "
-        f"of team {rec['team_id']} ({rec['class']}/{rec['effort']}) on channel {chan}. Lead: {lead}.\n"
-        f"Peers: {', '.join(peers) or '(none)'}.\n\n# Task\n{rec['task']}\n\n# File scope\n{scope}\n\n"
-        "# Team protocol\n"
-        f"1. First action: post a start note to the lead: {note_cmd(lead)}\n"
-        "2. Before you finish, post one peer-sync note to EACH peer (what you found or changed, "
-        f"what they should avoid), e.g. {note_cmd(peers[0] if peers else lead)}\n"
-        "3. Finish with a STATUS block (STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT) as your final "
-        "output; the harness wrapper posts it to the lead as your one report note.\n"
+        f"You are {me} ({member['role']}), 1 of {len(rec['members'])} workers of team {rec['team_id']} "
+        f"on {chan}. Lead: {lead}. Peers: {', '.join(peers) or '(none)'}.\n\n"
+        f"# Task\n{rec['task']}\n\n# Scope\n{scope}\n\n"
+        f"# Protocol\nBoard: python3 {todo} note --to <who> '<text>' | notes --to {me}\n"
+        f"1. After your first concrete finding, note it to {lead}.\n"
+        "2. Before finishing, note each peer once (found/changed, what to avoid).\n"
+        f"3. Read `notes --to {me}`; reply once to any peer note.\n"
+        "4. End with STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT; the wrapper posts it as your report.\n"
     )
 
 
@@ -1500,6 +1514,10 @@ def cmd_spawn_team(args) -> int:
     rec["created"] = time.time()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
+    members = ", ".join(f"{m['name']} ({m['role']})" for m in rec["members"])
+    headline = (rec["task"].strip().splitlines() or [""])[0][:120]
+    kickoff = f"kickoff {rec['team_id']}: {headline} | members: {members} | scope: {', '.join(rec['file_scope']) or 'whole project'}"
+    atlas_todo.note(root, lead, kickoff, to="all", channel=chan, kind="kickoff")
 
     def spawn(member: dict) -> dict:
         pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
@@ -1606,6 +1624,21 @@ def _release_team_channel(root: str, rec: dict) -> None:
         atlas_todo.leave(root, name, lead)
 
 
+def _post_wrapup(root: str, rec: dict) -> None:
+    """One lead wrap-up note on the team channel: each member's exit code, duration and notes posted."""
+    chan, lead = rec.get("channel"), rec.get("lead")
+    if not (chan and lead):
+        return
+    allnotes = atlas_todo.notes(root)
+    parts = []
+    for m in rec["members"]:
+        mine = [r for r in allnotes if str(r.get("owner")) == m["name"]]
+        found = EXIT_NOTE_RE.search(str(mine[-1].get("text") or "")) if mine else None
+        secs = f" {round(float(mine[-1]['ts']) - rec['created'])}s" if found and rec.get("created") else ""
+        parts.append(f"{m['name']} exit {found.group(1) if found else '?'}{secs} {len(mine)} notes")
+    atlas_todo.note(root, lead, f"wrap-up {rec['team_id']}: " + "; ".join(parts), to="all", channel=chan, kind="wrapup")
+
+
 def cmd_reap(args) -> int:
     root = _root(args)
     if not NAME_RE.match(args.team or ""):
@@ -1632,6 +1665,8 @@ def cmd_reap(args) -> int:
     elif _tmux("has-session", "-t", session).returncode == 0:
         killed = _tmux("kill-session", "-t", session).returncode == 0
     _kill_notes(root, names)  # exit note + mark_finished + leave for any worker that never posted its own
+    if state == "live":  # an archived or recovered team already got (or never had) a wrap-up
+        _post_wrapup(root, rec)
     _release_team_channel(root, rec)
     reaped = atlas_todo.reap_channels(root)
     if state == "live":
