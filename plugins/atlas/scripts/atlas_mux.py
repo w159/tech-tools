@@ -37,7 +37,9 @@ not-found / 402 / credit / auth patterns is classified failed and recorded as ex
 Not Claude Code agent teams: teammates inherit the lead's effort, which would
 erase the per-role tiers. The default in-process colony is unchanged.
 
-Subcommands: spawn | status | kill | run-worker (internal: the pane command).
+Subcommands: spawn | spawn-team | wait | reap | status | kill | run-worker (internal: the pane command).
+spawn-team sizes a team from atlas_resolve (class, effort) and spawns it as tmux panes (session atlas-<team_id>);
+wait blocks until every member posted its exit note; reap kills the session and archives the team record.
 Test-only: --command-override / ATLAS_MUX_WORKER_CMD replaces the harness
 command inside run-worker (stub workers for smoke runs).
 Stdlib only. Prints one JSON object per invocation.
@@ -46,10 +48,14 @@ Stdlib only. Prints one JSON object per invocation.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import hashlib
+import io
 import json
 import os
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import time
@@ -57,6 +63,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import atlas_resolve
 import atlas_todo
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -1066,6 +1073,261 @@ def cmd_kill(args) -> int:
     )
 
 
+# ---- spawn-team / wait / reap: resolver-sized parallel worker teams -----------------------------------------------
+TEAMS_REL = Path(".atlas") / ".run" / "teams"
+
+
+def _sha(*parts) -> str:
+    return hashlib.sha1("\x1f".join(map(str, parts)).encode()).hexdigest()
+
+
+def build_team(
+    task_class: str, effort: str, paths=None, task: str = "", team_id: str | None = None
+) -> dict:
+    """Deterministic team record: same (class, effort, paths, task) -> same ids and member names.
+    `created` is the only non-deterministic field and is added by the caller."""
+    cell = atlas_resolve.resolve(task_class, effort, paths)
+    scope = cell["file_scope"]
+    tid = team_id or "t" + _sha(task_class, effort, *scope, task)[:6]
+    members = []
+    for spec in cell["team"]:
+        for i in range(int(spec["count"])):
+            members.append(
+                {
+                    "name": f"{spec['role']}-{_sha(tid, spec['role'], i)[:4]}",
+                    "role": spec["role"],
+                    "tools_profile": spec.get("tools_profile"),
+                }
+            )
+    return {
+        "team_id": tid,
+        "class": task_class,
+        "effort": effort,
+        "task": task,
+        "file_scope": scope,
+        "members": members,
+        "max_parallel": int(cell["max_parallel"]),
+        "isolation": cell["isolation"],
+    }
+
+
+def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
+    """Self-contained worker brief: task, scope, channel, peers, and the note protocol."""
+    todo = Path(__file__).resolve().with_name("atlas_todo.py")
+    peers = [m["name"] for m in rec["members"] if m["name"] != member["name"]]
+
+    def note_cmd(to: str) -> str:
+        return (
+            f"python3 {todo} note --root {shlex.quote(root)} --channel {shlex.quote(chan)} "
+            f"--owner {shlex.quote(member['name'])} --to {shlex.quote(to)} '<text>'"
+        )
+
+    scope = ", ".join(rec["file_scope"]) or "(whole project; stay read-mostly)"
+    return (
+        f"You are {member['name']} ({member['role']}), one of {len(rec['members'])} parallel workers "
+        f"of team {rec['team_id']} ({rec['class']}/{rec['effort']}) on channel {chan}. Lead: {lead}.\n"
+        f"Peers: {', '.join(peers) or '(none)'}.\n\n# Task\n{rec['task']}\n\n# File scope\n{scope}\n\n"
+        "# Team protocol\n"
+        f"1. First action: post a start note to the lead: {note_cmd(lead)}\n"
+        "2. Before you finish, post one peer-sync note to EACH peer (what you found or changed, "
+        f"what they should avoid), e.g. {note_cmd(peers[0] if peers else lead)}\n"
+        "3. Finish with a STATUS block (STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT) as your final "
+        "output; the harness wrapper posts it to the lead as your one report note.\n"
+    )
+
+
+def _team_dir(root: str) -> Path:
+    return Path(root) / TEAMS_REL
+
+
+def supervise(rec: dict, spawn, is_done, sleep=time.sleep, poll_s: float = 1.0) -> list:
+    """Start members under a max_parallel semaphore: never more than that many unfinished at once;
+    the rest start as earlier ones exit. spawn(member)->dict(ok,...); is_done(name)->bool."""
+    pending, live, results = list(rec["members"]), [], []
+    # returns once the last member is started; `wait` covers the remaining runtime
+    while pending:
+        live = [n for n in live if not is_done(n)]
+        while pending and len(live) < rec["max_parallel"]:
+            m = pending.pop(0)
+            res = spawn(m)
+            results.append({"name": m["name"], **res})
+            if res.get("ok"):
+                live.append(m["name"])
+        if pending:
+            sleep(poll_s)
+    return results
+
+
+def _log_wave(rec: dict) -> bool:
+    """One dispatches row per member with wave_id=team_id. Fail-open; needs a run for the session."""
+    try:
+        import atlas_db
+
+        sid = os.environ.get("CLAUDE_SESSION_ID") or os.environ.get("ATLAS_SESSION_ID")
+        if not sid:
+            return False
+        conn = atlas_db.connect()
+        try:
+            run_id = atlas_db.current_or_last_run_id(conn, sid)
+            if run_id is None:
+                return False
+            for m in rec["members"]:
+                atlas_db.log_dispatch(conn, run_id, m["role"], None, rec["team_id"])
+            conn.commit()
+        finally:
+            conn.close()
+        return True
+    except Exception:
+        return False
+
+
+def _root(args) -> str:
+    return os.path.abspath(args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd())
+
+
+def cmd_spawn_team(args) -> int:
+    root = _root(args)
+    task = Path(args.task_file).read_text(encoding="utf-8") if args.task_file else (args.task or "")
+    paths = args.paths.split(",") if args.paths else None
+    try:
+        rec = build_team(args.cls, args.effort, paths, task, args.team_id)
+    except ValueError as exc:
+        return _emit({"ok": False, "error": str(exc)}, 2)
+    if not NAME_RE.match(rec["team_id"]):
+        return _emit({"ok": False, "error": f"invalid team id {rec['team_id']!r}"}, 2)
+    if args.dry_run:
+        return _emit({"ok": True, "dry_run": True, "team": rec})
+    path = _team_dir(root) / f"{rec['team_id']}.json"
+    if path.exists():
+        return _emit({"ok": False, "error": f"team {rec['team_id']} exists; reap it or pass --team-id"}, 1)
+    # tmux when installed gives a visible window per worker; ATLAS_COLONY_TRANSPORT still overrides.
+    note = None
+    if not os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip():
+        if shutil.which("tmux"):
+            os.environ["ATLAS_COLONY_TRANSPORT"] = "tmux"
+        else:
+            note = "tmux not on PATH: fell back to claude-bg"
+    os.environ["ATLAS_MUX"] = "tmux"  # spawn-team is the explicit opt-in cmd_spawn checks for
+    lead = (os.environ.get("ATLAS_LEAD_NAME") or "").strip() or "lead"
+    chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
+    os.environ["ATLAS_CHANNEL"] = chan
+    os.environ.setdefault("ATLAS_LEAD_NAME", lead)
+    rec["channel"], rec["transport"] = chan, transport()
+    rec["created"] = time.time()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
+    wave_logged = _log_wave(rec)
+
+    def spawn(member: dict) -> dict:
+        pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
+        pf.write_text(team_brief(rec, member, root, chan, lead), encoding="utf-8")
+        ns = argparse.Namespace(
+            run=rec["team_id"], name=member["name"], harness=args.harness, agent=member["role"],
+            prompt_file=str(pf), model=None, effort=None, thinking=None, agents_dir=None,
+            permission_mode=None, command_override=None, omp_extension=None, root=root, cwd=None,
+        )
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cmd_spawn(ns)
+        try:
+            return json.loads(buf.getvalue().strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            return {"ok": False, "error": buf.getvalue().strip()[-200:]}
+
+    results = supervise(rec, spawn, lambda n: _exited(root, n), poll_s=args.poll)
+    return _emit(
+        {
+            "ok": all(r.get("ok") for r in results),
+            "team_id": rec["team_id"],
+            "session": _session(rec["team_id"]),
+            "transport": rec["transport"],
+            "transport_note": note,
+            "wave_logged": wave_logged,
+            "channel": chan,
+            "max_parallel": rec["max_parallel"],
+            "members": results,
+        }
+    )
+
+
+def _load_team(root: str, team_id: str) -> dict | None:
+    try:
+        return json.loads((_team_dir(root) / f"{team_id}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def cmd_wait(args) -> int:
+    root = _root(args)
+    rec = _load_team(root, args.team)
+    if rec is None:
+        return _emit({"ok": False, "error": f"no team record for {args.team}"}, 1)
+    names = [m["name"] for m in rec["members"]]
+    t0 = time.time()
+    while not all(_exited(root, n) for n in names) and time.time() - t0 < args.timeout:
+        time.sleep(args.poll)
+    allnotes = atlas_todo.notes(root)
+    members, w2w = [], 0
+    for n in names:
+        mine = [r for r in allnotes if str(r.get("owner")) == n]
+        text = str(mine[-1].get("text") or "") if mine else ""
+        found = EXIT_NOTE_RE.search(text)
+        status = next((l for l in text.splitlines() if l.startswith("STATUS:")), None)
+        w2w += sum(1 for r in mine if r.get("to") in names and r.get("to") != n)
+        members.append(
+            {
+                "name": n,
+                "exit": int(found.group(1)) if found else None,
+                "duration_s": round(float(mine[-1]["ts"]) - rec["created"], 1) if found else None,
+                "last_status": status,
+            }
+        )
+    finished = all(m["exit"] is not None for m in members)
+    return _emit(
+        {
+            "ok": finished,
+            "team_id": rec["team_id"],
+            "members": members,
+            "notes_worker_to_worker": w2w,
+            "elapsed_s": round(time.time() - t0, 1),
+        },
+        0 if finished else 1,
+    )
+
+
+def cmd_reap(args) -> int:
+    root = _root(args)
+    rec = _load_team(root, args.team)
+    if rec is None:
+        return _emit({"ok": False, "error": f"no team record for {args.team}"}, 1)
+    session = _session(rec["team_id"])
+    names = [m["name"] for m in rec["members"]]
+    killed = False
+    # scope is this team's own session/agents only (cmd_kill's claude-bg path stops every worker of the root)
+    if rec.get("transport") == "claude-bg":
+        for w in _claude_workers(root) or []:
+            if w["name"] in names and not w["dead"]:
+                killed = _claude("stop", str(w["pid"])).returncode == 0 or killed
+    elif _tmux("has-session", "-t", session).returncode == 0:
+        killed = _tmux("kill-session", "-t", session).returncode == 0
+    _kill_notes(root, names)  # exit note + mark_finished + leave for any worker that never posted its own
+    reaped = atlas_todo.reap_channels(root)
+    arch = _team_dir(root) / "archive"
+    arch.mkdir(parents=True, exist_ok=True)
+    (_team_dir(root) / f"{rec['team_id']}.json").replace(arch / f"{rec['team_id']}.json")
+    return _emit(
+        {
+            "ok": True,
+            "team_id": rec["team_id"],
+            "session": session,
+            "killed": killed,
+            "session_left": _tmux("has-session", "-t", session).returncode == 0,
+            "channels_reaped": reaped.get("reaped"),
+            "archived": str(arch / f"{rec['team_id']}.json"),
+        }
+    )
+
+
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="atlas_mux", description=(__doc__ or "").split("\n\n")[0]
@@ -1121,6 +1383,23 @@ def _parser() -> argparse.ArgumentParser:
     worker_opts(
         sub.add_parser("run-worker", help="internal: the pane command"), internal=True
     )
+    st = sub.add_parser("spawn-team", help="resolver-sized team of parallel tmux workers")
+    st.add_argument("--class", dest="cls", required=True)
+    st.add_argument("--effort", required=True)
+    st.add_argument("--paths", help="comma-separated file scope")
+    st.add_argument("--task")
+    st.add_argument("--task-file")
+    st.add_argument("--team-id")
+    st.add_argument("--harness", choices=("claude", "omp"), default="claude")
+    st.add_argument("--dry-run", action="store_true")
+    st.add_argument("--root")
+    st.add_argument("--poll", type=float, default=1.0)
+    for name in ("wait", "reap"):
+        sp = sub.add_parser(name)
+        sp.add_argument("--team", required=True)
+        sp.add_argument("--root")
+        sp.add_argument("--timeout", type=float, default=600)
+        sp.add_argument("--poll", type=float, default=1.0)
     for name in ("status", "kill"):
         sp = sub.add_parser(name)
         sp.add_argument("--run", required=True)
@@ -1134,6 +1413,9 @@ def main(argv=None) -> int:
         return {
             "spawn": cmd_spawn,
             "run-worker": cmd_run_worker,
+            "spawn-team": cmd_spawn_team,
+            "wait": cmd_wait,
+            "reap": cmd_reap,
             "status": cmd_status,
             "kill": cmd_kill,
         }[args.cmd](args)
