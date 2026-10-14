@@ -1,4 +1,4 @@
-// The sidebar never opens unasked unless docked (fullscreen, >= 110 columns), decided at the first
+// The sidebar never opens unasked unless docked (fullscreen, >= 144 columns), decided at the first
 // render with a viewport; /atlas-cc opens it on demand with focus and Esc-to-close.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
@@ -49,10 +49,11 @@ function stubEngine() {
 const noopNext: AnyNext = async (input) => input;
 
 describe('sidebar open requests', () => {
-  test('shouldDock: fullscreen and >= 110 columns only', () => {
+  test('shouldDock: fullscreen and >= 144 columns only (the engine floor for unasked panes)', () => {
     expect(shouldDock({ isFullscreen: true, columns: 160 })).toBe(true);
-    expect(shouldDock({ isFullscreen: true, columns: 110 })).toBe(true);
-    expect(shouldDock({ isFullscreen: true, columns: 100 })).toBe(false);
+    expect(shouldDock({ isFullscreen: true, columns: 144 })).toBe(true);
+    expect(shouldDock({ isFullscreen: true, columns: 143 })).toBe(false);
+    expect(shouldDock({ isFullscreen: true, columns: 110 })).toBe(false);
     expect(shouldDock({ isFullscreen: false, columns: 160 })).toBe(false);
     expect(shouldDock({ columns: 160 })).toBe(false);
   });
