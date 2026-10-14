@@ -48,7 +48,9 @@ class BriefAndArgvTests(unittest.TestCase):
             "notes --to explorer-aaaa",
         ):
             self.assertIn(needle, brief)
-        self.assertNotIn("--root", brief)  # root/channel/owner come from the pane env
+        # explicit flags: pane env alone left workers posting to no channel
+        for flag in ("--root /Users/jerry/proj", "--channel proj@main/lead-6d0ddb", "--owner explorer-aaaa"):
+            self.assertIn(flag, brief)
 
     def test_claude_worker_argv_allows_the_read_only_mcp_tools_and_keeps_the_prompt_last(
         self,

@@ -88,7 +88,7 @@ function drawFleet() {
   const body = S.body;
   const down = st.down;
   if (!st.loaded) return replace(body, State({ variant: "loading", label: "agents", shape: "cards" }));
-  if (down === "herdr") return replace(body, DegradedState({ layer: "herdr", reason: st.layers.herdr.reason, onRecheck: () => agentsStore.recheck() }));
+  if (down === "herdr") return replace(body, DegradedState({ layer: "herdr", reason: st.layers.herdr.reason, onStart: () => agentsStore.startHerdr(), onRecheck: () => agentsStore.recheck() }));
   loadChans();
   warmHp().then((changed) => { if (changed && !S.destroyed && S.lens === "fleet") drawFleet(); });
   const sel = ctx.params.agent;
@@ -100,7 +100,7 @@ function drawFleet() {
     const cur = agentsStore.getState();
     const vis = visible(cur);
     const a = actions(ctx);
-    if (!vis.length) return replace(listHost, st.counts.total ? State({ variant: "empty", title: "No agents match", body: "Clear the filter to see all " + st.counts.total + ".", action: Button({ label: "Clear filter", onClick: () => { S.filter.clear(); S.q = ""; drawFleet(); } }) }) : State({ variant: "empty", title: "No agents running", body: "Agents appear here when you start one in herdr or launch one from Atlas.", action: Button({ label: "Launch agent", variant: "primary", onClick: () => document.dispatchEvent(new CustomEvent("atlas:launch")) }) }));
+    if (!vis.length) return replace(listHost, st.counts.total ? State({ variant: "empty", title: "No agents match", body: "Clear the filter to see all " + st.counts.total + ".", action: Button({ label: "Clear filter", onClick: () => { S.filter.clear(); S.q = ""; drawFleet(); } }) }) : State({ variant: "empty", title: "No agents running", body: "Agents appear here when you start one in a terminal or launch one from Atlas.", action: Button({ label: "Launch agent", variant: "primary", onClick: () => document.dispatchEvent(new CustomEvent("atlas:launch")) }) }));
     if (S.view === "list") {
       const rows = vis.slice().sort((x, y) => S.sort.dir * SORT[S.sort.key](x, y) || STATES.indexOf(x.state) - STATES.indexOf(y.state));
       return replace(listHost, AgentTable({ agents: rows, sort: S.sort, selectedKey: sel, onOpen: open, actions: a, projectOf: (r) => projectLabel(rootOf(r), S.chans), channelOf: (r) => channelOf(r, S.chans), onSort: (k) => { S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : 1 }; drawList(); } }));

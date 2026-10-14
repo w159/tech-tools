@@ -1459,7 +1459,7 @@ _MODEL_MISUSE = re.compile(
     r"|must be a json object|refuses the redirect|selector must be a string"
     r"|not supported on the \w+ backend|takes \(key, options\)|cannot load xd://"
     r"|requires user consent|missing items for|no active project|is not a function"
-    r"|added as a read-only root|rule=\"[\w-]+\" path=)",
+    r"|added as a read-only root|rule=\"[\w-]+\" path=|cannot combine query extraction)",
     re.I,
 )
 _ENVIRONMENT = re.compile(
@@ -1475,7 +1475,7 @@ _ENVIRONMENT = re.compile(
     r"|previous omp process exited|(?:was|were|input was) cancelled|cancelled by the user"
     r"|session closed|detached frame|cannot find module|auth check: failed"
     r"|unknown tool from js runtime|multiple windows match|is not alive"
-    r"|chroma|fetch failed|claude_mem_runtime|fell back|falling back)",
+    r"|\beperm\b|operation not permitted|withheld by the context gateway|chroma|fetch failed|claude_mem_runtime|fell back|falling back)",
     re.I,
 )
 _ATLAS_FRAME = r'File "[^"\n]*(?:plugins/atlas/|/\.(?:claude|omp)/[^"\n]*atlas[^"\n/]*/)[^"\n]*\.py"'
@@ -1483,7 +1483,7 @@ _TOOL_FAULT = re.compile(
     r"(?:Traceback \(most recent call last\)[\s\S]*?" + _ATLAS_FRAME + r"|hook error:)",
     re.I,
 )
-_TOOL_FAULT_SCRIPT = re.compile(r"can't open file '[^']*scripts/atlas_[^']*\.py'", re.I)
+_TOOL_FAULT_SCRIPT = re.compile(r"can't open file '([^']*scripts/atlas_[^']*\.py)'", re.I)
 # A failed run of the user's own code (eval cell, shell one-liner, ctx_execute) is a
 # traceback or a bare `XError:` line that names no atlas frame (_TOOL_FAULT ran first).
 _CODE_TOOL = re.compile(r"(?:^|__|_)(?:bash|shell|eval|execute|execute_file)$", re.I)
@@ -1517,7 +1517,11 @@ def classify_error(tool_name, snippet, denied):
         return "deny"
     if not snippet or not snippet.strip():
         return "unknown"
-    if _TOOL_FAULT.search(snippet) or _TOOL_FAULT_SCRIPT.search(snippet):
+    miss = _TOOL_FAULT_SCRIPT.search(snippet)
+    # A script path that is gone from disk is a stale install, not an atlas bug.
+    if miss and not os.path.exists(miss.group(1)):
+        return "environment"
+    if _TOOL_FAULT.search(snippet) or miss:
         return "tool_fault"
     # error_snippet_of caps at 500 chars, so the atlas frame may be cut off a
     # Bash traceback; a leading Traceback naming atlas is still an atlas crash.

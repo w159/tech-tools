@@ -1,0 +1,13 @@
+# 12.4.1 release checks 2026-10-14T07:12:32Z on af412066
+plugin.json 12.4.1
+marketplace ['12.4.1']
+docs/CHANGELOG.md:5:## 12.4.1 (2026-10-14)
+plugins/atlas/CHANGELOG.md:5:## 12.4.1 (2026-10-14)
+completion_gate exit=0
+dispatch_tripwire exit=0
+prompt_optimizer exit=0
+session_boot exit=0
+worker_report_gate exit=0
+Ran 136 tests in 1.784s
+
+OK

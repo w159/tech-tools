@@ -131,7 +131,8 @@ test("a missing atlas_todo.py records ONE actionable stale-install fault across 
 	const added = readFileSync(faults, "utf8").slice(before).trim().split("\n");
 	expect(added.length).toBe(1);
 	expect(added[0]).toContain("atlas omp install is stale");
-	expect(added[0]).toContain("reinstall atlas in omp");
+	expect(added[0]).toContain("omp plugin upgrade atlas");
+  expect(added[0]).toContain("restart omp sessions started before the upgrade");
 	expect(ran).toBe(0);
 });
 

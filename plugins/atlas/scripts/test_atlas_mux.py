@@ -23,6 +23,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 
@@ -258,6 +259,8 @@ class Base(unittest.TestCase):
         self.env["ATLAS_MUX_OMP_CONFIG"] = str(self.omp_config)
         # the whole suite below drives the fake tmux: pin the explicit fallback (the default transport is herdr)
         self.env["ATLAS_COLONY_TRANSPORT"] = "tmux"
+        # seats off: never reach a live OpenRig/herdr on the host
+        self.env["ATLAS_SEAT_BACKEND"] = "off"
         # isolated tmux log namespace per test
         with open(os.path.join(self.state, "log"), "w", encoding="utf-8"):
             pass
@@ -1658,6 +1661,7 @@ class HerdrTransportTests(Base):
             "herdr"  # herdr is opt-in under the claude-bg default
         )
         self.env["HERDR_SOCKET_PATH"] = self.fake.path
+        self.env["ATLAS_SEAT_BACKEND"] = "herdr"
 
     def pane_texts(self):
         return [p["text"] for m, p in self.fake.calls if m == "pane.send_input"]
@@ -1749,7 +1753,12 @@ class HerdrTransportTests(Base):
         self.assertEqual((rc, k2["killed"]), (0, False))  # idempotent
 
     def test_herdr_not_running_falls_back_to_tmux(self):
-        env = self.spawn_env(extra={"HERDR_SOCKET_PATH": "/nonexistent/h.sock"})
+        env = self.spawn_env(
+            extra={
+                "HERDR_SOCKET_PATH": "/nonexistent/h.sock",
+                "ATLAS_SEAT_BACKEND": "herdr",
+            }
+        )
         env.pop(
             "ATLAS_COLONY_TRANSPORT"
         )  # the claude-bg default: omp falls back to panes
@@ -1788,6 +1797,8 @@ class ClaudeBgTests(Base):
     def bg_env(self, extra=None):
         env = self.spawn_env(extra=extra)
         env.pop("ATLAS_COLONY_TRANSPORT", None)  # the default: claude-bg
+        # herdr must look down regardless of a real server on this host
+        env["HERDR_SOCKET_PATH"] = os.path.join(self.state, "no-herdr.sock")
         return env
 
     def set_agents(self, rows):
@@ -2261,6 +2272,7 @@ class ClaudeBgTests(Base):
             env=self.spawn_env(
                 extra={
                     "ATLAS_COLONY_TRANSPORT": "herdr",
+                    "ATLAS_SEAT_BACKEND": "herdr",
                     "HERDR_SOCKET_PATH": fake.path,
                 }
             ),
@@ -2370,8 +2382,8 @@ class StatusSidebarTests(unittest.TestCase):
         import io
         from unittest import mock
 
-        import atlas_herdr
         import atlas_mux
+        import atlas_seats
 
         panes = [
             {"label": n, "pane_id": f"p{i}"}
@@ -2380,7 +2392,7 @@ class StatusSidebarTests(unittest.TestCase):
         out = io.StringIO()
         with (
             mock.patch.object(atlas_mux, "transport", return_value="herdr"),
-            mock.patch.object(atlas_herdr, "list_panes", return_value=panes),
+            mock.patch.object(atlas_seats, "list_panes", return_value=panes),
             contextlib.redirect_stdout(out),
             tempfile.TemporaryDirectory() as root,
         ):
@@ -2389,6 +2401,43 @@ class StatusSidebarTests(unittest.TestCase):
             [w["name"] for w in json.loads(out.getvalue())["workers"]],
             ["Alpha", "Beta"],
         )
+
+
+class SeatTransportTests(unittest.TestCase):
+    """Transport selection: seats up -> pane transport for any worker; down -> old fallbacks; env force wins."""
+
+    def _t(self, up, forced=None):
+        from unittest import mock
+
+        import atlas_mux
+
+        env = {"ATLAS_COLONY_TRANSPORT": forced} if forced else {}
+        with (
+            mock.patch.dict(os.environ, env),
+            mock.patch.object(atlas_mux, "_seats_up", return_value=up),
+        ):
+            if not forced:
+                os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
+            return atlas_mux.transport(), atlas_mux._pane_transport()
+
+    def test_seats_up_prefers_pane_transport(self):
+        self.assertEqual(("herdr", "herdr"), self._t(True))
+
+    def test_seats_down_keeps_claude_bg_and_tmux_for_omp(self):
+        self.assertEqual(("claude-bg", "tmux"), self._t(False))
+
+    def test_env_force_wins_over_seats(self):
+        self.assertEqual("claude-bg", self._t(True, "claude-bg")[0])
+        self.assertEqual("tmux", self._t(True, "tmux")[0])
+
+    def test_seats_up_false_when_backend_none(self):
+        from unittest import mock
+
+        import atlas_mux
+        import atlas_seats
+
+        with mock.patch.object(atlas_seats, "backend", return_value="none"):
+            self.assertFalse(atlas_mux._seats_up())
 
 
 class TeamWindowTests(unittest.TestCase):
@@ -2436,7 +2485,7 @@ class TeamWindowTests(unittest.TestCase):
         self.assertEqual([None], results)
         new = next(c for c in calls if c[0] == "new-session")
         self.assertEqual(new[new.index("-n") + 1], "atlas-t9")
-        self.assertEqual(new[-1], "exec run a")
+        self.assertIn("exec run a", new)
         self.assertNotIn("lead", new)
         self.assertFalse([c for c in calls if c[0] == "new-window"])
 
@@ -2591,6 +2640,82 @@ class TeamLiveTmuxTests(unittest.TestCase):
                 env=dict(os.environ),
             )
             self.assertNotEqual(0, gone.returncode)
+
+
+@unittest.skipUnless(shutil.which("tmux"), "tmux not on PATH")
+class TeamHardeningTests(unittest.TestCase):
+    """Real tmux on a private socket (-L), never the default server."""
+
+    def setUp(self):
+        import atlas_mux
+
+        self.mux = atlas_mux
+        self.bin = tempfile.mkdtemp()
+        self.root = tempfile.mkdtemp()
+        self.sock = f"atlas-test-{os.getpid()}"
+        real = shutil.which("tmux")
+        wrapper = pathlib.Path(self.bin, "tmux")
+        wrapper.write_text(f'#!/bin/sh\nexec {real} -L {self.sock} "$@"\n')
+        wrapper.chmod(0o755)
+        patcher = mock.patch.dict(
+            os.environ, {"PATH": self.bin + os.pathsep + os.environ["PATH"], "ATLAS_PROJECT_ROOT": self.root}
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(shutil.rmtree, self.bin, True)
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.addCleanup(lambda: subprocess.run([real, "-L", self.sock, "kill-server"], capture_output=True))
+
+    def test_instantly_exiting_first_worker_keeps_the_session(self):
+        err = self.mux._open_window("atlas-h1", "a", "exit 3", {"rec": {}, "role": "r"})
+        time.sleep(0.5)
+        self.assertEqual(0, self.mux._tmux("has-session", "-t", "atlas-h1").returncode)
+        err2 = self.mux._open_window("atlas-h1", "b", "sleep 5", {"rec": {}, "role": "r"})
+        self.assertIsNone(err2)
+        self.assertEqual({"a", "b"}, {p["name"] for p in self.mux._team_panes("atlas-h1")})
+        # a crash at spawn is reported loudly when tmux has already seen it
+        self.assertTrue(err is None or "died at spawn" in err, err)
+
+    def test_forwarded_channel_reaches_the_pane(self):
+        os.environ["ATLAS_CHANNEL"] = "chan-x"
+        self.addCleanup(os.environ.pop, "ATLAS_CHANNEL", None)
+        out = os.path.join(self.root, "chan.txt")
+        forwarded = [f"{k}={os.environ[k]}" for k in self.mux.FORWARDED_ENV if os.environ.get(k)]
+        pane = "exec " + shlex.join(["env", *forwarded]) + f" sh -c 'echo $ATLAS_CHANNEL > {out}; sleep 1'"
+        self.assertIsNone(self.mux._open_window("atlas-h2", "a", pane, {"rec": {}, "role": "r"}))
+        time.sleep(0.5)
+        self.assertEqual("chan-x", pathlib.Path(out).read_text().strip())
+
+    def test_team_brief_has_explicit_board_args_and_unresolved_script_path(self):
+        plug = pathlib.Path(self.root, "plug")
+        (plug / "scripts").mkdir(parents=True)
+        (plug / "scripts" / "atlas_todo.py").write_text("")
+        rec = {"team_id": "t", "task": "x", "file_scope": [], "members": [{"name": "w1", "role": "r"}]}
+        with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": str(plug)}):
+            brief = self.mux.team_brief(rec, rec["members"][0], "/proj", "chan-1", "lead-1")
+        self.assertIn("--channel chan-1", brief)
+        self.assertIn("--owner w1", brief)
+        self.assertIn("--root /proj", brief)
+        self.assertIn(str(plug / "scripts" / "atlas_todo.py"), brief)
+        self.assertNotIn("osprey", brief)
+
+    def test_wait_fails_fast_on_a_dead_pane_and_logs_tmux_errors(self):
+        team = {"team_id": "hw", "members": [{"name": "a", "role": "r"}], "created": time.time(), "transport": "tmux"}
+        d = pathlib.Path(self.root, ".atlas/.run/teams")
+        d.mkdir(parents=True)
+        (d / "hw.json").write_text(json.dumps(team))
+        self.mux._open_window("atlas-hw", "a", "exit 0", {"rec": {}, "role": "r"})
+        time.sleep(0.5)
+        buf, t0 = io.StringIO(), time.time()
+        with contextlib.redirect_stdout(buf):
+            code = self.mux.main(["wait", "--team", "hw", "--root", self.root, "--timeout", "30", "--poll", "0.2"])
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertEqual(1, code)
+        self.assertLess(time.time() - t0, 10)
+        self.assertTrue(out["members"][0]["dead_without_report"], out)
+        self.mux._tmux("kill-pane", "-t", "nonexistent-zz")
+        log = pathlib.Path(self.root, ".atlas/.run/logs/atlas_mux.log").read_text()
+        self.assertIn("kill-pane", log)
 
 
 if __name__ == "__main__":

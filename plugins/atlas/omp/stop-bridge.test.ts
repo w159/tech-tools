@@ -797,3 +797,11 @@ test("two children running at once each remove only their own directory", async 
 	await slow.exited;
 	expect(existsSync(a)).toBe(false);
 });
+
+test("textOf pulls a sub's final report text from string, content[] and details.result shapes", async () => {
+	const { textOf } = await import("./stop-bridge");
+	expect(textOf("STATUS: DONE")).toBe("STATUS: DONE");
+	expect(textOf({ content: [{ type: "text", text: "a" }, { text: "b" }] })).toBe("a\nb");
+	expect(textOf({ details: { result: "r" } })).toBe("r");
+	expect(textOf(undefined)).toBe("");
+});

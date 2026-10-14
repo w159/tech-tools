@@ -18,7 +18,7 @@ const PHASES: Array<[string, Rgb]> = [["research", BLUE], ["theory", VIOLET], ["
 const NICKS = [PINK, PEACH, YEL, GREEN, TEAL, SKY, BLUE, VIOLET];
 const SPARK = "▁▂▃▄▅▆▇█";
 const MAX_LANES = 5;
-const BAR_FULL_S = 120; // a lane bar fills over two minutes
+const BAR_FULL_S = 120; // a lane bar fills over two minutes, then shows an empty track
 const GATES_TTL_MS = 10_000;
 
 
@@ -85,9 +85,13 @@ function fitLine(s: string, w: number): string {
 }
 
 
-const age = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`);
-const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-const roleOf = (name: string) => name.replace(/-[^-]*$/, "") || name;
+const p2 = (n: number) => String(n).padStart(2, "0");
+/** Elapsed time, widest output 6 columns: 59s, 59m59s, 23h59m, 99d23h. */
+export const age = (s: number) =>
+	s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m${p2(s % 60)}s` : s < 86400 ? `${Math.floor(s / 3600)}h${p2(Math.floor((s % 3600) / 60))}m` : `${Math.floor(s / 86400)}d${p2(Math.floor((s % 86400) / 3600))}h`;
+const clock = (s: number) => (s < 3600 ? `${p2(Math.floor(s / 60))}:${p2(s % 60)}` : age(s));
+/** Role from `role-id` names; a plain name (no hyphen) has no role to show. */
+export const roleOf = (name: string) => (name.includes("-") ? name.replace(/-[^-]*$/, "") || name : "task");
 
 /**
  * Fit `s` in `w` columns by dropping leading hyphen words (`completeness-critic-f08e` -> `critic-f08e`), keeping at
@@ -190,7 +194,7 @@ const roleCell = (wk: PanelWorker, c: LaneCols) => (c.role ? seg(`${abbrev(wk.ro
 
 /** Elapsed bar (fills over BAR_FULL_S) and the tool-call sparkline, each only when its column fits. */
 function meterCells(wk: PanelWorker, c: LaneCols, col: Rgb): string {
-	const meter = c.bar ? seg(" ") + bar(wk.secs / BAR_FULL_S, c.bar, lerp(col, PANEL, 0.1), lerp(col, WHITE, 0.35)) + seg(" ") : "";
+	const meter = c.bar ? seg(" ") + bar(wk.secs >= BAR_FULL_S ? 0 : wk.secs / BAR_FULL_S, c.bar, lerp(col, PANEL, 0.1), lerp(col, WHITE, 0.35)) + seg(" ") : "";
 	return meter + (c.spark ? seg(" ") + spark(wk.spark, c.spark, col) + seg(" ") : "");
 }
 

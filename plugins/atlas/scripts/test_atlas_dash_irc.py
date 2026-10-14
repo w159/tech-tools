@@ -102,6 +102,10 @@ class IrcTestBase(unittest.TestCase):
         conn.commit()
         conn.close()
         self.herdr = FakeHerdr()
+        # fixture roots live under tmp, which the channel list hides as junk
+        jp = mock.patch.object(irc, "_junk_root", return_value=False)
+        jp.start()
+        self.addCleanup(jp.stop)
         for patcher in (
             mock.patch.object(atlas_herdr, "agents", self.herdr.agents),
             mock.patch.object(atlas_herdr, "send_prompt", self.herdr.send_prompt),
@@ -658,6 +662,15 @@ class ChannelsTest(IrcTestBase):
         lead = {m["name"]: m for m in by[self.LEAD]["members"]}["lead-a"]
         self.assertIsNone(lead["pane_id"])  # no live pane: still listed, not invented
 
+    def test_junk_root_and_dead_lead_channels_hidden(self):
+        with mock.patch.object(irc, "_junk_root", return_value=True):
+            _, body = self.call("GET", "/api/v2/channels")
+        self.assertEqual(body["channels"], [])
+        dead = ({"lead-a": {"state": "dead"}}, None)
+        with mock.patch.object(irc, "_roster", return_value=dead):
+            _, body = self.call("GET", "/api/v2/channels")
+        self.assertEqual([c["name"] for c in body["channels"]], [self.MAIN])
+
     def test_detail_keeps_channels_apart_and_main_owns_legacy_notes(self):
         self.store += [
             {"ts": 10.0, "owner": "old", "text": "legacy note", "to": "all"},
@@ -806,6 +819,20 @@ class ChannelsRealRegistryTest(IrcTestBase):
             self.assertEqual([m["body"] for m in body["messages"]], ["hi " + ch])
             self.assertFalse(body["more"])
             self.assertIn("owners", body["board"])
+
+
+# These tests drive the herdr backend through the atlas_seats facade (their fakes patch atlas_herdr).
+_SEAT_ENV = __import__("unittest.mock").mock.patch.dict(
+    __import__("os").environ, {"ATLAS_SEAT_BACKEND": "herdr"}
+)
+
+
+def setUpModule():
+    _SEAT_ENV.start()
+
+
+def tearDownModule():
+    _SEAT_ENV.stop()
 
 
 if __name__ == "__main__":

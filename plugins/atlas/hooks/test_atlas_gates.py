@@ -109,6 +109,28 @@ class AtlasGatesTest(unittest.TestCase):
         self.assertIn("error", groups["routing"])
         self.assertNotIn("error", groups["completion"])
 
+    def _native_bash_ok(self, agent):
+        self.conn.execute(
+            "INSERT INTO session_logs (session_id, agent) VALUES (?,?)", (SESSION, agent)
+        )
+        self.conn.execute(
+            "INSERT INTO tool_calls (session_id, tool_use_id, tool_name, kind) "
+            "VALUES (?, 'tu-1', 'Bash', 'builtin')",
+            (SESSION,),
+        )
+        self.conn.commit()
+        _, doc = _run(self.db, self.root)
+        routing = next(g for g in doc["groups"] if g["id"] == "routing")
+        return {ln["id"]: ln["ok"] for ln in routing["lines"]}
+
+    def test_native_bash_counts_in_claude_session(self):
+        self.assertFalse(self._native_bash_ok("claude")["native-Bash"])
+
+    def test_native_bash_ignored_in_omp_session(self):
+        ok = self._native_bash_ok("omp")
+        self.assertNotIn("native-Bash", ok)
+        self.assertIn("native-Read", ok)
+
     def test_gate_off(self):
         _, doc = _run(self.db, self.root, {"ATLAS_GATE": "off"})
         self.assertEqual(doc["groups"][0]["error"], "gate is off")

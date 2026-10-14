@@ -356,6 +356,16 @@ export function isTerminalYield(event: { toolName?: unknown; isError?: unknown; 
 	return !(record.status === "success" && Array.isArray(record.type) && record.type.length > 0 && record.type.every(item => typeof item === "string"));
 }
 
+/** Text of an omp message or tool result: a string, `{content: string | [{text}]}`, or `{details: {result: string}}`; "" when none (payload shape not verified live). */
+export function textOf(v: unknown): string {
+	if (typeof v === "string") return v;
+	if (!v || typeof v !== "object") return "";
+	const r = v as { content?: unknown; details?: { result?: unknown } };
+	if (typeof r.content === "string") return r.content;
+	if (Array.isArray(r.content)) return r.content.map(c => (typeof (c as { text?: unknown })?.text === "string" ? (c as { text: string }).text : "")).join("\n");
+	return typeof r.details?.result === "string" ? r.details.result : "";
+}
+
 export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridgeDeps = {}): void {
 	const env = () => deps.env ?? process.env;
 	const off = () => env().ATLAS_HOOK_BRIDGE === "off" || env().ATLAS_STOP_BRIDGE === "off";
@@ -391,12 +401,12 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 
 	/** A finished omp `task` subagent is parked: nothing drains board notes sent to it. Record that in the channel registry so the dashboard stops offering Send. */
 	const finished = new Set<string>();
-	const markSubFinished = async (ctx: BridgeCtx): Promise<void> => {
+	const markSubFinished = async (ctx: BridgeCtx, report = ""): Promise<void> => {
 		try {
 			const id = String((ctx.agent as { id?: string } | undefined)?.id ?? "");
 			if (!id || off() || finished.has(id)) return;
 			finished.add(id);
-			const finish = (agent: string) => runCapture(["python3", nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py"), "member-finish", "--root", ctx.cwd, "--agent", agent, "--exit", "0"], { timeoutMs: 1_500 });
+			const finish = (agent: string) => runCapture(["python3", nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py"), "member-finish", "--root", ctx.cwd, "--agent", agent, "--exit", "0", ...(report ? ["--message", report] : [])], { timeoutMs: 1_500 }); // --message: the sub's final text, so a valid DONE report also completes its board item
 			// omp 18.10 ids are `<Name>-<n>` (live "ProbeFin-5"); the resolver only strips a `<n>-` prefix or bare trailing digits,
 			// so retry once with the `-<n>` suffix removed when the raw id matched no member.
 			const first = await finish(id);
@@ -546,7 +556,7 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 	pi.on("tool_execution_end", async (event, ctx) => {
 		try {
 			const bridgeCtx = ctx as BridgeCtx;
-			if (isTerminalYield(event) && bridgeCtx.agent?.kind === "sub") await markSubFinished(bridgeCtx);
+			if (isTerminalYield(event) && bridgeCtx.agent?.kind === "sub") await markSubFinished(bridgeCtx, textOf((event as { result?: unknown }).result));
 		} catch {
 			// fail open: the view falls back to its own hard cap
 		}
@@ -555,9 +565,10 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 
 	// A task worker that ends with plain text (no terminal `yield`, observed live) still fires agent_end in its own
 	// ctx while omp parks it, so this is the reliable per-worker completion signal; the yield hook above is the early one.
-	pi.on("agent_end", async (_event, ctx) => {
+	pi.on("agent_end", async (event, ctx) => {
 		const bridgeCtx = ctx as BridgeCtx;
-		if (bridgeCtx.agent?.kind === "sub") await markSubFinished(bridgeCtx);
+		const last = [...((event as { messages?: unknown[] }).messages ?? [])].reverse().find(m => (m as { role?: unknown })?.role === "assistant");
+		if (bridgeCtx.agent?.kind === "sub") await markSubFinished(bridgeCtx, textOf(last));
 	});
 
 	pi.on("auto_compaction_start", async (_event, ctx) => {

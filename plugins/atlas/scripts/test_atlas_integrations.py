@@ -443,6 +443,7 @@ class TestDeck(Base):
         self.assertEqual(
             (d["available"], d["reason"]), (False, "Firstmate not installed")
         )
+        self.assertEqual((d["status"], d["tone"]), ("not installed (optional)", "info"))
 
     def test_homes_present_without_plugin_root_probe(self):
         (self.home / "firstmate").mkdir()
@@ -550,9 +551,9 @@ class TestHostileRoots(Base):
 
     def setUp(self):
         super().setUp()
-        orig = routes.atlas_herdr.agents
-        routes.atlas_herdr.agents = lambda *a, **k: {"agents": []}
-        self.addCleanup(setattr, routes.atlas_herdr, "agents", orig)
+        orig = routes.atlas_seats.agents
+        routes.atlas_seats.agents = lambda *a, **k: {"agents": []}
+        self.addCleanup(setattr, routes.atlas_seats, "agents", orig)
         self.hostile = [
             "/",
             str(self.home),

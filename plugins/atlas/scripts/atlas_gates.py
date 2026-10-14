@@ -161,12 +161,18 @@ def routing_group(session: str) -> dict:
             "SELECT kind, server, tool_name, denied FROM tool_calls WHERE session_id=?",
             (session,),
         ).fetchall()
+        agent = conn.execute(
+            "SELECT agent FROM session_logs WHERE session_id=?", (session,)
+        ).fetchone()
     finally:
         conn.close()
+    # omp has no Read/Grep/Glob-equivalent shell policy for Bash (its bash is the primary
+    # shell tool), so native Bash is not a routing miss there; other natives and denies count.
+    native = _NATIVE if not agent or agent[0] != "omp" else _NATIVE[:-1]
     for name, keys in _CONTEXT_SERVERS:
         n = sum(1 for k, s, t, d in rows if k == "mcp" and (s or "").lower() in keys)
         g["lines"].append(_line(name, f"{name} calls", True, f"{n} {_ROUTING_NOTE}"))
-    for tool in _NATIVE:
+    for tool in native:
         n = sum(1 for k, s, t, d in rows if k == "builtin" and t == tool)
         g["lines"].append(
             _line(

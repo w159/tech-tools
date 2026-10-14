@@ -96,13 +96,15 @@ class AtlasDoctorTest(unittest.TestCase):
         )
         atlas_doctor.PLUGINS_DIR = self.plugins
         atlas_doctor.STATE_PATH = self.state
-        os.environ["CLAUDE_PLUGIN_ROOT"] = self.self_root
         omp_patch = mock.patch.dict(
             os.environ,
             {"ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins")},
         )
         omp_patch.start()
         self.addCleanup(omp_patch.stop)
+        # Set after the patch.dict snapshot: its cleanup runs after tearDown and would
+        # otherwise restore this value, leaking it into later test files.
+        os.environ["CLAUDE_PLUGIN_ROOT"] = self.self_root
         cmux_patch = mock.patch.object(atlas_doctor, "_cmux_bin", return_value=None)
         cmux_patch.start()
         self.addCleanup(cmux_patch.stop)
@@ -239,6 +241,39 @@ class AtlasDoctorTest(unittest.TestCase):
             f.write("ORCH_SKILLS = {'atlas-orchestrate'}\nmark_orchestrating = None\n")
         self.assertEqual(atlas_doctor.check_orchestration_wiring(ip), [])
 
+    def test_orchestration_wiring_reads_core_behind_shim(self):
+        ip = self.install_101
+        write_json(
+            os.path.join(ip, "hooks", "hooks.json"),
+            {
+                "hooks": {
+                    "PostToolUse": [
+                        {
+                            "matcher": "Read|Agent|Task|Skill",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "python3 x/dispatch_tripwire.py",
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+        )
+        shim = os.path.join(ip, "hooks", "dispatch_tripwire.py")
+        core = os.path.join(ip, "hooks", "dispatch_tripwire_core.py")
+        with open(shim, "w") as f:
+            f.write("# cached-bytecode shim, no markers\n")
+        with open(core, "w") as f:
+            f.write("ORCH_SKILLS = {'atlas-orchestrate'}\nmark_orchestrating = None\n")
+        self.assertEqual(atlas_doctor.check_orchestration_wiring(ip), [])
+        with open(core, "w") as f:
+            f.write("# no markers either\n")
+        problems = atlas_doctor.check_orchestration_wiring(ip)
+        self.assertTrue(any("ORCH_SKILLS" in p for p in problems))
+        self.assertTrue(any("mark_orchestrating" in p for p in problems))
+
     def test_norm_repo_treats_url_variants_as_equal(self):
         for u in (
             "https://github.com/w159/tech-tools.git",
@@ -327,13 +362,21 @@ class AtlasDoctorTest(unittest.TestCase):
         old = os.path.join(omp, "cache", "plugins", "tech-tools___atlas___11.0.0")
         write_json(
             os.path.join(omp, "installed_plugins.json"),
-            {"plugins": {"atlas@tech-tools": [{"version": "11.0.0", "installPath": old}]}},
+            {
+                "plugins": {
+                    "atlas@tech-tools": [{"version": "11.0.0", "installPath": old}]
+                }
+            },
         )
         atlas_doctor.apply_fixes(self._ctx(), "atlas")
         with open(os.path.join(omp, "installed_plugins.json")) as f:
             e = json.load(f)["plugins"]["atlas@tech-tools"][0]
         self.assertEqual(e["version"], "2.3.0")
-        self.assertTrue(os.path.isfile(os.path.join(e["installPath"], ".claude-plugin", "plugin.json")))
+        self.assertTrue(
+            os.path.isfile(
+                os.path.join(e["installPath"], ".claude-plugin", "plugin.json")
+            )
+        )
 
     def test_fix_without_omp_registry_adds_no_omp_action(self):
         actions = atlas_doctor.apply_fixes(self._ctx(), "atlas")
@@ -1067,10 +1110,21 @@ class AtlasDoctorTest(unittest.TestCase):
         os.makedirs(ah, exist_ok=True)
         now = time.time()
         stale = "/x/.omp/plugins/cache/plugins/tech-tools___atlas___0.0.1/scripts/a.py"
-        rows = [{"hook": "format_after_edit", "error": "formatter skipped: missing for /a.py"}] * 6
-        rows += [{"hook": "format_after_edit", "error": "formatter skipped: parse for /b.ts"}] * 3
-        rows += [{"hook": "channels", "error": f"channel-open failed: can't open '{stale}'"}] * 6
-        rows += [{"hook": "recall_gate", "error": "boom", "plugin_version": "0.0.1"}] * 6
+        rows = [
+            {
+                "hook": "format_after_edit",
+                "error": "formatter skipped: missing for /a.py",
+            }
+        ] * 6
+        rows += [
+            {"hook": "format_after_edit", "error": "formatter skipped: parse for /b.ts"}
+        ] * 3
+        rows += [
+            {"hook": "channels", "error": f"channel-open failed: can't open '{stale}'"}
+        ] * 6
+        rows += [
+            {"hook": "recall_gate", "error": "boom", "plugin_version": "0.0.1"}
+        ] * 6
         with open(os.path.join(ah, "hook-faults.jsonl"), "w") as f:
             for r in rows:
                 f.write(json.dumps({"ts": now, "type": "X", "cwd": "/", **r}) + "\n")

@@ -54,7 +54,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { readFileSync, statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { registerAgentGuard } from "./agent-guard";
-import { registerChannelView, registerLaneToolRecorder } from "./channel-view";
+import { phaseFromName, registerChannelView, registerLaneToolRecorder } from "./channel-view";
 import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { registerTeamTool } from "./team-tool";
@@ -159,7 +159,9 @@ export function boardItemsFromTodoDetails(details: unknown): BoardItem[] {
 		if (!Array.isArray(tasks)) continue;
 		const rawName = (phase as Record<string, unknown>).name;
 		const lowered = typeof rawName === "string" ? rawName.trim().toLowerCase() : "";
-		const boardPhase = known.includes(lowered) ? lowered : undefined;
+		const mapped = phaseFromName(lowered);
+		// board only stores contract todoPhases; exact "done"/"blocked" stay absent as before
+		const boardPhase = known.includes(lowered) ? lowered : lowered === "done" || lowered === "blocked" ? undefined : mapped && known.includes(mapped) ? mapped : undefined;
 		for (const task of tasks) {
 			const content = (task as Record<string, unknown> | null)?.content;
 			if (typeof content !== "string" || content.trim() === "") continue;

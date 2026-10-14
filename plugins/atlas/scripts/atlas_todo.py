@@ -37,6 +37,7 @@ Stdlib only. Same fcntl/msvcrt lock pattern as atlas_memory.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -57,6 +58,9 @@ _KEEP_ORIGINS = (
     "advisor",
 )  # never mirrored away or carried over; sweep() ages advisor notes out
 _ADVISOR_TTL_S = 2 * 3600
+_CARRY_MAX_AGE_S = 86400  # older than this at boot: archived, not carried
+_CARRY_MAX_CARRIES = 2  # already carried this many times: archived
+LEAD_IDLE_TTL_S = 2 * 3600  # idle lead channel without exit_code (crashed session)
 BOARD_DIR = ".atlas/.run"
 BOARD_NAME = "todos.json"
 _CLAIM_STALE_S = 30 * 60  # a claim older than this can be taken over
@@ -605,6 +609,7 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
     with _file_lock(board_path(root)):
         board = _locked_load(root)
         carried = archived = 0
+        now = _now()
         for item in board.get("items", []):
             if (
                 item.get("archived")
@@ -615,14 +620,26 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
             if item.get("status") == "completed":
                 item["archived"] = True
                 archived += 1
+            elif not (item.get("launch") and _launch_live(item)) and (
+                now - float(item.get("created_at") or item.get("updated_at") or now)
+                > _CARRY_MAX_AGE_S
+                or int(item.get("carries") or 0) >= _CARRY_MAX_CARRIES
+            ):
+                # stale backlog from dead sessions: archive (restorable), never re-surface
+                item["archived"] = True
+                item["archived_reason"] = "carry_expired"
+                item["archived_at"] = now
+                archived += 1
             else:
                 item["origin"] = "carried"
+                item["carries"] = int(item.get("carries") or 0) + 1
+                item["carried_at"] = now
                 item["session_id"] = session_id
                 if not item.get("launch"):  # a dashboard-launched agent keeps its claim
                     item["owner"] = None
                     item["claimed_at"] = None
                     item["status"] = "pending"
-                _touch(item)
+                # no _touch: carrying must not reset the sweep() staleness clock
                 carried += 1
         if carried or archived:
             save(root, board)
@@ -1149,6 +1166,7 @@ def reap_channels(
     max_idle: float = 86400,
     keep: Optional[str] = None,
     dry_run: bool = False,
+    lead_idle: Optional[float] = None,
 ) -> dict:
     """Archive then delete dead lead channels; prune dead main-channel members.
     A lead channel is dead when every member has exit_code or no activity for max_idle
@@ -1157,11 +1175,20 @@ def reap_channels(
     Returns {reaped, archived_path, kept}."""
     now = time.time() if now is None else now
     keep = _sanitize_owner(keep) if keep else None
+    if lead_idle is None:  # leads crash without exit_code, so they age out faster
+        try:
+            lead_idle = float(os.environ.get("ATLAS_LEAD_IDLE_TTL") or LEAD_IDLE_TTL_S)
+        except ValueError:
+            lead_idle = LEAD_IDLE_TTL_S
 
     def stale(m: dict, chan: dict) -> bool:
         if "exit_code" in m:
             return True
-        return now - float(chan.get("last_activity") or 0) > max_idle
+        pid = m.get("pid")
+        if pid and pid_start(pid) is None:  # recorded pid is gone
+            return True
+        ttl = lead_idle if chan.get("kind") == "lead" else max_idle
+        return now - float(chan.get("last_activity") or 0) > ttl
 
     def live(m: dict) -> bool:
         return bool(m.get("pid")) and pid_matches(m.get("pid"), m.get("pid_start"))
@@ -1360,7 +1387,19 @@ def set_member_handles(
         return 0
 
 
-def set_member_agent_id(root: Optional[str], name: str, agent_id: str) -> int:
+def member_board_item(root: Optional[str], name: str) -> Optional[str]:
+    """Board item id recorded on member `name` from its dispatch prompt, else None."""
+    n = _sanitize_owner(name)
+    for chan in _reg_read(root)["channels"].values():
+        for m in chan["members"]:
+            if m["name"] == n and m.get("board_item"):
+                return str(m["board_item"])
+    return None
+
+
+def set_member_agent_id(
+    root: Optional[str], name: str, agent_id: str, board_item: str = ""
+) -> int:
     """Record a Claude subagent's agent_id on every registry entry of member `name`.
     SubagentStop carries agent_id but not the dispatch name; PostToolUse:Agent knows both.
     Returns entries updated; fail-open (0)."""
@@ -1372,6 +1411,8 @@ def set_member_agent_id(root: Optional[str], name: str, agent_id: str) -> int:
             for m in chan["members"]:
                 if m["name"] == n:
                     m["agent_id"] = str(agent_id)
+                    if board_item:
+                        m["board_item"] = board_item
                     hit += 1
         return hit
 
@@ -1718,6 +1759,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--paths"
             or a == "--max-idle"
             or a == "--keep"
+            or a == "--message"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
@@ -1783,13 +1825,23 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             who = worker_inbox._member_for(
                 sys.modules[__name__], proj, flags.get("agent", "")
             )
-            out = {
-                "ok": True,
-                "member": who,
-                "marked": mark_finished(proj, who, int(flags.get("exit", "0") or 0))
-                if who
-                else 0,
-            }
+            marked = 0
+            if who:
+                marked = mark_finished(proj, who, int(flags.get("exit", "0") or 0))
+                # A valid DONE report (omp passes the sub's final text) also settles the
+                # board item and drops the member from its channel, like the Claude hook.
+                with contextlib.suppress(Exception):
+                    import worker_report_gate_core as wrg
+
+                    msg = flags.get("message") or ""
+                    report = None
+                    if msg.strip():
+                        with open(wrg.PROTOCOL, encoding="utf-8") as f:
+                            report = json.load(f)["report"]
+                        if wrg.check_report(msg, "atlas:", proj, report):
+                            report = None
+                    wrg.reap_member(sys.modules[__name__], proj, who, msg, report)
+            out = {"ok": True, "member": who, "marked": marked}
         elif cmd == "complete":
             out = set_status(
                 root,
@@ -1911,6 +1963,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                     max_idle=float(flags.get("max-idle", 86400)),
                     keep=flags.get("keep"),
                     dry_run=bool(flags.get("dry-run")),
+                    lead_idle=float(flags["lead-idle"]) if "lead-idle" in flags else None,
                 ),
             }
         elif cmd == "channel-board":

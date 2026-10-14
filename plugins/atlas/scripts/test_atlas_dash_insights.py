@@ -68,6 +68,7 @@ class InsightsBase(unittest.TestCase):
         # isolate every on-disk source the module reads
         for attr, rel in (
             ("PREFS_PATH", "dashboard-prefs.json"),
+            ("DISMISSED_PATH", "dashboard-dismissed.json"),
             ("DASHBOARD_LOG", "dashboard.log"),
             ("HOOKSTATE_DIR", "hookstate"),
             ("NUDGE_STAMP", ".atlas_nudge"),
@@ -227,7 +228,7 @@ class TestHealth(InsightsBase):
             {(r["kind"], r["rule"]): r["count"] for r in enf["top_rules"]},
             {("gate_deny", "Grep"): 1, ("gate_block", "gate_block"): 1},
         )
-        self.assertEqual(enf["projects"], [{"project": ROOT_A, "count": 2}])
+        self.assertEqual(enf["projects"], [{"project": ROOT_A, "name": "alpha", "count": 2}])
         for s in body["silent_failures"]:
             for k in (
                 "id",
@@ -429,6 +430,64 @@ class TestHealth(InsightsBase):
         self.conn.commit()
         self.assertNotIn("improvements.verdict=regressed", sources())
 
+    def test_formatter_skipped_faults_are_not_hook_crashes(self):
+        import atlas_faults
+
+        atlas_faults.record("format_after_edit", ValueError("formatter skipped: missing"), cwd=ROOT_A)
+        atlas_faults.record("format_after_edit", ValueError("formatter skipped: parse x"), cwd=ROOT_A)
+        _, body = self.get(ins.route_health)
+        self.assertNotIn("hook_crash", {s["kind"] for s in body["silent_failures"]})
+        atlas_faults.record("pretool", ValueError("boom"), cwd=ROOT_A)
+        _, body = self.get(ins.route_health)
+        self.assertEqual(
+            [s["count"] for s in body["silent_failures"] if s["kind"] == "hook_crash"], [1]
+        )
+
+    def test_dashboard_and_doctor_agree_on_hook_fault_count(self):
+        import atlas_doctor
+        import atlas_faults
+
+        atlas_faults.record("format_after_edit", ValueError("formatter skipped: missing"), cwd=ROOT_A)
+        atlas_faults.record("channels", ValueError("x /cache/atlas/0.0.1/a.py"), cwd=ROOT_A)
+        atlas_faults.record("pretool", ValueError("boom"), cwd=ROOT_A)
+        doctor_n = len(atlas_doctor._live_faults(atlas_faults.load(0), atlas_faults._plugin_version()))
+        dash_n = sum(s["count"] for s in ins._fold_hook_faults(0, None))
+        self.assertEqual(doctor_n, dash_n)
+        self.assertLess(dash_n, 3)  # the formatter skip is dropped by both
+
+    def test_regressions_dedupe_to_newest_row_per_finding(self):
+        fid = atlas_db.upsert_finding(
+            self.conn, "k:dedupe", dimension="d", severity="LOW", title="t",
+            detail="d", proposed_action="p", target_path="x",
+        )
+        imps = [
+            atlas_db.record_improvement(
+                self.conn, 0, "d", "1", "0", None, finding_id=fid, metric="m", baseline_value=1
+            )
+            for _ in range(3)
+        ]
+        self.conn.execute("UPDATE improvements SET ts=ts+id WHERE finding_id=?", (fid,))
+        self.conn.commit()
+        for i in imps[:2]:  # older rows regressed, newest improved
+            atlas_db.set_improvement_remeasure(self.conn, i, 2, "regressed")
+        atlas_db.set_improvement_remeasure(self.conn, imps[2], 0, "improved")
+        _, body = self.get(ins.route_health)
+        regs = [s for s in body["silent_failures"] if s["kind"] == "doctor_regression"]
+        self.assertEqual(regs, [])
+        atlas_db.set_improvement_remeasure(self.conn, imps[2], 2, "regressed")
+        _, body = self.get(ins.route_health)
+        regs = [s for s in body["silent_failures"] if s["kind"] == "doctor_regression"]
+        self.assertEqual([(r["count"], r["finding_id"]) for r in regs], [(1, fid)])
+
+    def test_breaker_trip_is_warn_with_session_id(self):
+        (self.home / "hookstate" / "sess-abc.json").write_text(
+            json.dumps({"stop_events": [NOW - 10 * i for i in range(6)], "last_run": {}})
+        )
+        _, body = self.get(ins.route_overview)
+        att = [a for a in body["attention"] if "breaker" in a["title"].lower()]
+        self.assertEqual([a["severity"] for a in att], ["warn"])
+        self.assertEqual(att[0]["session_id"], "sess-abc")
+
     def test_user_code_traceback_is_a_cause_not_a_silent_failure(self):
         self.conn.execute(
             "INSERT INTO tool_calls(session_id, tool_use_id, tool_name, kind, target, ts, "
@@ -456,6 +515,18 @@ class TestHealth(InsightsBase):
 
 
 class TestProjectsOverviewActivity(InsightsBase):
+    def test_projects_agents_active_counts_live_herdr_agents(self):
+        import atlas_seats
+
+        live = {"agents": [{"cwd": ROOT_A}, {"cwd": ROOT_A + "/sub"}, {"cwd": "/elsewhere"}]}
+        with mock.patch.object(ins, "_is_fixture_root", lambda r: False), mock.patch.object(
+            atlas_seats, "agents", return_value=live
+        ):
+            _, body = self.get(ins.route_projects)
+        by_root = {p["root"]: p for p in body["projects"]}
+        self.assertEqual(by_root[ROOT_A]["agents_active"], 2)
+        self.assertEqual(by_root[ROOT_B]["agents_active"], 0)
+
     def test_projects_grouped_with_counts(self):
         # the route hides roots that no longer exist on disk; these are fixtures
         with mock.patch.object(ins, "_is_fixture_root", lambda r: False):
@@ -554,6 +625,21 @@ class TestProjectsOverviewActivity(InsightsBase):
         )
         self.assertEqual(len(body["recent_runs"]), 2)
 
+    def test_enforcement_projects_name_scratch_and_empty_as_unattributed(self):
+        mk = lambda proj: {"kind": "gate_deny", "project": proj, "count": 2,
+                           "tool": "t", "sample": "", "hint": "", "last": None}
+        out = ins._enforcement_summary([mk(""), mk("/tmp/x/m"), mk(ROOT_A)])
+        by = {p["project"]: p for p in out["projects"]}
+        self.assertEqual(by[""]["count"], 4)  # empty + scratch fold together
+        self.assertEqual(by[""]["name"], "Unattributed")
+        self.assertNotIn("/tmp/x/m", by)
+        self.assertEqual(by[ROOT_A]["name"], "alpha")
+
+    def test_overview_silent_kpi_says_occurrences(self):
+        _, body = self.get(ins.route_overview)
+        kpi = {k["id"]: k for k in body["kpis"]}["silent_failures"]
+        self.assertIn("occurrences", kpi["hint"])
+
     def test_activity_dedupes_and_groups(self):
         _, body = self.get(ins.route_activity, group="project")
         items = [i for g in body["groups"] for i in g["items"]]
@@ -564,6 +650,7 @@ class TestProjectsOverviewActivity(InsightsBase):
         self.assertEqual(errs[0]["count"], 5)
         labels = {g["label"] for g in body["groups"]}
         self.assertIn("alpha", labels)
+        self.assertNotIn("(none)", labels)  # empty project reads Unattributed
         _, by_kind = self.get(ins.route_activity, group="kind")
         self.assertIn("tool_error_unclassified", {g["key"] for g in by_kind["groups"]})
         _, filt = self.get(ins.route_activity, group="kind", kind="deny")
@@ -697,6 +784,23 @@ class TestImprove(InsightsBase):
             self.assertIn("current", body["state"])
         st, _ = ins.route_improve_remeasure(Ctx(self.conn, body={"id": "x"}))
         self.assertEqual(st, 400)
+
+    def test_remeasure_not_reproduced_is_200_unknown_stays_422(self):
+        from unittest import mock
+
+        fid = self.conn.execute("SELECT id FROM findings").fetchone()[0]
+        ctx = lambda: Ctx(self.conn, body={"id": f"doctor:{fid}"})
+        with mock.patch.object(
+            ins.atlas_doctor, "_measure", return_value=("not_reproduced", None)
+        ):
+            st, body = ins.route_improve_remeasure(ctx())
+        self.assertEqual(st, 200, body)
+        self.assertEqual(body["state"]["verdict"], "not_reproduced")
+        with mock.patch.object(
+            ins.atlas_doctor, "_measure", return_value=("unknown", None)
+        ):
+            st, body = ins.route_improve_remeasure(ctx())
+        self.assertEqual(st, 422, body)
 
     def test_improve_carries_enforcement_adherence(self):
         _, body = self.get(ins.route_improve)
@@ -1150,6 +1254,7 @@ class TestRoutes(unittest.TestCase):
                 ("GET", "^/api/v2/activity$"),
                 ("GET", "^/api/v2/improve$"),
                 ("POST", "^/api/v2/improve/finding$"),
+                ("POST", "^/api/v2/dismiss$"),
                 ("POST", "^/api/v2/improve/remeasure$"),
                 ("POST", "^/api/v2/improve/selffix$"),
                 ("GET", "^/api/v2/prefs$"),
@@ -1323,6 +1428,31 @@ class TestHealthHonesty(InsightsBase):
         self.assertIsNone(
             blocked["series"]
         )  # the board keeps no history of blocked counts
+
+    def test_dismiss_clears_attention_and_expires_on_recurrence(self):
+        _, body = ins.route_overview(Ctx(self.conn, {"window": "7d"}))
+        self.assertTrue(body["attention"])
+        fid = body["attention"][0]["id"]
+        st, res = ins.route_dismiss(Ctx(body={"id": fid}))
+        self.assertEqual((st, res["dismissed"]), (200, True))
+        _, after = ins.route_overview(Ctx(self.conn, {"window": "7d"}))
+        self.assertNotIn(fid, [a["id"] for a in after["attention"]])
+        _, health = ins.route_health(Ctx(self.conn, {"window": "7d"}))
+        self.assertTrue(
+            {s["id"]: s for s in health["silent_failures"]}[fid]["dismissed"]
+        )
+        # recurrence after the dismissal brings it back
+        ins.DISMISSED_PATH.write_text(json.dumps({fid: NOW - 86400 * 30}))
+        _, again = ins.route_overview(Ctx(self.conn, {"window": "7d"}))
+        self.assertIn(fid, [a["id"] for a in again["attention"]])
+        # undo removes the record
+        ins.route_dismiss(Ctx(body={"id": fid}))
+        ins.route_dismiss(Ctx(body={"id": fid, "undo": True}))
+        self.assertNotIn(fid, json.loads(ins.DISMISSED_PATH.read_text()))
+
+    def test_dismiss_rejects_bad_id(self):
+        for bad in ({}, {"id": "../x"}, {"id": 5}):
+            self.assertEqual(ins.route_dismiss(Ctx(body=bad))[0], 400)
 
     def test_findings_counts_name_their_scope(self):
         """Needs-attention (and the top-bar pill, which renders the same list) counts

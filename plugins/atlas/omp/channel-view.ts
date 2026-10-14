@@ -401,7 +401,20 @@ const todoItems = (root: string, sessionId?: string): PanelTodo[] =>
 	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined }));
 
 /** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */
-const railPhase = (todo: string | undefined, header: string | undefined): string => todo ?? header ?? "research";
+const PHASE_WORDS: Array<[string, RegExp]> = [
+	["research", /^(setup|plan|research|discover)/],
+	["theory", /^(design|theory)/],
+	["test", /^test/],
+	["implement", /^(audit|build|implement|fix|execute)/],
+	["verify", /^(verify|review|validate)/],
+	["done", /^(deliver|ship|release|done|wrap)/],
+];
+/** Rail phase for a contract name or an omp todo phase name ("Setup", "Audit", "Deliver"); unknown names give undefined. */
+export function phaseFromName(name: string | undefined): string | undefined {
+	const n = (name ?? "").trim().toLowerCase();
+	return PHASE_WORDS.find(([, re]) => re.test(n))?.[0];
+}
+export const railPhase = (todo: string | undefined, header: string | undefined): string => phaseFromName(todo) ?? todo ?? header ?? "research";
 
 /** Main repo root of a linked git worktree dir (`.git` file -> gitdir -> commondir), else undefined. Mirrors atlas_todo._worktree_main_root. */
 function worktreeMainRoot(dir: string): string | undefined {

@@ -224,5 +224,19 @@ class WaveTest(unittest.TestCase):
         self.assertEqual((r["queued"], r["last_sent"]["status"]), (0, "refused"))
 
 
+# These tests drive the herdr backend through the atlas_seats facade (their fakes patch atlas_herdr).
+_SEAT_ENV = __import__("unittest.mock").mock.patch.dict(
+    __import__("os").environ, {"ATLAS_SEAT_BACKEND": "herdr"}
+)
+
+
+def setUpModule():
+    _SEAT_ENV.start()
+
+
+def tearDownModule():
+    _SEAT_ENV.stop()
+
+
 if __name__ == "__main__":
     unittest.main()

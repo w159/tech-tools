@@ -1,0 +1,14 @@
+# bun test plugins/atlas/omp/advisor.test.ts
+bun test v1.4.2 (744846f84)
+
+ 18 pass
+ 0 fail
+ 47 expect() calls
+Ran 18 tests across 1 file. [950.00ms]
+
+# bun test plugins/atlas/omp
+
+ 443 pass
+ 0 fail
+ 6991 expect() calls
+Ran 443 tests across 26 files. [20.66s]

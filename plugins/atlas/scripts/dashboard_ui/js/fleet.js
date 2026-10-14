@@ -10,6 +10,21 @@ import { Drawer, openDrawer, closeDrawer, openMenu, openPopover, closePopover, t
 import { ChannelList, Composer, FeedItem } from "./ui-data.js";
 import { renamePane, renameTab, closePane, closeTab, renameWorkspace, closeWorkspace, newTab, hostReachable, QUICK_KEYS, sendKeys } from "./herdr-actions.js";
 import { FilesPanel, hpThreadFor, openEditor } from "./integrations.js";
+import { pollCapture, CAPTURE_LINES } from "./capture-view.js";
+
+// <pre> of one seat's text for runtimes with no web UI. Polls herd/capture until it leaves the DOM; skips ticks while hidden.
+function captureView(paneId) {
+  const pre = h("pre", { class: "pane-capture mono", "data-pane": paneId, tabindex: "0", "aria-label": "Terminal output (read only)", style: "margin:0;overflow:auto;max-height:60vh;white-space:pre-wrap" }, "waiting for output");
+  let attached = false;
+  pre.stop = pollCapture({
+    fetchOnce: () => api.get("herd/capture", { pane: paneId, lines: CAPTURE_LINES }),
+    onUpdate: (d) => { pre.textContent = d.text; pre.dataset.error = d.isError ? "true" : "false"; },
+    isHidden: () => Boolean(pre.closest("[hidden]")),
+    // Gone only counts after it was attached once: the first tick runs before the caller appends it.
+    isGone: () => { if (pre.isConnected) attached = true; return attached && !pre.isConnected; },
+  });
+  return pre;
+}
 
 // herdr-projects thread/branch chip when the agent's cwd is a thread's cwd (null otherwise).
 export function hpChip(a) {
@@ -45,6 +60,14 @@ export function kindIcon(kind) {
 
 const KIND_WORD = { omp: "omp", claude: "Claude Code", codex: "Codex", shell: "Shell", unknown: "Agent" };
 export const kindWord = (k) => KIND_WORD[k] || KIND_WORD.unknown;
+
+// Workspace rows can arrive with a null label; fall back to the id basename, then "Unassigned".
+export function wsLabel(w) {
+  const l = w && w.label;
+  if (l != null && String(l).trim()) return String(l);
+  const id = w && w.id != null ? String(w.id).split("/").filter(Boolean).pop() : "";
+  return id || "Unassigned";
+}
 
 export function agentLabel(rec) {
   return rec.title + " in " + (rec.workspace || "workspace") + ", " + STATE_WORD[rec.state].toLowerCase() + (ageLabel(rec) ? ", " + ageLabel(rec) : "");
@@ -277,7 +300,7 @@ export function RailTree({ onSelect, onRecheck } = {}) {
     root.appendChild(host);
     if (!st.loaded) { root.appendChild(h("p", { class: "tree-note dim", role: "status" }, "Loading agents")); return; }
     if (st.layers.herdr.state === "down") {
-      root.appendChild(h("div", { class: "tree-note" }, h("p", null, "herdr isn't running"), h("p", { class: "dim" }, "Atlas can't list agents without it."), Button({ label: "Recheck", size: "sm", onClick: onRecheck })));
+      root.appendChild(h("div", { class: "tree-note" }, h("p", null, "The agent runtime isn't running"), h("p", { class: "dim" }, "Atlas can't list agents until the agent runtime is up."), Button({ label: "Start runtime", size: "sm", variant: "primary", onClick: () => agentsStore.startHerdr() }), Button({ label: "Recheck", size: "sm", onClick: onRecheck })));
       return;
     }
     if (!st.tree.length) { root.appendChild(h("p", { class: "tree-note dim" }, "No agents running")); return; }
@@ -285,8 +308,8 @@ export function RailTree({ onSelect, onRecheck } = {}) {
     for (const w of st.tree) {
       const hasSel = w.agents.some((a) => a.key === sel);
       const isOpen = open.has(w.id) ? open.get(w.id) : !many || hasSel;
-      const wsMenu = h("button", { class: "btn btn-ghost btn-icon row-menu", type: "button", "aria-label": "Actions for workspace " + w.label, "aria-haspopup": "menu", onClick: (e) => { e.stopPropagation(); openMenu(wsMenu, [{ label: "New tab", icon: "plus", onSelect: () => newTab(w.id) }, { label: "Rename workspace", icon: "edit", onSelect: () => renameWorkspace(w.id, w.label) }, { label: "Close workspace", icon: "stop", danger: true, onSelect: () => closeWorkspace(w.id, w.label) }], { placement: "end", label: "Actions for workspace " + w.label }); } }, icon("more"));
-      const wr = h("div", { class: "tree-row tree-ws", role: "treeitem", "aria-level": "2", "aria-expanded": isOpen ? "true" : "false", tabindex: "-1", "data-id": w.id, onClick: () => { open.set(w.id, !isOpen); draw(); } }, icon(isOpen ? "chevron-down" : "chevron-right", { class: "icon tree-chev" }), h("span", { class: "tree-label truncate" }, w.label), h("span", { class: "tree-count num dim" }, String(w.paneCount || w.agents.length)), HexGlyph(w.state, { size: "mini" }), wsMenu);
+      const wsMenu = h("button", { class: "btn btn-ghost btn-icon row-menu", type: "button", "aria-label": "Actions for workspace " + wsLabel(w), "aria-haspopup": "menu", onClick: (e) => { e.stopPropagation(); openMenu(wsMenu, [{ label: "New tab", icon: "plus", onSelect: () => newTab(w.id) }, { label: "Rename workspace", icon: "edit", onSelect: () => renameWorkspace(w.id, wsLabel(w)) }, { label: "Close workspace", icon: "stop", danger: true, onSelect: () => closeWorkspace(w.id, wsLabel(w)) }], { placement: "end", label: "Actions for workspace " + wsLabel(w) }); } }, icon("more"));
+      const wr = h("div", { class: "tree-row tree-ws", role: "treeitem", "aria-level": "2", "aria-expanded": isOpen ? "true" : "false", tabindex: "-1", "data-id": w.id, onClick: () => { open.set(w.id, !isOpen); draw(); } }, icon(isOpen ? "chevron-down" : "chevron-right", { class: "icon tree-chev" }), h("span", { class: "tree-label truncate" }, wsLabel(w)), h("span", { class: "tree-count num dim" }, String(w.paneCount || w.agents.length)), HexGlyph(w.state, { size: "mini" }), wsMenu);
       root.appendChild(wr);
       if (isOpen) for (const a of w.agents) for (const n of agentItem(a, 3)) root.appendChild(n);
     }
@@ -363,6 +386,7 @@ export function Inspector({ agent, tab, onTab } = {}) {
   let rec = agent;
   let cur = TABS.includes(tab) ? tab : "now";
   let frame = null;
+  let cap = null; // seat-text <pre> when the runtime has no web UI
   let busy = false;
   const body = h("div", { class: "insp-panels" });
   const tabs = Tabs({ label: "Agent detail", tabs: [{ id: "now", label: "Now" }, { id: "channel", label: "Channel" }, { id: "tasks", label: "Tasks" }, { id: "files", label: "Files" }, { id: "terminal", label: "Terminal" }], active: cur, onChange: (id) => { cur = id; paint(); if (onTab) onTab(id); } });
@@ -385,7 +409,7 @@ export function Inspector({ agent, tab, onTab } = {}) {
     const state = agentsStore.getState();
     const rows = [["State", Badge({ status: rec.state })], ["Age", (ageLabel(rec) || "n/a") + (rec.sinceApprox ? " (since this page opened)" : "")], ["Kind", kindWord(rec.kind)], ["Workspace", rec.workspace || ""], ["Pane", h("span", { class: "mono" }, rec.pane_id)], ["Directory", h("span", { class: "mono cwd", title: rec.cwd }, rec.cwd, h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", "aria-label": "Copy directory", onClick: () => copyText(rec.cwd) }, icon("copy")))], ["Project", rec.project ? rec.project.split("/").pop() : "None matched"], ["Latest task", rec.task || "Not attached to an atlas task"]];
     const recent = rec.messages.slice(-5).reverse();
-    const keysRow = rec.pane_id ? h("div", { class: "row insp-keys", role: "group", "aria-label": "Send keys" }, h("span", { class: "dim" }, "Send keys"), QUICK_KEYS.map(([label, keys]) => Button({ label, size: "sm", disabled: !hostReachable(), title: hostReachable() ? "Send " + label + " to this pane" : "Needs Atlas opened through the herdr host (/atlas/)", onClick: () => sendKeys(rec.pane_id, keys) }))) : null;
+    const keysRow = rec.pane_id ? h("div", { class: "row insp-keys", role: "group", "aria-label": "Send keys" }, h("span", { class: "dim" }, "Send keys"), QUICK_KEYS.map(([label, keys]) => Button({ label, size: "sm", disabled: !hostReachable(), title: hostReachable() ? "Send " + label + " to this pane" : "Needs Atlas opened through the agent runtime host (/atlas/)", onClick: () => sendKeys(rec.pane_id, keys) }))) : null;
     return h("div", { class: "insp-now" }, h("dl", { class: "kv" }, rows.map(([k, v]) => [h("dt", null, k), h("dd", null, v)])), h("div", { class: "row" }, consoleButton()), keysRow, h("h3", null, "Recent activity"), recent.length ? h("div", { class: "feed" }, recent.map((m) => FeedItem({ ts: m.ts, kind: "message", title: (m.from || "system") + (m.to && m.to !== "all" ? " to " + m.to : ""), detail: m.body, root: rec.cwd }))) : h("p", { class: "dim" }, "No channel activity for this agent yet."), state.sources.irc && !state.sources.irc.ok ? h("p", { class: "dim" }, "Channel source unavailable; counts may be incomplete.") : null);
   };
   const channelPanel = () => ChannelList({ messages: rec.messages, empty: "No messages to or from this agent.", root: rec.cwd, onPane: (id) => { const r = agentsStore.get(id); if (r) openAgentInspector(r); } });
@@ -394,13 +418,20 @@ export function Inspector({ agent, tab, onTab } = {}) {
   const terminalPanel = () => {
     const st = agentsStore.getState();
     const wrap = h("div", { class: "insp-terminal" });
-    if (st.layers.herdr.state === "down") return wrap.appendChild(DegradedState({ layer: "herdr", reason: st.layers.herdr.reason, inline: true, onRecheck: () => agentsStore.recheck() })) && wrap;
+    if (st.layers.herdr.state === "down") return wrap.appendChild(DegradedState({ layer: "herdr", reason: st.layers.herdr.reason, inline: true, onStart: () => agentsStore.startHerdr(), onRecheck: () => agentsStore.recheck() })) && wrap;
     if (st.layers.webui.state === "down") {
       wrap.appendChild(DegradedState({ layer: "webui", busy, onRecheck: () => agentsStore.recheck(), onStart: async () => { busy = true; paint(); try { await api.post("herd/ensure", {}); toast("Terminal service started", { kind: "ok" }); } catch (e) { toastError(e, "Could not start the terminal service"); } busy = false; await agentsStore.recheck(); paint(); } }));
       return wrap;
     }
+    if (st.layers.webui.none) {
+      // No web UI on this runtime: show the seat's text instead of a frame. Kept across paints for the same pane (see paint()).
+      if (!rec.pane_id) { wrap.appendChild(State({ variant: "empty", title: "No terminal", body: "This agent has no seat to read.", inline: true })); return wrap; }
+      if (!cap || cap.dataset.pane !== rec.pane_id || !cap.isConnected) { if (cap) cap.stop(); cap = captureView(rec.pane_id); }
+      wrap.append(cap, h("div", { class: "row insp-hint" }, h("span", { class: "dim grow" }, "Read-only view of this seat. Use the composer to send a prompt.")));
+      return wrap;
+    }
     const url = paneUrl(rec);
-    if (!url) { wrap.appendChild(State({ variant: "empty", title: "No terminal link", body: "herdr did not report a web address for this pane. Recheck in a moment.", inline: true })); return wrap; }
+    if (!url) { wrap.appendChild(State({ variant: "empty", title: "No terminal link", body: "The agent runtime did not report a web address for this pane. Recheck in a moment.", inline: true })); return wrap; }
     if (!frame || frame.dataset.src !== url) {
       frame = h("iframe", { class: "pane-frame", src: url, title: "Terminal for " + rec.title, loading: "lazy", sandbox: "allow-scripts allow-same-origin allow-forms allow-popups allow-downloads", referrerpolicy: "no-referrer", allow: "clipboard-read; clipboard-write" });
       frame.dataset.src = url;
@@ -432,7 +463,10 @@ export function Inspector({ agent, tab, onTab } = {}) {
       dyn.hidden = true;
       const url = paneUrl(rec);
       const stateNow = agentsStore.getState();
-      const live = frame && frame.isConnected && frame.dataset.src === url && stateNow.layers.webui.state !== "down" && stateNow.layers.herdr.state !== "down";
+      const noWeb = stateNow.layers.webui.none;
+      const live = stateNow.layers.herdr.state !== "down" && (noWeb
+        ? Boolean(cap) && cap.isConnected && cap.dataset.pane === rec.pane_id
+        : frame && frame.isConnected && frame.dataset.src === url && stateNow.layers.webui.state !== "down");
       if (!termEl) { termEl = h("div", { ...tabPanelProps("terminal"), class: "insp-panel" }); body.appendChild(termEl); }
       if (!live) replace(termEl, builders.terminal());
       termEl.hidden = false;

@@ -66,6 +66,7 @@ class SelffixTest(unittest.TestCase):
 
     def fake_launch(self, top, f, wt):
         self.launches.append(f["id"])
+        self.live = True  # a fresh pane is live; tests flip it off to age the worker out
         return {"ok": True, "target": f"atlas-selffix:fix-{f['id']}"}
 
     def add(self, n, target="src/a.py", cmd=None):
@@ -91,6 +92,44 @@ class SelffixTest(unittest.TestCase):
         sf.tick(self.conn)  # still capped across ticks, no duplicate launch
         self.assertEqual(self.launches, ids[:2])
 
+    def test_dead_after_launch_is_not_running_and_counts_attempt(self):
+        fid = self.add(1)
+        self.fake_launch = lambda top, f, wt: {"ok": True, "target": "x:y"}
+        with mock.patch.object(sf, "_worker_launch", self.fake_launch), mock.patch.object(
+            sf, "_is_live", lambda t: False
+        ), mock.patch.object(sf, "LAUNCH_CONFIRM_S", 0):
+            sf.tick(self.conn)
+        row = atlas_db.get_finding(self.conn, fid)
+        self.assertNotEqual(row["fix_state"], "running")
+        self.assertEqual(row["fix_attempts"], 1)
+        self.assertIn("not live", row["fix_log"])
+
+    def test_finished_worker_with_live_pane_leaves_running(self):
+        fid = self.add(1)
+        sf.tick(self.conn)
+        self.assertEqual(self.state(fid), "running")
+        orig = self.fake_git
+
+        def git(args, cwd, timeout=120):
+            if args[:2] == ["log", "-1"]:
+                return 0, str(int(sf.time.time()) - sf.DONE_IDLE_S - 10)
+            return orig(args, cwd, timeout)
+
+        with mock.patch.object(sf, "_git", git):
+            sf.tick(self.conn)  # pane still live, but committed + clean + idle
+        self.assertEqual(self.state(fid), "ready")
+
+    def test_friction_with_no_recent_events_is_not_launched(self):
+        fid = atlas_db.upsert_finding(
+            self.conn, "recurring_friction:formatter_skipped:missing", title="t",
+            severity="MED", target_path="src/a.py", evidence_json="{}",
+        )
+        sf.tick(self.conn)
+        row = atlas_db.get_finding(self.conn, fid)
+        self.assertEqual(self.launches, [])
+        self.assertEqual(row["fix_state"], "skipped")
+        self.assertIn("age out", row["fix_log"])
+
     def test_ready_then_merge_refuses_dirty_overlap(self):
         fid = self.add(1)
         sf.tick(self.conn)
@@ -115,6 +154,7 @@ class SelffixTest(unittest.TestCase):
             self.conn
         )  # attempt 1 fails verify -> back to pool -> relaunched same tick
         self.assertEqual(self.state(fid), "running")
+        self.live = False
         sf.tick(self.conn)  # attempt 2 fails -> failed
         self.assertEqual(self.state(fid), "failed")
         self.assertIn("verify failed", atlas_db.get_finding(self.conn, fid)["fix_log"])

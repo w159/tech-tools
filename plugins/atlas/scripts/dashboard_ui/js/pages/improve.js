@@ -1,4 +1,4 @@
-// Atlas Workboard v2 — Self-improvement page: observe → mine → propose → apply →
+// Atlas Command Center — Self-improvement page: observe → mine → propose → apply →
 // remeasure strip, findings table with status actions + remeasure, by-rule
 // rollup across projects, ledger, nudges, lessons and score trends.
 // No innerHTML; all data via h() text children.
@@ -483,7 +483,7 @@ function enforcementCard() {
           ],
         }),
         projects.length
-          ? h('p', { class: 'pg-hint' }, `By project: ${projects.map((p) => `${projName(p.project)} ×${p.count}`).join(', ')}`)
+          ? h('p', { class: 'pg-hint' }, `By project: ${projects.map((p) => `${p.name || projName(p.project)} ×${p.count}`).join(', ')}`)
           : null)
       : h('p', { class: 'pg-hint' }, 'No denies or gate blocks in the last 7 days.')],
   });
@@ -567,7 +567,7 @@ function selffixCard() {
     title: 'Self-fix (git worktrees, merge is local only)',
     actions: [controls],
     children: [
-      h('p', { class: 'pg-hint' }, sf.error ? `Unavailable: ${sf.error}` : `${lastTick}. Each fix runs in a herdr pane on its own git worktree; nothing is pushed.`),
+      h('p', { class: 'pg-hint' }, sf.error ? `Unavailable: ${sf.error}` : `${lastTick}. Each fix runs in its own terminal pane on its own git worktree; nothing is pushed.`),
       empty ? h('p', { class: 'pg-hint' }, 'No fixes in flight. Findings that point at source files in a git repo are picked up on the next pass.') : null,
       running.length ? h('div', {}, h('h3', { class: 'pg-sub' }, `Running (${running.length})`),
         h('ul', { class: 'pg-selffix-list' }, ...running.map((it) => fixRow(it,
@@ -638,6 +638,10 @@ export default {
     S.ctx = ctx;
     S.mount = h('div', { class: 'pg-page pg-improve' });
     draw();
+    // "Open in Improve" from Health/Overview lands here with ?finding=<id>: open that row's detail
+    const want = String((ctx.params && ctx.params.finding) || '');
+    const hit = want && (S.data && S.data.findings || []).find((f) => [`doctor:${want}`, want].includes(String(f.id)));
+    if (hit) setTimeout(() => openFinding(hit), 0);
     return S.mount;
   },
   // SSE: `improve` carries the full route body (hash-gated server side, so it

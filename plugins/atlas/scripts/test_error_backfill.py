@@ -347,7 +347,7 @@ class ClassifyErrorTests(unittest.TestCase):
             ("environment", "WebFetch", "HTTP 404 on url"),
             ("environment", "WebFetch", "upstream returned 502 Bad Gateway"),
             (
-                "tool_fault",
+                "environment",  # script path absent on disk = stale install
                 "Bash",
                 "python3: can't open file '/scripts/atlas_todo.py': [Errno 2] No such file or directory",
             ),

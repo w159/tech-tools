@@ -16,12 +16,12 @@ const PREFIX = ((document.querySelector('meta[name="atlas-base"]') || {}).conten
 export const hostReachable = () => Boolean(PREFIX);
 
 export async function hostPost(path, body) {
-  if (!PREFIX) throw new ApiError(0, "Needs the herdr host address", "Atlas is open on its own port, so the herdr host's workspace routes are on another origin.", "Open Atlas through the herdr web UI address (/atlas/) or use Colony.");
+  if (!PREFIX) throw new ApiError(0, "Needs the agent runtime host address", "Atlas is open on its own port, so the runtime host's workspace routes are on another origin.", "Open Atlas through the runtime web UI address (/atlas/) or use Colony.");
   let res;
   try {
     res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, credentials: "same-origin", body: JSON.stringify(body || {}) });
   } catch (_err) {
-    throw new ApiError(0, "Cannot reach the herdr host", "The terminal service did not answer.", "Recheck from Colony.");
+    throw new ApiError(0, "Cannot reach the agent runtime host", "The terminal service did not answer.", "Recheck from Colony.");
   }
   const text = await res.text();
   let data = {};
@@ -30,7 +30,7 @@ export async function hostPost(path, body) {
   } catch (_err) {
     data = {};
   }
-  if (!res.ok) throw new ApiError(res.status, data.error || res.statusText, data.message || data.why || (res.status === 403 ? "This device is view-only on the herdr host." : ""), data.do || "");
+  if (!res.ok) throw new ApiError(res.status, data.error || res.statusText, data.message || data.why || (res.status === 403 ? "This device is view-only on the agent runtime host." : ""), data.do || "");
   return data;
 }
 
@@ -64,7 +64,7 @@ function prompt({ title, label, value, action, onSubmit, extra }) {
 }
 
 export function newWorkspace(defaultCwd) {
-  const cwd = Input({ label: "Directory", value: defaultCwd || "", placeholder: "/path/to/project", hint: "Leave empty for herdr's default." });
+  const cwd = Input({ label: "Directory", value: defaultCwd || "", placeholder: "/path/to/project", hint: "Leave empty for the runtime default." });
   prompt({
     title: "New workspace",
     label: "Name",

@@ -56,7 +56,8 @@ the next occurrence is a question.
 
 `done` means the whole task is finished and control returns to the user. It is
 forbidden unless ALL hold: every deliverable passes the check above; no subagent
-or background task is running; no question to the user is unanswered; nothing
+or background task is running; no question to the user is unanswered; no advisor
+item on the board is open; nothing
 remains that you intend to do. Otherwise the phase is `verify`, `implement`, or
 `blocked`. `done` while an agent is in flight is a defect.
 

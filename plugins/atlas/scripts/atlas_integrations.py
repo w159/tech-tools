@@ -800,6 +800,9 @@ def deck_status() -> dict:
             **base,
             "available": False,
             "reason": "Firstmate not installed",
+            "status": "not installed (optional)",
+            "tone": "info",
+            "hint": "Optional: install Firstmate to get the Captain's Deck board.",
             "homes": [],
         }
     if not p:

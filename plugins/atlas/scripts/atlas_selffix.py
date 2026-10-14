@@ -44,6 +44,9 @@ VERIFY_TIMEOUT_S = 900
 REGRESSION_FACTOR = (
     1.25  # ponytail: telemetry-noise margin; per-metric tolerances if it flaps
 )
+LAUNCH_CONFIRM_S = 5  # how long a fresh pane gets to show up live before the launch counts as dead
+DONE_IDLE_S = 300  # committed + clean worktree + this long since last commit = worker finished
+RECENT_QUIET_S = 86400  # a friction category with no events this long is already fixed upstream
 ACTIVE = ("queued", "running", "verifying")
 HIGHER_IS_BETTER = ("verifier_coverage_low", "cache_hit_ratio_low")
 SEV_ORDER = {"CRIT": 0, "HIGH": 1, "MED": 2, "LOW": 3}
@@ -356,7 +359,16 @@ def _start(conn, f, top) -> str:
     if not res.get("ok"):
         _cleanup(top, wt, branch)
         return _fail(conn, fid, f"launch failed: {res.get('reason')}", attempts)
-    _set(conn, fid, "running", fix_target=res.get("target"), fix_attempts=attempts)
+    # launch() can return ok for a pane that never started (herdr down, tmux gone):
+    # confirm liveness before claiming "running", else the row sits there for WORKER_TIMEOUT_S.
+    target, deadline = res.get("target"), time.time() + LAUNCH_CONFIRM_S
+    while not _is_live(target):
+        if time.time() >= deadline:
+            _tmux_kill(target)
+            _cleanup(top, wt, branch)
+            return _fail(conn, fid, f"launch failed: pane {target} not live after {LAUNCH_CONFIRM_S}s", attempts)
+        time.sleep(0.5)
+    _set(conn, fid, "running", fix_target=target, fix_attempts=attempts)
     return f"#{fid} running at {res.get('target')}"
 
 
@@ -453,6 +465,9 @@ def _worse(f, base, now) -> bool:
 def _check_running(conn, f, top) -> str | None:
     live = _is_live(f["fix_target"])
     age = time.time() - (f["fix_updated_at"] or 0)
+    if live and _worker_done(f, top):  # finished panes stay open, so liveness alone never ends the row
+        _tmux_kill(f["fix_target"])
+        return _verify(conn, f, top)
     if live and age < WORKER_TIMEOUT_S:
         return None
     if live:
@@ -461,6 +476,31 @@ def _check_running(conn, f, top) -> str | None:
     if _branch_state(top, f["fix_branch"]) == "gone":
         return _reconcile_ready(conn, f)  # branch merged+deleted out of band
     return _verify(conn, f, top)
+
+
+def _worker_done(f, top) -> bool:
+    """Worker committed on its branch, left the worktree clean, and went quiet."""
+    wt, branch = f.get("fix_worktree"), f.get("fix_branch")
+    if not wt or not branch or not os.path.isdir(wt) or _git(["status", "--porcelain"], wt)[1]:
+        return False
+    rc, n = _git(["rev-list", "--count", f"HEAD..{branch}"], top)
+    if rc or not n.isdigit() or int(n) == 0:
+        return False
+    rc, ts = _git(["log", "-1", "--format=%ct", branch], top)
+    return not rc and ts.isdigit() and time.time() - int(ts) > DONE_IDLE_S
+
+
+def _already_quiet(conn, f) -> bool:
+    """recurring_friction whose category has no events in the last 24h: the 14d count is
+    stale (fixed upstream), so launching a worker would only chase the window."""
+    miner, _, cat = (f["fingerprint"] or "").partition(":")
+    if miner != "recurring_friction" or not cat:
+        return False
+    n = conn.execute(
+        "SELECT COUNT(*) FROM friction_events WHERE category=? AND ts > ?",
+        (cat, time.time() - RECENT_QUIET_S),
+    ).fetchone()[0]
+    return n == 0
 
 
 def _check_merged(conn, f, top) -> str | None:
@@ -570,6 +610,9 @@ def tick(conn=None) -> dict:
             top, _, why = resolve_target(f)
             if not top:
                 _set(conn, f["id"], "skipped", why)
+                continue
+            if _already_quiet(conn, f):
+                _set(conn, f["id"], "skipped", "waiting for window to age out: no events in the last 24h")
                 continue
             if free <= 0:
                 continue  # keep walking so unfixable findings still get marked skipped

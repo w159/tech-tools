@@ -213,6 +213,7 @@ class HerdrLaunchTest(unittest.TestCase):
     """Default transport: panes are created over the herdr socket; tmux is never called."""
 
     def setUp(self):
+        atlas_herdr._status_cache = None  # a status cached by an earlier module must not mask this fake server
         self.root = tempfile.mkdtemp()
         self.handler = PaneHandler()
         self.fake = FakeHerdr(self.handler)
@@ -521,6 +522,20 @@ class StartOpTest(unittest.TestCase):
         status, _ = self.post({"op": "restore", "id": self.item["id"]})
         self.assertEqual(status, 200)
         self.assertEqual(len(work.todos_state(self.root)["phases"]), 1)
+
+
+# These tests drive the herdr backend through the atlas_seats facade (their fakes patch atlas_herdr).
+_SEAT_ENV = __import__("unittest.mock").mock.patch.dict(
+    __import__("os").environ, {"ATLAS_SEAT_BACKEND": "herdr"}
+)
+
+
+def setUpModule():
+    _SEAT_ENV.start()
+
+
+def tearDownModule():
+    _SEAT_ENV.stop()
 
 
 if __name__ == "__main__":

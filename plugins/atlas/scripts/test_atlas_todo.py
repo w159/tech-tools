@@ -134,6 +134,40 @@ class BoardBasics(unittest.TestCase):
         self.assertIsNone(carried["owner"])
         self.assertEqual(atlas_todo.counts(board, "s2")["needed"], 1)
 
+    def _age(self, content, **fields):
+        board = atlas_todo.load(self.root)
+        for i in board["items"]:
+            if i["content"] == content:
+                i.update(fields)
+        atlas_todo.save(self.root, board)
+
+    def test_carry_over_does_not_touch_updated_at(self):
+        atlas_todo.mirror(self.root, [{"content": "open", "status": "pending"}], "s1")
+        before = atlas_todo.load(self.root)["items"][0]["updated_at"]
+        time.sleep(0.01)
+        atlas_todo.carry_over(self.root, "s2")
+        item = atlas_todo.load(self.root)["items"][0]
+        self.assertEqual(item["updated_at"], before)
+        self.assertEqual(item["carries"], 1)
+        self.assertTrue(item["carried_at"])
+
+    def test_carry_over_archives_items_older_than_24h(self):
+        atlas_todo.mirror(self.root, [{"content": "old", "status": "pending"}], "s1")
+        self._age("old", created_at=time.time() - 90000)
+        out = atlas_todo.carry_over(self.root, "s2")
+        item = atlas_todo.load(self.root)["items"][0]
+        self.assertEqual((out["carried"], out["archived"]), (0, 1))
+        self.assertTrue(item["archived"])
+        self.assertEqual(item["archived_reason"], "carry_expired")
+
+    def test_carry_over_archives_after_two_carries(self):
+        atlas_todo.mirror(self.root, [{"content": "x", "status": "pending"}], "s1")
+        atlas_todo.carry_over(self.root, "s2")
+        atlas_todo.carry_over(self.root, "s3")
+        self.assertFalse(atlas_todo.load(self.root)["items"][0].get("archived"))
+        atlas_todo.carry_over(self.root, "s4")
+        self.assertTrue(atlas_todo.load(self.root)["items"][0]["archived"])
+
     def test_manual_items_survive_carry_over(self):
         atlas_todo.add(self.root, "human note", origin="manual")
         atlas_todo.carry_over(self.root, "s2")

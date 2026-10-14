@@ -421,7 +421,7 @@ export const DAEMON_START = 'python3 "$CLAUDE_PLUGIN_ROOT/scripts/atlas_dashboar
 
 // DegradedState({ layer: "daemon"|"herdr"|"webui", reason, onRecheck, onStart, busy, inline })
 //   daemon : full-page replacement, only when requests fail with a network error.
-//   herdr  : replaces the agent canvas / rail tree only. Atlas never starts herdr.
+//   herdr  : replaces the agent canvas / rail tree only. onStart (POST herd/server/start) starts the herdr server.
 //   webui  : inline in the Terminal tab / "Open terminal" only. The agent list is NOT affected.
 // Raw reason ids appear only inside "Technical details". Returns null for a null layer.
 export function DegradedState({ layer, reason, onRecheck, onStart, busy, inline } = {}) {
@@ -432,7 +432,7 @@ export function DegradedState({ layer, reason, onRecheck, onStart, busy, inline 
     return h("div", { class: "state state-degraded", "data-layer": "daemon", role: "alert" }, h("h2", { class: "state-title" }, "Atlas isn't responding"), h("p", { class: "state-body" }, "The dashboard process stopped or restarted."), CommandBlock(DAEMON_START), h("div", { class: "row state-actions" }, recheck), tech);
   }
   if (layer === "herdr") {
-    return h("div", { class: ["state", "state-degraded", inline ? "is-inline" : ""], "data-layer": "herdr", role: "status" }, h("h2", { class: "state-title" }, "herdr isn't running"), h("p", { class: "state-body" }, "Atlas can't list agents without it. Atlas never starts herdr itself."), CommandBlock("herdr"), h("div", { class: "row state-actions" }, recheck), tech);
+    return h("div", { class: ["state", "state-degraded", inline ? "is-inline" : ""], "data-layer": "herdr", role: "status" }, h("h2", { class: "state-title" }, "The agent runtime isn't running"), h("p", { class: "state-body" }, "Atlas can't list agents until the agent runtime is up. Start it here, or start it from a terminal."), h("div", { class: "row state-actions" }, onStart ? Button({ label: "Start runtime", busy: Boolean(busy), busyLabel: "Starting runtime", variant: "primary", onClick: onStart }) : null, recheck), tech);
   }
   return h(
     "div",

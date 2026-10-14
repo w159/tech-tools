@@ -92,10 +92,8 @@ export function reviseTaskInput(input: Record<string, unknown>, schema: Record<s
 		let next: Record<string, unknown> | undefined;
 		if (item.outputSchema === undefined) next = structuredClone(schema);
 		else {
+			// A non-object schema (string/array/boolean) is the lead's own shape, not an atlas fault: leave it untouched.
 			next = withReportFields(item.outputSchema, schema);
-			if (!next && !isSchemaObject(item.outputSchema)) {
-				recordFault("worker-report", `custom outputSchema for ${agent} is not an object schema: report fields not merged`, "SchemaMerge", undefined);
-			}
 		}
 		if (!next) continue;
 		item.outputSchema = next;

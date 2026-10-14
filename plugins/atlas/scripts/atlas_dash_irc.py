@@ -7,7 +7,7 @@
 * the worker's own PostToolUse hook drains it from the board (hooks/worker_inbox.py advances a
   cursor): the note reads ``queued`` until then, ``read`` after; or
 * when herdr lists an agent for that name (pane id like ``wA:p1``, tab title or workspace label) and it is an idle
-  claude/omp session, the dashboard hands it over with ``atlas_herdr.send_prompt`` and stamps
+  claude/omp session, the dashboard hands it over with ``atlas_seats.send_prompt`` and stamps
   ``delivery=delivered`` on the note so the hook never injects it a second time. herdr's agent list holds only
   panes it recognises as agents, so a plain shell pane is never matched: that note simply stays ``queued``. A
   listed agent that is not claude/omp is stamped ``refused`` and never typed into.
@@ -18,6 +18,7 @@ Stdlib only. Nothing here types into a terminal or spawns a process.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import sys
 import time
@@ -28,7 +29,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-import atlas_herdr  # noqa: E402
+import atlas_seats  # noqa: E402
 import atlas_todo  # noqa: E402
 from atlas_dash_work import _err, _iso, _project_roots  # noqa: E402
 
@@ -310,8 +311,8 @@ def _deliver(pane: dict, sender: str, to: str, text: str):
         }
     flat = sanitize_keys(f"From: {sender}\nTo: {to}\n{text}".replace("\n", " | "))
     try:
-        atlas_herdr.send_prompt(pane["pane_id"], flat)
-    except atlas_herdr.PromptRefused as e:
+        atlas_seats.send_prompt(pane["pane_id"], flat)
+    except atlas_seats.PromptRefused as e:
         # busy / unreachable / rejected: nothing was typed, so no stamp. The note stays queued
         # on the board and the worker's hook drains it on its next tool call.
         return None, {
@@ -367,7 +368,7 @@ def _post(ctx, b, root):
     stamp, refusal = None, None
     pane = None
     if to != "all":
-        live = atlas_herdr.agents()
+        live = atlas_seats.agents()
         pane = _find_pane(live, to) if live["reachable"] else None
         if pane:
             stamp, refusal = _deliver(pane, sender, to, body)
@@ -415,13 +416,13 @@ def _unavailable():
 
 def _live_index() -> dict:
     """name/pane/title/colony label -> {pane_id, state} for the live herdr agents (empty if down)."""
-    live = atlas_herdr.agents()
+    live = atlas_seats.agents()
     idx: dict = {}
     if not live["reachable"]:
         return idx
     try:
-        labels = {p["pane_id"]: p["label"] for p in atlas_herdr.list_panes()}
-    except atlas_herdr.HerdrSockError:
+        labels = {p["pane_id"]: p["label"] for p in atlas_seats.list_panes()}
+    except atlas_seats.SockError:
         labels = {}
     for a in live["agents"]:
         info = {"pane_id": a["pane_id"], "state": a["status"], "kind": a["agent"]}
@@ -513,6 +514,19 @@ def _decode(name: str) -> str:
     return unquote(name)
 
 
+_DEAD_LEAD = {"dead", "finished"}
+
+
+def _junk_root(root: str) -> bool:
+    """Fixture/scratch/home roots and roots gone from disk: no real channel lives there."""
+    try:
+        import atlas_control
+
+        return atlas_control.is_fixture_project(root)
+    except ImportError:
+        return not os.path.isdir(str(root))
+
+
 def h_channels_get(ctx):
     if not hasattr(atlas_todo, "channels"):
         return _unavailable()
@@ -520,6 +534,8 @@ def h_channels_get(ctx):
     live = _live_index()
     out = []
     for root in roots:
+        if _junk_root(root):
+            continue
         try:
             mains = atlas_todo.channels(root)
             if not mains and ctx.query.get("project") not in (None, "", "all"):
@@ -532,7 +548,11 @@ def h_channels_get(ctx):
         roster, cur = _roster(root)
         for m in mains:
             for c in [m, *(m.get("children") or [])]:
-                out.append(_chan_view(root, c, live, roster, cur or m.get("name")))
+                v = _chan_view(root, c, live, roster, cur or m.get("name"))
+                # Hide (never delete) lead channels whose lead is dead/finished.
+                if v["kind"] == "lead" and not v["current"] and v["lead_state"] in _DEAD_LEAD:
+                    continue
+                out.append(v)
     cur_views = [c for c in out if c["current"]]
     current = max(cur_views, key=lambda c: c.get("last_activity") or 0, default=None)
     return 200, {"channels": out, "current": current["name"] if current else None}

@@ -53,13 +53,12 @@ def remote_port() -> int:
 
 
 def default_web_url() -> str:
-    """The colony's URL as atlas_herdr resolves it: the vendored build's port ($ATLAS_HOME/colony/port, or the
+    """The colony's URL as atlas_seats resolves it: the vendored build's port ($ATLAS_HOME/colony/port, or the
     fallback it would start on when an upstream herdr-web-ui holds 7317), else http://127.0.0.1:7317."""
     try:
-        import atlas_herdr  # sibling module; one definition of where the colony lives
+        import atlas_seats  # sibling module; one definition of where the colony lives
 
-        atlas_herdr._refresh_url()
-        return atlas_herdr._where()[1]
+        return atlas_seats.web_url()
     except Exception:
         return DEFAULT_WEB_URL
 

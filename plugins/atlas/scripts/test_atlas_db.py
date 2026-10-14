@@ -1912,3 +1912,27 @@ class RunChangedPathsUriTest(unittest.TestCase):
             sorted(atlas_db.run_changed_paths(self.conn, self.rid)),
             ["src/other.py", "src/real.py"],
         )
+
+
+class ClassifyEnvironmentNoiseTest(unittest.TestCase):
+    def test_new_messages(self):
+        c = atlas_db.classify_error
+        self.assertEqual(c("Edit", "EPERM: operation not permitted, open '/x'", False), "environment")
+        self.assertEqual(
+            c("ctx_read", "source content withheld by the context gateway", False), "environment"
+        )
+        self.assertEqual(
+            c("ctx_execute", "Cannot combine query extraction with line selectors", False),
+            "model_misuse",
+        )
+
+    def test_missing_script_is_environment(self):
+        msg = "python3: can't open file '/nope/stale/scripts/atlas_todo.py': [Errno 2]"
+        self.assertEqual(atlas_db.classify_error("Bash", msg, False), "environment")
+
+    def test_existing_script_is_tool_fault(self):
+        msg = "python3: can't open file '%s': [Errno 13]" % os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "atlas_db.py")
+        ).replace("atlas_db.py", "atlas_db.py")
+        # the regex needs scripts/atlas_*.py; atlas_db.py lives in scripts/
+        self.assertEqual(atlas_db.classify_error("Bash", msg, False), "tool_fault")

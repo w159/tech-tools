@@ -6687,5 +6687,144 @@
     "status": "verified",
     "verified_at": "2026-10-14T04:11:28+00:00",
     "verified_by": "verifier-live232"
+  },
+  {
+    "id": "atlas-12.4.1-w1c-merge",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "W1c bytecode shims merged into main",
+    "evidence": [
+      "omp bun test 435/0; hooks 1504 (3 fails = same 3 as 12.4.0 baseline); scripts 1785 (2F/1E, subset of baseline 4F/7E); cores diff vs main only _cli wrapper + session_boot shim path"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest discover -p \"test_*.py\"; cd plugins/atlas/omp && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T07:09:57+00:00",
+    "verified_by": "orchestrator"
+  },
+  {
+    "id": "atlas-12.4.1-release-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "12.4.1 release bump and shims verified",
+    "evidence": [
+      "plugin.json=12.4.1; marketplace atlas=[12.4.1]; CHANGELOG 12.4.1 at docs/CHANGELOG.md:5 and plugins/atlas/CHANGELOG.md:5; 5 hooks exit 0 with {} under python3 -S, no traceback; test_worker_report_gate+test_prompt_optimizer 136 tests OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "version json reads; grep ^## 12.4.1; echo {} | python3 -S plugins/atlas/hooks/<h>.py; python3 -m unittest test_worker_report_gate test_prompt_optimizer",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T07:11:10+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "omp-widget-reap-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp widget + reap-on-report fixes verified",
+    "evidence": [
+      ".atlas/evidence/omp-widget-reap-verify.txt: red on HEAD (gates native_bash_ignored_in_omp; reap done_report_closes_lead_made_board_item + member_finish_cli_with_done_report; omp D2,D3,D4,D6,textOf), green on tree; suites only allowed failures; sentinel fails on HEAD too"
+    ],
+    "doc_refs": [],
+    "reproduction": "git worktree add HEAD + cp tests; unittest/bun test; full suites",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T08:24:50+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "doctor-wiring-shim",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_doctor orchestration-wiring check reads dispatch_tripwire_core.py behind the 12.4.1 shim",
+    "evidence": [
+      ".atlas/evidence/doctor-wiring-verify.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_doctor",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T11:31:05+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-repair-2026-10-14",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center and colony repair: herdr autostart, reap, tmux hardening, health noise and actions",
+    "evidence": [
+      ".atlas/evidence/colony-repair-final.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p \"test_*.py\"; python3 -m unittest discover -s plugins/atlas/hooks -p \"test_*.py\"; bun test plugins/atlas/omp plugins/atlas/scripts/dashboard_ui/js",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T13:17:33+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "openrig-backend-2026-10-14",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "high",
+    "title": "OpenRig seat backend: silent autostart, mux/team/dashboard routing, swallowed-error logging, tripwire subagent guard (C2-C9 PASS; C1 FAIL: 11 unexpected pytest failures)",
+    "evidence": [
+      "pytest: 15 failed 3369 passed; unexpected: test_atlas_herdr.py x7 (502 != 200/400/404, stale herdr route tests), test_atlas_contract DocsMatchCodeContract x3 (37 vs 38 skills count), test_dispatch_tripwire VerifierVerdictBracketTest::test_hint_names_an_existing_absolute_script_path",
+      "omp bun 441 pass; dashboard_ui bun 42 pass; C4 capture VERIFY_OK; C5 team exit0; C6 api rig/healthy/capture VERIFY_OK; no evidence file (CLI cannot write one)"
+    ],
+    "doc_refs": [],
+    "reproduction": "/opt/homebrew/bin/python3.14 -m pytest plugins/atlas/scripts plugins/atlas/hooks -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-14T19:06:46+00:00",
+    "verified_by": "verifier-openrig-backend"
+  },
+  {
+    "id": "omp-advisor-gate-per-turn",
+    "surface": "omp",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp advisor gate: all severities, per-turn stop cap, per-prompt open-item reminder",
+    "evidence": [
+      "bun test plugins/atlas/omp/advisor.test.ts -> 18 pass 0 fail",
+      "bun test plugins/atlas/omp -> 443 pass 0 fail",
+      "plugins/atlas/omp/advisor.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun test plugins/atlas/omp/advisor.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T19:30:16+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "openrig-backend-2026-10-14",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "OpenRig seat backend: silent autostart, mux/team/dashboard routing, swallowed-error logging, tripwire subagent guard",
+    "evidence": [
+      ".atlas/evidence/openrig-adapter-live.md; .atlas/evidence/openrig-spike.md; full suite 4 failed (documented) 3380 passed; omp 443 pass; dashboard_ui 47 pass; browser capture-panel test 8/8"
+    ],
+    "doc_refs": [],
+    "reproduction": "/opt/homebrew/bin/python3.14 -m pytest plugins/atlas/scripts plugins/atlas/hooks -q; cd plugins/atlas/omp && bun test; cd plugins/atlas/scripts/dashboard_ui && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T19:37:23+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

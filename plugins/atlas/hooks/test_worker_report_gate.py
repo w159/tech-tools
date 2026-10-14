@@ -109,6 +109,56 @@ class WorkerReportGateTest(unittest.TestCase):
         msg = COMPLIANT.replace("STATUS: DONE", "STATUS: BLOCKED")
         self.assertEqual(self._board_item_after(msg)["status"], "blocked")
 
+    def test_done_report_closes_lead_made_board_item_by_recorded_id(self):
+        # A lead-written CHANNEL: prompt skips the owned dispatch todo; the lead's own item
+        # (no owner) is named by `BOARD ITEM: <id>` in the prompt, recorded on the member.
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["runner-1"])
+        item = todo.add(root, "lead made", origin="manual")["item"]
+        todo.set_member_agent_id(root, "runner-1", "abc123abc123", item["id"])
+        self.run_hook(
+            payload(
+                agent_id="abc123abc123",
+                agent_type="atlas:runner",
+                cwd=root,
+                last_assistant_message=COMPLIANT,
+            )
+        )
+        self.assertEqual(todo.load(root)["items"][0]["status"], "completed")
+
+    def test_member_finish_cli_with_done_report_reaps_like_claude(self):
+        # omp path: `member-finish --message <final text>` settles item and member.
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["Alpha"])
+        todo.add(root, "do it", owner="Alpha", origin="dispatch")
+        subprocess.run(
+            [
+                sys.executable,
+                os.path.join(os.path.dirname(HOOK), "..", "scripts", "atlas_todo.py"),
+                "member-finish",
+                "--root",
+                root,
+                "--agent",
+                "0-Alpha",
+                "--exit",
+                "0",
+                "--message",
+                COMPLIANT,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(todo.load(root)["items"][0]["status"], "completed")
+
     def test_stop_with_only_agent_id_finishes_mapped_member(self):
         # Claude's SubagentStop carries agent_id + agent_type, never the member name.
         sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
@@ -155,6 +205,39 @@ class WorkerReportGateTest(unittest.TestCase):
         ]
         self.assertEqual([m.get("exit_code") for m in mem], [0])
         self.assertTrue(all("ended_at" in m for m in mem))
+
+    def _stop_unmapped(self, names, agent_type="atlas:implementer"):
+        # SubagentStop with no recorded agent_id mapping and no report (async launch).
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", names)
+        p = payload(agent_id="zzz999", agent_type=agent_type, cwd=root)
+        del p["last_assistant_message"]
+        self.run_hook(p)
+        return {
+            m["name"]: m
+            for c in todo._reg_read(root)["channels"].values()
+            for m in c["members"]
+        }
+
+    def test_stop_without_id_map_finishes_single_type_match(self):
+        mem = self._stop_unmapped(["implementer-doctorwiring", "explorer-x"])
+        self.assertEqual(mem["implementer-doctorwiring"].get("exit_code"), 0)
+        self.assertIn("ended_at", mem["implementer-doctorwiring"])
+        self.assertNotIn("exit_code", mem["explorer-x"])
+
+    def test_stop_without_id_map_ambiguous_is_noop(self):
+        mem = self._stop_unmapped(["implementer-a", "implementer-b"])
+        self.assertTrue(
+            all(
+                "exit_code" not in m
+                for m in mem.values()
+                if m["name"].startswith("impl")
+            )
+        )
 
     def test_compliant_is_silent(self):
         r = self.run_hook(payload(last_assistant_message=COMPLIANT))

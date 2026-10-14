@@ -852,7 +852,12 @@ def _record_agent_id(payload):
         )
         if not name:
             return
-        atlas_todo.set_member_agent_id(root, name, found.group(1))
+        bi = re.search(
+            r"BOARD ITEM:\s*(\w+)", str((payload.get("tool_input") or {}).get("prompt"))
+        )
+        atlas_todo.set_member_agent_id(
+            root, name, found.group(1), bi.group(1) if bi else ""
+        )
     except Exception as exc:
         _record_fault(exc)
 
@@ -2316,6 +2321,8 @@ def _run(payload):
         if verb:
             return  # wait/reap only observe the team: not inline work, not a dispatch
 
+        if _in_subagent(payload):
+            return  # subagents share the lead's session_id; their ops are not the lead's inline work
         atlas_db.log_event(conn, run_id, tool, "main", 1, path)
         # Prompt arming is a regex heuristic; an unflagged session that grows
         # into multi-file code work is armed from the footprint it left.

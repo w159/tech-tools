@@ -153,7 +153,7 @@ function openAndInject(
 	const script = opts.script ?? TODO_SCRIPT;
 	// A stale omp install lacks the script (python exits 2): say so once, with the fix, instead of a vague failure per dispatch.
 	if (!fs.existsSync(script)) {
-		faultOnce(`atlas omp install is stale: ${script} missing; reinstall atlas in omp`, opts.cwd);
+		faultOnce(`atlas omp install is stale: ${script} missing; run: omp plugin upgrade atlas, then restart omp sessions started before the upgrade`, opts.cwd);
 		return undefined;
 	}
 	const run = opts.run ?? defaultRun;

@@ -1,4 +1,4 @@
-// Atlas Workboard v2 — Activity page: grouped log explorer with facet filters,
+// Atlas Command Center — Activity page: grouped log explorer with facet filters,
 // live tail, duplicate-collapse counts and saved views.
 // Consumes only the documented component API (see dashboard-contract.md).
 // No innerHTML: every datum reaches the DOM through h() text children.

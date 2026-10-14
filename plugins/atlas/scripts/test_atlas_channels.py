@@ -91,6 +91,49 @@ class ChannelModel(unittest.TestCase):
         self._dead_lead("mine")
         self.assertEqual(todo.reap_channels(self.root, now=later, keep="mine")["reaped"], 0)
 
+    def _live_lead(self, name, age, pid=None):
+        todo.open_lead_channel(self.root, name, ["w1"])
+
+        def fn(r):
+            ch = r["channels"][f"{self.main}/{name}"]
+            ch["last_activity"] = time.time() - age
+            if pid is not None:
+                ch["members"][0]["pid"] = pid
+
+        todo._reg_update(self.root, fn)
+
+    def test_reap_dead_pid_member_without_exit_code(self):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        self._live_lead("crashed", 10, pid=proc.pid)
+        todo._reg_update(
+            self.root,
+            lambda r: r["channels"][f"{self.main}/crashed"]["members"][1].update(pid=proc.pid),
+        )
+        self.assertEqual(todo.reap_channels(self.root)["reaped"], 1)
+
+    def test_reap_idle_lead_past_two_hours_but_not_current(self):
+        todo.open_lead_channel(self.root, "mine", ["w1"])
+        todo.open_lead_channel(self.root, "idle", ["w1"])  # opens reap, so age after both exist
+        todo._reg_update(
+            self.root,
+            lambda r: [c.update(last_activity=time.time() - 3 * 3600) for n, c in r["channels"].items() if n.endswith(("/mine", "/idle"))],
+        )
+        out = todo.reap_channels(self.root, keep="mine")
+        names = list(todo._reg_read(self.root)["channels"])
+        self.assertEqual(out["reaped"], 1)
+        self.assertNotIn(f"{self.main}/idle", names)
+        self.assertIn(f"{self.main}/mine", names)
+
+    def test_reap_keeps_recently_active_lead(self):
+        self._live_lead("fresh", 600)
+        self.assertEqual(todo.reap_channels(self.root)["reaped"], 0)
+
+    def test_reap_lead_idle_env_override(self):
+        self._live_lead("env", 600)
+        with mock.patch.dict(os.environ, {"ATLAS_LEAD_IDLE_TTL": "60"}):
+            self.assertEqual(todo.reap_channels(self.root)["reaped"], 1)
+
     def test_reap_prunes_finished_main_members_and_dry_run_is_inert(self):
         self._dead_lead()
         out = todo.reap_channels(self.root, now=time.time() + 90000, dry_run=True)

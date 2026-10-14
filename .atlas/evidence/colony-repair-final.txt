@@ -1,0 +1,21 @@
+Command Center and colony repair, final verification (2026-10-14)
+
+== scripts: python3 -m unittest discover -s plugins/atlas/scripts -p "test_*.py"
+Ran 1814 tests; FAILED (failures=3, errors=1), all pre-existing (docs/ROADMAP.md:191):
+ERROR test_sweep_state (loader)
+FAIL test_atlas_db.UncoveredPathsTest.test_sentinel_stays_at_cwd_without_any_marker
+FAIL test_atlas_finding.AtlasFindingCli.test_no_project_root_fails_loudly
+FAIL test_no_tmp_marker.TmpRootMarkerTest.test_no_marker_in_temp_roots
+
+== hooks: python3 -m unittest discover -s plugins/atlas/hooks -p "test_*.py"
+Ran 1510 tests; FAILED (failures=1): test_atlas_contract.InstalledParityContract.test_installed_hook_files_match_repo
+(expected until reinstall: hooks changed in source vs installed 12.4.1)
+
+== omp: bun test plugins/atlas/omp -> 441 pass, 0 fail
+== dashboard_ui: bun test plugins/atlas/scripts/dashboard_ui/js -> 42 pass, 0 fail
+
+== live
+atlas_herdr.ensure_server(wait=5) -> {"ok": true, "action": "started"}; second call -> {"ok": true, "action": "already_up"}
+herdr status -> client version 0.9.3 answers
+reap_channels('.', keep='lead-0e2acb', dry_run=True) -> reaped 0, would_reap 0, kept 3 (tech-tools channels.json now 3 channels; old leads in .atlas/.run/archive/channels-202610.jsonl)
+git stash list -> 0 entries

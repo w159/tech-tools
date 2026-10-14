@@ -289,8 +289,13 @@ def check_orchestration_wiring(ip):
         problems.append(f"hooks.json unreadable: {e}")
     tripwire = os.path.join(ip, "hooks", "dispatch_tripwire.py")
     try:
-        with open(tripwire, encoding="utf-8") as f:
-            src = f.read()
+        # Since 12.4.1 the tripwire is a shim; the markers live in the core
+        # module, which older installs lack. Scan whichever exist.
+        src = ""
+        for path in (tripwire, os.path.join(ip, "hooks", "dispatch_tripwire_core.py")):
+            if path == tripwire or os.path.exists(path):
+                with open(path, encoding="utf-8") as f:
+                    src += f.read() + "\n"
         if "ORCH_SKILLS" not in src:
             problems.append("dispatch_tripwire.py lacks ORCH_SKILLS auto-marking")
         if "mark_orchestrating" not in src:
@@ -740,27 +745,10 @@ def _armed_cwd(cwd):
             os.environ["ATLAS_DB"] = old
 
 
-# format_after_edit's QUIET_REASONS skips: older installs wrote them as faults.
-_QUIET_SKIP = re.compile(r"^formatter skipped: (missing|parse)\b")
-# An install path inside the error (omp's TS writer tags no plugin_version).
-_INSTALL_VER = re.compile(r"atlas(?:___|/)(\d+\.\d+\.\d+)")
-
-
 def _live_faults(faults, version):
-    """Faults that describe this install: drop quiet formatter skips and rows tagged
-    (plugin_version, else an install path in the error) with another atlas version.
-    Untagged rows still count: their origin is unknown."""
-    out = []
-    for f in faults:
-        err = str(f.get("error", ""))
-        if _QUIET_SKIP.match(err):
-            continue
-        m = _INSTALL_VER.search(err)
-        tag = f.get("plugin_version") or (m.group(1) if m else None)
-        if version and tag and tag != version:
-            continue
-        out.append(f)
-    return out
+    import atlas_faults
+
+    return atlas_faults.live_faults(faults, version)
 
 
 def behaviour_checks(add, plugin_name, version, now=None):

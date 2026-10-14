@@ -1,0 +1,32 @@
+$ git diff -- plugins/atlas/scripts/atlas_doctor.py
+diff --git a/plugins/atlas/scripts/atlas_doctor.py b/plugins/atlas/scripts/atlas_doctor.py
+index 2cf0b129..e7c13284 100644
+--- a/plugins/atlas/scripts/atlas_doctor.py
++++ b/plugins/atlas/scripts/atlas_doctor.py
+@@ -289,8 +289,13 @@ def check_orchestration_wiring(ip):
+         problems.append(f"hooks.json unreadable: {e}")
+     tripwire = os.path.join(ip, "hooks", "dispatch_tripwire.py")
+     try:
+-        with open(tripwire, encoding="utf-8") as f:
+-            src = f.read()
++        # Since 12.4.1 the tripwire is a shim; the markers live in the core
++        # module, which older installs lack. Scan whichever exist.
++        src = ""
++        for path in (tripwire, os.path.join(ip, "hooks", "dispatch_tripwire_core.py")):
++            if path == tripwire or os.path.exists(path):
++                with open(path, encoding="utf-8") as f:
++                    src += f.read() + "\n"
+         if "ORCH_SKILLS" not in src:
+             problems.append("dispatch_tripwire.py lacks ORCH_SKILLS auto-marking")
+         if "mark_orchestrating" not in src:
+$ unittest test_atlas_doctor
+PURGE dispatches: 0 -> 0 (dropped 0)
+PURGE metrics: 0 -> 0 (dropped 0)
+PURGE improvements: 0 -> 0 (dropped 0)
+PURGE signals: 20 -> 5 (dropped 15)
+PURGE friction_events: 0 -> 0 (dropped 0)
+$ check_orchestration_wiring
+[]
+$ unittest test_atlas_doctor | grep Ran/OK/FAILED
+Ran 124 tests in 1.535s
+OK

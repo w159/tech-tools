@@ -1,4 +1,4 @@
-// Atlas Workboard v2 — Settings page: Behavior knobs, Ecosystem toggles,
+// Atlas Command Center — Settings page: Behavior knobs, Ecosystem toggles,
 // connectors, and dashboard preferences (theme, density, noise filters, default
 // project, nav order, refresh rate).
 // Reuses the existing legacy routes unchanged:
@@ -24,7 +24,7 @@ import { IntegrationsPanel } from '../integrations.js';
 import { DEFAULT_NAV, normalizeNav } from '../nav-order.js';
 
 const NAV_LABELS = {
-  overview: 'Overview', activity: 'Activity', health: 'Health', agents: 'Agents', colony: 'Colony', channels: 'Channels',
+  overview: 'Overview', activity: 'Activity', health: 'Health', agents: 'Agents', colony: 'Colony', terminal: 'Terminal', channels: 'Channels',
   improve: 'Improve', projects: 'Projects', settings: 'Settings',
 };
 const DEFAULT_PREFS = {
@@ -965,6 +965,10 @@ function agentsSection() {
           h('td', { title: d.last_used ? new Date(d.last_used * 1000).toISOString() : '' }, d.last_used ? ago(d.last_used) : 'never'));
       }))))
     : null;
+  if (S.errors.projectList) {
+    // A failed or slow /api/projects fetch is not "no projects"; say so and offer Retry.
+    return Card({ id: 'pg-sec-agents', title: 'Agents', children: [sectionError('projectList', 'Project list'), rosterTable] });
+  }
   if (!projects.length) {
     return Card({ id: 'pg-sec-agents', title: 'Agents', children: [
       h('p', { class: 'pg-hint' }, 'No registered projects yet, so overrides cannot be edited. The plugin’s own agents are listed below; run Claude Code or omp in a project to register it.'),
@@ -1056,7 +1060,7 @@ function integrationsSection() {
   return Card({
     id: 'integrations',
     title: 'Integrations',
-    actions: [h('span', { class: 'pg-hint' }, 'herdr tooling and atlas MCP connectors, read-only')],
+    actions: [h('span', { class: 'pg-hint' }, 'terminal tooling and atlas MCP connectors, read-only')],
     children: [S.integrations || (S.integrations = IntegrationsPanel())],
   });
 }

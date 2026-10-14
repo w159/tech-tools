@@ -29,13 +29,13 @@ export function sendBlock(m) {
 }
 
 const needsProject = (p) => !p || p === "all";
-const terminalBtn = (ctx) => Button({ label: "Open terminal (herdr)", onClick: () => ctx.navigate("terminal") });
+const terminalBtn = (ctx) => Button({ label: "Open terminal", onClick: () => ctx.navigate("terminal") });
 const pickProject = (ctx) => {
   const projects = (ctx.store && ctx.store.get("projects")) || [];
   const buttons = projects.map((p) => Button({ label: p.name || p.root, onClick: () => ctx.setProject(p.root, true) }));
   return State({ variant: "empty", title: "Pick a project", body: "The colony is one project's lead and workers. Choose the project:", action: h("div", { class: "row", style: { flexWrap: "wrap", maxHeight: "40vh", overflowY: "auto" } }, ...buttons, terminalBtn(ctx)) });
 };
-const noMembers = (ctx) => State({ variant: "empty", title: "No colony members yet", body: "Members appear here when atlas workers are dispatched into this project's channel. Turn on Show all herdr panes to see every herdr pane.", action: terminalBtn(ctx) });
+const noMembers = (ctx) => State({ variant: "empty", title: "No colony members yet", body: "Members appear here when atlas workers are dispatched into this project's channel. Turn on Show all panes to see every pane.", action: terminalBtn(ctx) });
 
 async function load(ctx, st, project) {
   try {
@@ -190,9 +190,9 @@ export default {
     const body = h("div", { class: "colony-body" });
     const toggle = h("input", { type: "checkbox", id: "colony-all", onChange: (e) => { st.all = e.target.checked; refresh(); } });
     const bar = h("div", { class: "colony-bar" },
-      h("label", { class: "colony-all", for: "colony-all" }, toggle, " Show all herdr panes"),
+      h("label", { class: "colony-all", for: "colony-all" }, toggle, " Show all panes"),
       h("span", { class: "grow" }),
-      Button({ label: "Open terminal (herdr)", size: "sm", icon: "external-link", onClick: () => ctx.navigate("terminal") }));
+      Button({ label: "Open terminal", size: "sm", icon: "external-link", onClick: () => ctx.navigate("terminal") }));
     const page = h("div", { class: "page colony-roster" }, h("h1", null, "Colony"), bar, body);
 
     function paint() {

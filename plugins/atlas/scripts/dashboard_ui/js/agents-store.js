@@ -178,10 +178,13 @@ export function groupByWorkspace(agents, workspaces) {
 
 function layersFrom(src, daemonUp, daemonError) {
   const herd = src.herd;
+  const hstat = src.hstat; // GET herd/status: { backend, web_ui: boolean }; null until loaded or when the call fails
+  const noWebUi = Boolean(hstat) && hstat.web_ui === false; // rig seats: nothing to iframe, so the web UI layer can never be "down"
   return {
     daemon: { state: daemonUp ? "up" : "down", reason: daemonError || "" },
-    herdr: herd ? { state: herd.herdr && herd.herdr.reachable ? "up" : "down", reason: (herd.herdr && herd.herdr.reason) || "" } : { state: "unknown", reason: "" },
-    webui: herd && herd.web_ui ? { state: herd.web_ui.healthy ? "up" : "down", url: herd.web_ui.url || "", authRequired: Boolean(herd.web_ui.auth_required) } : { state: "unknown", url: "", authRequired: false },
+    // Key kept as "herdr" (other code keys on it); it is the agent runtime layer for either backend.
+    herdr: herd ? { state: herd.herdr && herd.herdr.reachable ? "up" : "down", reason: (herd.herdr && herd.herdr.reason) || "", backend: (hstat && hstat.backend) || "" } : { state: "unknown", reason: "", backend: (hstat && hstat.backend) || "" },
+    webui: noWebUi ? { state: "unknown", url: "", authRequired: false, none: true } : herd && herd.web_ui ? { state: herd.web_ui.healthy ? "up" : "down", url: herd.web_ui.url || "", authRequired: Boolean(herd.web_ui.auth_required) } : { state: "unknown", url: "", authRequired: false },
   };
 }
 
@@ -197,6 +200,7 @@ export function firstDownLayer(layers) {
 
 const SOURCES = {
   herd: (project) => api.get("herd/agents", { project }),
+  hstat: () => api.get("herd/status"),
   todos: (project) => api.get("todos", { project }),
   irc: (project) => api.get("irc", { project, limit: 200 }),
   colony: () => api.get("herd/colony"),
@@ -207,7 +211,7 @@ function createAgentsStore() {
   const subs = new Set();
   const eventSubs = new Set();
   const seen = new Map(); // pane_id -> { seq, at, approx }
-  const src = { herd: null, todos: null, irc: null, colony: null, projects: null };
+  const src = { herd: null, hstat: null, todos: null, irc: null, colony: null, projects: null };
   const status = {}; // source -> { ok, error, at }
   let project = "all";
   let pollMs = 8000;
@@ -305,7 +309,7 @@ function createAgentsStore() {
   }
 
   async function refresh(names) {
-    const list = names || ["herd", "todos", "irc"];
+    const list = names || ["herd", "hstat", "todos", "irc"];
     await Promise.all(list.map(load));
     emit();
   }
@@ -389,7 +393,7 @@ function createAgentsStore() {
       project = o.project || "all";
       pollMs = o.pollMs || 8000;
       started = true;
-      src.herd = src.todos = src.irc = null;
+      src.herd = src.hstat = src.todos = src.irc = null;
       openStream();
       clearInterval(projectsTimer);
       projectsTimer = setInterval(() => load("projects").then(() => emit()), 60000);
@@ -413,7 +417,9 @@ function createAgentsStore() {
       }
     },
     refresh,
-    recheck: () => refresh(["herd"]),
+    recheck: () => refresh(["herd", "hstat"]),
+    // POST herd/server/start (atlas_herdr.ensure_server), then re-read; a failed start just leaves the degraded state up
+    startHerdr: async () => { try { await api.post("herd/server/start", {}); } catch (_e) { /* recheck below shows the real state */ } return refresh(["herd", "hstat"]); },
     // Subscribe to state changes. Invoked once immediately with the current state. Returns unsubscribe.
     subscribe(fn) {
       subs.add(fn);

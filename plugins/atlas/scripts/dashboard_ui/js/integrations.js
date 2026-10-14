@@ -58,7 +58,7 @@ const CODE_TEXT = {
   not_found: ["File not found", "It may have been moved or deleted since the message was written."],
   not_a_file: ["That is a folder, not a file", "The file viewer opens one file at a time."],
   bad_root: ["Directory no longer exists", ""],
-  open_failed: ["herdr could not open the viewer", ""],
+  open_failed: ["The runtime could not open the viewer", ""],
   spawn_failed: ["Could not start the editor", ""],
   unsupported_path: ["This file name cannot be opened", "A colon in the path clashes with the line suffix."],
 };
@@ -83,7 +83,7 @@ export function explain(err, what) {
   if (status === 424) {
     const tool = what === "editor" ? "tode" : what === "thread" ? "herdr-projects" : "the herdr file viewer";
     const cmd = d.install_cmd || "";
-    installModal(tool.charAt(0).toUpperCase() + tool.slice(1) + " is not installed", cmd, d.error === "herdr_not_found" ? "herdr itself was not found on this machine." : "Atlas will not install it for you.");
+    installModal(tool.charAt(0).toUpperCase() + tool.slice(1) + " is not installed", cmd, d.error === "herdr_not_found" ? "The agent runtime was not found on this machine." : "Atlas will not install it for you.");
     return;
   }
   const code = err && err.error;
@@ -206,7 +206,7 @@ const TOOL_LABEL = { "herdr-projects": "herdr-projects", "herdr-file-viewer": "h
 const TOOL_ROLE = {
   "herdr-projects": "Coordinator + worker threads on their own branches",
   "herdr-file-viewer": "Read-only file viewer pane (path:line links)",
-  "captains-deck": "Read-only Firstmate kanban inside herdr",
+  "captains-deck": "Read-only Firstmate kanban in a terminal pane",
   "cmux-browser-mcp": "Browser automation for agents through the cmux app",
   tode: "Editor launched from the CLI (Open in editor)",
 };
@@ -242,9 +242,9 @@ function toolRow(t, ctx) {
 function deckBlock(deck) {
   if (!deck) return null;
   if (deck.available) {
-    return h("div", { class: "int-deck", "data-available": "true" }, h("h3", null, "Captain's Deck"), h("p", { class: "dim" }, "Firstmate homes found: " + (deck.homes || []).join(", ")), (deck.discovered || []).length ? h("ul", { class: "files-list mono" }, deck.discovered.map((l) => h("li", null, l))) : null, h("p", { class: "dim" }, "The board itself lives in the herdr pane (open-captain-deck); Atlas shows no copy of it."));
+    return h("div", { class: "int-deck", "data-available": "true" }, h("h3", null, "Captain's Deck"), h("p", { class: "dim" }, "Firstmate homes found: " + (deck.homes || []).join(", ")), (deck.discovered || []).length ? h("ul", { class: "files-list mono" }, deck.discovered.map((l) => h("li", null, l))) : null, h("p", { class: "dim" }, "The board itself lives in the terminal pane (open-captain-deck); Atlas shows no copy of it."));
   }
-  return h("div", { class: "int-deck", "data-available": "false" }, h("h3", null, "Captain's Deck board"), h("p", null, "Unavailable: " + (deck.reason || "needs Firstmate") + "."), h("p", { class: "dim" }, "Captain's Deck is a read-only view of a Firstmate flow. Atlas shows no board without Firstmate homes, and does not make one up."));
+  return h("div", { class: "int-deck", "data-available": "false" }, h("h3", null, "Captain's Deck board"), h("p", { class: deck.tone === "info" ? "dim" : null }, deck.status ? deck.status + (deck.hint ? ". " + deck.hint : "") : "Unavailable: " + (deck.reason || "needs Firstmate") + "."), h("p", { class: "dim" }, "Captain's Deck is a read-only view of a Firstmate flow. Atlas shows no board without Firstmate homes, and does not make one up."));
 }
 
 const CONN_STATUS = { ok: "ok", idle: "idle", degraded: "warn", unconfigured: "fail", disabled: "idle" };
@@ -275,7 +275,7 @@ export function IntegrationsPanel() {
     try {
       const [d, deck] = await Promise.all([getIntegrations(force), getDeck(force).catch(() => null)]);
       replace(root,
-        h("div", { class: "int-bar" }, h("p", { class: "dim" }, "herdr " + (d.herdr ? "found" : "not found") + ". Atlas only reads this state; installing is always your call."), Button({ label: "Recheck", size: "sm", onClick: () => load(true) })),
+        h("div", { class: "int-bar" }, h("p", { class: "dim" }, "Agent runtime " + (d.herdr ? "found" : "not found") + ". Atlas only reads this state; installing is always your call."), Button({ label: "Recheck", size: "sm", onClick: () => load(true) })),
         h("ul", { class: "int-list" }, (d.tools || []).map((t) => toolRow(t, { mcp: d.mcp, deck }))),
         connectorsBlock(d.connectors),
         deckBlock(deck));

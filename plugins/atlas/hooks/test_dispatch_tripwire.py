@@ -3311,6 +3311,37 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
                 (tool, tinput),
             )
 
+    def _post_bash(self, **extra):
+        return run_hook(
+            {
+                "session_id": "sess-1",
+                "cwd": self.tmp,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "touch a.txt"},
+                **extra,
+            },
+            self.env,
+        )
+
+    def test_subagent_inline_ops_are_not_logged_against_the_lead(self):
+        # Subagents share the lead's session_id; agent_id marks them.
+        for _ in range(8):
+            self._post_bash(agent_id="a7bb2a9dc1db9efad")
+        self.assertEqual(self._raw_count(), 0)
+        self._post_bash()  # same payload on the main thread still counts
+        self.assertEqual(self._raw_count(), 1)
+
+    def test_subagent_dispatch_marker_still_resets_the_count(self):
+        self._post_bash()
+        self.assertEqual(self._raw_count(), 1)
+        self._call(
+            "PostToolUse",
+            "Agent",
+            {"subagent_type": "atlas:implementer", "prompt": "x", "name": "n"},
+        )
+        self.assertEqual(self._raw_count(), 0)
+
     def test_edit_and_write_still_trip_the_deny(self):
         # Sanctioned (docs/) writes are exempt from the count by design, so use
         # mutating Bash to reach the threshold, then confirm an Edit/Write is denied.

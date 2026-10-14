@@ -184,9 +184,32 @@ def clean_env(env: dict | None = None) -> dict:
 TMUX_TIMEOUT_S = 10
 
 
+def _log_tmux_failure(args, res) -> None:
+    """Append one line per failed tmux call to <project>/.atlas/.run/logs/atlas_mux.log. has-session is the
+    existence probe (nonzero is the normal answer), so it stays out. Best effort: logging never breaks a spawn."""
+    if res.returncode == 0 or args[:1] == ("has-session",):
+        return
+    try:
+        root = os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
+        log = Path(root) / ".atlas" / ".run" / "logs" / "atlas_mux.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write(
+                f"{time.strftime('%FT%T')} tmux {shlex.join(args)[:300]} rc={res.returncode} {str(res.stderr).strip()[:300]}\n"
+            )
+    except OSError:
+        pass
+
+
 def _tmux(*args: str) -> subprocess.CompletedProcess:
     """Run tmux with a bounded wait. A missing binary or a wedged server comes back as a failed
     CompletedProcess (127 / 124) with a stderr reason, never an exception or a hang."""
+    res = _tmux_run(args)
+    _log_tmux_failure(args, res)
+    return res
+
+
+def _tmux_run(args) -> subprocess.CompletedProcess:
     try:
         return subprocess.run(
             ["tmux", *args],
@@ -205,18 +228,33 @@ def _tmux(*args: str) -> subprocess.CompletedProcess:
         )
 
 
+def _seats_up() -> bool:
+    """True when a seat backend (OpenRig, else herdr) is reachable; the one symbol tests patch."""
+    import atlas_seats
+
+    try:
+        if atlas_seats.backend() == "none":
+            return False
+        st = atlas_seats.status()
+        # herdr's `healthy` is only its web UI; the pane socket is `herdr_server`. rig has just `healthy`.
+        return bool(st["herdr_server"] if "herdr_server" in st else st.get("healthy"))
+    except Exception:
+        return False
+
+
 def transport() -> str:
-    """'claude-bg' (the default), or the pane transport forced via ATLAS_COLONY_TRANSPORT=herdr|tmux."""
+    """The transport forced via ATLAS_COLONY_TRANSPORT=herdr|tmux|claude-bg; unforced, the seat
+    backend's panes ('herdr' = the pane transport) when one is up, else 'claude-bg'."""
     forced = os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip().lower()
-    return forced if forced in ("herdr", "tmux", "claude-bg") else "claude-bg"
+    if forced in ("herdr", "tmux", "claude-bg"):
+        return forced
+    return "herdr" if _seats_up() else "claude-bg"
 
 
 def _pane_transport() -> str:
-    """'herdr' when the herdr server is up, else 'tmux' — for workers that must run as panes
+    """'herdr' (seat-backend panes) when seats are up, else 'tmux' — for workers that must run as panes
     (omp has no claude --bg equivalent; interactive launches always need a pane)."""
-    import atlas_herdr
-
-    return "herdr" if atlas_herdr._server_up() else "tmux"
+    return "herdr" if _seats_up() else "tmux"
 
 
 CLAUDE_TIMEOUT_S = 30
@@ -440,13 +478,27 @@ def harness_argv(
 ) -> list:
     if harness == "claude":
         # stream-json so the pane shows live tool calls; atlas_panefeed renders it and run-worker keeps the result text
-        argv = ["claude", "-p", "--output-format", "stream-json", "--verbose", "--agent", f"atlas:{role}"]
+        argv = [
+            "claude",
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--agent",
+            f"atlas:{role}",
+        ]
         if model:
             argv += ["--model", model]
         if level:
             argv += ["--effort", level]
         # --allowedTools is variadic: another flag must follow it so it cannot swallow the prompt
-        return argv + ["--allowedTools", ",".join(WORKER_MCP_ALLOW), "--permission-mode", permission_mode, prompt]
+        return argv + [
+            "--allowedTools",
+            ",".join(WORKER_MCP_ALLOW),
+            "--permission-mode",
+            permission_mode,
+            prompt,
+        ]
     # --mode json: one JSON event per line, so atlas_panefeed renders tool rows like the claude feed
     argv = ["omp", "-p", "--mode", "json"]
     if model:
@@ -522,7 +574,9 @@ def _lead_size() -> str:
         try:
             out = subprocess.run(
                 ["tmux", "display-message", "-p", "#{client_width}x#{client_height}"],
-                capture_output=True, text=True, timeout=TMUX_TIMEOUT_S,
+                capture_output=True,
+                text=True,
+                timeout=TMUX_TIMEOUT_S,
             ).stdout.strip()
         except (OSError, subprocess.TimeoutExpired):
             out = ""
@@ -531,7 +585,9 @@ def _lead_size() -> str:
     return DEFAULT_PANE_SIZE
 
 
-def _open_window(session: str, name: str, pane: str, team: dict | None = None) -> str | None:
+def _open_window(
+    session: str, name: str, pane: str, team: dict | None = None
+) -> str | None:
     """Create the session when missing and open window `name` in it; an error string or None.
     With `team` (spawn-team) the worker becomes a pane of the team's one tiled window instead.
 
@@ -546,7 +602,16 @@ def _open_window(session: str, name: str, pane: str, team: dict | None = None) -
             # default-size covers the windows opened later (no client is attached to size them)
             width, height = _lead_size().split("x")
             created = _tmux(
-                "new-session", "-d", "-s", session, "-n", "lead", "-x", width, "-y", height
+                "new-session",
+                "-d",
+                "-s",
+                session,
+                "-n",
+                "lead",
+                "-x",
+                width,
+                "-y",
+                height,
             )
             if created.returncode != 0 and "duplicate session" not in created.stderr:
                 return f"tmux new-session failed: {created.stderr.strip()}"
@@ -623,11 +688,22 @@ TITLE_RE = re.compile(r"^(\S+) \[(.*)\]$")
 
 def _team_panes(session: str) -> list:
     """Worker panes of a team session, by their @atlas_worker pane option."""
-    res = _tmux("list-panes", "-s", "-t", session, "-F", "#{@atlas_worker}\t#{pane_dead}\t#{pane_pid}")
+    res = _tmux(
+        "list-panes",
+        "-s",
+        "-t",
+        session,
+        "-F",
+        "#{@atlas_worker}\t#{pane_dead}\t#{pane_pid}",
+    )
     if res.returncode != 0:
         return []
     rows = [line.split("\t") for line in res.stdout.splitlines()]
-    return [{"name": r[0], "dead": _dead_flag(r[1]), "pid": r[2]} for r in rows if len(r) == 3 and r[0]]
+    return [
+        {"name": r[0], "dead": _dead_flag(r[1]), "pid": r[2]}
+        for r in rows
+        if len(r) == 3 and r[0]
+    ]
 
 
 def _team_pane_rows(session: str, root: str) -> list:
@@ -636,8 +712,16 @@ def _team_pane_rows(session: str, root: str) -> list:
     else from the `name [role]` pane title (a harness can rewrite the title, the option survives)."""
     fmt = "\t".join(
         "#{" + k + "}"
-        for k in ("pane_id", "@atlas_worker", "@atlas_role", "pane_title", "pane_pid", "pane_dead",
-                  "pane_dead_status", "pane_current_command")
+        for k in (
+            "pane_id",
+            "@atlas_worker",
+            "@atlas_role",
+            "pane_title",
+            "pane_pid",
+            "pane_dead",
+            "pane_dead_status",
+            "pane_current_command",
+        )
     )
     res = _tmux("list-panes", "-s", "-t", session, "-F", fmt)
     if res.returncode != 0:
@@ -657,33 +741,79 @@ def _team_pane_rows(session: str, root: str) -> list:
         dead = _dead_flag(r[5])
         rows.append(
             {
-                "name": name, "role": role, "pane_id": r[0], "pid": r[4], "dead": dead,
-                "command": r[7], "exit_status": int(r[6]) if dead and r[6].lstrip("-").isdigit() else None,
+                "name": name,
+                "role": role,
+                "pane_id": r[0],
+                "pid": r[4],
+                "dead": dead,
+                "command": r[7],
+                "exit_status": int(r[6])
+                if dead and r[6].lstrip("-").isdigit()
+                else None,
                 "last_note": last.get(name),
             }
         )
     return rows
 
 
-def _new_team_session(session: str, pane: str, rec: dict) -> subprocess.CompletedProcess:
+def _new_team_session(
+    session: str, pane: str, rec: dict
+) -> subprocess.CompletedProcess:
     """The team session; its first window (named like the session) starts with this worker, no idle shell."""
     width, height = _lead_size().split("x")
     res = _tmux(
-        "new-session", "-d", "-s", session, "-n", session, "-x", width, "-y", height,
-        "-P", "-F", "#{pane_id}", pane,
+        "new-session",
+        "-d",
+        "-s",
+        session,
+        "-n",
+        session,
+        "-x",
+        width,
+        "-y",
+        height,
+        "-P",
+        "-F",
+        "#{pane_id}",
+        pane,
+        # same tmux command queue as new-session: the option is set before the event loop can reap a worker that
+        # exits at once (set afterwards, the lone pane died, the session and server vanished, later splits failed)
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        f"{session}:{session}",
+        "remain-on-exit",
+        "on",
     )
     if res.returncode == 0:
-        for argv in [*_team_session_argv(session, rec), *_team_window_argv(f"{session}:{session}")]:
+        for argv in [
+            *_team_session_argv(session, rec),
+            *_team_window_argv(f"{session}:{session}"),
+        ]:
             _tmux(*argv)
     return res
 
 
-def _split_team_window(session: str, name: str, pane: str) -> subprocess.CompletedProcess:
-    res = _tmux("split-window", "-d", "-t", f"{session}:{session}", "-P", "-F", "#{pane_id}", pane)
+def _split_team_window(
+    session: str, name: str, pane: str
+) -> subprocess.CompletedProcess:
+    res = _tmux(
+        "split-window",
+        "-d",
+        "-t",
+        f"{session}:{session}",
+        "-P",
+        "-F",
+        "#{pane_id}",
+        pane,
+    )
     if res.returncode == 0:
         return res
     # no space left for another pane: overflow into a styled window of its own
-    res = _tmux("new-window", "-d", "-t", session, "-n", name, "-P", "-F", "#{pane_id}", pane)
+    res = _tmux(
+        "new-window", "-d", "-t", session, "-n", name, "-P", "-F", "#{pane_id}", pane
+    )
     if res.returncode == 0:
         for argv in _team_window_argv(f"{session}:{name}"):
             _tmux(*argv)
@@ -700,7 +830,11 @@ def _team_layout(count: int, width: int) -> str:
 def _relayout_team(session: str) -> None:
     win = f"{session}:{session}"
     res = _tmux("list-panes", "-t", win, "-F", "#{window_width}")
-    widths = [int(w) for w in res.stdout.split() if w.isdigit()] if res.returncode == 0 else []
+    widths = (
+        [int(w) for w in res.stdout.split() if w.isdigit()]
+        if res.returncode == 0
+        else []
+    )
     width = widths[0] if widths else int(_lead_size().split("x")[0])
     _tmux("select-layout", "-t", win, _team_layout(max(1, len(widths)), width))
 
@@ -720,6 +854,12 @@ def _open_team_pane(session: str, name: str, pane: str, team: dict) -> str | Non
     _tmux("set-option", "-p", "-t", pane_id, "@atlas_role", str(team.get("role") or ""))
     _tmux("select-pane", "-t", pane_id, "-T", f"{name} [{team.get('role') or ''}]")
     _relayout_team(session)
+    dead = _tmux(
+        "display-message", "-p", "-t", pane_id, "#{pane_dead} #{pane_dead_status}"
+    )
+    state = dead.stdout.split()
+    if dead.returncode == 0 and len(state) == 2 and state[0] == "1" and state[1] != "0":
+        return f"tmux team pane {name} died at spawn (exit {state[1]}); see .atlas/.run/logs/atlas_mux.log"
     return None
 
 
@@ -735,6 +875,15 @@ def _bg_log_tail(pid: str) -> str:
     )
 
 
+def _todo_script() -> Path:
+    """atlas_todo.py as the plugin root names it, symlinks NOT followed: resolve() turned the ~/.claude/plugins
+    link into a source-tree path the worker's settings deny reading, so workers skipped the note protocol."""
+    root = (os.environ.get("CLAUDE_PLUGIN_ROOT") or "").strip()
+    if root and (Path(root) / "scripts" / "atlas_todo.py").is_file():
+        return Path(root) / "scripts" / "atlas_todo.py"
+    return Path(os.path.abspath(__file__)).with_name("atlas_todo.py")
+
+
 def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
     """Task prompt + the board report contract. A pane worker gets its ONE report note posted by
     the run-worker wrapper watching its output; a claude-bg agent has no wrapper, so the note
@@ -742,7 +891,7 @@ def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
     note is the transport of record; when the lead exported ATLAS_LEAD_AGENT, one env-gated
     paragraph adds a best-effort SendMessage native wake (unset = byte-identical brief), and a
     truthy ATLAS_TASKS_MIRROR adds an opt-in TaskCreate board-mirror paragraph the same way."""
-    todo = Path(__file__).resolve()
+    todo = _todo_script()
     note_cmd = (
         f"python3 {todo} note --root {shlex.quote(root)} --channel {shlex.quote(chan)} "
         f"--owner {shlex.quote(name)} --to {shlex.quote(lead or 'lead')} --kind report "
@@ -924,10 +1073,10 @@ def cmd_spawn(args) -> int:
     if use == "herdr":
         # herdr panes get the board pins as well: run-worker re-pins them for the harness, the pane shell needs them
         # for anything the lead runs there (and for the hooks of a manually started harness).
-        import atlas_herdr
+        import atlas_seats
 
         pins = pane_env(root, args.name)
-        made = atlas_herdr.create_pane(
+        made = atlas_seats.create_pane(
             args.name,
             pane_command(pins, worker),
             cwd=os.path.abspath(args.cwd) if args.cwd else root,
@@ -942,7 +1091,10 @@ def cmd_spawn(args) -> int:
     else:
         team = getattr(args, "team", None)
         failure = _open_window(
-            session, args.name, pane, {"rec": team, "role": args.agent} if team else None
+            session,
+            args.name,
+            pane,
+            {"rec": team, "role": args.agent} if team else None,
         )
     if failure:
         atlas_todo.leave(root, chan, args.name)
@@ -1041,7 +1193,14 @@ def cmd_run_worker(args) -> int:
     log.flush()
     # guaranteed start note: the board shows the worker even when the model skips its own
     try:
-        atlas_todo.note(root, args.name, f"start: {args.agent} worker {args.name} running", to=lead, channel=channel or None, kind="start")
+        atlas_todo.note(
+            root,
+            args.name,
+            f"start: {args.agent} worker {args.name} running",
+            to=lead,
+            channel=channel or None,
+            kind="start",
+        )
     except OSError as exc:
         log.write(f"start note failed: {exc}\n")
     feed.start()
@@ -1163,14 +1322,14 @@ def cmd_status(args) -> int:
         # omp/pane workers of the same run still exist under a pane transport
         pane_use = _pane_transport()
         if pane_use == "herdr":
-            import atlas_herdr
+            import atlas_seats
 
             try:
                 panes = [
                     {"name": p["label"], "dead": 0, "pid": p["pane_id"]}
-                    for p in atlas_herdr.list_panes(args.run)
+                    for p in atlas_seats.list_panes(args.run)
                 ]
-            except atlas_herdr.HerdrSockError:
+            except Exception:  # seat backend unreachable
                 panes = None
         else:
             panes = (
@@ -1182,14 +1341,14 @@ def cmd_status(args) -> int:
             w for w in (panes or []) if w["name"] not in ("lead", "Sidebar")
         ]
     elif use == "herdr":
-        import atlas_herdr
+        import atlas_seats
 
         try:
             windows = [
                 {"name": p["label"], "dead": 0, "pid": p["pane_id"]}
-                for p in atlas_herdr.list_panes(args.run)
+                for p in atlas_seats.list_panes(args.run)
             ]
-        except atlas_herdr.HerdrSockError:
+        except Exception:  # seat backend unreachable
             windows = None
     else:
         windows = (
@@ -1273,9 +1432,9 @@ def cmd_kill(args) -> int:
         stopped = _stop_claude_bg(str(root))
         use = _pane_transport()  # panes of this run (omp workers) may still exist
     if use == "herdr":
-        import atlas_herdr
+        import atlas_seats
 
-        res = atlas_herdr.close_run(args.run)
+        res = atlas_seats.close_run(args.run)
         if not res["ok"]:
             if stopped:
                 _kill_notes(root, stopped)
@@ -1367,21 +1526,25 @@ def build_team(
 
 def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     """Self-contained worker brief: task, scope, channel, peers, and the note protocol."""
-    todo = Path(__file__).resolve().with_name("atlas_todo.py")
+    todo = _todo_script()
     peers = [m["name"] for m in rec["members"] if m["name"] != member["name"]]
 
     scope = ", ".join(rec["file_scope"]) or "(whole project; stay read-mostly)"
     me = member["name"]
-    # root/channel/owner come from the pane env (atlas_todo note defaults them), so the path appears once
+    # explicit --root/--channel/--owner (as _bg_brief): pane env alone left workers posting to no channel
+    qr, qc = shlex.quote(root), shlex.quote(chan)
+    cmd = f"python3 {todo}"
+    flags = f"--root {qr} --channel {qc}"
     return (
         f"You are {me} ({member['role']}), 1 of {len(rec['members'])} workers of team {rec['team_id']} "
         f"on {chan}. Lead: {lead}. Peers: {', '.join(peers) or '(none)'}.\n\n"
         f"# Task\n{rec['task']}\n\n# Scope\n{scope}\n\n"
-        f"# Protocol\nBoard: python3 {todo} note --to <who> '<text>' | notes --to {me}\n"
-        f"1. After your first concrete finding, note it to {lead}.\n"
-        "2. Before finishing, note each peer once (found/changed, what to avoid).\n"
-        f"3. Read `notes --to {me}`; reply once to any peer note.\n"
-        "4. End with STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT; the wrapper posts it as your report.\n"
+        f"# Protocol\nPost (do not read the script): {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
+        f"Read: {cmd} notes --to {me} {flags}\n"
+        f"1. After a first finding, note {lead}.\n"
+        "2. Before finishing, note each peer once (found, changed, avoid).\n"
+        "3. Reply once to any peer note.\n"
+        "4. End with STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT.\n"
     )
 
 
@@ -1416,7 +1579,9 @@ def _lead_run(root: str, session: str | None) -> tuple:
     try:
         import atlas_db
 
-        sid = session or next((os.environ[k] for k in SESSION_ENV if os.environ.get(k)), None)
+        sid = session or next(
+            (os.environ[k] for k in SESSION_ENV if os.environ.get(k)), None
+        )
         conn = atlas_db.connect()
         try:
             if sid:
@@ -1435,7 +1600,11 @@ def _lead_run(root: str, session: str | None) -> tuple:
                 if c.get("kind") == "lead"
             }
             row = next(
-                (r for r in rows if f"lead-{atlas_todo._sanitize_owner(r[1])[:6]}" in leads),
+                (
+                    r
+                    for r in rows
+                    if f"lead-{atlas_todo._sanitize_owner(r[1])[:6]}" in leads
+                ),
                 rows[0] if rows else None,
             )
             return (row[0], row[1]) if row else (None, None)
@@ -1476,7 +1645,9 @@ def _log_wave(rec: dict, run_id, results=()) -> bool:
                 if have.get(agent, 0) > 0:
                     have[agent] -= 1
                     continue
-                atlas_db.log_dispatch(conn, run_id, agent, models.get(m["name"]), rec["team_id"])
+                atlas_db.log_dispatch(
+                    conn, run_id, agent, models.get(m["name"]), rec["team_id"]
+                )
             conn.commit()
         finally:
             conn.close()
@@ -1486,7 +1657,9 @@ def _log_wave(rec: dict, run_id, results=()) -> bool:
 
 
 def _root(args) -> str:
-    return os.path.abspath(args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd())
+    return os.path.abspath(
+        args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
+    )
 
 
 def _team_thinking(harness: str, role: str) -> str | None:
@@ -1495,12 +1668,19 @@ def _team_thinking(harness: str, role: str) -> str | None:
     members thinking-off while the same Claude team ran at low. None for claude (its definition already applies)."""
     if harness != "omp":
         return None
-    return _frontmatter(_agents_dir("claude", None) / f"{role}.md")[0].get("effort") or None
+    return (
+        _frontmatter(_agents_dir("claude", None) / f"{role}.md")[0].get("effort")
+        or None
+    )
 
 
 def cmd_spawn_team(args) -> int:
     root = _root(args)
-    task = Path(args.task_file).read_text(encoding="utf-8") if args.task_file else (args.task or "")
+    task = (
+        Path(args.task_file).read_text(encoding="utf-8")
+        if args.task_file
+        else (args.task or "")
+    )
     paths = args.paths.split(",") if args.paths else None
     try:
         rec = build_team(args.cls, args.effort, paths, task, args.team_id)
@@ -1512,15 +1692,24 @@ def cmd_spawn_team(args) -> int:
         return _emit({"ok": True, "dry_run": True, "team": rec})
     path = _team_dir(root) / f"{rec['team_id']}.json"
     if path.exists():
-        return _emit({"ok": False, "error": f"team {rec['team_id']} exists; reap it or pass --team-id"}, 1)
+        return _emit(
+            {
+                "ok": False,
+                "error": f"team {rec['team_id']} exists; reap it or pass --team-id",
+            },
+            1,
+        )
     # tmux when installed gives a visible window per worker; ATLAS_COLONY_TRANSPORT still overrides.
     note = None
-    if not os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip():
+    if not os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip() and not _seats_up():
+        # seats up: transport() resolves to the seat backend's panes (one rig per team id)
         if shutil.which("tmux"):
             os.environ["ATLAS_COLONY_TRANSPORT"] = "tmux"
         else:
             note = "tmux not on PATH: fell back to claude-bg"
-    os.environ["ATLAS_MUX"] = "tmux"  # spawn-team is the explicit opt-in cmd_spawn checks for
+    os.environ["ATLAS_MUX"] = (
+        "tmux"  # spawn-team is the explicit opt-in cmd_spawn checks for
+    )
     run_id, sid = _lead_run(root, args.session)
     lead = _team_lead(sid, rec["team_id"])
     chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
@@ -1539,9 +1728,20 @@ def cmd_spawn_team(args) -> int:
         pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
         pf.write_text(team_brief(rec, member, root, chan, lead), encoding="utf-8")
         ns = argparse.Namespace(
-            run=rec["team_id"], name=member["name"], harness=args.harness, agent=member["role"],
-            prompt_file=str(pf), model=None, effort=None, thinking=_team_thinking(args.harness, member["role"]),
-            agents_dir=None, permission_mode=None, command_override=None, omp_extension=None, root=root, cwd=None,
+            run=rec["team_id"],
+            name=member["name"],
+            harness=args.harness,
+            agent=member["role"],
+            prompt_file=str(pf),
+            model=None,
+            effort=None,
+            thinking=_team_thinking(args.harness, member["role"]),
+            agents_dir=None,
+            permission_mode=None,
+            command_override=None,
+            omp_extension=None,
+            root=root,
+            cwd=None,
             team=rec,
         )
         buf = io.StringIO()
@@ -1553,7 +1753,9 @@ def cmd_spawn_team(args) -> int:
             return {"ok": False, "error": buf.getvalue().strip()[-200:]}
 
     results = supervise(rec, spawn, lambda n: _exited(root, n), poll_s=args.poll)
-    wave_logged = _log_wave(rec, run_id, results)  # after spawn: each member's resolved model is known
+    wave_logged = _log_wave(
+        rec, run_id, results
+    )  # after spawn: each member's resolved model is known
     return _emit(
         {
             "ok": all(r.get("ok") for r in results),
@@ -1572,7 +1774,9 @@ def cmd_spawn_team(args) -> int:
 
 def _load_team(root: str, team_id: str) -> dict | None:
     try:
-        return json.loads((_team_dir(root) / f"{team_id}.json").read_text(encoding="utf-8"))
+        return json.loads(
+            (_team_dir(root) / f"{team_id}.json").read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return None
 
@@ -1584,8 +1788,23 @@ def cmd_wait(args) -> int:
         return _emit({"ok": False, "error": f"no team record for {args.team}"}, 1)
     names = [m["name"] for m in rec["members"]]
     t0 = time.time()
-    while not all(_exited(root, n) for n in names) and time.time() - t0 < args.timeout:
+
+    def dead_silent() -> set:
+        # a pane whose process is gone with no exit note will never report; do not wait out the timeout for it
+        if rec.get("transport") in ("claude-bg", "herdr"):
+            return set()
+        return {
+            p["name"]
+            for p in _team_panes(_session(rec["team_id"]))
+            if p["dead"] and not _exited(root, p["name"])
+        }
+
+    while time.time() - t0 < args.timeout:
+        silent = dead_silent()
+        if all(_exited(root, n) or n in silent for n in names):
+            break
         time.sleep(args.poll)
+    silent = dead_silent()
     allnotes = atlas_todo.notes(root)
     members, w2w = [], 0
     for n in names:
@@ -1598,7 +1817,10 @@ def cmd_wait(args) -> int:
             {
                 "name": n,
                 "exit": int(found.group(1)) if found else None,
-                "duration_s": round(float(mine[-1]["ts"]) - rec["created"], 1) if found else None,
+                "dead_without_report": n in silent and not found,
+                "duration_s": round(float(mine[-1]["ts"]) - rec["created"], 1)
+                if found
+                else None,
                 "last_status": status,
             }
         )
@@ -1619,13 +1841,22 @@ def _recover_team(root: str, team_id: str) -> dict | None:
     """A team with no live record: members from the per-member prompt files spawn-team wrote and the
     windows of atlas-<team>. None when no trace is left."""
     # ponytail: team "peer" also matches peer-sync's prompts; team ids are hashes or explicit, so rare
-    names = {p.name[len(team_id) + 1 : -len(".prompt")] for p in _team_dir(root).glob(f"{team_id}-*.prompt")}
+    names = {
+        p.name[len(team_id) + 1 : -len(".prompt")]
+        for p in _team_dir(root).glob(f"{team_id}-*.prompt")
+    }
     windows = _windows(_session(team_id)) or []
-    names |= {w["name"] for w in windows if w["name"] not in ("lead", _session(team_id))}
+    names |= {
+        w["name"] for w in windows if w["name"] not in ("lead", _session(team_id))
+    }
     names |= {p["name"] for p in _team_panes(_session(team_id))}
     if not names and not windows:
         return None
-    return {"team_id": team_id, "members": [{"name": n} for n in sorted(names)], "transport": "tmux"}
+    return {
+        "team_id": team_id,
+        "members": [{"name": n} for n in sorted(names)],
+        "transport": "tmux",
+    }
 
 
 def _release_team_channel(root: str, rec: dict) -> None:
@@ -1650,9 +1881,22 @@ def _post_wrapup(root: str, rec: dict) -> None:
     for m in rec["members"]:
         mine = [r for r in allnotes if str(r.get("owner")) == m["name"]]
         found = EXIT_NOTE_RE.search(str(mine[-1].get("text") or "")) if mine else None
-        secs = f" {round(float(mine[-1]['ts']) - rec['created'])}s" if found and rec.get("created") else ""
-        parts.append(f"{m['name']} exit {found.group(1) if found else '?'}{secs} {len(mine)} notes")
-    atlas_todo.note(root, lead, f"wrap-up {rec['team_id']}: " + "; ".join(parts), to="all", channel=chan, kind="wrapup")
+        secs = (
+            f" {round(float(mine[-1]['ts']) - rec['created'])}s"
+            if found and rec.get("created")
+            else ""
+        )
+        parts.append(
+            f"{m['name']} exit {found.group(1) if found else '?'}{secs} {len(mine)} notes"
+        )
+    atlas_todo.note(
+        root,
+        lead,
+        f"wrap-up {rec['team_id']}: " + "; ".join(parts),
+        to="all",
+        channel=chan,
+        kind="wrapup",
+    )
 
 
 def cmd_reap(args) -> int:
@@ -1665,11 +1909,20 @@ def cmd_reap(args) -> int:
     if rec is None:
         # reap is idempotent: an archived team still gets its leftover session and prompts cleaned
         try:
-            rec, state = json.loads(archived_path.read_text(encoding="utf-8")), "archived"
+            rec, state = (
+                json.loads(archived_path.read_text(encoding="utf-8")),
+                "archived",
+            )
         except (OSError, ValueError):
             rec, state = _recover_team(root, args.team), "recovered"
         if rec is None:
-            return _emit({"ok": False, "error": f"no team record, prompts or session for {args.team}"}, 1)
+            return _emit(
+                {
+                    "ok": False,
+                    "error": f"no team record, prompts or session for {args.team}",
+                },
+                1,
+            )
     session = _session(rec["team_id"])
     names = [m["name"] for m in rec["members"]]
     killed = False
@@ -1678,10 +1931,18 @@ def cmd_reap(args) -> int:
         for w in _claude_workers(root) or []:
             if w["name"] in names and not w["dead"]:
                 killed = _claude("stop", str(w["pid"])).returncode == 0 or killed
+    elif rec.get("transport") == "herdr":
+        import atlas_seats
+
+        killed = bool(atlas_seats.close_run(rec["team_id"]).get("ok"))
     elif _tmux("has-session", "-t", session).returncode == 0:
         killed = _tmux("kill-session", "-t", session).returncode == 0
-    _kill_notes(root, names)  # exit note + mark_finished + leave for any worker that never posted its own
-    if state == "live":  # an archived or recovered team already got (or never had) a wrap-up
+    _kill_notes(
+        root, names
+    )  # exit note + mark_finished + leave for any worker that never posted its own
+    if (
+        state == "live"
+    ):  # an archived or recovered team already got (or never had) a wrap-up
         _post_wrapup(root, rec)
     _release_team_channel(root, rec)
     reaped = atlas_todo.reap_channels(root)
@@ -1766,14 +2027,18 @@ def _parser() -> argparse.ArgumentParser:
     worker_opts(
         sub.add_parser("run-worker", help="internal: the pane command"), internal=True
     )
-    st = sub.add_parser("spawn-team", help="resolver-sized team of parallel tmux workers")
+    st = sub.add_parser(
+        "spawn-team", help="resolver-sized team of parallel tmux workers"
+    )
     st.add_argument("--class", dest="cls", required=True)
     st.add_argument("--effort", required=True)
     st.add_argument("--paths", help="comma-separated file scope")
     st.add_argument("--task")
     st.add_argument("--task-file")
     st.add_argument("--team-id")
-    st.add_argument("--session", help="lead session id for wave attribution and the team channel")
+    st.add_argument(
+        "--session", help="lead session id for wave attribution and the team channel"
+    )
     st.add_argument("--harness", choices=("claude", "omp"), default="claude")
     st.add_argument("--dry-run", action="store_true")
     st.add_argument("--root")
@@ -1787,7 +2052,9 @@ def _parser() -> argparse.ArgumentParser:
     for name in ("status", "kill"):
         sp = sub.add_parser(name)
         if name == "status":
-            sp.add_argument("--run", "--team", dest="run", required=True)  # a team id is its run id
+            sp.add_argument(
+                "--run", "--team", dest="run", required=True
+            )  # a team id is its run id
         else:
             sp.add_argument("--run", required=True)
         sp.add_argument("--root")

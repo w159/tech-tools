@@ -36,6 +36,7 @@ work."
 - Fix in place. If you find a bug, broken import, or dead reference inside the work you
   were asked to do, fix it and report it. Do not create _v2 / _fixed / _new parallel files.
 - Finish the job. If the request had N parts, all N are done before you report done.
+- Open advisor items (`advisor[...]` on the board) are work: verify, fix or refute with evidence, and close each before `done`.
   Partial work is reported as partial, not as complete.
 - Do not narrate intent ("I'll now run..."). Run it and show the result.
 - Two failed attempts with the same strategy means change strategy, not retry harder.

@@ -4,8 +4,9 @@ import { h, debounce, fmtRelative, patchInto } from "../dom.js";
 import { stableJson } from "../api.js";
 import { Kpi, Card, Badge, StatusDot, Table, LineChart, EmptyState, toastError } from "../components.js";
 import { IntegrationsRow } from "../integrations.js";
+import { actionButton, dismissButton } from "../health-actions.js";
 
-function attentionItem(item, ctx) {
+function attentionItem(item, ctx, subs, onDismissed) {
   const sev = item.severity === "fail" || item.severity === "warn" ? item.severity : "info";
   const meta = [];
   if (item.project) meta.push(String(item.project).split("/").filter(Boolean).pop() || item.project);
@@ -25,7 +26,9 @@ function attentionItem(item, ctx) {
       item.next ? h("div", { class: "detail" }, h("strong", null, "Do this: "), item.next) : null,
       meta.length ? h("div", { class: "meta" }, meta.join("  |  ")) : null
     ),
-    action ? h("button", { class: "btn btn-sm", type: "button", onClick: () => ctx.navigate(action.target) }, action.label || "Open") : null
+    action ? h("button", { class: "btn btn-sm", type: "button", onClick: () => ctx.navigate(action.target) }, action.label || "Open") : null,
+    item.kind ? actionButton({ kind: item.kind, sample: item.detail, next: item.next, finding_id: item.finding_id, session_id: item.session_id }, subs, ctx.navigate) : null,
+    item.kind ? dismissButton(item, ctx.api, onDismissed) : null
   );
 }
 
@@ -106,7 +109,8 @@ function weekKpi(k, ctx) {
   return Kpi({ label: k.label, value: k.value, delta: k.delta, status: k.status, hint, onClick: target ? () => ctx.navigate(target) : null });
 }
 
-function attentionCard(d, attention, ctx) {
+function attentionCard(d, attention, ctx, onDismissed) {
+  const subs = (d.health && d.health.subsystems) || [];
   const actionable = attention.filter((a) => a.severity === "fail" || a.severity === "warn").length;
   const historic = d.attention_historic;
   return Card({
@@ -115,7 +119,7 @@ function attentionCard(d, attention, ctx) {
     flush: true,
     children: [
       attention.length
-        ? h("ul", { class: "attn-list" }, attention.map((a) => attentionItem(a, ctx)))
+        ? h("ul", { class: "attn-list" }, attention.map((a) => attentionItem(a, ctx, subs, onDismissed)))
         : h("div", { style: { padding: "var(--pad-card)" } }, h("div", { class: "row" }, StatusDot({ status: "ok" }), h("span", null, "Nothing needs you right now. Failures, stuck agents and blocked work show up here when they happen."))),
       historic ? h("div", { class: "detail", style: { padding: "var(--pad-card)" } }, historic + " older failure" + (historic > 1 ? "s" : "") + " in the last 7 days have not recurred in 24h and need no action; they are listed as historic in Health.") : null,
     ],
@@ -164,9 +168,21 @@ export default {
     root.appendChild(glance(d, ctx, attention));
     root.appendChild(h("h2", { class: "ov-h" }, "Last 7 days", h("span", { class: "dim" }, " — counted from the Atlas database")));
     root.appendChild(kpis.length ? h("div", { class: "kpi-grid" }, kpis.map((k) => weekKpi(k, ctx))) : null);
-    root.appendChild(h("div", { class: "ov-grid" }, attentionCard(d, attention, ctx), sideColumn(d.trend, runs)));
+    root.appendChild(h("div", { class: "ov-grid" }, attentionCard(d, attention, ctx, () => this.reload(ctx)), sideColumn(d.trend, runs)));
     if (!kpis.length && !attention.length && !runs.length) root.appendChild(emptyOverview());
     return root;
+  },
+
+  // After a dismissal: refetch and patch in place so the card, KPI and top-bar badge drop it.
+  async reload(ctx) {
+    try {
+      const data = await fetchAll(ctx);
+      lastKey = stableJson(data);
+      const old = document.getElementById("overview-root");
+      if (old) patchInto(old, this.render(ctx, data));
+    } catch (err) {
+      toastError(err);
+    }
   },
 
   onEvent(evt, ctx) {

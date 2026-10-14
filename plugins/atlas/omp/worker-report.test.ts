@@ -54,6 +54,13 @@ test("a missing schemaMode defaults to strict and an existing one is not overwri
 	expect(revised?.schemaMode).toBe("permissive");
 });
 
+test("a non-object outputSchema is left alone and records no fault", () => {
+	withFaultHome(faultFile => {
+		expect(reviseTaskInput({ agent: "docs-curator", task: "x", outputSchema: "free text" }, SCHEMA)).toBeUndefined();
+		expect(() => readFileSync(faultFile, "utf8")).toThrow();
+	});
+});
+
 function withFaultHome<T>(run: (faultFile: string) => T): T {
 	const home = mkdtempSync(join(tmpdir(), "worker-report-home-"));
 	const old = process.env.ATLAS_HOME;

@@ -41,7 +41,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import atlas_dash_irc  # noqa: E402
 import atlas_db  # noqa: E402
-import atlas_herdr  # noqa: E402
+import atlas_seats  # noqa: E402
 import atlas_todo  # noqa: E402
 from atlas_dash_work import _err  # noqa: E402
 
@@ -74,13 +74,13 @@ def _herdr() -> tuple[dict, dict]:
     rows: dict = {}
     panes: dict = {}
     try:
-        snap = atlas_herdr.agents()
+        snap = atlas_seats.agents()
         if snap["reachable"]:
             rows = {a["pane_id"]: a for a in snap["agents"]}
-            for p in atlas_herdr.list_panes():
+            for p in atlas_seats.list_panes():
                 if p["label"]:
                     panes[p["label"]] = p
-    except atlas_herdr.HerdrSockError:
+    except atlas_seats.SockError:
         pass
     return rows, panes
 
@@ -506,9 +506,9 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
 
 def _herdr_url() -> str:
     try:
-        return str(atlas_herdr._url())
+        return str(atlas_seats.web_url())
     except Exception:
-        return str(getattr(atlas_herdr, "HERDR_URL", "") or "")
+        return ""
 
 
 def member_state(root: str, name: str) -> str | None:
@@ -795,8 +795,8 @@ def h_colony_send(ctx):
             f"From: {atlas_dash_irc.HUMAN}\nTo: {name}\n{text}".replace("\n", " | ")
         )
         try:
-            atlas_herdr.send_prompt(m["pane_id"], flat)
-        except atlas_herdr.PromptRefused as e:
+            atlas_seats.send_prompt(m["pane_id"], flat)
+        except atlas_seats.PromptRefused as e:
             if e.http != 409:  # busy falls through to the board queue
                 # receipt on the board: nothing was typed, nothing vanishes
                 msg = atlas_dash_irc._record_irc(
@@ -861,7 +861,7 @@ def h_colony_kill(ctx):
             "nothing to kill",
         )
     if m["pane_id"]:
-        out = atlas_herdr.close_pane(m["pane_id"])
+        out = atlas_seats.close_pane(m["pane_id"])
         return (
             (200, {"ok": True, "killed": name, "via": "pane"})
             if out.get("ok")

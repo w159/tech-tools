@@ -1,8 +1,8 @@
 // Single source for the saved nav order: normalisation (Settings editor + rail) and group ordering (rail).
 
-export const DEFAULT_NAV = ["overview", "activity", "health", "agents", "colony", "channels", "improve", "projects", "settings"];
+export const DEFAULT_NAV = ["overview", "activity", "health", "agents", "colony", "terminal", "channels", "improve", "projects", "settings"];
 // Mobile bottom bar / More popover entries: [page id, label].
-export const MOBILE_TABS = [["overview", "Overview"], ["agents", "Agents"], ["activity", "Activity"], ["health", "Health"], ["colony", "Colony"], ["channels", "Channels"], ["improve", "Improve"], ["projects", "Projects"], ["settings", "Settings"]];
+export const MOBILE_TABS = [["overview", "Overview"], ["agents", "Agents"], ["activity", "Activity"], ["health", "Health"], ["colony", "Colony"], ["terminal", "Terminal"], ["channels", "Channels"], ["improve", "Improve"], ["projects", "Projects"], ["settings", "Settings"]];
 // Ids saved by older versions map onto canonical pages.
 export const NAV_ALIASES = { herd: "terminal", work: "agents", irc: "channels", console: "terminal", herdr: "terminal" };
 
@@ -27,3 +27,6 @@ export function orderGroups(groups, order) {
     .sort((a, b) => Math.min(...a[0].items.map(r)) - Math.min(...b[0].items.map(r)) || a[1] - b[1])
     .map((x) => x[0]);
 }
+
+// Old Agents lenses that became their own routes (lens=colony opens the Colony page, same as chord c).
+export const LENS_ROUTES = { console: "terminal", colony: "colony", channel: "channels" };

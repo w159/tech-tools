@@ -1000,6 +1000,11 @@ class EnsureColonyCacheTest(unittest.TestCase):
             with (
                 mock.patch("subprocess.run") as run,
                 mock.patch("subprocess.Popen") as popen,
+                mock.patch.object(__import__("atlas_seats"), "backend", return_value="herdr"),
+                # herdr down -> one ensure_server attempt; never start (or probe) the real server
+                mock.patch.object(
+                    __import__("atlas_herdr"), "ensure_server", return_value={"ok": False}
+                ),
             ):
                 run.return_value = mock.Mock(
                     stdout=json.dumps({"healthy": False, "herdr_server": False})

@@ -1,7 +1,8 @@
-// Atlas Workboard v2 — Health page: subsystem grid, silent-failure list with
+// Atlas Command Center — Health page: subsystem grid, silent-failure list with
 // fix hints, and what is working. No innerHTML; all data via h() text children.
 import { h, replace, copyText } from '../dom.js';
-import { fixCommands } from '../health-fix.js';
+import { failureTone } from '../health-fix.js';
+import { actionButton, dismissButton } from '../health-actions.js';
 import { changeKey, keepView } from '../keep-view.js';
 import {
   Badge, Card, Table, Tabs, EmptyState, StatusDot, Sparkline,
@@ -140,21 +141,6 @@ function evidenceItem(e) {
     m ? Badge({ status: m[1] === 'active' ? 'warn' : 'info', text: m[1] === 'active' ? 'active' : 'historic' }) : null);
 }
 
-// "Copy fix command" button; disabled with the reason when no concrete command exists.
-function fixButton(f) {
-  const cmds = fixCommands(f, (S.data && S.data.subsystems) || []);
-  if (!cmds.length) {
-    return h('button', { type: 'button', class: 'btn', disabled: true, title: 'No single command fixes this; read the sample and the Do this text.' }, 'No fix command');
-  }
-  const btn = h('button', { type: 'button', class: 'btn', title: cmds.join('\n') }, 'Copy fix command');
-  btn.addEventListener('click', async () => {
-    const ok = await copyText(cmds.join('\n'));
-    btn.textContent = ok ? 'Copied' : 'Copy failed: select the text in Do this';
-    setTimeout(() => { btn.textContent = 'Copy fix command'; }, 2500);
-  });
-  return btn;
-}
-
 function warningsBanner(list) {
   if (!Array.isArray(list) || !list.length) return null;
   return h('div', { class: 'pg-hintbox', role: 'alert' },
@@ -183,8 +169,8 @@ function failureFacts(f, active) {
 // One silent failure as a card with an id, so "Open in Health" from Overview lands on it.
 function failureCard(f) {
   const active = f.state === 'active';
-  const tone = active ? 'warn' : 'info';
-  const stateText = active ? 'happening now' : 'historic';
+  const tone = failureTone(f);
+  const stateText = tone === 'warn' ? 'happening now' : active ? 'not an atlas fault' : 'historic';
   const title = f.title || f.kind;
   const sample = String(f.sample || '');
   return h('article', { id: f.id, class: `pg-subsys is-${tone}`, 'aria-label': `${title}: ${stateText}` },
@@ -195,7 +181,7 @@ function failureCard(f) {
     f.what ? h('p', { class: 'pg-hint' }, f.what) : null,
     sample ? h('pre', { class: 'pg-mono-block' }, clip(sample, 220)) : null,
     h('div', { class: 'pg-hintbox' }, h('strong', {}, 'Do this'), h('p', {}, f.next || f.hint || 'No action recorded for this failure kind.')),
-    h('div', { class: 'pg-head-actions' }, fixButton(f)),
+    h('div', { class: 'pg-head-actions' }, actionButton(f, (S.data && S.data.subsystems) || [], S.ctx.navigate), dismissButton(f, S.ctx.api, () => refresh(true))),
     failureFacts(f, active));
 }
 
@@ -221,7 +207,7 @@ function enforcementCard(e) {
           ],
         }),
         projects.length
-          ? h('p', { class: 'pg-hint' }, `By project: ${projects.map((p) => `${projName(p.project)} ×${p.count}`).join(', ')}`)
+          ? h('p', { class: 'pg-hint' }, `By project: ${projects.map((p) => `${p.name || projName(p.project)} ×${p.count}`).join(', ')}`)
           : null)
       : h('p', { class: 'pg-hint' }, 'No denies or gate blocks in this window.')],
   });
@@ -267,7 +253,9 @@ function successCard(s) {
     h('span', { class: 'pg-success-last' }, fmtWhen(s.last)));
 }
 
-function silentFailuresCard(fails) {
+function silentFailuresCard(all) {
+  const fails = all.filter((f) => !f.dismissed);
+  const hidden = all.filter((f) => f.dismissed);
   const now = fails.filter((f) => f.state === 'active');
   const old = fails.filter((f) => f.state !== 'active');
   const grid = (list) => h('div', { class: 'pg-subsys-grid' }, ...list.map(failureCard));
@@ -278,15 +266,20 @@ function silentFailuresCard(fails) {
       grid(old),
     ]
     : [];
+  const dismissed = hidden.length
+    ? [h('details', { class: 'pg-evidence', 'data-keep': 'dismissed-failures' },
+      h('summary', {}, `Dismissed (${hidden.length}): hidden until they happen again`),
+      h('ul', {}, ...hidden.map((f) => h('li', { class: 'pg-mono' }, `${f.title || f.kind} `, dismissButton(f, S.ctx.api, () => refresh(true), true)))))]
+    : [];
   return Card({
-    title: `Silent failures (${fails.length})`,
+    title: `Silent failures (${fails.length} distinct, ${fails.reduce((n, f) => n + (f.count || 0), 0)} occurrences)`,
     actions: [h('span', { class: 'pg-group-meta' }, 'Errored or stalled without surfacing')],
     children: [fails.length
       ? h('div', { class: 'pg-stack' },
         h('h3', { class: 'pg-sub' }, `Happening now (${now.length})`),
         now.length ? grid(now) : h('p', { class: 'pg-hint' }, 'Nothing is failing quietly right now: no failure was seen in the last 24h.'),
-        ...historic)
-      : EmptyState({ icon: 'check', title: 'No silent failures', body: 'Nothing errored quietly in this window.' })],
+        ...historic, ...dismissed)
+      : h('div', { class: 'pg-stack' }, EmptyState({ icon: 'check', title: 'No silent failures', body: 'Nothing errored quietly in this window.' }), ...dismissed)],
   });
 }
 

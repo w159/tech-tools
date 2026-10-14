@@ -2,14 +2,16 @@
 """Atlas Workboard v2: Herd page backend (single-instance herdr web UI + herdr socket) and the
 unified agents feed of the Atlas Command Center.
 
-GET  /api/v2/herd, /api/v2/herd/status -> atlas_herdr.status()  (cached, never spawns; says whether
+GET  /api/v2/herd, /api/v2/herd/status -> atlas_seats.status()  (cached, never spawns; says whether
                                           the herdr SERVER or only the web UI is down)
 GET  /api/v2/herd/agents               -> live agents from the herdr socket (read-only, HTTP 200 always);
                                           rows carry tab_label, state_changed_at, parent_pane, children
 GET  /api/v2/herd/agents/<pane>/peek   -> last N lines of a pane's output (read-only, bounded, redacted)
+GET  /api/v2/herd/capture?pane=&lines= -> a seat's redacted terminal text (rig backend; 501 on herdr)
 GET  /api/v2/herd/colony               -> status + the colony's live panes (read-only)
 POST /api/v2/herd/agents/<pane>/prompt -> send text to an IDLE agent (token-gated by the central guard)
-POST /api/v2/herd/ensure               -> atlas_herdr.ensure()  (reuse, or launch only if none)
+POST /api/v2/herd/ensure               -> atlas_seats.ensure()  (reuse, or launch only if none)
+POST /api/v2/herd/server/start         -> atlas_seats.ensure_server()  (start the herdr headless server if down)
 POST /api/v2/herd/panes                -> open a worker pane via atlas_launch.launch {name,prompt,project,[harness,run]}
 POST /api/v2/herd/panes/<pane>/kill    -> close one COLONY pane (ids outside the colony are refused)
 
@@ -38,7 +40,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-import atlas_herdr  # noqa: E402
+import atlas_seats  # noqa: E402
 import atlas_todo  # noqa: E402
 import atlas_dash_irc  # noqa: E402
 import atlas_dash_work  # noqa: E402
@@ -114,9 +116,11 @@ def _prune_seen(live: set[str]) -> None:
 
 def _tabs() -> list[dict]:
     """[{tab_id, workspace_id, label, number, focused, pane_count, agent_status}] (G2 tab labels)."""
+    if atlas_seats.backend() != "herdr":  # herdr-only: tabs have no rig equivalent
+        return []
     try:
-        tabs = atlas_herdr.rpc("tab.list").get("tabs")
-    except atlas_herdr.HerdrSockError:
+        tabs = atlas_seats.rpc("tab.list").get("tabs")
+    except atlas_seats.SockError:
         return []
     return [
         {
@@ -136,9 +140,11 @@ def _tabs() -> list[dict]:
 def _sessions() -> dict[str, str]:
     """pane_id -> agent session id. The session PATH never leaves this process: only the id that
     joins the pane to the telemetry runs table is kept."""
+    if atlas_seats.backend() != "herdr":  # herdr-only: agent session files
+        return {}
     try:
-        al = atlas_herdr.rpc("agent.list").get("agents")
-    except atlas_herdr.HerdrSockError:
+        al = atlas_seats.rpc("agent.list").get("agents")
+    except atlas_seats.SockError:
         return {}
     out = {}
     for a in al if isinstance(al, list) else []:
@@ -152,8 +158,8 @@ def _sessions() -> dict[str, str]:
 def _colony() -> dict[str, dict]:
     """pane_id -> {label, run} for the colony's panes (the mux workers); {} when none or unreachable."""
     try:
-        panes = atlas_herdr.list_panes()
-    except atlas_herdr.HerdrSockError:
+        panes = atlas_seats.list_panes()
+    except atlas_seats.SockError:
         return {}
     return {
         p["pane_id"]: {
@@ -339,7 +345,7 @@ def _enrich(
 
 
 def _status(ctx):
-    return 200, {"ok": True, **atlas_herdr.status()}
+    return 200, {"ok": True, **atlas_seats.status()}
 
 
 def _counts(rows: list[dict]) -> dict:
@@ -409,8 +415,8 @@ def _bg_agents(ctx) -> list[dict]:
 def _agents(ctx):
     t0 = time.perf_counter()
     now = time.time()
-    snap = atlas_herdr.agents()
-    st = atlas_herdr.status()
+    snap = atlas_seats.agents()
+    st = atlas_seats.status()
     conn = _db(ctx)
     tabs = _tabs() if snap["reachable"] else []
     try:
@@ -428,9 +434,9 @@ def _agents(ctx):
         "ok": True,
         "herdr": {"reachable": snap["reachable"], "reason": snap["reason"]},
         "web_ui": {
-            "healthy": st["healthy"],
-            "url": st["url"],
-            "auth_required": st["auth_required"],
+            "healthy": st.get("healthy"),
+            "url": st.get("url"),
+            "auth_required": st.get("auth_required", False),
         },
         "counts": _counts(snap["agents"] + bg),
         "workspaces": snap["workspaces"],
@@ -450,6 +456,32 @@ def _redact(text: str) -> str | None:
         return None
 
 
+def _read_pane(pane: str, n: int) -> tuple[dict | None, tuple[int, dict] | None]:
+    """(read result, None) or (None, (status, error body)): rig via capture, herdr via the pane.read socket call."""
+    if atlas_seats.backend() == "rig":
+        cap = atlas_seats.capture(pane, n)
+        if not cap.get("ok"):
+            return None, (404, {"ok": False, "error": "no such pane", "why": cap.get("error")})
+        return {"text": cap.get("text")}, None
+    try:
+        res = atlas_seats.rpc(
+            "pane.read",
+            {"pane_id": pane, "source": "recent", "lines": n, "format": "text"},
+            timeout=2.0,
+        ).get("read")
+    except atlas_seats.SockError as e:
+        code = 404 if e.reason == "rpc_error" else 503
+        return None, (
+            code,
+            {
+                "ok": False,
+                "error": "no such pane" if code == 404 else "herdr server is not reachable",
+                "why": e.reason,
+            },
+        )
+    return res, None
+
+
 def _peek_pane(pane: str, lines_raw) -> tuple[int, dict]:
     try:
         n = int(lines_raw) if lines_raw not in (None, "") else PEEK_DEFAULT_LINES
@@ -457,19 +489,9 @@ def _peek_pane(pane: str, lines_raw) -> tuple[int, dict]:
         return 400, {"ok": False, "error": "lines must be an integer"}
     n = max(1, min(n, PEEK_MAX_LINES))
     t0 = time.perf_counter()
-    try:
-        res = atlas_herdr.rpc(
-            "pane.read",
-            {"pane_id": pane, "source": "recent", "lines": n, "format": "text"},
-            timeout=2.0,
-        ).get("read")
-    except atlas_herdr.HerdrSockError as e:
-        code = 404 if e.reason == "rpc_error" else 503
-        return code, {
-            "ok": False,
-            "error": "no such pane" if code == 404 else "herdr server is not reachable",
-            "why": e.reason,
-        }
+    res, fail = _read_pane(pane, n)
+    if fail:
+        return fail
     text = _redact(
         _CTRL_RE.sub("", _ANSI_RE.sub("", str((res or {}).get("text") or "")))
     )
@@ -498,28 +520,57 @@ def _peek(ctx):
     return _peek_pane(ctx.groups[0], (ctx.query or {}).get("lines"))
 
 
+def _capture(ctx):
+    """GET /api/v2/herd/capture?pane=<id>&lines=<n>: a seat's terminal text, redacted (ANSI and secrets masked)."""
+    q = ctx.query or {}
+    pane = str(q.get("pane") or "")
+    if not pane:
+        return 400, {"ok": False, "error": "pane is required"}
+    try:
+        n = max(1, min(int(q.get("lines") or PEEK_DEFAULT_LINES), PEEK_MAX_LINES))
+    except (TypeError, ValueError):
+        return 400, {"ok": False, "error": "lines must be an integer"}
+    out = atlas_seats.capture(pane, n)
+    if out.get("error") == "not_supported":
+        return 501, out
+    if not out.get("ok"):
+        return 502, out
+    text = _redact(_CTRL_RE.sub("", _ANSI_RE.sub("", str(out.get("text") or ""))))
+    if text is None:
+        return 503, {"ok": False, "error": "redaction unavailable"}
+    return 200, {**out, "text": text, "redacted": True}
+
+
 def _prompt(ctx):
     pane = ctx.groups[0]
     body = ctx.json() or {}
     try:
-        res = atlas_herdr.send_prompt(pane, body.get("text"))
-    except atlas_herdr.PromptRefused as e:
+        res = atlas_seats.send_prompt(pane, body.get("text"))
+    except atlas_seats.PromptRefused as e:
         return e.http, {"ok": False, "error": e.error, "why": e.why}
+    if res.get("ok") is False:  # the rig backend reports refusal as a dict
+        return 502, {"ok": False, "error": "prompt_failed", "why": res.get("reason")}
     return 200, {"ok": True, "pane_id": pane, "result": res}
 
 
 def _ensure(ctx):
-    out = atlas_herdr.ensure()
-    atlas_herdr._status_cache = None  # the page re-reads status right after
+    out = atlas_seats.ensure()
+    atlas_seats.reset_status_cache()  # the page re-reads status right after
+    return (200 if out.get("ok") else 503), out
+
+
+def _start_server(ctx):
+    out = atlas_seats.ensure_server()
+    atlas_seats.reset_status_cache()
     return (200 if out.get("ok") else 503), out
 
 
 def _colony_route(ctx):
     """Colony status: web UI state and the colony's live panes (never spawns)."""
-    out = {"ok": True, **atlas_herdr.status()}
+    out = {"ok": True, **atlas_seats.status()}
     try:
-        out["panes"] = atlas_herdr.list_panes()
-    except atlas_herdr.HerdrSockError as e:
+        out["panes"] = atlas_seats.list_panes()
+    except atlas_seats.SockError as e:
         out["panes"], out["panes_error"] = [], e.reason
     return 200, out
 
@@ -543,12 +594,12 @@ def _create_pane(ctx):
     if not root:
         return 400, {"ok": False, "error": "unknown project"}
     res = atlas_launch.launch(root, name, prompt, harness=harness, run=run)
-    atlas_herdr._status_cache = None
+    atlas_seats.reset_status_cache()
     return (200 if res.get("ok") else 502), res
 
 
 def _kill_pane(ctx):
-    out = atlas_herdr.close_pane(ctx.groups[0])
+    out = atlas_seats.close_pane(ctx.groups[0])
     return (200 if out["ok"] else 404), out
 
 
@@ -560,8 +611,8 @@ def build_agents(ctx, project: str | None = None) -> dict:
     channel participants, one record per agent, with the status of the three layers."""
     t0 = time.perf_counter()
     now = time.time()
-    snap = atlas_herdr.agents()
-    st = atlas_herdr.status()
+    snap = atlas_seats.agents()
+    st = atlas_seats.status()
     reachable = snap["reachable"]
     rows = snap["agents"]
     conn = _db(ctx)
@@ -724,9 +775,9 @@ def build_agents(ctx, project: str | None = None) -> dict:
             "atlas": {"ok": True},
             "herdr_socket": {"reachable": reachable, "reason": snap["reason"]},
             "herdr_web_ui": {
-                "healthy": st["healthy"],
-                "url": st["url"],
-                "auth_required": st["auth_required"],
+                "healthy": st.get("healthy"),
+                "url": st.get("url"),
+                "auth_required": st.get("auth_required", False),
             },
         },
         "counts": _counts([r for r in records if r["pane_id"]]),  # == herdr agent list
@@ -747,7 +798,7 @@ def _agents_unified(ctx):
 
 def _resolve(ident: str) -> tuple[dict | None, dict]:
     """(live herdr row for a pane id, worker name or title, snapshot). Row is None when no match."""
-    snap = atlas_herdr.agents()
+    snap = atlas_seats.agents()
     if not snap["reachable"]:
         return None, snap
     colony = _colony()
@@ -809,15 +860,17 @@ def _unified_prompt(ctx):
     if isinstance(text, str):
         text = atlas_dash_irc.sanitize_keys(text)
     try:
-        res = atlas_herdr.send_prompt(row["pane_id"], text)
-    except atlas_herdr.PromptRefused as e:
+        res = atlas_seats.send_prompt(row["pane_id"], text)
+    except atlas_seats.PromptRefused as e:
         return e.http, {"ok": False, "error": e.error, "why": e.why}
+    if res.get("ok") is False:
+        return 502, {"ok": False, "error": "prompt_failed", "why": res.get("reason")}
     return 200, {"ok": True, "key": ident, "pane_id": row["pane_id"], "result": res}
 
 
 def _console(ctx):
     """Where the Command Center frames the unmodified herdr web UI (same-origin gateway or direct)."""
-    st = atlas_herdr.status()
+    st = atlas_seats.status()
     url = (st.get("url") or "").rstrip("/")
     return 200, {
         "ok": True,
@@ -844,9 +897,11 @@ ROUTES = [
     ("GET", r"^/api/v2/herd/status$", _status),
     ("GET", r"^/api/v2/herd/agents$", _agents),
     ("GET", rf"^/api/v2/herd/agents/({PANE_RE})/peek$", _peek),
+    ("GET", r"^/api/v2/herd/capture$", _capture),
     ("GET", r"^/api/v2/herd/colony$", _colony_route),
     ("POST", rf"^/api/v2/herd/agents/({PANE_RE})/prompt$", _prompt),
     ("POST", r"^/api/v2/herd/ensure$", _ensure),
+    ("POST", r"^/api/v2/herd/server/start$", _start_server),
     ("POST", r"^/api/v2/herd/panes$", _create_pane),
     ("POST", rf"^/api/v2/herd/panes/({PANE_RE})/kill$", _kill_pane),
     ("GET", r"^/api/v2/herd/console$", _console),

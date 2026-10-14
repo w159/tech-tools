@@ -409,6 +409,42 @@ class TestUnifiedFeed(AgentsBase):
         self.assertEqual([k for k in keys if k not in ("ghost-one", "lead")], [])
 
 
+class TestCapture(AgentsBase):
+    def cap(self, **q):
+        return herd._capture(self.ctx({k: str(v) for k, v in q.items()}))
+
+    def test_missing_pane_is_400(self):
+        self.assertEqual(self.cap()[0], 400)
+
+    def test_herdr_backend_is_501(self):
+        status, body = self.cap(pane="wA:p1")
+        self.assertEqual((status, body["error"]), (501, "not_supported"))
+
+    def test_rig_backend_returns_redacted_text(self):
+        text = f"\x1b[31mred\x1b[0m Authorization: Bearer {FAKE_TOKEN}\n"
+        with (
+            mock.patch.dict(os.environ, {"ATLAS_SEAT_BACKEND": "rig"}),
+            mock.patch(
+                "atlas_rig.capture",
+                return_value={"ok": True, "pane_id": "s", "text": text},
+            ) as c,
+        ):
+            status, body = self.cap(pane="s", lines=5)
+        self.assertEqual(status, 200, body)
+        c.assert_called_once_with("s", 5)
+        self.assertTrue(body["text"].startswith("red "))
+        self.assertNotIn(FAKE_TOKEN, json.dumps(body))
+
+    def test_rig_failure_is_502(self):
+        with (
+            mock.patch.dict(os.environ, {"ATLAS_SEAT_BACKEND": "rig"}),
+            mock.patch(
+                "atlas_rig.capture", return_value={"ok": False, "error": "gone"}
+            ),
+        ):
+            self.assertEqual(self.cap(pane="s")[0], 502)
+
+
 class TestPeek(AgentsBase):
     def peek(self, ident, lines=None, unified=True):
         q = {} if lines is None else {"lines": str(lines)}
@@ -566,6 +602,20 @@ class TestRoutesAndGate(unittest.TestCase):
         self.assertEqual(call("GET", "/api/v2/agents/wA:p1/peek"), 401)
         self.assertEqual(call("GET", "/api/v2/herd/agents/wA:p1/peek"), 401)
         self.assertEqual(call("POST", "/api/v2/agents/wA:p1/prompt"), 401)
+
+
+# These tests drive the herdr backend through the atlas_seats facade (their fakes patch atlas_herdr).
+_SEAT_ENV = __import__("unittest.mock").mock.patch.dict(
+    __import__("os").environ, {"ATLAS_SEAT_BACKEND": "herdr"}
+)
+
+
+def setUpModule():
+    _SEAT_ENV.start()
+
+
+def tearDownModule():
+    _SEAT_ENV.stop()
 
 
 if __name__ == "__main__":

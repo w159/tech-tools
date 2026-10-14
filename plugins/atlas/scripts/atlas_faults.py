@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 
 MAX_BYTES = 1 << 20  # 1 MiB; on overflow keep the newest half
@@ -99,4 +100,27 @@ def load(since: float = 0.0) -> list[dict]:
                     continue
     except Exception:  # noqa: BLE001
         pass
+    return out
+
+
+# format_after_edit's quiet skips: older installs wrote them as faults.
+QUIET_SKIP = re.compile(r"^formatter skipped: (missing|parse)\b")
+# An install path inside the error (omp's TS writer tags no plugin_version).
+_INSTALL_VER = re.compile(r"atlas(?:___|/)(\d+\.\d+\.\d+)")
+
+
+def live_faults(faults, version):
+    """Faults that describe this install: drop quiet formatter skips and rows tagged
+    (plugin_version, else an install path in the error) with another atlas version.
+    Untagged rows still count: their origin is unknown. Shared by the doctor and the dashboard."""
+    out = []
+    for f in faults:
+        err = str(f.get("error", ""))
+        if QUIET_SKIP.match(err):
+            continue
+        m = _INSTALL_VER.search(err)
+        tag = f.get("plugin_version") or (m.group(1) if m else None)
+        if version and tag and tag != version:
+            continue
+        out.append(f)
     return out

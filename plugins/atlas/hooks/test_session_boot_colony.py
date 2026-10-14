@@ -76,6 +76,15 @@ class ColonyBootTests(unittest.TestCase):
                 "subprocess.Popen", side_effect=lambda *a, **k: self.popen.append(a[0])
             ),
             mock.patch("urllib.request.urlopen", side_effect=urlopen),
+            mock.patch.object(
+                __import__("atlas_seats"), "backend", return_value="herdr"
+            ),
+            # herdr down -> one ensure_server attempt; keep it off the real herdr server
+            mock.patch.object(
+                __import__("atlas_herdr"),
+                "ensure_server",
+                return_value={"ok": False, "reason": "spawn denied"},
+            ),
         ):
             return session_boot.ensure_colony()
 
@@ -187,6 +196,88 @@ class ColonyBootTests(unittest.TestCase):
                 with mock.patch("subprocess.Popen"):
                     session_boot.ensure_colony()  # must not raise
 
+    def _boot_log(self):
+        try:
+            with open(os.path.join(self.home, "colony-boot.log")) as f:
+                return f.read()
+        except OSError:
+            return ""
+
+    def test_ensure_server_failure_is_logged_not_printed(self):
+        self.seed(
+            {**DOWN, "herdr_server": False}, age=300
+        )  # past the negative-cache TTL
+        self.assertIsNone(self.boot())
+        self.assertRegex(
+            self._boot_log(), r"ensure_colony: ensure_server .*spawn denied"
+        )
+
+    def test_unexpected_exception_is_logged_and_still_silent(self):
+        self.seed(DOWN, age=10)
+        with (
+            mock.patch.object(
+                __import__("atlas_seats"), "backend", return_value="herdr"
+            ),
+            mock.patch.object(
+                session_boot, "_colony_stack_url", side_effect=RuntimeError("kaboom")
+            ),
+        ):
+            self.assertIsNone(session_boot.ensure_colony())
+        self.assertRegex(self._boot_log(), r"ensure_colony: exception .*kaboom")
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SeatBackendBootTests(unittest.TestCase):
+    """Backend rig/none: boot is silent (None) and failures only reach colony-boot.log."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        p = mock.patch.dict(os.environ, {"ATLAS_HOME": self.home, "ATLAS_COLONY": "on"})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def boot(self, kind, popen_side=None):
+        with (
+            mock.patch.object(__import__("atlas_seats"), "backend", return_value=kind),
+            mock.patch("subprocess.Popen", side_effect=popen_side) as popen,
+        ):
+            return session_boot.ensure_colony(), popen
+
+    def log(self):
+        try:
+            return open(os.path.join(self.home, "colony-boot.log")).read()
+        except OSError:
+            return ""
+
+    def test_healthy_cache_no_spawn(self):
+        with open(os.path.join(self.home, "seat-status-cache.json"), "w") as f:
+            json.dump({"healthy": True}, f)
+        out, popen = self.boot("rig")
+        self.assertIsNone(out)
+        popen.assert_not_called()
+
+    def test_down_spawns_detached_ensure_once(self):
+        out, popen = self.boot("rig")
+        self.assertIsNone(out)
+        self.assertEqual(popen.call_count, 1)
+        self.assertTrue(popen.call_args[1]["start_new_session"])
+
+    def test_spawn_failure_logged_silently(self):
+        out, _ = self.boot("rig", popen_side=OSError("nope"))
+        self.assertIsNone(out)
+        self.assertRegex(self.log(), r"ensure_colony: exception .*nope")
+
+    def test_backend_none_logged(self):
+        out, popen = self.boot("none")
+        self.assertIsNone(out)
+        popen.assert_not_called()
+        self.assertRegex(self.log(), r"ensure_colony: backend none")
+
+    def test_autostart_off_no_spawn(self):
+        with mock.patch.dict(os.environ, {"ATLAS_HERDR_AUTOSTART": "off"}):
+            out, popen = self.boot("rig")
+        self.assertIsNone(out)
+        popen.assert_not_called()

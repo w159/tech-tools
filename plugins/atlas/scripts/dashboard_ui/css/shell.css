@@ -121,6 +121,7 @@ html[data-inspector="overlay"] .inspector { position: fixed; top: 0; right: 0; b
   .topbar .mobile-project { flex: 1; min-width: 0; display: block; }
   .live-pill { padding: 0 var(--s-2); }
   .strip-band { grid-area: band; display: block; height: 40px; overflow-x: auto; overflow-y: hidden; background: var(--chrome); border-bottom: 1px solid var(--border); padding: 0 var(--s-3); scrollbar-width: none; }
+  .strip-band .fleet-strip .sr-only { position: static; width: auto; height: auto; margin: 0; clip: auto; overflow: visible; white-space: nowrap; font-size: 12px; color: var(--text-dim, inherit); order: 2; }
   .strip-band .fleet-strip { height: 40px; flex-wrap: nowrap; width: max-content; }
   .tabbar { grid-area: tabs; display: flex; background: var(--chrome); border-top: 1px solid var(--border); z-index: var(--z-chrome); }
   .tabbar a, .tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; border: 0; background: none; color: var(--text-dim); font-size: var(--fs-2xs); font-weight: 550; text-decoration: none; }

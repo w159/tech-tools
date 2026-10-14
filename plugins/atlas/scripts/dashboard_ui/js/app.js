@@ -10,7 +10,7 @@ import overview from "./pages/overview.js";
 import work from "./pages/work.js";
 import { openEditor } from "./integrations.js";
 import { openNewThread } from "./hp.js";
-import { normalizeNav, orderGroups, MOBILE_TABS } from "./nav-order.js";
+import { normalizeNav, orderGroups, MOBILE_TABS, LENS_ROUTES } from "./nav-order.js";
 
 // ---- store ----------------------------------------------------------------
 
@@ -41,7 +41,7 @@ const RECENT_KEY = "atlas.recent";
 
 const GROUPS = [
   { id: "observe", label: "Monitor", desc: "See what Atlas and your agents are doing", items: [{ page: "overview" }, { page: "activity" }, { page: "health" }] },
-  { id: "operate", label: "Operate", desc: "Work with running agents and their channel", items: [{ page: "agents", label: "Agents" }, { page: "colony", label: "Colony", icon: "herd" }, { page: "channels", label: "Channels", icon: "irc" }], tree: true },
+  { id: "operate", label: "Operate", desc: "Work with running agents and their channel", items: [{ page: "agents", label: "Agents" }, { page: "colony", label: "Colony", icon: "herd" }, { page: "terminal", label: "Terminal", icon: "herd" }, { page: "channels", label: "Channels", icon: "irc" }], tree: true },
   { id: "improve", label: "Improve", desc: "Atlas's self-improvement loop", items: [{ page: "improve" }] },
   { id: "configure", label: "Configure", desc: "Choose projects and change behavior", items: [{ page: "projects" }, { page: "settings" }] },
 ];
@@ -56,7 +56,7 @@ const DESC = {
   improve: "Atlas's self-improvement loop: observe, mine, propose, apply, remeasure.",
   projects: "Pin, mute or hide the projects Atlas has seen.",
   settings: "Behavior switches, dashboard preferences and navigation order.",
-  terminal: "The raw herdr terminal for every pane.",
+  terminal: "The raw terminal for every pane.",
 };
 // Rebuild a chrome region only when what it shows changed, so the 8s refresh never replaces a node under the operator's pointer or focus.
 const sigs = {};
@@ -184,7 +184,7 @@ function makeCtx(params) {
 
 async function route() {
   let { id, anchor, params } = parseHash();
-  const lensRoute = id === "agents" && { console: "terminal", colony: "terminal", channel: "channels" }[params.lens];
+  const lensRoute = id === "agents" && LENS_ROUTES[params.lens];
   if (lensRoute) { // old Agents lenses became their own routes
     const { lens: _l, view: _v, ...rest } = params;
     history.replaceState(null, "", hashFor(lensRoute, rest, anchor));
@@ -706,7 +706,7 @@ function paletteEntries() {
   act("prompt", "Prompt agent", () => openAppPalette("@"), "", "send");
   act("post", "Post to channel", () => navigate("channels"), "", "message");
   act("todo", "Add todo", () => navigate("agents?lens=board"), "", "work");
-  act("hp-thread", "New herdr project thread", () => openNewThread({}), "", "plus");
+  act("hp-thread", "New project thread", () => openNewThread({}), "", "plus");
   act("terminal", "Start terminal service", async () => { try { await api.post("herd/ensure", {}); toast("Terminal service started", { kind: "ok" }); agentsStore.recheck(); } catch (e) { toastError(e, "Could not start the terminal service"); } }, "", "terminal");
   act("refresh", "Refresh", refreshPage, "r", "refresh");
   act("theme", "Toggle theme", toggleTheme, "\u21E7 d", "sun");

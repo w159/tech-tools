@@ -1,0 +1,48 @@
+=== RED (HEAD + new tests) ===
+FAIL: test_native_bash_ignored_in_omp_session (test_atlas_gates.AtlasGatesTest.test_native_bash_ignored_in_omp_session)
+Ran 6 tests in 0.620s
+FAILED (failures=1)
+ERROR: test_done_report_closes_lead_made_board_item_by_recorded_id (test_worker_report_gate.WorkerReportGateTest.test_done_report_closes_lead_made_board_item_by_recorded_id)
+FAIL: test_member_finish_cli_with_done_report_reaps_like_claude (test_worker_report_gate.WorkerReportGateTest.test_member_finish_cli_with_done_report_reaps_like_claude)
+Ran 31 tests in 1.675s
+FAILED (failures=1, errors=1)
+(fail) D2 age rolls over to hours and days [0.23ms]
+(fail) D3 saturated bar is an empty track and a 6-day lane fits the width [0.82ms]
+(fail) D4 roleOf of a plain name is task [0.08ms]
+(fail) D6 omp phase names map to rail phases [0.07ms]
+(fail) textOf pulls a sub's final report text from string, content[] and details.result shapes [0.38ms]
+ 84 pass
+ 5 fail
+=== sentinel on HEAD ===
+FAIL: test_sentinel_stays_at_cwd_without_any_marker (test_atlas_db.UncoveredPathsTest.test_sentinel_stays_at_cwd_without_any_marker)
+Ran 109 tests in 0.697s
+FAILED (failures=1)
+=== GREEN (working tree) ===
+Ran 6 tests in 0.588s
+OK
+Ran 31 tests in 1.724s
+OK
+ 89 pass
+ 0 fail
+=== FULL suites ===
+FAIL: test_installed_hook_files_match_repo (test_atlas_contract.InstalledParityContract.test_installed_hook_files_match_repo)
+Ran 1508 tests in 89.390s
+FAILED (failures=1)
+--- scripts
+ERROR: test_sweep_state (unittest.loader._FailedTest.test_sweep_state)
+FAIL: test_sentinel_stays_at_cwd_without_any_marker (test_atlas_db.UncoveredPathsTest.test_sentinel_stays_at_cwd_without_any_marker)
+FAIL: test_no_project_root_fails_loudly (test_atlas_finding.AtlasFindingCli.test_no_project_root_fails_loudly)
+FAIL: test_no_marker_in_temp_roots (test_no_tmp_marker.TmpRootMarkerTest.test_no_marker_in_temp_roots)
+Ran 1785 tests in 129.041s
+FAILED (failures=3, errors=1)
+--- omp
+ 440 pass
+ 0 fail
+--- diff
+8:-def set_member_agent_id(root: Optional[str], name: str, agent_id: str) -> int:
+9:+def member_board_item(root: Optional[str], name: str) -> Optional[str]:
+10:+    """Board item id recorded on member `name` from its dispatch prompt, else None."""
+11:+    n = _sanitize_owner(name)
+14:+            if m["name"] == n and m.get("board_item"):
+20:+    root: Optional[str], name: str, agent_id: str, board_item: str = ""
+22:@@ -1374,0 +1388,2 @@ def set_member_agent_id(root: Optional[str], name: str, agent_id: str) -> int:

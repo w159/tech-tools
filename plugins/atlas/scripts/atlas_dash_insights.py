@@ -333,7 +333,7 @@ def _fold_tool_calls(
 def _fold_hook_faults(since: float, root: str | None) -> list[dict]:
     """Swallowed hook crashes recorded by atlas_faults, grouped per hook."""
     groups: dict[str, dict] = {}
-    for rec in atlas_faults.load(since):
+    for rec in atlas_faults.live_faults(atlas_faults.load(since), atlas_faults._plugin_version()):
         cwd = str(rec.get("cwd") or "")
         if root and cwd != root and not cwd.startswith(root.rstrip("/") + "/"):
             continue
@@ -465,24 +465,28 @@ def _fold_doctor_regressions(db: _Db) -> list[dict]:
         # user dismissed (rejected) is not actionable; so is any zero-validity
         # judgment, which the miner auto-resolves.
         has_f = db.has("findings") and "finding_id" in db.cols("improvements")
-        for r in db.dicts(
-            "SELECT COUNT(*) AS n, MIN(i.ts) AS first, "
-            "MAX(COALESCE(i.remeasured_at,i.ts)) AS last, "
-            "MAX(i.metric) AS sample FROM improvements i "
-            + (
-                "LEFT JOIN findings f ON f.id=i.finding_id "
-                "WHERE i.verdict='regressed' "
-                "AND COALESCE(f.status,'') NOT IN ('resolved','rejected')"
-                if has_f
-                else "WHERE i.verdict='regressed'"
-            )
-        ):
-            if r["n"]:
+        # Only the newest row per finding counts: older rows are superseded by a
+        # later remeasure, so an applied fix is not "worse after its fix" twice.
+        rows = db.dicts(
+            "SELECT i.finding_id AS fid, i.ts AS first, "
+            "COALESCE(i.remeasured_at,i.ts) AS last, i.metric AS sample "
+            "FROM improvements i LEFT JOIN findings f ON f.id=i.finding_id "
+            "WHERE i.verdict='regressed' "
+            "AND COALESCE(f.status,'') NOT IN ('resolved','rejected') "
+            "AND i.id=(SELECT i2.id FROM improvements i2 "
+            "WHERE i2.finding_id=i.finding_id ORDER BY i2.ts DESC, i2.id DESC LIMIT 1)"
+            if has_f
+            else "SELECT NULL AS fid, MIN(ts) AS first, "
+            "MAX(COALESCE(remeasured_at,ts)) AS last, MAX(metric) AS sample, "
+            "COUNT(*) AS n FROM improvements WHERE verdict='regressed'"
+        )
+        for r in rows:
+            if has_f or r.get("n"):
                 out.append(
                     {
                         "kind": "doctor_regression",
                         "project": "",
-                        "count": r["n"],
+                        "count": r.get("n") or 1,
                         "first": r["first"],
                         "last": r["last"],
                         "sample": _clip(
@@ -490,6 +494,9 @@ def _fold_doctor_regressions(db: _Db) -> list[dict]:
                         ),
                         "hint": "Remeasure says this metric got worse after the fix.",
                         "source": "improvements.verdict=regressed",
+                        "tool": f"finding-{r['fid']}",
+                        # UI: link "Open in Improve" to this finding
+                        "finding_id": r["fid"],
                     }
                 )
     return out
@@ -606,6 +613,7 @@ def _fold_hook_burst(scan: dict, since: float) -> list[dict]:
             "hint": "The Stop-hook circuit breaker tripped; the hook chain is "
             "thrashing and was silenced for that session.",
             "source": "hookstate.stop_events",
+            "session_id": max(recent, key=lambda x: x[1])[0],  # UI: "Copy session id"
         }
     ]
 
@@ -694,7 +702,7 @@ FAILURE_INFO = {
     "hook_burst_tripped": (
         "Stop-hook breaker tripped",
         "The Stop hook fired many times within seconds in one session, so atlas silenced the hook chain for that session.",
-        "Nothing to do unless it keeps recurring; then look for a loop in hooks/completion_gate.py.",
+        "The breaker is the safety net working, not a crash. Nothing to do unless it keeps recurring; then copy the session id and look for a loop in hooks/completion_gate.py.",
     ),
     "dispatch_unclassified": (
         "Untyped subagent dispatch",
@@ -719,7 +727,7 @@ FAILURE_INFO = {
     "doctor_regression": (
         "A fix stopped holding",
         "A finding you fixed was remeasured and its metric got worse again.",
-        "Open Improve, find the regressed finding, then Reopen or Remeasure it.",
+        "Use Open in Improve on this item (it links the finding), then Reopen or Remeasure it.",
     ),
     "doctor_miner_error": (
         "Doctor miner crashed",
@@ -782,10 +790,14 @@ def _collect_events(
     failures: list[dict] = []
     enforcement: list[dict] = []
     tool_errors: list[dict] = []
+    dismissed = _dismissed_read()
     for it in items:
         key = f"{it['kind']}|{it['project']}|{it.get('tool', '')}|{it['source']}"
         it["id"] = hashlib.sha1(key.encode()).hexdigest()[:12]
         _annotate(it, now, since)
+        # dismissal expires the moment the item recurs (last seen after the click)
+        at = dismissed.get(it["id"])
+        it["dismissed"] = at is not None and (it.get("last") or 0) <= at
         it["first"] = _iso(it["first"])
         it["last"] = _iso(it["last"])
         if it["kind"] in ENFORCEMENT_KINDS:
@@ -802,6 +814,60 @@ def _collect_events(
     return failures, enforcement, scan, tool_errors
 
 
+DISMISSED_PATH = PREFS_PATH.with_name("dashboard-dismissed.json")
+_DISMISS_ID_RE = re.compile(r"^[0-9a-f]{12}$")
+
+
+def _dismissed_read() -> dict[str, float]:
+    """{failure id: epoch it was dismissed}; a missing or corrupt file means none."""
+    try:
+        raw = json.loads(Path(DISMISSED_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        k: float(v)
+        for k, v in raw.items()
+        if isinstance(k, str)
+        and isinstance(v, (int, float))
+        and not isinstance(v, bool)
+    }
+
+
+def route_dismiss(ctx):
+    """POST {id} dismisses a silent failure; {id, undo: true} restores it.
+    The click time is stored, so a later recurrence (last seen after it) shows again."""
+    body = ctx.json()
+    fid = body.get("id") if isinstance(body, dict) else None
+    if not isinstance(fid, str) or not _DISMISS_ID_RE.match(fid):
+        return _err(
+            400, "invalid id", "id must be a 12-char failure id", 'POST {"id":"<id>"}'
+        )
+    state = _dismissed_read()
+    if body.get("undo") is True:
+        state.pop(fid, None)
+    else:
+        state[fid] = time.time()
+    path = Path(DISMISSED_PATH)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(
+            dir=str(path.parent), prefix=".dashboard-dismissed.", suffix=".tmp"
+        )
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        os.replace(tmp, path)
+    except OSError as e:
+        return _err(
+            500,
+            "could not save dismissal",
+            str(e),
+            f"check write access to {path.parent}",
+        )
+    return 200, {"ok": True, "id": fid, "dismissed": body.get("undo") is not True}
+
+
 def _enforcement_summary(items: list[dict]) -> dict:
     """Counts, top rules and per-project totals for the enforcement stream.
     A rule is the denied tool (gate_deny) or the gate that blocked (gate_block)."""
@@ -810,7 +876,10 @@ def _enforcement_summary(items: list[dict]) -> dict:
     projects: dict[str, int] = {}
     for it in items:
         counts[it["kind"]] = counts.get(it["kind"], 0) + it["count"]
-        projects[it["project"]] = projects.get(it["project"], 0) + it["count"]
+        # Scratch/fixture roots (a bare "m") and empty projects are one honest bucket.
+        pr = it["project"]
+        pr = "" if not pr or _is_noise_root(pr) else pr
+        projects[pr] = projects.get(pr, 0) + it["count"]
         rule = it.get("tool") or it["kind"]
         b = rules.setdefault(
             (it["kind"], rule),
@@ -832,7 +901,11 @@ def _enforcement_summary(items: list[dict]) -> dict:
         "counts": counts,
         "top_rules": top[:10],
         "projects": [
-            {"project": p, "count": n}
+            {
+                "project": p,
+                "name": os.path.basename(p.rstrip("/")) or p or "Unattributed",
+                "count": n,
+            }
             for p, n in sorted(projects.items(), key=lambda kv: (-kv[1], kv[0]))
         ][:MAX_ITEMS],
         "note": "Policy enforcement working as designed; not a failure.",
@@ -1830,6 +1903,25 @@ def _is_fixture_root(root: str) -> bool:
     return p == tmp or p.startswith(tmp + os.sep) or not os.path.isdir(p)
 
 
+def _live_agents_by_root(roots) -> dict[str, int]:
+    """Live herdr agents per project root (cwd under the root): the same source
+    the Agents page lists, so the Projects card and that page agree."""
+    try:
+        import atlas_seats
+        from atlas_dash_herd import _project_of
+
+        rows = atlas_seats.agents().get("agents", [])
+    except Exception:
+        return {}
+    roots = sorted(roots, key=len, reverse=True)  # deepest root wins
+    out: dict[str, int] = {}
+    for a in rows:
+        r = _project_of(a.get("cwd") or "", roots)
+        if r:
+            out[r] = out.get(r, 0) + 1
+    return out
+
+
 def route_projects(ctx):
     db = _open(ctx)
     now = time.time()
@@ -1851,6 +1943,7 @@ def route_projects(ctx):
             (now - 3600,),
         ):
             active[root] = n
+    live_agents = _live_agents_by_root(names)
     fails: dict[str, int] = {}
     enforced: dict[str, int] = {}
     ext_errs: dict[str, int] = {}
@@ -1884,7 +1977,7 @@ def route_projects(ctx):
                 "name": meta["name"],
                 "last_active": _iso(last_ts),
                 "runs_7d": runs,
-                "agents_active": active.get(root, 0),
+                "agents_active": live_agents.get(root, 0),
                 "todos": {"open": td["open"], "done": td["done"]},
                 "health": health,
                 "failures_7d": f,
@@ -1912,7 +2005,9 @@ def route_overview(ctx):
     )
     tool_errors = _tool_error_summary(tool_error_items)
     cur_total = sum(s["count"] for s in silent)
-    act_total = sum(s["count"] for s in silent if s["state"] == "active")
+    act_total = sum(
+        s["count"] for s in silent if s["state"] == "active" and not s["dismissed"]
+    )
     # previous window [since-win, since): only the DB-bounded tool_error fold, so
     # the delta compares like with like (log/ingest/hookstate sources are not
     # windowed) and counts only atlas-attributable tool errors, as the current
@@ -1974,7 +2069,7 @@ def route_overview(ctx):
             "delta": delta(runs_n, runs_prev),
             "prior": runs_prev,
             "status": "ok",
-            "hint": "orchestrator and worker runs in window",
+            "hint": "orchestrator and worker runs, whole window",
         },
         {
             "id": "dispatches",
@@ -1982,7 +2077,7 @@ def route_overview(ctx):
             "value": disp_n,
             "delta": None,
             "status": "ok",
-            "hint": "subagent dispatches in window",
+            "hint": "subagent dispatches, whole window (not just 24h)",
         },
         {
             "id": "silent_failures",
@@ -1991,8 +2086,8 @@ def route_overview(ctx):
             "delta": delta(cur_bounded, prev_silent_n),
             "prior": prev_silent_n,
             "status": "fail" if act_total >= 100 else "warn" if act_total else "ok",
-            "hint": f"atlas faults seen in the last 24h ({cur_total - act_total} older ones "
-            "in the window are historic and listed in Health): internal tool faults, "
+            "hint": f"occurrences (not distinct failures; Health groups them), last 24h only ({cur_total - act_total} older ones in the "
+            "window are historic, listed in Health): internal tool faults, "
             "unclassified errors, hook crashes, stalls and regressions",
         },
         {
@@ -2011,7 +2106,7 @@ def route_overview(ctx):
             "value": open_f,
             "delta": None,
             "status": "warn" if open_f else "ok",
-            "hint": "open doctor-ledger findings awaiting a decision; "
+            "hint": "all open doctor-ledger findings, any age, awaiting a decision; "
             "not the Needs-attention list, which counts grouped failures",
         },
     ]
@@ -2028,23 +2123,21 @@ def route_overview(ctx):
         )
 
     attention = []
-    active = [s for s in silent if s["state"] == "active"]
+    active = [s for s in silent if s["state"] == "active" and not s["dismissed"]]
     for s in active[:12]:
+        # the Stop breaker is the safety net working: warn at most, never fail
         sev = (
-            "fail"
-            if s["kind"]
-            in (
-                "hook_burst_tripped",
-                "hook_crash",
-                "dashboard_error",
-                "doctor_miner_error",
-            )
+            "warn"
+            if s["kind"] == "hook_burst_tripped"
+            else "fail"
+            if s["kind"] in ("hook_crash", "dashboard_error", "doctor_miner_error")
             or s["count"] >= 50
             else "warn"
         )
         attention.append(
             {
                 "id": s["id"],
+                "kind": s["kind"],
                 "severity": sev,
                 "project": s["project"],
                 "title": s.get("title") or s["kind"].replace("_", " "),
@@ -2054,6 +2147,8 @@ def route_overview(ctx):
                 "count": s["count"],
                 "first": s["first"],
                 "last": s["last"],
+                "finding_id": s.get("finding_id"),
+                "session_id": s.get("session_id"),
                 "action": {"label": "Open in Health", "target": f"health#{s['id']}"},
             }
         )
@@ -2110,7 +2205,9 @@ def route_overview(ctx):
     return 200, {
         "kpis": kpis,
         "attention": attention,
-        "attention_historic": len(silent) - len(active),
+        "attention_historic": sum(
+            1 for s in silent if s["state"] != "active" and not s["dismissed"]
+        ),
         "recent_runs": recent,
         "trend": trend,
         "enforcement": _enforcement_summary(enforcement_items),
@@ -2492,7 +2589,7 @@ def route_activity(ctx):
             group
         ]
         label = (
-            (names.get(key, {}).get("name") or key or "(none)")
+            (names.get(key, {}).get("name") or key or "Unattributed")
             if group == "project"
             else (key or "(none)")
         )
@@ -3298,9 +3395,19 @@ def route_improve_remeasure(ctx):
             f"doctor finding {raw} does not exist",
             "refresh Improve",
         )
-    value = atlas_doctor.measure_finding_metric(
-        conn, finding, root=str(_q(ctx, "project", "")) or None
-    )
+    root = str(_q(ctx, "project", "")) or None
+    value = atlas_doctor.measure_finding_metric(conn, finding, root=root)
+    if value is None and atlas_doctor._measure(conn, finding, root)[0] == (
+        atlas_doctor.NOT_REPRODUCED
+    ):
+        # The miner ran clean but no longer reports this key: not an error and
+        # never scored as 0.0 (that would read as "improved").
+        return 200, {
+            "ok": True,
+            "state": {"id": fid, "current": None, "verdict": "not_reproduced"},
+            "next": "the miner no longer reports this finding; "
+            "it may be fixed, or below the miner's data threshold",
+        }
     if value is None:
         return _err(
             422,
@@ -3662,6 +3769,7 @@ ROUTES = [
     ("GET", r"^/api/v2/health$", route_health),
     ("GET", r"^/api/v2/activity$", route_activity),
     ("GET", r"^/api/v2/improve$", route_improve),
+    ("POST", r"^/api/v2/dismiss$", route_dismiss),
     ("POST", r"^/api/v2/improve/finding$", route_improve_finding),
     ("POST", r"^/api/v2/improve/remeasure$", route_improve_remeasure),
     ("POST", r"^/api/v2/improve/selffix$", route_improve_selffix),

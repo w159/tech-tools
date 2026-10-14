@@ -188,8 +188,9 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 
 Closed in 12.4.0 (see `docs/CHANGELOG.md`): omp lane role and tool, omp worker pane feed, claude team worker timestamps and sparklines, `atlas_mux.py status` per-pane listing, lean-ctx read-only classification, inline-op counter reset, Stop hook merge (5 -> 2 processes).
 
-- [done] Hook bytecode shims for large hooks and a lazy worker_inbox registry check: merged in 12.4.1.
-- [planned] Pre-existing environment-dependent test failures (present on 12.4.0 and 12.4.1): hooks test_completion_gate condition_g no-diff, two test_dispatch_tripwire absolute-script-path tests (fail when CLAUDE_PLUGIN_ROOT points at another plugin); scripts test_sweep_state load error, test_atlas_finding no-project-root, test_no_tmp_marker temp roots.
+- [planned] Pre-existing environment-dependent test failures, re-measured 2026-10-14 on the unreleased tree (`pytest plugins/atlas/scripts plugins/atlas/hooks`): exactly four remain: `test_atlas_contract InstalledParityContract::test_installed_hook_files_match_repo` (clears on reinstall), `test_atlas_db UncoveredPathsTest::test_sentinel_stays_at_cwd_without_any_marker`, `test_atlas_finding AtlasFindingCli::test_no_project_root_fails_loudly`, `test_no_tmp_marker TmpRootMarkerTest::test_no_marker_in_temp_roots`. The earlier list is stale: the two `test_dispatch_tripwire` absolute-path failures were test pollution from `test_atlas_doctor` (fixed), `test_sweep_state` and `test_completion_gate condition_g` no longer fail, and the brief-bytes and hook-parity notes from the 12.4.1 colony repair are closed.
+- [in-progress] omp Mission Control fixes (unreleased, test-verified, finding omp-widget-reap-verify): live check in an omp session after reinstall is open. Open follow-ups: omp payload shapes for a sub's final text (yield result, agent_end messages) are assumed, not seen live; board items cannot store phase `done`, so "Deliver" items stay phase-less on the board; atlas_mux team reap was not changed; 8 stale members in gwh-firstrespondersapp channels.json (lead-01a117, lead-01a136) predate reap-on-report and stay until cleared; board mirror lag (widget 1/7 vs omp 2/7) not root-caused.
+- [planned] completion_gate fixes: (a) `_check_evidence` only counts top-level files in `.atlas/evidence/` (completion_gate_core.py:189), not subfolders; (i) `_ledger_open_todos` counts the example `LEDGER | 3/5` line from the injected output style as open todos.
 - [planned] dispatch_tripwire 30% speedup not met (sqlite is about 1.5 ms; per-call recompile at about 8 ms is the lever). PostToolUse Edit latency is unchanged (real ruff run plus DB).
 - [planned] Hooks tolerate raw control characters in every payload (todo t417c7495); port the `sh -c` git parse fix to the omp/mandates.ts twin.
 - [blocked] Workers with extended thinking disabled: not possible on Sonnet 5.5 per Claude Code docs (costs, env-vars, sub-agents pages); low effort is the only lever. Platform limit.
@@ -203,6 +204,49 @@ Closed in 12.4.0 (see `docs/CHANGELOG.md`): omp lane role and tool, omp worker p
 - [planned] Before/after report HTML with live captures and metrics.
 - [planned] Decide whether to restore original wording in historical docs records the skill-merge rename rewrote (`docs/audits`, `docs/superpowers`).
 - [planned] Carry forward unchanged: the engine folds 2+ background dispatches into one row; the mod pane Tab key has no engine action; foreground Agent agentId mapping for SubagentStop.
+
+### Missed requests (added 2026-10-14 from the 48h transcript audit)
+
+- [planned] Show full role names ("Lead Agent"), not two-letter initials ("LE"), wherever subagents are labelled (requested 2026-10-12). Role characters (a8b8f393) shipped, but the label still truncates.
+- [planned] Message any colony member directly (DM or `/msg`) from the mod or omp surface (requested 2026-10-12).
+- [planned] Merge and deduplicate skills, agents, scripts and hooks to remove repeated text and wasted context (requested 2026-10-14). The Matt Pocock loop changes shipped; the deduplication pass did not. Overlaps the SessionStart <= 2000 bytes item above.
+- [in-progress] Release 12.4.2: bump version, commit and push the omp Mission Control fixes, the OpenRig seat backend and the current working-tree changes (requested 2026-10-14). Changelogs are titled 12.4.2; the version bump, commit and push follow.
+- [in-progress] `atlas_doctor` orchestration-wiring false alarm: `check_orchestration_wiring` read only the 12.4.1 `dispatch_tripwire.py` shim, not `dispatch_tripwire_core.py`, so every SessionStart flagged a healthy install. Addressed in source (check now reads `dispatch_tripwire_core.py`); unreleased; live check pending.
+- [in-progress] The 8 ghost workers in gwh-firstrespondersapp `channels.json` (lead-01a117, lead-01a136): reap_channels now treats a dead recorded pid as stale and applies a 2h lead idle TTL, so reap covers them once the fix is reinstalled. Unreleased; live check pending.
+
+### OpenRig seat backend (2026-10-14)
+
+Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026-10-14`; evidence `.atlas/evidence/openrig-spike.md`, `.atlas/evidence/openrig-adapter-live.md`; suite at the four documented failures, 3380 passed, omp 443, dashboard 47). Design: `docs/atlas-colony.md`, "Seat backend".
+
+- [in-progress] Reinstall after the 12.4.2 release so the running Claude Code and omp caches pick up the seat backend; until then live sessions still run the 12.4.1 herdr path.
+- [planned] Remove the herdr backend, `colony/herdr-web-ui` and `atlas_herdr.py` after one release of soak on OpenRig; `atlas_integrations.py` herdr-projects and file-viewer stay herdr-specific until then.
+- [planned] Rename the internal transport label `herdr` (board member records, `atlas_mux.py` spawn/kill/spawn-team JSON, `layers.herdr` in the dashboard store) to a neutral name; the UI text is already neutral.
+- [planned] Find and fix the writer that created `plugins/atlas/skills/.atlas/.run/channels.json` on 2026-10-14 15:03 (a channel registry written relative to cwd, not the repo marker). The stray was removed; the three `DocsMatchCodeContract` count tests fail whenever it reappears.
+- [planned] OpenRig pin policy: `RIG_VERSION` in `atlas_rig.py` pins 0.6.10; bumps need the spike rerun (install, `--no-kernel` daemon, terminal seat, `rig send --raw`, `rig add`) because the project is pre-1.0 with weekly releases and its docs lag the release.
+- [planned] `claude-code` seats (OpenRig-managed Claude sessions with `permission_policy: builtin:yolo`, activity telemetry) once OpenRig supports per-seat env vars; today `ATLAS_*` pins require terminal seats.
+- [planned] `rig capture` of a seat whose process has exited returns only the shell; `agents()` reports terminal seats as `unknown` activity. Map exit status from the board notes instead.
+- [planned] `atlas_seats.capture` on the herdr backend returns `not_supported` (501); the dashboard falls back to the iframe there.
+
+### Command Center and colony repair (2026-10-14)
+
+Unreleased, test-verified in source (see `docs/CHANGELOG.md` Unreleased). The herdr autostart, Start button, reap and tmux items below were verified live during the OpenRig work; the rest keep their live check pending.
+
+- [in-progress] herdr auto-start at session boot (`ATLAS_HERDR_AUTOSTART=off` disables) and the dashboard "Start herdr" button (now "Start runtime"; it starts whichever seat backend is selected).
+- [in-progress] Board and colony hygiene: carry-over expiry (24h or 2 carries), dead-pid and 2h idle TTL reap (`ATLAS_LEAD_IDLE_TTL`), reap at session boot and every 5 min from the dashboard.
+- [in-progress] tmux team hardening in `atlas_mux.py`: `remain-on-exit` set with `new-session`, dead-at-spawn errors, explicit brief arguments, dead-pane wait, `.atlas/.run/logs/atlas_mux.log`.
+- [in-progress] SubagentStop fallback member match by `<role>-` name.
+- [in-progress] Self-fix: 5s live-launch confirmation, finished-worker detection, 24h aging skip for `recurring_friction`, transport-neutral Improve text.
+- [in-progress] Dashboard noise: legacy formatter fault rows, regression dedupe, Stop-breaker warn, KPI window hints.
+- [in-progress] `classify_error` environment and model_misuse mappings.
+- [in-progress] Health and Overview actions: Dismiss and Restore, info tone, Open in Improve, Copy session id, stale omp install fix text.
+- [in-progress] omp worker-report non-object `outputSchema` tolerance; Settings shows Firstmate as "not installed (optional)".
+- [planned] Live spawn-team run with a failing worker.
+- [planned] `route_projects` `failures_7d` still counts dismissed items.
+- [planned] The Dismissed/Restore list and the Overview dismiss refresh have no automated test.
+- [planned] Self-fix DONE detection is a heuristic (no explicit DONE signal).
+- [planned] `reap_tick` runs without `keep=`; it relies on live-pid and the 2h TTL.
+- [planned] 3 pre-existing failures in `colony/herdr-web-ui/server/herdr/client.ts` tests.
+- [in-progress] Ships in 12.4.2 (see the Missed requests item above).
 
 ### Deferred backlog: atlas 10.5.0 wave (added 2026-10-10)
 

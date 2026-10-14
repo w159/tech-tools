@@ -18,6 +18,7 @@ import contextlib
 import fcntl
 import hmac
 import json
+import logging
 import os
 import re
 import secrets
@@ -708,6 +709,8 @@ def _is_junk_project(root) -> bool:
 
 def _projects(conn, recent_only=True, editable_only=False):
     now = time.time()
+    # The agent editor must list every real project, however idle: only junk is dropped.
+    recent_only = recent_only and not editable_only
     # Prefer projects with recent runs/session activity.
     rows = _q(
         conn,
@@ -1911,7 +1914,7 @@ TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
 # GETs that expose transcripts/agent output or live streams: token required.
 _SENSITIVE_GET = re.compile(
     r"^/api/v2/(stream|irc|colony|channels(/[^/]+)?|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
-    r"|^/api/v2/(herd/)?agents/[^/]+/peek$"
+    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/herd/capture$"
 )
 _TOKEN_EXEMPT = ("/api/health", "/health")
 _MIME = {
@@ -2271,7 +2274,7 @@ def _sampler_release(s: _Sampler) -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "AtlasDashboard/1.2"
+    server_version = "AtlasDashboard/" + (_plugin_manifest().get("version") or "0")
 
     def _json(self, code: int, payload):
         body = json.dumps(payload, default=str, separators=(",", ":")).encode("utf-8")
@@ -2895,6 +2898,56 @@ class _Server(ThreadingHTTPServer):
     request_queue_size = 128
 
 
+REAP_INTERVAL_S = 300
+_REAP_LAST = 0.0
+log = logging.getLogger("atlas.dashboard")
+_REAP_WARNED: set[str] = set()
+
+
+def _reap_warn(what: str, exc: Exception) -> None:
+    """Log a swallowed reaper error once per distinct message per process (the tick repeats every 5 min)."""
+    msg = f"reap_tick {what}: {exc!r}"
+    if msg not in _REAP_WARNED:
+        _REAP_WARNED.add(msg)
+        log.warning(msg)
+
+
+def reap_tick(now: float | None = None, interval: float = REAP_INTERVAL_S) -> dict | None:
+    """Reap dead colony channels for every known project root, at most once per
+    interval. Fail-open: a bad root or DB never stops the dashboard."""
+    global _REAP_LAST
+    now = time.time() if now is None else now
+    if now - _REAP_LAST < interval:
+        return None
+    _REAP_LAST = now
+    out: dict = {}
+    try:
+        import sqlite3
+
+        import atlas_todo
+
+        conn = sqlite3.connect(f"file:{dashboard_db_path()}?mode=ro", uri=True)
+        try:
+            roots = [r[0] for r in conn.execute("SELECT root_path FROM projects") if r[0]]
+        finally:
+            conn.close()
+    except Exception as exc:
+        _reap_warn("project list", exc)
+        return out
+    for root in roots:
+        try:
+            out[root] = atlas_todo.reap_channels(root)
+        except Exception as exc:
+            _reap_warn(f"reap {root}", exc)
+    return out
+
+
+def _reap_loop():
+    while True:
+        reap_tick()
+        time.sleep(REAP_INTERVAL_S)
+
+
 def serve(host: str, port: int):
     reason = _guard_shared_port(port)
     if reason:
@@ -2919,6 +2972,7 @@ def serve(host: str, port: int):
     __import__(
         "atlas_selffix"
     ).start_scheduler()  # daemon thread; serve() is not run by tests/imports
+    threading.Thread(target=_reap_loop, daemon=True, name="atlas-reap").start()
     httpd.serve_forever()
 
 

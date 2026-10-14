@@ -28,8 +28,9 @@ export function mountConsoleFrame(ctx, body) {
   function draw() {
     const st = agentsStore.getState();
     if (!st.loaded) return replace(body, State({ variant: "loading", label: "terminal", shape: "rows" }));
-    if (isFramed()) return recover(State({ variant: "empty", title: "The terminal cannot open inside itself", body: "This dashboard is already shown inside the herdr app. Use the herdr app's own panes.", inline: true }));
+    if (isFramed()) return recover(State({ variant: "empty", title: "The terminal cannot open inside itself", body: "This dashboard is already shown inside the terminal app. Use the terminal app's own panes.", inline: true }));
     if (st.down === "herdr") return recover(DegradedState({ layer: "herdr", reason: st.layers.herdr.reason, onRecheck: () => agentsStore.recheck() }));
+    if (st.layers.webui.none) return recover(State({ variant: "empty", title: "No web terminal for this runtime", body: "Open an agent and use its Terminal tab to read its output.", inline: true }));
     if (st.layers.webui.state === "down" || !st.layers.webui.url) {
       return recover(DegradedState({
         layer: "webui",

@@ -23,7 +23,9 @@ violation is possible, and keep advisory text only as the early warning.
 The stage 6 verifier proved that pointing ATLAS_DB at an unusable path silently
 no-ops the ENTIRE completion gate, not just the new condition (g): the
 orchestration check itself fails open to False before any condition is
-evaluated (`plugins/atlas/hooks/completion_gate.py`). Fail-open is the right
+evaluated (`_session_is_orchestrating` in
+`plugins/atlas/hooks/completion_gate_core.py`; `completion_gate.py` is now a
+shim. Citation refreshed 2026-10-14). Fail-open is the right
 default for hooks (never crash a session), but its scope should be
 per-condition, not per-gate - one shared dependency failing should degrade the
 gate, not delete it. Carried as a design note for the next gate revision.

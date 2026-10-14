@@ -608,3 +608,27 @@ test("claude team lane: role + tool from the stream log, sparkline from panefeed
 	expect(lane).toMatch(/[▂▃▄▅▆▇█]/); // a non-empty sparkline bucket
 	view.stop();
 });
+
+test("D2 age rolls over to hours and days", async () => {
+	const { age } = await import("./mission-panel");
+	expect([age(5), age(61), age(3599), age(3600), age(86399), age(540092)]).toEqual(["5s", "1m01s", "59m59s", "1h00m", "23h59m", "6d06h"]);
+});
+test("D3 saturated bar is an empty track and a 6-day lane fits the width", () => {
+	const plainOf = (l: string) => l.replace(/\x1b\[[0-9;]*m/g, "");
+	const workers = [{ name: "a-1", secs: 540092 }, ...[1, 2, 3].map(i => ({ name: `explorer-t${i}`, secs: 500, tool: { tool: "Edit", target: "x.ts", active: false } }))];
+	const lines = renderPanel(model({ workers, width: 100, maxLines: 14 }));
+	for (const l of lines) expect(visibleWidth(l)).toBeLessThanOrEqual(100);
+	expect(lines.map(plainOf).filter(l => /START|THINK/.test(l)).join("\n")).not.toContain("█");
+	expect(lines.map(plainOf).some(l => l.includes("6d06h"))).toBe(true);
+});
+test("D4 roleOf of a plain name is task", async () => {
+	const { roleOf } = await import("./mission-panel");
+	expect([roleOf("PonytailReview2"), roleOf("explorer-a324")]).toEqual(["task", "explorer"]);
+});
+test("D6 omp phase names map to rail phases", async () => {
+	const { phaseFromName, railPhase } = await import("./channel-view");
+	expect(["Setup", "Audit", "Deliver", "implement", "Tasks"].map(phaseFromName)).toEqual(["research", "implement", "done", "implement", undefined]);
+	expect(railPhase("Setup", undefined)).toBe("research");
+	expect(railPhase("Audit", undefined)).toBe("implement");
+	expect(railPhase("Deliver", undefined)).toBe("done");
+});

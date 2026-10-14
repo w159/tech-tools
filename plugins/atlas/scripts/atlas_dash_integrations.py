@@ -15,7 +15,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-import atlas_herdr  # noqa: E402
+import atlas_seats  # noqa: E402
 import atlas_integrations as ai  # noqa: E402
 
 
@@ -30,7 +30,7 @@ def known_roots(ctx) -> list:
         pass
     try:
         roots += [
-            a["cwd"] for a in atlas_herdr.agents().get("agents", []) if a.get("cwd")
+            a["cwd"] for a in atlas_seats.agents().get("agents", []) if a.get("cwd")
         ]
     except Exception:
         pass

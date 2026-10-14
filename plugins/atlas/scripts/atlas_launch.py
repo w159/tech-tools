@@ -105,11 +105,11 @@ def _ensure_session(session: str, cwd: str) -> str | None:
 def _taken(use: str, run: str) -> set:
     """Worker names already in use in this run on the chosen transport."""
     if use == "herdr":
-        import atlas_herdr
+        import atlas_seats
 
         try:
-            return {p["label"] for p in atlas_herdr.list_panes(run)}
-        except atlas_herdr.HerdrSockError:
+            return {p["label"] for p in atlas_seats.list_panes(run)}
+        except atlas_seats.SockError:
             return set()
     return {w["name"] for w in (atlas_mux._windows(atlas_mux._session(run)) or [])}
 
@@ -185,9 +185,9 @@ def launch(
         pane_env.update({k: v for k, v in child.items() if k in (env or {})})
         pane = atlas_mux.pane_command(pane_env, cmd)
         if use == "herdr":
-            import atlas_herdr
+            import atlas_seats
 
-            made = atlas_herdr.create_pane(window, pane, cwd=cwd, run=run, env=pane_env)
+            made = atlas_seats.create_pane(window, pane, cwd=cwd, run=run, env=pane_env)
             if not made["ok"]:
                 return _fail(made["reason"], prompt_file=prompt_file)
             pane_id = made["pane_id"]
@@ -240,10 +240,10 @@ def launch(
                 str(data.get("error") or "mux spawn failed"), prompt_file=prompt_file
             )
     if use == "herdr":
-        import atlas_herdr
+        import atlas_seats
 
         target = f"herdr:{pane_id}" if pane_id else f"{session}:{window}"
-        attach = f"{atlas_herdr.HERDR_URL}/"
+        attach = f"{atlas_seats.web_url()}/"
     else:
         target = f"{session}:{window}"
         attach = f"tmux attach -t {target}"
@@ -264,9 +264,9 @@ def is_live(target: str) -> bool:
     if not target:
         return False
     if target.startswith("herdr:"):
-        import atlas_herdr
+        import atlas_seats
 
-        return atlas_herdr.pane_live(target[len("herdr:") :])
+        return atlas_seats.pane_live(target[len("herdr:") :])
     try:
         res = atlas_mux._tmux("list-panes", "-t", target, "-F", "#{pane_dead}")
     except OSError:
@@ -279,9 +279,9 @@ def kill(target: str) -> None:
     if not target:
         return
     if target.startswith("herdr:"):
-        import atlas_herdr
+        import atlas_seats
 
-        atlas_herdr.close_pane(target[len("herdr:") :])
+        atlas_seats.close_pane(target[len("herdr:") :])
     else:
         atlas_mux._tmux("kill-window", "-t", target)
 
@@ -289,7 +289,7 @@ def kill(target: str) -> None:
 def attach_hint(target: str) -> str:
     """How a human reaches a launched worker: the colony web UI for a herdr pane, `tmux attach` otherwise."""
     if target.startswith("herdr:"):
-        import atlas_herdr
+        import atlas_seats
 
-        return f"{atlas_herdr.HERDR_URL}/?pane={target[len('herdr:') :]}&machine=local"
+        return f"{atlas_seats.web_url()}/?pane={target[len('herdr:') :]}&machine=local"
     return f"tmux attach -t {target}"

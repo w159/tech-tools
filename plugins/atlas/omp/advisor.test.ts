@@ -28,7 +28,7 @@ function harness(opts: { open?: string[] | Error; addError?: Error; env?: Record
 		},
 		openAdvisorItems(_sessionId: string, _root: string) {
 			if (opts.open instanceof Error) throw opts.open;
-			return opts.open ?? [];
+			return (opts.open ?? []).map(id => ({ id, text: `advisor[concern]: text of ${id}` }));
 		},
 		env: opts.env ?? {},
 	};
@@ -44,20 +44,26 @@ function harness(opts: { open?: string[] | Error; addError?: Error; env?: Record
 			ctx(kind, cwd),
 		);
 	const stop = (kind: "main" | "sub" = "main", cwd = dir) => handlers.session_stop({ signal: new AbortController().signal }, ctx(kind, cwd));
-	return { added, context, stop };
+	const start = (systemPrompt: string[] = ["base"], kind: "main" | "sub" = "main") =>
+		handlers.before_agent_start({ systemPrompt }, ctx(kind)) as { systemPrompt: string[] } | undefined;
+	return { added, context, stop, start };
 }
 
-test("concern and blocker notes become board items for this session; nits are ignored", async () => {
+test("every severity becomes a board item for this session; missing severity is a nit", async () => {
 	const h = harness();
 	await h.context([
 		{ note: "Edit skips the red test", severity: "concern", advisor: "default" },
 		{ note: "Stop and re-read the cited lines", severity: "blocker" },
 		{ note: "rename this variable", severity: "nit" },
 		{ note: "no severity means nit" },
+		{ note: "non-string severity", severity: 3 as never },
 	]);
 	expect(h.added).toEqual([
 		{ text: "advisor[concern]: Edit skips the red test", sessionId: "s-1", root: dir },
 		{ text: "advisor[blocker]: Stop and re-read the cited lines", sessionId: "s-1", root: dir },
+		{ text: "advisor[nit]: rename this variable", sessionId: "s-1", root: dir },
+		{ text: "advisor[nit]: no severity means nit", sessionId: "s-1", root: dir },
+		{ text: "advisor[nit]: non-string severity", sessionId: "s-1", root: dir },
 	]);
 });
 
@@ -118,13 +124,13 @@ test("session_stop blocks listing every open id and the close command; clean boa
 	const result = (await h.stop()) as { decision: string; reason: string };
 	expect(result.decision).toBe("block");
 	expect(result.reason).toContain("t1a2b3c4d");
-	expect(result.reason).toContain("t5e6f7a8b");
+	expect(result.reason).toContain("t5e6f7a8b: advisor[concern]: text of t5e6f7a8b");
 	expect(result.reason).toContain("atlas_todo.py complete --id <id> --evidence");
 
 	expect(await harness({ open: [] }).stop()).toBeUndefined();
 });
 
-test("session_stop blocks at most 3 times per session, then allows", async () => {
+test("session_stop blocks at most 3 times per turn, then allows; a new turn resets the cap", async () => {
 	const h = harness({ open: ["t1"] });
 	const decisions = [await h.stop(), await h.stop(), await h.stop(), await h.stop(), await h.stop()];
 	expect(decisions.map(d => (d as { decision?: string } | undefined)?.decision)).toEqual([
@@ -134,6 +140,27 @@ test("session_stop blocks at most 3 times per session, then allows", async () =>
 		undefined,
 		undefined,
 	]);
+	h.start();
+	expect(((await h.stop()) as { decision?: string }).decision).toBe("block");
+});
+
+test("before_agent_start appends one marker-guarded reminder listing ids and text while items are open", () => {
+	const h = harness({ open: ["t1", "t2"] });
+	const out = h.start();
+	expect(out?.systemPrompt[0]).toBe("base");
+	expect(out?.systemPrompt).toHaveLength(2);
+	const text = out?.systemPrompt[1] ?? "";
+	expect(text).toContain("t1: advisor[concern]: text of t1");
+	expect(text).toContain("t2: advisor[concern]: text of t2");
+	expect(text).toContain("complete --id <id> --evidence");
+	expect(h.start(out?.systemPrompt)).toBeUndefined(); // not duplicated
+});
+
+test("before_agent_start adds no reminder with no open items, for subagents, or when off", () => {
+	expect(harness({ open: [] }).start()).toBeUndefined();
+	expect(harness({ open: ["t1"] }).start(["base"], "sub")).toBeUndefined();
+	expect(harness({ open: ["t1"], env: { ATLAS_ADVISOR_GATE: "off" } }).start()).toBeUndefined();
+	expect(harness({ open: new Error("x") }).start()).toBeUndefined();
 });
 
 test("a clean stop does not spend the block budget", async () => {
@@ -180,7 +207,7 @@ test("defaultAdvisorDeps adds a real board item and lists it open for the sessio
 	expect(mine?.session_id).toBe("e2e-session");
 	expect(mine?.id).toMatch(/^t[0-9a-f]{8}$/);
 
-	expect(deps.openAdvisorItems("e2e-session", dir)).toEqual([mine?.id]);
+	expect(deps.openAdvisorItems("e2e-session", dir)).toEqual([{ id: mine?.id as string, text: "advisor[concern]: e2e probe item" }]);
 	expect(deps.openAdvisorItems("nobody", dir)).toEqual([]);
 });
 
@@ -212,7 +239,7 @@ test("replaying the same advisor note through real atlas_todo.py add --unique ke
 	const read = () => JSON.parse(readFileSync(boardFile, "utf8")) as { items: { id: string; content: string; status: string; session_id: string }[] };
 	const matching = () => read().items.filter(item => item.content === text && item.session_id === "replay-session");
 	expect(matching()).toHaveLength(1);
-	expect(deps.openAdvisorItems("replay-session", dir)).toEqual([matching()[0].id]);
+	expect(deps.openAdvisorItems("replay-session", dir)).toEqual([{ id: matching()[0].id, text }]);
 
 	const todo = join(import.meta.dir, "..", "scripts", "atlas_todo.py");
 	const done = Bun.spawnSync(["python3", todo, "complete", "--id", matching()[0].id, "--evidence", "fixed", "--root", dir]);

@@ -23,6 +23,23 @@ class TestAtlasDashboard(unittest.TestCase):
     def setUpClass(cls):
         cls.mod = _load()
 
+    def test_server_header_uses_manifest_version(self):
+        ver = self.mod._plugin_manifest()["version"]
+        self.assertEqual(self.mod.Handler.server_version, f"AtlasDashboard/{ver}")
+
+    def test_editable_projects_not_hidden_by_recency(self):
+        import time
+        from unittest import mock
+
+        row = {"id": 1, "root_path": "/x/stale-proj", "name": "stale-proj",
+               "last_seen": time.time() - 90 * 86400, "run_count": 1,
+               "last_run_at": time.time() - 90 * 86400}
+        with mock.patch.object(self.mod, "_q", return_value=[dict(row)]), \
+                mock.patch.object(self.mod, "_is_junk_project", return_value=False):
+            self.assertEqual(self.mod._projects(None), [])
+            got = self.mod._projects(None, editable_only=True)
+        self.assertEqual([r["root_path"] for r in got], ["/x/stale-proj"])
+
     def test_snapshot_canonical_and_filtered(self):
         snap = self.mod.snapshot()
         self.assertTrue(snap["ok"])
@@ -1299,3 +1316,36 @@ class SettingsDataTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestReapTick(unittest.TestCase):
+    def test_rate_limited_and_fail_open(self):
+        import atlas_dashboard as d
+
+        calls = []
+        d._REAP_LAST = 0.0
+        orig = d.dashboard_db_path
+        d.dashboard_db_path = lambda: "/nonexistent/x.db"
+        try:
+            self.assertEqual(d.reap_tick(now=1000.0, interval=300), {})  # bad db: fail-open
+            self.assertIsNone(d.reap_tick(now=1100.0, interval=300))  # inside interval
+            self.assertEqual(d.reap_tick(now=1400.0, interval=300), {})
+        finally:
+            d.dashboard_db_path = orig
+        self.assertEqual(calls, [])
+
+
+class TestReapTickLogging(unittest.TestCase):
+    def test_swallowed_errors_log_once_per_distinct_message(self):
+        import atlas_dashboard as d
+
+        orig = d.dashboard_db_path
+        d.dashboard_db_path = lambda: "/nonexistent/x.db"
+        d._REAP_WARNED.clear()
+        try:
+            with self.assertLogs(d.log, level="WARNING") as cm:
+                d.reap_tick(now=1000.0, interval=0)
+                d.reap_tick(now=2000.0, interval=0)  # identical failure: no second record
+        finally:
+            d.dashboard_db_path = orig
+        self.assertEqual(len(cm.records), 1)

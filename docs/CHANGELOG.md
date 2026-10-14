@@ -1,6 +1,38 @@
 # Changelog
 
-## Unreleased
+## 12.4.2 (2026-10-14)
+
+### Added
+
+OpenRig seat backend (atlas). The colony's worker panes now run on [OpenRig](https://openrig.dev) (`@openrig/cli` 0.6.10, Apache-2.0) behind one facade; the session boot installs, starts and checks the runtime silently. Evidence: `.atlas/evidence/openrig-spike.md`, `.atlas/evidence/openrig-adapter-live.md`. Architecture: `docs/atlas-colony.md`, "Seat backend".
+
+- `plugins/atlas/scripts/atlas_rig.py`: OpenRig adapter with the `atlas_herdr.py` public surface plus `capture` and `install`; `rig` CLI with `--json`, health from `GET /healthz`; workers are `terminal` seats (one rig per run or team, one member per worker), so worker commands and `ATLAS_*` env pins are unchanged.
+- Private install and isolation: `npm install --prefix $ATLAS_HOME/openrig/npm` (Node 22 or 24), `OPENRIG_HOME=$ATLAS_HOME/openrig/home`, `--no-kernel --host 127.0.0.1 --port 7437` (`ATLAS_RIG_PORT`), `CODEX_HOME` inside that home; the daemon's unconditional skill vendoring into `~/.claude/skills` and `~/.agents/skills` is neutralised by leaving empty marker-less directories it skips.
+- `plugins/atlas/scripts/atlas_seats.py`: seat-backend facade (`rig` by default, `herdr` fallback, `none`; `ATLAS_SEAT_BACKEND=rig|herdr|off`); `status()` carries `backend` and `web_ui`.
+- Silent autostart at SessionStart through `atlas_seats` (seat-status cache, detached `ensure`, no terminal output; failures in `colony-boot.log` and `seat-ensure.log`).
+- `atlas_mux.py` and `spawn-team` run workers and teams as seats whenever a backend is up (tmux layout as fallback); dashboard, launch and remote access call the facade; new `GET /api/v2/herd/capture`.
+- Dashboard UI is backend-neutral ("agent runtime", "Start runtime"); the inspector Terminal tab shows a polled text capture when the backend has no web UI.
+
+### Fixed
+
+- Colony boot failures are logged to `$ATLAS_HOME/colony-boot.log` instead of being swallowed; the herdr `ensure` message no longer claims Atlas cannot start herdr; the dashboard reaper logs once per distinct error.
+- Hook-fault accounting: doctor and dashboard share `atlas_faults.live_faults`, so their counts agree.
+- Dispatch tripwire no longer counts a subagent's tool calls as the lead's inline ops.
+- Test pollution from `test_atlas_doctor` (`CLAUDE_PLUGIN_ROOT` leaked into later modules) fixed; herdr route tests pin `ATLAS_SEAT_BACKEND=herdr`.
+- `atlas_doctor` orchestration-wiring check scans `dispatch_tripwire_core.py` as well as the `dispatch_tripwire.py` shim, so healthy 12.4.1+ installs no longer report a missing ORCH_SKILLS / mark_orchestrating.
+- omp Mission Control widget: age and title clock roll over to hours/days, saturated lane bars draw an empty track, plain-named workers show role `task`, and omp todo phase names (Setup, Audit, Deliver) map to rail phases.
+- A valid STATUS: DONE worker report now reaps its member and completes its board item on every path: the item is joined by the dispatch prompt's `BOARD ITEM:` id recorded on the member (lead-written CHANNEL: prompts have no owned item), omp's `member-finish --message` settles item and channel like Claude's SubagentStop, and the routing gate ignores native Bash in omp sessions.
+- herdr auto-start: `atlas_herdr.ensure_server()` runs `herdr server` detached at session boot (`ATLAS_HERDR_AUTOSTART=off` disables). Dashboard `POST /api/v2/herd/server/start` and a "Start herdr" button replace the Copy "herdr" block on Agents and the sidebar.
+- Board and colony hygiene: `carry_over` no longer refreshes `updated_at`; carried items get `carries`/`carried_at` and are archived (`carry_expired`) after 24h or 2 carries. `reap_channels` treats a dead recorded pid as stale and uses a 2h lead idle TTL (`ATLAS_LEAD_IDLE_TTL`); it runs at session boot and every 5 min from the dashboard (`reap_tick`).
+- tmux teams (`atlas_mux.py`): `remain-on-exit` is set in the same tmux call as `new-session`, so a fast-exiting first worker no longer kills the session; dead-at-spawn panes error; worker briefs pass explicit `--root`/`--channel`/`--owner` and an unresolved `$CLAUDE_PLUGIN_ROOT` script path; wait detects dead panes; tmux failures are logged to `.atlas/.run/logs/atlas_mux.log`.
+- SubagentStop falls back to a member match by `<role>-` name when no agentId mapping exists (exactly one candidate; an ambiguous match logs a fault).
+- Self-fix: a launch must be confirmed live within 5s or it counts as a failed attempt; finished workers (commits ahead, clean tree, idle 5 min) are detected and verified; `recurring_friction` findings with no events in 24h are skipped ("waiting for window to age out"); Improve text is transport-neutral.
+- Dashboard noise: legacy "formatter skipped: missing|parse" fault rows no longer count as hook crashes; regressions are deduped to the newest row per finding with `finding_id`; the Stop-breaker is warn (not fail) with `session_id`; KPI hints name their window.
+- `classify_error`: EPERM/operation not permitted and context-gateway withheld map to environment; `ctx_execute` selector misuse maps to model_misuse; a missing atlas script path maps to environment (stale install), not tool_fault.
+- Health and Overview actions: Dismiss (`POST /api/v2/dismiss`, stored in `~/.atlas/dashboard-dismissed.json`, reopens on recurrence, excluded from attention and the badge), a Restore list, info tone for not-atlas-fault kinds, Open in Improve, Copy session id, a "Copy diagnostic command" label, and no more disabled "No fix command". Stale omp install fix: `omp plugin upgrade atlas`, then restart omp sessions.
+- omp worker-report no longer faults on a non-object dispatch `outputSchema`; Settings shows Firstmate as "not installed (optional)".
+
+
 
 ## 12.4.1 (2026-10-14)
 

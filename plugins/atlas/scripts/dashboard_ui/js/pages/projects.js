@@ -1,4 +1,4 @@
-// Atlas Workboard v2 — Projects page: per-project cards with health, drill-in,
+// Atlas Command Center — Projects page: per-project cards with health, drill-in,
 // pin, hide and mute. Prefs are persisted via PUT /api/v2/prefs (minimal keys).
 // No innerHTML; all data via h() text children.
 import { h, replace } from '../dom.js';

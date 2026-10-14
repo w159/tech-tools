@@ -1341,5 +1341,79 @@ class ClaudeBgAgentsTests(unittest.TestCase):
         self.assertFalse(any(r.get("source") for r in body["agents"]))
 
 
+class EnsureServerTests(unittest.TestCase):
+    """ensure_server: starts `herdr server` once when down, no-ops when up, never raises."""
+
+    def setUp(self):
+        self.saved = {k: getattr(atlas_herdr, k) for k in ("_server_up", "_herdr_bin")}
+        self.popen = atlas_herdr.subprocess.Popen
+        self.spawned = []
+        atlas_herdr.subprocess.Popen = lambda argv, **kw: self.spawned.append(
+            (argv, kw)
+        )
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(atlas_herdr, k, v)
+        atlas_herdr.subprocess.Popen = self.popen
+
+    def test_noop_when_up(self):
+        atlas_herdr._server_up = lambda: True
+        self.assertEqual(atlas_herdr.ensure_server()["action"], "already_up")
+        self.assertEqual(self.spawned, [])
+
+    def test_starts_detached_once_when_down(self):
+        state = {"n": 0}
+
+        def up():
+            state["n"] += 1
+            return state["n"] > 2  # down on the probe, up after the spawn
+
+        atlas_herdr._server_up = up
+        atlas_herdr._herdr_bin = lambda: "/x/herdr"
+        out = atlas_herdr.ensure_server(wait=1)
+        self.assertEqual(out, {"ok": True, "action": "started"})
+        self.assertEqual(len(self.spawned), 1)
+        self.assertEqual(self.spawned[0][0], ["/x/herdr", "server"])
+        self.assertTrue(self.spawned[0][1]["start_new_session"])
+
+    def test_missing_binary_does_not_raise(self):
+        atlas_herdr._server_up = lambda: False
+        atlas_herdr._herdr_bin = lambda: None
+        out = atlas_herdr.ensure_server()
+        self.assertFalse(out["ok"])
+        self.assertEqual(self.spawned, [])
+
+    def test_spawn_error_does_not_raise(self):
+        atlas_herdr._server_up = lambda: False
+        atlas_herdr._herdr_bin = lambda: "/x/herdr"
+
+        def boom(*a, **k):
+            raise OSError("nope")
+
+        atlas_herdr.subprocess.Popen = boom
+        self.assertEqual(atlas_herdr.ensure_server()["action"], "error")
+
+    def test_dashboard_route_registered(self):
+        self.assertTrue(
+            any(r[1] == r"^/api/v2/herd/server/start$" for r in atlas_dash_herd.ROUTES)
+        )
+
+
+# Dashboard routes go through atlas_seats; pin the herdr backend so the fake sockets are used
+# regardless of which backend the host would auto-select.
+_SEAT_ENV = __import__("unittest.mock").mock.patch.dict(
+    os.environ, {"ATLAS_SEAT_BACKEND": "herdr"}
+)
+
+
+def setUpModule():
+    _SEAT_ENV.start()
+
+
+def tearDownModule():
+    _SEAT_ENV.stop()
+
+
 if __name__ == "__main__":
     unittest.main()

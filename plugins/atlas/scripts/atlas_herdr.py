@@ -343,6 +343,36 @@ def _server_up() -> bool:
         return False
 
 
+def ensure_server(wait: float = 1.5) -> dict:
+    """Start the herdr headless server (`herdr server`) detached if the socket does not answer.
+    Idempotent (no-op when up) and fail-open: never raises, waits at most `wait` seconds.
+    Output goes to $ATLAS_HOME/herdr-ensure.log."""
+    try:
+        if _server_up():
+            return {"ok": True, "action": "already_up"}
+        binary = _herdr_bin()
+        if not binary:
+            return {"ok": False, "action": "no_binary", "reason": "herdr binary not found"}
+        home = Path(os.environ.get("ATLAS_HOME") or Path.home() / ".atlas")
+        home.mkdir(parents=True, exist_ok=True)
+        with open(home / "herdr-ensure.log", "ab") as log:
+            subprocess.Popen(
+                [binary, "server"],
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+            )
+        end = time.monotonic() + wait
+        while time.monotonic() < end:
+            if _server_up():
+                return {"ok": True, "action": "started"}
+            time.sleep(0.1)
+        return {"ok": False, "action": "started_unconfirmed", "reason": "socket not answering yet"}
+    except Exception as e:  # fail-open: a boot must never break on herdr
+        return {"ok": False, "action": "error", "reason": str(e)[:200]}
+
+
 def _classify(command: str) -> str | None:
     """'managed'/'supervisor' iff argv[0] is bun/node and argv[1] is the plugin's server script.
 
@@ -991,7 +1021,7 @@ def ensure() -> dict:
             return _unavailable(chk["why"], chk["do"])
         if not _server_up():  # the web UI health 502s without it; spawning cannot help
             return _unavailable(
-                "the herdr server is not running (Atlas cannot start herdr itself)",
+                "the herdr server is not running (autostart failed or disabled; see $ATLAS_HOME/colony-boot.log)",
                 "start herdr in a terminal (run `herdr`), then recheck",
             )
         lock = _acquire(_lock_path())

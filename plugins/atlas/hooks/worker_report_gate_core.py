@@ -204,15 +204,35 @@ def close_board_item(atlas_todo, root, who, msg, report):
     status = first.split(":", 1)[-1].strip()
     ev = sections(lines, report["textFields"]).get("EVIDENCE", "")
     ev = next((ln.strip() for ln in ev.splitlines() if NUMBERED_RE.match(ln)), "")[:300]
-    for item in reversed(atlas_todo.load(root).get("items", [])):
-        if item.get("owner") == who and item.get("status") != "completed":
-            atlas_todo.set_status(
-                root,
-                item["id"],
-                "completed" if status == "DONE" else "blocked",
-                evidence=ev,
-            )
-            return
+    # The dispatch prompt's `BOARD ITEM: <id>` (recorded on the member at PostToolUse) is the
+    # authoritative join: a lead-supplied CHANNEL: prompt skips the owned dispatch todo, so an
+    # owner-only match missed those items. Owner match stays as the fallback.
+    bid = atlas_todo.member_board_item(root, who)
+    items = [
+        i
+        for i in atlas_todo.load(root).get("items", [])
+        if i.get("status") != "completed"
+    ]
+    pick = next((i for i in items if bid and i.get("id") == bid), None) or next(
+        (i for i in reversed(items) if i.get("owner") == who), None
+    )
+    if pick:
+        atlas_todo.set_status(
+            root,
+            pick["id"],
+            "completed" if status == "DONE" else "blocked",
+            evidence=ev,
+        )
+
+
+def reap_member(atlas_todo, root, who, msg=None, report=None):
+    """Shared by the Claude SubagentStop hook and omp's `member-finish`: settle the board
+    item (valid report only), mark the member finished, drop it from its channels."""
+    if report:
+        close_board_item(atlas_todo, root, who, msg, report)
+    atlas_todo.mark_finished(root, who, 0)
+    for ch in list(atlas_todo._reg_read(root)["channels"]):
+        atlas_todo.leave(root, ch, who)
 
 
 def finish_member(p, msg=None, report=None):
@@ -236,12 +256,33 @@ def finish_member(p, msg=None, report=None):
                 atlas_todo, root, str(p.get(key) or "")
             )
             if who:
-                if report:
-                    close_board_item(atlas_todo, root, who, msg, report)
-                atlas_todo.mark_finished(root, who, 0)
-                for ch in list(atlas_todo._reg_read(root)["channels"]):
-                    atlas_todo.leave(root, ch, who)
+                reap_member(atlas_todo, root, who, msg, report)
                 return
+        # No id/name hit (async launch gave no agentId): fall back to the one unfinished,
+        # unmapped member whose name is the agent type or starts "<type>-". Ambiguous = no-op.
+        tail = str(p.get("agent_type") or "").split(":")[-1].lower()
+        if tail:
+            cands = {
+                m["name"]
+                for c in atlas_todo._reg_read(root)["channels"].values()
+                for m in c["members"]
+                if "exit_code" not in m
+                and not m.get("agent_id")
+                and m.get("role") != "lead"
+                and (
+                    m["name"].lower() == tail
+                    or m["name"].lower().startswith(tail + "-")
+                )
+            }
+            if len(cands) == 1:
+                reap_member(atlas_todo, root, cands.pop(), msg, report)
+            elif cands:
+                import atlas_faults
+
+                atlas_faults.record(
+                    "worker_report_gate.finish_member",
+                    RuntimeError(f"ambiguous SubagentStop fallback: {sorted(cands)}"),
+                )
     except Exception as exc:
         try:
             import atlas_faults

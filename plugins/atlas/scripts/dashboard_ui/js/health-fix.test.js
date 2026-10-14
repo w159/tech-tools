@@ -24,3 +24,28 @@ test("non-stale hook_crash, null subs and missing row fall back safely", () => {
   expect(fixCommands(undefined, undefined)).toEqual([]);
   expect(fixCommands({ kind: "chronicle_gap" }, [])).toHaveLength(2);
 });
+
+import { failureAction, failureTone } from "./health-fix.js";
+
+test("tail is a diagnostic, not a fix", () => {
+  const a = failureAction({ kind: "hook_crash", next: "run: tail -n 5 ~/.atlas/hook-faults.jsonl" }, []);
+  expect(a).toMatchObject({ type: "copy", label: "Copy diagnostic command" });
+  expect(failureAction({ kind: "ingest_stalled" }, []).label).toBe("Copy fix command");
+});
+
+test("finding_id opens Improve, session_id copies the id, none has no button", () => {
+  expect(failureAction({ kind: "doctor_regression", finding_id: 7 }, [])).toEqual({ type: "link", label: "Open in Improve", target: "improve?finding=7" });
+  expect(failureAction({ kind: "hook_burst_tripped", session_id: "abc" }, [])).toEqual({ type: "copy", label: "Copy session id", text: "abc" });
+  expect(failureAction({ kind: "x", next: "Read the sample." }, [])).toEqual({ type: "none" });
+});
+
+test("stale omp install sample yields the upgrade command", () => {
+  const f = { kind: "hook_crash", sample: "omp: atlas omp install is stale: /x missing; run: omp plugin upgrade atlas, then restart omp sessions started before the upgrade" };
+  expect(fixCommands(f, [])).toEqual(["omp plugin upgrade atlas"]);
+});
+
+test("non-atlas-fault kinds are info even when active", () => {
+  expect(failureTone({ kind: "tool_error_unclassified", state: "active" })).toBe("info");
+  expect(failureTone({ kind: "hook_crash", state: "active" })).toBe("warn");
+  expect(failureTone({ kind: "hook_crash", state: "historic" })).toBe("info");
+});

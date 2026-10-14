@@ -4,12 +4,15 @@
  * `customType: "advisor"` and `details.notes: [{ note, severity?, advisor? }]`
  * (severity: "nit" | "concern" | "blocker"; omitted = nit).
  *
- * - `context` (main session): every NEW note of severity concern|blocker becomes
- *   an atlas board item `advisor[<severity>]: <first 200 chars>` for this session.
+ * - `context` (main session): every NEW note of any severity (nit, concern, blocker;
+ *   missing = nit) becomes an atlas board item `advisor[<severity>]: <first 200 chars>` for this session.
  *   Dedupe is by note text and session-local (omp rebinds the factory per session).
  * - `session_stop` (main session; omp never fires it for subagents): while this
  *   session still has open advisor items, refuse to stop and list them. At most 3
- *   refusals per session, then allow, so a stuck advisor can never wedge a session.
+ *   refusals per user turn (reset on before_agent_start), then allow, so a stuck
+ *   advisor can never wedge a turn.
+ * - `before_agent_start` (main session): while items are open, append a reminder to the
+ *   system prompt (marker-guarded) so the model closes them before any `done` header.
  *
  * Board root = nearest ancestor of cwd with docs/ (same walk as index.ts docsRoot,
  * which is not exported). No docs/ ancestor, no session id, a dependency throwing,
@@ -25,13 +28,14 @@ const TODO_SCRIPT = nodePath.resolve(import.meta.dir, "..", "scripts", "atlas_to
 const MAX_STOP_BLOCKS = 3;
 const NOTE_PREFIX_LIMIT = 200;
 const CLI_TIMEOUT_MS = 10_000;
-const GATED_SEVERITIES: Record<string, true> = { concern: true, blocker: true };
+const SEVERITIES: Record<string, true> = { nit: true, concern: true, blocker: true };
+const REMINDER_MARKER = "ATLAS ADVISOR ITEMS OPEN";
 
 export interface AdvisorDeps {
 	/** Append one pending item to the board for `sessionId` under `root`. */
 	addBoardItem(text: string, sessionId: string, root: string): void;
 	/** Ids of this session's advisor items that are not yet completed. */
-	openAdvisorItems(sessionId: string, root: string): string[];
+	openAdvisorItems(sessionId: string, root: string): { id: string; text: string }[];
 	env?: Record<string, string | undefined>;
 }
 
@@ -57,11 +61,11 @@ export function defaultAdvisorDeps(): AdvisorDeps {
 				throw new Error(`atlas_todo.py list failed: ${error instanceof Error ? error.message : String(error)}`);
 			}
 			const items = isRecord(parsed) && Array.isArray(parsed.items) ? parsed.items : [];
-			const open: string[] = [];
+			const open: { id: string; text: string }[] = [];
 			for (const item of items) {
 				if (!isRecord(item) || typeof item.id !== "string") continue;
 				if (item.session_id !== sessionId || item.archived === true || item.status === "completed") continue;
-				if (typeof item.content === "string" && item.content.startsWith("advisor[")) open.push(item.id);
+				if (typeof item.content === "string" && item.content.startsWith("advisor[")) open.push({ id: item.id, text: item.content });
 			}
 			return open;
 		},
@@ -83,7 +87,7 @@ function boardRoot(cwd: string): string | undefined {
 	}
 }
 
-/** Gated notes of one `context` event, in message order. */
+/** Advisor notes of one `context` event, in message order. */
 function gatedNotes(messages: unknown): { text: string; severity: string }[] {
 	const out: { text: string; severity: string }[] = [];
 	if (!Array.isArray(messages)) return out;
@@ -92,15 +96,23 @@ function gatedNotes(messages: unknown): { text: string; severity: string }[] {
 		const notes = isRecord(message.details) ? message.details.notes : undefined;
 		if (!Array.isArray(notes)) continue;
 		for (const entry of notes) {
-			if (!isRecord(entry) || typeof entry.note !== "string" || typeof entry.severity !== "string") continue;
-			if (GATED_SEVERITIES[entry.severity]) out.push({ text: entry.note, severity: entry.severity });
+			if (!isRecord(entry) || typeof entry.note !== "string" ) continue;
+			// a missing or unknown severity is a nit (omp omits it for nits)
+			const severity = typeof entry.severity === "string" && SEVERITIES[entry.severity] ? entry.severity : "nit";
+			out.push({ text: entry.note, severity });
 		}
 	}
 	return out;
 }
 
-const stopReason = (ids: string[]) =>
-	`Advisor gate: this session has ${ids.length} open advisor item(s) on the atlas board. An advisor concern or blocker is a work item: for each id below, check the note against the cited code or output, fix it (or refute it with evidence), then close it with \`python3 ${TODO_SCRIPT} complete --id <id> --evidence <what you changed or the proof it does not hold>\`. Run \`python3 ${TODO_SCRIPT} list --session <session>\` to read the item text. (Set ATLAS_ADVISOR_GATE=off to disable this gate.)\n${ids.map(id => `- ${id}`).join("\n")}`;
+type OpenItem = { id: string; text: string };
+const itemLines = (items: OpenItem[]) => items.map(i => `- ${i.id}: ${i.text}`).join("\n");
+
+const reminder = (items: OpenItem[]) =>
+	`${REMINDER_MARKER}: this session has ${items.length} open advisor item(s) on the atlas board. Operating contract: verify each one against the cited code or output, fix it or refute it with evidence, and close it with \`python3 ${TODO_SCRIPT} complete --id <id> --evidence <proof>\` before any \`done\` header.\n${itemLines(items)}`;
+
+const stopReason = (items: OpenItem[]) =>
+	`Advisor gate: this session has ${items.length} open advisor item(s) on the atlas board. An advisor note is a work item: for each id below, check the note against the cited code or output, fix it (or refute it with evidence), then close it with \`python3 ${TODO_SCRIPT} complete --id <id> --evidence <what you changed or the proof it does not hold>\`. (Set ATLAS_ADVISOR_GATE=off to disable this gate.)\n${itemLines(items)}`;
 
 export function registerAdvisorGate(pi: Pick<ExtensionAPI, "on">, deps: AdvisorDeps = defaultAdvisorDeps()): void {
 	const seen = new Set<string>();
@@ -125,6 +137,22 @@ export function registerAdvisorGate(pi: Pick<ExtensionAPI, "on">, deps: AdvisorD
 	pi.on("session_switch", () => {
 		reset();
 		return undefined;
+	});
+
+	// before_agent_start fires once per user prompt: the stop-block cap is per turn, and open items are re-announced.
+	pi.on("before_agent_start", (event, ctx) => {
+		blocks = 0;
+		try {
+			const where = scope(ctx);
+			if (!where) return undefined;
+			const open = deps.openAdvisorItems(where.sessionId, where.root);
+			if (open.length === 0) return undefined;
+			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
+			if (base.some(entry => typeof entry === "string" && entry.includes(REMINDER_MARKER))) return undefined;
+			return { systemPrompt: [...base, reminder(open)] };
+		} catch {
+			return undefined; // fail open
+		}
 	});
 
 	pi.on("context", (event, ctx) => {
