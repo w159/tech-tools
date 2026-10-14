@@ -39,7 +39,6 @@ import json
 import os
 import re
 import sys
-import tempfile
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
@@ -47,7 +46,19 @@ sys.path.insert(
 import atlas_hook_guard  # noqa: E402
 
 # One-time marker dir for the commit nudge (tests point this at a temp dir).
-MANDATE_MARKER_DIR = os.path.join(tempfile.gettempdir(), "atlas-mandates")
+# None until first use: tempfile (~8 ms of shutil/random imports) loads only on a
+# commit nudge, not on every Bash call.
+MANDATE_MARKER_DIR: str | None = None
+
+
+def _marker_dir() -> str:
+    global MANDATE_MARKER_DIR
+    if MANDATE_MARKER_DIR is None:
+        import tempfile
+
+        MANDATE_MARKER_DIR = os.path.join(tempfile.gettempdir(), "atlas-mandates")
+    return MANDATE_MARKER_DIR
+
 
 # Shared mandate contract (also read by omp/mandates.ts); unreadable -> no nudge.
 MANDATES_PATH = os.path.join(
@@ -264,8 +275,9 @@ def _commit_nudge(data: dict, command: str) -> str | None:
         if not session or not _ponytail_installed(data.get("cwd")):
             return None
         safe = re.sub(r"[^A-Za-z0-9_.-]", "_", session)
-        os.makedirs(MANDATE_MARKER_DIR, exist_ok=True)
-        marker = os.path.join(MANDATE_MARKER_DIR, f"ponytail-{safe}")
+        marker_dir = _marker_dir()
+        os.makedirs(marker_dir, exist_ok=True)
+        marker = os.path.join(marker_dir, f"ponytail-{safe}")
         try:
             fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except FileExistsError:

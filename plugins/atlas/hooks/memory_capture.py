@@ -32,7 +32,6 @@ SEEN_MAX_LINES = 500  # cap the seen-hash file so it cannot grow unbounded
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import atlas_faults  # noqa: E402
 import atlas_hook_guard  # noqa: E402
-import atlas_memory  # noqa: E402
 
 
 def _trace(exc, cwd=None):
@@ -196,6 +195,8 @@ def _should_capture(conn, session_id):
 
 def _extract_facts(conn, session_id, cwd):
     """Extract durable facts from the session. Returns (memory_facts, project_facts)."""
+    import atlas_memory  # lazy: ~16 ms, only reached once a capture is attempted
+
     memory_facts = []  # general agent notes
     project_facts = []  # project-specific
 

@@ -114,6 +114,8 @@ def _is_uri_path(path: str) -> bool:
     """URI-scheme path (`agent://`, `xd://`, ...): an IRC/device message, not a file.
     Shared definition lives in atlas_db.is_uri_path; fail open (treat as a file)
     if it cannot be imported."""
+    if "://" not in path:  # the URI pattern requires it: skip the atlas_db import
+        return False
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         from atlas_db import is_uri_path

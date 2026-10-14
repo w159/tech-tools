@@ -2,7 +2,9 @@
 """Hook latency benchmark (stdlib). Reads hooks/hooks.json, runs each bound
 command with a representative payload in a scratch git repo, ATLAS_HOME and
 ATLAS_DB pointed at a temp dir, and prints median/p90 per hook and per
-event/tool "call" (sum of every hook bound to it).
+event/tool "call" (sum of every hook bound to it). The wall column is the median
+over runs of the slowest hook in that call: Claude Code runs an event's hooks in
+parallel, so wall is the latency the user waits.
 
     python3 scripts/bench_hooks.py [-n 10] [--root PLUGIN_ROOT]
 """
@@ -72,21 +74,25 @@ def main():
         os.makedirs(env["ATLAS_HOME"])
         floor = [run("python3 -c pass", {}, env, cwd) for _ in range(a.n)]
         print(f"python3 floor: median {statistics.median(floor):.0f} ms\n")
-        print(f"{'event/tool':<26}{'hooks':>6}{'median':>9}{'p90':>8}   per-hook median ms")
+        print(f"{'event/tool':<26}{'hooks':>6}{'median':>9}{'p90':>8}{'wall':>8}   per-hook median ms")
         for ev, tool, pl in payloads(cwd):
             cmds = [h["command"] for g in hooks.get(ev, []) if matches(g.get("matcher"), tool)
                     for h in g["hooks"]]
             per = {c: [] for c in cmds}
             totals = []
+            walls = []
             for _ in range(a.n):
                 tot = 0
+                longest = 0
                 for c in cmds:
                     ms = run(c, pl, env, cwd)
                     per[c].append(ms)
                     tot += ms
+                    longest = max(longest, ms)
                 totals.append(tot)
+                walls.append(longest)
             detail = " ".join(f"{Path(c.split('\"')[1]).stem}={statistics.median(v):.0f}" for c, v in per.items())
-            print(f"{(ev + ' ' + (tool or '')).strip():<26}{len(cmds):>6}{statistics.median(totals):>9.0f}{p90(totals):>8.0f}   {detail}")
+            print(f"{(ev + ' ' + (tool or '')).strip():<26}{len(cmds):>6}{statistics.median(totals):>9.0f}{p90(totals):>8.0f}{statistics.median(walls):>8.0f}   {detail}")
 
 
 if __name__ == "__main__":
