@@ -7,12 +7,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session_boot.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/session_boot.py\"",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py\" --hook",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py\" --hook",
             "timeout": 30
           }
         ]
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/prompt_optimizer.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/prompt_optimizer.py\"",
             "timeout": 120
           }
         ]
@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/recall_gate.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/recall_gate.py\"",
             "timeout": 10
           }
         ]
@@ -46,12 +46,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bash_advisor.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/bash_advisor.py\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/fallow_gate.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/fallow_gate.py\"",
             "timeout": 300
           }
         ]
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/edit_read_nudge.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/edit_read_nudge.py\"",
             "timeout": 10
           }
         ]
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
             "timeout": 15
           }
         ]
@@ -83,7 +83,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/todo_capture.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/todo_capture.py\"",
             "timeout": 10
           }
         ]
@@ -93,18 +93,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/format_after_edit.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/format_after_edit.py\"",
             "timeout": 60,
             "async": true
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/docs_drift_watch.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/docs_drift_watch.py\"",
             "timeout": 15
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/delegation_prewarn.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/delegation_prewarn.py\"",
             "timeout": 10
           }
         ]
@@ -114,7 +114,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/edit_read_nudge.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/edit_read_nudge.py\"",
             "timeout": 10
           }
         ]
@@ -124,7 +124,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
             "timeout": 15
           }
         ]
@@ -134,7 +134,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/connector_credential_watch.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/connector_credential_watch.py\"",
             "timeout": 10
           }
         ]
@@ -146,27 +146,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/completion_gate.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/completion_gate.py\"",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/chronicle_facet.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/chronicle_facet.py\"",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_capture.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_capture.py\"",
             "timeout": 30
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/nudge.py\"",
             "timeout": 15
           }
         ]
@@ -178,7 +178,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
             "timeout": 15
           }
         ]
@@ -190,12 +190,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/worker_report_gate.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/worker_report_gate.py\"",
             "timeout": 15
           }
         ]
@@ -207,7 +207,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
             "timeout": 60
           }
         ]
@@ -219,7 +219,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/ingest_session.py\"",
             "timeout": 60
           }
         ]

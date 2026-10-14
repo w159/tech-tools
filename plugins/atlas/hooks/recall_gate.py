@@ -31,16 +31,28 @@ import json
 import os
 import re
 import sys
-import tempfile
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 )
-import atlas_hook_guard  # noqa: E402
 import worker_inbox  # noqa: E402  (same-dir hook module; stdlib-only, lazy atlas_todo)
 
 # Per-session "recall satisfied" markers (tests point this at a temp dir).
-GATE_MARKER_DIR = os.path.join(tempfile.gettempdir(), "atlas-recall-gate")
+def _temp_root() -> str:
+    """tempfile.gettempdir() without importing tempfile (6ms of import per tool call):
+    TMPDIR/TEMP/TMP, else /tmp. Windows keeps the real call."""
+    if os.name != "posix":
+        import tempfile
+
+        return tempfile.gettempdir()
+    for var in ("TMPDIR", "TEMP", "TMP"):
+        value = os.environ.get(var)
+        if value:
+            return os.path.abspath(value)
+    return "/tmp"
+
+
+GATE_MARKER_DIR = os.path.join(_temp_root(), "atlas-recall-gate")
 
 # Shared mandate contract (also read by omp/mandates.ts); unreadable -> gate unarmed.
 MANDATES_PATH = os.path.join(
@@ -212,6 +224,8 @@ def _gates_armed(cwd: str) -> bool:
 
 def _record_fault(exc: BaseException, cwd) -> None:
     """Persist a fail-open crash (never raises)."""
+    import atlas_hook_guard
+
     atlas_hook_guard.fault(
         "recall_gate", exc, cwd if isinstance(cwd, str) else os.getcwd()
     )
