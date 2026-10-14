@@ -442,6 +442,9 @@ def harness_argv(
         # Pin the worker to one atlas tree. Without this a worker loads whichever atlas omp has installed, which
         # can be an older release than the lead's. --no-extensions keeps discovery from loading a second copy.
         argv += ["--no-extensions", f"--extension={omp_extension}"]
+    # In-memory session: with omp's autoResume on, `omp -p` in the lead's cwd resumes the lead's own session
+    # (live: the worker reopened it, hit the writer lock and hung on "Working..." until SIGHUP).
+    argv.append("--no-session")
     brief = (
         f"You are the atlas:{role} worker.\n\n{body.strip()}\n\n# Task\n{prompt}"
         if body.strip()
@@ -494,6 +497,25 @@ def _windows(session: str) -> list | None:
     return out
 
 
+DEFAULT_PANE_SIZE = "200x50"
+
+
+def _lead_size() -> str:
+    """WxH of the lead's tmux client, else DEFAULT_PANE_SIZE. Queried with the lead's own env (TMUX set),
+    not clean_env, which strips TMUX on purpose."""
+    if os.environ.get("TMUX"):
+        try:
+            out = subprocess.run(
+                ["tmux", "display-message", "-p", "#{client_width}x#{client_height}"],
+                capture_output=True, text=True, timeout=TMUX_TIMEOUT_S,
+            ).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            out = ""
+        if re.fullmatch(r"\d+x\d+", out) and not out.startswith("0"):
+            return out
+    return DEFAULT_PANE_SIZE
+
+
 def _open_window(session: str, name: str, pane: str) -> str | None:
     """Create the session when missing and open window `name` in it; an error string or None.
 
@@ -502,10 +524,16 @@ def _open_window(session: str, name: str, pane: str) -> str | None:
     lock = Path(tempfile.gettempdir()) / f"atlas-mux-{session}"
     with atlas_todo._file_lock(lock):
         if _tmux("has-session", "-t", session).returncode != 0:
-            created = _tmux("new-session", "-d", "-s", session, "-n", "lead")
+            # a detached session is 80x24 unless told otherwise and the branded feed wraps at that width;
+            # default-size covers the windows opened later (no client is attached to size them)
+            width, height = _lead_size().split("x")
+            created = _tmux(
+                "new-session", "-d", "-s", session, "-n", "lead", "-x", width, "-y", height
+            )
             if created.returncode != 0 and "duplicate session" not in created.stderr:
                 return f"tmux new-session failed: {created.stderr.strip()}"
             _tmux("set-option", "-t", session, "remain-on-exit", "off")
+            _tmux("set-option", "-t", session, "default-size", f"{width}x{height}")
         elif any(w["name"] == name for w in _windows(session) or []):
             return f"name_taken: {name} already runs in {session}"
         res = _tmux("new-window", "-d", "-t", session, "-n", name, pane)
@@ -1176,21 +1204,62 @@ def supervise(rec: dict, spawn, is_done, sleep=time.sleep, poll_s: float = 1.0) 
     return results
 
 
-def _log_wave(rec: dict) -> bool:
-    """One dispatches row per member with wave_id=team_id. Fail-open; needs a run for the session."""
+SESSION_ENV = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "ATLAS_SESSION_ID")
+
+
+def _lead_run(root: str, session: str | None) -> tuple:
+    """(run_id, session_id) of the lead: --session, else the session env Claude Code exports, else the
+    project's latest run (open first). (None, None) when nothing matches. Fail-open."""
     try:
         import atlas_db
 
-        sid = os.environ.get("CLAUDE_SESSION_ID") or os.environ.get("ATLAS_SESSION_ID")
-        if not sid:
-            return False
+        sid = session or next((os.environ[k] for k in SESSION_ENV if os.environ.get(k)), None)
         conn = atlas_db.connect()
         try:
-            run_id = atlas_db.current_or_last_run_id(conn, sid)
-            if run_id is None:
-                return False
+            if sid:
+                return atlas_db.current_or_last_run_id(conn, sid), sid
+            # An omp lead exports no session id. Worker sessions register runs in the same project too, so
+            # prefer a run whose session owns a lead-<sid6> channel (lead sessions open one, workers never do).
+            # ponytail: with two live leads in one project the newest wins; pass --session to be exact.
+            rows = conn.execute(
+                "SELECT r.id, r.session_id FROM runs r JOIN projects p ON p.id=r.project_id "
+                "WHERE p.root_path=? ORDER BY (r.ended_at IS NULL) DESC, r.id DESC LIMIT 50",
+                (root,),
+            ).fetchall()
+            leads = {
+                c.get("lead")
+                for c in atlas_todo._reg_read(root).get("channels", {}).values()
+                if c.get("kind") == "lead"
+            }
+            row = next(
+                (r for r in rows if f"lead-{atlas_todo._sanitize_owner(r[1])[:6]}" in leads),
+                rows[0] if rows else None,
+            )
+            return (row[0], row[1]) if row else (None, None)
+        finally:
+            conn.close()
+    except Exception:
+        return None, None
+
+
+def _team_lead(session_id: str | None, team_id: str) -> str:
+    """The team's lead name, which names its channel `<main>/<lead>`: ATLAS_LEAD_NAME, else lead-<sid6>,
+    else lead-<team_id>. Never the bare shared `lead`, where every session's notes mix."""
+    name = atlas_todo.lead_name(session_id)
+    return name if name != "lead" else f"lead-{team_id}"
+
+
+def _log_wave(rec: dict, run_id) -> bool:
+    """One dispatches row per member with wave_id=team_id (TEXT in the INTEGER-affinity column). Fail-open."""
+    if run_id is None:
+        return False
+    try:
+        import atlas_db
+
+        conn = atlas_db.connect()
+        try:
             for m in rec["members"]:
-                atlas_db.log_dispatch(conn, run_id, m["role"], None, rec["team_id"])
+                atlas_db.log_dispatch(conn, run_id, f"atlas:{m['role']}", None, rec["team_id"])
             conn.commit()
         finally:
             conn.close()
@@ -1226,15 +1295,16 @@ def cmd_spawn_team(args) -> int:
         else:
             note = "tmux not on PATH: fell back to claude-bg"
     os.environ["ATLAS_MUX"] = "tmux"  # spawn-team is the explicit opt-in cmd_spawn checks for
-    lead = (os.environ.get("ATLAS_LEAD_NAME") or "").strip() or "lead"
+    run_id, sid = _lead_run(root, args.session)
+    lead = _team_lead(sid, rec["team_id"])
     chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
     os.environ["ATLAS_CHANNEL"] = chan
-    os.environ.setdefault("ATLAS_LEAD_NAME", lead)
-    rec["channel"], rec["transport"] = chan, transport()
+    os.environ["ATLAS_LEAD_NAME"] = lead
+    rec["channel"], rec["transport"], rec["lead"] = chan, transport(), lead
     rec["created"] = time.time()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
-    wave_logged = _log_wave(rec)
+    wave_logged = _log_wave(rec, run_id)
 
     def spawn(member: dict) -> dict:
         pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
@@ -1261,6 +1331,7 @@ def cmd_spawn_team(args) -> int:
             "transport": rec["transport"],
             "transport_note": note,
             "wave_logged": wave_logged,
+            "run_id": run_id,
             "channel": chan,
             "max_parallel": rec["max_parallel"],
             "members": results,
@@ -1313,11 +1384,33 @@ def cmd_wait(args) -> int:
     )
 
 
+def _recover_team(root: str, team_id: str) -> dict | None:
+    """A team with no live record: members from the per-member prompt files spawn-team wrote and the
+    windows of atlas-<team>. None when no trace is left."""
+    # ponytail: team "peer" also matches peer-sync's prompts; team ids are hashes or explicit, so rare
+    names = {p.name[len(team_id) + 1 : -len(".prompt")] for p in _team_dir(root).glob(f"{team_id}-*.prompt")}
+    windows = _windows(_session(team_id)) or []
+    names |= {w["name"] for w in windows if w["name"] != "lead"}
+    if not names and not windows:
+        return None
+    return {"team_id": team_id, "members": [{"name": n} for n in sorted(names)], "transport": "tmux"}
+
+
 def cmd_reap(args) -> int:
     root = _root(args)
-    rec = _load_team(root, args.team)
+    if not NAME_RE.match(args.team or ""):
+        return _emit({"ok": False, "error": f"invalid team id {args.team!r}"}, 2)
+    arch = _team_dir(root) / "archive"
+    archived_path = arch / f"{args.team}.json"
+    rec, state = _load_team(root, args.team), "live"
     if rec is None:
-        return _emit({"ok": False, "error": f"no team record for {args.team}"}, 1)
+        # reap is idempotent: an archived team still gets its leftover session and prompts cleaned
+        try:
+            rec, state = json.loads(archived_path.read_text(encoding="utf-8")), "archived"
+        except (OSError, ValueError):
+            rec, state = _recover_team(root, args.team), "recovered"
+        if rec is None:
+            return _emit({"ok": False, "error": f"no team record, prompts or session for {args.team}"}, 1)
     session = _session(rec["team_id"])
     names = [m["name"] for m in rec["members"]]
     killed = False
@@ -1330,18 +1423,28 @@ def cmd_reap(args) -> int:
         killed = _tmux("kill-session", "-t", session).returncode == 0
     _kill_notes(root, names)  # exit note + mark_finished + leave for any worker that never posted its own
     reaped = atlas_todo.reap_channels(root)
-    arch = _team_dir(root) / "archive"
-    arch.mkdir(parents=True, exist_ok=True)
-    (_team_dir(root) / f"{rec['team_id']}.json").replace(arch / f"{rec['team_id']}.json")
+    if state == "live":
+        arch.mkdir(parents=True, exist_ok=True)
+        (_team_dir(root) / f"{rec['team_id']}.json").replace(archived_path)
+    prompts = [_team_dir(root) / f"{rec['team_id']}-{n}.prompt" for n in names]
+    removed = 0
+    for p in prompts:
+        if p.exists():
+            p.unlink()
+            removed += 1
     return _emit(
         {
             "ok": True,
             "team_id": rec["team_id"],
+            "record": state,
+            "already_reaped": state == "archived",
+            "members": names,
             "session": session,
             "killed": killed,
             "session_left": _tmux("has-session", "-t", session).returncode == 0,
             "channels_reaped": reaped.get("reaped"),
-            "archived": str(arch / f"{rec['team_id']}.json"),
+            "prompts_removed": removed,
+            "archived": str(archived_path) if state != "recovered" else None,
         }
     )
 
@@ -1408,6 +1511,7 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--task")
     st.add_argument("--task-file")
     st.add_argument("--team-id")
+    st.add_argument("--session", help="lead session id for wave attribution and the team channel")
     st.add_argument("--harness", choices=("claude", "omp"), default="claude")
     st.add_argument("--dry-run", action="store_true")
     st.add_argument("--root")
