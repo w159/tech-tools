@@ -578,3 +578,22 @@ test("team lanes take class/effort and roles from the live team record; channels
 	expect(out).not.toContain("subagent");
 	view.stop();
 });
+
+test("claude team lane: role + tool from the stream log, sparkline from panefeed's calls-only <name>.tool.json", () => {
+	const root = atlasFixture([{ name: "lead-abc", role: "lead" }, { name: "explorer-127a", role: "subagent", joined: 1 }], [{ status: "pending", phase: "research" }]);
+	mkdirSync(join(root, ".atlas", ".run", "teams"), { recursive: true });
+	writeFileSync(join(root, ".atlas", ".run", "teams", "t1.json"), JSON.stringify({ channel: CHAN, class: "audit", effort: "medium", members: [{ name: "explorer-127a", role: "scout" }] }));
+	const logs = join(root, ".atlas", ".run", "logs");
+	mkdirSync(logs, { recursive: true });
+	const use = { type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Read", input: { file_path: "/a/b/dispatch.py" } }] } };
+	writeFileSync(join(logs, "explorer-127a.log"), `${JSON.stringify(use)}\n`);
+	const nowS = Date.now() / 1000;
+	writeFileSync(join(logs, "explorer-127a.tool.json"), JSON.stringify({ calls: [nowS - 2, nowS - 3, nowS - 40] })); // no `tool`: the log tail supplies it
+	const { calls, ui, timers, view } = harness({ ATLAS_PROJECT_ROOT: root });
+	timers.clock = nowS * 1000; // the harness clock starts at 0, which would age every call out of the window
+	view.open(ui, { channel: CHAN, members: ["explorer-127a"], cwd: root });
+	const lane = plain(calls.at(-1)).split("\n").find(l => l.includes("explorer-127a")) ?? "";
+	expect(lane).toMatch(/RUN .*explorer-127a +scout +Read +dispatch\.py/);
+	expect(lane).toMatch(/[▂▃▄▅▆▇█]/); // a non-empty sparkline bucket
+	view.stop();
+});

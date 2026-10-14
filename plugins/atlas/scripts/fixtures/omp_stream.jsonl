@@ -1,0 +1,10 @@
+{"type":"session","version":3,"id":"01a138d1-a61c-7671-bcda-e1edb496ec0e","timestamp":"2026-10-14T05:10:26.076Z","cwd":"/tmp"}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"run the shell command: echo hi, then say done"}]}}
+{"type":"tool_execution_start","toolCallId":"toolu_01","toolName":"todo","args":{"op":"init","items":["Run echo hi","Report done"]},"intent":"Planning echo task"}
+{"type":"tool_execution_end","toolCallId":"toolu_01","toolName":"todo","result":{"content":[{"type":"text","text":"Remaining items (2)"}]},"isError":false}
+{"type":"tool_execution_start","toolCallId":"toolu_02","toolName":"bash","args":{"command":"echo hi"},"intent":"Running echo command"}
+{"type":"tool_execution_end","toolCallId":"toolu_02","toolName":"bash","result":{"content":[{"type":"text","text":"hi\n"}]},"isError":false}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"The command printed `hi`. Done."}],"usage":{"input":4,"output":20,"cacheRead":10601,"cacheWrite":0}}}
+{"type":"agent_end","isTerminal":true,"yielded":false,"messages":[{"role":"user","content":[{"type":"text","text":"run the shell command: echo hi, then say done"}]},{"role":"assistant","content":[{"type":"text","text":"The command printed `hi`. Done."}]}]}

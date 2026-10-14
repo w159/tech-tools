@@ -592,10 +592,10 @@ class SpawnOmpTests(Base):
         base, hargv = _fake_harness_argv(self.state)
         self.assertEqual("omp", base)
         self.assertEqual(
-            ["-p", "--model=openrouter/some-model:off", "--thinking=medium"], hargv[:3]
+            ["-p", "--mode", "json", "--model=openrouter/some-model:off", "--thinking=medium"], hargv[:5]
         )
         # ephemeral session: with omp autoResume on, a worker in the lead's cwd otherwise resumes the lead's session
-        self.assertEqual("--no-session", hargv[3])
+        self.assertEqual("--no-session", hargv[5])
         self.assertIn("You are the atlas:explorer worker.", hargv[-1])
         self.assertIn("explorer body", hargv[-1])
         self.assertTrue(hargv[-1].endswith("# Task\ncolonize the pane"))
@@ -660,12 +660,14 @@ class SpawnOmpTests(Base):
         self.assertEqual(
             [
                 "-p",
+                "--mode",
+                "json",
                 "--model=openrouter/some-model:off",
                 "--thinking=low",
                 "--no-extensions",
                 f"--extension={ext}",
             ],
-            hargv[:5],
+            hargv[:7],
         )
         self.assertIn(
             "You are the atlas:explorer worker.", hargv[-1]
@@ -731,7 +733,7 @@ class SpawnOmpTests(Base):
         self.assertNotIn("--no-extensions", hargv)
         self.assertFalse([a for a in hargv if a.startswith("--extension")])
         self.assertEqual(
-            ["-p", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:3]
+            ["-p", "--mode", "json", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:5]
         )
 
     def test_claude_workers_ignore_the_omp_extension_pin(self):
@@ -902,7 +904,7 @@ class SpawnOmpTests(Base):
         _wait_exit(self.root, "Beta")
         _, hargv = _fake_harness_argv(self.state)
         self.assertEqual(
-            ["-p", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:3]
+            ["-p", "--mode", "json", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:5]
         )
 
     def test_omp_explicit_concrete_model_plus_thinking_passes_through(self):
@@ -910,7 +912,7 @@ class SpawnOmpTests(Base):
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Beta")
         _, hargv = _fake_harness_argv(self.state)
-        self.assertEqual(["-p", "--model=openai/gpt-x", "--thinking=high"], hargv[:3])
+        self.assertEqual(["-p", "--mode", "json", "--model=openai/gpt-x", "--thinking=high"], hargv[:5])
 
     def test_omp_explicit_model_without_thinking_refused(self):
         self.omp_config.write_text("modelRoles:\n  smol: openrouter/some-model:off\n")
