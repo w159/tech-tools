@@ -32,7 +32,7 @@ const PANE_ID = 'atlas';
 const PANE_DOCK = { id: PANE_ID, title: 'Atlas', columns: 56 } as const;
 const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: true, focus: true } as const;
 const TICK_MS = 250;
-const DOCK_MIN_COLUMNS = 110;
+const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
 
 /** The pane opens by itself only docked: a fullscreen terminal wide enough to leave the transcript its room. */
 export const shouldDock = (v: { isFullscreen?: boolean; columns: number }): boolean => v.isFullscreen === true && v.columns >= DOCK_MIN_COLUMNS;
@@ -615,7 +615,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);
-		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState) });
+		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows });
 		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
 	});
 
