@@ -123,14 +123,14 @@ test("unknown agent names are rejected instead of guessed", () => {
 	expect(() => renderGeneratedAgent("mystery-agent.md", source)).toThrow("mystery-agent");
 });
 
-test("runner is registered on the mechanical tier: off thinking, @atlas-mechanic with @smol fallback", () => {
+test("runner is registered on the worker tier: off thinking, @atlas-worker sonnet with @smol fallback", () => {
 	expect(ATLAS_THINKING_LEVELS.runner).toBe("off");
-	expect(roleFor("runner")).toBe("@atlas-mechanic");
-	expect(modelPatternsFor("runner")).toEqual(["@atlas-mechanic", "haiku", "@smol"]);
+	expect(roleFor("runner")).toBe("@atlas-worker");
+	expect(modelPatternsFor("runner")).toEqual(["@atlas-worker", "sonnet", "@smol"]);
 	expect(ATLAS_AGENT_TARGETABLE.runner).toBe(true);
 	const fm = frontmatterOf(generatedAgents().runner);
 	expect(fm.thinkingLevel).toBe("off");
-	expect(fm.model).toEqual(["@atlas-mechanic", "haiku", "@smol"]);
+	expect(fm.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
 	expect(readFileSync(path.join(outDir, "runner.md"), "utf8")).toContain('thinkingLevel: "off"');
 });
 
@@ -168,12 +168,12 @@ test("read-only agents' omp definitions list no edit device; the writers still m
 	}
 });
 
-test("haiku-pinned agents run on the cheap mechanic role; implementer keeps the worker role at medium thinking", () => {
+test("every worker runs the sonnet worker role; implementer thinks at low", () => {
 	for (const name of ["docs-auditor", "naming-glossary-audit", "schema-inventory", "runner"]) {
-		expect(modelPatternsFor(name)).toEqual([ATLAS_MECHANIC_ROLE, ATLAS_TIER_DEFAULTS.mechanic, SMOL_FALLBACK_ROLE]);
+		expect(modelPatternsFor(name)).toEqual(["@atlas-worker", ATLAS_TIER_DEFAULTS.worker, SMOL_FALLBACK_ROLE]);
 	}
 	expect(modelPatternsFor("explorer")).toEqual(["@atlas-worker", ATLAS_TIER_DEFAULTS.worker, SMOL_FALLBACK_ROLE]);
-	expect(ATLAS_THINKING_LEVELS.implementer).toBe("medium");
+	expect(ATLAS_THINKING_LEVELS.implementer).toBe("low");
 	expect(roleFor("implementer")).toBe("@atlas-worker");
 });
 // ── omp-side resolution: the tier holds with no modelRoles.atlas-*, and a user-set role wins ──
@@ -188,15 +188,15 @@ const resolveTier = async (agent: string, roles: Record<string, string>): Promis
 	return resolveModelRoleValue(modelPatternsFor(agent).join(","), MODELS, { roleLookup }).model?.id;
 };
 
-test.skipIf(!existsSync(OMP_RESOLVER))("no user modelRoles: runner->haiku, implementer->sonnet, verifier->@default else sonnet", async () => {
-	expect(await resolveTier("runner", { default: "anthropic/claude-opus-5-5" })).toBe("claude-haiku-4-5");
+test.skipIf(!existsSync(OMP_RESOLVER))("no user modelRoles: runner->sonnet, implementer->sonnet, verifier->@default else sonnet", async () => {
+	expect(await resolveTier("runner", { default: "anthropic/claude-opus-5-5" })).toBe("claude-sonnet-5-5");
 	expect(await resolveTier("implementer", { default: "anthropic/claude-opus-5-5" })).toBe("claude-sonnet-5-5");
 	expect(await resolveTier("verifier", { default: "anthropic/claude-opus-5-5" })).toBe("claude-opus-5-5");
 	expect(await resolveTier("verifier", {})).toBe("claude-sonnet-5-5");
 });
 
 test.skipIf(!existsSync(OMP_RESOLVER))("a user-set modelRole overrides the default tier", async () => {
-	expect(await resolveTier("runner", { "atlas-mechanic": "openai/gpt-5-mini" })).toBe("gpt-5-mini");
+	expect(await resolveTier("runner", { "atlas-worker": "openai/gpt-5-mini" })).toBe("gpt-5-mini");
 	expect(await resolveTier("implementer", { "atlas-worker": "anthropic/claude-opus-5-5" })).toBe("claude-opus-5-5");
 	expect(await resolveTier("verifier", { "atlas-verifier": "openai/gpt-5-mini", default: "anthropic/claude-opus-5-5" })).toBe("gpt-5-mini");
 });

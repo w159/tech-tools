@@ -10,8 +10,8 @@ import * as nodePath from "node:path";
  * notice). Tier map (atlas colony):
  *
  * - off:    explorer, docs-auditor, docs-curator, schema-inventory, naming-glossary-audit, runner
- * - low:    planner, db-prober, ui-runtime-tester
- * - medium: implementer, verifier, completeness-critic, rls-privilege-audit
+ * - low:    planner, db-prober, ui-runtime-tester, implementer, verifier, completeness-critic, rls-privilege-audit
+ * (every worker is sonnet at low effort: one task + one test, then the lead ends it and spawns a fresh one)
  *
  * Mechanical tier (Claude `model: haiku`: runner, docs-auditor, schema-inventory, naming-glossary-audit) uses
  * `@atlas-mechanic` with `@smol` as the guaranteed fallback.
@@ -28,20 +28,20 @@ export const ATLAS_WORKER_ROLE = "@atlas-worker";
 export const ATLAS_VERIFIER_ROLE = "@atlas-verifier";
 export const ATLAS_MECHANIC_ROLE = "@atlas-mechanic";
 
-export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low" | "medium"> = {
+export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low"> = {
 	explorer: "off",
 	"docs-auditor": "off",
 	"docs-curator": "off",
 	"schema-inventory": "off",
 	"naming-glossary-audit": "off",
 	runner: "off",
-	implementer: "medium", // writes code: low effort was the only code-writing agent below medium
+	implementer: "low", // sonnet at low effort executes one task + test; the lead escalates, not the worker
 	planner: "low",
 	"db-prober": "low",
 	"ui-runtime-tester": "low",
-	verifier: "medium",
-	"completeness-critic": "medium",
-	"rls-privilege-audit": "medium",
+	verifier: "low",
+	"completeness-critic": "low",
+	"rls-privilege-audit": "low",
 };
 
 /** Agents whose omp tier is the judgment tier (`@atlas-verifier`); every other non-haiku agent is a worker. */
@@ -51,7 +51,7 @@ const VERIFIER_AGENTS: Record<string, true> = { verifier: true, "completeness-cr
 export function roleFor(
 	agentName: string,
 ): typeof ATLAS_WORKER_ROLE | typeof ATLAS_VERIFIER_ROLE | typeof ATLAS_MECHANIC_ROLE {
-	if (agentName === "runner" || frontmatterModelFor(agentName) === "haiku") return ATLAS_MECHANIC_ROLE;
+	if (frontmatterModelFor(agentName) === "haiku") return ATLAS_MECHANIC_ROLE;
 	return Object.hasOwn(VERIFIER_AGENTS, agentName) ? ATLAS_VERIFIER_ROLE : ATLAS_WORKER_ROLE;
 }
 

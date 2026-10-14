@@ -3,7 +3,7 @@
 # Re-generate with: bun plugins/atlas/omp/gen-agents.ts (idempotent; commit the output).
 name: "verifier"
 description: "Adversarial verifier that independently confirms or REFUTES a claimed finding or fix in a fresh context: re-opens cited lines, re-runs tests, re-queries data, re-reads the diff. Never fixes; returns an evidence-backed verdict. Use when a finding or fix must be checked before it is recorded as verified."
-thinkingLevel: "medium"
+thinkingLevel: "low"
 model: ["@atlas-verifier","@default","sonnet","@smol"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"

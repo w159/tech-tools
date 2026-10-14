@@ -85,7 +85,11 @@ def _named(tinput):
     if "name" not in tinput and agent.startswith("atlas:"):
         tinput["name"] = COLONY_NAME
     prompt = tinput.get("prompt")
-    if agent.startswith("atlas:") and isinstance(prompt, str) and not re.search(r"(?m)^SCOPE:", prompt):
+    if (
+        agent.startswith("atlas:")
+        and isinstance(prompt, str)
+        and not re.search(r"(?m)^SCOPE:", prompt)
+    ):
         tinput["prompt"] = f"{prompt}\nSCOPE: {_scope_for(agent.split(':', 1)[1])}\n"
     return tinput
 
@@ -3486,10 +3490,14 @@ class TeamMuxDispatchTest(ReadOnlyInvestigationTest):
         """live-231: lean-ctx's PreToolUse rewrites Bash to `lean-ctx -c '<cmd>'`, so PostToolUse
         saw the wrapped command and logged spawn-team/wait/reap as inline ops."""
         self._saturate()
-        wrapped = "/opt/homebrew/bin/lean-ctx -c " + __import__("shlex").quote(self.SPAWN)
+        wrapped = "/opt/homebrew/bin/lean-ctx -c " + __import__("shlex").quote(
+            self.SPAWN
+        )
         self._call("PostToolUse", "Bash", {"command": wrapped})
         self.assertEqual(self._count(), 0)
-        wait = "/opt/homebrew/bin/lean-ctx -c " + __import__("shlex").quote(f"python3 {self.MUX} wait --team t1")
+        wait = "/opt/homebrew/bin/lean-ctx -c " + __import__("shlex").quote(
+            f"python3 {self.MUX} wait --team t1"
+        )
         self._call("PostToolUse", "Bash", {"command": wait})
         self.assertEqual(self._count(), 0)
 
@@ -3509,7 +3517,10 @@ class TeamMuxDispatchTest(ReadOnlyInvestigationTest):
         import dispatch_tripwire as dt
 
         scripts = Path(dt.__file__).resolve().parents[1] / "scripts"
-        for cmd, script in ((dt.RESOLVE_CMD, "atlas_resolve.py"), (dt.SPAWN_TEAM_CMD, "atlas_mux.py")):
+        for cmd, script in (
+            (dt.RESOLVE_CMD, "atlas_resolve.py"),
+            (dt.SPAWN_TEAM_CMD, "atlas_mux.py"),
+        ):
             self.assertNotIn("CLAUDE_PLUGIN_ROOT", cmd)
             self.assertIn(f'python3 "{scripts / script}"', cmd)
             self.assertTrue((scripts / script).is_file())
@@ -3837,7 +3848,10 @@ class PinTierDefaultsTwinTest(unittest.TestCase):
         expected = (
             ("explorer", "@atlas-worker"),
             ("verifier", "@atlas-verifier"),
-            ("runner", "@atlas-mechanic"),
+            (
+                "runner",
+                "@atlas-worker",
+            ),  # every worker is sonnet now; mechanic tier is unused
             ("docs-curator", "@atlas-worker"),  # the DOCSCUR case
         )
         for agent, alias in expected:
@@ -4054,7 +4068,11 @@ class ScopeGateTest(unittest.TestCase):
             "cwd": self.tmp,
             "hook_event_name": "PreToolUse",
             "tool_name": "Agent",
-            "tool_input": {"subagent_type": agent, "name": COLONY_NAME, "prompt": prompt},
+            "tool_input": {
+                "subagent_type": agent,
+                "name": COLONY_NAME,
+                "prompt": prompt,
+            },
         }
         return run_hook(payload, env or self.env)
 
@@ -4062,7 +4080,9 @@ class ScopeGateTest(unittest.TestCase):
         if not r.stdout.strip():
             return None, ""
         out = json.loads(r.stdout)["hookSpecificOutput"]
-        return out.get("permissionDecision"), out.get("permissionDecisionReason") or out.get("additionalContext") or ""
+        return out.get("permissionDecision"), out.get(
+            "permissionDecisionReason"
+        ) or out.get("additionalContext") or ""
 
     def test_a_missing_scope_denied_with_resolver_command(self):
         decision, reason = self._decision(self._dispatch("atlas:explorer"))
@@ -4079,7 +4099,9 @@ class ScopeGateTest(unittest.TestCase):
         self.assertIn("unknown task_class", reason)
 
     def test_b_role_inside_team_passes_and_unmatrixed_role_passes(self):
-        self.assertIsNone(self._decision(self._dispatch("atlas:implementer", "fix/low"))[0])
+        self.assertIsNone(
+            self._decision(self._dispatch("atlas:implementer", "fix/low"))[0]
+        )
 
     def test_c_second_dispatch_within_window_gets_spawn_team_advisory(self):
         # The burst clock is per session and may live in the shared temp dir: use a session no other test touches.
@@ -4091,8 +4113,15 @@ class ScopeGateTest(unittest.TestCase):
         atlas_db.start_run(conn, atlas_db.register_project(conn, "/repo/x"), sess)
         atlas_db.mark_orchestrating(conn, sess)
         conn.close()
-        self.assertEqual(self._decision(self._dispatch("atlas:implementer", "fix/low", session=sess)), (None, ""))
-        decision, note = self._decision(self._dispatch("atlas:explorer", "fix/medium", session=sess))
+        self.assertEqual(
+            self._decision(
+                self._dispatch("atlas:implementer", "fix/low", session=sess)
+            ),
+            (None, ""),
+        )
+        decision, note = self._decision(
+            self._dispatch("atlas:explorer", "fix/medium", session=sess)
+        )
         self.assertIsNone(decision)
         self.assertIn("spawn-team", note)
 
@@ -4105,7 +4134,9 @@ class ScopeGateTest(unittest.TestCase):
 
     def test_e_workers_and_non_atlas_agents_unaffected(self):
         worker = dict(self.env, ATLAS_WORKER_NAME="W")
-        self.assertIsNone(self._decision(self._dispatch("atlas:explorer", env=worker))[0])
+        self.assertIsNone(
+            self._decision(self._dispatch("atlas:explorer", env=worker))[0]
+        )
         self.assertIsNone(self._decision(self._dispatch("general-purpose-x"))[0])
 
     def test_f_deny_tier_survives_the_first_stop(self):

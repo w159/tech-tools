@@ -1,7 +1,7 @@
 ---
 name: docs-auditor
 description: "Read-only drift auditor for the canonical atlas project structure (docs-ssot.md). Compares docs/ (CHANGELOG, ROADMAP, architecture, AGENTS.md), .atlas/, root entry files, and .gitignore against real code and returns a per-area verdict (current/stale/missing) with file:line evidence. Never writes. Use when checking whether docs and project structure still match the code."
-model: haiku
+model: sonnet
 effort: low
 color: orange
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]

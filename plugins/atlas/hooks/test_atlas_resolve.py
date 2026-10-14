@@ -26,11 +26,11 @@ def _fm_effort(role):
 
 ROWS = [
     # (class, effort) -> [(role, count, effort, tools_profile)], isolation
-    ("implement", "low", [("implementer", 1, "medium", "edit")], "shared"),
+    ("implement", "low", [("implementer", 1, "low", "edit")], "shared"),
     (
         "implement",
         "medium",
-        [("implementer", 2, "medium", "edit"), ("verifier", 1, "medium", "exec")],
+        [("implementer", 2, "low", "edit"), ("verifier", 1, "low", "exec")],
         "worktree",
     ),
     (
@@ -38,8 +38,8 @@ ROWS = [
         "high",
         [
             ("explorer", 2, "low", "read"),
-            ("implementer", 1, "medium", "edit"),
-            ("verifier", 1, "medium", "exec"),
+            ("implementer", 1, "low", "edit"),
+            ("verifier", 1, "low", "exec"),
         ],
         "worktree",
     ),
@@ -47,8 +47,8 @@ ROWS = [
         "verify",
         "high",
         [
-            ("verifier", 2, "medium", "exec"),
-            ("completeness-critic", 1, "medium", "read"),
+            ("verifier", 2, "low", "exec"),
+            ("completeness-critic", 1, "low", "read"),
         ],
         "shared",
     ),
