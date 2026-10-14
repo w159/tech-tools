@@ -81,6 +81,24 @@ test("spawn mounts the channel widget with the team's channel and members; wait 
 	expect(opened).toHaveLength(2);
 });
 
+test("reap re-mounts the widget from the archived team record, flagged reaped, so the idle panel shows", async () => {
+	const root = mkdtempSync(join(tmpdir(), "team-tool-"));
+	const arch = join(root, ".atlas", ".run", "teams", "archive");
+	mkdirSync(arch, { recursive: true });
+	const { tools, pi } = fakePi();
+	const opened: any[] = [];
+	const order: string[] = [];
+	const run = async (argv: string[]) => {
+		order.push(argv[2]);
+		writeFileSync(join(arch, "t1.json"), JSON.stringify({ team_id: "t1", channel: "c@main/lead", members: [{ name: "audit-1" }, { name: "audit-2" }] })); // reap archives
+		return { code: 0, stdout: '{"ok": true}' };
+	};
+	registerTeamTool(pi, ROOT, run, {}, (_u, info) => (order.push("open"), opened.push(info)));
+	await tools[0].execute("id", { action: "reap", team: "t1" }, undefined, undefined, { cwd: root, ui: { setWidget: () => {} } });
+	expect(order).toEqual(["reap", "open"]);
+	expect(opened[0]).toMatchObject({ channel: "c@main/lead", members: ["audit-1", "audit-2"], reaped: true });
+});
+
 test("hidden from worker sessions", () => {
 	const { tools, pi } = fakePi();
 	expect(registerTeamTool(pi, ROOT, undefined, { ATLAS_WORKER_NAME: "w1" })).toBe(false);

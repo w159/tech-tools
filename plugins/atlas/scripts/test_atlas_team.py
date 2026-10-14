@@ -161,6 +161,54 @@ class WaveAndChannelTests(unittest.TestCase):
         conn.close()
         self.assertEqual((self.run_id, self.sid), atlas_mux._lead_run(self.root, None))
 
+    def test_omp_team_members_run_the_claude_tier_level_not_off(self):
+        """Live 12.3.0: omp spawn-team reported "level": "off" for explorers; Claude ran them at low."""
+        from unittest import mock
+
+        os.environ["ATLAS_SESSION_ID"] = self.sid
+        seen = {}
+
+        def fake_spawn(ns):
+            seen[ns.name] = (ns.agent, ns.thinking, ns.effort)
+            print(json.dumps({"ok": True, "name": ns.name}))
+            return 0
+
+        ns = type("N", (), dict(root=self.root, task_file=None, task="t", paths=None, cls="audit", effort="medium",
+                                team_id="tlvl1", dry_run=False, session=self.sid, harness="omp", poll=0))
+        try:
+            with (
+                mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn),
+                mock.patch.object(atlas_mux, "_exited", return_value=True),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(0, atlas_mux.cmd_spawn_team(ns))
+        finally:
+            os.environ.pop("ATLAS_SESSION_ID", None)
+        levels = {agent: thinking for agent, thinking, _ in seen.values()}
+        self.assertEqual({"explorer": "low", "completeness-critic": "medium"}, levels)
+        self.assertTrue(all(effort is None for *_, effort in seen.values()))
+
+    def test_reap_closes_the_team_channel_while_its_lead_session_lives(self):
+        """Live 12.3.0: omp reap returned channels_reaped 0 and left the lead's team channel open."""
+        lead = f"lead-{self.sid[:6]}"
+        names = ["explorer-aaaa", "explorer-bbbb"]
+        chan = atlas_mux.atlas_todo.open_lead_channel(self.root, lead, names)["name"]
+        rec = atlas_mux.build_team("audit", "medium", None, "r", team_id="treap1")
+        rec.update(created=0.0, transport="tmux", channel=chan, lead=lead,
+                   members=[{"name": n, "role": "explorer"} for n in names])
+        d = pathlib.Path(self.root) / atlas_mux.TEAMS_REL
+        d.mkdir(parents=True)
+        (d / "treap1.json").write_text(json.dumps(rec))
+        for n in names:
+            atlas_mux.atlas_todo.mark_finished(self.root, n, 0)
+        ns = type("N", (), {"root": self.root, "team": "treap1", "timeout": 1, "poll": 0.1})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(0, atlas_mux.cmd_reap(ns))
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertGreaterEqual(out["channels_reaped"], 1)
+        self.assertIsNone(atlas_mux.atlas_todo.get_channel(self.root, chan))
+
     def test_team_channel_is_the_leads_session_channel(self):
         """Live: omp workers posted to the shared '<main>/lead' channel."""
         self.assertEqual("lead-abc123", atlas_mux._team_lead(self.sid, "tx"))

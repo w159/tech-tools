@@ -76,7 +76,13 @@ export interface PanelModel {
 	channel?: string; // `<repo>@<branch>/<lead>`
 	team?: string; // `<class>/<effort>`
 	elapsedSecs?: number;
-	idle?: { workers: number; minutes: number };
+	idle?: IdleWave;
+}
+/** The last wave the idle panel summarizes: member count, first join to last finish, non-zero exits. */
+export interface IdleWave {
+	workers: number;
+	secs?: number;
+	failed: number;
 }
 
 const ANSI_SPLIT = /(\x1b\[[0-9;]*m)/;
@@ -108,6 +114,19 @@ function cut(s: string, w: number): string {
 const age = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`);
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 const roleOf = (name: string) => name.replace(/-[^-]*$/, "") || name;
+
+/**
+ * Fit `s` in `w` columns by dropping leading hyphen words (`completeness-critic-f08e` -> `critic-f08e`), keeping at
+ * least `keep` words (a worker name keeps role + id), else cut.
+ */
+function abbrev(s: string, w: number, keep = 1): string {
+	const parts = s.split("-");
+	for (let i = 0; i <= parts.length - keep; i++) {
+		const tail = parts.slice(i).join("-");
+		if ([...tail].length <= w) return cut(tail, w);
+	}
+	return cut(s, w);
+}
 
 /** Full-width title: `left` and `right` in bold base color over a per-cell gradient from `a` to `b`. */
 function gradBar(left: string, right: string, w: number, a: Rgb, b: Rgb): string {
@@ -205,7 +224,7 @@ function laneLook(t: LaneTool | undefined, spin: string): LaneLook {
 		: { label: "THINK", col: YEL, glyph: "◷", tool: t.tool, target: t.target, ink: MUT, toolInk: MUT };
 }
 
-const roleCell = (wk: PanelWorker, c: LaneCols) => (c.role ? seg(`${cut(wk.role ?? roleOf(wk.name), c.role - 1)} `, MUT) : "");
+const roleCell = (wk: PanelWorker, c: LaneCols) => (c.role ? seg(`${abbrev(wk.role ?? roleOf(wk.name), c.role - 1)} `, MUT) : "");
 
 /** Elapsed bar (fills over BAR_FULL_S) and the tool-call sparkline, each only when its column fits. */
 function meterCells(wk: PanelWorker, c: LaneCols, col: Rgb): string {
@@ -215,7 +234,7 @@ function meterCells(wk: PanelWorker, c: LaneCols, col: Rgb): string {
 
 function laneRow(wk: PanelWorker, m: PanelModel, c: LaneCols): string {
 	const k = laneLook(wk.tool, m.laneSpin);
-	const head = seg(" ") + chip(cut(k.label, 5), k.col) + seg(` ${k.glyph} `, k.col) + seg(`${cut(wk.name, c.name - 1)} `, TXT, PANEL, true);
+	const head = seg(" ") + chip(cut(k.label, 5), k.col) + seg(` ${k.glyph} `, k.col) + seg(`${abbrev(wk.name, c.name - 1, 2)} `, TXT, PANEL, true);
 	const tool = seg(` ${cut(k.tool, 10)} `, k.toolInk, PANEL2, true) + seg(` ${cut(k.target, c.target)}`, k.ink);
 	return head + roleCell(wk, c) + tool + meterCells(wk, c, k.col) + seg(age(wk.secs).padStart(7), MUT);
 }
@@ -299,9 +318,11 @@ function middleRows(m: PanelModel, w: number, room: number): string[] {
 	return breathe(lanes, extras, room);
 }
 
-function idleRows(idle: { workers: number; minutes: number }, gates: GateGroup[] | null, w: number): string[] {
-	const right = `last run: ${idle.workers} workers · ${idle.minutes} min · ${gatesBrief(gates)} `;
-	return [gradBar("◢◤ ATLAS  ·  idle", right, w, hx("#585b70"), hx("#313244")), rail("done", w, { tick: 0, spin: "◆", idle: true })];
+/** Claude band idle wording (mod/band.tsx lastWave): `last wave: N workers · 1m10s · ✔ ok`. */
+function idleRows(idle: IdleWave, w: number): string[] {
+	const wave = [`last wave: ${idle.workers} workers`, ...(idle.secs === undefined ? [] : [age(idle.secs)]), idle.failed ? `✖ ${idle.failed} failed` : "✔ ok"];
+	const title = `◆ ATLAS  ·  idle  ·  ${wave.join(" · ")}`;
+	return [gradBar(title, "", w, hx("#585b70"), hx("#313244")), rail("done", w, { tick: 0, spin: "◆", idle: true })];
 }
 
 /** Title, rail and footer always show; the middle rows take what is left of maxLines. */
@@ -312,7 +333,7 @@ function liveRows(m: PanelModel, w: number): string[] {
 
 export function renderPanel(m: PanelModel): string[] {
 	const w = Math.max(20, m.width);
-	return (m.idle ? idleRows(m.idle, m.gates, w) : liveRows(m, w)).map(s => fitLine(s, w));
+	return (m.idle ? idleRows(m.idle, w) : liveRows(m, w)).map(s => fitLine(s, w));
 }
 
 /** Last gate groups from atlas_gates.py; re-runs at most once per GATES_TTL_MS and never blocks a paint. */
