@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.1.3
+
+### Fixed
+- omp: a task-item worker's colony member is finished when the worker ends (agent_end in the sub, plus the omp `<Name>-<n>` id shape), so the widget live count drops to 0 without waiting for the lead to exit.
+- omp widget header counts only the current session's todos (no more whole-board totals) and drops the open-todo gate proxy, matching the Claude band's scoping.
+
 ## 12.1.2
 
 ### Fixed
