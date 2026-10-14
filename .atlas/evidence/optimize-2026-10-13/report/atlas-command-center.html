@@ -1,0 +1,160 @@
+<title>Atlas Command Center 12.3.1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a terminal-native report. One dark world (matches the Catppuccin Mocha product palette), before/after pairs stacked as evidence, numbers in mono. */
+:root {
+  color-scheme: dark;
+  --bg: #11111b; --panel: #181825; --line: #313244; --fg: #cdd6f4; --muted: #9399b2; --dim: #6c7086;
+  --violet: #cba6f7; --sky: #89dceb; --teal: #94e2d5; --green: #a6e3a1; --peach: #fab387; --red: #f38ba8; --yellow: #f9e2af;
+  --display: "Chakra Petch", "IBM Plex Sans", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; }
+a { color: var(--sky); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.05; letter-spacing: .01em; }
+h2 { font-size: 24px; margin-top: 56px; }
+h3 { font-size: 16px; color: var(--muted); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+p { max-width: 68ch; }
+.mark { display: inline-block; font-family: var(--mono); font-weight: 600; font-size: 13px; padding: 2px 10px; color: #11111b;
+  background: linear-gradient(90deg, var(--violet), var(--sky)); border-radius: 2px; letter-spacing: .08em; }
+.hero { display: grid; gap: 14px; padding-block: 8px 20px; border-bottom: 1px solid var(--line); }
+.lede { font-size: 18px; color: var(--fg); max-width: 72ch; }
+.versions { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--mono); font-size: 12.5px; }
+.versions span { padding: 3px 9px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+.versions span.now { color: #11111b; background: var(--teal); border-color: var(--teal); font-weight: 600; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 22px; }
+.kpi { background: var(--panel); border-left: 3px solid var(--teal); padding: 12px 14px; min-width: 0; }
+.kpi .v { font-family: var(--mono); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .v s { color: var(--dim); font-size: 15px; text-decoration-thickness: 1px; margin-right: 6px; }
+.kpi .l { color: var(--muted); font-size: 13px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+@media (max-width: 860px) { .pair { grid-template-columns: 1fr; } }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); min-width: 0; }
+figure img { display: block; width: 100%; height: auto; }
+figcaption { display: flex; gap: 10px; align-items: baseline; padding: 10px 12px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--muted); }
+.tag { font-family: var(--mono); font-size: 11.5px; font-weight: 600; padding: 1px 7px; letter-spacing: .06em; flex: none; }
+.tag.before { background: #45475a; color: var(--fg); }
+.tag.after { background: var(--green); color: #11111b; }
+.single { margin-top: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+@media (max-width: 860px) { .grid3 { grid-template-columns: 1fr; } }
+.chart { background: var(--panel); border: 1px solid var(--line); padding: 16px; margin-top: 16px; overflow-x: auto; }
+.row { display: grid; grid-template-columns: 170px 1fr 70px; gap: 10px; align-items: center; min-width: 520px; padding-block: 5px; font-variant-numeric: tabular-nums; }
+.row .n { font-family: var(--mono); font-size: 13px; color: var(--fg); }
+.row .ms { font-family: var(--mono); font-size: 13px; text-align: right; color: var(--muted); }
+.bars { display: grid; gap: 3px; }
+.bar { height: 9px; }
+.bar.old { background: #585b70; }
+.bar.new { background: linear-gradient(90deg, var(--teal), var(--sky)); }
+.axis { display: grid; grid-template-columns: 170px 1fr 70px; gap: 10px; min-width: 520px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.axis .ticks { display: flex; justify-content: space-between; }
+.legend { display: flex; gap: 18px; font-size: 13px; color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 18px; height: 8px; margin-right: 6px; vertical-align: middle; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tbl { overflow-x: auto; margin-top: 16px; background: var(--panel); border: 1px solid var(--line); }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .04em; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.was { color: var(--dim); }
+td.now { color: var(--green); }
+.issues { display: grid; gap: 8px; margin-top: 16px; padding: 0; list-style: none; }
+.issues li { background: var(--panel); border-left: 3px solid var(--peach); padding: 9px 12px; font-size: 14px; }
+code { font-family: var(--mono); font-size: 12.5px; background: #1e1e2e; padding: 1px 5px; color: var(--teal); }
+footer { margin-top: 56px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="mark">◆ ATLAS · COMMAND CENTER</span>
+    <h1>Atlas Command Center 12.3.1</h1>
+    <p class="lede">Every frame below is a real tmux capture of the installed plugin in Claude Code or omp, rendered to an image. The left side is the shipped state before this work; the right side is 12.3.1 after reinstall.</p>
+    <div class="versions">
+      <span>12.0.0</span><span>12.1.0</span><span>12.1.1</span><span>12.1.2</span><span>12.1.3</span><span>12.2.0</span><span>12.3.0</span><span class="now">12.3.1 installed</span>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="v"><s>no</s>yes</div><div class="l">Parallel tmux teams are the default flow, in both harnesses</div></div>
+      <div class="kpi"><div class="v"><s>223</s>83 ms</div><div class="l">Session start hook time, median</div></div>
+      <div class="kpi"><div class="v"><s>0</s>6</div><div class="l">Worker-to-worker channel notes per 3-worker team</div></div>
+      <div class="kpi"><div class="v"><s>63</s>0</div><div class="l">New hook faults across four live rounds (was per 24 h)</div></div>
+    </div>
+  </header>
+
+  <h2>Mission Control band</h2>
+  <p>The band above the prompt went from one text row to a filled panel: gradient title with wave, scope, elapsed, live count and cost; phase pills; one lane per worker with state chip, tool chip, target, elapsed bar and activity sparkline; a channel ticker; gate chips.</p>
+  <div class="pair">
+    <figure><img src="img/before-band.png" alt="12.2.0 band: thin outline, hairline bars" loading="lazy"><figcaption><span class="tag before">BEFORE</span>12.2.0 while two explorers run: thin outline, hairline bars, mostly empty space.</figcaption></figure>
+    <figure><img src="img/cc-band-running.png" alt="12.3.1 band with two running lanes" loading="lazy"><figcaption><span class="tag after">AFTER</span>12.3.1 with two background explorers: RUN chips, live tool and target, bars, sparklines, ticker.</figcaption></figure>
+  </div>
+  <div class="pair">
+    <figure><img src="img/before-idle.png" alt="12.2.0 idle band" loading="lazy"><figcaption><span class="tag before">BEFORE</span>Idle: a row of check marks in a thin box; reply header glued as <code>ATLAS|</code>.</figcaption></figure>
+    <figure><img src="img/cc-band-idle.png" alt="12.3.1 calm idle band" loading="lazy"><figcaption><span class="tag after">AFTER</span>Calm idle: last-wave summary, completed phase rail, one amber gate chip, pill reply header.</figcaption></figure>
+  </div>
+
+  <h2>Parallel teams in tmux</h2>
+  <p>The lead classifies the task, resolves the team from one shared scope matrix, then runs <code>spawn-team</code>, <code>wait</code> and <code>reap</code> with absolute paths to the installed plugin. Workers run side by side in one styled window and talk on the colony channel.</p>
+  <div class="pair">
+    <figure><img src="img/before-team.png" alt="12.2.0 team panes" loading="lazy"><figcaption><span class="tag before">BEFORE</span>One window per worker, an empty shell pane, wrapped raw <code>lean-ctx -c</code> commands.</figcaption></figure>
+    <figure><img src="img/cc-team.png" alt="12.3.1 tiled team window" loading="lazy"><figcaption><span class="tag after">AFTER</span>Three workers tiled, role-colored headers, tool and peer chips, sticky status lines.</figcaption></figure>
+  </div>
+  <div class="single">
+    <figure><img src="img/cc-team-lead.png" alt="Claude lead running the default team flow" loading="lazy"><figcaption><span class="tag after">AFTER</span>The Claude lead runs resolve, spawn-team and wait from the installed 12.3.1 path; the band shows all three team lanes live.</figcaption></figure>
+  </div>
+
+  <h2>omp parity</h2>
+  <p>omp gets the same panel inside its 10-line widget, the same team tool, and the same idle summary after reap.</p>
+  <div class="pair">
+    <figure><img src="img/before-omp.png" alt="12.2.0 omp, no widget" loading="lazy"><figcaption><span class="tag before">BEFORE</span>12.2.0 omp during a team run: no atlas widget at all.</figcaption></figure>
+    <figure><img src="img/omp-widget.png" alt="12.3.1 omp widget" loading="lazy"><figcaption><span class="tag after">AFTER</span>12.3.1 omp: gradient title, phase pills, three lanes with tool and target, ticker, gate chips.</figcaption></figure>
+  </div>
+
+  <h2>Transcript and gate</h2>
+  <div class="grid3">
+    <figure><img src="img/cc-card-done.png" alt="Worker card done" loading="lazy"><figcaption><span class="tag after">AFTER</span>Worker card updates in place to <code>STATUS: DONE · 42s</code>.</figcaption></figure>
+    <figure><img src="img/cc-scope-deny.png" alt="SCOPE deny card" loading="lazy"><figcaption><span class="tag after">AFTER</span>Unscoped dispatch denied on any turn, with the resolver command to fix it.</figcaption></figure>
+    <figure><img src="img/omp-widget-idle.png" alt="omp idle after reap" loading="lazy"><figcaption><span class="tag after">AFTER</span>omp shows the last wave after reap instead of vanishing.</figcaption></figure>
+  </div>
+
+  <h2>Hook time per event</h2>
+  <p>Median milliseconds from <code>bench_hooks.py</code>, 15 runs each, against the installed plugin. 12.1.3 is the round-two baseline.</p>
+  <div class="chart" role="img" aria-label="Hook latency, 12.1.3 versus 12.3.1">
+    <div class="row"><span class="n">Session start</span><div class="bars"><div class="bar old" style="width:66.4%"></div><div class="bar new" style="width:24.7%"></div></div><span class="ms">223 → 83</span></div>
+    <div class="row"><span class="n">Edit call, pre+post</span><div class="bars"><div class="bar old" style="width:98.2%"></div><div class="bar new" style="width:71.4%"></div></div><span class="ms">330 → 240</span></div>
+    <div class="row"><span class="n">Stop</span><div class="bars"><div class="bar old" style="width:65.2%"></div><div class="bar new" style="width:47.0%"></div></div><span class="ms">219 → 158</span></div>
+    <div class="row"><span class="n">Read call, pre+post</span><div class="bars"><div class="bar old" style="width:56.5%"></div><div class="bar new" style="width:40.2%"></div></div><span class="ms">190 → 135</span></div>
+    <div class="row"><span class="n">Bash, pre</span><div class="bars"><div class="bar old" style="width:53.0%"></div><div class="bar new" style="width:37.5%"></div></div><span class="ms">178 → 126</span></div>
+    <div class="row"><span class="n">Agent, pre</span><div class="bars"><div class="bar old" style="width:35.4%"></div><div class="bar new" style="width:28.0%"></div></div><span class="ms">119 → 94</span></div>
+    <div class="axis"><span></span><div class="ticks"><span>0</span><span>84</span><span>168</span><span>252</span><span>336 ms</span></div><span></span></div>
+    <div class="legend"><span><i style="background:#585b70"></i>12.1.3</span><span><i style="background:linear-gradient(90deg,#94e2d5,#89dceb)"></i>12.3.1</span></div>
+  </div>
+
+  <h2>Orchestration, measured</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Measure</th><th>Before</th><th>12.3.1</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Default worker transport</td><td class="was">in-process Agent calls; tmux opt-in</td><td class="now">resolver-sized tmux team</td><td>live-232 lead scrollback</td></tr>
+      <tr><td>Resolver calls</td><td class="num was">0 in 7 days</td><td class="num now">every team run</td><td>atlas.db, live runs</td></tr>
+      <tr><td>SCOPE on atlas dispatches</td><td class="num was">8 of 166 runs, advisory</td><td class="num now">required, every turn</td><td>live deny capture</td></tr>
+      <tr><td>Dispatch rows with wave id</td><td class="num was">0 of 1899</td><td class="num now">28 rows, 10 waves, model filled</td><td>atlas.db, last hour</td></tr>
+      <tr><td>Worker-to-worker notes per team</td><td class="num was">0 (in-process)</td><td class="num now">6 of 6 expected</td><td>wait JSON</td></tr>
+      <tr><td>Stale colony channels</td><td class="num was">32 channels, 453 unfinished members</td><td class="num now">teams reaped on finish; registry flat across runs</td><td>channels.json</td></tr>
+      <tr><td>Doctor</td><td class="was">4 problems, false failures</td><td class="now">HEALTHY</td><td>atlas_doctor.py</td></tr>
+      <tr><td>Test suites</td><td class="num was">hooks 6 fail, omp 1 fail</td><td class="num now">hooks: only install-parity, cleared by reinstall; omp 424/0; mod 0</td><td>suite runs</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Still open</h2>
+  <ul class="issues">
+    <li>Claude idle band: the "last wave" duration keeps growing after the wave ends, and after a tmux team it counts 1 worker instead of 3.</li>
+    <li>omp lanes show THINK while a tool is running, and the phase pills stay on RESEARCH during a team run.</li>
+    <li>Claude Code folds a batch of 2+ background dispatches into one engine row that plugins cannot restyle, so a batch shows per-worker results on notification rows instead of a wave strip.</li>
+    <li>Report bubbles cut off at <code>DELIVERABLE:</code>, and the transcript repeats the done line two or three times.</li>
+    <li>Running Claude Code inside tmux needs <code>CLAUDE_CODE_TMUX_TRUECOLOR=1</code> for the gradients; without it colors are quantized to 256.</li>
+  </ul>
+
+  <footer>Evidence: <code>.atlas/evidence/optimize-2026-10-13/</code> in tech-tools (baseline-r2.md, live-230, live-231, live-232, design). Commit c3af1bf1 on main.</footer>
+</div>

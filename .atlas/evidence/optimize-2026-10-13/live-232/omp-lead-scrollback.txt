@@ -1,0 +1,233 @@
+                                                                                                                                                                
+ First run one claude-mem search for "omp widget" (limit 2). Then use the atlas_team tool: spawn class audit effort medium with task "Each worker reads 3 files 
+ under /etc, runs sleep 4, posts a peer-sync note to each sibling, reports STATUS: DONE". Then atlas_team wait, then atlas_team reap. Print each JSON result    
+ verbatim.                                                                                                                                                      
+                                                                                                                                                                
+
+                                                                                                                                                                
+ • mcp__claude_mem_mcp_search_search                                                                                                                            
+  └─ query="omp widget", limit=2                                                                                                                                
+ Found 5 result(s) matching "omp widget" (2 obs, 2 sessions, 1 prompts)                                                                                         
+                                                                                                                                                                
+ ### Oct 13, 2026                                                                                                                                               
+                                                                                                                                                                
+ … 9 more lines ⟦⌃O: Expand⟧                                                                                                                                    
+                                                                                                                                                                
+
+ ● Read xd://atlas_team                 
+
+                                                                                                                                                                
+ • Atlas team                                                                                                                                                   
+  └─ action="spawn", class="audit", effort="medium", task="Each worker reads 3 files under /etc, runs sleep 4, posts a peer-sync note to each sibling, repor…"  
+ └ • ok: true                                                                                                                                                   
+   • team_id: "t330623"                                                                                                                                         
+   • session: "atlas-t330623"                                                                                                                                   
+   • transport: "tmux"                                                                                                                                          
+   • transport_note: null                                                                                                                                       
+   • wave_logged: true                                                                                                                                          
+ ⟦⌃O: Expand⟧                                                                                                                                                   
+                                                                                                                                                                
+
+                                                                                                                                                                
+ • Atlas team                                                                                                                                                   
+  └─ action="wait", team="t330623"                                                                                                                              
+ └ • ok: true                                                                                                                                                   
+   • team_id: "t330623"                                                                                                                                         
+   • members [3]                                                                                                                                                
+     ├─ [0] {4}                                                                                                                                                 
+     │  └─ …                                                                                                                                                    
+     ├─ [1] {4}                                                                                                                                                 
+ ⟦⌃O: Expand⟧                                                                                                                                                   
+                                                                                                                                                                
+
+                                                                                                                                                                
+ • Atlas team                                                                                                                                                   
+  └─ action="reap", team="t330623"                                                                                                                              
+ └ • ok: true                                                                                                                                                   
+   • team_id: "t330623"                                                                                                                                         
+   • record: "live"                                                                                                                                             
+   • already_reaped: false                                                                                                                                      
+   • members [3]                                                                                                                                                
+     ├─ [0]: "explorer-2bb7"                                                                                                                                    
+ ⟦⌃O: Expand⟧                                                                                                                                                   
+                                                                                                                                                                
+
+╭─── ☑ Todo 5 tasks ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ I. recall  1/1                                                                                                                                               │
+│ II. team  3/3                                                                                                                                                │
+│ III. report  1/1                                                                                                                                             │
+│   └─ ☑ Print each JSON result verbatim                                                                                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ATLAS | 🏁 done 5/5 | search ran, team t330623 spawned (3 workers), waited (all STATUS: DONE, exit 0), reaped                                                  
+
+ claude-mem search "omp widget" (limit 2)                                       
+
+ ```                                    
+Found 5 result(s) matching "omp widget" (2 obs, 2 sessions, 1 prompts)
+#38959 7:13 PM plugins/atlas/hooks/worker_report_gate.py — Reaper Implementation, Band/Widget Before-After Evidence, and Doc Source Content Located (~796)
+#38954 7:12 PM General — OMP Widget Implementer (implementer-7a6b) Completion Report: Red-Green Tests, Known Limitations (~614)
+ ```                                    
+
+ atlas_team spawn                       
+
+ ```json                                
+{"ok": true, "team_id": "t330623", "session": "atlas-t330623", "transport": "tmux", "transport_note": null, "wave_logged": true, "run_id": 2743, "channel":
+"tech-tools@main/lead-01a138", "max_parallel": 3, "members": [{"name": "explorer-2bb7", "ok": true, "session": "atlas-t330623", "harness": "omp", "agent":
+"explorer", "model": "sonnet", "level": "off", "board": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/explorer-2bb7.jsonl"}, {"name":
+"explorer-1903", "ok": true, "session": "atlas-t330623", "harness": "omp", "agent": "explorer", "model": "sonnet", "level": "off", "board":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/explorer-1903.jsonl"}, {"name": "completeness-critic-f08e", "ok": true, "session":
+"atlas-t330623", "harness": "omp", "agent": "completeness-critic", "model": "anthropic/claude-sonnet-5-5:medium", "level": "medium", "board":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/completeness-critic-f08e.jsonl"}]}
+ ```                                    
+
+ atlas_team wait                        
+
+ ```json                                
+{"ok": true, "team_id": "t330623", "members": [{"name": "explorer-2bb7", "exit": 0, "duration_s": 49.7, "last_status": "STATUS: DONE"}, {"name":
+"explorer-1903", "exit": 0, "duration_s": 48.3, "last_status": "STATUS: DONE"}, {"name": "completeness-critic-f08e", "exit": 0, "duration_s": 78.8,
+"last_status": "STATUS: DONE"}], "notes_worker_to_worker": 6, "elapsed_s": 69.6}
+ ```                                    
+
+ atlas_team reap                        
+
+ ```json                                
+{"ok": true, "team_id": "t330623", "record": "live", "already_reaped": false, "members": ["explorer-2bb7", "explorer-1903", "completeness-critic-f08e"],
+"session": "atlas-t330623", "killed": true, "session_left": false, "channels_reaped": 0, "prompts_removed": 3, "archived":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/teams/archive/t330623.json"}
+ ```                                    
+
+ Observations from board notes: audit/medium resolved to 3 workers (not 2); completeness-critic-f08e reported its first start-note attempt was denied by the    
+ claude-mem gate and its "read" was a wc -l line count, not file contents.      
+
+ ATLAS | 🏁 done | one gotcha captured; no code/behavior changed, docs untouched by design                                                                      
+
+                                                                                                                                                                
+ • Learn                                                                                                                                                        
+  └─ memory="atlas_team on omp (tech-tools, 2026-10-13, team t330623): class=audit effort=medium resolves to 3 workers (explorer x2 on sonnet +…", context="…"  
+ Lesson stored.                                                                                                                                                 
+ ⟦⌃O: Expand⟧                                                                                                                                                   
+                                                                                                                                                                
+
+ Captured as a project memory (atlas_team sizing for audit/medium, claude-mem gate denying a worker's first board note, "read" ambiguity). Docs check: no file  
+ under plugins/ or docs/ changed this turn (spawn/wait/reap only wrote .atlas/.run/ runtime artifacts), so CHANGELOG/ROADMAP/architecture need no update.       
+
+ ⓘ Advisor 1 note 
+   ▎ ⟦concern⟧ T-1 CLAUDE.md: "Never generate a skill or command to capture a lesson or pattern" — durable 
+   ▎ knowledge goes to findings.json, docs/, or claude-mem only. `learn` returned just "Lesson stored." with no 
+   ▎ path; confirm its destination isn't a `learned-*` SKILL.md or `created_by: atlas-auto` artifact (ctx_glob 
+   ▎ `**/skills/learned-*/SKILL.md`), and delete it if so. 
+
+ Ponytail loaded: full                  
+
+                                                                                                                                                                
+ Team UI test. First do one claude-mem search for "atlas team widget". Then use the atlas_team tool: spawn a team with class audit, effort medium, paths        
+ plugins/atlas/README.md,AGENTS.md,CLAUDE.md, task: "Each worker reads 3 repo files (plugins/atlas/README.md, AGENTS.md, CLAUDE.md) with ctx_read, runs sleep   
+ 6; echo ok via Bash, posts a peer-sync note to each sibling via the board, then reports STATUS: DONE." Then atlas_team wait for that team, then atlas_team     
+ reap it. Reply with the spawn, wait and reap JSON verbatim.                                                                                                    
+                                                                                                                                                                
+
+🔌 claude-mem:mcp-search/search         
+Found 6 result(s) matching "atlas team widget" (2 obs, 2 sessions, 2 prompts)   
+
+### Oct 13, 2026                        
+
+… 15 more lines ⟦⌃O: Expand⟧            
+
+🔌 lean-ctx/ctx_glob                    
+0 files matched '**/skills/learned-*/SKILL.md' in 3447 files walked             
+⟦⌃O: Expand⟧                            
+
+                                                                                                                                                                
+ • Atlas team                                                                                                                                                   
+  └─ action="spawn", class="audit", effort="medium", paths=[3 items], task="Each worker reads 3 repo files (plugins/atlas/README.md, AGENTS.md, CLAUDE.md) w…"  
+ └ • ok: true                                                                                                                                                   
+   • team_id: "tab80d5"                                                                                                                                         
+   • session: "atlas-tab80d5"                                                                                                                                   
+   • transport: "tmux"                                                                                                                                          
+   • transport_note: null                                                                                                                                       
+   • wave_logged: true                                                                                                                                          
+ ⟦⌃O: Expand⟧                                                                                                                                                   
+                                                                                                                                                                
+
+                                                                                                                                                                
+ • Atlas team                                                                                                                                                   
+  └─ action="wait", team="tab80d5"                                                                                                                              
+ └ • ok: true                                                                                                                                                   
+   • team_id: "tab80d5"                                                                                                                                         
+   • members [3]                                                                                                                                                
+     ├─ [0] {4}                                                                                                                                                 
+     │  └─ …                                                                                                                                                    
+     ├─ [1] {4}                                                                                                                                                 
+ ⟦⌃O: Expand⟧                                                                                                                                                   
+                                                                                                                                                                
+
+                                                                                                                                                                
+ • Atlas team                                                                                                                                                   
+  └─ action="reap", team="tab80d5"                                                                                                                              
+ └ • ok: true                                                                                                                                                   
+   • team_id: "tab80d5"                                                                                                                                         
+   • record: "live"                                                                                                                                             
+   • already_reaped: false                                                                                                                                      
+   • members [3]                                                                                                                                                
+     ├─ [0]: "explorer-f00f"                                                                                                                                    
+ ⟦⌃O: Expand⟧                                                                                                                                                   
+                                                                                                                                                                
+
+ ATLAS | 🏁 done | team tab80d5 spawned (3), waited (all STATUS: DONE, exit 0, 6 peer notes), reaped                                                            
+
+ Advisory check: **/skills/learned-*/SKILL.md → 0 matches in 3447 files; learn was called without a skill param, so it wrote memory only.                       
+
+ claude-mem search "atlas team widget"  
+
+ ```                                    
+#40109 10:11 PM General — OMP Widget Missing During atlas_team Runs Identified as Known Issue (~307)
+#39650 9:32 PM .atlas/.run/teams/archive/t1bbe70.json — Second Team Successful: audit/medium Resolved to 3 Workers, 4 Peer Notes, All Exit 0 (~469)
+ ```                                    
+
+ spawn                                  
+
+ wait                                   
+                                                                                                                                                                
+ ```json                                                                                                                                                        
+{"ok": true, "team_id": "tab80d5", "members": [{"name": "explorer-f00f", "exit": 0, "duration_s": 88.8, "last_status": "STATUS: DONE"}, {"name":
+"explorer-c18d", "exit": 0, "duration_s": 75.5, "last_status": "STATUS: DONE"}, {"name": "completeness-critic-78b5", "exit": 0, "duration_s": 54.5,
+"last_status": "STATUS: DONE"}], "notes_worker_to_worker": 6, "elapsed_s": 84.6}
+ ```                                    
+
+ reap                                   
+                                                                                                                                                                
+ ```json                                                                                                                                                        
+{"ok": true, "team_id": "tab80d5", "record": "live", "already_reaped": false, "members": ["explorer-f00f", "explorer-c18d", "completeness-critic-78b5"],
+"session": "atlas-tab80d5", "killed": true, "session_left": false, "channels_reaped": 1, "prompts_removed": 3, "archived":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/teams/archive/tab80d5.json"}
+ ```                                                                                                                                                            
+                                                                                
+ Board deviations worth knowing: all three workers read only the first 8-33 lines of each file, and explorer-c18d used native read instead of ctx_read. Each    
+ reported sleep 6; echo ok → ok at ~6.1s wall.                                  
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ $ /opt/homebrew/bin/lean-ctx -c 'python3 /Users/jerry/.omp/plugins/cache/plugins/tech-tools___atlas___12.3.1/scripts/atlas_todo.py list 2>/dev/null | grep   │
+│ -A3 tf864ea65 || python3 /Users/jerry/.omp/plugins/cache/plugins/tech-tools___atlas___12.3.1/scripts/atlas_todo.py list --session lead-01a138'               │
+├─── Output ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ {"ok": true, "items": [{"id": "te0b45b37", "content": "advisor[blocker]: Hold the commit and push. The only `verified` evidence for the post-fix tree is     │
+│ `atlas-9.0.0-verify-fixes`, which the orchestrator wrote about its own fixes, while the independent row `atlas-9.0.0-ver", "status": "completed", "owner":   │
+│ null, "claimed_at": null, "origin": "manual", "session_id": "01a10c96-19bb-7000-b3fd-64000588297e", "created_at": 1791215016.813024, "updated_at":           │
+│ 1791220178.6424708, "evidence": "Refuted as stale: the commit it said to hold was made only after an independent atlas:verifier row (atlas-9.0.0-reverify,   │
+│ verified_by atlas:verifier) confirmed all 15 items; the orchestrator row atlas-9.0.0-verify-fixes is labelled non-independent.", "completed_at": 1791220178… │
+│ ⟦Wall: 0.12s | Timeout: 300s⟧                                                                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  ⎋ Reading advisor item tf864ea65      
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 📁  tech-tools   🐸········  2m06s · 18 tok/s · tools 6     👾  Claude Fable 5.1  ·  medium                                                                    
+ ​                                       
+ 📚  ctx  15% ▅▁▁▁▁▁▁▁▁  147.8k / 1M         │  💰  session         plan     2.1M tok  cache 86%                                                                
+ ⏳  5h   40% ▅▅▅▅▁▁▁▁▁  1h49m anthropic     │  🔌  anthropic       plan     2.1M tok  claude-fable-5-1                                                         
+ 📅  7d   79% ▅▅▅▅▅▅▅▁▁  1d0h anthropic      │                                  
+ ​                                       
+LSP Active: typescript                         ● 🐴 ponytail: ⚡ FULL     fallow impact  off
+

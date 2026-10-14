@@ -6670,5 +6670,22 @@
     "status": "open",
     "verified_at": "2026-10-14T03:17:09+00:00",
     "verified_by": "verifier-live230"
+  },
+  {
+    "id": "live-232",
+    "surface": "band,card,header,deny-card,team-panes,omp-widget",
+    "category": "live-ui",
+    "severity": "low",
+    "title": "Live verify installed atlas 12.3.1 in Claude Code + omp: 10/10 captures PASS (2 with defects); team flow uses absolute installed paths, spawn-team not denied, no (p)",
+    "evidence": [
+      ".atlas/evidence/optimize-2026-10-13/live-232/verdicts.md; metrics.json; cc-team-lead-scrollback.txt; omp-lead-scrollback.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T04:11:28+00:00",
+    "verified_by": "verifier-live232"
   }
 ]

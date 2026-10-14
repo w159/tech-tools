@@ -1,0 +1,165 @@
+The scope doc's first heading is "# Plugin development scope: atlas and armada"; plugins/atlas/ROADMAP.md doesn't exist (the roadmap is docs/ROADMAP.md), and
+the 25-second sleep had to run in the background because the harness blocked it in the foreground.
+ ◆ ATLAS  ✓ VERIFY  no change: explorer-cardc is still waiting on its background `sleep 25`
+▸ 1s · ctx 12%
+▸ 3s · ctx 12%
+▌ ✔ explorer-cardc  explorer done · STATUS: DONE · 13s 
+ ◆ ATLAS  ⚑ DONE  explorer-cardc finished, nothing left running
+The scope doc's first heading is "# Plugin development scope: atlas and armada"; plugins/atlas/ROADMAP.md doesn't exist (the roadmap is docs/ROADMAP.md), and
+the 25-second sleep had to run in the background because the harness blocked it in the foreground.
+▸ 4s · ctx 12% · $0.03
+
+❯ Card test 2. Dispatch ONE atlas:explorer named explorer-cardd with run_in_background true. Prompt lines: "SCOPE: audit/low", "GOAL: read 2 files and report   
+  their first heading", "TOOLS: ToolSearch lean-ctx (ctx_read, ctx_search); Bash", "DELIVERABLE: 2 lines file: heading", "SUCCESS CRITERIA: two headings        
+  reported", "OUT OF SCOPE: edits", "STOP CONDITIONS: after both reads", "REPORT: the standard STATUS/STEPS/FILES_CHANGED/EVIDENCE/DELIVERABLE block". It reads 
+  docs/ROADMAP.md with ctx_read, then runs the Bash command sleep 15; echo half in the foreground, then reads docs/plugin-development-scope.md with ctx_read,   
+  then runs sleep 10; echo end in the foreground. Do not read them yourself. Wait for it, then reply in one line.                                               
+▌ ✓ explorer-cardd  explorer · sonnet·low                                                                                                                     
+▌ goal  read 2 files and report their first heading                                                                                                           
+▌ done  STATUS: DONE · 42s                                                                                                                                    
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+ ◆ ATLAS  ◎ RESEARCH  explorer-cardd running in background
+I wrote the REPORT line as the hook's exact list (STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT), which adds NEXT to the block you named; I'll reply
+in one line once explorer-cardd finishes.
+▸ 7s · ctx 12% · $0.04 
+▸ 10s · ctx 12% · $0.07
+▌ #atlas explorer-cardd › lead
+▌ STATUS: DONE
+▌ STEPS: 4/4
+▌ FILES_CHANGED: none
+▌ EVIDENCE:
+▌ 1. ctx_read docs/ROADMAP.md lines:1-8 -> "1| # Roadmap" ... "7| ## In Progress"
+▌ 2. Bash `sleep 15; echo half` (foreground) -> half
+▌ 3. ctx_read docs/plugin-development-scope.md lines:1-8 -> "1| # Plugin development scope: atlas and armada" ... "7| The one rule this document exists to enf…
+▌ 4. Bash `sleep 10; echo end` (foreground) -> end
+ ◆ ATLAS  ⚑ DONE  explorer-cardd finished all 4 steps
+docs/ROADMAP.md starts with "# Roadmap" and docs/plugin-development-scope.md with "# Plugin development scope: atlas and armada"; both sleeps ran in the
+
+❯ Deny test. Dispatch ONE atlas:explorer named explorer-noscope (foreground) whose prompt deliberately has NO SCOPE line: "GOAL: count lines in AGENTS.md",     
+  "TOOLS: ToolSearch lean-ctx (ctx_read)", "DELIVERABLE: one number", "SUCCESS CRITERIA: number reported", "OUT OF SCOPE: edits", "STOP CONDITIONS: after one   
+  read", "REPORT: STATUS line". Do not add SCOPE and do not retry if it is denied; just quote the deny reason in one line.                                      
+▌ ✗ explorer-noscope  explorer · ✖ denied                                                                                                                     
+▌ goal  count lines in AGENTS.md                                                                                                                              
+▌ deny  this dispatch to atlas:explorer has no `SCOPE: <class>/<effort>` line.                                                                                
+  ⎿  Initializing…
+  ⎿  Error: PreToolUse:Agent hook error: DENY - this dispatch to atlas:explorer has no `SCOPE: <class>/<effort>` line. Classify the task, then resolve its team:
+       python3 "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_resolve.py" <class> <effort> --paths a,b
+     classes: implement, fix, verify, audit, docs, db, ui-test; efforts: high, low, medium
+     Add `SCOPE: <class>/<effort>` to the prompt and re-dispatch. 2+ workers: run them as tmux panes with
+       python3 "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" spawn-team --class C --effort E
+     --paths a,b --task "..."
+ ◆ ATLAS  ⚑ DONE  explorer-noscope denied as expected, not retried
+Deny reason: "DENY - this dispatch to atlas:explorer has no SCOPE: <class>/<effort> line. Classify the task, then resolve its team."
+     Add `SCOPE: <class>/<effort>` to the prompt and re-dispatch. 2+ workers: run them as tmux panes with
+       python3 "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" spawn-team --class C --effort E
+     --paths a,b --task "..."
+ ◆ ATLAS  ⚑ DONE  explorer-noscope denied as expected, not retried
+Deny reason: "DENY - this dispatch to atlas:explorer has no SCOPE: <class>/<effort> line. Classify the task, then resolve its team."
+  run atlas_resolve.py audit medium --paths plugins/atlas/README.md,AGENTS.md,CLAUDE.md, then spawn-team --class audit --effort medium with those paths and a   
+  task saying: "Each worker reads 3 repo files (plugins/atlas/README.md, AGENTS.md, CLAUDE.md) with ctx_read, runs sleep 4; echo ok, posts a peer-sync note to  
+  each sibling via the board, then reports STATUS: DONE." Then wait --team, then reap --team. First quote the exact SessionStart team-flow line you are using.  
+  After reap, reply with the spawn-team, wait and reap JSON verbatim.                                                                                           
+
+⏺ Bash(python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_resolve.py" audit medium --paths
+      plugins/atlas/README.md,AGENTS.md,CLAUDE.md)
+  ⎿  {
+       "effort": "medium",
+       "file_scope": [
+     … +22 lines (ctrl+o to expand)
+
+⏺ Bash(python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" spawn-team --class audit --effort medium --paths
+      plugins/atlas/README.…)
+  ⎿  {
+       "ok": true,
+       "team_id": "t5aac31",
+     … +40 lines (ctrl+o to expand)
+
+⏺ Bash(python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" wait --team t5aac31)
+  ⎿  {"ok": true, "team_id": "t5aac31", "members": [{"name": "explorer-f61a", "exit": 0, "duration_s": 29.2, "last_status": "STATUS: DONE"}, {"name": "expl
+     orer-e2d5", "exit": 0, "duration_s": 28.0, "last_status": "STATUS: DONE"}, {"name": "completeness-critic-7c3f", "exit": 0, "duration_s": 29.7, "last_s
+     tatus": "STATUS: DONE"}], "notes_worker_to_worker": 6, "elapsed_s": 26.6}
+  ⎿  (timeout 10m)
+
+⏺ Bash(python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" reap --team t5aac31)
+  ⎿  {
+       "ok": true,
+       "team_id": "t5aac31",
+     … +14 lines (ctrl+o to expand)
+
+
+❯ Team test, use the default atlas team flow exactly as your SessionStart guidance gives it (the absolute-path commands, verbatim): classify as audit/medium,   
+  run atlas_resolve.py audit medium --paths plugins/atlas/README.md,AGENTS.md,CLAUDE.md, then spawn-team --class audit --effort medium with those paths and a   
+  task saying: "Each worker reads 3 repo files (plugins/atlas/README.md, AGENTS.md, CLAUDE.md) with ctx_read, runs sleep 4; echo ok, posts a peer-sync note to  
+  each sibling via the board, then reports STATUS: DONE." Then wait --team, then reap --team. First quote the exact SessionStart team-flow line you are using.  
+  After reap, reply with the spawn-team, wait and reap JSON verbatim.                                                                                           
+
+⏺ Bash(python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_resolve.py" audit medium --paths
+      plugins/atlas/README.md,AGENTS.md,CLAUDE.md)
+  ⎿  {
+       "effort": "medium",
+       "file_scope": [
+     … +22 lines (ctrl+o to expand)
+
+⏺ Bash(python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" spawn-team --class audit --effort medium --paths
+      plugins/atlas/README.…)
+  ⎿  {
+       "ok": true,
+       "team_id": "t5aac31",
+     … +40 lines (ctrl+o to expand)
+
+⏺ Bash(python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" wait --team t5aac31)
+  ⎿  {"ok": true, "team_id": "t5aac31", "members": [{"name": "explorer-f61a", "exit": 0, "duration_s": 29.2, "last_status": "STATUS: DONE"}, {"name": "expl
+     orer-e2d5", "exit": 0, "duration_s": 28.0, "last_status": "STATUS: DONE"}, {"name": "completeness-critic-7c3f", "exit": 0, "duration_s": 29.7, "last_s
+     tatus": "STATUS: DONE"}], "notes_worker_to_worker": 6, "elapsed_s": 26.6}
+  ⎿  (timeout 10m)
+
+⏺ Bash(python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" reap --team t5aac31)
+  ⎿  {
+       "ok": true,
+       "team_id": "t5aac31",
+     … +14 lines (ctrl+o to expand)
+ ◆ ATLAS  ⚑ DONE  team t5aac31 spawned, waited, reaped; all 3 workers STATUS: DONE                                                                             
+Team-flow line from SessionStart that I ran:                                                                                                               
+Team flow (absolute paths, use verbatim): python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_resolve.py" <class> <effort> --paths
+a,b ; python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" spawn-team --class C --effort E --paths a,b --task "..." ;      
+python3 "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" wait --team T ; python3 
+"/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.1/scripts/atlas_mux.py" reap --team T                                                                 
+                                                                                                                                                              
+spawn-team:                        
+{"ok": true, "team_id": "t5aac31", "session": "atlas-t5aac31", "transport": "tmux", "transport_note": null, "wave_logged": true, "run_id": 2770, "channel": 
+"tech-tools@main/lead-85c17b", "max_parallel": 3, "members": [{"name": "explorer-f61a", "ok": true, "session": "atlas-t5aac31", "harness": "claude", "agent": 
+"explorer", "model": "sonnet", "level": "low", "board": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/explorer-f61a.jsonl"}, {"name": 
+"explorer-e2d5", "ok": true, "session": "atlas-t5aac31", "harness": "claude", "agent": "explorer", "model": "sonnet", "level": "low", "board": 
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/explorer-e2d5.jsonl"}, {"name": "completeness-critic-7c3f", "ok": true, "session":
+"atlas-t5aac31", "harness": "claude", "agent": "completeness-critic", "model": "sonnet", "level": "medium", "board":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/completeness-critic-7c3f.jsonl"}]}
+
+wait:
+{"ok": true, "team_id": "t5aac31", "members": [{"name": "explorer-f61a", "exit": 0, "duration_s": 29.2, "last_status": "STATUS: DONE"}, {"name":
+"explorer-e2d5", "exit": 0, "duration_s": 28.0, "last_status": "STATUS: DONE"}, {"name": "completeness-critic-7c3f", "exit": 0, "duration_s": 29.7,
+"last_status": "STATUS: DONE"}], "notes_worker_to_worker": 6, "elapsed_s": 26.6}
+
+reap:
+{"ok": true, "team_id": "t5aac31", "record": "live", "already_reaped": false, "members": ["explorer-f61a", "explorer-e2d5", "completeness-critic-7c3f"],
+"session": "atlas-t5aac31", "killed": true, "session_left": false, "channels_reaped": 1, "prompts_removed": 3, "archived":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/teams/archive/t5aac31.json"}
+
+Two things to look at:
+- ctx_shell refused: in all three workers, the first ctx_shell call failed because its permission isn't granted, so they ran sleep 4; echo ok with Bash instead.
+- Path mismatch: the SCOPE deny message in the previous test pointed to osprey/assets/plugins/cache/..., a different place than the ~/.claude/plugins/cache/...
+  paths SessionStart gives.
+▸ 56s · ctx 13% · $0.21                                                                                                                                        
+ ◆ ATLAS  ·  idle  ·  last wave: 1 worker · 2m54s · ✔ ok · $2.26                                                                                 gates ✖1   [-]
+  ✓ research ▶ ✓ theory ▶ ✓ test ▶ ✓ implement ▶ ✓ verify ▶ ◆ DONE                                                                                         
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+❯                                                                                                                                                               
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁 tech-tools | 🤖 Opus 5.5 | 🧠 █░░░░░░░░░ 13% (125.3k/1M)                                                                                              /rc  
+  ⏱️  5h: ███░░░░░░░ 39% 1h52m left                                                                                                                           
+  ⏱️  7d: ███████░░░ 78% 1d0h left             
+  context-mode  ●  saves ~98% of context window
+   fallow  impact  off                             
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 3 agents
+
+

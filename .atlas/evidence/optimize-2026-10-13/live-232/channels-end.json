@@ -1,0 +1,871 @@
+{
+  "version": 1,
+  "channels": {
+    "tech-tools@main": {
+      "name": "tech-tools@main",
+      "kind": "main",
+      "parent": null,
+      "lead": null,
+      "members": [],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791395937.5099132,
+      "last_activity": 1791395937.5099132
+    },
+    "tech-tools@main/selffix": {
+      "name": "tech-tools@main/selffix",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "selffix",
+      "members": [
+        {
+          "name": "selffix",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791488139.521962
+        },
+        {
+          "name": "fix-2740",
+          "role": "subagent",
+          "parent": "selffix",
+          "joined": 1791828681.453779,
+          "pane_id": "wQ:p9",
+          "pid": 15376,
+          "pid_start": "Mon Oct 12 14:11:21 2026",
+          "exit_code": 0,
+          "ended_at": 1791828773.240919
+        },
+        {
+          "name": "fix-48",
+          "role": "subagent",
+          "parent": "selffix",
+          "joined": 1791561910.148264,
+          "pane_id": "wN:p5",
+          "pid": 67748,
+          "pid_start": "Fri Oct 9 12:05:10 2026",
+          "exit_code": 0,
+          "ended_at": 1791562012.74086
+        },
+        {
+          "name": "fix-7314",
+          "role": "subagent",
+          "parent": "selffix",
+          "joined": 1791828682.179955,
+          "pane_id": "wQ:pB",
+          "pid": 15469,
+          "pid_start": "Mon Oct 12 14:11:22 2026",
+          "exit_code": 0,
+          "ended_at": 1791828896.760156
+        },
+        {
+          "name": "fix-7488",
+          "role": "subagent",
+          "parent": "selffix",
+          "joined": 1791830495.36127,
+          "pane_id": "wQ:pD",
+          "pid": 34181,
+          "pid_start": "Mon Oct 12 14:41:35 2026",
+          "exit_code": 0,
+          "ended_at": 1791830595.157105
+        },
+        {
+          "name": "fix-8420",
+          "role": "subagent",
+          "parent": "selffix",
+          "joined": 1791921649.8419352,
+          "pid": 87181,
+          "pid_start": "Tue Oct 13 16:00:49 2026",
+          "exit_code": 0,
+          "ended_at": 1791921835.422658
+        },
+        {
+          "name": "fix-8834",
+          "role": "subagent",
+          "parent": "selffix",
+          "joined": 1791950472.8177788,
+          "pid": 59311,
+          "pid_start": "Wed Oct 14 00:01:12 2026",
+          "exit_code": 0,
+          "ended_at": 1791950587.445518
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791488139.521961,
+      "last_activity": 1791950472.743561,
+      "departed": {
+        "fix-1": {
+          "name": "fix-1",
+          "role": "subagent",
+          "parent": "selffix",
+          "joined": 1791563656.6311522
+        }
+      }
+    },
+    "tech-tools@main/lead-01a130": {
+      "name": "tech-tools@main/lead-01a130",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-01a130",
+      "members": [
+        {
+          "name": "lead-01a130",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791818617.4586902
+        },
+        {
+          "name": "DedupCpWidth",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791818617.458695,
+          "exit_code": 0,
+          "ended_at": 1791818675.9578571
+        },
+        {
+          "name": "CommentChangelog",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791818781.2457752,
+          "exit_code": 0,
+          "ended_at": 1791818809.074655
+        },
+        {
+          "name": "TripwireTestLint",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791818865.003853
+        },
+        {
+          "name": "ModAudit",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791895931.838589,
+          "exit_code": 0,
+          "ended_at": 1791896678.020851
+        },
+        {
+          "name": "OrchAudit",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791895931.838592,
+          "exit_code": 0,
+          "ended_at": 1791896621.951648
+        },
+        {
+          "name": "StyleAudit",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791895931.838593,
+          "exit_code": 0,
+          "ended_at": 1791896435.8772612
+        },
+        {
+          "name": "ModExamples",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791895931.838593,
+          "exit_code": 0,
+          "ended_at": 1791896630.554861
+        },
+        {
+          "name": "HeaderKeep",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791899951.551109,
+          "exit_code": 0,
+          "ended_at": 1791900510.637984
+        },
+        {
+          "name": "GlyphLive",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791899951.551113,
+          "exit_code": 0,
+          "ended_at": 1791900512.7836149
+        },
+        {
+          "name": "Prune",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791899951.551114,
+          "exit_code": 0,
+          "ended_at": 1791900939.037142
+        },
+        {
+          "name": "Shell",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791900722.059466,
+          "exit_code": 0,
+          "ended_at": 1791901336.2610922
+        },
+        {
+          "name": "Band",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791900722.059469,
+          "exit_code": 0,
+          "ended_at": 1791901235.106587
+        },
+        {
+          "name": "Team",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791900722.0594702,
+          "exit_code": 0,
+          "ended_at": 1791901299.510454
+        },
+        {
+          "name": "Channel",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791900722.0594702,
+          "exit_code": 0,
+          "ended_at": 1791901232.09087
+        },
+        {
+          "name": "RouteGates",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791900722.0594711,
+          "exit_code": 0,
+          "ended_at": 1791901284.430641
+        },
+        {
+          "name": "HeaderPipes",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791900722.0594718,
+          "exit_code": 0,
+          "ended_at": 1791901208.189158
+        },
+        {
+          "name": "TypeFix",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791901234.468745,
+          "exit_code": 0,
+          "ended_at": 1791901336.2610419
+        },
+        {
+          "name": "Restyle3",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791901234.468749,
+          "exit_code": 0,
+          "ended_at": 1791901336.567193
+        },
+        {
+          "name": "SpriteReview",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791901234.46875,
+          "exit_code": 0,
+          "ended_at": 1791901336.261173
+        },
+        {
+          "name": "BootHeader",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791901234.46875,
+          "exit_code": 0,
+          "ended_at": 1791901336.59501
+        },
+        {
+          "name": "LiveMod",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791908282.1740952,
+          "exit_code": 0,
+          "ended_at": 1791908905.162561
+        },
+        {
+          "name": "LiveWorkers",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791908639.360048,
+          "exit_code": 0,
+          "ended_at": 1791909713.568227
+        },
+        {
+          "name": "PaneChrome",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791908639.3600519,
+          "exit_code": 0,
+          "ended_at": 1791909270.2685351
+        },
+        {
+          "name": "HeaderNarrow",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791908639.360053,
+          "exit_code": 0,
+          "ended_at": 1791909255.922174
+        },
+        {
+          "name": "SuggestOne",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791908639.360054,
+          "exit_code": 0,
+          "ended_at": 1791909235.295091
+        },
+        {
+          "name": "DeadCode",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791909425.115728,
+          "exit_code": 0,
+          "ended_at": 1791909927.724525
+        },
+        {
+          "name": "Docs",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791909425.115731,
+          "exit_code": 0,
+          "ended_at": 1791910275.815277
+        },
+        {
+          "name": "Verify",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791909425.115732,
+          "exit_code": 0,
+          "ended_at": 1791910212.2884989
+        },
+        {
+          "name": "BootOmp",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791909855.295674,
+          "exit_code": 0,
+          "ended_at": 1791910529.387393
+        },
+        {
+          "name": "ParkedWorker",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791909855.295678,
+          "exit_code": 0,
+          "ended_at": 1791910579.048312
+        },
+        {
+          "name": "Verify2",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791910370.952888,
+          "exit_code": 0,
+          "ended_at": 1791911007.419276
+        },
+        {
+          "name": "NameMux",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791910729.635481,
+          "exit_code": 0,
+          "ended_at": 1791911493.2242382
+        },
+        {
+          "name": "Focus",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791910729.635484,
+          "exit_code": 0,
+          "ended_at": 1791912135.579526
+        },
+        {
+          "name": "MatchCall",
+          "role": "subagent",
+          "parent": "lead-01a130",
+          "joined": 1791911778.9039402,
+          "exit_code": 0,
+          "ended_at": 1791912228.220792
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791818617.4586859,
+      "last_activity": 1791911778.9039412
+    },
+    "tech-tools@main/lead-50b61b": {
+      "name": "tech-tools@main/lead-50b61b",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-50b61b",
+      "members": [
+        {
+          "name": "lead-50b61b",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791886010.321992
+        },
+        {
+          "name": "explorer-57f9",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791886010.321994
+        },
+        {
+          "name": "explorer-3011",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791886020.314236
+        },
+        {
+          "name": "explorer-f14a",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791886031.535588
+        },
+        {
+          "name": "implementer-e458",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791888308.604778
+        },
+        {
+          "name": "implementer-c5e4",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791888328.4098182
+        },
+        {
+          "name": "implementer-a398",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791888346.539569
+        },
+        {
+          "name": "implementer-a46a",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791888363.8107781
+        },
+        {
+          "name": "fork-76c8",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791888478.16862
+        },
+        {
+          "name": "runner-a76a",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791888485.6259148
+        },
+        {
+          "name": "implementer-279e",
+          "role": "subagent",
+          "parent": "lead-50b61b",
+          "joined": 1791888803.5150762
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791886010.3219898,
+      "last_activity": 1791888803.515079
+    },
+    "tech-tools@main/lead-384c2a": {
+      "name": "tech-tools@main/lead-384c2a",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-384c2a",
+      "members": [
+        {
+          "name": "lead-384c2a",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791919139.12499
+        },
+        {
+          "name": "runner-drive-atlas-mod",
+          "role": "subagent",
+          "parent": "lead-384c2a",
+          "joined": 1791919139.124992
+        },
+        {
+          "name": "runner-d4ff",
+          "role": "subagent",
+          "parent": "lead-384c2a",
+          "joined": 1791919291.7448902
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791919139.124987,
+      "last_activity": 1791919291.7448902
+    },
+    "tech-tools@main/lead-ec38fa": {
+      "name": "tech-tools@main/lead-ec38fa",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-ec38fa",
+      "members": [
+        {
+          "name": "lead-ec38fa",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791932109.568417
+        },
+        {
+          "name": "explorer-mod-visuals",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932109.568419
+        },
+        {
+          "name": "explorer-irc-channel",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932118.924544
+        },
+        {
+          "name": "explorer-omp-parity-gaps",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932127.424465
+        },
+        {
+          "name": "explorer-subagent",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932135.888117
+        },
+        {
+          "name": "implementer-fa00",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932385.273123
+        },
+        {
+          "name": "implementer-cff9",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932403.47332
+        },
+        {
+          "name": "implementer-7935",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932420.963704
+        },
+        {
+          "name": "implementer-5baf",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932609.323081
+        },
+        {
+          "name": "implementer-5008",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932738.508196
+        },
+        {
+          "name": "implementer-73fd",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791932833.9747741
+        },
+        {
+          "name": "implementer-7a6b",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791933028.502468
+        },
+        {
+          "name": "docs-curator-21ff",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791933166.0485911
+        },
+        {
+          "name": "runner-eb3c",
+          "role": "subagent",
+          "parent": "lead-ec38fa",
+          "joined": 1791933314.0754812
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791932109.568415,
+      "last_activity": 1791933314.0754812
+    },
+    "tech-tools@main/lead-4abfc9": {
+      "name": "tech-tools@main/lead-4abfc9",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-4abfc9",
+      "members": [
+        {
+          "name": "lead-4abfc9",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791934008.296685
+        },
+        {
+          "name": "explorer-4fc0",
+          "role": "subagent",
+          "parent": "lead-4abfc9",
+          "joined": 1791934008.2966871
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791934008.296682,
+      "last_activity": 1791934008.2966871
+    },
+    "tech-tools@main/lead-bf36fe": {
+      "name": "tech-tools@main/lead-bf36fe",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-bf36fe",
+      "members": [
+        {
+          "name": "lead-bf36fe",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791934598.389378,
+          "exit_code": 0,
+          "ended_at": 1791934905.4566069
+        },
+        {
+          "name": "explorer-ffec",
+          "role": "subagent",
+          "parent": "lead-bf36fe",
+          "joined": 1791934598.38938
+        },
+        {
+          "name": "explorer-82ee",
+          "role": "subagent",
+          "parent": "lead-bf36fe",
+          "joined": 1791934600.464468
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791934598.389376,
+      "last_activity": 1791934600.464468
+    },
+    "tech-tools@main/lead-65f1b1": {
+      "name": "tech-tools@main/lead-65f1b1",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-65f1b1",
+      "members": [
+        {
+          "name": "lead-65f1b1",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791934716.4359848
+        },
+        {
+          "name": "explorer-7625",
+          "role": "subagent",
+          "parent": "lead-65f1b1",
+          "joined": 1791934716.435987
+        },
+        {
+          "name": "explorer-6d66",
+          "role": "subagent",
+          "parent": "lead-65f1b1",
+          "joined": 1791934946.7715259
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791934716.4359832,
+      "last_activity": 1791934946.7715268
+    },
+    "tech-tools@main/lead-9e5f3a": {
+      "name": "tech-tools@main/lead-9e5f3a",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-9e5f3a",
+      "members": [
+        {
+          "name": "lead-9e5f3a",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791937950.155755,
+          "exit_code": 0,
+          "ended_at": 1791938062.7761421
+        },
+        {
+          "name": "explorer-aca5",
+          "role": "subagent",
+          "parent": "lead-9e5f3a",
+          "joined": 1791937950.155756,
+          "tool_use_id": "toolu_01NH4i1bugrqRQj23ytUoUGq",
+          "agent_id": "a6c9568047dc60e14",
+          "exit_code": 0,
+          "ended_at": 1791937993.351331
+        },
+        {
+          "name": "explorer-b1b6",
+          "role": "subagent",
+          "parent": "lead-9e5f3a",
+          "joined": 1791937952.224381,
+          "tool_use_id": "toolu_01Lp8tfW9747yTr63QY7Vk2K",
+          "agent_id": "a978b788135cde35f",
+          "exit_code": 0,
+          "ended_at": 1791937988.525671
+        },
+        {
+          "name": "explorer-99f3",
+          "role": "subagent",
+          "parent": "lead-9e5f3a",
+          "joined": 1791938039.1977909,
+          "tool_use_id": "toolu_01QHLfFMgDmLcqorv8J7FXoA",
+          "agent_id": "a4ff990b509b48a54"
+        },
+        {
+          "name": "explorer-ffc1",
+          "role": "subagent",
+          "parent": "lead-9e5f3a",
+          "joined": 1791938041.441252,
+          "tool_use_id": "toolu_01C6MWH4G56VcFVMCgDYAUbG",
+          "agent_id": "a73663ac2ee99c8f5"
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791937950.155751,
+      "last_activity": 1791938041.4412532
+    },
+    "tech-tools@main/lead-atlv4-": {
+      "name": "tech-tools@main/lead-atlv4-",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-atlv4-",
+      "members": [
+        {
+          "name": "lead-atlv4-",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791940472.314542
+        },
+        {
+          "name": "explorer-ff01",
+          "role": "subagent",
+          "parent": "lead-atlv4-",
+          "joined": 1791940472.314543
+        },
+        {
+          "name": "explorer-8002",
+          "role": "subagent",
+          "parent": "lead-atlv4-",
+          "joined": 1791940489.837497
+        },
+        {
+          "name": "explorer-5e20",
+          "role": "subagent",
+          "parent": "lead-atlv4-",
+          "joined": 1791940498.556285
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791940472.3145401,
+      "last_activity": 1791940498.5562859
+    },
+    "tech-tools@main/lead-0bcc6c": {
+      "name": "tech-tools@main/lead-0bcc6c",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-0bcc6c",
+      "members": [
+        {
+          "name": "lead-0bcc6c",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791942414.46364,
+          "exit_code": 0,
+          "ended_at": 1791942427.782621
+        },
+        {
+          "name": "explorer-gate-probe",
+          "role": "subagent",
+          "parent": "lead-0bcc6c",
+          "joined": 1791942414.4636438,
+          "tool_use_id": "toolu_01WaB5QiV47j19n9AyJHYow4",
+          "agent_id": "a72343b121af595cf"
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791942414.4636369,
+      "last_activity": 1791942414.4636438
+    },
+    "tech-tools@main/lead-023dc1": {
+      "name": "tech-tools@main/lead-023dc1",
+      "kind": "lead",
+      "parent": "tech-tools@main",
+      "lead": "lead-023dc1",
+      "members": [
+        {
+          "name": "lead-023dc1",
+          "role": "lead",
+          "parent": null,
+          "joined": 1791948271.924593,
+          "exit_code": 0,
+          "ended_at": 1791948823.5781372
+        },
+        {
+          "name": "explorer-count-lines",
+          "role": "subagent",
+          "parent": "lead-023dc1",
+          "joined": 1791948271.924598,
+          "tool_use_id": "toolu_012f9xrbJAaEAfdHjakVkUmG"
+        },
+        {
+          "name": "explorer-count-lines-2",
+          "role": "subagent",
+          "parent": "lead-023dc1",
+          "joined": 1791948278.845757,
+          "tool_use_id": "toolu_016fW2DFSQ2UJgYXBwrePvRa",
+          "agent_id": "a2e2f45651bc77c84",
+          "exit_code": 0,
+          "ended_at": 1791948290.796567
+        },
+        {
+          "name": "explorer-c04d",
+          "role": "subagent",
+          "parent": "lead-023dc1",
+          "joined": 1791948319.6345012,
+          "pid": 7091,
+          "pid_start": "Tue Oct 13 23:25:19 2026",
+          "exit_code": 0,
+          "ended_at": 1791948363.044802
+        },
+        {
+          "name": "explorer-a445",
+          "role": "subagent",
+          "parent": "lead-023dc1",
+          "joined": 1791948319.815597,
+          "pid": 7198,
+          "pid_start": "Tue Oct 13 23:25:19 2026",
+          "exit_code": 0,
+          "ended_at": 1791948361.3520389
+        },
+        {
+          "name": "completeness-critic-4525",
+          "role": "subagent",
+          "parent": "lead-023dc1",
+          "joined": 1791948319.868951,
+          "pid": 7227,
+          "pid_start": "Tue Oct 13 23:25:19 2026",
+          "exit_code": 0,
+          "ended_at": 1791948344.732907
+        }
+      ],
+      "project_root": "/Users/jerry/MEGA/Projects/Agentic/tech-tools",
+      "branch": "main",
+      "created": 1791948271.92459,
+      "last_activity": 1791948319.535285
+    }
+  }
+}
