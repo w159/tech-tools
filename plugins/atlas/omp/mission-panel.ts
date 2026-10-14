@@ -8,43 +8,18 @@
  */
 import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
 import type { GateGroup } from "../mod/pane/sidebar";
+import { BASE, BLUE, DIM, GREEN, MUT, PANEL, PANEL2, PEACH, PINK, RED, RST, type Rgb, SKY, TEAL, TXT, VIOLET, WHITE, YEL, bar, bg, chip, cut, fg, hx, lerp, seg, visibleWidth } from "./panel-paint";
 import { type PanelTodo, todoLines } from "./todo-panel";
 
-type Rgb = readonly [number, number, number];
-const hx = (s: string): Rgb => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
-const PANEL = hx("#11111b");
-const PANEL2 = hx("#181825");
-const BASE = hx("#1e1e2e");
-const TXT = hx("#cdd6f4");
-const MUT = hx("#6c7086");
-const DIM = hx("#45475a");
-const VIOLET = hx("#cba6f7");
-const TEAL = hx("#94e2d5");
-const SKY = hx("#89dceb");
-const BLUE = hx("#89b4fa");
-const GREEN = hx("#a6e3a1");
-const PEACH = hx("#fab387");
-const RED = hx("#f38ba8");
-const YEL = hx("#f9e2af");
-const PINK = hx("#f5c2e7");
-const WHITE: Rgb = [255, 255, 255];
+export { visibleWidth };
+
 const PHASES: Array<[string, Rgb]> = [["research", BLUE], ["theory", VIOLET], ["test", YEL], ["implement", PEACH], ["verify", GREEN], ["done", TEAL]];
 const NICKS = [PINK, PEACH, YEL, GREEN, TEAL, SKY, BLUE, VIOLET];
-const EIGHTHS = " ▏▎▍▌▋▊▉█";
 const SPARK = "▁▂▃▄▅▆▇█";
 const MAX_LANES = 5;
 const BAR_FULL_S = 120; // a lane bar fills over two minutes
 const GATES_TTL_MS = 10_000;
 
-const RST = "\x1b[0m";
-const fg = (c: Rgb) => `\x1b[38;2;${c[0]};${c[1]};${c[2]}m`;
-const bg = (c: Rgb) => `\x1b[48;2;${c[0]};${c[1]};${c[2]}m`;
-const lerp = (a: Rgb, b: Rgb, t: number): Rgb => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * t)) as unknown as Rgb;
-const seg = (text: string, f?: Rgb, b: Rgb = PANEL, bold = false) => `${bold ? "\x1b[1m" : ""}${f ? fg(f) : ""}${bg(b)}${text}${RST}`;
-const chip = (text: string, col: Rgb) => seg(` ${text} `, BASE, col, true);
-/** Palette and paint helpers for todo-panel.ts (called at render time only; see the cycle note there). */
-export const C = { YEL, GREEN, RED, MUT, TXT, VIOLET, TEAL, WHITE, PANEL2 };
-export { bar, chip, cut, lerp, seg };
 
 /** A lane's current tool (active) or the last one it ran (inactive, between calls). */
 export interface LaneTool {
@@ -92,8 +67,6 @@ export interface IdleWave {
 }
 
 const ANSI_SPLIT = /(\x1b\[[0-9;]*m)/;
-/** Visible columns: code points outside escape sequences (every glyph this panel draws is one column wide). */
-export const visibleWidth = (s: string) => [...s.replace(/\x1b\[[0-9;]*m/g, "")].length;
 
 /** Cut to `w` columns between escape sequences, then fill the rest with the panel background. */
 function fitLine(s: string, w: number): string {
@@ -110,12 +83,6 @@ function fitLine(s: string, w: number): string {
 	return out + RST + (n < w ? seg(" ".repeat(w - n)) : "");
 }
 
-/** Pad or cut (with an ellipsis) to exactly `w` code points. */
-function cut(s: string, w: number): string {
-	const cs = [...s];
-	if (w <= 0) return "";
-	return cs.length > w ? `${cs.slice(0, w - 1).join("")}…` : s + " ".repeat(w - cs.length);
-}
 
 const age = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`);
 const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -168,17 +135,6 @@ function rail(phase: string, w: number, m: RailLook): string {
 	return visibleWidth(full) <= w ? full : build("short");
 }
 
-/** One bar cell: full block, the eighth-block edge, or empty track; filled cells take the gradient color. */
-function barCell(i: number, width: number, cells: number, a: Rgb, b: Rgb): string {
-	const whole = Math.floor(cells);
-	const ch = i < whole ? "█" : i === whole ? EIGHTHS[Math.floor((cells - whole) * 8)]! : " ";
-	return fg(i <= whole ? lerp(a, b, i / Math.max(1, width - 1)) : DIM) + bg(PANEL2) + ch;
-}
-
-function bar(frac: number, width: number, a: Rgb, b: Rgb): string {
-	const cells = Math.max(0, Math.min(1, frac)) * width;
-	return Array.from({ length: width }, (_, i) => barCell(i, width, cells, a, b)).join("") + RST;
-}
 
 function spark(counts: number[] | undefined, width: number, col: Rgb): string {
 	const vals = (counts ?? []).slice(-width);

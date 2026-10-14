@@ -67,7 +67,7 @@ export function ompBody(body: string): string {
 		.replace(/SendMessage that sibling by name/g, "`write agent://<name>` to that sibling")
 		.replace(/On Claude Code use SendMessage to the lead by name\. On omp use `write`/g, "Use `write`")
 		.replace(/the ToolSearch call above exists/g, "the xd:// devices above exist")
-		.replace(/Load deferred\/MCP tool schemas \(`ToolSearch`\) before calling them\./g, "Read an `xd://<device>` schema before the first call.")
+		.replace(/Load deferred\/MCP tool schemas \(`ToolSearch`\) before calling them([.,])/g, "Read an `xd://<device>` schema before the first call$1")
 		.replace(/Load deferred\/MCP tool schemas before calling them\*\* \(`ToolSearch` to fetch the schema\)/g, "Read an `xd://<device>` schema before the first call**")
 		.replace(/`activate_project`/g, "`xd://mcp__serena_activate_project`")
 		.replace(

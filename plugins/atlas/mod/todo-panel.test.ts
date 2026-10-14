@@ -49,6 +49,13 @@ describe('todo panel', () => {
     expect(rows).toHaveLength(3);
     expect(rows[2]).toContain('+2 more');
   });
+  test('zero row budget draws nothing; blocked glyph and stripped evidence numbering', () => {
+    expect(todoRows(items, { cols: 100, tick: 0, expanded: true, maxRows: 0 })).toEqual([]);
+    const rows = todoRows(items, { cols: 100, tick: 0, expanded: true, maxRows: 8 }).map(text);
+    expect(rows[3]).toContain('✖');
+    expect(rows[0]).toContain('rg auth -> 3 hits');
+    expect(rows[0]).not.toContain('1. rg');
+  });
   test('no items: no rows', () => {
     expect(todoRows([], { cols: 100, tick: 0, expanded: true, maxRows: 5 })).toEqual([]);
   });

@@ -16,16 +16,28 @@ export type { GateGroup, GateLine, SidebarHandlers, SidebarModel, SidebarView } 
 const HINT_MIN_INNER = 60;
 const HINT = 'r t c g tabs · ↑↓ Enter';
 
-/** The tab strip: four plain hotkey Buttons (the current one bold), then a dim hint pushed to the right edge when there is room. */
-function tabStrip(els: ClientElements, model: SidebarModel, on: SidebarHandlers, inner: number): RenderElement {
-  const open = openGateCount(model.gates);
-  const tabs: { v: SidebarView; key: string; label: string }[] = [
-    { v: 'route', key: 'r', label: '◎ route' },
-    { v: 'team', key: 't', label: '● team' },
-    { v: 'channel', key: 'c', label: '✉ channel' },
-    { v: 'gates', key: 'g', label: open ? `✗ ${open}` : '✓ gates' },
-  ];
-  const used = tabs.reduce((n, t) => n + textWidth(t.label) + 6, -3);
+type Tab = { v: SidebarView; key: string; label: string };
+
+const tabList = (open: number): Tab[] => [
+  { v: 'route', key: 'r', label: '◎ route' },
+  { v: 'team', key: 't', label: '● team' },
+  { v: 'channel', key: 'c', label: '✉ channel' },
+  { v: 'gates', key: 'g', label: open ? `✗ ${open}` : '✓ gates' },
+];
+
+/** The optional board toggle after the four tabs. */
+function todosTab(els: ClientElements, on: SidebarHandlers): RenderElement[] {
+  if (!on.toggleTodos) return [];
+  return [els.Text({ dimColor: true, children: ' │ ' }), els.Button({ key: 'tab:todos', plain: true, hotkey: 'o', dimColor: true, children: [els.Text({ children: '▤ board' })], label: '▤ board', onPress: on.toggleTodos })];
+}
+
+/** The right-aligned hint, only when the pane is wide enough and the gap fits. */
+function hintCells(els: ClientElements, inner: number, gap: number): RenderElement[] {
+  if (inner < HINT_MIN_INNER || gap < 1) return [];
+  return [els.Text({ children: ' '.repeat(gap) }), els.Text({ dimColor: true, children: HINT })];
+}
+
+function tabButtons(els: ClientElements, tabs: Tab[], model: SidebarModel, on: SidebarHandlers): RenderElement[] {
   const children: RenderElement[] = [];
   tabs.forEach((t, i) => {
     const cur = t.v === model.ui.view;
@@ -36,13 +48,15 @@ function tabStrip(els: ClientElements, model: SidebarModel, on: SidebarHandlers,
       label: t.label, onPress: () => on.setView(t.v),
     }));
   });
-  if (on.toggleTodos) {
-    children.push(els.Text({ dimColor: true, children: ' │ ' }), els.Button({ key: 'tab:todos', plain: true, hotkey: 'o', dimColor: true, children: [els.Text({ children: '▤ board' })], label: '▤ board', onPress: on.toggleTodos }));
-  }
+  return children;
+}
+
+/** The tab strip: four plain hotkey Buttons (the current one bold), then a dim hint pushed to the right edge when there is room. */
+function tabStrip(els: ClientElements, model: SidebarModel, on: SidebarHandlers, inner: number): RenderElement {
+  const tabs = tabList(openGateCount(model.gates));
+  const used = tabs.reduce((n, t) => n + textWidth(t.label) + 6, -3);
   const gap = inner - used - textWidth(HINT) - (on.toggleTodos ? 12 : 0);
-  if (inner >= HINT_MIN_INNER && gap >= 1) {
-    children.push(els.Text({ children: ' '.repeat(gap) }), els.Text({ dimColor: true, children: HINT }));
-  }
+  const children = [...tabButtons(els, tabs, model, on), ...todosTab(els, on), ...hintCells(els, inner, gap)];
   return els.Box({ key: 'tabs', flexDirection: 'row', flexShrink: 0, children });
 }
 

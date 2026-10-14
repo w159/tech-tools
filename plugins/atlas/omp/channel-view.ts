@@ -397,7 +397,7 @@ export function todoSummary(root: string, sessionId?: string): { done: number; t
 }
 
 /** The same session slice as rows for the board panel. */
-export const todoItems = (root: string, sessionId?: string): PanelTodo[] =>
+const todoItems = (root: string, sessionId?: string): PanelTodo[] =>
 	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined }));
 
 /** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */

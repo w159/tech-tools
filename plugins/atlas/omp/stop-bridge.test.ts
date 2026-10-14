@@ -538,7 +538,7 @@ test("real completion_gate.py blocks an orchestrating run with no ROADMAP, throu
 		expect(seed.exitCode).toBe(0);
 
 		const hooks = loadBridgedHooksFor(["Stop"], "bridgedSessionEnd");
-		expect(hooks.map(h => scriptOf(h.command))).toEqual(["completion_gate.py", "ingest_session.py", "chronicle_facet.py", "memory_capture.py", "nudge.py"]); // hooks.json order
+		expect(hooks.map(h => scriptOf(h.command))).toEqual(["completion_gate.py", "stop_tail.py"]); // hooks.json order
 		const handlers: Record<string, Handler[]> = {};
 		registerStopBridge({ on: (name: string, fn: Handler) => (handlers[name] ??= []).push(fn) } as unknown as Pick<ExtensionAPI, "on">, {
 			hooks,

@@ -18,16 +18,19 @@ const glyphOf = (status: string, tick: number): Segment => {
   return seg(ch, color);
 };
 
+const glyphAt = (i: number, whole: number, part: number): string => (i < whole ? '█' : i === whole ? EIGHTHS[part] ?? ' ' : ' ');
+const cellColor = (ch: string, i: number, lit: number, base: string): string => (ch === ' ' ? M.dim : i === lit ? mix(base, M.white, 0.6) : base);
+const litCell = (pulse: boolean, whole: number, tick: number): number => (pulse && whole > 0 ? tick % whole : -1);
+
 /** `width` cells filled `frac`, violet to teal; one cell of the filled part is lit and moves with `tick`. */
 function bar(frac: number, width: number, tick: number, pulse: boolean): Segment[] {
   const cells = Math.max(0, Math.min(1, frac)) * width;
   const whole = Math.floor(cells);
   const part = Math.floor((cells - whole) * 8);
-  const lit = pulse && whole > 0 ? tick % whole : -1;
+  const lit = litCell(pulse, whole, tick);
   return merge(Array.from({ length: width }, (_, i) => {
-    const ch = i < whole ? '█' : i === whole ? EIGHTHS[part] ?? ' ' : ' ';
-    const base = mix(M.violet, M.teal, i / Math.max(1, width - 1));
-    return { t: ch, color: ch === ' ' ? M.dim : i === lit ? mix(base, M.white, 0.6) : base, bg: M.panel2 };
+    const ch = glyphAt(i, whole, part);
+    return { t: ch, color: cellColor(ch, i, lit, mix(M.violet, M.teal, i / Math.max(1, width - 1))), bg: M.panel2 };
   }));
 }
 
@@ -59,21 +62,27 @@ function fitRow(parts: Segment[], cols: number): Segment[] {
   return out;
 }
 
+const ownerCell = (i: TodoItem): Segment[] => (i.owner ? [chip(fitText(i.owner, 14).padEnd(10), i.status === 'in_progress' ? M.yellow : M.panel2), seg(' ')] : [seg(' '.repeat(13))]);
+const cleanEvidence = (i: TodoItem): string => (i.evidence ?? '').replace(/^\s*\d+[.)]\s*/, '').replace(/\s+/g, ' ');
+const evidenceTail = (ev: string, room: number, used: number): Segment[] => (ev ? [seg(`  ${fitText(ev, Math.max(0, room - used - 2))}`, M.muted)] : []);
+
 function itemRow(i: TodoItem, o: TodoPanelOpts): Segment[] {
-  const owner = i.owner ? [chip(fitText(i.owner, 14).padEnd(10), i.status === 'in_progress' ? M.yellow : M.panel2), seg(' ')] : [seg(' '.repeat(13))];
-  const head = [seg(' '), glyphOf(i.status, o.tick), seg(' '), ...owner];
-  const ev = i.evidence ? i.evidence.replace(/^\s*\d+[.)]\s*/, '').replace(/\s+/g, ' ') : '';
+  const head = [seg(' '), glyphOf(i.status, o.tick), seg(' '), ...ownerCell(i)];
+  const ev = cleanEvidence(i);
   const room = o.cols - runsWidth(head) - 1;
   const content = fitText(i.content, ev ? Math.max(10, Math.floor(room * 0.6)) : room);
-  const rest = ev ? [seg(`  ${fitText(ev, Math.max(0, room - textWidth(content) - 2))}`, M.muted)] : [];
-  return padRow(fitRow([...head, seg(content, i.status === 'completed' ? M.muted : M.text), ...rest], o.cols), o.cols);
+  const color = i.status === 'completed' ? M.muted : M.text;
+  return padRow(fitRow([...head, seg(content, color), ...evidenceTail(ev, room, textWidth(content))], o.cols), o.cols);
+}
+
+function expandedRows(items: TodoItem[], o: TodoPanelOpts): Segment[][] {
+  if (items.length <= o.maxRows) return items.map((i) => itemRow(i, o));
+  const shown = items.slice(0, Math.max(0, o.maxRows - 1));
+  return [...shown.map((i) => itemRow(i, o)), padRow([seg(`   +${items.length - shown.length} more`, M.muted)], o.cols)];
 }
 
 /** Panel rows for the board: [] without items, one row collapsed, else <= `maxRows` item rows. */
 export function todoRows(items: TodoItem[], o: TodoPanelOpts): Segment[][] {
   if (!items.length || o.maxRows < 1) return [];
-  if (!o.expanded) return [collapsed(items, o)];
-  if (items.length <= o.maxRows) return items.map((i) => itemRow(i, o));
-  const shown = items.slice(0, Math.max(0, o.maxRows - 1));
-  return [...shown.map((i) => itemRow(i, o)), padRow([seg(`   +${items.length - shown.length} more`, M.muted)], o.cols)];
+  return o.expanded ? expandedRows(items, o) : [collapsed(items, o)];
 }

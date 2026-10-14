@@ -223,8 +223,13 @@ function idleTitle(c: Ctx, all: LiveWorker[]): Segment[] {
 function boardRows(c: Ctx, maxRows: number, fixed: number): Segment[][] {
   const room = maxRows - fixed;
   if (!c.s.todos.length || room < 1) return [];
+  return todoRows(c.s.todos, boardOpts(c, room));
+}
+
+/** Expanded list when the board is open and 4+ rows are free (3 reserved for the rail), else one collapsed row. */
+function boardOpts(c: Ctx, room: number): Parameters<typeof todoRows>[1] {
   const list = c.todoExpanded && room >= 4;
-  return todoRows(c.s.todos, { cols: c.cols, tick: c.tick, expanded: list, maxRows: list ? room - 3 : 1 });
+  return { cols: c.cols, tick: c.tick, expanded: list, maxRows: list ? room - 3 : 1 };
 }
 
 /** Idle: the dim title and the settled rail, then the board when there is one. */

@@ -46,6 +46,25 @@ test("no todos: no lines", () => {
 	expect(todoLines([], opts)).toEqual([]);
 });
 
+test("a zero line budget draws nothing, expanded or not", () => {
+	expect(todoLines(todos, { ...opts, maxLines: 0 })).toEqual([]);
+	expect(todoLines(todos, { ...opts, expanded: true, maxLines: 0 })).toEqual([]);
+});
+
+test("collapsed without an in-progress item is the bar alone; a narrow row drops the tail", () => {
+	const idle = todos.filter(t => t.status !== "in_progress");
+	expect(strip(todoLines(idle, opts)[0]!)).not.toContain("impl-auth");
+	expect(strip(todoLines(todos, { ...opts, width: 20 })[0]!)).not.toContain("edit auth");
+});
+
+test("expanded rows: blocked glyph, ownerless padding, evidence numbering stripped", () => {
+	const rows = todoLines(todos, { ...opts, expanded: true }).map(strip);
+	expect(rows[3]).toContain("✖");
+	expect(rows[2]).toContain("○");
+	expect(rows[0]).toContain("rg auth -> 3 hits");
+	expect(rows[0]).not.toContain("1. rg");
+});
+
 const model = (over: Partial<PanelModel> = {}): PanelModel => ({
 	width: 100, maxLines: 10, phase: "implement", spin: "⣾", laneSpin: "⠋", tick: 1, done: 1, total: 4,
 	workers: [{ name: "explorer-a324", secs: 72 }], notes: [], gates: [], todos, ...over,

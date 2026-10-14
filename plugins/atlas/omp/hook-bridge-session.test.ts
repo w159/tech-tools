@@ -243,7 +243,7 @@ test("loadBridgedHooks stays turn-only; the session-end family loads through its
 	expect(turn.every(h => ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse"].includes(h.event))).toBe(true);
 	const scripts = (hooks: BridgedHook[]) => hooks.map(h => scriptOf(h.command));
 	const stop = loadBridgedHooksFor(["Stop"], "bridgedSessionEnd");
-	expect(scripts(stop)).toEqual(["completion_gate.py", "ingest_session.py", "chronicle_facet.py", "memory_capture.py", "nudge.py"]);
+	expect(scripts(stop)).toEqual(["completion_gate.py", "stop_tail.py"]);
 	for (const event of ["SessionEnd", "SubagentStop", "PreCompact"] as const) expect(scripts(loadBridgedHooksFor([event], "bridgedSessionEnd"))).toEqual(["ingest_session.py"]);
 	expect(scripts(turn)).toContain("dispatch_tripwire.py");
 	expect(scripts(turn)).toContain("connector_credential_watch.py");

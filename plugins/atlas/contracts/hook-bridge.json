@@ -5,7 +5,7 @@
     "UserPromptSubmit": "every main before_agent_start",
     "PreToolUse": "tool_call (main and subagent sessions); an omp task batch is run once per item as a Claude Task dispatch",
     "PostToolUse": "tool_result (payload carries tool_response = stringified result content, transcript_path and is_error; omp-minted mcp__<server>_<tool> names of the hooks.json connector servers are re-split to mcp__<server>__<tool>)",
-    "Stop": "session_stop (main only): omp_transcript.py converts the omp session file BEFORE any hook runs, then the five Stop hooks all run in hooks.json order (capture hooks must run even when the gate blocks); the first {decision: block, reason} becomes the omp session_stop result {decision: block, reason}, not plain context. The payload mirrors Claude Code's Stop payload, including last_assistant_message: the text blocks of session_stop.last_assistant_message joined by newlines (omitted when the event carries no text), which completion_gate.py condition (n) reads",
+    "Stop": "session_stop (main only): omp_transcript.py converts the omp session file BEFORE any hook runs, then both Stop hooks (completion_gate.py, then stop_tail.py, which runs ingest_session, chronicle_facet, memory_capture and nudge in one process) run in hooks.json order (capture hooks must run even when the gate blocks); the first {decision: block, reason} becomes the omp session_stop result {decision: block, reason}, not plain context. The payload mirrors Claude Code's Stop payload, including last_assistant_message: the text blocks of session_stop.last_assistant_message joined by newlines (omitted when the event carries no text), which completion_gate.py condition (n) reads",
     "SessionEnd": "session_shutdown on a main session: ingest_session.py spawned detached (never awaited) after transcript conversion",
     "SubagentStop": "session_shutdown on a subagent session: ingest_session.py spawned detached after transcript conversion",
     "PreCompact": "auto_compaction_start: ingest_session.py spawned detached (session_before_compact is deliberately NOT used: registering a handler for it disables omp async compaction)"
@@ -30,10 +30,8 @@
   ],
   "bridgedSessionEnd": [
     "completion_gate.py",
-    "ingest_session.py",
-    "chronicle_facet.py",
-    "memory_capture.py",
-    "nudge.py"
+    "stop_tail.py",
+    "ingest_session.py"
   ],
   "notBridged": {
     "todo_capture.py": "omp/index.ts mirrors the omp todo tool to the board natively (the board-mirror spawn writes .atlas/.run/todos.json on every todo tool result)",
