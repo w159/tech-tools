@@ -1,13 +1,12 @@
 // Golden tests for transcript/cards.tsx: worker cards, wave strips, channel bubbles.
 import { expect, test } from 'claude-code/testing'
-import { bubbleTree, waveTree, workerCard, goalLine, resultLine } from './cards'
+import { bubbleTree, waveTree, workerCard, goalLine, resultLine, phaseOf } from './cards'
 import type { CallLike } from './cards'
 
+const leaf = (n: unknown): string => (typeof n === 'string' || typeof n === 'number' ? String(n) : '')
 const text = (n: unknown): string => {
-  if (typeof n === 'string' || typeof n === 'number') return String(n)
   if (Array.isArray(n)) return n.map(text).join('')
-  if (n && typeof n === 'object') return text((n as { children?: unknown }).children)
-  return ''
+  return n && typeof n === 'object' ? text((n as { children?: unknown }).children) : leaf(n)
 }
 const props = (n: unknown): Record<string, unknown> => ((n as { props?: Record<string, unknown> }).props ?? {})
 
@@ -62,4 +61,22 @@ test('bubble names sender and carries the text', () => {
   expect(t).toContain('#atlas wave-a › lead')
   expect(t).toContain('hello team')
   expect(bubbleTree('x', undefined)).toBeNull()
+})
+
+test('phaseOf: errored beats interrupted beats running; else finished', () => {
+  const s = (over: Partial<CallLike>) => phaseOf(call({ isRunning: false, ...over }), 'finished')
+  expect(s({ isErrored: true, isInterrupted: true }).state).toBe('failed')
+  expect(s({ isInterrupted: true }).state).toBe('dead')
+  expect(phaseOf(call(), 'finished').state).toBe('running')
+  expect(s({})).toMatchObject({ mark: '✓', state: 'finished' })
+})
+
+test('interrupted card says so; flatten walks nested output', () => {
+  expect(text(workerCard(call({ isRunning: false, isInterrupted: true }), 'dead')!)).toContain('interrupted')
+  expect(resultLine([{ text: 'a' }, { content: ['STATUS: OK'] }, 5])).toBe('STATUS: OK')
+})
+
+test('narrow wave stacks cards', () => {
+  const calls = [call(), call()]
+  expect(props((waveTree(calls, 2, 60) as { children: unknown[] }).children[1])).toMatchObject({ flexDirection: 'column' })
 })
