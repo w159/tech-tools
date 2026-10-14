@@ -57,7 +57,7 @@ Full laws, decision gate, TodoWrite rules, and mid-run steering: **load `referen
 
 ## The loop (load full text when running a wave)
 
-Orient → Plan (+ TodoWrite) → Dispatch (resolve, then tmux team) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done. **Implementation-unit discipline** governs every implementer dispatch: idempotency check before redoing a unit, an explicit per-unit evidence strategy (`proof-first` / `characterization` / `no-test-exception`) named in the prompt, independent-unit waves isolated via `atlas-worktree`, and a machine-readable per-unit evidence receipt folded into findings.json. **Parallel implementers work on isolated branches:** lead `atlas_wt.py add <name>` per worker (branch `worker/<name>`, worktree `.atlas/wt/<name>`), a verifier per branch, then `atlas_wt.py merge <name>` one at a time only after the verified finding, tests rerun once on the merged tree (protocol: `references/implementation-units.md`; gate (q) blocks unmerged branches). Full checklists: `references/implementation-units.md`.
+Orient → Plan (+ TodoWrite) → Dispatch (resolve, then tmux team) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done. **Implementation-unit discipline** governs every implementer dispatch: idempotency check before redoing a unit, an explicit per-unit evidence strategy (`proof-first` / `characterization` / `no-test-exception`) named in the prompt, independent-unit waves isolated via `atlas-worktree`, and a machine-readable per-unit evidence receipt folded into findings.json. **Parallel implementers work on isolated branches:** lead `atlas_wt.py add <name>` per worker (branch `worker/<name>`, worktree `.atlas/wt/<name>`), a verifier per branch, then `atlas_wt.py merge <name>` one at a time only after the verified finding, tests rerun once on the merged tree (protocol: `references/implementation-units.md`; gate (q) blocks unmerged branches). Full checklists: `references/implementation-units.md`. Each implementer step runs red-green: failing check first, then pass (loop method in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-debug/references/feedback-loop.md`, unit shape in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-plan/references/tracer-slices.md`).
 
 Full loop, fan-out mechanisms, and definition of done: **load `references/the-loop.md`**.
 
@@ -69,7 +69,7 @@ A request to implement or add one feature across UI, API and data runs through t
 
 ## Stop-thoughts
 
-If you think "too small," "I'll just read it," "I already tested it," "docs later," or "mark unverified" — **STOP and dispatch**. Full table: **load `references/anti-rationalization.md`**.
+If you think "too small," "I'll just read it," "I already tested it," "docs later," or "mark unverified" - **STOP and dispatch**. Full table: **load `references/anti-rationalization.md`**.
 
 ## Squad and cost tiers
 
@@ -88,9 +88,9 @@ For small direct changes in one-developer repos: `export ATLAS_MODE=solo` (case-
 **What it relaxes** (completion_gate only):
 
 - **(m) delegation mandate**: direct main-thread changes to **at most 5 non-docs source files** are acknowledged instead of demanded into an implementer dispatch. Any block the gate raises for another reason states `(m) solo mode: direct changes acknowledged for <N> files; verifier still required for shipped work`. Six or more files fall back to the normal (m) block.
-- **(g) verifier coverage**: one real test-runner command executed during the run (pytest, vitest, cargo test, ... — the same detection the stamped-entry credit uses) pairs one unpaired implementer without a stamped findings entry. Not a blanket exemption: a stamp with no executed test, or no check at all, still blocks, and one test run covers exactly one implementer.
+- **(g) verifier coverage**: one real test-runner command executed during the run (pytest, vitest, cargo test, ... - the same detection the stamped-entry credit uses) pairs one unpaired implementer without a stamped findings entry. Not a blanket exemption: a stamp with no executed test, or no check at all, still blocks, and one test run covers exactly one implementer.
 
-**What it does NOT relax**: the DELIVERABLE/spec gate (dispatch_tripwire's `REQUIRED_SPEC_BLOCKS` and its advisory tier are untouched), verification evidence itself — (a) evidence capture and (b) the verified findings entry are still required for shipped code — and every other delta gate letter ((a)-(l), (n)-(p)). Solo removes the *dispatch ceremony*, not the *proof of work*. When in doubt, run the test and stamp the finding; that is the whole fast path.
+**What it does NOT relax**: the DELIVERABLE/spec gate (dispatch_tripwire's `REQUIRED_SPEC_BLOCKS` and its advisory tier are untouched), verification evidence itself - (a) evidence capture and (b) the verified findings entry are still required for shipped code - and every other delta gate letter ((a)-(l), (n)-(p)). Solo removes the *dispatch ceremony*, not the *proof of work*. When in doubt, run the test and stamp the finding; that is the whole fast path.
 
 ## Reference index - load only when triggered
 
@@ -100,7 +100,7 @@ For small direct changes in one-developer repos: `export ATLAS_MODE=solo` (case-
 | `references/the-loop.md` | running Orient→Finish or closing a wave |
 | `references/implementation-units.md` | dispatching implementer units, resuming interrupted runs, parallel implementer waves, evidence receipts |
 | `references/feature-flow.md` | implementing one feature across UI, API and data |
-| `references/anti-rationalization.md` | catching "I'll just…" thoughts |
+| `references/anti-rationalization.md` | catching "I'll just..." thoughts |
 | `references/squad-and-tiers.md` | choosing agent/model/effort |
 | `references/capability-routing.md` | task -> agent/skill/MCP/model |
 | `references/capability-catalog.md` | recommending installs (atlas-setup) |

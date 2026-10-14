@@ -83,7 +83,7 @@ Re-verify at the point of risk (snapshot rule): branch is still the intended one
 
 After the PR URL, one line: CI watching is available via `atlas-run-watch` with a `pr:<N>` target (checkpoint tick or sustained watch) - want it? Only on a yes, invoke `atlas-run-watch` naming the PR (pass `checkpoint` when the user wants one tick and a report). It then owns the watch and holds its own push-consent gate for any fix it makes - hand off cleanly, do not run watch mechanics yourself, and do not substitute `gh pr checks --watch`, a poll loop, or a promise to check later.
 
-A declined watch is the successful terminal of this skill: the PR URL plus the Step 7 report is done. If the user wants watching but `atlas-run-watch` cannot load, report that blocked - never improvise a narrower watch.
+Done when the user answers the watch offer (or declines); a declined watch is the successful terminal of this skill: the PR URL plus the Step 7 report is done. If the user wants watching but `atlas-run-watch` cannot load, report that blocked - never improvise a narrower watch.
 
 ## Step 7 - REPORT
 

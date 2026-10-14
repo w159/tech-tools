@@ -95,6 +95,8 @@ Invoke the repo-root graphify skill on the architecture folder with the
 JSON. Use `--no-viz` only when the HTML is not wanted; by default the
 HTML is the primary navigable artifact and should be kept.
 
+Done when `graphify-out/` holds graph.html and graph.json.
+
 The exact invocation and the flags' grounding in graphify/SKILL.md are
 documented in `references/graphify-invocation.md`. The short form:
 
@@ -124,6 +126,8 @@ mv graphify-out/cost.json "$wiki_dir/cost.json" 2>/dev/null || true
 # Clean up the now-empty graphify-out/ directory.
 rmdir graphify-out 2>/dev/null || rm -rf graphify-out
 ```
+
+Done when `$wiki_dir/index.html` exists and `graphify-out/` is gone.
 
 ### Step 5 - Verify
 

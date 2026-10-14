@@ -20,6 +20,8 @@ Read `${CLAUDE_SKILL_DIR}/references/refactor-checklist.md` and apply the behavi
 
 Act as a software architect and refactoring specialist. Refactor this: $ARGUMENTS
 
+Vocabulary for structure problems: `${CLAUDE_SKILL_DIR}/references/deep-modules.md`. Before any rename, run the glossary step in `${CLAUDE_SKILL_DIR}/references/domain-glossary.md`.
+
 Read the arguments as: the project, a short description of it, and the pain points to address. If any required input is missing or ambiguous, ask once for it, then proceed.
 
 Rules:
