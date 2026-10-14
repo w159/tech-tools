@@ -2383,5 +2383,97 @@ class StatusSidebarTests(unittest.TestCase):
         )
 
 
+class TeamWindowTests(unittest.TestCase):
+    """spawn-team: every worker a pane of ONE tiled, styled window; no idle `lead` shell."""
+
+    REC = {"team_id": "t9", "class": "audit", "effort": "medium", "created": 100}
+
+    def drive(self, names, fail_split=False):
+        from unittest import mock
+
+        import atlas_mux
+
+        calls, state = [], {"session": False, "panes": []}
+
+        def fake(*argv):
+            calls.append(list(argv))
+            verb = argv[0]
+            ok = subprocess.CompletedProcess(argv, 0, "", "")
+            if verb == "has-session":
+                return subprocess.CompletedProcess(argv, 0 if state["session"] else 1, "", "")
+            if verb == "list-panes":
+                return subprocess.CompletedProcess(argv, 0, "".join(f"{n}\t0\t1\n" for n in state["panes"]), "")
+            if verb == "split-window" and fail_split:
+                return subprocess.CompletedProcess(argv, 1, "", "no space for new pane")
+            if verb in ("new-session", "split-window", "new-window"):
+                state["session"] = True
+                return subprocess.CompletedProcess(argv, 0, f"%{len(calls)}\n", "")
+            if verb == "set-option" and argv[-2] == "@atlas_worker":
+                state["panes"].append(argv[-1])
+            return ok
+
+        results = []
+        with (
+            mock.patch.object(atlas_mux, "_tmux", fake),
+            mock.patch.object(atlas_mux, "_lead_size", return_value="200x50"),
+        ):
+            for n in names:
+                results.append(atlas_mux._open_window("atlas-t9", n, f"exec run {n}", {"rec": self.REC, "role": "explorer"}))
+        return results, calls
+
+    def test_first_worker_starts_the_session_no_idle_shell(self):
+        results, calls = self.drive(["a"])
+        self.assertEqual([None], results)
+        new = next(c for c in calls if c[0] == "new-session")
+        self.assertEqual(new[new.index("-n") + 1], "atlas-t9")
+        self.assertEqual(new[-1], "exec run a")
+        self.assertNotIn("lead", new)
+        self.assertFalse([c for c in calls if c[0] == "new-window"])
+
+    def test_more_workers_split_and_tile_the_same_window(self):
+        results, calls = self.drive(["a", "b", "c"])
+        self.assertEqual([None] * 3, results)
+        splits = [c for c in calls if c[0] == "split-window"]
+        self.assertEqual(2, len(splits))
+        self.assertTrue(all(c[c.index("-t") + 1] == "atlas-t9:atlas-t9" for c in splits))
+        self.assertEqual(3, sum(1 for c in calls if c[:2] == ["select-layout", "-t"] and c[-1] == "tiled"))
+        tags = [c for c in calls if c[0] == "set-option" and c[-2] in ("@atlas_worker", "@atlas_role")]
+        self.assertTrue(all(c[1] == "-p" for c in tags))
+        self.assertEqual(["a", "b", "c"], [c[-1] for c in tags if c[-2] == "@atlas_worker"])
+
+    def test_styling_is_scoped_to_the_team_session_never_global(self):
+        _, calls = self.drive(["a", "b"])
+        opts = [c for c in calls if c[0] == "set-option" and c[-2] not in ("@atlas_worker", "@atlas_role")]
+        self.assertTrue(opts)
+        for c in opts:
+            self.assertNotIn("-g", c)
+            self.assertTrue(c[c.index("-t") + 1].startswith("atlas-t9"), c)
+        by = {c[-2]: c[-1] for c in opts}
+        self.assertEqual("top", by["pane-border-status"])
+        self.assertEqual("heavy", by["pane-border-lines"])
+        self.assertIn("#{@atlas_worker} · #{@atlas_role}", by["pane-border-format"])
+        self.assertIn("pane_active", by["pane-border-format"])
+        self.assertIn("◢◤ ATLAS", by["status-left"])
+        self.assertIn("team t9 · audit/medium", by["status-left"])
+        self.assertIn("#{n:#{P:#{?pane_dead,,x}}} live", by["status-right"])
+        self.assertIn("#{n:#{P:#{?pane_dead,x,}}} done", by["status-right"])
+        self.assertIn("%s,#{session_created}", by["status-right"])
+        self.assertNotIn("#(", by["status-right"])  # no shell job: a detached session never runs one
+        self.assertEqual("1", by["status-interval"])
+        self.assertEqual("on", by["remain-on-exit"])
+
+    def test_name_taken_is_read_from_pane_tags(self):
+        results, _ = self.drive(["a", "a"])
+        self.assertIsNone(results[0])
+        self.assertIn("name_taken", results[1])
+
+    def test_split_without_space_overflows_into_a_styled_window(self):
+        results, calls = self.drive(["a", "b"], fail_split=True)
+        self.assertEqual([None, None], results)
+        nw = next(c for c in calls if c[0] == "new-window")
+        self.assertEqual("b", nw[nw.index("-n") + 1])
+        self.assertTrue(any(c[0] == "set-option" and "atlas-t9:b" in c for c in calls))
+
+
 if __name__ == "__main__":
     unittest.main()

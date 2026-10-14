@@ -1,3 +1,4 @@
+import io
 import json
 import sys
 import unittest
@@ -8,49 +9,142 @@ import _test_isolation  # noqa: F401,E402
 import atlas_panefeed as pf  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "claude_stream.jsonl"
-ANSI = __import__("re").compile(r"\x1b\[[0-9;]*m")
+ANSI = __import__("re").compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+# the shape a live worker sent (osprey cache path, $S/$A env prefix, several notes in one call)
+LIVE_CMD = (
+    "S=/Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/cache/tech-tools/atlas/12.2.0/scripts/atlas_todo.py; "
+    'A="--root /Users/jerry/MEGA/Projects/Agentic/tech-tools --channel tech-tools@main/lead-a47cc5 --owner explorer-9eb2"; '
+    "python3 $S note $A --to lead-a47cc5 'start: sleep x2 then peer-sync'; sleep 5; sleep 5; "
+    "python3 $S note $A --to explorer-4fdc peer-sync"
+)
 
 
 def plain(s: str) -> str:
     return ANSI.sub("", s)
 
 
+def tool(name, **inp):
+    return {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": name, "input": inp}]}}
+
+
+class UnwrapTests(unittest.TestCase):
+    def test_live_env_prefix_form(self):
+        first, notes = pf.unwrap_shell(LIVE_CMD)
+        self.assertEqual(first, "python3 atlas_todo.py note --to lead-a47cc5")
+        self.assertEqual(notes, [("lead-a47cc5", "start: sleep x2 then peer-sync"), ("explorer-4fdc", "peer-sync")])
+
+    def test_lean_ctx_wrapper_is_stripped(self):
+        first, notes = pf.unwrap_shell("/opt/homebrew/bin/lean-ctx -c 'S=/a/b; cd /tmp/x && git status --short'")
+        self.assertEqual((first, notes), ("g" + "it status --short", []))
+        self.assertEqual(pf.unwrap_shell("cd /tmp/x")[0], "cd x")
+        self.assertEqual(
+            pf.unwrap_shell("cd /tmp && python3 /a/atlas_todo.py note --to b hi")[0],
+            "python3 atlas_todo.py note --to b",
+        )
+        self.assertEqual(pf.unwrap_shell("/opt/homebrew/bin/lean-ctx -c 'sleep 3'")[0], "sleep 3")
+
+    def test_loop_and_quoted_path_note(self):
+        cmd = 'S=/x/scripts/atlas_todo.py\nfor p in a b; do python3 "$S" note --root /r --to $p \'hi there\' 2>&1 | head -3; done'
+        first, notes = pf.unwrap_shell(cmd)
+        self.assertEqual(first, "python3 atlas_todo.py note --to a,b")
+        self.assertEqual(notes, [("a", "hi there"), ("b", "hi there")])
+
+    def test_note_help_is_not_a_note(self):
+        self.assertEqual(pf.unwrap_shell("python3 /x/atlas_todo.py note --help")[1], [])
+
+    def test_file_tools_show_basename_and_range(self):
+        self.assertEqual(pf.tool_arg("Read", {"file_path": "/etc/hosts", "offset": 10, "limit": 20}), "hosts:10-30")
+        self.assertEqual(pf.tool_arg("mcp__lean-ctx__ctx_read", {"path": "/a/band.tsx", "mode": "lines:96-140"}), "band.tsx:96-140")
+        self.assertEqual(pf.tool_arg("Edit", {"file_path": "/a/b/c.py", "old_string": "x"}), "c.py")
+        self.assertEqual(pf.tool_arg("Grep", {"pattern": "planRows", "path": "/r/plugins/atlas"}), "planRows  in plugins/atlas")
+
+
+class RowTests(unittest.TestCase):
+    def test_peer_note_renders_bash_then_pink_peer_chip(self):
+        rows = pf.event_rows(tool("Bash", command=LIVE_CMD), now=0)
+        texts = [plain(pf.paint(r, 200)) for r in rows]
+        self.assertIn(" Bash ", texts[0])
+        self.assertIn("python3 atlas_todo.py note --to lead-a47cc5", texts[0])
+        self.assertIn(" peer ", texts[1])
+        self.assertIn("→ lead-a47cc5: start: sleep x2 then peer-sync", texts[1])
+        self.assertEqual(rows[1][1][2], pf.PINK)  # the chip background
+        self.assertNotIn("S=/Users", "".join(texts))
+
+    def test_text_block_is_a_think_row(self):
+        ev = {"type": "assistant", "message": {"content": [{"type": "text", "text": "plan A\nmore"}]}}
+        row = plain(pf.paint(pf.event_rows(ev)[0], 120))
+        self.assertIn(" think ", row)
+        self.assertIn("plan A", row)
+        self.assertNotIn("more", row)
+
+    def test_rows_are_cut_to_width_never_wrapped(self):
+        """Text stops one cell short of the edge; EL fills the last column (no wrap flag for -J)."""
+        long = tool("Bash", command="echo " + "x" * 500)
+        for width in (20, 40, 77):
+            for line in pf.render_event(long, width):
+                self.assertEqual(len(plain(line)), width - 1)
+                self.assertTrue(line.endswith("\x1b[K\x1b[0m"))
+                self.assertNotIn("\n", line)
+
+    def test_header_spans_the_pane_width(self):
+        for width in (60, 96, 158):
+            rows = pf.header("explorer-a324", "explorer", "t3", "x@main/lead-a47cc5", "Map callers\nmore", width, ["b", "c"]).split("\n")
+            bar = plain(rows[0])
+            self.assertEqual(len(bar), width - 1)
+            self.assertIn("\x1b[K", rows[0])
+            self.assertTrue(bar.startswith(" ◢◤ ATLAS  explorer-a324"))
+            self.assertTrue(bar.endswith("explorer · wave t3 "))
+            self.assertIn("goal Map callers", plain(rows[1]))
+            self.assertIn("#lead-a47cc5  peers: b · c", plain(rows[2]))
+        self.assertIn("38;2;", rows[0])
+
+    def test_status_line_run_done_failed(self):
+        self.assertIn("working", plain(pf.status_row("run", 0, 72, 9, 3100, 96)))
+        self.assertIn("1m12s · 9 tools · 3.1k tok", plain(pf.status_row("run", 0, 72, 9, 3100, 96)))
+        self.assertIn("✔ DONE · 35s · 9 tools", plain(pf.status_row("done", 0, 35, 9, 0, 96)))
+        self.assertIn("✖ FAILED", plain(pf.status_row("fail", 0, 35, 9, 0, 96)))
+        self.assertEqual(len(plain(pf.status_row("run", 3, 5, 1, 0, 30))), 29)
+
+    def test_brief_goal_and_peers(self):
+        brief = "You are w (x), one of 3.\nPeers: a-1, b-2.\n\n# Task\nRead 3 files.\nmore\n"
+        self.assertEqual(pf.goal_of(brief), "Read 3 files.")
+        self.assertEqual(pf.peers_of(brief), ["a-1", "b-2"])
+        self.assertEqual(pf.peers_of("Peers: (none)."), [])
+
+
 class PaneFeedTests(unittest.TestCase):
     def events(self):
         return [json.loads(l) for l in FIXTURE.read_text().splitlines() if l.strip()]
 
-    def test_header_has_pill_and_fields(self):
-        h = plain(pf.header("w1", "auditor", "t9", "chan", "Do the thing\nmore"))
-        self.assertIn(" ATLAS ", h)
-        for want in ("w1", "auditor", "team t9", "#chan", "Do the thing"):
-            self.assertIn(want, h)
-        self.assertNotIn("more", h)
-        self.assertIn("\x1b[", pf.header("w1", "a", "t", "c", "g"))
-
-    def test_fixture_renders_tool_lines_and_status(self):
+    def test_fixture_renders_tool_lines_and_result(self):
         out = []
         for ev in self.events():
-            out += [plain(x) for x in pf.render_event(ev)]
+            out += [plain(x) for x in pf.render_event(ev, 120)]
         joined = "\n".join(out)
         self.assertIn("Bash", joined)
         self.assertIn("echo hi", joined)
-        self.assertRegex(joined, r"STATUS .*exit 0")
+        self.assertRegex(joined, r"result .*exit 0")
+
+    def test_feed_counts_tools_and_prints_final_status(self):
+        buf = io.StringIO()
+        feed = pf.Feed("w1", "explorer", "t9", "c/lead-x", "# Task\ngo", out=buf, live=False)
+        feed.start()
+        for ev in self.events():
+            feed.event(ev)
+        feed.finish(0)
+        text = plain(buf.getvalue())
+        self.assertIn("◢◤ ATLAS  w1", text)
+        self.assertRegex(text, r"✔ DONE · \d+s · [1-9]\d* tools")
 
     def test_result_text_matches_final_result(self):
         res = [e for e in self.events() if e["type"] == "result"][-1]
         self.assertEqual(pf.result_text(res), res["result"])
 
-    def test_peer_note_line(self):
-        ev = {"type": "assistant", "message": {"content": [{
-            "type": "tool_use", "name": "Bash",
-            "input": {"command": "python3 atlas_todo.py note --to sib hello"}}]}}
-        self.assertIn("note", plain(pf.render_event(ev)[0]))
-
     def test_non_event_is_ignored(self):
         self.assertEqual(pf.render_event({"type": "system", "subtype": "hook_started"}), [])
 
     def test_mux_feed_keeps_report_text(self):
-        import contextlib, io
+        import contextlib
         import atlas_mux
         lines = []
         with contextlib.redirect_stdout(io.StringIO()):
