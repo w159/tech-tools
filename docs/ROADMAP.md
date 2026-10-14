@@ -188,7 +188,8 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 
 Closed in 12.4.0 (see `docs/CHANGELOG.md`): omp lane role and tool, omp worker pane feed, claude team worker timestamps and sparklines, `atlas_mux.py status` per-pane listing, lean-ctx read-only classification, inline-op counter reset, Stop hook merge (5 -> 2 processes).
 
-- [in-progress] Hook bytecode shims for large hooks and a lazy worker_inbox registry check: on a branch, not merged.
+- [done] Hook bytecode shims for large hooks and a lazy worker_inbox registry check: merged in 12.4.1.
+- [planned] Pre-existing environment-dependent test failures (present on 12.4.0 and 12.4.1): hooks test_completion_gate condition_g no-diff, two test_dispatch_tripwire absolute-script-path tests (fail when CLAUDE_PLUGIN_ROOT points at another plugin); scripts test_sweep_state load error, test_atlas_finding no-project-root, test_no_tmp_marker temp roots.
 - [planned] dispatch_tripwire 30% speedup not met (sqlite is about 1.5 ms; per-call recompile at about 8 ms is the lever). PostToolUse Edit latency is unchanged (real ruff run plus DB).
 - [planned] Hooks tolerate raw control characters in every payload (todo t417c7495); port the `sh -c` git parse fix to the omp/mandates.ts twin.
 - [blocked] Workers with extended thinking disabled: not possible on Sonnet 5.5 per Claude Code docs (costs, env-vars, sub-agents pages); low effort is the only lever. Platform limit.

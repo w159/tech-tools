@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 12.4.1 (2026-10-14)
+
+### Changed
+- Performance: completion_gate, dispatch_tripwire, prompt_optimizer, session_boot and worker_report_gate are thin shims over `*_core.py` modules, so Python caches their bytecode instead of recompiling the script on every call. worker_inbox skips the atlas_todo import when no board notes dir exists. The 12.4.0 prompt optimizer and worker_report_gate changes are carried into the core files. Suites: omp 435/0; the hooks and scripts suite failures are a subset of the 12.4.0 baseline failures (environment-dependent, unchanged by this merge).
+
 ## 12.4.0 (2026-10-14)
 
 ### Added
