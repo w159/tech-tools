@@ -26,6 +26,8 @@ export type SidebarHandlers = {
   expand(key: string): void;
   /** Switch the pane view (hotkeys r/t/c/g). */
   setView(v: SidebarView): void;
+  /** Collapse or expand the band's board panel (hotkey `o`); absent in fixtures that do not wire it. */
+  toggleTodos?(): void;
 };
 
 export const pad = (s: string, n: number): string => s + ' '.repeat(Math.max(0, n - textWidth(s)));

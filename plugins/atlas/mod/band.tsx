@@ -12,10 +12,11 @@ import { groupOpenCount, openGateCount } from './gates';
 import type { GateGroup } from './pane/sidebar-types';
 import { chip, eighthBar, gradientBar, merge, nickColor, padRow, seg, sparkline, spread } from './paint';
 import { rowOf, type Segment } from './runs';
+import { todoRows } from './todo-panel';
 import { fitText, formatDuration, MOCHA as M, mix, phaseHue, spin, textWidth } from './theme';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
-export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; costUsd?: number | null; lastPhase?: string | null };
+export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; costUsd?: number | null; lastPhase?: string | null; todoExpanded?: boolean };
 
 const FULL = 120;
 const MID = 80;
@@ -28,7 +29,7 @@ const RAIL_SKIP = new Set(['validate', 'blocked']);
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
 
-type Ctx = { s: LiveSnapshot; rail: string; cols: number; tick: number; full: boolean; now: number; done: number; total: number; open: number; gates: GateGroup[]; cost: number | null };
+type Ctx = { s: LiveSnapshot; rail: string; cols: number; tick: number; full: boolean; now: number; done: number; total: number; open: number; gates: GateGroup[]; cost: number | null; todoExpanded: boolean };
 
 const padTo = (t: string, n: number): string => { const f = fitText(t, n); return f + ' '.repeat(Math.max(0, n - textWidth(f))); };
 const clock = (ms: number): string => {
@@ -217,10 +218,19 @@ function idleTitle(c: Ctx, all: LiveWorker[]): Segment[] {
   return withChips(c, chips, (w) => gradientBar(`${MARK} ATLAS  ·  ${['idle', wave].filter(Boolean).join('  ·  ')}`, '', w, M.grey, mix(M.teal, M.panel, 0.55), M.text));
 }
 
-/** Idle: the dim title and the settled rail. */
+/** Board rows (todo-panel.tsx) under the rail: one collapsed bar, or the list capped to what `maxRows` leaves after
+ * the fixed rows and a few lanes. Empty without a board or without the room. */
+function boardRows(c: Ctx, maxRows: number, fixed: number): Segment[][] {
+  const room = maxRows - fixed;
+  if (!c.s.todos.length || room < 1) return [];
+  const list = c.todoExpanded && room >= 4;
+  return todoRows(c.s.todos, { cols: c.cols, tick: c.tick, expanded: list, maxRows: list ? room - 3 : 1 });
+}
+
+/** Idle: the dim title and the settled rail, then the board when there is one. */
 function idleRows(c: Ctx, all: LiveWorker[], maxRows: number): Segment[][] {
   const title = idleTitle(c, all);
-  return maxRows >= 2 ? [title, padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, false), c.cols)] : [title];
+  return maxRows >= 2 ? [title, padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, false), c.cols), ...boardRows(c, maxRows, 2)] : [title];
 }
 
 /** <80 columns or <3 rows: the title row alone, phase and counts in it. */
@@ -231,20 +241,21 @@ function narrowRow(c: Ctx, shown: LiveWorker[]): Segment[] {
 
 /** Title, rail, as many lanes as fit, then "+N more", ticker and footer per `planRows`. */
 function fullRows(c: Ctx, all: LiveWorker[], shown: LiveWorker[], maxRows: number): Segment[][] {
-  const plan = planRows(maxRows, shown.length, c.s.comms.length > 0);
-  const rows: Segment[][] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, true), c.cols), ...shown.slice(0, plan.lanes).map((w) => lane(w, c))];
+  const board = boardRows(c, maxRows - 3, 2); // keep title, rail and one lane
+  const plan = planRows(maxRows - board.length, shown.length, c.s.comms.length > 0);
+  const rows: Segment[][] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, true), c.cols), ...board, ...shown.slice(0, plan.lanes).map((w) => lane(w, c))];
   if (plan.more) rows.push(padRow([seg(`   +${shown.length - plan.lanes} more`, M.muted)], c.cols));
   if (plan.ticker) rows.push(ticker(c));
   if (plan.footer) rows.push(footer(c));
   return rows;
 }
 
-export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12, costUsd = null, lastPhase = null }: BandModel): RenderElement {
+export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12, costUsd = null, lastPhase = null, todoExpanded = false }: BandModel): RenderElement {
   const { done, total } = routeCounts(s.todoGroups, s.contract);
   const all = live.filter((w) => w.state !== 'parked'); // parked workers are resting
   const shown = all.filter((w) => w.state !== 'done');
   const cols = Math.max(1, columns);
-  const c: Ctx = { s, rail: railPhase(s, lastPhase), cols, tick, full: cols >= FULL, now: s.now, done, total, open: openGateCount(gates), gates, cost: costUsd };
+  const c: Ctx = { s, rail: railPhase(s, lastPhase), cols, tick, full: cols >= FULL, now: s.now, done, total, open: openGateCount(gates), gates, cost: costUsd, todoExpanded };
   if (!shown.length) return panel(els, idleRows(c, all, maxRows), cols);
   if (cols < MID || maxRows < 3) return panel(els, [narrowRow(c, shown)], cols);
   return panel(els, fullRows(c, all, shown, maxRows).map(merge), cols);

@@ -36,7 +36,10 @@ function tabStrip(els: ClientElements, model: SidebarModel, on: SidebarHandlers,
       label: t.label, onPress: () => on.setView(t.v),
     }));
   });
-  const gap = inner - used - textWidth(HINT);
+  if (on.toggleTodos) {
+    children.push(els.Text({ dimColor: true, children: ' │ ' }), els.Button({ key: 'tab:todos', plain: true, hotkey: 'o', dimColor: true, children: [els.Text({ children: '▤ board' })], label: '▤ board', onPress: on.toggleTodos }));
+  }
+  const gap = inner - used - textWidth(HINT) - (on.toggleTodos ? 12 : 0);
   if (inner >= HINT_MIN_INNER && gap >= 1) {
     children.push(els.Text({ children: ' '.repeat(gap) }), els.Text({ dimColor: true, children: HINT }));
   }

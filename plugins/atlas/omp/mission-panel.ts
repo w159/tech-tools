@@ -8,6 +8,7 @@
  */
 import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
 import type { GateGroup } from "../mod/pane/sidebar";
+import { type PanelTodo, todoLines } from "./todo-panel";
 
 type Rgb = readonly [number, number, number];
 const hx = (s: string): Rgb => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
@@ -41,6 +42,9 @@ const bg = (c: Rgb) => `\x1b[48;2;${c[0]};${c[1]};${c[2]}m`;
 const lerp = (a: Rgb, b: Rgb, t: number): Rgb => [0, 1, 2].map(i => Math.round(a[i] + (b[i] - a[i]) * t)) as unknown as Rgb;
 const seg = (text: string, f?: Rgb, b: Rgb = PANEL, bold = false) => `${bold ? "\x1b[1m" : ""}${f ? fg(f) : ""}${bg(b)}${text}${RST}`;
 const chip = (text: string, col: Rgb) => seg(` ${text} `, BASE, col, true);
+/** Palette and paint helpers for todo-panel.ts (called at render time only; see the cycle note there). */
+export const C = { YEL, GREEN, RED, MUT, TXT, VIOLET, TEAL, WHITE, PANEL2 };
+export { bar, chip, cut, lerp, seg };
 
 /** A lane's current tool (active) or the last one it ran (inactive, between calls). */
 export interface LaneTool {
@@ -77,6 +81,8 @@ export interface PanelModel {
 	team?: string; // `<class>/<effort>`
 	elapsedSecs?: number;
 	idle?: IdleWave;
+	todos?: PanelTodo[]; // the shared board; drawn under the rail
+	todosExpanded?: boolean; // ATLAS_TODO_EXPANDED=1: the list instead of the one-row bar
 }
 /** The last wave the idle panel summarizes: member count, first join to last finish, non-zero exits. */
 export interface IdleWave {
@@ -324,16 +330,24 @@ function idleRows(idle: IdleWave, w: number): string[] {
 	const title = `◆ ATLAS  ·  idle  ·  ${wave.join(" · ")}`;
 	return [gradBar(title, "", w, hx("#585b70"), hx("#313244")), rail("done", w, { tick: 0, spin: "◆", idle: true })];
 }
+const withBoard = (m: PanelModel, w: number, rows: string[]) => [...rows.slice(0, 2), ...boardRows(m, w, Math.max(0, m.maxLines - 2)), ...rows.slice(2)];
 
-/** Title, rail and footer always show; the middle rows take what is left of maxLines. */
+/** Board rows within `room` lines: the list only when it can show 3+, else the one-row bar. */
+function boardRows(m: PanelModel, w: number, room: number): string[] {
+	return todoLines(m.todos ?? [], { width: w, tick: m.tick, spin: m.laneSpin, expanded: !!m.todosExpanded && room >= 3, maxLines: room });
+}
+
+/** Title, rail and footer always show; the board and the middle rows take what is left of maxLines. */
 function liveRows(m: PanelModel, w: number): string[] {
 	const railLine = rail(m.phase, w, { tick: m.tick, spin: m.spin, idle: false });
-	return [titleRow(m, w), railLine, ...middleRows(m, w, Math.max(0, m.maxLines - 3)), footerRow(m, w)];
+	const mid = Math.max(0, m.maxLines - 3);
+	const board = boardRows(m, w, Math.min(m.todosExpanded ? 5 : 1, Math.max(0, mid - 2))); // keep two rows for lanes
+	return [titleRow(m, w), railLine, ...board, ...middleRows(m, w, mid - board.length), footerRow(m, w)];
 }
 
 export function renderPanel(m: PanelModel): string[] {
 	const w = Math.max(20, m.width);
-	return (m.idle ? idleRows(m.idle, w) : liveRows(m, w)).map(s => fitLine(s, w));
+	return (m.idle ? withBoard(m, w, idleRows(m.idle, w)) : liveRows(m, w)).map(s => fitLine(s, w));
 }
 
 /** Last gate groups from atlas_gates.py; re-runs at most once per GATES_TTL_MS and never blocks a paint. */

@@ -66,6 +66,8 @@ const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 
 const lastHeaderState = atom({ plugin: 'atlas', key: 'lastHeader' } as const, null);
 const gatesState = atom({ plugin: 'atlas', key: 'gates' } as const, []);
 const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'route'); // docs and the tab strip list route first
+const todoExpandedState = atom({ plugin: 'atlas', key: 'todoExpanded' } as const, null as boolean | null); // pane key `o` override; null follows ATLAS_TODO_EXPANDED
+const todoExpanded = async ($: EngineInterface): Promise<boolean> => (await read($, todoExpandedState)) ?? (await $.env.get('ATLAS_TODO_EXPANDED').catch(() => undefined)) === '1';
 
 // ---- module caches left out of $.state ---------------------------------------
 // builder: a class instance with methods, not JSON (a reload leaves it null until
@@ -516,6 +518,7 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 		send: (text) => guarded(() => sendNote($, text)),
 		focus: (key) => guarded(() => $.ui.focus({ requestId: PANE_ID, key })),
 		setView: (v) => guarded(() => update($, viewState, () => v)),
+		toggleTodos: () => guarded(async () => { const open = await todoExpanded($); await update($, todoExpandedState, () => !open); }),
 		expand: (key) =>
 			guarded(async () => {
 				await update($, expandedState, () => key);
@@ -669,7 +672,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);
 		lastRailPhase = railPhase(snapshot, lastRailPhase); // a blocked reply keeps the phase lit before it
-		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, costUsd: (await read($, usageState)).costUsd, lastPhase: lastRailPhase });
+		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, costUsd: (await read($, usageState)).costUsd, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($) });
 		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
 	});
 

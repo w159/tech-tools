@@ -1956,19 +1956,25 @@ def _channel_dispatch(payload):
     if str(tinput.get("subagent_type") or "").startswith("atlas:"):
         goal = re.search(r"^\s*GOAL:\s*(.+)$", prompt, re.M)
         title = goal.group(1).strip() if goal else " ".join(prompt.split())[:80]
+        board_line = ""
         with contextlib.suppress(
             Exception
         ):  # contract C4: one owned todo per atlas member; never blocks the dispatch
-            atlas_todo.add(
+            res = atlas_todo.add(
                 root,
                 title,
                 session_id=payload.get("session_id"),
                 origin="dispatch",
                 owner=name,
                 channel=chan["name"],
+                role=str(tinput["subagent_type"]).split(":")[-1],
             )
+            if res.get("ok"):
+                board_line = f"\nBOARD ITEM: {res['item']['id']}"
+    else:
+        board_line = ""
     brief = atlas_todo.channel_brief(root, chan["name"], lead, name)
-    return {**tinput, "prompt": f"{prompt}\n\n{brief}"}
+    return {**tinput, "prompt": f"{prompt}\n\n{brief}{board_line}"}
 
 
 def _merge_updated_input(out, updated):
