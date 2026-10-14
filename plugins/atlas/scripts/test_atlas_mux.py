@@ -588,9 +588,11 @@ class SpawnOmpTests(Base):
         self.assertEqual(
             ["-p", "--model=openrouter/some-model:off", "--thinking=medium"], hargv[:3]
         )
-        self.assertIn("You are the atlas:explorer worker.", hargv[3])
-        self.assertIn("explorer body", hargv[3])
-        self.assertTrue(hargv[3].endswith("# Task\ncolonize the pane"))
+        # ephemeral session: with omp autoResume on, a worker in the lead's cwd otherwise resumes the lead's session
+        self.assertEqual("--no-session", hargv[3])
+        self.assertIn("You are the atlas:explorer worker.", hargv[-1])
+        self.assertIn("explorer body", hargv[-1])
+        self.assertTrue(hargv[-1].endswith("# Task\ncolonize the pane"))
         log = pathlib.Path(self.root) / ".atlas" / ".run" / "logs" / "Beta.log"
         first = log.read_text().removeprefix("$ ").split("\nfake-report-1")[0]
         self.assertEqual(
@@ -660,8 +662,9 @@ class SpawnOmpTests(Base):
             hargv[:5],
         )
         self.assertIn(
-            "You are the atlas:explorer worker.", hargv[5]
+            "You are the atlas:explorer worker.", hargv[-1]
         )  # the brief is still the last argument
+        self.assertIn("--no-session", hargv)
 
     def test_omp_extension_pin_from_lead_env_reaches_the_pane_as_a_flag(self):
         # A tmux pane inherits the tmux SERVER env, so an env var set for the spawning client alone would be lost
@@ -2297,6 +2300,37 @@ class TmuxStateRobustnessTests(unittest.TestCase):
         self.assertNotIn("TMUX", seen["env"])
         self.assertNotIn("TMUX_PANE", seen["env"])
         self.assertEqual(atlas_mux.TMUX_TIMEOUT_S, seen["timeout"])
+
+    def test_new_session_takes_the_lead_size_or_200x50(self):
+        """A detached session defaults to 80x24 and the branded feed wraps; size it like the lead."""
+        from unittest import mock
+
+        import atlas_mux
+
+        def opened_with(env):
+            calls = []
+
+            def fake_run(argv, **kw):
+                calls.append(argv)
+                if "has-session" in argv:
+                    return subprocess.CompletedProcess(argv, 1, "", "")
+                if "display-message" in argv or "display" in argv:
+                    return subprocess.CompletedProcess(argv, 0, "150x40\n", "")
+                return subprocess.CompletedProcess(argv, 0, "", "")
+
+            with (
+                mock.patch.dict(os.environ, env, clear=False),
+                mock.patch.object(atlas_mux.subprocess, "run", fake_run),
+            ):
+                if "TMUX" not in env:
+                    os.environ.pop("TMUX", None)
+                self.assertIsNone(atlas_mux._open_window("atlas-sz", "w", "true"))
+            new = next(c for c in calls if "new-session" in c)
+            size = next(c for c in calls if "default-size" in c)
+            return new[new.index("-x") + 1], new[new.index("-y") + 1], size[-1]
+
+        self.assertEqual(("150", "40", "150x40"), opened_with({"TMUX": "/tmp/s,1,0"}))
+        self.assertEqual(("200", "50", "200x50"), opened_with({}))
 
     def test_missing_or_wedged_tmux_is_a_failed_result_not_an_exception(self):
         from unittest import mock
