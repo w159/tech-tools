@@ -57,6 +57,7 @@ import { registerAgentGuard } from "./agent-guard";
 import { registerChannelView } from "./channel-view";
 import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
+import { registerTeamTool } from "./team-tool";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
 import { createShellEditTracker } from "./delegation";
 import { atlasStoreEnv, registerHookBridge } from "./hook-bridge";
@@ -745,6 +746,7 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	const channelView = registerChannelView(pi);
 	registerWorkerReport(pi, { onChannelOpen: channelView.open });
 	registerAdvisorGate(pi, defaultAdvisorDeps());
+	registerTeamTool(pi, PLUGIN_ROOT);
 	register(pi, {
 		runState,
 		// getActiveTools() is omp's enabled set (top-level names plus live xd://

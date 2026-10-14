@@ -63,6 +63,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import atlas_panefeed
 import atlas_resolve
 import atlas_todo
 
@@ -425,7 +426,8 @@ def harness_argv(
     omp_extension: str | None = None,
 ) -> list:
     if harness == "claude":
-        argv = ["claude", "-p", "--agent", f"atlas:{role}"]
+        # stream-json so the pane shows live tool calls; atlas_panefeed renders it and run-worker keeps the result text
+        argv = ["claude", "-p", "--output-format", "stream-json", "--verbose", "--agent", f"atlas:{role}"]
         if model:
             argv += ["--model", model]
         if level:
@@ -841,13 +843,14 @@ def cmd_run_worker(args) -> int:
         signal.signal(sig, _killed)
     lines: list[str] = []
     try:
+        print(
+            atlas_panefeed.header(args.name, args.agent, channel or "-", channel or "-", prompt),
+            flush=True,
+        )
         for raw in proc.stdout:
-            text = raw.rstrip("\n")
-            print(text, flush=True)
             log.write(raw if raw.endswith("\n") else raw + "\n")
             log.flush()
-            if text.strip():
-                lines.append(text)
+            lines += _feed_line(raw.rstrip("\n"))
         # classify the harness output only: the STATUS..NEXT report is the worker's own prose
         # (it may cite `foo.py:402`) and must not trip the 402/401 signs
         head = lines[
@@ -863,6 +866,21 @@ def cmd_run_worker(args) -> int:
         proc.terminate()
         return finish(code, _report(lines), f"killed by signal {code - 128}")
     return finish(code, _report(lines), reason)
+
+
+def _feed_line(text: str) -> list[str]:
+    """Print one worker output line; return the lines that count as the worker's output (report/classify input)."""
+    event = atlas_panefeed.parse_line(text)
+    if event is None:
+        print(text, flush=True)
+        return [text] if text.strip() else []
+    for shown in atlas_panefeed.render_event(event):
+        print(shown, flush=True)
+    if event.get("type") != "result":
+        return []
+    body = atlas_panefeed.result_text(event)
+    print(body, flush=True)
+    return [t for t in body.splitlines() if t.strip()]
 
 
 def _report(lines: list[str]) -> str:
