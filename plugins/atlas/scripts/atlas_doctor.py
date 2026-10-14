@@ -158,10 +158,15 @@ def ver_tuple(v):
 
 def self_manifest():
     """Manifest of the plugin this script ships inside of."""
-    root = os.environ.get("CLAUDE_PLUGIN_ROOT") or os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))
-    )
-    return root, _load_json(os.path.join(root, ".claude-plugin", "plugin.json"))
+    own = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if env:
+        manifest = _load_json(os.path.join(env, ".claude-plugin", "plugin.json"))
+        # CLAUDE_PLUGIN_ROOT leaks into shells spawned by whichever plugin's hook ran
+        # (context-mode's, seen live): trust it only when it names this plugin.
+        if manifest.get("name") == "atlas":
+            return env, manifest
+    return own, _load_json(os.path.join(own, ".claude-plugin", "plugin.json"))
 
 
 def find_registration(installed, plugin_name):
@@ -735,6 +740,29 @@ def _armed_cwd(cwd):
             os.environ["ATLAS_DB"] = old
 
 
+# format_after_edit's QUIET_REASONS skips: older installs wrote them as faults.
+_QUIET_SKIP = re.compile(r"^formatter skipped: (missing|parse)\b")
+# An install path inside the error (omp's TS writer tags no plugin_version).
+_INSTALL_VER = re.compile(r"atlas(?:___|/)(\d+\.\d+\.\d+)")
+
+
+def _live_faults(faults, version):
+    """Faults that describe this install: drop quiet formatter skips and rows tagged
+    (plugin_version, else an install path in the error) with another atlas version.
+    Untagged rows still count: their origin is unknown."""
+    out = []
+    for f in faults:
+        err = str(f.get("error", ""))
+        if _QUIET_SKIP.match(err):
+            continue
+        m = _INSTALL_VER.search(err)
+        tag = f.get("plugin_version") or (m.group(1) if m else None)
+        if version and tag and tag != version:
+            continue
+        out.append(f)
+    return out
+
+
 def behaviour_checks(add, plugin_name, version, now=None):
     """Runtime checks: is enforcement actually live, not merely installed?
     Each is read-only and bounded (one DB open, two indexed-ish scans)."""
@@ -742,14 +770,16 @@ def behaviour_checks(add, plugin_name, version, now=None):
 
     now = now or time.time()
     # B1: swallowed hook crashes (fail-open hooks leave a trace here)
-    faults = atlas_faults.load(now - 86400)
-    n = len(faults)
+    loaded = atlas_faults.load(now - 86400)
+    faults = _live_faults(loaded, atlas_faults._plugin_version())
+    n, ignored = len(faults), len(loaded) - len(faults)
     last = faults[-1] if faults else {}
     add(
         "hook-faults",
         n == 0,
         f"{n} hook fault(s) in 24h"
-        + (f"; last {last.get('hook')}: {last.get('error', '')[:80]}" if n else ""),
+        + (f"; last {last.get('hook')}: {last.get('error', '')[:80]}" if n else "")
+        + (f" ({ignored} ignored: formatter skips or other installs)" if ignored else ""),
         severity="fail" if n >= FAULT_FAIL_24H else "warn",
     )
     # B2: env kill switches / scope make the gates inert
@@ -901,10 +931,20 @@ def install_checks(plugin_name="atlas"):
     # known_marketplaces.json stores the source as {"source": "github", "repo": "owner/name"}
     # or {"source": "directory", "path": "/local/path"} for local marketplaces
     src = mkt.get("source", {})
-    src_url = src.get("url", "") or src.get("repo", "")
+    accepted = (expected_repo, LEGACY_REPO_ALIAS)
+    repo, url = src.get("repo", ""), src.get("url", "")
+    # Claude Code resolves a github source by `repo`; a leftover `url` is unused.
+    src_url = repo or url
     # Directory-sourced marketplaces have no repo URL; check the clone remote instead
     if not src_url and src.get("source") == "directory":
         add("marketplace-source", True, f"directory: {src.get('path', '?')}")
+    elif norm_repo(repo) in accepted and url and norm_repo(url) not in accepted:
+        add(
+            "marketplace-source",
+            False,
+            f"{repo} (stale unused url field {url}; `atlas_doctor.py --fix` rewrites it)",
+            severity="warn",
+        )
     else:
         ok = norm_repo(src_url) in (expected_repo, LEGACY_REPO_ALIAS)
         add(

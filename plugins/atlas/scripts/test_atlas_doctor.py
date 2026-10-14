@@ -1055,6 +1055,73 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertEqual(c["severity"], "fail")
         self.assertIn("recall_gate", c["detail"])
 
+    def test_hook_faults_ignore_quiet_skips_and_other_versions(self):
+        # Live false FAIL: 57 "formatter skipped: missing" rows from pre-QUIET_REASONS
+        # installs plus omp rows naming a stale tech-tools___atlas___11.1.6 cache.
+        import atlas_faults
+
+        ah = os.path.join(self.tmp, "ah")
+        env = mock.patch.dict(os.environ, {"ATLAS_HOME": ah})
+        env.start()
+        self.addCleanup(env.stop)
+        os.makedirs(ah, exist_ok=True)
+        now = time.time()
+        stale = "/x/.omp/plugins/cache/plugins/tech-tools___atlas___0.0.1/scripts/a.py"
+        rows = [{"hook": "format_after_edit", "error": "formatter skipped: missing for /a.py"}] * 6
+        rows += [{"hook": "format_after_edit", "error": "formatter skipped: parse for /b.ts"}] * 3
+        rows += [{"hook": "channels", "error": f"channel-open failed: can't open '{stale}'"}] * 6
+        rows += [{"hook": "recall_gate", "error": "boom", "plugin_version": "0.0.1"}] * 6
+        with open(os.path.join(ah, "hook-faults.jsonl"), "w") as f:
+            for r in rows:
+                f.write(json.dumps({"ts": now, "type": "X", "cwd": "/", **r}) + "\n")
+        c = self._checks()["hook-faults"]
+        self.assertTrue(c["ok"], c["detail"])
+        self.assertIn("ignored", c["detail"])
+        # a real crash from this version, or an untagged one, still counts
+        atlas_faults.record("recall_gate", RuntimeError("live"))
+        self.assertFalse(self._checks()["hook-faults"]["ok"])
+
+    def test_foreign_plugin_root_env_does_not_hijack_self_manifest(self):
+        # Live false FAIL: CLAUDE_PLUGIN_ROOT leaked from context-mode's hook made the
+        # doctor expect mksglu/context-mode and compare omp against 1.0.169.
+        foreign = os.path.join(self.tmp, "context-mode")
+        write_json(
+            os.path.join(foreign, ".claude-plugin", "plugin.json"),
+            {
+                "name": "context-mode",
+                "version": "1.0.169",
+                "repository": "https://github.com/mksglu/context-mode",
+            },
+        )
+        with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": foreign}):
+            root, manifest = atlas_doctor.self_manifest()
+            self.assertEqual(manifest["name"], "atlas")
+            self.assertNotEqual(root, foreign)
+            self._omp_registry(manifest["version"])
+            c = self._checks()
+        self.assertNotIn("context-mode", c["marketplace-source"]["detail"])
+        self.assertTrue(c["omp-bridge"]["ok"], c["omp-bridge"]["detail"])
+
+    def test_stale_marketplace_url_field_is_a_warn_when_repo_is_right(self):
+        write_json(
+            os.path.join(self.plugins, "known_marketplaces.json"),
+            {
+                "tech-tools": {
+                    "source": {
+                        "source": "github",
+                        "repo": "w159/tech-tools",
+                        "url": "https://github.com/mksglu/context-mode.git",
+                    },
+                    "installLocation": self.clone,
+                }
+            },
+        )
+        c = self._checks()["marketplace-source"]
+        self.assertFalse(c["ok"])
+        self.assertEqual(c["severity"], "warn")
+        self.assertIn("w159/tech-tools", c["detail"])
+        self.assertIn("--fix", c["detail"])
+
     def test_env_kill_switch_makes_gates_inert_and_unhealthy(self):
         with mock.patch.dict(os.environ, {"ATLAS_GATES": "off"}):
             c = self._checks()["gates-armed"]
