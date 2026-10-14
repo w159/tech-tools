@@ -210,20 +210,31 @@ _SEGMENT_HEAD = 2048
 _MAX_SEGMENTS = 4096
 
 
-def _git_subcommands(command: str):
+# `sh -c '...'` / `bash -lc "..."`: the quoted script runs as its own command line.
+_SHELL_C = re.compile(
+    r"""\b(?:ba|z|da|k)?sh\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*c[A-Za-z]*\s+(['"])(.*?)\1""",
+    re.S,
+)
+
+
+def _git_subcommands(command: str, _depth: int = 0):
     """Yield the git subcommand each shell segment runs.
 
     Parse contract (mirrored by omp/mandates.ts): split on && || ; |, skip leading
     NAME=value assignments, the first token must be `git` (or a path ending /git),
     consume -C <v>, -c <v>, --git-dir=/--work-tree=/--exec-path=/--namespace= and a
     bare `--`; the next token is the subcommand. So `echo git commit` and
-    `git stash commit` run no commit; `git commit --amend` does.
+    `git stash commit` run no commit; `git commit --amend` does. The quoted script of
+    `sh|bash|zsh -c` is parsed the same way (two levels deep), so wrapping is no bypass.
     """
     import shlex
 
     command = command or ""
     if "git" not in command:
         return
+    if _depth < 2:
+        for m in _SHELL_C.finditer(command[: _SEGMENT_HEAD * 4]):
+            yield from _git_subcommands(m.group(2), _depth + 1)
     for segment in _SEGMENT_SPLIT.split(command, _MAX_SEGMENTS):
         segment = segment[:_SEGMENT_HEAD]
         if "git" not in segment:

@@ -15,6 +15,7 @@ Guarantees, each pinned by a unit test in test_worker_report_gate.py:
   or show up in `git status`) - test_nonsense_done_blocks and friends;
 - every error fails open and leaves an atlas_faults row (test_malformed_stdin_silent)."""
 
+import hashlib
 import json
 import os
 import re
@@ -38,6 +39,8 @@ ARROW_RE = re.compile(r"->|\u2192|=>")
 ANNOTATION_RE = re.compile(r"\s*\(([^)]*)\)\s*$")
 GLOB_CHARS = set("*?{}[]")
 # Annotations that say the entry is intentionally not a surviving file.
+# A non-zero failure count in the evidence contradicts a DONE report ("5 failed", "2 errors").
+FAILING_RE = re.compile(r"(?<![\d.])[1-9]\d*\s+(?:failed|failures?|errors?)\b", re.I)
 GONE_RE = re.compile(r"delet|remov|throwaway|scratch|temp|not committed", re.I)
 
 
@@ -177,6 +180,10 @@ def check_report(msg, agent_type, cwd, report):
             problems.append(
                 "a DONE report needs at least one numbered EVIDENCE line with a command and its real output (`1. <command> -> <output>`)"
             )
+        if FAILING_RE.search(sec.get("EVIDENCE", "")):
+            problems.append(
+                "a DONE report's EVIDENCE shows failing results; report FAILED or fix and re-run"
+            )
         if agent_type in WRITERS:
             gone = missing_files(sec.get("FILES_CHANGED", ""), cwd)
             if gone:
@@ -273,7 +280,9 @@ def main():
     if not problems:
         finish_member(p, msg, report)
         return
-    if not marker_claimed(p.get("agent_id") or "unknown"):
+    # No agent_id: key on the message so one malformed report does not exempt every later one.
+    key = p.get("agent_id") or "unknown-" + hashlib.sha1(msg.encode()).hexdigest()[:12]
+    if not marker_claimed(key):
         finish_member(p)  # blocked once already: this is the final report
         return
     reason = (

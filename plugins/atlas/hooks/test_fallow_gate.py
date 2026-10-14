@@ -53,6 +53,17 @@ class PatternTests(unittest.TestCase):
         ):
             self.assertTrue(fg._is_git_commit_or_push(cmd), cmd)
 
+    def test_shell_c_wrapped_git_is_gated(self):
+        for cmd in (
+            "sh -c 'git commit -m x'",
+            'bash -c "git push"',
+            "bash -lc 'cd r; git commit -am m'",
+            "sh -c \"bash -c 'git push'\"",
+        ):
+            self.assertTrue(fg._is_git_commit_or_push(cmd), cmd)
+        self.assertFalse(fg._is_git_commit_or_push("sh -c 'git status'"))
+        self.assertFalse(fg._is_git_commit_or_push("bash -c 'echo git commit'"))
+
     def test_non_gate_commands(self):
         for cmd in (
             "git status",

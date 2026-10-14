@@ -179,6 +179,24 @@ class WorkerReportGateTest(unittest.TestCase):
         self.run_hook(payload())
         self.assertNotEqual(self.run_hook(payload(agent_id="a2")).stdout, "")
 
+    def test_missing_agent_id_does_not_share_one_marker(self):
+        # Without an agent_id every agent used to share the "unknown" marker, so only the
+        # first malformed report was ever blocked.
+        p1 = payload(last_assistant_message="prose")
+        p2 = payload(last_assistant_message="prose2", agent_type="atlas:y")
+        del p1["agent_id"], p2["agent_id"]
+        self.assertNotEqual(self.run_hook(p1).stdout, "")
+        self.assertNotEqual(self.run_hook(p2).stdout, "")
+        self.assertEqual(self.run_hook(p1).stdout, "")
+
+    def test_done_with_failing_test_evidence_blocks(self):
+        bad = COMPLIANT.replace("1. ls -> ok", "1. pytest -> 5 failed, 2 passed")
+        self.assertIn(
+            "failing", self.run_hook(payload(last_assistant_message=bad)).stdout
+        )
+        ok = COMPLIANT.replace("1. ls -> ok", "1. pytest -> 7 passed, 0 failed")
+        self.assertEqual(self.run_hook(payload(last_assistant_message=ok)).stdout, "")
+
     def test_block_reason_is_one_line_format_correction(self):
         r = self.run_hook(payload())
         self.assertEqual(r.returncode, 0)
