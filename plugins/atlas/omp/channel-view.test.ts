@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WIDGET_KEY, createChannelView, liveWorkers, spinFrame, todoSummary, finishedMembers, formatNote, readChannelNotes, registerChannelView } from "./channel-view";
+import { WIDGET_KEY, createChannelView, laneTool, liveWorkers, registerLaneToolRecorder, spinFrame, todoSummary, finishedMembers, formatNote, readChannelNotes, registerChannelView } from "./channel-view";
 import { createGatesCache, renderPanel, type PanelModel } from "./mission-panel";
 import { isTerminalYield, registerStopBridge } from "./stop-bridge";
 import { registerWorkerReport } from "./worker-report";
@@ -374,4 +374,83 @@ test("gates cache: a failing command becomes an error group and still throttles"
 	await new Promise(r => setTimeout(r, 0));
 	expect(calls).toBe(1);
 	expect(cache.read()?.[0]?.error).toBe("boom");
+});
+
+// ---- lanes: tmux team workers and task subs with their live tool + target ----
+
+const FIXTURE_LOG = join(import.meta.dir, "..", "scripts", "fixtures", "claude_stream.jsonl");
+const live = (root: string, names: string[], ended: string[] = []) =>
+	writeFileSync(
+		join(root, ".atlas", ".run", "channels.json"),
+		JSON.stringify({ version: 1, channels: { [CHAN]: { members: [{ name: "lead-abc", role: "lead" }, ...names.map(name => (ended.includes(name) ? { name, ended_at: 1, exit_code: 0 } : { name }))] } } }),
+	);
+const toolUse = (id: string, name: string, input: Record<string, unknown>) =>
+	`${JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id, name, input }] } })}\n`;
+const toolResult = (id: string) => `${JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] } })}\n`;
+const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
+
+test("team lanes: last tool_use from each worker's stream-json log, mcp prefix stripped, dimmed between calls; finished workers drop", () => {
+	const f = fixture();
+	const logs = join(f.root, ".atlas", ".run", "logs");
+	mkdirSync(logs, { recursive: true });
+	writeFileSync(join(logs, "audit-1.log"), readFileSync(FIXTURE_LOG)); // real claude worker log: last call `Bash echo hi`, already answered
+	writeFileSync(join(logs, "audit-2.log"), `garbage torn line\n${toolUse("t1", "mcp__plugin_context-mode_context-mode__ctx_search", { query: "where is the widget mounted from the team spawn path today" })}`);
+	writeFileSync(join(logs, "audit-3.log"), toolUse("t2", "Read", { file_path: "/x/y/shared.ts" }) + toolResult("t2") + toolUse("t3", "Edit", { file_path: "/x/y/mission-panel.ts" }));
+	live(f.root, ["audit-1", "audit-2", "audit-3"]);
+	const { calls, ui, timers, view } = harness();
+	view.open(ui, { channel: CHAN, members: ["audit-1", "audit-2", "audit-3"], cwd: f.root });
+	const out = plain(calls.at(-1));
+	expect(out).toContain("Bash echo hi");
+	expect(out).toContain("ctx_search where is the widget mounted from the t");
+	expect(out).not.toContain("mcp__");
+	expect(out).toContain("Edit mission-panel.ts");
+	const raw = (calls.at(-1) ?? []).join("\n");
+	expect(raw).toContain("\x1b[2mBash echo hi"); // answered: dim
+	expect(raw).not.toContain("\x1b[2mEdit mission-panel.ts"); // in flight: normal
+	const widths = (calls.at(-1) ?? []).map(l => [...stripAnsi(l)].length);
+	expect(new Set(widths).size).toBe(1); // ANSI in a lane never skews the frame
+
+	live(f.root, ["audit-1", "audit-2", "audit-3"], ["audit-2"]); // audit-2 posted its exit
+	timers.iv?.();
+	expect(plain(calls.at(-1))).not.toContain("audit-2");
+	expect(plain(calls.at(-1))).toContain("▌ audit-3");
+
+	live(f.root, ["audit-1", "audit-2", "audit-3"], ["audit-1", "audit-2", "audit-3"]);
+	timers.iv?.();
+	expect(plain(calls.at(-1))).toContain("idle · last run: 3 workers");
+	writeFileSync(join(f.root, ".atlas", ".run", "channels.json"), JSON.stringify({ version: 1, channels: {} })); // atlas_team reap drops the channel
+	timers.iv?.();
+	expect(plain(calls.at(-1))).not.toContain("▌ audit"); // finished stays finished: lanes never resurrect
+});
+
+test("a team reaped between polls (channel gone after it was seen) ends every lane", () => {
+	const f = fixture();
+	live(f.root, ["w1", "w2"]);
+	const { calls, ui, timers, view } = harness();
+	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root });
+	expect(plain(calls.at(-1))).toContain("▌ w1");
+	writeFileSync(join(f.root, ".atlas", ".run", "channels.json"), JSON.stringify({ version: 1, channels: {} }));
+	timers.iv?.();
+	expect(plain(calls.at(-1))).toContain("idle · last run: 2 workers");
+});
+
+test("omp workers and task subs record their own tool: worker env name or sub id, active on call, dim after result", () => {
+	const f = fixture();
+	type H = (e: unknown, c: unknown) => unknown;
+	const worker: Record<string, H> = {};
+	registerLaneToolRecorder({ on: (ev: string, h: H) => void (worker[ev] = h) } as never, { ATLAS_WORKER_NAME: "audit-1" });
+	const main = { cwd: f.root, agent: { kind: "main", id: "Main", name: "main" } };
+	worker.tool_call?.({ toolName: "bash", toolCallId: "c1", input: { command: "sleep 5" } }, main);
+	expect(laneTool(f.root, "audit-1")).toEqual({ tool: "bash", target: "sleep 5", active: true });
+	worker.tool_result?.({ toolName: "bash", toolCallId: "c1", input: { command: "sleep 5" } }, main);
+	expect(laneTool(f.root, "audit-1")).toEqual({ tool: "bash", target: "sleep 5", active: false });
+
+	const lead: Record<string, H> = {};
+	registerLaneToolRecorder({ on: (ev: string, h: H) => void (lead[ev] = h) } as never, {});
+	lead.tool_call?.({ toolName: "read", toolCallId: "c2", input: { path: "/a/b/c.ts" } }, main); // the lead itself: no lane
+	expect(laneTool(f.root, "Main")).toBeUndefined();
+	lead.tool_call?.({ toolName: "read", toolCallId: "c3", input: { path: "/a/b/c.ts" } }, { cwd: f.root, agent: { kind: "sub", id: "Probe-3", name: "explore" } });
+	expect(laneTool(f.root, "Probe")).toEqual({ tool: "read", target: "c.ts", active: true });
+	lead.tool_call?.({ toolName: "read", toolCallId: "c4", input: { path: "x" } }, { cwd: f.root, agent: { kind: "sub", id: "../evil", name: "x" } });
+	expect(laneTool(f.root, "../evil")).toBeUndefined();
 });

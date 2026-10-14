@@ -15,10 +15,10 @@
  * Rendering lives in mission-panel.ts: framed Mission Control panel, gates from a 10s-throttled async atlas_gates.py
  * cache; omp widget strings go through pi-tui Text, which is ANSI aware, so borders and accents are colored.
  */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, writeFileSync } from "node:fs";
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { type GatesCache, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
+import { type GatesCache, type LaneTool, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
 import { gatesArmed } from "./scope";
 
 export const WIDGET_KEY = "atlas-channel";
@@ -120,9 +120,138 @@ function idleSummary(workers: PanelWorker[], members: number, elapsedMs: number)
 const maxSeq = (notes: Note[]) => notes.reduce((m, n) => Math.max(m, n.seq ?? 0), 0);
 
 /** Lane rows: running members; before the registry lists anyone, the dispatched members not yet finished. */
-function panelWorkers(live: LiveWorker[], pending: string[], nowMs: number): PanelWorker[] {
+function panelWorkers(root: string, live: LiveWorker[], pending: string[], nowMs: number): PanelWorker[] {
 	const src: LiveWorker[] = live.length ? live : pending.map(name => ({ name }));
-	return src.map(w => ({ name: w.name, secs: w.joined ? Math.max(0, Math.floor(nowMs / 1000 - w.joined)) : 0 }));
+	return src.map(w => ({ name: w.name, secs: w.joined ? Math.max(0, Math.floor(nowMs / 1000 - w.joined)) : 0, tool: laneTool(root, w.name) }));
+}
+
+// ---- per-lane current tool -------------------------------------------------------------------------------------------
+// Two sources, one file layout under <root>/.atlas/.run/logs: a claude team worker's pane log is stream-json
+// (<name>.log, atlas_mux harness_argv), so its last tool_use is read from the tail; an omp team worker (`omp -p` prints
+// plain text) and an omp `task` sub both load this extension, so registerLaneToolRecorder writes <name>.tool.json.
+
+const LOG_TAIL_BYTES = 64 * 1024;
+const TARGET_MAX = 40;
+const LANE_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/; // atlas_mux NAME_RE: also keeps a name from escaping logs/
+
+const logsDir = (root: string) => nodePath.join(root, ".atlas", ".run", "logs");
+
+/** `mcp__<server>__<tool>` -> `<tool>`; other names unchanged. */
+const shortTool = (name: string) => name.replace(/^mcp__.*__/, "");
+
+const asRecord = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
+const firstText = (vals: unknown[]): string | undefined => vals.find((v): v is string => typeof v === "string" && v !== "");
+
+/** Basename of a path argument, else the first TARGET_MAX chars of a command/pattern/query; "" when none. */
+function toolTarget(input: unknown): string {
+	const i = asRecord(input);
+	const p = firstText([i.file_path, i.path]);
+	if (p) return nodePath.basename(p);
+	return (firstText([i.command, i.pattern, i.query]) ?? "").replace(/\s+/g, " ").trim().slice(0, TARGET_MAX);
+}
+
+function readTail(file: string, bytes: number): string {
+	const fd = openSync(file, "r");
+	try {
+		const size = fstatSync(fd).size;
+		const len = Math.min(size, bytes);
+		const buf = Buffer.alloc(len);
+		readSync(fd, buf, 0, len, size - len);
+		return buf.toString("utf8");
+	} finally {
+		closeSync(fd);
+	}
+}
+
+type StreamBlock = { type?: string; id?: string; name?: string; input?: unknown; tool_use_id?: string };
+type StreamTool = LaneTool & { id?: string };
+
+/** Content blocks of one stream-json line; [] for a torn or non-JSON line (a tail usually starts mid-record). */
+function streamBlocks(raw: string): StreamBlock[] {
+	try {
+		const c = JSON.parse(raw)?.message?.content;
+		return Array.isArray(c) ? c.map(asRecord) : [];
+	} catch {
+		return [];
+	}
+}
+
+/** A tool_use starts a new current tool; the tool_result answering it makes that tool inactive. */
+const isToolUse = (b: StreamBlock): b is StreamBlock & { name: string } => b.type === "tool_use" && !!b.name;
+const answers = (b: StreamBlock, last: StreamTool) => b.type === "tool_result" && b.tool_use_id === last.id;
+function applyBlock(last: StreamTool | undefined, b: StreamBlock): StreamTool | undefined {
+	if (isToolUse(b)) return { tool: shortTool(b.name), target: toolTarget(b.input), active: true, id: b.id };
+	return last && answers(b, last) ? { ...last, active: false } : last;
+}
+
+/** Last tool_use in a stream-json tail; inactive once its tool_result followed. */
+function lastStreamTool(text: string): LaneTool | undefined {
+	const last = text.split("\n").flatMap(streamBlocks).reduce(applyBlock, undefined);
+	return last && { tool: last.tool, target: last.target, active: last.active };
+}
+
+/** <name>.tool.json written by registerLaneToolRecorder; undefined when absent or malformed. */
+function recordedTool(root: string, name: string): LaneTool | undefined {
+	try {
+		const rec = asRecord(JSON.parse(readFileSync(nodePath.join(logsDir(root), `${name}.tool.json`), "utf8")));
+		return typeof rec.tool === "string" ? { tool: rec.tool, target: String(rec.target ?? ""), active: rec.active === true } : undefined;
+	} catch {
+		return undefined; // no recorder file: a claude worker
+	}
+}
+
+function loggedTool(root: string, name: string): LaneTool | undefined {
+	try {
+		return lastStreamTool(readTail(nodePath.join(logsDir(root), `${name}.log`), LOG_TAIL_BYTES));
+	} catch {
+		return undefined; // no log yet
+	}
+}
+
+/** The tool a lane is running (active) or ran last (inactive): <name>.tool.json first, else the stream-json log tail. */
+export function laneTool(root: string, name: string): LaneTool | undefined {
+	if (!LANE_NAME_RE.test(name)) return undefined;
+	return recordedTool(root, name) ?? loggedTool(root, name);
+}
+
+type RecorderCtx = { cwd?: string; agent?: { kind?: string; id?: string; name?: string } };
+type ToolEvent = { toolName?: string; input?: unknown };
+
+const isLaneSub = (agent: RecorderCtx["agent"]) => agent?.kind === "sub" && agent.name !== "advisor";
+/** A task sub's lane name: its omp id minus the `-<n>` suffix; none for the lead or the advisor. */
+const subName = (agent: RecorderCtx["agent"]) => (isLaneSub(agent) ? String(agent?.id ?? "").replace(/-\d+$/, "") : undefined);
+const workerName = (env: Record<string, string | undefined>) => (env.ATLAS_WORKER_NAME ?? "").trim();
+
+/** Lane name of this session: the team worker's ATLAS_WORKER_NAME, else a task sub's name; only a safe file name. */
+function recorderName(ctx: RecorderCtx, env: Record<string, string | undefined>): string | undefined {
+	const name = workerName(env) || subName(ctx.agent);
+	return name && LANE_NAME_RE.test(name) ? name : undefined;
+}
+
+/** <root>/.atlas/.run/logs for a session that has a lane and an armed (.atlas) tree; undefined otherwise. */
+function recorderDir(ctx: RecorderCtx, env: Record<string, string | undefined>): string | undefined {
+	if (env.ATLAS_CHANNELS === "off" || !ctx.cwd) return undefined;
+	const root = boardRoot(ctx.cwd, env);
+	return existsSync(nodePath.join(root, ".atlas")) ? logsDir(root) : undefined;
+}
+
+/** Workers and subs write their current tool for the lead's lanes; the lead and unarmed trees write nothing. */
+export function registerLaneToolRecorder(pi: Pick<ExtensionAPI, "on">, env: Record<string, string | undefined> = process.env): void {
+	const record = (active: boolean) => (event: ToolEvent, ctx: RecorderCtx) => {
+		try {
+			const name = recorderName(ctx, env);
+			const dir = name && event.toolName ? recorderDir(ctx, env) : undefined;
+			if (!dir) return undefined;
+			mkdirSync(dir, { recursive: true });
+			const rec = { tool: shortTool(String(event.toolName)), target: toolTarget(event.input), active, ts: Date.now() / 1000 };
+			writeFileSync(nodePath.join(dir, `${name}.tool.json`), JSON.stringify(rec));
+		} catch {
+			// fail soft: a lane without a tool still renders "working"
+		}
+		return undefined;
+	};
+	pi.on("tool_call", record(true) as never);
+	pi.on("tool_result", record(false) as never);
 }
 
 /** This session's todo progress, scoped like the Claude mod (mod/data/todos.ts): other sessions' rows and advisor notes never count. */
@@ -197,6 +326,15 @@ export function finishedMembers(root: string, channel: string): Set<string> {
 	}
 }
 
+/** Whether channels.json lists `channel`; undefined when the registry is missing or unreadable (not proof of a reap). */
+function channelListed(root: string, channel: string): boolean | undefined {
+	try {
+		return !!JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "channels.json"), "utf8"))?.channels?.[channel];
+	} catch {
+		return undefined;
+	}
+}
+
 export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	const env = deps.env ?? process.env;
 	const pollMs = deps.pollMs ?? POLL_MS;
@@ -231,11 +369,24 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	let painted = "";
 	let tickN = 0;
 
+	// Sticky: a member once finished stays finished, and a channel that vanishes after it was seen (atlas_team reap
+	// drops it from channels.json) finishes everyone. Without this the pending fallback repaints every reaped lane.
+	let ended = new Set<string>();
+	let seenChannel = false;
+
 	const stopPoll = () => {
 		if (poll !== undefined) clearIv(poll);
 		poll = undefined;
 	};
-	const finished = () => (info ? finishedMembers(info.root, info.channel) : new Set<string>());
+	const goneMembers = (i: ChannelOpenInfo & { root: string }): Iterable<string> => {
+		const listed = channelListed(i.root, i.channel);
+		if (listed) seenChannel = true;
+		return listed === false && seenChannel ? i.members : finishedMembers(i.root, i.channel);
+	};
+	const finished = () => {
+		if (info) for (const m of goneMembers(info)) ended.add(m);
+		return ended;
+	};
 
 	const columns = () => deps.columns?.() ?? process.stdout.columns;
 	const refreshGates = (i: ChannelOpenInfo & { root: string }) => {
@@ -249,7 +400,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		const pending = info.members.filter(m => !fin.has(m));
 		const todos = todoSummary(info.root, info.sessionId);
 		refreshGates(info);
-		const workers = panelWorkers(liveWorkers(info.root, info.channel), pending, now());
+		const workers = panelWorkers(info.root, liveWorkers(info.root, info.channel), pending, now());
 		const lines = renderPanel({
 			width: panelWidth(columns()),
 			maxLines: MAX_LINES,
@@ -307,7 +458,12 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 				if (env.ATLAS_CHANNELS === "off" || !i.channel) return;
 				if (linger !== undefined) clearTo(linger);
 				linger = undefined;
-				const members = info?.channel === i.channel ? [...new Set([...info.members, ...i.members])] : i.members;
+				const same = info?.channel === i.channel;
+				const members = same && info ? [...new Set([...info.members, ...i.members])] : i.members;
+				if (!same) {
+					ended = new Set();
+					seenChannel = false;
+				}
 				ui = u;
 				info = { ...i, members, root: boardRoot(i.cwd, env) };
 				openedAt = now();
