@@ -6636,5 +6636,22 @@
     "status": "verified",
     "verified_at": "2026-10-14T00:18:06+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "live-220",
+    "surface": "plugins/atlas/hooks/dispatch_tripwire.py",
+    "category": "correctness",
+    "severity": "high",
+    "title": "Live 12.2.0: band/latency/faults PASS; SCOPE gate, WAVE strip, wave_id, omp widget-during-team FAIL",
+    "evidence": [
+      ".atlas/evidence/optimize-2026-10-13/live-220.md + live-220.ansi. V1 PASS, V2 FAIL(partial: card ok, no result line, no WAVE strip), V3 FAIL (2 unscoped atlas:explorer dispatches allowed), V4 flow PASS / wave_id 0 of 16 FAIL, V5 FAIL(partial: widget absent during atlas_team; audit/low worker hung exit 129; medium team ok; lead reaped), V6 PASS (SessionStart 223->124 ms, Stop 219->190), V7 PASS (0 new faults)."
+    ],
+    "doc_refs": [],
+    "reproduction": "Unscoped atlas:explorer dispatch in a CC session after its first Stop: allowed. dispatch_tripwire._pre_tool_use returns when atlas_db.current_run_id() is None (ended_at set at first Stop); first-offense unbounded advisory returns before _scope_gate.",
+    "proposed_fix": "Gate on latest_run_id/is_orchestrating instead of an open run, and run _scope_gate before the F11 advisory return; log team members as dispatches with wave_id; render WAVE strip for batched Agent calls; show omp widget lanes for atlas_team workers.",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-14T01:36:11+00:00",
+    "verified_by": "verifier-live220"
   }
 ]
