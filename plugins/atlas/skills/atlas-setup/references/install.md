@@ -27,9 +27,9 @@ anything discoverable (stack, existing config, dependency presence) is detected,
 asked.
 
 Two entry points share this methodology:
-- the `/atlas` command (heavy, on demand) runs all stages,
+- `/atlas-setup install` (heavy, on demand) runs all stages,
 - the SessionStart boot hook (`hooks/session_boot.py`) does the fast read-only
-  subset every session (status + lessons) and points the user at `/atlas` for the
+  subset every session (status + lessons) and points the user at `/atlas-setup` for the
   rest.
 
 ## Stages

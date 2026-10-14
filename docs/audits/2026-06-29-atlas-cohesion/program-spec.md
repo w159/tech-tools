@@ -64,8 +64,8 @@ These are load-bearing and shared. Flagged `[DECISION]` are the ones worth your 
   is the single source the branded graph and the launcher both read.
 
 - **D4 — Naming.** `atlas-handoff` (session-resume checkpoint) keeps its name and meaning.
-  The new launcher is `atlas-launch`. The cartographer/survey `handoffs/` artifacts keep
-  their name but their prompts target `atlas-launch`, not the non-existent `/atlas-engine`
+  The new launcher is `atlas-audit act`. The cartographer/survey `handoffs/` artifacts keep
+  their name but their prompts target `atlas-audit act`, not the non-existent `/atlas-engine`
   command. A short note in each skill's Output section disambiguates the two "handoff" senses.
 
 - **D5 — Propagation.** Per repo `CLAUDE.md`, every change lands across all owning layers:
@@ -153,29 +153,29 @@ Changes:
 - Build `hub/manifest.json` (D3): map every `handoffs/<id>.md` and every `report.md` finding
   to its graphify `node_id` by file:line.
 - Branded overlay `hub/index.html`: the graphify graph with actionable nodes marked; clicking
-  a marked node shows the finding, the handoff, and the exact `atlas-launch <id>` command.
+  a marked node shows the finding, the handoff, and the exact `atlas-audit act <id>` command.
   Branding (approved): the **Atlas theme throughout** — the cartography/discovery narrative
   (maps, charts, compass, sextant, expedition) and an Atlas token set (its own palette,
   type, and iconography), NOT the Henssler client tokens. The theme/vocabulary is consistent
   with the existing skill names (cartographer, survey, sextant, expedition, harbor, orbit).
-- New `commands/atlas-launch.md`: `atlas-launch <node-id>` reads the manifest, loads the
+- New `commands/atlas-audit act.md`: `atlas-audit act <node-id>` reads the manifest, loads the
   handoff prompt, and invokes the existing `atlas-engine` skill with it; no-arg mode lists
   actionable nodes from the most recent run dir. This sets the D1 orchestration marker
-  (closing the loop with WS1/WS2). No new `/atlas-engine` command is created — `atlas-launch`
+  (closing the loop with WS1/WS2). No new `/atlas-engine` command is created — `atlas-audit act`
   is the single launcher and `atlas-engine` remains the orchestration skill it invokes.
 - Make the handoff target real: cartographer/survey `handoffs/` prompts reference
-  `atlas-launch` (not the non-existent `/atlas-engine` command).
+  `atlas-audit act` (not the non-existent `/atlas-engine` command).
 - **Harden `atlas-engine` (approved scope add).** As the orchestration substrate that
-  `atlas-launch` invokes, atlas-engine owns: setting the D1 marker on start, emitting the
+  `atlas-audit act` invokes, atlas-engine owns: setting the D1 marker on start, emitting the
   dispatch/recall/verifier signals WS2 records, and reliably consuming a handoff prompt as
   its opening task. Concrete engine reliability gaps surfaced while wiring WS1/WS2 (e.g.
   `finalize_run`/`derive_run_metrics` wiring, marker lifecycle) are fixed here so the loop
   lands on an engine that actually works, not one that "should."
 
 Acceptance: after a survey run, `hub/index.html` opens and shows marked nodes; the listed
-`/atlas-launch <id>` for one node starts an atlas-engine session pre-loaded with that handoff
+`/atlas-audit act <id>` for one node starts an atlas-engine session pre-loaded with that handoff
 (orchestration marker set, tripwire/gate now correctly active). Verified by opening the HTML,
-running one `atlas-launch` end-to-end, and confirming the new session's first message carries
+running one `atlas-audit act` end-to-end, and confirming the new session's first message carries
 the handoff content and `runs.orchestrating=1`.
 
 Propagation: `plugin.json:4` command count (15→16 launchers, or 17 with `/atlas-engine`);
@@ -215,7 +215,7 @@ Each phase ends with its acceptance check run and evidence captured before the n
 - Hook changes: extend the existing `hooks/test_*.py` (pytest) with orchestrating on/off
   cases. WS2 adds dispatch-logging and ingest-classifier tests.
 - graphify: a scoped-run smoke test on one MCP server source dir.
-- Hub: manual open of `hub/index.html` + one real `atlas-launch` round-trip.
+- Hub: manual open of `hub/index.html` + one real `atlas-audit act` round-trip.
 - Server/bundle suites (`node test-mcp-tools.mjs`) are unaffected (no connector changes) but
   run once at the end to confirm no regression.
 
@@ -224,7 +224,7 @@ Each phase ends with its acceptance check run and evidence captured before the n
 1. D1 mechanism: run-row flag + sentinel file, as proposed.
 2. WS4 branding: Atlas theme throughout — cartography/discovery narrative + Atlas tokens, not
    Henssler.
-3. WS4 entry point: `atlas-launch` is the single launcher and invokes the existing
+3. WS4 entry point: `atlas-audit act` is the single launcher and invokes the existing
    `atlas-engine` skill; no new `/atlas-engine` command. `atlas-engine` is hardened as part of
    WS4.
 4. WS3 root detection: dynamic self-discovery by exploring the workspace + graphify's own

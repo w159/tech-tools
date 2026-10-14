@@ -1,22 +1,24 @@
 ---
 name: atlas-audit
-description: "Audits a codebase: CODE (quality, security, hotspots, dead code, docs drift), ARCHITECTURE (flowcharts, duplication) or SELF (atlas run health). Use to audit a repo or map architecture."
-when_to_use: "full-codebase quality or security audit, OWASP review, architecture map, find duplication, dead code, coverage gaps, atlas run health, session transcript forensics"
+description: "Audits a codebase: CODE (quality, security, hotspots, dead code, docs drift), ARCHITECTURE (flowcharts, duplication), SELF (atlas run health), or ACT (open a remediation session for one audit finding by id; no id lists them). Use to audit a repo, map architecture or fix a finding."
+when_to_use: "full-codebase quality or security audit, OWASP review, architecture map, find duplication, dead code, coverage gaps, atlas run health, session transcript forensics, fix finding, remediate audit finding, pick a finding, act on audit results, list findings"
+argument-hint: '[act [finding-id]]'
 allowed-tools: Read, Glob, Grep, Bash, Agent, Task
 ---
 
 
 # atlas-audit
 
-Three modes; pick by the ask, never by question:
+Four modes; pick by the ask, never by question:
 
 | Mode | Trigger | Where |
 |---|---|---|
 | code (default) | "audit this", quality/security review | this file |
 | architecture | "map the architecture", duplication hunt, pre-refactor | `references/architecture-map.md` |
 | self | atlas run health, context/asset waste, session forensics | `references/self-telemetry.md` |
+| act | `act [finding-id]`: remediate one finding from the latest audit hub; no id lists the actionable findings | `references/act-on-finding.md` |
 
-The rest of this file is the code mode.
+For act mode, read `${CLAUDE_SKILL_DIR}/references/act-on-finding.md` and follow it. The rest of this file is the code mode.
 
 Discovery-first, comprehensive audit swarm. You supply no arguments. The survey builds a knowledge graph of the codebase, aims every dimension reviewer at the hottest nodes that graph surfaces, verifies every finding adversarially, and delivers a prioritized, file:line-anchored report under docs/audits/atlas-audit-<date>/.
 
@@ -89,23 +91,23 @@ docs/audits/atlas-audit-<date>/
     docs-drift.md           - verified code-vs-docs drift findings (file:line)
   report.md                 - prioritized master list: all verified findings, severity HIGH/MED/LOW
   handoffs/
-    <finding-id>.md         - one handoff prompt per accepted finding (ends with `atlas-launch <finding-id>`)
+    <finding-id>.md         - one handoff prompt per accepted finding (ends with `atlas-audit act <finding-id>`)
   hub/
     manifest.json           - node<->finding bridge (each handoff mapped to its graphify node)
-    index.html              - branded Atlas expedition map; click a node -> finding + atlas-launch cmd
+    index.html              - branded Atlas expedition map; click a node -> finding + `atlas-audit act` cmd
 ```
 
 Each finding in report.md carries: dimension, severity (HIGH / MED / LOW), file:line, a one-sentence description of the flaw, and the verifier's evidence. Rejected findings are not mentioned.
 
 **Compliance mapping (optional, elicited):** when the user selected frameworks at elicitation time, each verified finding additionally carries a `compliance:` line mapping it to the specific control IDs from the chosen frameworks that the finding touches - e.g. FTC Safeguards section (9.x), GLBA 16 CFR 314.4(x), SOC 2 CC-series criterion, or an OWASP ASVS requirement ID. Map from the finding's dimension and described flaw; cite the control ID, never paraphrase it into a new numbering. If a verified finding touches no control in the selected frameworks, state that explicitly rather than forcing a tag. Frameworks were not selected: emit no `compliance:` lines at all. Each verified verdict is also appended to `.atlas/.run/findings.json` by the `atlas:verifier` via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py`; that ledger's entry schema, verified stamp, and append-only intent are documented in `${CLAUDE_PLUGIN_ROOT}/references/findings-schema.md`. The ledger holds verdicts and evidence references only - findings must never carry credential values; reference configuration by environment variable NAME only.
 
-The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each `<finding-id>` used as a filename must be a filesystem-safe slug: lowercase, with every character outside `a-z 0-9 . _ -` (notably the Windows-reserved set `< > : " / \ | ? *`, plus spaces) replaced by `-`. A colon in any audit filename makes the repo un-checkout-able on Windows and blocks everyone syncing it. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, specifies which atlas squad agent should lead the fix, and ends with `Remediate with: atlas-launch <finding-id>`. After writing handoffs/, the orchestrator builds the hub so findings are navigable and one-command launchable:
+The orchestrator writes handoff prompts only for findings the user accepts for remediation. Each `<finding-id>` used as a filename must be a filesystem-safe slug: lowercase, with every character outside `a-z 0-9 . _ -` (notably the Windows-reserved set `< > : " / \ | ? *`, plus spaces) replaced by `-`. A colon in any audit filename makes the repo un-checkout-able on Windows and blocks everyone syncing it. Each handoff is self-contained: it names the file:line, states the flaw and acceptance criterion, specifies which atlas squad agent should lead the fix, and ends with `Remediate with: atlas-audit act <finding-id>`. After writing handoffs/, the orchestrator builds the hub so findings are navigable and one-command launchable:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/build_hub.py" "docs/audits/atlas-audit-<date>" <each per-root graphify-out/graph.json>
 ```
 
-`atlas-launch <finding-id>` then loads that handoff into the `atlas-orchestrate` skill to remediate it. (`atlas-launch` is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
+`atlas-audit act <finding-id>` then loads that handoff into the `atlas-orchestrate` skill to remediate it. (Act mode is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
 
 ## Workflow shape
 
@@ -145,3 +147,10 @@ The orchestrator collects all verified findings, assigns final severity ordering
 - [Lens set](references/lens-set.md): the three self-mode lenses (run health, asset/context audit, session forensics). Read when running `self` mode.
 - [Graph-to-hub pipeline](references/graph-to-hub-pipeline.md): how Phase 4 turns graphify output into the knowledge-graph hub. Read when building the hub or debugging one that came out wrong.
 - [Findings ledger schema](${CLAUDE_PLUGIN_ROOT}/references/findings-schema.md): the `.atlas/.run/findings.json` entry schema, verified stamp, and append-only intent, derived from `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py`. Read when a gate or reviewer asks about ledger contents.
+
+## Mode references
+
+Open each when its mode reaches that step:
+
+- `references/launch-checklist.md`: act mode: the ordered launch checklist
+- `templates/launch-artifact.seed.md`: act mode: seed for the resumption artifact

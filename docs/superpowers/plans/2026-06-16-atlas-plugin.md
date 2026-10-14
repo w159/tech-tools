@@ -850,7 +850,7 @@ Dispatch `atlas:verifier` (or `general-purpose`) to independently confirm: `/atl
 - [ ] **Step 1: Confirm structure end-to-end**
 
 ```bash
-ls plugins/atlas/commands/atlas.md plugins/atlas/commands/atlas-feature.md
+ls plugins/atlas/commands/atlas.md plugins/atlas/commands/atlas-orchestrate.md
 ls plugins/atlas/agents/explorer.md
 test -f plugins/atlas/hooks/hooks.json && echo "hooks.json present"
 python3 plugins/atlas/scripts/discover_capabilities.py . >/dev/null && echo "discovery ok"

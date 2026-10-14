@@ -154,7 +154,7 @@ class MainInProcessTest(unittest.TestCase):
         )
         self.assertEqual(
             data["systemMessage"],
-            "Atlas ready (run the `atlas` skill to complete setup)",
+            "Atlas ready (run the `atlas-setup` skill to complete setup)",
         )
         self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
 

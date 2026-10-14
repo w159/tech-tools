@@ -1045,7 +1045,7 @@ def main():
     ]
     if absent:
         lines.append(
-            f"Setup gap: {', '.join(absent)} absent - run the `atlas` skill to install."
+            f"Setup gap: {', '.join(absent)} absent - run the `atlas-setup` skill to install."
         )
     if fallow:
         lines.append(
@@ -1128,7 +1128,7 @@ def main():
             lines.append(colony)
     sys_msg = "Atlas ready"
     if not (mem and ctx):
-        sys_msg += " (run the `atlas` skill to complete setup)"
+        sys_msg += " (run the `atlas-setup` skill to complete setup)"
     if active_style and active_style != ATLAS_OUTPUT_STYLE:
         sys_msg += (
             f" | outputStyle={active_style!r} (docs: plugin style should still win; "

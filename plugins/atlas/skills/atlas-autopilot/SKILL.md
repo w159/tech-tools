@@ -35,7 +35,7 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 ## Hard behavioral lines
 
-1. **Push, PR, and merge always require explicit user confirmation.** The pipeline runs autonomously through local commit and then STOPS. `atlas-ship` and `atlas-babysit-pr` are invoked only after the user says yes at the gate. There is no flag, budget, or CI pressure that waives this.
+1. **Push, PR, and merge always require explicit user confirmation.** The pipeline runs autonomously through local commit and then STOPS. `atlas-ship` and `atlas-run-watch` are invoked only after the user says yes at the gate. There is no flag, budget, or CI pressure that waives this.
 2. **Only a verified, complete work return advances.** Execution (via `atlas-orchestrate`) must return with independent verification evidence - verifier verdicts stamped in `.atlas/.run/findings.json`, red/green or runtime proof under `.atlas/evidence/`. A partial, unverified, or self-graded return does not advance to simplify/review/commit; recover or re-dispatch first.
 3. **Ambiguous product shape routes to a human, never to a guess.** If mid-pipeline the work forks into a genuine product decision (divergent fix choice, unsettled scope, competing UX shapes), stop the pipeline and route to `atlas-brainstorm`. Do not pick silently; do not implement the most convenient branch.
 4. **Repair budgets are hard.** The review-fix loop and (post-consent) CI-repair loop each get a bounded budget, default 3 rounds. On exhaustion with issues remaining: write the residual state, state plainly what failed and why, and stop. Never loop forever, never declare success with known issues.
@@ -55,10 +55,10 @@ Eleven steps, in order. Each step has a machine gate; a failed gate stops the pi
 | 5. Apply mechanical fixes | High-confidence + mechanical findings only, via `atlas:implementer`, budget-bounded | Budget not exhausted, or residuals persisted | `references/pipeline.md` § Fix loop |
 | 6. Persist residuals | Unapplied findings and deferred decisions into findings ledger + ROADMAP | Every residual written with its reason | `references/pipeline.md` § Residuals |
 | 7. Compound | `atlas-compound` only when durable learning exists that code/tests/plan do not already carry | One qualifying learning, or explicit skip | `references/pipeline.md` § Compound |
-| 8. UI testing | `atlas-dogfood` / `atlas-test-browser` when the change is UI-shaped | Live-browser evidence, or step skipped with reason | `references/pipeline.md` § UI testing |
-| 9. Local commit | `atlas-commit` (local only, run-owned files) | Commit lands clean | `references/shipping-gate.md` |
+| 8. UI testing | `atlas-dogfood` / `atlas-dogfood smoke` when the change is UI-shaped | Live-browser evidence, or step skipped with reason | `references/pipeline.md` § UI testing |
+| 9. Local commit | `atlas-ship commit-only` (local only, run-owned files) | Commit lands clean | `references/shipping-gate.md` |
 | 10. **STOP: consent gate** | Present the run summary; ask before any push/PR/merge | **Explicit user yes, or the run ends here** | `references/shipping-gate.md` § The gate |
-| 11. Ship & babysit (consent only) | `atlas-ship`, then `atlas-babysit-pr` with a bounded CI-repair budget; close out with residuals and DONE | Post-consent only | `references/shipping-gate.md` § After consent |
+| 11. Ship & babysit (consent only) | `atlas-ship`, then `atlas-run-watch` with a bounded CI-repair budget; close out with residuals and DONE | Post-consent only | `references/shipping-gate.md` § After consent |
 
 ## No-source behavior
 

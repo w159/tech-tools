@@ -1,9 +1,9 @@
 ---
 name: atlas-dogfood
-description: "Dogfoods the branch or PR diff in a live browser: drives each touched flow via atlas:ui-runtime-tester and repairs genuine breaks in a bounded loop. Use when changed flows must work end to end."
-when_to_use: "dogfood this change, drive the changed flows, exercise the diff in the browser, find and fix UI breakage"
+description: "Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route. Use for end-to-end flow checks or a quick render check."
+when_to_use: "dogfood this change, drive the changed flows, find and fix UI breakage, smoke test, check changed routes, does it load, console errors, quick browser check"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
-argument-hint: "[PR number, branch name, or 'current'] [--port PORT] [--fix-budget N]"
+argument-hint: "[smoke] [PR number, branch name, or 'current'] [--port PORT] [--fix-budget N]"
 ---
 
 
@@ -18,6 +18,8 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 # atlas-dogfood
 
+Two modes share one diff scope and one browser agent. **Full** (default) drives flows and repairs breaks. **Smoke** (argument `smoke`, or "quick render check") loads each touched route once, reports Pass, Fail or Skip, and never fixes: read `${CLAUDE_SKILL_DIR}/references/smoke.md` and follow it instead of the phases below. The rest of this file describes full mode.
+
 Act as a QA engineer who dogfoods the active branch's changes end to end, autonomously, until the diff's user-visible behavior genuinely works.
 
 **Outcome:** every user-facing route/flow this diff touches has been driven live in a real browser along its whole journey - happy path plus edge inputs - and small breakages are fixed, regression-tested, and re-verified. **Done:** every matrix scenario is `Pass`, `Fixed`, `Skipped` (with reason), or in a terminal `Blocked` state, and the report is finalized (template in `references/report-template.md`). A green matrix does not excuse an unexercised scenario: a scenario nobody could reach is `Blocked` with the reason, never silently dropped.
@@ -26,22 +28,22 @@ Act as a QA engineer who dogfoods the active branch's changes end to end, autono
 
 ## Routing: where this sits among its neighbors
 
-The three browser-testing skills differ on two axes: **scope** (the diff vs the whole app) and **behavior on failure** (report-only vs autonomous repair). State these distinctions whenever routing between them:
+The browser-testing surfaces differ on two axes: **scope** (the diff vs the whole app) and **behavior on failure** (report-only vs autonomous repair).
 
-| Skill | Scope | On failure | Weight |
+| Surface | Scope | On failure | Weight |
 |---|---|---|---|
-| **atlas-test-browser** | Routes touched by the current diff/PR only | Captures evidence, marks `Fail`, hands off - **never fixes** | Lightest: one load per route |
-| **atlas-dogfood** (this) | **Flows** touched by the current diff/PR only | **Bounded autonomous repair loop**: diagnose, dispatch `atlas:implementer`, verify with a fresh `atlas:verifier`, re-drive until green or escalation | Middle |
-| **atlas-ux-test** | The **whole app**, multi-persona | Detects and reports with evidence - **never fixes** | Heaviest: persona generation, scripted data entry, full walks, fuzzing, accessibility, calc oracle |
+| **atlas-dogfood smoke** | Routes touched by the current diff/PR | Captures evidence, marks `Fail`, hands off | Lightest: one load per route |
+| **atlas-dogfood full** (this) | **Flows** touched by the current diff/PR | **Bounded repair loop**: diagnose, dispatch `atlas:implementer`, verify with a fresh `atlas:verifier`, re-drive until green or escalation | Middle |
+| **atlas-ux-test** | The **whole app**, multi-persona | Reports with evidence | Heaviest: personas, scripted data entry, fuzzing, accessibility |
 
-Decision rules, stated explicitly:
+Routing:
 
-- Quick green/red signal on the routes a change touches, no repair wanted -> **atlas-test-browser**.
-- The diff's flows must actually work end to end before you report back, and small breakages should be fixed in the same run -> **atlas-dogfood** (this). Run atlas-test-browser first when you want a cheap map of what breaks; feed its `Fail` routes in as dogfood scope.
-- Pre-release full-app UX sweep, personas, fuzzing, accessibility -> **atlas-ux-test** (route there instead; do not combine in one run).
-- Single known issue, root-cause fix outside a QA run -> **atlas-debug**, not this.
+- Quick green/red signal on the touched routes, no repair wanted -> smoke mode. Feed its `Fail` routes into a full run when repair is wanted.
+- The diff's flows must work end to end before you report back, with small breakages fixed in the same run -> full mode.
+- Pre-release full-app UX sweep, personas, fuzzing, accessibility -> **atlas-ux-test** (a separate run).
+- Single known issue, root-cause fix outside a QA run -> **atlas-debug**.
 
-atlas-dogfood never edits app source itself - repairs happen only through dispatched `atlas:implementer` agents, and every fix is confirmed by an independent `atlas:verifier` that did not see the fix being made. If the user only wanted a report, atlas-test-browser is the wrong-scope-fixer guard: ask, or default to dogfood only when "make it work" is plausibly implied.
+atlas-dogfood never edits app source itself - repairs happen only through dispatched `atlas:implementer` agents, and every fix is confirmed by an independent `atlas:verifier` that did not see the fix being made. When the user may only want a report, ask which mode, and default to full only when "make it work" is plausibly implied.
 
 ## Phase order
 
@@ -73,3 +75,11 @@ This is the middle-weight skill: judge each scenario for correctness first, and 
 - Fixes applied: file-level summary per fix, the regression test that proves it, and the verifier's confirmation.
 - Escalations: every `Blocked` scenario with what a human must decide or verify, and the **Decisions for a human** section from the template.
 - What was NOT tested and why (skip/block reasons), and the working-tree state (files changed by fixes, uncommitted).
+
+## Mode references
+
+Open each when its mode reaches that step:
+
+- `references/route-and-report.md`: smoke mode: route mapping, port and server commands, dispatch template, summary format
+- `references/pipeline-mode.md`: smoke mode when invoked by an automated runner
+- `scripts/resolve-port.sh`: smoke mode: prints the dev-server port (run it, do not read it)

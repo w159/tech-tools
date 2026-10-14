@@ -69,7 +69,7 @@ Common tools: `analyze` / dead-code equivalents, `audit`, dupes/health helpers,
 `inspect_target`, security candidates. Use `--format json` equivalents via the
 tool params. Set `FALLOW_BIN` only when the CLI is not on PATH.
 
-## Setup shortlist (atlas-setup / `/atlas` discover)
+## Setup shortlist (atlas-setup discover)
 
 For `js_ts` projects, `discover_capabilities.py` recommends:
 

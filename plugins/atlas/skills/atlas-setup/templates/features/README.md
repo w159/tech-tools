@@ -27,4 +27,4 @@ Status: shipped | partial | reverted
 - <what changed and why>
 ```
 
-atlas-feature and atlas-orchestrate write here. atlas-setup only creates it.
+atlas-orchestrate writes here. atlas-setup only creates it.

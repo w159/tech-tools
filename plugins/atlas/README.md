@@ -11,44 +11,53 @@ skill or a slash command: durable knowledge goes to findings, docs, and memory.
 Org deployment (11 departments, 156 department skills) lives in the separate
 `armada` plugin in this repo; install it alongside atlas only for org use.
 
-## The skill fleet (50 skills, plainly named)
+## The skill fleet (37 skills, plainly named)
 
-Three manual skills, forty-seven auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
+One manual skill, 36 auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
 loads on relevance); `when_to_use` is retained as atlas-local routing metadata.
-Manual skills set `disable-model-invocation: true`.
+The manual skill sets `disable-model-invocation: true`.
 
-This release ports the Compound Engineering plugin's capabilities onto atlas's control
-plane: atlas keeps its own orchestrator, named agents, docs/.atlas SSOT, findings ledger,
-and explicit-push-consent policy as the execution and safety authority throughout - CE
-contributed artifact schemas, review rubrics, and workflow shapes, not a second engine.
+Overlapping capabilities are modes of one skill rather than separate skills: atlas-setup (onboard, install, connectors, repair, tour), atlas-dogfood (full, smoke), atlas-frontend (build, component, polish), atlas-run-watch (jobs, PR CI), atlas-bakeoff (bakeoff, verdict), atlas-brainstorm (requirements, strategy), atlas-orchestrate (engine, feature flow), atlas-ship (full, commit-only), atlas-status (status, announce), atlas-audit (code, architecture, self, act), atlas-sweep (sweep, analyze). Each SKILL.md opens with its mode table. atlas keeps its own orchestrator, named agents, docs/.atlas SSOT, findings ledger and explicit-push-consent policy as the execution and safety authority throughout.
 
 | Skill | Mode | What it does |
 | --- | --- | --- |
-| atlas | MANUAL | Boot the workspace: verify claude-mem and context-mode, scan the project, recommend tooling (confirm first), wire hooks, seed the docs/ SSOT |
-| atlas-setup | MANUAL | The lifecycle skill: onboard (scaffold `docs/`, inventory, recommend what to run next), install (claude-mem, context-mode, hooks, config), connectors (vendor MCP setup), Compound Pack health check, repair (`--fix` runs `scripts/atlas_doctor.py`) |
-| atlas-orchestrate | auto | The engine: decompose a task, route every code edit to a subagent, demand execution evidence, verify with an independent agent (runtime evidence included), keep `docs/` the single source of truth. Now carries CE's implementation-unit rigor: per-unit idempotency, proof-first/characterization test strategy, bounded parallel waves |
-| atlas-audit | auto | Three audit modes: code (quality/security/OWASP swarm), architecture (feature map + duplication + unify proposal), self (atlas run health, context/asset waste, session forensics from the observability DB) |
-| atlas-doctor | auto | Interactive self-improvement: mine findings from session telemetry, ask per finding, apply what you accept, re-measure against a baseline. Now includes CE's measurement-first retuning gate and a `docs/lessons/` citation-drift refresh pass |
-| atlas-loop | auto | Match a recurring or iterative task to a curated loop-library entry (loop-until-dry, fan-out-adversarial-verify, red-green-tdd, and more) and instantiate it |
-| atlas-ux-test | auto | App-discovering UX swarm: auto-finds routes and forms in a running web app, then runs cartographer -> persona -> fuzzer -> oracle -> reporter |
-| 14 task skills | auto | atlas-component, atlas-db-audit, atlas-debug (now with CE's ranked-hypothesis/red-for-the-right-reason/three-failed-fix rigor), atlas-feature, atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch, atlas-prompt, atlas-readme, atlas-refactor, atlas-validate, atlas-wiki |
-| **The CE core loop (ported from Compound Engineering)** | | |
-| atlas-brainstorm | auto | WHAT-stage requirements elicitation: one-question-at-a-time dialogue, 2-3 approaches with a mandatory non-obvious option, writes a requirements-only `docs/plans/<date>-<slug>-brainstorm.md` |
-| atlas-plan | auto | HOW-stage implementation-ready planning: stable `U<N>` implementation units, a Verification Contract and Definition of Done, mandatory `atlas:completeness-critic` review, hands off to `atlas-orchestrate` |
-| atlas-simplify | auto | Bounded post-implementation simplification pass over a fresh diff: three independent read-only reviewers (reuse/quality/efficiency), behavior-preserving apply, full gate re-run |
-| atlas-review | auto | Risk-selected multi-persona diff/PR review (correctness always-on, conditional security/performance/API/migration/reliability/adversarial/etc.), typed findings with confidence anchors, report-only by default |
-| atlas-compound | auto | Durable learning capture into `docs/lessons/`: a hard solved-and-verified-and-non-obvious eligibility gate, overlap detection before writing, CE's bug/knowledge frontmatter schema |
-| atlas-autopilot | auto | Atlas's consent-gated equivalent of CE's `lfg`: brainstorm/plan -> work -> simplify -> review -> compound -> local commit, then a hard stop for explicit push/PR/merge confirmation |
-| **On-demand and around-loop (ported from Compound Engineering)** | | |
-| atlas-strategy, atlas-pulse, atlas-sweep | auto | Product strategy anchor (`docs/architecture/product-strategy.md`), time-windowed telemetry pulse report, feedback-source ingestion into a rolling triage doc |
-| atlas-bakeoff, atlas-pov, atlas-explain | auto | Competing-approach generation and selection; evidence-floored independent "oracle" opinion with optional non-voting peer checks; evidence-backed explanation of existing behavior (also answers "wtf does this do") |
-| atlas-prototype, atlas-optimize, atlas-feedback-analysis | auto | Throwaway demonstrate-then-decide prototyping; measurement-first optimization experiments; raw feedback (transcripts/tickets/notes) into evidence-quoted findings |
-| atlas-commit, atlas-ship, atlas-babysit-pr, atlas-resolve-pr-feedback | auto | Local-only commit; commit+push+PR with a mandatory confirmation gate before anything leaves the machine; bounded CI-repair loop; review-comment triage, fix, and reply (never auto-posted) |
-| atlas-polish, atlas-dogfood, atlas-test-xcode, atlas-test-browser | auto | Live interactive UX polish; diff-scoped autonomous browser QA with a repair loop; iOS Simulator test runtime; diff-scoped no-fix-loop browser smoke check |
-| atlas-proof, atlas-promote, atlas-worktree | auto | Publish/annotate/collect review workflow for durable docs; post-shipping announcement drafts (never auto-posted); atlas's own host-portable `git worktree` isolation primitive |
-| atlas-status | auto | Stakeholder-readable status rollup for a plan or feature, assembled from what the project actually has: plan, findings, todo board and git state (`scripts/atlas_status.py`); claims labeled verified vs assumed |
-| atlas-run-watch | auto | Provider-agnostic long-run watcher for a process PID, log tail or CI run, reusing the babysit-pr machinery, with a `.atlas/.run/runs/<id>/` ledger |
-| atlas-tour | MANUAL | One-time, plain-language guided first session of atlas: the orchestrator style, one dispatch, the gates |
+| atlas-audit | auto | Audits a codebase: CODE (quality, security, hotspots, dead code, docs drift), ARCHITECTURE (flowcharts, duplication), SELF (atlas run health), or ACT (open a remediation session for one audit finding by id; no id lists them). Use to audit a repo, map architecture or fix a finding. |
+| atlas-autopilot | auto | Consent-gated autonomous pipeline: runs a ready plan or diagnosed fix via atlas-orchestrate, simplifies, reviews, fixes under a budget, stops at the local commit. Use to run a plan end to end. |
+| atlas-bakeoff | auto | Decides a technical choice with evidence: compares 2-3 approaches against named criteria (bakeoff), or grades one option Adopt, Trial, Hold or Reject (verdict). Use when a costly, hard-to-reverse choice or a second opinion is needed; reversible picks go to atlas-plan. |
+| atlas-brainstorm | auto | Grills a vague idea one hard question at a time, recommending an answer each turn, until shared understanding. Default mode writes a requirements-only docs/plans/ artifact (WHAT, not HOW); strategy mode writes docs/architecture/product-strategy.md. Writes no product code. Use before atlas-plan. |
+| atlas-compound | auto | Captures one durable, verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use after solving and verifying a problem a future engineer would repeat. |
+| atlas-db-audit | auto | Audits a live database read-only via parallel subagents: schema inventory, schema-to-code reconciliation, privileges, naming. Use before a schema or permission change. |
+| atlas-debug | auto | Diagnoses a reproducible bug, exception, stack trace or bad output and fixes the root cause with evidence. Use when the cause of a failure must be found and fixed. |
+| atlas-doctor | auto | Atlas self-improvement loop: mines cross-session findings from atlas.db, applies accepted changes, records a baseline. Use when telemetry has accumulated or before changing a skill, hook or agent. |
+| atlas-dogfood | auto | Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route. Use for end-to-end flow checks or a quick render check. |
+| atlas-explain | auto | Explains how or why existing code behaves, in chat, with file:line evidence from an atlas:explorer trace; read-only. Use when asked how something works or what code means. |
+| atlas-frontend | auto | Builds, refactors or polishes frontend UI on one design system (shadcn/ui, Tailwind, Radix), verified live in the browser. Modes: build (screens, flows), component (one reusable async component), polish (live visual refinement). Use when creating or reworking UI. |
+| atlas-gitignore | auto | Generates a zero-trust, deny-by-default .gitignore for a named stack, secrets re-excluded last. Use when starting a repo or hardening a .gitignore. |
+| atlas-handoff | auto | Produces a dense session handoff so a fresh session resumes without re-discovery. Use at a checkpoint before context fills, before a break, or when handing work to another session. |
+| atlas-harden | auto | Writes an idempotent endpoint remediation script (CHECK/SET/VERIFY) for RMM or MDM that proves whether it changed state. Use to remediate or enforce an endpoint setting at scale. |
+| atlas-loop | auto | Matches a recurring or iterative task to a library loop: interval loops use /loop, fan-out loops run as a parallel verify workflow. Use to repeat, poll, iterate until a condition holds, or sweep. |
+| atlas-optimize | auto | Single-experiment loop: baseline, one hypothesis, one change, identical re-measure, real delta reported. Use when a working system's metric should improve; not for bugs or restructuring. |
+| atlas-orchestrate | auto | Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification. Includes a feature flow that builds one feature across UI, API and data with the squad. Use when a task spans layers or the repo. |
+| atlas-plan | auto | Writes an implementation-ready plan to docs/plans/ from a brainstorm artifact or feature description, with U-numbered units and a verification contract. Use when requirements are settled. |
+| atlas-prompt | auto | Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous. Use when a request is underspecified. |
+| atlas-proof | auto | Human-review workflow for project markdown: publishes a doc for review, records anchored comments in a sidecar file, folds feedback back. Use to share a plan, spec or draft for review; not proofreading. |
+| atlas-prototype | auto | Builds a throwaway prototype in an isolated run directory to answer one visual, interaction or product-shape question, then promotes decisions into a plan or discards it. Use when showing beats arguing. |
+| atlas-pulse | auto | Generates a time-windowed product pulse (usage, performance, errors) from wired telemetry, read-only, into docs/pulses/. Use for a product pulse or usage and error summary. |
+| atlas-readme | auto | Generates an onboarding-grade README.md by inspecting the repo, tracing every claim to a file. Use when a repo has no README or a stale one. |
+| atlas-refactor | auto | Refactors, renames or restructures code without changing behavior, with before/after evidence. Use when code works but is messy, hard to navigate or carries dead weight. |
+| atlas-resolve-pr-feedback | auto | Resolves PR review feedback: triages each thread (fix, reply, needs-human), applies approved fixes, drafts replies, confirms before pushing or posting. Use when a PR has open review comments. |
+| atlas-review | auto | Risk-selected multi-persona review of a diff, branch or PR; P0/P1 findings verified, report-only verdict (Ready, Ready-with-fixes, Not-ready). Use before merge. |
+| atlas-run-watch | auto | Watches a long-running job (PID, log tail, CI URL, API, command loop) or one open GitHub PR's CI with tick/checkpoint/re-arm, spilling logs to a run ledger. PR targets repair genuine CI failures in a bounded loop, ask before pushing and never merge. Use when a job or PR needs watching. |
+| atlas-setup | MANUAL | Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair, tour (first-session walkthrough), menu. Use to bring atlas online, fix it or learn it. |
+| atlas-ship | auto | Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR. Commit-only mode makes just the local conventional commit from a file list. Use when work is ready to commit or open a PR. |
+| atlas-simplify | auto | Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate. Use after implementing, before review or commit; restructuring is atlas-refactor. |
+| atlas-status | auto | Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed. Announce mode drafts plain-language release notes, Slack updates and changelog entries for shipped work. Use when asked how a feature is going or to announce it. |
+| atlas-sweep | auto | Turns feedback into triaged findings. Sweep mode ingests new GitHub issues, triages them, verifies claimed fixes and updates a docs/features/ triage doc, never auto-closing or replying. Analyze mode turns a transcript, support thread or notes into findings tied to verbatim quotes. Use when feedback needs triage or analysis. |
+| atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs. Use to build or test an iOS or Xcode project; macOS only. |
+| atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness. Use for a full UI/UX pass or persona testing. |
+| atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing. Use when a plugin is believed complete. |
+| atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify. Use when architecture docs changed, before the completion gate, or when wiki diagrams are stale. |
+| atlas-worktree | auto | Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection. Use to isolate parallel implementer waves, spikes or bakeoffs, or close them at wave end. |
 
 ## Layout
 
@@ -106,7 +115,7 @@ atlas/
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   |-- completeness-critic.md     #   "what did we miss" gap pass before done (fork)
 |   `-- runner.md                  #   mechanical executor (haiku/low) for <=7 exact numbered STEPS; fixed STEPS: report
-`-- skills/                        # the 50 skills, one directory each (SKILL.md; most add references/)
+`-- skills/                        # the 37 skills, one directory each (SKILL.md; most add references/)
 ```
 
 ## Getting started

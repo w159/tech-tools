@@ -1,9 +1,9 @@
 ---
 name: atlas-brainstorm
-description: "Elicits requirements (WHAT, not HOW) one question at a time into a docs/plans/ artifact; writes no product code. Use when a feature idea is vague and needs scoping before atlas-plan."
-when_to_use: "brainstorm, flesh out this idea, what should we build, scope this feature, requirements discovery, product requirements"
+description: "Grills a vague idea one hard question at a time, recommending an answer each turn, until shared understanding. Default mode writes a requirements-only docs/plans/ artifact (WHAT, not HOW); strategy mode writes docs/architecture/product-strategy.md. Writes no product code. Use before atlas-plan."
+when_to_use: "brainstorm, flesh out this idea, what should we build, scope this feature, requirements discovery, product requirements, product strategy, positioning, target users, success metrics, product direction, STRATEGY.md, grill me"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
-argument-hint: '<the idea, feature, or request to brainstorm>'
+argument-hint: '[strategy [section]] <the idea, feature, or request to brainstorm>'
 ---
 
 
@@ -18,9 +18,29 @@ cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 
 If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
-## Why this skill exists
+Two modes share one dialogue discipline:
 
-Atlas plans well (`atlas-plan`) and executes well (`atlas-orchestrate`), but nothing elicits requirements from a genuinely vague idea. A vague request handed to a planner produces a confident plan over a guessed problem. This skill is the WHAT stage: it interrogates the idea against repo reality, resolves actor/outcome/scope/success gaps through dialogue, and leaves a requirements-only artifact stable enough for planning. It is a port of CE's `ce-brainstorm` (see `agent://CELoopSkillsDetail`, section 3) with atlas's control plane: grounding via the `atlas:explorer` agent instead of a bespoke scout script, Compound Packs instead of CE's strategy/concepts files, and date-first docs naming per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`.
+| Mode | When | Detail |
+|---|---|---|
+| requirements (default) | A feature idea is vague and needs scoping before `atlas-plan` | this file |
+| strategy | Starting a product, adding or refreshing the strategy doc, changing direction | `references/strategy.md` |
+
+For strategy mode, read `${CLAUDE_SKILL_DIR}/references/strategy.md` and follow it; Phases 0 to 4 below do not apply. The switch is done once that reference has been read.
+
+## Grilling pattern (both modes)
+
+Interview until you and the user share one understanding of the idea:
+
+1. Ask **one hard question per turn**, the one whose answer most changes what you would build. Facts you can look up (code, docs, git history) are your job: dispatch `atlas:explorer` or read them, and ask only for decisions the user owns.
+2. Put **your recommended answer** with every question and word the question so "yes" accepts it.
+3. After each answer, recompute which question is now most load-bearing; settled decisions stay settled unless the user reopens them.
+4. Stop when no branch of the idea is left silently assumed, then state the shared understanding back and wait for the user's confirmation before writing anything.
+
+Each step is done when the question carries a recommendation and the answer has been recorded as a decision or an explicit assumption.
+
+## What this skill is
+
+Atlas plans well (`atlas-plan`) and executes well (`atlas-orchestrate`); this skill is the WHAT stage in front of them. It interrogates the idea against repo reality, resolves actor, outcome, scope and success gaps through dialogue, and leaves a requirements-only artifact stable enough for planning. Grounding runs through the `atlas:explorer` agent, Compound Packs supply team conventions, and docs naming follows `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`.
 
 The output is **requirements-only**. It contains NO implementation units, NO file lists, NO test plans. Those belong to `atlas-plan`. If you find yourself writing "U-01: edit `src/foo.ts`", stop - that is a HOW.
 
@@ -74,3 +94,12 @@ Validate the four Ready checks (Complete, Consistent, Focused, Usable - defined 
 ## Boundary
 
 atlas-brainstorm owns: classification, grounding, dialogue, approach synthesis, and the requirements-only artifact. It does NOT own: writing `docs/` (atlas:docs-curator owns durable docs per docs-ssot), implementation planning (`atlas-plan`), execution (`atlas-orchestrate` + atlas agents), or any git action - it never commits, pushes, or opens a PR.
+
+## Mode references
+
+Open each when its mode reaches that step:
+
+- `references/grounding.md`: strategy mode Phase 0: repo model and legacy-sibling rules
+- `references/interview.md`: strategy mode Phase 1: questions, pushback, stress test
+- `references/strategy-template.md`: strategy mode: the literal file shape
+- `references/update-run.md`: strategy mode Phase 2: before editing an existing strategy doc

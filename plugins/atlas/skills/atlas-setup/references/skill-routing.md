@@ -52,12 +52,14 @@ The atlas fleet:
  3. atlas-setup        -- Onboard, install, connectors, repair (this skill)
  4. atlas-loop         -- Recurring/iterative task loops
  5. atlas-ux-test      -- UX test swarm on any web app
- 6. Task skills        -- atlas-feature, atlas-debug, atlas-refactor,
-                          atlas-frontend, atlas-component, atlas-db-audit,
+ 6. Task skills        -- atlas-debug, atlas-refactor,
+                          atlas-frontend (build, component, polish), atlas-db-audit,
                           atlas-gitignore, atlas-handoff, atlas-harden,
-                          atlas-launch, atlas-prompt,
-                          atlas-readme, atlas-validate,
+                          atlas-prompt, atlas-readme, atlas-validate,
                           atlas-wiki
+    Modes of one skill: atlas-audit act, atlas-dogfood smoke, atlas-ship commit-only,
+    atlas-status announce, atlas-sweep analyze, atlas-bakeoff verdict,
+    atlas-brainstorm strategy, atlas-run-watch pr:<N>, atlas-setup tour
 
 Org deployment lives in the separate armada plugin.
 

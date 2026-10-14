@@ -29,4 +29,4 @@ The user pain this solves.
 - <explicit non-goals>
 ```
 
-atlas-feature and atlas-orchestrate write here. atlas-setup only creates it.
+atlas-orchestrate writes here. atlas-setup only creates it.

@@ -9,7 +9,7 @@ the stop.
 
 ## Step 9 - Local commit
 
-Run `atlas-commit` (local only; it never pushes):
+Run `atlas-ship commit-only` (local only; it never pushes):
 
 - Commit the run-owned files: the change scope, plus the atlas artifacts this run
   produced that belong in the tree - `docs/` updates (CHANGELOG entry, ROADMAP
@@ -35,7 +35,7 @@ The summary must cover, compactly:
   UI evidence or skip.
 - **The commit:** SHA, branch, changed-file summary.
 - **What shipping would do:** the branch to push, whether a PR would be opened
-  (and its target), and what `atlas-babysit-pr` would watch afterwards.
+  (and its target), and what `atlas-run-watch` would watch afterwards.
 - **Known risk:** anything from review or testing the user should weigh before the
   push - unapplied findings, budget exhaustion, skipped checks.
 
@@ -55,7 +55,7 @@ With a confirmed yes:
    satisfied. Pass the run context: plan/defect path, the consent-gate summary,
    residual findings (they render into the PR's "Unapplied review findings"
    checklist rather than vanishing).
-2. **`atlas-babysit-pr`** on the opened PR, with the CI-repair budget (default 3
+2. **`atlas-run-watch`** on the opened PR, with the CI-repair budget (default 3
    rounds, shared `budget:N` override). CI failures and review comments route
    through `atlas-debug` (convergent fixes) and `atlas-resolve-pr-feedback`;
    divergent or product-shaped feedback becomes a `needs-human` residual - it does

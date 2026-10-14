@@ -1,13 +1,10 @@
 ---
 name: atlas-frontend
-description: "Builds or refactors screens, flows and components on one design system (shadcn/ui, Tailwind, Radix) with every state verified live in the browser. Use when creating or reworking frontend UI."
-when_to_use: "build a screen, shadcn, Tailwind, Radix, refactor UI, design system, form, dashboard, page"
+description: "Builds, refactors or polishes frontend UI on one design system (shadcn/ui, Tailwind, Radix), verified live in the browser. Modes: build (screens, flows), component (one reusable async component), polish (live visual refinement). Use when creating or reworking UI."
+when_to_use: "build a screen, shadcn, Tailwind, Radix, refactor UI, design system, form, dashboard, page, async component, progress modal, upload widget, job panel, polish the UI, tweak spacing, animation, final UI touches"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
-# paths: screens/flows anywhere in the repo (tsx, css, scss); reusable
-# components under components/ route to atlas-component instead, keeping the
-# two skills' literal globs disjoint so they do not co-activate.
-paths: ["**/*.tsx", "**/*.css", "**/*.scss"]
-argument-hint: '[project] [screens/flows] [design intent]'
+paths: ["**/*.tsx", "**/*.css", "**/*.scss", "components/**"]
+argument-hint: '[build|component|polish] [project] [screens/flows] [design intent]'
 ---
 
 
@@ -23,6 +20,16 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 Read `${CLAUDE_SKILL_DIR}/references/frontend-states.md` and apply the loading/empty/error/success, accessibility, and responsive rules it defines to every screen you touch.
 
 # `atlas-frontend`
+
+Three modes, picked from the first argument or the ask:
+
+| Mode | When | Detail |
+|---|---|---|
+| build (default) | Screens, flows or components to build or refactor | this file |
+| component | One new reusable component that survives latency, cancellation and partial failure | `references/component.md` |
+| polish | An already-working UI needs spacing, motion or micro-interaction refinement, with the user judging live | `references/polish.md` |
+
+For component or polish mode, read the named reference and follow it; the build steps below do not apply. The mode switch is done once that reference has been read.
 
 Build or refactor the UI described in `$ARGUMENTS` on one design system, then prove it works in the browser.
 
@@ -59,3 +66,12 @@ Dispatch all independent jobs in ONE message (multiple Agent calls in a single m
 - Each state confirmed and the route it was shown on.
 - Console-clean and responsive checks, with the evidence captured.
 - Files changed (paths) and a short diff summary.
+
+## Mode references
+
+Open each when its mode reaches that step:
+
+- `references/component-pattern.md`: component mode: props, className, six-state and file-pattern contract
+- `templates/component.seed.tsx`: component mode: seed for a new component file
+- `references/live-session.md`: polish mode: workspace safety, dev-server resolution, browser handoff
+- `references/polish-loop.md`: polish mode: iteration protocol and close-out gate

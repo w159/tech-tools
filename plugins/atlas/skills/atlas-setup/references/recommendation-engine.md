@@ -22,7 +22,7 @@ Check: does `.atlas/` exist? Does `docs/CHANGELOG.md` exist? Are hooks
 wired? Is claude-mem installed? Is context-mode installed?
 
 If any are missing: recommend atlas-setup (boot and configure).
-Command: `/atlas` (which runs atlas-setup).
+Command: `/atlas-setup install`.
 
 ### 2. Structural completeness (confidence: high)
 

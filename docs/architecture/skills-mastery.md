@@ -16,8 +16,8 @@ when atlas-olympus was merged into atlas-setup in 5.0.0).
 Counts are verified by plugins/atlas/skills/atlas-setup/scripts/plugin-health.py,
 which reports `skills: actual=21` and `agents: actual=12`, both PASS against
 the atlas manifest. The 21 atlas skills are: atlas, atlas-audit,
-atlas-component, atlas-db-audit, atlas-debug, atlas-doctor, atlas-feature,
-atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch,
+atlas-frontend component, atlas-db-audit, atlas-debug, atlas-doctor, atlas-orchestrate,
+atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-audit act,
 atlas-loop, atlas-orchestrate, atlas-prompt, atlas-readme, atlas-refactor,
 atlas-setup, atlas-ux-test, atlas-validate, atlas-wiki (atlas-m365 and
 atlas-vendor-assessment removed 2026-07-21; see docs/CHANGELOG.md and
@@ -51,7 +51,7 @@ key use first, under 1024 characters), when_to_use (trigger phrases).
 Trigger control: `disable-model-invocation: true` marks a skill manual. In
 the 5.0.0 atlas plugin, 11 skills are manual. Verified by
 `grep -rl 'disable-model-invocation: true' plugins/atlas/skills/`, which
-returns exactly: atlas-component, atlas-db-audit, atlas-frontend,
+returns exactly: atlas-frontend component, atlas-db-audit, atlas-frontend,
 atlas-harden, atlas-m365, atlas-prompt, atlas-readme, atlas-refactor,
 atlas-setup, atlas-vendor-assessment, atlas-wiki (each at
 plugins/atlas/skills/<name>/SKILL.md, plus three reference files under

@@ -33,7 +33,7 @@ and optimize against that real inventory:
   server like serena, a memory server, a browser/runtime tester, cloud CLIs). Reference
   them by their **real tool names** as they appear in your tool list - never invent a
   tool that isn't loaded.
-- **Skills** available (this plugin ships `atlas`; others may be installed).
+- **Skills** available (this plugin ships the `atlas-*` skills; others may be installed).
 - **Subagents** registered (this plugin ships `atlas:explorer`, `atlas:implementer`,
   `atlas:verifier`, `atlas:db-prober`, `atlas:ui-runtime-tester`; the host may add more).
 - **Project principles** - scan `CLAUDE.md` / `AGENTS.md` / `.agents/` / contributing

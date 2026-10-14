@@ -68,7 +68,7 @@ The proposal is written to docs/audits/atlas-audit-<date>/proposal.md.
 
 ### Phase 4 - Handoff prompts + hub (orchestrator only)
 
-For each system the proposal targets for unification, the orchestrator writes a handoff prompt to docs/audits/atlas-audit-<date>/handoffs/<system>.md. The `<system>` filename must be a filesystem-safe slug (see "Filename safety" below); the human-readable system name still appears inside the file. Each prompt is self-contained: it names the target, cites file:line evidence from the duplication report, states the acceptance criterion, specifies which atlas squad agent should lead the work, and ends with the launch line `Remediate with: atlas-launch <system>`.
+For each system the proposal targets for unification, the orchestrator writes a handoff prompt to docs/audits/atlas-audit-<date>/handoffs/<system>.md. The `<system>` filename must be a filesystem-safe slug (see "Filename safety" below); the human-readable system name still appears inside the file. Each prompt is self-contained: it names the target, cites file:line evidence from the duplication report, states the acceptance criterion, specifies which atlas squad agent should lead the work, and ends with the launch line `Remediate with: atlas-audit act <system>`.
 
 Then build the knowledge-graph hub so the findings are navigable and launchable:
 
@@ -81,7 +81,7 @@ are documented in `references/graph-to-hub-pipeline.md`. Read it before the
 first hub run and when a hub comes out with `node_match: "none"` on every
 entry.
 
-This writes `hub/manifest.json` (each handoff mapped to its graphify node, file-granular) and a branded `hub/index.html`. Each charted system is then remediated in one step with `atlas-launch <system>`, which loads its handoff into the `atlas-orchestrate` skill. Do not write /make-plan handoffs - these are atlas-native Workflows launched via `atlas-launch`. (`atlas-launch` is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
+This writes `hub/manifest.json` (each handoff mapped to its graphify node, file-granular) and a branded `hub/index.html`. Each charted system is then remediated in one step with `atlas-audit act <system>`, which loads its handoff into the `atlas-orchestrate` skill. Do not write /make-plan handoffs - these are atlas-native Workflows launched via `atlas-audit act`. (`atlas-audit act` is the remediation launcher; `atlas-handoff` is the separate session-resume checkpoint.)
 
 ## Evidence contract
 
@@ -133,10 +133,10 @@ docs/audits/atlas-audit-<date>/
   duplications.md        - merged within-feature and cross-feature duplication report
   proposal.md            - unified architecture proposal with file:line evidence
   handoffs/
-    <system-slug>.md     - one handoff prompt per targeted system (name slugged; ends with `atlas-launch <system>`)
+    <system-slug>.md     - one handoff prompt per targeted system (name slugged; ends with `atlas-audit act <system>`)
   hub/
     manifest.json        - node<->finding bridge (each handoff mapped to its graphify node)
-    index.html           - branded Atlas expedition map; click a node -> finding + atlas-launch cmd
+    index.html           - branded Atlas expedition map; click a node -> finding + atlas-audit act cmd
 ```
 
 The orchestrator writes a short index entry to docs/audits/atlas-audit-<date>/index.md listing the run date, feature count, duplication count, and proposal summary (one sentence per merged subsystem).

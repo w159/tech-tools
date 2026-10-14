@@ -11,7 +11,7 @@ remediation prompts and optional `report.md`/`findings/*.md`, plus one or more g
                                  no line spans, so the bridge is file-granular, not exact.
   <run_dir>/hub/index.html     - a branded Atlas "expedition map": actionable nodes as
                                  cards with severity, the finding, the handoff excerpt,
-                                 and the exact `atlas-launch <id>` command to remediate.
+                                 and the exact `atlas-audit act <id>` command to remediate.
 
 Pure stdlib. Safe to run repeatedly (overwrites hub/). Tolerates missing fields.
 
@@ -189,7 +189,7 @@ def render_html(run_label, entries, communities):
             if e["node_id"]
             else "graph node: unmatched"
         )
-        cmd = "atlas-launch %s" % e["id"]
+        cmd = "atlas-audit act %s" % e["id"]
         cards.append(
             '<div class="card %s"><span class="badge %s">%s</span>'
             '<div class="file">%s%s</div><div class="summary">%s</div>'
@@ -226,7 +226,7 @@ def render_html(run_label, entries, communities):
         "<div class='sub'>%s</div></header>"
         "<div class='legend'>%s</div>"
         "<main>%s</main>"
-        "<footer>Each card is a charted finding. Run its <code>atlas-launch &lt;id&gt;</code> to "
+        "<footer>Each card is a charted finding. Run its <code>atlas-audit act &lt;id&gt;</code> to "
         "start a pre-loaded remediation expedition. Graph overlay is file-granular: graphify "
         "nodes are sub-file, so each finding maps to its file's container node.</footer>"
         "<script>%s</script></body></html>"

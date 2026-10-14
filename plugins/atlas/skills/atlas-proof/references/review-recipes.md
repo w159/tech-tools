@@ -68,9 +68,9 @@ Rules:
    ```bash
    diff <src> '<surface path>' && echo IDENTICAL
    ```
-4. Hand the user the surface path (one line), plus the source path if they differ. Do not delete anything, do not commit (offer `atlas-commit` if asked), do not push.
+4. Hand the user the surface path (one line), plus the source path if they differ. Do not delete anything, do not commit (offer `atlas-ship commit-only` if asked), do not push.
 
-When a planning skill hands off a publish (`atlas-plan`, `atlas-feature`), it supplies the file path and title. Label the title by readiness when known, e.g. `Plan: <title> (requirements-only)` or `Plan: <title> (implementation-ready)` — carry that label into the H1 and the ROADMAP status.
+When a planning skill hands off a publish (`atlas-plan`, `atlas-orchestrate`), it supplies the file path and title. Label the title by readiness when known, e.g. `Plan: <title> (requirements-only)` or `Plan: <title> (implementation-ready)` — carry that label into the H1 and the ROADMAP status.
 
 ## Collect recipe
 

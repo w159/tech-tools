@@ -22,7 +22,7 @@ Inputs:
 Outputs, both under `<run_dir>/hub/`:
 - `manifest.json` - the node-to-finding bridge, one entry per handoff.
 - `index.html` - a branded Atlas expedition map. Each actionable node is a
-  card with severity, the finding excerpt, and the exact `atlas-launch <id>`
+  card with severity, the finding excerpt, and the exact `atlas-audit act <id>`
   command to remediate.
 
 The script is pure stdlib, idempotent (overwrites `hub/`), and tolerates

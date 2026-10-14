@@ -1,12 +1,21 @@
 ---
 name: atlas-bakeoff
-description: "Compares 2-3 approaches for a costly, hard-to-reverse technical choice against named criteria and recommends one. Use for architecture, library or data-model choices; reversible picks go to atlas-plan."
-when_to_use: "compare approaches, library choice, data-model decision, build vs buy, which architecture, tradeoff analysis, spike"
+description: "Decides a technical choice with evidence: compares 2-3 approaches against named criteria (bakeoff), or grades one option Adopt, Trial, Hold or Reject (verdict). Use when a costly, hard-to-reverse choice or a second opinion is needed; reversible picks go to atlas-plan."
+when_to_use: "compare approaches, library choice, data-model decision, build vs buy, which architecture, tradeoff analysis, spike, oracle this, second opinion, should we adopt, what do you recommend, contested decision"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
-argument-hint: '<the decision to bake off>'
+argument-hint: '[verdict] <the decision to bake off, or the single option to opine on>'
 ---
 
 # atlas-bakeoff
+
+Pick the mode from the ask:
+
+| Mode | When | Detail |
+|---|---|---|
+| bakeoff (default) | Two or more real alternatives for a costly, hard-to-reverse choice | this file |
+| verdict | One option or a contested choice needs a grounded opinion (library pick, migration path, second opinion) | `references/single-verdict.md` |
+
+For verdict mode, read `${CLAUDE_SKILL_DIR}/references/single-verdict.md` and follow it; the gate and pipeline below do not apply. The switch is done once the reference has been read.
 
 Apply the Operating Contract to this entire task. It is injected below.
 
@@ -16,7 +25,7 @@ cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 
 If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
-You are a decision architect. Port of compound-engineering's `ce-bakeoff`, rebuilt on atlas's own dispatch and verification machinery: no external-CLI or cross-model dependency — candidates are fresh-context subagent dispatches, judgment is `atlas:verifier`.
+You are a decision architect. Candidates are fresh-context subagent dispatches and judgment is `atlas:verifier`; there is no external-CLI or cross-model dependency.
 
 Your job: generate concrete competing approaches, compare them against named criteria, and return ONE recommendation with the reasoning that would survive a skeptical reviewer. The caller (user, or `atlas-plan` for a single implementation unit) decides adoption and does the subsequent work. You do generation, comparison, selection, and verification — never the implementation itself.
 
@@ -73,3 +82,10 @@ Announce before dispatching: "**Bake-off** running on <subject> — N candidates
 - The actual comparison: per-candidate scores against each named criterion with the evidence behind each score — not labels, not a bare score total.
 - What was rejected and why (keep rejection reasons; they are the record that prevents re-litigating the same choice next month).
 - Verification: independent-judgment verdict, spike evidence paths or remaining evidence needs.
+
+## Mode references
+
+Open each when its mode reaches that step:
+
+- `references/verdict-protocol.md`: verdict mode: framing packet, evidence floor, verdict shape, grading rubric
+- `references/peer-dispatch.md`: verdict mode: only when the user explicitly asks for peer opinions

@@ -73,7 +73,7 @@ It does NOT own:
 
 - **Deciding what to build.** That is `atlas-brainstorm` (which may itself call this skill for a rough visual probe; a probe is not a fidelity run).
 - **Implementing the real thing.** Settled decisions flow to `atlas-plan` / `atlas-orchestrate`; this skill writes no product source except an explicitly-requested overlay, which it reverts.
-- **Proving shipped work.** Runtime verification of real features belongs to `atlas:verifier` and `atlas-feature`/`atlas-frontend` flows. Here, the human's reaction is the verification of record - it is stamped to `.atlas/.run/findings.json` via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py` at settle time, not dispatched to a verifier agent, because no agent can re-run a human judgment.
+- **Proving shipped work.** Runtime verification of real features belongs to `atlas:verifier` and `atlas-orchestrate`/`atlas-frontend` flows. Here, the human's reaction is the verification of record - it is stamped to `.atlas/.run/findings.json` via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py` at settle time, not dispatched to a verifier agent, because no agent can re-run a human judgment.
 - **Polish or iteration on a feature that already works.** That is `atlas-refactor` or `atlas-frontend` territory.
 
 Composes with: `atlas:explorer` (scoped read, phase 1), `atlas:implementer` (in-place overlay edits only), `atlas:ui-runtime-tester` (live look and rendered-result evidence, phase 3), `atlas-brainstorm` / `atlas-plan` (promotion targets, phase 4), `atlas:docs-curator` (any durable doc the promotion writes, when a curator pass is warranted).

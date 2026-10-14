@@ -101,7 +101,7 @@ upgraded at synthesis.
 Written only for findings the user accepts. Each handoff is
 self-contained: it names the `file:line`, states the flaw and the
 acceptance criterion, specifies which atlas squad agent should lead the
-fix, and ends with `Remediate with: atlas-launch <finding-id>`. The
+fix, and ends with `Remediate with: atlas-audit act <finding-id>`. The
 `<finding-id>` filename must be a filesystem-safe slug (lowercase, only
 `a-z 0-9 . _ -`), because a colon in any audit filename makes the repo
 un-checkout-able on Windows.

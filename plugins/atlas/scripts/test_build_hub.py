@@ -66,7 +66,7 @@ class BuildHubTest(unittest.TestCase):
         with open(idx) as fh:
             htmldoc = fh.read()
         self.assertIn("Atlas Expedition Map", htmldoc)
-        self.assertIn("atlas-launch finding-1", htmldoc)
+        self.assertIn("atlas-audit act finding-1", htmldoc)
         # HIGH sorts before LOW
         self.assertLess(htmldoc.index("finding-1"), htmldoc.index("finding-2"))
 

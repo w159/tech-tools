@@ -1,7 +1,7 @@
 # Capability catalog
 
 Maps a detected project signal to the asset Atlas recommends installing. The
-`/atlas` architect runs `${CLAUDE_PLUGIN_ROOT}/scripts/discover_capabilities.py` (read-only) to detect
+`atlas-setup` runs `${CLAUDE_PLUGIN_ROOT}/scripts/discover_capabilities.py` (read-only) to detect
 the signals, then presents matching rows here for confirmation. Nothing installs
 without the user's explicit OK.
 
