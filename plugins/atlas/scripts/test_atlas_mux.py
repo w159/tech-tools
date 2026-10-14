@@ -12,6 +12,7 @@ run-worker is not allowed to write the board itself.
 # tests never touch a real tmux server.
 
 import contextlib
+import io
 import json
 import os
 import pathlib
@@ -2491,6 +2492,98 @@ class TeamWindowTests(unittest.TestCase):
         nw = next(c for c in calls if c[0] == "new-window")
         self.assertEqual("b", nw[nw.index("-n") + 1])
         self.assertTrue(any(c[0] == "set-option" and "atlas-t9:b" in c for c in calls))
+
+
+@unittest.skipUnless(shutil.which("tmux"), "tmux not on PATH")
+class TeamLiveTmuxTests(unittest.TestCase):
+    """Live spawn-team -> status -> reap on a PRIVATE tmux server (TMUX_TMPDIR), never the user's default."""
+
+    def run_mux(self, *argv):
+        import atlas_mux
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(list(argv))
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def test_status_lists_every_team_pane_then_reap_removes_the_session(self):
+        from unittest import mock
+
+        sock = tempfile.mkdtemp(
+            prefix="amx", dir="/tmp"
+        )  # short: unix socket paths cap near 100 chars
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, sock, True)
+        self.addCleanup(shutil.rmtree, root, True)
+        env = {
+            "TMUX_TMPDIR": sock,
+            "ATLAS_MUX_WORKER_CMD": "echo hi; sleep 1",
+            "ATLAS_COLONY_TRANSPORT": "tmux",
+            "ATLAS_MUX": "tmux",
+        }
+        with mock.patch.dict(os.environ, env):
+            self.addCleanup(
+                lambda: subprocess.run(
+                    ["tmux", "kill-server"],
+                    env=dict(os.environ, **env),
+                    capture_output=True,
+                )
+            )
+            code, out = self.run_mux(
+                "spawn-team",
+                "--class",
+                "audit",
+                "--effort",
+                "medium",
+                "--paths",
+                "a.py,b.py,c.py",
+                "--team-id",
+                "tlive",
+                "--root",
+                root,
+                "--poll",
+                "0.2",
+            )
+            self.assertEqual(0, code, out)
+            code, st = self.run_mux("status", "--team", "tlive", "--root", root)
+            self.assertEqual(0, code, st)
+            want = {
+                m["name"]: m["role"]
+                for m in out["members"]
+                and json.loads(
+                    pathlib.Path(root, ".atlas/.run/teams/tlive.json").read_text()
+                )["members"]
+            }
+            self.assertEqual(3, len(st["panes"]), st)
+            self.assertEqual(want, {p["name"]: p["role"] for p in st["panes"]})
+            self.assertTrue(
+                all(p["pane_id"].startswith("%") and p["pid"] for p in st["panes"]), st
+            )
+            titles = subprocess.run(
+                [
+                    "tmux",
+                    "list-panes",
+                    "-s",
+                    "-t",
+                    "atlas-tlive",
+                    "-F",
+                    "#{pane_title}",
+                ],
+                capture_output=True,
+                text=True,
+                env=dict(os.environ),
+            ).stdout.split("\n")
+            self.assertEqual(
+                {f"{n} [{r}]" for n, r in want.items()}, set(titles) - {""}
+            )
+            code, _ = self.run_mux("reap", "--team", "tlive", "--root", root)
+            self.assertEqual(0, code)
+            gone = subprocess.run(
+                ["tmux", "has-session", "-t", "atlas-tlive"],
+                capture_output=True,
+                env=dict(os.environ),
+            )
+            self.assertNotEqual(0, gone.returncode)
 
 
 if __name__ == "__main__":

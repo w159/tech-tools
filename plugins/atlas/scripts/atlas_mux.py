@@ -602,6 +602,10 @@ def _team_session_argv(session: str, rec: dict) -> list:
     return [["set-option", "-t", session, k, v] for k, v in opts]
 
 
+# pane title `name [role]`, set by _open_team_pane so `list-panes -F '#{pane_title}'` maps panes to members
+TITLE_RE = re.compile(r"^(\S+) \[(.*)\]$")
+
+
 def _team_panes(session: str) -> list:
     """Worker panes of a team session, by their @atlas_worker pane option."""
     res = _tmux("list-panes", "-s", "-t", session, "-F", "#{@atlas_worker}\t#{pane_dead}\t#{pane_pid}")
@@ -609,6 +613,41 @@ def _team_panes(session: str) -> list:
         return []
     rows = [line.split("\t") for line in res.stdout.splitlines()]
     return [{"name": r[0], "dead": _dead_flag(r[1]), "pid": r[2]} for r in rows if len(r) == 3 and r[0]]
+
+
+def _team_pane_rows(session: str, root: str) -> list:
+    """One row per pane of a team session for `status`: member, role, pane id, pid, liveness, foreground
+    command, exit status when dead, last board note kind. Member comes from the @atlas_worker pane option,
+    else from the `name [role]` pane title (a harness can rewrite the title, the option survives)."""
+    fmt = "\t".join(
+        "#{" + k + "}"
+        for k in ("pane_id", "@atlas_worker", "@atlas_role", "pane_title", "pane_pid", "pane_dead",
+                  "pane_dead_status", "pane_current_command")
+    )
+    res = _tmux("list-panes", "-s", "-t", session, "-F", fmt)
+    if res.returncode != 0:
+        return []
+    last = {}
+    for rec in atlas_todo.notes(root):
+        last[str(rec.get("owner"))] = rec.get("kind") or "note"
+    rows = []
+    for line in res.stdout.splitlines():
+        r = (line.split("\t") + [""] * 8)[:8]
+        name, role = r[1], r[2]
+        title = TITLE_RE.match(r[3])
+        if not name and title:
+            name, role = title.group(1), role or title.group(2)
+        if not name:
+            continue
+        dead = _dead_flag(r[5])
+        rows.append(
+            {
+                "name": name, "role": role, "pane_id": r[0], "pid": r[4], "dead": dead,
+                "command": r[7], "exit_status": int(r[6]) if dead and r[6].lstrip("-").isdigit() else None,
+                "last_note": last.get(name),
+            }
+        )
+    return rows
 
 
 def _new_team_session(session: str, pane: str, rec: dict) -> subprocess.CompletedProcess:
@@ -664,6 +703,7 @@ def _open_team_pane(session: str, name: str, pane: str, team: dict) -> str | Non
     pane_id = res.stdout.strip()
     _tmux("set-option", "-p", "-t", pane_id, "@atlas_worker", name)
     _tmux("set-option", "-p", "-t", pane_id, "@atlas_role", str(team.get("role") or ""))
+    _tmux("select-pane", "-t", pane_id, "-T", f"{name} [{team.get('role') or ''}]")
     _relayout_team(session)
     return None
 
@@ -1123,6 +1163,9 @@ def cmd_status(args) -> int:
             else None
         )
     workers = [w for w in (windows or []) if w["name"] not in ("lead", "Sidebar")]
+    # a team's workers are tiled panes of one window, which `workers` (tmux windows) collapses to one row
+    has_team = use != "herdr" and _tmux("has-session", "-t", session).returncode == 0
+    panes = _team_pane_rows(session, str(root)) if has_team else []
     return _emit(
         {
             "ok": True,
@@ -1131,6 +1174,7 @@ def cmd_status(args) -> int:
             "transport": use,
             "tmux": use == "tmux" and windows is not None,
             "workers": workers,
+            "panes": panes,
             "board": _board_exits(root),
         }
     )
@@ -1691,7 +1735,10 @@ def _parser() -> argparse.ArgumentParser:
         sp.add_argument("--poll", type=float, default=1.0)
     for name in ("status", "kill"):
         sp = sub.add_parser(name)
-        sp.add_argument("--run", required=True)
+        if name == "status":
+            sp.add_argument("--run", "--team", dest="run", required=True)  # a team id is its run id
+        else:
+            sp.add_argument("--run", required=True)
         sp.add_argument("--root")
     return p
 
