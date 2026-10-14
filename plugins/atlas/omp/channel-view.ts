@@ -12,13 +12,17 @@
  * TERMINAL `yield` sets ended_at in channels.json (stop-bridge.ts isTerminalYield). Polling stops after QUIET_POLLS (3)
  * polls with every member finished and no new note, or after MAX_MS (30 min) regardless; the widget then clears
  * LINGER_MS (15s) later. ATLAS_CHANNELS=off: never shown. Fails soft everywhere.
+ * Rendering lives in mission-panel.ts: framed Mission Control panel, gates from a 10s-throttled async atlas_gates.py
+ * cache; omp widget strings go through pi-tui Text, which is ANSI aware, so borders and accents are colored.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { type GatesCache, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
+import { gatesArmed } from "./scope";
 
 export const WIDGET_KEY = "atlas-channel";
-const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + header + workers + notes + roster; notes are trimmed first
+const MAX_LINES = 10; // omp MAX_WIDGET_LINES: frame + header + lanes + ticker + footer, collapsed by renderPanel
 const MAX_NOTES = 8;
 const MAX_LINE = 110;
 const POLL_MS = 1500;
@@ -53,6 +57,8 @@ export interface ViewDeps {
 	clearInterval?: (h: unknown) => void;
 	setTimeout?: (fn: () => void, ms: number) => unknown;
 	clearTimeout?: (h: unknown) => void;
+	columns?: () => number | undefined; // terminal width; default process.stdout.columns, else 120
+	gates?: GatesCache; // default: atlas_gates.py through spawnText, armed projects only
 }
 export interface ChannelView {
 	/** A `task` dispatch opened (or reused) the lead's channel. */
@@ -61,14 +67,13 @@ export interface ChannelView {
 	stop(): void;
 }
 
-/** `from -> to: text`, whitespace collapsed to one line and cut to `max`. */
+/** `from > to: text`, whitespace collapsed to one line and cut to `max`. */
 export function formatNote(n: Note, max = MAX_LINE): string {
-	const line = `${n.owner ?? "?"} -> ${n.to ?? "all"}: ${(n.text ?? "").replace(/\s+/g, " ").trim()}`;
+	const line = `${n.owner ?? "?"} > ${n.to ?? "all"}: ${(n.text ?? "").replace(/\s+/g, " ").trim()}`;
 	return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
-const MAX_WORKERS = 4;
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 // Mirror of PHASE_FRAMES in mod/theme.ts (module-private there); channel-view.test.ts asserts equality via spin().
 const PHASE_FRAMES: Record<string, string[]> = {
@@ -82,16 +87,6 @@ const PHASE_FRAMES: Record<string, string[]> = {
 export function spinFrame(n: number, phase?: string): string {
 	const f = (phase && PHASE_FRAMES[phase]) || SPIN;
 	return f[Math.abs(Math.floor(n)) % f.length] ?? SPIN[0];
-}
-
-/** phase id -> glyph from contracts/operating-contract.json (the single glyph table); {} when unreadable. */
-function phaseGlyphs(): Record<string, string> {
-	try {
-		const raw = JSON.parse(readFileSync(nodePath.join(PLUGIN_ROOT, "contracts", "operating-contract.json"), "utf8"));
-		return Object.fromEntries((raw.phases as Array<{ id: string; glyph: string }>).map(p => [p.id, p.glyph]));
-	} catch {
-		return {};
-	}
 }
 
 export interface LiveWorker {
@@ -112,18 +107,26 @@ export function liveWorkers(root: string, channel: string): LiveWorker[] {
 	}
 }
 
-function ageOf(joined: number | undefined, nowMs: number): string {
-	if (!joined) return "?";
-	const s = Math.max(0, Math.floor(nowMs / 1000 - joined));
-	return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`;
+/** Panel width for a terminal of `columns` (pi-tui Text pads one cell each side); 120 when unknown. */
+function panelWidth(columns: number | undefined): number {
+	return Math.max(40, (columns ?? 122) - 2);
 }
 
-/**
- * `ATLAS <glyph> <phase> <done>/<total> <bar> · <n> live` from todos.json, scoped like the Claude mod (mod/data/todos.ts):
- * only this session's rows count, advisor notes never do. No gate count: the Claude band's gates come from
- * atlas_gates.py, and open todos are not that, so showing them would mislead.
- */
-export function headerLine(root: string, live: number, sessionId?: string): string {
+/** Set only when no lane is left: the "last run" line of the idle panel. */
+function idleSummary(workers: PanelWorker[], members: number, elapsedMs: number): { workers: number; minutes: number } | undefined {
+	return workers.length ? undefined : { workers: members, minutes: Math.round(elapsedMs / 60_000) };
+}
+
+const maxSeq = (notes: Note[]) => notes.reduce((m, n) => Math.max(m, n.seq ?? 0), 0);
+
+/** Lane rows: running members; before the registry lists anyone, the dispatched members not yet finished. */
+function panelWorkers(live: LiveWorker[], pending: string[], nowMs: number): PanelWorker[] {
+	const src: LiveWorker[] = live.length ? live : pending.map(name => ({ name }));
+	return src.map(w => ({ name: w.name, secs: w.joined ? Math.max(0, Math.floor(nowMs / 1000 - w.joined)) : 0 }));
+}
+
+/** This session's todo progress, scoped like the Claude mod (mod/data/todos.ts): other sessions' rows and advisor notes never count. */
+export function todoSummary(root: string, sessionId?: string): { done: number; total: number; phase: string } {
 	let items: Array<{ status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string }> = [];
 	try {
 		items = JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "todos.json"), "utf8")).items ?? [];
@@ -131,24 +134,9 @@ export function headerLine(root: string, live: number, sessionId?: string): stri
 		// no board yet: zeroes
 	}
 	items = items.filter(i => !i.archived && i.origin !== "advisor" && (!sessionId || i.session_id === sessionId));
-	const done = items.filter(i => i.status === "completed").length;
 	const open = items.filter(i => i.status !== "completed");
 	const phase = (open.find(i => i.status === "in_progress" && i.phase) ?? open.find(i => i.phase))?.phase ?? "research";
-	const w = 8;
-	const fill = items.length ? Math.round((done / items.length) * w) : 0;
-	const bar = "█".repeat(fill) + "░".repeat(w - fill);
-	return `ATLAS ${phaseGlyphs()[phase] ?? "·"} ${phase} ${done}/${items.length} ${bar} · ${live} live`;
-}
-
-export function workerLines(workers: LiveWorker[], tickN: number, nowMs: number): string[] {
-	const rows = workers.slice(0, MAX_WORKERS).map(w => `${spinFrame(tickN)} ${w.name} ${ageOf(w.joined, nowMs)}`);
-	if (workers.length > MAX_WORKERS) rows.push(`+${workers.length - MAX_WORKERS} more`);
-	return rows;
-}
-
-export function rosterLine(members: string[], finished: Set<string>): string {
-	const done = members.filter(m => finished.has(m)).length;
-	return `members: ${members.length - done} working, ${done} finished`;
+	return { done: items.length - open.length, total: items.length, phase };
 }
 
 /** Main repo root of a linked git worktree dir (`.git` file -> gitdir -> commondir), else undefined. Mirrors atlas_todo._worktree_main_root. */
@@ -232,6 +220,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		});
 	const clearTo = deps.clearTimeout ?? ((h: unknown) => clearTimeout(h as Timer));
 
+	const gates = deps.gates ?? createGatesCache(spawnText, now, nodePath.join(PLUGIN_ROOT, "scripts", "atlas_gates.py"));
 	let ui: WidgetUi | undefined;
 	let info: (ChannelOpenInfo & { root: string }) | undefined;
 	let poll: unknown;
@@ -248,18 +237,36 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	};
 	const finished = () => (info ? finishedMembers(info.root, info.channel) : new Set<string>());
 
+	const columns = () => deps.columns?.() ?? process.stdout.columns;
+	const refreshGates = (i: ChannelOpenInfo & { root: string }) => {
+		if (deps.gates || gatesArmed(i.cwd, env)) gates.refresh(i.sessionId ?? "-", i.root);
+	};
 	/** Paint the widget when its lines changed; returns the highest note seq seen. */
 	const paint = (): number => {
 		if (!ui || !info) return lastSeq;
 		const notes = readChannelNotes(info.root, info.channel);
-		const live = liveWorkers(info.root, info.channel);
-		const head = [headerLine(info.root, live.length, info.sessionId), ...workerLines(live, tickN, now())];
-		const lines = [`atlas channel ${info.channel}`, ...head, ...(noteRoom => (noteRoom > 0 ? notes.slice(-noteRoom) : [])
-				)(Math.max(0, MAX_LINES - 2 - head.length)).map(n => formatNote(n)), rosterLine(info.members, finished())];
+		const fin = finished();
+		const pending = info.members.filter(m => !fin.has(m));
+		const todos = todoSummary(info.root, info.sessionId);
+		refreshGates(info);
+		const workers = panelWorkers(liveWorkers(info.root, info.channel), pending, now());
+		const lines = renderPanel({
+			width: panelWidth(columns()),
+			maxLines: MAX_LINES,
+			phase: todos.phase,
+			spin: spinFrame(tickN, todos.phase),
+			laneSpin: spinFrame(tickN),
+			done: todos.done,
+			total: todos.total,
+			workers,
+			notes: notes.map(n => formatNote(n, 60)),
+			gates: gates.read(),
+			idle: idleSummary(workers, info.members.length, now() - openedAt),
+		});
 		const key = lines.join("\n");
 		if (key !== painted) ui.setWidget(WIDGET_KEY, lines);
 		painted = key;
-		return notes.reduce((m, n) => Math.max(m, n.seq ?? 0), 0);
+		return maxSeq(notes);
 	};
 	const clear = () => {
 		stopPoll();
