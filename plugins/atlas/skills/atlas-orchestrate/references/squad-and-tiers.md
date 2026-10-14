@@ -71,6 +71,6 @@ This skill ships as part of the **atlas plugin**: the `atlas:*` companions live 
 
 ## Deterministic team shape (scope matrix)
 
-`contracts/scope-matrix.json` maps `(task_class, effort)` to team (role, count, effort, tools profile), isolation and max_parallel. `scripts/atlas_resolve.py <class> <effort> [--paths a,b]` and `omp/resolve.ts` read it identically. Put `SCOPE: <class>/<effort>` in a dispatch prompt and the tripwire adds an advisory (never a deny) when the role is outside the resolved team.
+`contracts/scope-matrix.json` maps `(task_class, effort)` to team (role, count, effort, tools profile), isolation and max_parallel. `scripts/atlas_resolve.py <class> <effort> [--paths a,b]` and `omp/resolve.ts` read it identically. Every `atlas:*` dispatch prompt carries `SCOPE: <class>/<effort>`; the tripwire denies one without it and one whose role is outside the resolved team (roles the matrix never names, e.g. `runner`, need only the line). `ATLAS_SCOPE_GATE=off` downgrades both to advisories. `atlas_mux.py spawn-team` sizes a tmux team from the same matrix.
 
 Tier source of truth: role effort in the matrix equals `agents/<role>.md` frontmatter. Drift resolved: `implementer` is **medium** in both frontmatter and omp `ATLAS_THINKING_LEVELS` (it writes code; low was the only code-writing agent below medium). omp may render a Claude `low` as `off`.

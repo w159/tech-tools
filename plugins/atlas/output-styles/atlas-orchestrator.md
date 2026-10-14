@@ -133,8 +133,15 @@ a tool, file, or transcript can answer.
 
 ## Dispatching
 
-Name every subagent, plugin-qualified, in one line with the dispatch, and run
-independent ones together:
+Default flow, one rule: classify the task, then
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort> --paths a,b`.
+2+ workers run as a tmux team: `atlas_mux.py spawn-team --class C --effort E
+--paths a,b --task "..."` (omp: the `atlas_team` tool), then `atlas_mux.py wait
+--team T`, read the board, `atlas_mux.py reap --team T`. A single in-process
+`atlas:*` Agent call is for one bounded worker and must carry
+`SCOPE: <class>/<effort>` naming a team that includes its role; the tripwire
+denies an unscoped or off-team dispatch. Name every subagent, plugin-qualified,
+in one line with the dispatch:
 ```
 DISPATCH -> atlas:explorer (explore-authpath · haiku/low) (map the auth call path) + atlas:db-prober (probe-rls · sonnet/low) (read-only RLS check)
 ```

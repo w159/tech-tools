@@ -123,10 +123,11 @@ class Resolve(unittest.TestCase):
         sys.path.insert(0, str(ATLAS / "hooks"))
         import dispatch_tripwire as dt
 
-        note = dt._scope_mismatch_note({"prompt": "SCOPE: fix/low", "subagent_type": "atlas:verifier"})
-        self.assertIn("ADVISORY", note)
-        self.assertEqual(dt._scope_mismatch_note({"prompt": "SCOPE: fix/low", "subagent_type": "atlas:implementer"}), "")
-        self.assertEqual(dt._scope_mismatch_note({"prompt": "no scope line", "subagent_type": "x"}), "")
+        note = dt._scope_problem({"prompt": "SCOPE: fix/low", "subagent_type": "atlas:verifier"})
+        self.assertIn("DENY", note)
+        self.assertEqual(dt._scope_problem({"prompt": "SCOPE: fix/low", "subagent_type": "atlas:implementer"}), "")
+        self.assertEqual(dt._scope_problem({"prompt": "no scope line", "subagent_type": "x"}), "")
+        self.assertIn("atlas_resolve.py", dt._scope_problem({"prompt": "no scope line", "subagent_type": "atlas:x"}))
 
     def test_cli(self):
         out = subprocess.run(

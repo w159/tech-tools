@@ -29,6 +29,8 @@ from unittest.mock import patch
 HOOK = os.path.join(os.path.dirname(__file__), "dispatch_tripwire.py")
 # Fixtures use throwaway temp dirs as cwd, where the scope check leaves gates unarmed.
 os.environ.setdefault("ATLAS_GATES", "always")
+# Fixtures fire dispatches back to back in one session; only ScopeGateTest wants the burst advisory.
+os.environ.setdefault("ATLAS_BURST_SECS", "0")
 
 
 def run_hook(payload, env):
@@ -54,6 +56,8 @@ SPEC_BLOCK = (
     "OUT OF SCOPE: no edits, no migrations, no dependency changes\n"
     "STOP CONDITIONS: halt and report if the router cannot be located\n"
     "REPORT: return the structured result\n"
+    # fix/medium resolves to explorer + implementer + verifier, the roles most fixtures dispatch.
+    "SCOPE: fix/medium\n"
 )
 # Every atlas:* dispatch fixture carries a sibling name: the colony contract
 # (dispatch_tripwire.py) denies unnamed atlas:* dispatches, so tests exercise
@@ -61,14 +65,28 @@ SPEC_BLOCK = (
 COLONY_NAME = "auth-slice"
 
 
+def _scope_for(role):
+    """First `<class>/<effort>` in contracts/scope-matrix.json whose team holds `role` (implement/low if none)."""
+    matrix = Path(__file__).resolve().parents[1] / "contracts" / "scope-matrix.json"
+    for cls, cells in json.loads(matrix.read_text())["classes"].items():
+        for effort, cell in cells.items():
+            if role in [t["role"] for t in cell["team"]]:
+                return f"{cls}/{effort}"
+    return "implement/low"
+
+
 def _named(tinput):
     """Inject the fixture name into an atlas:* dispatch payload unless the test
-    set one deliberately (an empty/whitespace name exercises the deny)."""
+    set one deliberately (an empty/whitespace name exercises the deny). A prompt
+    with no SCOPE: line gets the role's matching one, so fixtures satisfy the
+    SCOPE gate instead of tripping it (ScopeGateTest exercises that deny)."""
     tinput = dict(tinput or {})
-    if "name" not in tinput and str(tinput.get("subagent_type") or "").startswith(
-        "atlas:"
-    ):
+    agent = str(tinput.get("subagent_type") or "")
+    if "name" not in tinput and agent.startswith("atlas:"):
         tinput["name"] = COLONY_NAME
+    prompt = tinput.get("prompt")
+    if agent.startswith("atlas:") and isinstance(prompt, str) and not re.search(r"(?m)^SCOPE:", prompt):
+        tinput["prompt"] = f"{prompt}\nSCOPE: {_scope_for(agent.split(':', 1)[1])}\n"
     return tinput
 
 
@@ -3953,6 +3971,75 @@ class VerifierWatchSlotTest(unittest.TestCase):
         self.assertFalse(
             self.dt._verdict_missing(self.root, "sess-b", "atlas:verifier|A")
         )
+
+
+class ScopeGateTest(unittest.TestCase):
+    """SCOPE: <class>/<effort> is required on atlas:* dispatches; the resolver owns the team.
+    Payloads are built raw (not through _named's SCOPE fixture injection) so the gate sees exactly them."""
+
+    setUp = TripwireTest.setUp
+
+    def _dispatch(self, agent, scope=None, env=None, session="sess-1"):
+        spec = SPEC_BLOCK.replace("SCOPE: fix/medium\n", "")
+        prompt = TOOLS_BLOCK + spec + (f"SCOPE: {scope}\n" if scope else "")
+        payload = {
+            "session_id": session,
+            "cwd": self.tmp,
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "tool_input": {"subagent_type": agent, "name": COLONY_NAME, "prompt": prompt},
+        }
+        return run_hook(payload, env or self.env)
+
+    def _decision(self, r):
+        if not r.stdout.strip():
+            return None, ""
+        out = json.loads(r.stdout)["hookSpecificOutput"]
+        return out.get("permissionDecision"), out.get("permissionDecisionReason") or out.get("additionalContext") or ""
+
+    def test_a_missing_scope_denied_with_resolver_command(self):
+        decision, reason = self._decision(self._dispatch("atlas:explorer"))
+        self.assertEqual(decision, "deny")
+        self.assertIn("SCOPE: <class>/<effort>", reason)
+        self.assertIn("atlas_resolve.py", reason)
+
+    def test_b_role_outside_resolved_team_denied_with_roles(self):
+        decision, reason = self._decision(self._dispatch("atlas:verifier", "fix/low"))
+        self.assertEqual(decision, "deny")
+        self.assertIn("['implementer']", reason)
+        decision, reason = self._decision(self._dispatch("atlas:explorer", "nope/low"))
+        self.assertEqual(decision, "deny")
+        self.assertIn("unknown task_class", reason)
+
+    def test_b_role_inside_team_passes_and_unmatrixed_role_passes(self):
+        self.assertIsNone(self._decision(self._dispatch("atlas:implementer", "fix/low"))[0])
+
+    def test_c_second_dispatch_within_window_gets_spawn_team_advisory(self):
+        # The burst clock is per session and may live in the shared temp dir: use a session no other test touches.
+        sess = f"burst-{os.getpid()}-{id(self)}"
+        self.env = dict(self.env, ATLAS_BURST_SECS="10")
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.start_run(conn, atlas_db.register_project(conn, "/repo/x"), sess)
+        atlas_db.mark_orchestrating(conn, sess)
+        conn.close()
+        self.assertEqual(self._decision(self._dispatch("atlas:implementer", "fix/low", session=sess)), (None, ""))
+        decision, note = self._decision(self._dispatch("atlas:explorer", "fix/medium", session=sess))
+        self.assertIsNone(decision)
+        self.assertIn("spawn-team", note)
+
+    def test_d_kill_switch_restores_advisory(self):
+        env = dict(self.env, ATLAS_SCOPE_GATE="off")
+        decision, note = self._decision(self._dispatch("atlas:explorer", env=env))
+        self.assertIsNone(decision)
+        self.assertIn("ADVISORY", note)
+        self.assertIn("atlas_resolve.py", note)
+
+    def test_e_workers_and_non_atlas_agents_unaffected(self):
+        worker = dict(self.env, ATLAS_WORKER_NAME="W")
+        self.assertIsNone(self._decision(self._dispatch("atlas:explorer", env=worker))[0])
+        self.assertIsNone(self._decision(self._dispatch("general-purpose-x"))[0])
 
 
 if __name__ == "__main__":
