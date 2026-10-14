@@ -89,7 +89,7 @@ For how to slice work into stages and when to fan out at all, see `multi-stage-p
   prompt is the usual cause, and the fix is the prompt.
 - Read-only roles (explore, verify, db-probe, ui-test) -> `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]`.
 - Parallel editors of the same tree -> `atlas_wt.py add <name>` per writer (worktree `.atlas/wt/<name>`, branch `worker/<name>`); the brief names that path as the ONLY place the worker edits and demands branch + head sha in the report. Verifier per branch, then `atlas_wt.py merge <name>` one at a time (see `implementation-units.md`). Harness `isolation: "worktree"` remains acceptable where the lead cannot pre-create worktrees.
-- Cap long/background jobs with a turn budget. Spawn all independent jobs in ONE message.
+- Cap long/background jobs with a turn budget. 2+ independent jobs run as one `spawn-team` (see Parallelism & integration).
 - **Subagents never talk to the user.** They cannot use AskUserQuestion; a subagent that
   hits a genuinely user-owned decision (destructive action, scope fork, missing
   credential) STOPS and returns a `DECISION NEEDED: <question + options>` line in its
@@ -156,7 +156,8 @@ Match field names across a wave so results stack. For a verification dispatch, a
 
 ## Parallelism & integration
 
-- **In flight:** ~4-6 max. As each returns, read its report, then dispatch dependents.
+- **Default flow:** classify, `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort> --paths a,b`, then for 2+ workers `atlas_mux.py spawn-team --class C --effort E --paths a,b --task "..."` (omp: `atlas_team`), `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T`. A lone in-process `atlas:*` dispatch carries `SCOPE: <class>/<effort>` with its role on that team, or the tripwire denies it (`ATLAS_SCOPE_GATE=off` = advisory).
+- **In flight:** the resolved `max_parallel`. As a team is reaped, read its board, then spawn dependents.
 - **Independent vs related:** only parallelize truly independent jobs. Related failures (one fix may resolve several) go to one agent first.
 - **CONFLICT-CHECK before every wave (required):** for each agent in the wave, list its expected write/touch set (files/paths it will create or modify) and any ordering need (whether it consumes another agent's output). If two agents would write the same file or one needs another's output, they are not independent for that wave - either give the colliding agents the dispatch-time `isolation: "worktree"` option (a dispatch-time Agent option, not agent-file frontmatter) so their edits land in isolated worktrees, OR serialize just those agents while still fanning out the rest. Read-only agents have no write set and pass automatically. See `multi-stage-planning.md` for the full precondition.
 - **Integrate:** after a wave, check for conflicting edits, run the affected gate, then mark findings. A verifier's `rejected` sends the item back to a *fresh* implementer with the failure attached: three failed attempts -> mark `needs-human`, defer, move on.
@@ -226,9 +227,10 @@ worker, opened over the herdr socket by `atlas_herdr.create_pane`). The
 transport is herdr by default; tmux (session `atlas-<run>`, one window per
 worker) is used only with `ATLAS_COLONY_TRANSPORT=tmux` or when the herdr
 socket does not answer. Dispatches via Agent/task are never rerouted to mux.
-The default (in-process named dispatch + board) is unchanged. Use mux when
-workers must run fully independently (separate processes, watchable panes) at
-their own tiers. Watch the panes in the herdr web UI (`http://127.0.0.1:7317`,
+This per-worker `spawn` is the manual path; the default for 2+ workers is
+`atlas_mux.py spawn-team` (Parallelism & integration), which sizes the team
+from the resolver. In-process named dispatch + board remains for a single
+scoped worker. Watch the panes in the herdr web UI (`http://127.0.0.1:7317`,
 the dashboard's Colony page); `ATLAS_COLONY=off` skips starting it at
 SessionStart.
 

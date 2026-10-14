@@ -44,15 +44,20 @@ If it feels too small to delegate, delegate anyway.
 
 ## Laws and gates (load full text when acting)
 
-**One-line laws:** (1) delegate all execution (2) one message, many agents; writers get worktree isolation (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
+**One-line laws:** (1) delegate all execution (2) resolve the team, 2+ workers run as a tmux team; writers get worktree isolation (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
 
 **Before any other action, run the decision gate:** multi-stage OR multi-surface OR whole-repo/audit? → Workflow or parallel wave first; no inline. Tripwire advises at 4 inline ops (`ATLAS_TRIPWIRE_THRESHOLD`) and denies the 7th unsanctioned inline op since the last dispatch, and non-docs Edit|Write|NotebookEdit in orchestration sessions (`ATLAS_TRIPWIRE*`); `docs/` and `.atlas/` writes and URI writes (`agent://`, `xd://`) are not counted.
+
+**Default dispatch flow (both harnesses, one rule):**
+1. Classify the task as `<class>/<effort>` and run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort> --paths a,b` (classes and teams: `contracts/scope-matrix.json`).
+2. 2+ workers: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class C --effort E --paths a,b --task "..."` (omp: the `atlas_team` tool), then `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T`.
+3. One bounded worker (e.g. a single read-only lookup) may stay an in-process `atlas:*` Agent call; its prompt carries `SCOPE: <class>/<effort>` and its role must be on that team. The tripwire denies an unscoped or off-team `atlas:*` dispatch (`ATLAS_SCOPE_GATE=off` makes it advisory) and advises spawn-team on a 2nd dispatch within 10 s.
 
 Full laws, decision gate, TodoWrite rules, and mid-run steering: **load `references/laws-and-gates.md`**.
 
 ## The loop (load full text when running a wave)
 
-Orient → Plan (+ TodoWrite) → Dispatch (parallel) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done. **Implementation-unit discipline** governs every implementer dispatch: idempotency check before redoing a unit, an explicit per-unit evidence strategy (`proof-first` / `characterization` / `no-test-exception`) named in the prompt, independent-unit waves isolated via `atlas-worktree`, and a machine-readable per-unit evidence receipt folded into findings.json. **Parallel implementers work on isolated branches:** lead `atlas_wt.py add <name>` per worker (branch `worker/<name>`, worktree `.atlas/wt/<name>`), a verifier per branch, then `atlas_wt.py merge <name>` one at a time only after the verified finding, tests rerun once on the merged tree (protocol: `references/implementation-units.md`; gate (q) blocks unmerged branches). Full checklists: `references/implementation-units.md`.
+Orient → Plan (+ TodoWrite) → Dispatch (resolve, then tmux team) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done. **Implementation-unit discipline** governs every implementer dispatch: idempotency check before redoing a unit, an explicit per-unit evidence strategy (`proof-first` / `characterization` / `no-test-exception`) named in the prompt, independent-unit waves isolated via `atlas-worktree`, and a machine-readable per-unit evidence receipt folded into findings.json. **Parallel implementers work on isolated branches:** lead `atlas_wt.py add <name>` per worker (branch `worker/<name>`, worktree `.atlas/wt/<name>`), a verifier per branch, then `atlas_wt.py merge <name>` one at a time only after the verified finding, tests rerun once on the merged tree (protocol: `references/implementation-units.md`; gate (q) blocks unmerged branches). Full checklists: `references/implementation-units.md`.
 
 Full loop, fan-out mechanisms, and definition of done: **load `references/the-loop.md`**.
 

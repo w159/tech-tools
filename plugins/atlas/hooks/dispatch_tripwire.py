@@ -369,25 +369,99 @@ def _advisory(msg):
     )
 
 
-def _scope_mismatch_note(tinput):
-    """Advisory only: a `SCOPE: <class>/<effort>` line names the expected team; note a role outside it."""
-    m = re.search(r"^SCOPE:\s*([\w-]+)/(\w+)\s*$", str(tinput.get("prompt") or ""), re.M)
-    if not m:
+_SCOPE_LINE = re.compile(r"^SCOPE:\s*([\w-]+)/(\w+)\s*$", re.M)
+RESOLVE_CMD = 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort> --paths a,b'
+SPAWN_TEAM_CMD = (
+    'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class C --effort E '
+    '--paths a,b --task "..."'
+)
+# Measured over 7 days: resolver invoked 0 times, SCOPE on 8 of 166 dispatches. Advice did not move it; a deny does.
+# ATLAS_BURST_SECS=0 silences the burst advisory (test suites that fire many dispatches back to back).
+BURST_SECS = 10
+
+
+def _scope_matrix():
+    """(resolve, {class: [efforts]}, roles seen anywhere in the matrix) from scripts/atlas_resolve.py."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import atlas_resolve
+
+    classes = json.loads(atlas_resolve.MATRIX.read_text())["classes"]
+    roles = {t["role"] for c in classes.values() for cell in c.values() for t in cell["team"]}
+    return atlas_resolve.resolve, {k: sorted(v) for k, v in classes.items()}, roles
+
+
+def _scope_problem(tinput):
+    """Deny text for an atlas:* dispatch with no SCOPE line, an unresolvable one, or one whose team lacks
+    this role; "" otherwise. Roles the matrix never names (runner, schema-inventory...) only need the line."""
+    agent = str(tinput.get("subagent_type") or "")
+    if not agent.startswith("atlas:"):
         return ""
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-        from atlas_resolve import resolve
-
+        resolve, classes, known = _scope_matrix()
+    except Exception as exc:  # a broken resolver is a plugin fault, not the lead's: fail open, observably
+        _record_fault(exc)
+        return ""
+    m = _SCOPE_LINE.search(str(tinput.get("prompt") or ""))
+    if not m:
+        efforts = sorted({e for v in classes.values() for e in v})
+        return (
+            f"DENY - this dispatch to {agent} has no `SCOPE: <class>/<effort>` line. Classify the task, "
+            f"then resolve its team:\n  {RESOLVE_CMD}\nclasses: {', '.join(classes)}; efforts: "
+            f"{', '.join(efforts)}\nAdd `SCOPE: <class>/<effort>` "
+            f"to the prompt and re-dispatch. 2+ workers: run them as tmux panes with\n  {SPAWN_TEAM_CMD}"
+        )
+    try:
         roles = [t["role"] for t in resolve(m.group(1), m.group(2))["team"]]
-    except Exception as exc:  # advisory must never break a dispatch
-        return f"[atlas] ADVISORY - SCOPE {m.group(1)}/{m.group(2)} did not resolve: {exc}"
-    agent = str(tinput.get("subagent_type") or "").split(":")[-1]
-    if agent in roles:
+    except ValueError as exc:
+        return f"DENY - SCOPE {m.group(1)}/{m.group(2)} does not resolve: {exc}. Check it with:\n  {RESOLVE_CMD}"
+    role = agent.split(":", 1)[1]
+    if role in roles or role not in known:
         return ""
     return (
-        f"[atlas] ADVISORY - SCOPE {m.group(1)}/{m.group(2)} expects roles {roles}, "
-        f"but this dispatch is to '{agent}'. Proceeding; align the team or drop the SCOPE line."
+        f"DENY - SCOPE {m.group(1)}/{m.group(2)} resolves to team {roles}; '{role}' is not on it. "
+        f"Dispatch one of {roles}, or re-classify with:\n  {RESOLVE_CMD}"
     )
+
+
+def _burst_note(root, session):
+    """Advisory for the 2nd+ atlas:* dispatch inside BURST_SECS: that is a team, and teams run as tmux panes.
+    The timestamp rides in the per-session autoname store (already flock-serialised for parallel batches)."""
+    import time
+
+    try:
+        window = float(os.environ.get("ATLAS_BURST_SECS", BURST_SECS))
+    except ValueError:
+        window = BURST_SECS
+    if window <= 0:
+        return ""
+    now = time.time()
+    try:
+        with _name_state(root, session) as st:
+            last, st["last_dispatch"] = st.get("last_dispatch", 0), now
+    except Exception as exc:
+        _record_fault(exc)
+        return ""
+    if now - float(last or 0) >= window:
+        return ""
+    return (
+        f"[atlas] ADVISORY - 2nd atlas dispatch within {window:g} s: this is a team. Run it as tmux panes:\n"
+        f"  {SPAWN_TEAM_CMD}\nthen `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T` "
+        "(omp: the atlas_team tool)."
+    )
+
+
+def _scope_gate(deny, tinput, root, session):
+    """Last dispatch check: SCOPE deny (ATLAS_SCOPE_GATE=off downgrades it to advisory), then the burst advisory."""
+    problem = _scope_problem(tinput)
+    if problem and os.environ.get("ATLAS_SCOPE_GATE", "on").lower() != "off":
+        deny("scope", problem)
+        return
+    notes = [problem.replace("DENY - ", "[atlas] ADVISORY (ATLAS_SCOPE_GATE=off) - ", 1)] if problem else []
+    if str(tinput.get("subagent_type") or "").startswith("atlas:"):
+        notes.append(_burst_note(root, session))
+    note = "\n".join(n for n in notes if n)
+    if note:
+        _advisory(note)
 
 
 def _toolkit_gap(tinput):
@@ -1162,9 +1236,7 @@ def _pre_tool_use(
                 + _role_block(str((tinput or {}).get("subagent_type"))),
             )
         else:
-            note = _scope_mismatch_note(tinput or {})
-            if note:
-                _advisory(note)
+            _scope_gate(deny, tinput or {}, root, session)
         return
     # (b) Editing production target code inline is the sharpest violation.
     if tool in EDIT_TOOLS and not _is_orchestration_path(path):
