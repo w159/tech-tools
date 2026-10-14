@@ -1,0 +1,122 @@
+ ✔ New session started
+
+
+ First run one claude-mem search for "omp widget" (limit 2). Then use the atlas_team tool: spawn class audit effort medium with task "Each worker reads 3 files
+ under /etc, runs sleep 4, posts a peer-sync note to each sibling, reports STATUS: DONE". Then atlas_team wait, then atlas_team reap. Print each JSON result
+ verbatim.
+
+
+🔌 claude-mem:mcp-search/search
+Found 5 result(s) matching "omp widget" (2 obs, 2 sessions, 1 prompts)
+
+### Oct 13, 2026
+
+… 15 more lines ⟦⌃O: Expand⟧
+
+ ● Read xd://atlas_team
+
+
+ • Atlas team
+  └─ action="spawn", class="audit", effort="medium", task="Each worker reads 3 files under /etc, runs sleep 4, posts a peer-sync note to each sibling, repor…"
+ └ • ok: true
+   • team_id: "t330623"
+   • session: "atlas-t330623"
+   • transport: "tmux"
+   • transport_note: null
+   • wave_logged: true
+ ⟦⌃O: Expand⟧
+
+
+
+ • Atlas team
+  └─ action="wait", team="t330623"
+ └ • ok: true
+   • team_id: "t330623"
+   • members [3]
+     ├─ [0] {4}
+     │  └─ …
+     ├─ [1] {4}
+ ⟦⌃O: Expand⟧
+
+
+
+ • Atlas team
+  └─ action="reap", team="t330623"
+ └ • ok: true
+   • team_id: "t330623"
+   • record: "live"
+   • already_reaped: false
+   • members [3]
+     ├─ [0]: "explorer-2bb7"
+ ⟦⌃O: Expand⟧
+
+
+╭─── ☑ Todo 5 tasks ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ I. recall  1/1                                                                                                                                               │
+│ II. team  3/3                                                                                                                                                │
+│ III. report  1/1                                                                                                                                             │
+│   └─ ☑ Print each JSON result verbatim                                                                                                                       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ATLAS | 🏁 done 5/5 | search ran, team t330623 spawned (3 workers), waited (all STATUS: DONE, exit 0), reaped
+
+ claude-mem search "omp widget" (limit 2)
+
+ ```
+Found 5 result(s) matching "omp widget" (2 obs, 2 sessions, 1 prompts)
+#38959 7:13 PM plugins/atlas/hooks/worker_report_gate.py — Reaper Implementation, Band/Widget Before-After Evidence, and Doc Source Content Located (~796)
+#38954 7:12 PM General — OMP Widget Implementer (implementer-7a6b) Completion Report: Red-Green Tests, Known Limitations (~614)
+ ```
+
+ atlas_team spawn
+
+ ```json
+{"ok": true, "team_id": "t330623", "session": "atlas-t330623", "transport": "tmux", "transport_note": null, "wave_logged": true, "run_id": 2743, "channel":
+"tech-tools@main/lead-01a138", "max_parallel": 3, "members": [{"name": "explorer-2bb7", "ok": true, "session": "atlas-t330623", "harness": "omp", "agent":
+"explorer", "model": "sonnet", "level": "off", "board": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/explorer-2bb7.jsonl"}, {"name":
+"explorer-1903", "ok": true, "session": "atlas-t330623", "harness": "omp", "agent": "explorer", "model": "sonnet", "level": "off", "board":
+{"ok": true, "team_id": "t330623", "members": [{"name": "explorer-2bb7", "exit": 0, "duration_s": 49.7, "last_status": "STATUS: DONE"}, {"name":
+"explorer-1903", "exit": 0, "duration_s": 48.3, "last_status": "STATUS: DONE"}, {"name": "completeness-critic-f08e", "exit": 0, "duration_s": 78.8,
+"last_status": "STATUS: DONE"}], "notes_worker_to_worker": 6, "elapsed_s": 69.6}
+ ```
+
+ atlas_team reap
+
+ ```json
+{"ok": true, "team_id": "t330623", "record": "live", "already_reaped": false, "members": ["explorer-2bb7", "explorer-1903", "completeness-critic-f08e"],
+"session": "atlas-t330623", "killed": true, "session_left": false, "channels_reaped": 0, "prompts_removed": 3, "archived":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/teams/archive/t330623.json"}
+ ```
+
+ Observations from board notes: audit/medium resolved to 3 workers (not 2); completeness-critic-f08e reported its first start-note attempt was denied by the
+ claude-mem gate and its "read" was a wc -l line count, not file contents.
+
+ ATLAS | 🏁 done | one gotcha captured; no code/behavior changed, docs untouched by design
+
+
+ • Learn
+  └─ memory="atlas_team on omp (tech-tools, 2026-10-13, team t330623): class=audit effort=medium resolves to 3 workers (explorer x2 on sonnet +…", context="…"
+ Lesson stored.
+ ⟦⌃O: Expand⟧
+
+
+ Captured as a project memory (atlas_team sizing for audit/medium, claude-mem gate denying a worker's first board note, "read" ambiguity). Docs check: no file
+ under plugins/ or docs/ changed this turn (spawn/wait/reap only wrote .atlas/.run/ runtime artifacts), so CHANGELOG/ROADMAP/architecture need no update.
+
+ ⓘ Advisor 1 note
+   ▎ ⟦concern⟧ T-1 CLAUDE.md: "Never generate a skill or command to capture a lesson or pattern" — durable
+   ▎ knowledge goes to findings.json, docs/, or claude-mem only. `learn` returned just "Lesson stored." with no
+   ▎ path; confirm its destination isn't a `learned-*` SKILL.md or `created_by: atlas-auto` artifact (ctx_glob
+   ▎ `**/skills/learned-*/SKILL.md`), and delete it if so.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 📁  tech-tools   🐸  napping · last run 3m08s · tools 12 · 1 run     👾  Claude Fable 5.1  ·  medium
+ ​
+ 📚  ctx  14% ▅▁▁▁▁▁▁▁▁  142.0k / 1M         │  💰  session         plan     1.2M tok  cache 82%
+ ⏳  5h   28% ▅▅▅▁▁▁▁▁▁  2h44m anthropic     │  🔌  anthropic       plan     1.2M tok  claude-fable-5-1
+ 📅  7d   76% ▅▅▅▅▅▅▅▁▁  1d1h anthropic      │
+ ​
+LSP Active: typescript                         ○ 🐴 ponytail: ⚡ FULL     fallow impact  off
+

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 12.3.1
+
+### Fixed
+- mod band: a calm idle band with an amber gate chip, last-wave counts per wave, team lanes in the lead band, the phase kept when blocked with a BLOCKED chip, and honest denied cards.
+- `spawn-team`, `resolve`, `wait` and `reap` are never denied by the dispatch gates, and `spawn-team` resets the inline-op count.
+- SessionStart guidance and the SCOPE deny text use absolute plugin paths.
+- Stop gate (p) counts the notes of reaped team members.
+- Wave logging is idempotent and records each member's model.
+- omp: the idle panel returns after reap, the phase rail follows the live phase, tool chips are coherent, team thinking levels come from role effort, and the team channel is reaped.
+- omp lanes unwrap lean-ctx and env-prefixed commands the same way pane feeds do.
+- Team pane feed counts new tokens with cached tokens shown separately, shows real tool counts, draws full-width bars, balances layouts and colors headers by role.
+
 ## 12.3.0
 
 Folds in the unreleased 12.2.1 fixes.

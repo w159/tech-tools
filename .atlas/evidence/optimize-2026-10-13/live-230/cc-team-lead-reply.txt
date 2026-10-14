@@ -1,0 +1,83 @@
+
+  Called plugin:claude-mem:mcp-search, lean-ctx 5 times (ctrl+o to expand)
+ ◆ ATLAS  ⚑ DONE  Team t9678cf ran as a tmux team: all 3 workers finished with STATUS: DONE and the team was reaped
+I ran the claude-mem search for "spawn-team" first (limit 2). It returned #39578, which covers the atlas_mux spawn-team/wait/reap commands, and #39590, which
+covers the 12.2.0 team-flow docs. Next I classified the task as audit/medium. atlas_resolve.py audit medium --paths /etc resolved a team of 2 explorers at low
+effort and 1 completeness-critic at medium effort, with max_parallel 3.
+
+spawn-team
+{"ok": true, "team_id": "t9678cf", "session": "atlas-t9678cf", "transport": "tmux", "transport_note": null, "wave_logged": true, "run_id": 2738, "channel":
+"tech-tools@main/lead-66906b", "max_parallel": 3, "members": [{"name": "explorer-8147", "ok": true, "session": "atlas-t9678cf", "harness": "claude", "agent":
+"explorer", "model": "sonnet", "level": "low", "board": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/explorer-8147.jsonl"}, {"name":
+"explorer-ccd5", "ok": true, "session": "atlas-t9678cf", "harness": "claude", "agent": "explorer", "model": "sonnet", "level": "low", "board":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/explorer-ccd5.jsonl"}, {"name": "completeness-critic-8b41", "ok": true, "session":
+"atlas-t9678cf", "harness": "claude", "agent": "completeness-critic", "model": "sonnet", "level": "medium", "board":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/board/completeness-critic-8b41.jsonl"}]}
+
+wait
+{"ok": true, "team_id": "t9678cf", "members": [{"name": "explorer-8147", "exit": 0, "duration_s": 21.7, "last_status": "STATUS: DONE"}, {"name":
+"explorer-ccd5", "exit": 0, "duration_s": 22.2, "last_status": "STATUS: DONE"}, {"name": "completeness-critic-8b41", "exit": 0, "duration_s": 28.9,
+"last_status": "STATUS: DONE"}], "notes_worker_to_worker": 6, "elapsed_s": 25.7}
+
+reap
+{"ok": true, "team_id": "t9678cf", "record": "live", "already_reaped": false, "members": ["explorer-8147", "explorer-ccd5", "completeness-critic-8b41"],
+"session": "atlas-t9678cf", "killed": true, "session_left": false, "channels_reaped": 1, "prompts_removed": 3, "archived":
+"/Users/jerry/MEGA/Projects/Agentic/tech-tools/.atlas/.run/teams/archive/t9678cf.json"}
+
+The wait output shows 6 worker-to-worker notes, which matches 3 workers each sending one peer-sync note to both siblings. Each worker exited 0 and reported
+STATUS: DONE. The reap killed the tmux session, closed the team channel and archived the team record. Nothing in the repo was changed.
+
+⏺ Ran 10 stop hooks (ctrl+o to expand)
+  ⎿  Stop hook error: [atlas] Definition-of-done gate: the following condition(s) are not met:
+    (p) Colony channel: this run dispatched 3 atlas workers but the colony channel carried nothing -- no worker board note under .atlas/.run/board/ and
+  no IRC/SendMessage traffic was recorded for the run. Workers that never report on the channel leave the lead synthesizing from nothing. -> Post one
+  handoff note per worker: `python3 "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/cache/tech-tools/atlas/12.3.0/scripts/atlas_todo.py" note
+  --owner <worker> --to lead "<summary>"`, then retry Stop. (This check blocks once per session.)
+       (p) try: python3 "/Users/jerry/MEGA/Projects/Agentic/osprey/assets/plugins/cache/tech-tools/atlas/12.3.0/scripts/atlas_todo.py" note --owner
+  <worker> --to lead "<worker summary>"
+
+  Close the gap with the SMALLEST deterministic action, in this order:
+    1. Anything that is only an unwritten record -- a docs/CHANGELOG line, a ROADMAP move, a findings.json verdict a verifier already reached -- write
+  it inline, yourself, right now. docs/ and .atlas/ are the two trees an orchestrator may edit directly, so no dispatch is needed and none should be
+  made.
+    2. Dispatch a specialist ONLY when the evidence genuinely does not exist yet and someone has to go produce it (atlas:verifier for a check that never
+  ran, atlas:ui-runtime-tester for a missing runtime capture).
+    3. If a dispatch cannot realistically finish in this session, do not start one. Say plainly what is unverified, name the exact command and its
+  expected output, and leave the gate honestly open rather than ending mid-wave.
+
+  All conditions must hold before this run can be declared done. If the work is genuinely not done, say so explicitly -- what is unverified and the
+  exact command + expected output to verify it. Do not declare success.
+  "Unverified" is not a completion state. A diff or a file:line is not proof that it works.
+  ⎿  Stop hook feedback: Atlas self-improvement check: if this turn produced a reusable decision, fix, or gotcha, capture it (claude-mem observation_add
+  or a note under .agents/) so the next session starts ahead. If you changed behavior or structure, confirm docs/ still matches
+  (CHANGELOG/ROADMAP/architecture).
+
+  Called lean-ctx (ctrl+o to expand)
+ ◆ ATLAS  ⚑ DONE  The colony-channel block was a false positive, so I posted no extra notes
+The workers did post to the channel. Each of the three board files has 4 lines. Counting the notes by recipient:
+
+$ wc -l .atlas/.run/board/{explorer-8147,explorer-ccd5,completeness-critic-8b41}.jsonl  -> 4 + 4 + 4 = 12
+$ grep -o '"to": *"[^"]*"' ... | sort | uniq -c
+   2 "to":"completeness-critic-8b41"
+   2 "to":"explorer-8147"
+   2 "to":"explorer-ccd5"
+   6 "to":"lead-66906b"
+
+That is 6 peer-sync notes between workers, which matches "notes_worker_to_worker": 6 in the wait output, plus 6 notes to the lead.
+
+I did not run the gate's suggested atlas_todo.py note --owner <worker> command. It would have made the lead write notes under the workers' names, which fakes
+channel traffic that already exists. The gate says it blocks only once per session, so the stop retries on its own.
+
+The bug is in completion_gate.py check (p). It looks for the board notes somewhere other than where spawn-team writes them in .atlas/.run/board/. It also points
+at the install cache under osprey/assets/plugins/cache/... and not at this repo. I can trace the cause in plugins/atlas/hooks/completion_gate.py if you want.
+▸ 1m05s · ctx 11% · $0.92
+ ◆ ATLAS  ·  idle                                                                                                                                           [-]
+  ✓ research ▶ ✓ theory ▶ ✓ test ▶ ✓ implement ▶ ✓ verify ▶ ◆ DONE
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── claude-code-mods-redesign-demo ─
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁 tech-tools | 🤖 Opus 5.5 | 🧠 █░░░░░░░░░ 11% (112.5k/1M)                                                                                              /rc
+  ⏱️  5h: ██░░░░░░░░ 27% 2h48m left
+  ⏱️  7d: ███████░░░ 76% 1d1h left
+  context-mode  ●  saves ~98% of context window

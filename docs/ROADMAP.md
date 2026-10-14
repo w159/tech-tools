@@ -186,6 +186,12 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 - [planned] claude-harness team workers record no call timestamps, so the omp widget draws no sparklines for them.
 - [planned] omp worker panes are still plain output; they have no stream-json feed for `atlas_panefeed.py` to render.
 
+### Follow-ups: atlas 12.3.1 (added 2026-10-13)
+
+- [planned] `atlas_mux.py status` lists tmux windows, not the tiled panes inside the team window.
+- [planned] Read-only Bash classification does not yet see through the lean-ctx rewrite, so a read-only command wrapped by lean-ctx can be misclassified.
+- [planned] The inline-op counter carries across user turns instead of resetting at each prompt.
+
 ### Deferred backlog: atlas 10.5.0 wave (added 2026-10-10)
 
 - Hook payload parsing tolerates raw control characters in all remaining hooks (split from todo teca63cae; the dashboard ensure half, the non-blocking singleton lock and the recorded boot timeout, shipped in atlas 11.1.7).

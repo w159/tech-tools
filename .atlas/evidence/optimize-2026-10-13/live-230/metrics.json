@@ -1,0 +1,34 @@
+{
+  "run_window_utc": {"start": "2026-10-14T02:58:25Z", "end": "2026-10-14T03:18:00Z"},
+  "installed": {"plugin": "atlas@tech-tools", "version": "12.3.0", "installPath": "/Users/jerry/.claude/plugins/cache/tech-tools/atlas/12.3.0"},
+  "dispatches_with_wave_id_last_2h": {
+    "count": 24,
+    "wave_ids": ["t28dd65", "t1ad516", "t07ad80", "t9678cf", "t330623"],
+    "per_wave": {"t07ad80": 3, "t1ad516": 12, "t28dd65": 3, "t330623": 3, "t9678cf": 3},
+    "this_run": {"t9678cf": "cc2 spawn-team, 3 rows, model empty", "t330623": "omp atlas_team, 3 rows, model empty"},
+    "notes": [
+      "Agent-tool background dispatches in Claude Code (ids 6800-6802: bandA, bandB, cardC) log wave_id NULL even though the band shows 'wave 1'/'wave 2'.",
+      "Team rows store model as NULL although spawn-team JSON reports model sonnet.",
+      "wave_id column is declared INTEGER but holds text team ids.",
+      "t1ad516 (not from this run) has 12 rows for a 3-member team: 4x duplicate logging."
+    ]
+  },
+  "channels_json": {
+    "global_~/.atlas/.run/channels.json": {"start": {"channels": 1, "members": 0, "unfinished": 0}, "end": {"channels": 1, "members": 0, "unfinished": 0}},
+    "repo_.atlas/.run/channels.json_end": {"channels": 14, "members": 96, "unfinished_subagents_no_ended_at": 37,
+      "this_run": {
+        "lead-e9d647 (atlv7-cc, Agent-tool workers)": "left open, 4 members, all ended",
+        "lead-66906b (atlv7-cc2 spawn-team)": "reaped (channels_reaped 1)",
+        "lead-01a138 (omp atlas_team)": "left open after reap, 4 members, all ended (channels_reaped 0)"
+      },
+      "note": "repo-level start snapshot was not taken; global file was the one checked at start"}
+  },
+  "hook_faults_jsonl": {"lines_start": 667, "lines_end": 667, "rows_written_during_run": 0},
+  "bench_hooks_n15_installed_root_ms": {
+    "python3_floor": 21,
+    "SessionStart": 81, "UserPromptSubmit": 46,
+    "PreToolUse Bash": 136, "PreToolUse Read": 69, "PreToolUse Edit": 89, "PreToolUse Agent": 92,
+    "PostToolUse Edit": 150, "PostToolUse Read": 70, "PostToolUse Bash": 48,
+    "Stop": 168
+  }
+}

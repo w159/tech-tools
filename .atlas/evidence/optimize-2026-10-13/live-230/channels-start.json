@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "channels": {
+    "jerry": {
+      "name": "jerry",
+      "kind": "main",
+      "parent": null,
+      "lead": null,
+      "members": [],
+      "project_root": "/Users/jerry",
+      "branch": null,
+      "created": 1791798738.635118,
+      "last_activity": 1791798738.635118
+    }
+  }
+}

@@ -6653,5 +6653,22 @@
     "status": "rejected",
     "verified_at": "2026-10-14T01:36:11+00:00",
     "verified_by": "verifier-live220"
+  },
+  {
+    "id": "live-230",
+    "surface": "atlas band/gates/omp widget",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Live 12.3.0 CC+omp: 8 of 11 frames pass; band blind to tmux teams, inline-op gate denies spawn-team, omp idle widget missing",
+    "evidence": [
+      ".atlas/evidence/optimize-2026-10-13/live-230/verdicts.md; metrics.json; cc-team-gate-deny.png; cc-team-lead.png; omp-widget-idle.png"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux claude lead: after ~6 inline ops ask for audit/medium spawn-team -> PreToolUse:Bash DENY; in a fresh lead the team runs (via ctx_shell) while the band reads idle",
+    "proposed_fix": "exempt atlas_mux spawn-team/wait/reap from inline-op count; feed mux team state into the CC band; fix completion_gate (p) board lookup; omp reap should close the channel and keep an idle widget",
+    "blast_radius": "module",
+    "status": "open",
+    "verified_at": "2026-10-14T03:17:09+00:00",
+    "verified_by": "verifier-live230"
   }
 ]
