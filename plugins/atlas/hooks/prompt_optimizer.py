@@ -19,13 +19,13 @@ The optimizer is reached two ways, in priority order: (1) an explicit command ov
 back to the `ollama run` CLI if the server is unreachable. The CLI path strips the word-wrap
 control noise the renderer emits; the API path needs none.
 
-In `always` mode the optimizer fires on every non-trivial prompt, but two cheap escape
-hatches keep it from spending the ~tens-of-seconds latency on noise: the MINLEN gate skips
-very short prompts instantly (before any model call), and a bare `SKIP` token returned by
-the model (its own trivial-input verdict) is treated as a passthrough rather than injected.
+The optimizer runs ONLY on opt-in: a prompt that starts with a trigger prefix, or the
+atlas-prompt skill (slash command), which does its own rewrite in the main session. Every
+other prompt passes through untouched. A bare `SKIP` token returned by the model (its own
+trivial-input verdict) is treated as a passthrough rather than injected.
 
 Configuration (environment variables):
-  ATLAS_OPTIMIZE          off | trigger | always   (default: trigger)
+  ATLAS_OPTIMIZE          off | trigger            (default: trigger; legacy `always` = trigger)
   ATLAS_OPTIMIZE_TRIGGER  comma-separated prefixes  (default: "opt:,optimize:,++")
   ATLAS_OPTIMIZER_MODEL   ollama model tag          (default: prompt-optimizer:latest)
   ATLAS_OLLAMA_URL        ollama base URL; falls back to $OLLAMA_HOST, then
@@ -33,8 +33,8 @@ Configuration (environment variables):
   ATLAS_OPTIMIZE_CMD      override: run this instead of ollama. "{prompt}" is
                                 substituted, else the prompt is appended as the final argv item
   ATLAS_OPTIMIZE_TIMEOUT  seconds before giving up  (default: 110)
-  ATLAS_OPTIMIZE_MINLEN   skip prompts shorter than this many chars, in BOTH trigger
-                                and always mode (default: 12)
+  ATLAS_OPTIMIZE_MINLEN   skip triggered prompts shorter than this many chars
+                                (default: 12)
   ATLAS_OPTIMIZE_VERBOSE  if set, print a one-line stderr banner (quiet by default)
   ATLAS_OPTIMIZE_LOG      if set, append an audit line (orig -> optimized) to this file
 
@@ -170,19 +170,37 @@ def should_optimize(prompt: str) -> tuple[bool, str]:
     )
     matched, body = match_trigger(prompt, triggers)
     minlen = _env_num("ATLAS_OPTIMIZE_MINLEN", 12, int)
-    if mode == "always":
-        # Fire on everything that isn't a slash command, but still skip prompts too short
-        # to be worth the latency - a bare "ok"/"thanks" should pass through instantly.
-        body = body if matched else prompt
-        if len(body.strip()) < minlen:
-            return False, prompt
-        return True, body
-    # default: trigger-gated
+    # Opt-in only: no trigger prefix, no optimizer run (legacy `always` mode included).
     if not matched:
         return False, prompt
     if len(body.strip()) < minlen:
         return False, prompt  # too trivial to be worth the latency
     return True, body
+
+
+# Directive the optimizer must carry into its spec. It is an instruction FOR the executing
+# agent; the optimizer itself does not write in STE.
+STE_DIRECTIVE = (
+    "Write your replies, docs and reports in ASDSTE-100 Simplified Technical English, "
+    "applied about 80%: short sentences (20 words max for procedures, 25 for descriptions), "
+    "one instruction per sentence, active voice, approved common words, consistent terms. "
+    "Keep technical names, code and quoted text unchanged. Relax a rule when it costs clarity."
+)
+
+OPTIMIZER_TEMPLATE = (
+    "Rewrite the request below into a structured task spec. Keep the user's intent and "
+    "wording style. Do NOT rewrite the request itself into Simplified Technical English. "
+    "If the request is trivial (a greeting or acknowledgement), output exactly: SKIP\n\n"
+    "End the spec with a section titled `## Output style` that contains exactly this "
+    "directive for the agent that will execute the spec, copied word for word:\n"
+    "{directive}\n\n"
+    "----- REQUEST -----\n{prompt}\n----- END REQUEST -----"
+)
+
+
+def build_optimizer_prompt(body: str) -> str:
+    """Wrap the user's prompt in the optimizer instructions, including the STE directive."""
+    return OPTIMIZER_TEMPLATE.format(directive=STE_DIRECTIVE, prompt=body)
 
 
 def override_command(prompt: str) -> list[str] | None:
@@ -641,7 +659,7 @@ def main() -> int:
     do_it, body = should_optimize(prompt)
     optimized = None
     if do_it:
-        optimized = run_optimizer(body)
+        optimized = run_optimizer(build_optimizer_prompt(body))
         if optimized and is_skip(optimized):
             optimized = (
                 None  # model judged the prompt trivial - pass the raw text through
