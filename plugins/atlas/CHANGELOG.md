@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 12.4.0 (2026-10-14)
+
+### Added
+- Band footer is a row of clickable Buttons `r: route  t: team  c: channel  g: gates  o: board`; `o` toggles the todo board panel. Hotkeys are unique per site and checked against Claude Code default keybindings. Verified live in tmux (keys and an SGR mouse click); mod tests pass on main.
+- Role characters: a 3-cell face per role (role eyes, state mouth); running cycles 5 frames, thinking 3, done/failed/blocked one. Drawn in Claude band lanes, omp lanes and the tmux pane header (4 Hz); a Python mirror test guards drift.
+- Shared todo board panel: collapsed animated progress bar, expanded one row per item. Each atlas dispatch creates a board item (owner, role, BOARD ITEM id in the prompt); a valid `STATUS: DONE` report completes it with evidence; BLOCKED or FAILED marks it blocked (new `blocked` status). Unit-tested. `ATLAS_TODO_EXPANDED=1` in omp.
+- `atlas_mux.py status --team T` lists every team pane (member, role, pane id, alive/dead, command, exit status, last note); pane titles are "name [role]". Live private-tmux e2e test.
+- Colony IRC: lead kickoff note at spawn-team and wrap-up note at reap; the run-worker wrapper posts each worker's start note; the brief asks for a progress note, peer sync and one reply per peer note. Worker brief 1147 -> 635 bytes. Claude team workers get `--allowedTools` for lean-ctx, context-mode and serena navigation (fixes ctx_shell permission denials). Projected 20-23 channel messages per 3-worker team vs 12 (projection, not measured live).
+- omp worker panes run `omp --mode json` and `atlas_panefeed` renders their tool rows; Claude team workers record per-call timestamps so omp lanes draw sparklines.
+- `scripts/validate_skills.py` checks every skill (37/37 pass) and runs in the scripts suite.
+- Matt Pocock loops: atlas-debug red feedback loop first, atlas-plan tracer-bullet slices, atlas-refactor deep modules and glossary, atlas-orchestrate red-green per step, atlas-optimize names bench_hooks and scorecard.
+- Telemetry: atlas.db schema version gate (`PRAGMA user_version`), Agent-tool dispatches get a wave id, model ids normalized (`anthropic/claude-sonnet-5-5:medium` -> `sonnet`), `wave_id` is TEXT with rows kept. `bench_hooks.py` gains a `wall` column.
+
+### Changed
+- Prompt optimizer runs only on a trigger prefix (`opt:`, `optimize:`, `++`, or ATLAS_OPTIMIZE_TRIGGER) or the /atlas-prompt slash command; ATLAS_OPTIMIZE=always no longer auto-runs; atlas-prompt is no longer model-invoked. The optimized spec now carries an `## Output style` directive telling the executing agent to write in ASDSTE-100 Simplified Technical English at about 80%; the optimizer keeps the user's own wording.
+- Skills 50 -> 37 by merging into modes of existing skills: atlas + atlas-tour -> atlas-setup tour; atlas-test-browser -> atlas-dogfood smoke; atlas-polish + atlas-component -> atlas-frontend; atlas-babysit-pr -> atlas-run-watch `pr:<N>`; atlas-pov -> atlas-bakeoff verdict; atlas-strategy -> atlas-brainstorm strategy; atlas-feature -> atlas-orchestrate feature flow; atlas-commit -> atlas-ship commit-only; atlas-promote -> atlas-status announce; atlas-launch -> atlas-audit act; atlas-feedback-analysis -> atlas-sweep analyze.
+- Every worker role runs on sonnet at low effort; scope matrix efforts are all low; omp thinking is off or low. Lead contract adds a step loop (one worker = one task + one test; read STATUS, end it, spawn fresh for the next step). It is a contract line only; nothing automates it.
+- Performance: Stop hooks 5 processes -> 2 (`stop_tail.py`), Stop sum 194 -> 90 ms; import deferral in fallow_gate, bash_advisor, recall_gate, docs_drift_watch, format_after_edit, memory_capture.
+- Context: skill descriptions 14016 -> 7744 bytes, output style 10328 -> about 9100 bytes, agent definitions 107457 -> 86754 bytes, boot memory deduped.
+- Operating contract: the inline-op counter resets at each user prompt; `lean-ctx -c '<cmd>'` read-only commands classify as read-only (mutations still deny); deny text names the unresolved CLAUDE_PLUGIN_ROOT path.
+
+### Fixed
+- Mod controls did nothing (user report): the old hint advertised keys the band did not have and said "ctrl+x" where the engine needs ctrl+x then Tab. Also fixed open-first "unasked below 144 columns" and the narrow-pane strip fit.
+- Misleading pricing removed: no dollar cost in the band title, idle summary, turn receipt or omp panel. The engine exposes no per-turn token count, so none is shown.
+- Gate correctness: scorecard gate probes 11/99 wrong -> 0/100; fallow gate audits `sh -c 'git commit'` and `bash -c "git push"`; the worker report gate no longer shares one marker for reports without agent_id and blocks DONE reports whose evidence shows failures; spawn probe 0/8 -> 8/8; colony accuracy null -> 3/3.
+
+### Audit
+- Utilization: 412/418 non-test plugin files are referenced; none dead.
+
 ## 12.3.1
 
 ### Fixed

@@ -32,7 +32,7 @@ Width tiers: >= 120 columns full; 80-119 drops role and target from the lanes; <
 
 Pane floor: the engine places an unasked pane only from 144 columns (`register.ts` `DOCK_MIN_COLUMNS = 144`); below that the band is the only always-on surface.
 
-Look since 12.3.0: the band is a filled Catppuccin Mocha truecolor panel. The title bar is a gradient (scope, wave, elapsed, live count, context, cost); the phase rail is chevron pills with a shimmering current pill that follows the live phase; each lane carries a state chip, a filled tool chip, an eighth-block elapsed bar and a per-worker tool-call sparkline (a ring buffer fed by `onToolStart` and by tool uses read from team pane logs). A lane keeps its last tool, dimmed, between calls. The ticker is an IRC-style feed with hashed nick colors; the footer is a tasks bar plus gate chips. An idle band is two rows.
+Look since 12.3.0: the band is a filled Catppuccin Mocha truecolor panel. The title bar is a gradient (scope, wave, elapsed, live count, context; no dollar cost since 12.4.0); the phase rail is chevron pills with a shimmering current pill that follows the live phase; each lane carries a state chip, a filled tool chip, an eighth-block elapsed bar and a per-worker tool-call sparkline (a ring buffer fed by `onToolStart` and by tool uses read from team pane logs). A lane keeps its last tool, dimmed, between calls. The ticker is an IRC-style feed with hashed nick colors; the footer is a tasks bar plus gate chips. An idle band is two rows.
 
 #### Truecolor in tmux
 
@@ -56,7 +56,7 @@ Since 12.3.0 worker cards are filled stripe cards with a state chip and goal, no
 
 One `Pane` with id `atlas`. Placement: the pane docks itself, unasked, only on the first render that knows the viewport, only when the terminal is fullscreen and at least 110 columns wide (`register.ts:34,37` `DOCK_MIN_COLUMNS`, `shouldDock`, checked once via `paneChecked`); it opens undocked at `PANE_DOCK` (56 columns, auto rows). Everywhere else the pane stays closed until `/atlas-cc`, which opens a focused, closable 12-row inline pane (`register.ts:32` `PANE_ON_DEMAND`) and closes with Esc or the close mark (clearing `paneOpenedState` so `/atlas-cc` reopens it next time, `register.ts:636-639`).
 
-**Tab strip** (`sidebar.tsx:20-44` `tabStrip`). Four plain hotkey Buttons, the current one bold and inverse, separated by a dim ` │ ` pipe, plus a right-pushed hint (`r t c g tabs · ↑↓ Enter`) when the pane is at least 60 columns inside:
+**Tab strip** (`sidebar.tsx:20-44` `tabStrip`). Four plain hotkey Buttons, the current one bold and inverse, separated by a dim ` │ ` pipe, plus a right-pushed hint (`r t c g keys · ↑↓ Enter`) when the pane is at least 60 columns inside:
 
 ```
 r: ◎ route │ t: ● team │ c: ✉ channel │ g: ✗ 2
@@ -78,7 +78,7 @@ The gates tab label is `✗ N` (error color) when gates are open, else `✓ gate
 - **`AssistantMessage`** (`restyle.tsx:153-182` `assistantTree`) draws the contract header verbatim on one styled row — ` ATLAS ` (inverse brand chip) `| <phase label>[ n/m]` (phase-colored) ` | <sentence>` (fit to the remaining width) — when the reply's first line matches `headerFirstLinePattern`; the pipes are kept. A reply whose first line does not match is left to the engine's own default render (no header row is drawn).
 - **`Spinner`** becomes a braille-globe frame next to the phase capsule; when any squad member is `running`/`spawning` it appends a live agent count and that agent's current task.
 - **`ToolUse` for `Agent`/`Task` on atlas personas** becomes a deployment card tracking `$.agent.list()` status live. A finished `Bash`/`Read`/`Grep` call whose output is 8000 bytes or more collapses to a one-line `<tool> <target> ▸ <size>` summary instead of drawing the raw output.
-- **`TurnDuration`** becomes a one-line receipt: duration, phase move, completions this turn, live agent count, this turn's own tokens, context fill, and this turn's cost (session cost at turn end minus at turn start; no figure when the host keeps no cost ledger).
+- **`TurnDuration`** becomes a one-line receipt: duration, phase move, completions this turn, live agent count and context fill. Since 12.4.0 the receipt shows no dollar cost and no token count (the engine exposes no per-turn token count).
 - **`PromptHint`** shows contextual chords (`/atlas-cc Command Center · /atlas-say @name …`).
 - Toasts for a subagent completed or failed, a note to the lead, a todo completed, fired on answer-turn boundaries (`mod/notify.ts` `registerNotify`). An opt-in sound pack (`atlas_mod_sound`, off by default) ships its assets in `mod/fx/`.
 
@@ -206,3 +206,11 @@ Colocated `*.test.ts` files use the `claude-code/testing` kit. `scripts/sprite_r
 - `docs/atlas-workboard.md` — the browser Command Center (dashboard) the mod complements
 - `docs/atlas-harness-parity.md` — the harness parity matrix, including the Claude mod vs omp widget row
 - `docs/plans/2026-10-13-atlas-command-center-redesign.md` — design plan, decisions and stage history
+
+## Changes in 12.4.0
+
+- **Band controls.** The band footer is a row of clickable Buttons `r: route  t: team  c: channel  g: gates  o: board`. route, team, channel and gates open the pane on that view; board toggles the todo panel. The hint reads "click or ctrl+x Tab, then r t c g o" (the engine needs ctrl+x then Tab). The pane hint lists only existing keys. Verified under tmux with `CLAUDE_CODE_NO_FLICKER=1`; not yet verified in the default inline mode.
+- **Role characters.** Each role has a 3-cell face (role eyes, state mouth). running cycles 5 frames, thinking 3, done, failed and blocked one frame. Faces draw in Claude band lanes, omp lanes and the tmux pane header (4 Hz redraw). A Python mirror test guards drift.
+- **Board panel.** Collapsed: one animated violet-to-teal progress bar row with done/total and the active item. Expanded: one row per item (state glyph, owner, evidence, "+N more"). Toggle with `o` or the board button; `ATLAS_TODO_EXPANDED=1` expands it in omp. Each atlas dispatch creates a board item; a valid `STATUS: DONE` report completes it with its evidence; `BLOCKED` or `FAILED` marks it `blocked` (new status).
+- **Cost.** No dollar cost appears in the band title, idle summary, turn receipt or omp panel.
+

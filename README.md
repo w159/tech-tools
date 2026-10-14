@@ -373,7 +373,7 @@ Source: `plugins/atlas/skills/`.
 | `atlas-harden` | remediating or enforcing an endpoint setting at scale | `atlas-harden remediate unencrypted drives for RMM` |
 | `atlas-audit act` | after an atlas-audit run, to act on a finding | `atlas-audit act` |
 | `atlas-loop` | something must run repeatedly, poll for status, iterate until done, or sweep a backlog | `atlas-loop scan dependencies weekly until green` |
-| `atlas-prompt` | a request is underspecified and needs sharpening before execution | `atlas-prompt make the search faster` |
+| `atlas-prompt` | you run `/atlas-prompt` (slash command only, not model-invoked) on an underspecified request | `atlas-prompt make the search faster` |
 | `atlas-readme` | a repo has no README or its README is stale | `atlas-readme` |
 | `atlas-validate` | a plugin is believed complete and needs a structural and content check | `atlas-validate plugins/atlas` |
 | `atlas-wiki` | architecture docs changed or wiki diagrams are stale or missing | `atlas-wiki` |

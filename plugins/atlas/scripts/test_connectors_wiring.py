@@ -137,6 +137,9 @@ class TestConnectorsWiring(unittest.TestCase):
     def test_every_user_config_key_defaults_to_empty_string(self) -> None:
         bad: list[str] = []
         for key, spec in self.user_config.items():
+            # Connector keys are strings; a boolean toggle (atlas_mod_sound) is not a credential.
+            if spec.get("type") == "boolean":
+                continue
             default = spec.get("default")
             if default != "":
                 bad.append(f"{key}={default!r}")

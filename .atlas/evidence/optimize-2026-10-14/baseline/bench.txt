@@ -1,0 +1,13 @@
+python3 floor: median 22 ms
+
+event/tool                 hooks   median     p90   per-hook median ms
+SessionStart                   2       90     128   session_boot=56 atlas_doctor=34
+UserPromptSubmit               1       48      80   prompt_optimizer=48
+PreToolUse Bash                4      133     142   recall_gate=29 bash_advisor=31 fallow_gate=35 dispatch_tripwire=38
+PreToolUse Read                2       66      68   recall_gate=28 dispatch_tripwire=37
+PreToolUse Edit                3       86      91   recall_gate=28 edit_read_nudge=22 dispatch_tripwire=37
+PreToolUse Agent               2       87      92   recall_gate=27 dispatch_tripwire=60
+PostToolUse Edit               4      140     155   format_after_edit=43 docs_drift_watch=26 delegation_prewarn=22 dispatch_tripwire=48
+PostToolUse Read               2       73      77   edit_read_nudge=23 dispatch_tripwire=50
+PostToolUse Bash               1       49      50   dispatch_tripwire=49
+Stop                           5      170     178   completion_gate=46 ingest_session=29 chronicle_facet=29 memory_capture=36 nudge=29

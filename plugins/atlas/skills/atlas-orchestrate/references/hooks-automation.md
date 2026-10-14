@@ -82,7 +82,7 @@ Config (env vars, all optional):
 
 | var | default | meaning |
 |---|---|---|
-| `ATLAS_OPTIMIZE` | `trigger` | `off` - `trigger` (opt-in prefix) - `always` |
+| `ATLAS_OPTIMIZE` | `trigger` | `off` - `trigger` (opt-in prefix; `always` no longer auto-runs) |
 | `ATLAS_OPTIMIZE_TRIGGER` | `opt:,optimize:,++` | comma-separated opt-in prefixes |
 | `ATLAS_OPTIMIZER_MODEL` | `prompt-optimizer:latest` | ollama model tag |
 | `ATLAS_OLLAMA_URL` | `$OLLAMA_HOST` -> `http://127.0.0.1:11434` | optimizer endpoint |

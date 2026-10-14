@@ -1,0 +1,3285 @@
+{
+ "meta": {
+  "db": "synthetic",
+  "git_sha": null,
+  "metric_count": 199,
+  "only": null,
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.15.0",
+  "quick": false,
+  "repeat": 1,
+  "root": "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas",
+  "runs": 15,
+  "started_at": "2026-10-14T00:49:48-0400",
+  "states": {
+   "error": 3,
+   "ok": 194,
+   "skipped": 2
+  },
+  "wall_s": 567.5
+ },
+ "metrics": {
+  "bash_advisor_100k_ms": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "bash_advisor_100k_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bash_advisor_scaling",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 37.106
+  },
+  "bash_advisor_300k_ms": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "bash_advisor_300k_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bash_advisor_scaling",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 52.154
+  },
+  "board_add_loss": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "board_add_loss",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only board_concurrency",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 200",
+   "value": 0
+  },
+  "board_note_loss_own_file": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "board_note_loss_own_file",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only board_concurrency",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 800",
+   "value": 0
+  },
+  "board_note_loss_same_file": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "board_note_loss_same_file",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only board_concurrency",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 800",
+   "value": 0
+  },
+  "boot_harness_rc": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "connectors",
+   "name": "boot_harness_rc",
+   "reason": "test-mcp-tools.mjs or node missing",
+   "remeasure": "",
+   "state": "skipped",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "",
+   "value": null
+  },
+  "boot_harness_tools": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "connectors",
+   "name": "boot_harness_tools",
+   "reason": "test-mcp-tools.mjs or node missing",
+   "remeasure": "",
+   "state": "skipped",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "",
+   "value": null
+  },
+  "bridge_bash_post_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_bash_post_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 80.368
+  },
+  "bridge_bash_post_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_bash_post_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 85.781
+  },
+  "bridge_bash_pre_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_bash_pre_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 63.247
+  },
+  "bridge_bash_pre_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_bash_pre_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 67.697
+  },
+  "bridge_bash_total_p50_ms": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_bash_total_p50_ms",
+   "note": "pre+post p50 for one bash call",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 143.615
+  },
+  "bridge_edit_post_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_edit_post_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 71.633
+  },
+  "bridge_edit_post_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_edit_post_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 76.169
+  },
+  "bridge_edit_pre_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_edit_pre_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 53.758
+  },
+  "bridge_edit_pre_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_edit_pre_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 57.494
+  },
+  "bridge_floor_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_floor_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 35.617
+  },
+  "bridge_floor_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_floor_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 39.661
+  },
+  "bridge_grep_post_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_grep_post_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 70.083
+  },
+  "bridge_grep_post_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_grep_post_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 74.613
+  },
+  "bridge_grep_pre_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_grep_pre_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 54.711
+  },
+  "bridge_grep_pre_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_grep_pre_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 58.593
+  },
+  "bridge_hang_bash_ms": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_hang_bash_ms",
+   "note": "all hooks hang; omp's own timeout is 30000",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_hang",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 20001.579
+  },
+  "bridge_hang_over_30s": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_hang_over_30s",
+   "note": "tool_calls that outlive omp's 30 s timeout",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_hang",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "calls",
+   "value": 0
+  },
+  "bridge_hang_task3_ms": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_hang_task3_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_hang",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 20001.11
+  },
+  "bridge_read_post_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_read_post_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 65.647
+  },
+  "bridge_read_post_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_read_post_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 72.5
+  },
+  "bridge_read_pre_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_read_pre_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 52.39
+  },
+  "bridge_read_pre_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "omp",
+   "name": "bridge_read_pre_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only bridge_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 59.604
+  },
+  "colony_terminal_accuracy": {
+   "detail": {
+    "da": null,
+    "db": null,
+    "dc": null
+   },
+   "deterministic": true,
+   "direction": "higher",
+   "group": "mesh",
+   "name": "colony_terminal_accuracy",
+   "note": "agents that ended (killed / exit note / ctrl-c) shown terminal within the window",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only colony_accuracy",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 3",
+   "value": 0
+  },
+  "completion_gate_blocks_of_9": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "gates",
+   "name": "completion_gate_blocks_of_9",
+   "note": "drops after 5 when the circuit breaker silently disables the gate",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only completion_breaker",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "stops",
+   "value": 4
+  },
+  "completion_gate_breaker_faults": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "gates",
+   "name": "completion_gate_breaker_faults",
+   "note": "hookstate breaker_tripped: the durable trace when the breaker trips",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only completion_breaker",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "sessions",
+   "value": 1
+  },
+  "connector_boot_count": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "",
+   "name": "connector_boot_count",
+   "reason": "probe connector_boot crashed: timeout: probe exceeded its 90s budget",
+   "remeasure": "",
+   "state": "error",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "",
+   "value": null
+  },
+  "connector_configured_false_negative": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "connectors",
+   "name": "connector_configured_false_negative",
+   "note": "valid alternate-auth setups shown unconfigured",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only connector_configured_truth",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 4",
+   "value": 0
+  },
+  "connector_configured_false_positive": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "connectors",
+   "name": "connector_configured_false_positive",
+   "note": "connectors that need more than a secret, shown configured with only the secret set",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only connector_configured_truth",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 9",
+   "value": 0
+  },
+  "connector_status_reachable": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "",
+   "name": "connector_status_reachable",
+   "reason": "probe connector_boot crashed: timeout: probe exceeded its 90s budget",
+   "remeasure": "",
+   "state": "error",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "",
+   "value": null
+  },
+  "contracts_unparseable": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "drift",
+   "name": "contracts_unparseable",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only mcp_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "files",
+   "value": 0
+  },
+  "credwatch_cases": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "gates",
+   "name": "credwatch_cases",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only credwatch",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 6
+  },
+  "credwatch_false_positives": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "credwatch_false_positives",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only credwatch",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 0
+  },
+  "credwatch_true_positives": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "gates",
+   "name": "credwatch_true_positives",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only credwatch",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 1
+  },
+  "dashboard_activity_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_activity_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 1280
+  },
+  "dashboard_activity_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_activity_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 13.37
+  },
+  "dashboard_activity_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_activity_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 15.724
+  },
+  "dashboard_api_worst_p95_ms": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_api_worst_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 15.724
+  },
+  "dashboard_auth_bypass": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_auth_bypass",
+   "note": "requests that must be refused (bad Host/Origin, missing token on sensitive/mutating routes) but got 200",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 6",
+   "value": 0
+  },
+  "dashboard_colony_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_colony_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 140
+  },
+  "dashboard_colony_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_colony_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 1.039
+  },
+  "dashboard_colony_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_colony_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 4.263
+  },
+  "dashboard_conc8_health_p50_ms": {
+   "detail": {
+    "n": 96
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_conc8_health_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 3.114
+  },
+  "dashboard_conc8_health_p95_ms": {
+   "detail": {
+    "n": 96
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_conc8_health_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 5.604
+  },
+  "dashboard_conc8_throughput_rps": {
+   "deterministic": false,
+   "direction": "higher",
+   "group": "dashboard",
+   "name": "dashboard_conc8_throughput_rps",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 0.5,
+    "rel": 0.25
+   },
+   "unit": "req/s",
+   "value": 2147.369
+  },
+  "dashboard_health_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_health_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 11706
+  },
+  "dashboard_health_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_health_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.55
+  },
+  "dashboard_health_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_health_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.825
+  },
+  "dashboard_herd_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_herd_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 438
+  },
+  "dashboard_herd_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_herd_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.823
+  },
+  "dashboard_herd_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_herd_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 3.81
+  },
+  "dashboard_improve_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_improve_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 2249
+  },
+  "dashboard_improve_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_improve_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.584
+  },
+  "dashboard_improve_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_improve_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.704
+  },
+  "dashboard_irc_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_irc_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 54
+  },
+  "dashboard_irc_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_irc_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.527
+  },
+  "dashboard_irc_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_irc_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.649
+  },
+  "dashboard_overview_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_overview_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 6437
+  },
+  "dashboard_overview_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_overview_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 5.768
+  },
+  "dashboard_overview_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_overview_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 7.019
+  },
+  "dashboard_payload_max_kb": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_payload_max_kb",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5,
+    "rel": 0.25
+   },
+   "unit": "KB",
+   "value": 11.432
+  },
+  "dashboard_prefs_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_prefs_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 318
+  },
+  "dashboard_prefs_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_prefs_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.527
+  },
+  "dashboard_prefs_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_prefs_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.774
+  },
+  "dashboard_projects_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_projects_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 33
+  },
+  "dashboard_projects_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_projects_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 4.456
+  },
+  "dashboard_projects_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_projects_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 4.729
+  },
+  "dashboard_sse_tick_cost_ms": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_sse_tick_cost_ms",
+   "note": "sum of the SSE topic route p50s: CPU spent per open client per 5 s tick",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 3.22
+  },
+  "dashboard_todos_bytes": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_todos_bytes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 512,
+    "rel": 0.25
+   },
+   "unit": "bytes",
+   "value": 196
+  },
+  "dashboard_todos_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_todos_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.52
+  },
+  "dashboard_todos_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "dashboard",
+   "name": "dashboard_todos_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 0.682
+  },
+  "dashboard_tokenless_get_routes": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "dashboard",
+   "name": "dashboard_tokenless_get_routes",
+   "note": "GET routes that answer 200 with no token (exposure surface, informational)",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 10",
+   "value": 8
+  },
+  "dashboard_up": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "dashboard",
+   "name": "dashboard_up",
+   "note": "DB: synthetic (6400 messages)",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dashboard_api",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "bool",
+   "value": 1
+  },
+  "dispatch_spec_decoy_denied": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "higher",
+   "group": "gates",
+   "name": "dispatch_spec_decoy_denied",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dispatch_spec",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 5
+  },
+  "dispatch_spec_decoy_total": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "gates",
+   "name": "dispatch_spec_decoy_total",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dispatch_spec",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 5
+  },
+  "dispatch_spec_empty_denied": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "higher",
+   "group": "gates",
+   "name": "dispatch_spec_empty_denied",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dispatch_spec",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 6
+  },
+  "dispatch_spec_empty_total": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "gates",
+   "name": "dispatch_spec_empty_total",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only dispatch_spec",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 6
+  },
+  "doctor_check_crashes": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "doctor",
+   "name": "doctor_check_crashes",
+   "note": "exit codes other than 0/1 from the plain check",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only doctor",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "rcs",
+   "value": 0
+  },
+  "doctor_check_p50_ms": {
+   "detail": {
+    "n": 5
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "doctor",
+   "name": "doctor_check_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only doctor",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 75.297
+  },
+  "doctor_check_p95_ms": {
+   "detail": {
+    "n": 5
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "doctor",
+   "name": "doctor_check_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only doctor",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 76.849
+  },
+  "doctor_hook_corrupt_state_rc": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "doctor",
+   "name": "doctor_hook_corrupt_state_rc",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only doctor",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "rc!=0",
+   "value": 0
+  },
+  "doctor_hook_corrupt_state_traced": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "doctor",
+   "name": "doctor_hook_corrupt_state_traced",
+   "note": "corrupt state leaves a durable fault line",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only doctor",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "faults",
+   "value": 0
+  },
+  "doctor_miner_errors": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "doctor",
+   "name": "doctor_miner_errors",
+   "note": "--mine with NULL inline_ops rows",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only doctor",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "miners",
+   "value": 0
+  },
+  "failopen_cells": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "hooks",
+   "name": "failopen_cells",
+   "note": "252 on a full run",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only failopen_grid",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cells",
+   "value": 252
+  },
+  "failopen_crashes": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "failopen_crashes",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only failopen_grid",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cells",
+   "value": 0
+  },
+  "failopen_silent": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "hooks",
+   "name": "failopen_silent",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only failopen_grid",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cells",
+   "value": 165
+  },
+  "failopen_timeouts": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "failopen_timeouts",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only failopen_grid",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cells",
+   "value": 0
+  },
+  "failopen_traceback_rc0": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "failopen_traceback_rc0",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only failopen_grid",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cells",
+   "value": 0
+  },
+  "failopen_traced": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "hooks",
+   "name": "failopen_traced",
+   "note": "cells whose internal error left a hook-faults.jsonl line",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only failopen_grid",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cells",
+   "value": 87
+  },
+  "failopen_untraced": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "failopen_untraced",
+   "note": "crash, timeout or traceback-with-rc0: errors that escaped fail-open untraced",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only failopen_grid",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cells",
+   "value": 0
+  },
+  "gate_mismatch_completion_gate": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "gate_mismatch_completion_gate",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 1
+  },
+  "gate_mismatch_dispatch_tripwire": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "gate_mismatch_dispatch_tripwire",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 3
+  },
+  "gate_mismatch_fallow_gate": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "gate_mismatch_fallow_gate",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 2
+  },
+  "gate_mismatch_recall_gate": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "gate_mismatch_recall_gate",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 2
+  },
+  "gate_mismatch_worker_report_gate": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "gate_mismatch_worker_report_gate",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 3
+  },
+  "gate_probe_faults": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "gates",
+   "name": "gate_probe_faults",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "faults",
+   "value": 2
+  },
+  "gate_probes_correct": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "gates",
+   "name": "gate_probes_correct",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 88
+  },
+  "gate_probes_mismatch": {
+   "detail": [
+    "recall_gate: BYPASS? non-claude-mem tool with mcp-search in the name expect=deny got=allow",
+    "recall_gate: BYPASS? non-search claude-mem tool satisfies the gate expect=deny got=allow",
+    "worker_report_gate: allow-lowercase-status expect=allow got=block",
+    "worker_report_gate: deny-atlas-dash-agent_type expect=block got=allow",
+    "worker_report_gate: agent_id missing: second agent also blocked expect=block got=allow",
+    "fallow_gate: BYPASS? sh -c 'git commit' expect=deny got=allow",
+    "fallow_gate: BYPASS? bash -c git push expect=deny got=allow",
+    "dispatch_tripwire: allow: valid atlas:implementer dispatch expect=allow got=deny",
+    "dispatch_tripwire: allow: non-atlas agent w/o spec expect=allow got=deny",
+    "dispatch_tripwire: BYPASS? Bash redirect write inline expect=deny got=context",
+    "completion_gate: allow: evidence+findings+changelog present expect=allow got=block"
+   ],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "gate_probes_mismatch",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 11
+  },
+  "gate_probes_total": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "gates",
+   "name": "gate_probes_total",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only gate_correctness",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 99
+  },
+  "herd_extra_instances": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "herd",
+   "name": "herd_extra_instances",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only herd",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "processes",
+   "value": 0
+  },
+  "herd_managed_instances": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "herd",
+   "name": "herd_managed_instances",
+   "note": "read-only ps count of live `bun|node ...managed.ts`; nothing is started or killed",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only herd",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "processes",
+   "value": 0
+  },
+  "hook_atlas_doctor_hook_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_atlas_doctor_hook_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 55.194
+  },
+  "hook_atlas_doctor_hook_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_atlas_doctor_hook_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 59.161
+  },
+  "hook_bash_advisor_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_bash_advisor_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 30.157
+  },
+  "hook_bash_advisor_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_bash_advisor_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 31.171
+  },
+  "hook_chronicle_facet_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_chronicle_facet_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 40.716
+  },
+  "hook_chronicle_facet_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_chronicle_facet_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 52.661
+  },
+  "hook_completion_gate_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_completion_gate_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 56.942
+  },
+  "hook_completion_gate_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_completion_gate_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 65.32
+  },
+  "hook_connector_credential_watch_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_connector_credential_watch_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 23.514
+  },
+  "hook_connector_credential_watch_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_connector_credential_watch_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 24.993
+  },
+  "hook_dispatch_tripwire_post_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_dispatch_tripwire_post_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 44.672
+  },
+  "hook_dispatch_tripwire_post_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_dispatch_tripwire_post_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 48.076
+  },
+  "hook_dispatch_tripwire_pre_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_dispatch_tripwire_pre_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 57.811
+  },
+  "hook_dispatch_tripwire_pre_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_dispatch_tripwire_pre_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 65.071
+  },
+  "hook_docs_drift_watch_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_docs_drift_watch_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 33.196
+  },
+  "hook_docs_drift_watch_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_docs_drift_watch_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 38.707
+  },
+  "hook_fallow_gate_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_fallow_gate_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 35.138
+  },
+  "hook_fallow_gate_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_fallow_gate_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 38.79
+  },
+  "hook_faults_on_valid_payloads": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_faults_on_valid_payloads",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "faults",
+   "value": 0
+  },
+  "hook_floor_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_floor_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 21.659
+  },
+  "hook_floor_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_floor_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 25.877
+  },
+  "hook_format_after_edit_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_format_after_edit_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 50.435
+  },
+  "hook_format_after_edit_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_format_after_edit_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 54.246
+  },
+  "hook_ingest_session_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_ingest_session_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 48.869
+  },
+  "hook_ingest_session_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_ingest_session_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 56.929
+  },
+  "hook_ingest_session_precompact_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_ingest_session_precompact_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 47.304
+  },
+  "hook_ingest_session_precompact_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_ingest_session_precompact_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 50.139
+  },
+  "hook_ingest_session_sessionend_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_ingest_session_sessionend_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 80.029
+  },
+  "hook_ingest_session_sessionend_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_ingest_session_sessionend_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 82.105
+  },
+  "hook_memory_capture_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_memory_capture_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 51.096
+  },
+  "hook_memory_capture_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_memory_capture_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 53.443
+  },
+  "hook_nonzero_exits": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_nonzero_exits",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "runs",
+   "value": 0
+  },
+  "hook_nudge_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_nudge_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 39.482
+  },
+  "hook_nudge_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_nudge_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 41.9
+  },
+  "hook_prompt_optimizer_chat_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_prompt_optimizer_chat_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 45.473
+  },
+  "hook_prompt_optimizer_chat_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_prompt_optimizer_chat_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 46.907
+  },
+  "hook_prompt_optimizer_eng_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_prompt_optimizer_eng_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 56.64
+  },
+  "hook_prompt_optimizer_eng_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_prompt_optimizer_eng_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 56.981
+  },
+  "hook_recall_gate_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_recall_gate_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 31.483
+  },
+  "hook_recall_gate_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_recall_gate_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 36.271
+  },
+  "hook_session_boot_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_session_boot_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 67.671
+  },
+  "hook_session_boot_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_session_boot_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 86.174
+  },
+  "hook_todo_capture_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_todo_capture_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 47.032
+  },
+  "hook_todo_capture_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_todo_capture_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 49.373
+  },
+  "hook_worker_report_gate_p50_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_worker_report_gate_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 30.19
+  },
+  "hook_worker_report_gate_p95_ms": {
+   "detail": {
+    "n": 15
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_worker_report_gate_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 33.837
+  },
+  "hook_worst_p95_ms": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hook_worst_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_latency",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 86.174
+  },
+  "hooks_bridge_names_unwired": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hooks_bridge_names_unwired",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "files",
+   "value": 0
+  },
+  "hooks_bridge_names_without_file": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hooks_bridge_names_without_file",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "files",
+   "value": 0
+  },
+  "hooks_entries_without_timeout": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hooks_entries_without_timeout",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "entries",
+   "value": 0
+  },
+  "hooks_suite_fail": {
+   "detail": [
+    "test_marketplace_entry_counts_match_disk (test_atlas_contract.DocsMatchCodeContract.test_marketplace_entry_counts_match_disk)",
+    "test_stop_message_and_inbox_share_one_document (test_worker_inbox.RealCollisionTest.test_stop_message_and_inbox_share_one_document)",
+    "test_secret_shapes_are_ignored_under_every_allowlisted_tree (test_atlas_contract.GitignoreSecretContract.test_secret_shapes_are_ignored_under_every_allowlisted_tree)",
+    "test_ip_is_orchestration_path_branches (test_dispatch_tripwire.InProcessTest.test_ip_is_orchestration_path_branches)",
+    "test_ip_orchestration_path_expands_home (test_dispatch_tripwire.InProcessTest.test_ip_orchestration_path_expands_home)",
+    "test_ip_post_edit_to_target_nags (test_dispatch_tripwire.InProcessTest.test_ip_post_edit_to_target_nags)",
+    "test_ip_pre_deny_notebook_edit (test_dispatch_tripwire.InProcessTest.test_ip_pre_deny_notebook_edit)",
+    "test_ip_pre_deny_prod_edit (test_dispatch_tripwire.InProcessTest.test_ip_pre_deny_prod_edit)",
+    "test_ip_pre_real_source_write_still_denied_after_uri_writes (test_dispatch_tripwire.InProcessTest.test_ip_pre_real_source_write_still_denied_after_uri_writes)",
+    "test_edit_and_write_still_trip_the_deny (test_dispatch_tripwire.ReadOnlyInvestigationTest.test_edit_and_write_still_trip_the_deny)",
+    "test_same_edit_from_the_main_transcript_is_still_denied (test_dispatch_tripwire.SubagentDenyTierSkipTest.test_same_edit_from_the_main_transcript_is_still_denied)",
+    "test_edit_and_write_still_trip_the_deny (test_dispatch_tripwire.TeamMuxDispatchTest.test_edit_and_write_still_trip_the_deny)",
+    "test_notebook_multiedit_on_prod_path_is_denied (test_dispatch_tripwire.TripwireTest.test_notebook_multiedit_on_prod_path_is_denied)",
+    "test_pre_denies_edit_to_in_root_source (test_dispatch_tripwire.TripwireTest.test_pre_denies_edit_to_in_root_source)",
+    "test_pre_deny_prod_edit_allows_docs_edit (test_dispatch_tripwire.TripwireTest.test_pre_deny_prod_edit_allows_docs_edit)",
+    "test_stop_message_and_inbox_share_one_document (test_worker_arm_paths.StopAndInboxMergeTest.test_stop_message_and_inbox_share_one_document)",
+    "(failures=14, errors=2, skipped=1)"
+   ],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "suites",
+   "name": "hooks_suite_fail",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/hooks && python3 -m pytest -q -p no:cacheprovider .",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "tests",
+   "value": 16
+  },
+  "hooks_suite_pass": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "suites",
+   "name": "hooks_suite_pass",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/hooks && python3 -m pytest -q -p no:cacheprovider .",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "tests",
+   "value": 1471
+  },
+  "hooks_suite_skipped": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "suites",
+   "name": "hooks_suite_skipped",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/hooks && python3 -m pytest -q -p no:cacheprovider .",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "tests",
+   "value": 1
+  },
+  "hooks_suite_wall_s": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "suites",
+   "name": "hooks_suite_wall_s",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/hooks && python3 -m pytest -q -p no:cacheprovider .",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "s",
+   "value": 118.2
+  },
+  "hooks_unclassified_in_bridge": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hooks_unclassified_in_bridge",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "files",
+   "value": 0
+  },
+  "hooks_wired_entries": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "hooks",
+   "name": "hooks_wired_entries",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "entries",
+   "value": 25
+  },
+  "hooks_wired_missing_file": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hooks_wired_missing_file",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "files",
+   "value": 0
+  },
+  "hooks_without_fault_recorder": {
+   "detail": [
+    "bash_advisor.py",
+    "completion_gate.py",
+    "delegation_prewarn.py",
+    "dispatch_tripwire.py",
+    "edit_read_nudge.py",
+    "fallow_gate.py",
+    "format_after_edit.py",
+    "prompt_optimizer.py"
+   ],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "hooks",
+   "name": "hooks_without_fault_recorder",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only hook_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "files",
+   "value": 8
+  },
+  "irc_a2a_loss": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_a2a_loss",
+   "note": "agent->agent via board to a headless worker",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only irc_delivery",
+   "state": "ok",
+   "threshold": {
+    "abs": 2
+   },
+   "unit": "messages",
+   "value": 0
+  },
+  "irc_delivery_p50_ms": {
+   "detail": {
+    "n": 30
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_delivery_p50_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only irc_delivery",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 318.827
+  },
+  "irc_delivery_p95_ms": {
+   "detail": {
+    "n": 30
+   },
+   "deterministic": false,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_delivery_p95_ms",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only irc_delivery",
+   "state": "ok",
+   "threshold": {
+    "abs": 5.0,
+    "rel": 0.25
+   },
+   "unit": "ms",
+   "value": 584.576
+  },
+  "irc_human_dup": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_human_dup",
+   "note": "delivered both typed and by hook drain",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only irc_delivery",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "messages",
+   "value": 0
+  },
+  "irc_human_loss": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_human_loss",
+   "note": "to steerable panes (omp1, omp2, wk1); no receipt of any kind",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only irc_delivery",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "messages",
+   "value": 0
+  },
+  "irc_human_sent": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "mesh",
+   "name": "irc_human_sent",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only irc_delivery",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "messages",
+   "value": 30
+  },
+  "irc_late_note_delivered": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "mesh",
+   "name": "irc_late_note_delivered",
+   "note": "an older-ts note landing after a drain must still be delivered",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only board_concurrency",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 1",
+   "value": 1
+  },
+  "irc_shell_typed": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_shell_typed",
+   "note": "messages typed into a plain shell pane (must be refused)",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only irc_delivery",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "messages",
+   "value": 0
+  },
+  "irc_stream_dup": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_stream_dup",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only board_concurrency",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "notes",
+   "value": 0
+  },
+  "irc_stream_loss": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_stream_loss",
+   "note": "8 writers x 300 notes + 1 drainer; timing-dependent in the baseline",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only board_concurrency",
+   "state": "ok",
+   "threshold": {
+    "abs": 8
+   },
+   "unit": "of 2400",
+   "value": 0
+  },
+  "irc_stuck_queued": {
+   "deterministic": false,
+   "direction": "lower",
+   "group": "mesh",
+   "name": "irc_stuck_queued",
+   "note": "never reached a terminal delivery status",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only irc_delivery",
+   "state": "ok",
+   "threshold": {
+    "abs": 2
+   },
+   "unit": "messages",
+   "value": 0
+  },
+  "isolation_db_follows_atlas_home": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "doctor",
+   "name": "isolation_db_follows_atlas_home",
+   "note": "with only ATLAS_HOME set, db_path() resolves under it",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only doctor",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "bool",
+   "value": 1
+  },
+  "lint_docs_names_rc": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "lint",
+   "name": "lint_docs_names_rc",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/scripts && python3 lint_skill_names.py; python3 lint_docs_names.py --all",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "rc!=0",
+   "value": 0
+  },
+  "lint_docs_names_violation_lines": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "lint",
+   "name": "lint_docs_names_violation_lines",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/scripts && python3 lint_skill_names.py; python3 lint_docs_names.py --all",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "lines",
+   "value": 0
+  },
+  "lint_skill_names_rc": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "lint",
+   "name": "lint_skill_names_rc",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/scripts && python3 lint_skill_names.py; python3 lint_docs_names.py --all",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "rc!=0",
+   "value": 0
+  },
+  "lint_skill_names_violation_lines": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "lint",
+   "name": "lint_skill_names_violation_lines",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/scripts && python3 lint_skill_names.py; python3 lint_docs_names.py --all",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "lines",
+   "value": 0
+  },
+  "mcp_env_example_missing": {
+   "detail": [
+    "PANOS_API_KEY",
+    "PANOS_HOST",
+    "PANOS_PASSWORD",
+    "PANOS_REST_VERSION",
+    "PANOS_TARGET",
+    "PANOS_USERNAME",
+    "PANOS_VERIFY_TLS"
+   ],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "drift",
+   "name": "mcp_env_example_missing",
+   "note": "CFG_* env wired in .mcp.json but absent from .env.example",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only mcp_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "keys",
+   "value": 7
+  },
+  "mcp_servers_vs_dirs_diff": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "drift",
+   "name": "mcp_servers_vs_dirs_diff",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only mcp_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "servers",
+   "value": 0
+  },
+  "mcp_servers_wired": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "drift",
+   "name": "mcp_servers_wired",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only mcp_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "servers",
+   "value": 12
+  },
+  "mcp_userconfig_undeclared": {
+   "detail": [],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "drift",
+   "name": "mcp_userconfig_undeclared",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only mcp_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "keys",
+   "value": 0
+  },
+  "mcp_userconfig_unused": {
+   "detail": [
+    "atlas_mod_sound"
+   ],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "drift",
+   "name": "mcp_userconfig_unused",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only mcp_drift",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "keys",
+   "value": 1
+  },
+  "omp_suite_fail": {
+   "detail": [
+    "REAL dispatch_tripwire through the bridge: first spec-less call is advisory, the second denies; bundled and production-edit calls are denied; well-formed and docs calls pass [381.12ms]",
+    "REAL dispatch_tripwire through the bridge: device writes are never 'inline edits of target code' [135.54ms]",
+    "repo dir is armed; markerless dir under home is not; ancestor marker arms [0.14ms]"
+   ],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "omp",
+   "name": "omp_suite_fail",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/omp && ATLAS_HOME=$(mktemp -d) ATLAS_DASHBOARD=off ATLAS_COLONY=off ATLAS_DASHBOARD_PORT=17969 bun test",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "tests",
+   "value": 3
+  },
+  "omp_suite_pass": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "omp",
+   "name": "omp_suite_pass",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/omp && ATLAS_HOME=$(mktemp -d) ATLAS_DASHBOARD=off ATLAS_COLONY=off ATLAS_DASHBOARD_PORT=17969 bun test",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "tests",
+   "value": 421
+  },
+  "omp_suite_wall_s": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "omp",
+   "name": "omp_suite_wall_s",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/omp && ATLAS_HOME=$(mktemp -d) ATLAS_DASHBOARD=off ATLAS_COLONY=off ATLAS_DASHBOARD_PORT=17969 bun test",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "s",
+   "value": 23.42
+  },
+  "omp_typecheck_errors": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "omp",
+   "name": "omp_typecheck_errors",
+   "note": "approximation: ad-hoc tsconfig (the tree ships none)",
+   "remeasure": "tsc -p <generated tsconfig: omp/*.ts non-test, paths -> omp dist types + bun-types> --noEmit",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "errors",
+   "value": 4
+  },
+  "parallel_spawn_ok": {
+   "detail": [
+    "Workspace not trusted. Run `claude` in /private/tmp/atlas-sc-g4o4jfu7/spawn/proj"
+   ],
+   "deterministic": true,
+   "direction": "higher",
+   "group": "mesh",
+   "name": "parallel_spawn_ok",
+   "note": "8 concurrent atlas_mux.py spawn calls into one run, distinct names",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only parallel_spawn",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "of 8",
+   "value": 0
+  },
+  "probe_error.connector_boot": {
+   "deterministic": true,
+   "direction": "exact",
+   "group": "probe",
+   "name": "probe_error.connector_boot",
+   "reason": "timeout: probe exceeded its 90s budget",
+   "remeasure": "--only connector_boot",
+   "state": "error",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "",
+   "value": null
+  },
+  "scripts_suite_fail": {
+   "detail": [
+    "test_hook_named_in_a_label_wins_over_the_style_file (test_atlas_selffix.SurfaceTargetTest.test_hook_named_in_a_label_wins_over_the_style_file)",
+    "test_plain_paths_and_tool_names_are_unchanged (test_atlas_selffix.SurfaceTargetTest.test_plain_paths_and_tool_names_are_unchanged)",
+    "test_table_matches_harness_for_every_connector (test_connectors_wiring.TestDisclosureDocMatchesHarness.test_table_matches_harness_for_every_connector)",
+    "test_claude_marketplace_lists_three_plugins_only (test_no_kimi_artifacts.NoKimiArtifacts.test_claude_marketplace_lists_three_plugins_only)",
+    "test_sweep_state (unittest.loader._FailedTest.test_sweep_state)",
+    "test_fixture_temp_and_missing_roots_are_excluded (test_atlas_dash_insights.TestProjectPicker.test_fixture_temp_and_missing_roots_are_excluded)",
+    "test_fixture_projects_are_filtered (test_atlas_dashboard.SettingsDataTest.test_fixture_projects_are_filtered)",
+    "test_sentinel_stays_at_cwd_without_any_marker (test_atlas_db.UncoveredPathsTest.test_sentinel_stays_at_cwd_without_any_marker)",
+    "test_no_project_root_fails_loudly (test_atlas_finding.AtlasFindingCli.test_no_project_root_fails_loudly)",
+    "test_repo_dir_true (test_atlas_scope.GatesArmedTest.test_repo_dir_true)",
+    "test_surface_labels_map_to_real_files_inside_the_repo (test_atlas_selffix.SurfaceTargetTest.test_surface_labels_map_to_real_files_inside_the_repo)",
+    "test_every_user_config_key_defaults_to_empty_string (test_connectors_wiring.TestConnectorsWiring.test_every_user_config_key_defaults_to_empty_string)",
+    "test_no_marker_in_temp_roots (test_no_tmp_marker.TmpRootMarkerTest.test_no_marker_in_temp_roots)",
+    "test_edit_without_task_blocks_on_delegation_condition (test_omp_transcript.GateConditionMatrixTest.test_edit_without_task_blocks_on_delegation_condition)",
+    "test_edit_without_task_blocks_on_delegation_condition (test_omp_transcript.GateEndToEndTest.test_edit_without_task_blocks_on_delegation_condition)",
+    "test_long_reference_files_have_a_table_of_contents (test_skill_agent_conformance.TestAnthropicSkillChecklist.test_long_reference_files_have_a_table_of_contents)",
+    "(failures=11, errors=5, skipped=1)"
+   ],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "suites",
+   "name": "scripts_suite_fail",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/scripts && python3 -m pytest -q -p no:cacheprovider .",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "tests",
+   "value": 16
+  },
+  "scripts_suite_pass": {
+   "deterministic": true,
+   "direction": "higher",
+   "group": "suites",
+   "name": "scripts_suite_pass",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/scripts && python3 -m pytest -q -p no:cacheprovider .",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "tests",
+   "value": 1728
+  },
+  "scripts_suite_skipped": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "suites",
+   "name": "scripts_suite_skipped",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/scripts && python3 -m pytest -q -p no:cacheprovider .",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "tests",
+   "value": 1
+  },
+  "scripts_suite_wall_s": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "suites",
+   "name": "scripts_suite_wall_s",
+   "remeasure": "cd /private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/6d0ddbcd-efa1-4050-bb7c-bc45d4a3017c/scratchpad/before/plugins/atlas/scripts && python3 -m pytest -q -p no:cacheprovider .",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "s",
+   "value": 162.424
+  },
+  "worker_report_nonsense_accepted": {
+   "detail": [
+    "done-with-failing-evidence"
+   ],
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "worker_report_nonsense_accepted",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only report_gate",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 1
+  },
+  "worker_report_nonsense_total": {
+   "deterministic": true,
+   "direction": "info",
+   "group": "gates",
+   "name": "worker_report_nonsense_total",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only report_gate",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 6
+  },
+  "worker_report_valid_blocked": {
+   "deterministic": true,
+   "direction": "lower",
+   "group": "gates",
+   "name": "worker_report_valid_blocked",
+   "remeasure": "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only report_gate",
+   "state": "ok",
+   "threshold": {
+    "abs": 0
+   },
+   "unit": "cases",
+   "value": 0
+  }
+ },
+ "probes": {
+  "bash_advisor_scaling": {
+   "metrics": 2,
+   "module": "hooks",
+   "state": "ok",
+   "wall_s": 0.1
+  },
+  "board_concurrency": {
+   "metrics": 6,
+   "module": "mesh",
+   "state": "ok",
+   "wall_s": 20.0
+  },
+  "boot_harness": {
+   "metrics": 2,
+   "module": "connectors",
+   "state": "ok",
+   "wall_s": 0.0
+  },
+  "bridge_hang": {
+   "metrics": 3,
+   "module": "omp",
+   "state": "ok",
+   "wall_s": 20.0
+  },
+  "bridge_latency": {
+   "metrics": 19,
+   "module": "omp",
+   "state": "ok",
+   "wall_s": 8.2
+  },
+  "bun_suite": {
+   "metrics": 3,
+   "module": "omp",
+   "state": "ok",
+   "wall_s": 23.4
+  },
+  "colony_accuracy": {
+   "metrics": 1,
+   "module": "mesh",
+   "state": "ok",
+   "wall_s": 25.6
+  },
+  "completion_breaker": {
+   "metrics": 2,
+   "module": "hooks",
+   "state": "ok",
+   "wall_s": 21.3
+  },
+  "connector_boot": {
+   "metrics": 3,
+   "module": "connectors",
+   "state": "error",
+   "wall_s": 90.0
+  },
+  "connector_configured_truth": {
+   "metrics": 2,
+   "module": "connectors",
+   "state": "ok",
+   "wall_s": 0.2
+  },
+  "credwatch": {
+   "metrics": 3,
+   "module": "gates",
+   "state": "ok",
+   "wall_s": 0.2
+  },
+  "dashboard_api": {
+   "metrics": 39,
+   "module": "dashboard",
+   "state": "ok",
+   "wall_s": 1.2
+  },
+  "dispatch_spec": {
+   "metrics": 4,
+   "module": "gates",
+   "state": "ok",
+   "wall_s": 0.5
+  },
+  "doctor": {
+   "metrics": 7,
+   "module": "misc",
+   "state": "ok",
+   "wall_s": 0.8
+  },
+  "failopen_grid": {
+   "metrics": 7,
+   "module": "hooks",
+   "state": "ok",
+   "wall_s": 32.6
+  },
+  "gate_correctness": {
+   "metrics": 9,
+   "module": "gates",
+   "state": "ok",
+   "wall_s": 6.7
+  },
+  "herd": {
+   "metrics": 2,
+   "module": "dashboard",
+   "state": "ok",
+   "wall_s": 0.1
+  },
+  "hook_drift": {
+   "metrics": 7,
+   "module": "hooks",
+   "state": "ok",
+   "wall_s": 0.0
+  },
+  "hook_latency": {
+   "metrics": 47,
+   "module": "hooks",
+   "state": "ok",
+   "wall_s": 15.3
+  },
+  "hook_suite": {
+   "metrics": 4,
+   "module": "hooks",
+   "state": "ok",
+   "wall_s": 118.5
+  },
+  "irc_delivery": {
+   "metrics": 8,
+   "module": "mesh",
+   "state": "ok",
+   "wall_s": 14.1
+  },
+  "lint": {
+   "metrics": 4,
+   "module": "misc",
+   "state": "ok",
+   "wall_s": 0.1
+  },
+  "mcp_drift": {
+   "metrics": 6,
+   "module": "misc",
+   "state": "ok",
+   "wall_s": 0.0
+  },
+  "parallel_spawn": {
+   "metrics": 1,
+   "module": "mesh",
+   "state": "ok",
+   "wall_s": 3.6
+  },
+  "report_gate": {
+   "metrics": 3,
+   "module": "gates",
+   "state": "ok",
+   "wall_s": 0.3
+  },
+  "scripts_suite": {
+   "metrics": 4,
+   "module": "hooks",
+   "state": "ok",
+   "wall_s": 162.9
+  },
+  "typecheck": {
+   "metrics": 1,
+   "module": "omp",
+   "state": "ok",
+   "wall_s": 1.5
+  }
+ },
+ "schema": 1
+}

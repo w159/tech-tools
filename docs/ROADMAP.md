@@ -176,21 +176,32 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 
 - [planned] The mod pane's Tab key has no engine action, so Tab does not cycle tabs; only `r t c g` and the arrow-key focus ring switch views.
 - [planned] A foreground Claude `Agent` call may not carry an `agentId`, so `SubagentStop` cannot map it to a member; the age-based reaper (trigger A at channel open, trigger B at omp lead shutdown) covers those members. Confirm with a live foreground dispatch.
-- [planned] omp Mission Control lanes lack role and current tool (`omp/mission-panel.ts`); the Claude band shows both.
-- [planned] omp worker panes have no streaming feed; `atlas_panefeed.py` renders only the Claude `stream-json` output.
-- [planned] Hook latency: merging the per-event hooks into one process could cut about 100 ms per Edit call.
 
 ### Follow-ups: atlas 12.3.0 (added 2026-10-13)
 
 - [planned] The engine folds 2+ background dispatches into one "N background agents launched" row that plugins cannot restyle; batch results show on the notification rows instead.
-- [planned] claude-harness team workers record no call timestamps, so the omp widget draws no sparklines for them.
-- [planned] omp worker panes are still plain output; they have no stream-json feed for `atlas_panefeed.py` to render.
 
 ### Follow-ups: atlas 12.3.1 (added 2026-10-13)
 
-- [planned] `atlas_mux.py status` lists tmux windows, not the tiled panes inside the team window.
-- [planned] Read-only Bash classification does not yet see through the lean-ctx rewrite, so a read-only command wrapped by lean-ctx can be misclassified.
-- [planned] The inline-op counter carries across user turns instead of resetting at each prompt.
+
+### Follow-ups: atlas 12.4.0 (added 2026-10-14)
+
+Closed in 12.4.0 (see `docs/CHANGELOG.md`): omp lane role and tool, omp worker pane feed, claude team worker timestamps and sparklines, `atlas_mux.py status` per-pane listing, lean-ctx read-only classification, inline-op counter reset, Stop hook merge (5 -> 2 processes).
+
+- [in-progress] Hook bytecode shims for large hooks and a lazy worker_inbox registry check: on a branch, not merged.
+- [planned] dispatch_tripwire 30% speedup not met (sqlite is about 1.5 ms; per-call recompile at about 8 ms is the lever). PostToolUse Edit latency is unchanged (real ruff run plus DB).
+- [planned] Hooks tolerate raw control characters in every payload (todo t417c7495); port the `sh -c` git parse fix to the omp/mandates.ts twin.
+- [blocked] Workers with extended thinking disabled: not possible on Sonnet 5.5 per Claude Code docs (costs, env-vars, sub-agents pages); low effort is the only lever. Platform limit.
+- [planned] Richer gamified characters and animations beyond the 3-cell faces (larger sprites, speech bubbles from mod/sprites).
+- [in-progress] Live verification on merged main of band controls, the `o` toggle, mouse clicks in the default inline mode (verified only under tmux with CLAUDE_CODE_NO_FLICKER=1), the board panel and characters in a real session. Awaiting verification.
+- [planned] Live team run measuring colony channel messages (20-23 projected, not measured).
+- [planned] Lead step loop is a contract line only; no automation ends a worker and spawns the next.
+- [blocked] Per-turn real token count in the turn receipt: the engine exposes none.
+- [planned] SessionStart context target <= 2000 bytes (about 3400 now; a test pins the full-path team commands). Output style <= 7000 bytes and agent definitions -25% were missed.
+- [planned] Full scorecard diff vs the 12.3.1 baseline, and an independent verifier review of the W15 probe expectation changes (recall_gate counts any claude-mem call; inline Bash redirect writes are allowed by design: confirm policy).
+- [planned] Before/after report HTML with live captures and metrics.
+- [planned] Decide whether to restore original wording in historical docs records the skill-merge rename rewrote (`docs/audits`, `docs/superpowers`).
+- [planned] Carry forward unchanged: the engine folds 2+ background dispatches into one row; the mod pane Tab key has no engine action; foreground Agent agentId mapping for SubagentStop.
 
 ### Deferred backlog: atlas 10.5.0 wave (added 2026-10-10)
 

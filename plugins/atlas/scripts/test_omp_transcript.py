@@ -824,6 +824,10 @@ class GateEndToEndTest(_TmpCase):
                 fh.write("# x\n")
         with open(os.path.join(self.proj, "README.md"), "w") as fh:
             fh.write("# readme\n")
+        # (m) drops recorded paths that no longer exist, so the edited file must be real.
+        os.makedirs(os.path.join(self.proj, "src"))
+        with open(os.path.join(self.proj, "src", "app.py"), "w") as fh:
+            fh.write("x = 1\n")
         _git(self.proj, "init", "-q")
         self.env = dict(
             os.environ,

@@ -1,0 +1,20 @@
+{
+ "session_start_bytes": 3549,
+ "doctor_hook_bytes": null,
+ "prompt_submit_bytes_per_prompt": [
+  0,
+  0,
+  333,
+  0,
+  0
+ ],
+ "prompt_submit_bytes_total5": 333,
+ "team_brief_bytes_each": [
+  1147,
+  1147,
+  1180
+ ],
+ "agent_defs_bytes": 107457,
+ "skill_descriptions_bytes": 14016,
+ "output_style_bytes": 10328
+}
