@@ -12,7 +12,7 @@ type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unk
 
 interface MountProps {
   snapshot: { squad: { name: string; state: string; source: string }[] };
-  usage?: { tokens: number | null; costUsd: number | null; contextPct: number | null };
+  usage?: { tokens: number | null; contextPct: number | null };
 }
 
 /** Minimal on() registrar capturing handlers by event (matcher narrowed by component). */
@@ -108,7 +108,7 @@ describe('register agent-list sync', () => {
       ['aa-3', 'finished'],
       ['aa-4', 'input'],
     ]);
-    expect(await usageOf(engine)).toEqual({ tokens: null, costUsd: null, contextPct: null });
+    expect(await usageOf(engine)).toEqual({ tokens: null, contextPct: null });
   });
 
   test('an unknown AgentStatus reads as running', async () => {
@@ -122,9 +122,9 @@ describe('register agent-list sync', () => {
     const { on, pick } = captureOn();
     const { engine } = stubEngine([]);
     await boot(on, engine, pick);
-    expect(await usageOf(engine)).toEqual({ tokens: null, costUsd: null, contextPct: null });
+    expect(await usageOf(engine)).toEqual({ tokens: null, contextPct: null });
     await pick('session.measure')(engine, { context: { tokens: 0, percent: 0 }, cost: { usd: 0 } }, noopNext);
-    expect(await usageOf(engine)).toEqual({ tokens: 0, costUsd: 0, contextPct: 0 });
+    expect(await usageOf(engine)).toEqual({ tokens: 0, contextPct: 0 });
   });
 
   test('a measure with absent fields leaves the figures unknown', async () => {
@@ -132,7 +132,7 @@ describe('register agent-list sync', () => {
     const { engine } = stubEngine([]);
     await boot(on, engine, pick);
     await pick('session.measure')(engine, { context: {}, cost: undefined }, noopNext);
-    expect(await usageOf(engine)).toEqual({ tokens: null, costUsd: null, contextPct: null });
+    expect(await usageOf(engine)).toEqual({ tokens: null, contextPct: null });
   });
 
   test('usage and task agents survive a re-register: they live in $.state, not module variables', async () => {
@@ -148,7 +148,7 @@ describe('register agent-list sync', () => {
     const second = captureOn();
     const reloaded = stubEngine([], state);
     await register(second.on, {});
-    expect(await usageOf(reloaded.engine)).toEqual({ tokens: 7, costUsd: 0.5, contextPct: 3 });
+    expect(await usageOf(reloaded.engine)).toEqual({ tokens: 7, contextPct: 3 });
     expect(await taskSquad(reloaded.engine)).toEqual([['spawn-9', 'running']]);
   });
 

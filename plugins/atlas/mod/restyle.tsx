@@ -28,7 +28,7 @@ export interface ToolUsePropsLike { tool: string; output?: unknown; input: unkno
 export interface AssistantPropsLike { text: string; isFirstOfReply?: boolean; isSummary?: true }
 export interface TurnDurationPropsLike { durationMs: number }
 /** Turn-over-turn memory for the TurnDuration receipt (owned by one registerRestyle call). */
-export interface ReceiptTracker { done?: number; costStart?: number | null; turnStart?: number | null }
+export interface ReceiptTracker { done?: number; turnStart?: number | null }
 
 // ---- plain element builders (StyledElement is plain data; no DOM, no globals) ----
 
@@ -206,16 +206,9 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
 }
 
-// ---- TurnDuration: `▸ 4m12s · +3 done · 2 workers · ctx 41% · $0.12` ----
+// ---- TurnDuration: `▸ 4m12s · +3 done · 2 workers · ctx 41%` ----
 
-/** This turn's dollar cost: the engine's session total at turn end minus at turn start.
- *  null when either reading is absent or the delta is 0: no figure beats a guessed one. */
-export function turnCostText(start: number | null | undefined, end: number | null | undefined): string | null {
- if (start == null || end == null || end <= start) return null
- return `$${(end - start).toFixed(2)}`
-}
-
-export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, costNow: number | null = null, now: number | null = null): RenderElement {
+export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null): RenderElement {
  // The host figure has been seen reading 9m02s for a 77s turn: the mod's own clock caps it.
  const measured = tracker.turnStart != null && now != null ? Math.max(0, now - tracker.turnStart) : null
  const durationMs = measured === null ? props.durationMs : Math.min(props.durationMs, measured)
@@ -226,7 +219,6 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
   delta > 0 ? `+${delta} done` : null,
   active > 0 ? `${active} workers` : null,
   snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,
-  turnCostText(tracker.costStart, costNow),
  ].filter((part): part is string => part !== null)
  tracker.done = snap.counts.done
  return txt({ dimColor: true },
@@ -244,11 +236,6 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
 async function ready($: EngineInterface, cache: { envOff?: boolean }): Promise<AtlasSnapshot | null> {
  if (cache.envOff === undefined) cache.envOff = (await $.env.get('ATLAS_MOD')) === 'off'
  return cache.envOff ? null : await read($, snapshotState)
-}
-
-/** The engine-measured session cost in USD, or null where the host keeps no ledger. */
-async function sessionCostUsd($: EngineInterface): Promise<number | null> {
- try { return (await $.session.usage()).cost?.usd ?? null } catch { return null }
 }
 
 /** The engine clock in ms, or null where it is unavailable. */
@@ -290,15 +277,14 @@ export function registerRestyle(on: On): void {
  on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => {
   try {
    const snap = await ready($, cache)
-   return snap ? durationTree(snap, e.props, tracker, await sessionCostUsd($), await nowMs($)) : next(e)
+   return snap ? durationTree(snap, e.props, tracker, await nowMs($)) : next(e)
   } catch { return next(e) }
  })
 
- // Cost baseline at turn start; the receipt prints the delta. A header phase belongs to the turn that wrote
+ // Turn clock at turn start. A header phase belongs to the turn that wrote
  // it, so a new turn starts without one (the engine allows one un-matchered turn.start per module: this one).
  // ponytail: turn.start carries no loop id, so a subagent's turn start clears it too; the next answer restores it.
  on('turn.start', async ($, e, next) => {
-  tracker.costStart = await sessionCostUsd($)
   tracker.turnStart = await nowMs($)
   await update($, headerPhaseState, () => null).catch(() => undefined)
   return next(e)

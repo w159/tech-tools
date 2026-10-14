@@ -11,7 +11,6 @@ import {
   registerRestyle,
   spinnerSuffix,
   toolUseTree,
-  turnCostText,
   type ReceiptTracker,
 } from './restyle'
 import type { AtlasSnapshot } from './contract'
@@ -156,19 +155,11 @@ test('headerless or summary replies return null (engine-drawn)', () => {
 
 // ---- TurnDuration receipt ----
 
-test('turn receipt: done delta, workers, ctx, cost', () => {
-  const tracker: ReceiptTracker = { done: 0, costStart: 1.2 }
-  const text = stringsOf(durationTree(snap({ squad: [worker('a', 'running')] }), { durationMs: 252_000 }, tracker, 1.32))
-  expect(text).toBe('▸ 4m12s · +3 done · 1 workers · ctx 41% · $0.12')
+test('turn receipt: done delta, workers, ctx', () => {
+  const tracker: ReceiptTracker = { done: 0 }
+  const text = stringsOf(durationTree(snap({ squad: [worker('a', 'running')] }), { durationMs: 252_000 }, tracker))
+  expect(text).toBe('▸ 4m12s · +3 done · 1 workers · ctx 41%')
   expect(tracker.done).toBe(3)
-})
-
-test('turn cost is the delta of two engine readings; a missing or zero reading prints no dollars', () => {
-  expect(turnCostText(1.2, 1.32)).toBe('$0.12')
-  expect(turnCostText(null, 1.32)).toBeNull()
-  expect(turnCostText(1.2, 1.2)).toBeNull()
-  const text = stringsOf(durationTree(snap(), { durationMs: 1000 }, {}, null))
-  expect(text).not.toContain('$')
 })
 
 // ---- registration wiring ----
@@ -226,7 +217,7 @@ test('registerRestyle wires the four sites; without a snapshot every site no-ops
   }
 })
 
-test('turn.start records the cost baseline; the receipt prints the delta', async () => {
+test('the receipt never prints dollars, even when the engine reports a session cost', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
   const costs: Array<{ usd: number } | undefined> = [{ usd: 1.2 }, { usd: 1.32 }]
@@ -234,7 +225,7 @@ test('turn.start records the cost baseline; the receipt prints the delta', async
   const $ = { ...(harness.$ as object), session: { usage: async () => ({ cost: costs.shift() }) } } as unknown as EngineInterface
   await regs[4]?.hook($, {}, echoNext)
   const text = stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 1000 }), echoNext))
-  expect(text).toContain('$0.12')
+  expect(text).not.toContain('$')
 })
 
 test('receipt duration is capped by the mod-owned turn timer when the host figure is larger', async () => {
