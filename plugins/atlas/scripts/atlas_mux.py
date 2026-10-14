@@ -516,13 +516,16 @@ def _lead_size() -> str:
     return DEFAULT_PANE_SIZE
 
 
-def _open_window(session: str, name: str, pane: str) -> str | None:
+def _open_window(session: str, name: str, pane: str, team: dict | None = None) -> str | None:
     """Create the session when missing and open window `name` in it; an error string or None.
+    With `team` (spawn-team) the worker becomes a pane of the team's one tiled window instead.
 
     Serialised per session by a lock file; a "duplicate session" from tmux (another process
     created it first) just means the session exists."""
     lock = Path(tempfile.gettempdir()) / f"atlas-mux-{session}"
     with atlas_todo._file_lock(lock):
+        if team is not None:
+            return _open_team_pane(session, name, pane, team)
         if _tmux("has-session", "-t", session).returncode != 0:
             # a detached session is 80x24 unless told otherwise and the branded feed wraps at that width;
             # default-size covers the windows opened later (no client is attached to size them)
@@ -539,6 +542,114 @@ def _open_window(session: str, name: str, pane: str) -> str | None:
         res = _tmux("new-window", "-d", "-t", session, "-n", name, pane)
         if res.returncode != 0:
             return f"tmux new-window failed: {res.stderr.strip()}"
+    return None
+
+
+# ---- team window: every worker a pane of one tiled, atlas-styled window ------------------------------------------
+# Catppuccin-Mocha, the palette atlas_panefeed paints the panes with
+_BORDER = (
+    "#{?pane_active,#[fg=#1e1e2e bg=#cba6f7 bold],#[fg=#cba6f7 bg=#181825]}"
+    " ◢◤ #{@atlas_worker} · #{@atlas_role} #[default]"
+)
+_DEAD = "#[fg=#6c7086] pane kept for review · exit #{pane_dead_status} · reap closes it"
+# Status counts and clock in plain tmux formats: #{n:} is the length of a per-pane glyph loop, and
+# strftime runs over status-right before format expansion, so %s is now and %% a literal % (modulo).
+_ELAPSED = "#{e|-|:%s,#{session_created}}"
+_COUNTS = (
+    "#{n:#{P:#{?pane_dead,,x}}} live · #{n:#{P:#{?pane_dead,x,}}} done · "
+    f"◷ #{{e|/|:{_ELAPSED},60}}m#{{e|%%|:{_ELAPSED},60}}s"
+)
+
+
+def _team_window_argv(target: str) -> list:
+    """Window options for a team window (set on that window only, never -g)."""
+    opts = [
+        ("pane-border-status", "top"),
+        ("pane-border-lines", "heavy"),
+        ("pane-border-format", _BORDER),
+        ("pane-border-style", "fg=#45475a"),
+        ("pane-active-border-style", "fg=#cba6f7"),
+        ("window-style", "fg=#cdd6f4,bg=#11111b"),
+        ("window-active-style", "fg=#cdd6f4,bg=#11111b"),
+        # a finished worker keeps its pane (and its DONE line) until reap kills the session
+        ("remain-on-exit", "on"),
+        ("remain-on-exit-format", _DEAD),
+    ]
+    return [["set-option", "-w", "-t", target, k, v] for k, v in opts]
+
+
+def _team_session_argv(session: str, rec: dict) -> list:
+    """Session options: an atlas status bar for this team session only (never -g)."""
+    left = (
+        "#[fg=#1e1e2e,bg=#cba6f7,bold] ◢◤ ATLAS #[fg=#cba6f7,bg=#181825,nobold]"
+        f" team {rec.get('team_id', '?')} · {rec.get('class', '?')}/{rec.get('effort', '?')} "
+    )
+    right = (
+        "#{P:#{?pane_dead,#{?#{==:#{pane_dead_status},0},#[fg=#a6e3a1]✔,#[fg=#f38ba8]✖},#[fg=#f9e2af]◆}} "
+        f"#[fg=#1e1e2e,bg=#94e2d5,bold] {_COUNTS} "
+    )
+    opts = [
+        ("status", "on"),
+        ("status-interval", "1"),
+        ("status-style", "fg=#cdd6f4,bg=#181825"),
+        ("status-left-length", "90"),
+        ("status-right-length", "90"),
+        ("status-left", left),
+        ("status-right", right),
+        ("window-status-format", ""),
+        ("window-status-current-format", ""),
+    ]
+    return [["set-option", "-t", session, k, v] for k, v in opts]
+
+
+def _team_panes(session: str) -> list:
+    """Worker panes of a team session, by their @atlas_worker pane option."""
+    res = _tmux("list-panes", "-s", "-t", session, "-F", "#{@atlas_worker}\t#{pane_dead}\t#{pane_pid}")
+    if res.returncode != 0:
+        return []
+    rows = [line.split("\t") for line in res.stdout.splitlines()]
+    return [{"name": r[0], "dead": _dead_flag(r[1]), "pid": r[2]} for r in rows if len(r) == 3 and r[0]]
+
+
+def _new_team_session(session: str, pane: str, rec: dict) -> subprocess.CompletedProcess:
+    """The team session; its first window (named like the session) starts with this worker, no idle shell."""
+    width, height = _lead_size().split("x")
+    res = _tmux(
+        "new-session", "-d", "-s", session, "-n", session, "-x", width, "-y", height,
+        "-P", "-F", "#{pane_id}", pane,
+    )
+    if res.returncode == 0:
+        for argv in [*_team_session_argv(session, rec), *_team_window_argv(f"{session}:{session}")]:
+            _tmux(*argv)
+    return res
+
+
+def _split_team_window(session: str, name: str, pane: str) -> subprocess.CompletedProcess:
+    res = _tmux("split-window", "-d", "-t", f"{session}:{session}", "-P", "-F", "#{pane_id}", pane)
+    if res.returncode == 0:
+        return res
+    # no space left for another pane: overflow into a styled window of its own
+    res = _tmux("new-window", "-d", "-t", session, "-n", name, "-P", "-F", "#{pane_id}", pane)
+    if res.returncode == 0:
+        for argv in _team_window_argv(f"{session}:{name}"):
+            _tmux(*argv)
+    return res
+
+
+def _open_team_pane(session: str, name: str, pane: str, team: dict) -> str | None:
+    """Team mode of _open_window (caller holds its lock): a tiled pane tagged @atlas_worker/@atlas_role."""
+    if _tmux("has-session", "-t", session).returncode != 0:
+        res = _new_team_session(session, pane, team.get("rec") or {})
+    elif any(p["name"] == name for p in _team_panes(session)):
+        return f"name_taken: {name} already runs in {session}"
+    else:
+        res = _split_team_window(session, name, pane)
+    if res.returncode != 0:
+        return f"tmux team pane failed: {res.stderr.strip()}"
+    pane_id = res.stdout.strip()
+    _tmux("set-option", "-p", "-t", pane_id, "@atlas_worker", name)
+    _tmux("set-option", "-p", "-t", pane_id, "@atlas_role", str(team.get("role") or ""))
+    _tmux("select-layout", "-t", f"{session}:{session}", "tiled")
     return None
 
 
@@ -759,7 +870,10 @@ def cmd_spawn(args) -> int:
                 root, args.name, chan or None, pane_id=made["pane_id"]
             )
     else:
-        failure = _open_window(session, args.name, pane)
+        team = getattr(args, "team", None)
+        failure = _open_window(
+            session, args.name, pane, {"rec": team, "role": args.agent} if team else None
+        )
     if failure:
         atlas_todo.leave(root, chan, args.name)
         return _emit({"ok": False, "error": failure}, 1)
@@ -825,9 +939,11 @@ def cmd_run_worker(args) -> int:
     log_path = Path(root) / ".atlas" / ".run" / "logs" / f"{args.name}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log = log_path.open("w", encoding="utf-8")
+    feed = atlas_panefeed.Feed(args.name, args.agent, args.run, channel, prompt)
 
     def finish(code: int, tail: str, reason: str | None = None) -> int:
         """The ONE board note of this run: the report block + exit line (contract C2)."""
+        feed.finish(code)
         exit_line = f"exit {code}" + (f" [failed: {reason}]" if reason else "")
         rec = atlas_todo.note(
             root,
@@ -846,6 +962,7 @@ def cmd_run_worker(args) -> int:
 
     log.write(f"$ {shlex.join(argv)}\n")
     log.flush()
+    feed.start()
     try:
         proc = subprocess.Popen(
             argv,
@@ -871,14 +988,10 @@ def cmd_run_worker(args) -> int:
         signal.signal(sig, _killed)
     lines: list[str] = []
     try:
-        print(
-            atlas_panefeed.header(args.name, args.agent, channel or "-", channel or "-", prompt),
-            flush=True,
-        )
         for raw in proc.stdout:
             log.write(raw if raw.endswith("\n") else raw + "\n")
             log.flush()
-            lines += _feed_line(raw.rstrip("\n"))
+            lines += _feed_line(raw.rstrip("\n"), feed)
         # classify the harness output only: the STATUS..NEXT report is the worker's own prose
         # (it may cite `foo.py:402`) and must not trip the 402/401 signs
         head = lines[
@@ -896,18 +1009,19 @@ def cmd_run_worker(args) -> int:
     return finish(code, _report(lines), reason)
 
 
-def _feed_line(text: str) -> list[str]:
-    """Print one worker output line; return the lines that count as the worker's output (report/classify input)."""
+def _feed_line(text: str, feed=None) -> list[str]:
+    """Show one worker output line in the pane feed; return the lines that count as the worker's output
+    (report/classify input)."""
+    feed = feed or atlas_panefeed.Feed(live=False)
     event = atlas_panefeed.parse_line(text)
     if event is None:
-        print(text, flush=True)
+        feed.text(text)
         return [text] if text.strip() else []
-    for shown in atlas_panefeed.render_event(event):
-        print(shown, flush=True)
+    feed.event(event)
     if event.get("type") != "result":
         return []
     body = atlas_panefeed.result_text(event)
-    print(body, flush=True)
+    feed.report(body)
     return [t for t in body.splitlines() if t.strip()]
 
 
@@ -1313,6 +1427,7 @@ def cmd_spawn_team(args) -> int:
             run=rec["team_id"], name=member["name"], harness=args.harness, agent=member["role"],
             prompt_file=str(pf), model=None, effort=None, thinking=None, agents_dir=None,
             permission_mode=None, command_override=None, omp_extension=None, root=root, cwd=None,
+            team=rec,
         )
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -1390,7 +1505,8 @@ def _recover_team(root: str, team_id: str) -> dict | None:
     # ponytail: team "peer" also matches peer-sync's prompts; team ids are hashes or explicit, so rare
     names = {p.name[len(team_id) + 1 : -len(".prompt")] for p in _team_dir(root).glob(f"{team_id}-*.prompt")}
     windows = _windows(_session(team_id)) or []
-    names |= {w["name"] for w in windows if w["name"] != "lead"}
+    names |= {w["name"] for w in windows if w["name"] not in ("lead", _session(team_id))}
+    names |= {p["name"] for p in _team_panes(_session(team_id))}
     if not names and not windows:
         return None
     return {"team_id": team_id, "members": [{"name": n} for n in sorted(names)], "transport": "tmux"}
