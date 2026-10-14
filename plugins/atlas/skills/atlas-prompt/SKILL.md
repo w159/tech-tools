@@ -4,6 +4,7 @@ description: "Rewrites a vague coding request into a structured, environment-awa
 when_to_use: "improve my prompt, rewrite this request, make this actionable, vague ask, prompt engineering"
 allowed-tools: Read, Glob, Grep, Bash, Write
 argument-hint: '<the vague request to sharpen>'
+disable-model-invocation: true
 ---
 
 
@@ -60,6 +61,15 @@ Do NOT ask when discovery already answered the question, when the request is tri
 (-> `SKIP`), or when a sensible default exists and the stakes are low - state the default
 in the optimized block instead. Never ask a second round: whatever is still unknown after
 one round becomes an explicit assumption listed in the optimized block.
+
+## Output style directive (tell the executing agent; do not apply it yourself)
+
+Write the optimized block in the user's own wording style. Do NOT convert it into
+Simplified Technical English. Instead, end the block with an `## Output style` section that
+tells the agent who will execute it to follow ASDSTE-100 about 80% of the way, using this
+text word for word:
+
+> Write your replies, docs and reports in ASDSTE-100 Simplified Technical English, applied about 80%: short sentences (20 words max for procedures, 25 for descriptions), one instruction per sentence, active voice, approved common words, consistent terms. Keep technical names, code and quoted text unchanged. Relax a rule when it costs clarity.
 
 ## Output rules
 
@@ -159,6 +169,10 @@ on it directly this session.
 ## Acceptance criteria
 
 - <concrete, testable criterion>
+
+## Output style
+
+<the directive above, verbatim>
 
 ## Forbidden
 

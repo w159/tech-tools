@@ -127,19 +127,13 @@ class ShouldOptimizeTest(unittest.TestCase):
         os.environ["ATLAS_OPTIMIZE"] = "always"
         self.assertEqual(po.should_optimize("/help me"), (False, "/help me"))
 
-    def test_always_mode_short_prompt_skipped(self):
+    def test_always_mode_is_no_longer_auto_run(self):
+        # "always" used to optimize every prompt; the optimizer is opt-in only now.
         os.environ["ATLAS_OPTIMIZE"] = "always"
-        os.environ["ATLAS_OPTIMIZE_MINLEN"] = "12"
-        do, _ = po.should_optimize("ok")
+        do, _ = po.should_optimize("this is a long enough prompt with no trigger")
         self.assertFalse(do)
 
-    def test_always_mode_long_prompt(self):
-        os.environ["ATLAS_OPTIMIZE"] = "always"
-        do, body = po.should_optimize("this is a long enough prompt for always mode")
-        self.assertTrue(do)
-        self.assertEqual(body, "this is a long enough prompt for always mode")
-
-    def test_always_mode_trigger_strips_prefix(self):
+    def test_always_mode_trigger_still_runs(self):
         os.environ["ATLAS_OPTIMIZE"] = "always"
         do, body = po.should_optimize("opt: do the thing with enough text")
         self.assertTrue(do)
@@ -880,6 +874,51 @@ class MainTest(unittest.TestCase):
                         "atlas-orchestrate",
                         data["hookSpecificOutput"]["additionalContext"],
                     )
+
+
+class OptInGateAndDirectiveTest(unittest.TestCase):
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, {}, clear=False)
+        self.env.start()
+        for k in ("ATLAS_OPTIMIZE_TRIGGER", "ATLAS_OPTIMIZE_MINLEN"):
+            os.environ.pop(k, None)
+        os.environ["ATLAS_ENGINE_ARM"] = "off"
+        os.environ["ATLAS_OPTIMIZE"] = "always"  # the old auto-run setting
+
+    def tearDown(self):
+        self.env.stop()
+
+    def _main(self, prompt):
+        with mock.patch("prompt_optimizer.run_optimizer", return_value="## Intent\nX") as ro:
+            with mock.patch("sys.stdin", new=_stdin({"prompt": prompt})):
+                with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                    with mock.patch("sys.stderr", new_callable=io.StringIO):
+                        po.main()
+        return ro, out.getvalue()
+
+    def test_no_trigger_no_model_run_no_spec(self):
+        ro, out = self._main("please build the whole feature end to end")
+        ro.assert_not_called()
+        self.assertNotIn("OPTIMIZED SPEC", out)
+
+    def test_trigger_runs_model(self):
+        ro, out = self._main("opt: please build the whole feature end to end")
+        ro.assert_called_once()
+        self.assertIn("OPTIMIZED SPEC", out)
+
+    def test_template_directs_ste_and_does_not_apply_it(self):
+        sent = po.build_optimizer_prompt("build the feature")
+        self.assertIn("build the feature", sent)
+        self.assertIn("ASDSTE-100", sent)
+        self.assertIn("about 80%", sent)
+        self.assertIn(po.STE_DIRECTIVE, sent)
+        # The optimizer carries the directive; it must not be told to write STE itself.
+        self.assertIn("Do NOT rewrite the request itself into Simplified Technical English", sent)
+        self.assertNotIn("Write your rewrite in", sent)
+
+    def test_main_sends_template_to_model(self):
+        ro, _ = self._main("opt: please build the whole feature end to end")
+        self.assertIn(po.STE_DIRECTIVE, ro.call_args[0][0])
 
 
 class EndToEndSubprocessTest(unittest.TestCase):
