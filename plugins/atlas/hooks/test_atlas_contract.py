@@ -1030,14 +1030,14 @@ class NoiseContract(unittest.TestCase):
         self.assertNotIn("auto-formatted", body, "formatter announces every success")
 
     def test_prompt_optimizer_banner_is_opt_in(self):
-        body = (HOOKS_DIR / "prompt_optimizer.py").read_text(encoding="utf-8")
+        body = (HOOKS_DIR / "prompt_optimizer_core.py").read_text(encoding="utf-8")
         self.assertIn("ATLAS_OPTIMIZE_VERBOSE", body)
         self.assertNotIn(
             "ATLAS_OPTIMIZE_QUIET", body, "banner is still opt-out, not opt-in"
         )
 
     def test_session_boot_reports_only_missing_dependencies(self):
-        body = (HOOKS_DIR / "session_boot.py").read_text(encoding="utf-8")
+        body = (HOOKS_DIR / "session_boot_core.py").read_text(encoding="utf-8")
         self.assertIn("Setup gap:", body)
         for chatter in (
             "Memory (claude-mem): ",
@@ -1048,7 +1048,7 @@ class NoiseContract(unittest.TestCase):
 
     def test_boot_context_is_capped(self):
         """An uncapped boot dump is the largest single block of session noise."""
-        body = (HOOKS_DIR / "session_boot.py").read_text(encoding="utf-8")
+        body = (HOOKS_DIR / "session_boot_core.py").read_text(encoding="utf-8")
         self.assertIn("body = body[:3500]", body)
 
 
@@ -1173,7 +1173,7 @@ class InsightRemediationContract(unittest.TestCase):
     def test_gate_block_orders_the_inline_fix_before_any_dispatch(self):
         """A block reason that leads with 'dispatch' is what dies at session
         end. Records that are merely unwritten get written inline."""
-        text = (HOOKS_DIR / "completion_gate.py").read_text(encoding="utf-8")
+        text = (HOOKS_DIR / "completion_gate_core.py").read_text(encoding="utf-8")
         self.assertIn("SMALLEST deterministic action", text)
         self.assertIn("atlas_finding.py", text)
         smallest = text.index("SMALLEST deterministic action")
@@ -1204,7 +1204,7 @@ class InsightRemediationContract(unittest.TestCase):
             self.assertNotIn(content_server, matcher)
 
     def test_tripwire_brackets_verifier_dispatches(self):
-        text = (HOOKS_DIR / "dispatch_tripwire.py").read_text(encoding="utf-8")
+        text = (HOOKS_DIR / "dispatch_tripwire_core.py").read_text(encoding="utf-8")
         self.assertIn("_is_verifier", text)
         self.assertIn("_stash_findings_count", text)
         self.assertIn("_verdict_missing", text)
@@ -1305,7 +1305,7 @@ class NoNestedSubagentsContract(unittest.TestCase):
     def test_the_deny_precedes_the_drift_kill_switch_and_the_db(self):
         """Placement is the whole trick: a subagent's session has no run row, so
         anything after current_run_id() would return early and never deny."""
-        src = (HOOKS_DIR / "dispatch_tripwire.py").read_text(encoding="utf-8")
+        src = (HOOKS_DIR / "dispatch_tripwire_core.py").read_text(encoding="utf-8")
         body = src[src.index("def main():") :]
         deny_at = body.index("_deny_nested_dispatch")
         self.assertLess(deny_at, body.index('ATLAS_TRIPWIRE", "on"'))
@@ -1349,7 +1349,7 @@ class RightSizedDelegationContract(unittest.TestCase):
     def test_a_test_run_can_pair_an_implementer(self):
         """Condition (g) must accept a deterministic test, not only a verifier
         dispatch -- otherwise every task costs two subagents by construction."""
-        src = (HOOKS_DIR / "completion_gate.py").read_text(encoding="utf-8")
+        src = (HOOKS_DIR / "completion_gate_core.py").read_text(encoding="utf-8")
         self.assertIn("_test_verified_this_run", src)
         self.assertIn("_unpaired_implementer_dispatches(session)", src)
         self.assertRegex(src, r"-\s*_test_verified_this_run\(\s*root,\s*session,")
@@ -1375,7 +1375,7 @@ class RightSizedDelegationContract(unittest.TestCase):
     def test_deny_tier_excludes_the_orchestrator_sanctioned_writes(self):
         """The gate orders docs//.atlas/ writes at closeout. Counting them
         against the inline budget would deny the remediation it just demanded."""
-        src = (HOOKS_DIR / "dispatch_tripwire.py").read_text(encoding="utf-8")
+        src = (HOOKS_DIR / "dispatch_tripwire_core.py").read_text(encoding="utf-8")
         self.assertIn("unsanctioned_inline_ops_since_last_dispatch", src)
         self.assertNotIn(
             "atlas_db.inline_ops_since_last_dispatch(conn, run_id)\n    except",
@@ -1488,7 +1488,7 @@ class TodoBoardContract(unittest.TestCase):
         self.assertEqual(matchers, ["TodoWrite"])
 
     def test_gate_falls_back_to_board_and_ledger(self):
-        src = (HOOKS_DIR / "completion_gate.py").read_text(encoding="utf-8")
+        src = (HOOKS_DIR / "completion_gate_core.py").read_text(encoding="utf-8")
         self.assertIn("_board_open_todos", src)
         self.assertIn("_ledger_open_todos", src)
         self.assertIn("todos.json", src)
@@ -1497,7 +1497,7 @@ class TodoBoardContract(unittest.TestCase):
         self.assertIn('item.get("session_id") == session_id', src)
 
     def test_session_boot_carries_over_the_board(self):
-        src = (HOOKS_DIR / "session_boot.py").read_text(encoding="utf-8")
+        src = (HOOKS_DIR / "session_boot_core.py").read_text(encoding="utf-8")
         self.assertIn("carry_over", src)
         self.assertIn("atlas_todo", src)
 

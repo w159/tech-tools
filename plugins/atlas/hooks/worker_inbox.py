@@ -355,6 +355,75 @@ def _no_registry_possible(cwd):
         return False
 
 
+def _candidate_roots(cwd, env):
+    """Dirs atlas_todo's root resolution could land on for this cwd (cwd and its 7
+    ancestors, plus ATLAS_PROJECT_ROOT), or None when uncertain (a linked-worktree
+    `.git` file can remap the root elsewhere)."""
+    dirs, d = [], os.path.abspath(cwd or os.getcwd())
+    for _ in range(8):
+        if os.path.isfile(os.path.join(d, ".git")):
+            return None
+        dirs.append(d)
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    pr = env.get("ATLAS_PROJECT_ROOT")
+    if pr:
+        if os.path.isfile(os.path.join(pr, ".git")):
+            return None
+        dirs.append(pr)
+    return dirs
+
+
+def _no_notes_dir(payload, env=None):
+    """True when no candidate root has a board notes dir: drain() returns "" for that
+    before reading anything, so the atlas_todo import (~13ms) is skipped. Uncertain
+    -> False."""
+    try:
+        env = os.environ if env is None else env
+        cwd = payload.get("cwd")
+        dirs = _candidate_roots(cwd if isinstance(cwd, str) and cwd else None, env)
+        return dirs is not None and not any(
+            os.path.isdir(os.path.join(d, ".atlas", ".run", "board")) for d in dirs
+        )
+    except Exception:
+        return False
+
+
+def _registry_has_no_candidate(cwd, payload, env=None):
+    """True only when reading channels.json directly proves identity() would find
+    neither a member (no agent_name) nor a lead channel, so the atlas_todo import
+    (~16ms) can be skipped. Anything unusual (a linked-worktree `.git` file,
+    unreadable json, a named agent, a channel whose lead may match this session)
+    returns False and takes the full path."""
+    try:
+        env = os.environ if env is None else env
+        if str(payload.get("agent_name") or "").strip():
+            return False
+        dirs = _candidate_roots(cwd, env)
+        if dirs is None:
+            return False
+        for key in ("ATLAS_LEAD_NAME", "ATLAS_WORKER_NAME"):
+            if (env.get(key) or "").strip():
+                return False  # lead_name() would take the env name: let it decide
+        sid = re.sub(
+            r"[^A-Za-z0-9._-]", "_", str(payload.get("session_id") or "").strip()
+        )
+        leads = {"lead"} | ({f"lead-{sid[:6]}"} if sid else set())
+        for d in dirs:
+            path = os.path.join(d, ".atlas", ".run", "channels.json")
+            if not os.path.exists(path):
+                continue
+            with open(path, encoding="utf-8") as fh:
+                channels = json.load(fh)["channels"]
+            if any(c.get("lead") in leads for c in channels.values()):
+                return False
+        return True
+    except Exception:
+        return False
+
+
 def identity(payload=None, env=None):
     """(name, root, aliases) of whoever this hook fires for, or None.
 
@@ -370,6 +439,10 @@ def identity(payload=None, env=None):
     cwd = payload.get("cwd")
     if _no_registry_possible(cwd if isinstance(cwd, str) and cwd else None):
         return None  # no registry: no member, no lead channel (see below)
+    if _registry_has_no_candidate(
+        cwd if isinstance(cwd, str) and cwd else None, payload, env
+    ):
+        return None  # registry exists but names no lead for this session
     todo = _todo()
     root = todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
     name = _member_for(todo, root, str(payload.get("agent_name") or ""))
@@ -391,6 +464,8 @@ def identity(payload=None, env=None):
 
 def context_for_post_tool_use(env=None, payload=None):
     """hookSpecificOutput JSON string for the current worker's pending notes, or ""."""
+    if isinstance(payload, dict) and _no_notes_dir(payload, env):
+        return ""  # nothing to drain: skip identity()'s registry import
     who = identity(payload, env)
     if not who:
         return ""

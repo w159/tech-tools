@@ -103,7 +103,7 @@ test("the addendum is small and restates nothing omp's own task and wait prompts
 
 test("the addendum names every dispatch-spec label dispatch_tripwire requires, so the lead writes them before the deny teaches it", () => {
 	const text = readFileSync(ADDENDUM_PATH, "utf8");
-	const tripwire = readFileSync(join(import.meta.dir, "..", "hooks", "dispatch_tripwire.py"), "utf8");
+	const tripwire = readFileSync(join(import.meta.dir, "..", "hooks", "dispatch_tripwire_core.py"), "utf8");
 	const block = /REQUIRED_SPEC_BLOCKS = \(([\s\S]*?)\n\)/.exec(tripwire)?.[1] ?? "";
 	const labels = [...block.matchAll(/\("([A-Z ]+:)"/g)].map(m => m[1]); // first variant of each required block
 	expect(labels).toEqual(["GOAL:", "DELIVERABLE:", "SUCCESS CRITERIA:", "OUT OF SCOPE:", "STOP CONDITIONS:", "REPORT:"]);
