@@ -33,7 +33,9 @@ PEACH, RED, YEL, PINK, BASE = _hx("#fab387"), _hx("#f38ba8"), _hx("#f9e2af"), _h
 SPIN = "⣾⣽⣻⢿⡿⣟⣯⣷"
 EIGHTHS = " ▏▎▍▌▋▊▉█"
 CHIP_W = 10
-_USAGE_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+# new work = input + output + cache writes; cache reads are re-sent context, shown apart once large
+_NEW_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens")
+CACHED_SHOWN = 10_000
 # tool input fields worth showing, first match wins
 _ARG_KEYS = ("file_path", "path", "command", "pattern", "query", "description", "url", "prompt")
 
@@ -373,17 +375,19 @@ def progress_bar(frac: float, width: int, a=GREEN, b=TEAL) -> list:
     return out
 
 
-def status_row(state: str, tick: int, elapsed: float, tools: int, tokens: int, width: int) -> str:
-    """'run' -> spinner + gradient bar; 'done' / 'fail' -> the final green / red verdict."""
+def status_row(state: str, tick: int, elapsed: float, tools: int, tokens: int, width: int, cached: int = 0) -> str:
+    """'run' -> spinner + gradient bar; 'done' / 'fail' -> the final green / red verdict. `tokens` is new
+    work; `cached` (cache reads) is appended dim only when large."""
     stats = f"{_clock(elapsed)} · {tools} tools · {_tokens(tokens)}"
+    tail = [seg(f" · {cached / 1000:.1f}k cached", DIM)] if cached >= CACHED_SHOWN else []
     if state == "done":
-        return paint([seg(" ✔ DONE ", BASE, GREEN, True), seg("· " + stats, GREEN, None, True)], width)
+        return paint([seg(" ✔ DONE ", BASE, GREEN, True), seg("· " + stats, GREEN, None, True), *tail], width)
     if state == "fail":
-        return paint([seg(" ✖ FAILED ", BASE, RED, True), seg("· " + stats, RED, None, True)], width)
+        return paint([seg(" ✖ FAILED ", BASE, RED, True), seg("· " + stats, RED, None, True), *tail], width)
     # ponytail: no real progress signal exists; the bar fills asymptotically with the tool count
     frac = 1 - 0.9**tools
     bar = progress_bar(frac, max(8, min(30, width // 4)))
-    return paint([seg(f" {SPIN[tick % len(SPIN)]} working ", GREEN, None, True), *bar, seg("  " + stats, MUT)], width)
+    return paint([seg(f" {SPIN[tick % len(SPIN)]} working ", GREEN, None, True), *bar, seg("  " + stats, MUT), *tail], width)
 
 
 # ---- the live pane ----------------------------------------------------------------------------------------------------
@@ -411,7 +415,8 @@ class Feed:
         return header(name, role, team, channel, goal, width, peers)
 
     def _status(self, width: int) -> str:
-        return status_row(self.state, self.tick, time.time() - self.t0, self.tools, sum(self.usage.values()), width)
+        new, cached = (sum(u[i] for u in self.usage.values()) for i in (0, 1))
+        return status_row(self.state, self.tick, time.time() - self.t0, self.tools, new, width, cached)
 
     def start(self) -> None:
         width, _ = self._size()
@@ -470,10 +475,12 @@ class Feed:
         # one per tool_use row plus one per peer-note row, so the count matches the rows shown
         self.tools += sum(len(_tool_rows(b, None)) for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use")
         usage = msg.get("usage") or {}
-        total = sum(v for k, v in usage.items() if k in _USAGE_KEYS and isinstance(v, int))
-        if total:
+        new = sum(v for k, v in usage.items() if k in _NEW_KEYS and isinstance(v, int))
+        cached = usage.get("cache_read_input_tokens")
+        cached = cached if isinstance(cached, int) else 0
+        if new or cached:
             # stream-json repeats a message's usage once per content block: keyed by id, counted once
-            self.usage[msg.get("id") or len(self.usage)] = total
+            self.usage[msg.get("id") or len(self.usage)] = (new, cached)
 
     def event(self, event: dict) -> None:
         if event.get("type") == "assistant":
