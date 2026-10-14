@@ -12,7 +12,7 @@ Arguments: `<target>` is a PR number, a branch name, or `current`/blank for the 
    - `current`/blank -> `git diff --name-only <trunk>...HEAD` plus uncommitted changes (`git diff --name-only HEAD; git ls-files --others --exclude-standard`). Never dogfood the trunk itself on a blank/branch target - there is no diff.
 2. If the diff is empty for a blank/branch target: **stop the run**, report "no diff to dogfood", and suggest the user name a PR or branch.
 3. If the target is not the current checkout: confirm with the user before checking it out in place; if uncommitted changes would be disturbed, offer an isolated worktree instead. A numeric target stays a PR identity through checkout.
-4. Record the scope in the run checkpoint: target, diff base, changed-file list. If atlas-test-browser ran earlier against the same diff, read its summary and seed this run's scope with its `Fail` routes.
+4. Record the scope in the run checkpoint: target, diff base, changed-file list. If atlas-dogfood smoke ran earlier against the same diff, read its summary and seed this run's scope with its `Fail` routes.
 
 ## Phase 1 - Analyze the diff
 
@@ -40,7 +40,7 @@ Cap the matrix: with `--fix-budget N` and more than ~12 scenarios, cut scenario 
 
 ## Phase 4 - Serve
 
-Resolve the dev server exactly as atlas-test-browser does (manual mode: user-run server; use its `scripts/resolve-port.sh` approach or the project's documented dev command; pipeline-style unattended runs may start one). Pin `--port` if given.
+Resolve the dev server exactly as atlas-dogfood smoke does (manual mode: user-run server; use its `scripts/resolve-port.sh` approach or the project's documented dev command; pipeline-style unattended runs may start one). Pin `--port` if given.
 
 - Manual default: if no server is running on the resolved port, stop and tell the user how to start it - do not start one behind their back unless the user asked for a hands-off run (that is what dogfood usually is; when explicitly hands-off, start the project's dev command, log the PID, and tear it down at the end).
 - Verify the root serves before iterating. A dead root is a preflight blocker, not a scenario failure.

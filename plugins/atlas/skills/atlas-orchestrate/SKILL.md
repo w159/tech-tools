@@ -1,7 +1,7 @@
 ---
 name: atlas-orchestrate
-description: "Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification. Use when a task spans layers or the repo."
-when_to_use: "orchestrate, whole-repo work, cross-layer bug, frontend and backend and database, multi-step task, subagent waves"
+description: "Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification. Includes a feature flow that builds one feature across UI, API and data with the squad. Use when a task spans layers or the repo."
+when_to_use: "orchestrate, whole-repo work, cross-layer bug, frontend and backend and database, multi-step task, subagent waves, implement a feature, add a feature that, build new functionality, full-stack feature"
 allowed-tools: Read, Glob, Grep, Bash, TodoWrite, AskUserQuestion
 ---
 
@@ -63,6 +63,10 @@ Full loop, fan-out mechanisms, and definition of done: **load `references/the-lo
 
 Verification doctrine: `references/verification-and-grounding.md`. Stage maps: `references/multi-stage-planning.md`.
 
+## Feature flow
+
+A request to implement or add one feature across UI, API and data runs through the squad as a single wave with an independent verifier closing it. Read `${CLAUDE_SKILL_DIR}/references/feature-flow.md` (inputs, squad, build rules, VERIFY and REPORT contract) and `references/feature-workflow.md` (spec, tests, implementation, verify, one failable check per phase). The flow is done when each endpoint was hit with a curl including one error path, a DB write was read back, and each UI state was shown on its route.
+
 ## Stop-thoughts
 
 If you think "too small," "I'll just read it," "I already tested it," "docs later," or "mark unverified" — **STOP and dispatch**. Full table: **load `references/anti-rationalization.md`**.
@@ -95,10 +99,11 @@ For small direct changes in one-developer repos: `export ATLAS_MODE=solo` (case-
 | `references/laws-and-gates.md` | applying laws, decision gate, todos, mid-run steering |
 | `references/the-loop.md` | running Orient→Finish or closing a wave |
 | `references/implementation-units.md` | dispatching implementer units, resuming interrupted runs, parallel implementer waves, evidence receipts |
+| `references/feature-flow.md` | implementing one feature across UI, API and data |
 | `references/anti-rationalization.md` | catching "I'll just…" thoughts |
 | `references/squad-and-tiers.md` | choosing agent/model/effort |
 | `references/capability-routing.md` | task -> agent/skill/MCP/model |
-| `references/capability-catalog.md` | recommending installs (`/atlas`, atlas-setup) |
+| `references/capability-catalog.md` | recommending installs (atlas-setup) |
 | `references/subagent-kit.md` | writing any dispatch |
 | `references/scaffolding.md` | Orient / findings / per-root docs |
 | `references/memory-access.md` | claude-mem recall |
@@ -132,7 +137,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating "${CLAUDE
 
 Run **Orient** (recall + roots + manifests + capabilities). Present orientation + plan, **write the todo list**, **wait for go-ahead before any write**. Then load `references/the-loop.md` and execute.
 
-**Opening from `atlas-launch <id>`:** treat the handoff acceptance criterion as done; still Orient; do not re-derive the finding.
+**Opening from `atlas-audit` act-on-finding mode (`atlas-audit <id>`):** treat the handoff acceptance criterion as done; still Orient; do not re-derive the finding.
 
 
 ## Additional references

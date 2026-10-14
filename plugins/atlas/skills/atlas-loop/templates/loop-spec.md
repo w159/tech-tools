@@ -59,7 +59,7 @@ Synthesize: <what the orchestrator keeps and how it ranks it>
 
 ## Field rules
 
-- `id` is the filename (minus `.md`) and the `atlas-launch` target. It
+- `id` is the filename (minus `.md`) and the `atlas-audit act` target. It
   must be a filesystem-safe slug. No colon, slash, or space: the repo
   must stay checkout-able on Windows.
 - `category` must match an existing category in `loops/INDEX.md`, or

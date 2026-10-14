@@ -125,7 +125,7 @@ is a decision, not an omission.
 When the change is UI-shaped (routes, components, styles, user-visible behavior):
 
 - `atlas-dogfood` for a self-directed walkthrough of the changed surface.
-- `atlas-test-browser` for scripted real-browser verification of the affected flows.
+- `atlas-dogfood smoke` for scripted real-browser verification of the affected flows.
 
 Evidence (screenshots, console/network captures) lands under `.atlas/evidence/` and
 is referenced from the run summary. Skip only when the change has no user-visible

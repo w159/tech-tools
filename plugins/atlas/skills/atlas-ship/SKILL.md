@@ -1,14 +1,12 @@
 ---
 name: atlas-ship
-description: "Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR. Use when verified work is ready to commit or open a PR."
-when_to_use: "ship it, push this, open a PR, ready to merge, finish and commit"
+description: "Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR. Commit-only mode makes just the local conventional commit from a file list. Use when work is ready to commit or open a PR."
+when_to_use: "ship it, push this, open a PR, ready to merge, finish and commit, commit these changes, make a commit, conventional commit message, stage and commit"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
-argument-hint: '[exclude:<paths>] [description-only] [babysit:off|checkpoint]'
+argument-hint: '[commit-only] [files...] [exclude:<paths>] [description-only] [babysit:off|checkpoint]'
 ---
 
-**atlas-ship never pushes, opens a pull request, edits a PR body, or performs any remote write without an explicit user confirmation at the point of risk; the local commit is the only step that ever runs without asking.** This is the deliberate inversion of CE's `ce-commit-push-pr`, which treats the act of invoking it as authorization to publish. In atlas, invoking this skill authorizes verification and a local commit only - the push and the PR are decisions the user owns, made fresh each time, in the conversation, after seeing what would leave the machine.
-
-Ported from CE's `ce-commit-push-pr` (Steps 1-5 plus `context.md`, `commit-and-push.md`, `pr-description-writing.md`, `apply-and-handoff.md`). Deliberately NOT ported: the auto-push/auto-PR posture itself, stack mode and its postures, the branding badge block, the `ce-noslop` composition pipeline (atlas composes directly from the diff), and the automatic babysit handoff (CE's run is "not done" until its babysitter owns the PR; atlas asks, and a declined watch is a successful terminal). Where CE trusts `gh` probes alone, PR creation here goes through the `xd://github` device (`pr_create` op) with `gh` as fallback.
+**atlas-ship never pushes, opens a pull request, edits a PR body, or performs any remote write without an explicit user confirmation at the point of risk; the local commit is the only step that ever runs without asking.** Invoking this skill authorizes verification and a local commit only; the push and the PR are decisions the user owns, made fresh each time, in the conversation, after seeing what would leave the machine. PR creation goes through the `xd://github` device (`pr_create` op) with `gh` as fallback.
 
 Apply the Operating Contract to this entire task. It is injected below.
 
@@ -20,6 +18,7 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 ## Modes
 
+- **Commit-only** - the user wants just a commit ("commit these changes", an explicit file list, or `commit-only`). Read `${CLAUDE_SKILL_DIR}/references/commit-only.md` and follow it; Steps 1 to 6 do not apply. Done when the named files are committed and `git status` is clean of them.
 - **Full workflow** (default) - Steps 1-6: resolve state, verify, commit locally, confirmation gate, push + PR, optional babysit handoff.
 - **Description-only** - the user wants just a description ("write a PR description", "describe this PR"). Run Step 1 for the range, compose per `references/pr-body.md`, print the title and body, and stop. Nothing is applied unless the user separately asks, and then only through the Step 4 gate.
 - **Description update** - refresh an existing PR's body, no push intent. Compose, preview the exact new title/body against the existing one, and apply via the device only after an explicit yes at the Step 4 gate (same rule as a push; a PR-body edit is a remote write).
@@ -50,17 +49,15 @@ End the dispatch with the verifier contract line: "Write your verdict (PASS/FAIL
 
 If `git status` shows nothing to commit, report that and stop.
 
-## Step 3 - Commit locally (compose atlas-commit)
+## Step 3 - Commit locally (commit-only mode)
 
-Hand the verified diff to the `atlas-commit` skill (same plugin, `plugins/atlas/skills/atlas-commit/SKILL.md`) via the host's normal skill-invocation mechanism, passing the named files and any `exclude:<paths>` from the invocation. Its contract applies verbatim: stage named files only, never `git add -A`/`git add .`, message grounded in the actual diff, `fix:` over `feat:` when ambiguous, plan unit IDs appended when already in hand, `exclude:` files left out and reported, trailing path list on `git commit`, message written to a file and applied with `git commit -F`.
-
-If `atlas-commit` cannot be loaded, apply its inline core yourself and say so in the report: named-files staging, one logical change per commit (file level, 2-3 max, no `git add -p`), message file + `git commit -F <file> -- <files>`, confirm with `git status`.
+Hand the verified diff to the commit-only procedure in `references/commit-only.md`, passing the named files and any `exclude:<paths>` from the invocation. Its contract applies verbatim: stage named files only, never `git add -A`/`git add .`, message grounded in the actual diff, `fix:` over `feat:` when ambiguous, plan unit IDs appended when already in hand, `exclude:` files left out and reported, trailing path list on `git commit`, message written to a file and applied with `git commit -F`.
 
 Report the commit hash(es) and subject(s), and state plainly: **local only so far - nothing has left this machine.**
 
 ## Step 4 - STOP: the push/PR confirmation gate
 
-This step does not exist in CE. Present one message containing:
+Present one message containing:
 
 - the commit hash(es) and subject(s) about to ship;
 - the branch and the target remote (or "no remote - nothing to confirm, ship ends here");
@@ -75,7 +72,7 @@ Then wait. Full consent mechanics - what counts as an explicit yes, what never c
 
 ## Step 5 - Push and open the PR (only after explicit yes)
 
-Re-verify at the point of risk (CE's snapshot rule): branch is still the intended one, remote still present, PR presence re-checked immediately before create - a "no PR" from Step 1 is a stale snapshot, and a PR that appeared since (or was missed by an unknown-state probe) means take the existing-PR path, never open a duplicate.
+Re-verify at the point of risk (snapshot rule): branch is still the intended one, remote still present, PR presence re-checked immediately before create - a "no PR" from Step 1 is a stale snapshot, and a PR that appeared since (or was missed by an unknown-state probe) means take the existing-PR path, never open a duplicate.
 
 1. **Push** - `git push -u origin HEAD`, pushing the live HEAD, never a remembered branch name. Never `--force`/`--force-with-lease`. If the remote rejects as non-fast-forward, stop and report - resolving remote-history divergence (fetch/rebase/push-again) is a fresh user decision, not this skill's.
 2. **Compose the PR title and body** per `references/pr-body.md`, grounded in the actual three-dot diff (`base...HEAD`) and any linked artifacts already in hand: `docs/plans/<slug>.md`, `.atlas/findings/<YYYY-MM-DD>-<slug>.md`, verified entries from `.atlas/.run/findings.json`, the plan unit IDs on the commits. Never a generic summary; never invented `Fixes`.
@@ -84,9 +81,9 @@ Re-verify at the point of risk (CE's snapshot rule): branch is still the intende
 
 ## Step 6 - Babysit handoff (only if the user wants it)
 
-CE auto-hands every published PR to `ce-babysit-pr`; atlas offers it. After the PR URL, one line: CI watching is available via `atlas-babysit-pr` (checkpoint tick or sustained watch) - want it? Only on a yes, invoke `atlas-babysit-pr` naming the PR (pass `checkpoint` when the user wants one tick and a report). It then owns the watch and holds its own push-consent gate for any fix it makes - hand off cleanly, do not run watch mechanics yourself, and do not substitute `gh pr checks --watch`, a poll loop, or a promise to check later.
+After the PR URL, one line: CI watching is available via `atlas-run-watch` with a `pr:<N>` target (checkpoint tick or sustained watch) - want it? Only on a yes, invoke `atlas-run-watch` naming the PR (pass `checkpoint` when the user wants one tick and a report). It then owns the watch and holds its own push-consent gate for any fix it makes - hand off cleanly, do not run watch mechanics yourself, and do not substitute `gh pr checks --watch`, a poll loop, or a promise to check later.
 
-A declined watch is the successful terminal of this skill: the PR URL plus the Step 7 report is done. If the user wants watching but `atlas-babysit-pr` cannot load, report that blocked - never improvise a narrower watch.
+A declined watch is the successful terminal of this skill: the PR URL plus the Step 7 report is done. If the user wants watching but `atlas-run-watch` cannot load, report that blocked - never improvise a narrower watch.
 
 ## Step 7 - REPORT
 

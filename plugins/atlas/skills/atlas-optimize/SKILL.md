@@ -96,7 +96,7 @@ Report to the user, in metric units:
 - Deferred opportunities observed but not tried (candidate hypotheses for a next run).
 - Evidence paths.
 
-**Keep/revert is the user's decision.** Recommend revert for no-change and regression results; the change stays in the working tree pending their call. Never push, open a PR, or merge without explicit user confirmation. If the user wants the change kept, hand off to `atlas-commit`.
+**Keep/revert is the user's decision.** Recommend revert for no-change and regression results; the change stays in the working tree pending their call. Never push, open a PR, or merge without explicit user confirmation. If the user wants the change kept, hand off to `atlas-ship commit-only`.
 
 ## REPORT
 

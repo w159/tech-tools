@@ -99,7 +99,7 @@ vendored-dir ignores.
 
 Design (chosen with user): Approach A — overlay findings/handoffs onto the existing
 graphify graph by `file:line`, write a manifest pinning actionable markers to nodes, and add
-a `/atlas-launch <node-id>` companion skill that reads the manifest + `handoffs/` and
+a `/atlas-audit act <node-id>` companion skill that reads the manifest + `handoffs/` and
 dispatches `atlas-engine`. Depends on WS3 making the graph real per-root.
 
 ### WS5 — Adoption / footprint (cross-cutting, investigate not build)

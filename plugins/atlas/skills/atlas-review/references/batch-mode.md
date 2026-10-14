@@ -2,7 +2,7 @@
 
 Queue mode of `atlas-review`: review a list of PRs — or everything open from an org query — in one run, and deliver ONE cross-PR triage table instead of N separate chat reports. Everything else about the skill is unchanged: each item runs the exact per-PR pipeline (Phases 1-7), every P0/P1 still routes through `atlas:verifier`, the output is still report-only, and the hard behavioral lines all still apply per item.
 
-Out of scope, by design: this mode never watches CI (`atlas-babysit-pr`), never resolves reviewer threads (`atlas-resolve-pr-feedback`), and never pushes or posts. It reviews and ranks; the orchestrator decides what happens next.
+Out of scope, by design: this mode never watches CI (`atlas-run-watch`), never resolves reviewer threads (`atlas-resolve-pr-feedback`), and never pushes or posts. It reviews and ranks; the orchestrator decides what happens next.
 
 ## Trigger
 

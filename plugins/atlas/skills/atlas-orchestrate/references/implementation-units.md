@@ -1,5 +1,13 @@
 # Implementation-unit discipline
 
+## Contents
+
+- The unit is the atom
+- 1. Idempotency: check before you redo
+- 2. Name the evidence strategy per unit - in the dispatch prompt
+- 3. Independent-unit bounded parallel waves
+- 4. Per-unit evidence receipts
+
 Load from atlas-orchestrate when a Dispatch step will send work to `atlas:implementer` - especially multi-unit plans, resumed runs, and parallel implementer waves. The four disciplines here (idempotency, evidence strategy, bounded parallel waves, evidence receipts) are adapted from CE's `ce-work` implementation loop and execution strategy, ported onto atlas's existing dispatch and findings mechanisms. CE's external-CLI transport does NOT port: atlas dispatches `atlas:implementer` subagents, never a named external binary. The host-ownership principles do port (see §3 close).
 
 ## The unit is the atom

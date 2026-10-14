@@ -488,7 +488,7 @@
     "plugins/atlas/scripts/dashboard_ui/css/shell.css",
     "plugins/atlas/scripts/dashboard_ui/css/tokens.css",
     "plugins/atlas/scripts/dashboard_ui/js/theme-boot.js",
-    "plugins/atlas/skills/atlas-component/templates/component.seed.tsx",
+    "plugins/atlas/skills/atlas-frontend/templates/component.seed.tsx",
     "skills/webapp-testing/assets/test-helper.js"
   ],
   "unused_exports": [
@@ -1892,7 +1892,7 @@
     "plugins/atlas/omp/stop-bridge.test.ts:@oh-my-pi/pi-coding-agent",
     "plugins/atlas/omp/style.test.ts:@oh-my-pi/pi-coding-agent",
     "plugins/atlas/omp/worker-report.test.ts:@oh-my-pi/pi-coding-agent",
-    "plugins/atlas/skills/atlas-component/templates/component.seed.tsx:@/lib/utils"
+    "plugins/atlas/skills/atlas-frontend/templates/component.seed.tsx:@/lib/utils"
   ],
   "unlisted_dependencies": [],
   "duplicate_exports": [

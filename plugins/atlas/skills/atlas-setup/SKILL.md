@@ -1,17 +1,17 @@
 ---
 name: atlas-setup
-description: "Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair. Use to bring atlas online or fix it; --fix auto-repairs."
-when_to_use: "first run, set up atlas, SSOT scaffolding, tooling install, vendor connectors, what to run next, subagents not launching, plugin acting like an older version"
+description: "Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair, tour (first-session walkthrough), menu. Use to bring atlas online, fix it or learn it."
+when_to_use: "first run, set up atlas, boot the workspace, SSOT scaffolding, tooling install, vendor connectors, what to run next, atlas menu, how does atlas work, atlas tour, subagents not launching, plugin acting like an older version"
 disable-model-invocation: true
 user-invocable: true
-argument-hint: "[onboard | install | connectors | repair [--fix] | task description | 'menu']"
+argument-hint: "[onboard | install | connectors | repair [--fix] | tour | task description | menu [need]]"
 allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/evidence/**), Write(docs/audits/**), Write(.claude/atlas.local.md)
 ---
 
 # atlas-setup - onboarding, install, connectors, repair
 
-One of two manual skills in the fleet (the other is `atlas`). The user invokes it explicitly; it never
-auto-triggers. Every other atlas skill auto-triggers from its description.
+The one manual skill in the fleet: the user invokes it explicitly and it never auto-triggers.
+Every other atlas skill auto-triggers from its description.
 
 atlas-setup configures, fixes, and organizes any project it runs in. First run
 scaffolds the SSOT from nothing; every later run checks the same structure and
@@ -24,7 +24,7 @@ durable `.atlas/**` subfolders) go through this script under
 grants, which cover `docs/**` content edits and `.atlas/evidence/**`
 captures made outside the scaffolder.
 
-It has four modes. Pick by argument, or infer from the ask:
+It has five modes plus a menu. Pick by argument, or infer from the ask:
 
 | Mode | When | Reference |
 |---|---|---|
@@ -32,6 +32,7 @@ It has four modes. Pick by argument, or infer from the ask:
 | install | Tooling not wired: claude-mem, context-mode, hooks, project config | `references/install.md` |
 | connectors | Vendor MCP connector setup (Auvik, CIPP, NinjaOne, ...) | `references/connectors.md` |
 | repair | Atlas itself is broken: subagents not launching, stale version, missing hooks | `references/repair.md` |
+| tour | First session, or "how does atlas work": orchestrator style, one dispatch, one gate event, one tiny task | `references/tour.md` |
 
 Mode routing rules:
 
@@ -52,6 +53,12 @@ Mode routing rules:
   `.claude/atlas.local.md` and the resolver
   `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py` is present, also run the
   Compound Pack health check (section below) as part of the diagnosis.
+- `tour` -> read `references/tour.md` and run it once per operator. Done when
+  the operator has seen one dispatch, one gate result and one finished task.
+- `menu [need]` -> print the intent-to-skill table in
+  `${CLAUDE_PLUGIN_ROOT}/references/skill-finder.md`. With a described need, end
+  with the single best-fit skill and a one-line why; when none fits, say so.
+  Done when the table is shown and, if a need was given, one verdict is named.
 - To build, fix, audit, or refactor code: this is NOT the skill. Route to
   atlas-orchestrate or the specific task skill.
 
@@ -265,15 +272,12 @@ task. When routing is ambiguous, present the candidates as one
 AskUserQuestion, recommendation first. See `references/skill-routing.md`
 for the full task-to-skill mapping.
 
-## The skill inventory (20 skills)
+## The skill inventory (37 skills)
 
-- **2 manual skills** - atlas-setup (this skill) and atlas.
-- **18 auto-trigger skills** - atlas-orchestrate, atlas-audit,
-  atlas-loop, atlas-ux-test, and the 14 task skills (atlas-component,
-  atlas-db-audit, atlas-debug, atlas-feature, atlas-frontend,
-  atlas-gitignore, atlas-handoff, atlas-harden, atlas-launch,
-  atlas-prompt, atlas-readme, atlas-refactor,
-  atlas-validate, atlas-wiki).
+- **1 manual skill** - atlas-setup (this skill).
+- **36 auto-trigger skills** - the full list with one-line triggers is
+  `references/manual-vs-auto-map.md`; the intent-to-skill table is
+  `${CLAUDE_PLUGIN_ROOT}/references/skill-finder.md`.
 
 Org deployment (11 departments, 156 department skills) now lives in the
 separate `armada` plugin; install it only for org use.
@@ -292,8 +296,7 @@ it into `wiki/diagrams/`. If `architecture/` is newer than
 
 No arguments: run the recommendation analysis and present the top 3-5.
 Install or change nothing without the user picking a recommendation or
-naming a task. "menu": list the full inventory from
-`references/manual-vs-auto-map.md`. A task description: route to the best
+naming a task. "menu": see the menu routing rule above. A task description: route to the best
 skill, asking one question if ambiguous.
 
 ## First move

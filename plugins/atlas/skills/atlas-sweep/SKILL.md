@@ -1,14 +1,21 @@
 ---
 name: atlas-sweep
-description: "Ingests new feedback (GitHub issues), triages it, verifies claimed fixes merged, updates a docs/features/ triage doc. Never auto-closes or replies. Use when new issues or feedback need triage."
-when_to_use: "triage issues, feedback sweep, new GitHub issues, backlog triage, what came in"
+description: "Turns feedback into triaged findings. Sweep mode ingests new GitHub issues, triages them, verifies claimed fixes and updates a docs/features/ triage doc, never auto-closing or replying. Analyze mode turns a transcript, support thread or notes into findings tied to verbatim quotes. Use when feedback needs triage or analysis."
+when_to_use: "triage issues, feedback sweep, new GitHub issues, backlog triage, what came in, analyze feedback, customer call transcript, support tickets, pain points, feature requests, usability friction, sentiment"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
-argument-hint: '[setup|reconfigure] [mode:non-interactive]'
+argument-hint: '[setup|reconfigure] [mode:non-interactive] | analyze <feedback artifact path, or nothing if pasting notes>'
 ---
 
 
 
 # atlas-sweep
+
+| Mode | When | Detail |
+|---|---|---|
+| sweep (default) | New items in a configured feedback source (GitHub issues) need triage | this file |
+| analyze | The user supplies a transcript, support thread, recording or pasted notes | `references/transcript-input.md` |
+
+For analyze mode, read `${CLAUDE_SKILL_DIR}/references/transcript-input.md` and follow it; the sweep boundaries, state engine and phases below do not apply. The switch is done once that reference has been read.
 
 Apply the Operating Contract to this entire task. It is injected below.
 
@@ -21,8 +28,6 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 **Outcome:** every item posted to a configured feedback source since the last run is ingested, acknowledged at that source when the source has standing approval, analyzed, and — when it claims a fix — verified actually merged. Everything still open lands in a rolling triage doc with proposed next actions, grouped into clusters.
 
 **Done:** the run is recorded in state, the lease is released, the triage doc is written under `docs/features/`, and the summary is printed with the doc path.
-
-**Origin:** ported from the compound-engineering plugin's `ce-sweep`. Adapted: artifact naming follows atlas's docs-SSOT date-first convention; state moved to `.atlas/.run/sweep-state.json`; source-side reach is scoped to what this harness can actually do (GitHub issues via the GitHub connector — no Slack/email integration is invented); and CE's auto-commit/auto-push shipping tail is removed entirely.
 
 ## Boundaries — read these before anything else
 
@@ -72,4 +77,13 @@ Any claim that a fix "merged" or that close-out happened routes through an indep
 
 ## Triage doc
 
-The run's output is a rolling triage doc at `docs/features/<YYYY-MM-DD>-feedback-sweep.md` (date-first per the docs SSOT), grouped into clusters with proposed next actions, plus Outstanding Questions for everything a decision deferred. Template and reconciliation rules: `references/triage-doc.md`. CE's `<HHMM>`-timestamped plan naming and `docs/solutions/` tree are deliberately not used.
+The run's output is a rolling triage doc at `docs/features/<YYYY-MM-DD>-feedback-sweep.md` (date-first per the docs SSOT), grouped into clusters with proposed next actions, plus Outstanding Questions for everything a decision deferred. Template and reconciliation rules: `references/triage-doc.md`.
+
+## Mode references
+
+Open each when its mode reaches that step:
+
+- `references/evidence-rules.md`: analyze mode: what counts as evidence, confidence, privacy
+- `references/quick-report.md`: analyze mode: single-issue inline report
+- `references/finding-format.md`: analyze mode: durable analysis doc template
+- `references/personas/feedback-analyst.md`: analyze mode: extraction persona for dispatched analysts

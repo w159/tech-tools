@@ -175,7 +175,7 @@ ordinary path references.
 
 | Stage | Pack behavior |
 |---|---|
-| Planning (`atlas:planner`, atlas-feature planning wave) | Resolves packs, matches rules, cites them on every requirement/constraint/risk they shaped. |
+| Planning (`atlas:planner`, atlas-orchestrate planning wave) | Resolves packs, matches rules, cites them on every requirement/constraint/risk they shaped. |
 | Implementation (`atlas:implementer`) | Consumes plan citations; does not independently resolve packs. |
 | Review (reviewer personas, `references/personas/*`) | Resolves packs in the institutional-learnings pass and cites rules in findings; a lite/focused path that skips packs says so in its receipt. |
 | Learning capture (compound-learning) | Recognizes pack-covered captures instead of duplicating them (`Documentation skipped — covered by pack rule (pack: <id>, <path>)`); git-cached packs are read-only. |

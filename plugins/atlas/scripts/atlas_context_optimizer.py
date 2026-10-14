@@ -40,7 +40,6 @@ CORE_SKILLS = {
     "atlas-setup",
     "atlas-audit",
     "atlas-debug",
-    "atlas-feature",
     "atlas-validate",
 }
 
@@ -59,12 +58,10 @@ CORE_AGENTS = {
 NICHE_SKILLS = {
     "atlas-wiki",  # graphify wiring — only when wiki is needed
     "atlas-gitignore",
-    "atlas-component",
     "atlas-db-audit",
     "atlas-prompt",
     "atlas-readme",
     "atlas-handoff",
-    "atlas-launch",
     "atlas-harden",
     "atlas-refactor",
     "atlas-frontend",

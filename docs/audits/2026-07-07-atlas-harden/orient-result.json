@@ -92,7 +92,7 @@
           "findings": [
             {
               "claim": "references/operating-contract.md is missing but referenced by 14 command files",
-              "evidence": "commands/atlas-component.md:9, atlas-db-audit.md:9, atlas-debug.md:9, atlas-feature.md:9, atlas-frontend.md:9, atlas-gitignore.md:9, atlas-handoff.md:9, atlas-harden.md:9, atlas-launch.md:9, atlas-m365.md:9, atlas-readme.md:9, atlas-refactor.md:9, atlas-validate.md:9, atlas-vendor-assessment.md:9. File does not exist at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/references/operating-contract.md",
+              "evidence": "commands/atlas-frontend component.md:9, atlas-db-audit.md:9, atlas-debug.md:9, atlas-orchestrate.md:9, atlas-frontend.md:9, atlas-gitignore.md:9, atlas-handoff.md:9, atlas-harden.md:9, atlas-audit act.md:9, atlas-m365.md:9, atlas-readme.md:9, atlas-refactor.md:9, atlas-validate.md:9, atlas-vendor-assessment.md:9. File does not exist at /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/references/operating-contract.md",
               "severity": "high"
             },
             {
@@ -453,7 +453,7 @@
         },
         {
           "claim": "references-resolution report: references/operating-contract.md is missing but referenced by 14 command files at line 9.",
-          "reason": "The report truncated the citation. Actual atlas-component.md:9 reads `cat \"${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md\"` and line 12 gives the same skill-relative fallback path. That file exists (3456 bytes). The fully-qualified CLAUDE_PLUGIN_ROOT path resolves; there is no dangling command reference."
+          "reason": "The report truncated the citation. Actual atlas-frontend component.md:9 reads `cat \"${CLAUDE_PLUGIN_ROOT}/skills/atlas-engine/references/operating-contract.md\"` and line 12 gives the same skill-relative fallback path. That file exists (3456 bytes). The fully-qualified CLAUDE_PLUGIN_ROOT path resolves; there is no dangling command reference."
         },
         {
           "claim": "references-resolution report: 6 references/roles/*.md files missing; directory references/roles/ does not exist.",

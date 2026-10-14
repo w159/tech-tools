@@ -31,7 +31,7 @@ Goal: **correct tool first, minimum tokens.** Atlas fails when agents default to
 | Want less code / cheaper session posture | ponytail plugin (session-augmentation tier) | rewriting style guides by hand |
 | git / mkdir / short fixed-output shell | Bash | context-mode |
 
-## Setup order (atlas-setup / `/atlas` install)
+## Setup order (atlas-setup install)
 
 For any code repo, activate in this order (confirm each install with the user):
 

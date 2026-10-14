@@ -51,7 +51,7 @@ by name (grouped under the plugin namespace in the Skill picker). The scheme:
 | --- | --- | --- |
 | Plugin | `atlas` | `plugins/atlas/` |
 | Architect command | `/atlas` | `commands/atlas.md` |
-| Commands | `/atlas-<verb>` | `/atlas-feature`, `/atlas-debug` |
+| Commands | `/atlas-<verb>` | `/atlas-orchestrate`, `/atlas-debug` |
 | Agents | `atlas:<role>` | `atlas:explorer`, `atlas:verifier` |
 | Skills | name, shown `atlas:<skill>` | `atlas-engine`, `atlas-architect`, `operating-contract`, `self-improving` |
 
@@ -154,8 +154,8 @@ updated to point at the new paths.
 
 ### Commands (rename, drop `orc-`, add `atlas-`)
 
-orc-component to atlas-component, orc-db-audit to atlas-db-audit, orc-debug to
-atlas-debug, orc-feature to atlas-feature, orc-frontend to atlas-frontend,
+orc-component to atlas-frontend component, orc-db-audit to atlas-db-audit, orc-debug to
+atlas-debug, orc-feature to atlas-orchestrate, orc-frontend to atlas-frontend,
 orc-gitignore to atlas-gitignore, orc-grafana to atlas-grafana, orc-handoff to
 atlas-handoff, orc-harden to atlas-harden, orc-m365 to atlas-m365, orc-prompt to
 atlas-prompt, orc-readme to atlas-readme, orc-refactor to atlas-refactor,

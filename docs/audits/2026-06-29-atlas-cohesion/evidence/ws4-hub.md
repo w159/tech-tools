@@ -1,4 +1,4 @@
-# WS4 evidence - knowledge-graph hub + atlas-launch launcher
+# WS4 evidence - knowledge-graph hub + atlas-audit act launcher
 
 Date: 2026-06-30. Branch: atlas-ws4-hub.
 
@@ -7,12 +7,12 @@ Date: 2026-06-30. Branch: atlas-ws4-hub.
 - `scripts/build_hub.py` - turns an audit run dir (`handoffs/<id>.md` + graphify `graph.json`) into
   `hub/manifest.json` (node<->finding bridge) and a branded `hub/index.html` (Atlas expedition-map
   theme). Stdlib-only.
-- `commands/atlas-launch.md` - `atlas-launch <id>` loads a finding's handoff, sets the orchestration
+- `commands/atlas-audit act.md` - `atlas-audit act <id>` loads a finding's handoff, sets the orchestration
   marker, and invokes the `atlas-engine` skill with the handoff as its opening task; no-arg lists the
   actionable findings. No `/atlas-engine` command is invented.
-- `atlas-survey` + `atlas-cartographer` - handoff prompts now end with `atlas-launch <id>` (not the
+- `atlas-survey` + `atlas-cartographer` - handoff prompts now end with `atlas-audit act <id>` (not the
   phantom `/atlas-engine`), Output trees gain `hub/`, and both build the hub after writing handoffs.
-- `atlas-engine` - explicit "opening task may be a handoff from atlas-launch" contract.
+- `atlas-engine` - explicit "opening task may be a handoff from atlas-audit act" contract.
 
 ## Design correction (honest, verified against the engine)
 

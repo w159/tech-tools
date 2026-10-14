@@ -34,7 +34,7 @@ GitHub only, including GitHub Enterprise. Before fetching, confirm the repo is G
 |----------|------|
 | No argument | **Full** - all unresolved feedback on the current branch's PR |
 | PR number (e.g., `123`) | **Full** - all unresolved feedback on that PR |
-| PR URL (e.g., `https://HOST/OWNER/REPO/pull/123`, no comment fragment) | **Full** - all unresolved feedback on that PR; parse `HOST`, `OWNER/REPO`, and the number from the URL (this is how `atlas-babysit-pr` hands a fork-to-upstream PR to full mode against the right host/base) |
+| PR URL (e.g., `https://HOST/OWNER/REPO/pull/123`, no comment fragment) | **Full** - all unresolved feedback on that PR; parse `HOST`, `OWNER/REPO`, and the number from the URL (this is how `atlas-run-watch` hands a fork-to-upstream PR to full mode against the right host/base) |
 | Review-comment URL (a `pull/123#discussion_r...` fragment - a diff/review-thread comment) | **Targeted** - only that specific review thread |
 | Issue-comment URL (a `pull/123#issuecomment-...` fragment - a top-level PR comment) | **Full** - a top-level comment has no review thread to resolve; process the PR and address it as non-thread feedback |
 

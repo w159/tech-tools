@@ -84,12 +84,9 @@ ORCH_SKILLS = {
     "atlas-audit",
     "atlas-ux-test",
     "atlas-loop",
-    "atlas-feature",
     "atlas-debug",
     "atlas-refactor",
     "atlas-harden",
-    "atlas-launch",
-    "atlas-component",
     "atlas-frontend",
 }
 

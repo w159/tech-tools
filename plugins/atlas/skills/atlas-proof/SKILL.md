@@ -66,15 +66,15 @@ DONE: every open annotation is `collected` or explicitly deferred with a reason,
 - Never silently replace a repo-tracked project doc with a review copy or a link. The tracked file stays canonical.
 - Deleting a review copy wipes the review record. Do not auto-delete after a publish handoff — review artifacts must linger under `.atlas/.run/proof/` until the user asks. Delete only on explicit request, and confirm the path at the point of deletion.
 - Pulling review edits into a source doc overwrites it. When applying collected changes is a side effect rather than the request, confirm the target path first.
-- NEVER push, open a PR, or post PR comments without an explicit user request naming that surface. `gh pr comment`/`gh pr review` on an existing PR is an external side effect: require the user to have named the PR, show the exact comment text before posting, and stop at that gate. Local commits are not this skill's job — hand off to `atlas-commit` if the user wants the review artifact committed.
+- NEVER push, open a PR, or post PR comments without an explicit user request naming that surface. `gh pr comment`/`gh pr review` on an existing PR is an external side effect: require the user to have named the PR, show the exact comment text before posting, and stop at that gate. Local commits are not this skill's job — hand off to `atlas-ship commit-only` if the user wants the review artifact committed.
 - An anchor that matches more than once means nothing was annotated: lengthen the quote or add surrounding context, never assume silent first-match. If the doc changed since you read it, re-read and re-anchor before retrying — a stale annotation is worse than none.
 
 ## Composition
 
 - `atlas:docs-curator` — dispatch via `Task` (per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`) when collected feedback changes durable `docs/` content.
 - `atlas:verifier` — dispatch in a fresh context when a collected annotation claims something is wrong/fixed and that claim must be independently confirmed before a findings row can be `verified`.
-- `atlas-plan`, `atlas-feature`, `atlas-frontend` — publish handoffs from these planning workflows land here: pass the file path and title, publish per mode 1, show the path, return control.
-- `atlas-commit` — the user's follow-up for committing a published review artifact.
+- `atlas-plan`, `atlas-orchestrate`, `atlas-frontend` — publish handoffs from these planning workflows land here: pass the file path and title, publish per mode 1, show the path, return control.
+- `atlas-ship commit-only` — the user's follow-up for committing a published review artifact.
 
 ## REPORT
 
