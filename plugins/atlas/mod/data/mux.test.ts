@@ -39,8 +39,8 @@ test('ownRows keeps this session\'s workers once each; other sessions\' claude-b
 });
 
 test('paneTool: last tool_use is in flight until a tool_result answers it; no call => {}', () => {
-  expect(paneTool([...LOG, use('t1', 'mcp__lean-ctx__ctx_shell', { command: 'sleep 5' })].join('\n'))).toEqual({ tool: 'mcp__lean-ctx__ctx_shell', target: 'sleep 5' });
-  expect(paneTool([...LOG, use('t1', 'Bash', { command: 'sleep 5' }), answer('t1')].join('\n'))).toEqual({ lastTool: 'Bash', target: 'sleep 5' });
+  expect(paneTool([...LOG, use('t1', 'mcp__lean-ctx__ctx_shell', { command: 'sleep 5' })].join('\n'))).toEqual({ tool: 'mcp__lean-ctx__ctx_shell', target: 'sleep 5', uses: 1 });
+  expect(paneTool([...LOG, use('t1', 'Bash', { command: 'sleep 5' }), answer('t1')].join('\n'))).toEqual({ lastTool: 'Bash', target: 'sleep 5', uses: 1 });
   expect(paneTool(LOG.join('\n'))).toEqual({});
   expect(paneTool('')).toEqual({});
 });

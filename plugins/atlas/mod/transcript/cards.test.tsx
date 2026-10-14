@@ -27,18 +27,28 @@ test('resultLine prefers the STATUS line', () => {
   expect(resultLine({ content: [{ type: 'text', text: 'plain result' }] })).toBe('plain result')
 })
 
-test('running card: round border, name, role, goal', () => {
-  const c = workerCard(call(), 'running')!
-  expect(props(c).borderStyle).toBe('round')
+type El = { props: Record<string, unknown>; children: El[] }
+/** The `▌` stripe colour and the header chip of a card. */
+const stripe = (c: unknown): unknown => (c as El).children[0]!.children[0]!.props.color
+const chip = (c: unknown): El => (c as El).children[0]!.children[1]!
+
+test('running card: filled panel, stripe, name chip, role · tier, goal and now rows', () => {
+  const c = workerCard(call(), 'running', 80, undefined, '', { mark: '⣾', now: 'Grep auth/ · 12s · 3 tools', wave: 2 })!
+  expect(props(c)).toMatchObject({ backgroundColor: '#11111b', width: 80 })
+  expect(props(c).borderStyle).toBeUndefined()
+  expect(text(chip(c))).toBe(' ⣾ impl-a ')
+  expect(chip(c).props).toMatchObject({ backgroundColor: '#a6e3a1', color: '#1e1e2e', bold: true })
   const t = text(c)
-  for (const s of ['◆', 'impl-a', 'implementer', 'sonnet', 'ship the thing']) expect(t).toContain(s)
+  for (const s of ['▌', 'implementer · sonnet · wave 2', 'goal', 'ship the thing', 'now', 'Grep auth/ · 12s · 3 tools']) expect(t).toContain(s)
+  for (const row of (c as El).children) expect(text(row).length).toBe(80)
 })
 
-test('done card shows the result line; errored uses the fail color', () => {
+test('done card shows the result line; errored uses the fail colour', () => {
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished')!
   expect(text(done)).toContain('STATUS: DONE')
   const bad = workerCard(call({ isRunning: false, isErrored: true }), 'failed')!
-  expect(props(bad).borderColor).not.toBe(props(done).borderColor)
+  expect(stripe(bad)).toBe('#f38ba8')
+  expect(stripe(bad)).not.toBe(stripe(done))
 })
 
 test('non-atlas Agent call is left to the engine', () => {

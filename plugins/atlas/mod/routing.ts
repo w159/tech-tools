@@ -110,7 +110,8 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
         await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? (label || 'unknown'), e.description));
         const now = await $.clock.now();
         const name = e.name || matchCall(calls, e, now) || promptName(e.prompt);
-        await update($, orchState, (o) => onSpawn(o, agentId, e.description || e.prompt, now, { ...(name ? { name } : {}), type: e.subagentType }));
+        const scope = /^\s*SCOPE:\s*(\S+)/m.exec(e.prompt ?? '')?.[1];
+        await update($, orchState, (o) => onSpawn(o, agentId, e.description || e.prompt, now, { ...(name ? { name } : {}), ...(scope ? { scope } : {}), type: e.subagentType }));
       } catch {
         // recording never blocks a spawn
       }

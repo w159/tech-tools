@@ -1,68 +1,95 @@
-// band.tsx — the AbovePrompt "Mission Control" panel: a framed multi-row band (header rail, one lane per
-// live worker, channel ticker, footer). Pure: `register.ts` hands it the snapshot, live workers, gate
-// groups, columns, the row budget and the spinner tick. Tiers: >=120 full, 80-119 no role/target,
-// <80 header row only; maxRows collapses lanes first, then the ticker, then the footer.
+// band.tsx: the AbovePrompt "Mission Control" panel, a filled truecolor band: a gradient title bar,
+// the phase rail as chevron pills, one lane per live worker (state chip, spinner, tool chip, eighth-block
+// elapsed bar, tool-call sparkline), an IRC ticker and a footer of task bar + gate chips. Pure: `register.ts`
+// hands it the snapshot, live workers, gate groups, columns, the row budget, the spinner tick and the cost.
+// Tiers: >=120 full, 80-119 no role/target, <80 title row only; maxRows collapses lanes first, then the
+// ticker, then the footer (planRows).
 import type { ClientElements, RenderElement } from 'claude-code';
 import type { LiveSnapshot } from './orchestra-types';
-import { activeCount, type LiveWorker } from './data/live';
+import { activeCount, callBuckets, type LiveWorker } from './data/live';
 import { routeCounts } from './data/todos';
 import { groupOpenCount, openGateCount } from './gates';
 import type { GateGroup } from './pane/sidebar-types';
+import { chip, eighthBar, gradientBar, merge, nickColor, padRow, seg, sparkline, spread } from './paint';
 import { rowOf, type Segment } from './runs';
-import { barParts, chartRoom as C, fitText, meterColor, spin, textWidth } from './theme';
+import { fitText, formatDuration, MOCHA as M, mix, phaseHue, spin, textWidth } from './theme';
 
-export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number };
+export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; costUsd?: number | null };
 
 const FULL = 120;
 const MID = 80;
 const REF_MS = 120_000; // an elapsed bar fills over two minutes
 const TICKER_ROWS = 2;
+const BAR_W = 28; // elapsed bar cells at most
+const TARGET_W = 24; // target column at its narrowest (full tier)
+const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 const RAIL_SKIP = new Set(['validate', 'blocked']);
-const BRAND_CHIP: Segment = { t: ' ATLAS ', color: C.focus, inverse: true, bold: true };
-const DOT: Segment = { t: ' · ', color: C.muted };
-const RAIL_SEP: Segment = { t: ' ─ ', color: C.faint };
+/** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
+export const MARK = '◆';
 
-type Ctx = { s: LiveSnapshot; inner: number; tick: number; full: boolean; now: number; done: number; total: number; open: number; gates: GateGroup[] };
+type Ctx = { s: LiveSnapshot; cols: number; tick: number; full: boolean; now: number; done: number; total: number; open: number; gates: GateGroup[]; cost: number | null };
 
-const seg = (t: string, color?: string, bold?: boolean): Segment => ({ t, color, bold });
-const width = (parts: Segment[]): number => parts.reduce((n, p) => n + textWidth(p.t), 0);
 const padTo = (t: string, n: number): string => { const f = fitText(t, n); return f + ' '.repeat(Math.max(0, n - textWidth(f))); };
-const age = (ms: number): string => (ms < 60_000 ? `${Math.max(0, Math.floor(ms / 1000))}s` : `${Math.floor(ms / 60_000)}m`);
+const clock = (ms: number): string => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return s >= 3600 ? formatDuration(ms) : `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+};
 
-/** left parts, then right parts pushed to the far edge; the right side is dropped when there is no room. */
-function spread(left: Segment[], right: Segment[], cols: number): Segment[] {
-  const gap = cols - width(left) - width(right);
-  return gap >= 1 ? [...left, seg(' '.repeat(gap)), ...right] : left;
+// ---- title bar ---------------------------------------------------------------------
+
+/** Spawn clusters among the run's workers: the current wave number. ponytail: a 10 s gap heuristic, swap for the
+ * dispatch batch id once the host exposes one. */
+function waveOf(ws: readonly LiveWorker[]): number {
+  const starts = ws.map((w) => w.startedAt).sort((a, b) => a - b);
+  return starts.reduce((n, t, i) => (i && t - (starts[i - 1] ?? t) > WAVE_GAP_MS ? n + 1 : n), starts.length ? 1 : 0);
 }
 
-/** Phase rail: past phases check, the current one animated, future ones hollow. Compact drops past/future names. */
-function phaseRail(s: LiveSnapshot, tick: number, compact: boolean, animate = true): Segment[] {
+/** `<folder>@<branch>` of the board channel; without a board, the project folder. */
+const boardOf = (s: LiveSnapshot): string => (s.channel ? s.channel.split('/')[0]! : (s.root ?? '').replace(/\/+$/, '').split('/').pop() || 'atlas');
+const statsOf = (c: Ctx, shown: LiveWorker[]): string => {
+  const since = Math.min(...shown.map((w) => w.startedAt));
+  const parts = [`◷ ${clock(c.now - since)}`, `${activeCount(shown)} live`, c.s.contextPct > 0 ? `ctx ${c.s.contextPct}%` : '', c.cost != null ? `$${c.cost.toFixed(2)}` : ''];
+  return `${parts.filter(Boolean).join('   ')} `;
+};
+
+function titleRow(c: Ctx, all: LiveWorker[], shown: LiveWorker[]): Segment[] {
+  const scope = shown.find((w) => w.scope)?.scope;
+  const left = [`${MARK} ATLAS`, ...(c.full ? ['mission control'] : []), boardOf(c.s), `wave ${waveOf(all)}`, ...(scope ? [scope] : [])].join('  ·  ');
+  return gradientBar(left, statsOf(c, shown), c.cols, M.violet, M.sky);
+}
+
+// ---- phase rail ----------------------------------------------------------------------
+
+const pastPill = (id: string, compact: boolean): Segment => ({ t: compact ? ' ✓ ' : ` ✓ ${id} `, color: M.base, bg: mix(phaseHue(id), M.panel, 0.45) });
+const futurePill = (id: string, compact: boolean): Segment => ({ t: compact ? ' · ' : ` ${id} `, color: M.muted, bg: M.panel2 });
+/** The current phase: bright hue, its white mix cycling with the tick while workers run. */
+const nowPill = (id: string, tick: number, animate: boolean): Segment => {
+  const shimmer = animate ? 0.25 + 0.25 * ((tick % 4) / 3) : 0.15;
+  return { t: ` ◆ ${id.toUpperCase()} `, color: M.base, bg: mix(phaseHue(id), M.white, shimmer), bold: true };
+};
+
+/** Pill for one phase; `rel` is its position against the current phase (0 current, <0 past, >0 future). */
+function pill(id: string, rel: number, tick: number, compact: boolean, animate: boolean): Segment {
+  if (rel < 0) return pastPill(id, compact);
+  return rel > 0 ? futurePill(id, compact) : nowPill(id, tick, animate);
+}
+
+function railRow(s: LiveSnapshot, tick: number, compact: boolean, animate: boolean): Segment[] {
   const ids = s.contract.phases.map((p) => p.id as string).filter((id) => !RAIL_SKIP.has(id));
   const at = ids.indexOf(s.phase);
-  return ids.flatMap((id, i) => [...(i ? [RAIL_SEP] : []), railStep(id, i - at, tick, compact, animate)]);
+  const cells = ids.flatMap((id, i) => [pill(id, i - at, tick, compact, animate), seg(i < ids.length - 1 ? '▶' : ' ', i < at ? phaseHue(id) : M.dim)]);
+  return [seg(' '), ...cells];
 }
 
-/** One rail cell; `rel` is its position relative to the current phase (0 current, <0 past, >0 future). */
-const railNow = (id: string, tick: number, animate: boolean): Segment => (animate ? seg(`${spin(tick, id)} ${id}`, C.live, true) : seg(`◉ ${id}`, C.focus, true));
-const railPast = (id: string, compact: boolean): Segment => seg(compact ? '✓' : `✓ ${id}`, C.ok);
-const railFuture = (id: string, compact: boolean): Segment => seg(compact ? '○' : `○ ${id}`, C.muted);
-function railStep(id: string, rel: number, tick: number, compact: boolean, animate: boolean): Segment {
-  if (rel === 0) return railNow(id, tick, animate);
-  return rel < 0 ? railPast(id, compact) : railFuture(id, compact);
-}
+// ---- lanes -------------------------------------------------------------------------
 
-const gateWord = (open: number): string => `gates ${open ? `✗${open}` : '✓'}`;
-
-function headerRow(c: Ctx): Segment[] {
-  const stats = [seg(`${c.done}/${c.total} tasks`, C.muted), DOT, seg(gateWord(c.open), c.open ? C.warn : C.ok)];
-  return spread([BRAND_CHIP, seg(' '), ...phaseRail(c.s, c.tick, !c.full)], stats, c.inner);
-}
-
-const laneColor = (w: LiveWorker): string => (w.state === 'blocked' ? C.warn : w.state === 'failed' ? C.fail : C.live);
+const STATE_CHIP: Record<LiveWorker['state'], [string, string]> = {
+  working: ['RUN', M.green], blocked: ['WAIT', M.yellow], failed: ['FAIL', M.red], done: ['DONE', M.teal], parked: ['PARK', M.muted],
+};
 
 function laneGlyph(w: LiveWorker, c: Ctx): string {
-  if (w.state === 'blocked') return '⏸';
-  return w.state === 'failed' ? '✗' : spin(c.tick, c.s.phase);
+  if (w.state === 'working') return spin(c.tick, c.s.phase);
+  return w.state === 'blocked' ? '◷' : w.state === 'failed' ? '✖' : '✔';
 }
 
 /** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
@@ -75,42 +102,54 @@ function laneTool(w: LiveWorker): string {
   return w.state === 'blocked' ? 'queued' : 'starting';
 }
 
-/** One worker lane: accent, name, role, glyph+tool, target, elapsed bar, age, state word. */
-function lane(w: LiveWorker, c: Ctx): Segment[] {
-  const color = laneColor(w);
-  const elapsed = c.now - w.startedAt;
-  const [fill, rest] = barParts((elapsed / REF_MS) * 100, 10);
-  const parts: Segment[] = [seg('▌', color), seg(` ${padTo(w.name, 18)} `, undefined, true)];
-  if (c.full) parts.push(seg(`${padTo(w.role, 12)} `, C.muted));
-  parts.push(seg(`${laneGlyph(w, c)} `, color), seg(`${padTo(laneTool(w), 12)} `, w.tool ? color : C.muted));
-  if (c.full) parts.push(seg(`${padTo(w.target ?? '', 24)} `, C.muted));
-  parts.push(seg('▕', C.faint), seg(fill, meterColor((elapsed / REF_MS) * 100)), seg(rest, C.muted), seg('▏', C.faint));
-  parts.push(seg(` ${age(elapsed).padStart(4)} `, C.muted), seg(w.state, color));
-  return parts;
+const roleCell = (w: LiveWorker, c: Ctx): Segment[] => (c.full ? [seg(padTo(w.role, 12), M.muted)] : []);
+const targetCell = (w: LiveWorker, c: Ctx, width: number): Segment => (c.full ? seg(` ${padTo(w.target ?? '', width)} `, M.text) : seg(' '));
+
+/** Lane head: state chip, spinner, name, role, tool chip (dim between calls), target. */
+function laneHead(w: LiveWorker, c: Ctx, color: string, targetWidth = TARGET_W): Segment[] {
+  const [word, hue] = STATE_CHIP[w.state];
+  const tool = seg(` ${padTo(laneTool(w), 10)} `, w.tool ? color : M.muted, M.panel2, true);
+  return [seg(' '), chip(word.padEnd(4), hue), seg(` ${laneGlyph(w, c)} `, color), seg(`${padTo(w.name, c.full ? 24 : 18)} `, M.text, M.panel, true), ...roleCell(w, c), tool, targetCell(w, c, targetWidth)];
 }
 
-/** Last two channel messages as `from > to: text`, led by the channel name. */
+const runsWidth = (parts: Segment[]): number => textWidth(parts.map((p) => p.t).join(''));
+
+/** One worker lane: head, elapsed bar sized to the room left (28 cells at most, the target takes the rest),
+ * sparkline of its tool calls, age. */
+function lane(w: LiveWorker, c: Ctx): Segment[] {
+  const color = STATE_CHIP[w.state][1];
+  const elapsed = c.now - w.startedAt;
+  const tail = [seg('  '), ...sparkline(callBuckets(w.calls, c.now), color), seg(`  ${formatDuration(elapsed).padStart(6)}`, M.muted)];
+  let head = laneHead(w, c, color);
+  let room = c.cols - runsWidth(head) - runsWidth(tail) - 1;
+  if (c.full && room > BAR_W) [head, room] = [laneHead(w, c, color, TARGET_W + room - BAR_W), BAR_W];
+  const bar = room >= 5 ? eighthBar(elapsed / REF_MS, Math.min(BAR_W, room), mix(color, M.panel, 0.1), mix(color, M.white, 0.35)) : [];
+  return padRow([...head, ...bar, ...tail], c.cols);
+}
+
+// ---- ticker and footer -------------------------------------------------------------
+
+const hhmm = (ts: number): string => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const nick = (name: string): Segment => seg(name, nickColor(name), M.panel, true);
+
+/** Last two channel messages as `hh:mm from → to: text`, led by the channel chip. */
 function ticker(c: Ctx): Segment[] {
   const channel = c.s.channel?.split('/').pop() ?? 'lead';
-  const msgs = c.s.comms.slice(-TICKER_ROWS).map((m) => `${m.from} > ${m.to}: ${m.text.replace(/\s+/g, ' ')}`);
-  const parts: Segment[] = [seg(`#${channel}  `, C.focus)];
-  msgs.forEach((m, i) => parts.push(...(i ? [DOT] : []), seg(m, C.muted)));
-  return parts;
+  const msgs = c.s.comms.slice(-TICKER_ROWS).flatMap((m, i) => [
+    seg(`${i ? '   ' : ''}${hhmm(m.ts)} `, M.dim), nick(m.from), seg(' → ', M.muted), nick(m.to), seg(`: ${m.text.replace(/\s+/g, ' ')}`, M.text),
+  ]);
+  return padRow([seg(' '), chip(`#${channel}`, M.violet), seg(' '), ...msgs], c.cols);
 }
 
-const gateChip = (g: GateGroup): Segment => (groupOpenCount(g) ? seg(` ✗ ${g.id}`, C.warn) : seg(` ✓ ${g.id}`, C.ok));
+const gateChip = (g: GateGroup): Segment[] => [groupOpenCount(g) || g.error ? chip(`✖ ${g.id}`, M.red) : chip(`✔ ${g.id}`, M.green), seg(' ')];
 const hasGateData = (g: GateGroup): boolean => g.lines.length > 0 || !!g.error;
 
-function todoBar(c: Ctx): Segment[] {
-  const pct = (c.done / Math.max(1, c.total)) * 100;
-  const [fill, rest] = barParts(pct, 9);
-  return [seg('todos ', C.muted), seg(fill, c.total ? meterColor(pct) : C.focus), seg(rest, C.muted), seg(` ${c.done}/${c.total}`, C.muted)];
+function footer(c: Ctx): Segment[] {
+  const tasks = [seg(' '), seg('tasks ', M.muted), ...eighthBar(c.done / Math.max(1, c.total), 18, M.green, M.teal), seg(` ${c.done}/${c.total}  `, M.text)];
+  return spread([...tasks, ...c.gates.filter(hasGateData).flatMap(gateChip)], [seg('ctrl+x tab  r t c g  /atlas-cc ', M.muted)], c.cols);
 }
 
-function footer(c: Ctx): Segment[] {
-  const left = [...todoBar(c), ...c.gates.filter(hasGateData).map(gateChip)];
-  return spread(left, [seg('/atlas-cc pane · r t c g tabs', C.faint)], c.inner);
-}
+// ---- row budget --------------------------------------------------------------------
 
 /** Whether the ticker and footer stay: drop the ticker first, then the footer, until `need` lane rows fit. */
 function chrome(room: number, need: number, hasTicker: boolean): [boolean, boolean] {
@@ -122,9 +161,9 @@ function chrome(room: number, need: number, hasTicker: boolean): [boolean, boole
 const tradesTicker = (kept: boolean, nLanes: number, slots: number): boolean => kept && nLanes > slots && slots < 2;
 const needsMore = (nLanes: number, slots: number): boolean => nLanes > slots && slots >= 2;
 
-/** How many lanes, ticker and footer rows fit `maxRows` (border 2 + header 1 are fixed). */
+/** How many lanes, ticker and footer rows fit `maxRows` (title + rail are fixed). */
 export function planRows(maxRows: number, nLanes: number, hasTicker: boolean): { lanes: number; ticker: boolean; footer: boolean; more: boolean } {
-  const room = Math.max(0, maxRows - 3);
+  const room = Math.max(0, maxRows - 2);
   const [kept, footer] = chrome(room, Math.min(1, nLanes), hasTicker);
   const ticker = kept && !tradesTicker(kept, nLanes, room - 1 - +footer);
   const slots = room - +ticker - +footer;
@@ -132,54 +171,54 @@ export function planRows(maxRows: number, nLanes: number, hasTicker: boolean): {
   return { lanes: more ? slots - 1 : Math.min(nLanes, slots), ticker, footer, more };
 }
 
-const frame = (els: ClientElements, rows: Segment[][], inner: number, color: string): RenderElement =>
-  els.Box({
-    flexDirection: 'column', flexShrink: 0, borderStyle: 'round', borderColor: color,
-    children: rows.map((r) => rowOf(els, r, inner)),
-  });
+// ---- assembly ----------------------------------------------------------------------
 
-/** `· last run: N workers, M min, ok|K failed`, empty when no worker ever ran. */
-function lastRun(c: Ctx, live: LiveWorker[]): string {
-  if (!live.length) return '';
-  const mins = Math.max(1, Math.round((c.now - Math.min(...live.map((w) => w.startedAt))) / 60_000));
-  const failed = live.filter((w) => w.state === 'failed').length;
-  return ` · last run: ${live.length} workers, ${mins} min, ${failed ? `${failed} failed` : 'ok'}`;
+const panel = (els: ClientElements, rows: Segment[][], cols: number): RenderElement =>
+  els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: M.panel, children: rows.map((r) => rowOf(els, r, cols)) });
+
+/** `last wave: N workers · 4m12s · ✔ ok`, empty when no worker ever ran. */
+function lastWave(c: Ctx, all: LiveWorker[]): string {
+  if (!all.length) return '';
+  const failed = all.filter((w) => w.state === 'failed').length;
+  const parts = [`last wave: ${all.length} workers`, formatDuration(c.now - Math.min(...all.map((w) => w.startedAt))), failed ? `✖ ${failed} failed` : '✔ ok', c.cost != null ? `$${c.cost.toFixed(2)}` : ''];
+  return `${parts.filter(Boolean).join(' · ')} `;
 }
 
-/** Idle panel body: brand, compact rail, and what the last run did. */
-const idleWord = (c: Ctx): Segment => (c.open ? seg('blocked', C.warn, true) : seg('idle', C.muted, true));
-const idleGates = (c: Ctx): Segment[] => (c.open ? [seg(` · gates ✗${c.open}`, C.warn)] : []);
-function idleRow(c: Ctx, live: LiveWorker[]): Segment[] {
-  const wide = c.inner >= MID;
-  return [BRAND_CHIP, seg(' '), ...(wide ? [...phaseRail(c.s, c.tick, true, false), seg(' ')] : []), idleWord(c), seg(wide ? lastRun(c, live) : '', C.muted), ...idleGates(c)];
+/** Idle title: grey, or red-led `blocked` when gates are open; the last wave on the right when wide. */
+function idleTitle(c: Ctx, all: LiveWorker[]): Segment[] {
+  const [word, from] = c.open ? [`blocked · gates ✖${c.open}`, M.red] : ['idle', M.grey];
+  return gradientBar(`${MARK} ATLAS  ·  ${word}`, c.cols >= MID ? lastWave(c, all) : '', c.cols, from, M.grey2, M.text);
 }
 
-const openChip = (c: Ctx, lead: Segment[]): Segment[] => (c.open ? [...lead, DOT, seg(`✗${c.open}`, C.warn)] : lead);
-const bandColor = (c: Ctx, shown: LiveWorker[]): string => (c.open || shown.some((w) => w.state === 'blocked') ? C.warn : C.live);
-
-/** <80 columns: one header row only. */
-function narrowRows(c: Ctx, shown: LiveWorker[]): Segment[][] {
-  const left = [BRAND_CHIP, seg(` ${c.s.phase} ${c.done}/${c.total}`, C.focus, true), DOT, seg(`${activeCount(shown)} working`, C.live)];
-  return [openChip(c, left)];
+/** Idle: the dim title and the settled rail. */
+function idleRows(c: Ctx, all: LiveWorker[], maxRows: number): Segment[][] {
+  const title = idleTitle(c, all);
+  return maxRows >= 2 ? [title, padRow(railRow(c.s, c.tick, c.cols < 100, false), c.cols)] : [title];
 }
 
-/** Header, as many lanes as fit, then "+N more", ticker and footer per `planRows`. */
-function fullRows(c: Ctx, shown: LiveWorker[], maxRows: number): Segment[][] {
+/** <80 columns or <3 rows: the title row alone, phase and counts in it. */
+function narrowRow(c: Ctx, shown: LiveWorker[]): Segment[] {
+  const left = [`${MARK} ATLAS`, `${c.s.phase} ${c.done}/${c.total}`, `${activeCount(shown)} working`, ...(c.open ? [`✖${c.open}`] : [])].join(' · ');
+  return gradientBar(left, '', c.cols, M.violet, M.sky);
+}
+
+/** Title, rail, as many lanes as fit, then "+N more", ticker and footer per `planRows`. */
+function fullRows(c: Ctx, all: LiveWorker[], shown: LiveWorker[], maxRows: number): Segment[][] {
   const plan = planRows(maxRows, shown.length, c.s.comms.length > 0);
-  const rows: Segment[][] = [headerRow(c), ...shown.slice(0, plan.lanes).map((w) => lane(w, c))];
-  if (plan.more) rows.push([seg(`  +${shown.length - plan.lanes} more`, C.muted)]);
+  const rows: Segment[][] = [titleRow(c, all, shown), padRow(railRow(c.s, c.tick, c.cols < 100, true), c.cols), ...shown.slice(0, plan.lanes).map((w) => lane(w, c))];
+  if (plan.more) rows.push(padRow([seg(`   +${shown.length - plan.lanes} more`, M.muted)], c.cols));
   if (plan.ticker) rows.push(ticker(c));
   if (plan.footer) rows.push(footer(c));
   return rows;
 }
 
-export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12 }: BandModel): RenderElement {
+export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12, costUsd = null }: BandModel): RenderElement {
   const { done, total } = routeCounts(s.todoGroups, s.contract);
-  const open = openGateCount(gates);
   const all = live.filter((w) => w.state !== 'parked'); // parked workers are resting
   const shown = all.filter((w) => w.state !== 'done');
-  const c: Ctx = { s, inner: Math.max(1, columns - 2), tick, full: columns >= FULL, now: s.now, done, total, open, gates };
-  if (maxRows < 3) return rowOf(els, [BRAND_CHIP, seg(` ${s.phase} ${done}/${total}`, C.focus), ...(open ? [seg(` ✗${open}`, C.warn)] : [])], columns);
-  if (!shown.length) return frame(els, [idleRow(c, all)], c.inner, open ? C.warn : C.muted);
-  return frame(els, columns < MID ? narrowRows(c, shown) : fullRows(c, shown, maxRows), c.inner, bandColor(c, shown));
+  const cols = Math.max(1, columns);
+  const c: Ctx = { s, cols, tick, full: cols >= FULL, now: s.now, done, total, open: openGateCount(gates), gates, cost: costUsd };
+  if (!shown.length) return panel(els, idleRows(c, all, maxRows), cols);
+  if (cols < MID || maxRows < 3) return panel(els, [narrowRow(c, shown)], cols);
+  return panel(els, fullRows(c, all, shown, maxRows).map(merge), cols);
 }
