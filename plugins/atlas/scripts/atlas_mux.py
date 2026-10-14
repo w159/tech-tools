@@ -1378,17 +1378,31 @@ def _team_lead(session_id: str | None, team_id: str) -> str:
     return name if name != "lead" else f"lead-{team_id}"
 
 
-def _log_wave(rec: dict, run_id) -> bool:
-    """One dispatches row per member with wave_id=team_id (TEXT in the INTEGER-affinity column). Fail-open."""
+def _log_wave(rec: dict, run_id, results=()) -> bool:
+    """One dispatches row per member with wave_id=team_id (TEXT in the INTEGER-affinity column) and the
+    model its spawn resolved (`results`, from supervise). Idempotent per (run, team, member): the table
+    has no member column, so a role's existing rows fill its first slots (member names are deterministic
+    per team id, live-230 logged t1ad516 4x on respawns). Fail-open."""
     if run_id is None:
         return False
     try:
         import atlas_db
 
+        models = {r.get("name"): r.get("model") for r in results}
         conn = atlas_db.connect()
         try:
+            have = dict(
+                conn.execute(
+                    "SELECT agent_type, COUNT(*) FROM dispatches WHERE run_id=? AND wave_id=? GROUP BY agent_type",
+                    (run_id, rec["team_id"]),
+                ).fetchall()
+            )
             for m in rec["members"]:
-                atlas_db.log_dispatch(conn, run_id, f"atlas:{m['role']}", None, rec["team_id"])
+                agent = f"atlas:{m['role']}"
+                if have.get(agent, 0) > 0:
+                    have[agent] -= 1
+                    continue
+                atlas_db.log_dispatch(conn, run_id, agent, models.get(m["name"]), rec["team_id"])
             conn.commit()
         finally:
             conn.close()
@@ -1442,7 +1456,6 @@ def cmd_spawn_team(args) -> int:
     rec["created"] = time.time()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
-    wave_logged = _log_wave(rec, run_id)
 
     def spawn(member: dict) -> dict:
         pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
@@ -1462,6 +1475,7 @@ def cmd_spawn_team(args) -> int:
             return {"ok": False, "error": buf.getvalue().strip()[-200:]}
 
     results = supervise(rec, spawn, lambda n: _exited(root, n), poll_s=args.poll)
+    wave_logged = _log_wave(rec, run_id, results)  # after spawn: each member's resolved model is known
     return _emit(
         {
             "ok": all(r.get("ok") for r in results),

@@ -147,6 +147,27 @@ class WaveAndChannelTests(unittest.TestCase):
         self.assertEqual({self.run_id}, {r[0] for r in rows})
         self.assertIn("atlas:explorer", {r[1] for r in rows})
 
+    def test_wave_logging_is_idempotent_and_records_member_models(self):
+        """live-230: team t1ad516 logged 4x (12 rows for 3 members), every row model NULL."""
+        rec = atlas_mux.build_team("audit", "medium", None, "w2", team_id="twave2")
+        results = [
+            {"name": m["name"], "ok": True, "model": "haiku" if m["role"] == "explorer" else "sonnet"}
+            for m in rec["members"]
+        ]
+        for _ in range(3):
+            self.assertTrue(atlas_mux._log_wave(rec, self.run_id, results))
+        conn = self.db.connect()
+        try:
+            rows = conn.execute(
+                "SELECT agent_type, model FROM dispatches WHERE wave_id=? ORDER BY id", ("twave2",)
+            ).fetchall()
+        finally:
+            conn.close()
+        self.assertEqual(
+            sorted((f"atlas:{m['role']}", "haiku" if m["role"] == "explorer" else "sonnet") for m in rec["members"]),
+            sorted(rows),
+        )
+
     def test_no_session_env_falls_back_to_the_projects_latest_run(self):
         """omp leads export no session id: the project's latest run is the lead's."""
         self.assertEqual((self.run_id, self.sid), atlas_mux._lead_run(self.root, None))

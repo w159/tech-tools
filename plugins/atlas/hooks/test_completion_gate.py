@@ -3499,6 +3499,38 @@ class ColonyRunScopeTest(unittest.TestCase):
             )
         )
 
+    def _reaped_team(self, owner):
+        """live-230: `atlas_mux reap` closes the team channel (gone from the registry) and archives the
+        team record; the board keeps the workers' notes. Only those notes evidence the channel."""
+        atlas_todo._reg_update(self.tmp, lambda reg: reg["channels"].pop(self.chan, None))
+        self.assertNotIn(self.chan, atlas_todo._reg_read(self.tmp)["channels"])
+        arch = Path(self.tmp) / ".atlas" / ".run" / "teams" / "archive"
+        arch.mkdir(parents=True, exist_ok=True)
+        rec = {
+            "team_id": "tp1",
+            "lead": atlas_todo.lead_name("sess-p"),
+            "channel": self.chan,
+            "members": [{"name": "explorer-8147", "role": "explorer"}],
+        }
+        (arch / "tp1.json").write_text(json.dumps(rec), encoding="utf-8")
+        target = atlas_todo.notes_dir(str(self.tmp))
+        target.mkdir(parents=True, exist_ok=True)
+        with open(target / (owner + atlas_todo.NOTE_FILE_SUFFIX), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"ts": 2_000_000_001.0, "owner": owner, "channel": self.chan,
+                                 "to": "explorer-ccd5", "text": "peer-sync"}) + "\n")
+
+    def test_reaped_team_member_note_counts(self):
+        self._reaped_team("explorer-8147")
+        self.assertTrue(
+            completion_gate._colony_channel_used(Path(self.tmp), "sess-p", 2_000_000_000.0)
+        )
+
+    def test_reaped_team_stranger_note_does_not_count(self):
+        self._reaped_team("stranger-1")
+        self.assertFalse(
+            completion_gate._colony_channel_used(Path(self.tmp), "sess-p", 2_000_000_000.0)
+        )
+
 
 class PhantomDropTest(GateOrchestrationTest):
     """F2 (refuted-phantom class): gate items naming file targets re-verify
