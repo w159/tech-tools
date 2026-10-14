@@ -1477,6 +1477,7 @@ class IngestFilesSchemaTest(unittest.TestCase):
     def test_init_adds_ingest_files_to_a_pre_existing_db(self):
         atlas_db.init(self.conn)
         self.conn.execute("DROP TABLE ingest_files")
+        self.conn.execute("PRAGMA user_version=0")  # a legacy DB predates the stamp
         self.conn.commit()
         atlas_db.init(self.conn)  # legacy DB: table missing, init must add it
         self.assertIn("cursor_bytes", self._cols())
@@ -1609,6 +1610,7 @@ class ToolCallDeniedTest(unittest.TestCase):
 
     def test_denied_column_migrates_onto_a_legacy_table(self):
         self.conn.execute("ALTER TABLE tool_calls DROP COLUMN denied")
+        self.conn.execute("PRAGMA user_version=0")  # a legacy DB predates the stamp
         self.conn.commit()
         atlas_db.init(self.conn)
         self.assertEqual(self._denied(), 0)
@@ -1670,6 +1672,7 @@ class ToolCallDeniedTest(unittest.TestCase):
         its rows, and the new column starts NULL."""
         atlas_db.update_tool_result(self.conn, "tu-1", 1, 4, "boom")
         self.conn.execute("ALTER TABLE tool_calls DROP COLUMN error_snippet")
+        self.conn.execute("PRAGMA user_version=0")  # a legacy DB predates the stamp
         self.conn.commit()
         atlas_db.init(self.conn)
         self.assertIsNone(self._snippet())
