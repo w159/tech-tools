@@ -17,7 +17,8 @@ const inputOf = (c: CallLike): AgentInput => (c.input ?? {}) as AgentInput
 const typeOf = (i: AgentInput): string => i.subagent_type ?? i.subagentType ?? ''
 const isAtlasWorker = (c: CallLike): boolean => (c.tool === 'Agent' || c.tool === 'Task') && typeOf(inputOf(c)).startsWith('atlas:')
 
-const promptGoal = (prompt?: string): string => /^\s*GOAL:\s*(.+)$/m.exec(prompt ?? '')?.[1] ?? ''
+// A one-line prompt keeps going after GOAL (`... TOOLS: x. DELIVERABLE: y`): stop at the next ALL-CAPS label.
+const promptGoal = (prompt?: string): string => /^\s*GOAL:\s*(.+?)(?=\s+[A-Z][A-Z ]*[A-Z]:|$)/m.exec(prompt ?? '')?.[1] ?? ''
 
 /** The GOAL: line of a dispatch prompt, else the description. */
 export function goalLine(i: { prompt?: string; description?: string }): string {
@@ -87,16 +88,31 @@ export interface CardExtra { mark?: string; outcome?: string; now?: string; wave
 const nowRow = (word: string, extra: CardExtra, hue: string, width: number): RenderElement =>
  cardRow(hue, M.panel, width, [label('now'), { t: fitter(width)(extra.now || word || 'running', 9), color: M.muted, bg: M.panel }])
 
-/** `done`/`fail` row with the result once settled; null when there is none. */
-function endRow(c: CallLike, state: AgentState, extra: CardExtra, hue: string, width: number): RenderElement | null {
- const r = resultText(c, extra.outcome)
- return r ? cardRow(hue, M.panel, width, [label(state === 'failed' ? 'fail' : 'done'), { t: fitter(width)(r, 9), color: hue, bg: M.panel }]) : null
+/** First sentence of a PreToolUse hook's DENY text, null when the call was not denied: a denied dispatch never ran. */
+function denyReason(c: CallLike): string | null {
+ if (!c.isErrored) return null
+ return /hook error:\s*DENY\s*[-:]\s*([\s\S]+?[.!?])(?=\s|$)/.exec(flatten(c.output))?.[1]?.replace(/\s+/g, ' ') ?? null
 }
 
-/** Header row: the state-coloured chip (`⣾ name`) then `role · tier · wave N`. */
-function headRow(i: AgentInput, role: string, name: string | undefined, mark: string, hue: string, width: number, wave?: number): RenderElement {
+/** `deny` row with the hook's first sentence; null when the call was not denied. */
+function denyRow(c: CallLike, hue: string, width: number): RenderElement | null {
+ const deny = denyReason(c)
+ return deny === null ? null : cardRow(hue, M.panel, width, [label('deny'), { t: fitter(width)(deny, 9), color: hue, bg: M.panel }])
+}
+
+/** The deny row, else `done`/`fail` with the result once settled; null when there is none. */
+function endRow(c: CallLike, state: AgentState, extra: CardExtra, hue: string, width: number): RenderElement | null {
+ const r = resultText(c, extra.outcome)
+ return denyRow(c, hue, width) ?? (r ? cardRow(hue, M.panel, width, [label(state === 'failed' ? 'fail' : 'done'), { t: fitter(width)(r, 9), color: hue, bg: M.panel }]) : null)
+}
+
+/** `role · tier · wave N`; a denied call has no tier, it never resolved one. */
+const metaOf = (c: CallLike, role: string, wave?: number): string =>
+ [role, denyReason(c) !== null ? '✖ denied' : tierOf(inputOf(c)), wave ? `wave ${wave}` : ''].filter(Boolean).join(' · ')
+
+/** Header row: the state-coloured chip (`⣾ name`) then the meta line. */
+function headRow(i: AgentInput, role: string, name: string | undefined, mark: string, hue: string, width: number, meta: string): RenderElement {
  const who = i.name ?? name ?? role
- const meta = [role, tierOf(i), wave ? `wave ${wave}` : ''].filter(Boolean).join(' · ')
  return cardRow(hue, M.panel2, width, [{ t: ` ${mark} ${who} `, color: M.base, bg: hue, bold: true }, { t: fitter(width)(` ${meta} `, 24), color: M.text, bg: M.panel2 }])
 }
 
@@ -113,7 +129,7 @@ export function workerCard(c: CallLike, state: AgentState, width = 0, name?: str
  const hue = cardHue(phase.state)
  const running = phase.state === 'running'
  return cardBox(width, [
-  headRow(i, role, name, markOf(phase, extra), hue, width, extra.wave),
+  headRow(i, role, name, markOf(phase, extra), hue, width, metaOf(c, role, extra.wave)),
   cardRow(hue, M.panel, width, [label('goal'), { t: fitter(width)(goalLine(i), 9), color: M.text, bg: M.panel }]),
   running ? nowRow(word, extra, hue, width) : endRow(c, phase.state, extra, hue, width),
  ])

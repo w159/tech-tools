@@ -90,3 +90,21 @@ test('narrow wave stacks cards', () => {
   const calls = [call(), call()]
   expect(props((waveTree(calls, 2, 60) as { children: unknown[] }).children[1])).toMatchObject({ flexDirection: 'column' })
 })
+
+test('denied dispatch: `✖ denied` with the first sentence of the reason, no tier, goal from the GOAL: line only', () => {
+  const prompt = 'GOAL: list files in /tmp. TOOLS: ToolSearch lean-ctx (ctx_tree). DELIVERABLE: list. SUCCESS CRITERIA: list returned.'
+  const output = 'Error: PreToolUse:Agent hook error: DENY - this dispatch to atlas:explorer has no `SCOPE: <class>/<effort>` line. Classify the task, then resolve its team:\n  python3 x'
+  const c = workerCard(call({ input: { subagent_type: 'atlas:explorer', prompt, model: 'sonnet', effort: 'low' }, isRunning: false, isErrored: true, output }), 'failed', 160)!
+  const t = text(c)
+  expect(t).toContain('✖ denied')
+  expect(t).toContain('this dispatch to atlas:explorer has no `SCOPE: <class>/<effort>` line.')
+  expect(t).not.toContain('Classify the task')
+  expect(t).not.toContain('sonnet')
+  expect(t).toContain('list files in /tmp.')
+  expect(t).not.toContain('TOOLS:')
+  expect(t).not.toContain('DELIVERABLE')
+})
+
+test('goalLine stops at the next ALL-CAPS label on a one-line prompt', () => {
+  expect(goalLine({ prompt: 'GOAL: do x. TOOLS: a. OUT OF SCOPE: b' })).toBe('do x.')
+})

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing';
 import { busySnap, NOW } from '../live_fixture';
 import { liveWorkers } from './live';
-import { ownRows, paneTool, parseMuxStatus, teamsOf } from './mux';
+import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './mux';
 import { deriveOrchestration, EMPTY_ORCH } from './orchestration';
 
 // stdout shape of `atlas_mux.py status --run <id>` (cmd_status), as a stubbed process.run would return it
@@ -59,6 +59,22 @@ test('parseMuxStatus maps rows to tagged squad entries; garbage => []', () => {
     ['mux-run', 'running', 'tmux'], ['mux-wait', 'input', 'tmux'], ['mux-bad', 'failed', 'tmux'], ['mux-ok', 'finished', 'tmux'],
   ]);
   expect(parseMuxStatus('nope')).toEqual([]);
+});
+
+test('paneExit: the stream-json result event ends the lane (worktree teams post exit notes to another root\'s board)', () => {
+  const tail = (o: object) => [...LOG, use('t1', 'Bash', { command: 'wc' }), answer('t1'), JSON.stringify(o)].join('\n');
+  expect(paneExit(tail({ duration_ms: 1, type: 'result', subtype: 'success', is_error: false }))).toBe('finished');
+  expect(paneExit(tail({ type: 'result', is_error: true }))).toBe('failed');
+  expect(paneExit([...LOG, use('t1', 'Bash', { command: 'echo "result"' })].join('\n'))).toBeNull();
+  expect(paneExit('{"type":"result"')).toBeNull(); // half-flushed
+});
+
+test('a tiled team (one window named after its session, workers are panes) reaches the band through its record members', () => {
+  // live 12.3.0: `status --run t9678cf` listed only window `atlas-t9678cf`, so ownRows dropped every member and the lead read idle
+  const tiled = JSON.stringify({ ok: true, run: 't1', transport: 'tmux', workers: [{ name: 'atlas-t1', dead: 0, pid: '9' }], board: [{ name: 'explorer-b', exit: 0 }] });
+  const rows = ownRows(parseMuxStatus(tiled, ['explorer-a', 'explorer-b']), new Set(['explorer-a', 'explorer-b']));
+  expect(rows.map((a) => [a.name, a.state, a.transport])).toEqual([['explorer-a', 'running', 'tmux'], ['explorer-b', 'finished', 'tmux']]);
+  expect(parseMuxStatus('', ['explorer-a'])).toEqual([]); // no status output (team gone): no phantom lanes
 });
 
 test('mux workers reach liveWorkers with working/blocked/failed/done', () => {

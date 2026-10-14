@@ -10,7 +10,7 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code';
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
 import { PHASES, intentToArgv } from './intents';
-import { bandTree } from './band';
+import { bandTree, railPhase } from './band';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { gatesError, headerGroup, parseGates } from './gates';
@@ -18,7 +18,7 @@ import { registerRouting, registerCompletion } from './routing';
 import { registerDiscipline } from './discipline';
 import { PHASE_RE, registerRestyle } from './restyle';
 import { registerNotify } from './notify';
-import { ownRows, paneTool, parseMuxStatus, teamsOf } from './data/mux';
+import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { TeamTool } from './orchestra-types';
 import { EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
 
@@ -77,6 +77,7 @@ let herdrStdout = '';
 let lastFingerprint = '';
 let wtAt = -Infinity; // last atlas_wt.py status run (ms clock)
 let wtRows: WtRow[] = [];
+let lastRailPhase: string | null = null; // last phase the band lit, kept through a blocked reply
 let muxStdout = '';
 let muxAgents: (SquadAgent & TeamTool)[] = [];
 let muxFirstSeen: Record<string, number> = {}; // team worker name -> first mux sight (ms), its lane's start
@@ -379,10 +380,10 @@ async function muxTick($: EngineInterface): Promise<void> {
 	const snap = await read($, snapshotState);
 	const root = rootOf(snap);
 	if (root === '' || snap === null) return;
+	// No early return on zero runs: a reaped team (record archived, no board channel) must clear its lanes, not freeze them.
 	const { runs, own } = await muxRuns($, root, snap);
-	if (runs.length === 0) return;
-	const outs = await Promise.all(runs.map((r) => muxStatus($, root, r)));
-	const agents = await withPaneTools($, root, ownRows(outs.flatMap(parseMuxStatus), own));
+	const outs = await Promise.all(runs.map((r) => muxStatus($, root, r.id)));
+	const agents = await withPaneTools($, root, ownRows(outs.flatMap((o, i) => parseMuxStatus(o, runs[i]!.members)), own));
 	const sig = `${outs.join('\n')}|${agents.map((a) => `${a.tool ?? ''}${a.lastTool ?? ''}${a.target ?? ''}${a.uses ?? ''}`).join(',')}`;
 	if (sig === muxStdout) return;
 	muxStdout = sig;
@@ -399,13 +400,13 @@ async function muxStatus($: EngineInterface, root: string, run: string): Promise
 /** Status runs: the board channel's, plus each `.atlas/.run/teams/<id>.json` team on the board channel or on this
  * session's lead channel (`<folder>@<branch>/lead-<session6>`, which the board channel need not be). `own`: the
  * worker names this session may show (team members and board members). */
-async function muxRuns($: EngineInterface, root: string, snap: AtlasSnapshot): Promise<{ runs: string[]; own: Set<string> }> {
+async function muxRuns($: EngineInterface, root: string, snap: AtlasSnapshot): Promise<{ runs: { id: string; members: string[] }[]; own: Set<string> }> {
 	const dir = `${root.replace(/\/+$/, '')}/.atlas/.run/teams`;
 	const names = (await $.fs.list(dir).catch(() => [])).map((e) => e.name).filter((n) => n.endsWith('.json'));
 	const records = await Promise.all(names.map(async (name) => ({ name, text: (await $.fs.read(`${dir}/${name}`).catch(() => undefined)) ?? '' })));
 	const board = snap.channel ?? '';
 	const teams = teamsOf(records, [board, `lead-${snap.sessionId.slice(0, 6)}`]);
-	const runs = [...(board ? [board.split('/').pop() ?? board] : []), ...teams.map((t) => t.id)];
+	const runs = [...(board ? [{ id: board.split('/').pop() ?? board, members: [] }] : []), ...teams];
 	return { runs, own: new Set([...teams.flatMap((t) => t.members), ...snap.members.map((m) => m.name)]) };
 }
 
@@ -427,8 +428,9 @@ async function withPaneTools($: EngineInterface, root: string, agents: SquadAgen
 		agents.map(async (a) => {
 			const startedAt = (muxFirstSeen[a.name] ??= now);
 			if (a.state !== 'running') return a;
-			const pane = paneTool((await $.fs.read(`${logs}/${a.name}.log`).catch(() => undefined)) ?? '');
-			return { ...a, startedAt, ...pane, calls: paneCalls(a.name, pane.uses ?? 0, now) };
+			const log = (await $.fs.read(`${logs}/${a.name}.log`).catch(() => undefined)) ?? '';
+			const pane = paneTool(log);
+			return { ...a, state: paneExit(log) ?? a.state, startedAt, ...pane, calls: paneCalls(a.name, pane.uses ?? 0, now) };
 		}),
 	);
 }
@@ -666,7 +668,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);
-		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, costUsd: (await read($, usageState)).costUsd });
+		lastRailPhase = railPhase(snapshot, lastRailPhase); // a blocked reply keeps the phase lit before it
+		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, costUsd: (await read($, usageState)).costUsd, lastPhase: lastRailPhase });
 		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
 	});
 
