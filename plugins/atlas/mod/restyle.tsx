@@ -10,6 +10,7 @@ import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
 import { fitText, glyph, phaseColor, stateColor, textWidth } from './theme'
 import { activeCount, liveWorkers } from './data/live'
 import type { LiveWorker } from './data/live'
+import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 
 // The live snapshot is read from $.state while drawing, so a snapshot write redraws
 // exactly the restyled sites (null outside an atlas session).
@@ -129,23 +130,15 @@ function agentStatus(
  return { state: STATUS_TO_STATE[raw] ?? 'running', label: raw, name: agent?.name }
 }
 
-/** Deployment card: `▸ impl-auth implementer sonnet·low · running`. Null keeps the engine's row. */
-export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents: AgentInfo[]): RenderElement | null {
+/** Deployment card: bordered `◆ impl-auth · implementer · sonnet·low ● running`. Null keeps the engine's row. */
+export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents: AgentInfo[], columns = 0): RenderElement | null {
  if (props.tool !== 'Agent' && props.tool !== 'Task') return noisyTree(props)
- const input = (props.input ?? {}) as { subagentType?: string; name?: string; description?: string }
- const persona = personaFor(snap, input.subagentType)
+ const input = (props.input ?? {}) as { subagentType?: string; subagent_type?: string; name?: string; description?: string }
+ const persona = personaFor(snap, input.subagentType ?? input.subagent_type)
  if (!persona) return null
- const status = agentStatus(agents, input, props)
- const name = input.name ?? status.name ?? persona.name
- let statusHex: string
- try { statusHex = stateColor(status.state) || BRAND.idle } catch { statusHex = BRAND.idle }
- return txt({},
-  txt({ color: BRAND.accent, bold: true }, `${MARK} `),
-  txt({ color: BRAND.text, bold: true }, `${name} `),
-  txt({ color: BRAND.subagent }, `${persona.name} `),
-  txt({ color: BRAND.dim }, `${persona.model}·${persona.effort}`),
-  txt({ color: statusHex }, ` ${glyph.dot} ${status.label}`),
- )
+ const status = agentStatus(agents, { ...input, subagentType: input.subagentType ?? input.subagent_type }, props)
+ const call = { ...props, input: { model: persona.model, effort: persona.effort, ...input } }
+ return workerCard(call, status.state, columns > 8 ? columns - 2 : 0, status.name ?? persona.name, status.label)
 }
 
 // ---- AssistantMessage: the ATLAS contract header drawn on one styled row; headerless replies stay engine-drawn ----
@@ -249,7 +242,7 @@ export function registerRestyle(on: On): void {
    const snap = await ready($, cache)
    if (!snap) return next(e)
    const agents = await $.agent.list().catch(() => [] as AgentInfo[])
-   return toolUseTree(snap, e.props, agents) ?? next(e)
+   return toolUseTree(snap, e.props, agents, e.viewport?.columns ?? 0) ?? next(e)
   } catch { return next(e) }
  })
 
@@ -272,5 +265,27 @@ export function registerRestyle(on: On): void {
   tracker.costStart = await sessionCostUsd($)
   tracker.turnStart = await nowMs($)
   return next(e)
+ })
+
+ // Waves: 2+ atlas dispatches grouped by the engine draw as one strip. Wave numbers are
+ // per registration, keyed by the group's first call id.
+ const waves = new Map<string, number>()
+ on('ui.render', { component: 'ToolGroup' }, async ($, e, next) => {
+  try {
+   if (!(await ready($, cache))) return next(e)
+   const calls = (e.props.calls ?? []) as ReadonlyArray<ToolUsePropsLike & { tool_use_id?: string }>
+   const key = calls[0]?.tool_use_id ?? String(waves.size)
+   if (!waves.has(key)) waves.set(key, waves.size + 1)
+   return waveTree(calls, waves.get(key) ?? 1, e.viewport?.columns ?? 0) ?? next(e)
+  } catch { return next(e) }
+ })
+
+ // Channel / agent messages as chat bubbles; the person's prompts and ctrl+o rows stay engine-drawn.
+ on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
+  try {
+   if (e.props.isExpanded || e.props.task || e.props.origin?.kind === 'composer') return next(e)
+   if (!(await ready($, cache))) return next(e)
+   return bubbleTree(e.props.text, e.props.from?.name, 'lead', e.viewport?.columns ?? 0) ?? next(e)
+  } catch { return next(e) }
  })
 }

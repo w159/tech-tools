@@ -211,7 +211,7 @@ const fakeE = (component: string, props: Record<string, unknown> = {}) =>
 test('registerRestyle wires the four sites; without a snapshot every site no-ops', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
-  expect(regs.length).toBe(5)
+  expect(regs.length).toBe(7) // 4 sites + turn.start + ToolGroup + UserMessage
   expect(regs.slice(0, 4).map((r) => r.matcher?.component)).toEqual(['Spinner', 'ToolUse', 'AssistantMessage', 'TurnDuration'])
   for (const r of regs.slice(0, 4)) {
     expect(await r.hook(fake$().$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
