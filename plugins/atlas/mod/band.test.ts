@@ -18,7 +18,7 @@ const gate = { id: 'completion' as const, title: 'Gates', lines: [{ ok: false, l
 const panel = (columns: number, over: Record<string, unknown> = {}) => {
   const snapshot = (over.snapshot as ReturnType<typeof busySnap>) ?? busySnap();
   const live = (over.live as any) ?? liveWorkers(snapshot, NOW);
-  const node = bandTree(els, { snapshot, live, gates: [], columns, tick: 3, maxRows: 12, costUsd: 0.41, ...over } as any) as unknown as Node;
+  const node = bandTree(els, { snapshot, live, gates: [], columns, tick: 3, maxRows: 12, ...over } as any) as unknown as Node;
   const rowNodes = node.props.children as Node[];
   const rows = rowNodes.map(text);
   return { node, rowNodes, rows, all: rows.join('\n') };
@@ -55,7 +55,7 @@ describe('Mission Control band', () => {
     expect(rows[0]).toContain('mission control');
     expect(rows[0]).toMatch(/◷ \d\d:\d\d/);
     expect(rows[0]).toContain('ctx 12%');
-    expect(rows[0]).toContain('$0.41');
+    expect(all).not.toContain('$');
     for (const s of ['RUN ', 'WAIT', 'FAIL', 'explorer-1', 'Grep', '#lead-1', 'need a decision on the token ttl', 'tasks', '✖ completion', '/atlas-cc']) expect(all).toContain(s);
     expect(rows).toHaveLength(7); // title + rail + blocked, failed, working lanes + ticker + footer
   });
@@ -185,6 +185,24 @@ describe('Mission Control band', () => {
     expect(all).toMatch(/ctx_shell\s+sleep 5/);
     const cell = cells(laneOf(rowNodes, 'explorer-1')).find((t) => String(t.props.children).includes('ctx_shell'))!;
     expect(cell.props.color).toBe(MOCHA.muted);
+  });
+  test('lanes wear the role character: eyes from the role, mouth from the state, frame from the tick', () => {
+    const snapshot = busySnap();
+    snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: 'Grep' } as never;
+    const lane = (tick: number) => text(laneOf(panel(160, { snapshot, live: liveWorkers(snapshot, NOW), tick }).rowNodes, 'explorer-1'));
+    expect(lane(0)).toContain('◔_◔');
+    expect(lane(1)).toContain('◔o◔');
+    expect(lane(0)).not.toBe(lane(1));
+    const thinking = { ...snapshot.activity['explorer-1']!, tool: null, lastTool: 'Grep' } as never;
+    snapshot.activity['explorer-1'] = thinking;
+    expect(lane(0)).toContain('◔~◔');
+  });
+  test('a failed lane shows its own single frame at any tick (done workers leave the lanes)', () => {
+    const snapshot = busySnap();
+    const live = liveWorkers(snapshot, NOW);
+    const lane = (state: 'failed', tick: number) => text(laneOf(panel(160, { snapshot, live: live.map((w) => ({ ...w, state })), tick }).rowNodes, 'explorer-1'));
+    expect(lane('failed', 0)).toContain('◔n◔');
+    expect(lane('failed', 3)).toContain('◔n◔');
   });
   test('title shows the dispatch scope and the wave', () => {
     const snapshot = busySnap();

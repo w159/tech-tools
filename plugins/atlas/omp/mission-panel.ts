@@ -7,6 +7,7 @@
  * Pure: renderPanel(model) -> lines. Gate status comes from a throttled async cache over atlas_gates.py.
  */
 import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
+import { charFrame } from "../mod/roles";
 import type { GateGroup } from "../mod/pane/sidebar";
 import { BASE, BLUE, DIM, GREEN, MUT, PANEL, PANEL2, PEACH, PINK, RED, RST, type Rgb, SKY, TEAL, TXT, VIOLET, WHITE, YEL, bar, bg, chip, cut, fg, hx, lerp, seg, visibleWidth } from "./panel-paint";
 import { type PanelTodo, todoLines } from "./todo-panel";
@@ -173,17 +174,16 @@ function laneCols(w: number): LaneCols {
 interface LaneLook {
 	label: string;
 	col: Rgb;
-	glyph: string;
 	tool: string;
 	target: string;
 	ink: Rgb;
 	toolInk: Rgb;
 }
-function laneLook(t: LaneTool | undefined, spin: string): LaneLook {
-	if (!t) return { label: "START", col: SKY, glyph: "◌", tool: "working", target: "", ink: TXT, toolInk: SKY };
+function laneLook(t: LaneTool | undefined): LaneLook {
+	if (!t) return { label: "START", col: SKY, tool: "working", target: "", ink: TXT, toolInk: SKY };
 	return t.active
-		? { label: "RUN", col: GREEN, glyph: spin, tool: t.tool, target: t.target, ink: TXT, toolInk: GREEN }
-		: { label: "THINK", col: YEL, glyph: "◷", tool: t.tool, target: t.target, ink: MUT, toolInk: MUT };
+		? { label: "RUN", col: GREEN, tool: t.tool, target: t.target, ink: TXT, toolInk: GREEN }
+		: { label: "THINK", col: YEL, tool: t.tool, target: t.target, ink: MUT, toolInk: MUT };
 }
 
 const roleCell = (wk: PanelWorker, c: LaneCols) => (c.role ? seg(`${abbrev(wk.role ?? roleOf(wk.name), c.role - 1)} `, MUT) : "");
@@ -195,8 +195,9 @@ function meterCells(wk: PanelWorker, c: LaneCols, col: Rgb): string {
 }
 
 function laneRow(wk: PanelWorker, m: PanelModel, c: LaneCols): string {
-	const k = laneLook(wk.tool, m.laneSpin);
-	const head = seg(" ") + chip(cut(k.label, 5), k.col) + seg(` ${k.glyph} `, k.col) + seg(`${abbrev(wk.name, c.name - 1, 2)} `, TXT, PANEL, true);
+	const k = laneLook(wk.tool);
+	const head =
+		seg(" ") + chip(cut(k.label, 5), k.col) + seg(charFrame(wk.role ?? roleOf(wk.name), wk.tool?.active ? "running" : "thinking", m.tick), k.col) + seg(` ${abbrev(wk.name, c.name - 2, 2)} `, TXT, PANEL, true);
 	const tool = seg(` ${cut(k.tool, 10)} `, k.toolInk, PANEL2, true) + seg(` ${cut(k.target, c.target)}`, k.ink);
 	return head + roleCell(wk, c) + tool + meterCells(wk, c, k.col) + seg(age(wk.secs).padStart(7), MUT);
 }

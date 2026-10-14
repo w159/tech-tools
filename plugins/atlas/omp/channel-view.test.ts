@@ -12,7 +12,7 @@ import { expect, test } from "bun:test";
 const CHAN = "repo@main/lead-abc";
 const plain = (ls?: string[]) => (ls ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
 /** A lane row: state chip, glyph, then the worker name. */
-const lane = (name: string) => new RegExp(`(START|RUN|THINK)\\s+\\S ${name}\\s`);
+const lane = (name: string) => new RegExp(`(START|RUN|THINK)\\s+\\S{3} ${name}\\s`);
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "chan-view-"));
@@ -322,10 +322,10 @@ test("panel: gradient title, chevron rail, state + tool chips, eighth-block bars
 	expect(p[0]).toContain("◷ 02:41   3 live   ✖ 1 gates");
 	expect(new Set(lines[0]!.match(/48;2;\d+;\d+;\d+/g)).size).toBeGreaterThan(20); // per-cell gradient
 	expect(p[1]).toContain(" ✓ research ▶ ✓ theory ▶ ✓ test ▶ ⣾ IMPLEMENT ▶ verify ▶ done");
-	expect(p[3]).toMatch(/ RUN {4}⠋ explorer-a324 +explorer +ctx_search +dispatch_tripwire\.py/);
+	expect(p[3]).toMatch(/ RUN {3}◔o◔ explorer-a324 +explorer +ctx_search +dispatch_tripwire\.py/);
 	expect(p[3]).toMatch(/█+[▏▎▍▌▋▊▉]? *[▁▂▃▄▅▆▇█]{12} +1m12s *$/);
-	expect(p[4]).toMatch(/ THINK  ◷ implementer-band +implementer +Edit +mod\/band\.tsx/);
-	expect(p[5]).toMatch(/ START  ◌ verifier-ui +verifier +working/);
+	expect(p[4]).toMatch(/ THINK •-• implementer-band +implementer +Edit +mod\/band\.tsx/);
+	expect(p[5]).toMatch(/ START ◉-◉ verifier-ui +verifier +working/);
 	expect(p[2]).toBe(" ".repeat(120)); // spacer under the rail
 	expect(p[6]).toBe(" ".repeat(120));
 	expect(p[7]).toContain("#lead-a47cc5  explorer-a324 → implementer-band: found 3 call sites   implementer-band → all: band.tsx compiles");
@@ -378,7 +378,18 @@ test("narrow lanes abbreviate roles and names at a hyphen, never mid-word", () =
 test("panel at 60 columns abbreviates the rail and still shows every lane's name and tool", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
 	expect(p[1]).toContain("✓ res ▶ ✓ the ▶ ✓ tes ▶ ⣾ IMPLEMENT ▶ ver ▶ don");
-	expect(p[3]).toMatch(/RUN {4}⠋ explorer-a… +ctx_search/);
+	expect(p[3]).toMatch(/RUN {3}◔o◔ explorer-… +ctx_search/);
+});
+
+test("lanes wear the role character: running cycles with the tick, thinking and START differ from running", () => {
+	const lane = (tick: number, tool?: { tool: string; target: string; active: boolean }) =>
+		plain([renderPanel(model({ tick, workers: [{ name: "explorer-a324", secs: 5, tool }] }))[3]!]);
+	const run = { tool: "ctx_search", target: "x", active: true };
+	expect(lane(0, run)).toContain("◔_◔");
+	expect(lane(1, run)).toContain("◔o◔");
+	expect(lane(0, { ...run, active: false })).toContain("◔~◔");
+	expect(lane(0)).toContain("◔~◔");
+	expect(lane(0, run)).not.toMatch(/[⠋⣾]/);
 });
 
 test("sparkBuckets: tool calls per 10s bucket over the last 2 minutes, oldest first", () => {

@@ -359,13 +359,42 @@ def role_gradient(role: str) -> tuple:
     return next(((a, b) for key, a, b in _ROLE_GRADIENT if key in str(role).lower()), (GREEN, TEAL))
 
 
-def header(name: str, role: str, team: str, channel: str, goal: str, width: int = 0, peers=()) -> str:
-    """Three painted header rows (gradient bar, goal, channel + peers) and a blank one."""
+# Role characters: the same table as mod/roles.ts (roles.test.ts keeps the two equal). Eyes carry the role, the
+# mouth carries the state, so the pane header shows `◔_◔ explorer-a324` and the feed's redraw animates it.
+ROLE_EYES = {
+    "explorer": ("◔", "◔"), "implementer": ("•", "•"), "verifier": ("◉", "◉"), "runner": ("▸", "◂"),
+    "planner": ("◐", "◑"), "critic": ("ò", "ó"), "docs": ("°", "°"), "ui-tester": ("◈", "◈"),
+    "db": ("⊙", "⊙"), "generic": ("·", "·"),
+}
+MOUTHS = {"running": ("_", "o", "O", "^", "u"), "thinking": ("~", "-", "="), "done": ("‿",), "failed": ("n",), "blocked": (".",)}
+_ROLE_ALIAS = {
+    "completeness-critic": "critic", "docs-auditor": "docs", "docs-curator": "docs", "ui-runtime-tester": "ui-tester",
+    "db-prober": "db", "rls-privilege-audit": "db", "schema-inventory": "db", "naming-glossary-audit": "db",
+}
+_FEED_STATE = {"run": "running", "done": "done", "fail": "failed"}
+
+
+def role_key(role: str) -> str:
+    k = str(role or "").lower().removeprefix("atlas:").strip()
+    k = _ROLE_ALIAS.get(k, k)
+    return k if k in ROLE_EYES else "generic"
+
+
+def char_frame(role: str, state: str, tick: int) -> str:
+    """The three-cell character for `role`; `state` is a MOUTHS key."""
+    left, right = ROLE_EYES[role_key(role)]
+    mouths = MOUTHS[state]
+    return f"{left}{mouths[abs(tick) % len(mouths)]}{right}"
+
+
+def header(name: str, role: str, team: str, channel: str, goal: str, width: int = 0, peers=(), tick: int = 0, state: str = "run") -> str:
+    """Three painted header rows (gradient bar, goal, channel + peers) and a blank one. The bar leads with the role
+    character, animated by `tick` while `state` is "run"."""
     width = width or shutil.get_terminal_size((100, 30)).columns
     chan = "#" + (channel.rsplit("/", 1)[-1] or "-") if channel else "#-"
     first = (goal.strip().splitlines() or [""])[0]
     rows = [
-        gradient_bar(f"◢◤ ATLAS  {name}", f"{role} · wave {team}", width, *role_gradient(role)),
+        gradient_bar(f"◢◤ ATLAS  {char_frame(role, _FEED_STATE.get(state, 'running'), tick)} {name}", f"{role} · wave {team}", width, *role_gradient(role)),
         paint([seg(" goal ", MUT), seg(first, TXT)], width),
         paint([seg(f" {chan}", VIOLET, None, True), seg("  peers: " + (" · ".join(peers) or "none"), VIOLET)], width),
         paint([], width),
@@ -429,7 +458,7 @@ class Feed:
 
     def _header(self, width: int) -> str:
         name, role, team, channel, goal, peers = self.head
-        return header(name, role, team, channel, goal, width, peers)
+        return header(name, role, team, channel, goal, width, peers, self.tick, self.state)
 
     def _status(self, width: int) -> str:
         new, cached = (sum(u[i] for u in self.usage.values()) for i in (0, 1))

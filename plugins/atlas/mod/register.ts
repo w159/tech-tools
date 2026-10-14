@@ -53,7 +53,7 @@ const toastUnplaced = ($: EngineInterface) => (r: { isPlaced: boolean; reason?: 
 const isModOn = atom({ plugin: 'atlas', key: 'isModOn' } as const, true); // ATLAS_MOD kill switch, set at session.start
 const isInteractive = atom({ plugin: 'atlas', key: 'isInteractive' } as const, false);
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
-const usageState = atom({ plugin: 'atlas', key: 'usage' } as const, { tokens: null, costUsd: null, contextPct: null });
+const usageState = atom({ plugin: 'atlas', key: 'usage' } as const, { tokens: null, contextPct: null });
 const taskAgentsState = atom({ plugin: 'atlas', key: 'taskAgents' } as const, []);
 const orchState = atom({ plugin: 'atlas', key: 'orch' } as const, EMPTY_ORCH);
 const headerPhaseState = atom({ plugin: 'atlas', key: 'headerPhase' } as const, null);
@@ -570,7 +570,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			await update($, isModOn, () => modOn);
 			// A fresh session is unmeasured again, whatever an earlier one measured,
 			// and its agents are its own.
-			await update($, usageState, () => ({ tokens: null, costUsd: null, contextPct: null }));
+			await update($, usageState, () => ({ tokens: null, contextPct: null }));
 			await update($, taskAgentsState, () => []);
 			await update($, paneOpenedState, () => false);
 			paneChecked = false;
@@ -621,12 +621,11 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return next(e);
 	});
 
-	// Usage figures (tokens / cost / context fill), pushed after each turn.
+	// Usage figures (tokens / context fill), pushed after each turn.
 	on('session.measure', async ($, e, next) => {
 		if (await read($, isModOn)) {
 			await update($, usageState, (usage) => ({
 				tokens: e.context.tokens ?? usage.tokens,
-				costUsd: e.cost?.usd ?? usage.costUsd,
 				contextPct: e.context.percent ?? usage.contextPct,
 			}));
 		}
@@ -672,7 +671,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);
 		lastRailPhase = railPhase(snapshot, lastRailPhase); // a blocked reply keeps the phase lit before it
-		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, costUsd: (await read($, usageState)).costUsd, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($) });
+		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($) });
 		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
 	});
 
