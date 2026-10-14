@@ -433,7 +433,8 @@ def harness_argv(
         if level:
             argv += ["--effort", level]
         return argv + ["--permission-mode", permission_mode, prompt]
-    argv = ["omp", "-p"]
+    # --mode json: one JSON event per line, so atlas_panefeed renders tool rows like the claude feed
+    argv = ["omp", "-p", "--mode", "json"]
     if model:
         argv.append(f"--model={model}")
     if level:
@@ -994,7 +995,14 @@ def cmd_run_worker(args) -> int:
     log_path = Path(root) / ".atlas" / ".run" / "logs" / f"{args.name}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log = log_path.open("w", encoding="utf-8")
-    feed = atlas_panefeed.Feed(args.name, args.agent, args.run, channel, prompt)
+    feed = atlas_panefeed.Feed(
+        args.name,
+        args.agent,
+        args.run,
+        channel,
+        prompt,
+        calls_file=log_path.with_suffix(".tool.json"),
+    )
 
     def finish(code: int, tail: str, reason: str | None = None) -> int:
         """The ONE board note of this run: the report block + exit line (contract C2)."""
@@ -1073,11 +1081,19 @@ def _feed_line(text: str, feed=None) -> list[str]:
         feed.text(text)
         return [text] if text.strip() else []
     feed.event(event)
-    if event.get("type") != "result":
-        return []
+    if event.get("type") not in ("result", "agent_end"):
+        return _omp_error_lines(event)
     body = atlas_panefeed.result_text(event)
     feed.report(body)
     return [t for t in body.splitlines() if t.strip()]
+
+
+def _omp_error_lines(event: dict) -> list[str]:
+    """omp json mode reports a failed model call as an assistant message_end with `errorMessage`; surface it
+    as an output line so _classify still sees the 402/not-found signs the plain-text mode printed."""
+    msg = event.get("message") if event.get("type") == "message_end" else None
+    err = msg.get("errorMessage") if isinstance(msg, dict) else None
+    return [err] if isinstance(err, str) and err.strip() else []
 
 
 def _report(lines: list[str]) -> str:

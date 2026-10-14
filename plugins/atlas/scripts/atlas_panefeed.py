@@ -18,6 +18,7 @@ import shutil
 import sys
 import threading
 import time
+from pathlib import Path
 
 ESC = "\x1b["
 RST = ESC + "0m"
@@ -36,6 +37,7 @@ CHIP_W = 10
 # new work = input + output + cache writes; cache reads are re-sent context, shown apart once large
 _NEW_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens")
 CACHED_SHOWN = 10_000
+MAX_CALLS = 64  # call-time history kept per lane (omp/channel-view.ts MAX_CALLS)
 # tool input fields worth showing, first match wins
 _ARG_KEYS = ("file_path", "path", "command", "pattern", "query", "description", "url", "prompt")
 
@@ -292,14 +294,21 @@ def _result_row(event: dict, now) -> list:
     return [_stamp(now), chip(label, color), seg(f" {secs:.1f}s · exit {1 if bad else 0}", color, None, True)]
 
 
+def _omp_tool_block(event: dict) -> dict:
+    """The claude-shaped tool_use block for an omp `tool_execution_start` event."""
+    return {"type": "tool_use", "name": event.get("toolName"), "input": event.get("args")}
+
+
 def event_rows(event: dict, now: float | None = None) -> list:
-    """Segment rows for one stream-json event (paint() them at the pane width)."""
+    """Segment rows for one event: claude stream-json, or omp `--mode json` (paint() them at the pane width)."""
     kind = event.get("type")
-    if kind == "assistant":
+    if kind == "assistant" or (kind == "message_end" and (event.get("message") or {}).get("role") == "assistant"):
         content = (event.get("message") or {}).get("content") or []
         return [r for b in content if isinstance(b, dict) for r in _block_rows(b, now)]
     if kind == "result":
         return [_result_row(event, now)]
+    if kind == "tool_execution_start":
+        return _block_rows(_omp_tool_block(event), now)
     return []
 
 
@@ -309,7 +318,14 @@ def render_event(event: dict, width: int | None = None) -> list:
 
 
 def result_text(event: dict) -> str:
-    return str(event.get("result") or "")
+    """Final report: claude's `result`, or the last assistant message's text on omp's `agent_end`."""
+    if event.get("type") != "agent_end":
+        return str(event.get("result") or "")
+    for msg in reversed(event.get("messages") or []):
+        if isinstance(msg, dict) and msg.get("role") == "assistant":
+            blocks = [b for b in msg.get("content") or [] if isinstance(b, dict) and b.get("type") == "text"]
+            return "\n".join(str(b.get("text") or "") for b in blocks)
+    return ""
 
 
 def parse_line(raw: str) -> dict | None:
@@ -396,7 +412,7 @@ class Feed:
     ticker for the spinner and clock, the size re-read on every paint so a resize reflows);
     live=False prints rows in order."""
 
-    def __init__(self, name="", role="", team="", channel="", prompt="", out=None, live=None):
+    def __init__(self, name="", role="", team="", channel="", prompt="", out=None, live=None, calls_file=None):
         self.out = out or sys.stdout
         self.live = bool(self.out.isatty()) if live is None else live
         self.head = (name, role, team, channel, goal_of(prompt), peers_of(prompt))
@@ -405,6 +421,7 @@ class Feed:
         self.usage: dict = {}
         self.lock = threading.Lock()
         self.painted_size: tuple | None = None
+        self.calls_file = calls_file  # <name>.tool.json: claude workers' call times for the omp widget sparkline
 
     def _size(self) -> tuple:
         size = shutil.get_terminal_size((100, 30))
@@ -482,9 +499,43 @@ class Feed:
             # stream-json repeats a message's usage once per content block: keyed by id, counted once
             self.usage[msg.get("id") or len(self.usage)] = (new, cached)
 
+    def _record_calls(self, event: dict) -> None:
+        """Append one timestamp per claude tool_use to calls_file, keeping its other keys (the omp recorder's).
+        Best effort: a lane without a sparkline is better than a feed that dies."""
+        blocks = (event.get("message") or {}).get("content") or []
+        n = sum(1 for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use")
+        if not (n and self.calls_file):
+            return
+        try:
+            try:
+                rec = json.loads(Path(self.calls_file).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                rec = {}
+            rec = rec if isinstance(rec, dict) else {}
+            calls = [t for t in rec.get("calls", []) if isinstance(t, (int, float))] + [time.time()] * n
+            rec["calls"] = calls[-MAX_CALLS:]
+            tmp = Path(str(self.calls_file) + ".tmp")
+            tmp.write_text(json.dumps(rec), encoding="utf-8")
+            os.replace(tmp, self.calls_file)
+        except OSError:
+            pass
+
+    def _count_omp(self, event: dict) -> None:
+        """omp `--mode json`: one tool per tool_execution_start; usage rides each assistant message_end."""
+        if event.get("type") == "tool_execution_start":
+            self.tools += len(_tool_rows(_omp_tool_block(event), None))
+        msg = event.get("message") or {}
+        usage = msg.get("usage") or {}
+        if event.get("type") == "message_end" and msg.get("role") == "assistant" and usage:
+            new = sum(usage.get(k) or 0 for k in ("input", "output", "cacheWrite"))
+            self.usage[len(self.usage)] = (new, usage.get("cacheRead") or 0)
+
     def event(self, event: dict) -> None:
         if event.get("type") == "assistant":
             self._count(event)
+            self._record_calls(event)
+        else:
+            self._count_omp(event)
         self._add(event_rows(event))
 
     def text(self, line: str, color=TXT) -> None:
