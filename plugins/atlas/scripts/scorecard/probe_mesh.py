@@ -153,11 +153,12 @@ import json, os, sys
 sys.path[:0] = [os.environ["SC_SCRIPTS"], os.environ["SC_HOOKS"]]
 import atlas_dashboard as D
 try:
-    c = D._v2_get("/api/v2/colony", {"project": os.environ["SC_ROOT"]})
+    c = D._v2_get("/api/v2/colony", {"project": os.environ["SC_ROOT"], "all": "1"})
 except LookupError:  # route removed: the colony moved to the herdr transport
     print("SC_RESULT " + json.dumps({"__no_route__": 1})); raise SystemExit
+# current shape: flat `members` with a `state` (finished|dead are terminal); the old `rigs` shape is gone
 out = {a["name"]: {"state": a.get("state"), "section": a.get("section")}
-       for r in (c or {}).get("rigs", []) for a in r.get("agents", [])}
+       for a in (c or {}).get("members", [])}
 print("SC_RESULT " + json.dumps(out))
 """
 
@@ -458,84 +459,52 @@ def probe_irc(ctx):
 
 
 def probe_colony(ctx):
+    """Colony state derives from the channel registry (exit_code, recorded pid), not from tmux
+    windows, so the probe ends three registered members the ways the registry records an end:
+    exit 0 (finished), exit 1 (dead), and a recorded pid whose process is gone (dead)."""
     cmd = CMD + "colony_accuracy"
     names = ["colony_terminal_accuracy"]
-    if not ctx.tmux_real:
-        return [skipped(n, "tmux not installed", group="mesh") for n in names]
-    env, _a, _h = core.iso_env(ctx, "colony", {"ATLAS_MUX": "tmux"})
+    env, _a, _h = core.iso_env(ctx, "colony", {})
     root = ctx.sub("colony") / "proj"
     root.mkdir(exist_ok=True)
     env = {**env, "SC_ROOT": str(root)}
-    if (
-        _tmux(
-            ctx, "new-session", "-d", "-s", "atlas-sccol", "-n", "lead", "-c", str(root)
-        ).returncode
-        != 0
-    ):
-        return [
-            skipped(n, "private tmux server would not start", group="mesh")
-            for n in names
-        ]
-    loop = "import time\nwhile 1:\n print(time.time(),flush=True);time.sleep(1)"
-    for n, c in (
-        ("da", f'exec {ctx.py} -c "{loop}"'),
-        ("db", "exec sleep 3000"),
-        ("dc", 'printf "Overwrite file? (y/n) "; exec sleep 3000'),
-    ):
-        _tmux(
-            ctx, "new-window", "-d", "-t", "atlas-sccol:", "-n", n, "-c", str(root), c
-        )
     code = (
-        f"import sys; sys.path[:0]=[{str(ctx.scripts)!r}]; import atlas_todo as T\n"
-        f"[T.note({str(root)!r}, n, 'started '+n, to='lead') for n in ('da','db','dc')]\n"
+        f"import sys, subprocess; sys.path[:0]=[{str(ctx.scripts)!r}]; import atlas_todo as T\n"
+        f"R={str(root)!r}\n"
+        "ch = T.open_lead_channel(R, 'lead-sc0001', [])['name']\n"
+        "for n in ('da','db','dc'): T.register_member(R, n, channel=ch)\n"
+        "T.mark_finished(R, 'da', 0)\n"
+        "T.mark_finished(R, 'db', 1)\n"
+        "p = subprocess.Popen(['true']); p.wait()\n"
+        "T.set_member_handles(R, 'dc', ch, pid=p.pid)\n"
     )
-    run([ctx.py, "-c", code], env=env)
-    time.sleep(4)
-    _tmux(ctx, "kill-window", "-t", "atlas-sccol:dc")  # killed, no exit note
-    run(
-        [
-            ctx.py,
-            "-c",
-            code.replace("'started '+n", "'exit 0'").replace(
-                "('da','db','dc')", "('db',)"
-            ),
-        ],
-        env=env,
-    )
-    _tmux(ctx, "kill-window", "-t", "atlas-sccol:db")  # finished with exit note
-    _tmux(ctx, "send-keys", "-t", "atlas-sccol:da", "C-c")  # interrupted
-    terminal = {"failed", "exited", "finished"}
-    ok, last, deadline = {}, {}, time.time() + (12 if ctx.quick else 20)
-    while time.time() < deadline:
-        res, _r = _helper(ctx, "colony", COLONY_PY, env, 60)
-        if res is None or res.get("__no_route__"):
-            _tmux(ctx, "kill-server")
-            why = (
-                "colony HTTP route absent in this tree (colony moved to the herdr transport): not measurable"
-                if res
-                else "colony helper failed: " + (_r["err"] + _r["out"])[-250:]
+    r = run([ctx.py, "-c", code], env=env)
+    if r["rc"] != 0:
+        return [
+            skipped(
+                names[0],
+                "colony setup failed: " + (r["err"] + r["out"])[-250:],
+                "of 3",
+                "higher",
+                cmd,
+                "mesh",
+                "error",
             )
-            return [
-                skipped(
-                    names[0],
-                    why,
-                    "of 3",
-                    "higher",
-                    cmd,
-                    "mesh",
-                    "skipped" if res else "error",
-                )
-            ]
-        last = res
-        ok = {
-            n: (last.get(n) or {}).get("state") in terminal
-            or (last.get(n) or {}).get("section") == "finished"
-            for n in ("da", "db", "dc")
-        }
-        if all(ok.values()):
-            break
-        time.sleep(2)
-    _tmux(ctx, "kill-server")
+        ]
+    res, _r = _helper(ctx, "colony", COLONY_PY, env, 60)
+    if res is None or res.get("__no_route__"):
+        why = (
+            "colony HTTP route absent in this tree: not measurable"
+            if res
+            else "colony helper failed: " + (_r["err"] + _r["out"])[-250:]
+        )
+        return [
+            skipped(
+                names[0], why, "of 3", "higher", cmd, "mesh", "skipped" if res else "error"
+            )
+        ]
+    terminal = {"finished", "dead"}
+    ok = {n: (res.get(n) or {}).get("state") in terminal for n in ("da", "db", "dc")}
     return [
         metric(
             "colony_terminal_accuracy",
@@ -544,8 +513,8 @@ def probe_colony(ctx):
             "higher",
             cmd=cmd,
             group="mesh",
-            detail={n: last.get(n) for n in ("da", "db", "dc")},
-            note="agents that ended (killed / exit note / ctrl-c) shown terminal within the window",
+            detail={n: res.get(n) for n in ("da", "db", "dc")},
+            note="members ended by exit 0 / exit 1 / vanished pid shown finished or dead",
         )
     ]
 
@@ -564,7 +533,13 @@ def probe_spawn(ctx):
     root.mkdir(exist_ok=True)
     pf = d / "prompt.txt"
     pf.write_text("do work")
-    env = {**env, "ATLAS_MUX_WORKER_CMD": "echo hi; sleep 40"}
+    # ATLAS_COLONY_TRANSPORT=tmux: the default transport is `claude --bg`, which needs a trusted
+    # workspace and measures claude, not spawning; the override command then runs in a tmux window.
+    env = {
+        **env,
+        "ATLAS_MUX_WORKER_CMD": "echo hi; sleep 40",
+        "ATLAS_COLONY_TRANSPORT": "tmux",
+    }
     procs = [
         subprocess.Popen(
             [
