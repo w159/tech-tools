@@ -1,6 +1,6 @@
 ---
 name: atlas-gitignore
-description: "Generates a zero-trust, deny-by-default .gitignore for a named stack: allowlists intended paths and re-excludes secrets last. Use when starting a repo or hardening an existing .gitignore."
+description: "Generates a zero-trust, deny-by-default .gitignore for a named stack, secrets re-excluded last. Use when starting a repo or hardening a .gitignore."
 when_to_use: "gitignore, deny by default, allowlist, keep secrets out of git, harden repo ignore rules"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 paths: [".gitignore"]

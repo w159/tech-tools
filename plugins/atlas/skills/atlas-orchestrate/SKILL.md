@@ -1,6 +1,6 @@
 ---
 name: atlas-orchestrate
-description: "Orchestrates multi-step, multi-surface or whole-codebase engineering work (build, fix, audit, refactor, investigate) through subagents with real execution and independent verification, keeping docs/ the single source of truth. Use when a task spans layers or the whole repo; use atlas-setup to install atlas itself."
+description: "Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification. Use when a task spans layers or the repo."
 when_to_use: "orchestrate, whole-repo work, cross-layer bug, frontend and backend and database, multi-step task, subagent waves"
 allowed-tools: Read, Glob, Grep, Bash, TodoWrite, AskUserQuestion
 ---

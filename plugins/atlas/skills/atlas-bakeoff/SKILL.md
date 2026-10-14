@@ -1,6 +1,6 @@
 ---
 name: atlas-bakeoff
-description: "Compares 2-3 concrete approaches for a costly, hard-to-reverse technical choice against named criteria, optionally runs cheap proof-of-concept spikes, and recommends one. Use when choosing an architecture, library or data-model shape; not for routine reversible picks, which belong in atlas-plan."
+description: "Compares 2-3 approaches for a costly, hard-to-reverse technical choice against named criteria and recommends one. Use for architecture, library or data-model choices; reversible picks go to atlas-plan."
 when_to_use: "compare approaches, library choice, data-model decision, build vs buy, which architecture, tradeoff analysis, spike"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<the decision to bake off>'

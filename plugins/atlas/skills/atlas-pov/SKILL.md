@@ -1,6 +1,6 @@
 ---
 name: atlas-pov
-description: "Forms a decisive, evidence-grounded independent verdict on a technical decision, library pick, migration path or contested question, graded Adopt, Trial, Hold, Reject or Not-our-problem. Use when asked for an opinion or second opinion on a technical choice."
+description: "Gives an evidence-grounded verdict on a technical decision, library pick or migration path: Adopt, Trial, Hold, Reject or Not-our-problem. Use when asked for an opinion or second opinion."
 when_to_use: "oracle this, cross-check, what do you recommend, second opinion, should we adopt, contested decision"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<the decision, question, or contested choice to opine on>'

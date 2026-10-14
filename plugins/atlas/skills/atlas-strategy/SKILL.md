@@ -1,6 +1,6 @@
 ---
 name: atlas-strategy
-description: "Runs a one-question-at-a-time interview to write or refresh the product strategy doc at docs/architecture/product-strategy.md, grounded in an atlas:explorer repo model and stress-tested against weak answers. Use when starting a product, adding a strategy doc, or changing direction."
+description: "Interviews one question at a time to write or refresh docs/architecture/product-strategy.md. Use when starting a product, adding a strategy doc, or changing direction."
 when_to_use: "product strategy, positioning, target users, success metrics, product direction, STRATEGY.md"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[optional: section to revisit, e.g. metrics, positioning, tracks]'

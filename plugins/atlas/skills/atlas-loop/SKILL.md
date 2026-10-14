@@ -1,6 +1,6 @@
 ---
 name: atlas-loop
-description: "Matches a recurring or iterative task to a reusable loop from the loop library and instantiates it, handing interval loops to the built-in /loop skill and running fan-out loops as a parallel verify workflow. Use when something must run repeatedly, poll for status, iterate until a condition holds, or sweep a backlog."
+description: "Matches a recurring or iterative task to a library loop: interval loops use /loop, fan-out loops run as a parallel verify workflow. Use to repeat, poll, iterate until a condition holds, or sweep."
 when_to_use: "run repeatedly, poll for status, keep going until, sweep a backlog, recurring task, scheduled workflow"
 allowed-tools: Read, Glob, Grep, Bash
 ---

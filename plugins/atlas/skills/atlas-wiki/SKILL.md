@@ -1,6 +1,6 @@
 ---
 name: atlas-wiki
-description: "Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using the graphify skill. Use when architecture docs changed, before the completion gate, or when wiki diagrams are stale or missing."
+description: "Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify. Use when architecture docs changed, before the completion gate, or when wiki diagrams are stale."
 when_to_use: "wiki is stale, refresh diagrams, architecture changed, generate diagrams, before completion gate"
 allowed-tools: Read, Glob, Grep, Bash
 ---

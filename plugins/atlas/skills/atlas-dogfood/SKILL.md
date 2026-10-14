@@ -1,6 +1,6 @@
 ---
 name: atlas-dogfood
-description: "Dogfoods the current branch or PR diff in a live browser: maps touched routes, drives each flow like a real user via atlas:ui-runtime-tester, and repairs genuine breaks in a bounded fix-verify loop. Use when changed flows must work end to end and small breakages should be fixed autonomously."
+description: "Dogfoods the branch or PR diff in a live browser: drives each touched flow via atlas:ui-runtime-tester and repairs genuine breaks in a bounded loop. Use when changed flows must work end to end."
 when_to_use: "dogfood this change, drive the changed flows, exercise the diff in the browser, find and fix UI breakage"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[PR number, branch name, or 'current'] [--port PORT] [--fix-budget N]"

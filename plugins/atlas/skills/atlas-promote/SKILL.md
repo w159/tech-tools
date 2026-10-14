@@ -1,6 +1,6 @@
 ---
 name: atlas-promote
-description: "Drafts a plain-language announcement (release note, Slack-style update or changelog entry) grounded in what actually changed. Use after a merged PR, completed plan or recorded lesson when the work should be announced."
+description: "Drafts a plain-language announcement (release note, Slack update, changelog entry) grounded in what changed. Use after a merged PR, completed plan or recorded lesson."
 when_to_use: "announce, release notes, changelog entry, write-up of the shipped feature, tell the team"
 allowed-tools: Read, Glob, Grep, Bash, Write, Task
 argument-hint: '[optional: what shipped and/or channels, e.g. "a release note and a Slack update"]'

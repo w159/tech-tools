@@ -961,8 +961,8 @@ def main():
             # separator rather than mid-sentence - a half-quoted assumption reads
             # as a fact the model half-remembers.
             memory_block = "\n\n".join(parts)
-            if len(memory_block) > 700:
-                head = memory_block[:700]
+            if len(memory_block) > 450:
+                head = memory_block[:450]
                 cut = head.rfind("\n\u00a7\n")
                 memory_block = head[:cut] if cut > 0 else head.rsplit("\n", 1)[0]
 
@@ -1020,7 +1020,9 @@ def main():
         "atlas:verifier) -> docs (atlas:docs-curator); evidence before any done claim. "
         "Route execution to atlas:<role> subagents; invoke atlas-orchestrate for multi-step or whole-codebase work.",
     ]
-    if os.environ.get("ATLAS_HARNESS") != "omp":  # omp/style.ts injects the header rule itself
+    if (
+        os.environ.get("ATLAS_HARNESS") != "omp"
+    ):  # omp/style.ts injects the header rule itself
         lines.extend(status_contract_lines(active_style))
     lines.append(team_flow_line())
     # claude-mem recall mandate: armed only when the claude-mem plugin (its MCP

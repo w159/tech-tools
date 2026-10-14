@@ -1,6 +1,6 @@
 ---
 name: atlas-status
-description: "Assembles a stakeholder-readable status rollup for a plan or feature from what the project actually has on file: the docs/plans/ doc, verified findings, the todo board, and git commits since the last tag — every claim labeled verified or assumed. Use when a founder, lead, or stakeholder asks how feature X is going, or before a check-in that needs a plain-language progress report."
+description: "Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed. Use when asked how a feature is going."
 when_to_use: "status report, how is it going, progress rollup, stakeholder update, feature status, plan status"
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '<plan-or-feature-name>'

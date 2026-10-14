@@ -1,6 +1,6 @@
 ---
 name: atlas-run-watch
-description: "Sustains a long-running job without babysitting it: watches a process PID, a log file tail, a CI URL or API, or an arbitrary command loop using the same tick/checkpoint/re-arm machinery as atlas-babysit-pr's run_watch, spilling full logs to a run ledger. Use when a training run, pipeline, deploy, or long command must be monitored to completion and raw logs would flood the session."
+description: "Monitors a long-running job (PID, log tail, CI URL, API, command loop) with tick/checkpoint/re-arm, spilling logs to a run ledger. Use for a training run, pipeline or deploy."
 when_to_use: "long-running job, watch a PID, tail a log, poll CI status, monitor a pipeline, keep a run alive, checkpoint a watch"
 allowed-tools: Read, Glob, Grep, Bash
 ---

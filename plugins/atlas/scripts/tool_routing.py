@@ -212,10 +212,10 @@ def boot_lines(stack: dict | None = None, root: str | None = None) -> list[str]:
     if stack is None:
         stack = scan_stack(root or os.getcwd())
     lines = [
-        "Tool routing: code symbols/edits -> serena (activate_project on cwd first); "
-        "tree orient/search -> lean-ctx ctx_compose/ctx_search/ctx_read; "
+        "Tool routing: symbols/edits -> serena (activate_project first); "
+        "orient/search -> lean-ctx ctx_compose/ctx_search/ctx_read; "
         "output >~20 lines -> context-mode ctx_batch_execute; "
-        "prior lessons -> claude-mem search, timeline, get_observations (ids as numbers)."
+        "prior lessons -> claude-mem search/timeline/get_observations."
     ]
     if stack.get("has_code"):
         langs = ",".join(stack.get("languages") or []) or "code"
@@ -225,8 +225,8 @@ def boot_lines(stack: dict | None = None, root: str | None = None) -> list[str]:
         elif not stack.get("serena_languages_ok"):
             note = "; project.yml lacks languages: (boot heals it)"
         lines.append(
-            "Code stack (%s): ToolSearch-load the batch once first; serena down -> "
-            "lean-ctx only%s. Matrix: atlas-orchestrate/references/tool-routing.md"
+            "Code stack (%s): ToolSearch-load the batch first; serena down -> "
+            "lean-ctx only%s. See atlas-orchestrate/references/tool-routing.md"
             % (langs, note)
         )
     if stack.get("js_ts"):
