@@ -158,9 +158,10 @@ export function currentPhase(
   items: TodoItem[],
   headerPhase: PhaseId | null,
 ): { phase: PhaseId; source: 'header' | 'todo' | 'default' } {
-  if (headerPhase) return { phase: headerPhase, source: 'header' };
+  // The run's own active todo is the live phase; the reply header is the lead's claim for this turn only.
   const active = items.find(it => it.status === 'in_progress');
   if (active?.phase) return { phase: active.phase, source: 'todo' };
+  if (headerPhase) return { phase: headerPhase, source: 'header' };
   return { phase: 'research', source: 'default' };
 }
 

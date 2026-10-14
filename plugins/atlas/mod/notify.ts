@@ -7,7 +7,7 @@ import type { AtlasSnapshot, PhaseId } from './contract';
 import { liveWorkers } from './data/live';
 import type { LiveWorker } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
-import { formatDuration } from './restyle';
+import { formatDuration } from './theme';
 
 export type NotifyEvent =
 	| { type: 'agent-spawn'; name: string }

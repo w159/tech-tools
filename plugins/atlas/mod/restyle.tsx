@@ -3,18 +3,22 @@
 // Every site falls back to the engine's own drawing (`next(e)`) when the snapshot is
 // missing, ATLAS_MOD=off, or anything in the draw path throws: restyles decorate, never break.
 
-import { atom, read } from 'claude-code'
+import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from './contract'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
-import { fitText, glyph, phaseColor, stateColor, textWidth } from './theme'
+import { fitText, formatDuration, glyph, phaseColor, stateColor, textWidth } from './theme'
 import { activeCount, liveWorkers } from './data/live'
 import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
+import type { CardExtra } from './transcript/cards'
+import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
+import type { Outcome } from './transcript/outcome'
 
 // The live snapshot is read from $.state while drawing, so a snapshot write redraws
 // exactly the restyled sites (null outside an atlas session).
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null)
+const headerPhaseState = atom({ plugin: 'atlas', key: 'headerPhase' } as const, null) // register.ts sets it per answer
 
 // ---- structural props the tree builders read (sites' real props satisfy these) ----
 
@@ -38,16 +42,6 @@ const phaseCol = (phase: PhaseId): string => {
 // Width-safe brand mark (1 cell everywhere).
 const MARK = '▸'
 export const PHASE_RE = /\b(research|theory|test|validate|implement|verify|done|blocked)\b/
-
-// ---- pure formatters (exported for tests) ----
-
-export function formatDuration(ms: number): string {
- const s = Math.max(0, Math.round(ms / 1000))
- if (s < 60) return `${s}s`
- const m = Math.floor(s / 60)
- if (m < 60) return `${m}m${String(s % 60).padStart(2, '0')}s`
- return `${Math.floor(m / 60)}h${m % 60}m`
-}
 
 /** The persona behind an `atlas:<name>` subagentType, from the snapshot's roster. */
 export function personaFor(snap: AtlasSnapshot, subagentType?: string): Persona | undefined {
@@ -113,32 +107,40 @@ const STATUS_TO_STATE: Record<string, AgentState> = {
  completed: 'finished', failed: 'failed', killed: 'dead',
 }
 
+/** Status when the session lists no agent for the call: no output and not running = the call is still being written. */
+const fallbackStatus = (props: ToolUsePropsLike): string => {
+ if (props.isRunning) return 'running'
+ if (props.isErrored) return 'failed'
+ if (props.isInterrupted) return 'killed'
+ return props.output === undefined ? 'pending' : 'completed'
+}
+
 function agentStatus(
  agents: AgentInfo[],
  input: { subagentType?: string; name?: string; description?: string },
  props: ToolUsePropsLike,
 ): { state: AgentState; label: string; name?: string } {
+ const id = launchedId(props.output)
  const agent =
+  (id ? agents.find((a) => a.id === id) : undefined) ??
   (input.name ? agents.find((a) => a.name === input.name) : undefined) ??
   (input.description ? agents.find((a) => a.description === input.description) : undefined) ??
   (props.isRunning && input.subagentType
    ? agents.find((a) => a.type === input.subagentType && a.status === 'running')
    : undefined)
- const raw =
-  agent?.status ??
-  (props.isRunning ? 'running' : props.isErrored ? 'failed' : props.isInterrupted ? 'killed' : 'completed')
+ const raw = agent?.status ?? fallbackStatus(props)
  return { state: STATUS_TO_STATE[raw] ?? 'running', label: raw, name: agent?.name }
 }
 
 /** Deployment card: bordered `◆ impl-auth · implementer · sonnet·low ● running`. Null keeps the engine's row. */
-export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents: AgentInfo[], columns = 0): RenderElement | null {
+export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents: AgentInfo[], columns = 0, extra: CardExtra = {}): RenderElement | null {
  if (props.tool !== 'Agent' && props.tool !== 'Task') return noisyTree(props)
  const input = (props.input ?? {}) as { subagentType?: string; subagent_type?: string; name?: string; description?: string }
  const persona = personaFor(snap, input.subagentType ?? input.subagent_type)
  if (!persona) return null
  const status = agentStatus(agents, { ...input, subagentType: input.subagentType ?? input.subagent_type }, props)
  const call = { ...props, input: { model: persona.model, effort: persona.effort, ...input } }
- return workerCard(call, status.state, columns > 8 ? columns - 2 : 0, status.name ?? persona.name, status.label)
+ return workerCard(call, status.state, columns > 8 ? columns - 2 : 0, status.name ?? persona.name, status.label, extra)
 }
 
 // ---- AssistantMessage: the ATLAS contract header drawn on one styled row; headerless replies stay engine-drawn ----
@@ -227,6 +229,7 @@ async function nowMs($: EngineInterface): Promise<number | null> {
 export function registerRestyle(on: On): void {
  const cache: { envOff?: boolean } = {}
  const tracker: ReceiptTracker = {}
+ const outcomes = new Map<string, Outcome>() // ended workers' result lines, per registration
 
  // The clock that bumps spinnerTick lives in register.ts; reading it while drawing
  // subscribes this Spinner instance so each tick redraws the globe.
@@ -242,7 +245,8 @@ export function registerRestyle(on: On): void {
    const snap = await ready($, cache)
    if (!snap) return next(e)
    const agents = await $.agent.list().catch(() => [] as AgentInfo[])
-   return toolUseTree(snap, e.props, agents, e.viewport?.columns ?? 0) ?? next(e)
+   const extra = e.props.tool === 'Agent' || e.props.tool === 'Task' ? await cardExtra($, e.props.output, agents, outcomes) : {}
+   return toolUseTree(snap, e.props, agents, e.viewport?.columns ?? 0, extra) ?? next(e)
   } catch { return next(e) }
  })
 
@@ -260,10 +264,13 @@ export function registerRestyle(on: On): void {
   } catch { return next(e) }
  })
 
- // Cost baseline at turn start; the receipt prints the delta.
+ // Cost baseline at turn start; the receipt prints the delta. A header phase belongs to the turn that wrote
+ // it, so a new turn starts without one (the engine allows one un-matchered turn.start per module: this one).
+ // ponytail: turn.start carries no loop id, so a subagent's turn start clears it too; the next answer restores it.
  on('turn.start', async ($, e, next) => {
   tracker.costStart = await sessionCostUsd($)
   tracker.turnStart = await nowMs($)
+  await update($, headerPhaseState, () => null).catch(() => undefined)
   return next(e)
  })
 
@@ -280,11 +287,13 @@ export function registerRestyle(on: On): void {
   } catch { return next(e) }
  })
 
- // Channel / agent messages as chat bubbles; the person's prompts and ctrl+o rows stay engine-drawn.
+ // Channel / agent messages as chat bubbles; a background atlas worker's notification as its result
+ // row (the engine folds a batch's launch rows into a tree no hook sees). Prompts and ctrl+o stay engine-drawn.
  on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
   try {
-   if (e.props.isExpanded || e.props.task || e.props.origin?.kind === 'composer') return next(e)
+   if (e.props.isExpanded || e.props.origin?.kind === 'composer') return next(e)
    if (!(await ready($, cache))) return next(e)
+   if (e.props.task) return (await notificationRow($, e.props.task, outcomes)) ?? next(e)
    return bubbleTree(e.props.text, e.props.from?.name, 'lead', e.viewport?.columns ?? 0) ?? next(e)
   } catch { return next(e) }
  })

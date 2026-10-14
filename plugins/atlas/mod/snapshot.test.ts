@@ -120,13 +120,9 @@ describe('SnapshotBuilder', () => {
     });
   });
 
-  test('phase precedence: header beats todo; no signal falls back to default', async () => {
+  test('phase precedence: active todo beats header; header next; no signal falls back to default', async () => {
     const { fs, b } = await newBuilder();
-    const withHeader = await b.build(live({ headerPhase: 'test' }));
-    expect(withHeader.phase).toBe('test');
-    expect(withHeader.phaseSource).toBe('header');
-
-    const fromTodo = await b.build(live({ headerPhase: null }));
+    const fromTodo = await b.build(live({ headerPhase: 'test' }));
     expect(fromTodo.phase).toBe('theory'); // first in_progress of the slice
     expect(fromTodo.phaseSource).toBe('todo');
 
@@ -135,6 +131,9 @@ describe('SnapshotBuilder', () => {
       version: 1,
       items: [{ id: 't1', content: '[research] map mod surface', status: 'pending', session_id: SESSION }],
     }));
+    const withHeader = await b.build(live({ headerPhase: 'test' }));
+    expect(withHeader.phase).toBe('test');
+    expect(withHeader.phaseSource).toBe('header');
     const fallback = await b.build(live({ headerPhase: null }));
     expect(fallback.phase).toBe('research');
     expect(fallback.phaseSource).toBe('default');

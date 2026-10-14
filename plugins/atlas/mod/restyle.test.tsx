@@ -7,7 +7,6 @@ import {
   noisyTree,
   assistantTree,
   durationTree,
-  formatDuration,
   personaFor,
   registerRestyle,
   spinnerSuffix,
@@ -16,7 +15,7 @@ import {
   type ReceiptTracker,
 } from './restyle'
 import type { AtlasSnapshot } from './contract'
-import { textWidth } from './theme'
+import { formatDuration, textWidth } from './theme'
 import { memState } from './test_helpers'
 
 // ---- fixtures ----

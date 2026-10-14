@@ -6,6 +6,8 @@ export interface LiveWorker {
   role: string;
   state: 'working' | 'blocked' | 'failed' | 'parked' | 'done';
   tool: string | null;
+  /** The tool answered last; the band shows it dimmed between calls. */
+  lastTool: string | null;
   /** Current-tool time (moves every call). */
   since: number;
   /** First sight of the worker; the age shown to people. */
@@ -30,7 +32,7 @@ export function liveWorkers(snapshot: LiveSnapshot, now: number): LiveWorker[] {
         : act?.mood === 'failed' ? 'failed'
         : act?.mood === 'done' ? 'done'
         : 'working';
-      return { name: a.name, role: a.persona, state, tool: act?.tool ?? null, since: act?.since ?? now, startedAt: act?.startedAt ?? act?.since ?? now, target: act?.target ?? null, lastLine: act?.lastLine ?? '' };
+      return { name: a.name, role: a.persona, state, tool: act?.tool ?? null, lastTool: act?.lastTool ?? null, since: act?.since ?? now, startedAt: act?.startedAt ?? act?.since ?? now, target: act?.target ?? null, lastLine: act?.lastLine ?? '' };
     })
     .sort((x, y) => ORDER[x.state] - ORDER[y.state]);
 }

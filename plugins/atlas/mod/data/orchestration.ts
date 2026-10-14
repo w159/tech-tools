@@ -4,7 +4,7 @@
 // SnapshotBuilder calls deriveOrchestration() to fold that with board notes
 // and git output into the AtlasSnapshot fields. No `$` here.
 import type { ChannelMember, ChannelNote, SquadAgent } from '../contract';
-import type { ActivityEntry, CommsEntry, Mood } from '../orchestra-types';
+import type { ActivityEntry, CommsEntry, Mood, TeamTool } from '../orchestra-types';
 import { isRawId } from '../theme';
 
 const RAW_ID = /^a?[0-9a-f]{16}$/;
@@ -76,7 +76,7 @@ const workingStage = (o: Orch, agent: string): Orch['stage'] =>
 const strOf = (v: unknown): string => (typeof v === 'string' ? v : '');
 const baseOf = (v: unknown): string => strOf(v).split('/').pop() ?? '';
 const headOf = (v: unknown): string => strOf(v).split('\n', 1)[0]?.slice(0, 40) ?? '';
-const targetOf = (input: unknown): string | undefined => {
+export const targetOf = (input: unknown): string | undefined => {
   const a = (input ?? {}) as Record<string, unknown>;
   return [baseOf(a.file_path), baseOf(a.path), headOf(a.command), headOf(a.pattern), headOf(a.query)].find(Boolean);
 };
@@ -91,12 +91,13 @@ export function onToolStart(o: Orch, agent: string, tool: string, now: number, i
   };
 }
 
-/** tool.call answered: the agent is between tools. */
+/** tool.call answered: the agent is between tools; the answered tool and its target stay as `lastTool` / `target`. */
 export function onToolEnd(o: Orch, agent: string, now: number): Orch {
   const prev = o.activity[agent] ?? blank(now);
+  const lastTool = prev.tool ?? prev.lastTool;
   return {
     ...o,
-    activity: { ...o.activity, [agent]: { ...prev, tool: null, since: now, target: undefined, mood: 'thinking' } },
+    activity: { ...o.activity, [agent]: { ...prev, tool: null, ...(lastTool ? { lastTool } : {}), since: now, mood: 'thinking' } },
   };
 }
 
@@ -163,7 +164,7 @@ export interface DeriveInput {
   orch: Orch;
   names: Record<string, string>; // raw agent id -> display name
   listed: readonly { id: string; status: string }[];
-  squad: readonly SquadAgent[];
+  squad: readonly (SquadAgent & TeamTool)[];
   notes: readonly ChannelNote[];
   members: readonly ChannelMember[];
   leadNames: readonly string[]; // channel names that mean 'lead'
@@ -210,7 +211,12 @@ function settle(a: ActivityEntry, mood: Mood, memo: Record<string, number>, name
   return ended ? { ...a, mood, tool: null, since: memoSince(memo, name, now) } : { ...a, mood };
 }
 
-const squadOnlyEntry = (s: SquadAgent, now: number): ActivityEntry => ({ tool: null, since: now, toolCount: 0, tokens: s.tokens ?? null, mood: squadMood(s.state), lastLine: '' });
+/** A worker with no in-process events (a team pane): its tool / last tool / target come from its pane log via the squad row. */
+const squadOnlyEntry = (s: SquadAgent & TeamTool, now: number): ActivityEntry => ({
+  tool: s.tool ?? null, ...definedOf({ lastTool: s.lastTool, target: s.target, startedAt: s.startedAt }),
+  since: now, toolCount: 0, tokens: s.tokens ?? null, mood: squadMood(s.state), lastLine: '',
+});
+const definedOf = <T extends object>(o: T): Partial<T> => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 
 function addMissingActivity(activity: Record<string, ActivityEntry>, i: DeriveInput): void {
   for (const s of i.squad) {
