@@ -6568,5 +6568,73 @@
     "status": "verified",
     "verified_at": "2026-10-13T17:15:38+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "demo-live-cc-12.0.0",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Live tmux demo of 12.0.0 Command Center: idle band, 4 pane tabs, band+team table during a real atlas:explorer run, header row and receipt",
+    "evidence": [
+      ".atlas/evidence/mod-cc-2026-10-13/demo-live-160x45.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux new-session -d -s atlasdemo -x 160 -y 45 'claude --plugin-dir plugins/atlas'; zsh ~/.claude/jobs/384c2a2e/tmp/atlas-demo-driver2.sh",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T19:24:27+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "live-121",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 12.1.1 live: C2,C3,C5,C7,C9 pass; C1 spinner, C4, C6, C8 reap fail",
+    "evidence": [
+      ".atlas/evidence/optimize-2026-10-13/live-121.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux atlv-cc/atlv-omp drive; see live-121.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-13T23:31:18+00:00",
+    "verified_by": "verifier-live121"
+  },
+  {
+    "id": "live-122",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "12.1.2 live: R1-R8 pass; omp widget shows stale 1 live after worker done",
+    "evidence": [
+      ".atlas/evidence/optimize-2026-10-13/live-122.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux atlv2-cc/atlv2-omp plain claude/omp; probe2 5x sleep 6; ProbeOmp2 3x sleep 6; /exit both; python measure of channels.json + archive",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-13T23:55:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "live-123",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 12.1.3 omp worker finish, header scoping, reap; CC regression",
+    "evidence": [
+      ".atlas/evidence/optimize-2026-10-13/live-123.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux atlv3-omp/atlv3-cc live runs, see live-123.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T00:18:06+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]
