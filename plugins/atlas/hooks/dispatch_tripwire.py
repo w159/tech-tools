@@ -48,6 +48,7 @@ def __getattr__(name):
         return mod
     raise AttributeError(name)
 
+
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
@@ -370,10 +371,23 @@ def _advisory(msg):
 
 
 _SCOPE_LINE = re.compile(r"^SCOPE:\s*([\w-]+)/(\w+)\s*$", re.M)
+
+
 # Absolute paths of THIS plugin's scripts: ${CLAUDE_PLUGIN_ROOT} is expanded only by the hook runner,
 # never in the lead's Bash, where it ran the repo's scripts instead of the installed ones (live-230).
-_OWN_SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-RESOLVE_CMD = f'python3 "{_OWN_SCRIPTS / "atlas_resolve.py"}" <class> <effort> --paths a,b'
+def _user_facing_scripts_dir():
+    """Scripts dir as the user's CLAUDE_PLUGIN_ROOT spells it (the same value SessionStart
+    prints), NOT symlink-resolved: the cache path is often a symlink and a resolved realpath
+    in deny text reads as a different plugin. realpath stays for internal comparisons only."""
+    root = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
+    base = Path(root) if root else Path(os.path.abspath(__file__)).parents[1]
+    return base / "scripts"
+
+
+_OWN_SCRIPTS = _user_facing_scripts_dir()
+RESOLVE_CMD = (
+    f'python3 "{_OWN_SCRIPTS / "atlas_resolve.py"}" <class> <effort> --paths a,b'
+)
 SPAWN_TEAM_CMD = (
     f'python3 "{_OWN_SCRIPTS / "atlas_mux.py"}" spawn-team --class C --effort E '
     '--paths a,b --task "..."'
@@ -389,7 +403,9 @@ def _scope_matrix():
     import atlas_resolve
 
     classes = json.loads(atlas_resolve.MATRIX.read_text())["classes"]
-    roles = {t["role"] for c in classes.values() for cell in c.values() for t in cell["team"]}
+    roles = {
+        t["role"] for c in classes.values() for cell in c.values() for t in cell["team"]
+    }
     return atlas_resolve.resolve, {k: sorted(v) for k, v in classes.items()}, roles
 
 
@@ -459,7 +475,11 @@ def _scope_gate(deny, tinput, root, session):
     if problem and os.environ.get("ATLAS_SCOPE_GATE", "on").lower() != "off":
         deny("scope", problem)
         return
-    notes = [problem.replace("DENY - ", "[atlas] ADVISORY (ATLAS_SCOPE_GATE=off) - ", 1)] if problem else []
+    notes = (
+        [problem.replace("DENY - ", "[atlas] ADVISORY (ATLAS_SCOPE_GATE=off) - ", 1)]
+        if problem
+        else []
+    )
     if str(tinput.get("subagent_type") or "").startswith("atlas:"):
         notes.append(_burst_note(root, session))
     note = "\n".join(n for n in notes if n)
@@ -631,7 +651,7 @@ AGENTS_DIR = Path(__file__).resolve().parent.parent / "agents"
 # Block texts run in a shell the model opens itself, where $CLAUDE_PLUGIN_ROOT is
 # unset (Claude Code expands it only for the hook command line): name scripts by
 # the absolute path resolved here.
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+SCRIPTS_DIR = _OWN_SCRIPTS
 _SAFE_AGENT_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
 
 
@@ -1037,6 +1057,26 @@ _READ_ONLY_GIT = frozenset(
 _READ_ONLY_TOOLS = frozenset(("Read", "Grep", "Glob"))
 
 
+def _unwrap_lean_ctx(command):
+    """`lean-ctx -c '<cmd>'` (quoted, double-quoted or bare) -> `<cmd>`; anything else is
+    returned unchanged. lean-ctx rewrites Bash this way, so the classifier must judge the
+    inner command. Any shell operator left outside the quotes stays in the joined text and
+    is classified too (`lean-ctx -c 'git status' && rm x` -> `git status && rm x`)."""
+    import shlex
+
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return command
+    if (
+        len(words) >= 3
+        and words[0].rsplit("/", 1)[-1] == "lean-ctx"
+        and words[1] == "-c"
+    ):
+        return " ".join(words[2:])
+    return command
+
+
 def _is_read_only_bash(command):
     """True when a Bash command only reads: exploration-only (cat/ls/rg/find...,
     the same classifier the native-tool deny uses) or a chain of read-only git
@@ -1044,6 +1084,7 @@ def _is_read_only_bash(command):
     keeps counting."""
     if not isinstance(command, str):
         return False
+    command = _unwrap_lean_ctx(command)
     if _is_exploration_shell(command):
         return True
     if _SHELL_SUBSTITUTION.search(command):
@@ -1094,7 +1135,11 @@ def _team_mux_verb(tool, tinput):
     # lean-ctx's PreToolUse rewrites Bash to `lean-ctx -c '<cmd>'`; PostToolUse sees the wrapped form.
     with contextlib.suppress(ValueError):
         words = shlex.split(command)
-        if len(words) == 3 and words[0].rsplit("/", 1)[-1] == "lean-ctx" and words[1] == "-c":
+        if (
+            len(words) == 3
+            and words[0].rsplit("/", 1)[-1] == "lean-ctx"
+            and words[1] == "-c"
+        ):
             command = words[2]
     if _SHELL_SUBSTITUTION.search(command):
         return ""
@@ -1125,7 +1170,9 @@ def _team_mux_verb(tool, tinput):
         script = seg[1].rsplit("/", 1)[-1] if is_python and len(seg) > 1 else ""
         if script == "atlas_mux.py" and len(seg) > 2 and seg[2] in _MUX_TEAM_VERBS:
             verb = "spawn-team" if "spawn-team" in (verb, seg[2]) else seg[2]
-        elif script == "atlas_resolve.py":  # the read-only resolver step that precedes spawn-team
+        elif (
+            script == "atlas_resolve.py"
+        ):  # the read-only resolver step that precedes spawn-team
             verb = verb or "resolve"
         elif not _is_exploration_shell(shlex.join(seg)):
             return ""
@@ -1977,7 +2024,6 @@ def _inject_name(payload, out):
     except Exception as exc:
         _record_fault(exc)
         return out
-
 
 
 def main():

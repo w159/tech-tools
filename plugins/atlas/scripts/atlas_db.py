@@ -501,6 +501,20 @@ def is_uri_path(path):
     return bool(path) and _URI_PATH.match(str(path)) is not None
 
 
+PROMPT_BOUNDARY_TOOL = "UserPrompt"
+
+
+def mark_prompt_boundary(conn, session_id):
+    """Record a user-prompt boundary for the session's run. It is a non-inline event
+    (is_inline_op=0), the same marker a dispatch leaves, so both inline-op counters
+    below restart at each user prompt: the threshold polices drift within one turn,
+    not across a whole session. No run yet -> nothing to reset, returns None."""
+    rid = current_or_last_run_id(conn, session_id)
+    if rid is None:
+        return None
+    return log_event(conn, rid, PROMPT_BOUNDARY_TOOL, "main", 0)
+
+
 def inline_ops_since_last_dispatch(conn, run_id):
     last = conn.execute(
         "SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND is_inline_op=0",

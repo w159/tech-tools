@@ -605,6 +605,25 @@ def audit(original: str, optimized: str | None) -> None:
         pass  # logging must never break the hook
 
 
+def _mark_prompt_boundary(data: dict) -> None:
+    """Restart the tripwire's inline-op window at this user prompt. Fail-open."""
+    session = (data.get("session_id") or "").strip()
+    if not session:
+        return
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        atlas_db.mark_prompt_boundary(conn, session)
+        conn.close()
+    except Exception as exc:
+        atlas_hook_guard.fault(
+            "prompt_optimizer", "prompt boundary mark failed: %s" % exc
+        )
+
+
 def main() -> int:
     data = atlas_hook_guard.load_payload("prompt_optimizer")
     prompt = data.get("prompt", "").strip()
@@ -617,6 +636,7 @@ def main() -> int:
     # is independent of the optimizer: it runs whether or not the prompt opted in,
     # and self-guards so a DB failure can never block the prompt.
     nudge = arm_orchestration(data, prompt)
+    _mark_prompt_boundary(data)
 
     do_it, body = should_optimize(prompt)
     optimized = None
