@@ -19,6 +19,7 @@ import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, re
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { type GatesCache, type IdleWave, type LaneTool, type PanelNote, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
+import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 
 export const WIDGET_KEY = "atlas-channel";
@@ -219,12 +220,17 @@ const shortTool = (name: string) => (name.startsWith("mcp__") ? (name.includes("
 const asRecord = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
 const firstText = (vals: unknown[]): string | undefined => vals.find((v): v is string => typeof v === "string" && v !== "");
 
-/** Basename of a path argument, else the first TARGET_MAX chars of a command/pattern/query; "" when none. */
+/**
+ * Basename of a path argument, else the first TARGET_MAX chars of a command (unwrapped like the pane feeds:
+ * no lean-ctx wrapper, env prefixes, or board flags), pattern, or query; "" when none.
+ */
 function toolTarget(input: unknown): string {
 	const i = asRecord(input);
 	const p = firstText([i.file_path, i.path]);
 	if (p) return nodePath.basename(p);
-	return (firstText([i.command, i.pattern, i.query]) ?? "").replace(/\s+/g, " ").trim().slice(0, TARGET_MAX);
+	const cmd = firstText([i.command]);
+	const text = cmd !== undefined ? shellTarget(cmd) : (firstText([i.pattern, i.query]) ?? "");
+	return text.replace(/\s+/g, " ").trim().slice(0, TARGET_MAX);
 }
 
 const XD_PREFIX = "xd://";
