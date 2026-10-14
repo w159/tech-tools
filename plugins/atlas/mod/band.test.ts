@@ -123,8 +123,30 @@ describe('Mission Control band', () => {
     expect(rows[1]).toContain('IMPLEMENT');
     expect(all).not.toMatch(/[⣾⣽⣻⢿⡿⣟] /);
   });
-  test('idle with open gates reads blocked', () => {
-    expect(panel(160, { snapshot: idleSnap(), live: [], gates: [gate] }).all).toContain('blocked');
+  test('idle with open gates stays calm: grey title, one amber gates chip, never "blocked"', () => {
+    const { rows, rowNodes } = panel(160, { snapshot: idleSnap(), live: [], gates: [gate] });
+    expect(rows[0]).toContain('◆ ATLAS  ·  idle');
+    expect(rows[0]).not.toContain('blocked');
+    const gatesChip = cells(rowNodes[0]!).find((t) => String(t.props.children).includes('gates ✖1'))!;
+    expect(gatesChip.props.backgroundColor).toBe(MOCHA.peach);
+    expect(cells(rowNodes[0]!)[0]!.props.backgroundColor).toBe(MOCHA.grey);
+    expect(textWidth(rows[0]!)).toBe(160);
+  });
+  test('last wave counts the most recent spawn burst only, not every worker of the session', () => {
+    const snapshot = busySnap({ comms: [] });
+    const live = liveWorkers(snapshot, NOW).map((w, i) => ({ ...w, state: 'done' as const, startedAt: i < 2 ? NOW - 300_000 : NOW - 40_000 }));
+    const title = panel(160, { snapshot: idleSnap(), live }).rows[0]!;
+    expect(title).toContain('last wave: 1 worker ');
+    expect(title).toContain('40s');
+  });
+  test('a blocked or unknown phase keeps the last real phase lit and adds a red BLOCKED chip', () => {
+    const snapshot = idleSnap();
+    snapshot.phase = 'blocked' as never;
+    const { rows, rowNodes } = panel(160, { snapshot, live: [], lastPhase: 'implement' });
+    expect(rows[1]).toContain('◆ IMPLEMENT');
+    const blocked = cells(rowNodes[0]!).find((t) => String(t.props.children).includes('BLOCKED'))!;
+    expect(blocked.props.backgroundColor).toBe(MOCHA.red);
+    expect(panel(160, { snapshot, live: [] }).rows[1]).toMatch(/◆ [A-Z]+/); // no memory yet: still one lit pill
   });
   test('shortTool strips mcp server prefixes', () => {
     expect(shortTool('mcp__lean-ctx__ctx_shell')).toBe('ctx_shell');

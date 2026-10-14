@@ -12,8 +12,10 @@ function stateOf(w: { dead?: unknown; state?: unknown }, exit: number | null | u
   return typeof w.state === 'string' && BLOCKED.includes(w.state) ? 'input' : 'running';
 }
 
-/** Malformed or non-JSON stdout => []. */
-export function parseMuxStatus(stdout: string): SquadAgent[] {
+/** Malformed or non-JSON stdout => []. `members`: a live spawn-team record's workers. A tiled team runs them as panes
+ * of one window named after the session, which `status` lists as that window only, so a member without a row of its
+ * own is running until its board exit note says otherwise. */
+export function parseMuxStatus(stdout: string, members: readonly string[] = []): SquadAgent[] {
   try {
     const data = JSON.parse(stdout) as { transport?: unknown; workers?: unknown; board?: unknown };
     if (!Array.isArray(data.workers)) return [];
@@ -22,11 +24,11 @@ export function parseMuxStatus(stdout: string): SquadAgent[] {
       if (typeof b?.name === 'string' && typeof b.exit === 'number') exits.set(b.name, b.exit);
     }
     const transport = typeof data.transport === 'string' ? data.transport : 'mux';
-    return (data.workers as { name?: unknown; dead?: unknown; state?: unknown }[]).flatMap((w) =>
-      typeof w?.name === 'string' && w.name
-        ? [{ name: w.name, persona: 'unknown', state: stateOf(w, exits.get(w.name)), source: 'colony' as const, transport }]
-        : [],
-    );
+    const rows = (data.workers as { name?: unknown; dead?: unknown; state?: unknown }[]).filter((w) => typeof w?.name === 'string' && w.name);
+    const listed = new Set(rows.map((w) => w.name));
+    return [...rows, ...members.filter((m) => !listed.has(m)).map((name) => ({ name }))].map((w) => ({
+      name: w.name as string, persona: 'unknown', state: stateOf(w, exits.get(w.name as string)), source: 'colony' as const, transport,
+    }));
   } catch {
     return [];
   }
@@ -75,6 +77,23 @@ const blocksOf = (line: string): Block[] => {
 };
 
 const isUse = (b: Block): boolean => b.type === 'tool_use' && typeof b.name === 'string';
+
+/** How a team worker's `claude -p` ended, from the stream-json `result` event its pane log closes with; null while it
+ * runs. A tiled pane hides `pane_dead` from `status`, and the exit note can sit on another root's board (worktrees). */
+export function paneExit(log: string): 'finished' | 'failed' | null {
+  const end = log.split('\n').reverse().map(eventOf).find((e) => e?.type === 'result');
+  if (!end) return null;
+  return end.is_error === true ? 'failed' : 'finished';
+}
+
+const eventOf = (line: string): { type?: unknown; is_error?: unknown } | null => {
+  if (!line.includes('"result"')) return null; // skip parsing every tool event
+  try {
+    return JSON.parse(line) as { type?: unknown; is_error?: unknown };
+  } catch {
+    return null; // a half-flushed last line or the argv header
+  }
+};
 
 /** A team worker's tool from its pane log (`.atlas/.run/logs/<name>.log`, stream-json): the last tool_use is `tool`
  * while no tool_result answers it, else `lastTool`; `uses` counts every tool_use; {} when the log holds no tool call. */
