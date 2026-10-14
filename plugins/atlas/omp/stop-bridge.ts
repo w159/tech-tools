@@ -396,7 +396,12 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			const id = String((ctx.agent as { id?: string } | undefined)?.id ?? "");
 			if (!id || off() || finished.has(id)) return;
 			finished.add(id);
-			await runCapture(["python3", nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py"), "member-finish", "--root", ctx.cwd, "--agent", id, "--exit", "0"], { timeoutMs: 1_500 });
+			const finish = (agent: string) => runCapture(["python3", nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py"), "member-finish", "--root", ctx.cwd, "--agent", agent, "--exit", "0"], { timeoutMs: 1_500 });
+			// omp 18.10 ids are `<Name>-<n>` (live "ProbeFin-5"); the resolver only strips a `<n>-` prefix or bare trailing digits,
+			// so retry once with the `-<n>` suffix removed when the raw id matched no member.
+			const first = await finish(id);
+			const bare = id.replace(/-\d+$/, "");
+			if (bare !== id && /"member":\s*null/.test(first.stdout)) await finish(bare);
 		} catch {
 			// fail open: a missed mark only leaves the member to the dashboard's parked heuristic
 		}
@@ -546,6 +551,13 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			// fail open: the view falls back to its own hard cap
 		}
 		return undefined;
+	});
+
+	// A task worker that ends with plain text (no terminal `yield`, observed live) still fires agent_end in its own
+	// ctx while omp parks it, so this is the reliable per-worker completion signal; the yield hook above is the early one.
+	pi.on("agent_end", async (_event, ctx) => {
+		const bridgeCtx = ctx as BridgeCtx;
+		if (bridgeCtx.agent?.kind === "sub") await markSubFinished(bridgeCtx);
 	});
 
 	pi.on("auto_compaction_start", async (_event, ctx) => {

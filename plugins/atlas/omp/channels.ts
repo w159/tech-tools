@@ -59,7 +59,7 @@ export const defaultRun: ChannelRunner = (argv, cwd) => {
 };
 
 /** Called once a dispatch has opened the lead's channel: the live view subscribes here. */
-export type OnChannelOpen = (info: { channel: string; members: string[]; cwd: string }) => void;
+export type OnChannelOpen = (info: { channel: string; members: string[]; cwd: string; sessionId?: string }) => void;
 
 /**
  * A revised copy of a `task` input with the CHANNEL block on every dispatch item (items without a name get one, so
@@ -167,6 +167,6 @@ function openAndInject(
 	const changed = injectBriefs(run, opts.cwd, items, names, parsed);
 	// The channel is open (members registered) even when every item already carried a CHANNEL block, e.g. the model
 	// copied a prior brief: the live view must still mount.
-	opts.onOpen?.({ channel: parsed.channel, members: names, cwd: opts.cwd });
+	opts.onOpen?.({ channel: parsed.channel, members: names, cwd: opts.cwd, sessionId: opts.sessionId });
 	return changed ? revised : undefined;
 }

@@ -212,6 +212,24 @@ test("a sub's terminal yield marks its member finished in channels.json (real at
 	expect([...finishedMembers(repo, chan)]).toEqual(["Alpha"]);
 });
 
+test("a sub's agent_end (omp parks a finished task worker; yield may never fire) marks its member finished", async () => {
+	process.env.ATLAS_HOME ??= mkdtempSync(join(tmpdir(), "chan-view-home-"));
+	const repo = realpathSync(mkdtempSync(join(tmpdir(), "chan-view-repo-")));
+	Bun.spawnSync(["git", "-C", repo, "init", "-q", "-b", "main"]);
+	const script = join(import.meta.dir, "..", "scripts", "atlas_todo.py");
+	const open = JSON.parse(Bun.spawnSync(["python3", script, "channel-open", "--root", repo, "--lead", "lead-abc", "--members", "Alpha,Beta"], { env: process.env }).stdout.toString());
+	const chan = open.channel.name as string;
+	type Handler = (e: Record<string, unknown>, c: Record<string, unknown>) => Promise<unknown> | unknown;
+	const handlers: Record<string, Handler[]> = {};
+	registerStopBridge({ on: (name: string, h: Handler) => void (handlers[name] ??= []).push(h) } as unknown as Parameters<typeof registerStopBridge>[0], { env: {} });
+	// omp 18.10 ids are `<Name>-<n>` (live: "ProbeFin-5"), not only `<n>-<Name>`; the python resolver strips neither the "-n" suffix
+	const sub = { cwd: repo, agent: { kind: "sub", id: "Alpha-5" }, sessionManager: { getSessionId: () => "s", getSessionFile: () => "" } };
+	await handlers.agent_end[0]({}, { ...sub, agent: { kind: "main", id: "Main" } }); // lead's agent_end: ignored
+	expect(finishedMembers(repo, chan).size).toBe(0);
+	await handlers.agent_end[0]({}, sub);
+	expect([...finishedMembers(repo, chan)]).toEqual(["Alpha"]);
+});
+
 function atlasFixture(members: Array<Record<string, unknown>>, todos: Array<Record<string, unknown>>) {
 	const f = fixture();
 	const run = join(f.root, ".atlas", ".run");
@@ -232,7 +250,23 @@ test("header carries ATLAS, the contract phase glyph, progress and live/gate cou
 	expect(h).toContain("ATLAS");
 	expect(h).toContain(`${glyph} implement 1/3`);
 	expect(h).toContain("1 live");
-	expect(h).toContain("2 gates");
+	expect(h).not.toContain("gates"); // open todos are not the Claude band's completion gates; no proxy
+});
+
+test("header counts only this session's todos (not the historic board) and ignores advisor rows", () => {
+	const root = atlasFixture(
+		[{ name: "lead-abc", role: "lead", joined: 1 }],
+		[
+			{ status: "pending", phase: "research", session_id: "old" },
+			{ status: "completed", session_id: "old" },
+			{ status: "pending", phase: "research", session_id: "s1", origin: "advisor" },
+			{ status: "completed", session_id: "s1" },
+			{ status: "in_progress", phase: "verify", session_id: "s1" },
+		],
+	);
+	const h = headerLine(root, 0, "s1");
+	expect(h).toContain(" verify 1/2 ");
+	expect(h).not.toContain("research");
 });
 
 test("spinner differs between consecutive polls and matches mod/theme.ts frames", () => {

@@ -30,6 +30,7 @@ export interface ChannelOpenInfo {
 	channel: string;
 	members: string[];
 	cwd: string;
+	sessionId?: string;
 }
 export interface WidgetUi {
 	setWidget(key: string, content: string[] | undefined): void;
@@ -117,22 +118,26 @@ function ageOf(joined: number | undefined, nowMs: number): string {
 	return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`;
 }
 
-/** `ATLAS <glyph> <phase> <done>/<total> <bar> · <n> live · <g> gates` from todos.json; "gates" = open (unfinished) todos. */
-export function headerLine(root: string, live: number): string {
-	let items: Array<{ status?: string; phase?: string; archived?: boolean }> = [];
+/**
+ * `ATLAS <glyph> <phase> <done>/<total> <bar> · <n> live` from todos.json, scoped like the Claude mod (mod/data/todos.ts):
+ * only this session's rows count, advisor notes never do. No gate count: the Claude band's gates come from
+ * atlas_gates.py, and open todos are not that, so showing them would mislead.
+ */
+export function headerLine(root: string, live: number, sessionId?: string): string {
+	let items: Array<{ status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string }> = [];
 	try {
 		items = JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "todos.json"), "utf8")).items ?? [];
 	} catch {
 		// no board yet: zeroes
 	}
-	items = items.filter(i => !i.archived);
+	items = items.filter(i => !i.archived && i.origin !== "advisor" && (!sessionId || i.session_id === sessionId));
 	const done = items.filter(i => i.status === "completed").length;
 	const open = items.filter(i => i.status !== "completed");
 	const phase = (open.find(i => i.status === "in_progress" && i.phase) ?? open.find(i => i.phase))?.phase ?? "research";
 	const w = 8;
 	const fill = items.length ? Math.round((done / items.length) * w) : 0;
 	const bar = "█".repeat(fill) + "░".repeat(w - fill);
-	return `ATLAS ${phaseGlyphs()[phase] ?? "·"} ${phase} ${done}/${items.length} ${bar} · ${live} live · ${open.length} gates`;
+	return `ATLAS ${phaseGlyphs()[phase] ?? "·"} ${phase} ${done}/${items.length} ${bar} · ${live} live`;
 }
 
 export function workerLines(workers: LiveWorker[], tickN: number, nowMs: number): string[] {
@@ -248,7 +253,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		if (!ui || !info) return lastSeq;
 		const notes = readChannelNotes(info.root, info.channel);
 		const live = liveWorkers(info.root, info.channel);
-		const head = [headerLine(info.root, live.length), ...workerLines(live, tickN, now())];
+		const head = [headerLine(info.root, live.length, info.sessionId), ...workerLines(live, tickN, now())];
 		const lines = [`atlas channel ${info.channel}`, ...head, ...(noteRoom => (noteRoom > 0 ? notes.slice(-noteRoom) : [])
 				)(Math.max(0, MAX_LINES - 2 - head.length)).map(n => formatNote(n)), rosterLine(info.members, finished())];
 		const key = lines.join("\n");
