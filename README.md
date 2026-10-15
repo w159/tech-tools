@@ -16,14 +16,21 @@ share one board, a Stop gate refuses "done" without evidence, and a doctor mines
 the session telemetry so the plugin can tune its own rules. It runs in Claude
 Code and, through its extension package, in omp.
 
-Current release: **12.4.2** (`plugins/atlas/.claude-plugin/plugin.json`).
+Current version: **12.4.5** (`plugins/atlas/.claude-plugin/plugin.json`).
+
+Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md)):
+
+- **12.4.5**: `atlas_herdr ensure` starts the headless herdr server itself before reporting unavailable.
+- **12.4.4**: atlas no longer writes `.atlas` into `~` or `~/Downloads`; the omp write-tool misuse guard covers every agent role; dashboard data fixes (Projects, Overview, Channels, Activity, Improve), better error classification and honest "Doctor findings" / "attention items" labels; a dispatch `thinkingLevel` quoting fix.
+- **12.4.3**: dashboard fallow cleanup, no behavior change.
+- **12.4.2**: OpenRig seat backend for colony worker panes (herdr stays a fallback behind one facade); backend-neutral dashboard wording.
 
 | What | Count | Source |
 |---|---|---|
 | Skills | 37 | `plugins/atlas/skills/` |
 | Role agents (`atlas:*`) | 13 | `plugins/atlas/agents/` |
 | Hooks | 17 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
-| Scripts | 50 non-test Python scripts | `plugins/atlas/scripts/` |
+| Scripts | 49 non-test Python scripts | `plugins/atlas/scripts/` |
 | MCP connectors | 12, each off until credentials exist | `plugins/atlas/.mcp.json` |
 | omp agents | 13, generated | `plugins/atlas/omp/agents/` |
 
