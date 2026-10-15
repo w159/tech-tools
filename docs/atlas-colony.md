@@ -141,7 +141,7 @@ States (`_state`): `finished` (exit 0 recorded), `dead` (nonzero exit recorded; 
 
 ### herdr (the multiplexer binary)
 
-herdr is an installed binary, not vendored. Atlas pins a minimum version in `colony/herdr/PIN.json` (`version`, `sha`, `min_protocol`, `install_url`); `python3 plugins/atlas/scripts/atlas_herdr.py install-check` is read-only and fails with `why` + `do` when herdr is missing or older than the pin. Install it from https://herdr.dev and run `herdr` in a terminal. Atlas cannot start herdr itself.
+herdr is an installed binary, not vendored. Atlas pins a minimum version in `colony/herdr/PIN.json` (`version`, `sha`, `min_protocol`, `install_url`); `python3 plugins/atlas/scripts/atlas_herdr.py install-check` is read-only and fails with `why` + `do` when herdr is missing or older than the pin. Install it from https://herdr.dev; Atlas starts the headless server (`herdr server`) itself on `atlas_herdr ensure` and at session boot, logging to `$ATLAS_HOME/herdr-ensure.log`.
 
 ### herdr-web-ui (the vendored colony build)
 
@@ -223,7 +223,7 @@ python3 plugins/atlas/scripts/atlas_remote.py url              # https://<node>.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| The Fleet or Terminal page says "herdr isn't running" (`state: server_down`) | The herdr server is down; Atlas cannot start it | Run `herdr` in a terminal, click Recheck |
+| The Fleet or Terminal page says "herdr isn't running" (`state: server_down`) | The herdr server is down and the headless autostart failed | Check `$ATLAS_HOME/herdr-ensure.log` (or run `herdr server`), click Recheck |
 | The Terminal page says "The terminal service isn't running" (`web_ui_down`) | Colony web UI process not started | Click **Start terminal service**, or `python3 plugins/atlas/scripts/atlas_herdr.py ensure`; check `$ATLAS_HOME/herdr-ensure.log` |
 | `/atlas/` answers `502 atlas_dashboard_unreachable` through the web UI | The dashboard daemon is not running or `ATLAS_DASHBOARD_URL` points elsewhere | `python3 plugins/atlas/scripts/atlas_dashboard.py ensure` |
 | `ensure` says "installed herdr is older than the pinned ..." or "herdr is not installed" | herdr is below `colony/herdr/PIN.json` | Upgrade herdr from https://herdr.dev, run `atlas_herdr.py install-check` |

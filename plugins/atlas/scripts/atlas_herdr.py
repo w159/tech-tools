@@ -343,6 +343,9 @@ def _server_up() -> bool:
         return False
 
 
+SERVER_WAIT_S = 5.0
+
+
 def ensure_server(wait: float = 1.5) -> dict:
     """Start the herdr headless server (`herdr server`) detached if the socket does not answer.
     Idempotent (no-op when up) and fail-open: never raises, waits at most `wait` seconds.
@@ -1019,11 +1022,15 @@ def ensure() -> dict:
         chk = install_check()
         if not chk["ok"]:
             return _unavailable(chk["why"], chk["do"])
-        if not _server_up():  # the web UI health 502s without it; spawning cannot help
-            return _unavailable(
-                "the herdr server is not running (autostart failed or disabled; see $ATLAS_HOME/colony-boot.log)",
-                "start herdr in a terminal (run `herdr`), then recheck",
-            )
+        if not _server_up():  # the web UI health 502s without it: start the headless server first
+            srv = ensure_server(wait=SERVER_WAIT_S)
+            if not _server_up():
+                why = srv.get("reason") or srv.get("action") or "unknown"
+                return _unavailable(
+                    f"the herdr server is not running and the headless autostart failed ({srv.get('action')}: {why})",
+                    "the headless server could not start; check $ATLAS_HOME/herdr-ensure.log "
+                    "(or run `herdr server` manually), then recheck",
+                )
         lock = _acquire(_lock_path())
         if lock is None:
             return _unavailable(

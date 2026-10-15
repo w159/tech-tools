@@ -479,19 +479,38 @@ class ServerDown(unittest.TestCase):
         finally:
             os.environ.pop("HERDR_SOCKET_PATH")
 
-    def test_ensure_never_spawns_when_server_down(self):
-        saved = atlas_herdr._health, atlas_herdr._spawn, atlas_herdr._server_up
-        calls = []
+    def _ensure_with(self, ups, server):
+        keys = ("_health", "_spawn", "_server_up", "ensure_server", "install_check")
+        saved = {k: getattr(atlas_herdr, k) for k in keys}
+        calls, spawns, seq = [], [], list(ups)
         atlas_herdr._health = lambda: False
-        atlas_herdr._server_up = lambda: False
-        atlas_herdr._spawn = lambda: calls.append(1) or (True, "")
+        atlas_herdr._spawn = lambda: spawns.append(1) or (True, "")
+        atlas_herdr.install_check = lambda: {"ok": True}
+        atlas_herdr._server_up = lambda: seq.pop(0) if len(seq) > 1 else seq[0]
+        atlas_herdr.ensure_server = lambda wait=1.5: calls.append(wait) or server
         try:
             out = atlas_herdr.ensure()
         finally:
-            atlas_herdr._health, atlas_herdr._spawn, atlas_herdr._server_up = saved
+            for k, v in saved.items():
+                setattr(atlas_herdr, k, v)
+        return out, calls, spawns
+
+    def test_ensure_autostarts_server_then_proceeds(self):
+        out, calls, spawns = self._ensure_with([False, True], {"ok": True, "action": "started"})
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(spawns), 1)  # proceeded past the server check
+        self.assertNotIn("herdr server is not running", str(out.get("why", "")))
+
+    def test_ensure_unavailable_when_headless_server_cannot_start(self):
+        out, calls, spawns = self._ensure_with(
+            [False], {"ok": False, "action": "started_unconfirmed", "reason": "socket not answering yet"}
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(spawns, [])
         self.assertFalse(out["ok"])
-        self.assertIn("herdr server", out["why"])
-        self.assertEqual(calls, [])
+        self.assertIn("herdr-ensure.log", out["do"])
+        self.assertIn("headless", out["do"])
+        self.assertNotIn("`herdr`", out["do"])
 
 
 class MalformedTests(SockBase):

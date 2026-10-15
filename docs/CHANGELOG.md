@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `atlas_herdr ensure` now starts the headless herdr server itself (`ensure_server`, up to 5 s) before reporting unavailable; when it still cannot start, the message points at `$ATLAS_HOME/herdr-ensure.log` instead of telling the user to run `herdr` in a terminal.
+
 ## 12.4.4 (2026-10-14)
 
 ### Fixed
