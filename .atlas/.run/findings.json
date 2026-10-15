@@ -6826,5 +6826,57 @@
     "status": "verified",
     "verified_at": "2026-10-14T19:37:23+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "dashboard-audit-fixes-2026-10-14",
+    "surface": "dashboard",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dashboard: data/frontend defects fixed, channels hang fixed (atlas_rig probe cache)",
+    "evidence": [
+      ".atlas/evidence/2026-10-14-dashboard-final/",
+      "test_atlas_dash* 303 OK; bun dashboard_ui 50 pass; test_atlas_rig 23 OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p 'test_atlas_dash*.py'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T21:10:46+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "junk-writes-home-downloads",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas wrote .atlas/.run into ~ and ~/Downloads; omp workers misused write with tool names/prose as paths",
+    "evidence": [
+      "agent://JunkRootCause; agent://TextPathForensics; agent://StopJunkWriters 9 tests red->green, smoke 0 writes under ~/Downloads; agent://WriteGuardAllRoles omp 449 pass; agent://JunkCleanup; agent://RepoJunkCleanup"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_todo test_atlas_dashboard test_atlas_db test_atlas_dash_work; cd ../omp && bun test agent-guard.test.ts",
+    "proposed_fix": "commit, release, reinstall so live caches get the guards; then restart dashboard",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-14T23:48:05+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "junk-writes-home-downloads",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Junk writers fixed: no stray .atlas/junk files, guards deny misuse",
+    "evidence": [
+      "agent://JunkFixVerify; a-f pass: no .atlas under ~/Downloads, no atlas-* dirs, no junk root entries, 7421 not listening, 269+65 py tests OK, bun 449 pass/0 fail, reap_tick created no stray .atlas, register_project None/None/1, guard deny/deny/deny/allow. NOT checked: installed cache 12.4.3; live sessions keep old code until reinstall"
+    ],
+    "doc_refs": [],
+    "reproduction": "find ~/Downloads -maxdepth 6 -name .atlas; lsof -iTCP:7421; unittest suites; bun test; reap_tick in temp ATLAS_HOME; bun /tmp/g.ts via registerAgentGuard",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-14T23:52:22+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

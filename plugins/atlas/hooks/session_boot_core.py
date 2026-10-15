@@ -879,7 +879,7 @@ def main():
         _sid = payload.get("session_id", "")
         # Empty/missing session_id would create a phantom run keyed by "" and
         # corrupt is_orchestrating/current_run_id lookups -- skip run creation.
-        if _sid and atlas_db.current_run_id(_conn, _sid) is None:
+        if _pid is not None and _sid and atlas_db.current_run_id(_conn, _sid) is None:
             atlas_db.start_run(_conn, _pid, _sid)
     except Exception:  # noqa: S110 -- observability is best-effort; never block boot
         pass
@@ -939,14 +939,20 @@ def main():
             and not worker_inbox.is_worker_env()
         ):
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+            import atlas_db
             import atlas_todo
 
             _todo_root = atlas_todo.find_root(payload.get("cwd") or os.getcwd())
-            carry = atlas_todo.carry_over(_todo_root, payload.get("session_id", ""))
-            try:  # fail-open: dead lead channels must never block boot
-                atlas_todo.reap_channels(_todo_root)
-            except Exception:
-                pass
+            # Never create .atlas/.run in a non-project dir (plain dir, $HOME, ~/Downloads).
+            if atlas_db.not_a_project_root(_todo_root) or not (
+                atlas_todo.is_project(_todo_root)
+                or os.path.exists(os.path.join(_todo_root, ".git"))
+            ):
+                carry = {}
+            else:
+                carry = atlas_todo.carry_over(_todo_root, payload.get("session_id", ""))
+                with contextlib.suppress(Exception):  # fail-open: dead lead channels must never block boot
+                    atlas_todo.reap_channels(_todo_root)
             c = carry.get("counts") or {}
             if c.get("needed") or carry.get("carried"):
                 todo_line = (

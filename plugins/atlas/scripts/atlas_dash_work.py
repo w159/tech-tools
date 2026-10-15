@@ -175,7 +175,46 @@ def _junk_root(path: str) -> bool:
             )
         )
         or "/plugins/cache/" in path + "/"
+        or _scratch_root(path, home, raw_home)
     )
+
+
+def _scratch_root(path: str, home: str, raw_home: str) -> bool:
+    """Roots that are never a project: relative names (a bare "m"), agent/worktree dirs,
+    home dot-dirs (~/.claude, ~/.config), and atlas fixture/e2e roots."""
+    if not path.startswith(os.sep):
+        return True
+    parts = path.split(os.sep)
+    if any(p.startswith("agent-") for p in parts) or "worktrees" in parts or "wt" in parts:
+        return True
+    for h in {home, raw_home}:
+        if path.startswith(h + os.sep) and path[len(h) + 1 :].startswith("."):
+            return True
+    try:
+        import atlas_control
+
+        return atlas_control.is_fixture_project(path, must_exist=False)
+    except ImportError:
+        return False
+
+
+_PROJECT_MARKERS = (".git", "docs", "pyproject.toml", "package.json")
+
+
+def _real_project(path: str) -> bool:
+    """A project needs a root of its own: a repo, docs/ or a package manifest (.atlas is excluded: atlas creates it itself).
+    A bare home subfolder (Downloads, Staff) or a subdir of another repo (plugins/) is not one."""
+    if _junk_root(path):
+        return False
+    if os.path.exists(os.path.join(path, ".git")):
+        return True
+    # A subdir of another repo (plugins/atlas in tech-tools) belongs to that repo's project.
+    parent = os.path.dirname(path)
+    while parent and parent != os.path.dirname(parent):
+        if os.path.exists(os.path.join(parent, ".git")):
+            return False
+        parent = os.path.dirname(parent)
+    return any(os.path.exists(os.path.join(path, m)) for m in _PROJECT_MARKERS)
 
 
 def _canon_roots(roots: list[str]) -> list[str]:

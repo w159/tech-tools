@@ -1,4 +1,3 @@
-import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import json
@@ -9,6 +8,8 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -464,7 +465,7 @@ class AtlasDbTest(unittest.TestCase):
         ):
             self.assertEqual(
                 self.conn.execute(
-                    f"SELECT COUNT(*) FROM {tbl} WHERE session_id='obs-1'"
+                    f"SELECT COUNT(*) FROM {tbl} WHERE session_id='obs-1'"  # noqa: S608  # tbl is from a literal tuple; identifiers cannot be bound
                 ).fetchone()[0],
                 0,
             )
@@ -478,7 +479,7 @@ class AtlasDbTest(unittest.TestCase):
         ):
             self.assertEqual(
                 self.conn.execute(
-                    f"SELECT COUNT(*) FROM {tbl} WHERE session_id='norm-1'"
+                    f"SELECT COUNT(*) FROM {tbl} WHERE session_id='norm-1'"  # noqa: S608  # tbl is from a literal tuple; identifiers cannot be bound
                 ).fetchone()[0],
                 1,
             )
@@ -514,7 +515,10 @@ class AtlasDbTest(unittest.TestCase):
             "dispatches",
             "metrics",
         )
-        count = lambda t: self.conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+
+        def count(t):
+            return self.conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]  # noqa: S608  # t is from a literal tuple; identifiers cannot be bound
+
         before = {t: count(t) for t in tables}
         counts = atlas_db.purge_tmp_sessions(self.conn)  # dry run is the default
         self.assertEqual(
@@ -527,7 +531,7 @@ class AtlasDbTest(unittest.TestCase):
         for t in ("messages", "tool_calls", "runs"):
             self.assertEqual(
                 self.conn.execute(
-                    f"SELECT COUNT(*) FROM {t} WHERE session_id='t1'"
+                    f"SELECT COUNT(*) FROM {t} WHERE session_id='t1'"  # noqa: S608  # t is from a literal tuple; identifiers cannot be bound
                 ).fetchone()[0],
                 0,
             )
@@ -887,7 +891,7 @@ class UncoveredPathsTest(unittest.TestCase):
         # Lines 782-784: drop a session's child rows for a clean re-ingest.
         sid = "s-reset"
         atlas_db.upsert_session_log(self.conn, sid)
-        for tbl_seeder in (("m1", "t1", "p1"),):
+        for _tbl_seeder in (("m1", "t1", "p1"),):
             atlas_db.insert_message(self.conn, sid, {"uuid": "m1", "role": "assistant"})
             atlas_db.insert_tool_call(
                 self.conn, sid, {"tool_use_id": "t1", "kind": "builtin", "target": "R"}
@@ -902,7 +906,7 @@ class UncoveredPathsTest(unittest.TestCase):
         for tbl in ("messages", "tool_calls", "user_prompts", "signals"):
             self.assertEqual(
                 self.conn.execute(
-                    f"SELECT COUNT(*) FROM {tbl} WHERE session_id=?", (sid,)
+                    f"SELECT COUNT(*) FROM {tbl} WHERE session_id=?", (sid,)  # noqa: S608  # tbl is from a literal tuple; value is bound
                 ).fetchone()[0],
                 0,
             )
@@ -1447,9 +1451,9 @@ class MainCliTest(unittest.TestCase):
             patch.object(sys, "argv", ["atlas_db.py", "bogus-cmd"]),
             patch.dict(os.environ, env, clear=False),
             contextlib.redirect_stderr(err),
+            self.assertRaises(SystemExit) as cm,
         ):
-            with self.assertRaises(SystemExit) as cm:
-                runpy.run_path(self.script, run_name="__main__")
+            runpy.run_path(self.script, run_name="__main__")
         self.assertEqual(cm.exception.code, 2)
         self.assertIn("Usage", err.getvalue())
 
@@ -1525,10 +1529,12 @@ class ErrorSnippetTest(unittest.TestCase):
 
     def test_long_traceback_keeps_head_and_tail(self):
         frames = "".join(
-            '  File "m%d.py", line %d, in f\n    g()\n' % (i, i) for i in range(40)
+            f'  File "m{i}.py", line {i}, in f\n    g()\n' for i in range(40)
         )
         text = "Traceback (most recent call last):\n" + frames + "KeyError: 'boom'"
         snip = atlas_db.error_snippet_of(text)
+        self.assertIsNotNone(snip)
+        assert snip is not None  # noqa: S101  # type narrowing for len()/startswith below
         self.assertLessEqual(len(snip), 500)
         self.assertTrue(snip.startswith("Traceback (most recent call last):"))
         self.assertIn(" ... ", snip)
@@ -1917,12 +1923,19 @@ class RunChangedPathsUriTest(unittest.TestCase):
 class ClassifyEnvironmentNoiseTest(unittest.TestCase):
     def test_new_messages(self):
         c = atlas_db.classify_error
-        self.assertEqual(c("Edit", "EPERM: operation not permitted, open '/x'", False), "environment")
         self.assertEqual(
-            c("ctx_read", "source content withheld by the context gateway", False), "environment"
+            c("Edit", "EPERM: operation not permitted, open '/x'", False), "environment"
         )
         self.assertEqual(
-            c("ctx_execute", "Cannot combine query extraction with line selectors", False),
+            c("ctx_read", "source content withheld by the context gateway", False),
+            "environment",
+        )
+        self.assertEqual(
+            c(
+                "ctx_execute",
+                "Cannot combine query extraction with line selectors",
+                False,
+            ),
             "model_misuse",
         )
 
@@ -1931,8 +1944,45 @@ class ClassifyEnvironmentNoiseTest(unittest.TestCase):
         self.assertEqual(atlas_db.classify_error("Bash", msg, False), "environment")
 
     def test_existing_script_is_tool_fault(self):
-        msg = "python3: can't open file '%s': [Errno 13]" % os.path.abspath(
+        script = os.path.abspath(
             os.path.join(os.path.dirname(__file__), "atlas_db.py")
         ).replace("atlas_db.py", "atlas_db.py")
+        msg = f"python3: can't open file '{script}': [Errno 13]"
         # the regex needs scripts/atlas_*.py; atlas_db.py lives in scripts/
         self.assertEqual(atlas_db.classify_error("Bash", msg, False), "tool_fault")
+
+
+class RegisterProjectRefusals(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.home = os.path.join(self.tmp, "home")
+        os.makedirs(os.path.join(self.home, "Downloads", "x"))
+        env = patch.dict(os.environ, {"HOME": self.home})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def _rows(self):
+        return self.conn.execute("SELECT root_path FROM projects").fetchall()
+
+    def test_refuses_non_project_roots(self):
+        d = os.path.join(self.home, "Downloads")
+        for p in (
+            self.home,
+            d,
+            "/tmp",  # noqa: S108  # asserts the literal /tmp prefix
+            "/private/tmp",
+            tempfile.gettempdir(),
+        ):
+            self.assertIsNone(atlas_db.register_project(self.conn, p), p)
+        self.assertEqual(self._rows(), [])
+
+    def test_downloads_children_register(self):
+        d = os.path.join(self.home, "Downloads")
+        for p in (os.path.join(d, "x"), os.path.join(d, "x", "deep")):
+            self.assertIsInstance(atlas_db.register_project(self.conn, p), int, p)
+
+    def test_real_project_registers(self):
+        p = os.path.join(self.home, "code", "app")
+        self.assertIsInstance(atlas_db.register_project(self.conn, p), int)

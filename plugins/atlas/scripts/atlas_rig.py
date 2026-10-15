@@ -10,8 +10,10 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -92,19 +94,40 @@ def _rig(args: list[str], timeout: float = 10) -> tuple[int, object, str]:
     exe = _bin()
     if not exe:
         return 127, None, "rig_missing"
+    # Own session + explicit group kill: subprocess.run's post-timeout communicate() blocks
+    # forever when a grandchild (the rig daemon autostart) inherits the stdout pipe.
     try:
-        p = subprocess.run(
-            [exe, *args], capture_output=True, text=True, timeout=timeout, env=_env()
+        proc = subprocess.Popen(
+            [exe, *args],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=_env(),
+            start_new_session=True,
         )
-    except subprocess.TimeoutExpired:
-        return 124, None, "timeout"
     except OSError as e:
         return 127, None, str(e)
     try:
-        data = json.loads(p.stdout) if p.stdout.strip() else None
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            proc.kill()
+        for stream in (proc.stdout, proc.stderr):
+            try:
+                if stream:
+                    stream.close()
+            except OSError:
+                pass
+        proc.wait(timeout=2)
+        return 124, None, "timeout"
+    try:
+        data = json.loads(out) if out.strip() else None
     except ValueError:
         data = None
-    return p.returncode, data, (p.stderr or "")[-300:]
+    return proc.returncode, data, (err or "")[-300:]
 
 
 def _healthz() -> dict | None:
@@ -240,8 +263,28 @@ def ensure() -> dict:
     return {**out, **{k: v for k, v in status().items() if k not in out}}
 
 
+_PROBE_TIMEOUT_S = 3  # request-path probes: fail fast, the next TTL window retries
+_PS_TTL_S = 3.0
+_ps_lock = threading.Lock()
+_ps_cache: dict[tuple, tuple[float, tuple[int, object, str]]] = {}
+
+
+def _ps(args: list[str]) -> tuple[int, object, str]:
+    """Read-only `rig ps` probe, cached for a few seconds under a lock. One dashboard request asks
+    per project root (agents + list_panes + live index); an unresponsive rig must cost one bounded
+    probe per window, not one per caller."""
+    key = tuple(args)
+    with _ps_lock:
+        hit = _ps_cache.get(key)
+        if hit and time.monotonic() - hit[0] < _PS_TTL_S:
+            return hit[1]
+        res = _rig(args, timeout=_PROBE_TIMEOUT_S)
+        _ps_cache[key] = (time.monotonic(), res)
+        return res
+
+
 def _nodes(rig: str) -> list[dict]:
-    rc, data, _ = _rig(["ps", "--nodes", "--rig", rig, "--json"])
+    rc, data, _ = _ps(["ps", "--nodes", "--rig", rig, "--json"])
     return (
         [n for n in data if isinstance(n, dict)]
         if rc == 0 and isinstance(data, list)
@@ -250,7 +293,7 @@ def _nodes(rig: str) -> list[dict]:
 
 
 def _rigs() -> list[str] | None:
-    rc, data, _ = _rig(["ps", "--json"])
+    rc, data, _ = _ps(["ps", "--json"])
     if rc != 0 or not isinstance(data, list):
         return None
     return [str(d["name"]) for d in data if isinstance(d, dict) and d.get("name")]

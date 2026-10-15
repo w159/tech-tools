@@ -18,7 +18,7 @@ A channel is a named scope on the durable board's notes. It answers "who may see
 
 ## Registry
 
-`<project>/.atlas/.run/channels.json`, written atomically under a lock: `{"version": 1, "channels": {<name>: <channel>}}`.
+`<project>/.atlas/.run/channels.json`, written atomically under a lock: `{"version": 1, "channels": {<name>: <channel>}}`. Only an existing atlas project (`<root>/.atlas/.run` present) is read-reaped: `reap_channels`, `sweep` and the dashboard reaper never create `.atlas/.run` in a plain dir, `$HOME` or `~/Downloads`, and the registry is rewritten only when it changed.
 
 ```json
 {

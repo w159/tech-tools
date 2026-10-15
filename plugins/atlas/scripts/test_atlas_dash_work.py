@@ -7,7 +7,6 @@ Hermetic: temp project root + temp sqlite db. Starting a todo's agent
 
 from __future__ import annotations
 
-import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import os
 import sys
 import tempfile
@@ -15,11 +14,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
+
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-import atlas_db  # noqa: E402
 import atlas_dash_work as work  # noqa: E402
+import atlas_db  # noqa: E402
 import atlas_todo  # noqa: E402
 
 
@@ -273,7 +274,7 @@ class TodosTest(WorkTestBase):
     def test_junk_root_covers_temp_worktrees_and_plugin_cache(self):
         home = os.path.expanduser("~")
         for p in (
-            "/tmp/x",
+            "/tmp/x",  # noqa: S108  (the literal /tmp prefix is what _junk_root must fold)
             "/private/var/folders/ab/T/x",
             "/var/folders/ab/T/x",
             home + "/.atlas/worktrees/repo-selffix-1",
@@ -282,6 +283,31 @@ class TodosTest(WorkTestBase):
         ):
             self.assertTrue(work._junk_root(p), p)
         self.assertFalse(work._junk_root(home + "/MEGA/Projects/x"))
+
+    def test_junk_root_folds_scratch_dot_dirs_and_agent_roots(self):
+        home = os.path.expanduser("~")
+        for p in (
+            "m",
+            home + "/.claude",
+            "/x/agent-a1b2c3",
+            "/x/.atlas/wt/w1",
+            "/x/atlas-e2e-colony",
+        ):
+            self.assertTrue(work._junk_root(p), p)
+
+    def test_real_project_needs_its_own_root(self):
+        with tempfile.TemporaryDirectory(dir=os.path.expanduser("~")) as d:
+            bare, repo = Path(d, "Staff"), Path(d, "repo")
+            bare.mkdir()
+            (repo / ".git").mkdir(parents=True)
+            with mock.patch.object(
+                work, "_junk_root", return_value=False
+            ):  # tmp HOME is junk
+                self.assertFalse(work._real_project(str(bare)))
+                self.assertTrue(work._real_project(str(repo)))
+                sub = repo / "plugins" / "atlas"
+                (sub / "docs").mkdir(parents=True)
+                self.assertFalse(work._real_project(str(sub)))  # subdir of another repo
 
     def test_get_without_project_or_all_merges_known_boards(self):
         # the fixture root lives in a tempdir, which is otherwise junk
@@ -312,3 +338,13 @@ class TodosTest(WorkTestBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NonProjectTodosGet(unittest.TestCase):
+    def test_get_todos_creates_nothing_in_non_project(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = os.path.realpath(tmp.name)
+        work._SWEEP_AT.clear()
+        work._maybe_sweep(root)
+        self.assertEqual(os.listdir(root), [])

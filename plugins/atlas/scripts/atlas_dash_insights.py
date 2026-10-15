@@ -868,18 +868,29 @@ def route_dismiss(ctx):
     return 200, {"ok": True, "id": fid, "dismissed": body.get("undo") is not True}
 
 
+def _merge_by_name(projects: dict[str, int], names: dict[str, str]) -> list[dict]:
+    """Rows that share a display name are one project (two clones, a renamed root)."""
+    merged: dict[str, dict] = {}
+    for p, n in sorted(projects.items(), key=lambda kv: (-kv[1], kv[0])):
+        row = merged.setdefault(names[p], {"project": p, "name": names[p], "count": 0})
+        row["count"] += n
+    return sorted(merged.values(), key=lambda r: (-r["count"], r["name"]))
+
+
 def _enforcement_summary(items: list[dict]) -> dict:
     """Counts, top rules and per-project totals for the enforcement stream.
     A rule is the denied tool (gate_deny) or the gate that blocked (gate_block)."""
     counts = dict.fromkeys(ENFORCEMENT_KINDS, 0)
     rules: dict[tuple[str, str], dict] = {}
     projects: dict[str, int] = {}
+    names: dict[str, str] = {}
     for it in items:
         counts[it["kind"]] = counts.get(it["kind"], 0) + it["count"]
         # Scratch/fixture roots (a bare "m") and empty projects are one honest bucket.
         pr = it["project"]
         pr = "" if not pr or _is_noise_root(pr) else pr
         projects[pr] = projects.get(pr, 0) + it["count"]
+        names.setdefault(pr, os.path.basename(pr.rstrip("/")) or "Unattributed")
         rule = it.get("tool") or it["kind"]
         b = rules.setdefault(
             (it["kind"], rule),
@@ -900,14 +911,7 @@ def _enforcement_summary(items: list[dict]) -> dict:
         "total": sum(counts.values()),
         "counts": counts,
         "top_rules": top[:10],
-        "projects": [
-            {
-                "project": p,
-                "name": os.path.basename(p.rstrip("/")) or p or "Unattributed",
-                "count": n,
-            }
-            for p, n in sorted(projects.items(), key=lambda kv: (-kv[1], kv[0]))
-        ][:MAX_ITEMS],
+        "projects": _merge_by_name(projects, names)[:MAX_ITEMS],
         "note": "Policy enforcement working as designed; not a failure.",
     }
 
@@ -1900,7 +1904,9 @@ def _is_fixture_root(root: str) -> bool:
         pass
     p = os.path.realpath(str(root or ""))
     tmp = os.path.realpath(tempfile.gettempdir())
-    return p == tmp or p.startswith(tmp + os.sep) or not os.path.isdir(p)
+    from atlas_dash_work import _real_project
+
+    return p == tmp or p.startswith(tmp + os.sep) or not _real_project(p)
 
 
 def _live_agents_by_root(roots) -> dict[str, int]:

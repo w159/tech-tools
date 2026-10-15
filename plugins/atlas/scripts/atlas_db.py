@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sqlite3
+import tempfile
 import time
 
 SCHEMA = """
@@ -323,7 +324,23 @@ def backfill_run_kinds(conn):
     conn.commit()
 
 
+def not_a_project_root(path):
+    """True only for exactly $HOME, exactly ~/Downloads and the bare temp roots (/tmp, system temp
+    dir). Children (e.g. ~/Downloads/clippy) are real projects; write guards stop the junk."""
+    if not path:
+        return False
+    real = os.path.realpath(path)
+    home = os.path.realpath(os.path.expanduser("~"))
+    if real in (home, os.path.join(home, "Downloads")):
+        return True
+    temps = {os.path.realpath(t) for t in ("/tmp", "/var/folders", tempfile.gettempdir())}  # noqa: S108  # literal temp roots are the point
+    return real in temps
+
+
 def register_project(conn, root_path, name=None, stack=None):
+    """Register a project root; returns its id, or None (no-op) for non-project roots."""
+    if not_a_project_root(root_path):
+        return None
     now = time.time()
     conn.execute(
         "INSERT INTO projects(root_path,name,stack,first_seen,last_seen) "
@@ -385,6 +402,8 @@ def mark_orchestrating(conn, session_id, cwd=None):
     if rid is None:
         base = cwd or "."
         pid = register_project(conn, base, os.path.basename(os.path.abspath(base)))
+        if pid is None:
+            return None
         rid = start_run(conn, pid, session_id)
     conn.execute("UPDATE runs SET orchestrating=1 WHERE id=?", (rid,))
     conn.commit()
@@ -446,7 +465,10 @@ def _project_root_for_sentinel(cwd):
 def _write_orchestration_sentinel(cwd):
     """Advisory only. Never read for gating; a stale file must not enable a gate."""
     try:
-        run_dir = os.path.join(_project_root_for_sentinel(cwd), ".atlas", ".run")
+        root = _project_root_for_sentinel(cwd)
+        if not_a_project_root(root):
+            return
+        run_dir = os.path.join(root, ".atlas", ".run")
         os.makedirs(run_dir, exist_ok=True)
         with open(os.path.join(run_dir, "atlas-orchestrate.active"), "w") as f:
             f.write(str(time.time()))

@@ -519,12 +519,28 @@ _DEAD_LEAD = {"dead", "finished"}
 
 def _junk_root(root: str) -> bool:
     """Fixture/scratch/home roots and roots gone from disk: no real channel lives there."""
-    try:
-        import atlas_control
+    from atlas_dash_work import _junk_root as shared_junk
 
-        return atlas_control.is_fixture_project(root)
-    except ImportError:
-        return not os.path.isdir(str(root))
+    return shared_junk(root) or not os.path.isdir(str(root))
+
+
+def _hide_stale_leads(out: list[dict]) -> list[dict]:
+    """Hide (never delete) an idle, process-less lead when a newer lead exists for the same main."""
+    newest: dict = {}
+    for v in out:
+        if v["kind"] == "lead":
+            newest[v["parent"]] = max(newest.get(v["parent"], 0), v.get("last_activity") or 0)
+    return [
+        v
+        for v in out
+        if not (
+            v["kind"] == "lead"
+            and not v["current"]
+            and v["lead_state"] == "idle"
+            and not (v.get("lead_liveness") or {}).get("active")
+            and (v.get("last_activity") or 0) < newest.get(v["parent"], 0)
+        )
+    ]
 
 
 def h_channels_get(ctx):
@@ -553,6 +569,7 @@ def h_channels_get(ctx):
                 if v["kind"] == "lead" and not v["current"] and v["lead_state"] in _DEAD_LEAD:
                     continue
                 out.append(v)
+    out = _hide_stale_leads(out)
     cur_views = [c for c in out if c["current"]]
     current = max(cur_views, key=lambda c: c.get("last_activity") or 0, default=None)
     return 200, {"channels": out, "current": current["name"] if current else None}

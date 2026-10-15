@@ -662,6 +662,15 @@ class ChannelsTest(IrcTestBase):
         lead = {m["name"]: m for m in by[self.LEAD]["members"]}["lead-a"]
         self.assertIsNone(lead["pane_id"])  # no live pane: still listed, not invented
 
+    def test_idle_lead_hidden_when_newer_lead_exists(self):
+        mk = lambda n, st, ts, live=False: {
+            "name": n, "kind": "lead", "parent": "p@main", "current": False,
+            "lead_state": st, "lead_liveness": {"active": live}, "last_activity": ts,
+        }
+        old, new = mk("p@main/lead", "idle", 1), mk("p@main/lead-x", "running", 2, True)
+        self.assertEqual(irc._hide_stale_leads([old, new]), [new])
+        self.assertEqual(irc._hide_stale_leads([old]), [old])  # no newer lead: kept
+
     def test_junk_root_and_dead_lead_channels_hidden(self):
         with mock.patch.object(irc, "_junk_root", return_value=True):
             _, body = self.call("GET", "/api/v2/channels")

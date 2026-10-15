@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 12.4.4 (2026-10-14)
 
 ### Fixed
 
+- omp `agent-guard.ts` now denies misused `write`/`edit` calls for every role including the lead: a bare tool name or `mcp__*` device name as path, a prose/JSON/multi-line path, swapped args (`content` = `agent://...` with a non-scheme path), and `full` / `100-150` content over an existing file larger than 200 bytes. The deny names the right forms (`agent://<id>`, `xd://<tool>`, `read`).
+- atlas no longer writes `.atlas/.run` into non-project dirs such as `~` and `~/Downloads`: `reap_channels` and `sweep` return early unless `<root>/.atlas/.run` already exists, the dashboard reaper skips such rows (and `_junk_root` rows), `_reg_update` rewrites `channels.json` only when it changed, session boot skips todo carry-over and channel reaping for a dir with neither `.atlas/.run` nor `.git` (and never for `$HOME`/`~/Downloads`), and `register_project` refuses only exactly `$HOME`, exactly `~/Downloads` and the bare temp roots (children such as `~/Downloads/clippy` register normally).
 - dashboard data (2026-10-14 runtime audit, `docs/audits/2026-10-14-atlas-runtime-audit.md`): Projects counts live agents by project root, matching the Agents page; Overview labels silent failures as occurrences and Health shows "N distinct, M occurrences"; Channels hides fixture, scratch, home dot-dir and missing roots plus idle leads replaced by a newer lead (no data deleted); Activity and Improve fold empty, scratch, worktree and e2e roots into "Unattributed"; project lists require a real project root (own `.git`, or `docs/`, `pyproject.toml`, `package.json` outside another repo); `/api/projects?editable=1` no longer hides projects idle over 14 days; the HTTP `Server` header carries the plugin.json version instead of `AtlasDashboard/1.2`; remeasure of a finding the miner no longer reports returns 200 `not_reproduced` instead of 422.
 - dashboard frontend: workspace groups with no label fall back to the folder name or "Unassigned"; Terminal is in the nav and mobile tabs and saved aliases to it survive; `agents?lens=colony` opens the Colony page; Settings shows an error with Retry when the project list fails to load; the mobile idle strip shows its "N idle" text.
 - `atlas_rig.py`: the `rig ps` probe is cached for 3 s under a lock with a 3 s timeout, and timed-out probes kill their process group. `/api/v2/channels` had spawned one uncached `rig ps` per project root and could hang for minutes; it now answers in under 3 s.

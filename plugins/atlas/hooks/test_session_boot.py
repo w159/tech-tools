@@ -1182,3 +1182,39 @@ class EnsureDashboardTempEnvTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoJunkAtlasDirOnBoot(unittest.TestCase):
+    """SessionStart in a non-project cwd (plain dir, $HOME, ~/Downloads[/x]) must not create .atlas."""
+
+    def setUp(self):
+        self.addCleanup(os.environ.update, testenv.scrub())
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.home = os.path.join(self.tmp, "home")
+        os.makedirs(os.path.join(self.home, "Downloads", "x"))
+        os.makedirs(os.path.join(self.tmp, "plain"))
+        self.env = dict(
+            os.environ,
+            HOME=self.home,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_DASHBOARD="off",
+            ATLAS_COLONY="off",
+        )
+
+    def test_no_atlas_dir_created(self):
+        for cwd in (
+            os.path.join(self.tmp, "plain"),
+            self.home,
+            os.path.join(self.home, "Downloads"),
+            os.path.join(self.home, "Downloads", "x"),
+        ):
+            subprocess.run(  # noqa: S603  # fixed argv: this interpreter + the BOOT script constant
+                [sys.executable, BOOT],
+                input=json.dumps({"session_id": "s1", "cwd": cwd}),
+                capture_output=True,
+                text=True,
+                env=self.env,
+            )
+            self.assertFalse(os.path.exists(os.path.join(cwd, ".atlas")), cwd)

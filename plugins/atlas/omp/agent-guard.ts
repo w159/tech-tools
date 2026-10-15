@@ -30,7 +30,7 @@
  * strand the agent.
  */
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import * as nodePath from "node:path";
 
 import { loadToolNames, mcpDevice } from "./style";
@@ -281,7 +281,35 @@ function deviceReason(event: GuardEvent, who: { agent: string; disallowed: strin
 	return claudeTool ? blockReason(who.agent, device, claudeTool, "") : undefined;
 }
 
+const MISUSE_FORM = "to message an agent write path=agent://<id>; to call a device write path=xd://<tool> with JSON content; to read use read";
+const BARE_TOOL_NAMES = new Set(["write", "read", "bash", "edit", "grep", "glob", "find", "task", "eval", "ask", "todo", "wait", "search", "lsp", "ast_grep", "ast_edit", "debug", "github", "retain", "recall", "reflect", "web_fetch", "lens_diagnostics", "symbol_search"]);
+const SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+/** Role-independent `write`/`edit` misuse shapes seen in junk files: bare tool-name path, prose/JSON path, swapped path/content, 'full'/'100-150' clobbers. */
+function misuseReason(event: GuardEvent, ctx: GuardCtx): string | undefined {
+	const tool = toolKey(event);
+	if (tool !== "write" && tool !== "edit") return undefined;
+	const input = (event.input ?? {}) as Record<string, unknown>;
+	const path = typeof input.path === "string" ? input.path : undefined;
+	if (path === undefined || SCHEME_RE.test(path.trim())) return undefined;
+	const content = tool === "write" && typeof input.content === "string" ? input.content : undefined;
+	const name = path.trim().toLowerCase();
+	let why: string | undefined;
+	if (BARE_TOOL_NAMES.has(name) || /^mcp__[a-z0-9_]+$/.test(name)) why = `path '${path}' is a tool name, not a file`;
+	else if (path.includes(": ") || /^[{[]/.test(path.trim()) || path.includes("\n")) why = "path looks like prose or JSON arguments, not a file path";
+	else if (content !== undefined && content.trim().startsWith("agent://")) why = "content is an agent:// URL: path and content look swapped";
+	else if (content !== undefined && /^\s*(full|\d+-\d+)\s*$/.test(content)) {
+		try {
+			const file = nodePath.resolve((ctx as { cwd?: string } | undefined)?.cwd ?? process.cwd(), path);
+			if (statSync(file).isFile() && statSync(file).size > 200) why = `content '${content.trim()}' would clobber existing file '${path}' (looks like a read selector)`;
+		} catch { /* missing file: a fresh write is allowed */ }
+	}
+	return why && `DENY - misused ${tool}: ${why}. ${MISUSE_FORM}.`;
+}
+
 function decide(event: GuardEvent, ctx: GuardCtx, deps: AgentGuardDeps): { block: true; reason: string } | undefined {
+	const misuse = misuseReason(event, ctx);
+	if (misuse) return { block: true, reason: misuse };
 	const who = restrictedAgent(ctx, deps);
 	if (!who) return undefined;
 	const hit = findHit(event, who.disallowed, deps);

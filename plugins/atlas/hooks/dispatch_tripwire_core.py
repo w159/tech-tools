@@ -754,14 +754,18 @@ AUTONAME_INFLIGHT_SECS = (
 @contextlib.contextmanager
 def _name_state(root, session):
     """Per-session `{"reserved": [name], "inflight": [[name, role, ts]]}` under the
-    project `.atlas/.run/autonames` (else the temp dir), flock-serialised because
+    project `.atlas/.run/autonames` (else `<tmp>/atlas-autonames`, never a `.atlas` dir in the temp
+    root), flock-serialised because
     the parallel calls of one batch run their hooks concurrently."""
     import hashlib
     import tempfile
 
-    store = (root or Path(tempfile.gettempdir())).joinpath(
-        *AUTONAMES_RELPATH
-    ) / hashlib.sha256(str(session or "").encode()).hexdigest()
+    base = (
+        root.joinpath(*AUTONAMES_RELPATH)
+        if root
+        else Path(tempfile.gettempdir()) / "atlas-autonames"
+    )
+    store = base / hashlib.sha256(str(session or "").encode()).hexdigest()
     store.parent.mkdir(parents=True, exist_ok=True)
     with open(str(store) + ".lock", "a") as lock:
         try:

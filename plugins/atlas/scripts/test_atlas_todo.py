@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Tests for the durable todo board (atlas_todo.py)."""
 
-import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import json
@@ -13,6 +12,7 @@ import time
 import unittest
 from unittest import mock
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import atlas_todo
 
 
@@ -304,7 +304,7 @@ class BoardBasics(unittest.TestCase):
 
 
 def _run_git(*args, cwd=None):
-    return subprocess.run(("git",) + args, cwd=cwd, capture_output=True, text=True)
+    return subprocess.run(("git",) + args, cwd=cwd, capture_output=True, text=True)  # noqa: S603,S607  # test helper, fixed git argv
 
 
 class WorktreeBoard(unittest.TestCase):
@@ -598,7 +598,7 @@ class BoardConcurrency(unittest.TestCase):
         for w in range(self.WORKERS):
             owner = f"worker-{w}"
             procs.append(
-                subprocess.Popen(
+                subprocess.Popen(  # noqa: S603  # test-controlled argv
                     [
                         sys.executable,
                         "-I",
@@ -652,7 +652,7 @@ class BoardConcurrency(unittest.TestCase):
             "    atlas_todo.note(sys.argv[1], sys.argv[2], 'n%d' % i, to='wx')\n"
         )
         procs = [
-            subprocess.Popen(
+            subprocess.Popen(  # noqa: S603  # test-controlled argv
                 [sys.executable, "-I", "-c", src, self.root, f"s{w}", "60"],
                 stderr=subprocess.PIPE,
             )
@@ -863,3 +863,45 @@ class ItemPhase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NonProjectRootWritesNothing(unittest.TestCase):
+    """A dir without <root>/.atlas/.run is not an atlas project: reading/reaping it must not create files."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = os.path.realpath(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def _entries(self):
+        return sorted(os.listdir(self.root))
+
+    def test_reap_channels_creates_nothing(self):
+        out = atlas_todo.reap_channels(self.root)
+        self.assertEqual(out["reaped"], 0)
+        self.assertEqual(self._entries(), [])
+
+    def test_sweep_creates_nothing(self):
+        self.assertEqual(atlas_todo.sweep(self.root), 0)
+        self.assertEqual(self._entries(), [])
+
+    def test_reg_update_noop_leaves_file_untouched(self):
+        run = os.path.join(self.root, ".atlas", ".run")
+        os.makedirs(run)
+        atlas_todo.ensure_main(self.root)
+        path = os.path.join(run, "channels.json")
+        before = os.stat(path)
+        time.sleep(0.02)
+        atlas_todo._reg_update(self.root, lambda reg: None)
+        after = os.stat(path)
+        self.assertEqual(
+            (before.st_ino, before.st_mtime_ns), (after.st_ino, after.st_mtime_ns)
+        )
+
+    def test_real_project_still_reaped(self):
+        os.makedirs(os.path.join(self.root, ".atlas", ".run"))
+        atlas_todo.ensure_main(self.root)
+        self.assertEqual(atlas_todo.reap_channels(self.root)["reaped"], 0)
+        self.assertTrue(
+            os.path.isfile(os.path.join(self.root, ".atlas", ".run", "channels.json"))
+        )

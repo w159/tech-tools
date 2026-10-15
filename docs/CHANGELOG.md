@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.4.4 (2026-10-14)
+
+### Fixed
+
+- omp `agent-guard.ts` now denies misused `write`/`edit` calls for every role including the lead: a bare tool name or `mcp__*` device name as path, a prose/JSON/multi-line path, swapped args (`content` = `agent://...` with a non-scheme path), and `full` / `100-150` content over an existing file larger than 200 bytes. The deny names the right forms (`agent://<id>`, `xd://<tool>`, `read`).
+
 ## 12.4.2 (2026-10-14)
 
 ### Added
@@ -18,6 +24,9 @@ OpenRig seat backend (atlas). The colony's worker panes now run on [OpenRig](htt
 - Colony boot failures are logged to `$ATLAS_HOME/colony-boot.log` instead of being swallowed; the herdr `ensure` message no longer claims Atlas cannot start herdr; the dashboard reaper logs once per distinct error.
 - Hook-fault accounting: doctor and dashboard share `atlas_faults.live_faults`, so their counts agree.
 - Dispatch tripwire no longer counts a subagent's tool calls as the lead's inline ops.
+- omp advisor gate tracks every advisor note (nits included), caps stop refusals per user turn, and reminds the model of open items at each prompt.
+- Dashboard fixes from the 2026-10-14 runtime audit (`docs/audits/2026-10-14-atlas-runtime-audit.md`): consistent agent and silent-failure counts, junk and stale channels hidden, "Unattributed" project bucket, real-project rule for project lists, Terminal in the nav, version in the server header, and the `/api/v2/channels` hang (uncached `rig ps` per project root) fixed with a 3 s cached probe.
+- atlas no longer writes `.atlas/.run` into non-project dirs such as `~` and `~/Downloads`: `reap_channels` and `sweep` return early unless `<root>/.atlas/.run` already exists, the dashboard reaper skips such rows (and `_junk_root` rows), `_reg_update` rewrites `channels.json` only when it changed, session boot skips todo carry-over and channel reaping for a dir with neither `.atlas/.run` nor `.git` (and never for `$HOME`/`~/Downloads`), and `register_project` refuses only exactly `$HOME`, exactly `~/Downloads` and the bare temp roots (children such as `~/Downloads/clippy` register normally).
 - Test pollution from `test_atlas_doctor` (`CLAUDE_PLUGIN_ROOT` leaked into later modules) fixed; herdr route tests pin `ATLAS_SEAT_BACKEND=herdr`.
 - `atlas_doctor` orchestration-wiring check scans `dispatch_tripwire_core.py` as well as the `dispatch_tripwire.py` shim, so healthy 12.4.1+ installs no longer report a missing ORCH_SKILLS / mark_orchestrating.
 - omp Mission Control widget: age and title clock roll over to hours/days, saturated lane bars draw an empty track, plain-named workers show role `task`, and omp todo phase names (Setup, Audit, Deliver) map to rail phases.

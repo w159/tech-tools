@@ -252,3 +252,58 @@ test("every real read-only agent definition lists no edit tool in its load list 
 		}
 	}
 });
+
+// ── role-independent write/edit misuse guard ──
+
+const BIG = "x".repeat(300);
+test("misuse: bare tool name path is denied for main and subs, write and edit", () => {
+	const { call } = harness();
+	for (const ctx of [main, sub("anyone")]) {
+		for (const tool of ["write", "edit"]) {
+			const r = call(ctx, tool, { path: "bash", content: "ls" });
+			expect(r?.block).toBe(true);
+			expect(r?.reason).toContain("path=agent://<id>");
+		}
+	}
+	expect(call(main, "write", { path: "xd://bash", content: "{}" })).toBeUndefined();
+});
+
+test("misuse: prose, JSON or multi-line path is denied", () => {
+	const { call } = harness();
+	for (const path of ["Please note: this", '{"pattern": "x"}', "[1,2]", "a\nb"]) {
+		expect(call(main, "write", { path, content: "hi" })?.block).toBe(true);
+	}
+});
+
+test("misuse: swapped args (content is agent://) with a non-scheme path is denied", () => {
+	const { call } = harness();
+	expect(call(sub("w"), "write", { path: "Here is my report", content: "agent://Main" })?.block).toBe(true);
+	expect(call(sub("w"), "write", { path: "notes.md", content: "agent://Main" })?.block).toBe(true);
+});
+
+test("misuse: 'full' or a line range over an existing big file is denied; small or new files are allowed", () => {
+	const dir = mkdtempSync(join(tmpdir(), "guard-"));
+	try {
+		writeFileSync(join(dir, "big.txt"), BIG);
+		writeFileSync(join(dir, "small.txt"), "tiny");
+		const { call } = harness();
+		const ctx = { ...main, cwd: dir };
+		expect(call(ctx, "write", { path: "big.txt", content: "full" })?.block).toBe(true);
+		expect(call(ctx, "write", { path: join(dir, "big.txt"), content: "100-150" })?.block).toBe(true);
+		expect(call(ctx, "write", { path: "small.txt", content: "full" })).toBeUndefined();
+		expect(call(ctx, "write", { path: "new.txt", content: "full" })).toBeUndefined();
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("misuse: a normal file write is allowed", () => {
+	const { call } = harness();
+	expect(call(main, "write", { path: "src/app.ts", content: "export const a = 1;\n" })).toBeUndefined();
+	expect(call(sub("w"), "write", { path: "/tmp/out.txt", content: "hello" })).toBeUndefined();
+});
+
+test("misuse: an agent:// path write is allowed", () => {
+	const { call } = harness();
+	expect(call(sub("w"), "write", { path: "agent://Main", content: "agent://x is done" })).toBeUndefined();
+});

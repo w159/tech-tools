@@ -58,6 +58,7 @@ NODES = [
 
 class Base(unittest.TestCase):
     def setUp(self):
+        r._ps_cache.clear()  # `rig ps` probes are TTL-cached; tests patch _rig per case
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         p = mock.patch.dict(os.environ, {"ATLAS_HOME": self.tmp.name})
@@ -323,6 +324,33 @@ class EnvTests(Base):
         e = r._env()
         self.assertEqual(e["CODEX_HOME"], str(r._rig_home() / "codex"))
         self.assertEqual(e["OPENRIG_BIND_HOST"], "127.0.0.1")
+
+
+class RigHangTests(unittest.TestCase):
+    def test_ps_probe_runs_once_per_ttl_window(self):
+        """Regression: /api/v2/channels probed `rig ps` per project root; a slow rig cost seconds each."""
+        r._ps_cache.clear()
+        with mock.patch.object(r, "_rig", return_value=(0, [], "")) as p:
+            for _ in range(5):
+                r._rigs()
+        self.assertEqual(p.call_count, 1)
+        r._ps_cache.clear()
+
+    def test_rig_returns_on_timeout_when_grandchild_holds_pipe(self):
+        """Regression: /api/v2/channels hung because a daemon grandchild kept stdout open."""
+        import stat
+        import tempfile
+        import time
+
+        with tempfile.TemporaryDirectory() as d:
+            exe = Path(d) / "rig"
+            exe.write_text("#!/bin/sh\n(sleep 30 &)\nsleep 30\n")
+            exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
+            t0 = time.monotonic()
+            with mock.patch.object(r, "_bin", return_value=str(exe)):
+                rc, data, _ = r._rig(["ps"], timeout=1)
+            self.assertEqual((rc, data), (124, None))
+            self.assertLess(time.monotonic() - t0, 5)
 
 
 if __name__ == "__main__":

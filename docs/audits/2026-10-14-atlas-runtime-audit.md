@@ -45,32 +45,35 @@ Sources:
 | Orphan hook files | `hooks/`: chronicle_facet.py, docs_drift.py, memory_capture.py, nudge.py, prompt_decision.py, testenv.py (no hooks.json binding, no import) | worker_inbox.py is imported by dispatch_tripwire_core.py and is fine |
 | docs-curator output schema | `agents/docs-curator.md` | 4 faults: "custom outputSchema for docs-curator is not an object schema" |
 | Dashboard data defects | see the Dashboard section | Found on the live pass |
+| `/api/v2/channels` hang (fixed) | `scripts/atlas_rig.py` `_rig` / `_rigs` / `_nodes` | The channels handler ran `build_colony` once per project root; each call spawned an uncached `rig ps --json` (node) with a 10 s timeout. Stack: `h_channels_get -> _roster -> build_colony -> _herdr -> atlas_seats.agents -> atlas_rig._rigs -> _rig -> subprocess`. 3 timed requests: no response in 20 s. Fixed with a 3 s cached `_ps()` probe and a 3 s timeout: 200 in 0.4-0.8 s (fixer), 1.3-2.9 s (browser check). Test: `test_atlas_rig.RigHangTests` |
 
 ## Unused
 
 - Skills: 4 of 37 invoked in 14 days (atlas-orchestrate 7, atlas-explain 5, atlas-audit 1, atlas-prompt 1). 27 were never invoked in the whole DB history: atlas-autopilot, bakeoff, brainstorm, compound, db-audit, doctor, dogfood, harden, loop, optimize, plan, proof, prototype, pulse, refactor, resolve-pr-feedback, review, run-watch, setup, ship, simplify, status, sweep, test-xcode, ux-test, wiki, worktree. Caveat: counts come from Skill tool calls and slash prompts; a skill whose body is read another way is not counted, so treat this as an upper bound on disuse.
 - Agents: docs-auditor and planner had 0 dispatches.
-- Scripts with no reference from hooks, skills, agents, omp or other scripts: `atlas_health_collect.py`, `atlas_rig.py`, `typesafe_client.py`. (`atlas_rig.py` is new work from the OpenRig wave and may not be wired yet.)
+- Scripts with no reference from hooks, skills, agents, omp or other scripts: `atlas_health_collect.py`, `typesafe_client.py`. (The first pass also listed `atlas_rig.py`; that was wrong: `atlas_seats.py` imports it, and the channels hang below ran through it.)
 
 ## Dashboard
 
-Static audit: the UI version chip reads `/api/health`, which reads `plugin.json`; every UI API call resolves to a server route; no dead JS modules; no hardcoded counts. Live audit defects, all assigned for fixing in this run:
+Static audit: the UI version chip reads `/api/health`, which reads `plugin.json`; every UI API call resolves to a server route; no dead JS modules; no hardcoded counts. Live audit defects and their status after this run. "Fixed, verified" means a unit test passes and a browser check on the source build (port 7433/7434, screenshots in `.atlas/evidence/2026-10-14-dashboard-final/`) confirmed it. The installed dashboard on :7421 still runs the 12.4.1 cache copy until the plugin is reinstalled.
 
-| ID | Page | Defect |
-|---|---|---|
-| F1 | Sidebar (all pages) | Workspace group with a null label: blank header, "Actions for workspace null" |
-| F2 | Settings > Agents | "No registered projects yet" while the API returns projects |
-| F3 | Overview (390px) | Four empty, unlabeled agent hexagons |
-| F4 | Nav | Terminal page exists but is not in the nav; saved aliases to it are dropped |
-| F5 | Routing | Legacy colony link opens Terminal; the `c` shortcut opens Colony |
-| S1 | Projects | tech-tools card shows 0 agents; Agents page shows 3; sidebar shows 2 |
-| S2 | Overview vs Health | "Silent failures 691" vs "Silent failures (21)" |
-| S3 | Channels | Test and stale channels listed (atlas-demo, T, .claude, jerry, e2e); duplicate tech-tools leads |
-| S4 | Activity, Improve | Project groups named "(none)", "m" and a dash |
-| S5 | HTTP header | `Server: AtlasDashboard/1.2` hardcoded |
-| S6 | Improve | POST remeasure returns 422 |
-| D2 | docs/atlas-workboard.md | 10.4.x sections read as current behavior |
-| W1 | Colony UI :7317 | Embedded iframe has both allow-scripts and allow-same-origin (browser sandbox-escape warning) |
+| ID | Page | Defect | Fix status |
+|---|---|---|---|
+| F1 | Sidebar (all pages) | Workspace group with a null label: blank header, "Actions for workspace null" | Fixed, verified |
+| F2 | Settings > Agents | "No registered projects yet" while the API returns projects | Fixed, verified (server recency filter plus client error/Retry state) |
+| F3 | Overview (390px) | Four empty, unlabeled agent hexagons (they were idle agents with a hidden label) | Fixed, unverified: no live agents during the browser check |
+| F4 | Nav | Terminal page exists but is not in the nav; saved aliases to it are dropped | Fixed, verified |
+| F5 | Routing | Legacy colony link opens Terminal; the `c` shortcut opens Colony | Fixed, verified |
+| S1 | Projects | tech-tools card shows 0 agents; Agents page shows 3; sidebar shows 2 | Fixed (live agents by root); count match unverified with live agents |
+| S2 | Overview vs Health | "Silent failures 691" vs "Silent failures (21)" | Fixed, verified (both labeled: occurrences vs "N distinct, M occurrences") |
+| S3 | Channels | Test and stale channels listed (atlas-demo, T, .claude, jerry, e2e); duplicate tech-tools leads | Fixed, verified |
+| S4 | Activity, Improve | Project groups named "(none)", "m" and a dash | Fixed, verified; Improve still names non-project folders such as Downloads (open) |
+| S5 | HTTP header | `Server: AtlasDashboard/1.2` hardcoded | Fixed, verified (`AtlasDashboard/12.4.2`) |
+| S6 | Improve | POST remeasure returns 422 | Fixed (not_reproduced returns 200), unit test only |
+| R4 | Sidebar projects | Non-project folders listed (Downloads, Staff, plugins) | Fixed, verified |
+| R1 | Channels | Page showed "Something went wrong" | Fixed, verified (cause: `/api/v2/channels` hang, see Broken) |
+| D2 | docs/atlas-workboard.md | 10.4.x sections read as current behavior | Open |
+| W1 | Colony UI :7317 | Embedded iframe has both allow-scripts and allow-same-origin (browser sandbox-escape warning) | Open |
 
 ## Improvements (ranked)
 

@@ -1349,3 +1349,35 @@ class TestReapTickLogging(unittest.TestCase):
         finally:
             d.dashboard_db_path = orig
         self.assertEqual(len(cm.records), 1)
+
+
+class TestReapTickNonProject(unittest.TestCase):
+    def test_skips_rows_without_atlas_run(self):
+        import sqlite3
+        import tempfile
+
+        import atlas_dashboard as d
+
+        with tempfile.TemporaryDirectory() as t:
+            t = os.path.realpath(t)
+            plain = os.path.join(t, "Downloads", "plain")
+            real = os.path.join(t, "real")
+            os.makedirs(plain)
+            os.makedirs(os.path.join(real, ".atlas", ".run"))
+            db = os.path.join(t, "x.db")
+            c = sqlite3.connect(db)
+            c.execute("CREATE TABLE projects(root_path TEXT)")
+            c.executemany("INSERT INTO projects VALUES(?)", [(plain,), (real,)])
+            c.commit()
+            c.close()
+            orig, d._REAP_LAST = d.dashboard_db_path, 0.0
+            d.dashboard_db_path = lambda: db
+            try:
+                with mock.patch("atlas_dash_work._junk_root", lambda _p: False):  # tmp roots are junk
+                    out = d.reap_tick(now=1000.0, interval=0)
+            finally:
+                d.dashboard_db_path = orig
+            self.assertFalse(os.path.exists(os.path.join(plain, ".atlas")))
+            out = out or {}
+            self.assertNotIn(plain, out)
+            self.assertIn(real, out)

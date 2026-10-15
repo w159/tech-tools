@@ -66,6 +66,10 @@ class GatesArmedTest(unittest.TestCase):
         conn = atlas_db.connect()
         atlas_db.init(conn)
         pid = atlas_db.register_project(conn, root)
+        if pid is None:  # register_project refuses home/tmp now; seed the legacy row directly
+            pid = conn.execute(
+                "INSERT INTO projects(root_path,first_seen,last_seen) VALUES(?,0,0)", (root,)
+            ).lastrowid
         run = conn.execute("INSERT INTO runs(project_id) VALUES(?)", (pid,)).lastrowid
         for _ in range(dispatches):
             atlas_db.log_dispatch(conn, run, "implementer")

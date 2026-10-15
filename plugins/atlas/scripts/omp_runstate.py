@@ -65,6 +65,8 @@ def cmd_begin(args) -> dict:
         pid = atlas_db.register_project(
             conn, args.cwd, os.path.basename(os.path.abspath(args.cwd))
         )
+        if pid is None:
+            return {"ok": False, "error": "non-project cwd"}
         rid = atlas_db.current_run_id(conn, args.session_id)
         created = False
         if rid is None:

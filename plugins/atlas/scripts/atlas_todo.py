@@ -683,6 +683,8 @@ def _launch_live(item: dict) -> bool:
 def sweep(root: Optional[str], ttl_s: int = 86400) -> int:
     """Archive (recoverable via restore) unfinished items that are stale, advisor notes of an ended session,
     and duplicate content. An item with a live launch is never swept. Returns how many were archived."""
+    if not is_project(root):  # the lock below would create .atlas/.run
+        return 0
     with _file_lock(board_path(root)):
         board = _locked_load(root)
         now = _now()
@@ -1090,13 +1092,22 @@ def _reg_read(root: Optional[str]) -> dict:
 CHANNEL_LOCK_TIMEOUT_S = 2.0  # hook/note paths must never hang on a stuck registry lock
 
 
+def is_project(root: str | None) -> bool:
+    """True when <root>/.atlas/.run already exists: only then may read/reap paths touch it."""
+    return os.path.isdir(os.path.join(_resolve_base(root), BOARD_DIR))
+
+
 def _reg_update(root: Optional[str], fn, timeout: Optional[float] = None) -> Any:
     """Read-modify-write the registry under its lock; returns fn(registry).
-    `timeout` (seconds) bounds the lock wait, raising atlas_memory.LockTimeout."""
+    `timeout` (seconds) bounds the lock wait, raising atlas_memory.LockTimeout.
+    The file is only written when fn changed the registry."""
     path = _channels_path(root)
     with _file_lock(path, timeout):
         reg = _reg_read(root)
+        before = json.dumps(reg, sort_keys=True)
         out = fn(reg)
+        if json.dumps(reg, sort_keys=True) == before:
+            return out
         tmp = path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
         os.replace(tmp, path)
@@ -1173,6 +1184,8 @@ def reap_channels(
     and no member holds a live pid (pid_matches). `keep` names a lead whose channel is
     never reaped. Archive line goes to .atlas/.run/archive/channels-YYYYMM.jsonl first.
     Returns {reaped, archived_path, kept}."""
+    if not is_project(root):  # never create .atlas/.run in a non-project dir
+        return {"reaped": 0, "would_reap": 0, "archived_path": None, "kept": 0}
     now = time.time() if now is None else now
     keep = _sanitize_owner(keep) if keep else None
     if lead_idle is None:  # leads crash without exit_code, so they age out faster

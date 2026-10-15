@@ -2934,7 +2934,13 @@ def reap_tick(now: float | None = None, interval: float = REAP_INTERVAL_S) -> di
     except Exception as exc:
         _reap_warn("project list", exc)
         return out
+    try:
+        from atlas_dash_work import _junk_root
+    except Exception:  # ponytail: is_project below is the real guard; this only trims temp/cache rows
+        _junk_root = lambda _p: False  # noqa: E731
     for root in roots:
+        if _junk_root(root) or not atlas_todo.is_project(root):
+            continue  # reaping must never create .atlas/.run in a non-project dir
         try:
             out[root] = atlas_todo.reap_channels(root)
         except Exception as exc:

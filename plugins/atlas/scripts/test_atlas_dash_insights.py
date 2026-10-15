@@ -635,6 +635,13 @@ class TestProjectsOverviewActivity(InsightsBase):
         self.assertNotIn("/tmp/x/m", by)
         self.assertEqual(by[ROOT_A]["name"], "alpha")
 
+    def test_enforcement_projects_merge_rows_sharing_a_name(self):
+        mk = lambda proj: {"kind": "gate_deny", "project": proj, "count": 1,
+                           "tool": "t", "sample": "", "hint": "", "last": None}
+        out = ins._enforcement_summary([mk("m"), mk("/a/x"), mk("/b/x")])
+        by = {p["name"]: p["count"] for p in out["projects"]}
+        self.assertEqual(by, {"Unattributed": 1, "x": 2})
+
     def test_overview_silent_kpi_says_occurrences(self):
         _, body = self.get(ins.route_overview)
         kpi = {k["id"]: k for k in body["kpis"]}["silent_failures"]
@@ -1607,7 +1614,7 @@ class TestProjectPicker(unittest.TestCase):
     def test_fixture_temp_and_missing_roots_are_excluded(self):
         home = Path.home()
         self.assertFalse(
-            ins._is_fixture_root(str(SCRIPTS))
+            ins._is_fixture_root(str(SCRIPTS.parents[2]))
         )  # a live, non-temp checkout stays
         with tempfile.TemporaryDirectory() as tmp:
             self.assertTrue(ins._is_fixture_root(tmp))  # exists, but under the temp dir
