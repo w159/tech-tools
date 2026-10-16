@@ -219,7 +219,9 @@ class BaseModule(ABC):
         Returns:
             The entities reordered to match ordered_ids.
         """
-        by_id = {str(entity.get(id_field, "")): entity for entity in entities if isinstance(entity, dict)}
+        by_id = {
+            str(entity.get(id_field, "")): entity for entity in entities if isinstance(entity, dict)
+        }
 
         result: list[dict[str, Any]] = []
         placed: set[str] = set()
@@ -231,7 +233,8 @@ class BaseModule(ABC):
 
         # Preserve entities not referenced by ordered_ids rather than dropping them
         result.extend(
-            entity for entity in entities
+            entity
+            for entity in entities
             if isinstance(entity, dict) and str(entity.get(id_field, "")) not in placed
         )
 
@@ -306,7 +309,7 @@ class BaseModule(ABC):
         if body_params:
             call_args["body"] = prepare_api_parameters(body_params)
 
-        logger.debug("Executing %s with args: %s", operation, call_args)
+        logger.debug("Executing %s with arg keys: %s", operation, sorted(call_args))
 
         # Make the API request
         response = self.client.command(operation, **call_args)
@@ -361,7 +364,7 @@ class BaseModule(ABC):
         # Prepare parameters for the API request
         prepared_params = prepare_api_parameters(api_params)
 
-        logger.debug("Executing %s with params: %s", operation, prepared_params)
+        logger.debug("Executing %s with param keys: %s", operation, sorted(prepared_params))
 
         # Make the API request
         command_response = self.client.command(operation, parameters=prepared_params)
@@ -369,7 +372,7 @@ class BaseModule(ABC):
         # FalconPy returns raw bytes for binary download endpoints (e.g., GetMitreReport)
         if isinstance(command_response, bytes):
             if decode_binary:
-                return command_response.decode('utf-8')
+                return command_response.decode("utf-8")
             return command_response
 
         # Dict response - check status code and use standard error handling
@@ -413,7 +416,7 @@ class BaseModule(ABC):
         """
         prepared_params = prepare_api_parameters(search_params)
 
-        logger.debug("Executing %s with params: %s", operation, prepared_params)
+        logger.debug("Executing %s with param keys: %s", operation, sorted(prepared_params))
 
         response = self.client.command(operation, parameters=prepared_params)
 
@@ -691,9 +694,7 @@ class BaseModule(ABC):
             # Formatted here rather than via handle_api_response, which would
             # report a status the transport never returned.
             api_messages = [
-                message
-                for error in body["errors"]
-                if (message := error.get("message"))
+                message for error in body["errors"] if (message := error.get("message"))
             ]
             detail = f" API said: {'; '.join(api_messages)}" if api_messages else ""
             return _format_error_response(
