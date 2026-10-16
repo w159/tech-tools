@@ -1,2 +1,5 @@
 [test]
 preload = ["./omp/test-env-preload.ts", "./omp/test-isolation.ts"]
+# colony/herdr-web-ui has its own bunfig (a private herdr session); run from here, its contract
+# tests would create workspaces in the user's live herdr, so they are run from that directory
+pathIgnorePatterns = ["colony/herdr-web-ui/**"]

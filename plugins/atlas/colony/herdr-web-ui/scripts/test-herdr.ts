@@ -5,8 +5,8 @@
  * show in the herdr the user works in.
  *
  * `bun test` loads this first (bunfig.toml); the browser and SSH scripts import it.
- * HERDR_TEST_LIVE=1 keeps the old behaviour: tests use HERDR_SOCKET, else the default
- * session. Without a herdr binary nothing changes, so CI runs as before.
+ * HERDR_TEST_LIVE=1 makes tests use HERDR_SOCKET, which must not be the user's default socket.
+ * Without a herdr binary, HERDR_SOCKET is likewise never the default socket, so unit runs still work.
  * HERDR_TEST_MODE=unit points HERDR_SOCKET at a socket that does not exist, so a test that
  * reaches for herdr in a unit run fails instead of working in the user's herdr.
  */
@@ -25,6 +25,10 @@ export const TEST_SESSION = process.env["HERDR_TEST_SESSION"] || "herdr-web-ui-t
 export function testSocketPath(): string {
   const config = join(process.env["XDG_CONFIG_HOME"] || join(homedir(), ".config"), "herdr");
   return join(config, "sessions", TEST_SESSION, "herdr.sock");
+}
+
+function defaultSocketPath(): string {
+  return join(homedir(), ".config", "herdr", "herdr.sock");
 }
 
 function herdrBinary(): string | null {
@@ -47,9 +51,18 @@ export async function useTestHerdr(): Promise<string | null> {
     process.env["HERDR_SOCKET"] = join(tmpdir(), "herdr-web-ui-unit-tests-have-no-herdr.sock");
     return null;
   }
-  if (process.env["HERDR_TEST_LIVE"] === "1") return null;
+  // Live mode or no herdr binary: tests may not fall through to the user's default socket
+  // (their workspaces came to show up there as blocked fake agents). Only an explicit,
+  // non-default HERDR_SOCKET is honoured; otherwise herdr is unreachable and contract tests fail.
   const herdr = herdrBinary();
-  if (!herdr) return null;
+  if (process.env["HERDR_TEST_LIVE"] === "1" || !herdr) {
+    const explicit = process.env["HERDR_SOCKET"];
+    if (!explicit || explicit === defaultSocketPath()) {
+      process.env["HERDR_SOCKET"] = join(tmpdir(), "herdr-web-ui-refuses-user-herdr.sock");
+      console.warn("[test-herdr] refusing the default herdr socket; set HERDR_SOCKET to an isolated server or install herdr");
+    }
+    return null;
+  }
   const socket = testSocketPath();
   // an empty ZDOTDIR: a pane's zsh (macOS's login shell) reads none of the user's own files,
   // where a shell integration can start a CLI herdr takes for an agent, ending the agent a test

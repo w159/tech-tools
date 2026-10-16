@@ -1,5 +1,12 @@
 # Changelog
 
+## 12.5.1 (2026-10-16)
+
+### Fixed
+
+- `bun test` from `plugins/atlas` no longer runs `colony/herdr-web-ui` tests (`pathIgnorePatterns` in `bunfig.toml`) and `omp/test-isolation.ts` points `HERDR_SOCKET` at a dead socket: run from there they used the live herdr and leaked blocked `herdr-web-ui-test-prompt-*` workspaces. Run them from `colony/herdr-web-ui`, whose bunfig gives them a private herdr session.
+- completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
+
 ## 12.5.0 (2026-10-16)
 
 ### Added
@@ -16,6 +23,7 @@
 ### Fixed
 
 - Agents tab: `joinAgents` joins on the store's real shape: the store reads `/api/v2/projects`, whose rows carry `root`. `root_path` (the `/api/projects` shape) is now also accepted defensively. The live join gives lead panes their project's open items.
+- herdr-web-ui tests can no longer reach the user's default herdr socket (`scripts/test-herdr.ts`): without the isolated test session, `HERDR_SOCKET` is pointed at a dead socket unless explicitly set to a non-default one, so `prompt.contract.test.ts` stops leaking blocked `herdr-web-ui-test-prompt-*` workspaces into the live herdr.
 - Completion gate (m): shell dirt that another session's `tool_calls` (any `is_sidechain`) wrote after this run's start is no longer blamed on this session, so a second session sharing the worktree no longer trips the "zero dispatches" block (`_other_session_writes`, `plugins/atlas/hooks/completion_gate_core.py`). Fails open on errors.
 - Tripwire tests no longer depend on an inherited `CLAUDE_PLUGIN_ROOT`.
 - The dispatch tripwire reads `effort_aliases`/`class_aliases` from `contracts/scope-matrix.json` (one alias table shared with the resolver).

@@ -14,5 +14,9 @@ process.env.ATLAS_DASHBOARD_DB = process.env.ATLAS_DB;
 process.env.ATLAS_DASHBOARD = "off";
 process.env.ATLAS_COLONY = "off";
 process.env.ATLAS_DASHBOARD_PORT = "17969";
+// a test that reaches for herdr here (an explicit path past the ignore in bunfig.toml) fails
+// rather than opening workspaces in the herdr the user works in
+process.env.HERDR_SOCKET = join(root, "no-herdr.sock");
+delete process.env.HERDR_SOCKET_PATH;
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
