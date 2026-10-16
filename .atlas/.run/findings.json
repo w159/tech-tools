@@ -7019,5 +7019,40 @@
     "status": "verified",
     "verified_at": "2026-10-16T14:22:33+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "CODEQL-37",
+    "surface": "backend",
+    "category": "security",
+    "severity": "high",
+    "title": "CodeQL 39 alerts: 26 fixed, 13 dismissed with justification; Dependabot 0, secret scanning 0 open on main 9b3a6652",
+    "evidence": [
+      "gh api code-scanning/alerts?state=open -> 0; dependabot -> 0; secret-scanning -> 0",
+      "unittest 298 OK; herdr-web-ui 92 + omp/proc 5 pass; node-spanning 43/43; falcon base 125 pass; _shared response-quality 71/71"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T14:50:38+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "CODEQL-VERIFY",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "CodeQL fixes 95687ebe..9b3a6652 preserve behaviour; no regressions introduced (pre-existing failures: herdr 14, falcon 7, omp agent-guard 1)",
+    "evidence": [
+      "atlas py 258+515 OK; node-spanning 43, paylocity 20, shared 71, cipp 31 pass; herdr 14 fails identical at baseline 95687ebe; falcon/omp fails not touched by diff"
+    ],
+    "doc_refs": [],
+    "reproduction": "see report commands",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T15:03:47+00:00",
+    "verified_by": "codeql-verifier"
   }
 ]
