@@ -1,6 +1,6 @@
 {
   "name": "ninjaone-mcp",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "NinjaOne MCP server with decision tree architecture for Claude",
   "type": "module",
   "main": "dist/mcp_servers/ninjaone-mcp/src/index.js",
@@ -46,16 +46,16 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.31.0",
     "node-ninjaone": "file:../../mcp_node/node-ninjaone",
-    "zod": "^4.0.0",
-    "tsup": "^8.5.1"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.3.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.0.0"

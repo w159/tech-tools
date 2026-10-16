@@ -11,9 +11,9 @@ skill or a slash command: durable knowledge goes to findings, docs, and memory.
 Org deployment (11 departments, 156 department skills) lives in the separate
 `armada` plugin in this repo; install it alongside atlas only for org use.
 
-## The skill fleet (37 skills, plainly named)
+## The skill fleet (38 skills, plainly named)
 
-One manual skill, 36 auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
+One manual skill, 37 auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
 loads on relevance); `when_to_use` is retained as atlas-local routing metadata.
 The manual skill sets `disable-model-invocation: true`.
 
@@ -54,6 +54,7 @@ Overlapping capabilities are modes of one skill rather than separate skills: atl
 | atlas-status | auto | Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed. Announce mode drafts plain-language release notes, Slack updates and changelog entries for shipped work. Use when asked how a feature is going or to announce it. |
 | atlas-sweep | auto | Turns feedback into triaged findings. Sweep mode ingests new GitHub issues, triages them, verifies claimed fixes and updates a docs/features/ triage doc, never auto-closing or replying. Analyze mode turns a transcript, support thread or notes into findings tied to verbatim quotes. Use when feedback needs triage or analysis. |
 | atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs. Use to build or test an iOS or Xcode project; macOS only. |
+| atlas-testing | auto | Plans, generates, and runs tests in any language: detects the stack and existing tests, maps gaps across every testing type (unit through mutation, fuzz, load, security, accessibility), recommends the highest-value next test, writes it, runs it, and reports evidence. Use to add tests, choose a test strategy, or find what testing is missing. |
 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness. Use for a full UI/UX pass or persona testing. |
 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing. Use when a plugin is believed complete. |
 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify. Use when architecture docs changed, before the completion gate, or when wiki diagrams are stale. |
@@ -102,10 +103,11 @@ atlas/
 |   `-- connector-tool-disclosure.md
 |-- output-styles/
 |   `-- atlas-orchestrator.md      # force-for-plugin: true - auto-applies whenever atlas is enabled
-|-- agents/                        # 13 core agents (atlas:<role>), auto-registered
+|-- agents/                        # 14 core agents (atlas:<role>), auto-registered
 |   |-- explorer.md                #   read-only codebase mapping (never fork)
 |   |-- implementer.md             #   bounded, verified code edits
 |   |-- verifier.md                #   adversarial confirm/refute with runtime-parity requirement (never fork)
+|   |-- test-engineer.md           #   authors and runs tests for one slice: seeded-fault proof, suite run, mutation report
 |   |-- db-prober.md               #   read-only schema/RLS/index inspection
 |   |-- schema-inventory.md        #   PostgreSQL catalog inventory
 |   |-- rls-privilege-audit.md     #   read-only RLS/grants/privilege audit
@@ -116,7 +118,7 @@ atlas/
 |   |-- docs-auditor.md            #   audits docs/ for drift against code
 |   |-- completeness-critic.md     #   "what did we miss" gap pass before done (fork)
 |   `-- runner.md                  #   mechanical executor (haiku/low) for <=7 exact numbered STEPS; fixed STEPS: report
-`-- skills/                        # the 37 skills, one directory each (SKILL.md; most add references/)
+`-- skills/                        # the 38 skills, one directory each (SKILL.md; most add references/)
 ```
 
 ## Getting started

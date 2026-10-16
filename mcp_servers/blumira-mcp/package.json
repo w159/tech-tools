@@ -1,6 +1,6 @@
 {
   "name": "blumira-mcp",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "MCP server for Blumira SIEM integration",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,7 +20,7 @@
     "clean": "rm -rf dist",
     "prepare": "npm run build",
     "pack:mcpb": "node scripts/pack-mcpb.js",
-    "validate:mcpb": "mcpb validate manifest.json",
+    "validate:mcpb": "npx --yes @anthropic-ai/mcpb validate manifest.json",
     "bundle:atlas": "tsup --config tsup.bundle.config.ts"
   },
   "keywords": [
@@ -40,11 +40,10 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@anthropic-ai/mcpb": "^2.1.2",
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=18.0.0"

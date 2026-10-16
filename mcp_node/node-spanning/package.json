@@ -1,6 +1,6 @@
 {
   "name": "node-spanning",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "description": "Typed Node.js client for the Spanning Cloud Backup REST API; used by kaseya-spanning-backup-mcp.",
   "main": "./dist/index.cjs",
@@ -64,12 +64,12 @@
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^8.56.0",
     "msw": "^2.1.0",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "esbuild": "^0.28.1"

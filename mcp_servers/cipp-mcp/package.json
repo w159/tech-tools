@@ -1,6 +1,6 @@
 {
   "name": "cipp-mcp",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "MCP server for CIPP (CyberDrain Improved Partner Portal) — M365 multi-tenant management, users, security, and standards for MSPs",
   "main": "dist/entry.js",
   "bin": {
@@ -42,7 +42,6 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@anthropic-ai/mcpb": "^2.1.2",
     "@types/jest": "^29.5.8",
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
@@ -55,6 +54,8 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
+    "argparse": "^2.0.1",
+    "esbuild": "^0.28.1",
     "minimatch": "^3.1.2",
     "tmp": "^0.2.4"
   },

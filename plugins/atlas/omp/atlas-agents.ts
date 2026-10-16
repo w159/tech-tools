@@ -42,6 +42,7 @@ export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low"> = {
 	verifier: "low",
 	"completeness-critic": "low",
 	"rls-privilege-audit": "low",
+	"test-engineer": "low",
 };
 
 /** Agents whose omp tier is the judgment tier (`@atlas-verifier`); every other non-haiku agent is a worker. */

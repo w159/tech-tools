@@ -177,9 +177,15 @@ try {
   //    the resolved directory of a package in that closure.
   const rootPaths = [];
   const externalPaths = [];
+  // npm ls misflags dev packages as prod when ROOT/node_modules is a symlink; the
+  // lockfile's dev flag is authoritative, so drop in-ROOT paths it marks dev.
+  const lockPackages = JSON.parse(readFileSync(join(ROOT, 'package-lock.json'), 'utf8')).packages || {};
+  const isLockDev = (p) =>
+    lockPackages[p.slice(ROOT.length + 1).replace(/(^|\/)node_modules\.nosync(?:\.noindex)?(?=\/|$)/g, '$1node_modules')]?.dev === true;
   for (const line of prodPathsRaw.split('\n')) {
     const p = line.trim();
     if (!p.includes('node_modules')) continue;
+    if (p.startsWith(ROOT + '/') && isLockDev(p)) continue;
     (p.startsWith(ROOT + '/') ? rootPaths : externalPaths).push(p);
   }
 

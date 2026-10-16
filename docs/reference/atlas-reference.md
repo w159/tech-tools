@@ -87,7 +87,7 @@ profile only; named profiles have their own config) and restart omp.
 ## Use it in chat
 
 Atlas is driven from the chat prompt of Claude Code or omp. Type a skill name
-followed by what you want, or just describe the work: 36 of the 37 skills
+followed by what you want, or just describe the work: 37 of the 38 skills
 auto-trigger from their description. The one manual skill, `/atlas-setup`,
 you invoke yourself. The output blocks below are illustrative
 sketches, not captured runs; real answers are longer, but open with the
@@ -377,6 +377,7 @@ Source: `plugins/atlas/skills/`.
 | `atlas-frontend polish` | a surface needs spacing, transition or micro-interaction polish | `/atlas-frontend polish` |
 | `atlas-dogfood` | changed flows must work end to end and small breakages should be fixed autonomously | `atlas-dogfood current` |
 | `atlas-test-xcode` | building or testing an iOS or Xcode project; macOS only | `atlas-test-xcode current` |
+| `atlas-testing` | adding tests, choosing a test strategy, or finding what testing is missing in any language | `atlas-testing src/payments gaps` |
 | `atlas-dogfood smoke` | a quick check that changed routes still render | `atlas-dogfood smoke current` |
 | `atlas-ux-test` | a full UI/UX test pass: persona testing, pre-release sweep, re-test after fixes | `atlas-ux-test the checkout flow` |
 | `atlas-proof` | sharing a plan, spec or draft for review or acting on its comments | `atlas-proof docs/plans/x.md` |
@@ -403,6 +404,7 @@ edit code; fresh agents start without the leader's assumptions. Source:
 | `atlas:rls-privilege-audit` | read-only | running the security half of a database audit in regulated environments |
 | `atlas:naming-glossary-audit` | read-only | running the nomenclature half of a database audit |
 | `atlas:ui-runtime-tester` | read-only | a UI change needs confirming in a running app rather than by reading code |
+| `atlas:test-engineer` | writes tests | a bounded slice needs tests authored and run: seeded-fault proof per new test, suite run, mutation killed/survived reported; never weakens assertions or edits production code |
 
 ## Hooks
 

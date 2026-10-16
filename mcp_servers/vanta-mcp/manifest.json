@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "vanta-mcp",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "display_name": "Vanta MCP Server",
   "description": "Query Vanta GRC compliance data — frameworks, controls, tests, evidence, vendors, vulnerabilities, and policies — for compliance AI agents.",
   "long_description": "Provides AI assistants with structured access to your Vanta GRC data. Browse frameworks (SOC 2, ISO 27001, HIPAA, etc.), inspect controls and test results, hunt evidence-document gaps, review vendor risk, triage vulnerabilities, and pull integration resource inventories. OAuth2 client_credentials auth with proactive token refresh and cursor-based pagination.",
@@ -15,13 +15,23 @@
   },
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/vanta-mcp",
   "license": "Apache-2.0",
-  "keywords": ["vanta", "compliance", "grc", "soc2", "iso27001", "audit", "evidence"],
+  "keywords": [
+    "vanta",
+    "compliance",
+    "grc",
+    "soc2",
+    "iso27001",
+    "audit",
+    "evidence"
+  ],
   "server": {
     "type": "node",
     "entry_point": "dist/index.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/dist/index.js"],
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
       "env": {
         "VANTA_CLIENT_ID": "${user_config.vanta_client_id}",
         "VANTA_CLIENT_SECRET": "${user_config.vanta_client_secret}",
@@ -55,7 +65,11 @@
     }
   },
   "compatibility": {
-    "platforms": ["darwin", "win32", "linux"],
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
     "runtimes": {
       "node": ">=18.0.0"
     },

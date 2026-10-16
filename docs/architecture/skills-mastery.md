@@ -23,10 +23,11 @@ atlas-setup, atlas-ux-test, atlas-validate, atlas-wiki (atlas-m365 and
 atlas-vendor-assessment removed 2026-07-21; see docs/CHANGELOG.md and
 .atlas/findings/2026-07-21-remove-m365-vendor-assessment.md; atlas-doctor,
 absent since the pre-5.0.0 rebuild, was re-added 2026-08-05 as the
-interactive self-improvement skill -- see docs/CHANGELOG.md 2026-08-05). The
-12 core agents live in plugins/atlas/agents/: completeness-critic, db-prober,
+interactive self-improvement skill -- see docs/CHANGELOG.md 2026-08-05).
+The 14 core agents live in plugins/atlas/agents/: completeness-critic, db-prober,
 docs-auditor, docs-curator, explorer, implementer, naming-glossary-audit,
-planner, rls-privilege-audit, schema-inventory, ui-runtime-tester, verifier.
+planner, rls-privilege-audit, runner, schema-inventory, test-engineer,
+ui-runtime-tester, verifier.
 
 ## Progressive disclosure (three levels)
 

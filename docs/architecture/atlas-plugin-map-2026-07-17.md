@@ -45,9 +45,9 @@ Key facts:
 ## Repo feature boundaries
 
 - **Root `/skills/` (12 standalone tools):** az-cost-optimize, azure-deployment-preflight, cloud-design-patterns, codebase-brain, database-optimization, entra-agent-user, graphify, msgraph-sdk, msoffice-docs, scrapling-official, security-audit, webapp-testing. All target external domains (Azure, MS APIs, security, web).
-- **`/plugins/atlas/` (the plugin):** 37 atlas-* skills, 13 agents (incl. `atlas:runner`, haiku/low, mechanical tier, `STEPS:` report), 17 hook programs / 21 `hooks.json` bindings (incl. `worker_report_gate.py` on `SubagentStop`; counted from `hooks/hooks.json`, with `scripts/atlas_doctor.py --hook` among the programs), scripts, contracts, omp extension, 12 MCP connector bundles. Atlas-specific operations (audit, debug, orchestrate).
+- **`/plugins/atlas/` (the plugin):** 38 atlas-* skills, 14 agents (incl. `atlas:runner`, haiku/low, mechanical tier, `STEPS:` report), 17 hook programs / 21 `hooks.json` bindings (incl. `worker_report_gate.py` on `SubagentStop`; counted from `hooks/hooks.json`, with `scripts/atlas_doctor.py --hook` among the programs), scripts, contracts, omp extension, 12 MCP connector bundles. Atlas-specific operations (audit, debug, orchestrate).
   <!-- 2026-10-06: counts re-derived from hooks.json (21 bindings, 17 distinct
-       programs) and plugins/atlas/agents (13). docs_drift.py is a shared
+       programs) and plugins/atlas/agents (14; 38 skills 2026-10-14). docs_drift.py is a shared
        helper module, not a hook, so it is not in the count. -->
 - **`/plugins/armada/` (org config layer):** 11 department agents carrying org branding/compliance context + the armada routing skill.
 - **`/plugins/programmer/` (independent developer-tools plugin, added 2026-07-21):** 2 skills (tpp-audit, tpp-principles) + 1 agent (tpp-auditor) + 1 UserPromptSubmit hook. Pragmatic Programmer codebase auditor with an 89-concept glossary; not part of the atlas orchestration engine.

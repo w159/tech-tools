@@ -1,6 +1,6 @@
 {
   "name": "node-blumira",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Typed Node.js client for the Blumira SIEM API; used by blumira-mcp.",
   "type": "module",
   "files": [
@@ -53,7 +53,7 @@
     "msw": "^2.4.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=18.0.0"

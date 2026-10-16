@@ -1,6 +1,6 @@
 {
   "name": "threatlocker-mcp",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "MCP server for the ThreatLocker Portal API",
   "type": "module",
   "main": "./dist/index.js",
@@ -43,7 +43,7 @@
     "@types/node": "^25.3.2",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "esbuild": "^0.28.1"

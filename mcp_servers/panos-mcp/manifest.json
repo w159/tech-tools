@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "panos-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "display_name": "PAN-OS MCP Server",
   "description": "Manage Palo Alto Networks Panorama and firewalls — config, commits, operations, logs, reports, objects, policies, updates, and certificates.",
   "long_description": "Provides AI assistants with structured access to the PAN-OS XML and REST APIs. Read and write candidate config with an explicit, separate commit step; run operational commands; pull logs and reports; manage address/service/tag objects and security/NAT policy rules over REST; drive content and software update lifecycle; and manage certificates. Works against Panorama (one credential set, with an optional per-call target serial routing to a managed firewall) or directly against a standalone firewall with the target omitted. Read-only validated against a PA-460 on PAN-OS 11.1.13-h6; mutating tools are unexercised against hardware.",

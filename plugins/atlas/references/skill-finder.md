@@ -75,6 +75,7 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Run a full UX test pass on a web app | atlas-ux-test | Auto | Persona-driven real-browser walkthroughs, fuzzing, and a report gating release |
 | Smoke-check just the routes my branch touched | atlas-dogfood smoke | Auto | Read-only Pass/Fail/Skip per route with console + network evidence; never fixes |
 | Build and test the iOS app on the simulator | atlas-test-xcode | Auto | Simulator boot, xcodebuild test, screenshots + logs, PASS/FAIL report |
+| Plan, generate and run tests and see what testing is missing | atlas-testing | Auto | Stack + existing-test detection, gap map across every testing type, highest-value next test written, run, and reported with evidence |
 | Try the branch diff in a live browser and fix real breaks | atlas-dogfood | Auto | Map routes touched, drive each flow like a user, bounded repair loop |
 | Polish spacing, transitions, and micro-interactions on working UI | atlas-frontend polish | Auto | Small live visual/CSS/animation changes you steer in the browser |
 | Push a hardening/config fix to many endpoints at once | atlas-harden | Auto | Idempotent CHECK/SET/VERIFY script for RMM/MDM that reports changed vs already-compliant |

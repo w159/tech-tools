@@ -1,6 +1,6 @@
 {
   "name": "node-paylocity",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Typed Node.js client for the Paylocity REST API; used by paylocity-mcp.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -46,9 +46,8 @@
     "msw": "^2.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.12"
   },
-  "dependencies": {},
   "overrides": {
     "esbuild": "^0.28.1"
   }

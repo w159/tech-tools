@@ -1,10 +1,10 @@
 # Atlas Subagent Roster
 
-Authoritative list of subagents shipped in `plugins/atlas/agents/`. 13 agents total (the
-2026-07-07 UX-swarm and api-usage-map removal left 12, formerly 18 as of v2.2.1; `atlas:runner` is the thirteenth).
+Authoritative list of subagents shipped in `plugins/atlas/agents/`. 14 agents total (the
+2026-07-07 UX-swarm and api-usage-map removal left 12, formerly 18 as of v2.2.1; `atlas:runner` is the thirteenth and `atlas:test-engineer` the fourteenth).
 Source: `plugins/atlas/agents/*.md` (each file's `name:` and `description:` frontmatter fields).
 
-The atlas plugin ships 13 core agents (listed below). The v5.0.0 split moved 11 additional
+The atlas plugin ships 14 core agents (listed below). The v5.0.0 split moved 11 additional
 `atlas:armada-*` department agents out of atlas and into a separate `armada` plugin
 (`plugins/armada/agents/`), which is part of the Claude Code marketplace but is installed
 alongside `atlas` only for org deployment. The 11 armada department agents are:
@@ -117,6 +117,16 @@ Source: `plugins/atlas/agents/runner.md`. The `worker_report_gate.py` SubagentSt
 
 ---
 
+## Testing Agent
+
+| Agent | One-line role |
+|---|---|
+| **atlas:test-engineer** | Test engineer: authors and runs tests for ONE bounded slice per the atlas-testing skill - reads the skill's language/type references, writes the tests, proves each new test fails against a seeded fault (or mutation) and passes on real code, runs the suite, and reports exact commands, outputs, pass/fail counts, and mutation killed/survived. Never weakens assertions or deletes failing tests to go green; never edits production code unless the brief says so. |
+
+Source: `plugins/atlas/agents/test-engineer.md`.
+
+---
+
 ## Stack
 
 Verified 2026-07-13 against the shipped tree.
@@ -130,10 +140,10 @@ Verified 2026-07-13 against the shipped tree.
 ## Architecture
 
 - Entry points: `plugins/atlas/{hooks,scripts,skills,agents,mcp}` (hook handlers, CLI scripts,
-  37 skills, 13 agents, 12 MCP connector bundles)
-- Boundaries: `atlas` plugin (codebase-facing, 13 agents in `plugins/atlas/agents/`) versus
+  38 skills, 14 agents, 12 MCP connector bundles)
+- Boundaries: `atlas` plugin (codebase-facing, 14 agents in `plugins/atlas/agents/`) versus
   `armada` plugin (11 department agents in `plugins/armada/agents/`); the split landed in v5.0.0
-- Key modules: 37 skills under `plugins/atlas/skills/`, 13 agents under `plugins/atlas/agents/`,
+- Key modules: 38 skills under `plugins/atlas/skills/`, 14 agents under `plugins/atlas/agents/`,
   hook handlers under `plugins/atlas/hooks/` (17 programs, 22 bindings in `hooks/hooks.json`, including
   `worker_report_gate.py` on SubagentStop), CLI scripts under `plugins/atlas/scripts/`, 12 MCP
   connector bundles under `plugins/atlas/mcp/` (listed in `plugins/atlas/.mcp.json`)
@@ -162,7 +172,7 @@ Verified 2026-07-13. Run from repo root.
 
 ## Agent Constraints
 
-All 13 agents share three standing constraints regardless of the task:
+All 14 agents share three standing constraints regardless of the task:
 
 1. **Never fix what you are auditing.** Auditor, verifier, critic, oracle, and prober agents
    return findings only. They do not carry Write, Edit, or MultiEdit permissions.

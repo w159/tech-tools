@@ -1,6 +1,6 @@
 # Manual vs Auto Map
 
-The inventory of the 37 atlas skills. atlas-setup uses this table to tell the user what just came online.
+The inventory of the 38 atlas skills. atlas-setup uses this table to tell the user what just came online.
 
 ## Trigger model
 
@@ -46,14 +46,15 @@ Several skills carry more than one mode (for example atlas-frontend: build, comp
 | 31 | atlas-status | auto | Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed |
 | 32 | atlas-sweep | auto | Turns feedback into triaged findings |
 | 33 | atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs |
-| 34 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness |
-| 35 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing |
-| 36 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify |
-| 37 | atlas-worktree | auto | Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection |
+| 34 | atlas-testing | auto | Plans, generates, and runs tests in any language: detects stack and existing tests, maps testing gaps, recommends and writes the highest-value next test, runs it, reports evidence |
+| 35 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness |
+| 36 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing |
+| 37 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify |
+| 38 | atlas-worktree | auto | Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection |
 
 ## Count check
 
-- Atlas skills: 37 (1 manual, 36 auto)
+- Atlas skills: 38 (1 manual, 37 auto)
 - Manual skills: atlas-setup
 
 ## Armada (separate plugin)

@@ -1,6 +1,6 @@
 {
   "name": "vanta-mcp",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "MCP server for the Vanta REST API",
   "type": "module",
   "main": "./dist/index.js",
@@ -31,14 +31,14 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.31.0",
-    "zod": "^4.0.0",
-    "node-vanta": "file:../../mcp_node/node-vanta"
+    "node-vanta": "file:../../mcp_node/node-vanta",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "esbuild": "^0.28.1"

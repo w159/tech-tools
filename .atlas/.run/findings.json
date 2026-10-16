@@ -6878,5 +6878,146 @@
     "status": "verified",
     "verified_at": "2026-10-14T23:52:22+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-testing-12.4.6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-testing skill + test-engineer agent shipped in source",
+    "evidence": [
+      "plugins/atlas/skills/atlas-testing/SKILL.md",
+      "plugins/atlas/skills/atlas-testing/scripts/test_testscope.py: 17 OK",
+      "test_atlas_contract: 96 OK (3 skipped)",
+      "omp bun test resolve+gen-agents: 22 pass"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md"
+    ],
+    "reproduction": "python3 plugins/atlas/skills/atlas-testing/scripts/test_testscope.py && python3 -m unittest plugins.atlas.hooks.test_atlas_contract",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-15T03:56:45+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "SEC-DEPS-2026-10-15",
+    "surface": "backend",
+    "category": "security",
+    "severity": "medium",
+    "title": "Dependabot remediation: 117/120 alerts fixed across 19 lockfiles + falcon uv.lock",
+    "evidence": [
+      "npm audit --package-lock-only: 0 findings for every GitHub-listed package (remaining: node-forge no-fix; braces GHSA-vfj7 pre-existing, unchanged from HEAD)",
+      "falcon uv.lock pyjwt 2.15.1 anyio 4.15.1 urllib3 2.8.0",
+      "node test-mcp-tools.mjs: PASS 12 connectors"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "node test-mcp-tools.mjs",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-15T17:52:48+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "SEC-DEPS-PACK-2026-10-15",
+    "surface": "backend",
+    "category": "security",
+    "severity": "medium",
+    "title": "mcpb packs no longer ship devDependencies (lockfile dev filter in pack-mcpb.js; tsup moved to devDependencies)",
+    "evidence": [
+      "lead zipfile scan of all 11 mcp_servers/*/*.mcpb: 0 top-level vitest/typescript/eslint/esbuild/tsup/rollup/vite/postcss/jest; sizes 2.6-3.4 MB",
+      "node test-mcp-tools.mjs rc 0: PASS 12 connectors after repack"
+    ],
+    "doc_refs": [
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "node test-mcp-tools.mjs",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-15T18:44:38+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "GATE-M-OMP-TASK",
+    "surface": "backend",
+    "category": "gate",
+    "severity": "medium",
+    "title": "completion gate (m) cannot see omp task dispatches: matches only Task/Agent tool names",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate_core.py:743,749,766 match tool IN (Task,Agent) and transcript type tool_use; omp tool is lowercase task with its own transcript shape",
+      "session 01a140a3 dispatched 9 named implementer/explorer tasks (deps-falcon-auvik-panos, deps-cipp-blumira-cw, deps-ninja-knowbe4-spanning, deps-paylocity-tl-vanta, deps-drop-overrides, pack-devdep-fix, tsup-devdep, omp-crash-cache-explorer); flagged files were written by those workers"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "match tool names case-insensitively (task/Task/Agent) and parse omp toolCall transcript entries in the (m) check",
+    "blast_radius": "module",
+    "status": "open",
+    "verified_at": "2026-10-15T18:52:34+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "GATE-M-OMP-TASK",
+    "surface": "backend",
+    "category": "gate",
+    "severity": "medium",
+    "title": "completion gate (m) now recognises omp task dispatches (case-insensitive task/agent, omp toolCall transcript blocks)",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate_core.py _missing_delegation: LOWER(tool)/LOWER(tool_name) IN (task,agent); transcript accepts tool_use|toolCall",
+      "new tests failed on old code (3 failures), pass now: lead ran python3 -m unittest test_completion_gate.ShellEditDelegationTest -> 15 OK; worker full module 473 OK"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md"
+    ],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_completion_gate.ShellEditDelegationTest",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-15T19:12:50+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "GATE-M-OMP-TASK",
+    "surface": "backend",
+    "category": "gate",
+    "severity": "medium",
+    "title": "completion gate (m): shell-dirty paths judged against session-wide dispatch evidence; omp task/toolCall recognised",
+    "evidence": [
+      "root cause: _shell_dirty_edits is session-scoped (SessionStart snapshot) but dispatch evidence was run-scoped; omp DB already records Task",
+      "real data: source _missing_delegation(01a140a3..., real omp transcript) -> []; was list of mcp_node/... paths",
+      "ShellEditDelegationTest 17 OK (lead run); full test_completion_gate 475 OK (worker)"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md",
+      "docs/CHANGELOG.md"
+    ],
+    "reproduction": "python3 -m unittest test_completion_gate.ShellEditDelegationTest (cwd plugins/atlas/hooks)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-15T19:18:20+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "DEPBOT-120",
+    "surface": "backend",
+    "category": "security",
+    "severity": "high",
+    "title": "All 120 open Dependabot alerts resolved in working tree (node-forge/sprintf-js removed from blumira/cipp)",
+    "evidence": [
+      "lockfile-vs-advisory scan: 0 of 120 still vulnerable",
+      "cipp jest 31/31; blumira vitest 19/19; test-mcp-tools blumira+cipp PASS; mcpb validate pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T14:22:33+00:00",
+    "verified_by": "lead"
   }
 ]

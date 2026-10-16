@@ -1,6 +1,6 @@
 {
   "name": "node-vanta",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Typed Node.js client for the Vanta REST API; used by vanta-mcp.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -46,9 +46,8 @@
     "msw": "^2.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.12"
   },
-  "dependencies": {},
   "overrides": {
     "esbuild": "^0.28.1"
   }

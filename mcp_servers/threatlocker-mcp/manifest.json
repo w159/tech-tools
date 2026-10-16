@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "threatlocker-mcp",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "display_name": "ThreatLocker MCP Server",
   "description": "Query and manage ThreatLocker endpoint application-control data — computers, groups, policies, applications, Config Manager device configurations, DAC risk findings, approval requests, audit logs, system audit, and tags — for MSP security AI agents.",
   "long_description": "Use this server when you need to automate ThreatLocker Portal operations. List and filter computers, computer groups, Application Control policies and applications; list Config Manager device-configuration policies (the hardening settings enforced on which devices); review DAC Health Center risk findings including storage-policy and network-policy posture (note: neither Storage Control nor Network Control policies have a documented list/get endpoint in the ThreatLocker KB or the live public swagger checked on two instances -- unprobed, not confirmed absent -- DAC analysis results are the closest available read source); retrieve software approval requests (application and storage approvals) and approve them (creating an allow policy for the requesting application); search the Unified Audit endpoint event log and the portal System Audit administrator log; list tags; and manage organizations (MSP child tenants). Note: the ThreatLocker Portal API does not expose a deny endpoint -- deny operations must be performed in the portal UI. Supports scoping to a specific managed organization via the optional THREATLOCKER_ORGANIZATION_ID config, or acting as the primary org by default.",
@@ -15,13 +15,22 @@
   },
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/threatlocker-mcp",
   "license": "Apache-2.0",
-  "keywords": ["threatlocker", "security", "endpoint", "application-control", "msp", "computers"],
+  "keywords": [
+    "threatlocker",
+    "security",
+    "endpoint",
+    "application-control",
+    "msp",
+    "computers"
+  ],
   "server": {
     "type": "node",
     "entry_point": "dist/index.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/dist/index.js"],
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
       "env": {
         "THREATLOCKER_API_KEY": "${user_config.threatlocker_api_key}",
         "THREATLOCKER_ORGANIZATION_ID": "${user_config.threatlocker_organization_id}",
@@ -53,7 +62,11 @@
     }
   },
   "compatibility": {
-    "platforms": ["darwin", "win32", "linux"],
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
     "runtimes": {
       "node": ">=18.0.0"
     },

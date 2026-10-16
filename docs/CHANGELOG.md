@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Dependabot remediation (all 120 open alerts). Runtime: falcon `pyjwt` 2.13.0→2.15.1, `anyio` 4.9.0→4.15.1, `urllib3` 2.7.0→2.8.0; node-auvik `axios` 1.18.1→1.20.0; node-panos `fast-xml-parser` 4.5.7→5.11.2 (major, parser options unchanged, leading-zero strings preserved); every MCP server `qs`→6.16.1, `@hono/node-server`→1.19.17/2.1.5 (the SDK accepts `^1.19.9 || ^2.0.5`), auvik/panos `find-my-way`→9.10.0. Dev: `vitest`/`@vitest/mocker`→4.1.11+, `postcss`→8.5.30, `js-yaml`→4.3.2/3.15.2, `browserslist`, `esbuild`, `baseline-browser-mapping`.
+- Patch-bumped (package.json = manifest.json): auvik-mcp 0.4.3, blumira-mcp 1.1.6, cipp-mcp 0.2.5, connectwise-manage-mcp 1.5.4, kaseya-spanning-backup-mcp 1.1.4, knowbe4-mcp 1.1.3, ninjaone-mcp 1.8.3, panos-mcp 0.2.1, paylocity-mcp 0.1.5, threatlocker-mcp 1.5.1, vanta-mcp 0.2.4; node libs auvik 1.0.2, blumira 1.0.3, panos 1.0.1, paylocity 1.0.2, spanning 1.0.3, threatlocker 1.2.1, vanta 1.0.1. `.mcpb` packs and `plugins/atlas/mcp/<svc>/server.mjs` bundles rebuilt; `node test-mcp-tools.mjs` PASS for all 12 connectors.
+- No upstream fix, removed from the tree instead: `node-forge` 1.4.0 came only from the `@anthropic-ai/mcpb` devDependency in blumira-mcp and cipp-mcp, which is dropped (the pack scripts already run `npx --yes @anthropic-ai/mcpb`, like the other servers; blumira `validate:mcpb` now does too). `sprintf-js` came from `argparse@1` under jest→istanbul→`js-yaml@3`; cipp-mcp overrides `argparse` to `^2.0.1` (js-yaml 3 needs argparse only for its CLI, never its library). Both trees verified clean; cipp jest 31/31, blumira vitest 19/19, both packs and boot tests pass.
+- Lockfiles regenerated with npm 11: npm 10.9.8 crashes (`reading 'edgesOut'`) on the vitest 4.1.11 peer set. node-blumira `vitest.config.ts` now excludes `node_modules.nosync.noindex`.
+- `mcp_servers/*/scripts/pack-mcpb.js` (all 11 copies): staging now drops in-root paths that `package-lock.json` marks `dev: true`, because `npm ls --omit=dev` misreports dev packages as production when `node_modules` is a symlink to `node_modules.nosync.noindex`. `tsup` moved to `devDependencies` in ninjaone-mcp, knowbe4-mcp and connectwise-manage-mcp. The `.mcpb` packs that had been shipping vitest, rollup, typescript and eslint (16 to 34 MB) are now 2.5 to 3.4 MB.
+
+### Fixed
+
+- Completion gate (m) delegation mandate no longer false-blocks later turns of a session that already dispatched: shell-written code (diffed against the SessionStart snapshot, so session-scoped) is now checked against session-wide dispatch evidence, while Write/Edit records stay run-scoped. It also recognises omp dispatches (case-insensitive `task`, `toolCall` transcript blocks).
+
+## 12.4.6 (2026-10-14)
+
+### Added
+
+- `atlas-testing` skill (atlas): plans, generates, and runs tests in any language - detects the stack and existing tests, maps gaps across every testing type (unit through mutation, fuzz, load, security, accessibility), recommends the highest-value next test, writes it, runs it, and reports evidence. Ships a canonical testing-type taxonomy, per-language reference files, and the read-only `testscope.py` detector (detect/gaps/commands).
+- `atlas:test-engineer` agent (atlas): authors and runs tests for ONE bounded slice per the atlas-testing skill; proves each new test fails against a seeded fault (or mutation) and passes on real code; reports exact commands, outputs, pass/fail counts, and mutation killed/survived. Never weakens assertions or deletes failing tests to go green; never edits production code unless the brief says so.
+- Scope matrix `test` task class (atlas): (low/medium/high) team shapes dispatching `test-engineer`, with a `test/high` parity row in `omp/resolve.test.ts`.
+
 ## 12.4.5 (2026-10-14)
 
 ### Fixed

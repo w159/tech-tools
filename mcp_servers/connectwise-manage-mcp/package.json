@@ -1,6 +1,6 @@
 {
   "name": "connectwise-manage-mcp",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "ConnectWise Manage (PSA) MCP server for Claude",
   "type": "module",
   "main": "dist/index.js",
@@ -44,16 +44,16 @@
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/connectwise-manage-mcp",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.31.0",
-    "jose": "^6.2.2",
-    "tsup": "^8.5.1"
+    "jose": "^6.2.2"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -184,6 +184,12 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 ### Follow-ups: atlas 12.3.1 (added 2026-10-13)
 
 
+### Follow-ups: atlas 12.4.6 (added 2026-10-14)
+
+Closed in 12.4.6 in source (see `docs/CHANGELOG.md`): `atlas-testing` skill (taxonomy of 44 testing types, per-language and per-area references, gap selection with regulated-data floors, `testscope.py` detect/gaps/commands with 17 tests), `atlas:test-engineer` agent, and the scope-matrix `test` class. Unreleased: commit, push and plugin reinstall pending.
+
+- [planned] Live-run `atlas-testing` `write` and `mutate` modes on one real repo (gwh-firstrespondersapp backend) to prove the seeded-fault and mutation evidence flow end to end; reference-file tool commands were researched, not executed.
+
 ### Follow-ups: atlas 12.4.0 (added 2026-10-14)
 
 Closed in 12.4.0 (see `docs/CHANGELOG.md`): omp lane role and tool, omp worker pane feed, claude team worker timestamps and sparklines, `atlas_mux.py status` per-pane listing, lean-ctx read-only classification, inline-op counter reset, Stop hook merge (5 -> 2 processes).

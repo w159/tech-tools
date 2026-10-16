@@ -1,6 +1,6 @@
 {
   "name": "knowbe4-mcp",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "MCP server for KnowBe4 — security awareness training, phishing simulation, and user risk management API integration",
   "type": "module",
   "main": "dist/mcp_servers/knowbe4-mcp/src/index.js",
@@ -44,7 +44,6 @@
   "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/knowbe4-mcp",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.31.0",
-    "tsup": "^8.5.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {
@@ -52,8 +51,9 @@
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.0.0"

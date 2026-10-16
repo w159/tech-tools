@@ -344,7 +344,8 @@ def _is_delegation_code(path: str, dirs: tuple, exts: tuple) -> bool:
     (not under an exempt dir, no exempt extension). Shared with
     delegation_prewarn.py so the warning and the gate use one predicate."""
     return not (
-        path.endswith(exts) or any(path.startswith(d + "/") or f"/{d}/" in path for d in dirs)
+        path.endswith(exts)
+        or any(path.startswith(d + "/") or f"/{d}/" in path for d in dirs)
     )
 
 
@@ -722,52 +723,78 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
         if exempt is None:
             return []  # contract unreadable: fail open, never block
         dirs, exts = exempt
-        code_paths = [p for p in paths if p and _is_delegation_code(p, dirs, exts)]
-        code_paths += _shell_dirty_edits(root, session_id)
-        # URI-shaped records (agent:// IRC, xd:// devices) are not files: drop
-        # them before the existence check so they can neither block nor be
-        # named in the (m) clause.
-        code_paths = [p for p in code_paths if not is_uri_path(p)]
-        # F2 (refuted-phantom class): a recorded path can be gone by block time
-        # (deleted, renamed, or recorded from a sibling run). Re-verify
-        # existence here so the gate never sends the model after a phantom.
-        code_paths = [p for p in code_paths if _target_exists(p, root)]
-        if not _nondocs_changed(code_paths):
+        run_code = [p for p in paths if p and _is_delegation_code(p, dirs, exts)]
+        shell_code = _shell_dirty_edits(root, session_id)
+
+        def _live(ps):
+            # URI-shaped records (agent:// IRC, xd:// devices) are not files: drop
+            # them before the existence check so they can neither block nor be
+            # named in the (m) clause. F2 (refuted-phantom class): a recorded path
+            # can be gone by block time, so re-verify existence.
+            return [p for p in ps if not is_uri_path(p) and _target_exists(p, root)]
+
+        run_code, shell_code = _live(run_code), _live(shell_code)
+        if not _nondocs_changed(run_code + shell_code):
             return []
-        if conn.execute(
-            "SELECT 1 FROM dispatches WHERE run_id=? LIMIT 1", (rid,)
-        ).fetchone():
-            return []
-        if conn.execute(
-            "SELECT 1 FROM events WHERE run_id=? AND context='main' "
-            "AND tool IN ('Task','Agent') LIMIT 1",
-            (rid,),
-        ).fetchone():
-            return []
-        if conn.execute(
-            "SELECT 1 FROM tool_calls WHERE session_id=? AND ts>=? "
-            "AND is_sidechain=0 AND tool_name IN ('Task','Agent') LIMIT 1",
-            (session_id, started),
-        ).fetchone():
-            return []
-        if transcript_path:
-            with open(transcript_path, encoding="utf-8", errors="replace") as fh:
-                for line in fh:
-                    rec = json.loads(line)
-                    if rec.get("isSidechain"):
-                        continue
-                    when = _parse_iso_epoch(rec.get("timestamp"))
-                    if when is None or when < started:
-                        continue
-                    content = (rec.get("message") or {}).get("content") or []
-                    if isinstance(content, list) and any(
-                        isinstance(b, dict)
-                        and b.get("type") == "tool_use"
-                        and b.get("name") in {"Task", "Agent"}
-                        for b in content
-                    ):
-                        return []
-        return code_paths
+
+        # Dispatch tool names are case-insensitive: Claude says Task/Agent, omp says `task`.
+        # Shell dirt is diffed against the SessionStart snapshot, so it is
+        # SESSION-scoped: a dispatch in an earlier run of this session covers it.
+        # Write/Edit records are run-scoped: they need a dispatch in this run.
+        def _dispatched(session_wide):
+            since = 0 if session_wide else started
+            run_ids = (
+                [
+                    r[0]
+                    for r in conn.execute(
+                        "SELECT id FROM runs WHERE session_id=?", (session_id,)
+                    )
+                ]
+                if session_wide
+                else [rid]
+            )
+            for run_id in run_ids:
+                if conn.execute(
+                    "SELECT 1 FROM dispatches WHERE run_id=? LIMIT 1", (run_id,)
+                ).fetchone():
+                    return True
+                if conn.execute(
+                    "SELECT 1 FROM events WHERE run_id=? AND context='main' "
+                    "AND LOWER(tool) IN ('task','agent') LIMIT 1",
+                    (run_id,),
+                ).fetchone():
+                    return True
+            if conn.execute(
+                "SELECT 1 FROM tool_calls WHERE session_id=? AND ts>=? "
+                "AND is_sidechain=0 AND LOWER(tool_name) IN ('task','agent') LIMIT 1",
+                (session_id, since),
+            ).fetchone():
+                return True
+            if transcript_path:
+                with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+                    for line in fh:
+                        rec = json.loads(line)
+                        if rec.get("isSidechain"):
+                            continue
+                        when = _parse_iso_epoch(rec.get("timestamp"))
+                        if when is None or when < since:
+                            continue
+                        content = (rec.get("message") or {}).get("content") or []
+                        # Claude: type tool_use; omp: type toolCall (same `name` field).
+                        if isinstance(content, list) and any(
+                            isinstance(b, dict)
+                            and b.get("type") in {"tool_use", "toolCall"}
+                            and str(b.get("name") or "").lower() in {"task", "agent"}
+                            for b in content
+                        ):
+                            return True
+            return False
+
+        if shell_code and _dispatched(True):
+            shell_code = []
+        if run_code and _dispatched(False):
+            run_code = []
+        return run_code + shell_code
     except Exception:
         return []
     finally:
@@ -1245,16 +1272,28 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
         )
         if failing
     ]
-    return {"ok_a": ok_a, "ok_b": ok_b, "ok_c": ok_c, "ok_d": ok_d, "ok_e": ok_e,
-            "ok_h": ok_h, "drift": drift, "unverified": unverified,
-            "open_todos": open_todos, "missing_plan": missing_plan,
-            "worktrees": worktrees, "name_violations": name_violations,
-            "header_failing": header_failing, "phases_missing": phases_missing,
-            "colony_failing": colony_failing, "colony_workers": colony_workers,
-            "wt_unmerged": wt_unmerged, "missing_delegation": missing_delegation,
-            "started": started, "failed": failed}
-
-
+    return {
+        "ok_a": ok_a,
+        "ok_b": ok_b,
+        "ok_c": ok_c,
+        "ok_d": ok_d,
+        "ok_e": ok_e,
+        "ok_h": ok_h,
+        "drift": drift,
+        "unverified": unverified,
+        "open_todos": open_todos,
+        "missing_plan": missing_plan,
+        "worktrees": worktrees,
+        "name_violations": name_violations,
+        "header_failing": header_failing,
+        "phases_missing": phases_missing,
+        "colony_failing": colony_failing,
+        "colony_workers": colony_workers,
+        "wt_unmerged": wt_unmerged,
+        "missing_delegation": missing_delegation,
+        "started": started,
+        "failed": failed,
+    }
 
 
 def main() -> int:
@@ -1301,8 +1340,8 @@ def main() -> int:
         if root is None:
             return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
         session = str(data.get("session_id") or "")
-        missing_delegation, delegation_paths, solo_delegation_note = (
-            _delegation_state(data, root)
+        missing_delegation, delegation_paths, solo_delegation_note = _delegation_state(
+            data, root
         )
         if not _session_is_orchestrating(session):
             if missing_delegation and not _has_in_flight_dispatch(data):
@@ -1331,7 +1370,9 @@ def main() -> int:
         # Fail-open: any DB error yields an empty path list -> treated the
         # same as "wrote nothing", never a false block.
         ev = evaluate(data, root, missing_delegation)
-        (ok_a, ok_b, ok_c, ok_d, ok_e, ok_h) = (ev[k] for k in ("ok_a", "ok_b", "ok_c", "ok_d", "ok_e", "ok_h"))
+        (ok_a, ok_b, ok_c, ok_d, ok_e, ok_h) = (
+            ev[k] for k in ("ok_a", "ok_b", "ok_c", "ok_d", "ok_e", "ok_h")
+        )
         drift, unverified, open_todos = ev["drift"], ev["unverified"], ev["open_todos"]
         missing_plan, worktrees = ev["missing_plan"], ev["worktrees"]
         name_violations, header_failing = ev["name_violations"], ev["header_failing"]
@@ -2215,7 +2256,9 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
             try:
                 team = json.loads(rec_path.read_text(encoding="utf-8"))
                 if team.get("lead") == lead and team.get("channel"):
-                    chans.setdefault(team["channel"], set()).update(m["name"] for m in team["members"])
+                    chans.setdefault(team["channel"], set()).update(
+                        m["name"] for m in team["members"]
+                    )
             except (OSError, ValueError, TypeError, KeyError, AttributeError):
                 continue
         if notes_dir.is_dir():

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Completion gate (m) delegation mandate no longer false-blocks later turns of a session that already dispatched: code written through the shell (diffed against the SessionStart snapshot, so session-scoped) is now checked against session-wide dispatch evidence (`dispatches`/`events` on any run of the session, `tool_calls` and transcript without the run-start cutoff), while Write/Edit records stay run-scoped. It also recognises omp dispatches: `events`/`tool_calls` names match `Task`/`Agent` case-insensitively (omp's tool is lowercase `task`) and the transcript scan accepts omp's `toolCall` block alongside Claude's `tool_use`. Finding GATE-M-OMP-TASK.
+
+## 12.4.6 (2026-10-14)
+
+### Added
+
+- `atlas-testing` skill (`plugins/atlas/skills/atlas-testing/`): plans, generates, and runs tests in any language - detects the stack and existing tests, maps gaps across every testing type (unit through mutation, fuzz, load, security, accessibility), recommends the highest-value next test, writes it, runs it, and reports evidence. Ships a canonical testing-type taxonomy, per-language reference files, and the read-only `testscope.py` detector (detect/gaps/commands). Use to add tests, choose a test strategy, or find what testing is missing.
+- `atlas:test-engineer` agent (`plugins/atlas/agents/test-engineer.md`, sonnet/low): authors and runs tests for ONE bounded slice per the atlas-testing skill; proves each new test fails against a seeded fault (or mutation) and passes on real code; reports exact commands, outputs, pass/fail counts, and mutation killed/survived. Never weakens assertions or deletes failing tests to go green; never edits production code unless the brief says so. Registered in the omp colony map (`omp/atlas-agents.ts`) and regenerated into `omp/agents/test-engineer.md`.
+- Scope matrix `test` task class (`contracts/scope-matrix.json`): (low/medium/high) team shapes dispatching `test-engineer` (worktree isolation from medium), with a `test/high` parity row in `omp/resolve.test.ts`.
+
 ## 12.4.5 (2026-10-14)
 
 ### Fixed

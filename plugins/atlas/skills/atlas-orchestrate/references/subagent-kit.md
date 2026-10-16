@@ -108,6 +108,7 @@ Use these by name as `subagent_type`. They already carry the orchestrator's disc
 | `atlas:verifier` | adversarially confirm a finding/fix in a fresh context | sonnet | medium | no |
 | `atlas:db-prober` | read-only schema / RLS / grants / indexes / EXPLAIN | sonnet | low | no |
 | `atlas:ui-runtime-tester` | actually run the FE and validate observed behavior | sonnet | low | no |
+| `atlas:test-engineer` | author and run tests for one slice per the atlas-testing skill; seeded-fault proof, mutation report | sonnet | low | yes (test files only) |
 | `atlas:planner` | decompose a task into a numbered, failable-check stage map | sonnet | low | no |
 | `atlas:docs-curator` | keep `docs/` as the single source of truth, current with the work | sonnet | low | only under `docs/` |
 | `atlas:docs-auditor` | audit `docs/` for drift against the code/behavior | haiku | low | no |

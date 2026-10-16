@@ -1686,6 +1686,93 @@ class ShellEditDelegationTest(unittest.TestCase):
             self.gate(transcript_path="/session/subagents/agent-a.jsonl"), ""
         )
 
+    def _dirty_code(self):
+        self.snapshot()
+        self.put("src/extra.py", "x = 1\n")
+
+    def test_lowercase_task_event_counts_as_dispatch(self):
+        self._dirty_code()
+        self.assertIn("(m) Delegation mandate", self.gate())
+        atlas_db.log_event(self.conn, self.rid, "task", "main", 0)
+        self.assertEqual(self.gate(), "")
+
+    def test_lowercase_task_tool_call_counts_as_dispatch(self):
+        self._dirty_code()
+        self.conn.execute(
+            "INSERT INTO tool_calls (session_id, ts, is_sidechain, tool_use_id, tool_name) "
+            "VALUES (?, ?, 0, 'omp-1', 'task')",
+            (self.SESSION, time.time() + 5),
+        )
+        self.conn.commit()
+        self.assertEqual(self.gate(), "")
+
+    def _transcript(self, block):
+        path = os.path.join(self.state.name, "t.jsonl")
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + 5))
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "type": "message",
+                        "timestamp": stamp,
+                        "message": {"role": "assistant", "content": [block]},
+                    }
+                )
+                + "\n"
+            )
+        return path
+
+    def test_omp_transcript_task_toolcall_counts_as_dispatch(self):
+        self._dirty_code()
+        t = self._transcript(
+            {"type": "toolCall", "id": "x", "name": "task", "arguments": {}}
+        )
+        self.assertEqual(self.gate(transcript_path=t), "")
+
+    def test_claude_transcript_task_tool_use_still_counts(self):
+        self._dirty_code()
+        t = self._transcript(
+            {"type": "tool_use", "id": "x", "name": "Task", "input": {}}
+        )
+        self.assertEqual(self.gate(transcript_path=t), "")
+
+    def test_non_dispatch_transcript_tool_still_blocks(self):
+        self._dirty_code()
+        t = self._transcript(
+            {"type": "toolCall", "id": "x", "name": "bash", "arguments": {}}
+        )
+        self.assertIn("(m) Delegation mandate", self.gate(transcript_path=t))
+
+    def _earlier_run_dispatch(self):
+        """Close run 1 with a Task dispatch, then open a later run (new prompt)."""
+        atlas_db.log_event(self.conn, self.rid, "Task", "main", 0)
+        self.conn.execute(
+            "UPDATE runs SET started_at=?, ended_at=? WHERE id=?",
+            (time.time() - 200, time.time() - 100, self.rid),
+        )
+        self.conn.execute(
+            "INSERT INTO tool_calls (session_id, ts, is_sidechain, tool_use_id, tool_name) "
+            "VALUES (?, ?, 0, 'old-1', 'Task')",
+            (self.SESSION, time.time() - 150),
+        )
+        self.conn.commit()
+        pid = atlas_db.register_project(self.conn, str(self.root))
+        return atlas_db.start_run(self.conn, pid, self.SESSION)
+
+    def test_shell_dirt_covered_by_dispatch_in_earlier_run(self):
+        self._dirty_code()
+        self._earlier_run_dispatch()
+        self.assertEqual(self.gate(), "")
+
+    def test_later_run_write_still_needs_dispatch_in_that_run(self):
+        self.snapshot()
+        self.put("src/extra.py", "x = 1\n")
+        later = self._earlier_run_dispatch()
+        atlas_db.log_event(
+            self.conn, later, "Edit", "main", 0, str(self.root / "src/extra.py")
+        )
+        self.assertIn("(m) Delegation mandate", self.gate())
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -3502,7 +3589,9 @@ class ColonyRunScopeTest(unittest.TestCase):
     def _reaped_team(self, owner):
         """live-230: `atlas_mux reap` closes the team channel (gone from the registry) and archives the
         team record; the board keeps the workers' notes. Only those notes evidence the channel."""
-        atlas_todo._reg_update(self.tmp, lambda reg: reg["channels"].pop(self.chan, None))
+        atlas_todo._reg_update(
+            self.tmp, lambda reg: reg["channels"].pop(self.chan, None)
+        )
         self.assertNotIn(self.chan, atlas_todo._reg_read(self.tmp)["channels"])
         arch = Path(self.tmp) / ".atlas" / ".run" / "teams" / "archive"
         arch.mkdir(parents=True, exist_ok=True)
@@ -3515,20 +3604,36 @@ class ColonyRunScopeTest(unittest.TestCase):
         (arch / "tp1.json").write_text(json.dumps(rec), encoding="utf-8")
         target = atlas_todo.notes_dir(str(self.tmp))
         target.mkdir(parents=True, exist_ok=True)
-        with open(target / (owner + atlas_todo.NOTE_FILE_SUFFIX), "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({"ts": 2_000_000_001.0, "owner": owner, "channel": self.chan,
-                                 "to": "explorer-ccd5", "text": "peer-sync"}) + "\n")
+        with open(
+            target / (owner + atlas_todo.NOTE_FILE_SUFFIX), "a", encoding="utf-8"
+        ) as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "ts": 2_000_000_001.0,
+                        "owner": owner,
+                        "channel": self.chan,
+                        "to": "explorer-ccd5",
+                        "text": "peer-sync",
+                    }
+                )
+                + "\n"
+            )
 
     def test_reaped_team_member_note_counts(self):
         self._reaped_team("explorer-8147")
         self.assertTrue(
-            completion_gate._colony_channel_used(Path(self.tmp), "sess-p", 2_000_000_000.0)
+            completion_gate._colony_channel_used(
+                Path(self.tmp), "sess-p", 2_000_000_000.0
+            )
         )
 
     def test_reaped_team_stranger_note_does_not_count(self):
         self._reaped_team("stranger-1")
         self.assertFalse(
-            completion_gate._colony_channel_used(Path(self.tmp), "sess-p", 2_000_000_000.0)
+            completion_gate._colony_channel_used(
+                Path(self.tmp), "sess-p", 2_000_000_000.0
+            )
         )
 
 

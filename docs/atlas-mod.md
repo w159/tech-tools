@@ -125,7 +125,7 @@ The sidebar draws no sprites; `mod/sprites/api.ts` (`spriteRows`, `art.ts`, `pal
 
 ## Personas, models and effort
 
-Source of truth is `agents/*.md` frontmatter (13 agents; all set `model`, `effort` and `color`). The mod copies the frontmatter value; it never keeps a second table.
+Source of truth is `agents/*.md` frontmatter (14 agents; all set `model`, `effort` and `color`). The mod copies the frontmatter value; it never keeps a second table.
 
 How the mod applies the matrix: `agent.spawn` records the agentId→persona mapping for `atlas:<role>` spawns (model untouched, the frontmatter pin decides it); `turn.step` sets `effort` from the frontmatter when the agent maps to a persona, so forks of `planner`/`completeness-critic`/`docs-curator` get their frontmatter effort instead of inheriting the opus parent's. Unpinned spawns (armada departments, the generic `task`) are not rewritten.
 

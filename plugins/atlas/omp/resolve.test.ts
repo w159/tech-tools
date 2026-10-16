@@ -20,6 +20,7 @@ const ROWS = [
 	["docs", "medium"],
 	["db", "low"],
 	["ui-test", "high"],
+	["test", "high"],
 ] as const;
 
 describe("resolve parity with atlas_resolve.py", () => {

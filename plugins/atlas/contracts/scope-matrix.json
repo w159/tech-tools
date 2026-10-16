@@ -368,6 +368,50 @@
     "isolation": "shared",
     "max_parallel": 4
    }
+  },
+  "test": {
+   "low": {
+    "team": [
+     {
+      "role": "test-engineer",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "test-engineer",
+      "count": 2,
+      "effort": "low",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "worktree",
+    "max_parallel": 2
+   },
+   "high": {
+    "team": [
+     {
+      "role": "test-engineer",
+      "count": 3,
+      "effort": "low",
+      "tools_profile": "exec"
+     },
+     {
+      "role": "verifier",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "exec"
+     }
+    ],
+    "isolation": "worktree",
+    "max_parallel": 4
+   }
   }
  }
 }
