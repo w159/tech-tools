@@ -67,11 +67,12 @@ const EXPECTED: Record<string, string[]> = {
 	"rls-privilege-audit": FULL_READONLY,
 	runner: NO_EDIT_RESTRICTION,
 	"schema-inventory": FULL_READONLY,
+	"test-engineer": NO_EDIT_RESTRICTION,
 	"ui-runtime-tester": [...FULL_READONLY, ...CMUX_LEAD_ONLY],
 	verifier: FULL_READONLY,
 };
 
-test("all 13 real agents/*.md parse to exactly the disallowedTools their frontmatter lists", () => {
+test("all 14 real agents/*.md parse to exactly the disallowedTools their frontmatter lists", () => {
 	const files = readdirSync(AGENTS_DIR).filter(f => f.endsWith(".md")).map(f => f.slice(0, -3)).sort();
 	expect(files).toEqual(Object.keys(EXPECTED).sort());
 	for (const name of files) {

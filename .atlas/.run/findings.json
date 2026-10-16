@@ -7054,5 +7054,22 @@
     "status": "verified",
     "verified_at": "2026-10-16T15:03:47+00:00",
     "verified_by": "codeql-verifier"
+  },
+  {
+    "id": "OMP-GUARD",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "agent-guard.test.ts expects test-engineer; omp suite green",
+    "evidence": [
+      "bun test plugins/atlas/omp: 450 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun test plugins/atlas/omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T15:07:06+00:00",
+    "verified_by": "lead"
   }
 ]
