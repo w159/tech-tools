@@ -264,7 +264,6 @@ class RealTmuxViewTest(unittest.TestCase):
             env.pop("TMUX", None)
             with mock.patch.dict(os.environ, env, clear=True):
                 tm = lambda *a: subprocess.run(["tmux", *a], capture_output=True, text=True, env=env)  # noqa: E731
-                self.addCleanup(tm, "kill-server")
                 made = tm("new-session", "-d", "-s", "atlas-rt", "-x", "80", "-y", "24", "-P", "-F", "#{pane_id}", "cat")
                 pane = made.stdout.strip()
                 self.assertTrue(pane.startswith("%"), made.stderr)
@@ -278,6 +277,7 @@ class RealTmuxViewTest(unittest.TestCase):
                 self.assertEqual(tm("display-message", "-p", "-t", "atlas-view-rt1", "#{window_zoomed_flag}").stdout.strip(), "1")
                 model.cleanup_view("rt1")
                 self.assertNotEqual(tm("has-session", "-t", "atlas-view-rt1").returncode, 0)
+                tm("kill-server")  # inside the with: a cleanup would run after TMPDIR is gone and leak the server
 
 
 if __name__ == "__main__":

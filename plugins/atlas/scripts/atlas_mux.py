@@ -1530,7 +1530,7 @@ def cmd_kill(args) -> int:
             }
         )
     victims = [w["name"] for w in _windows(session) or [] if w["name"] != "lead"]
-    res = _tmux("kill-session", "-t", session)
+    res = _tmux("kill-session", "-t", f"={session}")
     if res.returncode == 0:
         # a killed worker never writes its own exit: without one it reads as working forever
         _kill_notes(root, [*victims, *stopped])
@@ -1995,7 +1995,7 @@ def cmd_reap(args) -> int:
 
         killed = bool(atlas_seats.close_run(rec["team_id"]).get("ok"))
     elif _tmux("has-session", "-t", session).returncode == 0:
-        killed = _tmux("kill-session", "-t", session).returncode == 0
+        killed = _tmux("kill-session", "-t", f"={session}").returncode == 0
     _kill_notes(
         root, names
     )  # exit note + mark_finished + leave for any worker that never posted its own

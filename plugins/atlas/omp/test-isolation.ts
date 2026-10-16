@@ -19,4 +19,13 @@ process.env.ATLAS_DASHBOARD_PORT = "17969";
 process.env.HERDR_SOCKET = join(root, "no-herdr.sock");
 delete process.env.HERDR_SOCKET_PATH;
 
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+// every tmux a test runs lands on a private server (default socket = <dir>/tmux-<uid>/default), never the user's
+process.env.TMUX_TMPDIR = mkdtempSync(join("/tmp", "atmx"));
+delete process.env.TMUX;
+delete process.env.TMUX_PANE;
+
+afterAll(() => {
+	Bun.spawnSync(["tmux", "kill-server"], { env: process.env }); // private socket only: TMUX_TMPDIR is set above
+	rmSync(process.env.TMUX_TMPDIR!, { recursive: true, force: true });
+	rmSync(root, { recursive: true, force: true });
+});
