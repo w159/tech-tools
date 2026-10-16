@@ -20,7 +20,7 @@ SSOT contract (see atlas-loop/references/docs-ssot.md, authoritative):
   .atlas/      -- atlas's own auditable operational state for self-improvement:
                   evidence/, findings/ (+ INDEX.md), audits/, decisions/,
                   archive/, understand-anything/, graphify/, self-improvement/,
-                  memory/, nudge/, plus CLAUDE.md + AGENTS.md orientation.
+                  memory/, plus CLAUDE.md + AGENTS.md orientation.
                   .run/ is the only ephemeral subtree.
   .atlas/      -- NEVER contains project wiki content (architecture, plans,
                   specs, lessons, wiki, features, reference). Those belong in
@@ -144,7 +144,6 @@ ATLAS_ENTRIES = [
     ("graphify", True),
     ("self-improvement", True),
     ("memory", True),
-    ("nudge", True),
     (".run", True),
 ]
 
@@ -161,7 +160,6 @@ ATLAS_SEEDED_FILES = [
     "graphify/.gitkeep",
     "self-improvement/.gitkeep",
     "memory/.gitkeep",
-    "nudge/.gitkeep",
 ]
 
 # .atlas/CLAUDE.md, .atlas/AGENTS.md, and the findings index use distinctly-
@@ -479,6 +477,17 @@ def main(argv: list) -> int:
         return 0
 
     repo_root = Path(argv[1] if len(argv) > 1 else Path.cwd()).resolve()
+    # Never scaffold into $HOME or a dir that is not a project root: a run
+    # with $HOME as root once littered ~/.atlas with project scaffolding.
+    if repo_root == Path.home().resolve() or not (
+        (repo_root / ".git").exists() or (repo_root / "docs").is_dir()
+    ):
+        print(
+            f"ERROR: refusing to scaffold at {repo_root}: not a project root "
+            "(must not be $HOME, and needs a .git entry or a docs/ dir).",
+            file=sys.stderr,
+        )
+        return 1
     docs_root = repo_root / "docs"
     atlas_root = repo_root / ".atlas"
 

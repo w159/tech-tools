@@ -359,5 +359,35 @@ class PaneFeedTests(unittest.TestCase):
         self.assertEqual(lines, [t for t in res.splitlines() if t.strip()])
 
 
+CODEX_FIXTURE = Path(__file__).parent / "fixtures" / "codex_stream.jsonl"
+
+
+class CodexFeedTests(unittest.TestCase):
+    """codex `exec --json`; fixture = documented item schema plus the thread/turn/error lines a live probe printed."""
+
+    def events(self):
+        return [json.loads(l) for l in CODEX_FIXTURE.read_text().splitlines() if l.strip()]
+
+    def test_renders_command_message_file_change(self):
+        out = "\n".join(plain(x) for ev in self.events() for x in pf.render_event(ev, 120))
+        self.assertIn("Bash", out)
+        self.assertIn("echo hi", out)
+        self.assertIn("Checking the repo layout first", out)  # reasoning -> think row
+        self.assertIn("src/app.py", out)
+        self.assertIn("STATUS: DONE", out)
+        self.assertNotIn("ignoring 8", out)  # config-warning error items are noise
+
+    def test_failed_turn_renders_error_row(self):
+        rows = pf.render_event({"type": "turn.failed", "error": {"message": "401 Unauthorized"}}, 120)
+        self.assertIn("401 Unauthorized", plain(rows[0]))
+
+    def test_feed_counts_tools_and_usage(self):
+        feed = pf.Feed("w1", "explorer", "t9", "c/x", "# Task\ngo", out=io.StringIO(), live=False)
+        for ev in self.events():
+            feed.event(ev)
+        self.assertEqual(1, feed.tools)
+        self.assertEqual({0: (250, 1000)}, feed.usage)
+
+
 if __name__ == "__main__":
     unittest.main()

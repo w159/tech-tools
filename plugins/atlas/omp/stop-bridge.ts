@@ -356,14 +356,39 @@ export function isTerminalYield(event: { toolName?: unknown; isError?: unknown; 
 	return !(record.status === "success" && Array.isArray(record.type) && record.type.length > 0 && record.type.every(item => typeof item === "string"));
 }
 
-/** Text of an omp message or tool result: a string, `{content: string | [{text}]}`, or `{details: {result: string}}`; "" when none (payload shape not verified live). */
+/** An outputSchema `yield` carries the real report in details.data; render it as the STATUS/STEPS/... text protocol check_report reads. "" when `data` is not a report. */
+function renderReport(data: unknown): string {
+	if (!data || typeof data !== "object") return "";
+	const d = data as { status?: unknown; stepsDone?: unknown; stepsTotal?: unknown; filesChanged?: unknown; evidence?: unknown; deliverable?: unknown; next?: unknown };
+	if (typeof d.status !== "string" || !d.status) return "";
+	const files = Array.isArray(d.filesChanged) ? d.filesChanged.map(String) : [];
+	const rows = (Array.isArray(d.evidence) ? d.evidence : []).map(e => {
+		const r = e as { step?: unknown; command?: unknown; output?: unknown };
+		return `${String(r.step)}. ${String(r.command)} -> ${String(r.output)}`;
+	});
+	return [`STATUS: ${d.status}`, `STEPS: ${Number(d.stepsDone) || 0}/${Number(d.stepsTotal) || 0}`, `FILES_CHANGED: ${files.length ? files.join(", ") : "none"}`, "EVIDENCE:", ...rows, `DELIVERABLE: ${String(d.deliverable ?? "")}`, `NEXT: ${String(d.next ?? "")}`].join("\n");
+}
+
+/** Text of an omp message or tool result: a yield report (`details.data`), a string, `{content: string | [{text}]}`, or `{details: {result: string}}`; "" when none (payload shape not verified live). */
 export function textOf(v: unknown): string {
 	if (typeof v === "string") return v;
 	if (!v || typeof v !== "object") return "";
-	const r = v as { content?: unknown; details?: { result?: unknown } };
+	const r = v as { content?: unknown; details?: { result?: unknown; data?: unknown } };
+	const report = renderReport(r.details?.data);
+	if (report) return report;
 	if (typeof r.content === "string") return r.content;
 	if (Array.isArray(r.content)) return r.content.map(c => (typeof (c as { text?: unknown })?.text === "string" ? (c as { text: string }).text : "")).join("\n");
 	return typeof r.details?.result === "string" ? r.details.result : "";
+}
+
+/** The worker's final report from its messages: newest non-empty assistant text, or a yield tool result's rendered data; "" when neither exists. */
+export function finalReportOf(messages: unknown[]): string {
+	for (const m of [...messages].reverse()) {
+		const role = (m as { role?: unknown })?.role;
+		const text = role === "assistant" ? textOf(m).trim() : role === "toolResult" ? renderReport((m as { details?: { data?: unknown } }).details?.data) : "";
+		if (text) return text;
+	}
+	return "";
 }
 
 export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridgeDeps = {}): void {
@@ -567,8 +592,7 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 	// ctx while omp parks it, so this is the reliable per-worker completion signal; the yield hook above is the early one.
 	pi.on("agent_end", async (event, ctx) => {
 		const bridgeCtx = ctx as BridgeCtx;
-		const last = [...((event as { messages?: unknown[] }).messages ?? [])].reverse().find(m => (m as { role?: unknown })?.role === "assistant");
-		if (bridgeCtx.agent?.kind === "sub") await markSubFinished(bridgeCtx, textOf(last));
+		if (bridgeCtx.agent?.kind === "sub") await markSubFinished(bridgeCtx, finalReportOf((event as { messages?: unknown[] }).messages ?? []));
 	});
 
 	pi.on("auto_compaction_start", async (_event, ctx) => {

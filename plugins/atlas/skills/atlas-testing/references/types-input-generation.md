@@ -1,5 +1,19 @@
 # Input generation: property-based, fuzz, metamorphic, combinatorial, differential, model-based (TYPE IDs: `property-based`, `fuzz`, `metamorphic`, `combinatorial`, `differential`, `model-based`)
 
+## Contents
+
+- Definition
+- Property-based testing (TYPE ID: `property-based`)
+- Fuzzing (TYPE ID: `fuzz`)
+- Metamorphic testing (TYPE ID: `metamorphic`)
+- Combinatorial / pairwise testing (TYPE ID: `combinatorial`)
+- Differential testing (TYPE ID: `differential`)
+- Model-based / stateful testing (TYPE ID: `model-based`)
+- PR vs nightly strategy
+- Interpreting results and thresholds
+- Regulated-data priority (Henssler Financial)
+- Sources
+
 ## Definition
 
 These families generate inputs rather than hand-write them, then check the result against an **oracle**: the thing that decides pass/fail. The oracle is the whole game; a generator without an oracle only checks for crashes. Pick the family by the oracle you can actually express.

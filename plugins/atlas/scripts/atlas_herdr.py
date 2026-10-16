@@ -258,6 +258,8 @@ def _agent_row(a: dict, labels: dict, web: str) -> dict:
         "state_change_seq": a.get("state_change_seq"),
         "completion_seq": a.get("completion_seq"),
         "deep_link": f"{web}/?pane={quote(pane)}&machine=local",
+        # id only (the file stem's uuid), never the path; joins the pane to its todo items.
+        "session_id": os.path.basename(str((a.get("agent_session") or {}).get("value") or "")).removesuffix(".jsonl").rsplit("_", 1)[-1],
     }
 
 

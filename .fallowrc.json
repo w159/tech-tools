@@ -2,7 +2,9 @@
   "$schema": "https://fallow.dev/schema.json",
   "ignorePatterns": [
     "plugins/atlas/mcp/*/server.mjs",
-    "plugins/atlas/mcp/*/http.mjs"
+    "plugins/atlas/mcp/*/http.mjs",
+    "plugins/atlas/scripts/dashboard_ui/vendor/xterm/*",
+    "plugins/atlas/scripts/dashboard_ui/css/*.css"
   ],
   "entry": [
     "mcp_servers/_shared/__tests__/*.test.ts",

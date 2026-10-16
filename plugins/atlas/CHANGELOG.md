@@ -1,12 +1,55 @@
 # Changelog
 
-## Unreleased
+## 12.5.0 (2026-10-16)
+
+### Added
+
+- Atlas Colony terminal workspace (Command Center `#/terminal`): a live tmux card grid of every colony worker; Enlarge opens an interactive attach over a websocket PTY (`scripts/atlas_dash_term.py`, `js/pages/terminal.js`, vendored xterm.js + fit addon under `dashboard_ui/vendor/xterm/`).
+- Atlas Command Center TUI, `/atlas-tui` (`scripts/atlas_tui.py`, `skills/atlas-tui/`), on a shared colony model (`scripts/atlas_colony_model.py`) that the dashboard also reads.
+- Codex worker harness in `atlas_mux.py` / `atlas_panefeed.py` (stream fixture `scripts/fixtures/codex_stream.jsonl`).
+
+### Changed
+
+- tmux is the default colony transport whenever it is installed (session `atlas-<run>`, one window per worker); `claude-bg` is only the fallback and `ATLAS_COLONY_TRANSPORT=herdr|tmux|claude-bg` still forces one.
+- Removed the herdr Terminal iframe page (`js/pages/herdr.js`); the Terminal page is the native tmux workspace.
 
 ### Fixed
 
+- Agents tab: `joinAgents` joins on the store's real shape: the store reads `/api/v2/projects`, whose rows carry `root`. `root_path` (the `/api/projects` shape) is now also accepted defensively. The live join gives lead panes their project's open items.
+- Completion gate (m): shell dirt that another session's `tool_calls` (any `is_sidechain`) wrote after this run's start is no longer blamed on this session, so a second session sharing the worktree no longer trips the "zero dispatches" block (`_other_session_writes`, `plugins/atlas/hooks/completion_gate_core.py`). Fails open on errors.
+- Tripwire tests no longer depend on an inherited `CLAUDE_PLUGIN_ROOT`.
+- The dispatch tripwire reads `effort_aliases`/`class_aliases` from `contracts/scope-matrix.json` (one alias table shared with the resolver).
+- Conformance: `test-engineer` classed writable, description gains a `Use when` clause, `atlas-testing` references the testscope test and long references carry `## Contents`.
+- Improve fix: the memory_capture miner regex is now lazy, so it no longer re-flags handled drops.
+- Improve fix: `gate_block_loop` writes its friction row once per loop instead of once per block.
+- Improve fix: formatter parse skips are no longer recorded as friction.
+- Improve fix: the dispatch gate gives one combined deny, accepts effort/class aliases (`med`/`hi`/`lo`, `explore`/`research`/`feature`), scans every SCOPE line, and prints an omp paste block.
+- Improve fix: native Grep/Glob is allowed outside the project root, and `model_misuse` is excluded from the mcp error rate.
+- Improve fix: `session_ingest` backfills session facets.
+- Improve fix: `colony_adherence` ignores worker sessions with 0 prompts.
+- Improve fix: the scope resolver (`atlas_resolve.py`, `omp/resolve.ts`) accepts the same effort/class aliases as the dispatch gate, read from `contracts/scope-matrix.json`.
 - CodeQL hardening in herdr-web-ui: markdown URL regexes use explicit character classes, ws submit/secret settlers are type-checked before call, `errorResponse` no longer returns raw exception text on 500 (logged server-side), Copilot token host match is exact, and site FAQ text strips stray `<`/`>`.
 - CodeQL hardening in atlas Python scripts: dashboard agent-override and static-file paths and connector directories are realpath-contained before use, and the env-import and memory-capture-miner regexes no longer backtrack polynomially/exponentially.
 - Completion gate (m) delegation mandate no longer false-blocks later turns of a session that already dispatched: code written through the shell (diffed against the SessionStart snapshot, so session-scoped) is now checked against session-wide dispatch evidence (`dispatches`/`events` on any run of the session, `tool_calls` and transcript without the run-start cutoff), while Write/Edit records stay run-scoped. It also recognises omp dispatches: `events`/`tool_calls` names match `Task`/`Agent` case-insensitively (omp's tool is lowercase `task`) and the transcript scan accepts omp's `toolCall` block alongside Claude's `tool_use`. Finding GATE-M-OMP-TASK.
+- Atlas no longer scaffolds junk into `$HOME` or a non-project root. `scaffold_docs.py` refuses to run when the root is `$HOME` or lacks both a `.git` entry and a `docs/` dir (`plugins/atlas/skills/atlas-setup/scripts/scaffold_docs.py:480`). The unused `.atlas/nudge/` directory is removed from the scaffold, `session_boot` structure paths, and the gitignore seed; nudge hook state lives in `~/.atlas/hookstate` instead.
+- `worker_inbox.drain` no longer creates a `<worker>.json.lock` file for an idle worker with no cursor (`plugins/atlas/hooks/worker_inbox.py`). Session boot prunes `.atlas/.run/inbox` and `.atlas/.run/autonames` files untouched for 7 days (`prune_run_state`, `plugins/atlas/hooks/session_boot_core.py:891-895`).
+- `atlas_todo.sweep` archives manual board items past their TTL when their owner was set and is no longer live (`plugins/atlas/scripts/atlas_todo.py:699`); the sweep now runs on both Stop and SessionEnd (`ingest_session._sweep_todos`, `plugins/atlas/hooks/ingest_session.py:107`), not only when the dashboard Work tab opens. A finished worker's dispatch item is closed even without a report: `worker_report_gate_core.close_board_item` sets it to `blocked`, with evidence `worker finished without a valid report: <reason>` (`plugins/atlas/hooks/worker_report_gate_core.py:197-216`), not archived as `worker_finished`.
+- Terminal panel no longer shows empty when herdr is up: `atlas_seats.agents()` returns the union of rig and herdr rows, deduped by `pane_id` (`plugins/atlas/scripts/atlas_seats.py:106-107`); `backend()` picks herdr when rig holds no rigs (`ATLAS_SEAT_BACKEND` still restricts). `atlas_seats.close_run` closes runs in every live source so mux reap tears down rigs too (`plugins/atlas/scripts/atlas_seats.py:128`); `atlas_rig.close_run` retries `rig down` with a throwaway tmux keepalive session when no tmux server exists, because `rig` read "no tmux server" as "seat not confirmed gone" and refused with `deleteBlocked` (`plugins/atlas/scripts/atlas_rig.py:415-428`).
+- Empty colony view fixed: dashboard colony handlers normalize the picked project to its repo root (`_repo_root`, `plugins/atlas/scripts/atlas_dash_colony.py:724`); the dashboard project list and `reap_tick` drop junk rows ($HOME, subdirs of other repos, `.claude/worktrees`, `~/.omp/wt`, the omp plugin cache, `~/.atlas/worktrees`) via `_junk_root` (`plugins/atlas/scripts/atlas_dashboard.py:715-718,2986-2993`).
+- Mux reap now marks team members finished and leaves the lead channel; `atlas_mux status` usage names `--run|--team` (`plugins/atlas/scripts/atlas_mux.py`).
+- `atlas_faults.record` no longer writes the real `~/.atlas/hook-faults.jsonl` when `PYTEST_CURRENT_TEST` is set and `ATLAS_HOME` is unset, so tests cannot pollute it again (116 rows on 2026-10-06 came from tests) (`plugins/atlas/scripts/atlas_faults.py:65-72`).
+- `atlas_mux._log_tmux_failure` writes its failure log to the nearest ancestor directory that has a real `.atlas/.run`, not the cwd, and never creates `.atlas` itself (`plugins/atlas/scripts/atlas_mux.py:187-205`).
+- An omp worker's final yield report came through as "Result submitted.", so `check_report` did not read it as STATUS/STEPS text and the board item stayed open; 58 more items ended with empty final text. `renderReport` turns the yield's `details.data` report into the STATUS text protocol `check_report` reads, and `finalReportOf` uses it for the newest `toolResult` message (`plugins/atlas/omp/stop-bridge.ts:360-389`). When the final text is still empty, `finalReportOf` now falls back to the newest non-empty assistant text or yield report instead of leaving the item open (`plugins/atlas/omp/stop-bridge.ts:385-391`).
+- omp dispatch board items had `origin: manual` and no board-item marker, so they were indistinguishable from a human's own notes. They now get `origin: dispatch` and a `BOARD ITEM: <id>` line in the worker prompt (`plugins/atlas/omp/channels.ts:126-146`). `atlas_todo add --origin` was silently dropped before; the flag is now read and passed through (`plugins/atlas/scripts/atlas_todo.py:1816,1853`). The Agents Tasks tab still joins an omp worker to its board item by owner name.
+- The Agents Tasks tab joined only on `owner == pane title`, so a lead pane (titled with its own prompt text, not a worker name) showed no tasks for its in-process subagents, which have no pane of their own. It now falls back to the lead's project's open and in-progress board items when no owner matches (`plugins/atlas/scripts/dashboard_ui/js/agents-store.js:94-99`); `projectFor` now matches a project root that ends in a trailing slash (`plugins/atlas/scripts/dashboard_ui/js/agents-store.js:68-75`).
+- `worker_report_gate_core.check_report` runs the FAILING_RE check on the last numbered EVIDENCE row only, not on every row. A TDD report with an early red row and a later green row now passes (`plugins/atlas/hooks/worker_report_gate_core.py`).
+- `atlas_todo.sweep` no longer age-archives a board item whose status is `blocked`.
+- Dashboard: `_todo_view` now maps status `blocked` to the UI `blocked` state (before, only the `blocked` flag set it, so a blocked item showed as open) and exposes `session_id` and `channel`. `build_agents` copies each pane's `session_id`. `agents-store` matches a lead pane's tasks by `session_id` or its `lead-<sid6>` channel, and falls back to the project's open items when neither matches.
+- `atlas_herdr._agent_row` exposes `session_id` (the file stem only, never the full path). New `plugins/atlas/conftest.py` pins `HERDR_SOCKET_PATH`, so tests can no longer reach the live herdr server.
+- `atlas_doctor.self_manifest` falls back to its own manifest when `CLAUDE_PLUGIN_ROOT` points at a removed install. This was the cause of the `miner:recurring_friction` ENOENT faults reported against 12.4.4.
+- `atlas_db.reap_stale_worker_runs`: the dashboard `reap_tick` now closes worker runs idle for over 1 hour; before, only the lead Stop hook closed them, so runs of dead workers stayed open (`plugins/atlas/scripts/atlas_db.py:669`).
+- New `plugins/atlas/bunfig.toml`: `bun test` run from `plugins/atlas` preloads test isolation so `ATLAS_HOME` is a temp dir; 4 `convert exploded` rows in the real `~/.atlas` came from such a run. `stop-bridge.test.ts` anchors its python spawn to `import.meta.dir`, so it passes from either cwd.
+- Dashboard `status: blocked` now writes board status `blocked` through `atlas_todo.set_status` (the board is the single source) instead of setting the legacy `blocked` flag; `_todo_view` still honors a legacy flag.
 
 ## 12.4.6 (2026-10-14)
 

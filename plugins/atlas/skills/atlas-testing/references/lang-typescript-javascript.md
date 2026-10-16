@@ -4,6 +4,14 @@ Covers React/Vue/Svelte frontends, Node/Bun/Deno services, Next.js apps, and Vit
 
 Regulated context (FTC Safeguards, SEC Reg S-P, GLBA): prioritize authz/middleware tests, financial-calculation property tests, and coverage gates; keep client-data out of snapshot files.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |

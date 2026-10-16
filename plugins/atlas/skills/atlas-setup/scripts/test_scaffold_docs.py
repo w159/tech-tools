@@ -1,6 +1,7 @@
 import os
 import sys
 import tempfile
+import unittest.mock
 import unittest
 from pathlib import Path
 
@@ -28,7 +29,6 @@ ATLAS_SUBFOLDERS = (
     "graphify",
     "self-improvement",
     "memory",
-    "nudge",
     ".run",
 )
 
@@ -39,10 +39,36 @@ class TempRepo:
     def __enter__(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name)
+        (self.root / ".git").mkdir()
         return self.root
 
     def __exit__(self, *exc):
         self._tmp.cleanup()
+
+
+class RootGuardTest(unittest.TestCase):
+    def test_refuses_home(self):
+        with TempRepo() as root:
+            with unittest.mock.patch.dict(os.environ, {"HOME": str(root)}):
+                (root / ".git").rmdir()
+                self.assertEqual(scaffold_docs.main(["s", str(root)]), 1)
+            self.assertFalse((root / ".atlas").exists())
+
+    def test_refuses_non_project_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(scaffold_docs.main(["s", d]), 1)
+            self.assertEqual(os.listdir(d), [])
+
+    def test_home_with_git_still_refused(self):
+        with TempRepo() as root:
+            with unittest.mock.patch.dict(os.environ, {"HOME": str(root)}):
+                self.assertEqual(scaffold_docs.main(["s", str(root)]), 1)
+            self.assertFalse((root / ".atlas").exists())
+
+    def test_no_nudge_dir(self):
+        with TempRepo() as root:
+            self.assertEqual(scaffold_docs.main(["s", str(root)]), 0)
+            self.assertFalse((root / ".atlas" / "nudge").exists())
 
 
 class FullScaffoldTest(unittest.TestCase):
@@ -297,7 +323,6 @@ class ToolingBlockTest(unittest.TestCase):
             text = (root / "AGENTS.md").read_text()
             self.assertIn("Hand-written project rules", text)
             self.assertIn(scaffold_docs.TOOLING_MARKER_START, text)
-
 
 
 if __name__ == "__main__":

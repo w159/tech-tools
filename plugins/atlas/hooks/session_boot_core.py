@@ -129,7 +129,9 @@ def _boot_log(stage, reason):
     """Append `<iso-ts> ensure_colony: <stage> <reason>` to $ATLAS_HOME/colony-boot.log. Boot stays silent
     on the terminal; this file is the only trace of why the colony did not start. Fail-open."""
     try:
-        home = os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas")
+        home = os.environ.get("ATLAS_HOME") or os.path.join(
+            os.path.expanduser("~"), ".atlas"
+        )
         os.makedirs(home, exist_ok=True)
         line = "%s ensure_colony: %s %s\n" % (
             time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -147,7 +149,9 @@ def _boot_seats(home):
     (rig or none: silent, failures only in colony-boot.log); False means backend herdr, run the legacy path."""
     import subprocess
 
-    scripts = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+    scripts = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+    )
     if scripts not in sys.path:
         sys.path.insert(0, scripts)
     import atlas_seats
@@ -158,22 +162,40 @@ def _boot_seats(home):
     if kind == "none":
         _boot_log("backend", "none")
         return True
-    if os.environ.get("ATLAS_HERDR_AUTOSTART", "on").lower() in ("0", "off", "false", "no"):
+    if os.environ.get("ATLAS_HERDR_AUTOSTART", "on").lower() in (
+        "0",
+        "off",
+        "false",
+        "no",
+    ):
         return True
     cache = os.path.join(home, "seat-status-cache.json")
     try:
         with open(cache) as f:
-            if json.load(f).get("healthy") and time.time() - os.path.getmtime(cache) < _COLONY_TRUST_S:
+            if (
+                json.load(f).get("healthy")
+                and time.time() - os.path.getmtime(cache) < _COLONY_TRUST_S
+            ):
                 return True
     except (OSError, ValueError):
         pass
     os.makedirs(home, exist_ok=True)
     # detached + idempotent (ensure_server probes /healthz first); output refreshes the cache, errors go to the log
     subprocess.Popen(
-        ["sh", "-c", '"$0" "$1" ensure >"$2.tmp" 2>>"$3" && mv "$2.tmp" "$2"', sys.executable,
-         os.path.join(scripts, "atlas_seats.py"), cache, os.path.join(home, "seat-ensure.log")],
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True, env=os.environ.copy(),
+        [
+            "sh",
+            "-c",
+            '"$0" "$1" ensure >"$2.tmp" 2>>"$3" && mv "$2.tmp" "$2"',
+            sys.executable,
+            os.path.join(scripts, "atlas_seats.py"),
+            cache,
+            os.path.join(home, "seat-ensure.log"),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        env=os.environ.copy(),
     )
     return True
 
@@ -261,9 +283,16 @@ def ensure_colony():
             return f"colony ready at {url}"
         if not data.get("herdr_server"):
             # ATLAS_HERDR_AUTOSTART (default on) starts the headless server; off keeps the old hands-off boot
-            if os.environ.get("ATLAS_HERDR_AUTOSTART", "on").lower() in ("0", "off", "false", "no"):
+            if os.environ.get("ATLAS_HERDR_AUTOSTART", "on").lower() in (
+                "0",
+                "off",
+                "false",
+                "no",
+            ):
                 return None
-            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(script)), ""))
+            sys.path.insert(
+                0, os.path.join(os.path.dirname(os.path.abspath(script)), "")
+            )
             import atlas_herdr
 
             started = atlas_herdr.ensure_server()
@@ -711,7 +740,6 @@ _STRUCTURE_PATHS = (
     ".atlas/graphify/",
     ".atlas/self-improvement/",
     ".atlas/memory/",
-    ".atlas/nudge/",
     "README.md",
     "AGENTS.md",
     "CLAUDE.md",
@@ -859,6 +887,24 @@ def resume_block(root):
         return None
 
 
+_RUN_PRUNE_DIRS = ("inbox", "autonames")
+_RUN_PRUNE_SECONDS = 7 * 86400
+
+
+def prune_run_state(root):
+    """Delete files untouched for 7 days under <root>/.atlas/.run/{inbox,autonames}
+    (one cursor/lock/state per session, otherwise never reclaimed). Never raises."""
+    cutoff = time.time() - _RUN_PRUNE_SECONDS
+    for sub in _RUN_PRUNE_DIRS:
+        base = os.path.join(root, ".atlas", ".run", sub)
+        with contextlib.suppress(Exception):
+            for name in os.listdir(base):
+                path = os.path.join(base, name)
+                with contextlib.suppress(Exception):
+                    if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
+                        os.remove(path)
+
+
 def main():
     payload = {}
     with contextlib.suppress(Exception):
@@ -888,7 +934,6 @@ def main():
             _conn.close()
 
     resume = resume_block(payload.get("cwd") or os.getcwd())
-
     # Todo board: hand unfinished items from previous sessions to this one
     # (origin=carried) and archive what completed. The boot line gives the
     # session its starting ledger; the dashboard Work tab renders the board.
@@ -923,6 +968,7 @@ def main():
                 with open(_env_file, "a", encoding="utf-8") as _f:
                     _f.write(_line)
 
+    prune_run_state(_find_structure_root(payload.get("cwd") or os.getcwd()))
     todo_line = None
     with contextlib.suppress(
         Exception
@@ -951,7 +997,9 @@ def main():
                 carry = {}
             else:
                 carry = atlas_todo.carry_over(_todo_root, payload.get("session_id", ""))
-                with contextlib.suppress(Exception):  # fail-open: dead lead channels must never block boot
+                with contextlib.suppress(
+                    Exception
+                ):  # fail-open: dead lead channels must never block boot
                     atlas_todo.reap_channels(_todo_root)
             c = carry.get("counts") or {}
             if c.get("needed") or carry.get("carried"):

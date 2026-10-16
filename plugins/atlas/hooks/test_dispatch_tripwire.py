@@ -1771,6 +1771,7 @@ class VerifierVerdictBracketTest(unittest.TestCase):
     def test_hint_names_an_existing_absolute_script_path(self):
         """$CLAUDE_PLUGIN_ROOT is expanded only by the hook runner, never in a
         model-run shell, so the hint must carry the resolved absolute path."""
+        self.env["CLAUDE_PLUGIN_ROOT"] = ""
         self._write_findings([{"id": "S1", "status": "open"}])
         run_hook(self._payload("PreToolUse"), self.env)
         post = run_hook(self._payload("PostToolUse"), self.env)
@@ -1984,6 +1985,16 @@ class NativeToolPolicyTest(unittest.TestCase):
         self._mcp_json()
         with patch.object(self.dt, "NATIVE_TOOLS_PATH", str(self.root / "absent.json")):
             self.assertEqual(self.call("Grep"), (False, ""))
+
+    def test_native_search_outside_project_root_is_allowed(self):
+        """lean-ctx rejects out-of-root paths ('path escapes project root',
+        finding 9651): native Grep/Glob must pass for e.g. a worktree."""
+        self._mcp_json()
+        outside = str(self.root.parent / "worktrees" / "ws" / "src")
+        for tool in ("Grep", "Glob"):
+            self.assertEqual(self.call(tool, tool_input={"path": outside}), (False, ""))
+            inside = self.call(tool, tool_input={"path": str(self.root / "src")})
+            self.assertTrue(inside[0])  # in-root still denied
 
     def test_native_policy_env_unset_or_on_still_denies_native_grep(self):
         # Claude Code never sets ATLAS_NATIVE_POLICY: the deny must be unchanged.
@@ -3544,14 +3555,15 @@ class TeamMuxDispatchTest(ReadOnlyInvestigationTest):
 
     def test_guidance_commands_carry_this_plugins_absolute_scripts(self):
         """CLAUDE_PLUGIN_ROOT is unset in the lead's Bash: leads ran the repo's scripts, not the install."""
-        sys.path.insert(0, os.path.dirname(__file__))
-        import dispatch_tripwire as dt
-
-        scripts = Path(dt.__file__).resolve().parents[1] / "scripts"
-        for cmd, script in (
-            (dt.RESOLVE_CMD, "atlas_resolve.py"),
-            (dt.SPAWN_TEAM_CMD, "atlas_mux.py"),
-        ):
+        # The command strings are import-time constants: import in a child with the variable unset.
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
+        hooks = os.path.dirname(os.path.abspath(__file__))
+        out = subprocess.run(
+            [sys.executable, "-c", "import dispatch_tripwire as d;print(d.RESOLVE_CMD);print(d.SPAWN_TEAM_CMD)"],
+            cwd=hooks, env=env, capture_output=True, text=True, check=True,
+        ).stdout.splitlines()
+        scripts = Path(hooks).resolve().parent / "scripts"
+        for cmd, script in zip(out, ("atlas_resolve.py", "atlas_mux.py")):
             self.assertNotIn("CLAUDE_PLUGIN_ROOT", cmd)
             self.assertIn(f'python3 "{scripts / script}"', cmd)
             self.assertTrue((scripts / script).is_file())
@@ -4205,6 +4217,48 @@ class ScopeGateTest(unittest.TestCase):
         decision, note = self._decision(run_hook(payload, self.env))
         self.assertIsNone(decision)
         self.assertIn("ADVISORY", note)
+
+    def _raw(self, agent, prompt):
+        payload = {
+            "session_id": "sess-1",
+            "cwd": self.tmp,
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "tool_input": {
+                "subagent_type": agent,
+                "name": COLONY_NAME,
+                "prompt": prompt,
+            },
+        }
+        return self._decision(run_hook(payload, self.env))
+
+    def test_h_effort_and_class_aliases_resolve(self):
+        # Live denials: `SCOPE explore/med`, `research/med`, `feature/medium`.
+        for scope in ("audit/med", "explore/med", "research/hi", "audit/lo"):
+            self.assertIsNone(
+                self._decision(self._dispatch("atlas:explorer", scope))[0], scope
+            )
+        self.assertIsNone(
+            self._decision(self._dispatch("atlas:implementer", "feature/medium"))[0]
+        )
+
+    def test_i_deny_suggests_a_scope_line_for_the_role(self):
+        _, reason = self._decision(self._dispatch("atlas:docs-curator"))
+        self.assertIn("SCOPE: docs/medium", reason)
+        _, reason = self._decision(self._dispatch("atlas:implementer", "verify/low"))
+        self.assertIn("SCOPE: implement/medium", reason)
+
+    def test_j_any_scope_line_in_a_shared_context_may_cover_the_role(self):
+        # omp prepends the batch context: its SCOPE line must not shadow the task's own.
+        spec = SPEC_BLOCK.replace("SCOPE: fix/medium\n", "")
+        prompt = f"SCOPE: docs/low\n{TOOLS_BLOCK}{spec}SCOPE: verify/medium\n"
+        self.assertIsNone(self._raw("atlas:verifier", prompt)[0])
+
+    def test_k_toolkit_scope_spec_problems_arrive_in_one_deny(self):
+        decision, reason = self._raw("atlas:explorer", "GOAL: map it.\n")
+        self.assertEqual(decision, "deny")
+        for needle in ("TOOLS block", "SCOPE: <class>/<effort>", "unbounded: missing"):
+            self.assertIn(needle, reason)
 
 
 if __name__ == "__main__":

@@ -48,6 +48,8 @@ Everything above this section describes the herdr backend. Since the OpenRig wor
 
 **Facade.** `atlas_seats.backend()` returns `rig`, `herdr` or `none`: `ATLAS_SEAT_BACKEND=rig|herdr|off` overrides; otherwise `rig` when `$ATLAS_HOME/openrig/npm/node_modules/.bin/rig` exists or Node 22/24 plus npm are present (it will be installed), else `herdr` when `atlas_herdr.status()` reports it installed, else `none`. The ten public functions (`status`, `ensure`, `ensure_server`, `list_panes`, `create_pane`, `close_pane`, `close_run`, `pane_live`, `send_prompt`, `agents`) delegate to `atlas_rig` or `atlas_herdr` with the same signatures and return shapes; `capture(pane_id, lines)` is rig-only (herdr returns `not_supported`). `status()` adds `backend` and `web_ui` (true only for herdr, which has the vendored web UI). Callers: `atlas_mux.py` (`_seats_up()` is the one liveness check), `atlas_dash_herd.py`, `atlas_dash_colony.py`, `atlas_dash_irc.py`, `atlas_dash_integrations.py`, `atlas_launch.py`, `atlas_remote.py`, `hooks/session_boot_core.py`. Herdr-only helpers (`rpc`, `web_url`, tabs, sessions, `pane.read`) stay behind `backend() == "herdr"`.
 
+**Fix (2026-10-16): empty terminal panel.** `agents()` now returns the union of rig and herdr rows, deduped by `pane_id`, instead of only the picked backend's rows, so panes from either source show in the Terminal panel when herdr is up. `close_run` closes a run in every live source, so mux reap tears down rigs too. `atlas_rig.close_run` retries `rig down` with a throwaway tmux keepalive session when no tmux server exists: `rig` misread "no tmux server" as "seat not confirmed gone" and refused with `deleteBlocked`.
+
 **OpenRig process model (`scripts/atlas_rig.py`).** OpenRig is a Node daemon with a SQLite store and the `rig` CLI; its agents are tmux sessions. Atlas uses it only as a seat manager:
 
 - Install: `atlas_rig.install()` runs `npm install --prefix $ATLAS_HOME/openrig/npm @openrig/cli@<RIG_VERSION>` (pinned, 0.6.10); Node must be 22 or 24 (better-sqlite3); never `npm -g`, never `rig setup` (it installs tmux, herdr and brew packages on its own). Log: `$ATLAS_HOME/openrig/install.log`.
@@ -61,9 +63,13 @@ Everything above this section describes the herdr backend. Since the OpenRig wor
 
 **Dashboard data path.** `GET /api/v2/herd/status` returns the facade status with `backend` and `web_ui`; `GET /api/v2/herd/agents` joins `agents()` with channel members as before; `POST /api/v2/herd/server/start` and `/ensure` call the facade. `GET /api/v2/herd/capture?pane=<id>&lines=<n>` (same `X-Atlas-Token` as peek) returns `{ok, pane_id, text}` with ANSI stripped and secrets redacted (400 no pane, 501 on herdr, 502 capture failure). The agents store (`js/agents-store.js`) sets `layers.webui = {none: true}` when `web_ui` is false, so the Fleet inspector's Terminal tab renders `js/capture-view.js` (a `pre.pane-capture` polled every 2s, stops when hidden or detached) instead of the herdr iframe, and the Terminal page shows "No web terminal for this runtime".
 
+## Terminal workspace and Command Center TUI (12.5.0)
+
+The Command Center Terminal page (`#/terminal`, `js/pages/terminal.js`) replaces the herdr iframe: a live card grid of every colony tmux window, refreshed from `atlas_colony_model.py`. Enlarge opens an interactive attach, a websocket PTY served by `scripts/atlas_dash_term.py` and rendered with the vendored xterm.js (`dashboard_ui/vendor/xterm/`). `/atlas-tui` (`scripts/atlas_tui.py`, skill `atlas-tui`) shows the same colony model in a terminal. tmux is the default colony transport (session `atlas-<run>`, one window per worker); codex workers run through the same mux harness (`atlas_mux.py`, `atlas_panefeed.py`). herdr remains a forceable transport (`ATLAS_COLONY_TRANSPORT=herdr`) but no longer has a Terminal page.
+
 ## Spawning workers (transport)
 
-`scripts/atlas_mux.py:transport()` returns the pane transport whenever `_seats_up()` is true (a seat backend answers), else `claude-bg` for claude workers and `tmux` for omp workers; `ATLAS_COLONY_TRANSPORT=herdr|tmux|claude-bg` forces one. The pane transport label is still spelled `herdr` in mux JSON and board records for compatibility (rename tracked in `docs/ROADMAP.md`). `spawn-team` uses one rig per team id when seats are up and keeps the tmux tiled layout as the fallback. The paragraphs below describe the herdr backend specifically.
+`scripts/atlas_mux.py:transport()` returns `tmux` by default whenever tmux is installed (else `claude-bg`); `ATLAS_COLONY_TRANSPORT=herdr|tmux|claude-bg` forces one. The pane transport label is still spelled `herdr` in mux JSON and board records for compatibility (rename tracked in `docs/ROADMAP.md`). `spawn-team` uses one rig per team id when seats are up and keeps the tmux tiled layout as the fallback. The paragraphs below describe the herdr backend specifically.
 
 | Layer | What it does | Source |
 |---|---|---|
@@ -131,6 +137,8 @@ States (`_state`): `finished` (exit 0 recorded), `dead` (nonzero exit recorded; 
 **Send rules and header (10.4.3).** The header shows the current channel, lead, worker count and project. Finished, dead or parked members cannot be sent to (409 `member_finished`) and the UI shows the reason. Parked: a non-lead member with no pane/pid, silent 10 min (`PARKED_S`). The lead's always-refused Kill is removed from the UI. Mirrored completed todos no longer flood the lead row. The omp stop-bridge calls `atlas_todo.py member-finish --agent <id> --exit 0` when a subagent session ends.
 
 **Parked and lead liveness (10.4.3).** A parked member can receive nothing: it is excluded from "can receive" and Send is disabled. The lead row's liveness comes from real signals (tool_calls, hook events, session file mtime, inbox cursor mtime) and reads "active, last ... Ns ago" or "idle N min"; "headless" now reads "no terminal pane". The project list and Colony picker hide repo fixture roots (`/atlas-e2e`, `atlas-demo`), `.scratch` dirs, temp-dir roots and nonexistent roots; nothing is deleted from the registry.
+
+**Fix (2026-10-16): empty colony view.** The colony handlers normalize the picked project to its repo root (`_repo_root`) before building the roster, so a project path pointing partway into a repo no longer returns an empty member list. The dashboard project list and the reaper drop junk rows: `$HOME`, subdirs of other repos, `.claude/worktrees`, `~/.omp/wt`, the omp plugin cache, and `~/.atlas/worktrees`.
 
 ## Multiplexer and daemon isolation (10.4.3)
 

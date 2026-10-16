@@ -38,7 +38,6 @@ Artifacts live in two separate trees at the codebase root: `docs/` (the project 
 |-- graphify/             # COMMITTED working data for the graphify skill
 |-- self-improvement/     # COMMITTED skill generation/disabling decisions, context-optimizer output
 |-- memory/                # COMMITTED persistent memory for cross-session self-improvement
-|-- nudge/                 # COMMITTED nudge data: inline-op thresholds, dispatch coaching signals
 `-- .run/                 # EPHEMERAL, GITIGNORED run state (except findings.json, see below)
     |-- STATE.md          #   live: current wave, open subagents, decisions, next wave
     |-- findings.json     #   COMMITTED durable ledger, machine-readable, one object per finding (schema below)

@@ -5,6 +5,15 @@ close which risk, and how to turn `testscope gaps` output into a ranked plan. Re
 `taxonomy.md` first for the TYPE IDs used here, and `workflow.md` before acting on the
 recommendation.
 
+## Contents
+
+- Risk signals and recommended types
+- Gap complement matrix
+- Scoring formula
+- Reading testscope gaps output
+- Regulated-data emphasis
+- Anti-recommendations
+
 ## Risk signals and recommended types
 
 Start from the target's signals, not from a fixed checklist. Each signal names the types

@@ -676,6 +676,29 @@ def _shell_dirty_edits(root, session_id: str) -> list:
         return []
 
 
+def _abs_path(p: str, root) -> str:
+    return os.path.normpath(p if os.path.isabs(p) else os.path.join(str(root or ""), p))
+
+
+def _other_session_writes(conn, session_id: str, since, root) -> set:
+    """Absolute paths that OTHER sessions' tool_calls (any is_sidechain) wrote
+    since `since`. Fail open: empty set on any error."""
+    out = set()
+    try:
+        for (summary,) in conn.execute(
+            "SELECT input_summary FROM tool_calls WHERE session_id<>? AND ts>=? "
+            "AND LOWER(tool_name) IN ('write','edit','multiedit','notebookedit')",
+            (session_id, since),
+        ):
+            d = json.loads(summary or "{}")
+            p = d.get("file_path") or d.get("path")
+            if isinstance(p, str) and p:
+                out.add(_abs_path(p, root))
+    except Exception:
+        return set()
+    return out
+
+
 def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -> list:
     """(m) Main-thread code writes with no dispatch; fail open on any error.
 
@@ -725,6 +748,10 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
         dirs, exts = exempt
         run_code = [p for p in paths if p and _is_delegation_code(p, dirs, exts)]
         shell_code = _shell_dirty_edits(root, session_id)
+        if shell_code:
+            # Dirt another session's agents wrote in this shared worktree is not ours.
+            theirs = _other_session_writes(conn, session_id, started, root)
+            shell_code = [p for p in shell_code if _abs_path(p, root) not in theirs]
 
         def _live(ps):
             # URI-shaped records (agent:// IRC, xd:// devices) are not files: drop
@@ -1603,6 +1630,8 @@ def _block_loop_state(session_id: str, failed: list) -> tuple[int, bool]:
             return count, False
     if count <= _block_loop_limit():
         return count, False
+    if count > _block_loop_limit() + 1:
+        return count, True  # already recorded at first exhaustion; repeats are one loop
     conn = None
     try:
         with contextlib.suppress(Exception):

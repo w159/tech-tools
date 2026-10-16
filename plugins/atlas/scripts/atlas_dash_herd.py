@@ -461,7 +461,10 @@ def _read_pane(pane: str, n: int) -> tuple[dict | None, tuple[int, dict] | None]
     if atlas_seats.backend() == "rig":
         cap = atlas_seats.capture(pane, n)
         if not cap.get("ok"):
-            return None, (404, {"ok": False, "error": "no such pane", "why": cap.get("error")})
+            return None, (
+                404,
+                {"ok": False, "error": "no such pane", "why": cap.get("error")},
+            )
         return {"text": cap.get("text")}, None
     try:
         res = atlas_seats.rpc(
@@ -475,7 +478,9 @@ def _read_pane(pane: str, n: int) -> tuple[dict | None, tuple[int, dict] | None]
             code,
             {
                 "ok": False,
-                "error": "no such pane" if code == 404 else "herdr server is not reachable",
+                "error": "no such pane"
+                if code == 404
+                else "herdr server is not reachable",
                 "why": e.reason,
             },
         )
@@ -672,6 +677,7 @@ def build_agents(ctx, project: str | None = None) -> dict:
                 "cwd": r["cwd"],
                 "title": r["title"],
                 "focused": r["focused"],
+                "session_id": r.get("session_id") or sessions.get(pane, ""),
                 "deep_link": r["deep_link"],
                 "project": _project_of(r["cwd"], proj_roots),
                 "colony": pane in colony,

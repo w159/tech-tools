@@ -57,6 +57,20 @@ class FaultsTest(unittest.TestCase):
             atlas_faults.record("h", RuntimeError("x"))
             self.assertEqual(atlas_faults.load(0), [])
 
+    def test_pytest_skips_default_home_but_not_redirected_home(self):
+        env = {"PYTEST_CURRENT_TEST": "t (call)", "HOME": self.tmp.name}
+        with mock.patch.dict(os.environ, env):
+            os.environ.pop("ATLAS_HOME", None)
+            atlas_faults.record("h", RuntimeError("x"))
+            self.assertFalse(
+                os.path.exists(
+                    os.path.join(self.tmp.name, ".atlas", "hook-faults.jsonl")
+                )
+            )
+            os.environ["ATLAS_HOME"] = self.tmp.name
+            atlas_faults.record("h", RuntimeError("x"))
+            self.assertEqual(len(atlas_faults.load(0)), 1)
+
     def test_load_missing_and_garbage(self):
         self.assertEqual(atlas_faults.load(0), [])
         with open(self.path, "w") as f:

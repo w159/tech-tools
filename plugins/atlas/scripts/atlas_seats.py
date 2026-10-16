@@ -20,10 +20,8 @@ _NAMES = (
     "list_panes",
     "create_pane",
     "close_pane",
-    "close_run",
     "pane_live",
     "send_prompt",
-    "agents",
 )
 
 
@@ -48,6 +46,14 @@ def backend() -> str:
         return "none"
     rig = importlib.import_module("atlas_rig")
     if rig._bin() or _node_ok():
+        # rig holds no rigs but herdr is up: the live panes are herdr's
+        try:
+            if rig._rigs() == [] and importlib.import_module(
+                "atlas_herdr"
+            ).status().get("herdr_server"):
+                return "herdr"
+        except Exception:
+            pass
         return "rig"
     try:
         h = importlib.import_module("atlas_herdr").status()
@@ -73,6 +79,63 @@ for _n in _NAMES:
     globals()[_n] = _delegate(_n)
 
 _status = status  # the delegating function bound above
+
+
+def _forced() -> bool:
+    return (os.environ.get("ATLAS_SEAT_BACKEND") or "").strip().lower() in (
+        "rig",
+        "herdr",
+        "off",
+    )
+
+
+def _sources() -> list:
+    """Modules whose panes are live: the forced one alone, else rig plus herdr when its server is up."""
+    if _forced():
+        return [] if backend() == "none" else [_mod()]
+    mods = [importlib.import_module("atlas_rig")]
+    herdr = importlib.import_module("atlas_herdr")
+    try:
+        if herdr.status().get("herdr_server"):
+            mods.append(herdr)
+    except Exception:
+        pass
+    return mods
+
+
+def agents() -> dict:
+    """Union of every live source's rows (rig and herdr panes coexist), deduped by pane_id / workspace_id."""
+    out = {"reachable": False, "reason": "no seat backend", "workspaces": [], "agents": []}
+    seen_a, seen_w, reasons = set(), set(), []
+    for m in _sources():
+        r = m.agents()
+        if not r.get("reachable"):
+            reasons.append(str(r.get("reason")))
+            continue
+        out["reachable"] = True
+        for key, ident, seen in (
+            ("agents", "pane_id", seen_a),
+            ("workspaces", "workspace_id", seen_w),
+        ):
+            for row in r.get(key, []):
+                if row.get(ident) not in seen:
+                    seen.add(row.get(ident))
+                    out[key].append(row)
+    out["reason"] = None if out["reachable"] else "; ".join(reasons) or out["reason"]
+    return out
+
+
+def close_run(run: str) -> dict:
+    """Tear the run down in every live source: a team's rig and a herdr workspace of the same id may both exist."""
+    res = [m.close_run(run) for m in _sources()]
+    ok = [r for r in res if r.get("ok")]
+    if not ok:
+        return res[0] if res else {"ok": False, "reason": "no seat backend"}
+    return {
+        "ok": True,
+        "closed": [c for r in ok for c in r.get("closed", [])],
+        "panes": [c for r in ok for c in r.get("panes", [])],
+    }
 
 
 def status() -> dict:

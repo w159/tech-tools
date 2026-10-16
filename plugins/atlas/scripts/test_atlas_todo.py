@@ -861,6 +861,50 @@ class ItemPhase(unittest.TestCase):
             self.assertNotIn("phase", r["item"])
 
 
+class SweepManualOwners(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = os.path.realpath(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        os.makedirs(os.path.join(self.root, ".atlas", ".run"))
+
+    def _old(self, content, owner=None):
+        item = atlas_todo.add(self.root, content, origin="manual", owner=owner)["item"]
+        board = atlas_todo.load(self.root)
+        for i in board["items"]:
+            if i["id"] == item["id"]:
+                i["updated_at"] -= 5 * 86400
+        atlas_todo.save(self.root, board)
+        return item["id"]
+
+    def _archived(self, item_id):
+        return next(
+            i for i in atlas_todo.load(self.root)["items"] if i["id"] == item_id
+        ).get("archived", False)
+
+    def test_dead_owner_manual_item_expires_unowned_and_live_owner_kept(self):
+        atlas_todo.open_lead_channel(self.root, "lead-live", [])
+        unowned = self._old("unowned")
+        dead = self._old("dead owner", owner="GoneWorker")
+        live = self._old("live owner", owner="lead-live")
+        fresh = atlas_todo.add(self.root, "fresh", origin="manual")["item"]["id"]
+        self.assertEqual(atlas_todo.sweep(self.root), 1)
+        self.assertFalse(self._archived(unowned))
+        self.assertTrue(self._archived(dead))
+        self.assertFalse(self._archived(live))
+        self.assertFalse(self._archived(fresh))
+
+    def test_blocked_item_is_never_age_archived(self):
+        blocked = self._old("blocked work", owner="GoneWorker")
+        atlas_todo.set_status(self.root, blocked, "blocked", evidence="why")
+        board = atlas_todo.load(self.root)
+        for i in board["items"]:
+            i["updated_at"] -= 5 * 86400
+        atlas_todo.save(self.root, board)
+        self.assertEqual(atlas_todo.sweep(self.root), 0)
+        self.assertFalse(self._archived(blocked))
+
+
 if __name__ == "__main__":
     unittest.main()
 

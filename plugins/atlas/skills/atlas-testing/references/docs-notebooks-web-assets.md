@@ -2,6 +2,14 @@
 
 Covers Markdown/MDX, Jupyter notebooks, CSS/SCSS, HTML, and web performance budgets. These artifacts ship to users but are rarely exercised by the app's test suite, so they rot silently: broken links, dead code examples, notebooks that no longer run, CSS regressions. The testing answer is cheap static gates plus selective execution of embedded examples. Mutation testing does not exist for Markdown or CSS; what replaces it is stated explicitly below.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |

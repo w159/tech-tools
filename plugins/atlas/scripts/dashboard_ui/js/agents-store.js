@@ -70,7 +70,7 @@ function projectFor(cwd, roots) {
   let best = null;
   for (const r of roots) {
     if (!r) continue;
-    if ((cwd === r || cwd.startsWith(r.replace(/\/+$/, "") + "/")) && (!best || r.length > best.length)) best = r;
+    if ((cwd === r.replace(/\/+$/, "") || cwd.startsWith(r.replace(/\/+$/, "") + "/")) && (!best || r.length > best.length)) best = r;
   }
   return best;
 }
@@ -82,7 +82,7 @@ export function ageSeconds(rec, now) {
 // join({ herd, todos, irc, colony, projects, seen }) -> AgentRecord[] sorted by urgency
 export function joinAgents({ herd, todos, irc, colony, projects, seen, now }) {
   const rows = (herd && herd.agents) || [];
-  const roots = ((projects && projects.projects) || []).map((p) => p.root);
+  const roots = ((projects && projects.projects) || []).map((p) => p.root ?? p.root_path);
   const todoItems = flattenTodos(todos);
   const messages = (irc && (irc.messages || irc.items)) || [];
   const colonyPanes = new Set(((colony && colony.panes) || []).map((p) => p.pane_id || p.id || p.pane).filter(Boolean));
@@ -91,7 +91,18 @@ export function joinAgents({ herd, todos, irc, colony, projects, seen, now }) {
     const key = a.pane_id;
     const name = workerName(a.title, a.label);
     let state = mapState(a.status);
-    const tasks = todoItems.filter((t) => t.claimed_by === name || t.owner === name || (t.launch && t.launch.target === key));
+    const project = projectFor(a.cwd, roots);
+    let tasks = todoItems.filter((t) => t.claimed_by === name || t.owner === name || (t.launch && t.launch.target === key));
+    // A lead pane (title is prompt text, not a worker name) owns its project's live board: its subagents have no pane.
+    if (!tasks.length && !WORKER_NAME.test(name) && project) {
+      const root = (p) => String(p || "").replace(/\/+$/, "");
+      const live = todoItems.filter((t) => root(t.project) === root(project) && (t.status === "open" || t.status === "in_progress"));
+      // Per lead when the pane exposes its session: items stamped with it, or on its `lead-<sid6>` channel.
+      const sid = String(a.session_id || "");
+      const lead = sid ? "lead-" + sid.replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 6) : "";
+      const mine = sid ? live.filter((t) => t.session_id === sid || (lead && String(t.channel || "").endsWith("/" + lead))) : [];
+      tasks = mine.length ? mine : live;
+    }
     const msgs = messages.filter((m) => m.from === name || m.to === name || m.from === key || m.to === key);
     // A finished agent whose last channel line is a non-zero exit is a failure, not "Done".
     const lastExit = msgs.filter((m) => m.kind === "exit").pop();
@@ -129,7 +140,7 @@ export function joinAgents({ herd, todos, irc, colony, projects, seen, now }) {
       cwd: a.cwd || "",
       deep_link: a.deep_link || "",
       focused: Boolean(a.focused),
-      project: projectFor(a.cwd, roots),
+      project,
       tasks,
       messages: msgs,
       colony: colonyPanes.has(key),

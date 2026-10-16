@@ -4,6 +4,8 @@
 // test drives the REAL completion_gate.py end to end through the real runner.
 // Fixtures use temp dirs as cwd, where the scope check (omp/scope.ts) leaves gates unarmed.
 process.env.ATLAS_GATES = "always";
+// bun run from outside omp/ skips bunfig.toml's preload; never let recordFault reach the real ~/.atlas.
+process.env.ATLAS_HOME = mkdtempSync(join(tmpdir(), "atlas-stop-home-"));
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -804,4 +806,26 @@ test("textOf pulls a sub's final report text from string, content[] and details.
 	expect(textOf({ content: [{ type: "text", text: "a" }, { text: "b" }] })).toBe("a\nb");
 	expect(textOf({ details: { result: "r" } })).toBe("r");
 	expect(textOf(undefined)).toBe("");
+});
+
+const YIELD_RESULT = {
+	content: [{ type: "text", text: "Result submitted." }],
+	details: { data: { status: "DONE", stepsDone: 2, stepsTotal: 2, filesChanged: ["a.ts", "b.ts"], evidence: [{ step: 1, command: "bun test", output: "3 pass 0 fail" }], deliverable: "fixed", next: "none" } },
+};
+
+test("textOf renders an outputSchema yield (details.data) as the report text check_report accepts", async () => {
+	const { textOf } = await import("./stop-bridge");
+	const text = textOf(YIELD_RESULT);
+	expect(text).toBe("STATUS: DONE\nSTEPS: 2/2\nFILES_CHANGED: a.ts, b.ts\nEVIDENCE:\n1. bun test -> 3 pass 0 fail\nDELIVERABLE: fixed\nNEXT: none");
+	const here = import.meta.dir;
+	const py = `import sys,json;sys.path.insert(0,${JSON.stringify(`${here}/../hooks`)});import worker_report_gate_core as g;r=json.load(open(${JSON.stringify(`${here}/../contracts/worker-protocol.json`)}))["report"];print(json.dumps(g.check_report(sys.stdin.read(),"atlas:implementer",".",r)))`;
+	const out = Bun.spawnSync(["python3", "-c", py], { stdin: new TextEncoder().encode(text.replace("a.ts, b.ts", "none")) });
+	expect(out.stdout.toString().trim()).toBe("[]");
+});
+
+test("finalReportOf falls back past empty assistant text to the last yield data, and reports nothing when there is none", async () => {
+	const { finalReportOf } = await import("./stop-bridge");
+	expect(finalReportOf([{ role: "toolResult", ...YIELD_RESULT }, { role: "assistant", content: "" }])).toStartWith("STATUS: DONE");
+	expect(finalReportOf([{ role: "assistant", content: "hi" }, { role: "assistant", content: [] }])).toBe("hi");
+	expect(finalReportOf([{ role: "toolResult", content: "Result submitted." }, { role: "assistant", content: "" }])).toBe("");
 });

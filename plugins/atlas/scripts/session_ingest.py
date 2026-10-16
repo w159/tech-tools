@@ -1430,6 +1430,32 @@ AGENT_COLONY_FILTERS = {
 AGENT_COLONY_PARENT = {"omp": _omp_colony_parent}
 
 
+def facet_missing(conn):
+    """Chronicle a facets row for every ingested session that has none. The
+    Stop/ingest hooks do this per session; the backfill walks ingest in bulk
+    and skipped it, so each backfill left new session_logs rows with no facet
+    (the sessions_missing_facets regression). Fail-open: returns rows written."""
+    try:
+        hooks = os.path.join(os.path.dirname(__file__), "..", "hooks")
+        if hooks not in sys.path:
+            sys.path.insert(0, hooks)
+        import chronicle_facet
+
+        sids = [
+            r[0]
+            for r in conn.execute(
+                "SELECT session_id FROM session_logs "
+                "WHERE session_id NOT IN (SELECT session_id FROM facets)"
+            ).fetchall()
+        ]
+        for sid in sids:
+            atlas_db.upsert_facet(conn, sid, **chronicle_facet._compute_facet_fields(conn, sid))
+            chronicle_facet._sync_friction_events(conn, sid)
+        return len(sids)
+    except Exception:
+        return 0
+
+
 def backfill_agent(agent, root=None, conn=None):
     """Walk an agent's on-disk session tree and ingest every session file via
     that agent's registered adapter. Path-overridable (tests pass a temp tree).
@@ -1471,6 +1497,7 @@ def backfill_agent(agent, root=None, conn=None):
                     totals[k] += s.get(k, 0)
                 if totals["files"] % 200 == 0:
                     print(f"  ...{totals['files']} {agent} sessions", file=sys.stderr)
+        facet_missing(conn)
     finally:
         if own:
             conn.close()
@@ -1504,6 +1531,7 @@ def backfill(root=None, conn=None):
                     totals[k] += s.get(k, 0)
                 if totals["files"] % 200 == 0:
                     print(f"  ...{totals['files']} transcripts", file=sys.stderr)
+        facet_missing(conn)
     finally:
         if own:
             conn.close()

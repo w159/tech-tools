@@ -1,0 +1,447 @@
+"""Tests for atlas_dash_term: RFC6455 framing, ws auth, PTY bridge end to end."""
+
+from __future__ import annotations
+
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
+import base64
+import os
+import re
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import types
+import unittest
+import urllib.request
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+import atlas_dash_term as T  # noqa: E402
+
+MASK = b"\x01\x02\x03\x04"
+
+
+def masked(op, payload, fin=True, key=MASK):
+    f = bytearray(T.encode_frame(op, payload, key))
+    if not fin:
+        f[0] &= 0x7F
+    return bytes(f)
+
+
+class FramingTests(unittest.TestCase):
+    def test_accept_key_rfc_example(self):
+        self.assertEqual(
+            T.accept_key("dGhlIHNhbXBsZSBub25jZQ=="), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+        )
+
+    def test_roundtrip_lengths_and_masking(self):
+        for n in (0, 5, 125, 126, 70000):
+            payload = os.urandom(n)
+            wire = T.encode_frame(T.OP_BIN, payload, MASK)
+            self.assertNotEqual(wire[-n:] if n else b"", payload if n > 3 else b"x")
+            self.assertEqual(T.Decoder().feed(wire), [(T.OP_BIN, payload)])
+
+    def test_server_frames_unmasked(self):
+        wire = T.encode_frame(T.OP_TEXT, b"hi")
+        self.assertEqual(wire, b"\x81\x02hi")
+        self.assertEqual(T.Decoder(require_mask=False).feed(wire), [(T.OP_TEXT, b"hi")])
+        with self.assertRaises(T.ProtocolError):
+            T.Decoder().feed(wire)  # clients must mask
+
+    def test_byte_at_a_time(self):
+        wire = masked(T.OP_TEXT, b"hello")
+        d, out = T.Decoder(), []
+        for b in wire:
+            out += d.feed(bytes([b]))
+        self.assertEqual(out, [(T.OP_TEXT, b"hello")])
+
+    def test_fragmentation_with_interleaved_ping(self):
+        wire = (
+            masked(T.OP_TEXT, b"foo", fin=False)
+            + masked(T.OP_PING, b"p")
+            + masked(T.OP_CONT, b"bar", fin=False)
+            + masked(T.OP_CONT, b"baz")
+        )
+        self.assertEqual(
+            T.Decoder().feed(wire), [(T.OP_PING, b"p"), (T.OP_TEXT, b"foobarbaz")]
+        )
+
+    def test_close_and_bad_frames(self):
+        self.assertEqual(
+            T.Decoder().feed(masked(T.OP_CLOSE, struct.pack(">H", 1000))),
+            [(T.OP_CLOSE, b"\x03\xe8")],
+        )
+        with self.assertRaises(T.ProtocolError):
+            T.Decoder().feed(masked(T.OP_CONT, b"x"))  # continuation w/o start
+        with self.assertRaises(T.ProtocolError):
+            T.Decoder().feed(masked(T.OP_PING, b"x" * 126))  # oversized control
+        with self.assertRaises(T.ProtocolError):
+            T.Decoder().feed(bytes([0xC1, 0x80]) + MASK)  # RSV1 set
+
+    def test_target_regex(self):
+        for ok in ("%12", "atlas-run1", "atlas-run_1:worker.1", "atlas-a:b-c"):
+            self.assertTrue(T.TARGET_RE.match(ok), ok)
+        for bad in (
+            "",
+            "12",
+            "%",
+            "%1a",
+            "other",
+            "atlas-",
+            "atlas-a:",
+            "atlas-a b",
+            "atlas-a;rm",
+            "%1\n",
+        ):
+            self.assertFalse(T.TARGET_RE.match(bad), bad)
+
+    def test_capture_route_rejects_bad_target(self):
+        ctx = types.SimpleNamespace(query={"target": "x;y"}, groups=())
+        self.assertEqual(T._capture(ctx)[0], 400)
+
+
+# --- end to end ------------------------------------------------------------------
+
+
+class WsClient:
+    def __init__(self, port, path, headers=None):
+        self.sock = socket.create_connection(("127.0.0.1", port), timeout=10)
+        h = {
+            "Host": f"127.0.0.1:{port}",
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": base64.b64encode(os.urandom(16)).decode(),
+            "Sec-WebSocket-Version": "13",
+            "Origin": f"http://127.0.0.1:{port}",
+        }
+        h.update(headers or {})
+        h = {k: v for k, v in h.items() if v is not None}
+        req = (
+            f"GET {path} HTTP/1.1\r\n"
+            + "".join(f"{k}: {v}\r\n" for k, v in h.items())
+            + "\r\n"
+        )
+        self.sock.sendall(req.encode())
+        buf = b""
+        while b"\r\n\r\n" not in buf:
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+        self.head, _, rest = buf.partition(b"\r\n\r\n")
+        self.key = h["Sec-WebSocket-Key"]
+        self.dec = T.Decoder(require_mask=False)
+        self.msgs = self.dec.feed(rest) if rest and self.status == 101 else []
+
+    @property
+    def status(self):
+        return int(self.head.split(b" ")[1])
+
+    def send(self, op, payload):
+        self.sock.sendall(T.encode_frame(op, payload, os.urandom(4)))
+
+    def read_until(self, needle: bytes, timeout=10.0):
+        got, end = b"", time.monotonic() + timeout
+        while time.monotonic() < end:
+            for op, p in self.msgs:
+                if op == T.OP_BIN:
+                    got += p
+            self.msgs = []
+            if needle in got:
+                return got
+            try:
+                chunk = self.sock.recv(65536)
+            except socket.timeout:
+                continue
+            if not chunk:
+                break
+            self.msgs = self.dec.feed(chunk)
+        raise AssertionError(f"{needle!r} not seen in {got!r}")
+
+    def close(self):
+        self.sock.close()
+
+
+def tmux(env, *args):
+    return subprocess.run(
+        ["tmux", *args], env=env, capture_output=True, text=True, timeout=10
+    )
+
+
+def wait_for(cond, timeout=8.0):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if cond():
+            return True
+        time.sleep(0.1)
+    return False
+
+
+class InProcessDashboard(unittest.TestCase):
+    """Real Handler on a free port, isolated tmux server (TMUX_TMPDIR), fake model."""
+
+    @classmethod
+    def setUpClass(cls):
+        import atlas_dashboard as D
+
+        cls.D = D
+        cls.tmpdir = tempfile.mkdtemp(prefix="atl", dir="/tmp")
+        cls.saved_env = {
+            k: os.environ.get(k) for k in ("TMUX_TMPDIR", "TMUX", "ATLAS_TERM_TUI_CMD")
+        }
+        os.environ["TMUX_TMPDIR"] = cls.tmpdir
+        os.environ.pop("TMUX", None)
+        cls.env = dict(os.environ)
+        cls.saved_model = sys.modules.get("atlas_colony_model")
+        m = types.ModuleType("atlas_colony_model")
+        m.attach_argv = lambda target, vid: (
+            [
+                [
+                    "tmux",
+                    "new-session",
+                    "-d",
+                    "-t",
+                    target.split(":")[0],
+                    "-s",
+                    f"atlas-view-{vid}",
+                ]
+            ],
+            ["tmux", "attach", "-t", f"atlas-view-{vid}"],
+        )
+        m.cleanup_view = lambda vid: subprocess.run(
+            ["tmux", "kill-session", "-t", f"atlas-view-{vid}"], capture_output=True
+        )
+        m.capture = lambda target, lines=200, ansi=True: (
+            "pane text sk-ant-api03-" + "A" * 30
+        )
+        sys.modules["atlas_colony_model"] = m
+        cls.httpd = D._Server(("127.0.0.1", 0), D.Handler)
+        cls.port = cls.httpd.server_address[1]
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+        subprocess.run(["tmux", "kill-server"], env=cls.env, capture_output=True)
+        if cls.saved_model is None:
+            sys.modules.pop("atlas_colony_model", None)
+        else:
+            sys.modules["atlas_colony_model"] = cls.saved_model
+        for k, v in cls.saved_env.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        shutil.rmtree(cls.tmpdir, ignore_errors=True)
+
+    def ws_path(self, **q):
+        q = {"token": self.D.DASH_TOKEN, **q}
+        return "/api/v2/term/ws?" + "&".join(
+            f"{k}={v}" for k, v in q.items() if v is not None
+        )
+
+    # auth
+    def assert_denied(self, path, headers=None, code=403):
+        c = WsClient(self.port, path, headers)
+        try:
+            self.assertEqual(c.status, code, c.head)
+            self.assertNotIn(b"101", c.head.split(b"\r\n")[0])
+            self.assertNotIn(b"Sec-WebSocket-Accept", c.head)
+        finally:
+            c.close()
+
+    def test_bad_token(self):
+        self.assert_denied(self.ws_path(kind="tui", token="nope"))
+        self.assert_denied("/api/v2/term/ws?kind=tui")
+
+    def test_bad_host(self):
+        self.assert_denied(self.ws_path(kind="tui"), {"Host": "evil.example:80"})
+
+    def test_foreign_origin(self):
+        self.assert_denied(self.ws_path(kind="tui"), {"Origin": "http://evil.example"})
+
+    def test_bad_requests_are_400(self):
+        self.assert_denied(self.ws_path(kind="bogus"), code=400)
+        self.assert_denied(self.ws_path(kind="pane", target="x;y"), code=400)
+        self.assert_denied(
+            self.ws_path(kind="tui"), {"Sec-WebSocket-Key": "short"}, code=400
+        )
+        self.assert_denied(self.ws_path(kind="tui"), {"Upgrade": None}, code=400)
+
+    def test_http_routes_need_token(self):
+        base = f"http://127.0.0.1:{self.port}/api/v2/term/capture?target=%251"
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(base)
+        self.assertEqual(e.exception.code, 401)
+        req = urllib.request.Request(base, headers={"X-Atlas-Token": self.D.DASH_TOKEN})
+        import json
+
+        body = json.load(urllib.request.urlopen(req))
+        self.assertTrue(body["ok"])
+        self.assertNotIn("sk-ant-api03", body["text"])  # redacted
+
+    # tui
+    def test_tui_pty_roundtrip_and_cleanup(self):
+        os.environ["ATLAS_TERM_TUI_CMD"] = "sh -c 'echo ready-$((40+2)); exec cat'"
+        c = WsClient(self.port, self.ws_path(kind="tui", cols=100, rows=30))
+        try:
+            self.assertEqual(c.status, 101, c.head)
+            self.assertIn(T.accept_key(c.key).encode(), c.head)
+            c.read_until(b"ready-42")
+            c.send(T.OP_TEXT, b'{"t":"resize","cols":90,"rows":20}')
+            c.send(T.OP_PING, b"x")
+            c.send(T.OP_TEXT, b'{"t":"in","d":"hello-tui\\r"}')
+            c.read_until(b"hello-tui")
+            c.send(T.OP_CLOSE, struct.pack(">H", 1000))
+        finally:
+            c.close()
+            os.environ.pop("ATLAS_TERM_TUI_CMD", None)
+        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+
+    # pane
+    @unittest.skipUnless(shutil.which("tmux"), "tmux missing")
+    def test_pane_attach_echo_and_cleanup(self):
+        sess = f"atlas-test-{os.getpid()}"
+        self.assertEqual(
+            tmux(
+                self.env,
+                "new-session",
+                "-d",
+                "-s",
+                sess,
+                "-x",
+                "120",
+                "-y",
+                "30",
+                "cat",
+            ).returncode,
+            0,
+        )
+        c = WsClient(
+            self.port, self.ws_path(kind="pane", target=sess, cols=120, rows=30)
+        )
+        try:
+            self.assertEqual(c.status, 101, c.head)
+            self.assertTrue(
+                wait_for(lambda: "atlas-view-" in tmux(self.env, "ls").stdout)
+            )
+            time.sleep(0.5)
+            c.send(T.OP_TEXT, b'{"t":"in","d":"echo-me-123\\r"}')
+            c.read_until(b"echo-me-123")
+            c.send(T.OP_CLOSE, struct.pack(">H", 1000))
+        finally:
+            c.close()
+        self.assertTrue(
+            wait_for(lambda: "atlas-view-" not in tmux(self.env, "ls").stdout),
+            "grouped view session leaked",
+        )
+        self.assertIn(sess, tmux(self.env, "ls").stdout)  # worker session untouched
+        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+        # abrupt socket drop also cleans up
+        c = WsClient(self.port, self.ws_path(kind="pane", target=sess))
+        self.assertEqual(c.status, 101)
+        self.assertTrue(wait_for(lambda: "atlas-view-" in tmux(self.env, "ls").stdout))
+        c.close()
+        self.assertTrue(
+            wait_for(lambda: "atlas-view-" not in tmux(self.env, "ls").stdout)
+        )
+        tmux(self.env, "kill-session", "-t", sess)
+
+    def test_session_cap(self):
+        os.environ["ATLAS_TERM_TUI_CMD"] = "cat"
+        clients = []
+        try:
+            for _ in range(T.MAX_SESSIONS):
+                c = WsClient(self.port, self.ws_path(kind="tui"))
+                self.assertEqual(c.status, 101)
+                clients.append(c)
+            self.assert_denied(self.ws_path(kind="tui"), code=503)
+        finally:
+            for c in clients:
+                c.close()
+            os.environ.pop("ATLAS_TERM_TUI_CMD", None)
+        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+
+
+class RealServeTests(unittest.TestCase):
+    """The actual `atlas_dashboard.py serve` process with a temp ATLAS_HOME."""
+
+    def _start(self, home, env):
+        """Start `serve` on a free port; only accept it when OUR child answers
+        /api/health (a port grabbed by another suite's server is retried)."""
+        import json
+
+        for _ in range(5):
+            with socket.socket() as s:
+                s.bind(("127.0.0.1", 0))
+                port = s.getsockname()[1]
+            p = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(HERE / "atlas_dashboard.py"),
+                    "serve",
+                    "--port",
+                    str(port),
+                    "--foreground",
+                ],
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            end = time.monotonic() + 30
+            while time.monotonic() < end and p.poll() is None:
+                try:
+                    h = json.load(
+                        urllib.request.urlopen(
+                            f"http://127.0.0.1:{port}/api/health", timeout=2
+                        )
+                    )
+                    if h.get("pid") == p.pid:
+                        return p, port
+                    break  # someone else owns the port
+                except OSError:
+                    time.sleep(0.2)
+            p.terminate()
+            p.wait(timeout=10)
+        self.fail("dashboard did not start on any free port")
+
+    def test_serve_tui_ws(self):
+        home = tempfile.mkdtemp(prefix="atlhome")
+        env = {
+            **os.environ,
+            "ATLAS_HOME": home,
+            "ATLAS_TERM_TUI_CMD": "sh -c 'echo serve-ready; exec cat'",
+        }
+        p, port = self._start(home, env)
+        try:
+            html = (
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=5)
+                .read()
+                .decode()
+            )
+            m = re.search(r'name="atlas-token" content="([^"]+)"', html)
+            self.assertIsNotNone(m)
+            token = m.group(1)
+            c = WsClient(port, f"/api/v2/term/ws?kind=tui&token={token}")
+            try:
+                self.assertEqual(c.status, 101, c.head)
+                c.read_until(b"serve-ready")
+                c.send(T.OP_TEXT, b'{"t":"in","d":"ping-serve\\r"}')
+                c.read_until(b"ping-serve")
+            finally:
+                c.close()
+            bad = WsClient(port, "/api/v2/term/ws?kind=tui&token=bad")
+            self.assertEqual(bad.status, 403)
+            bad.close()
+        finally:
+            p.terminate()
+            p.wait(timeout=10)
+            shutil.rmtree(home, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    unittest.main()

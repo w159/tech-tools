@@ -28,8 +28,26 @@ class BackendTests(unittest.TestCase):
 
     def test_rig_when_binary_exists(self):
         self.env()
-        with mock.patch.object(atlas_rig, "_bin", return_value="/x/rig"):
+        with (
+            mock.patch.object(atlas_rig, "_bin", return_value="/x/rig"),
+            mock.patch.object(atlas_rig, "_rigs", return_value=None),
+        ):
             self.assertEqual(s.backend(), "rig")
+
+    def test_herdr_when_rig_empty_and_herdr_up(self):
+        self.env()
+        up = {"herdr_server": True}
+        with (
+            mock.patch.object(atlas_rig, "_bin", return_value="/x/rig"),
+            mock.patch.object(atlas_herdr, "status", return_value=up),
+        ):
+            with mock.patch.object(atlas_rig, "_rigs", return_value=[]):
+                self.assertEqual(s.backend(), "herdr")
+            with mock.patch.object(atlas_rig, "_rigs", return_value=["r"]):
+                self.assertEqual(s.backend(), "rig")
+            self.env(ATLAS_SEAT_BACKEND="rig")  # explicit override wins
+            with mock.patch.object(atlas_rig, "_rigs", return_value=[]):
+                self.assertEqual(s.backend(), "rig")
 
     def test_herdr_when_rig_absent(self):
         self.env()
@@ -58,6 +76,23 @@ class BackendTests(unittest.TestCase):
             self.assertEqual(s.status()["who"], "rig")
             os.environ["ATLAS_SEAT_BACKEND"] = "herdr"
             self.assertEqual(s.status()["who"], "herdr")
+
+    def test_agents_union_rig_and_herdr_deduped(self):
+        self.env()
+        rig = {"reachable": True, "reason": None, "workspaces": [{"workspace_id": "r1"}],
+               "agents": [{"pane_id": "a@r1"}, {"pane_id": "dup"}]}
+        hd = {"reachable": True, "reason": None, "workspaces": [{"workspace_id": "w1"}],
+              "agents": [{"pane_id": "dup"}, {"pane_id": "h1"}]}
+        with (
+            mock.patch.object(atlas_rig, "agents", return_value=rig),
+            mock.patch.object(atlas_herdr, "agents", return_value=hd),
+            mock.patch.object(atlas_herdr, "status", return_value={"herdr_server": True}),
+        ):
+            r = s.agents()
+            self.assertEqual([a["pane_id"] for a in r["agents"]], ["a@r1", "dup", "h1"])
+            self.assertEqual(len(r["workspaces"]), 2)
+            os.environ["ATLAS_SEAT_BACKEND"] = "rig"  # override restricts to one source
+            self.assertEqual([a["pane_id"] for a in s.agents()["agents"]], ["a@r1", "dup"])
 
     def test_status_adds_backend_and_web_ui(self):
         self.env(ATLAS_SEAT_BACKEND="rig")

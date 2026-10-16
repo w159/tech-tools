@@ -94,7 +94,12 @@ def _project_roots(ctx, project_param) -> list[str]:
 
 # --- todos ----------------------------------------------------------------------------------
 
-UI_STATUS = {"pending": "open", "in_progress": "in_progress", "completed": "done"}
+UI_STATUS = {
+    "pending": "open",
+    "in_progress": "in_progress",
+    "completed": "done",
+    "blocked": "blocked",
+}
 STATUS_IN = {
     "open": "pending",
     "pending": "pending",
@@ -136,6 +141,8 @@ def _todo_view(item: dict) -> dict:
         "launch": launch,
         "live": bool(launch and atlas_launch.is_live(launch.get("target"))),
         "archived_reason": item.get("archived_reason"),
+        "session_id": item.get("session_id"),
+        "channel": item.get("channel"),
     }
 
 
@@ -185,7 +192,11 @@ def _scratch_root(path: str, home: str, raw_home: str) -> bool:
     if not path.startswith(os.sep):
         return True
     parts = path.split(os.sep)
-    if any(p.startswith("agent-") for p in parts) or "worktrees" in parts or "wt" in parts:
+    if (
+        any(p.startswith("agent-") for p in parts)
+        or "worktrees" in parts
+        or "wt" in parts
+    ):
         return True
     for h in {home, raw_home}:
         if path.startswith(h + os.sep) and path[len(h) + 1 :].startswith("."):
@@ -360,19 +371,13 @@ def _op_update(root, b):
 def _op_status(root, b):
     item_id, want = str(b.get("id") or ""), str(b.get("status") or "")
     if want == "blocked":
-
-        def mark(board):
-            item = _find_item(board, item_id)
-            if item is None:
-                return {"ok": False, "error": "not_found", "id": item_id}
-            item["blocked"] = True
-            if item.get("status") == "completed":
-                item["status"] = "pending"
-                item["completed_at"] = None
-            atlas_todo._touch(item)
-            return {"ok": True}
-
-        return _locked_edit(root, mark)
+        # board status is the single source; the legacy item["blocked"] flag is only read, never written
+        r = atlas_todo.set_status(
+            root, item_id, "blocked", evidence=str(b.get("evidence") or "")
+        )
+        if r.get("ok"):
+            _locked_edit(root, lambda bd: _clear_blocked(bd, item_id))
+        return r
     if want not in STATUS_IN:
         return {
             "ok": False,

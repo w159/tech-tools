@@ -21,7 +21,10 @@ def normalize_paths(paths):
 
 
 def resolve(task_class, effort, paths=None):
-    classes = json.loads(MATRIX.read_text())["classes"]
+    matrix = json.loads(MATRIX.read_text())
+    classes = matrix["classes"]
+    task_class = matrix.get("class_aliases", {}).get(task_class.lower(), task_class)
+    effort = matrix.get("effort_aliases", {}).get(effort.lower(), effort)
     if task_class not in classes:
         raise ValueError(f"unknown task_class {task_class!r}; known: {sorted(classes)}")
     cell = classes[task_class].get(effort)

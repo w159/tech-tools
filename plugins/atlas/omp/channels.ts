@@ -119,11 +119,16 @@ function parseOpen(out: string | undefined, cwd: string): { briefs: Record<strin
 const memberTitle = (task: string): string =>
 	task.match(/^\s*GOAL:\s*(.+)$/m)?.[1]?.trim() || task.replace(/\s+/g, " ").trim().slice(0, 80);
 
-/** contract C4: one owned todo per named-agent member, titled by the GOAL line. */
-function addMemberTodo(run: ChannelRunner, cwd: string, channel: string, item: Item, name: string): void {
+/** contract C4: one owned todo per named-agent member, titled by the GOAL line; returns its board id ("" when none). */
+function addMemberTodo(run: ChannelRunner, cwd: string, channel: string, item: Item, name: string): string {
 	const agent = agentOf(item);
-	if (!channel || !agent || agent === "task") return;
-	run(["python3", TODO_SCRIPT, "add", memberTitle(item.task as string), "--root", cwd, "--owner", name, "--channel", channel], cwd);
+	if (!channel || !agent || agent === "task") return "";
+	const out = run(["python3", TODO_SCRIPT, "add", memberTitle(item.task as string), "--root", cwd, "--owner", name, "--channel", channel, "--origin", "dispatch"], cwd);
+	try {
+		return String(JSON.parse(out ?? "").item?.id ?? "");
+	} catch {
+		return "";
+	}
 }
 
 function injectBriefs(
@@ -137,8 +142,8 @@ function injectBriefs(
 	items.forEach((item, i) => {
 		const brief = parsed.briefs[names[i]];
 		if (!brief || (item.task as string).includes("CHANNEL:")) return;
-		addMemberTodo(run, cwd, parsed.channel, item, names[i]);
-		item.task = `${item.task as string}\n\n${brief}`;
+		const board = addMemberTodo(run, cwd, parsed.channel, item, names[i]);
+		item.task = `${item.task as string}\n\n${brief}${board ? `\nBOARD ITEM: ${board}` : ""}`;
 		changed = true;
 	});
 	return changed;

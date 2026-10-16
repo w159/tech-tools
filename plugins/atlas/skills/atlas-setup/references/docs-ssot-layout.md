@@ -37,7 +37,6 @@ docs/
   graphify/               diagram working data (published to docs/wiki/)
   self-improvement/       skill-gen/disable decisions, context-optimizer output
   memory/                 persistent cross-session memory
-  nudge/                  inline-op thresholds, dispatch coaching signals
   CLAUDE.md               orientation: what .atlas/ is, ephemeral vs durable
   AGENTS.md               same orientation for non-Claude agents
   .run/                   EPHEMERAL, GITIGNORED run state (except

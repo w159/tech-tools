@@ -61,6 +61,12 @@ class _Root(unittest.TestCase):
             rec["ts"] = ts
         return rec
 
+    def test_idle_worker_without_cursor_leaves_no_lockfile(self):
+        self.note("human", "Beta", "for beta")
+        self.assertEqual(worker_inbox.drain(self.root, "Zed"), "")
+        cdir = os.path.dirname(worker_inbox.cursor_path(self.root, "Zed"))
+        self.assertEqual([f for f in os.listdir(cdir) if "Zed" in f], [])
+
 
 class DrainTest(_Root):
     def test_not_a_worker_is_a_noop(self):

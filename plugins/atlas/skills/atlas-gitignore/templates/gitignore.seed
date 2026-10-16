@@ -122,8 +122,6 @@ firebase-adminsdk*.json
 !.atlas/self-improvement/**
 !.atlas/memory/
 !.atlas/memory/**
-!.atlas/nudge/
-!.atlas/nudge/**
 !.atlas/CLAUDE.md
 !.atlas/AGENTS.md
 

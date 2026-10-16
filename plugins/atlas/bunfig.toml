@@ -1,0 +1,2 @@
+[test]
+preload = ["./omp/test-env-preload.ts", "./omp/test-isolation.ts"]

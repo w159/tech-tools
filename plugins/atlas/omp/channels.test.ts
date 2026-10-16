@@ -162,3 +162,11 @@ test("defaultRun failure: fault carries exit code and stderr head", () => {
 	expect(last).toContain("exit 3");
 	expect(last).toContain("boom-cause");
 });
+
+test("a named-agent dispatch todo is origin=dispatch and its id is injected as BOARD ITEM", () => {
+	const cwd = repo();
+	const revised = reviseForChannel({ tasks: [{ agent: "implementer", name: "Alpha", task: "GOAL: x" }] }, { cwd, sessionId: "sess123456", env: {} });
+	const id = (todo("list", "--root", cwd).items as { id: string; owner?: string; origin?: string }[]).find(i => i.owner === "Alpha");
+	expect(id?.origin).toBe("dispatch");
+	expect((revised?.tasks as Record<string, string>[])[0].task).toContain(`BOARD ITEM: ${id?.id}`);
+});

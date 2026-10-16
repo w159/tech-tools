@@ -2,6 +2,14 @@
 
 How Swift (iOS, macOS, server-side Swift Package Manager) maps to the atlas-testing taxonomy. TYPE IDs are the canonical ids from `references/taxonomy.md`; gap output references rows here. Simulator builds and Xcode test runs are executed via the atlas-test-xcode skill.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |

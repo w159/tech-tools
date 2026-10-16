@@ -1473,11 +1473,6 @@
         "count": 2
       }
     },
-    "plugins/atlas/colony/herdr-web-ui/server/http.ts": {
-      "crap_moderate": {
-        "count": 1
-      }
-    },
     "plugins/atlas/colony/herdr-web-ui/server/index.ts": {
       "complexity_critical": {
         "count": 5
@@ -2909,9 +2904,6 @@
       }
     },
     "plugins/atlas/mod/band.tsx": {
-      "crap_critical": {
-        "count": 1
-      },
       "crap_moderate": {
         "count": 1
       }
@@ -3058,10 +3050,10 @@
         "count": 2
       },
       "crap_high": {
-        "count": 5
+        "count": 4
       },
       "crap_moderate": {
-        "count": 9
+        "count": 10
       }
     },
     "plugins/atlas/mod/restyle.test.tsx": {
@@ -3074,10 +3066,10 @@
     },
     "plugins/atlas/mod/restyle.tsx": {
       "crap_critical": {
-        "count": 2
+        "count": 4
       },
       "crap_high": {
-        "count": 1
+        "count": 3
       },
       "crap_moderate": {
         "count": 2
@@ -3136,15 +3128,21 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 3
+        "count": 4
       }
     },
     "plugins/atlas/omp/agent-guard.test.ts": {
       "crap_moderate": {
-        "count": 1
+        "count": 2
       }
     },
     "plugins/atlas/omp/agent-guard.ts": {
+      "complexity_critical": {
+        "count": 1
+      },
+      "crap_critical": {
+        "count": 1
+      },
       "crap_moderate": {
         "count": 3
       }
@@ -3162,26 +3160,29 @@
         "count": 1
       },
       "crap_high": {
-        "count": 1
+        "count": 3
+      },
+      "crap_moderate": {
+        "count": 3
       }
     },
     "plugins/atlas/omp/channel-view.ts": {
       "crap_critical": {
-        "count": 1
+        "count": 2
       },
       "crap_high": {
-        "count": 3
+        "count": 2
       },
       "crap_moderate": {
-        "count": 3
+        "count": 6
       }
     },
     "plugins/atlas/omp/channels.ts": {
       "crap_high": {
-        "count": 1
+        "count": 3
       },
       "crap_moderate": {
-        "count": 3
+        "count": 2
       }
     },
     "plugins/atlas/omp/contracts.test.ts": {
@@ -3223,7 +3224,7 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 4
+        "count": 5
       }
     },
     "plugins/atlas/omp/hook-bridge.test.ts": {
@@ -3294,6 +3295,11 @@
         "count": 1
       }
     },
+    "plugins/atlas/omp/resolve.ts": {
+      "crap_high": {
+        "count": 1
+      }
+    },
     "plugins/atlas/omp/run-state.ts": {
       "crap_high": {
         "count": 2
@@ -3325,18 +3331,21 @@
         "count": 2
       },
       "crap_critical": {
-        "count": 3
+        "count": 6
       },
       "crap_high": {
-        "count": 9
+        "count": 10
       },
       "crap_moderate": {
-        "count": 5
+        "count": 4
       }
     },
     "plugins/atlas/omp/style.test.ts": {
       "crap_high": {
         "count": 2
+      },
+      "crap_moderate": {
+        "count": 1
       }
     },
     "plugins/atlas/omp/style.ts": {
@@ -3346,19 +3355,24 @@
       "crap_critical": {
         "count": 3
       },
+      "crap_high": {
+        "count": 1
+      },
       "crap_moderate": {
         "count": 2
       }
     },
-    "plugins/atlas/omp/worker-report.ts": {
-      "complexity_critical": {
+    "plugins/atlas/omp/team-tool.ts": {
+      "crap_moderate": {
         "count": 1
-      },
+      }
+    },
+    "plugins/atlas/omp/worker-report.ts": {
       "crap_critical": {
-        "count": 2
+        "count": 1
       },
       "crap_high": {
-        "count": 1
+        "count": 2
       },
       "crap_moderate": {
         "count": 1
@@ -3377,13 +3391,13 @@
         "count": 2
       },
       "crap_critical": {
-        "count": 7
+        "count": 6
       },
       "crap_high": {
         "count": 4
       },
       "crap_moderate": {
-        "count": 2
+        "count": 4
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/api.js": {
@@ -3411,7 +3425,7 @@
         "count": 10
       },
       "crap_moderate": {
-        "count": 18
+        "count": 17
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/chan-names.js": {
@@ -3444,13 +3458,13 @@
         "count": 2
       },
       "crap_critical": {
-        "count": 7
+        "count": 8
       },
       "crap_high": {
         "count": 7
       },
       "crap_moderate": {
-        "count": 6
+        "count": 5
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/focus.js": {
@@ -3487,10 +3501,10 @@
         "count": 2
       },
       "crap_critical": {
-        "count": 2
+        "count": 3
       },
       "crap_high": {
-        "count": 9
+        "count": 8
       },
       "crap_moderate": {
         "count": 5
@@ -3560,18 +3574,13 @@
         "count": 1
       },
       "crap_critical": {
-        "count": 4
+        "count": 5
       },
       "crap_high": {
-        "count": 3
+        "count": 2
       },
       "crap_moderate": {
-        "count": 1
-      }
-    },
-    "plugins/atlas/scripts/dashboard_ui/js/pages/herdr.js": {
-      "crap_critical": {
-        "count": 1
+        "count": 2
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/improve.js": {
@@ -3579,7 +3588,7 @@
         "count": 7
       },
       "crap_high": {
-        "count": 5
+        "count": 6
       },
       "crap_moderate": {
         "count": 16
@@ -3593,10 +3602,10 @@
         "count": 1
       },
       "crap_high": {
-        "count": 3
+        "count": 4
       },
       "crap_moderate": {
-        "count": 6
+        "count": 5
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/projects.js": {
@@ -3627,6 +3636,17 @@
     "plugins/atlas/scripts/dashboard_ui/js/pages/supervision-lens.js": {
       "crap_moderate": {
         "count": 3
+      }
+    },
+    "plugins/atlas/scripts/dashboard_ui/js/pages/terminal.js": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 7
+      },
+      "crap_moderate": {
+        "count": 6
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/work.js": {

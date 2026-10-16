@@ -395,48 +395,80 @@ BURST_SECS = 10
 
 
 def _scope_matrix():
-    """(resolve, {class: [efforts]}, roles seen anywhere in the matrix) from scripts/atlas_resolve.py."""
+    """(resolve, {class: [efforts]}, roles seen anywhere in the matrix, (class aliases, effort aliases))
+    from scripts/atlas_resolve.py and contracts/scope-matrix.json."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
     import atlas_resolve
 
-    classes = json.loads(atlas_resolve.MATRIX.read_text())["classes"]
+    matrix = json.loads(atlas_resolve.MATRIX.read_text())
+    classes = matrix["classes"]
     roles = {
         t["role"] for c in classes.values() for cell in c.values() for t in cell["team"]
     }
-    return atlas_resolve.resolve, {k: sorted(v) for k, v in classes.items()}, roles
+    aliases = (matrix.get("class_aliases", {}), matrix.get("effort_aliases", {}))
+    return atlas_resolve.resolve, {k: sorted(v) for k, v in classes.items()}, roles, aliases
+
+
+_ROLE_CLASS = {
+    "implementer": "implement",
+    "verifier": "verify",
+    "explorer": "audit",
+    "docs-curator": "docs",
+    "ui-runtime-tester": "ui-test",
+    "db-prober": "db",
+    "test-engineer": "test",
+}
+
+
+def _scope_suggestion(agent):
+    """Paste-ready SCOPE line whose team holds `agent`'s role; "" when the role is not a matrix role."""
+    cls = _ROLE_CLASS.get(agent.split(":", 1)[-1])
+    return f"\nFor {agent} use: SCOPE: {cls}/medium" if cls else ""
 
 
 def _scope_problem(tinput):
-    """Deny text for an atlas:* dispatch with no SCOPE line, an unresolvable one, or one whose team lacks
-    this role; "" otherwise. Roles the matrix never names (runner, schema-inventory...) only need the line."""
+    """Deny text for an atlas:* dispatch with no SCOPE line, no resolvable one, or none whose team holds
+    this role; "" otherwise. Roles the matrix never names (runner, schema-inventory...) only need a line.
+    Every SCOPE line counts (a batch context's line plus the task's own); aliases like med/explore normalize."""
     agent = str(tinput.get("subagent_type") or "")
     if not agent.startswith("atlas:"):
         return ""
     try:
-        resolve, classes, known = _scope_matrix()
+        resolve, classes, known, (class_alias, effort_alias) = _scope_matrix()
     except Exception as exc:  # a broken resolver is a plugin fault, not the lead's: fail open, observably
         _record_fault(exc)
         return ""
-    m = _SCOPE_LINE.search(str(tinput.get("prompt") or ""))
-    if not m:
+    found = _SCOPE_LINE.findall(str(tinput.get("prompt") or ""))
+    if not found:
         efforts = sorted({e for v in classes.values() for e in v})
         return (
             f"DENY - this dispatch to {agent} has no `SCOPE: <class>/<effort>` line. Classify the task, "
             f"then resolve its team:\n  {RESOLVE_CMD}\nclasses: {', '.join(classes)}; efforts: "
-            f"{', '.join(efforts)}\nAdd `SCOPE: <class>/<effort>` "
+            f"{', '.join(efforts)}{_scope_suggestion(agent)}\nAdd `SCOPE: <class>/<effort>` "
             f"to the prompt and re-dispatch. 2+ workers: run them as tmux panes with\n  {SPAWN_TEAM_CMD}"
         )
-    try:
-        roles = [t["role"] for t in resolve(m.group(1), m.group(2))["team"]]
-    except ValueError as exc:
-        return f"DENY - SCOPE {m.group(1)}/{m.group(2)} does not resolve: {exc}. Check it with:\n  {RESOLVE_CMD}"
     role = agent.split(":", 1)[1]
-    if role in roles or role not in known:
-        return ""
-    return (
-        f"DENY - SCOPE {m.group(1)}/{m.group(2)} resolves to team {roles}; '{role}' is not on it. "
-        f"Dispatch one of {roles}, or re-classify with:\n  {RESOLVE_CMD}"
+    errors, off_team = [], []
+    for cls, effort in found:
+        cls = class_alias.get(cls.lower(), cls)
+        effort = effort_alias.get(effort.lower(), effort)
+        try:
+            roles = [t["role"] for t in resolve(cls, effort)["team"]]
+        except ValueError as exc:
+            errors.append(f"SCOPE {cls}/{effort} does not resolve: {exc}")
+            continue
+        if role in roles or role not in known:
+            return ""
+        off_team.append(
+            f"SCOPE {cls}/{effort} resolves to team {roles}; '{role}' is not on it"
+        )
+    detail = "; ".join(off_team or errors)
+    fix = (
+        f"Dispatch one of {roles}, or re-classify"
+        if off_team and len(found) == 1
+        else "Re-classify"
     )
+    return f"DENY - {detail}. {fix}:\n  {RESOLVE_CMD}{_scope_suggestion(agent)}"
 
 
 def _burst_note(root, session):
@@ -901,10 +933,12 @@ def _role_block(agent):
             "and serena (activate_project, get_symbols_overview, find_symbol), plus context-mode "
             "ctx_execute for noisy output, before any Read/Grep/Bash"
         )
-    lines = [
-        f'Agent(subagent_type="{agent}", name="<slice>-{role}", description="<3-5 words>", prompt=',
-        tools,
-    ]
+    call = (
+        f'task(agent="{role}", name="<Slice{role.title()}>", task='  # omp: bare role, `task` not `prompt`
+        if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
+        else f'Agent(subagent_type="{agent}", name="<slice>-{role}", description="<3-5 words>", prompt='
+    )
+    lines = [call, tools]
     lines.append(_spec_skeleton([b[0] for b in REQUIRED_SPEC_BLOCKS]))
     if role == _mechanical_tier()[0]:
         lines.append(
@@ -1289,13 +1323,9 @@ def _pre_tool_use(
             )
             return
         # (c) A dispatch that never names the toolset gets a subagent that greps.
+        # Toolkit, scope and spec problems are reported TOGETHER in one deny: they used to surface one per
+        # re-dispatch (toolkit, then scope, then spec - 3-4 denied round-trips for one bad brief).
         gap = _toolkit_gap(tinput or {})
-        if gap:
-            deny(
-                "toolkit",
-                _toolkit_gap_reason(tool, gap) + "\nPaste:\n" + _role_block(gap),
-            )
-            return
         unbounded = _unbounded_dispatch(tinput or {})
         if (
             unbounded
@@ -1307,48 +1337,68 @@ def _pre_tool_use(
             # batch is never split by a one-shot advisory/deny on one call.
             _PENDING_REPORT[0] = True
             unbounded = None
-        if unbounded:
-            agent, missing, goals = unbounded
-            if goals > 1:
-                deny(
-                    "multi_goal",
-                    f"DENY - this {tool} dispatch carries {goals} GOAL: blocks. One dispatch is "
-                    "ONE bounded task - that is what keeps a subagent's context small "
-                    f"and its runtime short. Split it into {goals} dispatches, each with its "
-                    "own GOAL, DELIVERABLE, and SUCCESS CRITERIA; independent ones can "
-                    "run in the same parallel wave.",
+        if unbounded and unbounded[2] > 1:
+            deny(
+                "multi_goal",
+                f"DENY - this {tool} dispatch carries {unbounded[2]} GOAL: blocks. One dispatch is "
+                "ONE bounded task - that is what keeps a subagent's context small "
+                f"and its runtime short. Split it into {unbounded[2]} dispatches, each with its "
+                "own GOAL, DELIVERABLE, and SUCCESS CRITERIA; independent ones can "
+                "run in the same parallel wave.",
+            )
+            return
+        scope_problem = (
+            _scope_problem(tinput or {})
+            if (gap or unbounded)
+            and os.environ.get("ATLAS_SCOPE_GATE", "on").lower() != "off"
+            else ""
+        )
+        # SCOPE and toolkit have no first-offense grace; they are checked before the claim so the
+        # one-time spec advisory stays unspent for the retry.
+        advisory = (
+            bool(unbounded)
+            and not gap
+            and not scope_problem
+            and _spec_advisory_claimed(root, session)
+        )
+        if advisory:
+            # F11: the first spec offense per session is taught, not denied - the deny-then-rewrite
+            # round-trip is the expensive enforcement point. The second offense denies.
+            _advisory(
+                "[atlas] ADVISORY - first unbounded-dispatch offense this "
+                "session, so this dispatch proceeds, but the next one is "
+                "denied. Missing {}. Add exactly:\n{}\nEach block is a "
+                "line-start `LABEL: text`.".format(
+                    ", ".join(unbounded[1]), _spec_skeleton(unbounded[1])
                 )
-            else:
-                reason = (
+            )
+            return
+        problems = []  # (code, text): the first code is the one friction row
+        if gap:
+            problems.append(("toolkit", _toolkit_gap_reason(tool, gap)))
+        if scope_problem:
+            problems.append(("scope", scope_problem))
+        if unbounded:
+            problems.append(
+                (
+                    "spec",
                     "DENY - this {} dispatch to {} is unbounded: missing {}. Each block "
                     "is a line-start `LABEL: text` (labels in a shared batch context "
                     "count for every task). Add exactly:\n{}\nThen re-dispatch.".format(
-                        tool, agent, ", ".join(missing), _spec_skeleton(missing)
-                    )
+                        tool,
+                        unbounded[0],
+                        ", ".join(unbounded[1]),
+                        _spec_skeleton(unbounded[1]),
+                    ),
                 )
-                scope_problem = _scope_problem(tinput or {})
-                if (
-                    scope_problem
-                    and os.environ.get("ATLAS_SCOPE_GATE", "on").lower() != "off"
-                ):
-                    # SCOPE has no first-offense grace. Checked before the claim
-                    # so the one-time spec advisory stays unspent for the retry.
-                    deny("scope", scope_problem)
-                elif _spec_advisory_claimed(root, session):
-                    # F11: the first spec offense per session is taught, not
-                    # denied - the deny-then-rewrite round-trip is the expensive
-                    # enforcement point. Advisory rides as 200+additionalContext
-                    # and the dispatch proceeds; the second offense denies.
-                    _advisory(
-                        "[atlas] ADVISORY - first unbounded-dispatch offense this "
-                        "session, so this dispatch proceeds, but the next one is "
-                        "denied. Missing {}. Add exactly:\n{}\nEach block is a "
-                        "line-start `LABEL: text`.".format(
-                            ", ".join(missing), _spec_skeleton(missing)
-                        )
-                    )
-                else:
-                    deny("spec", reason)
+            )
+        if problems:
+            text = problems[0][1] + "".join(
+                "\nALSO - " + t.removeprefix("DENY - ") for _, t in problems[1:]
+            )
+            if gap:
+                text += "\nPaste:\n" + _role_block(gap)
+            deny(problems[0][0], text)
             return
         steps_problem = _runner_steps_problem(tinput or {})
         if steps_problem:
@@ -1777,6 +1827,18 @@ def _exploration_rewrite(tokens):
     return None
 
 
+def _targets_outside_root(root, tool, tinput):
+    """True when the call names an absolute path outside `root`: ctx_search/ctx_glob
+    fail there with 'path escapes project root' (e.g. /Users/jerry/worktrees)."""
+    if not isinstance(tinput, dict):
+        return False
+    p = tinput.get("path")
+    if tool == "Bash" or not isinstance(p, str) or not p:
+        return False  # Bash args are not reliably paths: keep the deny
+    p = Path(p).resolve()
+    return root.resolve() not in (p, *p.parents)
+
+
 def _native_tool_policy(payload):
     """Docs-scoped native-call policy. Returns (handled, nudge).
 
@@ -1802,6 +1864,8 @@ def _native_tool_policy(payload):
         root = find_root(Path(payload.get("cwd") or os.getcwd()))
         if root is None or not (root / "docs").is_dir():
             return False, None
+        if _targets_outside_root(root, tool, payload.get("tool_input")):
+            return False, None  # lean-ctx rejects paths outside its root: allow native
         if mode == "deny":
             if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
                 return False, None  # allow; deny tiers are off too

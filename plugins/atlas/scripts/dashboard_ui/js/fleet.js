@@ -368,16 +368,6 @@ export function paneUrl(rec) {
   return u.toString();
 }
 
-// Full herdr-web-ui (?chrome=full): hosted unmodified by the Colony route (pages/herdr.js).
-export function consoleUrl(base, pane) {
-  if (!base && !GATEWAY) return "";
-  const u = toHost(new URL(base || location.origin, location.href));
-  u.searchParams.set("chrome", "full");
-  u.searchParams.set("theme", frameTheme());
-  if (pane) { u.searchParams.set("pane", pane); u.searchParams.set("machine", "local"); }
-  return u.toString();
-}
-
 const TABS = ["now", "channel", "tasks", "files", "terminal"];
 
 // Inspector({ agent, tab, onTab(id), store }) -> Drawer node. Re-render with .update(agent, state).

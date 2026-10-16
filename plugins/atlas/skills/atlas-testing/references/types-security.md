@@ -1,5 +1,21 @@
 # Security testing: sast, sca, secrets, dast, iac-policy, container-scan, authz, supply chain (TYPE IDs: `sast`, `sca`, `secrets`, `dast`, `iac-policy`, `container-scan`, `authz`; supply chain mapped to `sca` + build attestation)
 
+## Contents
+
+- Definition
+- SAST (TYPE ID: `sast`)
+- SCA / dependency vulnerabilities (TYPE ID: `sca`)
+- Secrets scanning (TYPE ID: `secrets`)
+- DAST (TYPE ID: `dast`)
+- IaC / policy scanning (TYPE ID: `iac-policy`)
+- Container scanning (TYPE ID: `container-scan`)
+- Authorization testing (TYPE ID: `authz`)
+- Supply chain (mapped to `sca` + build attestation)
+- PR vs nightly strategy
+- Interpreting results and thresholds
+- Reg S-P / FTC Safeguards / GLBA control-evidence mapping
+- Sources
+
 ## Definition
 
 Tests that look for vulnerabilities rather than behavior bugs. Layered: static code analysis (sast) and dependency scanning (sca) per PR; secret detection at commit time; dynamic probing (dast) and infrastructure/container policy checks against built artifacts; authorization tests as real test suites; supply-chain attestation for what you ship. For a regulated firm (SEC Reg S-P, FTC Safeguards Rule, GLBA) these are the control-evidence backbone: each tool run is a monitoring record.

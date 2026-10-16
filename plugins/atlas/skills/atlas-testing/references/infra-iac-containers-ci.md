@@ -2,6 +2,14 @@
 
 Covers Terraform, Bicep, Dockerfiles and images, Kubernetes manifests, GitHub Actions, Azure Pipelines, and pre-commit as the local test gate. Infrastructure "code" is usually validated rather than unit tested: the cheapest tests are static (fmt, lint, schema), the next tier renders the config and asserts on the result (plan, what-if, mocks), and the most expensive deploys into ephemeral environments and probes the result. Scale testing effort with blast radius: a module that provisions a database holding client data (regulated under FTC Safeguards, SEC Reg S-P, GLBA) deserves the deeper tiers; a lint-only pipeline does not.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 One row per applicable type id. Where the tool differs by area, the row names the tool per area.

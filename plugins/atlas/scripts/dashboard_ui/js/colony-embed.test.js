@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import { MOBILE_TABS, normalizeNav, DEFAULT_NAV } from "./nav-order.js";
 
-// Minimal DOM stand-in: just enough for h()/replace() and the console frame builder (no DOM lib is installed).
+// Minimal DOM stand-in: just enough for h()/replace() (no DOM lib is installed).
 class N {
   constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.listeners = {}; this.isConnected = false; this.hidden = false; this.classList = { toggle() {}, remove() {}, add() {} }; this.style = {}; }
   appendChild(c) { this.children.push(c); if (c instanceof N) c.isConnected = true; return c; }
@@ -27,65 +27,6 @@ globalThis.innerWidth = 1440;
 globalThis.sessionStorage = { v: {}, getItem(k) { return this.v[k] ?? null; }, setItem(k, x) { this.v[k] = String(x); } };
 globalThis.document = { createElement: (t) => new N(t), createElementNS: (_n, t) => new N(t), createTextNode: (t) => ({ text: t }), querySelector: () => null, documentElement: new N("html"), addEventListener() {}, removeEventListener() {}, body: new N("body") };
 
-const { default: colony, mountConsoleFrame, noteFramePane } = await import("./pages/herdr.js");
-const { agentsStore } = await import("./agents-store.js");
-
-const walk = (n, out = []) => { if (n && n.children) { out.push(n); n.children.forEach((c) => walk(c, out)); } return out; };
-const frames = (n) => walk(n).filter((x) => x.tag === "iframe");
-
-function setStore(state) { agentsStore.getState = () => state; agentsStore.subscribe = () => () => {}; }
-const up = { loaded: true, down: null, layers: { herdr: { state: "up" }, webui: { state: "up", url: "http://127.0.0.1:7317/" } } };
-const ctxOf = (params = {}) => ({ params, api: {} });
-
-test("Terminal page renders only the frame: chrome=full iframe, nothing else in the page", () => {
-  setStore(up);
-  const page = colony.render(ctxOf());
-  expect(colony.id).toBe("terminal");
-  expect(page.attrs.class).toContain("terminal-page");
-  // DOM children: the iframe plus its loading veil, no head, lens bar, toggle or status strip
-  expect(page.children.map((c) => c.tag + "." + c.attrs.class)).toEqual(["iframe.console-frame", "div.console-veil"]);
-  const f = frames(page)[0];
-  expect(f.attrs.src).toContain("chrome=full");
-  expect(f.attrs.src).not.toContain("pane=");
-  expect(f.attrs.sandbox).toContain("allow-same-origin");
-  expect(walk(page).some((n) => ["h1", "h2", "header", "button"].includes(n.tag))).toBe(false);
-  colony.destroy();
-});
-
-test("frame is never recreated by redraws; ?pane= deep link carries into the frame URL", () => {
-  setStore(up);
-  const body = new N("div");
-  const params = {};
-  const draw = mountConsoleFrame(ctxOf(params), body);
-  draw();
-  const f = frames(body)[0];
-  f.isConnected = true;
-  draw(); draw();
-  expect(frames(body)[0]).toBe(f);
-  params.pane = "p_7";
-  draw();
-  const g = frames(body)[0];
-  expect(g).not.toBe(f);
-  expect(g.attrs.src).toContain("pane=p_7");
-  expect(g.attrs.src).toContain("chrome=full");
-});
-
-test("recovery card when the web UI is down (Start + Recheck), no iframe", () => {
-  setStore({ ...up, layers: { herdr: { state: "up" }, webui: { state: "down", url: "" } } });
-  const body = new N("div");
-  mountConsoleFrame(ctxOf(), body)();
-  expect(frames(body).length).toBe(0);
-  expect(walk(body).some((n) => n.attrs["data-layer"] === "webui")).toBe(true);
-});
-
-test("no iframe when the dashboard itself is framed (recursion guard)", () => {
-  setStore(up);
-  window.top = {}; // distinct from self = framed
-  const body = new N("div");
-  mountConsoleFrame(ctxOf(), body)();
-  expect(frames(body).length).toBe(0);
-  window.top = SELF;
-});
 
 test("nav model: Colony and Channels are flat entries, mobile More lists each once", () => {
   const colonyTabs = MOBILE_TABS.filter((t) => t[0] === "colony");
@@ -97,45 +38,13 @@ test("nav model: Colony and Channels are flat entries, mobile More lists each on
   expect(normalizeNav(["irc", "colony"]).slice(0, 2)).toEqual(["channels", "colony"]);
   expect(ordered.slice(4).filter((t) => t[0] === "colony").length).toBe(1); // reachable from the More popover
 });
-
-test("iframe node and src are stable across load, frame-reported pane and store/SSE ticks; an external pane navigates", () => {
-  setStore(up);
-  const body = new N("div");
-  const params = {};
-  const draw = mountConsoleFrame(ctxOf(params), body);
-  draw();
-  const f = frames(body)[0];
-  const src = f.attrs.src;
-  f.listeners.load(); // frame loaded
-  // the frame reports its own selection: app.js notes it, then mirrors it into ctx.params (setParams)
-  noteFramePane("p_3");
-  params.pane = "p_3";
-  for (let i = 0; i < 5; i++) { setStore({ ...up, generation: i }); draw(); } // store / SSE ticks
-  expect(frames(body)[0]).toBe(f);
-  expect(frames(body)[0].attrs.src).toBe(src);
-  // the user picks another pane inside the frame
-  noteFramePane("p_9");
-  params.pane = "p_9";
-  draw(); draw();
-  expect(frames(body)[0]).toBe(f);
-  expect(f.attrs.src).toBe(src);
-  // a pane from outside (deep link / Open in Colony) does navigate
-  params.pane = "p_1";
-  draw();
-  const g = frames(body)[0];
-  expect(g).not.toBe(f);
-  expect(g.attrs.src).toContain("pane=p_1");
-  g.isConnected = true;
-  draw(); draw();
-  expect(frames(body)[0]).toBe(g);
-});
-
 test("every id in the nav model has a Settings label (no raw ids in the nav-order editor)", async () => {
   const src = await Bun.file(new URL("./pages/settings.js", import.meta.url)).text();
   const labels = src.match(/const NAV_LABELS = \{([^}]*)\}/)[1];
   for (const id of DEFAULT_NAV) expect(labels).toMatch(new RegExp("\\b" + id + ": '[A-Z]"));
   expect(src).not.toMatch(/Herdr[ ]console/);
   expect(labels).toContain("colony: 'Colony'");
+  expect(labels).toContain("terminal: 'Atlas Colony'");
 });
 
 test("colony roster: Send is disabled with a reason for finished/dead, headless explains delivery", async () => {
@@ -146,4 +55,16 @@ test("colony roster: Send is disabled with a reason for finished/dead, headless 
   expect(sendBlock({ state: "idle", headless: true })).toBe("");
   expect(canSteer({ state: "finished" })).toBe(false);
   expect(canSteer({ state: "stuck" })).toBe(true);
+});
+
+test("Terminal route is the Atlas Colony workspace; no herdr wording in its page or nav label", async () => {
+  const src = await Bun.file(new URL("./pages/terminal.js", import.meta.url)).text();
+  expect(src).not.toMatch(/herdr/i);
+  expect(MOBILE_TABS.find((t) => t[0] === "terminal")[1]).toBe("Atlas Colony");
+});
+
+test("Open terminal on a member row deep-links to terminal?space=&seat=", async () => {
+  const { terminalParams } = await import("./pages/colony.js");
+  expect(terminalParams({ name: "impl-1", colony: "run1" })).toEqual({ space: "run1", seat: "impl-1" });
+  expect(terminalParams({ name: "impl-1" })).toEqual({ seat: "impl-1" });
 });

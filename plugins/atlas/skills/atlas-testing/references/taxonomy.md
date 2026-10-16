@@ -4,6 +4,12 @@ Canonical vocabulary for atlas-testing. Every test type has one stable TYPE ID; 
 ids in arguments, scripts, gap tables, and evidence. Synonyms resolve to a TYPE ID (see
 the last table): do not mint new names for known concepts.
 
+## Contents
+
+- Canonical catalog
+- Layers view
+- Synonyms
+
 ## Canonical catalog
 
 Cost: time and infra to author + run at a useful scale. Automation: auto (agent can run

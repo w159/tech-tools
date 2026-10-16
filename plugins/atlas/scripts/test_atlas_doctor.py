@@ -636,9 +636,7 @@ class AtlasDoctorTest(unittest.TestCase):
 
     def test_self_manifest_unreadable_reports_and_returns(self):
         # lines 231-233: self_manifest() raises -> early return, empty ctx
-        bad_root = os.path.join(self.tmp, "badplugin")
-        os.makedirs(bad_root, exist_ok=True)
-        with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": bad_root}):
+        with mock.patch.object(atlas_doctor, "_load_json", side_effect=OSError("boom")):
             results, ctx = atlas_doctor.run_checks("atlas")
         by = self.by_check(results)
         self.assertFalse(by["self-manifest"]["ok"])
@@ -1155,6 +1153,15 @@ class AtlasDoctorTest(unittest.TestCase):
             c = self._checks()
         self.assertNotIn("context-mode", c["marketplace-source"]["detail"])
         self.assertTrue(c["omp-bridge"]["ok"], c["omp-bridge"]["detail"])
+
+    def test_stale_plugin_root_env_falls_back_to_own_manifest(self):
+        # Live: a long-lived process kept CLAUDE_PLUGIN_ROOT of a removed version dir ->
+        # ENOENT recorded as a miner:recurring_friction hook fault.
+        gone = os.path.join(self.tmp, "atlas-removed-version")
+        with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": gone}):
+            root, manifest = atlas_doctor.self_manifest()
+        self.assertEqual(manifest["name"], "atlas")
+        self.assertNotEqual(root, gone)
 
     def test_stale_marketplace_url_field_is_a_warn_when_repo_is_right(self):
         write_json(
@@ -1683,11 +1690,28 @@ class AtlasDoctorMiningTest(unittest.TestCase):
             ),
             [],
         )
-        self._calls(mem, "Error: Must provide either anchor or query", 6, kind="mcp")
+        self._calls(mem, "Error: search blew up", 6, kind="mcp")
         found = atlas_doctor.mine_tool_error_rate(
             self.conn, self.root, min_calls=5, min_error_sessions=1
         )
         self.assertEqual([f["key"] for f in found], ["mcp:claude-mem.search"])
+
+    def test_tool_error_rate_ignores_mcp_model_misuse(self):
+        """lean-ctx path-escape rejections (finding 9651) are the caller's
+        argument, not a fault of the tool."""
+        t = "lean-ctx-ctx-search"
+        self._calls(
+            t,
+            "Error: ERROR: path escapes project root: /Users/u/worktrees/w/src (root: /Users/u/p)",
+            22,
+            kind="mcp",
+        )
+        self.assertEqual(
+            atlas_doctor.mine_tool_error_rate(
+                self.conn, self.root, min_calls=5, min_error_sessions=1
+            ),
+            [],
+        )
 
     def test_tool_error_rate_needs_a_real_sample(self):
         """3/7 from one session (the doctor:802 shape) is noise; >=20 executed

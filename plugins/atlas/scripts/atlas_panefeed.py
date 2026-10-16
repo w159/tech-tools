@@ -299,6 +299,37 @@ def _omp_tool_block(event: dict) -> dict:
     return {"type": "tool_use", "name": event.get("toolName"), "input": event.get("args")}
 
 
+def _codex_block(event: dict) -> dict | None:
+    """The claude-shaped tool_use block for a codex `exec --json` item.started (command or mcp call)."""
+    item = event.get("item") if event.get("type") == "item.started" else None
+    item = item if isinstance(item, dict) else {}
+    if item.get("type") == "command_execution":
+        return {"type": "tool_use", "name": "Bash", "input": {"command": item.get("command")}}
+    if item.get("type") == "mcp_tool_call":
+        return {"type": "tool_use", "name": f"{item.get('server')}__{item.get('tool')}", "input": item.get("arguments") or {}}
+    return None
+
+
+def _codex_rows(event: dict, now) -> list:
+    """codex `exec --json`: commands/mcp calls on item.started, messages + file changes on item.completed, failures."""
+    kind, item = event.get("type"), event.get("item")
+    item = item if isinstance(item, dict) else {}
+    if kind == "item.started":
+        block = _codex_block(event)
+        return _tool_rows(block, now) if block else []
+    if kind == "item.completed":
+        if item.get("type") in ("agent_message", "reasoning"):
+            return _block_rows({"type": "text", "text": item.get("text")}, now)
+        if item.get("type") == "file_change":
+            return [_row(now, "Edit", PEACH, ", ".join(_short_path(c.get("path")) for c in item.get("changes") or [] if isinstance(c, dict)))]
+        if item.get("type") == "command_execution" and item.get("exit_code") not in (0, None):
+            return [_row(now, "✖ exit", RED, f"{item['exit_code']}")]
+    if kind in ("turn.failed", "error"):
+        err = event.get("error") if isinstance(event.get("error"), dict) else event
+        return [_row(now, "✖ error", RED, str(err.get("message") or "")[:200])]
+    return []
+
+
 def event_rows(event: dict, now: float | None = None) -> list:
     """Segment rows for one event: claude stream-json, or omp `--mode json` (paint() them at the pane width)."""
     kind = event.get("type")
@@ -309,7 +340,7 @@ def event_rows(event: dict, now: float | None = None) -> list:
         return [_result_row(event, now)]
     if kind == "tool_execution_start":
         return _block_rows(_omp_tool_block(event), now)
-    return []
+    return _codex_rows(event, now)
 
 
 def render_event(event: dict, width: int | None = None) -> list:
@@ -559,12 +590,24 @@ class Feed:
             new = sum(usage.get(k) or 0 for k in ("input", "output", "cacheWrite"))
             self.usage[len(self.usage)] = (new, usage.get("cacheRead") or 0)
 
+    def _count_codex(self, event: dict) -> None:
+        """codex: one tool per command/mcp item.started; turn.completed usage (input includes the cached part)."""
+        block = _codex_block(event)
+        if block:
+            self.tools += len(_tool_rows(block, None))
+        usage = event.get("usage") if event.get("type") == "turn.completed" else None
+        if isinstance(usage, dict):
+            cached = usage.get("cached_input_tokens") or 0
+            new = max((usage.get("input_tokens") or 0) - cached, 0) + (usage.get("output_tokens") or 0)
+            self.usage[len(self.usage)] = (new, cached)
+
     def event(self, event: dict) -> None:
         if event.get("type") == "assistant":
             self._count(event)
             self._record_calls(event)
         else:
             self._count_omp(event)
+            self._count_codex(event)
         self._add(event_rows(event))
 
     def text(self, line: str, color=TXT) -> None:

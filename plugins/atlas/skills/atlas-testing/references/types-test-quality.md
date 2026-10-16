@@ -2,6 +2,19 @@
 
 File scope: TYPE IDs `coverage` and `flakiness`, plus the cross-cutting practices diff coverage, test impact analysis, test smells, and suite health metrics. Cross-refs: mutation testing (assertion strength) in `types-mutation.md`; input generation for property/fuzz in `types-input-generation.md`; type catalogue in `types-functional.md`; scoring procedure in `references/selection-and-gaps.md`.
 
+## Contents
+
+- Type cards
+- 1. Coverage kinds
+- 2. Coverage tools per language
+- 3. Why coverage is necessary, not sufficient
+- 4. Diff (patch) coverage on PRs
+- 5. Flakiness
+- 6. Test impact analysis / selective runs
+- 7. Test smells catalog
+- 8. Suite health metrics
+- Sources
+
 ## Type cards
 
 ### coverage

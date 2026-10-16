@@ -38,4 +38,9 @@ describe("resolve parity with atlas_resolve.py", () => {
 		expect(() => resolve("fix", "extreme")).toThrow();
 		expect(() => resolve("constructor", "low")).toThrow();
 	});
+	test("aliases match canonical names", () => {
+		expect(resolve("explore", "med")).toEqual(resolve("audit", "medium"));
+		expect(resolve("feature", "hi")).toEqual(resolve("implement", "high"));
+		expect(() => resolve("nope", "med")).toThrow();
+	});
 });

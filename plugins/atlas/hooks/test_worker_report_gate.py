@@ -159,6 +159,36 @@ class WorkerReportGateTest(unittest.TestCase):
         )
         self.assertEqual(todo.load(root)["items"][0]["status"], "completed")
 
+    def test_member_finish_without_report_archives_dispatch_item(self):
+        # omp session_stop passes no final text: the worker's manual dispatch item must not stay pending.
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["Alpha"])
+        todo.add(root, "do it", owner="Alpha", origin="manual")
+        subprocess.run(
+            [
+                sys.executable,
+                os.path.join(os.path.dirname(HOOK), "..", "scripts", "atlas_todo.py"),
+                "member-finish",
+                "--root",
+                root,
+                "--agent",
+                "0-Alpha",
+                "--exit",
+                "0",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        item = todo.load(root)["items"][0]
+        self.assertFalse(item.get("archived"))
+        self.assertEqual(item["status"], "blocked")
+        self.assertIn("no final report", item["evidence"])
+
     def test_stop_with_only_agent_id_finishes_mapped_member(self):
         # Claude's SubagentStop carries agent_id + agent_type, never the member name.
         sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
@@ -279,6 +309,21 @@ class WorkerReportGateTest(unittest.TestCase):
         )
         ok = COMPLIANT.replace("1. ls -> ok", "1. pytest -> 7 passed, 0 failed")
         self.assertEqual(self.run_hook(payload(last_assistant_message=ok)).stdout, "")
+
+    def test_done_red_then_green_passes_final_failed_rejects(self):
+        red_green = COMPLIANT.replace(
+            "1. ls -> ok",
+            "1. pytest before fix -> 4 failed, 19 passed\n2. pytest after fix -> 23 passed",
+        )
+        self.assertEqual(
+            self.run_hook(payload(last_assistant_message=red_green)).stdout, ""
+        )
+        green_red = COMPLIANT.replace(
+            "1. ls -> ok", "1. pytest -> 23 passed\n2. pytest again -> 3 failed"
+        )
+        self.assertIn(
+            "failing", self.run_hook(payload(last_assistant_message=green_red)).stdout
+        )
 
     def test_block_reason_is_one_line_format_correction(self):
         r = self.run_hook(payload())

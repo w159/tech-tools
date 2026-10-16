@@ -2,6 +2,14 @@
 
 Language-specific tooling for testing Ruby (and Rails) code. For type definitions and procedures see `workflow.md`. Versions verified 2026-10-14 unless marked `[unverified]`.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |

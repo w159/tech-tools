@@ -3,6 +3,14 @@
 Procedures for phases generate -> run -> evidence in SKILL.md. Read the type file and
 language file named in the plan before writing code.
 
+## Contents
+
+- Authoring rules
+- Proving a test works
+- Running
+- Flake triage
+- Evidence report format
+
 ## Authoring rules
 
 - **Test behavior, not implementation.** Assert observable outcomes (return values,

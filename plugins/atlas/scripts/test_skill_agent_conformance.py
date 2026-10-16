@@ -535,7 +535,7 @@ class TestToolNameHygiene(unittest.TestCase):
         )
 
     def test_read_only_agents_deny_write_edit(self):
-        writable = {"docs-curator.md", "implementer.md", "runner.md"}
+        writable = {"docs-curator.md", "implementer.md", "runner.md", "test-engineer.md"}
         missing = []
         for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
             if path.name in writable:

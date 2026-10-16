@@ -2,6 +2,14 @@
 
 How .NET maps to the atlas-testing taxonomy. TYPE IDs are the canonical ids from `references/taxonomy.md`; gap output references rows here. Version floor unless noted: xUnit v3 and MSTest 4 target .NET 8+ / .NET Framework 4.7.2+/4.6.2+ respectively.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |

@@ -1,5 +1,5 @@
 // Agents canvas: one entity, four lenses (fleet, board, channel, supervision). Fleet, Channel and Supervision are native here;
-// Board mounts the work page. Colony (the full herdr UI) is its own route (#/colony, pages/herdr.js).
+// Board mounts the work page. Colony is its own route (#/colony).
 
 import { h, replace } from "../dom.js";
 import { agentsStore, STATES, STATE_WORD } from "../agents-store.js";

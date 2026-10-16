@@ -96,10 +96,27 @@ def _finish_lead(payload):
 
         cwd = payload.get("cwd")
         root = atlas_todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
-        atlas_todo.mark_finished(root, atlas_todo.lead_name(payload.get("session_id")), 0)
+        atlas_todo.mark_finished(
+            root, atlas_todo.lead_name(payload.get("session_id")), 0
+        )
         atlas_todo.reap_channels(root)
     except Exception as exc:
         atlas_faults.record("ingest_session._finish_lead", exc)
+
+
+def _sweep_todos(payload):
+    """Stop/SessionEnd: archive stale todos so the board self-cleans without the dashboard open. Fail-open."""
+    if payload.get("hook_event_name") not in ("Stop", "SessionEnd"):
+        return
+    try:
+        import atlas_todo
+
+        cwd = payload.get("cwd")
+        atlas_todo.sweep(
+            atlas_todo.find_root(cwd if isinstance(cwd, str) and cwd else None)
+        )
+    except Exception as exc:
+        atlas_faults.record("ingest_session._sweep_todos", exc)
 
 
 def main():
@@ -108,6 +125,7 @@ def main():
     payload = atlas_hook_guard.read_payload()
     payload = payload if isinstance(payload, dict) else {}
     _finish_lead(payload)
+    _sweep_todos(payload)
     if not atlas_hook_guard.should_run(payload, "ingest_session", kind="capture"):
         return
     path = payload.get("transcript_path")

@@ -4,6 +4,14 @@ Covers PHPUnit/Pest projects, Laravel applications, and Symfony services. Deep d
 
 Regulated context (FTC Safeguards, SEC Reg S-P, GLBA): prioritize Policy/Gate (authz) tests, financial-calculation property and regression tests, and coverage gates; Psalm taint analysis is cheap insurance on request handling.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |

@@ -1218,3 +1218,26 @@ class NoJunkAtlasDirOnBoot(unittest.TestCase):
                 env=self.env,
             )
             self.assertFalse(os.path.exists(os.path.join(cwd, ".atlas")), cwd)
+
+
+class PruneRunStateTest(unittest.TestCase):
+    def test_prunes_only_stale_files_in_inbox_and_autonames(self):
+        with tempfile.TemporaryDirectory() as root:
+            run = os.path.join(root, ".atlas", ".run")
+            old = time.time() - 8 * 86400
+            paths = {}
+            for sub in ("inbox", "autonames", "other"):
+                os.makedirs(os.path.join(run, sub))
+                for tag in ("old", "new"):
+                    p = os.path.join(run, sub, tag + ".lock")
+                    open(p, "w").close()
+                    if tag == "old":
+                        os.utime(p, (old, old))
+                    paths[(sub, tag)] = p
+            session_boot.prune_run_state(root)
+            for (sub, tag), p in paths.items():
+                gone = tag == "old" and sub != "other"
+                self.assertEqual(os.path.exists(p), not gone, (sub, tag))
+
+    def test_never_raises_without_dirs(self):
+        session_boot.prune_run_state("/nonexistent-atlas-root")

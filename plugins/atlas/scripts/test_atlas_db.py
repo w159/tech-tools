@@ -1986,3 +1986,19 @@ class RegisterProjectRefusals(unittest.TestCase):
     def test_real_project_registers(self):
         p = os.path.join(self.home, "code", "app")
         self.assertIsInstance(atlas_db.register_project(self.conn, p), int)
+
+
+class ReapStaleWorkerRunsTest(unittest.TestCase):
+    def test_closes_only_idle_worker_runs_at_last_activity(self):
+        import sqlite3
+
+        c = sqlite3.connect(":memory:")
+        c.executescript(atlas_db.SCHEMA)
+        now = 100000.0
+        for rid, kind, start in ((1, "worker", now - 9000), (2, "worker", now - 600), (3, "orchestrator", now - 9000)):
+            c.execute("INSERT INTO runs(id,project_id,session_id,started_at,kind) VALUES(?,1,?,?,?)", (rid, f"s{rid}", start, kind))
+        c.execute("INSERT INTO events(run_id,ts) VALUES(1,?)", (now - 8000,))
+        self.assertEqual(atlas_db.reap_stale_worker_runs(c, now=now), 1)
+        rows = dict(c.execute("SELECT id, ended_at FROM runs"))
+        self.assertEqual(rows, {1: now - 8000, 2: None, 3: None})
+        self.assertEqual(atlas_db.reap_stale_worker_runs(c, now=now), 0)

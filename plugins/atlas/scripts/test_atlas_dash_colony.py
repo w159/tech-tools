@@ -101,7 +101,9 @@ class ColonyTest(unittest.TestCase):
     def test_quiet_with_open_todo_is_stuck_never_dead_without_a_pid(self):
         s = self.states(now=__import__("time").time() + 3600)
         self.assertEqual(s["w-idle"], "stuck")
-        self.assertEqual(s["w-sub"], "parked")  # no pane, no pid, silent: parked wins over stuck
+        self.assertEqual(
+            s["w-sub"], "parked"
+        )  # no pane, no pid, silent: parked wins over stuck
 
     def test_tasks_join_by_owner_and_lead_is_kind_lead(self):
         ms = {m["name"]: m for m in colony.build_colony(self.root)["members"]}
@@ -417,6 +419,27 @@ class ColonyTest(unittest.TestCase):
         self.assertTrue(
             got["hi lead"]["delivery_text"].startswith(f"delivered to {LEAD} at ")
         )
+
+
+class RepoRootTest(unittest.TestCase):
+    def test_subdir_maps_to_repo_root_for_colony_get(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = os.path.realpath(d)
+            sub = os.path.join(repo, "plugins", "atlas")
+            os.makedirs(os.path.join(repo, ".git"))
+            os.makedirs(sub)
+            self.assertEqual(colony._repo_root(sub), repo)
+            self.assertEqual(colony._repo_root(repo), repo)
+            ctx = Ctx(sub, query={"project": sub})
+            with mock.patch.object(
+                colony, "build_colony", return_value={"ok": True}
+            ) as b:
+                colony.h_colony_get(ctx)
+            self.assertEqual(b.call_args[0][0], repo)
+
+    def test_no_git_keeps_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(colony._repo_root(d) is not None, True)
 
 
 # These tests drive the herdr backend through the atlas_seats facade (their fakes patch atlas_herdr).

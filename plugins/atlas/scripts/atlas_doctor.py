@@ -161,7 +161,13 @@ def self_manifest():
     own = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     env = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if env:
-        manifest = _load_json(os.path.join(env, ".claude-plugin", "plugin.json"))
+        try:
+            manifest = _load_json(os.path.join(env, ".claude-plugin", "plugin.json"))
+        except (
+            OSError,
+            ValueError,
+        ):  # stale root from a long-lived process (removed version dir)
+            manifest = {}
         # CLAUDE_PLUGIN_ROOT leaks into shells spawned by whichever plugin's hook ran
         # (context-mode's, seen live): trust it only when it names this plugin.
         if manifest.get("name") == "atlas":
@@ -1388,7 +1394,7 @@ def mine_memory_capture_silent_drop(conn, root):
     handled = len(
         # body lines start with non-blank after indent (`[ \t]+\S`), so repeats cannot overlap
         re.findall(
-            r'if result\.get\("success"\):(?:\n[ \t]+\S.*|\n[ \t]*(?=\n))*\n[ \t]*else:',
+            r'if result\.get\("success"\):(?:\n[ \t]+\S.*|\n[ \t]*(?=\n))*?\n[ \t]*else:',
             src,
         )
     )
@@ -1696,7 +1702,7 @@ def mine_tool_error_rate(
         if (
             atlas_db.is_recovered_error(snip)
             or cls == "user_code"
-            or (cls == "environment" and kind == "mcp")
+            or (cls in ("environment", "model_misuse") and kind == "mcp")
         ):
             excluded[key] = excluded.get(key, 0) + n
         else:
@@ -2153,7 +2159,12 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
     rows = conn.execute(
         "SELECT session_id, tool_name, input_summary FROM tool_calls "
         "WHERE is_sidechain=0 AND ts > strftime('%s','now', ?) "
-        "AND tool_name IS NOT NULL AND COALESCE(denied,0)=0",
+        "AND tool_name IS NOT NULL AND COALESCE(denied,0)=0 "
+        # Zero-prompt session_logs rows are worker/subagent transcripts that
+        # cannot dispatch (464 of ~540 non-delegating omp edit sessions in 14
+        # days); holding them to the lead contract inflated the shortfall.
+        "AND session_id NOT IN (SELECT session_id FROM session_logs "
+        "WHERE COALESCE(user_prompt_count,0)=0)",
         (f"-{window_days} days",),
     ).fetchall()
     sessions = {}

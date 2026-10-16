@@ -1,7 +1,7 @@
 // Colony (#/colony): the Atlas-scoped roster for the selected project. Data: GET /api/v2/colony?project=<root>[&all=1]
 // -> { lead, members:[{ name, kind, state, pane_id, steerable, headless, channel, tasks, last_note, log_path, exit_code,
-// ended_at }], herdr_url }. Send: POST colony/<name>/send {text, project}; Kill: POST colony/<name>/kill {project}. The raw herdr terminal
-// is the separate #/terminal route (pages/herdr.js).
+// ended_at }], herdr_url }. Send: POST colony/<name>/send {text, project}; Kill: POST colony/<name>/kill {project}. The live terminal workspace
+// is the separate #/terminal route (pages/terminal.js).
 
 import { h, replace, fmtRelative } from "../dom.js";
 import { Badge, Button, State, toast, toastError, confirm } from "../components.js";
@@ -100,7 +100,10 @@ const chip = (on, text, title, cls) => (on ? h("span", { class: "chip-lite" + (c
 
 const parked = (m) => m.state === "parked" || m.parked === true;
 
-function rowTop(m, onKill) {
+// Deep link into the Atlas Colony workspace; without a colony id the page finds the seat in its snapshot.
+export const terminalParams = (m) => (m.colony ? { space: m.colony, seat: m.name } : { seat: m.name });
+
+function rowTop(m, onKill, onTerm) {
   return h("div", { class: "colony-top" },
     h("strong", { class: "truncate", title: m.name }, m.name),
     h("span", { class: "chip-lite" }, m.kind),
@@ -109,6 +112,7 @@ function rowTop(m, onKill) {
     chip(m.steerable, "steerable", "Prompts reach it live"),
     chip(m.channel, m.channel, "Channel", "mono"),
     h("span", { class: "grow" }),
+    Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + m.name, onClick: onTerm }),
     canSteer(m) && m.kind !== "lead" ? Button({ label: "Kill", size: "sm", variant: "danger", ariaLabel: "Kill " + m.name, onClick: onKill }) : null);
 }
 
@@ -165,7 +169,7 @@ const rowSent = (m) => {
 function MemberRow(m, ctx, refresh) {
   const block = sendBlock(m);
   return h("li", { class: "colony-row", "data-kind": m.kind, "data-state": m.state },
-    rowTop(m, () => killMember(ctx, m, refresh)),
+    rowTop(m, () => killMember(ctx, m, refresh), () => ctx.navigate("terminal", terminalParams(m))),
     rowMeta(m),
     rowTasks(m),
     rowNote(m),

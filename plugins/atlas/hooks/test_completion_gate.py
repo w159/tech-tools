@@ -1662,6 +1662,30 @@ class ShellEditDelegationTest(unittest.TestCase):
         self.put("src/calc.py", "def add(a, b):\n    return a + b\n")
         self.assertEqual(self.gate(), "")
 
+    def _other_session_write(self, path):
+        self.conn.execute(
+            "INSERT INTO tool_calls (session_id, ts, is_sidechain, tool_use_id, tool_name, input_summary) "
+            "VALUES ('other-sess', ?, 1, ?, 'edit', ?)",
+            (
+                time.time() + 5,
+                "tu-" + path,
+                json.dumps({"file_path": str(self.root / path)}),
+            ),
+        )
+        self.conn.commit()
+
+    def test_other_sessions_write_is_not_blamed_on_this_session(self):
+        self.snapshot()
+        self.put("src/extra.py", "x = 1\n")
+        self._other_session_write("src/extra.py")
+        self.assertEqual(self.gate(), "")
+
+    def test_own_shell_edit_still_blocks_when_other_session_wrote_elsewhere(self):
+        self.snapshot()
+        self.put("src/extra.py", "x = 1\n")
+        self._other_session_write("src/unrelated.py")
+        self.assertIn("(m) Delegation mandate", self.gate())
+
     def test_non_git_project_fails_open(self):
         with tempfile.TemporaryDirectory() as plain:
             plain = Path(os.path.realpath(plain))
@@ -3421,6 +3445,8 @@ class BlockLoopCapTest(unittest.TestCase):
                 for _ in range(lim + 1)
             ]
             self.assertEqual(got, [False] * lim + [True])
+            # further identical blocks stay allowed but add no friction row
+            self.assertTrue(completion_gate._block_loop_exhausted("s1", ["c"]))
             # a different condition set restarts the count
             self.assertFalse(completion_gate._block_loop_exhausted("s1", ["c", "d"]))
             conn = atlas_db.connect(db)

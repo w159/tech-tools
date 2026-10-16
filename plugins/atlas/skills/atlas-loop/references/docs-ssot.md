@@ -101,7 +101,6 @@ adds any other subfolder the moment the project first needs it.
 | `.atlas/graphify/` | Reserved, optional working area for retained graphify snapshots or intermediate data: not populated by any atlas code today. The graphify tool always writes its raw output to ephemeral `graphify-out/` at the repo root (gitignored, no `--output` flag); atlas-wiki publishes the rendered diagrams to `docs/wiki/`. | yes |
 | `.atlas/self-improvement/` | Skill generation/disabling decisions, context-optimizer output, curator actions, ponytail debt records. | yes |
 | `.atlas/memory/` | Persistent memory for cross-session self-improvement. | yes |
-| `.atlas/nudge/` | Nudge data: inline-op thresholds, dispatch coaching signals. | yes |
 | `.atlas/CLAUDE.md` | Orientation: what `.atlas/` is (atlas runtime/operational state, NOT product source), which dirs are ephemeral vs durable. | yes |
 | `.atlas/AGENTS.md` | Same orientation for non-Claude agents. | yes |
 | `.atlas/.run/STATE.md` | Live run state: current wave, open subagents, decisions, next wave. | no (gitignored) |
@@ -140,7 +139,7 @@ artifacts last). It must allowlist the durable trees and re-exclude the ephemera
   `!.atlas/decisions/`, `!.atlas/decisions/**`, `!.atlas/archive/`, `!.atlas/archive/**`,
   `!.atlas/understand-anything/`, `!.atlas/understand-anything/**`, `!.atlas/graphify/`,
   `!.atlas/graphify/**`, `!.atlas/self-improvement/`, `!.atlas/self-improvement/**`,
-  `!.atlas/memory/`, `!.atlas/memory/**`, `!.atlas/nudge/`, `!.atlas/nudge/**`,
+  `!.atlas/memory/`, `!.atlas/memory/**`,
   `!.atlas/CLAUDE.md`, `!.atlas/AGENTS.md`.
 - Re-exclude `.atlas/.run/` AFTER the allowlist so it stays ignored, then re-include only
   the durable ledger: `!.atlas/.run/findings.json`.
@@ -160,7 +159,7 @@ the re-exclusion block comes last and wins.
 | `.atlas/evidence/*` | Write-capable execution agents (`atlas:implementer`, `atlas:ui-runtime-tester`) | They capture proof at the moment they produce it. |
 | `.atlas/findings/*`, `.atlas/audits/*`, `.atlas/decisions/*`, `.atlas/archive/*` | `atlas:docs-curator` | Distills verified `.run/findings.json` entries into the dated durable ledger; archives retired state. |
 | `.atlas/understand-anything/*`, `.atlas/graphify/*` | The understand-anything and graphify skills | Working data; the curator publishes rendered output to `docs/wiki/`. |
-| `.atlas/nudge/*`, `.atlas/self-improvement/*`, `.atlas/memory/*` | Atlas hooks and self-improvement scripts | Written by the atlas infrastructure itself. |
+| `.atlas/self-improvement/*`, `.atlas/memory/*` | Atlas hooks and self-improvement scripts | Written by the atlas infrastructure itself. |
 | `docs/CHANGELOG.md`, `docs/ROADMAP.md`, `docs/AGENTS.md` | `atlas:docs-curator` | Orchestrator may also update directly when a curator pass is overkill. |
 | `docs/` subfolders (`architecture/`, `plans/`, `specs/`, `features/`, `audits/`, `lessons/`, `wiki/`, `api/`, etc.) | `atlas:docs-curator` | Write-capable, confined to `docs/`. Creates subfolders on demand as the project needs them. |
 | `.gitignore` | `atlas-gitignore` skill / `atlas:docs-curator` maintenance | Kept zero-trust and current as new tracked paths appear. |

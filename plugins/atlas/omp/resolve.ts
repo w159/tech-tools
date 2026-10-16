@@ -14,7 +14,10 @@ function normalizePaths(paths: string[] = []): string[] {
 }
 
 export function resolve(taskClass: string, effort: string, paths?: string[]): Record<string, unknown> {
-	const classes = JSON.parse(readFileSync(MATRIX, "utf8")).classes as Record<string, Record<string, object>>;
+	const matrix = JSON.parse(readFileSync(MATRIX, "utf8"));
+	const classes = matrix.classes as Record<string, Record<string, object>>;
+	taskClass = matrix.class_aliases?.[taskClass.toLowerCase()] ?? taskClass;
+	effort = matrix.effort_aliases?.[effort.toLowerCase()] ?? effort;
 	if (!Object.hasOwn(classes, taskClass)) throw new Error(`unknown task_class '${taskClass}'`);
 	const cell = classes[taskClass][effort];
 	if (!cell) throw new Error(`unknown effort '${effort}'`);

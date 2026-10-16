@@ -386,6 +386,20 @@ class _ColonyDb(unittest.TestCase):
             self._call(sid, "mcp__lean-ctx__ctx_search")
 
 
+class ColonyWorkerSessionTest(_ColonyDb):
+    """Zero-prompt session_logs rows are workers, not leads: never measured."""
+
+    def test_zero_prompt_worker_sessions_are_excluded(self):
+        for i in range(6):
+            sid = f"01a10006-6f28-7000-b5df-c6e2c4f1f10{i}"
+            self._call(sid, "Edit", '{"file_path": "/repo/src/a.py"}')
+            self.conn.execute(
+                "INSERT INTO session_logs (session_id, user_prompt_count) VALUES (?, 0)",
+                (sid,),
+            )
+        self.assertEqual(self._mine(), [])
+
+
 class ColonyReaderRoutingTest(_ColonyDb):
     """native_reader_share counts what the agent actually ran natively:
     `lean-ctx -c`-wrapped bash is a ctx route, and a call a hook/extension

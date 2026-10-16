@@ -69,6 +69,20 @@ def _within(cwd: str, root: str) -> bool:
     return bool(cwd) and (cwd == root or cwd.startswith(root + "/"))
 
 
+def _tmux_worker_panes() -> dict:
+    """member name -> live tmux pane id (%N) of every atlas-* session worker; {} when tmux is down."""
+    try:
+        import atlas_colony_model
+
+        return {
+            p["@atlas_worker"]: p["pane_id"]
+            for p in atlas_colony_model._panes()
+            if p["@atlas_worker"] and p["pane_dead"] != "1"
+        }
+    except Exception:
+        return {}
+
+
 def _herdr() -> tuple[dict, dict]:
     """(pane_id -> herdr agent row, colony pane label -> {pane_id, workspace_id}); both {} when herdr is down."""
     rows: dict = {}
@@ -331,6 +345,9 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
                 },
             )
 
+    # tmux-transport workers live in `atlas-<run>` sessions herdr never sees: their pane is the tmux %N
+    tmux_panes = _tmux_worker_panes()
+
     items = [i for i in atlas_todo.load(root).get("items", []) if not i.get("archived")]
     last_note: dict = {}
     sent: dict = {}  # member -> the newest message the dashboard (human) sent to it
@@ -372,6 +389,8 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
         )
         if pane_id is None and c["role"] == "lead":
             pane_id = by_title.get(name)
+        tmux_pane = None if pane_id else tmux_panes.get(name)
+        pane_id = pane_id or tmux_pane
         row = rows.get(pane_id) if pane_id else None
         live = pane_id is not None or _pid_alive(entry)
         mine = [i for i in items if i.get("owner") == name]
@@ -431,7 +450,8 @@ def build_colony(root: str, all_: bool = False, now: float | None = None) -> dic
                     "canceled": bool((wave.get(name) or {}).get("canceled")),
                 },
                 "headless": state in LIVE_STATES
-                and not steerable,  # = no terminal pane, not a state
+                and not steerable
+                and not tmux_pane,  # = no terminal pane, not a state
                 "liveness": liveness,
                 "deliver": _deliver(
                     name,
@@ -721,8 +741,18 @@ def h_colony_cancel(ctx):
 # --- routes ----------------------------------------------------------------------------------
 
 
+def _repo_root(path: str | None) -> str | None:
+    """Channels live at the repo root: map a subdir or linked worktree to it (else keep `path`)."""
+    d = path
+    while d and d != os.path.dirname(d):
+        if os.path.exists(os.path.join(d, ".git")):
+            return atlas_todo._resolve_base(d)
+        d = os.path.dirname(d)
+    return path
+
+
 def _find(ctx, name: str, project) -> tuple[str, dict] | None:
-    root = ctx.project_root(project)
+    root = _repo_root(ctx.project_root(project))
     if not root:
         return None
     # default scope, not all=1: the all-panes view lists other projects' panes, which a
@@ -741,7 +771,7 @@ def h_colony_get(ctx):
         return _err(
             400, "project_required", "no project given", "pass ?project=<abs root>"
         )
-    root = ctx.project_root(project)
+    root = _repo_root(ctx.project_root(project))
     if not root:
         return _err(
             400,

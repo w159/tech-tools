@@ -333,7 +333,9 @@ def not_a_project_root(path):
     home = os.path.realpath(os.path.expanduser("~"))
     if real in (home, os.path.join(home, "Downloads")):
         return True
-    temps = {os.path.realpath(t) for t in ("/tmp", "/var/folders", tempfile.gettempdir())}  # noqa: S108  # literal temp roots are the point
+    temps = {
+        os.path.realpath(t) for t in ("/tmp", "/var/folders", tempfile.gettempdir())
+    }  # noqa: S108  # literal temp roots are the point
     return real in temps
 
 
@@ -662,6 +664,27 @@ def unsanctioned_inline_ops_since_last_dispatch(conn, run_id):
         "  OR path LIKE '%://%'))",
         (run_id, last),
     ).fetchone()[0]
+
+
+def reap_stale_worker_runs(conn, now=None, idle_s=3600):
+    """Close worker runs nothing finalized. Subagent sessions never fire the orchestrator Stop hook
+    (the only finalize_run caller), so a worker run stays open forever. Runs carry no pid, so
+    "dead" means no event or message for idle_s; ended_at is the last activity, not now.
+    shortcut: only kind='worker'; an idle orchestrator may still Stop later. Returns rows closed."""
+    now = time.time() if now is None else now
+    before = conn.total_changes
+    conn.execute(
+        "WITH a AS (SELECT r.id, r.started_at, MAX(r.started_at, "
+        "COALESCE((SELECT MAX(ts) FROM events WHERE run_id=r.id),0), "
+        "COALESCE((SELECT MAX(ts) FROM messages WHERE session_id=r.session_id),0)) AS last "
+        "FROM runs r WHERE r.kind='worker' AND r.ended_at IS NULL AND r.started_at IS NOT NULL) "
+        "UPDATE runs SET ended_at=(SELECT last FROM a WHERE a.id=runs.id), "
+        "wall_clock_s=COALESCE(wall_clock_s,(SELECT last-started_at FROM a WHERE a.id=runs.id)) "
+        "WHERE id IN (SELECT id FROM a WHERE last<?)",
+        (now - idle_s,),
+    )
+    conn.commit()
+    return conn.total_changes - before
 
 
 def finalize_run(conn, run_id, wall_clock_s=None):
@@ -1505,7 +1528,9 @@ _TOOL_FAULT = re.compile(
     r"(?:Traceback \(most recent call last\)[\s\S]*?" + _ATLAS_FRAME + r"|hook error:)",
     re.I,
 )
-_TOOL_FAULT_SCRIPT = re.compile(r"can't open file '([^']*scripts/atlas_[^']*\.py)'", re.I)
+_TOOL_FAULT_SCRIPT = re.compile(
+    r"can't open file '([^']*scripts/atlas_[^']*\.py)'", re.I
+)
 # A failed run of the user's own code (eval cell, shell one-liner, ctx_execute) is a
 # traceback or a bare `XError:` line that names no atlas frame (_TOOL_FAULT ran first).
 _CODE_TOOL = re.compile(r"(?:^|__|_)(?:bash|shell|eval|execute|execute_file)$", re.I)

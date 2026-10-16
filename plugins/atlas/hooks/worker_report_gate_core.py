@@ -180,7 +180,7 @@ def check_report(msg, agent_type, cwd, report):
             problems.append(
                 "a DONE report needs at least one numbered EVIDENCE line with a command and its real output (`1. <command> -> <output>`)"
             )
-        if FAILING_RE.search(sec.get("EVIDENCE", "")):
+        if FAILING_RE.search(last_evidence_row(sec.get("EVIDENCE", ""))):
             problems.append(
                 "a DONE report's EVIDENCE shows failing results; report FAILED or fix and re-run"
             )
@@ -194,16 +194,30 @@ def check_report(msg, agent_type, cwd, report):
     return problems
 
 
+def last_evidence_row(text):
+    """The final numbered EVIDENCE item (continuations included): the end state, not a TDD red phase."""
+    rows = []
+    for ln in text.splitlines():
+        if NUMBERED_RE.match(ln):
+            rows.append([ln])
+        elif rows:
+            rows[-1].append(ln)
+    return "\n".join(rows[-1]) if rows else text
+
+
+def _block(atlas_todo, root, pick, why):
+    atlas_todo.set_status(
+        root,
+        pick["id"],
+        "blocked",
+        evidence=("worker finished without a valid report: " + why)[:300],
+    )
+
+
 def close_board_item(atlas_todo, root, who, msg, report):
-    """Settle the member's open dispatch todo from its valid report: DONE completes it
-    with the first EVIDENCE item, BLOCKED/FAILED marks it blocked. No-op without a report."""
-    if not msg:
-        return
-    lines = msg.splitlines()
-    first = next((ln for ln in lines if ln.strip()), "")
-    status = first.split(":", 1)[-1].strip()
-    ev = sections(lines, report["textFields"]).get("EVIDENCE", "")
-    ev = next((ln.strip() for ln in ev.splitlines() if NUMBERED_RE.match(ln)), "")[:300]
+    """Settle the member's open dispatch todo: a valid report completes it (DONE, with the first
+    EVIDENCE item) or marks it blocked (BLOCKED/FAILED); no valid report blocks it with the reason
+    so unfinished work stays visible."""
     # The dispatch prompt's `BOARD ITEM: <id>` (recorded on the member at PostToolUse) is the
     # authoritative join: a lead-supplied CHANNEL: prompt skips the owned dispatch todo, so an
     # owner-only match missed those items. Owner match stays as the fallback.
@@ -211,25 +225,37 @@ def close_board_item(atlas_todo, root, who, msg, report):
     items = [
         i
         for i in atlas_todo.load(root).get("items", [])
-        if i.get("status") != "completed"
+        if i.get("status") != "completed" and not i.get("archived")
     ]
     pick = next((i for i in items if bid and i.get("id") == bid), None) or next(
         (i for i in reversed(items) if i.get("owner") == who), None
     )
-    if pick:
-        atlas_todo.set_status(
-            root,
-            pick["id"],
-            "completed" if status == "DONE" else "blocked",
-            evidence=ev,
-        )
+    if not pick:
+        return
+    if not (msg and report):
+        why = "no final report"
+        if msg and msg.strip():
+            with open(PROTOCOL, encoding="utf-8") as f:
+                why = "; ".join(check_report(msg, "atlas:", None, json.load(f)["report"])) or why
+        _block(atlas_todo, root, pick, why)
+        return
+    lines = msg.splitlines()
+    first = next((ln for ln in lines if ln.strip()), "")
+    status = first.split(":", 1)[-1].strip()
+    ev = sections(lines, report["textFields"]).get("EVIDENCE", "")
+    ev = next((ln.strip() for ln in ev.splitlines() if NUMBERED_RE.match(ln)), "")[:300]
+    atlas_todo.set_status(
+        root,
+        pick["id"],
+        "completed" if status == "DONE" else "blocked",
+        evidence=ev,
+    )
 
 
 def reap_member(atlas_todo, root, who, msg=None, report=None):
     """Shared by the Claude SubagentStop hook and omp's `member-finish`: settle the board
-    item (valid report only), mark the member finished, drop it from its channels."""
-    if report:
-        close_board_item(atlas_todo, root, who, msg, report)
+    item (report, else archived), mark the member finished, drop it from its channels."""
+    close_board_item(atlas_todo, root, who, msg, report)
     atlas_todo.mark_finished(root, who, 0)
     for ch in list(atlas_todo._reg_read(root)["channels"]):
         atlas_todo.leave(root, ch, who)

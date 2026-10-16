@@ -130,7 +130,7 @@ def launch(
     cwd = os.path.abspath(cwd or root)
     if not atlas_mux.NAME_RE.match(run or ""):
         return _fail(f"invalid run {run!r}: use [A-Za-z0-9_-]")
-    if harness not in ("omp", "claude"):
+    if harness not in ("omp", "claude", "codex"):
         return _fail(f"unsupported harness {harness!r}")
     env = dict(env or {})
     # The channel comes from the launching lead (explicit env, else its own process env);

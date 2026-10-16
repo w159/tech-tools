@@ -134,7 +134,7 @@ def _tmux_log_calls(state):
 
 def _fake_harness_argv(state):
     """Return (basename, argv_tokens) of the fake harness log's argv line."""
-    for base in ("claude", "omp"):
+    for base in ("claude", "omp", "codex"):
         path = pathlib.Path(state) / f"argv.{base}"
         if path.exists():
             return base, path.read_text(encoding="utf-8").split("\0")[:-1]
@@ -180,7 +180,11 @@ def _atlas_todo():
 def _notes(root, owner=None, to="lead"):
     recs = _atlas_todo().notes(root, to=to)
     # run-worker's automatic start note is covered by test_atlas_colony_notes; these tests pin the report contract
-    return [r for r in recs if r.get("kind") != "start" and (owner is None or r.get("owner") == owner)]
+    return [
+        r
+        for r in recs
+        if r.get("kind") != "start" and (owner is None or r.get("owner") == owner)
+    ]
 
 
 def _texts(recs):
@@ -241,6 +245,7 @@ class Base(unittest.TestCase):
             ("tmux", FAKE_TMUX),
             ("claude", FAKE_HARNESS),
             ("omp", FAKE_HARNESS),
+            ("codex", FAKE_HARNESS),
         ):
             p = pathlib.Path(self.bin_dir) / name
             p.write_text(body)
@@ -413,8 +418,18 @@ class SpawnClaudeTests(Base):
         base, cargv = _fake_harness_argv(self.state)
         self.assertEqual("claude", base)
         self.assertEqual(
-            ["-p", "--output-format", "stream-json", "--verbose", "--agent", "atlas:explorer",
-             "--model", "haiku", "--effort", "low"],
+            [
+                "-p",
+                "--output-format",
+                "stream-json",
+                "--verbose",
+                "--agent",
+                "atlas:explorer",
+                "--model",
+                "haiku",
+                "--effort",
+                "low",
+            ],
             cargv[:10],
         )
         self.assertNotIn(
@@ -595,7 +610,14 @@ class SpawnOmpTests(Base):
         base, hargv = _fake_harness_argv(self.state)
         self.assertEqual("omp", base)
         self.assertEqual(
-            ["-p", "--mode", "json", "--model=openrouter/some-model:off", "--thinking=medium"], hargv[:5]
+            [
+                "-p",
+                "--mode",
+                "json",
+                "--model=openrouter/some-model:off",
+                "--thinking=medium",
+            ],
+            hargv[:5],
         )
         # ephemeral session: with omp autoResume on, a worker in the lead's cwd otherwise resumes the lead's session
         self.assertEqual("--no-session", hargv[5])
@@ -736,7 +758,14 @@ class SpawnOmpTests(Base):
         self.assertNotIn("--no-extensions", hargv)
         self.assertFalse([a for a in hargv if a.startswith("--extension")])
         self.assertEqual(
-            ["-p", "--mode", "json", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:5]
+            [
+                "-p",
+                "--mode",
+                "json",
+                "--model=openrouter/some-model:off",
+                "--thinking=low",
+            ],
+            hargv[:5],
         )
 
     def test_claude_workers_ignore_the_omp_extension_pin(self):
@@ -907,7 +936,14 @@ class SpawnOmpTests(Base):
         _wait_exit(self.root, "Beta")
         _, hargv = _fake_harness_argv(self.state)
         self.assertEqual(
-            ["-p", "--mode", "json", "--model=openrouter/some-model:off", "--thinking=low"], hargv[:5]
+            [
+                "-p",
+                "--mode",
+                "json",
+                "--model=openrouter/some-model:off",
+                "--thinking=low",
+            ],
+            hargv[:5],
         )
 
     def test_omp_explicit_concrete_model_plus_thinking_passes_through(self):
@@ -915,7 +951,10 @@ class SpawnOmpTests(Base):
         self.assertEqual(0, rc, (data, err))
         _wait_exit(self.root, "Beta")
         _, hargv = _fake_harness_argv(self.state)
-        self.assertEqual(["-p", "--mode", "json", "--model=openai/gpt-x", "--thinking=high"], hargv[:5])
+        self.assertEqual(
+            ["-p", "--mode", "json", "--model=openai/gpt-x", "--thinking=high"],
+            hargv[:5],
+        )
 
     def test_omp_explicit_model_without_thinking_refused(self):
         self.omp_config.write_text("modelRoles:\n  smol: openrouter/some-model:off\n")
@@ -986,6 +1025,51 @@ OMP_THINKING_LEVELS = {
     "auto",
 }
 SHIPPED_OMP_AGENTS = sorted((SCRIPT.parent.parent / "omp" / "agents").glob("*.md"))
+
+
+class SpawnCodexTests(Base):
+    def spawn(self, **kw):
+        argv = ["spawn", "--run", "r1", "--harness", "codex", "--name", "Cx", "--agent", "explorer",
+                "--prompt-file", self.make_prompt("p", "colonize the pane"),
+                "--agents-dir", os.path.join(self.root, "agents")]
+        for k, v in kw.items():
+            argv += [f"--{k}", v]
+        return _run(*argv, env=self.spawn_env(), cwd=self.root)
+
+    def test_codex_argv_and_log_first_line(self):
+        self.make_agent("claude", "explorer", "---\nmodel: opus\neffort: high\n---\nexplorer body\n")
+        rc, data, _, err = self.spawn(model="gpt-5", thinking="medium")
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Cx")
+        base, argv = _fake_harness_argv(self.state)
+        self.assertEqual("codex", base)
+        self.assertEqual(
+            ["exec", "--json", "--skip-git-repo-check", "-s", "workspace-write", "-C", self.root,
+             "-m", "gpt-5", "-c", "model_reasoning_effort=medium"],
+            argv[:11],
+        )
+        self.assertIn("explorer body", argv[-1])
+        self.assertTrue(argv[-1].endswith("# Task\ncolonize the pane"))
+        log = pathlib.Path(self.root) / ".atlas" / ".run" / "logs" / "Cx.log"
+        self.assertTrue(log.read_text().startswith("$ codex exec --json"))
+
+    def test_codex_needs_no_model_and_rejects_effort(self):
+        self.make_agent("claude", "explorer", "---\nmodel: opus\neffort: high\n---\nb\n")
+        rc, data, _, err = self.spawn()
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Cx")
+        _, argv = _fake_harness_argv(self.state)
+        self.assertNotIn("-m", argv)
+        self.assertIn("model_reasoning_effort=high", argv)  # claude effort in codex's range carries over
+        rc, data, _, _ = self.spawn(effort="high")
+        self.assertFalse(data.get("ok"), data)
+
+    def test_feed_line_collects_codex_report_and_errors(self):
+        import atlas_mux
+        fx = pathlib.Path(__file__).parent / "fixtures" / "codex_stream.jsonl"
+        lines = [t for raw in fx.read_text().splitlines() for t in atlas_mux._feed_line(raw)]
+        self.assertEqual(["STATUS: DONE", "STEPS: 1/1", "DELIVERABLE: said hi"], lines)
+        self.assertEqual(["401 Unauthorized"], atlas_mux._feed_line('{"type":"turn.failed","error":{"message":"401 Unauthorized"}}'))
 
 
 class ShippedOmpAgentsThinkingTests(Base):
@@ -1212,6 +1296,44 @@ class SpawnLifecycleTests(Base):
         )
 
 
+class LogTmuxFailureTests(unittest.TestCase):
+    def test_no_atlas_dir_created_outside_project(self):
+        import atlas_mux
+
+        res = subprocess.CompletedProcess([], 1, "", "boom")
+        old = os.getcwd()
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_PROJECT_ROOT"}
+        with tempfile.TemporaryDirectory() as d:
+            os.chdir(d)
+            try:
+                with mock.patch.dict(os.environ, env, clear=True):
+                    atlas_mux._log_tmux_failure(("new-session",), res)
+            finally:
+                os.chdir(old)
+            self.assertFalse(os.path.exists(os.path.join(d, ".atlas")))
+
+    def test_subdir_logs_to_repo_root(self):
+        import atlas_mux
+
+        res = subprocess.CompletedProcess([], 1, "", "boom")
+        old = os.getcwd()
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_PROJECT_ROOT"}
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / ".atlas" / ".run").mkdir(parents=True)
+            sub = pathlib.Path(d) / "plugins" / "atlas"
+            sub.mkdir(parents=True)
+            os.chdir(sub)
+            try:
+                with mock.patch.dict(os.environ, env, clear=True):
+                    atlas_mux._log_tmux_failure(("new-session",), res)
+            finally:
+                os.chdir(old)
+            self.assertTrue(
+                (pathlib.Path(d) / ".atlas/.run/logs/atlas_mux.log").is_file()
+            )
+            self.assertFalse((sub / ".atlas").exists())
+
+
 class StatusKillTests(Base):
     def _spawn(self, name="Alpha"):
         self.make_agent(
@@ -1398,7 +1520,9 @@ class RunWorkerTests(Base):
         """Single writer: every board line is an atlas_todo.note record, nothing mux-shaped."""
         rc, _, err = self.run_worker("--command-override", "echo one")
         self.assertEqual(0, rc, err)
-        lines = [r for r in _read_board(self.board_file("Zeta")) if r.get("kind") != "start"]
+        lines = [
+            r for r in _read_board(self.board_file("Zeta")) if r.get("kind") != "start"
+        ]
         self.assertEqual(1, len(lines))  # one report note: output + exit 0
         for rec in lines:
             # atlas_todo.note records: base keys plus the channel stamp (channel work)
@@ -1640,7 +1764,11 @@ class NotesInteropTests(Base):
             text=True,
             timeout=60,
         )
-        texts = [n.get("text") for n in json.loads(p.stdout).get("notes", []) if n.get("kind") != "start"]
+        texts = [
+            n.get("text")
+            for n in json.loads(p.stdout).get("notes", [])
+            if n.get("kind") != "start"
+        ]
         self.assertIn("raw-worker-stream\nexit 0", texts)
         self.assertIn("alpha done, note to lead", texts)
         self.assertEqual(2, len(texts))
@@ -1796,7 +1924,7 @@ class ClaudeBgTests(Base):
 
     def bg_env(self, extra=None):
         env = self.spawn_env(extra=extra)
-        env.pop("ATLAS_COLONY_TRANSPORT", None)  # the default: claude-bg
+        env["ATLAS_COLONY_TRANSPORT"] = "claude-bg"  # opt-in: the default is tmux whenever it is installed
         # herdr must look down regardless of a real server on this host
         env["HERDR_SOCKET_PATH"] = os.path.join(self.state, "no-herdr.sock")
         return env
@@ -1828,7 +1956,7 @@ class ClaudeBgTests(Base):
             cwd=self.root,
         )
 
-    def test_default_transport_is_claude_bg(self):
+    def test_forced_transport_is_claude_bg(self):
         rc, data, _, err = _run(
             "status", "--run", "zz", env=self.bg_env(), cwd=self.root
         )
@@ -2420,11 +2548,24 @@ class SeatTransportTests(unittest.TestCase):
                 os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
             return atlas_mux.transport(), atlas_mux._pane_transport()
 
-    def test_seats_up_prefers_pane_transport(self):
-        self.assertEqual(("herdr", "herdr"), self._t(True))
+    def test_seats_up_still_defaults_to_tmux(self):
+        from unittest import mock
 
-    def test_seats_down_keeps_claude_bg_and_tmux_for_omp(self):
-        self.assertEqual(("claude-bg", "tmux"), self._t(False))
+        import atlas_mux
+
+        with mock.patch.object(atlas_mux.shutil, "which", return_value="/usr/bin/tmux"):
+            self.assertEqual(("tmux", "tmux"), self._t(True))
+
+    def test_no_tmux_falls_back_to_claude_bg(self):
+        from unittest import mock
+
+        import atlas_mux
+
+        with mock.patch.object(atlas_mux.shutil, "which", return_value=None):
+            self.assertEqual(("claude-bg", "tmux"), self._t(False))
+
+    def test_env_force_herdr(self):
+        self.assertEqual(("herdr", "herdr"), self._t(True, "herdr"))
 
     def test_env_force_wins_over_seats(self):
         self.assertEqual("claude-bg", self._t(True, "claude-bg")[0])
@@ -2457,11 +2598,19 @@ class TeamWindowTests(unittest.TestCase):
             verb = argv[0]
             ok = subprocess.CompletedProcess(argv, 0, "", "")
             if verb == "has-session":
-                return subprocess.CompletedProcess(argv, 0 if state["session"] else 1, "", "")
-            if verb == "list-panes" and "-s" not in argv:  # the team window's panes: its width per pane
-                return subprocess.CompletedProcess(argv, 0, f"{width}\n" * max(1, len(state["panes"])), "")
+                return subprocess.CompletedProcess(
+                    argv, 0 if state["session"] else 1, "", ""
+                )
+            if (
+                verb == "list-panes" and "-s" not in argv
+            ):  # the team window's panes: its width per pane
+                return subprocess.CompletedProcess(
+                    argv, 0, f"{width}\n" * max(1, len(state["panes"])), ""
+                )
             if verb == "list-panes":
-                return subprocess.CompletedProcess(argv, 0, "".join(f"{n}\t0\t1\n" for n in state["panes"]), "")
+                return subprocess.CompletedProcess(
+                    argv, 0, "".join(f"{n}\t0\t1\n" for n in state["panes"]), ""
+                )
             if verb == "split-window" and fail_split:
                 return subprocess.CompletedProcess(argv, 1, "", "no space for new pane")
             if verb in ("new-session", "split-window", "new-window"):
@@ -2477,7 +2626,14 @@ class TeamWindowTests(unittest.TestCase):
             mock.patch.object(atlas_mux, "_lead_size", return_value="200x50"),
         ):
             for n in names:
-                results.append(atlas_mux._open_window("atlas-t9", n, f"exec run {n}", {"rec": self.REC, "role": "explorer"}))
+                results.append(
+                    atlas_mux._open_window(
+                        "atlas-t9",
+                        n,
+                        f"exec run {n}",
+                        {"rec": self.REC, "role": "explorer"},
+                    )
+                )
         return results, calls
 
     def test_first_worker_starts_the_session_no_idle_shell(self):
@@ -2494,13 +2650,23 @@ class TeamWindowTests(unittest.TestCase):
         self.assertEqual([None] * 3, results)
         splits = [c for c in calls if c[0] == "split-window"]
         self.assertEqual(2, len(splits))
-        self.assertTrue(all(c[c.index("-t") + 1] == "atlas-t9:atlas-t9" for c in splits))
+        self.assertTrue(
+            all(c[c.index("-t") + 1] == "atlas-t9:atlas-t9" for c in splits)
+        )
         layouts = [c[-1] for c in calls if c[:2] == ["select-layout", "-t"]]
         # 200 cols cannot give 3 side-by-side panes 70 cols each
-        self.assertEqual(["even-horizontal", "even-horizontal", "main-horizontal"], layouts)
-        tags = [c for c in calls if c[0] == "set-option" and c[-2] in ("@atlas_worker", "@atlas_role")]
+        self.assertEqual(
+            ["even-horizontal", "even-horizontal", "main-horizontal"], layouts
+        )
+        tags = [
+            c
+            for c in calls
+            if c[0] == "set-option" and c[-2] in ("@atlas_worker", "@atlas_role")
+        ]
         self.assertTrue(all(c[1] == "-p" for c in tags))
-        self.assertEqual(["a", "b", "c"], [c[-1] for c in tags if c[-2] == "@atlas_worker"])
+        self.assertEqual(
+            ["a", "b", "c"], [c[-1] for c in tags if c[-2] == "@atlas_worker"]
+        )
 
     def test_layout_by_worker_count_and_window_width(self):
         import atlas_mux
@@ -2512,13 +2678,19 @@ class TeamWindowTests(unittest.TestCase):
         self.assertEqual("tiled", pick(4, 400))
         self.assertEqual("tiled", pick(6, 400))
         _, calls = self.drive(["a", "b", "c"], width=240)
-        self.assertEqual("even-horizontal", [c for c in calls if c[0] == "select-layout"][-1][-1])
+        self.assertEqual(
+            "even-horizontal", [c for c in calls if c[0] == "select-layout"][-1][-1]
+        )
         _, calls = self.drive(["a", "b", "c", "d"])
         self.assertEqual("tiled", [c for c in calls if c[0] == "select-layout"][-1][-1])
 
     def test_styling_is_scoped_to_the_team_session_never_global(self):
         _, calls = self.drive(["a", "b"])
-        opts = [c for c in calls if c[0] == "set-option" and c[-2] not in ("@atlas_worker", "@atlas_role")]
+        opts = [
+            c
+            for c in calls
+            if c[0] == "set-option" and c[-2] not in ("@atlas_worker", "@atlas_role")
+        ]
         self.assertTrue(opts)
         for c in opts:
             self.assertNotIn("-g", c)
@@ -2533,7 +2705,9 @@ class TeamWindowTests(unittest.TestCase):
         self.assertIn("#{n:#{P:#{?pane_dead,,x}}} live", by["status-right"])
         self.assertIn("#{n:#{P:#{?pane_dead,x,}}} done", by["status-right"])
         self.assertIn("%s,#{session_created}", by["status-right"])
-        self.assertNotIn("#(", by["status-right"])  # no shell job: a detached session never runs one
+        self.assertNotIn(
+            "#(", by["status-right"]
+        )  # no shell job: a detached session never runs one
         self.assertEqual("1", by["status-interval"])
         self.assertEqual("on", by["remain-on-exit"])
 
@@ -2658,21 +2832,33 @@ class TeamHardeningTests(unittest.TestCase):
         wrapper.write_text(f'#!/bin/sh\nexec {real} -L {self.sock} "$@"\n')
         wrapper.chmod(0o755)
         patcher = mock.patch.dict(
-            os.environ, {"PATH": self.bin + os.pathsep + os.environ["PATH"], "ATLAS_PROJECT_ROOT": self.root}
+            os.environ,
+            {
+                "PATH": self.bin + os.pathsep + os.environ["PATH"],
+                "ATLAS_PROJECT_ROOT": self.root,
+            },
         )
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(shutil.rmtree, self.bin, True)
         self.addCleanup(shutil.rmtree, self.root, True)
-        self.addCleanup(lambda: subprocess.run([real, "-L", self.sock, "kill-server"], capture_output=True))
+        self.addCleanup(
+            lambda: subprocess.run(
+                [real, "-L", self.sock, "kill-server"], capture_output=True
+            )
+        )
 
     def test_instantly_exiting_first_worker_keeps_the_session(self):
         err = self.mux._open_window("atlas-h1", "a", "exit 3", {"rec": {}, "role": "r"})
         time.sleep(0.5)
         self.assertEqual(0, self.mux._tmux("has-session", "-t", "atlas-h1").returncode)
-        err2 = self.mux._open_window("atlas-h1", "b", "sleep 5", {"rec": {}, "role": "r"})
+        err2 = self.mux._open_window(
+            "atlas-h1", "b", "sleep 5", {"rec": {}, "role": "r"}
+        )
         self.assertIsNone(err2)
-        self.assertEqual({"a", "b"}, {p["name"] for p in self.mux._team_panes("atlas-h1")})
+        self.assertEqual(
+            {"a", "b"}, {p["name"] for p in self.mux._team_panes("atlas-h1")}
+        )
         # a crash at spawn is reported loudly when tmux has already seen it
         self.assertTrue(err is None or "died at spawn" in err, err)
 
@@ -2680,9 +2866,17 @@ class TeamHardeningTests(unittest.TestCase):
         os.environ["ATLAS_CHANNEL"] = "chan-x"
         self.addCleanup(os.environ.pop, "ATLAS_CHANNEL", None)
         out = os.path.join(self.root, "chan.txt")
-        forwarded = [f"{k}={os.environ[k]}" for k in self.mux.FORWARDED_ENV if os.environ.get(k)]
-        pane = "exec " + shlex.join(["env", *forwarded]) + f" sh -c 'echo $ATLAS_CHANNEL > {out}; sleep 1'"
-        self.assertIsNone(self.mux._open_window("atlas-h2", "a", pane, {"rec": {}, "role": "r"}))
+        forwarded = [
+            f"{k}={os.environ[k]}" for k in self.mux.FORWARDED_ENV if os.environ.get(k)
+        ]
+        pane = (
+            "exec "
+            + shlex.join(["env", *forwarded])
+            + f" sh -c 'echo $ATLAS_CHANNEL > {out}; sleep 1'"
+        )
+        self.assertIsNone(
+            self.mux._open_window("atlas-h2", "a", pane, {"rec": {}, "role": "r"})
+        )
         time.sleep(0.5)
         self.assertEqual("chan-x", pathlib.Path(out).read_text().strip())
 
@@ -2690,9 +2884,16 @@ class TeamHardeningTests(unittest.TestCase):
         plug = pathlib.Path(self.root, "plug")
         (plug / "scripts").mkdir(parents=True)
         (plug / "scripts" / "atlas_todo.py").write_text("")
-        rec = {"team_id": "t", "task": "x", "file_scope": [], "members": [{"name": "w1", "role": "r"}]}
+        rec = {
+            "team_id": "t",
+            "task": "x",
+            "file_scope": [],
+            "members": [{"name": "w1", "role": "r"}],
+        }
         with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": str(plug)}):
-            brief = self.mux.team_brief(rec, rec["members"][0], "/proj", "chan-1", "lead-1")
+            brief = self.mux.team_brief(
+                rec, rec["members"][0], "/proj", "chan-1", "lead-1"
+            )
         self.assertIn("--channel chan-1", brief)
         self.assertIn("--owner w1", brief)
         self.assertIn("--root /proj", brief)
@@ -2700,7 +2901,12 @@ class TeamHardeningTests(unittest.TestCase):
         self.assertNotIn("osprey", brief)
 
     def test_wait_fails_fast_on_a_dead_pane_and_logs_tmux_errors(self):
-        team = {"team_id": "hw", "members": [{"name": "a", "role": "r"}], "created": time.time(), "transport": "tmux"}
+        team = {
+            "team_id": "hw",
+            "members": [{"name": "a", "role": "r"}],
+            "created": time.time(),
+            "transport": "tmux",
+        }
         d = pathlib.Path(self.root, ".atlas/.run/teams")
         d.mkdir(parents=True)
         (d / "hw.json").write_text(json.dumps(team))
@@ -2708,7 +2914,19 @@ class TeamHardeningTests(unittest.TestCase):
         time.sleep(0.5)
         buf, t0 = io.StringIO(), time.time()
         with contextlib.redirect_stdout(buf):
-            code = self.mux.main(["wait", "--team", "hw", "--root", self.root, "--timeout", "30", "--poll", "0.2"])
+            code = self.mux.main(
+                [
+                    "wait",
+                    "--team",
+                    "hw",
+                    "--root",
+                    self.root,
+                    "--timeout",
+                    "30",
+                    "--poll",
+                    "0.2",
+                ]
+            )
         out = json.loads(buf.getvalue().strip().splitlines()[-1])
         self.assertEqual(1, code)
         self.assertLess(time.time() - t0, 10)
@@ -2720,3 +2938,80 @@ class TeamHardeningTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReapMembersAndStatusArgsTests(unittest.TestCase):
+    def test_reap_finishes_team_members_left_in_the_lead_channel(self):
+        import atlas_mux
+
+        root = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        os.makedirs(os.path.join(root, ".atlas", ".run", "teams"))
+        todo = atlas_mux.atlas_todo
+        chan = todo.open_lead_channel(root, "lead-rt", ["w1", "w2"])["name"]
+        rec = {
+            "team_id": "rt",
+            "members": [{"name": "w1"}, {"name": "w2"}],
+            "transport": "tmux",
+            "channel": chan,
+            "lead": "lead-rt",
+            "created": time.time(),
+        }
+        pathlib.Path(root, ".atlas/.run/teams/rt.json").write_text(json.dumps(rec))
+        fail = subprocess.CompletedProcess([], 1, "", "")
+        buf = io.StringIO()
+        with (
+            mock.patch.object(atlas_mux, "_tmux", return_value=fail),
+            mock.patch.object(atlas_mux, "_kill_notes"),
+            contextlib.redirect_stdout(buf),
+        ):
+            self.assertEqual(
+                0, atlas_mux.main(["reap", "--team", "rt", "--root", root])
+            )
+        for chan_rec in todo._reg_read(root)["channels"].values():
+            for m in chan_rec["members"]:
+                if m["name"] in ("w1", "w2"):
+                    self.assertIn("exit_code", m)
+
+    def test_reap_tears_down_rig_and_herdr_run(self):
+        import atlas_herdr, atlas_rig, atlas_mux
+
+        root = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        os.makedirs(os.path.join(root, ".atlas", ".run", "teams"))
+        rec = {
+            "team_id": "rg",
+            "members": [{"name": "w1"}],
+            "transport": "herdr",
+            "created": time.time(),
+        }
+        pathlib.Path(root, ".atlas/.run/teams/rg.json").write_text(json.dumps(rec))
+        ok = {"ok": True, "closed": [], "panes": []}
+        with (
+            mock.patch.dict(os.environ, {"ATLAS_SEAT_BACKEND": ""}),
+            mock.patch.object(
+                atlas_herdr, "status", return_value={"herdr_server": True}
+            ),
+            mock.patch.object(atlas_herdr, "close_run", return_value=ok) as h,
+            mock.patch.object(atlas_rig, "close_run", return_value=ok) as r,
+            mock.patch.object(atlas_mux, "_kill_notes"),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(
+                0, atlas_mux.main(["reap", "--team", "rg", "--root", root])
+            )
+        r.assert_called_once_with("rg")
+        h.assert_called_once_with("rg")
+
+    def test_status_help_and_error_agree_on_run_or_team(self):
+        import atlas_mux
+
+        helptext = atlas_mux._parser().parse_args(["status", "--team", "x"]).run
+        self.assertEqual("x", helptext)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            atlas_mux._parser().parse_args(["status"])
+        msg = err.getvalue()
+        usage = msg.splitlines()[0]
+        self.assertIn("--team", usage)
+        self.assertIn("--run", usage)

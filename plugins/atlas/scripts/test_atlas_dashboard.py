@@ -31,11 +31,18 @@ class TestAtlasDashboard(unittest.TestCase):
         import time
         from unittest import mock
 
-        row = {"id": 1, "root_path": "/x/stale-proj", "name": "stale-proj",
-               "last_seen": time.time() - 90 * 86400, "run_count": 1,
-               "last_run_at": time.time() - 90 * 86400}
-        with mock.patch.object(self.mod, "_q", return_value=[dict(row)]), \
-                mock.patch.object(self.mod, "_is_junk_project", return_value=False):
+        row = {
+            "id": 1,
+            "root_path": "/x/stale-proj",
+            "name": "stale-proj",
+            "last_seen": time.time() - 90 * 86400,
+            "run_count": 1,
+            "last_run_at": time.time() - 90 * 86400,
+        }
+        with (
+            mock.patch.object(self.mod, "_q", return_value=[dict(row)]),
+            mock.patch.object(self.mod, "_is_junk_project", return_value=False),
+        ):
             self.assertEqual(self.mod._projects(None), [])
             got = self.mod._projects(None, editable_only=True)
         self.assertEqual([r["root_path"] for r in got], ["/x/stale-proj"])
@@ -1327,7 +1334,9 @@ class TestReapTick(unittest.TestCase):
         orig = d.dashboard_db_path
         d.dashboard_db_path = lambda: "/nonexistent/x.db"
         try:
-            self.assertEqual(d.reap_tick(now=1000.0, interval=300), {})  # bad db: fail-open
+            self.assertEqual(
+                d.reap_tick(now=1000.0, interval=300), {}
+            )  # bad db: fail-open
             self.assertIsNone(d.reap_tick(now=1100.0, interval=300))  # inside interval
             self.assertEqual(d.reap_tick(now=1400.0, interval=300), {})
         finally:
@@ -1345,7 +1354,9 @@ class TestReapTickLogging(unittest.TestCase):
         try:
             with self.assertLogs(d.log, level="WARNING") as cm:
                 d.reap_tick(now=1000.0, interval=0)
-                d.reap_tick(now=2000.0, interval=0)  # identical failure: no second record
+                d.reap_tick(
+                    now=2000.0, interval=0
+                )  # identical failure: no second record
         finally:
             d.dashboard_db_path = orig
         self.assertEqual(len(cm.records), 1)
@@ -1373,7 +1384,9 @@ class TestReapTickNonProject(unittest.TestCase):
             orig, d._REAP_LAST = d.dashboard_db_path, 0.0
             d.dashboard_db_path = lambda: db
             try:
-                with mock.patch("atlas_dash_work._junk_root", lambda _p: False):  # tmp roots are junk
+                with mock.patch(
+                    "atlas_dash_work._junk_root", lambda _p: False
+                ):  # tmp roots are junk
                     out = d.reap_tick(now=1000.0, interval=0)
             finally:
                 d.dashboard_db_path = orig
@@ -1381,3 +1394,34 @@ class TestReapTickNonProject(unittest.TestCase):
             out = out or {}
             self.assertNotIn(plain, out)
             self.assertIn(real, out)
+
+
+class TestJunkProjectRow(unittest.TestCase):
+    def test_home_subdirs_and_worktrees_are_junk(self):
+        import atlas_dashboard as d
+
+        with tempfile.TemporaryDirectory() as t:
+            t = os.path.realpath(t)
+            repo = os.path.join(t, "repo")
+            os.makedirs(os.path.join(repo, ".git"))
+            os.makedirs(os.path.join(repo, "plugins", "atlas"))
+            with (
+                mock.patch(
+                    "atlas_dash_work._junk_root", lambda _p: False
+                ),  # tmp roots are junk
+                mock.patch.dict(os.environ, {"HOME": t}),
+            ):
+                self.assertFalse(d._junk_project_row(repo))
+                self.assertTrue(
+                    d._junk_project_row(os.path.join(repo, "plugins", "atlas"))
+                )
+                self.assertTrue(d._junk_project_row(t))  # $HOME
+                self.assertTrue(d._junk_project_row(""))
+            home = os.path.expanduser("~")
+            self.assertTrue(d._junk_project_row(os.path.join(home, ".omp", "wt", "x")))
+            self.assertTrue(
+                d._junk_project_row(os.path.join(home, ".omp", "plugins", "cache", "p"))
+            )
+            self.assertTrue(
+                d._junk_project_row(os.path.join(home, ".atlas", "worktrees", "w"))
+            )

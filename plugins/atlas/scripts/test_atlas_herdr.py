@@ -444,6 +444,8 @@ class SocketClientTests(SockBase):
             a["wB:p1"]["deep_link"].endswith("/?pane=wB%3Ap1&machine=local")
         )
         self.assertNotIn("secret.jsonl", json.dumps(snap))
+        self.assertEqual(a["wB:p1"]["session_id"], "secret")  # the file stem only
+        self.assertEqual(a["wC:p2"]["session_id"], "")
 
     def test_dash_agents_counts(self):
         code, body = atlas_dash_herd._agents(None)

@@ -577,6 +577,22 @@ def set_status(
         return {"ok": True, "item": item, "counts": counts(board)}
 
 
+def archive_item(root: Optional[str], item_id: str, reason: str) -> dict:
+    """Archive one unfinished item (restorable); used when its worker ended without a valid report."""
+    with _file_lock(board_path(root)):
+        board = _locked_load(root)
+        item = _find(board, item_id)
+        if item is None:
+            return {"ok": False, "error": "not_found", "id": item_id}
+        item["archived"], item["archived_reason"], item["archived_at"] = (
+            True,
+            reason,
+            _now(),
+        )
+        save(root, board)
+        return {"ok": True, "item": item}
+
+
 def edit(root: Optional[str], item_id: str, content: str) -> dict:
     content = (content or "").strip()
     if not content:
@@ -706,11 +722,35 @@ def sweep(root: Optional[str], ttl_s: int = 86400) -> int:
                 "advisor["
             )
 
+        def owner_live(i: dict) -> bool:
+            """A manual item survives while its owner is a live channel member (no exit, pid matches
+            or channel active within ttl); only an owned item whose owner is gone is swept by age."""
+            o = i.get("owner")
+            if not o:
+                return False
+            for chan in _reg_read(root)["channels"].values():
+                for m in chan["members"]:
+                    if m["name"] != _sanitize_owner(o) or "exit_code" in m:
+                        continue
+                    if m.get("pid") and pid_matches(m["pid"], m.get("pid_start")):
+                        return True
+                    if now - float(chan.get("last_activity") or 0) <= ttl_s:
+                        return True
+            return False
+
         open_items = [
             i
             for i in _active(board["items"])
             if i.get("status") != "completed"
-            and (i.get("origin") != "manual" or is_advisor(i))
+            and (
+                i.get("origin") != "manual"
+                or is_advisor(i)
+                or (
+                    i.get("owner")
+                    and now - float(i.get("updated_at") or 0) > ttl_s
+                    and not owner_live(i)
+                )
+            )
         ]
         n = 0
         keep = []
@@ -718,7 +758,9 @@ def sweep(root: Optional[str], ttl_s: int = 86400) -> int:
             age = now - float(i.get("updated_at") or 0)
             if alive(i):
                 continue
-            if age > ttl_s:
+            if (
+                age > ttl_s and i.get("status") != "blocked"
+            ):  # blocked = visible unfinished work
                 archive(i, "stale")
             elif (
                 is_advisor(i) and i.get("session_id") != newest and age > _ADVISOR_TTL_S
@@ -1773,6 +1815,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--max-idle"
             or a == "--keep"
             or a == "--message"
+            or a == "--origin"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
@@ -1809,6 +1852,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 phase=flags.get("phase"),
                 owner=flags.get("owner"),
                 channel=flags.get("channel"),
+                origin=flags.get("origin") or "manual",
             )
         elif cmd == "scaffold":
             phases_raw = flags.get("phases")
@@ -1976,7 +2020,9 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                     max_idle=float(flags.get("max-idle", 86400)),
                     keep=flags.get("keep"),
                     dry_run=bool(flags.get("dry-run")),
-                    lead_idle=float(flags["lead-idle"]) if "lead-idle" in flags else None,
+                    lead_idle=float(flags["lead-idle"])
+                    if "lead-idle" in flags
+                    else None,
                 ),
             }
         elif cmd == "channel-board":

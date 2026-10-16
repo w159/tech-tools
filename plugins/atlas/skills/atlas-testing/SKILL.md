@@ -51,6 +51,8 @@ Stdlib-only, python3.9+, read-only on the target repo. Run via bash:
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/atlas-testing/scripts/testscope.py" <detect|gaps|commands> [--root PATH] [--format json|md]
 ```
 
+(Unit tests for it: `scripts/test_testscope.py`.)
+
 - `detect` returns `{languages: {name: {files}}, frameworks, test_tools: [{tool, type_ids, evidence}], ci: [paths]}`.
 - `gaps` returns per detected area: `{area, type_id, status: present|missing|n/a, priority: must|should|could, reason, reference}`.
 - `commands` returns `[{tool, type_id, command, note?}]`, exact run commands for the

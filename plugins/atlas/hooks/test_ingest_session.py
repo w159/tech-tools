@@ -280,6 +280,26 @@ class SessionEndLeadTest(unittest.TestCase):
         self.assertEqual([c for c in chans if c.endswith("/" + lead)], [])
 
 
+class StopSweepTest(unittest.TestCase):
+    def test_stop_sweeps_todos_and_never_raises(self):
+        import atlas_todo as todo
+
+        for boom in (None, RuntimeError("x")):
+            with (
+                mock.patch.object(
+                    todo, "sweep", side_effect=boom, return_value=0
+                ) as sw,
+                mock.patch.object(ingest_session.atlas_faults, "record"),
+            ):
+                ingest_session._sweep_todos(
+                    {"hook_event_name": "Stop", "cwd": os.getcwd()}
+                )
+                self.assertEqual(sw.call_count, 1)
+        with mock.patch.object(todo, "sweep") as sw:
+            ingest_session._sweep_todos({"hook_event_name": "SubagentStop"})
+            sw.assert_not_called()
+
+
 class NoTranscriptTest(_HookTestCase):
     def test_empty_stdin_returns_early(self):
         self._run_main(None)

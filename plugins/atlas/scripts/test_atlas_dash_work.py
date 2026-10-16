@@ -197,11 +197,17 @@ class TodosTest(WorkTestBase):
             body={"op": "status", "id": tid, "status": "blocked"},
         )
         self.assertEqual(body["state"]["counts"]["blocked"], 1)
+        raw = atlas_todo.load(self.root)["items"][0]
+        self.assertEqual(raw["status"], "blocked")
+        self.assertNotIn("blocked", raw)
         _, body = self.call(
             "POST", "/api/v2/todos", body={"op": "status", "id": tid, "status": "open"}
         )
         self.assertEqual(body["state"]["counts"]["blocked"], 0)
         self.assertEqual(body["state"]["counts"]["open"], 1)
+        raw = atlas_todo.load(self.root)["items"][0]
+        self.assertEqual(raw["status"], "pending")
+        self.assertNotIn("blocked", raw)
 
     def test_move_and_reorder(self):
         phases = atlas_todo.todo_phases()
@@ -334,6 +340,25 @@ class TodosTest(WorkTestBase):
         status, body = work.h_todos_get(Ctx(self.db_path, self.root, {}))
         self.assertEqual(status, 200, body)
         self.assertEqual(body["phases"], [])
+
+
+class BlockedStatusView(unittest.TestCase):
+    def test_board_status_blocked_maps_to_ui_blocked(self):
+        # set_status / close_board_item write status="blocked", not the `blocked` flag
+        self.assertEqual(
+            work._todo_view({"id": "a", "status": "blocked"})["status"], "blocked"
+        )
+        self.assertEqual(
+            work._todo_view({"id": "b", "status": "pending", "blocked": True})[
+                "status"
+            ],
+            "blocked",
+        )
+        self.assertEqual(
+            work._todo_view({"id": "c", "status": "pending"})["status"], "open"
+        )
+        v = work._todo_view({"id": "d", "session_id": "s1", "channel": "c1"})
+        self.assertEqual((v["session_id"], v["channel"]), ("s1", "c1"))
 
 
 if __name__ == "__main__":

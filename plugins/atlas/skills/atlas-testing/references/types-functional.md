@@ -4,6 +4,13 @@ File scope: TYPE IDs `static-lint`, `type-check`, `unit`, `integration`, `compon
 
 Every type below follows the same template: definition, what it catches and misses, when to choose or avoid, per-language tool table, PR vs nightly run strategy, how to interpret results and thresholds, and a regulated-data priority note. "PR vs nightly" means PR-gate vs scheduled full run, not literally nightly.
 
+## Contents
+
+- 1. Suite shape: pyramid vs trophy vs honeycomb
+- 2. Type catalogue
+- 3. How these types compose
+- Sources
+
 ## 1. Suite shape: pyramid vs trophy vs honeycomb
 
 Before adding tests, agree where the weight goes. The shape decides which of the types below dominates.

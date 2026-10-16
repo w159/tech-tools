@@ -1,5 +1,21 @@
 # Non-functional testing: benchmark, load, chaos, accessibility, visual-regression, cross-browser, i18n, usability (TYPE IDs: `benchmark`, `load`, `chaos`, `accessibility`, `visual-regression`, `cross-browser`, `i18n`, `usability`)
 
+## Contents
+
+- Definition
+- Benchmark (TYPE ID: `benchmark`)
+- Load testing (TYPE ID: `load`)
+- Chaos engineering (TYPE ID: `chaos`)
+- Accessibility testing (TYPE ID: `accessibility`)
+- Visual regression (TYPE ID: `visual-regression`)
+- Cross-browser testing (TYPE ID: `cross-browser`)
+- Internationalization (TYPE ID: `i18n`)
+- Usability testing (TYPE ID: `usability`)
+- PR vs nightly strategy
+- Interpreting results and thresholds
+- Regulated-data priority (Henssler Financial)
+- Sources
+
 ## Definition
 
 Tests that assert on qualities other than functional correctness: speed, capacity under load, resilience to failure, accessibility conformance, visual fidelity, browser compatibility, localization, and real-user usability. Each needs its own oracle and its own runtime tier; most are too slow or too environment-sensitive for every PR.

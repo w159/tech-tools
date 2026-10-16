@@ -4,6 +4,14 @@ Covers pytest-based projects, FastAPI backends, and data/notebook work. Deep div
 
 Regulated context (FTC Safeguards, SEC Reg S-P, GLBA): prioritize authz tests, financial-calculation property and regression tests, and coverage gates over raw speed tooling.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |

@@ -134,7 +134,7 @@ def file_path_from(data: dict) -> str | None:
 
 
 # Reasons that are environment/input state, not hook failures: friction row only.
-# "missing" = no formatter installed; "parse" = file is syntactically broken mid-edit.
+# "missing" = no formatter installed; "parse" (mid-edit syntax error) is not recorded at all.
 # Real crashes ("crash") and timeouts also write a fault row.
 QUIET_REASONS = {"missing", "parse"}
 PARSE_MARKERS = ("parse", "syntax", "unexpected token")
@@ -144,6 +144,8 @@ def _record_skip(data: dict, fp: str, reason: str) -> None:
     """Friction row (`formatter_skipped:<reason>`, ext in snippet) so skips stay
     measurable. "missing" is recorded once per session+extension. Only real
     failures (crash, timeout) also write a fault row. Never raises; exit stays 0."""
+    if reason == "parse":
+        return  # mid-edit syntax errors are expected input state, not friction
     ext = os.path.splitext(fp)[1].lower() or "(none)"
     try:
         import atlas_db  # noqa: E402  (lazy: only on the skip path)

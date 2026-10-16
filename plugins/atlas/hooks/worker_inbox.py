@@ -270,6 +270,10 @@ def drain(root, worker, member_of=None, aliases=()):
             return not ch or ch in chans or ch == main
         return to == "all" and bool(ch) and ch in chans
 
+    # No cursor, no alias bootstrap and nothing addressed to this worker: taking
+    # the lock would only leave a stray <worker>.json.lock behind.
+    if not path.exists() and not aliases and not any(map(wanted, todo.notes(root))):
+        return ""
     with todo._file_lock(path):
         state = _read_state(root, worker)
         since = 0.0

@@ -1,5 +1,7 @@
 {
  "_doc": "Scope matrix: (task_class, effort) -> team shape. Read by scripts/atlas_resolve.py and omp/resolve.ts. Role effort must equal agents/<role>.md frontmatter. tools_profile: read | edit | exec.",
+ "effort_aliases": {"med": "medium", "hi": "high", "lo": "low"},
+ "class_aliases": {"explore": "audit", "research": "audit", "investigate": "audit", "review": "audit", "feature": "implement", "build": "implement", "refactor": "implement", "bug": "fix", "bugfix": "fix", "doc": "docs", "uitest": "ui-test", "ui": "ui-test"},
  "classes": {
   "implement": {
    "low": {

@@ -1,5 +1,21 @@
 # Mutation testing (TYPE ID: `mutation`)
 
+## Contents
+
+- Definition
+- Catches / misses
+- When to choose / avoid
+- Per-language tool table
+- Python (mutmut 3) configuration, verified against the mutmut 3.6.x docs (current: 3.8.0)
+- StrykerJS 10 configuration, verified against the 10.0.0 release (2026-08-14)
+- Mutation operators (what tools change)
+- Equivalent mutants and survivor triage
+- Rollout (incremental adoption)
+- PR vs nightly strategy
+- Interpreting results and thresholds
+- Regulated-data priority (Henssler Financial)
+- Sources
+
 ## Definition
 
 Mutation testing makes small, systematic changes (mutants) to production code, runs the test suite against each mutant, and counts a mutant as killed when at least one test fails. A surviving mutant means the code executed but no test checked the behavior the mutant changed: the gap line coverage cannot see. Coverage tells you a line ran; a killed mutant tells you a line is meaningfully asserted on.

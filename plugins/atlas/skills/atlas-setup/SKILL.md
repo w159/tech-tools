@@ -176,10 +176,10 @@ task. When routing is ambiguous, present the candidates as one
 AskUserQuestion, recommendation first. See `references/skill-routing.md`
 for the full task-to-skill mapping.
 
-## The skill inventory (38 skills)
+## The skill inventory (39 skills)
 
 - **1 manual skill** - atlas-setup (this skill).
-- **37 auto-trigger skills** - the full list with one-line triggers is
+- **38 auto-trigger skills** - the full list with one-line triggers is
   `references/manual-vs-auto-map.md`; the intent-to-skill table is
   `${CLAUDE_PLUGIN_ROOT}/references/skill-finder.md`.
 

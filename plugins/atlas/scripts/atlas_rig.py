@@ -418,6 +418,14 @@ def close_run(run: str) -> dict:
         rig = _safe(run)
         panes = list_panes(rig)
         rc, _, tail = _rig(["down", rig, "--delete", "--json"], 60)
+        if rc != 0 and subprocess.run(["tmux", "has-session"], capture_output=True).returncode:
+            # rig reads "no tmux server" as "seat not confirmed gone" and keeps the rig; a throwaway session makes the check answer
+            keep = "atlas-rigdown-keepalive"
+            subprocess.run(["tmux", "new-session", "-d", "-s", keep], capture_output=True, timeout=5)
+            try:
+                rc, _, tail = _rig(["down", rig, "--delete", "--json"], 60)
+            finally:
+                subprocess.run(["tmux", "kill-session", "-t", keep], capture_output=True, timeout=5)
         if rc != 0:
             return _err(f"rig down failed (rc={rc}): {tail}".strip())
         return _ok(

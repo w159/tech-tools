@@ -66,6 +66,14 @@ def record(hook: str, exc: BaseException, cwd: str | None = None) -> None:
     """Append one JSON fault line. Never raises."""
     try:
         path = _path()
+        real = os.path.join(os.path.expanduser("~"), ".atlas", _NAME)
+        # Tests that did not redirect ATLAS_HOME must not pollute the real fault log.
+        if (
+            os.environ.get("PYTEST_CURRENT_TEST")
+            and not os.environ.get("ATLAS_HOME")
+            and os.path.abspath(path) == os.path.abspath(real)
+        ):
+            return
         os.makedirs(os.path.dirname(path), exist_ok=True)
         row = {
             "ts": time.time(),

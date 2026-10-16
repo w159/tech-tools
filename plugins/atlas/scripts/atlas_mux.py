@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""atlas_mux -- opt-in colony mode (ATLAS_MUX=tmux); workers run as panes of a herdr workspace.
+"""atlas_mux -- opt-in colony mode (ATLAS_MUX=tmux); workers run as tmux panes/windows.
 
-Transport: claude-bg by default for claude workers — `claude --bg --name <worker> --agent atlas:<role>` runs the
-harness itself as a supervised background agent (status via `claude agents --json`, kill via `claude stop`; the
-worker's ONE report note contract travels in the composed brief, since no run-worker wrapper watches the output).
-ATLAS_COLONY_TRANSPORT=herdr|tmux forces a pane transport. omp workers always run as panes (claude --bg is
-claude-only): herdr when its server is up, else tmux (session `atlas-<run>`, one window per worker).
+Transport: tmux by default whenever it is installed (session `atlas-<run>`, one window per worker; the dashboard
+Terminal page attaches to these live). claude-bg is the fallback without tmux: `claude --bg --name <worker> --agent
+atlas:<role>` runs the harness as a supervised background agent (status via `claude agents --json`, kill via
+`claude stop`; the worker's ONE report note contract travels in the composed brief). ATLAS_COLONY_TRANSPORT=
+herdr|tmux|claude-bg forces one. omp workers always run as panes (claude --bg is claude-only): tmux, or herdr only
+when forced.
 Each worker runs as its own headless harness process,
 at the cost tier its agent definition declares:
 
@@ -72,6 +73,7 @@ DEFAULT_AGENT_DIRS = {
     "claude": PLUGIN_ROOT / "agents",
     "omp": PLUGIN_ROOT / "omp" / "agents",
 }
+CODEX_EFFORTS = ("minimal", "low", "medium", "high")
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 BOARD_REL = Path(".atlas") / ".run" / "board"
 # Lead env vars a tmux pane would otherwise lose (a pane inherits the tmux SERVER env, not the spawning client's;
@@ -190,8 +192,15 @@ def _log_tmux_failure(args, res) -> None:
     if res.returncode == 0 or args[:1] == ("has-session",):
         return
     try:
-        root = os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
-        log = Path(root) / ".atlas" / ".run" / "logs" / "atlas_mux.log"
+        start = Path(os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()).resolve()
+        # nearest ancestor with a real .atlas/.run; never create .atlas itself
+        root = next(
+            (p for p in (start, *start.parents) if (p / ".atlas" / ".run").is_dir()),
+            None,
+        )
+        if root is None:
+            return
+        log = root / ".atlas" / ".run" / "logs" / "atlas_mux.log"
         log.parent.mkdir(parents=True, exist_ok=True)
         with log.open("a", encoding="utf-8") as fh:
             fh.write(
@@ -243,18 +252,22 @@ def _seats_up() -> bool:
 
 
 def transport() -> str:
-    """The transport forced via ATLAS_COLONY_TRANSPORT=herdr|tmux|claude-bg; unforced, the seat
-    backend's panes ('herdr' = the pane transport) when one is up, else 'claude-bg'."""
+    """The transport forced via ATLAS_COLONY_TRANSPORT=herdr|tmux|claude-bg; unforced, tmux whenever it is
+    installed (each colony worker gets its own window under session atlas-<run>), else 'claude-bg'."""
     forced = os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip().lower()
     if forced in ("herdr", "tmux", "claude-bg"):
         return forced
-    return "herdr" if _seats_up() else "claude-bg"
+    return "tmux" if shutil.which("tmux") else "claude-bg"
 
 
 def _pane_transport() -> str:
-    """'herdr' (seat-backend panes) when seats are up, else 'tmux' — for workers that must run as panes
+    """'herdr' only when forced via ATLAS_COLONY_TRANSPORT, else 'tmux' — for workers that must run as panes
     (omp has no claude --bg equivalent; interactive launches always need a pane)."""
-    return "herdr" if _seats_up() else "tmux"
+    return (
+        "herdr"
+        if os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip().lower() == "herdr"
+        else "tmux"
+    )
 
 
 CLAUDE_TIMEOUT_S = 30
@@ -424,12 +437,20 @@ def _tier(
     or for omp no pattern that resolves), the caller must pass an explicit --model
     AND the harness tier flag; the explicit model always wins and, for omp, must
     itself resolve to a concrete selector."""
-    def_path = _agents_dir(harness, agents_dir) / f"{role}.md"
+    # codex has no agent files of its own: it reads the claude role (body is prepended to the brief)
+    def_path = (
+        _agents_dir("claude" if harness == "codex" else harness, agents_dir)
+        / f"{role}.md"
+    )
     fields, body = _frontmatter(def_path)
     flag = "--effort" if harness == "claude" else "--thinking"
     fm_level = fields.get("effort" if harness == "claude" else "thinkingLevel") or None
     config: Path | None = None
     patterns: list = []
+    if harness == "codex":
+        # codex's own config picks the model; --model/--thinking are optional overrides, never required
+        fm = fields.get("effort")
+        return model or None, level or (fm if fm in CODEX_EFFORTS else None), body, None
     if harness == "claude":
         def_model = fields.get("model") or None
         explicit = model
@@ -475,7 +496,30 @@ def harness_argv(
     body: str,
     permission_mode: str,
     omp_extension: str | None = None,
+    cwd: str | None = None,
 ) -> list:
+    if harness == "codex":
+        # exec --json: one JSON event per line (atlas_panefeed renders them); workspace-write lets the worker edit
+        argv = [
+            "codex",
+            "exec",
+            "--json",
+            "--skip-git-repo-check",
+            "-s",
+            "workspace-write",
+        ]
+        if cwd:
+            argv += ["-C", cwd]
+        if model:
+            argv += ["-m", model]
+        if level:
+            argv += ["-c", f"model_reasoning_effort={level}"]
+        brief = (
+            f"You are the atlas:{role} worker.\n\n{body.strip()}\n\n# Task\n{prompt}"
+            if body.strip()
+            else prompt
+        )
+        return argv + [brief]
     if harness == "claude":
         # stream-json so the pane shows live tool calls; atlas_panefeed renders it and run-worker keeps the result text
         argv = [
@@ -526,8 +570,8 @@ def _validate(args) -> str | None:
     for label, value in (("run", args.run), ("name", args.name), ("agent", args.agent)):
         if not NAME_RE.match(value or ""):
             return f"invalid {label} {value!r}: use [A-Za-z0-9_-]"
-    if args.harness == "omp" and args.effort:
-        return "--effort is a claude flag; omp workers take --thinking"
+    if args.harness in ("omp", "codex") and args.effort:
+        return f"--effort is a claude flag; {args.harness} workers take --thinking"
     if args.harness == "claude" and args.thinking:
         return "--thinking is an omp flag; claude workers take --effort"
     if not os.path.isfile(args.prompt_file):
@@ -1148,6 +1192,7 @@ def cmd_run_worker(args) -> int:
             body,
             args.permission_mode,
             args.omp_extension,
+            os.path.abspath(args.cwd or root),
         )
     env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
     channel = (os.environ.get("ATLAS_CHANNEL") or "").strip()
@@ -1269,7 +1314,22 @@ def _feed_line(text: str, feed=None) -> list[str]:
 def _omp_error_lines(event: dict) -> list[str]:
     """omp json mode reports a failed model call as an assistant message_end with `errorMessage`; surface it
     as an output line so _classify still sees the 402/not-found signs the plain-text mode printed."""
-    msg = event.get("message") if event.get("type") == "message_end" else None
+    kind = event.get("type")
+    item = event.get("item")
+    if (
+        kind == "item.completed"
+        and isinstance(item, dict)
+        and item.get("type") == "agent_message"
+    ):
+        # codex exec --json: every agent message is output; the last one carries the STATUS report
+        return [t for t in str(item.get("text") or "").splitlines() if t.strip()]
+    if kind in (
+        "turn.failed",
+        "error",
+    ):  # classify sees 401/402/model-not-found in the failure text
+        err = event.get("error") if isinstance(event.get("error"), dict) else event
+        return [str(err.get("message") or "")]
+    msg = event.get("message") if kind == "message_end" else None
     err = msg.get("errorMessage") if isinstance(msg, dict) else None
     return [err] if isinstance(err, str) and err.strip() else []
 
@@ -1701,8 +1761,7 @@ def cmd_spawn_team(args) -> int:
         )
     # tmux when installed gives a visible window per worker; ATLAS_COLONY_TRANSPORT still overrides.
     note = None
-    if not os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip() and not _seats_up():
-        # seats up: transport() resolves to the seat backend's panes (one rig per team id)
+    if not os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip():
         if shutil.which("tmux"):
             os.environ["ATLAS_COLONY_TRANSPORT"] = "tmux"
         else:
@@ -1940,6 +1999,17 @@ def cmd_reap(args) -> int:
     _kill_notes(
         root, names
     )  # exit note + mark_finished + leave for any worker that never posted its own
+    for n in (
+        names
+    ):  # a member the lead channel still lists without an exit: finish it, then drop it
+        for c in atlas_todo.channels_of(root, n):
+            if not any(
+                "exit_code" in m
+                for m in (atlas_todo.get_channel(root, c) or {}).get("members", [])
+                if m["name"] == n
+            ):
+                atlas_todo.mark_finished(root, n, 137)
+            atlas_todo.leave(root, c, n)
     if (
         state == "live"
     ):  # an archived or recovered team already got (or never had) a wrap-up
@@ -1981,7 +2051,7 @@ def _parser() -> argparse.ArgumentParser:
     def worker_opts(sp, internal=False, permission_default: str | None = "acceptEdits"):
         sp.add_argument("--run", required=True)
         sp.add_argument("--name", required=True)
-        sp.add_argument("--harness", choices=("claude", "omp"), required=True)
+        sp.add_argument("--harness", choices=("claude", "omp", "codex"), required=True)
         sp.add_argument("--agent", required=True, help="atlas role, e.g. implementer")
         sp.add_argument("--prompt-file", required=True)
         sp.add_argument(
@@ -2039,7 +2109,7 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument(
         "--session", help="lead session id for wave attribution and the team channel"
     )
-    st.add_argument("--harness", choices=("claude", "omp"), default="claude")
+    st.add_argument("--harness", choices=("claude", "omp", "codex"), default="claude")
     st.add_argument("--dry-run", action="store_true")
     st.add_argument("--root")
     st.add_argument("--poll", type=float, default=1.0)
@@ -2052,9 +2122,9 @@ def _parser() -> argparse.ArgumentParser:
     for name in ("status", "kill"):
         sp = sub.add_parser(name)
         if name == "status":
-            sp.add_argument(
-                "--run", "--team", dest="run", required=True
-            )  # a team id is its run id
+            g = sp.add_mutually_exclusive_group(required=True)
+            g.add_argument("--run", dest="run")
+            g.add_argument("--team", dest="run")  # a team id is its run id
         else:
             sp.add_argument("--run", required=True)
         sp.add_argument("--root")

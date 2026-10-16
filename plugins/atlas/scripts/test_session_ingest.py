@@ -628,6 +628,22 @@ class OmpAdapterTest(unittest.TestCase):
         )
 
 
+class FacetMissingTest(unittest.TestCase):
+    def test_facet_missing_chronicles_sessions_without_a_facet(self):
+        conn = atlas_db.connect(os.path.join(tempfile.mkdtemp(), "atlas.db"))
+        atlas_db.init(conn)
+        self.addCleanup(conn.close)
+        conn.execute(
+            "INSERT INTO session_logs (session_id, message_count, user_prompt_count, started_at) "
+            "VALUES ('s-nofacet', 3, 1, strftime('%s','now'))"
+        )
+        self.assertEqual(session_ingest.facet_missing(conn), 1)
+        self.assertEqual(
+            conn.execute("SELECT COUNT(*) FROM facets WHERE session_id='s-nofacet'").fetchone()[0], 1
+        )
+        self.assertEqual(session_ingest.facet_missing(conn), 0)
+
+
 class OmpColonySidechainTest(unittest.TestCase):
     """Production omp colony layout: <proj>/<stem>.jsonl is the lead's main
     session; <proj>/<stem>/ holds member transcripts (__advisor.jsonl and

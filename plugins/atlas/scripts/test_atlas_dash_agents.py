@@ -212,7 +212,10 @@ class AgentsBase(unittest.TestCase):
         self.herdr = FakeHerdr(self.sock)
         self.addCleanup(self.herdr.close)
         for p in (
-            mock.patch.dict(os.environ, {"HERDR_SOCKET_PATH": self.sock}),
+            mock.patch.dict(
+                os.environ,
+                {"HERDR_SOCKET_PATH": self.sock, "ATLAS_SEAT_BACKEND": "herdr"},
+            ),  # _sessions() returns {} on any other backend, so never inherit it from a sibling module
             mock.patch.object(atlas_herdr, "status", lambda: dict(STATUS)),
             mock.patch.object(
                 work, "_junk_root", lambda path: False
@@ -361,9 +364,13 @@ class TestUnifiedFeed(AgentsBase):
         self.assertEqual(types, ["atlas:implementer", "atlas:verifier"])
         self.assertEqual(recs["wA:p1"]["children_total"], 2)
         self.assertEqual(recs["wA:p2"]["children"], [])
+        self.assertEqual(
+            recs["wA:p1"]["session_id"], sid
+        )  # the id joins the pane to its work
+        self.assertEqual(recs["wA:p2"]["session_id"], "")
         self.assertNotIn(
-            sid, json.dumps(recs)
-        )  # the session id/path never leaves the process
+            ".jsonl", json.dumps(recs)
+        )  # the session PATH never leaves the process
 
     def test_parent_pane_comes_from_the_launch_record(self):
         item = self.add_todo("child work")

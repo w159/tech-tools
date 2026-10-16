@@ -18,6 +18,12 @@ test("spawn argv carries class, effort, task, paths and the omp harness", () => 
 	]);
 });
 
+test("spawn argv passes an explicit harness and rejects unknown ones", () => {
+	const spawn = { action: "spawn" as const, class: "audit", effort: "low", task: "t" };
+	expect(teamArgv({ ...spawn, harness: "codex" }, ROOT)).toContain("codex");
+	expect(() => teamArgv({ ...spawn, harness: "bogus" as unknown as "omp" }, ROOT)).toThrow("harness");
+});
+
 test("spawn argv passes the lead session id when known and omits --session otherwise", () => {
 	const spawn = { action: "spawn" as const, class: "audit", effort: "medium", task: "t" };
 	expect(teamArgv(spawn, ROOT, "sess-lead").slice(-2)).toEqual(["--session", "sess-lead"]);

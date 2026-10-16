@@ -374,13 +374,13 @@ class MainInProcessTest(unittest.TestCase):
         )
         self.assertEqual(r[0], 0)
 
-    def test_parse_error_is_friction_only_no_fault(self):
+    def test_parse_error_is_not_recorded(self):
         class Proc:
             returncode = 2
             stderr = "error: Failed to parse x.py:99:27: missing closing quote"
 
         r = self._faults_and_rows("/x", dict(return_value=Proc()), sid="p")
-        self.assertEqual(r, (0, 1))
+        self.assertEqual(r, (0, 0))
 
     def test_prettier_resolved_from_file_ancestor_not_cwd(self):
         root = tempfile.mkdtemp()

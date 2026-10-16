@@ -707,6 +707,24 @@ def _is_junk_project(root) -> bool:
     return atlas_control.is_fixture_project(root)
 
 
+def _junk_project_row(root) -> bool:
+    """Rows that are not a project of their own: $HOME, worktrees/caches/scratch, and
+    subdirs of another repo (those belong to the enclosing repo's project)."""
+    if not root:
+        return True
+    from atlas_dash_work import _junk_root
+
+    d = os.path.realpath(root)
+    if d == os.path.realpath(os.path.expanduser("~")) or _junk_root(d):
+        return True
+    p = os.path.dirname(d)
+    while p != os.path.dirname(p):
+        if os.path.exists(os.path.join(p, ".git")):
+            return True
+        p = os.path.dirname(p)
+    return False
+
+
 def _projects(conn, recent_only=True, editable_only=False):
     now = time.time()
     # The agent editor must list every real project, however idle: only junk is dropped.
@@ -726,7 +744,9 @@ def _projects(conn, recent_only=True, editable_only=False):
     )
     out = []
     for r in rows:
-        if editable_only and _is_junk_project(r.get("root_path")):
+        if _junk_project_row(r.get("root_path")) or (
+            editable_only and _is_junk_project(r.get("root_path"))
+        ):
             continue
         folder = r.get("name") or _folder_name(r.get("root_path"))
         if _is_generic_folder(folder) and _folder_name(r.get("root_path")):
@@ -1938,7 +1958,7 @@ TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
 # GETs that expose transcripts/agent output or live streams: token required.
 _SENSITIVE_GET = re.compile(
     r"^/api/v2/(stream|irc|colony|channels(/[^/]+)?|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
-    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/herd/capture$"
+    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/herd/capture$|^/api/v2/term/(snapshot|capture)$"
 )
 _TOKEN_EXEMPT = ("/api/health", "/health")
 _MIME = {
@@ -1973,6 +1993,7 @@ def _mount_v2_routes() -> None:
         "atlas_dash_insights",
         "atlas_dash_herd",
         "atlas_dash_integrations",
+        "atlas_dash_term",
     ):
         try:
             mod = importlib.import_module(name)
@@ -2596,6 +2617,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if u.path == "/api/v2/stream":
             return self._sse(query)
+        if (
+            u.path == "/api/v2/term/ws"
+        ):  # token is checked in the handler (browsers cannot set headers)
+            import atlas_dash_term
+
+            return atlas_dash_term.handle_ws(self, query, DASH_TOKEN)
         if self._dispatch_v2("GET", u.path, query, {}):
             return
         return self._legacy_get(u)
@@ -2969,12 +2996,28 @@ def reap_tick(
     ):  # ponytail: is_project below is the real guard; this only trims temp/cache rows
         _junk_root = lambda _p: False  # noqa: E731
     for root in roots:
-        if _junk_root(root) or not atlas_todo.is_project(root):
+        if (
+            _junk_root(root)
+            or _junk_project_row(root)
+            or not atlas_todo.is_project(root)
+        ):
             continue  # reaping must never create .atlas/.run in a non-project dir
         try:
             out[root] = atlas_todo.reap_channels(root)
         except Exception as exc:
             _reap_warn(f"reap {root}", exc)
+    try:
+        import atlas_db
+
+        conn = atlas_db.connect(dashboard_db_path())
+        try:
+            closed = atlas_db.reap_stale_worker_runs(conn)
+        finally:
+            conn.close()
+        if closed:
+            out["worker_runs_closed"] = closed
+    except Exception as exc:
+        _reap_warn("worker runs", exc)
     return out
 
 

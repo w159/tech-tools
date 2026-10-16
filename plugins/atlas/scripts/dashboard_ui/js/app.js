@@ -41,7 +41,7 @@ const RECENT_KEY = "atlas.recent";
 
 const GROUPS = [
   { id: "observe", label: "Monitor", desc: "See what Atlas and your agents are doing", items: [{ page: "overview" }, { page: "activity" }, { page: "health" }] },
-  { id: "operate", label: "Operate", desc: "Work with running agents and their channel", items: [{ page: "agents", label: "Agents" }, { page: "colony", label: "Colony", icon: "herd" }, { page: "terminal", label: "Terminal", icon: "herd" }, { page: "channels", label: "Channels", icon: "irc" }], tree: true },
+  { id: "operate", label: "Operate", desc: "Work with running agents and their channel", items: [{ page: "agents", label: "Agents" }, { page: "colony", label: "Colony", icon: "herd" }, { page: "terminal", label: "Atlas Colony", icon: "herd" }, { page: "channels", label: "Channels", icon: "irc" }], tree: true },
   { id: "improve", label: "Improve", desc: "Atlas's self-improvement loop", items: [{ page: "improve" }] },
   { id: "configure", label: "Configure", desc: "Choose projects and change behavior", items: [{ page: "projects" }, { page: "settings" }] },
 ];
@@ -56,7 +56,7 @@ const DESC = {
   improve: "Atlas's self-improvement loop: observe, mine, propose, apply, remeasure.",
   projects: "Pin, mute or hide the projects Atlas has seen.",
   settings: "Behavior switches, dashboard preferences and navigation order.",
-  terminal: "The raw terminal for every pane.",
+  terminal: "Atlas Command Center and live tmux panes for every colony worker.",
 };
 // Rebuild a chrome region only when what it shows changed, so the 8s refresh never replaces a node under the operator's pointer or focus.
 const sigs = {};
@@ -66,7 +66,7 @@ const changed = (key, value) => {
   sigs[key] = v;
   return true;
 };
-const LABELS = { overview: "Overview", agents: "Agents", activity: "Activity", health: "Health", improve: "Improve", projects: "Projects", settings: "Settings", colony: "Colony", channels: "Channels", terminal: "Terminal" };
+const LABELS = { overview: "Overview", agents: "Agents", activity: "Activity", health: "Health", improve: "Improve", projects: "Projects", settings: "Settings", colony: "Colony", channels: "Channels", terminal: "Atlas Colony" };
 const ICON_FOR = { overview: "overview", agents: "agents", activity: "activity", health: "heart-pulse", improve: "sparkles", projects: "folder", settings: "settings", colony: "herd", channels: "irc", terminal: "herd" };
 const CHORDS = { o: "overview", a: "agents", l: "activity", h: "health", i: "improve", p: "projects", ",": "settings", d: "agents", s: "improve", w: "agents?lens=board", c: "colony", n: "channels", u: "agents?lens=supervision" };
 // Old ids keep working: redirect to the canonical page with a lens, keeping the query.
@@ -79,7 +79,7 @@ export const legacyPages = { work };
 
 async function loadExternalPage(id) {
   try {
-    const mod = await import("./pages/" + (id === "terminal" ? "herdr" : id) + ".js"); // Terminal is the herdr frame page
+    const mod = await import("./pages/" + id + ".js");
     if (mod && mod.default) pages.set(id, mod.default);
     return null;
   } catch (err) {
@@ -619,7 +619,6 @@ window.addEventListener("message", (e) => {
   if (e.origin !== location.origin && !(frame && e.source === frame.contentWindow)) return;
   const pane = typeof d.pane_id === "string" ? d.pane_id : typeof d.paneId === "string" ? d.paneId : "";
   if (d.type === "select-pane" && pane) navigate("terminal", { pane });
-  else if (d.type === "herdr:selected-pane" && pane && parseHash().id === "terminal") import("./pages/herdr.js").then((m) => { m.noteFramePane(pane); setParams({ pane }); });
   else if (d.type === "herdr:attention") agentsStore.refresh(["herd"]);
 });
 

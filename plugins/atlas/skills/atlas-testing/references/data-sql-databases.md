@@ -2,6 +2,14 @@
 
 Covers SQL linting, database unit tests, schema migrations, RLS and authorization, data quality, data contracts, query performance, and test data. Regulatory note up front: for client data, authorization tests (row level security, per-role grants) and PII handling in test fixtures are compliance obligations under FTC Safeguards and SEC Reg S-P, not optional extras. Priority scoring in this file therefore ranks authz tests and PII masking highest, then migration safety, then lint and quality.
 
+## Contents
+
+- At a glance
+- Recommended default stack
+- Config snippets
+- Gotchas
+- Sources
+
 ## At a glance
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |
