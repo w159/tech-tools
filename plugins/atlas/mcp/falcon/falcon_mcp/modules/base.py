@@ -264,7 +264,7 @@ class BaseModule(ABC):
         # Prepare parameters for the API request
         prepared_params = prepare_api_parameters(search_params)
 
-        logger.debug("Executing %s with params: %s", operation, prepared_params)
+        logger.debug("Executing %s with param keys: %s", operation, sorted(prepared_params))
 
         # Make the API request
         response = self.client.command(operation, parameters=prepared_params)

@@ -101,6 +101,13 @@ export interface ResolvedConfig {
 /**
  * Resolve a {@link SpanningConfig} by applying defaults.
  */
+// Linear scan; a /\/+$/ regex backtracks quadratically on long slash runs.
+function stripTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === '/') end--;
+  return s.slice(0, end);
+}
+
 export function resolveConfig(config: SpanningConfig): ResolvedConfig {
   if (!config.adminEmail) {
     throw new Error('adminEmail must be provided');
@@ -115,7 +122,7 @@ export function resolveConfig(config: SpanningConfig): ResolvedConfig {
     );
   }
   const baseFromPlatform = PLATFORM_BASE_URLS[platform];
-  const apiUrl = (config.apiUrl ?? baseFromPlatform).replace(/\/+$/, '');
+  const apiUrl = stripTrailingSlashes(config.apiUrl ?? baseFromPlatform);
   return {
     adminEmail: config.adminEmail,
     apiToken: config.apiToken,

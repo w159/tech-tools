@@ -1192,6 +1192,13 @@ def _subst_root(value: str) -> str:
     return value.replace("${CLAUDE_PLUGIN_ROOT}", str(PLUGIN_ROOT))
 
 
+def _mcp_dir(name: str) -> Path:
+    """PLUGIN_ROOT/mcp/<name>, or a nonexistent sibling when name would escape mcp/."""
+    base = os.path.realpath(PLUGIN_ROOT / "mcp")
+    p = os.path.realpath(os.path.join(base, name))
+    return Path(p) if p.startswith(base + os.sep) else Path(base) / "_invalid"
+
+
 def connector_entry(name: str) -> tuple[Path, list[str] | None]:
     """Resolve a connector's entry point and the exact argv .mcp.json launches.
 
@@ -1200,12 +1207,13 @@ def connector_entry(name: str) -> tuple[Path, list[str] | None]:
     bundles go through ``--import mcp/_env/load.mjs`` and python connectors
     through uv + load.py, which is what promotes CFG_* values.
     """
-    node_bundle = PLUGIN_ROOT / "mcp" / name / "server.mjs"
+    mcp_dir = _mcp_dir(name)
+    node_bundle = mcp_dir / "server.mjs"
     spec = _mcp_server_spec(name)
     if node_bundle.is_file():
         entry = node_bundle
-    elif (PLUGIN_ROOT / "mcp" / name / "pyproject.toml").is_file():
-        entry = PLUGIN_ROOT / "mcp" / name / "pyproject.toml"
+    elif (mcp_dir / "pyproject.toml").is_file():
+        entry = mcp_dir / "pyproject.toml"
     else:
         return node_bundle, None
     if not spec.get("command"):
@@ -1222,7 +1230,7 @@ def _connector_launch_env(name: str, env: dict | None) -> dict:
             proc_env[k] = _subst_root(v)
     proc_env["MCP_TRANSPORT"] = "stdio"
     proc_env.update({str(k): str(v) for k, v in (env or {}).items()})
-    project = PLUGIN_ROOT / "mcp" / name
+    project = _mcp_dir(name)
     # An already-synced uv project must not trigger a network sync from a button click.
     if (project / ".venv").is_dir() or os.environ.get("UV_PROJECT_ENVIRONMENT"):
         proc_env.setdefault("UV_NO_SYNC", "1")
@@ -1586,7 +1594,8 @@ def omp_model_roles(path: Path | None = None) -> dict:
 
 # --- bulk env import / export -------------------------------------------------
 
-ENV_LINE_RE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
+# `=(.*)` not `=\s*(.*)`: the value is stripped by the caller, and `\s*(.*)` backtracks quadratically.
+ENV_LINE_RE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$")
 
 
 def parse_env_block(text: str) -> dict:

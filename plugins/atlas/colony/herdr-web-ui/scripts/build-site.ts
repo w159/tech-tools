@@ -175,7 +175,7 @@ for (const name of pageMedia) {
 
 // the FAQ as structured data, read from the rows the page shows
 // (a row's closing "… →" link is navigation, not part of the answer)
-const text = (html: string) => html.replace(/<a [^>]*>[^<]*→<\/a>/g, "").replace(/<[^>]+>/g, "").replaceAll("&amp;", "&").replace(/\s+/g, " ").trim();
+const text = (html: string) => html.replace(/<a [^>]*>[^<]*→<\/a>/g, "").replace(/<[^>]+>/g, "").replace(/[<>]/g, "").replaceAll("&amp;", "&").replace(/\s+/g, " ").trim();
 const questions = [...page.matchAll(/<div class="qa">\s*<dt>(.*?)<\/dt>\s*<dd>(.*?)<\/dd>\s*<\/div>/gs)].map(([, question, answer]) => ({
   "@type": "Question",
   name: text(question),

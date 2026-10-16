@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- CodeQL hardening in herdr-web-ui: markdown URL regexes use explicit character classes, ws submit/secret settlers are type-checked before call, `errorResponse` no longer returns raw exception text on 500 (logged server-side), Copilot token host match is exact, and site FAQ text strips stray `<`/`>`.
+- CodeQL hardening in atlas Python scripts: dashboard agent-override and static-file paths and connector directories are realpath-contained before use, and the env-import and memory-capture-miner regexes no longer backtrack polynomially/exponentially.
 - Completion gate (m) delegation mandate no longer false-blocks later turns of a session that already dispatched: code written through the shell (diffed against the SessionStart snapshot, so session-scoped) is now checked against session-wide dispatch evidence (`dispatches`/`events` on any run of the session, `tool_calls` and transcript without the run-start cutoff), while Write/Edit records stay run-scoped. It also recognises omp dispatches: `events`/`tool_calls` names match `Task`/`Agent` case-insensitively (omp's tool is lowercase `task`) and the transcript scan accepts omp's `toolCall` block alongside Claude's `tool_use`. Finding GATE-M-OMP-TASK.
 
 ## 12.4.6 (2026-10-14)

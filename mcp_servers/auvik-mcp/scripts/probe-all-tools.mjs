@@ -63,7 +63,7 @@ const parse = (r) => {
 };
 
 console.log('=== Auvik MCP — live tool probe ===');
-console.log(`Region: ${process.env.AUVIK_REGION}  User: ${process.env.AUVIK_USERNAME}\n`);
+console.log(`Region: ${process.env.AUVIK_REGION ? 'set' : 'unset'}  User: ${process.env.AUVIK_USERNAME ? 'set' : 'unset'}\n`);
 
 await run('auvik_status', () => status.handleStatus());
 

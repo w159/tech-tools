@@ -29,8 +29,8 @@ export function errorResponse(error: unknown): Response {
     const status = error.code === "connect_failed" || error.code === "timeout" ? 502 : 404;
     return jsonResponse({ error: { code: error.code, message: error.message } }, status);
   }
-  const message = error instanceof Error ? error.message : String(error);
-  return jsonResponse({ error: { code: "internal_error", message } }, 500);
+  console.error(error);
+  return jsonResponse({ error: { code: "internal_error", message: "Internal server error" } }, 500);
 }
 
 export function badRequest(code: string, message: string): Response {

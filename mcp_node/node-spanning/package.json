@@ -1,6 +1,6 @@
 {
   "name": "node-spanning",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "description": "Typed Node.js client for the Spanning Cloud Backup REST API; used by kaseya-spanning-backup-mcp.",
   "main": "./dist/index.cjs",

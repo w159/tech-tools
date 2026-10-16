@@ -1,6 +1,6 @@
 {
   "name": "panos-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "MCP server for the PAN-OS XML and REST APIs (Panorama and firewall)",
   "type": "module",
   "main": "./dist/index.js",

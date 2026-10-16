@@ -6,13 +6,16 @@ function getConfiguredLevel(): LogLevel {
   return (env in LEVELS) ? env as LogLevel : 'info';
 }
 
+const SENSITIVE_KEY = /pass|secret|token|key|authorization|credential/i;
+const redact = (k: string, v: object | string) => (SENSITIVE_KEY.test(k) ? '[REDACTED]' : v);
+
 function log(level: LogLevel, message: string, context?: unknown): void {
   if (LEVELS[level] < LEVELS[getConfiguredLevel()]) return;
   const timestamp = new Date().toISOString();
   const prefix = `${timestamp} [${level.toUpperCase()}]`;
   if (context !== undefined) {
     let contextStr: string;
-    try { contextStr = JSON.stringify(context); }
+    try { contextStr = JSON.stringify(context, redact); }
     catch { contextStr = String(context); }
     console.error(`${prefix} ${message} ${contextStr}`);
   } else {

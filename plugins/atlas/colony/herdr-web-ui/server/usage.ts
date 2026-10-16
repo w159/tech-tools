@@ -442,7 +442,7 @@ interface GitHubToken {
 
 function copilotFileTokens(source: string | null): GitHubToken[] {
   return Object.entries(record(parseJson(source))).flatMap(([host, entry]) => {
-    const token = host.startsWith("github.com") ? text(record(entry)["oauth_token"]) : null;
+    const token = host.split(":")[0] === "github.com" ? text(record(entry)["oauth_token"]) : null;
     return token ? [{ token, login: text(record(entry)["user"]), editor: true }] : [];
   });
 }

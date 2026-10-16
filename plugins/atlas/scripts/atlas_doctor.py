@@ -767,7 +767,11 @@ def behaviour_checks(add, plugin_name, version, now=None):
         n == 0,
         f"{n} hook fault(s) in 24h"
         + (f"; last {last.get('hook')}: {last.get('error', '')[:80]}" if n else "")
-        + (f" ({ignored} ignored: formatter skips or other installs)" if ignored else ""),
+        + (
+            f" ({ignored} ignored: formatter skips or other installs)"
+            if ignored
+            else ""
+        ),
         severity="fail" if n >= FAULT_FAIL_24H else "warn",
     )
     # B2: env kill switches / scope make the gates inert
@@ -1237,7 +1241,9 @@ def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
         actions.append(f"reset marketplace clone to origin/{branch}")
 
     mkt_ver = marketplace_plugin_version(clone, plugin_name)
-    cur_ver_dir = os.path.basename(reg.get("installPath", "").rstrip("/")) if reg else None
+    cur_ver_dir = (
+        os.path.basename(reg.get("installPath", "").rstrip("/")) if reg else None
+    )
     if mkt_ver and reg and reg["version"] != mkt_ver:
         cur_ver_dir = mkt_ver  # cache_dir basename below
         cache_dir = os.path.join(PLUGINS_DIR, "cache", mkt_name, plugin_name, mkt_ver)
@@ -1273,7 +1279,9 @@ def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
                 "plugins",
                 f"{mkt_name}___{plugin_name}___{mkt_ver}",
             )
-            if not os.path.exists(os.path.join(omp_dir, ".claude-plugin", "plugin.json")):
+            if not os.path.exists(
+                os.path.join(omp_dir, ".claude-plugin", "plugin.json")
+            ):
                 shutil.copytree(
                     os.path.join(clone, "plugins", plugin_name),
                     omp_dir,
@@ -1378,7 +1386,11 @@ def mine_memory_capture_silent_drop(conn, root):
         return []
     checks = len(re.findall(r'if result\.get\("success"\):', src))
     handled = len(
-        re.findall(r'if result\.get\("success"\):(?:\n[ \t]+.*)*\n[ \t]*else:', src)
+        # body lines start with non-blank after indent (`[ \t]+\S`), so repeats cannot overlap
+        re.findall(
+            r'if result\.get\("success"\):(?:\n[ \t]+\S.*|\n[ \t]*(?=\n))*\n[ \t]*else:',
+            src,
+        )
     )
     missing = checks - handled
     if missing <= 0:

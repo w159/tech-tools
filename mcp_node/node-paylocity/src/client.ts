@@ -18,6 +18,18 @@ const PROD_BASE = 'https://api.paylocity.com';
 const SANDBOX_BASE = 'https://apisandbox.paylocity.com';
 const DEFAULT_SCOPE = 'WebLinkAPI';
 
+// Linear scan; a /\/+$/ regex backtracks quadratically on long slash runs.
+function stripTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === '/') end--;
+  return s.slice(0, end);
+}
+
+function stripApiSuffix(s: string): string {
+  const t = stripTrailingSlashes(s);
+  return t.toLowerCase().endsWith('/api') ? t.slice(0, -4) : t;
+}
+
 export class PaylocityClient {
   readonly employees: EmployeesResource;
   readonly legacyEmployees: LegacyEmployeesResource;
@@ -42,7 +54,7 @@ export class PaylocityClient {
     // Strip trailing slashes and a trailing "/api" segment if the caller
     // pasted one in — Paylocity's modern endpoints (e.g. /coreHr/v1/...) and
     // the OAuth token endpoint both live at the host root, not under /api.
-    this.baseUrl = root.replace(/\/+$/, '').replace(/\/api$/i, '');
+    this.baseUrl = stripApiSuffix(root);
     const tokenUrl =
       config.tokenUrl ?? `${this.baseUrl}/IdentityServer/connect/token`;
     const scope = config.scope ?? DEFAULT_SCOPE;

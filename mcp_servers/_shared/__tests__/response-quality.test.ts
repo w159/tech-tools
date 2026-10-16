@@ -737,14 +737,14 @@ describe("makeBaseUrlResolver", () => {
 describe("describeBaseUrl", () => {
   it("describes the default when no override is set", () => {
     const desc = describeBaseUrl("vanta", "", "VANTA_BASE_URL");
-    assert.ok(desc.includes("https://api.vanta.com/v1"), "should contain the URL");
+    assert.ok(desc.startsWith("https://api.vanta.com/v1 "), "should contain the URL");
     assert.ok(desc.includes("vendor default"), "should label it as vendor default");
     assert.ok(desc.includes("VANTA_BASE_URL"), "should name the env var");
   });
 
   it("describes the override when set", () => {
     const desc = describeBaseUrl("vanta", "https://staging.vanta.com", "VANTA_BASE_URL");
-    assert.ok(desc.includes("staging.vanta.com"), "should contain the override URL");
+    assert.ok(desc.startsWith("https://staging.vanta.com "), "should contain the override URL");
     assert.ok(desc.includes("VANTA_BASE_URL"), "should name the env var source");
   });
 

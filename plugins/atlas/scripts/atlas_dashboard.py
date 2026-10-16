@@ -1517,7 +1517,9 @@ def _reclaim_temp_listener(port: int, health: dict, want_db: str) -> bool:
 
 LOG_ROTATE_BYTES = 5 * 1024 * 1024
 AUTH_LOG_INTERVAL_S = 60.0
-_auth_log_state: dict[str, list] = {}  # route -> [last logged monotonic, suppressed count]
+_auth_log_state: dict[
+    str, list
+] = {}  # route -> [last logged monotonic, suppressed count]
 
 
 def _throttle_auth_failure(line: str) -> str | None:
@@ -1562,7 +1564,9 @@ def ensure_daemon(port: int | None = None) -> dict:
         # Non-blocking: a blocking flock behind another session's slow start outlasted
         # session_boot's 15s guard and failed silently. The holder is already ensuring.
         try:
-            fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)  # released when the file closes
+            fcntl.flock(
+                lockf, fcntl.LOCK_EX | fcntl.LOCK_NB
+            )  # released when the file closes
         except OSError:  # BlockingIOError (EWOULDBLOCK/EAGAIN)
             print("dashboard: another session is starting it", file=sys.stderr)
             return {"ok": True, "starting": True, "port": port}
@@ -1588,7 +1592,10 @@ def _ensure_daemon_locked(port: int) -> dict:
         h = _patient_health(port) or {}
         if not h:
             # Port is bound but /api/health never answered: replace it (unhealthy).
-            print(f"[atlas-dashboard] {_ts()} replacing :{port}: listener unhealthy", file=sys.stderr)
+            print(
+                f"[atlas-dashboard] {_ts()} replacing :{port}: listener unhealthy",
+                file=sys.stderr,
+            )
         same_db = _daemon_db_ok(port)
         reclaimed = False
         if h and not same_db:
@@ -1703,6 +1710,13 @@ def _todo_payload(root):
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+def _contained(base, *parts):
+    """realpath(base/parts) as str if it stays inside realpath(base), else None."""
+    root = os.path.realpath(str(base))
+    full = os.path.realpath(os.path.join(root, *parts))
+    return full if full.startswith(root + os.sep) else None
 
 
 def _agent_name_ok(name):
@@ -1833,7 +1847,10 @@ def _agent_content(root, name):
     """The override file wins; the plugin source is the editing start point."""
     if not _agent_name_ok(name):
         return {"ok": False, "error": "invalid_name"}
-    over = Path(root) / ".claude" / "agents" / (name + ".md") if root else None
+    over_p = (
+        _contained(Path(root) / ".claude" / "agents", name + ".md") if root else None
+    )
+    over = Path(over_p) if over_p else None
     if over and over.is_file():
         try:
             return {
@@ -1844,8 +1861,9 @@ def _agent_content(root, name):
             }
         except OSError as e:
             return {"ok": False, "error": str(e)}
-    src = PLUGIN_ROOT / "agents" / (name + ".md")
-    if src.is_file():
+    src_p = _contained(PLUGIN_ROOT / "agents", name + ".md")
+    src = Path(src_p) if src_p else None
+    if src and src.is_file():
         try:
             return {
                 "ok": True,
@@ -1872,9 +1890,12 @@ def _agent_save(root, name, content):
             "hint": "Agent files start with YAML frontmatter: --- on the first line.",
         }
     over_dir = Path(root) / ".claude" / "agents"
+    over_p = _contained(over_dir, name + ".md")
+    if not over_p:
+        return {"ok": False, "error": "invalid_name"}
+    over = Path(over_p)
     try:
         over_dir.mkdir(parents=True, exist_ok=True)
-        over = over_dir / (name + ".md")
         over.write_text(text, encoding="utf-8")
     except OSError as e:
         return {"ok": False, "error": str(e)}
@@ -1892,7 +1913,10 @@ def _agent_reset(root, name):
         return {"ok": False, "error": "invalid_name"}
     if not root:
         return {"ok": False, "error": "unknown_project"}
-    over = Path(root) / ".claude" / "agents" / (name + ".md")
+    over_p = _contained(Path(root) / ".claude" / "agents", name + ".md")
+    if not over_p:
+        return {"ok": False, "error": "invalid_name"}
+    over = Path(over_p)
     try:
         over.unlink(missing_ok=True)
     except OSError as e:
@@ -2004,13 +2028,11 @@ def _static_file(rel: str):
     parts = [p for p in rel.split("/") if p not in ("", ".")]
     if any(p == ".." or p.startswith(".") for p in parts):
         return None
-    base = STATIC_DIR.resolve()
-    target = (base / "/".join(parts)).resolve()
-    try:
-        target.relative_to(base)
-    except ValueError:
+    base = os.path.realpath(str(STATIC_DIR))
+    target = os.path.realpath(os.path.join(base, "/".join(parts)))
+    if not target.startswith(base + os.sep):
         return None
-    return target if target.is_file() else None
+    return Path(target) if os.path.isfile(target) else None
 
 
 # Keys that change every tick without meaning anything changed. They are ignored for change
@@ -2338,7 +2360,9 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):  # noqa: A002 - base-class signature
         line = format % args
         # Liveness probes fire every few seconds from every session; only failures are worth a line.
-        if re.search(r'"GET /(api/(v2/)?)?health[ ?]', line) and line.rstrip().split()[-2:-1] == ["200"]:
+        if re.search(r'"GET /(api/(v2/)?)?health[ ?]', line) and line.rstrip().split()[
+            -2:-1
+        ] == ["200"]:
             return
         line = _throttle_auth_failure(line)
         if line is None:
@@ -2912,7 +2936,9 @@ def _reap_warn(what: str, exc: Exception) -> None:
         log.warning(msg)
 
 
-def reap_tick(now: float | None = None, interval: float = REAP_INTERVAL_S) -> dict | None:
+def reap_tick(
+    now: float | None = None, interval: float = REAP_INTERVAL_S
+) -> dict | None:
     """Reap dead colony channels for every known project root, at most once per
     interval. Fail-open: a bad root or DB never stops the dashboard."""
     global _REAP_LAST
@@ -2928,7 +2954,9 @@ def reap_tick(now: float | None = None, interval: float = REAP_INTERVAL_S) -> di
 
         conn = sqlite3.connect(f"file:{dashboard_db_path()}?mode=ro", uri=True)
         try:
-            roots = [r[0] for r in conn.execute("SELECT root_path FROM projects") if r[0]]
+            roots = [
+                r[0] for r in conn.execute("SELECT root_path FROM projects") if r[0]
+            ]
         finally:
             conn.close()
     except Exception as exc:
@@ -2936,7 +2964,9 @@ def reap_tick(now: float | None = None, interval: float = REAP_INTERVAL_S) -> di
         return out
     try:
         from atlas_dash_work import _junk_root
-    except Exception:  # ponytail: is_project below is the real guard; this only trims temp/cache rows
+    except (
+        Exception
+    ):  # ponytail: is_project below is the real guard; this only trims temp/cache rows
         _junk_root = lambda _p: False  # noqa: E731
     for root in roots:
         if _junk_root(root) or not atlas_todo.is_project(root):
