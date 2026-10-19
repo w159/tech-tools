@@ -51,5 +51,10 @@
 .tw-space { flex-direction: column; align-items: flex-start; gap: 0; }
 .tw-agent-name { display: flex; flex-direction: column; min-width: 0; }
 .tw-sub2 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.tw-pane[hidden], .tw-term-cc[hidden] { display: none; }
+.tw-space.is-finished, .rail-colony.is-finished, .colony-card.is-finished { opacity: .55; }
+.tw-fin { margin-left: var(--s-2); font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
+.update-banner { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: 8px 12px; background: var(--accent); color: var(--bg, #0a0f12); font-weight: 600; }
 .tw-source { color: var(--text-faint); font-size: 12px; }
 .tw-crumbs { flex-wrap: wrap; }

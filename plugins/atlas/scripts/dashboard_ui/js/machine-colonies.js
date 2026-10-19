@@ -1,7 +1,7 @@
 // Rail section "This machine": the live Atlas colonies from GET term/snapshot (the Terminal page's data), not herdr workspaces.
 import { h, replace } from "./dom.js";
 import { api } from "./api.js";
-import { spaceName } from "./pages/terminal.js";
+import { spaceName, lastSnap } from "./pages/terminal.js";
 
 const POLL_MS = 5000;
 
@@ -12,7 +12,7 @@ export function colonyRows(snap) {
     const mine = seats.filter((s) => s.colony === c.id);
     const state = mine.some((s) => s.state === "working") ? "working" : mine.some((s) => s.state === "blocked") ? "blocked" : "idle";
     const project = c.project || (snap && snap.project) || "";
-    return { id: c.id, name: spaceName(c), title: c.title || "", project: project.split("/").filter(Boolean).pop() || project, state, seats: mine.length };
+    return { id: c.id, name: spaceName(c), title: c.title || "", project: project.split("/").filter(Boolean).pop() || project, finished: Boolean(c.finished), state, seats: mine.length };
   });
 }
 
@@ -24,16 +24,21 @@ export function MachineColonies({ getProject, poll = true } = {}) {
     replace(root,
       h("div", { class: "tree-row tree-host" }, h("span", { class: "tree-label truncate" }, "This machine"), h("span", { class: "tree-tag dim" }, (snap && snap.host) || "")),
       rows.length
-        ? rows.map((r) => h("a", { class: "tree-row rail-colony", href: "#/terminal?space=" + encodeURIComponent(r.id), "data-colony": r.id, "aria-label": r.name + ", " + r.project + ", " + r.state + ", " + r.seats + " seats" },
+        ? rows.map((r) => h("a", { class: "tree-row rail-colony" + (r.finished ? " is-finished" : ""), href: "#/terminal?space=" + encodeURIComponent(r.id), "data-colony": r.id, "aria-label": r.name + ", " + r.project + ", " + r.state + ", " + r.seats + " seats" },
             h("span", { class: "tree-dot", "data-state": r.state, "aria-hidden": "true" }),
             h("span", { class: "tree-label truncate", title: r.title || r.id }, r.name),
-            h("span", { class: "tree-age dim truncate" }, r.project),
+            h("span", { class: "tree-age dim truncate" }, r.finished ? "finished" : r.project),
             h("span", { class: "tree-count num dim" }, String(r.seats))))
         : h("p", { class: "tree-note dim" }, "No colonies running"));
   };
   root.refresh = async () => {
     const p = getProject ? getProject() : "all";
-    try { draw(await api.get("term/snapshot", !p || p === "all" ? { all: "1" } : { project: p })); } catch { draw(null); }
+    const q = !p || p === "all" ? { all: "1" } : { project: p };
+    try {
+      const snap = await api.get("term/snapshot", q);
+      lastSnap.key = JSON.stringify(q); lastSnap.snap = snap;
+      draw(snap);
+    } catch { draw(null); }
   };
   root.refresh();
   if (poll) {

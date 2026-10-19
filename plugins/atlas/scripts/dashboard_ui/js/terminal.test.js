@@ -33,6 +33,7 @@ window.Terminal = class {
   loadAddon() {} open() {} focus() {} dispose() { this.disposed = true; } reset() { this.out = ""; }
   write(d) { this.out += typeof d === "string" ? d : "<bytes>"; }
   onData(fn) { this.dataFn = fn; return { dispose() {} }; }
+  onBinary() { return { dispose() {} }; }
   onResize(fn) { this.resizeFn = fn; return { dispose() {} }; }
 };
 window.FitAddon = { FitAddon: class { fit() {} } };
@@ -182,13 +183,13 @@ test("a 4xx behind the ws close renders the server reason and stops retrying", a
   page.destroy();
 });
 
-test("stepFont steps 13 -> 10 until the grid reaches 100x30", async () => {
+test("stepFont steps 13 -> 10 until the grid reaches 152x30", async () => {
   const { stepFont } = await import("./pages/terminal.js");
   const grid = (w, h) => (n) => ({ cols: Math.floor(w / (n * 0.6)), rows: Math.floor(h / (n * 1.2)) });
   expect(stepFont(grid(1400, 900))).toBe(13);
-  const mid = stepFont(grid(700, 420));
-  expect(mid).toBeLessThan(13);
-  expect(mid).toBeGreaterThanOrEqual(10);
+  expect(stepFont(grid(1180, 900))).toBe(12); // 13px -> 151 cols (< 152), 12px -> 163
+  expect(stepFont(grid(1100, 900))).toBeLessThan(13);
+  expect(stepFont(grid(1100, 900))).toBeGreaterThanOrEqual(10);
   expect(stepFont(grid(500, 300))).toBe(10);
 });
 
@@ -223,4 +224,51 @@ test("the Command Center OSC 7717 handler opens a space and a seat", async () =>
   expect(sets.pop()).toEqual({ space: "t8e7324", seat: "explorer-ab12" });
   term.osc[7717]("garbage");
   expect(sets.length).toBe(0);
+});
+
+test("switching spaces keeps the Command Center terminal and ws alive", async () => {
+  terms.length = 0; sockets.length = 0;
+  const root = await mount(NAMED, {});
+  const cc = byClass(root, "tw-term-cc")[0];
+  const pane = byClass(root, "tw-pane")[0];
+  const click = (label) => walk(root).find((x) => x.tag === "button" && (x.attrs.class || "").includes("tw-space") && text(x).includes(label)).listeners.click();
+  expect(terms.length).toBe(1);
+  click("tui-review");
+  await tick();
+  expect(cc.hidden).toBe(true);
+  expect(pane.hidden).toBe(false);
+  expect(terms[0].disposed).toBeUndefined();
+  click("Atlas Command Center");
+  await tick();
+  expect(cc.hidden).toBe(false);
+  expect(terms[0].disposed).toBeUndefined(); // cards add terms; the first one is the Command Center
+  expect(sockets.filter((s) => s.url.includes("kind=tui")).length).toBe(1);
+  page.destroy();
+  expect(terms[0].disposed).toBe(true);
+});
+
+test("source.label wins over the composed line; finished colonies are dimmed and tagged", async () => {
+  const { sourceLine } = await import("./pages/terminal.js");
+  expect(sourceLine({ source: { label: "channel x@y/z", harness: "omp" } })).toBe("channel x@y/z");
+  const snap = { ...NAMED, colonies: [{ ...NAMED.colonies[0], finished: true }, NAMED.colonies[1]] };
+  const root = await mount(snap, {});
+  const fin = byClass(root, "tw-space").filter((b) => (b.attrs.class || "").includes("is-finished"));
+  expect(fin.length).toBe(1);
+  expect(text(fin[0])).toContain("finished");
+  page.destroy();
+});
+
+test("SPACES lists colonies from the rail snapshot before the page own fetch lands, else says loading", async () => {
+  const { lastSnap } = await import("./pages/terminal.js");
+  const never = { params: {}, project: "all", api: { get: () => new Promise(() => {}) } };
+  lastSnap.key = ""; lastSnap.snap = null;
+  let root = page.render(never); root.isConnected = true; walk(root).forEach((x) => (x.isConnected = true));
+  expect(text(root)).toContain("Loading colonies");
+  expect(text(root)).not.toContain("tui-review");
+  page.destroy();
+  lastSnap.key = JSON.stringify({ all: "1" }); lastSnap.snap = NAMED;
+  root = page.render(never); root.isConnected = true; walk(root).forEach((x) => (x.isConnected = true));
+  expect(text(root)).toContain("tui-review");
+  page.destroy();
+  lastSnap.key = ""; lastSnap.snap = null;
 });

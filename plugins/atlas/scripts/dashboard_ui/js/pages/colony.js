@@ -46,8 +46,8 @@ const allProjects = (snap, ctx) => {
   if (!groups.length) return State({ variant: "empty", title: "No live colonies in any project", body: "Start one from your agent and it appears here with its members.", action: terminalBtn(ctx) });
   return h("div", { class: "colony-all-projects" }, ...groups.map((g) => h("section", { class: "colony-group" },
     h("h2", { title: g.project }, g.name),
-    ...g.colonies.map(({ colony, seats }) => h("div", { class: "colony-card" },
-      h("div", { class: "colony-top" }, h("strong", { title: colony.id }, spaceName(colony)), h("span", { class: "dim truncate" }, colony.title || colony.task || ""), h("span", { class: "grow" }),
+    ...g.colonies.map(({ colony, seats }) => h("div", { class: "colony-card" + (colony.finished ? " is-finished" : "") },
+      h("div", { class: "colony-top" }, h("strong", { title: colony.id }, spaceName(colony)), colony.finished ? h("span", { class: "tw-fin" }, "finished") : null, h("span", { class: "dim truncate" }, colony.title || colony.task || ""), h("span", { class: "grow" }),
         Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + spaceName(colony), onClick: () => ctx.navigate("terminal", { space: colony.id, project: g.project }) })),
       sourceLine(colony) ? h("div", { class: "dim colony-source" }, sourceLine(colony)) : null,
       ...seats.map((s) => h("div", { class: "colony-top" }, h("span", { class: "truncate", title: s.name }, seatAddress(s)), h("span", { class: "chip-lite" }, s.role_title || s.role || "worker"), Badge({ status: BADGE[s.state] || s.state, text: s.state }),

@@ -2471,8 +2471,10 @@ class Handler(BaseHTTPRequestHandler):
                     },
                 )
                 return True
-            body = target.read_bytes().replace(
-                TOKEN_PLACEHOLDER.encode(), DASH_TOKEN.encode()
+            body = (
+                target.read_bytes()
+                .replace(TOKEN_PLACEHOLDER.encode(), DASH_TOKEN.encode())
+                .replace(b"__ATLAS_VERSION__", str(_plugin_manifest().get("version") or "").encode())
             )
             if DASH_TOKEN.encode() not in body:
                 tag = f'<meta name="atlas-token" content="{DASH_TOKEN}">'.encode()

@@ -7,7 +7,7 @@ test("connectPty shows the placeholder at once and clears it before the first PT
   globalThis.WebSocket = class { constructor(u) { this.url = u; this.readyState = 0; sockets.push(this); } send() {} close() {} };
   const { connectPty } = await import("./pages/terminal.js");
   const out = [];
-  const term = { cols: 80, rows: 24, write: (d) => out.push(d), onData: () => null, onResize: () => null };
+  const term = { cols: 80, rows: 24, write: (d) => out.push(d), onData: () => null, onBinary: () => null, onResize: () => null };
   const pty = connectPty({ term, kind: "tui", onStatus: () => {}, placeholder: "starting Atlas Command Center…" });
   expect(out).toEqual(["starting Atlas Command Center…"]);
   sockets[0].onmessage({ data: new ArrayBuffer(1) });

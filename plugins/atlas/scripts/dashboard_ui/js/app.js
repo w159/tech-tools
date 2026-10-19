@@ -6,6 +6,7 @@ import { api, ApiError, setHiddenRoots } from "./api.js";
 import { toast, toastError, Modal, openModal, closeModal, hasOpenModal, closeDrawer, hasOpenDrawer, openPopover, closePopover, hasOpenPopover, openPalette, closePalette, isPaletteOpen, State, DegradedState, Button, Input, Select, HexGlyph, Keycap } from "./components.js";
 import { FleetStrip, openAgentInspector, closeAgentInspector } from "./fleet.js";
 import { MachineColonies } from "./machine-colonies.js";
+import { watchVersion } from "./version-banner.js";
 import { agentsStore, STATE_WORD } from "./agents-store.js";
 import overview from "./pages/overview.js";
 import work from "./pages/work.js";
@@ -875,6 +876,8 @@ async function boot() {
       stampAsOf();
     }
   });
+
+  watchVersion({ probe: () => api.probe(), mount: (n) => document.body.prepend(n) });
 
   window.addEventListener("hashchange", route);
   window.addEventListener("unhandledrejection", (e) => {

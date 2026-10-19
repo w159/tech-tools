@@ -29,9 +29,9 @@ const mount = async (snap) => { api.get = async () => snap; const el = MachineCo
 
 test("rows come from the snapshot: id, project, state dot, seat count, terminal link", async () => {
   expect(colonyRows(SNAP)).toEqual([
-    { id: "run1", name: "run1", title: "", project: "tech-tools", state: "working", seats: 2 },
-    { id: "run2", name: "run2", title: "", project: "other", state: "blocked", seats: 1 },
-    { id: "run3", name: "run3", title: "", project: "tech-tools", state: "idle", seats: 1 },
+    { id: "run1", name: "run1", title: "", project: "tech-tools", finished: false, state: "working", seats: 2 },
+    { id: "run2", name: "run2", title: "", project: "other", finished: false, state: "blocked", seats: 1 },
+    { id: "run3", name: "run3", title: "", project: "tech-tools", finished: false, state: "idle", seats: 1 },
   ]);
   const el = await mount(SNAP);
   const rows = walk(el).filter((x) => (x.attrs.class || "").includes("rail-colony"));
@@ -58,4 +58,12 @@ test("rows show the human name and title, keep the id in the link", async () => 
   expect(text(row)).toContain("tui-review");
   expect(walk(row).some((x) => x.attrs.title === "Review the TUI")).toBe(true);
   expect(text(row)).not.toContain("t8e7324");
+});
+
+test("finished colonies are dimmed and tagged in the rail", async () => {
+  const snap = { host: "m", colonies: [{ id: "done", finished: true }], seats: [{ colony: "done", state: "finished" }] };
+  const el = await mount(snap);
+  const row = walk(el).find((x) => (x.attrs.class || "").includes("rail-colony"));
+  expect(row.attrs.class).toContain("is-finished");
+  expect(text(row)).toContain("finished");
 });
