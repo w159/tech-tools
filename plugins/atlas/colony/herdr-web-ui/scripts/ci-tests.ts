@@ -51,7 +51,7 @@ async function work(session: string): Promise<void> {
     // Live process/pane probes can poll for 10s; Bun's 5s default would cut them off early.
     // One stream, so a file's output reads in the order it was written.
     const child = Bun.spawn(["sh", "-c", 'exec "$@" 2>&1', "sh", process.execPath, "test", "--timeout", "15000", `./${file}`], {
-      env: { ...process.env, HERDR_TEST_MODE: suite!, HERDR_TEST_SESSION: session },
+      env: { ...process.env, HERDR_TEST_MODE: suite!, HERDR_TEST_SESSION: session, HERDR_LIVE_TESTS: "1" },
       stdin: "ignore", stdout: "pipe", stderr: "inherit",
     });
     const [output, code] = await Promise.all([new Response(child.stdout).text(), child.exited]);

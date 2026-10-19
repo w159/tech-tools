@@ -16,6 +16,7 @@
     "start": "bun run build && bun run server/managed.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "test:prompt-live": "HERDR_LIVE_TESTS=1 bun test server/prompt.contract.test.ts",
     "test:unit": "bun scripts/ci-tests.ts unit",
     "test:integration": "bun scripts/ci-tests.ts integration",
     "test:ui": "bun run build && bun scripts/ui-regression.ts",

@@ -35,6 +35,8 @@ after a herdr restart. It prints the time each step took. `KEEP=1` leaves the co
 
 Tests run against a herdr session of their own, `herdr-web-ui-test`. The first run starts a headless `herdr --session herdr-web-ui-test server` and later runs reuse it, so test workspaces never show in the herdr you work in (`scripts/test-herdr.ts`). Stop it with `herdr --session herdr-web-ui-test server stop`. `HERDR_TEST_SESSION` picks another name, and `HERDR_TEST_LIVE=1` runs against `HERDR_SOCKET` or your default session instead.
 
+`server/prompt.contract.test.ts` creates blocked stand-in agents, so it is opt-in: it skips unless `HERDR_LIVE_TESTS=1` (`bun run test:prompt-live`; `scripts/ci-tests.ts` sets it for its isolated sessions). With it set, the file throws if `HERDR_SOCKET` resolves to your default herdr socket, and closes leftover `herdr-web-ui-test-prompt-*` workspaces from a killed run before starting. Run it from this directory so `bunfig.toml` preloads the isolated session.
+
 Browser checks look for Chrome at `/opt/google/chrome/chrome`; set `CHROME_PATH` otherwise. After a herdr upgrade, refresh the generated wire types with `bun run generate:types --refresh` (and `--check` to verify).
 
 For isolated phone viewer and keyboard layout regressions (no herdr session; the demo runner builds the real client locally):

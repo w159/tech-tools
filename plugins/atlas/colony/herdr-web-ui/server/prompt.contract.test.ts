@@ -1,9 +1,25 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "./index.ts";
 import { herdrRpc } from "./herdr/client.ts";
+
+// These suites drive a real herdr and leave blocked stand-in agents in it if killed: opt-in only,
+// and never on the user's own herdr (scripts/test-herdr.ts points HERDR_SOCKET at an isolated session).
+const live = process.env["HERDR_LIVE_TESTS"] === "1";
+const describeLive = live ? describe : describe.skip;
+const PREFIX = "herdr-web-ui-test-prompt-";
+const DEFAULT_SOCKET = join(homedir(), ".config", "herdr", "herdr.sock");
+
+async function guardSocket(): Promise<void> {
+  if ((process.env["HERDR_SOCKET"] || DEFAULT_SOCKET) === DEFAULT_SOCKET) {
+    throw new Error("prompt.contract.test.ts refuses the default herdr socket; run it from the package dir (bunfig preload) or set HERDR_SOCKET to an isolated session");
+  }
+  // a killed earlier run leaves its workspaces behind
+  const { workspaces } = await herdrRpc<{ workspaces: { workspace_id: string; label?: string }[] }>("workspace.list", {});
+  for (const w of workspaces) if (w.label?.startsWith(PREFIX)) await herdrRpc("workspace.close", { workspace_id: w.workspace_id }).catch(() => undefined);
+}
 
 /**
  * Answers to Claude's unnumbered menus (the folder-trust check among them), against the real
@@ -110,6 +126,8 @@ async function answer(target: Menu, promptId: string, optionIndex: number): Prom
 }
 
 beforeAll(async () => {
+  if (!live) return;
+  await guardSocket();
   server = createServer({ port: 0, stateDir: join(root, "push") });
   writeFileSync(join(root, "menu.js"), MENU);
   writeFileSync(join(root, "tick.js"), TICKING);
@@ -129,7 +147,7 @@ afterAll(async () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe("answers to Claude's unnumbered menus", () => {
+describeLive("answers to Claude's unnumbered menus", () => {
   it("moves the cursor to the row answered, then confirms it", async () => {
     const prompt = await card(trust);
     expect(prompt.options.map((option) => option.label)).toEqual(["No, exit", "Yes, I trust this folder"]);
@@ -231,7 +249,7 @@ async function piMenu(label: string, title: string, rows: string[]): Promise<Men
   return { pane: created.root_pane.pane_id, log };
 }
 
-describe("answers to pi's dialogs", () => {
+describeLive("answers to pi's dialogs", () => {
   let select: Menu;
   let confirm: Menu;
 
@@ -310,7 +328,7 @@ draw();
 writeFileSync(out, "");
 `;
 
-describe("picks from Claude Code's model list", () => {
+describeLive("picks from Claude Code's model list", () => {
   const MODELS: [name: string, said: string][] = [
     ["Default (recommended)", "Fable 5.1"], ["Opus 5.5", "For complex work and everyday tasks"], ["Fable 5.1", "For your toughest challenges"],
     ["Sonnet 5.5", "Most efficient for simpler tasks"], ["Haiku 4.5", "Fastest for quick answers"], ["Sonnet 5", "Efficient for routine tasks"],
@@ -420,7 +438,7 @@ async function keys(target: Menu): Promise<string[]> {
   return seen;
 }
 
-describe("an answer whose menu changes under it", () => {
+describeLive("an answer whose menu changes under it", () => {
   const continueMenu = (title: string, rows: string[]): Frame => ({
     mark: "›", lines: [title, "", ...rows.map((row, index) => `{${index}} ${index + 1}. ${row}`), "", "Press enter to continue"],
   });
@@ -545,7 +563,7 @@ draw();
 writeFileSync(out, "");
 `;
 
-describe("picks from Codex's model lists", () => {
+describeLive("picks from Codex's model lists", () => {
   let lists: Menu;
   type Card = Awaited<ReturnType<typeof card>>;
   const shown = async (): Promise<Card | null> => (await (await fetch(`${base()}/api/pane/prompt?pane_id=${encodeURIComponent(lists.pane)}`)).json() as { prompt: Card | null }).prompt;
