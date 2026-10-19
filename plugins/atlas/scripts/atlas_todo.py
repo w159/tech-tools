@@ -1338,6 +1338,7 @@ def open_lead_channel(
     base = _resolve_base(root)
     main, branch = _main_parts(base)
     lead = _sanitize_owner(lead_name)
+    lp = _lead_pid()  # outside the registry lock: a slow `ps` must not extend lock hold time
 
     def fn(reg: dict) -> dict:
         mchan = _upsert(reg, main, "main", None, None, base, branch)
@@ -1350,7 +1351,6 @@ def open_lead_channel(
                 from atlas_mux import _lead_harness
 
                 sub["harness"] = _lead_harness()
-        lp = _lead_pid()
         if lp:  # overwrite on every open: a lead can restart
             sub["lead_pid"] = lp
         else:
