@@ -235,6 +235,13 @@ def _compact_now(text: str, w: int) -> str:
     return text
 
 
+def _qlen(s) -> int:
+    try:
+        return int(s.get("queue") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _table(snap, ui, w) -> list:
     seats = _seats(snap, ui["colony"], ui.get("pod"), ui.get("filter", ""))
     allseats = _seats(snap, ui["colony"])
@@ -273,7 +280,7 @@ def _table(snap, ui, w) -> list:
         if prev is not None and pod != prev:
             out.append("┈" * w)
         mark = "▶" if i == row and ui.get("focus") == "pane" else " "
-        q = int(s.get("queue") or 0)
+        q = _qlen(s)
         now = _compact_now(str(s.get("now") or "—"), nw)
         dotseat = _fit(DOT.get(st, "?") + " " + _slabel(s), sw)
         pcell = _fit(pod if pod != prev else "", pw)
@@ -289,7 +296,7 @@ def _table(snap, ui, w) -> list:
     if not seats:
         out.append("no seats match")
     working = sum(1 for s in allseats if s.get("state") == "working")
-    q = sum(int(s.get("queue") or 0) for s in allseats)
+    q = sum(_qlen(s) for s in allseats)
     out.append(f"{len(allseats)} seats · {working} working · {len(bad)} need attention · {q} open rows")
     return out + _recent_block(snap, ui, w, 5)
 
@@ -727,7 +734,8 @@ def bridge_seq(cid, seat=None) -> str:
 def emit_bridge(ui, out=None, environ=None):
     """Pop the pending open and write it only when ATLAS_TUI_BRIDGE=1 (set by the dashboard terminal)."""
     pend = ui.pop("_bridge", None)
-    if pend and (environ if environ is not None else os.environ).get("ATLAS_TUI_BRIDGE") == "1":
+    env = os.environ if environ is None else environ
+    if pend and env.get("ATLAS_TUI_BRIDGE") == "1":
         out = out or sys.stdout
         out.write(bridge_seq(*pend))
         out.flush()
@@ -1074,7 +1082,7 @@ def loop(stdscr, args):
     root = _root(args)
     ui = new_ui()
     ui["status"] = "loading colonies…"
-    snap = {"loading": True}
+    snap: dict = {"loading": True}
     loader = Loader(root, args.all)
     loader.start()
     first = True
@@ -1202,7 +1210,11 @@ def launch(args) -> int:
 
 def once(args) -> int:
     if args.fixture:
-        snap = json.loads(Path(args.fixture).read_text())
+        try:
+            snap = json.loads(Path(args.fixture).read_text())
+        except (OSError, ValueError) as e:
+            print(f"atlas_tui: cannot read fixture {args.fixture}: {e}", file=sys.stderr)
+            return 1
     else:
         snap = _model().snapshot(_root(args), args.all)
     ui = new_ui(section=args.view or "topology")
