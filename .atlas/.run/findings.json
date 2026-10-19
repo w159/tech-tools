@@ -7071,5 +7071,646 @@
     "status": "verified",
     "verified_at": "2026-10-16T15:07:06+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "JUNK-DIRS-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "scaffold_docs.py refuses $HOME/non-project root; .atlas/nudge/ removed",
+    "evidence": [
+      "plugins/atlas/skills/atlas-setup/scripts/scaffold_docs.py:480",
+      "plugins/atlas/hooks/session_boot_core.py",
+      "plugins/atlas/skills/atlas-gitignore/templates/gitignore.seed"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md Unreleased"
+    ],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:37:33+00:00",
+    "verified_by": "docs-curator-runtimefix"
+  },
+  {
+    "id": "LOCK-GROWTH-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker_inbox.drain stops creating idle-worker lock files; 7-day run-state prune",
+    "evidence": [
+      "plugins/atlas/hooks/worker_inbox.py",
+      "plugins/atlas/hooks/session_boot_core.py:891-895 (prune_run_state)"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md Unreleased"
+    ],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:37:33+00:00",
+    "verified_by": "docs-curator-runtimefix"
+  },
+  {
+    "id": "STALE-TODOS-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_todo.sweep runs on Stop/SessionEnd; finished worker closes its dispatch item",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_todo.py:699 (sweep), :580 (archive_item)",
+      "plugins/atlas/hooks/ingest_session.py:107 (_sweep_todos)",
+      "plugins/atlas/hooks/worker_report_gate_core.py:197-216 (close_board_item)"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md Unreleased"
+    ],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:37:33+00:00",
+    "verified_by": "docs-curator-runtimefix"
+  },
+  {
+    "id": "TERMINAL-PANEL-EMPTY-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_seats.agents() unions rig+herdr rows; close_run multi-source; rig keepalive teardown",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_seats.py:106-107,128",
+      "plugins/atlas/scripts/atlas_rig.py:415-428"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md Unreleased"
+    ],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:37:33+00:00",
+    "verified_by": "docs-curator-runtimefix"
+  },
+  {
+    "id": "EMPTY-COLONY-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dashboard colony handlers normalize project to repo root; junk project rows dropped",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_dash_colony.py:724 (_repo_root)",
+      "plugins/atlas/scripts/atlas_dashboard.py:715-718,2986-2993 (_junk_root)",
+      "A/B /api/v2/colony?project=<repo>/plugins/atlas: installed empty vs source 16 members"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md Unreleased"
+    ],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:37:33+00:00",
+    "verified_by": "docs-curator-runtimefix"
+  },
+  {
+    "id": "MUX-REAP-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mux reap marks team members finished and leaves the lead channel; status usage fixed",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_mux.py"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md Unreleased"
+    ],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:37:33+00:00",
+    "verified_by": "docs-curator-runtimefix"
+  },
+  {
+    "id": "FAULTS-PYTEST-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_faults.record skips writing the real hook-faults.jsonl under pytest",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_faults.py:65-72",
+      "116 polluted rows on 2026-10-06 traced to tests"
+    ],
+    "doc_refs": [
+      "plugins/atlas/CHANGELOG.md Unreleased"
+    ],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:37:33+00:00",
+    "verified_by": "docs-curator-runtimefix"
+  },
+  {
+    "id": "JUNK-DIRS-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "re-verified: scaffold_docs/session_boot/dashboard junk-row tests pass",
+    "evidence": [
+      "pytest scripts hooks skills: 10 failed/3464 passed/3 skipped (284s); all 10 fail identically at HEAD or are env artifacts except 2 credential-watch; bun test 450 pass/0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:50:06+00:00",
+    "verified_by": "runtimefix-verifier"
+  },
+  {
+    "id": "LOCK-GROWTH-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "re-verified: test_worker_inbox/test_session_boot pass",
+    "evidence": [
+      "pytest scripts hooks skills: 10 failed/3464 passed/3 skipped (284s); all 10 fail identically at HEAD or are env artifacts except 2 credential-watch; bun test 450 pass/0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:50:06+00:00",
+    "verified_by": "runtimefix-verifier"
+  },
+  {
+    "id": "STALE-TODOS-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "re-verified: test_ingest_session/test_worker_report_gate/test_atlas_todo pass",
+    "evidence": [
+      "pytest scripts hooks skills: 10 failed/3464 passed/3 skipped (284s); all 10 fail identically at HEAD or are env artifacts except 2 credential-watch; bun test 450 pass/0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:50:06+00:00",
+    "verified_by": "runtimefix-verifier"
+  },
+  {
+    "id": "TERMINAL-PANEL-EMPTY-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "re-verified: test_atlas_seats/test_atlas_rig pass",
+    "evidence": [
+      "pytest scripts hooks skills: 10 failed/3464 passed/3 skipped (284s); all 10 fail identically at HEAD or are env artifacts except 2 credential-watch; bun test 450 pass/0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:50:06+00:00",
+    "verified_by": "runtimefix-verifier"
+  },
+  {
+    "id": "EMPTY-COLONY-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "re-verified: test_atlas_dash_colony/test_atlas_dashboard pass",
+    "evidence": [
+      "pytest scripts hooks skills: 10 failed/3464 passed/3 skipped (284s); all 10 fail identically at HEAD or are env artifacts except 2 credential-watch; bun test 450 pass/0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:50:06+00:00",
+    "verified_by": "runtimefix-verifier"
+  },
+  {
+    "id": "MUX-REAP-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "re-verified: test_atlas_mux pass",
+    "evidence": [
+      "pytest scripts hooks skills: 10 failed/3464 passed/3 skipped (284s); all 10 fail identically at HEAD or are env artifacts except 2 credential-watch; bun test 450 pass/0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:50:06+00:00",
+    "verified_by": "runtimefix-verifier"
+  },
+  {
+    "id": "FAULTS-PYTEST-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "pytest guard in atlas_faults.record breaks 2 hook tests (NEW regression)",
+    "evidence": [
+      "hooks/test_connector_credential_watch.py::test_malformed_stdin_traces_but_empty_stdin_does_not + test_unwritable_state_still_warns_and_traces fail with FileNotFoundError; pass 18/18 with HEAD atlas_faults.py; hook subprocess inherits PYTEST_CURRENT_TEST and test sets HOME=tmp, ATLAS_HOME=tmp/.atlas so path==real and guard skips write"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider hooks/test_connector_credential_watch.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-16T16:50:06+00:00",
+    "verified_by": "runtimefix-verifier"
+  },
+  {
+    "id": "FAULTS-PYTEST-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_faults pytest guard skips only when ATLAS_HOME unset",
+    "evidence": [
+      "hooks/test_connector_credential_watch.py, scripts/test_atlas_faults.py pass (28 passed)"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q hooks/test_connector_credential_watch.py scripts/test_atlas_faults.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:50:55+00:00",
+    "verified_by": "faults-implementer"
+  },
+  {
+    "id": "STALE-TODOS-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "sweep spares unowned manual backlog",
+    "evidence": [
+      "cd plugins/atlas && python3.14 -m pytest -q scripts/test_atlas_todo.py hooks/test_ingest_session.py hooks/test_worker_report_gate.py -> 123 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T16:53:47+00:00",
+    "verified_by": "sweep-implementer"
+  },
+  {
+    "id": "BOARD-CLOSE-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Board/Tasks-tab fixes: omp yield report renders to STATUS protocol and passes check_report",
+    "evidence": [
+      "pytest 189 passed (atlas_todo, atlas_mux, worker_report_gate); omp bun test 453 pass/0 fail; dashboard_ui bun test 51 pass/0 fail; replay 3 real gwh yields -> finalReportOf -> check_report: 2 PASS, 1 rejected by FAILING_RE ('4 failed' in legitimate TDD red-phase evidence)"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q scripts/test_atlas_todo.py scripts/test_atlas_mux.py hooks/test_worker_report_gate.py; (cd omp && bun test); (cd scripts/dashboard_ui && bun test); bun /tmp/bfv/r2.ts + check_report",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T17:10:04+00:00",
+    "verified_by": "boardfix-verifier"
+  },
+  {
+    "id": "FINAL-RUNTIME-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas runtime + board fixes final suite",
+    "evidence": [
+      "pytest 7 failed/3472 passed/3 skipped (6 pre-existing, 1 flaky: test_atlas_dash_agents children_come_from passes isolated, fails in full run, file modified today); omp bun 453/0; dashboard_ui bun 52/0"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills; cd omp && bun test; cd ../scripts/dashboard_ui && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-16T17:58:34+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "FINAL-RUNTIME-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas runtime + board fixes final suite",
+    "evidence": [
+      "full run (scripts hooks skills, quiet host): 6 failed, 3474 passed, 3 skipped, 495 subtests; test_children_come_from_the_panes_own_session_dispatches passes; 6 failures = colony_notes 800B brief, 4 skill_agent_conformance (test-engineer), dispatch_tripwire abs path, all pre-existing at HEAD"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T18:12:58+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "IMPROVE-FIXES-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas improve + health fixes",
+    "evidence": [
+      "pytest 3486 pass/4 fail/3 skip (all 4 pre-existing, identical on git archive HEAD); omp bun 454/0; dashboard_ui bun 52/0"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && env -u CLAUDE_PLUGIN_ROOT python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills; cd omp && bun test; cd ../scripts/dashboard_ui && bun test; baseline: git archive HEAD plugins/atlas to /tmp/iv, same pytest on test_skill_agent_conformance.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T18:42:58+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "FINAL-FIXES-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "last atlas fixes",
+    "evidence": [
+      "pytest scripts hooks skills: 3490 passed, 3 skipped, 0 failed; dashboard_ui bun test: 53 pass 0 fail; omp bun test: 454 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills; (cd scripts/dashboard_ui && bun test); (cd omp && bun test)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T19:13:41+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "GATE-M-CROSS-SESSION-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "gate (m) ignores other sessions writes in shared worktree",
+    "evidence": [
+      "hooks/test_completion_gate.py 477 passed incl test_other_sessions_write_is_not_blamed_on_this_session; session 01a14579 has 15 task dispatches in tool_calls"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && python3.14 -m pytest -q hooks/test_completion_gate.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T19:40:00+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "GATE-M-CROSS-SESSION-2026-10-16",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "gate (m) ignores other sessions writes in shared worktree",
+    "evidence": [
+      "HEAD code + new tests: test_other_sessions_write_is_not_blamed_on_this_session FAILS (gate blocks), test_own_shell_edit_still_blocks_when_other_session_wrote_elsewhere passes; working tree: both pass; full hooks/test_completion_gate.py 477 passed, 13 subtests; CHANGELOG lines plugins/atlas/CHANGELOG.md:7-8, docs/CHANGELOG.md:16-17 correct"
+    ],
+    "doc_refs": [],
+    "reproduction": "git archive HEAD plugins/atlas into /tmp/gv, copy current test file, python3.14 -m pytest -q hooks/test_completion_gate.py -k <two tests>; then same in working tree; full file run",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T19:41:51+00:00",
+    "verified_by": "gate-verifier"
+  },
+  {
+    "id": "colony-terminal-live",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Colony terminal live e2e: all steps pass except enlarged pane view (ws kind=pane) -> atlas-view session destroyed before attach",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_colony_model.py:105-111 attach_argv sets destroy-unattached on before attach; tmux 3.8 destroys detached session immediately; screenshot .scratch/verify/03-card-enlarged.png"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux new-session -d -t atlas-work -s atlas-view-yy; tmux set-option -t atlas-view-yy destroy-unattached on; sleep 1; tmux ls (view gone); browser click Enlarge on a card -> can't find session: atlas-view-*",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-16T20:18:04+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-terminal-live",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Enlarged colony card attaches live worker pane; atlas-view session created/removed; TUI seat opens",
+    "evidence": [
+      ".scratch/verify/v2-3-enlarged.png,.scratch/verify/v2-4-enlarged-10s.png,.scratch/verify/v2-5-back.png,.scratch/verify/v2-tui-capture.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "spawn-team ta34430 + headless chrome :7431/#/terminal click card, tmux ls; atlas_tui.py in tmux Enter Enter q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T21:03:00+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-terminal-installed",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Installed 12.5.0 Terminal page works with live tmux worker",
+    "evidence": [
+      ".scratch/verify/v3-step3.png,.scratch/verify/v3-step4.png,.scratch/verify/v3-step5.png"
+    ],
+    "doc_refs": [],
+    "reproduction": "ATLAS_MUX=tmux atlas_mux.py spawn-team (12.5.0 cache) + headless chrome 1600x1000 on /#/terminal; enlarge card, All agents, wait+reap",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-16T21:16:03+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-allprojects",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "All-projects Command Center xterm fills only 40% of surface",
+    "evidence": [
+      ".scratch/verify/v4-1-command-center.png"
+    ],
+    "doc_refs": [],
+    "reproduction": "open :7432/#/terminal, All projects; .xterm h=340 vs .tw-term h=849",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-19T12:21:26+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-allprojects",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "12.5.2 live colony td1172f visible under All projects on :7421",
+    "evidence": [
+      ".scratch/verify/v7-1-command-center.png,v7-2-cards.png,v7-3-enlarged.png,v7-4-colony.png"
+    ],
+    "doc_refs": [],
+    "reproduction": "browser run on 127.0.0.1:7421 All projects; tmux ls",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T12:34:24+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-1253",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "12.5.3 shipped+upgraded+live on :7421; explorer/1024 pass; Colony cards show static working badge (no text changing over 5s)",
+    "evidence": [
+      ".scratch/verify/v10-1-1440.png,v10-2-1024.png,v10-3-cards.png; health 12.5.3; team t8e7324 transport tmux; EXPLORER 938ms, team id 1941ms"
+    ],
+    "doc_refs": [],
+    "reproduction": "browser poll .xterm-rows at 1440/1024; #/colony text sampled 5s identical",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-19T13:10:26+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-1253",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "12.5.3 live on :7421; colony cards (#/terminal?space=t8e7324) update live; enlarge works",
+    "evidence": [
+      ".scratch/verify/v10-1-1440.png,v10-2-1024.png,v10-3-cards.png,v10-4-enlarged.png; 3/3 cards changed over 5s (spinner, timer 2m18s, tool counts)"
+    ],
+    "doc_refs": [],
+    "reproduction": "browser: #/terminal?space=t8e7324, sample .tw-card .xterm-rows at t0 and t5s; click .tw-card-body",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T13:11:40+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "pane-input",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Typing into enlarged dashboard terminal reaches real tmux pane; resize propagates",
+    "evidence": [
+      ".scratch/verify/v11-input.png; capture-pane showed hello-atlas-123 x2; pane 129x49 -> 106x35 after viewport 1440x900 -> 1100x700"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux new-session -d -s atlas-inputprobe cat; browser :7421 #/terminal?space=inputprobe&seat=inputprobe, type hello-atlas-123+Enter, tmux capture-pane -p -t %19",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T14:00:33+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-final",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "v13 final colony/terminal verification",
+    "evidence": [
+      ".scratch/verify/v13-2-command-center.png: NOW column truncated to 20 chars (ctx_read atlas_dashb\u2026), identical across 24+s while agent progressed chunk 1..1501-1750"
+    ],
+    "doc_refs": [],
+    "reproduction": "serve :7444; spawn-team --team-id v13a; sampled #/terminal xterm text every 4-5s",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-19T14:12:16+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-1254",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 12.5.4 shipped+verified on :7421; CHANGELOG not moved (edit denied), TUI NOW shows literal peer -> $1: $2",
+    "evidence": [
+      ".scratch/verify/v14-*.png; /api/health 12.5.4; tmux atlas-live1254"
+    ],
+    "doc_refs": [],
+    "reproduction": "see ship-1254 report",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-19T14:46:33+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-1255",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "12.5.5 names/source/clickable TUI/bridge verified on real live team t141df3 (dashboard-audit)",
+    "evidence": [
+      ".scratch/verify/v16-1-tui.png v16-2-graph v16-3-space v16-4-enlarged v16-5-colony; colony model JSON"
+    ],
+    "doc_refs": [],
+    "reproduction": "dashboard :7460 + atlas_mux spawn-team --name dashboard-audit; headless Chrome mouse clicks",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T15:03:06+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-1255-installed",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 12.5.5 released, installed (omp+claude) and verified on :7421: names, clicks, space page",
+    "evidence": [
+      ".scratch/verify/v17-1-tui.png",
+      ".scratch/verify/v17-2-graph.png",
+      ".scratch/verify/v17-3-space.png",
+      ".scratch/verify/v17-4-colony.png"
+    ],
+    "doc_refs": [],
+    "reproduction": "curl localhost:7421/api/health; open #/terminal",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T15:09:47+00:00",
+    "verified_by": "ship-1255"
+  },
+  {
+    "id": "colony-1256-installed",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 12.5.6 released, installed (omp+claude), dashboard restarted; review fixes verified on :7421",
+    "evidence": [
+      ".scratch/verify/v19-1-table.png",
+      ".scratch/verify/v19-2-space.png",
+      ".scratch/verify/v19-3-return.png",
+      ".scratch/verify/v19-4-finished.png"
+    ],
+    "doc_refs": [],
+    "reproduction": "curl localhost:7421/api/health -> version 12.5.6",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T15:39:42+00:00",
+    "verified_by": "ship-1256"
   }
 ]

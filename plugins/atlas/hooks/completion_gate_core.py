@@ -1334,7 +1334,7 @@ def main() -> int:
         _raw = _buf.read() if _buf is not None else sys.stdin.read().encode()
     _readable = True
     try:
-        json.loads(_raw) if _raw.strip() else {}
+        json.loads(_raw, strict=False) if _raw.strip() else {}
     except ValueError:
         _readable = False
     # Always routed through load_payload so an unreadable payload keeps its

@@ -81,6 +81,57 @@ class PayloadGuardTest(unittest.TestCase):
                 faults = open(fp).read() if os.path.exists(fp) else ""
                 self.assertNotIn("control character", faults)
 
+    def test_raw_control_chars_every_registered_hook(self):
+        import json
+        import shlex
+
+        root = os.path.dirname(HERE)
+        with open(os.path.join(HERE, "hooks.json")) as f:
+            reg = json.load(f)
+        reg = reg.get("hooks", reg)
+        for event, matchers in reg.items():
+            for m in matchers:
+                for h in m["hooks"]:
+                    cmd = h["command"].replace("${CLAUDE_PLUGIN_ROOT}", root)
+                    argv = [
+                        sys.executable if a == "python3" else a
+                        for a in shlex.split(cmd)
+                    ]
+                    stdin = (
+                        '{"hook_event_name":"%s","session_id":"s","last_assistant_message":"a\x01b\nc",'
+                        '"tool_input":{"command":"x\x01y\nz"}}' % event
+                    )
+                    with (
+                        self.subTest(event=event, hook=argv[-1]),
+                        tempfile.TemporaryDirectory() as home,
+                    ):
+                        env = {
+                            **os.environ,
+                            "CLAUDE_PLUGIN_ROOT": root,
+                            "ATLAS_HOME": home,
+                            "ATLAS_DB": os.path.join(home, "atlas.db"),
+                            "ATLAS_HOOKSTATE_DIR": os.path.join(home, "hookstate"),
+                            "ATLAS_DASHBOARD": "off",
+                            "ATLAS_COLONY": "off",
+                        }
+                        r = subprocess.run(
+                            argv,
+                            input=stdin,
+                            text=True,
+                            capture_output=True,
+                            env=env,
+                            timeout=60,
+                            cwd=home,
+                        )
+                        self.assertEqual(r.returncode, 0, r.stderr)
+                        out = r.stdout + r.stderr
+                        self.assertFalse(
+                            "FAIL-OPEN" in out and "unreadable" in out, out
+                        )
+                        fp = os.path.join(home, "hook-faults.jsonl")
+                        faults = open(fp).read() if os.path.exists(fp) else ""
+                        self.assertNotIn("unreadable", faults)
+
 
 if __name__ == "__main__":
     unittest.main()

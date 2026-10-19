@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 12.5.7 (2026-10-19)
 
 ### Fixed
 
