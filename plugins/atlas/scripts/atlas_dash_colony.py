@@ -876,6 +876,12 @@ def h_colony_kill(ctx):
             "GET /api/v2/colony",
         )
     root, m = hit
+    return _kill_member(root, m)
+
+
+def _kill_member(root: str, m: dict) -> tuple[int, dict]:
+    """The kill ladder of h_colony_kill as a plain function (no HTTP ctx), shared with the TUI's Stop button."""
+    name = m["name"]
     if m["kind"] == "lead":
         return _err(
             409,
@@ -906,6 +912,19 @@ def h_colony_kill(ctx):
             return _err(409, "kill_failed", str(e), "the process is gone or not yours")
         return 200, {"ok": True, "killed": name, "via": "pid"}
     return _err(409, "member_dead", f"{name!r} has no live process", "nothing to kill")
+
+
+def kill_member(root: str, name: str) -> tuple[int, dict]:
+    """Kill one roster member by name: the same ladder as POST /colony/<name>/kill, for the TUI."""
+    m = next((m for m in build_colony(root)["members"] if m["name"] == name), None)
+    if not m:
+        return _err(
+            404,
+            "no_such_member",
+            f"{name!r} is not on the colony roster",
+            "GET /api/v2/colony",
+        )
+    return _kill_member(root, m)
 
 
 def _entry(root: str, name: str):

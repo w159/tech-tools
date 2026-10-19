@@ -7782,5 +7782,24 @@
     "status": "verified",
     "verified_at": "2026-10-19T17:54:39+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "ATLAS-TUI-ACTIONS",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-tui actionable: single-click, msg/view/term/stop buttons, transcript seat view",
+    "evidence": [
+      "tmux-driven real TUI: click [ view ] on in-process omp seat showed transcript lines; click [ msg ] + text + Enter -> atlas_todo inbox returned the note for explorer-a",
+      "inside omp (-e repo extension): /atlas-tui, clicked colony then [ view ], seat view rendered with buttons",
+      "pytest tui+colony_model+dash_colony+todo 171 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T19:12:03+00:00",
+    "verified_by": "lead"
   }
 ]

@@ -455,6 +455,7 @@ class ModelTest(unittest.TestCase):
                 "work",
                 "now",
                 "log_path",
+                "transcript",
                 "last_active",
                 "lead",
                 "address",
@@ -565,6 +566,198 @@ class RealTmuxViewTest(unittest.TestCase):
                 model.cleanup_view("rt1")
                 self.assertNotEqual(tm("has-session", "-t", "atlas-view-rt1").returncode, 0)
                 tm("kill-server")  # inside the with: a cleanup would run after TMPDIR is gone and leak the server
+
+
+class TranscriptTailTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+
+    @staticmethod
+    def _write_jsonl(path, records):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+        return path
+
+    def test_omp_tail_rendering_order_and_format(self):
+        p = self._write_jsonl(
+            Path(self.tmp, "s", "w.jsonl"),
+            [
+                {"type": "session", "timestamp": "2026-10-19T10:00:00.000Z", "id": "s1"},
+                {"type": "model_change", "timestamp": "2026-10-19T10:00:01.000Z", "model": "m"},
+                {
+                    "type": "message",
+                    "timestamp": "2026-10-19T10:00:02.000Z",
+                    "message": {"role": "user", "content": "fix the bug\nplease"},
+                },
+                {
+                    "type": "message",
+                    "timestamp": "2026-10-19T10:00:03.000Z",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "thinking", "thinking": "hidden"},
+                            {"type": "text", "text": "on it\nline two"},
+                            {"type": "toolCall", "id": "c1", "name": "read", "arguments": {"path": "a.py"}},
+                        ],
+                    },
+                },
+                {
+                    "type": "message",
+                    "timestamp": "2026-10-19T10:00:04.000Z",
+                    "message": {"role": "toolResult", "content": [{"type": "text", "text": "\x1b[31mdef f(): pass\x1b[0m\nmore"}]},
+                },
+                {"type": "model_usage", "timestamp": "2026-10-19T10:00:05.000Z", "usage": {}},
+                {"type": "custom", "customType": "session_exit", "data": {"reason": "dispose"}, "timestamp": "2026-10-19T10:00:06.000Z"},
+            ],
+        )
+        self.assertEqual(
+            model.transcript_tail(str(p)),
+            ["▸ fix the bug", "please", "on it", "line two", "→ read {\"path\": \"a.py\"}", "  ← def f(): pass"],
+        )
+
+    def test_claude_tail_rendering_order_and_format(self):
+        p = self._write_jsonl(
+            Path(self.tmp, "c", "a.jsonl"),
+            [
+                {"type": "user", "timestamp": "2026-10-19T10:00:00.000Z", "message": {"role": "user", "content": "run it"}},
+                {
+                    "type": "assistant",
+                    "timestamp": "2026-10-19T10:00:01.000Z",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {"type": "text", "text": "running"},
+                            {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "ls -la"}},
+                        ],
+                    },
+                },
+                {
+                    "type": "user",
+                    "timestamp": "2026-10-19T10:00:02.000Z",
+                    "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "file.txt\nother.txt"}]},
+                },
+            ],
+        )
+        self.assertEqual(
+            model.transcript_tail(str(p)),
+            ["▸ run it", "running", "→ Bash {\"command\": \"ls -la\"}", "  ← file.txt"],
+        )
+
+    def test_lines_limit_keeps_latest(self):
+        p = self._write_jsonl(
+            Path(self.tmp, "l", "x.jsonl"),
+            [
+                {"type": "message", "timestamp": f"2026-10-19T10:00:0{i}.000Z", "message": {"role": "assistant", "content": f"line {i}"}}
+                for i in range(5)
+            ],
+        )
+        self.assertEqual(model.transcript_tail(str(p), lines=2), ["line 3", "line 4"])
+
+    def test_error_returns_empty(self):
+        self.assertEqual(model.transcript_tail(str(Path(self.tmp, "missing.jsonl"))), [])
+        d = Path(self.tmp, "adir")
+        d.mkdir()
+        self.assertEqual(model.transcript_tail(str(d)), [])
+        bad = Path(self.tmp, "bad.jsonl")
+        bad.write_bytes(b"\xff\xfe\x00garbage not json\n")
+        self.assertEqual(model.transcript_tail(str(bad)), [])
+
+
+class TranscriptResolutionTest(unittest.TestCase):
+    def setUp(self):
+        model._TRANSCRIPTS.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name)
+        p = mock.patch.dict(os.environ, {"HOME": str(self.home), "PI_CODING_AGENT_DIR": "", "CLAUDE_CONFIG_DIR": ""})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _omp_session(self, slug, dirname, name, mtime=None):
+        f = self.home / ".omp" / "agent" / "sessions" / slug / dirname / f"{name}.jsonl"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("{}\n")
+        if mtime:
+            os.utime(f, (mtime, mtime))
+        return f
+
+    def test_omp_transcript_resolves_by_sid_and_member_name(self):
+        want = self._omp_session("-x-proj", "2026-10-19T17-24-15-712Z_abcdef11-48e0-7359-867a-da09d7910de0", "TuiX", mtime=100)
+        self._omp_session("-x-proj", "2026-10-19T16-00-00-000Z_abcdef11-0000-0000-0000-000000000000", "TuiX", mtime=50)
+        self._omp_session("-y-proj", "2026-10-19T17-00-00-000Z_abcdef11-9999-0000-0000-000000000000", "TuiX", mtime=200)
+        got = model._seat_transcript("/x/proj", "TuiX", {}, {"lead": "lead-abcdef"})
+        self.assertEqual(got, str(want))
+
+    def test_omp_transcript_prefers_cwd_slug_over_newer_other_project(self):
+        want = self._omp_session("-x-proj", "2026-10-19T17-24-15-712Z_abcdef22-48e0-7359-867a-da09d7910de0", "TuiY", mtime=100)
+        self._omp_session("-x-proj2", "2026-10-19T18-00-00-000Z_abcdef22-48e0-7359-867a-da09d7910de0", "TuiY", mtime=900)
+        got = model._seat_transcript("/x/proj", "TuiY", {}, {"lead": "lead-abcdef22"})
+        self.assertEqual(got, str(want))
+
+    def test_omp_transcript_missing_returns_empty(self):
+        self.assertEqual(model._seat_transcript("/x/proj", "Nobody", {}, {"lead": "lead-abcdef"}), "")
+
+    def test_omp_sessions_root_honours_pi_coding_agent_dir(self):
+        with mock.patch.dict(os.environ, {"PI_CODING_AGENT_DIR": str(self.home / "agentdir")}):
+            self.assertEqual(model._omp_sessions_root(), self.home / "agentdir" / "sessions")
+        self.assertEqual(model._omp_sessions_root(), self.home / ".omp" / "agent" / "sessions")
+
+    def test_claude_transcript_resolves_by_recorded_agent_id(self):
+        f = self.home / ".claude" / "projects" / "-x-proj" / "sess-1" / "subagents" / "agent-adfb194813edbfebf.jsonl"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("{}\n")
+        self.assertEqual(model._seat_transcript("/x/proj", "w", {"agent_id": "adfb194813edbfebf"}, None), str(f))
+        self.assertEqual(model._seat_transcript("/x/proj", "w", {}, None), "")
+        self.assertEqual(model._seat_transcript("/x/proj", "w", {"agent_id": "nope"}, None), "")
+
+    def test_transcript_cache_honours_ttl(self):
+        self._omp_session("-x-proj", "2026-10-19T17-24-15-712Z_abcdef33-48e0-7359-867a-da09d7910de0", "TuiZ")
+        first = model._seat_transcript("/x/proj", "TuiZ", {}, {"lead": "lead-abcdef"})
+        shutil.rmtree(self.home / ".omp")  # a rescan would find nothing
+        self.assertEqual(model._seat_transcript("/x/proj", "TuiZ", {}, {"lead": "lead-abcdef"}), first)
+        model._TRANSCRIPTS.clear()
+        self.assertEqual(model._seat_transcript("/x/proj", "TuiZ", {}, {"lead": "lead-abcdef"}), "")
+
+    def test_session_exit_marks_seat_finished_and_sets_end_time(self):
+        root = Path(self.tmp.name, "proj")
+        (root / ".atlas" / ".run" / "teams").mkdir(parents=True)
+        (root / ".atlas" / ".run" / "logs").mkdir()
+        chan = "proj@main/lead-abcdef"
+        (root / ".atlas" / ".run" / "teams" / "se.json").write_text(
+            json.dumps({"team_id": "se", "class": "fix", "effort": "low", "task": "x", "created": time.time() - 900,
+                        "members": [{"name": "TuiZ", "role": "implementer"}], "channel": chan})
+        )
+        (root / ".atlas" / ".run" / "channels.json").write_text(
+            json.dumps({"version": 1, "channels": {chan: {"name": chan, "kind": "lead", "lead": "lead-abcdef", "harness": "omp",
+                                                          "members": [{"name": "TuiZ", "role": "implementer"}]}}})
+        )
+        exit_at = time.time() - 120
+        f = self._omp_session(
+            "-" + str(root).strip("/").replace("/", "-"), "2026-10-19T17-24-15-712Z_abcdef44-48e0-7359-867a-da09d7910de0", "TuiZ"
+        )
+        f.write_text(
+            "".join(
+                json.dumps(r) + "\n"
+                for r in (
+                    {"type": "message", "timestamp": "2026-10-19T10:00:00.000Z", "message": {"role": "assistant", "content": "done"}},
+                    {"type": "custom", "customType": "session_exit", "data": {"reason": "dispose"},
+                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(exit_at))},
+                )
+            )
+        )
+        s = model.snapshot(str(root))
+        seat = next(x for x in s["seats"] if x["name"] == "TuiZ")
+        self.assertEqual(seat["state"], "finished")
+        self.assertEqual(seat["exit_code"], 0)
+        self.assertEqual(seat["transcript"], str(f))
+        seen, exit_seen_ts, _ = model._transcript_scan(str(f))
+        self.assertTrue(seen)
+        self.assertLess(abs(exit_seen_ts - exit_at), 2)
+        colony = next(c for c in s["colonies"] if c["channel"] == chan)
+        self.assertTrue(colony["finished"])
+        self.assertEqual(seat["now"], "done")
 
 
 if __name__ == "__main__":

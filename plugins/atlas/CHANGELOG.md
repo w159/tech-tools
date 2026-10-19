@@ -1,5 +1,14 @@
 # Changelog
 
+## 12.5.9 (2026-10-19)
+
+### Changed
+
+- Command Center TUI is actionable. One click opens rows (no select-then-click). Visible buttons, all clickable: per seat `[ msg ]`, `[ view ]`, plus `[ term ]` and `[ stop ]` when the seat has a pane; per colony `[ msg all ]` and `[ refresh ]`; footer `[ ? help ]` and `[ q quit ]`. Keys: `m` msg, `v`/Enter view, `t` term, `x` stop (asks y/n), Esc back. `msg` posts a board note that the subagent reads on its next tool call. `stop` uses the dashboard's kill contract (`atlas_dash_colony.kill_member`); the lead and in-process subagents are never stoppable.
+- Seat view always has content: the live pane, else the subagent's own transcript (omp `~/.omp/agent/sessions/*/*_<sid6>*/<name>.jsonl`, Claude `~/.claude/projects/*/*/subagents/agent-<id>.jsonl`, via `atlas_colony_model.transcript_tail`), else the worker log, else the seat's board notes.
+- An omp subagent whose transcript ends with `session_exit` is shown `finished` at that time; the seat `now` column falls back to the transcript's latest line.
+- `channel-open` runs its `ps` walk before taking the channel registry lock.
+
 ## 12.5.8 (2026-10-19)
 
 ### Fixed

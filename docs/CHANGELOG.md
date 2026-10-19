@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.5.9 (2026-10-19)
+
+### Changed
+
+- Command Center TUI is actionable: single-click rows, clickable `[ msg ]` / `[ view ]` / `[ term ]` / `[ stop ]` / `[ msg all ]` buttons with key equivalents, and a seat view that shows the in-process subagent's own transcript (omp and Claude Code) instead of "no tmux pane". Details in `plugins/atlas/CHANGELOG.md` and `docs/atlas-colony.md`.
+
 ## 12.5.8 (2026-10-19)
 
 ### Fixed

@@ -154,7 +154,8 @@ class Render(unittest.TestCase):
             "explorer    ● ex-1",
             "! impl-1",
             "· impl-2",
-            "term ▸",
+            "[ msg ] [ view ] [ term ] [ stop ]",
+            "[ msg ] [ view ]",
             "3 seats · 1 working · 1 need attention · 3 open rows",
             "── RECENT · colony lead-01 ──",
             "▪ 2026-10-16 ",
@@ -182,7 +183,7 @@ class Render(unittest.TestCase):
 
     def test_now_keeps_changing_range(self):
         snap = dict(SNAP, seats=[dict(SNAP["seats"][0], now="ctx_read /a/very/long/path/to/atlas_dashboard.py:1501-1750")])
-        for w, want in ((150, "ctx_read atlas_dashboard.py:1501-1750"), (80, "py:1501-1750")):
+        for w, want in ((150, "ctx_read atlas_dashboard.py:1501-1750"), (80, "01-1750")):
             f = "\n".join(T.render(snap, T.new_ui(colony="lead-01"), w, 40))
             self.assertIn(want, f)
 
@@ -520,16 +521,14 @@ class Mouse(unittest.TestCase):
     def find(self, hits, kind, pred=lambda a: True):
         return next((r, x0, a) for r, x0, _x1, a in hits if a[0] == kind and pred(a))
 
-    def test_click_explorer_row_selects_then_opens(self):
+    def test_one_click_explorer_opens(self):
         ui = T.new_ui()
         rows = T.explorer_rows(SNAP, ui)
         i = next(k for k, r in enumerate(rows) if r[1] == "colony" and r[2] == "ops")
         r, x, _ = self.find(self.hits(ui), "explorer", lambda a: a[1] == i)
         self.assertIn("ops", T.render(SNAP, ui, self.W, self.H)[r])
         T.handle_click(SNAP, ui, self.hits(ui), x + 2, r)
-        self.assertEqual((ui["cursor"], ui["colony"]), (i, None))
-        T.handle_click(SNAP, ui, self.hits(ui), x + 2, r)
-        self.assertEqual(ui["colony"], "ops")
+        self.assertEqual((ui["cursor"], ui["colony"]), (i, "ops"))
 
     def test_two_quick_clicks_open_even_when_selection_moved(self):
         ui = T.new_ui()
@@ -550,17 +549,15 @@ class Mouse(unittest.TestCase):
         T.handle_click(SNAP, ui, self.hits(ui), x + 3, r)
         self.assertEqual(ui["tab"], "graph")
 
-    def test_click_term_and_seat_row(self):
+    def test_click_term_button_and_seat_row_opens(self):
         ui = T.new_ui()
         T.run_command(SNAP, ui, "colony lead-01")
-        r, x, a = self.find(self.hits(ui), "term")
-        self.assertEqual(T.render(SNAP, ui, self.W, self.H)[r][x : x + 6], "term ▸")
-        self.assertEqual(T.handle_click(SNAP, ui, self.hits(ui), x + 1, r), ("term", a[1]))
+        r, x, a = self.find(self.hits(ui), "button", lambda a: a[1] == "term")
+        self.assertEqual(T.render(SNAP, ui, self.W, self.H)[r][x : x + 8], "[ term ]")
+        self.assertEqual(T.handle_click(SNAP, ui, self.hits(ui), x + 2, r), ("term", a[2]))
         r, x, a = self.find(self.hits(ui), "seatrow", lambda a: a[1] == 1)
         T.handle_click(SNAP, ui, self.hits(ui), x + 1, r)
-        self.assertEqual(ui["row"], 1)
-        T.handle_click(SNAP, ui, self.hits(ui), x + 1, r)
-        self.assertEqual(ui["seat"], "impl-1")
+        self.assertEqual((ui["row"], ui["seat"]), (1, "impl-1"))
 
     def test_open_link_and_wheel(self):
         ui = T.new_ui()
@@ -570,6 +567,133 @@ class Mouse(unittest.TestCase):
         self.assertEqual(ui["tab"], "overview")
         T.scroll(ui, 1)
         self.assertEqual(ui["pane_scroll"], 3)
+
+
+class Buttons(unittest.TestCase):
+    """Bracketed on-screen buttons: one click fires, all registered in hitmap."""
+
+    W, H = 140, 40
+
+    def btn(self, ui, label, seat="__any__", snap=None):
+        hits = T.hitmap(snap or SNAP, ui, self.W, self.H)
+        return next(
+            (r, x0, a)
+            for r, x0, _x1, a in hits
+            if a[0] == "button" and a[1] == label and (seat == "__any__" or a[2] == seat)
+        )
+
+    def click(self, snap, ui, r, x):
+        return T.handle_click(snap, ui, T.hitmap(snap, ui, self.W, self.H), x, r)
+
+    def test_seat_row_buttons_fire(self):
+        ui = T.new_ui(colony="lead-01")
+        r, x, _ = self.btn(ui, "msg", "ex-1")
+        self.assertIsNone(self.click(SNAP, ui, r, x + 2))
+        self.assertEqual((ui["mode"], ui["buf"]), ("cmd", "send ex-1 "))
+        r, x, _ = self.btn(ui, "view", "impl-1")
+        self.click(SNAP, ui, r, x + 2)
+        self.assertEqual(ui["seat"], "impl-1")
+        ui = T.new_ui(colony="lead-01")
+        r, x, _ = self.btn(ui, "term", "ex-1")
+        self.assertEqual(self.click(SNAP, ui, r, x + 2), ("term", "ex-1"))
+
+    def test_stop_needs_confirm(self):
+        ui = T.new_ui(colony="lead-01")
+        r, x, _ = self.btn(ui, "stop", "ex-1")
+        self.assertIsNone(self.click(SNAP, ui, r, x + 2))
+        self.assertEqual((ui["mode"], ui["confirm"]), ("confirm", "ex-1"))
+        T.handle_key(SNAP, ui, "k")  # anything but y/n waits at the gate
+        self.assertEqual(ui["mode"], "confirm")
+        T.handle_key(SNAP, ui, "n")
+        self.assertEqual((ui["mode"], ui["confirm"]), ("", None))
+        T.handle_key(SNAP, ui, "y")  # cancelled already: no stray stop
+        self.assertEqual(ui["mode"], "")
+
+        ui = T.new_ui(colony="lead-01")
+        r, x, _ = self.btn(ui, "stop", "ex-1")
+        self.click(SNAP, ui, r, x + 2)
+        self.assertEqual(T.handle_key(SNAP, ui, "y"), ("stop", "ex-1"))
+
+    def test_no_stop_for_pane_less_seat(self):
+        ui = T.new_ui(colony="lead-01")
+        with self.assertRaises(StopIteration):
+            self.btn(ui, "stop", "impl-2")  # in-process subagents are out of reach
+        f = "\n".join(T.render(SNAP, ui, self.W, self.H))
+        self.assertIn("[ msg ] [ view ]", f)
+        self.assertIsNone(T.run_command(SNAP, ui, "stop impl-2"))
+        self.assertIn("not stoppable", ui["status"])
+
+    def test_msg_prefill_and_broadcast(self):
+        ui = T.new_ui(colony="lead-01")
+        self.assertIsNone(T.run_command(SNAP, ui, "msg impl-1"))
+        self.assertEqual((ui["mode"], ui["buf"]), ("cmd", "send impl-1 "))
+        self.assertEqual(T.run_command(SNAP, ui, "broadcast stand down"), ("broadcast", "stand down"))
+        ui = T.new_ui()
+        self.assertIsNone(T.run_command(SNAP, ui, "broadcast x"))
+        self.assertEqual(ui["status"], "no colony selected")
+
+    def test_colony_header_buttons(self):
+        ui = T.new_ui(colony="lead-01")
+        r, x, _ = self.btn(ui, "refresh")
+        self.assertEqual(self.click(SNAP, ui, r, x + 2), ("refresh",))
+        r, x, _ = self.btn(ui, "msg all")
+        self.assertIsNone(self.click(SNAP, ui, r, x + 2))
+        self.assertEqual((ui["mode"], ui["buf"]), ("cmd", "broadcast "))
+
+    def test_footer_help_quit_clickable(self):
+        ui = T.new_ui(colony="lead-01")
+        r, x, _ = self.btn(ui, "? help")
+        self.assertEqual(r, self.H - 2)
+        self.click(SNAP, ui, r, x + 2)
+        self.assertEqual(ui["mode"], "help")
+        ui = T.new_ui(colony="lead-01")
+        r, x, _ = self.btn(ui, "q quit")
+        self.assertEqual(self.click(SNAP, ui, r, x + 2), ("quit",))
+
+    def test_seat_view_header_buttons_incl_back(self):
+        ui = T.new_ui(colony="lead-01", seat="impl-1")
+        r, x, _ = self.btn(ui, "back", "impl-1")
+        self.click(SNAP, ui, r, x + 2)
+        self.assertIsNone(ui["seat"])
+        ui = T.new_ui(colony="lead-01", seat="impl-1")
+        r, x, _ = self.btn(ui, "msg", "impl-1")
+        self.click(SNAP, ui, r, x + 2)
+        self.assertEqual(ui["buf"], "send impl-1 ")
+
+    def test_keyboard_equivalents(self):
+        ui = T.new_ui(colony="lead-01", focus="pane")
+        T.handle_key(SNAP, ui, "m")
+        self.assertEqual((ui["mode"], ui["buf"]), ("cmd", "send ex-1 "))
+        ui = T.new_ui(colony="lead-01", focus="pane", row=2)
+        T.handle_key(SNAP, ui, "x")
+        self.assertIn("not stoppable", ui["status"])
+        ui = T.new_ui(colony="lead-01", focus="pane")
+        T.handle_key(SNAP, ui, "v")
+        self.assertEqual(ui["seat"], "ex-1")
+        ui = T.new_ui(colony="lead-01", seat="impl-1")
+        self.assertIsNone(T.handle_key(SNAP, ui, "x"))
+        self.assertEqual(ui["mode"], "confirm")
+        self.assertEqual(T.handle_key(SNAP, ui, "y"), ("stop", "impl-1"))
+
+    def test_transcript_view_uses_model_tail(self):
+        snap = dict(
+            SNAP,
+            seats=[
+                dict(
+                    SNAP["seats"][2],
+                    runtime="omp",
+                    target="",
+                    log_path="",
+                    transcript="/t.jsonl",
+                )
+            ],
+        )
+        m = mock.Mock(transcript_tail=mock.Mock(return_value=["▸ user task", "→ ctx_search", "  ← hits"]))
+        with mock.patch.object(T, "_model", return_value=m):
+            f = "\n".join(T.render(snap, T.new_ui(colony="lead-01", seat="impl-2"), self.W, self.H))
+        m.transcript_tail.assert_called_once_with("/t.jsonl", 200)
+        self.assertIn("▸ user task", f)
+        self.assertNotIn("no tmux pane", f)
 
 
 class Bridge(unittest.TestCase):

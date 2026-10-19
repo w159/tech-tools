@@ -5,6 +5,7 @@ Atlas Command Center TUI (atlas_tui.py) and the dashboard terminal workspace (at
     snapshot(root, all_projects)   the dict both UIs render (shape: docs/colony-model.md contract C1)
     capture(target, lines, ansi)   a pane's text, "" when tmux is missing or the pane is gone
     pane_state(text, runtime)      "working" | "idle" | "blocked" | "unknown" from the pane's text
+    transcript_tail(path, lines)   plain-text tail of a subagent's harness transcript (oldest→newest)
     attach_argv(target, view_id)   (setup argv list, attach argv) for a grouped, disposable tmux view
     cleanup_view(view_id)          kill that view session
 
@@ -314,6 +315,213 @@ def _pane_activity(text: str) -> str:
         if m := _ACTIVITY.match(ln):
             return " ".join((m.group(1) or m.group(2)).split())[:NOW_MAX]
     return ""
+
+
+# --- subagent transcripts -------------------------------------------------------------------------
+# Pane-less in-process subagents have no pane and often no log: their harness transcript is the
+# ground truth for activity and completion. omp writes <agent-dir>/sessions/<cwd-slug>/<ts>_<SID>/
+# <member>.jsonl (the channel lead name embeds the first 6 SID chars as lead-xxxxxx); Claude Code
+# writes <config-dir>/projects/<cwd-slug>/<session>/subagents/agent-<agentId>.jsonl, with the
+# agent_id recorded on the channel member entry by the dispatch tripwire.
+TRANSCRIPT_TAIL_BYTES = 512 * 1024
+_TRANSCRIPT_TTL_S = 5.0
+_TRANSCRIPTS: dict = {}  # (kind, sid6|agent_id, name) -> (expires, path)
+
+
+def _omp_sessions_root() -> Path:
+    d = os.environ.get("PI_CODING_AGENT_DIR")
+    if d:
+        return Path(d).expanduser() / "sessions"
+    return Path.home() / (os.environ.get("PI_CONFIG_DIR") or ".omp") / "agent" / "sessions"
+
+
+def _claude_projects_root() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude").expanduser() / "projects"
+
+
+def _cwd_slug(path: str) -> str:
+    return "-" + str(path).strip("/").replace("/", "-")
+
+
+def _newest(cands: list[Path], slug: str) -> Path:
+    return max(cands, key=lambda f: (f.parent.parent.name == slug, f.stat().st_mtime))
+
+
+def _omp_transcript(root: str, name: str, sid6: str) -> str:
+    key = ("omp", sid6, name)
+    hit = _TRANSCRIPTS.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    path = ""
+    try:
+        base = _omp_sessions_root()
+        if sid6 and base.is_dir():
+            cands = [f for f in base.glob(f"*/*_{sid6}*/*.jsonl") if f.stem == name]
+            if cands:
+                path = str(_newest(cands, _cwd_slug(root)))
+    except OSError:
+        path = ""
+    _TRANSCRIPTS[key] = (time.time() + _TRANSCRIPT_TTL_S, path)
+    return path
+
+
+def _claude_transcript(entry: dict) -> str:
+    aid = str(entry.get("agent_id") or "")
+    key = ("claude", aid, "")
+    hit = _TRANSCRIPTS.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    path = ""
+    try:
+        if aid and (base := _claude_projects_root()).is_dir():
+            cands = list(base.glob(f"*/*/subagents/agent-{aid}.jsonl"))
+            if cands:
+                path = str(max(cands, key=lambda f: f.stat().st_mtime))
+    except OSError:
+        path = ""
+    _TRANSCRIPTS[key] = (time.time() + _TRANSCRIPT_TTL_S, path)
+    return path
+
+
+def _seat_transcript(root: str, name: str, entry: dict, chan: dict | None) -> str:
+    """Transcript path for a pane-less seat; '' when unknown (pane workers keep their log_path)."""
+    if m := re.search(r"lead-([0-9a-fA-F]{6})", str((chan or {}).get("lead") or "")):
+        return _omp_transcript(root, name, m.group(1).lower())
+    return _claude_transcript(entry)
+
+
+def _iso_ts(v) -> float:
+    if isinstance(v, (int, float)):
+        return _f(v)
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _transcript_scan(path: str) -> tuple[bool, float, float]:
+    """(session_exit seen in the tail, that record's epoch, latest record epoch) of a transcript."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - TRANSCRIPT_TAIL_BYTES))
+            raw = f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return False, 0.0, 0.0
+    exit_seen, exit_ts, last_ts = False, 0.0, 0.0
+    for ln in raw.split("\n")[1 if size > TRANSCRIPT_TAIL_BYTES else 0 :]:
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        last_ts = _iso_ts(rec.get("timestamp")) or last_ts
+        if rec.get("type") == "custom" and rec.get("customType") == "session_exit":
+            exit_seen, exit_ts = True, _iso_ts(rec.get("timestamp")) or last_ts
+    return exit_seen, exit_ts, last_ts
+
+
+def _prompt_lines(text, prompt: bool) -> list[str]:
+    out, first = [], True
+    for ln in strip_ansi(str(text or "")).replace("\r\n", "\n").split("\n"):
+        ln = ln.rstrip()
+        if prompt and first and ln.strip():
+            ln, first = "▸ " + ln, False
+        out.append(ln)
+    return out
+
+
+def _short_args(args) -> str:
+    if not args:
+        return ""
+    try:
+        s = json.dumps(args, ensure_ascii=False)
+    except (TypeError, ValueError):
+        s = str(args)
+    return " ".join(s.split())[:100]
+
+
+def _result_line(text) -> list[str]:
+    for ln in strip_ansi(str(text or "")).splitlines():
+        if ln.strip():
+            return ["  ← " + ln.strip()[:120]]
+    return []
+
+
+def _result_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)
+    return str(content or "")
+
+
+def _tail_record(rec: dict) -> list[str]:
+    """Human-readable lines for one transcript record; lifecycle/usage records render nothing."""
+    t = rec.get("type")
+    if t == "message":  # omp: {message: {role, content: str | [parts]}}
+        msg = rec.get("message") or {}
+        role, content = msg.get("role"), msg.get("content")
+        if role in ("toolResult", "tool_result"):
+            return _result_line(_result_text(content))
+        out: list[str] = []
+        if isinstance(content, str):
+            out += _prompt_lines(content, role == "user")
+        elif isinstance(content, list):
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                pt = part.get("type")
+                if pt in ("text", "output_text"):
+                    out += _prompt_lines(part.get("text"), False)
+                elif pt == "toolCall":
+                    out.append(f"→ {part.get('name', '?')} {_short_args(part.get('arguments'))}".rstrip())
+                elif pt == "toolResult":
+                    out += _result_line(_result_text(part.get("content") or part.get("text")))
+        return out
+    if t in ("assistant", "user"):  # Claude Code: {message: {content: str | [blocks]}}
+        msg = rec.get("message") or {}
+        content = msg.get("content")
+        out = []
+        if isinstance(content, str):
+            out += _prompt_lines(content, t == "user")
+        elif isinstance(content, list):
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                pt = part.get("type")
+                if pt == "text":
+                    out += _prompt_lines(part.get("text"), t == "user")
+                elif pt == "tool_use":
+                    out.append(f"→ {part.get('name', '?')} {_short_args(part.get('input'))}".rstrip())
+                elif pt == "tool_result":
+                    out += _result_line(_result_text(part.get("content")))
+        return out
+    return []
+
+
+def transcript_tail(path: str, lines: int = 200) -> list[str]:
+    """Plain-text tail of a harness transcript (omp or Claude Code), oldest→newest, at most
+    `lines` output lines; [] on any error. Reads only the file's last 512 KiB."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - TRANSCRIPT_TAIL_BYTES))
+            raw = f.read().decode("utf-8", errors="replace")
+    except (OSError, ValueError):
+        return []
+    out: list[str] = []
+    for ln in raw.split("\n")[1 if size > TRANSCRIPT_TAIL_BYTES else 0 :]:
+        try:
+            rec = json.loads(ln)
+        except ValueError:
+            continue
+        if isinstance(rec, dict):
+            out += _tail_record(rec)
+    return out[-max(1, _i(lines, 200)) :]
 
 
 def _specs() -> list[dict]:
@@ -668,6 +876,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         }
 
     out_seats = []
+    session_ended: dict = {}  # seat name -> session_exit epoch (finished-grace end time)
     leadpid_live_names: set = set()  # pane-less seats classified via a live lead_pid
     for name, s in seats.items():
         p, m = s["pane"], members.get(name) or {"entry": {}, "channel": ""}
@@ -698,6 +907,9 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         if runtime == "unknown" and not p:  # in-process subagent: its channel knows the harness
             runtime = str((chan_recs.get(str(m.get("channel") or "")) or {}).get("harness") or "unknown")
         target = p["pane_id"] if p else ""
+        transcript = (
+            "" if p else _seat_transcript(root, name, entry, chan_recs.get(str(m.get("channel") or "")))
+        )
         text = capture(target, 60, ansi=False) if p and p["pane_dead"] != "1" else ""
         exit_code = entry.get("exit_code")
         if (
@@ -714,16 +926,21 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         elif p and p["pane_dead"] == "1":
             state = "dead"
         elif not p:
-            lp = (
-                _i((chan_recs.get(str(m.get("channel") or "")) or {}).get("lead_pid"))
-                if exit_code is None and not _i(entry.get("pid"))
-                else 0
-            )
-            if lp > 0:  # in-process subagent: its lead's liveness is the seat's liveness
-                leadpid_live = _pid_alive(lp)
-                state = "working" if leadpid_live else "dead"
+            if transcript and _transcript_scan(transcript)[0]:
+                # the harness transcript ends with session_exit: the subagent finished cleanly
+                state, exit_code = "finished", 0
+                session_ended[name] = _transcript_scan(transcript)[1]
             else:
-                state = "dead" if _pid_gone(entry.get("pid")) else "unknown"
+                lp = (
+                    _i((chan_recs.get(str(m.get("channel") or "")) or {}).get("lead_pid"))
+                    if exit_code is None and not _i(entry.get("pid"))
+                    else 0
+                )
+                if lp > 0:  # in-process subagent: its lead's liveness is the seat's liveness
+                    leadpid_live = _pid_alive(lp)
+                    state = "working" if leadpid_live else "dead"
+                else:
+                    state = "dead" if _pid_gone(entry.get("pid")) else "unknown"
         else:
             state = pane_state(text, runtime)
             if (
@@ -767,9 +984,14 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 or (
                     " ".join(str(note["text"]).split())[:NOW_MAX]
                     if note and note.get("text")
-                    else _last_line(text)
+                    else (
+                        (transcript_tail(transcript, 1) or [""])[-1][:NOW_MAX]
+                        if transcript
+                        else _last_line(text)
+                    )
                 ),
                 "log_path": str(log) if log.is_file() else "",
+                "transcript": transcript,
                 "last_active": active or None,
                 "lead": atlas_todo.is_lead_name(name),
             }
@@ -796,7 +1018,9 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     ended: dict = {}
     team_by_id = {t["team_id"]: t for t in teams}
     for s_ in out_seats:
-        e = _f((members.get(s_["name"]) or {"entry": {}})["entry"].get("ended_at"))
+        e = _f(session_ended.get(s_["name"])) or _f(
+            (members.get(s_["name"]) or {"entry": {}})["entry"].get("ended_at")
+        )
         if not e and s_["state"] in ("finished", "dead"):
             e = _ended_fallback(s_, seats[s_["name"]]["pane"], team_by_id.get(s_["colony"]), now)
         ended[s_["colony"]] = max(ended.get(s_["colony"], 0.0), e)

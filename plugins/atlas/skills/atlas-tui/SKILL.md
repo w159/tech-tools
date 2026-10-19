@@ -11,8 +11,11 @@ disable-model-invocation: true
 Opens the **Atlas Command Center**: a curses TUI over the real colony (omp / claude / codex
 workers in `atlas-<run>` tmux sessions). Left explorer (topology, specs, projects,
 terminals, feed, system); right pane shows a seat table, graph, health, or the live tmux
-pane of one seat. Keys: arrows, Enter, Esc, `?` help, `:` command, `/` filter, `t` attach
-the seat's pane (detach with `C-b d` to return), `q` quit.
+pane of one seat. One click acts: rows and the bracketed buttons (`[ msg ]`, `[ view ]`,
+`[ term ]`, `[ stop ]`, `[ msg all ]`, `[ refresh ]`, `[ ? help ]`, `[ q quit ]`) fire on a
+single click, and the mouse wheel scrolls. Keys: arrows, Enter, Esc, `?` help, `:` command,
+`/` filter, `m` msg a seat, `v` view it, `t` attach the seat's pane (detach with `C-b d` to
+return), `x` stop a pane seat (y/n confirm), `q` quit.
 
 ## Run
 
