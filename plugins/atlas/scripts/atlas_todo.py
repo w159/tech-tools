@@ -1140,14 +1140,13 @@ def is_project(root: str | None) -> bool:
 
 
 def lead_channel_allowed(root: str | None) -> bool:
-    """A session-start lead channel may only be opened in a real project: an atlas board already
-    exists or it is a git repo, and never $HOME, ~/Downloads or a bare temp root."""
+    """A session-start lead channel may only be opened where an atlas board already exists, and
+    never in $HOME, ~/Downloads or a bare temp root. A plain git repo is not enough: session start
+    must not create .atlas/.run anywhere; the first real dispatch creates the board."""
     import atlas_db
 
     base = _resolve_base(root)
-    return not atlas_db.not_a_project_root(base) and (
-        is_project(base) or os.path.exists(os.path.join(base, ".git"))
-    )
+    return not atlas_db.not_a_project_root(base) and is_project(base)
 
 
 def _reg_update(root: Optional[str], fn, timeout: Optional[float] = None) -> Any:
@@ -1296,9 +1295,13 @@ def reap_channels(
 
 _ANCESTOR_HARNESSES = ("omp", "bun", "claude", "codex", "node")
 
+# The ancestor probe must always see the real process table, so it binds subprocess.run at import:
+# wrappers (or test doubles for other commands sharing the patched entry point) must not interpose.
+_PS_RUN = subprocess.run
+
 
 def _ps_ancestor_table():
-    return subprocess.run(
+    return _PS_RUN(
         ["ps", "-A", "-o", "pid=,ppid=,comm="],
         capture_output=True, text=True, timeout=2,
     )

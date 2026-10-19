@@ -1626,8 +1626,11 @@ class TestIsolationContract(unittest.TestCase):
 
         real = os.path.join(_test_isolation.REAL_HOME, ".atlas")
         for var, value in _test_isolation.ISOLATED_ENV.items():
-            self.assertTrue(value.startswith(_test_isolation.ROOT), var)
             self.assertFalse(value.startswith(real), var)
+            # TMUX_TMPDIR is deliberately a short /tmp path (unix socket paths cap ~104 chars,
+            # see _test_isolation); it is a private dir, never the user's home or ~/.atlas.
+            if var != "TMUX_TMPDIR":
+                self.assertTrue(value.startswith(_test_isolation.ROOT), var)
 
     def test_fault_record_honours_atlas_home(self):
         sys.path.insert(0, str(SCRIPTS_DIR))

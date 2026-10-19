@@ -1315,7 +1315,7 @@ class LeadChannelOpenTest(unittest.TestCase):
     @staticmethod
     def _project():
         proj = tempfile.mkdtemp()
-        os.mkdir(os.path.join(proj, ".git"))
+        os.makedirs(os.path.join(proj, ".atlas", ".run"))  # an atlas project: its board already exists
         return proj
 
     @staticmethod

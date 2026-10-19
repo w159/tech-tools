@@ -169,16 +169,15 @@ class LaunchArgvTest(unittest.TestCase):
         self.assertIn("--cwd", argv)
         self.assertEqual(kw["env"]["ATLAS_MUX"], "tmux")
 
-    def test_default_transport_is_claude_bg_and_pane_transports_stay_opt_in(self):
-        with (
-            mock.patch.dict(os.environ, {}, clear=False),
-            mock.patch.object(atlas_herdr, "_server_up", lambda: False),
-        ):
-            os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
-            self.assertEqual(atlas_mux.transport(), "claude-bg")
+    def test_default_transport_is_tmux_when_installed_and_herdr_stays_opt_in(self):
+        # 12.5.0 contract (docs/atlas-colony.md): tmux whenever installed, else claude-bg;
+        # herdr only when forced, even with its server up.
         with mock.patch.object(atlas_herdr, "_server_up", lambda: True):
             os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
-            self.assertEqual(atlas_mux.transport(), "claude-bg")
+            with mock.patch.object(atlas_mux.shutil, "which", return_value="/usr/bin/tmux"):
+                self.assertEqual(atlas_mux.transport(), "tmux")
+            with mock.patch.object(atlas_mux.shutil, "which", return_value=None):
+                self.assertEqual(atlas_mux.transport(), "claude-bg")
             with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "herdr"}):
                 self.assertEqual(atlas_mux.transport(), "herdr")
             with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "tmux"}):
@@ -210,7 +209,7 @@ class _NoTmux:
 
 
 class HerdrLaunchTest(unittest.TestCase):
-    """Default transport: panes are created over the herdr socket; tmux is never called."""
+    """Forced herdr transport: panes are created over the herdr socket; tmux is never called."""
 
     def setUp(self):
         atlas_herdr._status_cache = None  # a status cached by an earlier module must not mask this fake server
@@ -222,7 +221,7 @@ class HerdrLaunchTest(unittest.TestCase):
         p = mock.patch.dict(os.environ, env)
         p.start()
         self.addCleanup(p.stop)
-        os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
+        os.environ["ATLAS_COLONY_TRANSPORT"] = "herdr"  # herdr is opt-in since 12.5.0
         for patcher in (
             mock.patch.object(atlas_mux, "_tmux", _NoTmux(self)),
             mock.patch("subprocess.run", self._no_tmux_run(subprocess.run)),

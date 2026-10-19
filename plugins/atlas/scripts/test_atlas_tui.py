@@ -1162,7 +1162,10 @@ class Effects(unittest.TestCase):
         model = mock.Mock(snapshot=mock.Mock(side_effect=RuntimeError("boom: registry unreadable")))
         frames = self._drive([], marker="SNAPSHOT ERROR", model=model)
         self.assertTrue(any("SNAPSHOT ERROR" in f and "boom: registry unreadable" in f for f in frames))
-        self.assertTrue(any(f"python3 {T.HERE / 'atlas_colony_model.py'} --root /p" in f for f in frames))
+        # The loop frame renders at 120 cols, whose right pane fits ~86 chars (_fit truncates);
+        # the exact diagnose command exceeds that on long checkouts. Its content is pinned at a
+        # fitting width by test_snapshot_error_frame_renders; here the frame carries the section.
+        self.assertTrue(any("Diagnose:" in f for f in frames))
 
     def test_snapshot_error_frame_renders(self):
         text = "\n".join(T.render({"error": "boom: registry unreadable", "root": "/p"}, T.new_ui(), 200, 30))

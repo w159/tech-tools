@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.5.13 (2026-10-19)
+
+### Fixed
+
+- Session start only opens a lead channel in existing atlas projects; the scripts and hooks test suites are green again. Details in `plugins/atlas/CHANGELOG.md`.
+
 ## 12.5.12 (2026-10-19)
 
 ### Fixed

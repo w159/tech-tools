@@ -19,29 +19,30 @@ return), `x` stop a pane seat (y/n confirm), `a` toggle watching all projects, `
 Tab (or `tab wall`) cycles the right-pane tabs TABLE | WALL | RECENT | OVERVIEW | GRAPH |
 HEALTH. WALL is a 2-column grid of every agent's live output (lead first); arrows move the
 tile selection, Enter or a click opens that seat. The tree lists each pod's seats
-(`● name · queue`) — Enter/click a seat row opens it. A seat page shows CONTEXT, CURRENT
+(`● name · queue`); Enter/click a seat row opens it. A seat page shows CONTEXT, CURRENT
 ACTIVITY, CURRENT WORK, QUEUE, NEEDS YOU, SEAT, COMMUNICATION and OUTPUT. In the TERMINALS
 section, Enter/click attaches an atlas tmux session (grouped view, `C-b d` returns) and `x`
-kills that session after a y/n confirm — never `atlas-tui` itself, never non-`atlas-`
-sessions.
+kills that session after a y/n confirm (never `atlas-tui` itself, never non-`atlas-`
+sessions).
 In the PROJECTS section, Enter or a click on a row switches the watched project; lead
-seats (`lead-…`) are listed with their colony but have no msg/stop — the lead reads the
-board itself.
+seats (`lead-*`) are listed with their colony but have no msg/stop (the lead reads the
+board itself).
 
 ## Run
 
 ```bash
-python3 "<skill base directory>/../../scripts/atlas_tui.py" --launch
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_tui.py" --launch
 ```
 
-Replace `<skill base directory>` with the absolute skill directory your harness gave you
-(omp, Claude Code and Codex all provide it). Do not run the relative path from the project
-cwd. Under omp, the user can type `/atlas-tui` to open the TUI inside the omp session.
-Under Claude Code or Codex, `--launch` opens it in a new terminal window.
+omp rewrites `${CLAUDE_PLUGIN_ROOT}` to the live install at call time. If it is unset (Codex),
+substitute the plugin root: two directories above the skill directory your harness gave you,
+never a path relative to the project cwd. Under omp, the user can type `/atlas-tui` to
+open the TUI inside the omp session. Under Claude Code or Codex, `--launch` opens it in a new
+terminal window.
 
 `--launch` opens the TUI in a new tmux window when `$TMUX` is set; otherwise it restarts
 the detached tmux session `atlas-tui` in place with the current script and project
-(respawn-window -k, creating the window if it is missing — a session left by an older
+(respawn-window -k, creating the window if it is missing; a session left by an older
 install is never reused), and tries to open a visible terminal window attached to it,
 falling back to printing `tmux attach -t atlas-tui`. It then prints a
 one-frame snapshot (`--once`) so the chat shows the current colony state.

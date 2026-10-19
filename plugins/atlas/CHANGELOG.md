@@ -1,5 +1,12 @@
 # Changelog
 
+## 12.5.13 (2026-10-19)
+
+### Fixed
+
+- Session start opens the lead channel only where an atlas board already exists (`lead_channel_allowed`, shared by omp `channel-open --only-project` and Claude `session_boot`); a plain git repo no longer gets `.atlas/.run` just because a session started there.
+- Scripts and hooks suites are green again (3643 passed; only the install-parity contract differs until this release is installed): `_lead_pid` binds the real `subprocess.run` so tests that patch it for other commands are unaffected; `spawn-team` tolerates a namespace without `--name`; `test_atlas_launch` follows the 12.5.0 transport contract (tmux by default, herdr only when forced); the isolation contract allows the deliberately short `TMUX_TMPDIR`; the `atlas-tui` skill uses `${CLAUDE_PLUGIN_ROOT}` (omp rewrites it to the live install) and passes skill conformance.
+
 ## 12.5.12 (2026-10-19)
 
 ### Fixed

@@ -952,8 +952,14 @@ class SessionStartChannelGate(unittest.TestCase):
         self.assertEqual((rc, data.get("skipped")), (0, "not_a_project"))
         self.assertEqual(os.listdir(self.root), [])
 
-    def test_git_repo_gets_the_lead_channel(self):
+    def test_plain_git_repo_is_skipped_too(self):
         os.makedirs(os.path.join(self.root, ".git"))
+        rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "", "--only-project")
+        self.assertEqual((rc, data.get("skipped")), (0, "not_a_project"))
+        self.assertEqual(os.listdir(self.root), [".git"])
+
+    def test_existing_atlas_board_gets_the_lead_channel(self):
+        os.makedirs(os.path.join(self.root, ".atlas", ".run"))
         rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "", "--only-project")
         self.assertEqual(rc, 0)
         self.assertTrue(data["channel"]["name"].endswith("/lead-abcdef"))

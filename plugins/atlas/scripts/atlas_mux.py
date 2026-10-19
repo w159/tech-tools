@@ -1801,13 +1801,14 @@ def cmd_spawn_team(args) -> int:
         return _emit({"ok": False, "error": str(exc)}, 2)
     if not NAME_RE.match(rec["team_id"]):
         return _emit({"ok": False, "error": f"invalid team id {rec['team_id']!r}"}, 2)
-    if args.name:
-        if not COLONY_NAME_RE.match(args.name):
+    team_name = getattr(args, "name", None)  # optional --name; programmatic namespaces may omit it
+    if team_name:
+        if not COLONY_NAME_RE.match(team_name):
             return _emit(
-                {"ok": False, "error": f"invalid --name {args.name!r}: use [a-z0-9-], 1-32 chars, no leading dash"},
+                {"ok": False, "error": f"invalid --name {team_name!r}: use [a-z0-9-], 1-32 chars, no leading dash"},
                 2,
             )
-        rec["name"] = args.name
+        rec["name"] = team_name
     if args.dry_run:
         return _emit({"ok": True, "dry_run": True, "team": rec})
     path = _team_dir(root) / f"{rec['team_id']}.json"

@@ -935,17 +935,14 @@ def open_lead_channel_once(payload, run=None):
     import subprocess
 
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
-    import atlas_db
     import atlas_todo
     import worker_inbox
 
     if worker_inbox.is_worker_env():
         return None  # a mux worker's own session must not pose as a lead
     root = atlas_todo.find_root(payload.get("cwd") or os.getcwd())
-    if atlas_db.not_a_project_root(root) or not (
-        atlas_todo.is_project(root) or os.path.exists(os.path.join(root, ".git"))
-    ):
-        return None  # never create channels registry state in a non-project dir
+    if not atlas_todo.lead_channel_allowed(root):
+        return None  # only an existing atlas board; never create channels state elsewhere
     (run or subprocess.run)(
         [
             sys.executable,
