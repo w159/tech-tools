@@ -1,5 +1,18 @@
 # Changelog
 
+## 12.5.10 (2026-10-19)
+
+### Fixed
+
+- Dashboard heals itself after a plugin upgrade. A daemon whose install dir was deleted served `ui_missing` on every page until something ran `ensure`. A watchdog thread (`HEAL_CHECK_S`, 20 s) now re-execs into the newest sibling install (omp `tech-tools___atlas___<ver>`, Claude `<marketplace>/atlas/<ver>`) on the same port; the `ui_missing` reply names the exact `ensure` command.
+- `atlas_tui.py --launch` no longer reuses a stale `atlas-tui` tmux session: it respawns its window with the current script and project (an old session from a deleted install rendered an empty TUI with no specs), and turns tmux `mouse on` for that session.
+- Stop works for plain tmux colony panes: the kill ladder falls back to `tmux kill-pane` for panes in `atlas-*` sessions, then to the recorded pid.
+
+### Changed
+
+- Command Center TUI modelled on the OpenRig team workspace: the explorer tree lists each pod's seats; a WALL tab shows every seat's live output side by side (pane capture or transcript); the seat page is an agent detail (context, current activity, current work, queue, needs you, seat, communication, output); TERMINALS rows attach (Enter/click) or kill (`x`, y/n; never `atlas-tui` or non-`atlas-` sessions) atlas-mux sessions.
+- Live leads (channel `lead_pid` alive) appear as seats with their own transcript and keep their colony listed. Empty TOPOLOGY explains what fills it; `a` toggles all projects; PROJECTS rows switch the watched project. Hints and HEALTH only offer `t term`/`x stop` and `tmux ok` when the seat or colony has panes.
+
 ## 12.5.9 (2026-10-19)
 
 ### Changed

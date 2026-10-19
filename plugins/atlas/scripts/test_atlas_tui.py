@@ -144,7 +144,7 @@ class Render(unittest.TestCase):
     def test_table(self):
         f = frame(T.new_ui(colony="lead-01"), 180, 50)
         for s in (
-            "[ TABLE ]  RECENT    OVERVIEW    GRAPH    HEALTH     colony lead-01",
+            "[ TABLE ]  WALL    RECENT    OVERVIEW    GRAPH    HEALTH     colony lead-01",
             "▪ CONFIG · colony settings  (open ▸)",
             "HEALTH  ATTENTION · impl-1 blocked",
             "/ filter agents…",
@@ -253,7 +253,7 @@ class Render(unittest.TestCase):
             "seat <name>",
             "term <seat>",
             "send <seat> <text>",
-            "tab <table|recent|overview|graph|health>",
+            "tab <table|wall|recent|overview|graph|health>",
             "refresh",
             "quit",
             "› colony <id>",
@@ -366,7 +366,7 @@ class LaunchWindow(unittest.TestCase):
                 self.assertIn(marker, " ".join(argv))
                 self.assertIn("atlas-tui", " ".join(argv))
 
-    def _launch(self, env, opener_rc=0, has_session=1):
+    def _launch(self, env, opener_rc=0, has_session=1, wins=""):
         a = mock.Mock(project="/p", all=False, fixture=None)
         calls, out = [], io.StringIO()
 
@@ -374,7 +374,7 @@ class LaunchWindow(unittest.TestCase):
             calls.append(list(cmd))
             r = mock.Mock()
             r.returncode = has_session if cmd[:2] == ["tmux", "has-session"] else opener_rc
-            r.stdout = ""
+            r.stdout = (wins + "\n") if cmd[:2] == ["tmux", "list-windows"] else ""
             return r
 
         with mock.patch.dict(T.os.environ, env, clear=True), \
@@ -394,11 +394,39 @@ class LaunchWindow(unittest.TestCase):
                 self.assertTrue(any(marker in " ".join(c) for c in calls))
                 self.assertIn("opened a new", out)
 
-    def test_launch_reuses_existing_detached_session(self):
-        calls, out = self._launch({"TERM_PROGRAM": "vscode"}, has_session=0)
+    def test_launch_respawns_existing_detached_session(self):
+        calls, out = self._launch({"TERM_PROGRAM": "vscode"}, has_session=0, wins="atlas-tui")
         self.assertTrue(any("has-session" in " ".join(c) for c in calls))
+        self.assertTrue(
+            any(
+                c[:2] == ["tmux", "respawn-window"]
+                and "-k" in c
+                and "-t" in c
+                and "atlas-tui:atlas-tui" in c
+                and "atlas_tui.py" in c[-1]
+                for c in calls
+            )
+        )
         self.assertFalse(any("new-session" in " ".join(c) for c in calls))
-        self.assertIn("reusing detached tmux session 'atlas-tui'", out)
+        self.assertTrue(
+            any(c[:4] == ["tmux", "set-option", "-t", "atlas-tui"] and c[-2:] == ["mouse", "on"] for c in calls)
+        )
+        self.assertIn("restarted the atlas-tui session with", out)
+        self.assertNotIn("reusing", out)
+
+    def test_launch_creates_window_when_missing(self):
+        calls, out = self._launch({"TERM_PROGRAM": "vscode"}, has_session=0, wins="zsh")
+        self.assertTrue(
+            any(
+                c[:2] == ["tmux", "new-window"]
+                and "-d" in c
+                and "-t" in c
+                and "atlas-tui" in c
+                for c in calls
+            )
+        )
+        self.assertFalse(any("new-session" in " ".join(c) for c in calls))
+        self.assertIn("restarted the atlas-tui session with", out)
 
     def test_launch_falls_back_to_attach_command(self):
         calls, out = self._launch({"TERM_PROGRAM": "vscode"})
@@ -745,6 +773,314 @@ class Names(unittest.TestCase):
         self.assertIn("from omp session S1 · lead lead-01 · project tt", "\n".join(T.render(s, ui, 140, 40)))
         T.run_command(s, ui, "seat ex-1")
         self.assertIn("Maps code", "\n".join(T.render(s, ui, 140, 40)))
+
+
+EMPTY = {
+    "ok": True,
+    "host": "h",
+    "clock": "c",
+    "project": "/w/proj",
+    "colonies": [],
+    "seats": [],
+    "feed": [],
+    "needs": [],
+    "projects": [
+        {"root": "/w/proj", "name": "proj", "channels": 1},
+        {"root": "/w/other", "name": "other", "channels": 0},
+    ],
+}
+
+
+class EmptyStates(unittest.TestCase):
+    W, H = 160, 48
+
+    def test_topology_zero_colonies_guides(self):
+        ui = T.new_ui(section="topology")
+        f = "\n".join(T.render(EMPTY, ui, self.W, self.H))
+        self.assertIn("no colonies · watching /w/proj", f)
+        self.assertIn("dispatches subagents (omp `task`, Claude `Agent`) or `atlas_mux spawn-team`", f)
+        self.assertIn("`a` toggles all projects", f)
+        self.assertIn("Enter/click a PROJECTS row to switch the watched project", f)
+
+    def test_topology_nonempty_keeps_colony_line(self):
+        ui = T.new_ui(section="topology")
+        f = "\n".join(T.render(SNAP, ui, self.W, self.H))
+        self.assertIn("2 colonies · select one in Explorer", f)
+
+    def test_specs_empty_removed_install_message(self):
+        ui = T.new_ui(section="specs")
+        f = "\n".join(T.render(EMPTY, ui, self.W, self.H))
+        self.assertIn("no agent specs found under", f)
+        self.assertIn(f"{T._model().PLUGIN_DIR / 'agents'}", f)
+        self.assertIn("this TUI process may be from a removed install; relaunch it", f)
+
+    def test_specs_empty_respects_filter(self):
+        ui = T.new_ui(section="specs")
+        ui["filter"] = "zzz"
+        f = "\n".join(T.render(EMPTY, ui, self.W, self.H))
+        self.assertNotIn("removed install", f)
+
+
+class WatchControls(unittest.TestCase):
+    W, H = 160, 48
+
+    def test_a_key_toggles_all_projects(self):
+        ui = T.new_ui(section="topology")
+        self.assertEqual(T.handle_key(EMPTY, ui, "a"), ("all",))
+        self.assertEqual(T.handle_key(SNAP, ui, "a"), ("all",))
+
+    def test_projects_enter_switches_root(self):
+        ui = T.new_ui(section="projects", focus="pane")
+        self.assertEqual(T.handle_key(EMPTY, ui, "enter"), ("project", "/w/proj"))
+        T.handle_key(EMPTY, ui, "down")
+        self.assertEqual(T.handle_key(EMPTY, ui, "enter"), ("project", "/w/other"))
+        T.handle_key(EMPTY, ui, "up")
+        T.handle_key(EMPTY, ui, "up")  # clamp at 0
+        self.assertEqual(T.handle_key(EMPTY, ui, "enter"), ("project", "/w/proj"))
+
+    def test_projects_click_switches_root(self):
+        ui = T.new_ui(section="projects")
+        hits = T.hitmap(EMPTY, ui, self.W, self.H)
+        row_hits = [a for *_, a in hits if a[0] == "project"]
+        self.assertIn(("project", "/w/proj"), row_hits)
+        self.assertIn(("project", "/w/other"), row_hits)
+        j = hits.index(next(h for h in hits if h[3][0] == "project" and h[3][1] == "/w/other"))
+        self.assertEqual(T.handle_click(EMPTY, ui, hits, T.LEFT + 10, hits[j][0]), ("project", "/w/other"))
+
+    def test_projects_rows_filterable_and_not_clickable_when_filtered(self):
+        ui = T.new_ui(section="projects")
+        ui["filter"] = "other"
+        hits = T.hitmap(EMPTY, ui, self.W, self.H)
+        self.assertFalse([a for *_, a in hits if a[0] == "project"])
+
+
+class LeadSeatUi(unittest.TestCase):
+    """A lead seat is never stoppable and has no msg button: worker_inbox never drains tui->lead notes."""
+
+    W, H = 160, 48
+
+    def lead(self, **kw):
+        return seat("lead-abc123", "lead", "omp", "working", target="", lead=True, **kw)
+
+    def snap_with_lead(self, s):
+        snap = {**SNAP, "seats": SNAP["seats"] + [s]}
+        snap["colonies"][0]["pods"] = snap["colonies"][0]["pods"] + [{"id": "lead", "seats": ["lead-abc123"]}]
+        return snap
+
+    def test_no_msg_or_stop_buttons_for_lead(self):
+        s = self.lead()
+        snap = self.snap_with_lead(s)
+        f = "\n".join(T.render(snap, T.new_ui(colony="lead-01", seat="lead-abc123"), self.W, self.H))
+        self.assertIn("[ view ]", f)
+        self.assertNotIn("[ msg ]", f)
+        self.assertNotIn("[ stop ]", f)
+
+    def test_msg_guard_reports_lead(self):
+        ui = T.new_ui(colony="lead-01", row=3)
+        snap = self.snap_with_lead(self.lead())
+        self.assertIsNone(T._button_effect(snap, ui, "msg", "lead-abc123"))
+        self.assertIn("is the lead", ui["status"])
+        ui = T.new_ui(colony="lead-01", seat="lead-abc123")
+        self.assertIsNone(T.run_command(snap, ui, "send lead-abc123 hi"))
+        self.assertIn("is the lead", ui["status"])
+
+    def test_stops_still_work_for_workers(self):
+        ui = T.new_ui(colony="lead-01")
+        f = "\n".join(T.render(SNAP, ui, self.W, self.H))
+        self.assertIn("[ msg ] [ view ]", f)
+
+
+class TreeSeats(unittest.TestCase):
+    """Pods list their seats in the tree; a seat row opens the seat."""
+
+    W, H = 140, 40
+
+    def test_tree_lists_seats_under_pods(self):
+        ui = T.new_ui()
+        f = "\n".join(T.render(SNAP, ui, self.W, self.H))
+        for s in ("┣━ › explorer", "● ex-1 ·1", "! impl-1 ·1", "· impl-2"):
+            self.assertIn(s, f)
+        kinds = [r[1] for r in T.explorer_rows(SNAP, ui)]
+        self.assertIn("seat", kinds)
+
+    def test_click_and_enter_on_seat_row_opens_seat(self):
+        ui = T.new_ui()
+        hits = T.hitmap(SNAP, ui, self.W, self.H)
+        rows = T.explorer_rows(SNAP, ui)
+        i = next(k for k, r in enumerate(rows) if r[1] == "seat" and r[2] == "impl-1")
+        r, x0, _x1, a = next(h for h in hits if h[3][0] == "explorer" and h[3][1] == i)
+        T.handle_click(SNAP, ui, hits, x0 + 5, r)
+        self.assertEqual(ui["seat"], "impl-1")
+        ui = T.new_ui()
+        ui["cursor"] = i
+        ui["focus"] = "explorer"
+        T.handle_key(SNAP, ui, "enter")
+        self.assertEqual(ui["seat"], "impl-1")
+
+
+class SeatDetail(unittest.TestCase):
+    """AGENT DETAIL sections from data we have, for pane and in-process seats."""
+
+    W, H = 140, 48
+
+    def test_pane_seat_sections(self):
+        ui = T.new_ui(colony="lead-01", seat="impl-1", seat_text="pane-line-1\npane-line-2")
+        snap = dict(SNAP, seats=[dict(SNAP["seats"][1], open_items=[{"id": "t9", "title": "Build the panel", "status": "in_progress"}])]
+        )
+        f = "\n".join(T.render(snap, ui, self.W, self.H))
+        for s in (
+            "SEAT impl-1 · omp",
+            "CONTEXT",
+            "runtime omp · model m-omp",
+            "terminal term ▸ implementer (%2 [ term ]) · t = attach",
+            "CURRENT ACTIVITY",
+            "blocked · doing impl-1 · active 1970-01-01 00:00:01 UTC",
+            "CURRENT WORK · 1",
+            "#t9 Build the panel · in_progress",
+            "QUEUE",
+            "pending 0 · in progress 1 · blocked 0 · open 1",
+            "NEEDS YOU · 1",
+            "SEAT",
+            "host macbook-pro · colony lead-01 · pod implementer",
+            "COMMUNICATION · 1",
+            "OUTPUT",
+            "pane-line-1",
+        ):
+            self.assertIn(s, f)
+
+    def test_in_process_seat_sections(self):
+        snap = dict(
+            SNAP,
+            seats=[
+                dict(SNAP["seats"][2], target="", log_path="", transcript="/t.jsonl")
+            ],
+        )
+        m = mock.Mock(transcript_tail=mock.Mock(return_value=["▸ dispatch", "→ done"]))
+        ui = T.new_ui(colony="lead-01", seat="impl-2")
+        with mock.patch.object(T, "_model", return_value=m):
+            f = "\n".join(T.render(snap, ui, self.W, self.H))
+        m.transcript_tail.assert_called_with("/t.jsonl", 200)
+        for s in (
+            "terminal in-process",
+            "CURRENT WORK · 0",
+            "OUTPUT",
+            "▸ dispatch",
+        ):
+            self.assertIn(s, f)
+
+
+class Wall(unittest.TestCase):
+    """WALL tab: 2-col grid, lead first, tiles open seats, footer counts."""
+
+    W, H = 140, 48
+
+    def ui(self, **kw):
+        return T.new_ui(colony="lead-01", tab="wall", wall_text={"ex-1": "wall-out-1\nwall-out-2"}, **kw)
+
+    def snap_with_lead(self):
+        lead = seat("lead-abc123", "lead", "omp", "working", target="", lead=True, address="lead-abc123@lead-01")
+        snap = {**SNAP, "seats": SNAP["seats"] + [lead]}
+        snap["colonies"][0]["pods"] = snap["colonies"][0]["pods"] + [{"id": "lead", "seats": ["lead-abc123"]}]
+        return snap
+
+    def test_wall_renders_tiles_and_footer(self):
+        f = "\n".join(T.render(SNAP, self.ui(), self.W, self.H))
+        for s in (
+            "[ WALL ]",
+            "Claude Code ex-1@lead-01",
+            "omp impl-1@lead-01",
+            "Codex CLI impl-2@lead-01",
+            "wall-out-1",
+            "3 agents in lead-01",
+        ):
+            self.assertIn(s, f)
+
+    def test_wall_lead_first_and_selection_moves(self):
+        snap = self.snap_with_lead()
+        ui = self.ui(focus="pane")
+        lines, tiles = T._wall_layout(snap, ui, 106)
+        self.assertEqual(tiles[0][4]["name"], "lead-abc123")
+        self.assertIn("lead-abc123", lines[0])
+        T.handle_key(snap, ui, "down")
+        self.assertEqual(ui["row"], 2)
+        T.handle_key(snap, ui, "right")
+        self.assertEqual(ui["row"], 3)
+
+    def test_wall_enter_and_click_open_seat(self):
+        ui = self.ui(focus="pane")
+        T.handle_key(SNAP, ui, "enter")
+        self.assertEqual(ui["seat"], "ex-1")
+        ui = self.ui(focus="pane")
+        hits = T.hitmap(SNAP, ui, self.W, self.H)
+        r, x0, _x1, a = next(h for h in hits if h[3][0] == "walltile" and h[3][2] == "impl-1")
+        T.handle_click(SNAP, ui, hits, x0 + 3, r)
+        self.assertEqual((ui["row"], ui["seat"]), (a[1], "impl-1"))
+
+    def test_wall_read_cadence_uses_model_once_per_refresh(self):
+        m = mock.Mock(capture=mock.Mock(return_value="cap"), transcript_tail=mock.Mock(return_value=["tail"]))
+        ui = self.ui(focus="pane")
+        snap = self.snap_with_lead()
+        snap["seats"] = [
+            s if s["name"] != "impl-2" else dict(s, transcript="/t.jsonl") for s in snap["seats"]
+        ]
+        T.refresh_wall(snap, ui, m)
+        self.assertEqual(ui["wall_text"]["ex-1"], "cap")
+        self.assertEqual(ui["wall_text"]["impl-2"], "tail")
+        self.assertEqual(m.capture.call_count, 2)  # pane seats only
+
+
+class Terminals(unittest.TestCase):
+    """TERMINALS rows attach and kill (guarded) atlas sessions."""
+
+    W, H = 140, 40
+
+    def snap_nonatlas(self):
+        return dict(SNAP, terminals=SNAP["terminals"] + [{"session": "work", "windows": 1, "panes": 1, "attached": 0}])
+
+    def test_rows_show_seat_names(self):
+        f = "\n".join(T.render(SNAP, T.new_ui(section="terminals"), self.W, self.H))
+        self.assertIn("atlas-lead-01", f)
+        self.assertIn("ex-1", f)
+
+    def test_click_and_enter_attach(self):
+        ui = T.new_ui(section="terminals", focus="pane")
+        self.assertEqual(T.handle_key(SNAP, ui, "enter"), ("attach", "atlas-lead-01"))
+        hits = T.hitmap(SNAP, ui, self.W, self.H)
+        r, x0, _x1, a = next(h for h in hits if h[3][0] == "termsess")
+        self.assertEqual(T.handle_click(SNAP, ui, hits, x0 + 2, r), ("attach", "atlas-lead-01"))
+
+    def test_kill_gate_confirms_and_refuses(self):
+        ui = T.new_ui(section="terminals", focus="pane")
+        self.assertIsNone(T.handle_key(SNAP, ui, "x"))
+        self.assertEqual((ui["mode"], ui["confirm_sess"]), ("confirm", "atlas-lead-01"))
+        self.assertEqual(T.handle_key(SNAP, ui, "y"), ("kill", "atlas-lead-01"))
+        # atlas-tui is refused outright
+        snap = dict(SNAP, terminals=[{"session": "atlas-tui", "windows": 1, "panes": 1, "attached": 1}])
+        ui = T.new_ui(section="terminals", focus="pane")
+        self.assertIsNone(T.handle_key(snap, ui, "x"))
+        self.assertIn("refusing to kill atlas-tui", ui["status"])
+        # so are non-atlas sessions
+        ui = T.new_ui(section="terminals", focus="pane")
+        self.assertIsNone(T.handle_key(self.snap_nonatlas(), ui, "down"))
+        self.assertIsNone(T.handle_key(self.snap_nonatlas(), ui, "x"))
+        self.assertIn("not an atlas-* session", ui["status"])
+        self.assertIsNone(ui["confirm_sess"])
+
+    def test_own_session_refused(self):
+        with mock.patch.dict(T.os.environ, {"TMUX": "sock,1,0"}), mock.patch.object(
+            T, "_run_tmux", return_value=mock.Mock(returncode=0, stdout="atlas-lead-01\n")
+        ):
+            self.assertEqual(T._kill_refusal("atlas-lead-01", T.os.environ), "refusing to kill atlas-lead-01: this TUI runs there")
+            self.assertEqual(T._kill_refusal("atlas-other", T.os.environ), "")
+        self.assertEqual(T._kill_refusal("atlas-other", {}), "")
+
+    def test_attach_target_runs_setup_argv_cleanup(self):
+        m = mock.Mock()
+        m.attach_argv.return_value = ([["tmux", "new-session"]], ["tmux", "attach", "-t", "v"])
+        with mock.patch.object(T.subprocess, "run") as run:
+            self.assertEqual(T.attach_target("atlas-lead-01", m), "")
+        self.assertEqual([c.args[0][:2] for c in run.call_args_list], [["tmux", "new-session"], ["tmux", "attach"]])
+        m.cleanup_view.assert_called_once()
 
 
 if __name__ == "__main__":

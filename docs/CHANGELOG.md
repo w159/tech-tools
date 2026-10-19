@@ -1,5 +1,15 @@
 # Changelog
 
+## 12.5.10 (2026-10-19)
+
+### Fixed
+
+- Dashboard on :7421 self-heals when a plugin upgrade deletes its install dir (it showed `ui_missing` for hours); `--launch` restarts a stale `atlas-tui` session instead of reusing it.
+
+### Changed
+
+- Command Center TUI modelled on the OpenRig team workspace: seats in the tree, a WALL of every seat's live output, an agent detail page with communication, and attach/kill for atlas-mux sessions. Details in `plugins/atlas/CHANGELOG.md` and `docs/atlas-colony.md`.
+
 ## 12.5.9 (2026-10-19)
 
 ### Changed

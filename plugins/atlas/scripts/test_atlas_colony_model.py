@@ -307,6 +307,62 @@ class ModelTest(unittest.TestCase):
         seat = next(x for x in s["seats"] if x["name"] == "worker-d1")
         self.assertEqual(seat["state"], "dead")
 
+    def test_live_lead_pid_adds_lead_seat(self):
+        model._TRANSCRIPTS.clear()
+        with mock.patch.object(model, "_omp_sessions_root", return_value=Path(self.root) / "no-sessions"):
+            self._channel(
+                "proj@main/lead-abc123", "lead-abc123",
+                [{"name": "worker-s1", "role": "scout", "joined": time.time() - 30}],
+                harness="omp", lead_pid=os.getpid(),
+            )
+            s = model.snapshot(self.root)
+        seat = next(x for x in s["seats"] if x["name"] == "lead-abc123")
+        self.assertEqual(seat["role"], "lead")
+        self.assertEqual(seat["pod"], "lead")
+        self.assertTrue(seat["lead"])
+        self.assertEqual(seat["state"], "working")
+        self.assertEqual(seat["runtime"], "omp")
+        self.assertEqual(seat["target"], "")
+        self.assertEqual(seat["pid"], os.getpid())
+        c = next(c for c in s["colonies"] if c["channel"] == "proj@main/lead-abc123")
+        self.assertIn("lead", [p["id"] for p in c["pods"]])
+        self.assertFalse(c["finished"])
+        self.assertTrue(next(x for x in s["seats"] if x["name"] == "worker-s1")["state"] == "working")
+
+    def test_dead_lead_pid_adds_no_lead_seat(self):
+        import subprocess
+
+        pr = subprocess.Popen(["/bin/sleep", "0"])  # spawn + reap: a guaranteed-dead pid
+        pr.wait()
+        self._channel(
+            "proj@main/lead-dead2", "lead-dead2",
+            [],  # no members at all: nothing else can keep the colony alive
+            harness="omp", lead_pid=pr.pid,
+        )
+        s = model.snapshot(self.root)
+        self.assertFalse(any(x["name"] == "lead-dead2" for x in s["seats"]))
+        self.assertFalse(any(c["channel"] == "proj@main/lead-dead2" for c in s["colonies"]))
+
+    def test_colony_stays_live_with_only_lead_alive(self):
+        model._TRANSCRIPTS.clear()
+        with mock.patch.object(model, "_omp_sessions_root", return_value=Path(self.root) / "no-sessions"):
+            self._channel(
+                "proj@main/lead-only", "lead-only",
+                [{"name": "worker-f1", "role": "runner", "exit_code": 0, "ended_at": time.time() - 60}],
+                harness="omp", lead_pid=os.getpid(),
+            )
+            s = model.snapshot(self.root)
+        c = next(c for c in s["colonies"] if c["channel"] == "proj@main/lead-only")
+        self.assertFalse(c["finished"])  # the live lead keeps the colony live past the finished grace
+        self.assertTrue(any(x["name"] == "lead-only" for x in s["seats"]))
+        self.assertEqual(  # the finished subagent stays listed under its lead's colony
+            next(x for x in s["seats"] if x["name"] == "worker-f1")["state"], "finished"
+        )
+
+    def test_named_lead_without_sid6_gets_no_transcript(self):
+        self.assertEqual(model._lead_transcript("/r", "lead-boss", {"harness": "omp"}), "")
+        self.assertEqual(model._lead_transcript("/r", "lead-abc123", {"harness": "codex"}), "")
+
     def test_name_colonies_harness_falls_back_to_channel_record(self):
         chans = {"p@b/L": {"name": "p@b/L", "harness": "omp"}}
         cols = {"t": {"id": "t", "channel": "p@b/L", "project": "/x/proj", "created": 1}}
@@ -452,6 +508,7 @@ class ModelTest(unittest.TestCase):
                 "target",
                 "pid",
                 "queue",
+                "open_items",
                 "work",
                 "now",
                 "log_path",

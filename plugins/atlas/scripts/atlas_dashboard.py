@@ -2477,7 +2477,7 @@ class Handler(BaseHTTPRequestHandler):
                         "ok": False,
                         "error": "ui_missing",
                         "why": f"{STATIC_DIR / 'index.html'} does not exist",
-                        "do": "reinstall the atlas plugin",
+                        "do": _ui_missing_hint(),
                     },
                 )
                 return True
@@ -3039,6 +3039,139 @@ def _reap_loop():
         time.sleep(REAP_INTERVAL_S)
 
 
+HEAL_CHECK_S = 20
+_HTTPD: ThreadingHTTPServer | None = None
+_EXEC = os.execv  # seam: tests stub this instead of really exec-ing
+
+
+def _own_install_roots() -> list[Path]:
+    """Install dirs (scripts/..) this process may run from.
+
+    Both the unresolved argv path and __file__: __file__ may resolve through a
+    symlink into a different cache (e.g. osprey assets), and the raw path is the
+    one an omp upgrade deletes.
+    """
+    roots: list[Path] = []
+    for script in (sys.argv[0], __file__):
+        try:
+            root = Path(script).absolute().parent.parent
+        except OSError:
+            continue
+        if root not in roots:
+            roots.append(root)
+    return roots
+
+
+def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[int, ...], Path]]:
+    """(version, daemon script) of sibling installs of this same plugin.
+
+    Layouts: omp .../tech-tools___atlas___<ver>/ and claude .../<mkt>/atlas/<ver>/.
+    Newest last; a dir without scripts/atlas_dashboard.py is ignored.
+    """
+    if own_roots is None:
+        own_roots = _own_install_roots()
+    found: dict[tuple[int, ...], Path] = {}
+    for root in own_roots:
+        m = re.match(r"^(.+___)", root.name)  # omp family prefix
+        fam = m.group(1) if m else ""
+        try:
+            entries = list(root.parent.iterdir())
+        except OSError:
+            continue
+        for d in entries:
+            if fam and not d.name.startswith(fam):
+                continue
+            ver = _version_tuple(d.name[len(fam):]) if fam else _version_tuple(d.name)
+            if not ver or not (d / "scripts" / "atlas_dashboard.py").is_file():
+                continue
+            found.setdefault(ver, d / "scripts" / "atlas_dashboard.py")
+    return sorted(found.items())
+
+
+def _self_heal_target(
+    own_roots: list[Path] | None = None, self_scripts: set[str] | None = None
+) -> Path | None:
+    """Newest sibling daemon to exec into, or None while this install can serve.
+
+    Broken means no own candidate root still has the dashboard UI (an upgrade
+    deleted the install dir under the running daemon).
+    """
+    roots = own_roots if own_roots is not None else _own_install_roots()
+    scan = list(roots)
+    for r in roots:  # siblings may live beside the resolved tree, not the raw path
+        try:
+            rp = Path(os.path.realpath(r))
+        except OSError:
+            continue
+        if rp not in scan:
+            scan.append(rp)
+    if any((r / "scripts" / "dashboard_ui" / "index.html").is_file() for r in scan):
+        return None
+    if self_scripts is None:
+        self_scripts = {os.path.realpath(s) for s in (sys.argv[0], __file__)}
+    for _ver, script in reversed(_sibling_installs(scan)):
+        if os.path.realpath(script) not in self_scripts:
+            return script
+    return None
+
+
+def _self_heal_exec(target: Path) -> None:
+    """Replace this process with the newer install's daemon on the same port/DB.
+
+    The listening socket is closed first so the exec'd server can rebind; there
+    is no overlap window, unlike spawning ``ensure`` beside a live daemon.
+    """
+    sys.stderr.write(
+        f"[atlas-dashboard] {time.strftime('%Y-%m-%dT%H:%M:%S')} "
+        f"install dir vanished; switching to {target}\n"
+    )
+    if _HTTPD is not None:
+        with contextlib.suppress(OSError):
+            _HTTPD.server_close()
+    _EXEC(sys.executable, [sys.executable, str(target), *sys.argv[1:]])
+
+
+def _self_heal_loop():
+    while True:
+        time.sleep(HEAL_CHECK_S)
+        try:
+            target = _self_heal_target()
+        except Exception as exc:  # transient scan errors must not kill the watchdog
+            log.warning("self-heal check failed: %r", exc)
+            continue
+        if target is not None:
+            _self_heal_exec(target)
+
+
+def _cache_install_scripts() -> list[str]:
+    """Atlas installs in the standard omp/claude caches, for the ui_missing hint."""
+    pats = [
+        Path.home() / ".omp" / "plugins" / "cache" / "plugins" / "*atlas*",
+        Path.home() / ".claude" / "plugins" / "cache" / "*" / "atlas" / "*",
+    ]
+    out: list[str] = []
+    for base in pats:
+        for d in Path(base).parent.glob(base.name):
+            if (d / "scripts" / "atlas_dashboard.py").is_file():
+                out.append(str(d / "scripts" / "atlas_dashboard.py"))
+    return out
+
+
+def _ui_missing_hint() -> str:
+    target = _self_heal_target()
+    if target is None:
+        cands = []
+        for s in _cache_install_scripts():
+            ver = _version_tuple(Path(s).parent.parent.name)
+            if ver:
+                cands.append((ver, s))
+        if cands:
+            target = Path(max(cands)[1])
+    if target is not None:
+        return f"python3 {target} ensure"
+    return "python3 ~/.omp/plugins/cache/plugins/tech-tools___atlas___*/scripts/atlas_dashboard.py ensure"
+
+
 def serve(host: str, port: int):
     reason = _guard_shared_port(port)
     if reason:
@@ -3047,6 +3180,8 @@ def serve(host: str, port: int):
     os.environ["ATLAS_DB"] = dashboard_db_path()
     os.environ["ATLAS_DASHBOARD_DB"] = dashboard_db_path()
     httpd = _Server((host, port), Handler)
+    global _HTTPD
+    _HTTPD = httpd
     _write_pidfile(os.getpid(), port, dashboard_db_path())
     me = os.getpid()
     atexit.register(_clear_pidfile, me, port)
@@ -3064,6 +3199,7 @@ def serve(host: str, port: int):
         "atlas_selffix"
     ).start_scheduler()  # daemon thread; serve() is not run by tests/imports
     threading.Thread(target=_reap_loop, daemon=True, name="atlas-reap").start()
+    threading.Thread(target=_self_heal_loop, daemon=True, name="atlas-selfheal").start()
     httpd.serve_forever()
 
 

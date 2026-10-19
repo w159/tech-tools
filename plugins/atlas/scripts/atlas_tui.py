@@ -32,8 +32,10 @@ COMPACT_LEFT = 24  # explorer width below COMPACT_W columns
 COMPACT_W = 100
 MIN_W, MIN_H = 60, 18
 SECTIONS = ["topology", "specs", "projects", "terminals", "feed", "system"]
-TABS = ["table", "recent", "overview", "graph", "health"]
+TABS = ["table", "wall", "recent", "overview", "graph", "health"]
 RT = {"claude": "cl", "omp": "omp", "codex": "cx"}
+RT_LONG = {"omp": "omp", "claude": "Claude Code", "codex": "Codex CLI"}
+WALL_BODY = 5  # output lines shown per wall tile
 RT_GLYPH = {"claude": "><", "omp": ">_", "codex": "#>"}
 DOT = {"working": "●", "idle": "·", "blocked": "!", "finished": "✓", "dead": "✗"}
 COMMANDS = [
@@ -47,7 +49,7 @@ COMMANDS = [
     ("broadcast <text>", "post a board note to the colony's channel (to all)"),
     (": <section>", "topology|specs|projects|terminals|feed|system"),
     ("/ <text>", "filter the current view"),
-    ("tab <table|recent|overview|graph|health>", "switch right-pane tab"),
+    ("tab <table|wall|recent|overview|graph|health>", "switch right-pane tab"),
     ("refresh", "re-read the snapshot"),
     ("back", "go up one level"),
     ("help", "this list"),
@@ -81,6 +83,8 @@ def new_ui(**kw) -> dict:
         "help_sel": 0,
         "sub": None,
         "confirm": None,  # seat awaiting the y/n stop gate
+        "confirm_sess": None,  # tmux session awaiting the y/n kill gate
+        "wall_text": {},  # seat name -> output lines, refreshed at snapshot cadence only
         "status": "",
     }
     ui.update(kw)
@@ -173,7 +177,8 @@ def _stoppable(s) -> bool:
 
 
 def _seat_buttons(s) -> str:
-    b = "[ msg ] [ view ]"
+    # a lead reads the board itself (worker_inbox never drains tui->lead notes): no msg button
+    b = "[ view ]" if s.get("lead") else "[ msg ] [ view ]"
     if s.get("target"):
         b += " [ term ]"
         if _stoppable(s):
@@ -206,17 +211,26 @@ def _hints(snap, ui) -> str:
     """Footer: keyboard equivalents for the current context plus the clickable help/quit buttons."""
     s = _context_seat(snap, ui)
     if ui.get("seat"):
-        base = "m msg · v/enter view · t term" + (" · x stop" if _stoppable(s) else "") + " · esc back"
+        base = "m msg · v/enter view" + _seat_keys(s) + " · esc back"
+    elif ui["section"] == "terminals":
+        base = "↑↓ move · enter attach · x kill session"
+    elif ui.get("colony") and ui["tab"] == "wall":
+        base = "↑↓←→ tile · enter open seat · tab next tab · esc back"
     elif s:
-        base = "↑↓ move · enter/v open · m msg · t term" + (" · x stop" if _stoppable(s) else "") + " · esc back"
+        base = "↑↓ move · enter/v open · m msg" + _seat_keys(s) + " · esc back"
     else:
         base = "↑↓ move · ←→ pane · ⏎ open · : command · / filter"
     return base + " · [ ? help ]  [ q quit ]"
 
 
+def _seat_keys(s) -> str:
+    """`t term` / `x stop` only for seats that can use them (in-process subagents have no pane)."""
+    return (" · t term" if (s or {}).get("target") else "") + (" · x stop" if _stoppable(s) else "")
+
+
 # ---------------------------------------------------------------- explorer
 def explorer_rows(snap, ui) -> list:
-    """[(text, kind, key)] for the left tree; kind in section|colony|pod|sub."""
+    """[(text, kind, key)] for the left tree; kind in section|colony|pod|seat|sub."""
     rows = []
     colonies = _colonies(snap)
     for sec in SECTIONS:
@@ -254,6 +268,28 @@ def explorer_rows(snap, ui) -> list:
                             n,
                         )
                     )
+                    pseats = [
+                        s
+                        for s in snap.get("seats") or []
+                        if s.get("colony") == c.get("id")
+                        and s.get("pod") == p.get("id")
+                    ]
+                    for k, s in enumerate(pseats):
+                        q = _qlen(s)
+                        rows.append(
+                            (
+                                stem
+                                + "  "
+                                + ("┗━" if k == len(pseats) - 1 else "┣━")
+                                + " "
+                                + DOT.get(s.get("state"), "?")
+                                + " "
+                                + _slabel(s)
+                                + (f" ·{q}" if q else ""),
+                                "seat",
+                                s.get("name"),
+                            )
+                        )
         if sec == "feed" and ui.get("section") == "feed":
             for label, key in (
                 ("Needs attention", "needs"),
@@ -362,7 +398,9 @@ def _table(snap, ui, w) -> list:
     elif bad:
         health = "ATTENTION · " + ", ".join(f"{s['name']} {s.get('state')}" for s in bad)
     else:
-        health = f"OK · {len(allseats)} seats reporting · tmux {'ok' if tm.get('ok') else 'DOWN'}"
+        panes = any(s.get("target") for s in allseats)
+        where = f"tmux {'ok' if tm.get('ok') else 'DOWN'}" if panes else "in-process subagents (no panes)"
+        health = f"OK · {len(allseats)} seats reporting · {where}"
     if (_find_colony(snap, ui["colony"]) or {}).get("finished"):
         health = "✓ finished · " + health
     flt = ui.get("filter", "")
@@ -535,28 +573,87 @@ def _health(snap, colony=None) -> list:
     return out
 
 
+def _utc(ts) -> str:
+    try:
+        return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(float(ts)))
+    except (TypeError, ValueError, OverflowError):
+        return "—"
+
+
+def _queue_counts(s) -> dict:
+    counts = {"pending": 0, "in_progress": 0, "blocked": 0}
+    for i in s.get("open_items") or []:
+        st = str(i.get("status") or "")
+        counts[st] = counts.get(st, 0) + 1
+    return counts
+
+
+def _needs_you(snap, s) -> list:
+    """Blocked notes / notes to human from this seat, plus blocked notes addressed to it."""
+    name = s.get("name")
+    return [
+        e
+        for e in snap.get("needs") or []
+        if e.get("from") == name or (e.get("to") == name and e.get("kind") == "blocked")
+    ]
+
+
+def _seat_feed(snap, s) -> list:
+    name = s.get("name")
+    return [
+        e
+        for e in snap.get("feed") or []
+        if e.get("from") == name or e.get("to") == name
+    ]
+
+
 def _seat_view(snap, ui, h) -> list:
     s = _seat_of(snap, ui["seat"])
     if not s:
         return [f"SEAT {ui['seat']} · not found"]
-    btns = "[ msg ] [ view ]"
-    if s.get("target"):
-        btns += " [ term ]"
-        if _stoppable(s):
-            btns += " [ stop ]"
-    btns += " [ back ]"
+    btns = _seat_buttons(s) + " [ back ]"
+    qc = _queue_counts(s)
+    items = s.get("open_items") or []
+    needs = _needs_you(snap, s)
+    comm = _seat_feed(snap, s)
+    term = (
+        f"term ▸ {s.get('pod')} ({s.get('target')} [ term ])"
+        if s.get("target")
+        else "in-process"
+    )
     head = [
         f"SEAT {_slabel(s)} · {s.get('runtime')} · {DOT.get(s.get('state'), '?')} {s.get('state')}"
         + (f" · {s['role_title']}" if s.get("role_title") else ""),
-        f"  colony {_cname_of(snap, s.get('colony'))} · pod {s.get('pod')} · target {s.get('target') or '—'}"
-        + (" · t = attach" if s.get("target") else " · in-process (no pane to attach)"),
         "  " + btns,
+        "",
     ]
-    lines = _seat_lines(snap, s, ui)
+    work_lines = [
+        f"  #{i.get('id')} {i.get('title')} · {i.get('status')}" for i in items
+    ] or ["  nothing open"]
+    body = [
+        "CONTEXT",
+        f"  runtime {RT_LONG.get(s.get('runtime'), s.get('runtime') or '?')} · model {s.get('model') or '—'}",
+        f"  terminal {term}" + (" · t = attach" if s.get("target") else ""),
+        "CURRENT ACTIVITY",
+        f"  {s.get('state')} · {s.get('now') or '—'} · active {_utc(s.get('last_active'))}",
+        f"CURRENT WORK · {len(items)}",
+        *work_lines,
+        "QUEUE",
+        f"  pending {qc.get('pending', 0)} · in progress {qc.get('in_progress', 0)} · blocked {qc.get('blocked', 0)} · open {s.get('queue', 0) or 0}",
+        f"NEEDS YOU · {len(needs)}",
+        *(  # a blocked/human note ends up in snap['needs'], never in the feed window
+            [f"  {_ev(e)}" for e in needs[-5:]] or ["  nothing needs you"]
+        ),
+        "SEAT",
+        f"  host {snap.get('host') or '—'} · colony {_cname_of(snap, s.get('colony'))} · pod {s.get('pod')} · address {s.get('address') or s.get('name')}",
+        f"COMMUNICATION · {len(comm)}",
+        *(["  " + _ev(e) for e in comm[-8:]] or ["  no messages on the board yet"]),
+        "OUTPUT",
+    ] + (_seat_lines(snap, s, ui) or ["  (no output)"])
     room = max(1, h - len(head) - 1)
-    end = len(lines) - max(0, ui.get("seat_scroll", 0))
-    shown = lines[max(0, end - room) : max(0, end)]
-    return head + [""] + shown
+    off = max(0, min(ui.get("seat_scroll", 0), max(0, len(body) - room)))
+    shown = body[off : off + room]
+    return head + shown
 
 
 def _seat_lines(snap, s, ui) -> list:
@@ -586,6 +683,74 @@ def _seat_lines(snap, s, ui) -> list:
     return ["  no messages on the board yet"]
 
 
+# ---------------------------------------------------------------- wall
+def _rt_label(rt) -> str:
+    return RT_LONG.get(rt, str(rt or "?"))
+
+
+def _wall_seats(snap, ui) -> list:
+    return sorted(
+        _seats(snap, ui.get("colony"), flt=ui.get("filter", "")),
+        key=lambda s: not s.get("lead"),
+    )
+
+
+def refresh_wall(snap, ui, model=None) -> None:
+    """Fill ui['wall_text'] for the colony's wall: one pane capture / transcript read per
+    seat, run at snapshot cadence only (the loop calls this when a new snapshot lands)."""
+    if not ui.get("colony"):
+        return
+    m = model or _model()
+    wt = ui.setdefault("wall_text", {})
+    for s in _wall_seats(snap, ui):
+        if s.get("target"):
+            wt[s["name"]] = m.capture(s["target"], 12, ansi=False)
+        elif s.get("transcript"):
+            wt[s["name"]] = "\n".join(m.transcript_tail(s["transcript"], WALL_BODY))
+
+
+def _wall_body(snap, ui, s, n) -> list:
+    txt = (ui.get("wall_text") or {}).get(s.get("name"))
+    lines = (
+        [ANSI.sub("", str(ln)).rstrip() for ln in str(txt).splitlines()] if txt else []
+    )
+    return lines[-n:] or [str(s.get("now") or "—")]
+
+
+def _wall_tile(snap, ui, s, tw, sel) -> list:
+    addr = s.get("address") or f"{_slabel(s)}@{_cname_of(snap, s.get('colony'))}"
+    title = ("▶ " if sel else "  ") + f"{_rt_label(s.get('runtime'))} {addr} ↗"
+    return [title[:tw].ljust(tw)] + [_fit(ln, tw) for ln in _wall_body(snap, ui, s, WALL_BODY)]
+
+
+def _wall_layout(snap, ui, w) -> tuple[list, list]:
+    """(lines, tiles): tiles = [(line_index, x0, x1, seat)] mirroring the rendered grid."""
+    seats = _wall_seats(snap, ui)
+    cols = 2 if w >= 70 else 1
+    gut = 2
+    tw = max(10, (w - gut * (cols - 1)) // cols)
+    sel = max(0, min(ui.get("row", 0), len(seats) - 1)) if seats else 0
+    lines, tiles = [], []
+    for g in range(0, len(seats), cols):
+        group = seats[g : g + cols]
+        tl = [_wall_tile(snap, ui, s, tw, g + k == sel) for k, s in enumerate(group)]
+        base = len(lines)
+        for r in range(max(len(t) for t in tl)):
+            line = ""
+            for k, t in enumerate(tl):
+                line += (t[r] if r < len(t) else " " * tw) + (" " * gut if k < cols - 1 else "")
+            lines.append(line)
+        for k, s in enumerate(group):
+            tiles.append((base, k * (tw + gut), k * (tw + gut) + tw, g + k, s))
+    return lines, tiles
+
+
+def _wall(snap, ui, w) -> list:
+    lines, _tiles = _wall_layout(snap, ui, w)
+    n = len(_seats(snap, ui.get("colony"), flt=ui.get("filter", "")))
+    return lines + ["", f"{n} agents in {_cname_of(snap, ui['colony'])}"]
+
+
 def _list_view(snap, ui, h) -> list:
     sec, flt = ui["section"], ui.get("filter", "")
     out = []
@@ -599,6 +764,12 @@ def _list_view(snap, ui, h) -> list:
             )
             if _match(line, flt):
                 out.append(line)
+        if not flt and len(out) == 2:
+            out += [
+                "",
+                f"no agent specs found under {_model().PLUGIN_DIR / 'agents'}",
+                "— this TUI process may be from a removed install; relaunch it",
+            ]
     elif sec == "projects":
         out = ["PROJECTS", ""]
         out += [
@@ -615,17 +786,19 @@ def _list_view(snap, ui, h) -> list:
             "",
             f"  {'SESSION':<28} WIN PANE ATT SEATS",
         ]
+        sess_seats: dict = {}
+        for s in snap.get("seats") or []:
+            if not s.get("target"):
+                continue
+            c = _find_colony(snap, s.get("colony")) or {}
+            if c.get("session"):
+                sess_seats.setdefault(c["session"], []).append(_slabel(s))
         for t in snap.get("terminals") or []:
-            n = len(
-                [
-                    s
-                    for s in snap.get("seats") or []
-                    if str(s.get("target") or "").startswith(str(t.get("session")))
-                ]
-            ) or len(
+            names = sess_seats.get(t.get("session")) or []
+            n = len(names) or len(
                 [c for c in _colonies(snap) if c.get("session") == t.get("session")]
             )
-            line = f"  {t.get('session'):<28} {t.get('windows'):>3} {t.get('panes'):>4} {t.get('attached'):>3} {n}"
+            line = f"  {t.get('session'):<28} {t.get('windows'):>3} {t.get('panes'):>4} {t.get('attached'):>3} {n}  {', '.join(names)}"
             if _match(line, flt):
                 out.append(line)
     elif sec == "feed":
@@ -654,9 +827,18 @@ def _list_view(snap, ui, h) -> list:
         out = [
             f"TOPOLOGY · {snap.get('host')}",
             "Choose a colony to read its seats and work.",
-            "loading colonies…" if snap.get("loading") else f"{n} colonies · select one in Explorer",
-            "Bright ▦ live agents · gray ▦ none · ? unknown",
         ]
+        if snap.get("loading"):
+            out.append("loading colonies…")
+        elif n == 0:
+            out += [
+                f"no colonies · watching {snap.get('project') or '?'}",
+                "Colonies appear when a session in this project dispatches subagents (omp `task`, Claude `Agent`) or `atlas_mux spawn-team`.",
+                "`a` toggles all projects · Enter/click a PROJECTS row to switch the watched project.",
+            ]
+        else:
+            out.append(f"{n} colonies · select one in Explorer")
+        out.append("Bright ▦ live agents · gray ▦ none · ? unknown")
     return out
 
 
@@ -667,6 +849,7 @@ def right_lines(snap, ui, w, h) -> list:
         t = ui["tab"]
         body = {
             "table": lambda: _table(snap, ui, w),
+            "wall": lambda: _wall(snap, ui, w),
             "recent": lambda: _recent_block(snap, ui, w),
             "overview": lambda: _overview(snap, ui),
             "graph": lambda: _graph(snap, ui, w),
@@ -802,11 +985,35 @@ def hitmap(snap: dict, ui: dict, width: int, height: int) -> list:
                 hits.append((r, x0 + bm.start(), x0 + bm.start() + len(bm.group(0)), ("button", bm.group(1), seat_row["name"])))
             hits.append((r, x0, x0 + rw - 1, ("seatrow", si - 1)))
             continue
+        if (
+            ui["section"] == "projects"
+            and not ui.get("filter")
+            and 0 <= j - 2 < len(snap.get("projects") or [])
+            and ln.strip()
+        ):
+            hits.append((r, x0, x0 + rw - 1, ("project", snap["projects"][j - 2].get("root"))))
+            continue
+        if (
+            ui["section"] == "terminals"
+            and not ui.get("filter")
+            and 0 <= j - 3 < len(snap.get("terminals") or [])
+            and ln.strip()
+        ):
+            hits.append((r, x0, x0 + rw - 1, ("termsess", snap["terminals"][j - 3].get("session"))))
+            continue
+        if tabbed and ui["tab"] == "wall":  # tiles register below; body text is never a link
+            continue
         i = ln.find("(open ▸)")
         if i >= 0:
             m = re.search(r"#(\S+)\s+\(open", ln)
             act = ("open", f"note #{m.group(1)}") if m else ("open", "config")
             hits.append((r, x0 + i, x0 + i + 8, act))
+    if tabbed and ui["tab"] == "wall":
+        _wl, tiles = _wall_layout(snap, ui, rw - 1)
+        for li, tx0, tx1, si, s in tiles:
+            r = 2 + (li + 2) - off  # body sits two rows under the tab bar in right_lines
+            if 2 <= r < 2 + bodyh:
+                hits.append((r, x0 + tx0, x0 + tx1, ("walltile", si, s.get("name"))))
     fr = height - 2  # the hints footer: [ ? help ] and [ q quit ]
     fl = _fit(_hints(snap, ui), width)
     for bm in BTNS.finditer(fl):
@@ -824,6 +1031,8 @@ def _button_effect(snap, ui, act, seat=None):
         seat = seat or (_context_seat(snap, ui) or {}).get("name")
         if not seat:
             ui["status"] = "no seat selected"
+        elif (_seat_of(snap, seat) or {}).get("lead"):
+            ui["status"] = f"{seat} is the lead: it reads the board itself"
         else:
             ui.update(mode="cmd", buf=f"send {seat} ")
         return None
@@ -886,8 +1095,16 @@ def handle_click(snap, ui, hits, x: int, y: int):
             i = max(0, min(act[1], len(seats) - 1))
             ui.update(row=i, focus="pane")
             _open_seat(snap, ui, seats[i]["name"])
+    elif kind == "walltile":
+        ui.update(row=max(0, act[1]), focus="pane")
+        _open_seat(snap, ui, act[2])
+    elif kind == "termsess":
+        eff = ("attach", act[1])
     elif kind == "term":
         eff = _seat_target(snap, ui, act[1])
+    elif kind == "project":
+        if act[1]:
+            eff = ("project", act[1])
     elif kind == "button":
         eff = _button_effect(snap, ui, BTN_ACT[act[1]], act[2])
     elif kind == "open":
@@ -902,7 +1119,7 @@ def handle_click(snap, ui, hits, x: int, y: int):
 def scroll(ui, d: int):
     """Wheel: d=-1 up, +1 down, on the right pane."""
     if ui.get("seat"):
-        ui["seat_scroll"] = max(0, ui.get("seat_scroll", 0) - d * 3)
+        ui["seat_scroll"] = max(0, ui.get("seat_scroll", 0) + d * 3)
     else:
         ui["pane_scroll"] = max(0, ui.get("pane_scroll", 0) + d * 3)
 
@@ -925,7 +1142,17 @@ def emit_bridge(ui, out=None, environ=None):
 # ---------------------------------------------------------------- input
 def _clamp(snap, ui):
     ui["cursor"] = max(0, min(ui["cursor"], len(explorer_rows(snap, ui)) - 1))
-    n = len(_seats(snap, ui.get("colony"), ui.get("pod"), ui.get("filter", "")))
+    if ui["section"] == "projects":  # rows navigate projects, not seat tables
+        ui["row"] = max(0, min(ui.get("row", 0), len(snap.get("projects") or []) - 1))
+        return
+    if ui["section"] == "terminals":
+        ui["row"] = max(0, min(ui.get("row", 0), len(snap.get("terminals") or []) - 1))
+        return
+    n = len(
+        _wall_seats(snap, ui)
+        if ui.get("tab") == "wall"
+        else _seats(snap, ui.get("colony"), ui.get("pod"), ui.get("filter", ""))
+    )
     ui["row"] = max(0, min(ui.get("row", 0), max(0, n - 1)))
 
 
@@ -1004,8 +1231,12 @@ def run_command(snap, ui, text: str):
             return None
         return ("broadcast", " ".join(args))
     elif cmd == "send" and len(args) == 2:
-        if not any(s.get("name") == args[0] for s in snap.get("seats") or []):
+        s = next((x for x in snap.get("seats") or [] if x.get("name") == args[0]), None)
+        if not s:
             ui["status"] = f"no seat {args[0]}"
+            return None
+        if s.get("lead"):  # honest UI: worker_inbox never drains tui->lead notes
+            ui["status"] = f"{s['name']} is the lead: it reads the board itself"
             return None
         return ("send", args[0], args[1])
     elif cmd == "tab" and args and args[0] in TABS:
@@ -1049,10 +1280,11 @@ def handle_key(snap, ui, key: str):
     if mode == "confirm":
         if key == "y":
             tgt = ui.pop("confirm", None)
+            sk = ui.pop("confirm_sess", None)
             ui.update(mode="", buf="")
-            return ("stop", tgt) if tgt else None
+            return ("kill", sk) if sk else (("stop", tgt) if tgt else None)
         if key in ("n", "esc"):
-            ui.update(mode="", buf="", confirm=None)
+            ui.update(mode="", buf="", confirm=None, confirm_sess=None)
         return None
     if mode:
         if key == "esc":
@@ -1110,6 +1342,8 @@ def handle_key(snap, ui, key: str):
         ui.update(mode="filter", buf=ui.get("filter", ""))
     elif key == "r":
         return ("refresh",)
+    elif key == "a":
+        return ("all",)
     elif key == "t":
         return _seat_target(snap, ui)
     elif key == "m":
@@ -1117,6 +1351,8 @@ def handle_key(snap, ui, key: str):
     elif key == "v":
         return _button_effect(snap, ui, "view")
     elif key == "x":
+        if ui["section"] == "terminals" and not ui.get("seat"):
+            return _term_kill_gate(snap, ui)
         return _button_effect(snap, ui, "stop")
     elif key == "esc":
         if in_seat:
@@ -1131,7 +1367,16 @@ def handle_key(snap, ui, key: str):
     elif key == "tab" and ui.get("colony") and not in_seat:
         ui["tab"] = TABS[(TABS.index(ui["tab"]) + 1) % len(TABS)]
     elif key in ("left", "right"):
-        ui["focus"] = "pane" if key == "right" else "explorer"
+        if (
+            ui.get("focus") == "pane"
+            and not in_seat
+            and ui.get("colony")
+            and ui["tab"] == "wall"
+        ):
+            seats = _wall_seats(snap, ui)
+            ui["row"] = max(0, min(ui.get("row", 0) + (1 if key == "right" else -1), len(seats) - 1))
+        else:
+            ui["focus"] = "pane" if key == "right" else "explorer"
     elif key in ("up", "down", "pgup", "pgdn"):
         d = -1 if key in ("up", "pgup") else 1
         step = 10 if key in ("pgup", "pgdn") else 1
@@ -1139,10 +1384,17 @@ def handle_key(snap, ui, key: str):
             ui["cursor"] += d * step
         elif in_seat:
             ui["seat_scroll"] = max(
-                0, ui.get("seat_scroll", 0) - d * step
-            )  # up = older output
+                0, ui.get("seat_scroll", 0) + d * step
+            )  # down = toward the output tail
+        elif ui["section"] == "projects":
+            ui["row"] = max(0, ui.get("row", 0) + d * step)
         elif ui.get("colony") and ui["tab"] == "table":
             ui["row"] = ui.get("row", 0) + d * step
+        elif ui.get("colony") and ui["tab"] == "wall":
+            seats = _wall_seats(snap, ui)
+            ui["row"] = max(0, min(ui.get("row", 0) + d * 2 * step, len(seats) - 1))
+        elif ui["section"] == "terminals":
+            ui["row"] = max(0, min(ui.get("row", 0) + d * step, len(snap.get("terminals") or []) - 1))
         else:
             ui["pane_scroll"] = max(0, ui.get("pane_scroll", 0) + d * step)
     elif key == "enter":
@@ -1150,15 +1402,29 @@ def handle_key(snap, ui, key: str):
             ui["focus"] == "pane"
             and not in_seat
             and ui.get("colony")
-            and ui["tab"] == "table"
+            and ui["tab"] in ("table", "wall")
         ):
-            seats = _seats(snap, ui["colony"], ui.get("pod"), ui.get("filter", ""))
+            seats = (
+                _wall_seats(snap, ui) if ui["tab"] == "wall" else _seats(snap, ui["colony"], ui.get("pod"), ui.get("filter", ""))
+            )
             if seats:
                 _open_seat(
                     snap,
                     ui,
                     seats[max(0, min(ui.get("row", 0), len(seats) - 1))]["name"],
                 )
+        elif ui["section"] == "projects" and ui["focus"] == "pane":
+            projs = snap.get("projects") or []
+            if projs:
+                p = projs[max(0, min(ui.get("row", 0), len(projs) - 1))]
+                if p.get("root"):
+                    return ("project", p["root"])
+        elif ui["section"] == "terminals" and ui["focus"] == "pane":
+            terms = snap.get("terminals") or []
+            if terms:
+                sess = terms[max(0, min(ui.get("row", 0), len(terms) - 1))].get("session")
+                if sess:
+                    return ("attach", sess)
         elif ui["focus"] == "explorer" and rows:
             r = rows[max(0, min(ui["cursor"], len(rows) - 1))]
             if r[1] == "section":
@@ -1168,6 +1434,8 @@ def handle_key(snap, ui, key: str):
             elif r[1] == "pod":
                 _open_colony(snap, ui, r[2][0])
                 ui.update(pod=r[2][1], focus="explorer")
+            elif r[1] == "seat":
+                _open_seat(snap, ui, r[2])
             elif r[1] == "sub":
                 if r[2] is None:
                     ui.update(sub=None, cursor=SECTIONS.index("feed"))
@@ -1198,9 +1466,15 @@ def attach(snap, name: str, model=None):
     s = next((x for x in snap.get("seats") or [] if x.get("name") == name), None)
     if not s or not s.get("target"):
         return "no tmux pane"
+    return attach_target(s["target"], m)
+
+
+def attach_target(target: str, model=None) -> str:
+    """Suspend-safe attach of any tmux target (seat pane or whole atlas session)."""
+    m = model or _model()
     vid = f"tui{os.getpid()}"
     try:
-        setup, argv = m.attach_argv(s["target"], vid)
+        setup, argv = m.attach_argv(target, vid)
         for cmd in _norm_setup(setup):
             subprocess.run(
                 cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -1210,6 +1484,42 @@ def attach(snap, name: str, model=None):
         with contextlib.suppress(Exception):
             m.cleanup_view(vid)
     return ""
+
+
+def _own_session(env: Mapping[str, str]) -> str:
+    """The tmux session this TUI runs in ('' when detached)."""
+    if not env.get("TMUX"):
+        return ""
+    r = _run_tmux(["tmux", "display-message", "-p", "#S"])
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def _kill_refusal(sess, env: Mapping[str, str]) -> str:
+    """Why the kill gate must refuse, or '' when the session may be killed."""
+    sess = str(sess or "")
+    if not sess.startswith("atlas-"):
+        return f"refusing to kill {sess}: not an atlas-* session"
+    if sess == "atlas-tui":
+        return "refusing to kill atlas-tui (this TUI)"
+    own = _own_session(env)
+    if own and sess == own:
+        return f"refusing to kill {sess}: this TUI runs there"
+    return ""
+
+
+def _term_kill_gate(snap, ui) -> None:
+    """Arm the y/n kill gate for the terminal row under the cursor, guarded."""
+    terms = snap.get("terminals") or []
+    if not terms:
+        ui["status"] = "no terminal sessions"
+        return None
+    sess = terms[max(0, min(ui.get("row", 0), len(terms) - 1))].get("session")
+    why = _kill_refusal(sess, os.environ)
+    if why:
+        ui["status"] = why
+        return None
+    ui.update(mode="confirm", buf=f"kill {sess}? (y/n) ", confirm=None, confirm_sess=sess)
+    return None
 
 
 def send(root, seat, text, snap):
@@ -1317,6 +1627,12 @@ def loop(stdscr, args):
                 first = False
                 ui["status"] = ""
                 focus_first_live(snap, ui)
+            if ui.get("tab") == "wall":  # tile output refreshes only with the snapshot
+                refresh_wall(snap, ui)
+                ui["_wall_for"] = ui.get("colony")
+        if ui.get("tab") == "wall" and ui.get("_wall_for") != ui.get("colony"):
+            refresh_wall(snap, ui)  # a freshly opened wall fills now, not on the next snapshot
+            ui["_wall_for"] = ui.get("colony")
         if now - last_snap >= 2:
             loader.start()
         if ui.get("seat") and now - last_cap >= 1:
@@ -1389,6 +1705,17 @@ def loop(stdscr, args):
             return
         if eff[0] == "refresh":
             loader.start()
+        elif eff[0] == "all":
+            loader = Loader(loader.root, not loader.all)
+            loader.start()
+            ui["status"] = (
+                "watching all projects" if loader.all else f"watching {loader.root} only"
+            )
+        elif eff[0] == "project":
+            root = eff[1]
+            loader = Loader(root, loader.all)
+            loader.start()
+            ui.update(colony=None, seat=None, pod=None, row=0, status=f"watching {root}")
         elif eff[0] == "stop":
             try:
                 import atlas_dash_colony as dash
@@ -1397,7 +1724,7 @@ def loop(stdscr, args):
                 ui["status"] = (
                     f"stopped {eff[1]}"
                     if st == 200
-                    else f"stop {eff[1]} refused: {body.get('error') or st}"
+                    else f"stop {eff[1]} refused: {body.get('error') or body.get('why') or st}"
                 )
                 loader.start()  # the snapshot shows the seat's new state
             except Exception as e:  # stop failure must not kill the TUI
@@ -1419,6 +1746,23 @@ def loop(stdscr, args):
             err = attach(snap, eff[1], _model())
             stdscr.refresh()
             ui["status"] = err or f"returned from {eff[1]}"
+            loader.start()
+        elif eff[0] == "attach":
+            curses.endwin()
+            try:
+                err = attach_target(eff[1], _model())
+            except Exception as e:  # attach failure must not kill the TUI
+                err = f"attach failed: {e}"
+            stdscr.refresh()
+            ui["status"] = err or f"returned from {eff[1]}"
+        elif eff[0] == "kill":
+            sess = eff[1]
+            why = _kill_refusal(sess, os.environ)
+            if why:
+                ui["status"] = why
+            else:
+                r = _run_tmux(["tmux", "kill-session", "-t", sess])
+                ui["status"] = f"killed {sess}" if r.returncode == 0 else f"kill {sess} failed"
             loader.start()
         elif eff[0] == "send":
             try:
@@ -1462,6 +1806,22 @@ def _lead_harness_safe(env: Mapping[str, str]) -> str:
         return ""
 
 
+def _run_tmux(argv: list[str]) -> subprocess.CompletedProcess:
+    """One tmux call, output captured; tests inject a fake runner by patching subprocess.run."""
+    return subprocess.run(argv, check=False, capture_output=True, text=True)
+
+
+def _plugin_version() -> str:
+    """Version of the plugin this script runs from ('?' when the manifest is unreadable)."""
+    try:
+        manifest = json.loads(
+            (HERE.parent / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+        return str(manifest.get("version") or "?")
+    except (OSError, ValueError):
+        return "?"
+
+
 def launch(args) -> int:
     script = str(Path(__file__).resolve())
     cmd = [sys.executable, script, "--project", _root(args)] + (
@@ -1469,19 +1829,28 @@ def launch(args) -> int:
     )
     line = shlex.join(cmd)
     if os.environ.get("TMUX"):
-        r = subprocess.run(["tmux", "new-window", "-P", "-F", "#{window_id}", "-n", "atlas-tui", line],
-                           check=False, capture_output=True, text=True)
+        r = _run_tmux(["tmux", "new-window", "-P", "-F", "#{window_id}", "-n", "atlas-tui", line])
         if r.stdout.strip():
-            subprocess.run(["tmux", "set-window-option", "-t", r.stdout.strip(), "automatic-rename", "off"], check=False)
+            _run_tmux(["tmux", "set-window-option", "-t", r.stdout.strip(), "automatic-rename", "off"])
         print("opened Atlas Command Center in a new tmux window 'atlas-tui'")
     else:
-        if subprocess.run(["tmux", "has-session", "-t", "atlas-tui"], check=False, capture_output=True).returncode == 0:
-            print("reusing detached tmux session 'atlas-tui'")
+        if _run_tmux(["tmux", "has-session", "-t", "atlas-tui"]).returncode == 0:
+            # the detached session may run a process from an older, moved install:
+            # replace what runs in it with the current script and project
+            wins = (
+                _run_tmux(["tmux", "list-windows", "-t", "atlas-tui", "-F", "#{window_name}"]).stdout
+                or ""
+            ).split()
+            if "atlas-tui" in wins:
+                _run_tmux(["tmux", "respawn-window", "-k", "-t", "atlas-tui:atlas-tui", line])
+            else:
+                _run_tmux(["tmux", "new-window", "-d", "-t", "atlas-tui", "-n", "atlas-tui", line])
+            print(f"restarted the atlas-tui session with {_plugin_version()}")
         else:
-            subprocess.run(
-                ["tmux", "new-session", "-d", "-s", "atlas-tui", "-n", "atlas-tui", line], check=False
-            )
-        subprocess.run(["tmux", "set-window-option", "-t", "atlas-tui:atlas-tui", "automatic-rename", "off"], check=False)
+            _run_tmux(["tmux", "new-session", "-d", "-s", "atlas-tui", "-n", "atlas-tui", line])
+        _run_tmux(["tmux", "set-window-option", "-t", "atlas-tui:atlas-tui", "automatic-rename", "off"])
+        # our own session: tmux only forwards clicks to the TUI with mouse on
+        _run_tmux(["tmux", "set-option", "-t", "atlas-tui", "mouse", "on"])
         opener = _attach_open_argv(os.environ) if sys.platform == "darwin" else None
         if opener:
             argv, label = opener
@@ -1527,6 +1896,8 @@ def once(args) -> int:
         )
         if s and s.get("target") and not args.fixture:
             ui["seat_text"] = _model().capture(s["target"], 200, False)
+    if ui["tab"] == "wall" and not args.fixture:
+        refresh_wall(snap, ui)
     ui["cursor"] = SECTIONS.index(ui["section"])
     if not args.colony and not args.seat:
         focus_first_live(snap, ui)

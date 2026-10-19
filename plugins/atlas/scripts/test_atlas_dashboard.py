@@ -1443,3 +1443,116 @@ class TestJunkProjectRow(unittest.TestCase):
             self.assertTrue(
                 d._junk_project_row(os.path.join(home, ".atlas", "worktrees", "w"))
             )
+
+
+class TestSelfHeal(unittest.TestCase):
+    """Watchdog: exec into the newest sibling install when the own dir vanishes."""
+
+    @classmethod
+    def setUpClass(cls):
+        import atlas_dashboard as d
+
+        cls.d = d
+
+    @staticmethod
+    def _install(root: Path, rel: str, with_ui: bool = True) -> Path:
+        scripts = root / rel / "scripts"
+        scripts.mkdir(parents=True, exist_ok=True)
+        (scripts / "atlas_dashboard.py").write_text("# fake install\n")
+        if with_ui:
+            ui = scripts / "dashboard_ui"
+            ui.mkdir(exist_ok=True)
+            (ui / "index.html").write_text("<html></html>\n")
+        return scripts / "atlas_dashboard.py"
+
+    def test_semver_ordering(self):
+        d = self.d
+        self.assertIsNone(d._version_tuple("not-a-version"))
+        self.assertGreater(d._version_tuple("1.10.0"), d._version_tuple("1.9"))
+        self.assertGreater(d._version_tuple("1.10"), d._version_tuple("1.9"))
+
+    def test_omp_layout_picks_newest_semver(self):
+        d = self.d
+        with tempfile.TemporaryDirectory() as t:
+            cache = Path(t) / "cache" / "plugins"
+            s19 = self._install(cache, "tech-tools___atlas___1.9.0", with_ui=False)
+            s110 = self._install(cache, "tech-tools___atlas___1.10.0", with_ui=False)
+            self._install(cache, "tech-tools___other___9.9.9", with_ui=False)  # decoy family
+            (cache / "tech-tools___atlas___broken").mkdir(parents=True, exist_ok=True)
+            own_root = cache / "tech-tools___atlas___1.9.0"
+            self.assertEqual(d._sibling_installs([own_root])[-1][1], s110)
+            self.assertEqual(
+                d._self_heal_target([own_root], {os.path.realpath(s19)}), s110
+            )
+
+    def test_claude_layout_picks_newest_semver(self):
+        d = self.d
+        with tempfile.TemporaryDirectory() as t:
+            plugin = Path(t) / "cache" / "mkt" / "atlas"
+            s19 = self._install(plugin, "1.9.0", with_ui=False)
+            s110 = self._install(plugin, "1.10.0", with_ui=False)
+            self._install(plugin, "not-a-version", with_ui=False)  # ignored
+            own_root = plugin / "1.9.0"
+            self.assertEqual(d._sibling_installs([own_root])[-1][1], s110)
+            self.assertEqual(d._self_heal_target([own_root], {os.path.realpath(s19)}), s110)
+
+    def test_symlinked_file_still_heals_via_raw_root(self):
+        d = self.d
+        with tempfile.TemporaryDirectory() as t:
+            cache = Path(t) / "cache" / "plugins"
+            real = self._install(cache, "tech-tools___atlas___1.9.0", with_ui=True)
+            s110 = self._install(cache, "tech-tools___atlas___1.10.0", with_ui=False)
+            link_root = Path(t) / "raw" / "tech-tools___atlas___1.9.0"
+            link_root.parent.mkdir(parents=True)
+            link_root.symlink_to(cache / "tech-tools___atlas___1.9.0")
+            self_scripts = {os.path.realpath(real)}
+            # intact install: no heal
+            self.assertIsNone(d._self_heal_target([link_root], self_scripts))
+            # real tree's UI deleted under the running daemon: heal
+            (real.parent / "dashboard_ui" / "index.html").unlink()
+            got = d._self_heal_target([link_root], self_scripts)
+            self.assertEqual(
+                os.path.realpath(got), os.path.realpath(s110)
+            )  # same file; spelled via the resolved root when only it has siblings
+
+    def test_no_sibling_means_no_replacement(self):
+        d = self.d
+        with tempfile.TemporaryDirectory() as t:
+            own_root = Path(t) / "tech-tools___atlas___1.9.0"
+            s19 = self._install(own_root.parent, "tech-tools___atlas___1.9.0", with_ui=False)
+            self.assertIsNone(d._self_heal_target([own_root], {os.path.realpath(s19)}))
+
+    def test_exec_replaces_process_on_same_argv_tail(self):
+        d = self.d
+        calls = []
+        closed = []
+        with tempfile.TemporaryDirectory() as t:
+            import sys
+
+            target = self._install(Path(t), "tech-tools___atlas___2.0.0", with_ui=False)
+            fake = type("S", (), {"server_close": lambda self: closed.append(True)})()
+            with (
+                mock.patch.object(d, "_EXEC", lambda exe, argv: calls.append((exe, argv))),
+                mock.patch.object(d, "_HTTPD", fake),
+                mock.patch.object(
+                    sys, "argv", ["/old/scripts/atlas_dashboard.py", "serve", "--port", "7439"]
+                ),
+            ):
+                d._self_heal_exec(target)
+        self.assertEqual(
+            calls, [(sys.executable, [sys.executable, str(target), "serve", "--port", "7439"])]
+        )
+        self.assertEqual(closed, [True])
+
+    def test_ui_missing_hint_names_exact_ensure_command(self):
+        d = self.d
+        newer = Path("/newest/scripts/atlas_dashboard.py")
+        with mock.patch.object(d, "_self_heal_target", return_value=newer):
+            self.assertEqual(d._ui_missing_hint(), f"python3 {newer} ensure")
+        with (
+            mock.patch.object(d, "_self_heal_target", return_value=None),
+            mock.patch.object(d, "_cache_install_scripts", return_value=[]),
+        ):
+            hint = d._ui_missing_hint()
+        self.assertTrue(hint.startswith("python3 "))
+        self.assertTrue(hint.endswith("atlas_dashboard.py ensure"))

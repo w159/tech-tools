@@ -30,6 +30,7 @@ import json
 import os
 import signal
 import sqlite3
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -898,11 +899,9 @@ def _kill_member(root: str, m: dict) -> tuple[int, dict]:
         )
     if m["pane_id"]:
         out = atlas_seats.close_pane(m["pane_id"])
-        return (
-            (200, {"ok": True, "killed": name, "via": "pane"})
-            if out.get("ok")
-            else (404, out)
-        )
+        if out.get("ok") or _kill_tmux_pane(m["pane_id"]):
+            return 200, {"ok": True, "killed": name, "via": "pane"}
+        # not a herdr/rig pane and not a live colony tmux pane: try the recorded pid below
     entry = _entry(root, name)
     if entry and _pid_alive(entry):
         pid = entry["pid"]
@@ -912,6 +911,21 @@ def _kill_member(root: str, m: dict) -> tuple[int, dict]:
             return _err(409, "kill_failed", str(e), "the process is gone or not yours")
         return 200, {"ok": True, "killed": name, "via": "pid"}
     return _err(409, "member_dead", f"{name!r} has no live process", "nothing to kill")
+
+
+def _kill_tmux_pane(pane_id: str) -> bool:
+    """Kill a plain tmux pane (the default mux transport) when it lives in an `atlas-*` colony session."""
+    try:
+        r = subprocess.run(
+            ["tmux", "display-message", "-p", "-t", pane_id, "#{session_name}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        session = r.stdout.strip()
+        if r.returncode != 0 or not session.startswith("atlas-") or session.startswith("atlas-view-"):
+            return False
+        return subprocess.run(["tmux", "kill-pane", "-t", pane_id], capture_output=True, timeout=5).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def kill_member(root: str, name: str) -> tuple[int, dict]:

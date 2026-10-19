@@ -390,6 +390,36 @@ def _seat_transcript(root: str, name: str, entry: dict, chan: dict | None) -> st
     return _claude_transcript(entry)
 
 
+def _lead_transcript(root: str, name: str, chan: dict | None) -> str:
+    """The lead's own session transcript: the omp main session file (sibling FILE of its
+    subagent dirs) or the Claude project session file; '' when unknown."""
+    m = re.search(r"lead-([0-9a-fA-F]{6})", name)
+    if not m:  # a named lead (ATLAS_LEAD_NAME/ATLAS_WORKER_NAME) has no session id to find
+        return ""
+    sid6 = m.group(1).lower()
+    key = ("lead", sid6, str((chan or {}).get("harness") or ""))
+    hit = _TRANSCRIPTS.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    path = ""
+    try:
+        slug = _cwd_slug(root)
+        if key[2] == "claude":
+            base = _claude_projects_root()
+            cands = list(base.glob(f"*/{sid6}*.jsonl")) if base.is_dir() else []
+        elif key[2] == "omp":
+            base = _omp_sessions_root()
+            cands = list(base.glob(f"*/*_{sid6}*.jsonl")) if base.is_dir() else []
+        else:
+            cands = []
+        if cands:
+            path = str(max(cands, key=lambda f: (f.parent.name == slug, f.stat().st_mtime)))
+    except OSError:
+        path = ""
+    _TRANSCRIPTS[key] = (time.time() + _TRANSCRIPT_TTL_S, path)
+    return path
+
+
 def _iso_ts(v) -> float:
     if isinstance(v, (int, float)):
         return _f(v)
@@ -801,6 +831,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     team_of: dict = {}
     proj_of: dict = {}  # seat name / team_id -> owning project root
     chan_recs: dict = {}  # channel name -> registry record (carries the lead harness)
+    chan_root: dict = {}  # channel name -> project root whose registry holds it
     teams, items, board = [], [], []
     for r in roots:
         if all_projects and r != root and not _active(r, panes_all):
@@ -809,6 +840,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         teams += rteams
         for c in _registry(r).values():
             chan_recs.setdefault(str(c.get("name") or ""), c)
+            chan_root.setdefault(str(c.get("name") or ""), r)
             for m in c.get("members") or []:
                 if m.get("name") and m.get("role") != "lead" and m["name"] not in members:
                     members[m["name"]] = {
@@ -974,6 +1006,14 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "target": target,
                 "pid": pid,
                 "queue": len(mine),
+                "open_items": [
+                    {
+                        "id": str(i.get("id")),
+                        "title": " ".join(str(i.get("content") or "").split()),
+                        "status": str(i.get("status") or ""),
+                    }
+                    for i in mine
+                ],
                 "work": (
                     f"{mine[0].get('id')} "
                     + " ".join(str(mine[0].get("content") or "").split())
@@ -996,6 +1036,53 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "lead": atlas_todo.is_lead_name(name),
             }
         )
+    # The lead itself: a channel with a recorded, live lead_pid contributes the user's
+    # own session as a seat (no pane, not stoppable) and keeps its colony live even
+    # when every subagent has finished. A dead lead_pid adds nothing: the colony then
+    # lives or falls by its seats under the ordinary finished-grace rules.
+    for cname, c in chan_recs.items():
+        lname = str(c.get("lead") or "")
+        lp = _i(c.get("lead_pid"))
+        if not lname or lp <= 0 or not _pid_alive(lp) or lname in seats:
+            continue
+        seats[lname] = {"pane": None, "role": "lead"}  # _ended_fallback looks seats up by name
+        cid = str(cname or "colony").rsplit("/", 1)[-1]
+        if cid not in colonies:
+            colonies[cid] = {
+                "id": cid,
+                "label": cid,
+                "session": "",
+                "project": chan_root.get(cname) or root,
+                "transport": "subagent",
+                "task": "",
+                "channel": cname,
+                "created": None,
+                "pods": [],
+            }
+        out_seats.append(
+            {
+                "name": lname,
+                "colony": cid,
+                "project": colonies[cid].get("project") or root,
+                "pod": "lead",
+                "role": "lead",
+                "runtime": str(c.get("harness") or "unknown"),
+                "model": "",
+                "state": "working",
+                "exit_code": None,
+                "target": "",
+                "pid": lp,
+                "queue": 0,
+                "open_items": [],
+                "work": "",
+                "now": "",
+                "log_path": "",
+                "transcript": _lead_transcript(chan_root.get(cname) or root, lname, c),
+                "last_active": None,
+                "lead": True,
+            }
+        )
+        leadpid_live_names.add(lname)
     _name_colonies(colonies, teams, chan_recs)
     _address_seats(out_seats, colonies, teams, _static("specs", _specs))
     # Only colonies with work in progress: a live pane that is working/idle/blocked, a team
