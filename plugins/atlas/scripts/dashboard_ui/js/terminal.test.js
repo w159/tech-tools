@@ -62,7 +62,7 @@ const mount = async (snap, params) => { const root = page.render(mk(snap, params
 test("Command Center is the default space and opens a live ws kind=tui", async () => {
   terms.length = 0; sockets.length = 0;
   const root = await mount(SNAP);
-  expect(text(root)).toContain("mac · Atlas Colony");
+  expect(text(root)).toContain("mac · Terminal");
   expect(text(root)).toContain("terminal workspace");
   expect(text(root)).toContain("Atlas Command Center");
   expect(text(root)).toContain("Atlas Command Center · live");

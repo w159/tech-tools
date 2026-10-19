@@ -117,7 +117,7 @@ const chip = (on, text, title, cls) => (on ? h("span", { class: "chip-lite" + (c
 
 const parked = (m) => m.state === "parked" || m.parked === true;
 
-// Deep link into the Atlas Colony workspace; without a colony id the page finds the seat in its snapshot.
+// Deep link into the Terminal workspace; without a colony id the page finds the seat in its snapshot.
 export const terminalParams = (m) => (m.colony ? { space: m.colony, seat: m.name } : { seat: m.name });
 
 function rowTop(m, onKill, onTerm) {

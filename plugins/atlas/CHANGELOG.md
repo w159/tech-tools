@@ -4,8 +4,9 @@
 
 ### Changed
 
-- `atlas_colony_model.snapshot` lists only colonies with work in progress: a seat that is working, idle or blocked on a live pane, or a team record under 3 minutes old whose panes are not up yet (`TEAM_GRACE_S`). Colonies whose seats are all finished or dead, or that have no live pane, are hidden; the 24h `TEAM_FRESH_S` path is gone.
+- The terminal workspace page (`#/terminal`) is now named **Terminal** in the nav, mobile tabs, settings, page header (`<host> · Terminal`) and document title, with its own `terminal` icon, so it is distinct from the **Colony** roster page; its space list heading reads `SPACES`. No page is called "Atlas Colony" any more.
 - Dashboard rail section "This machine" lists the live Atlas colonies from `term/snapshot` (id, project, state dot, seat count, link to `#/terminal?space=<id>`; `No colonies running` when none) instead of herdr workspaces, which stay on the herdr/integrations page only.
+- `atlas_colony_model.snapshot` lists only colonies with work in progress: a seat that is working, idle or blocked on a live pane, or a team record under 3 minutes old whose panes are not up yet (`TEAM_GRACE_S`). Colonies whose seats are all finished or dead, or that have no live pane, are hidden; the 24h `TEAM_FRESH_S` path is gone.
 - Atlas Command Center TUI opens on the first live colony with its `[ TABLE ]` selected, laid out like the OpenRig native TUI (CONFIG/HEALTH/filter lines, `POD SEAT RT MODEL CTX STATE Q WORK NOW ACTIONS` grouped by pod with `┈` rules, summary line, `── RECENT ──` board-note block with `#seq`); GRAPH draws `──▸` edges between pods; explorer tree arrow takes column 0 like the capture; the seat NOW column shows the latest tool row from the live pane (`ctx_read file:range`) before the board note. With no live colony it keeps the topology overview.
 
 ### Fixed

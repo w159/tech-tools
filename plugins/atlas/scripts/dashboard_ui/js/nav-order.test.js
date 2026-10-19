@@ -45,7 +45,7 @@ test("F5: agents?lens=colony routes to the Colony page, console to terminal", ()
   expect(LENS_ROUTES.channel).toBe("channels");
 });
 
-test("terminal keeps its id but shows as Atlas Colony", () => {
-  expect(MOBILE_TABS.find((t) => t[0] === "terminal")[1]).toBe("Atlas Colony");
+test("terminal keeps its id but shows as Terminal", () => {
+  expect(MOBILE_TABS.find((t) => t[0] === "terminal")[1]).toBe("Terminal");
   expect(normalizeNav(["herdr"])[0]).toBe("terminal");
 });

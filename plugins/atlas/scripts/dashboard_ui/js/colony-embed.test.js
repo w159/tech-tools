@@ -44,7 +44,7 @@ test("every id in the nav model has a Settings label (no raw ids in the nav-orde
   for (const id of DEFAULT_NAV) expect(labels).toMatch(new RegExp("\\b" + id + ": '[A-Z]"));
   expect(src).not.toMatch(/Herdr[ ]console/);
   expect(labels).toContain("colony: 'Colony'");
-  expect(labels).toContain("terminal: 'Atlas Colony'");
+  expect(labels).toContain("terminal: 'Terminal'");
 });
 
 test("colony roster: Send is disabled with a reason for finished/dead, headless explains delivery", async () => {
@@ -57,10 +57,10 @@ test("colony roster: Send is disabled with a reason for finished/dead, headless 
   expect(canSteer({ state: "stuck" })).toBe(true);
 });
 
-test("Terminal route is the Atlas Colony workspace; no herdr wording in its page or nav label", async () => {
+test("Terminal route is the Terminal workspace; no herdr wording in its page or nav label", async () => {
   const src = await Bun.file(new URL("./pages/terminal.js", import.meta.url)).text();
   expect(src).not.toMatch(/herdr/i);
-  expect(MOBILE_TABS.find((t) => t[0] === "terminal")[1]).toBe("Atlas Colony");
+  expect(MOBILE_TABS.find((t) => t[0] === "terminal")[1]).toBe("Terminal");
 });
 
 test("Open terminal on a member row deep-links to terminal?space=&seat=", async () => {

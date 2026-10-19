@@ -1,4 +1,4 @@
-// Rail section "This machine": the live Atlas colonies from GET term/snapshot (the Atlas Colony page's data), not herdr workspaces.
+// Rail section "This machine": the live Atlas colonies from GET term/snapshot (the Terminal page's data), not herdr workspaces.
 import { h, replace } from "./dom.js";
 import { api } from "./api.js";
 

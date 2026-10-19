@@ -1,4 +1,4 @@
-// Atlas Colony (#/terminal[?space=<colony>&seat=<name>]): terminal workspace over the colony's real tmux panes.
+// Terminal (#/terminal[?space=<colony>&seat=<name>]): terminal workspace over the colony's real tmux panes.
 // Spaces: "Atlas Command Center" (live atlas_tui.py over ws kind=tui) and one per colony (grid of live pane captures;
 // enlarge = interactive ws kind=pane). Data: GET term/snapshot, GET term/capture, ws /api/v2/term/ws (see colony contract §3).
 
@@ -137,7 +137,7 @@ function emptyColonies() {
 
 export default {
   id: "terminal",
-  title: "Atlas Colony",
+  title: "Terminal",
   icon: "herd",
   group: "Operate",
   async load() {
@@ -147,7 +147,7 @@ export default {
   render(ctx) {
     const st = { snap: null, space: ctx.params.space || (ctx.params.seat ? "" : CC), seat: ctx.params.seat || "", err: "", cards: new Map(), big: null, cc: null, ptyStatus: "" };
     const header = h("div", { class: "tw-head" });
-    const side = h("nav", { class: "tw-side", "aria-label": "Atlas Colony spaces" });
+    const side = h("nav", { class: "tw-side", "aria-label": "Terminal spaces" });
     const main = h("div", { class: "tw-main" });
     const foot = h("div", { class: "tw-foot" });
     const root = h("div", { class: "page terminal-page tw" }, header, h("div", { class: "tw-body" }, side, main), foot);
@@ -184,13 +184,13 @@ export default {
     }
 
     function drawHead() {
-      replace(header, h("h1", {}, (st.snap && st.snap.host ? st.snap.host + " · " : "") + "Atlas Colony"), h("span", { class: "tw-sub" }, "terminal workspace"));
+      replace(header, h("h1", {}, (st.snap && st.snap.host ? st.snap.host + " · " : "") + "Terminal"), h("span", { class: "tw-sub" }, "terminal workspace"));
     }
 
     function drawSide() {
       const spaces = [{ id: CC, label: "Atlas Command Center" }, ...colonies().map((c) => ({ id: c.id, label: c.id, title: c.label }))];
       const items = spaces.map((s) => h("button", { class: "tw-space", type: "button", "aria-current": s.id === st.space ? "page" : null, title: s.title || s.label, onClick: () => go(s.id) }, s.label));
-      const parts = [h("div", { class: "tw-side-label" }, "Atlas Colony"), ...items];
+      const parts = [h("div", { class: "tw-side-label" }, "SPACES"), ...items];
       const c = colony();
       if (c) {
         const seats = seatsOf(c);
