@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from "
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { defaultRun, leadName, reviseForChannel, sanitizeName } from "./channels";
+import { defaultRun, leadName, openLeadChannel, reviseForChannel, sanitizeName } from "./channels";
 import { registerWorkerReport } from "./worker-report";
 
 process.env.ATLAS_HOME = mkdtempSync(join(tmpdir(), "channels-test-home-"));
@@ -169,4 +169,32 @@ test("a named-agent dispatch todo is origin=dispatch and its id is injected as B
 	const id = (todo("list", "--root", cwd).items as { id: string; owner?: string; origin?: string }[]).find(i => i.owner === "Alpha");
 	expect(id?.origin).toBe("dispatch");
 	expect((revised?.tasks as Record<string, string>[])[0].task).toContain(`BOARD ITEM: ${id?.id}`);
+});
+
+test("openLeadChannel: SessionStart opens the lead's channel with zero members, reusing the dispatch lead name", () => {
+	const cwd = repo();
+	const opened: Array<{ channel: string; members: string[]; cwd: string }> = [];
+	const chan = openLeadChannel({ cwd, sessionId: "sess123456", env: {}, onOpen: i => opened.push({ channel: i.channel, members: i.members, cwd: i.cwd }) });
+	const want = `${basename(cwd)}@feature/x/lead-sess12`;
+	expect(chan).toBe(want);
+	expect(opened).toEqual([{ channel: want, members: [], cwd }]);
+	// lead seat only: zero members registered, so the colony shows before any dispatch
+	const sub = todo("channels", "--root", cwd).channels[0].children[0] as { name: string; members: { name: string }[] };
+	expect(sub.name).toBe(want);
+	expect(sub.members.map(m => m.name)).toEqual(["lead-sess12"]);
+	// idempotent: a second session start reuses the same channel (same lead name)
+	expect(openLeadChannel({ cwd, sessionId: "sess123456", env: {} })).toBe(want);
+	expect(todo("channels", "--root", cwd).channels[0].children[0].members).toHaveLength(1);
+});
+
+test("openLeadChannel: ATLAS_CHANNELS=off skips; a missing script records the stale-install fault", () => {
+	const cwd = repo();
+	expect(openLeadChannel({ cwd, sessionId: "sess123456", env: { ATLAS_CHANNELS: "off" } })).toBeUndefined();
+	const faults = join(process.env.ATLAS_HOME as string, "hook-faults.jsonl");
+	const before = existsSync(faults) ? readFileSync(faults, "utf8").length : 0;
+	expect(openLeadChannel({ cwd, sessionId: "sess123456", env: {}, script: join(cwd, "nope", "atlas_todo.py") })).toBeUndefined();
+	const added = readFileSync(faults, "utf8").slice(before).trim().split("\n");
+	expect(added.length).toBe(1); // faultOnce: one row even across repeated session starts
+	expect(added[0]).toContain("atlas omp install is stale");
+	expect(added[0]).toContain("omp plugin upgrade atlas");
 });

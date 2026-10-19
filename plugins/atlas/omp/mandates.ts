@@ -22,6 +22,7 @@ import { tmpdir } from "node:os";
 import * as nodePath from "node:path";
 
 import { gatesArmed } from "./scope";
+import { pluginRoot } from "./plugin-path";
 
 export const MANDATES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "mandates.json");
 
@@ -35,7 +36,7 @@ export interface Mandates {
 }
 
 /** Undefined when the contract is unreadable or lacks a field. */
-export function loadMandates(path: string = MANDATES_PATH): Mandates | undefined {
+export function loadMandates(path: string = nodePath.join(pluginRoot(), "contracts", "mandates.json")): Mandates | undefined {
 	try {
 		const parsed: unknown = JSON.parse(fs.readFileSync(path, "utf8"));
 		if (!parsed || typeof parsed !== "object") return undefined;

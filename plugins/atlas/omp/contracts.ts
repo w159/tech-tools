@@ -6,6 +6,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as nodePath from "node:path";
+import { pluginRoot } from "./plugin-path";
 
 /** Resolve an edit/write target against cwd, expanding a leading `~`, `~/` and `$HOME`/`${HOME}` first (the shell never did). */
 export function resolveTarget(cwd: string, p: string): string {
@@ -77,7 +78,7 @@ function parseKind(raw: unknown): KindSpec | undefined {
 
 let cached: { path: string; value: NativeToolContract | undefined } | undefined;
 
-export function loadNativeTools(path: string = NATIVE_TOOLS_PATH): NativeToolContract | undefined {
+export function loadNativeTools(path: string = nodePath.join(pluginRoot(), "contracts", "native-tools.json")): NativeToolContract | undefined {
 	if (cached?.path === path) return cached.value;
 	let value: NativeToolContract | undefined;
 	try {

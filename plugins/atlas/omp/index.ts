@@ -65,15 +65,12 @@ import { atlasStoreEnv, registerHookBridge } from "./hook-bridge";
 import { type RunStateSink, createRunStateSink } from "./run-state";
 import { createTranscriptCache, registerStopBridge, sessionFileOf } from "./stop-bridge";
 import { registerMandates } from "./mandates";
-import { pluginScript } from "./plugin-path";
+import { pluginRoot, pluginScript } from "./plugin-path";
 import { gatesArmed } from "./scope";
 import { defaultLeanCtxBin, registerShellRoute } from "./shell-route";
 import { registerStyle } from "./style";
 import { registerWorkerBudget } from "./workers";
 import { registerWorkerReport } from "./worker-report";
-
-/** Absolute atlas plugin root: the directory containing scripts/atlas_todo.py. */
-const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 
 /** The durable todo board CLI, shipped alongside this module; resolved at call time so an
  * `omp plugin upgrade atlas` mid-session is picked up (plugin-path). */
@@ -89,8 +86,10 @@ export interface BoardItem {
 	phase?: string;
 }
 
-/** contracts/operating-contract.json: the single source of the phase ids a board item may carry. */
-const OPERATING_CONTRACT_PATH = nodePath.join(PLUGIN_ROOT, "contracts", "operating-contract.json");
+/** contracts/operating-contract.json: the single source of the phase ids a board item may carry. Resolved at call time: a session kept loaded across `omp plugin upgrade atlas` must read the live install. */
+function operatingContractPath(): string {
+	return nodePath.join(pluginRoot(), "contracts", "operating-contract.json");
+}
 
 let cachedTodoPhases: string[] | undefined;
 
@@ -99,7 +98,7 @@ function todoPhases(): string[] {
 	if (cachedTodoPhases) return cachedTodoPhases;
 	let phases: string[] = [];
 	try {
-		const raw: unknown = JSON.parse(readFileSync(OPERATING_CONTRACT_PATH, "utf8"));
+		const raw: unknown = JSON.parse(readFileSync(operatingContractPath(), "utf8"));
 		const list = (raw as { todoPhases?: unknown } | null)?.todoPhases;
 		if (Array.isArray(list) && list.every(p => typeof p === "string")) phases = list as string[];
 	} catch {
@@ -682,7 +681,7 @@ const CLAUDE_PLUGIN_ROOT_RE = /\$\{?CLAUDE_PLUGIN_ROOT\}?/g;
 function rewritePluginRoot(input: Record<string, unknown> | undefined): string | undefined {
 	const command = input?.command;
 	if (typeof command !== "string" || !command.includes("CLAUDE_PLUGIN_ROOT")) return undefined;
-	return command.replace(CLAUDE_PLUGIN_ROOT_RE, PLUGIN_ROOT);
+	return command.replace(CLAUDE_PLUGIN_ROOT_RE, pluginRoot());
 }
 
 /**
@@ -742,6 +741,9 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 		transcriptPath: ctx => transcripts.forToolHook(sessionFileOf(ctx), sessionIdOf(ctx) ?? "", ctx.agent?.kind === "sub" ? "sub" : "main"),
 		onToolAllowed: info => runState.onToolAllowed(info),
 		onToolResult: info => runState.onToolResult(info),
+		// SessionStart lead-channel open mounts the same live colony view dispatches use.
+		// Lazy closure: channelView is created just below; the callback only fires at turn start.
+		onChannelOpen: (ui, info) => channelView.open(ui, info),
 	});
 	// Registered before the advisor and delegation gates: omp takes the first `block` across handlers.
 	registerStopBridge(pi, { cache: transcripts });
@@ -754,7 +756,7 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	// Team workers and task subs write their current tool; the lead's lanes read it (channel-view.ts laneTool).
 	registerLaneToolRecorder(pi);
 	registerAdvisorGate(pi, defaultAdvisorDeps());
-	registerTeamTool(pi, PLUGIN_ROOT, undefined, process.env, channelView.open);
+	registerTeamTool(pi, pluginRoot(), undefined, process.env, channelView.open);
 	// /atlas-tui: hand the terminal to the curses TUI while omp's renderer is paused.
 	registerAtlasTuiCommand(pi);
 	register(pi, {

@@ -28,13 +28,12 @@
  * tool call.
  */
 import { statSync } from "node:fs";
-import * as nodePath from "node:path";
 import { resolveTarget } from "./contracts";
 import { type ToolEventInfo, claudeNamesForCall, taskItems } from "./hook-bridge";
+import { pluginScript } from "./plugin-path";
 import { runCapture } from "./proc";
 
-const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
-export const RUNSTATE_SCRIPT = nodePath.join(PLUGIN_ROOT, "scripts", "omp_runstate.py");
+export const RUNSTATE_SCRIPT = pluginScript("omp_runstate.py");
 const CLI_TIMEOUT_MS = 10_000;
 
 export type RunStateCommand = "begin" | "snapshot" | "rebaseline" | "arm" | "event";
@@ -51,7 +50,7 @@ export interface RunStateArgs {
 }
 
 /** argv for one omp_runstate.py call (no shell; values travel as separate argv elements). */
-export function runStateArgv(command: RunStateCommand, args: RunStateArgs, script: string = RUNSTATE_SCRIPT): string[] {
+export function runStateArgv(command: RunStateCommand, args: RunStateArgs, script: string = pluginScript("omp_runstate.py")): string[] {
 	const argv = ["python3", script, command, "--session-id", args.sessionId, "--cwd", args.cwd];
 	if (command === "arm") {
 		if (args.agentType) argv.push("--agent-type", args.agentType);

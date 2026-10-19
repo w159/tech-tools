@@ -1241,3 +1241,158 @@ class PruneRunStateTest(unittest.TestCase):
 
     def test_never_raises_without_dirs(self):
         session_boot.prune_run_state("/nonexistent-atlas-root")
+
+
+class EnsureDashboardStaleInstallTest(unittest.TestCase):
+    """A partial install (empty scripts/ dir, as seen in omp plugin caches) used to skip
+    dashboard ensure SILENTLY - the stale :7421 daemon was then never replaced (no
+    `replacing` line, no fault row). The skip must now leave a fault row."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self._saved = dict(os.environ)
+        testenv.scrub()
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        os.environ.clear()
+        os.environ.update(self._saved)
+
+    def test_missing_dashboard_script_records_fault_and_fails_open(self):
+        env = dict(
+            self._saved,
+            ATLAS_HOME=self.tmp,
+            ATLAS_DASHBOARD="on",
+            ATLAS_DASHBOARD_PORT="7495",  # non-shared: the temp-root guard does not apply
+        )
+        real_isfile = os.path.isfile
+
+        def no_dashboard(path):
+            return False if str(path).endswith("atlas_dashboard.py") else real_isfile(path)
+
+        guard = mock.MagicMock()
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch("os.path.isfile", side_effect=no_dashboard),
+            mock.patch.dict(sys.modules, {"atlas_hook_guard": guard}),
+        ):
+            self.assertIsNone(session_boot.ensure_dashboard())
+        guard.fault.assert_called_once()
+        self.assertIn("stale", guard.fault.call_args.args[1])
+        self.assertIn("atlas_dashboard.py", guard.fault.call_args.args[1])
+
+    def test_missing_script_with_kill_switch_stays_silent(self):
+        env = dict(self._saved, ATLAS_HOME=self.tmp, ATLAS_DASHBOARD="off")
+        guard = mock.MagicMock()
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.dict(sys.modules, {"atlas_hook_guard": guard}),
+        ):
+            self.assertIsNone(session_boot.ensure_dashboard())
+        guard.fault.assert_not_called()
+
+
+class LeadChannelOpenTest(unittest.TestCase):
+    """SessionStart opens the lead's channel with ZERO members via the same channel-open
+    CLI the dispatch path runs, with the same lead name (atlas_todo.lead_name), so the
+    first dispatch joins this exact channel and the live session shows as a colony
+    (harness + lead_pid recorded by atlas_todo) before any dispatch."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self._saved = dict(os.environ)
+        testenv.scrub()
+        os.environ.pop("ATLAS_WORKER_NAME", None)
+        os.environ.pop("ATLAS_CHANNELS", None)
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        os.environ.clear()
+        os.environ.update(self._saved)
+
+    @staticmethod
+    def _project():
+        proj = tempfile.mkdtemp()
+        os.mkdir(os.path.join(proj, ".git"))
+        return proj
+
+    @staticmethod
+    def _rec(calls):
+        def rec(argv, **kw):
+            calls.append(argv)
+            return mock.MagicMock(returncode=0, stdout="{}", stderr="")
+
+        return rec
+
+    def test_opens_lead_channel_with_zero_members_in_a_project(self):
+        proj = self._project()
+        calls = []
+        session_boot.open_lead_channel_once(
+            {"session_id": "sess123456", "cwd": proj}, run=self._rec(calls)
+        )
+        self.assertEqual(len(calls), 1)
+        argv = calls[0]
+        self.assertIn("channel-open", argv)
+        self.assertEqual(argv[argv.index("--lead") + 1], "lead-sess12")
+        self.assertEqual(argv[argv.index("--members") + 1], "")  # zero members
+        self.assertEqual(
+            os.path.realpath(argv[argv.index("--root") + 1]),
+            os.path.realpath(proj),
+        )
+
+    def test_second_session_start_reuses_the_same_channel(self):
+        proj = self._project()
+        calls = []
+        for _ in range(2):
+            session_boot.open_lead_channel_once(
+                {"session_id": "sess123456", "cwd": proj}, run=self._rec(calls)
+            )
+        self.assertEqual(calls[0], calls[1])  # idempotent channel-open, same name
+
+    def test_worker_env_does_not_open_a_channel(self):
+        proj = self._project()
+        os.environ["ATLAS_WORKER_NAME"] = "w1"
+        rec = mock.MagicMock()
+        session_boot.open_lead_channel_once(
+            {"session_id": "sess123456", "cwd": proj}, run=rec
+        )
+        rec.assert_not_called()
+
+    def test_atlas_channels_off_skips(self):
+        proj = self._project()
+        os.environ["ATLAS_CHANNELS"] = "off"
+        rec = mock.MagicMock()
+        session_boot.open_lead_channel_once(
+            {"session_id": "sess123456", "cwd": proj}, run=rec
+        )
+        rec.assert_not_called()
+
+    def test_no_session_id_skips(self):
+        rec = mock.MagicMock()
+        session_boot.open_lead_channel_once({"cwd": self.tmp}, run=rec)
+        rec.assert_not_called()
+
+    def test_non_project_dir_never_gets_board_state(self):
+        rec = mock.MagicMock()  # plain tempdir: no .git, no project markers
+        session_boot.open_lead_channel_once(
+            {"session_id": "sess123456", "cwd": self.tmp}, run=rec
+        )
+        rec.assert_not_called()
+
+    def test_main_invokes_the_channel_open_fail_open(self):
+        proj = self._project()
+        with mock.patch.object(
+            session_boot, "open_lead_channel_once", return_value=None
+        ) as spy, mock.patch.dict(
+            os.environ,
+            dict(self._saved, ATLAS_DASHBOARD="off", ATLAS_COLONY="off"),
+            clear=True,
+        ):
+            os.environ.pop("ATLAS_WORKER_NAME", None)
+            code, _out = run_main_inprocess(
+                {"session_id": "sess123456", "cwd": proj}, dict(os.environ)
+            )
+        self.assertEqual(code, 0)
+        spy.assert_called_once()

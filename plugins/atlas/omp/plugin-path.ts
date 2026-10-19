@@ -57,3 +57,40 @@ export function pluginScriptFallback(here: string): string {
 export function pluginScript(name: string): string {
 	return pluginScriptFallback(nodePath.resolve(import.meta.dir, "..", "scripts", name));
 }
+
+/**
+ * Same stale-install walk, for the plugin ROOT itself (hooks.json, contracts, and the
+ * `${CLAUDE_PLUGIN_ROOT}` handed to hooks.json commands): the live directory wins, else the
+ * newest sibling versioned install, else the input so callers report it missing. Never throws.
+ */
+export function pluginRootFallback(here: string): string {
+	if (fs.existsSync(here)) return here;
+	const m = nodePath.basename(here).match(VERSIONED);
+	if (!m) return here;
+	let best: string | undefined;
+	let bestVersion = "";
+	try {
+		for (const entry of fs.readdirSync(nodePath.dirname(here))) {
+			if (!entry.startsWith(m[1])) continue;
+			const candidate = nodePath.join(nodePath.dirname(here), entry);
+			try {
+				if (!fs.statSync(candidate).isDirectory()) continue;
+			} catch {
+				continue;
+			}
+			const version = entry.slice(m[1].length);
+			if (!best || newerVersion(version, bestVersion)) {
+				best = candidate;
+				bestVersion = version;
+			}
+		}
+	} catch {
+		return here;
+	}
+	return best ?? here;
+}
+
+/** This module's plugin root, with the stale-install fallback above. Resolved per call so a mid-session `omp plugin upgrade atlas` is picked up. */
+export function pluginRoot(): string {
+	return pluginRootFallback(nodePath.resolve(import.meta.dir, ".."));
+}

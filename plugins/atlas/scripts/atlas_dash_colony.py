@@ -756,6 +756,7 @@ def _find(ctx, name: str, project) -> tuple[str, dict] | None:
     root = _repo_root(ctx.project_root(project))
     if not root:
         return None
+    root = os.path.realpath(root)  # /var/folders vs /private/var aliases are one board
     # default scope, not all=1: the all-panes view lists other projects' panes, which a
     # project-scoped Send/Kill must never reach
     for m in build_colony(root)["members"]:
@@ -900,6 +901,7 @@ def _kill_member(root: str, m: dict) -> tuple[int, dict]:
     if m["pane_id"]:
         out = atlas_seats.close_pane(m["pane_id"])
         if out.get("ok") or _kill_tmux_pane(m["pane_id"]):
+            atlas_todo.mark_finished(root, name, 137)  # the mux kill's board mark: the next snapshot shows the seat dead
             return 200, {"ok": True, "killed": name, "via": "pane"}
         # not a herdr/rig pane and not a live colony tmux pane: try the recorded pid below
     entry = _entry(root, name)
@@ -909,6 +911,7 @@ def _kill_member(root: str, m: dict) -> tuple[int, dict]:
             os.kill(int(pid), signal.SIGTERM)
         except OSError as e:
             return _err(409, "kill_failed", str(e), "the process is gone or not yours")
+        atlas_todo.mark_finished(root, name, 137)
         return 200, {"ok": True, "killed": name, "via": "pid"}
     return _err(409, "member_dead", f"{name!r} has no live process", "nothing to kill")
 
@@ -930,6 +933,7 @@ def _kill_tmux_pane(pane_id: str) -> bool:
 
 def kill_member(root: str, name: str) -> tuple[int, dict]:
     """Kill one roster member by name: the same ladder as POST /colony/<name>/kill, for the TUI."""
+    root = os.path.realpath(root)  # /var/folders vs /private/var aliases are one board
     m = next((m for m in build_colony(root)["members"] if m["name"] == name), None)
     if not m:
         return _err(

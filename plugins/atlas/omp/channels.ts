@@ -177,3 +177,28 @@ function openAndInject(
 	opts.onOpen?.({ channel: parsed.channel, members: names, cwd: opts.cwd, sessionId: opts.sessionId });
 	return changed ? revised : undefined;
 }
+
+/**
+ * Opens (idempotently) the lead's channel with ZERO members at SessionStart — omp (hook-bridge
+ * before_agent_start) and Claude (session_boot) both call this — so the live session already
+ * shows as a colony with its lead seat (harness + lead_pid recorded by atlas_todo
+ * open_lead_channel) before any dispatch. Same lead name as the dispatch path (leadName /
+ * atlas_todo.lead_name), so the first dispatch joins this exact channel instead of making one.
+ * Returns the channel name, or undefined (with a fault row) when the board is unavailable.
+ */
+export function openLeadChannel(
+	opts: { cwd: string; sessionId?: string; env?: Record<string, string | undefined>; run?: ChannelRunner; script?: string; onOpen?: OnChannelOpen },
+): string | undefined {
+	const env = opts.env ?? process.env;
+	if (env.ATLAS_CHANNELS === "off") return undefined;
+	const script = opts.script ?? todoScript();
+	if (!fs.existsSync(script)) {
+		faultOnce(`atlas omp install is stale: ${script} missing; run: omp plugin upgrade atlas, then restart omp sessions started before the upgrade`, opts.cwd);
+		return undefined;
+	}
+	const out = (opts.run ?? defaultRun)(["python3", script, "channel-open", "--root", opts.cwd, "--lead", leadName(opts.sessionId, env), "--members", ""], opts.cwd);
+	const parsed = parseOpen(out, opts.cwd);
+	if (!parsed) return undefined;
+	opts.onOpen?.({ channel: parsed.channel, members: [], cwd: opts.cwd, sessionId: opts.sessionId });
+	return parsed.channel;
+}

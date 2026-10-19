@@ -458,3 +458,53 @@ def tearDownModule():
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KillMember(unittest.TestCase):
+    """The kill ladder as the TUI uses it: board mark on success, realpath at the boundary."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = os.path.realpath(tmp.name)
+        os.makedirs(os.path.join(self.root, ".atlas", ".run"))
+        env = mock.patch.dict(os.environ, {"ATLAS_HOME": self.root, "ATLAS_CHANNEL": ""})
+        env.start()
+        self.addCleanup(env.stop)
+        self.chan = atlas_todo.open_lead_channel(self.root, LEAD, ["w1"])["name"]
+        atlas_todo.add(self.root, "do it", owner="w1", channel=self.chan)
+        for name, val in (
+            ("_herdr", lambda: ({}, {})),
+            ("_tmux_worker_panes", lambda: {}),
+        ):
+            p = mock.patch.object(colony, name, val)
+            p.start()
+            self.addCleanup(p.stop)
+        self.m = {"name": "w1", "kind": "worker", "state": "working", "pane_id": "%9"}
+
+    def test_kill_via_tmux_pane_returns_200_and_marks_the_board(self):
+        with mock.patch.object(colony.atlas_seats, "close_pane", return_value={"ok": False}), \
+                mock.patch.object(colony, "_kill_tmux_pane", return_value=True):
+            status, body = colony._kill_member(self.root, self.m)
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {"ok": True, "killed": "w1", "via": "pane"})
+        chan = atlas_todo.get_channel(self.root, self.chan)
+        mm = next(m for m in chan["members"] if m["name"] == "w1")
+        self.assertEqual(mm.get("exit_code"), 137)
+
+    def test_pane_kill_fails_with_no_live_pid_is_member_dead(self):
+        with mock.patch.object(colony.atlas_seats, "close_pane", return_value={"ok": False}), \
+                mock.patch.object(colony, "_kill_tmux_pane", return_value=False):
+            status, body = colony._kill_member(self.root, self.m)
+        self.assertEqual(status, 409)
+        self.assertEqual(body.get("error"), "member_dead")
+
+    def test_kill_member_resolves_a_realpath_alias(self):
+        link = os.path.join(self.root, "self-link")
+        os.symlink(self.root, link)
+        with mock.patch.object(colony.atlas_seats, "close_pane", return_value={"ok": False}), \
+                mock.patch.object(colony, "_kill_tmux_pane", return_value=False):
+            status, body = colony.kill_member(link, "w1")
+        # found the member through the alias (409 dead: w1 has no live pid), not 404
+        self.assertEqual(status, 409)
+        self.assertEqual(body.get("error"), "member_dead")

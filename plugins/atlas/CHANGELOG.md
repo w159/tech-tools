@@ -1,5 +1,13 @@
 # Changelog
 
+## 12.5.11 (2026-10-19)
+
+### Fixed
+
+- omp sessions started before `omp plugin upgrade atlas` silently ran no Python hooks afterwards: `omp/hook-bridge.ts` read `hooks.json` and set `CLAUDE_PLUGIN_ROOT` from the deleted install dir, so SessionStart never ran `session_boot.py` and a stale dashboard was never replaced. Every runtime read of scripts, hooks and contracts in `plugins/atlas/omp` (hook-bridge, agent-guard, channel-view, style, atlas-agents, contracts, mandates, resolve, run-state, worker-report, index) now resolves at call time via `pluginRoot()`/`pluginScript()` and falls back to the newest installed version. An unreadable `hooks.json` records a `StaleInstall` fault instead of failing silently; a missing `atlas_dashboard.py` in `session_boot` records a fault too.
+- The lead's channel opens at session start (omp `session_start`, Claude `session_boot`), so your live session shows in the TUI as a colony with its lead seat before any dispatch.
+- Stop marks the killed member finished (exit 137) so the seat shows dead at once; `kill_member` and the colony routes normalise the project path (`/var/folders` vs `/private/var`); TUI stop/msg/broadcast act on the seat's own project in all-projects mode; a failed snapshot shows a full-pane error with the diagnose command.
+
 ## 12.5.10 (2026-10-19)
 
 ### Fixed

@@ -1085,3 +1085,91 @@ class Terminals(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Effects(unittest.TestCase):
+    """stop / send / broadcast act on the seat's own project, not the watched root."""
+
+    def _drive(self, effects, snap=None, marker="ex-1", model=None):
+        import curses
+
+        class Done(Exception):
+            pass
+
+        if model is None:
+            model = mock.Mock(snapshot=lambda root, all_projects: snap)
+        pending = list(effects)
+        scr = mock.Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        cur, frames = [], []
+        scr.erase.side_effect = cur.clear
+        scr.addstr.side_effect = lambda y, x, s, *a: cur.append(s)
+        scr.refresh.side_effect = lambda: frames.append("\n".join(cur))
+        keys = {"i": 0}
+
+        def getch():
+            if not frames or marker not in frames[-1]:
+                time.sleep(0.01)
+                return -1
+            if keys["i"] < len(pending):
+                keys["i"] += 1
+                return ord("k")
+            raise Done
+
+        scr.getch.side_effect = getch
+        handled = {"i": 0}
+
+        def handle_key(_snap, _ui, _key):
+            eff = pending[handled["i"]]
+            handled["i"] += 1
+            return eff
+
+        args = mock.Mock(project="/p", all=False)
+        with mock.patch.multiple(
+            curses, curs_set=mock.DEFAULT, start_color=mock.DEFAULT, use_default_colors=mock.DEFAULT
+        ), mock.patch.object(T, "_model", return_value=model), mock.patch.object(
+            T, "handle_key", side_effect=handle_key
+        ), self.assertRaises(Done):
+            T.loop(scr, args)
+        return frames
+
+    def test_stop_targets_the_seat_project(self):
+        snap = dict(SNAP, seats=[seat("ex-1", "explorer", "claude", "working", project="/other")])
+        with mock.patch("atlas_dash_colony.kill_member", return_value=(200, {"ok": True})) as km:
+            self._drive([("stop", "ex-1")], snap)
+        km.assert_called_once_with("/other", "ex-1")
+
+    def test_stop_falls_back_to_the_watched_root_without_seat_project(self):
+        with mock.patch("atlas_dash_colony.kill_member", return_value=(200, {"ok": True})) as km:
+            self._drive([("stop", "ex-1")], SNAP)
+        km.assert_called_once_with("/p", "ex-1")
+
+    def test_send_targets_the_seat_project(self):
+        snap = dict(SNAP, seats=[seat("ex-1", "explorer", "claude", "working", project="/other")])
+        todo = mock.Mock()
+        with mock.patch.dict(sys.modules, {"atlas_todo": todo}):
+            self._drive([("send", "ex-1", "hi")], snap)
+        todo.note.assert_called_once_with("/other", "tui", "hi", to="ex-1")
+
+    def test_broadcast_targets_the_colony_project(self):
+        snap = dict(SNAP, colonies=[dict(SNAP["colonies"][0], project="/other"), SNAP["colonies"][1]])
+        todo = mock.Mock()
+        with mock.patch.dict(sys.modules, {"atlas_todo": todo}):
+            self._drive([("broadcast", "stand down")], snap)
+        todo.note.assert_called_once_with("/other", "tui", "stand down", to="all", channel="ch1")
+
+    def test_failed_snapshot_shows_the_error_frame(self):
+        model = mock.Mock(snapshot=mock.Mock(side_effect=RuntimeError("boom: registry unreadable")))
+        frames = self._drive([], marker="SNAPSHOT ERROR", model=model)
+        self.assertTrue(any("SNAPSHOT ERROR" in f and "boom: registry unreadable" in f for f in frames))
+        self.assertTrue(any(f"python3 {T.HERE / 'atlas_colony_model.py'} --root /p" in f for f in frames))
+
+    def test_snapshot_error_frame_renders(self):
+        text = "\n".join(T.render({"error": "boom: registry unreadable", "root": "/p"}, T.new_ui(), 200, 30))
+        self.assertIn("SNAPSHOT ERROR", text)
+        self.assertIn("boom: registry unreadable", text)
+        self.assertIn(f"python3 {T.HERE / 'atlas_colony_model.py'} --root /p", text)
+
+
+if __name__ == "__main__":
+    unittest.main()

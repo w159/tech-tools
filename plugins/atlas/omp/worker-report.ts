@@ -18,8 +18,7 @@ import type { ChannelOpenInfo, WidgetUi } from "./channel-view";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
 import { type ChannelRunner, reviseForChannel } from "./channels";
 import { recordFault, taskItems } from "./hook-bridge";
-
-const DEFAULT_CONTRACT = nodePath.resolve(import.meta.dir, "..", "contracts", "worker-protocol.json");
+import { pluginRoot } from "./plugin-path";
 
 export interface WorkerReportDeps {
 	env?: Record<string, string | undefined>;
@@ -109,7 +108,7 @@ function schemaEnabled(event: { toolName: string }, deps: WorkerReportDeps): boo
 
 function reviseForEvent(event: { toolName: string; input: unknown }, deps: WorkerReportDeps): Record<string, unknown> | undefined {
 	if (!schemaEnabled(event, deps)) return undefined;
-	const schema = loadReportSchema(deps.contractPath ?? DEFAULT_CONTRACT);
+	const schema = loadReportSchema(deps.contractPath ?? nodePath.join(pluginRoot(), "contracts", "worker-protocol.json"));
 	return schema ? reviseTaskInput(event.input as Record<string, unknown>, schema) : undefined;
 }
 

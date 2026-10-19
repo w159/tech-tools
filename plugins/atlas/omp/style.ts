@@ -17,6 +17,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import { loadNativeTools } from "./contracts";
+import { pluginRoot } from "./plugin-path";
 
 export const STYLE_PATH = nodePath.resolve(import.meta.dir, "..", "output-styles", "atlas-orchestrator.md");
 export const TOOL_NAMES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "tool-names.json");
@@ -51,7 +52,7 @@ export function loadStyleBody(path: string = STYLE_PATH): string | undefined {
 	}
 }
 
-export function loadToolNames(path: string = TOOL_NAMES_PATH): ToolNameMap | undefined {
+export function loadToolNames(path: string = nodePath.join(pluginRoot(), "contracts", "tool-names.json")): ToolNameMap | undefined {
 	try {
 		const parsed: unknown = JSON.parse(fs.readFileSync(path, "utf8"));
 		if (!parsed || typeof parsed !== "object" || !("claudeToOmp" in parsed) || !("mcp" in parsed)) return undefined;
@@ -166,7 +167,7 @@ export function resolveBareTools(map: ToolNameMap, active: string[] | undefined)
 /** The style block appended to the omp system prompt; undefined when sources are unreadable. */
 export function renderOmpStyle(
 	stylePath: string = STYLE_PATH,
-	namesPath: string = TOOL_NAMES_PATH,
+	namesPath: string = nodePath.join(pluginRoot(), "contracts", "tool-names.json"),
 	active?: string[],
 ): string | undefined {
 	const body = loadStyleBody(stylePath);
@@ -180,14 +181,12 @@ export function renderOmpStyle(
 	return text;
 }
 
-const CONTRACT_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "operating-contract.json");
-
 /**
  * Minimal header rule for when the full style cannot be rendered or ATLAS_STYLE=off: session_boot.py skips its own
  * header rule under ATLAS_HARNESS=omp, so without this omp sessions would have none. Glyphs come from the operating
  * contract (single source); an unreadable contract still yields the bare rule.
  */
-function renderHeaderFallback(path: string = CONTRACT_PATH): string {
+function renderHeaderFallback(path: string = nodePath.join(pluginRoot(), "contracts", "operating-contract.json")): string {
 	let phases = "";
 	try {
 		const doc: unknown = JSON.parse(fs.readFileSync(path, "utf8"));

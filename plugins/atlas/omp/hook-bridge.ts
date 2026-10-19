@@ -34,6 +34,9 @@ import * as os from "node:os";
 import * as nodePath from "node:path";
 import { resolveTarget } from "./contracts";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
+import { pluginRoot } from "./plugin-path";
+import { openLeadChannel } from "./channels";
+import type { WidgetUi } from "./channel-view";
 import { runCapture } from "./proc";
 
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
@@ -98,8 +101,8 @@ function readJson(path: string): JsonDocument {
 	}
 }
 
-/** Bridgeable turn-event hook commands from hooks.json, filtered by the contract's `bridged` list. */
-export function loadBridgedHooks(hooksPath: string = HOOKS_JSON, contractPath: string = BRIDGE_CONTRACT): BridgedHook[] {
+/** Bridgeable turn-event hook commands from hooks.json, filtered by the contract's `bridged` list. Paths resolve per call: a module kept loaded across `omp plugin upgrade atlas` must read the live install, not the deleted cache dir it was imported from. */
+export function loadBridgedHooks(hooksPath: string = nodePath.join(pluginRoot(), "hooks", "hooks.json"), contractPath: string = nodePath.join(pluginRoot(), "contracts", "hook-bridge.json")): BridgedHook[] {
 	return loadBridgedHooksFor(TURN_EVENTS, "bridged", hooksPath, contractPath);
 }
 
@@ -111,8 +114,8 @@ export function loadBridgedHooks(hooksPath: string = HOOKS_JSON, contractPath: s
 export function loadBridgedHooksFor(
 	events: readonly ClaudeEvent[],
 	listKey: "bridged" | "bridgedSessionEnd",
-	hooksPath: string = HOOKS_JSON,
-	contractPath: string = BRIDGE_CONTRACT,
+	hooksPath: string = nodePath.join(pluginRoot(), "hooks", "hooks.json"),
+	contractPath: string = nodePath.join(pluginRoot(), "contracts", "hook-bridge.json"),
 ): BridgedHook[] {
 	try {
 		const contract = readJson(contractPath) as Record<string, unknown> | null;
@@ -138,13 +141,24 @@ export function loadBridgedHooksFor(
 			}
 		}
 		return out;
-	} catch {
+	} catch (error) {
+		// A deleted or partial install must not fail open SILENTLY: this is exactly how a
+		// session started before `omp plugin upgrade atlas` lost every hook (SessionStart
+		// included, so the dashboard daemon was never replaced) with no trace anywhere.
+		if (!staleFaults.has(hooksPath)) {
+			staleFaults.add(hooksPath);
+			// Actionable text first: recordFault truncates at 500 chars and cache paths are long.
+			recordFault("hook-bridge", `atlas omp install is stale: ${hooksPath} unreadable (${String(error).slice(0, 120)}) — run: omp plugin upgrade atlas, then restart omp sessions started before the upgrade`, "StaleInstall", undefined);
+		}
 		return [];
 	}
 }
 
+/** hooks.json paths already reported unreadable: one fault row per dead path, not one per turn. */
+const staleFaults = new Set<string>();
+
 /** omp tool name → every Claude tool name mapping to it (contracts/tool-names.json `claudeToOmp`, then `ompAliases`); itself when unmapped. */
-export function claudeNamesFor(ompTool: string, namesPath: string = TOOL_NAMES): string[] {
+export function claudeNamesFor(ompTool: string, namesPath: string = nodePath.join(pluginRoot(), "contracts", "tool-names.json")): string[] {
 	try {
 		const parsed = readJson(namesPath);
 		if (!parsed || typeof parsed !== "object" || !("claudeToOmp" in parsed) || !parsed.claudeToOmp || typeof parsed.claudeToOmp !== "object") return [ompTool];
@@ -240,7 +254,7 @@ export function claudeLifecyclePayload(
 const CONNECTOR_SERVERS_FALLBACK: readonly string[] = ["plugin_atlas", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"];
 
 /** `connectorWatch` from the MCP server contract; the built-in list when the file is unreadable or malformed. */
-export function loadConnectorServers(path: string = MCP_SERVERS, fallback: readonly string[] = CONNECTOR_SERVERS_FALLBACK): readonly string[] {
+export function loadConnectorServers(path: string = nodePath.join(pluginRoot(), "contracts", "mcp-servers.json"), fallback: readonly string[] = CONNECTOR_SERVERS_FALLBACK): readonly string[] {
 	try {
 		const doc = readJson(path);
 		const list = doc && typeof doc === "object" && !Array.isArray(doc) ? doc.connectorWatch : undefined;
@@ -282,7 +296,7 @@ const UNDERSCORED_SERVERS_FALLBACK: readonly string[] = [
 ];
 
 /** `underscoredServers` from the MCP server contract, longest first; the built-in list when the file is unreadable or malformed. */
-export function loadUnderscoredServers(path: string = MCP_SERVERS, fallback: readonly string[] = UNDERSCORED_SERVERS_FALLBACK): readonly string[] {
+export function loadUnderscoredServers(path: string = nodePath.join(pluginRoot(), "contracts", "mcp-servers.json"), fallback: readonly string[] = UNDERSCORED_SERVERS_FALLBACK): readonly string[] {
 	let list: readonly string[] = fallback;
 	try {
 		const doc = readJson(path);
@@ -445,7 +459,10 @@ export function atlasStoreEnv(env: Record<string, string | undefined> = process.
  * every edit it was spawned to make. A lead (no marker) is armed exactly as before.
  */
 export function hookEnv(env: Record<string, string | undefined> = process.env): Record<string, string> {
-	const base: Record<string, string> = { ...atlasStoreEnv(env), CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off", ATLAS_TOOLKIT_LOAD: "omp" };
+	// pluginRoot(), not PLUGIN_ROOT: after `omp plugin upgrade atlas` deletes this module's
+	// versioned cache dir, a session started before the upgrade must hand hooks the LIVE
+	// install's root, or every hooks.json command fails in sh and session_boot never runs.
+	const base: Record<string, string> = { ...atlasStoreEnv(env), CLAUDE_PLUGIN_ROOT: pluginRoot(), ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_NATIVE_POLICY: "off", ATLAS_TOOLKIT_LOAD: "omp" };
 	if ((env.ATLAS_WORKER_NAME ?? "").trim() !== "") base.ATLAS_ENGINE_ARM = "off";
 	return base;
 }
@@ -530,6 +547,8 @@ export interface BridgeCtx {
 	sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown };
 	/** The parent's live model; absent in tests and when omp has none selected. */
 	model?: { provider?: unknown; id?: unknown };
+	/** omp's widget surface, forwarded to the channel view; absent in tests. */
+	ui?: unknown;
 }
 
 /**
@@ -589,6 +608,10 @@ export interface BridgeDeps {
 	onToolResult?(info: ToolEventInfo): void;
 	/** Whole-call hook budget in ms for tool_call / tool_result; default TOOL_CALL_BUDGET_MS. Tests shrink it. */
 	budgetMs?: number;
+	/** Runner for the SessionStart lead-channel open (tests inject a recorder); default channels.ts defaultRun. */
+	channelRun?(argv: string[], cwd: string): string | undefined;
+	/** Called once the SessionStart lead channel is open (the live channel view subscribes). */
+	onChannelOpen?(ui: WidgetUi, info: { channel: string; members: string[]; cwd: string; sessionId?: string }): void;
 }
 
 export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDeps = {}): void {
@@ -597,10 +620,26 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	const run = deps.run ?? runHook;
 	const off = () => (deps.env ?? process.env).ATLAS_HOOK_BRIDGE === "off";
 	let sessionContext: Promise<string> | undefined;
+	let channelOpened = false;
 	const reset = () => {
 		sessionContext = undefined;
+		channelOpened = false;
 	};
-	pi.on("session_start", reset);
+	pi.on("session_start", (_event, ctx) => {
+		reset();
+		// The lead's channel opens at SessionStart — omp's own session_start, BEFORE any
+		// dispatch and outside the 25 s before_agent_start hook budget: zero members, so the
+		// live session already shows as a colony with its lead seat (harness + lead_pid are
+		// recorded server-side) and later dispatches reuse this exact channel (identical
+		// leadName). Once per session; openLeadChannel is idempotent and fails open.
+		if (off() || channelOpened || ctx?.agent?.kind !== "main") return;
+		channelOpened = true;
+		try {
+			openLeadChannel({ cwd: ctx.cwd, sessionId: sessionIdOf(ctx), env: deps.env ?? process.env, run: deps.channelRun, onOpen: info => deps.onChannelOpen?.(ctx.ui, info) });
+		} catch (error) {
+			recordFault("channels", String(error), "ChannelOpen", ctx?.cwd);
+		}
+	});
 	pi.on("session_switch", reset);
 
 	/**

@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.5.11 (2026-10-19)
+
+### Fixed
+
+- omp sessions that outlive a plugin upgrade keep running atlas hooks (the omp extension resolves the install at call time and falls back to the newest one), so a new session again replaces a stale dashboard; your live session appears in the TUI at session start; stop/msg fixes across projects. Details in `plugins/atlas/CHANGELOG.md`.
+
 ## 12.5.10 (2026-10-19)
 
 ### Fixed

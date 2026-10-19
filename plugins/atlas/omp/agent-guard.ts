@@ -35,10 +35,7 @@ import * as nodePath from "node:path";
 
 import { loadToolNames, mcpDevice } from "./style";
 import { isRecord } from "./workers";
-
-const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
-const DEFAULT_AGENTS_DIR = nodePath.join(PLUGIN_ROOT, "agents");
-const DEFAULT_CONTRACT = nodePath.join(PLUGIN_ROOT, "contracts", "tool-names.json");
+import { pluginRoot } from "./plugin-path";
 
 /** One omp tool's guard rule: blocked when any listed Claude tool is in the agent's disallowedTools. */
 export interface GuardRule {
@@ -142,7 +139,7 @@ const isSafeAgentName = (name: string): boolean => SAFE_AGENT_NAME.test(name) &&
  * Cached `disallowedTools` of agents/<name>.md. Undefined when the agent has no readable,
  * parseable definition (unknown agent, bad name, I/O or parse error): callers fail open.
  */
-export function loadAgentDisallowed(name: string, agentsDir: string = DEFAULT_AGENTS_DIR): string[] | undefined {
+export function loadAgentDisallowed(name: string, agentsDir: string = nodePath.join(pluginRoot(), "agents")): string[] | undefined {
 	return cachedLoad(agentCache, `${agentsDir}\0${name}`, () =>
 		isSafeAgentName(name) ? parseDisallowedTools(readFileSync(nodePath.join(agentsDir, `${name}.md`), "utf8")) : null);
 }
@@ -201,7 +198,7 @@ function readJsonObject(file: string): Record<string, unknown> | null {
 }
 
 /** Parsed `agentGuard` section of contracts/tool-names.json, cached; undefined when absent or malformed. */
-export function loadGuardContract(contractPath: string = DEFAULT_CONTRACT): GuardContract | undefined {
+export function loadGuardContract(contractPath: string = nodePath.join(pluginRoot(), "contracts", "tool-names.json")): GuardContract | undefined {
 	return cachedLoad(contractCache, contractPath, () => parseGuardContract(readJsonObject(contractPath)));
 }
 
@@ -267,7 +264,7 @@ function restrictedAgent(ctx: GuardCtx, deps: AgentGuardDeps): { agent: string; 
 /** The `xd://` device an `mcp__<server>__<tool>` disallowed entry resolves to on omp (same mint as translateToolNames). */
 function deviceOf(claudeName: string, deps: AgentGuardDeps): string | undefined {
 	const m = /^mcp__(.+?)__(.+)$/.exec(claudeName);
-	const map = m ? loadToolNames(deps.contractPath ?? DEFAULT_CONTRACT) : undefined;
+	const map = m ? loadToolNames(deps.contractPath ?? nodePath.join(pluginRoot(), "contracts", "tool-names.json")) : undefined;
 	return m && map ? mcpDevice(m[1], m[2], map) : undefined;
 }
 

@@ -171,6 +171,12 @@ def _seat_of(snap, name):
     return next((x for x in snap.get("seats") or [] if x.get("name") == name), None)
 
 
+def _seat_root(snap, name, root: str) -> str:
+    """The seat's own project (realpath), not the watched root: `--all` spans projects."""
+    p = str((_seat_of(snap, name) or {}).get("project") or "")
+    return os.path.realpath(p) if p else root
+
+
 def _stoppable(s) -> bool:
     """TUI side of the kill contract: a pane seat that is not the lead. In-process subagents (no pane) are out of reach."""
     return bool(s.get("target")) and not s.get("lead")
@@ -842,7 +848,22 @@ def _list_view(snap, ui, h) -> list:
     return out
 
 
+def _snap_error(snap) -> list:
+    """Full right-pane report for a failed colony snapshot, with the exact diagnose command."""
+    detail = str(snap.get("error") or "").splitlines() or ["(no detail)"]
+    return [
+        "SNAPSHOT ERROR",
+        "",
+        *detail,
+        "",
+        "Diagnose:",
+        f"  python3 {HERE / 'atlas_colony_model.py'} --root {snap.get('root')}",
+    ]
+
+
 def right_lines(snap, ui, w, h) -> list:
+    if snap.get("error"):
+        return _snap_error(snap)
     if ui.get("seat"):
         return _seat_view(snap, ui, h)
     if ui["section"] == "topology" and ui.get("colony"):
@@ -1619,6 +1640,7 @@ def loop(stdscr, args):
         now = time.time()
         res = loader.take()
         if isinstance(res, Exception):
+            snap = {"error": str(res), "root": loader.root}  # full right-pane failure report
             ui["status"] = f"snapshot failed: {res}"
             last_snap = now
         elif res is not None:
@@ -1720,7 +1742,7 @@ def loop(stdscr, args):
             try:
                 import atlas_dash_colony as dash
 
-                st, body = dash.kill_member(root, eff[1])
+                st, body = dash.kill_member(_seat_root(snap, eff[1], root), eff[1])
                 ui["status"] = (
                     f"stopped {eff[1]}"
                     if st == 200
@@ -1737,7 +1759,8 @@ def loop(stdscr, args):
                 else:
                     import atlas_todo
 
-                    atlas_todo.note(root, "tui", eff[1], to="all", channel=c["channel"])
+                    croot = os.path.realpath(c["project"]) if c.get("project") else root
+                    atlas_todo.note(croot, "tui", eff[1], to="all", channel=c["channel"])
                     ui["status"] = f"sent to all · {_cname(c)}"
             except Exception as e:  # board write failure must not kill the TUI
                 ui["status"] = f"send failed: {e}"
@@ -1766,7 +1789,7 @@ def loop(stdscr, args):
             loader.start()
         elif eff[0] == "send":
             try:
-                send(root, eff[1], eff[2], snap)
+                send(_seat_root(snap, eff[1], root), eff[1], eff[2], snap)
                 s = _seat_of(snap, eff[1])
                 ui["status"] = (
                     f"queued for {eff[1]}'s next tool call"

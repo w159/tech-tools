@@ -22,6 +22,7 @@ import type { PanelTodo } from "./todo-panel";
 import { type GatesCache,type IdleWave, type LaneTool, type PanelNote, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
+import { pluginRoot } from "./plugin-path";
 
 export const WIDGET_KEY = "atlas-channel";
 const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
@@ -78,7 +79,6 @@ export function formatNote(n: Note, max = MAX_LINE): string {
 	return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
-const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 // Mirror of PHASE_FRAMES in mod/theme.ts (module-private there); channel-view.test.ts asserts equality via spin().
 const PHASE_FRAMES: Record<string, string[]> = {
@@ -506,7 +506,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		});
 	const clearTo = deps.clearTimeout ?? ((h: unknown) => clearTimeout(h as Timer));
 
-	const gates = deps.gates ?? createGatesCache(spawnText, now, nodePath.join(PLUGIN_ROOT, "scripts", "atlas_gates.py"));
+	const gates = deps.gates ?? createGatesCache(spawnText, now, nodePath.join(pluginRoot(), "scripts", "atlas_gates.py"));
 	let ui: WidgetUi | undefined;
 	let info: (ChannelOpenInfo & { root: string }) | undefined;
 	let poll: unknown;
@@ -657,7 +657,7 @@ let headerRe: RegExp | null | undefined;
 function headerPattern(): RegExp | null {
 	if (headerRe === undefined) {
 		try {
-			headerRe = new RegExp(JSON.parse(readFileSync(nodePath.join(PLUGIN_ROOT, "contracts", "operating-contract.json"), "utf8")).headerFirstLinePattern);
+			headerRe = new RegExp(JSON.parse(readFileSync(nodePath.join(pluginRoot(), "contracts", "operating-contract.json"), "utf8")).headerFirstLinePattern);
 		} catch {
 			headerRe = null; // no contract: the rail falls back to todos, then research
 		}

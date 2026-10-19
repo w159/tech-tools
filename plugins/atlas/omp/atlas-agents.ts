@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import * as nodePath from "node:path";
+import { pluginRoot } from "./plugin-path";
 
 /**
  * Single source of truth for the atlas omp colony worker map.
@@ -107,7 +108,7 @@ export function modelPatternsFor(agentName: string): string[] {
 export function frontmatterModelFor(agentName: string): string {
 	try {
 		if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(agentName)) return "";
-		const text = readFileSync(nodePath.resolve(import.meta.dir, "..", "agents", `${agentName}.md`), "utf8");
+		const text = readFileSync(nodePath.join(pluginRoot(), "agents", `${agentName}.md`), "utf8");
 		const lines = text.split(/\r?\n/);
 		if (lines[0]?.trim() !== "---") return "";
 		for (const line of lines.slice(1)) {

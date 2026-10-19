@@ -4,7 +4,7 @@
 // below, proving captured-child stdout with EVERY `bun test` path form, since
 // bun's own spawn stdio was unreliable under relative-path test filters.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
@@ -17,6 +17,7 @@ import {
 	claudeNamesFor,
 	claudeNamesForCall,
 	loadBridgedHooks,
+	loadBridgedHooksFor,
 	atlasStoreEnv,
 	hookEnv,
 	matcherNames,
@@ -26,10 +27,15 @@ import {
 	type BridgeDeps,
 	type HookRunner,
 } from "./hook-bridge";
+import { pluginRoot } from "./plugin-path";
 
 type Ctx = { cwd: string; agent: { kind: "main" | "sub" }; sessionManager: { getSessionId(): string } };
 type Result = { block?: boolean; reason?: string; additionalContext?: string; systemPrompt?: string[] } | undefined;
 type Handler = (event: Record<string, unknown>, ctx: Ctx) => Promise<Result> | Result;
+
+// SessionStart now opens the lead's channel, whose failures fault to ATLAS_HOME: keep the real
+// ~/.atlas untouched (same pattern as channels.test.ts).
+process.env.ATLAS_HOME = mkdtempSync(join(tmpdir(), "hook-bridge-test-home-"));
 
 let dir: string;
 beforeEach(() => {
@@ -566,4 +572,66 @@ test("atlas_doctor.py --hook is bridged and runs on the first main before_agent_
 	expect(seen.filter(c => c.includes("atlas_doctor.py")).length).toBe(1);
 	await handlers.before_agent_start({ prompt: "again", systemPrompt: [] }, ctx("main"));
 	expect(seen.filter(c => c.includes("atlas_doctor.py")).length).toBe(1);
+});
+
+// ---- stale-install resilience ----
+// Root cause (live-231, 2026-10-19): a session started before `omp plugin upgrade atlas` kept a
+// module-level PLUGIN_ROOT pointing at the DELETED versioned cache dir, so hooks.json was
+// unreadable (silent []) and CLAUDE_PLUGIN_ROOT was dead — session_boot never ran and the stale
+// dashboard daemon was never replaced, with zero fault rows anywhere.
+
+test("hookEnv hands hooks the LIVE plugin root, not the (possibly deleted) import root", () => {
+	const root = hookEnv({ CLAUDE_PLUGIN_ROOT: "/gone/tech-tools___atlas___12.5.6" }).CLAUDE_PLUGIN_ROOT;
+	expect(root).toBe(pluginRoot());
+	expect(existsSync(join(root, "scripts", "atlas_todo.py"))).toBe(true);
+});
+
+test("an unreadable hooks.json still fails open but records ONE StaleInstall fault with the fix", () => {
+	const home = mkdtempSync(join(tmpdir(), "atlas-stale-"));
+	const saved = process.env.ATLAS_HOME;
+	process.env.ATLAS_HOME = home;
+	try {
+		const dead = join(home, "tech-tools___atlas___12.5.6");
+		expect(loadBridgedHooksFor(["SessionStart"], "bridged", join(dead, "hooks", "hooks.json"), join(dead, "contracts", "hook-bridge.json"))).toEqual([]);
+		const rows = readFileSync(join(home, "hook-faults.jsonl"), "utf8").trim().split("\n");
+		expect(rows.length).toBe(1);
+		expect(rows[0]).toContain('"type":"StaleInstall"');
+		expect(rows[0]).toContain("omp plugin upgrade atlas");
+	} finally {
+		if (saved === undefined) delete process.env.ATLAS_HOME;
+		else process.env.ATLAS_HOME = saved;
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("session_start opens the lead's channel once, with zero members, before any dispatch", () => {
+	const boot = hookScript("chan_boot.py", context("SessionStart", "booted"));
+	const channelArgv: string[][] = [];
+	const opened: Array<{ channel: string; members: string[]; cwd: string; sessionId?: string }> = [];
+	const channelRun = (argv: string[]) => {
+		channelArgv.push(argv);
+		return JSON.stringify({ channel: { name: "proj@main/lead-s-1" }, briefs: {} });
+	};
+	const { handlers, ctx } = harness(
+		writeConfig({ SessionStart: [{ hooks: [{ command: `python3 "${boot}"` }] }] }, ["chan_boot.py"]),
+		{},
+		recordingRunner,
+		{ channelRun, onChannelOpen: (_ui, info) => opened.push(info) },
+	);
+	handlers.session_start?.({}, ctx("main"));
+	expect(channelArgv).toEqual([["python3", expect.any(String), "channel-open", "--root", dir, "--lead", "lead-s-1", "--members", ""]]);
+	expect(opened).toEqual([{ channel: "proj@main/lead-s-1", members: [], cwd: dir, sessionId: "s-1" }]);
+	// once per session: turns and session_switch do not re-open, but a NEW session_start
+	// (reset) opens that session's own channel (fresh session id → its own lead channel)
+	handlers.session_switch?.({}, ctx("main"));
+	expect(channelArgv.length).toBe(1);
+	handlers.session_start?.({}, ctx("main"));
+	expect(channelArgv.length).toBe(2);
+	// a subagent's session start never poses as the lead
+	handlers.session_start?.({}, ctx("sub"));
+	expect(channelArgv.length).toBe(2);
+	// the ATLAS_HOOK_BRIDGE=off kill switch also silences the channel open
+	const killed = harness(writeConfig({}, []), { ATLAS_HOOK_BRIDGE: "off" }, recordingRunner, { channelRun });
+	killed.handlers.session_start?.({}, killed.ctx("main"));
+	expect(channelArgv.length).toBe(2);
 });

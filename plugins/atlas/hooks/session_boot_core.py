@@ -58,6 +58,19 @@ def ensure_dashboard():
         )
         script = os.path.abspath(os.path.join(scripts, "atlas_dashboard.py"))
         if not os.path.isfile(script):
+            # A partial/stale install (empty scripts/ dir, as seen in omp plugin caches) must not
+            # skip the ensure SILENTLY: that is how a stale dashboard daemon kept serving with no
+            # trace. Say why, once, then fail open exactly as before.
+            with contextlib.suppress(Exception):
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                import atlas_hook_guard
+
+                atlas_hook_guard.fault(
+                    "session_boot",
+                    f"dashboard ensure skipped: {script} missing — atlas install is stale"
+                    " (empty/partial scripts dir); reinstall the atlas plugin, then restart"
+                    " sessions started before the reinstall",
+                )
             return None
         env = os.environ.copy()
         res = subprocess.run(
@@ -905,6 +918,61 @@ def prune_run_state(root):
                         os.remove(path)
 
 
+def open_lead_channel_once(payload, run=None):
+    """Open the lead's channel with ZERO members at SessionStart (idempotent, Claude side; omp
+    does the same from hook-bridge's first main before_agent_start). The live session then shows
+    as a colony with its lead seat — harness + lead_pid are recorded by atlas_todo
+    open_lead_channel — before any dispatch, and the first dispatch joins this exact channel:
+    the lead name here is atlas_todo.lead_name(session_id), the same name the dispatch path
+    (omp/channels.ts leadName) uses. Runs the same channel-open CLI the dispatch path runs.
+    Fail-open; ATLAS_CHANNELS=off skips; non-project cwds never get board state. run is a test
+    seam replacing subprocess.run."""
+    if os.environ.get("ATLAS_CHANNELS", "").lower() in ("0", "off", "false", "no"):
+        return None
+    sid = payload.get("session_id", "")
+    if not sid:
+        return None
+    import subprocess
+
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+    import atlas_db
+    import atlas_todo
+    import worker_inbox
+
+    if worker_inbox.is_worker_env():
+        return None  # a mux worker's own session must not pose as a lead
+    root = atlas_todo.find_root(payload.get("cwd") or os.getcwd())
+    if atlas_db.not_a_project_root(root) or not (
+        atlas_todo.is_project(root) or os.path.exists(os.path.join(root, ".git"))
+    ):
+        return None  # never create channels registry state in a non-project dir
+    (run or subprocess.run)(
+        [
+            sys.executable,
+            os.path.abspath(
+                os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "..",
+                    "scripts",
+                    "atlas_todo.py",
+                )
+            ),
+            "channel-open",
+            "--root",
+            root,
+            "--lead",
+            atlas_todo.lead_name(sid),
+            "--members",
+            "",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        env=os.environ.copy(),
+    )
+    return None
+
+
 def main():
     payload = {}
     with contextlib.suppress(Exception):
@@ -967,6 +1035,11 @@ def main():
             if not _have:
                 with open(_env_file, "a", encoding="utf-8") as _f:
                     _f.write(_line)
+
+    with contextlib.suppress(
+        Exception
+    ):  # lead channel open is best-effort; never block boot
+        open_lead_channel_once(payload)
 
     prune_run_state(_find_structure_root(payload.get("cwd") or os.getcwd()))
     todo_line = None

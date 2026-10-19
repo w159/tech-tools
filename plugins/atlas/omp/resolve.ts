@@ -4,8 +4,7 @@
  */
 import * as nodePath from "node:path";
 import { readFileSync } from "node:fs";
-
-const MATRIX = nodePath.resolve(import.meta.dir, "..", "contracts", "scope-matrix.json");
+import { pluginRoot } from "./plugin-path";
 
 /** Sorted, de-duplicated, posix-normalized, no leading "./" (matches python normalize_paths). */
 function normalizePaths(paths: string[] = []): string[] {
@@ -14,7 +13,7 @@ function normalizePaths(paths: string[] = []): string[] {
 }
 
 export function resolve(taskClass: string, effort: string, paths?: string[]): Record<string, unknown> {
-	const matrix = JSON.parse(readFileSync(MATRIX, "utf8"));
+	const matrix = JSON.parse(readFileSync(nodePath.join(pluginRoot(), "contracts", "scope-matrix.json"), "utf8"));
 	const classes = matrix.classes as Record<string, Record<string, object>>;
 	taskClass = matrix.class_aliases?.[taskClass.toLowerCase()] ?? taskClass;
 	effort = matrix.effort_aliases?.[effort.toLowerCase()] ?? effort;
