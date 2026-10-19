@@ -1139,6 +1139,17 @@ def is_project(root: str | None) -> bool:
     return os.path.isdir(os.path.join(_resolve_base(root), BOARD_DIR))
 
 
+def lead_channel_allowed(root: str | None) -> bool:
+    """A session-start lead channel may only be opened in a real project: an atlas board already
+    exists or it is a git repo, and never $HOME, ~/Downloads or a bare temp root."""
+    import atlas_db
+
+    base = _resolve_base(root)
+    return not atlas_db.not_a_project_root(base) and (
+        is_project(base) or os.path.exists(os.path.join(base, ".git"))
+    )
+
+
 def _reg_update(root: Optional[str], fn, timeout: Optional[float] = None) -> Any:
     """Read-modify-write the registry under its lock; returns fn(registry).
     `timeout` (seconds) bounds the lock wait, raising atlas_memory.LockTimeout.
@@ -1872,7 +1883,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
-        elif a == "--force" or a == "--unique" or a == "--json" or a == "--dry-run":
+        elif a in ("--force", "--unique", "--json", "--dry-run", "--only-project"):
             flags[a[2:]] = "1"
             i += 1
         else:
@@ -2054,17 +2065,21 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 members = [m for m in flags.get("members", "").split(",") if m.strip()]
                 # a dispatcher passes its cwd, which may be a subdirectory of the project
                 root = find_root(root) if root else root
-                chan = open_lead_channel(root, lead, members)
-                out = {
-                    "ok": True,
-                    "channel": chan,
-                    "briefs": {
-                        _sanitize_owner(m): channel_brief(
-                            root, chan["name"], chan["lead"], _sanitize_owner(m)
-                        )
-                        for m in members
-                    },
-                }
+                if flags.get("only-project") and not lead_channel_allowed(root):
+                    # session-start opens must never create board state in a non-project dir
+                    out = {"ok": True, "skipped": "not_a_project", "root": root}
+                else:
+                    chan = open_lead_channel(root, lead, members)
+                    out = {
+                        "ok": True,
+                        "channel": chan,
+                        "briefs": {
+                            _sanitize_owner(m): channel_brief(
+                                root, chan["name"], chan["lead"], _sanitize_owner(m)
+                            )
+                            for m in members
+                        },
+                    }
         elif cmd == "channel-reap":
             out = {
                 "ok": True,

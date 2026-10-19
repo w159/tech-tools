@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.5.12 (2026-10-19)
+
+### Fixed
+
+- Session start no longer creates `.atlas/` in non-project directories (`channel-open --only-project`).
+
 ## 12.5.11 (2026-10-19)
 
 ### Fixed

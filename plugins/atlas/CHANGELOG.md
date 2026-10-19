@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.5.12 (2026-10-19)
+
+### Fixed
+
+- The session-start lead channel (12.5.11) created `.atlas/.run` in whatever directory a session started in. `channel-open --only-project` now opens it only in a real project (existing atlas board or a git repo, never `$HOME`, `~/Downloads` or a bare temp root) and otherwise answers `{"skipped": "not_a_project"}` without writing; omp's `session_start` passes it. Dispatch-time opens are unchanged.
+
 ## 12.5.11 (2026-10-19)
 
 ### Fixed

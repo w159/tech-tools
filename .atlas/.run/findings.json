@@ -7838,5 +7838,23 @@
     "status": "verified",
     "verified_at": "2026-10-19T20:51:41+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "ATLAS-SESSION-CHANNEL-GATE",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "session-start lead channel only in real projects",
+    "evidence": [
+      "before: channel-open in mktemp dir created .atlas; after: --only-project returns skipped, dir empty; git repo gets channel",
+      "pytest test_atlas_todo SessionStartChannelGate 3 passed; test_atlas_todo+test_session_boot 140 passed; bun test omp 472 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T20:56:02+00:00",
+    "verified_by": "lead"
   }
 ]

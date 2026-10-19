@@ -371,7 +371,7 @@ test("with every hook hanging, a bash tool_call returns inside the call budget, 
 test("a runner that ignores its timeout is abandoned at the budget (plus a short grace), not awaited", async () => {
 	await withAtlasHome(async home => {
 		const a = hookScript("stuck.py", {});
-		const never: HookRunner = () => new Promise<string>(() => {});
+		const never: HookRunner = () => new Promise<string>(() => { });
 		const { handlers, ctx } = harness(writeConfig({ PostToolUse: [{ matcher: "Bash", hooks: [{ command: `python3 "${a}"` }] }] }, ["stuck.py"]), {}, never, { budgetMs: 200 });
 		const started = Date.now();
 		expect(await handlers.tool_result({ toolName: "bash", input: { command: "ls" }, content: "x", isError: false }, ctx())).toBeUndefined();
@@ -619,7 +619,7 @@ test("session_start opens the lead's channel once, with zero members, before any
 		{ channelRun, onChannelOpen: (_ui, info) => opened.push(info) },
 	);
 	handlers.session_start?.({}, ctx("main"));
-	expect(channelArgv).toEqual([["python3", expect.any(String), "channel-open", "--root", dir, "--lead", "lead-s-1", "--members", ""]]);
+	expect(channelArgv).toEqual([["python3", expect.any(String), "channel-open", "--root", dir, "--lead", "lead-s-1", "--members", "", "--only-project"]]);
 	expect(opened).toEqual([{ channel: "proj@main/lead-s-1", members: [], cwd: dir, sessionId: "s-1" }]);
 	// once per session: turns and session_switch do not re-open, but a NEW session_start
 	// (reset) opens that session's own channel (fresh session id → its own lead channel)

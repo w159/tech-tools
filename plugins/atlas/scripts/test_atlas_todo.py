@@ -937,6 +937,33 @@ class ChannelHarness(unittest.TestCase):
         self.assertNotIn("lead_pid", chan)  # a failed walk drops the stale pid
 
 
+class SessionStartChannelGate(unittest.TestCase):
+    """`channel-open --only-project` (session start) never creates board state outside a project."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        # temp dirs are not projects by themselves; use a child so not_a_project_root is not the reason
+        self.root = os.path.join(self._tmp.name, "proj")
+        os.makedirs(self.root)
+
+    def test_non_project_dir_is_skipped_and_left_untouched(self):
+        rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "", "--only-project")
+        self.assertEqual((rc, data.get("skipped")), (0, "not_a_project"))
+        self.assertEqual(os.listdir(self.root), [])
+
+    def test_git_repo_gets_the_lead_channel(self):
+        os.makedirs(os.path.join(self.root, ".git"))
+        rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "", "--only-project")
+        self.assertEqual(rc, 0)
+        self.assertTrue(data["channel"]["name"].endswith("/lead-abcdef"))
+
+    def test_dispatch_open_without_the_flag_is_unchanged(self):
+        rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "w1")
+        self.assertEqual(rc, 0)
+        self.assertIn("w1", data["briefs"])
+
+
 class LeadPidWalk(unittest.TestCase):
     def _runner(self, rows, returncode=0):
         def run():

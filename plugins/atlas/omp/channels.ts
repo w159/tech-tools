@@ -196,9 +196,10 @@ export function openLeadChannel(
 		faultOnce(`atlas omp install is stale: ${script} missing; run: omp plugin upgrade atlas, then restart omp sessions started before the upgrade`, opts.cwd);
 		return undefined;
 	}
-	const out = (opts.run ?? defaultRun)(["python3", script, "channel-open", "--root", opts.cwd, "--lead", leadName(opts.sessionId, env), "--members", ""], opts.cwd);
+	// --only-project: a session started in $HOME, a temp dir or a non-repo folder must not get board state
+	const out = (opts.run ?? defaultRun)(["python3", script, "channel-open", "--root", opts.cwd, "--lead", leadName(opts.sessionId, env), "--members", "", "--only-project"], opts.cwd);
 	const parsed = parseOpen(out, opts.cwd);
-	if (!parsed) return undefined;
+	if (!parsed || !parsed.channel) return undefined; // skipped: not a project
 	opts.onOpen?.({ channel: parsed.channel, members: [], cwd: opts.cwd, sessionId: opts.sessionId });
 	return parsed.channel;
 }
