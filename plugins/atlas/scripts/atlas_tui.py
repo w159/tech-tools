@@ -109,7 +109,10 @@ def _seats(snap, colony=None, pod=None, flt="") -> list:
         ):
             continue
         out.append(s)
-    return out
+    cs = _find_colony(snap, colony) if colony else None
+    order = [p.get("id") for p in (cs or {}).get("pods") or []]
+    # stable: group by pod in the colony's pod order so table rows and row selection agree
+    return sorted(out, key=lambda s: order.index(s.get("pod")) if s.get("pod") in order else len(order)) if order else out
 
 
 def _match(text: str, flt: str) -> bool:
@@ -188,7 +191,7 @@ def _explorer_lines(rows, ui, h, lw=LEFT) -> list:
     for i in range(top, min(len(rows), top + h)):
         r = rows[i]
         mark = "▶" if i == cur and ui.get("focus") == "explorer" else " "
-        text = mark + r[0]
+        text = mark + (r[0][1:] if r[1] in ("host", "colony", "pod") else r[0])  # tree rows: the arrow takes col 0
         if len(r) > 3:
             text = _fit(text, lw - len(str(r[3]))) + str(r[3])
         out.append(_fit(text, lw))
@@ -205,45 +208,71 @@ def _tabbar(ui, snap) -> str:
 
 def _table(snap, ui, w) -> list:
     seats = _seats(snap, ui["colony"], ui.get("pod"), ui.get("filter", ""))
-    pw, sw, mw, stw, ww, aw = (12, 16, 14, 11, 18, 8) if w >= 90 else (6, 12, 8, 9, 8, 8)
-    nw = max(6, w - (pw + sw + 3 + mw + 4 + stw + 2 + ww + aw + 9) - 3)
-    hdr = f"  {'POD':<{pw}} {'SEAT':<{sw}} {'RT':<3} {'MODEL':<{mw}} {'CTX':<4} {'STATE':<{stw}} {'Q':>2} {'WORK':<{ww}} {'NOW':<{nw}} ACTIONS"
-    out = [hdr]
+    allseats = _seats(snap, ui["colony"])
+    pw, sw, rw, mw, stw, ww = (8, 15, 4, 17, 13, 15) if w >= 119 else (6, 11, 3, 8, 8, 8)
+    nw = max(8, w - (pw + sw + rw + mw + 3 + stw + 1 + ww + 9) - 7)
+    bad = [s for s in allseats if _attention(s)]
+    tm = (snap.get("system") or {}).get("tmux") or {}
+    if not allseats:
+        health = "EMPTY FOR COLONY · no seats served; not a healthy verdict"
+    elif bad:
+        health = "ATTENTION · " + ", ".join(f"{s['name']} {s.get('state')}" for s in bad)
+    else:
+        health = f"OK · {len(allseats)} seats reporting · tmux {'ok' if tm.get('ok') else 'DOWN'}"
+    flt = ui.get("filter", "")
+    out = [
+        "  ▪ CONFIG · colony settings  (open ▸)",
+        f"HEALTH  {health}",
+        f"/ {flt}" if flt else "/ filter agents…",
+        f"{'POD':<{pw}} {'SEAT':<{sw}} {'RT':<{rw}} {'MODEL':<{mw}} {'CTX':<3} {'STATE':<{stw}} {'Q':<1} {'WORK':<{ww}} {'NOW':<{nw}} ACTIONS",
+        "━" * w,
+    ]
     row = max(0, min(ui.get("row", 0), len(seats) - 1))
+    prev = None
     for i, s in enumerate(seats):
         st = s.get("state") or "unknown"
-        mark = "▶ " if i == row and ui.get("focus") == "pane" else "  "
-        line = (
-            f"{mark}{_fit(str(s.get('pod') or ''), pw)} {_fit(str(s.get('name')), sw)} "
-            f"{_fit(RT.get(s.get('runtime'), '?'), 3)} {_fit(str(s.get('model') or '—'), mw)} {'—':<4} "
-            f"{_fit(DOT.get(st, '?') + ' ' + st, stw)} {s.get('queue') or 0:>2} "
-            f"{_fit(str(s.get('work') or '—'), ww)} {_fit(str(s.get('now') or ''), nw)} "
+        pod = str(s.get("pod") or "")
+        if prev is not None and pod != prev:
+            out.append("┈" * w)
+        mark = "▶" if i == row and ui.get("focus") == "pane" else " "
+        q = int(s.get("queue") or 0)
+        out.append(
+            f"{_fit(pod if pod != prev else '', pw)}{mark}{_fit(DOT.get(st, '?') + ' ' + str(s.get('name')), sw)} "
+            f"{_fit(RT.get(s.get('runtime'), '?'), rw)} {_fit(str(s.get('model') or '—'), mw)} {'—':<3} "
+            f"{_fit(st, stw)} {q or '·'} "
+            f"{_fit(str(s.get('work') or '—'), ww)} {_fit(str(s.get('now') or '—'), nw)} "
             f"{'term ▸' if s.get('target') else '—'}"
         )
-        out.append(line)
+        prev = pod
     if not seats:
-        out.append("  no seats match")
-    allseats = _seats(snap, ui["colony"])
+        out.append("no seats match")
     working = sum(1 for s in allseats if s.get("state") == "working")
-    att = sum(1 for s in allseats if _attention(s))
     q = sum(int(s.get("queue") or 0) for s in allseats)
-    out += [
-        "",
-        f"{len(allseats)} seats · {working} working · {att} need attention · {q} open rows",
-        "",
-        "RECENT",
-    ]
-    out += _recent_lines(snap, ui, 5)
-    return out
+    out.append(f"{len(allseats)} seats · {working} working · {len(bad)} need attention · {q} open rows")
+    return out + _recent_block(snap, ui, w, 5)
 
 
-def _recent_lines(snap, ui, n=None) -> list:
+def _recent_block(snap, ui, w, n=None) -> list:
     c = _find_colony(snap, ui["colony"]) or {}
     ch = c.get("channel")
     ev = [e for e in snap.get("feed") or [] if not ch or e.get("channel") == ch]
     ev = [e for e in ev if _match(_ev(e), ui.get("filter", ""))]
     ev = ev[-n:] if n else ev
-    return ["  " + _ev(e) for e in reversed(ev)] or ["  No current items."]
+    out = [
+        ("  ── RECENT · colony " + str(ui["colony"]) + " ").ljust(w, "─"),
+        "  Recorded board notes · oldest to newest · Enter inspects",
+    ]
+    for e in ev:
+        try:
+            when = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(float(e.get("ts"))))
+        except (TypeError, ValueError, OverflowError):
+            when = "—"
+        out += [
+            f"  ▪ {when} · #{e.get('seq') or '?'}  (open ▸)",
+            f"    {e.get('from')} → {e.get('to')} · {e.get('kind') or 'note'}",
+            f"    {' '.join(str(e.get('text') or '').split())}",
+        ]
+    return out + ([] if ev else ["  No current items."])
 
 
 def _overview(snap, ui) -> list:
@@ -279,7 +308,7 @@ def _graph(snap, ui, w) -> list:
         cells = []
         for s in ps:
             l1 = f"{DOT.get(s.get('state'), '?')} {s.get('name')}"
-            l2 = f"{RT_GLYPH.get(s.get('runtime'), '??')} {s.get('model') or '—'}"
+            l2 = f"{RT_GLYPH.get(s.get('runtime'), '??')} —"
             bw = max(len(l1), len(l2)) + 2
             cells.append(
                 (
@@ -315,9 +344,18 @@ def _graph(snap, ui, w) -> list:
     for g in groups:
         h = max(len(b) for b in g)
         for i in range(h):
-            body.append(
-                "    ".join((b[i] if i < len(b) else " " * len(b[0])) for b in g)
-            )
+            row = ""
+            for k, b in enumerate(g):
+                a = b[i] if i < len(b) else " " * len(b[0])
+                nxt = g[k + 1] if k + 1 < len(g) else None
+                edge = i == 2 and nxt and b[1][1:3] == " ┌" and nxt[1][1:3] == " ┌"
+                if edge:  # pod → next pod: the first seat's row carries the edge `──▸`
+                    pad = len(a) - len(a[:-1].rstrip())
+                    a = a[: len(a) - 1 - pad] + "─" * pad + "┼"
+                if i == 2 and k and g[k - 1][1][1:3] == " ┌" and b[1][1:3] == " ┌":
+                    a = "┼▸" + a[2:]
+                row += a + ("────" if edge else "    " if nxt else "")
+            body.append(row)
         body.append("")
     title = f"╔═ ▦ COLONY {ui['colony']} "
     width = max([len(title) + 2, 20] + [len(x) + 4 for x in body])
@@ -329,9 +367,9 @@ def _graph(snap, ui, w) -> list:
     return out
 
 
-def _health(snap) -> list:
+def _health(snap, colony=None) -> list:
     sy = snap.get("system") or {}
-    seats = snap.get("seats") or []
+    seats = _seats(snap, colony)
     bad = [s for s in seats if _attention(s)]
     def ok(b):
         return "ok" if b else "DOWN"
@@ -453,12 +491,12 @@ def right_lines(snap, ui, w, h) -> list:
         t = ui["tab"]
         body = {
             "table": lambda: _table(snap, ui, w),
-            "recent": lambda: ["RECENT", ""] + _recent_lines(snap, ui),
+            "recent": lambda: _recent_block(snap, ui, w),
             "overview": lambda: _overview(snap, ui),
             "graph": lambda: _graph(snap, ui, w),
-            "health": lambda: _health(snap),
+            "health": lambda: _health(snap, ui["colony"]),
         }[t]()
-        return [_tabbar(ui, snap), ""] + body
+        return [_tabbar(ui, snap)] + ([] if t in ("table", "recent") else [""]) + body
     return _list_view(snap, ui, h)
 
 
@@ -507,7 +545,8 @@ def render(snap: dict, ui: dict, width: int, height: int) -> list:
         _fit(HINTS, width),
         _fit(
             ui.get("status")
-            or f"[{snap.get('host') or 'atlas'}] {_title(snap, ui).lower()}",
+            or f"[{snap.get('host') or 'atlas'}] {_title(snap, ui).lower()}"
+            + (f" · {snap.get('host')} → {ui['colony']}" if ui.get("colony") and not ui.get("seat") else ""),
             width,
         ),
     ]
@@ -828,14 +867,18 @@ def _keyname(ch, curses) -> str:
 
 
 def focus_first_live(snap, ui):
-    """Place the explorer cursor on the first live colony (else the first colony), as OpenRig does."""
+    """Open the first live colony on its TABLE with the explorer arrow on it, as OpenRig does; no live colony keeps the overview."""
     if ui.get("section") != "topology" or ui.get("colony"):
         return
     live = {x.get("colony") for x in snap.get("seats") or [] if x.get("state") in ("working", "idle", "blocked")}
-    cols = [r for r in explorer_rows(snap, ui) if r[1] == "colony"]
-    pick = next((r[2] for r in cols if r[2] in live), cols[0][2] if cols else None)
-    if pick is not None:
-        ui["cursor"] = next(i for i, r in enumerate(explorer_rows(snap, ui)) if r[1] == "colony" and r[2] == pick)
+    rows = explorer_rows(snap, ui)
+    cols = [r for r in rows if r[1] == "colony"]
+    pick = next((r[2] for r in cols if r[2] in live), None)
+    if pick is None:
+        return
+    ui["cursor"] = next(i for i, r in enumerate(rows) if r[1] == "colony" and r[2] == pick)
+    _open_colony(snap, ui, pick)
+    ui["focus"] = "explorer"
 
 
 class Loader:

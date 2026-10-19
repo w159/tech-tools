@@ -5,6 +5,7 @@
 ### Changed
 
 - Dashboard rail section "This machine" lists the live Atlas colonies from `term/snapshot` (id, project, state dot, seat count, link to `#/terminal?space=<id>`; `No colonies running` when none) instead of herdr workspaces, which stay on the herdr/integrations page only.
+- Atlas Command Center TUI opens on the first live colony with its `[ TABLE ]` selected, laid out like the OpenRig native TUI (CONFIG/HEALTH/filter lines, `POD SEAT RT MODEL CTX STATE Q WORK NOW ACTIONS` grouped by pod with `┈` rules, summary line, `── RECENT ──` board-note block with `#seq`); GRAPH draws `──▸` edges between pods; explorer tree arrow takes column 0 like the capture; the seat NOW column shows the latest tool row from the live pane (`ctx_read file:range`) before the board note. With no live colony it keeps the topology overview.
 
 ### Fixed
 

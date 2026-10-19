@@ -13,6 +13,7 @@ import time  # noqa: E402
 
 EV = {
     "ts": 1792181090,
+    "seq": 7,
     "from": "impl-1",
     "to": "lead",
     "kind": "blocked",
@@ -139,23 +140,42 @@ class Render(unittest.TestCase):
             self.assertIn(s, f)
 
     def test_table(self):
-        f = frame(T.new_ui(colony="lead-01"))
+        f = frame(T.new_ui(colony="lead-01"), 180, 50)
         for s in (
-            "[ TABLE ]",
-            "colony lead-01",
-            "POD",
-            "SEAT",
-            "MODEL",
-            "ACTIONS",
-            "● working",
-            "! blocked",
-            "· idle",
+            "[ TABLE ]  RECENT    OVERVIEW    GRAPH    HEALTH     colony lead-01",
+            "▪ CONFIG · colony settings  (open ▸)",
+            "HEALTH  ATTENTION · impl-1 blocked",
+            "/ filter agents…",
+            "POD      SEAT            RT   MODEL             CTX STATE         Q WORK            NOW ",
+            "━━━━━━━━",
+            "┈┈┈┈┈┈┈┈",
+            "explorer ● ex-1",
+            "! impl-1",
+            "· impl-2",
             "term ▸",
             "3 seats · 1 working · 1 need attention · 3 open rows",
-            "RECENT",
-            "▪ [blocked]",
+            "── RECENT · colony lead-01 ──",
+            "▪ 2026-10-16 ",
+            "· #7  (open ▸)",
+            "impl-1 → lead · blocked",
         ):
             self.assertIn(s, f)
+        self.assertEqual(f.count("explorer ●"), 1)
+
+    def test_default_opens_live_colony_table(self):
+        ui = T.new_ui()
+        T.focus_first_live(SNAP, ui)
+        f = frame(ui, 180, 50)
+        self.assertIn("▶   ┣━ ▦ lead-01", f)
+        self.assertIn("[ TABLE ]", f)
+        self.assertIn("POD      SEAT", f)
+
+    def test_no_live_colony_keeps_topology(self):
+        snap = dict(SNAP, seats=[])
+        ui = T.new_ui()
+        T.focus_first_live(snap, ui)
+        self.assertIsNone(ui["colony"])
+        self.assertIn("2 colonies · select one in Explorer", "\n".join(T.render(snap, ui, 140, 40)))
 
     def test_graph_boxes(self):
         f = frame(T.new_ui(colony="lead-01", tab="graph"))
@@ -164,7 +184,8 @@ class Render(unittest.TestCase):
             "╔═ ▦ COLONY lead-01",
             "┌ ≡ explorer",
             "│ ● ex-1",
-            "│ >_ m-omp",
+            "│ >_ —",
+            "─┼────┼▸│",
             "▾",
             "╚",
         ):

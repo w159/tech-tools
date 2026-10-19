@@ -234,6 +234,22 @@ def _last_line(text: str) -> str:
     return lines[-1][:NOW_MAX] if lines else ""
 
 
+# A harness's tool-call row: an optional bullet, then `tool_name args` or `Tool(args)`; or the panefeed's
+# `HH:MM:SS  tool  args` row (its `think` rows are narration, not a tool).
+_ACTIVITY = re.compile(
+    r"^[\s│┃]*(?:[●⏺•▸→⎿✔]\s*)?((?:ctx_\w+|[Rr]ead|[Bb]ash|[Gg]rep|[Gg]lob|[Ee]dit|[Ww]rite|[Ff]ind|[Ss]earch|[Tt]ask|[Ww]eb\w*)\b[( :].*\S)"
+    r"|^\s*\d\d:\d\d:\d\d\s+(?!think\b)(\S+\s+\S.*\S)"
+)
+
+
+def _pane_activity(text: str) -> str:
+    """The seat's latest tool/activity row from its live pane ('' when none is visible)."""
+    for ln in reversed(strip_ansi(text or "").splitlines()[-60:]):
+        if m := _ACTIVITY.match(ln):
+            return " ".join((m.group(1) or m.group(2)).split())[:NOW_MAX]
+    return ""
+
+
 def _specs() -> list[dict]:
     out = []
     for p in sorted((PLUGIN_DIR / "agents").glob("*.md")):
@@ -582,7 +598,8 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 )[:NOW_MAX]
                 if mine
                 else "",
-                "now": (
+                "now": _pane_activity(text)
+                or (
                     " ".join(str(note["text"]).split())[:NOW_MAX]
                     if note and note.get("text")
                     else _last_line(text)
@@ -614,6 +631,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     feed = [
         {
             "ts": n.get("ts"),
+            "seq": n.get("seq"),
             "from": n.get("owner"),
             "to": n.get("to") or "all",
             "kind": n.get("kind") or "note",

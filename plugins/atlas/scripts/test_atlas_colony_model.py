@@ -38,6 +38,15 @@ esac
 """
 
 
+class PaneActivityTest(unittest.TestCase):
+    def test_latest_tool_row_wins(self):
+        text = "● ctx_read atlas_dashboard.py:1-250\n  ⎿ ok\n● ctx_read atlas_dashboard.py:2501-2750\n\n❯ \n"
+        self.assertEqual(model._pane_activity(text), "ctx_read atlas_dashboard.py:2501-2750")
+        self.assertEqual(model._pane_activity("thinking…\n❯ "), "")
+        feed = "10:04:27  ctx_read    atlas_dashboard.py:1-100\n10:04:34  think       Chunk 1 done\n"
+        self.assertEqual(model._pane_activity(feed), "ctx_read atlas_dashboard.py:1-100")
+
+
 class ModelTest(unittest.TestCase):
     def setUp(self):
         model._STATIC.clear()
