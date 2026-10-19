@@ -142,21 +142,21 @@ class ModelTest(unittest.TestCase):
             json.dumps({"team_id": tid, "class": "fix", "effort": "low", "task": "x", "created": created, "members": [{"name": member, "role": "implementer"}], **extra})
         )
 
-    def test_only_live_or_fresh_colonies_listed(self):
+    def test_only_colonies_with_work_in_progress_listed(self):
         now = time.time()
-        self._team(self.root, "killed1", now - 600, "worker-k1")  # killed, not reaped, no panes, fresh
-        self._team(self.root, "old1", now - 90000, "worker-o1")  # un-reaped but older than 24h
-        self._team(self.root, "gone1", now - 600, "worker-g1", state="reaped")
+        self._team(self.root, "grace1", now - 60, "worker-k1")  # 1 min old, no panes: startup grace
+        self._team(self.root, "stale1", now - 600, "worker-o1")  # 10 min old, no panes: hidden
+        self._team(self.root, "gone1", now - 60, "worker-g1", state="reaped")
         reg = Path(self.root, ".atlas", ".run", "channels.json")
         data = json.loads(reg.read_text())
-        data["channels"]["proj@main/lead-old"] = {  # stale lead channel: all seats finished, no pane
+        data["channels"]["proj@main/lead-old"] = {  # all seats finished, no pane
             "name": "proj@main/lead-old", "kind": "lead", "lead": "lead-old",
             "members": [{"name": f"explorer-s{i}", "role": "explorer", "exit_code": 0} for i in range(3)],
         }
         reg.write_text(json.dumps(data))
         s = model.snapshot(self.root)
         ids = {c["id"] for c in s["colonies"]}
-        self.assertEqual(ids, {"t1", "killed1"})  # t1 has live panes; its record is old
+        self.assertEqual(ids, {"t1", "grace1"})  # t1 has live working panes
         self.assertEqual({x["colony"] for x in s["seats"]}, ids)
 
     def test_all_projects_includes_other_projects_teams(self):
