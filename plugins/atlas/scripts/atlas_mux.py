@@ -666,6 +666,8 @@ def _open_window(
         res = _tmux("new-window", "-d", "-t", session, "-n", name, pane)
         if res.returncode != 0:
             return f"tmux new-window failed: {res.stderr.strip()}"
+        # tag like a team pane so the colony model lists a non-team worker whatever its cwd or registry
+        _tmux("set-option", "-p", "-t", f"{session}:{name}", "@atlas_worker", name)
     return None
 
 

@@ -397,11 +397,21 @@ def _recent_notes(files: list[tuple[int, Path]]) -> list[dict]:
     return recs
 
 
+def _within(path: str, root: str) -> bool:
+    path = os.path.realpath(path) if path else ""
+    return bool(path) and (path == root or path.startswith(root.rstrip("/") + "/"))
+
+
+def _owner(path: str, roots: list[str]) -> str:
+    """Deepest known project root containing path, else path itself (an unregistered project)."""
+    hits = [r for r in roots if _within(path, r)]
+    return max(hits, key=len) if hits else path
+
+
 def _active(root: str, panes_all: list[dict]) -> bool:
     """A project worth scanning: it has team records or a live pane running inside it."""
     return (Path(root) / ".atlas" / ".run" / "teams").is_dir() or any(
-        p["pane_current_path"] == root or p["pane_current_path"].startswith(root + "/")
-        for p in panes_all
+        _within(p["pane_current_path"], root) for p in panes_all
     )
 
 
@@ -507,7 +517,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "id": cid,
                 "label": cid,
                 "session": p["session_name"] if p else "",
-                "project": proj_of.get(name) or (p or {}).get("pane_current_path") or root,
+                "project": proj_of.get(name) or _owner((p or {}).get("pane_current_path") or root, roots),
                 "transport": "tmux" if p else "claude-bg",
                 "task": "",
                 "channel": str(m.get("channel") or ""),

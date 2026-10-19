@@ -1182,8 +1182,8 @@ class SpawnLifecycleTests(Base):
         self.assertEqual(0, rc, (data, err))
         calls_after = _tmux_log_calls(self.state)
         self.assertEqual(
-            calls_before + 3, len(calls_after)
-        )  # has-session, list-windows, new-window
+            calls_before + 4, len(calls_after)
+        )  # has-session, list-windows, new-window, set-option @atlas_worker
         self.assertNotIn("new-session", "\n".join(calls_after[calls_before:]))
         self.assertIn(
             "new-window -d -t atlas-r1 -n Beta", "\n".join(calls_after[calls_before:])

@@ -168,6 +168,37 @@ class ModelTest(unittest.TestCase):
         with mock.patch.object(model, "_projects", return_value=projects[:1]):
             self.assertNotIn("t2", {c["id"] for c in model.snapshot(self.root)["colonies"]})
 
+    def _skip_rule_snapshot(self, panes, projects):
+        env = {"FAKE_PANES": panes}
+        with mock.patch.dict(os.environ, env), mock.patch.object(model, "_projects", return_value=projects):
+            return model.snapshot(self.root, True)
+
+    def test_all_projects_skip_rule_keeps_live_panes(self):
+        dirs = []
+        for _ in range(3):
+            d = tempfile.TemporaryDirectory()
+            self.addCleanup(d.cleanup)
+            dirs.append(os.path.realpath(d.name))
+        a, b, c = dirs
+        sub = Path(b, "sub", "dir")
+        sub.mkdir(parents=True)
+        outside = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, outside, True)
+        Path(c, ".atlas", ".run", "board").mkdir(parents=True)  # old files only, no teams dir
+        Path(c, ".atlas", ".run", "board", "old.jsonl").write_text("{}\n")
+        projects = [{"root": r, "name": Path(r).name, "channels": 0} for r in (self.root, a, b, c)]
+        panes = (
+            f"%11\tatlas-skipa\tw\t1\t0\t0\tworker-a\timplementer\tomp\t{a}\n"
+            f"%12\tatlas-skipb\tw\t2\t0\t0\tworker-b\timplementer\tomp\t{sub}\n"
+            f"%13\tatlas-skipo\tw\t3\t0\t0\tworker-o\timplementer\tomp\t{outside}\n"
+        )
+        s = self._skip_rule_snapshot(panes, projects)
+        proj = {x["id"]: x["project"] for x in s["colonies"]}
+        self.assertEqual(proj.get("skipa"), a)  # (a) non-team spawn, cwd == project
+        self.assertEqual(proj.get("skipb"), b)  # (b) cwd in a subdir lists under the project
+        self.assertEqual(proj.get("skipo"), outside)  # (c) no registered project: its cwd
+        self.assertNotIn(c, proj.values())  # (d) no teams dir, no panes: history only
+
     def test_all_projects_subprocess_budget_and_idle_projects_skipped(self):
         idle = []
         for i in range(30):  # registered projects with no teams dir and no live pane
