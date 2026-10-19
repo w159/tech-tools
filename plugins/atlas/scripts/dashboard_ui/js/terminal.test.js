@@ -29,6 +29,7 @@ globalThis.document = {
 const terms = [];
 window.Terminal = class {
   constructor(o) { this.opts = o; this.cols = 80; this.rows = 24; this.out = ""; this.sent = []; terms.push(this); }
+  parser = { registerOscHandler: (id, fn) => { this.osc = this.osc || {}; this.osc[id] = fn; return { dispose() {} }; } };
   loadAddon() {} open() {} focus() {} dispose() { this.disposed = true; } reset() { this.out = ""; }
   write(d) { this.out += typeof d === "string" ? d : "<bytes>"; }
   onData(fn) { this.dataFn = fn; return { dispose() {} }; }
@@ -189,4 +190,37 @@ test("stepFont steps 13 -> 10 until the grid reaches 100x30", async () => {
   expect(mid).toBeLessThan(13);
   expect(mid).toBeGreaterThanOrEqual(10);
   expect(stepFont(grid(500, 300))).toBe(10);
+});
+
+const NAMED = {
+  ...SNAP,
+  colonies: [{ ...SNAP.colonies[0], id: "t8e7324", name: "tui-review", title: "Review the TUI", source: { project: "tech-tools", lead: "lead-01a146", harness: "omp", session: "S1" } }, { id: "bare", task: "x" }],
+  seats: [{ ...SNAP.seats[0], colony: "t8e7324", address: "explorer-1@tui-review", role_title: "Read-only code explorer" }, { ...SNAP.seats[1], colony: "t8e7324" }],
+};
+
+test("spaces, agents list, cards and source line use human names with id fallback", async () => {
+  const { sourceLine, parseOpen } = await import("./pages/terminal.js");
+  expect(sourceLine(NAMED.colonies[0])).toBe("from omp session S1 · lead lead-01a146 · tech-tools");
+  expect(sourceLine(NAMED.colonies[1])).toBe("");
+  expect(parseOpen("open;c1;seat-a")).toEqual({ space: "c1", seat: "seat-a" });
+  expect(parseOpen("open;c1")).toEqual({ space: "c1", seat: "" });
+  expect(parseOpen("close;c1")).toBeNull();
+  const root = await mount(NAMED, { space: "t8e7324" });
+  const t = text(root);
+  for (const s of ["tui-review", "Review the TUI", "bare", "Agents · 2", "explorer-1@tui-review", "Read-only code explorer", "tui-review / All agents", "from omp session S1", "2 agents in tui-review"]) expect(t).toContain(s);
+  expect(t).toContain("impl-cd34"); // seat without address falls back to its name
+});
+
+test("the Command Center OSC 7717 handler opens a space and a seat", async () => {
+  const sets = [];
+  const ctx = mk(NAMED, {});
+  ctx.setParams = (p) => sets.push(p);
+  const root = page.render(ctx); root.isConnected = true; walk(root).forEach((x) => (x.isConnected = true));
+  await tick(); await tick();
+  const term = terms[terms.length - 1];
+  expect(typeof term.osc[7717]).toBe("function");
+  term.osc[7717]("open;t8e7324;explorer-ab12");
+  expect(sets.pop()).toEqual({ space: "t8e7324", seat: "explorer-ab12" });
+  term.osc[7717]("garbage");
+  expect(sets.length).toBe(0);
 });

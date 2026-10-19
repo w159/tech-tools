@@ -4,6 +4,7 @@
 // is the separate #/terminal route (pages/terminal.js).
 
 import { h, replace, fmtRelative } from "../dom.js";
+import { spaceName, seatAddress, sourceLine } from "./terminal.js";
 import { Badge, Button, State, toast, toastError, confirm } from "../components.js";
 
 const BADGE = { running: "working", idle: "idle", stuck: "input", finished: "done", dead: "fail", parked: "idle" };
@@ -46,11 +47,12 @@ const allProjects = (snap, ctx) => {
   return h("div", { class: "colony-all-projects" }, ...groups.map((g) => h("section", { class: "colony-group" },
     h("h2", { title: g.project }, g.name),
     ...g.colonies.map(({ colony, seats }) => h("div", { class: "colony-card" },
-      h("div", { class: "colony-top" }, h("strong", { class: "mono" }, colony.id), h("span", { class: "dim truncate" }, colony.task || ""), h("span", { class: "grow" }),
-        Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + colony.id, onClick: () => ctx.navigate("terminal", { space: colony.id, project: g.project }) })),
-      ...seats.map((s) => h("div", { class: "colony-top" }, h("span", { class: "truncate", title: s.name }, s.name), h("span", { class: "chip-lite" }, s.role || "worker"), Badge({ status: BADGE[s.state] || s.state, text: s.state }),
+      h("div", { class: "colony-top" }, h("strong", { title: colony.id }, spaceName(colony)), h("span", { class: "dim truncate" }, colony.title || colony.task || ""), h("span", { class: "grow" }),
+        Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + spaceName(colony), onClick: () => ctx.navigate("terminal", { space: colony.id, project: g.project }) })),
+      sourceLine(colony) ? h("div", { class: "dim colony-source" }, sourceLine(colony)) : null,
+      ...seats.map((s) => h("div", { class: "colony-top" }, h("span", { class: "truncate", title: s.name }, seatAddress(s)), h("span", { class: "chip-lite" }, s.role_title || s.role || "worker"), Badge({ status: BADGE[s.state] || s.state, text: s.state }),
         h("span", { class: "grow" }),
-        Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + s.name, onClick: () => ctx.navigate("terminal", { ...terminalParams({ colony: colony.id, name: s.name }), project: g.project }) }))))))));
+        Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + seatAddress(s), onClick: () => ctx.navigate("terminal", { ...terminalParams({ colony: colony.id, name: s.name }), project: g.project }) }))))))));
 };
 const noMembers = (ctx) => State({ variant: "empty", title: "No colony members yet", body: "Members appear here when atlas workers are dispatched into this project's channel. Turn on Show all panes to see every pane.", action: terminalBtn(ctx) });
 
@@ -122,7 +124,7 @@ export const terminalParams = (m) => (m.colony ? { space: m.colony, seat: m.name
 
 function rowTop(m, onKill, onTerm) {
   return h("div", { class: "colony-top" },
-    h("strong", { class: "truncate", title: m.name }, m.name),
+    h("strong", { class: "truncate", title: m.name }, m.address || m.name),
     h("span", { class: "chip-lite" }, m.kind),
     parked(m) ? Badge({ status: "idle", text: "parked" }) : Badge({ status: BADGE[m.state] || m.state, text: m.state }),
     chip(m.headless, "no terminal pane", NO_PANE),

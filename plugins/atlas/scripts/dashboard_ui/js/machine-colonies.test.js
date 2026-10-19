@@ -29,9 +29,9 @@ const mount = async (snap) => { api.get = async () => snap; const el = MachineCo
 
 test("rows come from the snapshot: id, project, state dot, seat count, terminal link", async () => {
   expect(colonyRows(SNAP)).toEqual([
-    { id: "run1", project: "tech-tools", state: "working", seats: 2 },
-    { id: "run2", project: "other", state: "blocked", seats: 1 },
-    { id: "run3", project: "tech-tools", state: "idle", seats: 1 },
+    { id: "run1", name: "run1", title: "", project: "tech-tools", state: "working", seats: 2 },
+    { id: "run2", name: "run2", title: "", project: "other", state: "blocked", seats: 1 },
+    { id: "run3", name: "run3", title: "", project: "tech-tools", state: "idle", seats: 1 },
   ]);
   const el = await mount(SNAP);
   const rows = walk(el).filter((x) => (x.attrs.class || "").includes("rail-colony"));
@@ -49,4 +49,13 @@ test("no herdr workspace rows", async () => {
 test("empty state", async () => {
   const el = await mount({ host: "mac", colonies: [], seats: [] });
   expect(text(el)).toContain("No colonies running");
+});
+
+test("rows show the human name and title, keep the id in the link", async () => {
+  const el = await mount({ host: "mac", project: "/p", colonies: [{ id: "t8e7324", name: "tui-review", title: "Review the TUI" }], seats: [] });
+  const row = walk(el).find((x) => (x.attrs.class || "").includes("rail-colony"));
+  expect(row.attrs.href).toBe("#/terminal?space=t8e7324");
+  expect(text(row)).toContain("tui-review");
+  expect(walk(row).some((x) => x.attrs.title === "Review the TUI")).toBe(true);
+  expect(text(row)).not.toContain("t8e7324");
 });

@@ -48,3 +48,8 @@
 @media (max-width: 900px) { .tw-grid { grid-template-columns: 1fr; } .tw-side { width: 160px; } }
 .tw-card-body .xterm, .tw-term .xterm { height: 100%; }
 .tw-card-body .xterm-screen, .tw-card-body .xterm-rows { white-space: pre; }
+.tw-space { flex-direction: column; align-items: flex-start; gap: 0; }
+.tw-agent-name { display: flex; flex-direction: column; min-width: 0; }
+.tw-sub2 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-source { color: var(--text-faint); font-size: 12px; }
+.tw-crumbs { flex-wrap: wrap; }

@@ -122,11 +122,25 @@ export function connectPty({ term, kind, target, project, onStatus, probe, place
   };
 }
 
+// Human labels from the snapshot (colony name/title/source, seat address/role_title); ids are the fallback.
+export const spaceName = (c) => c.name || c.id;
+export const seatAddress = (s) => s.address || s.name;
+export const sourceLine = (c) => {
+  const o = c.source || {};
+  const from = o.harness ? "from " + RUNTIMES[o.harness] + (o.session ? " session " + o.session : "") : o.session ? "from session " + o.session : "";
+  return [from, o.lead ? "lead " + o.lead : "", o.project].filter(Boolean).join(" · ");
+};
+// TUI bridge payload "open;<colony>[;<seat>]" -> {space, seat}, or null when it is not an open request.
+export function parseOpen(data) {
+  const [verb, space, seat] = String(data).split(";");
+  return verb === "open" && space ? { space, seat: seat || "" } : null;
+}
+
 const runtimeLabel = (r) => RUNTIMES[r] || "agent";
 const ended = (s) => s.state === "finished" || s.state === "dead";
 const endedLabel = (s) => (ended(s) ? "finished" + (s.exit_code != null ? ", exit " + s.exit_code : "") : "");
 const stateChip = (s) => h("span", { class: "tw-chip", "data-state": s.state || "unknown" }, ended(s) ? s.state + (s.exit_code != null ? ", exit " + s.exit_code : "") : s.state || "unknown");
-const snapKey = (snap) => JSON.stringify([((snap && snap.colonies) || []).map((c) => c.id), ((snap && snap.seats) || []).map((s) => s.name + s.target + s.state)]);
+const snapKey = (snap) => JSON.stringify([((snap && snap.colonies) || []).map((c) => c.id + (c.name || "") + (c.title || "")), ((snap && snap.seats) || []).map((s) => s.name + (s.address || "") + s.target + s.state)]);
 
 function emptyColonies() {
   return h("div", { class: "tw-empty" },
@@ -172,6 +186,10 @@ export default {
       window.addEventListener("resize", fit);
       S.disposers.push(() => { pty.dispose(); stop(); term.dispose(); window.removeEventListener("resize", fit); });
       term.focus();
+      if (kind === "tui") { // the Command Center is clickable, and its TUI can open a space here (private OSC 7717)
+        el.addEventListener("mousedown", () => term.focus());
+        if (term.parser) term.parser.registerOscHandler(7717, (data) => { const o = parseOpen(data); if (o) go(o.space, o.seat); return true; });
+      }
       return term;
     };
     const sync = () => { if (ctx.setParams) ctx.setParams({ space: st.space === CC ? "" : st.space, seat: st.seat }); };
@@ -188,8 +206,8 @@ export default {
     }
 
     function drawSide() {
-      const spaces = [{ id: CC, label: "Atlas Command Center" }, ...colonies().map((c) => ({ id: c.id, label: c.id, title: c.label }))];
-      const items = spaces.map((s) => h("button", { class: "tw-space", type: "button", "aria-current": s.id === st.space ? "page" : null, title: s.title || s.label, onClick: () => go(s.id) }, s.label));
+      const spaces = [{ id: CC, label: "Atlas Command Center" }, ...colonies().map((c) => ({ id: c.id, label: spaceName(c), title: c.title || c.label, sub: c.title }))];
+      const items = spaces.map((s) => h("button", { class: "tw-space", type: "button", "aria-current": s.id === st.space ? "page" : null, title: s.title || s.label, onClick: () => go(s.id) }, h("span", { class: "tw-agent-name" }, s.label), s.sub ? h("span", { class: "tw-agent-role tw-sub2" }, s.sub) : null));
       const parts = [h("div", { class: "tw-side-label" }, "SPACES"), ...items];
       const c = colony();
       if (c) {
@@ -197,7 +215,7 @@ export default {
         parts.push(h("div", { class: "tw-side-label" }, "Agents · " + seats.length));
         for (const s of seats) {
           parts.push(h("button", { class: "tw-agent", type: "button", "aria-current": s.name === st.seat ? "true" : null, onClick: () => go(c.id, s.name) },
-            h("span", { class: "tw-dot", "data-state": s.state || "unknown" }), h("span", { class: "tw-agent-name" }, s.name), h("span", { class: "tw-agent-role" }, s.role || "")));
+            h("span", { class: "tw-dot", "data-state": s.state || "unknown" }), h("span", { class: "tw-agent-name" }, seatAddress(s), s.role_title ? h("span", { class: "tw-agent-role tw-sub2" }, s.role_title) : null)));
         }
       }
       if (st.snap && !colonies().length) parts.push(emptyColonies());
@@ -206,7 +224,7 @@ export default {
 
     function drawFoot() {
       const c = colony();
-      const left = st.space === CC ? "Atlas Command Center · live" : c ? seatsOf(c).length + " agents in " + c.id + " · live tmux panes" : "";
+      const left = st.space === CC ? "Atlas Command Center · live" : c ? seatsOf(c).length + " agents in " + spaceName(c) + " · live tmux panes" : "";
       replace(foot, h("span", {}, left), st.ptyStatus ? h("span", { class: "tw-status" + (st.ptyErr ? " tw-err" : ""), role: "status" }, st.ptyStatus) : null, st.err ? h("span", { class: "tw-status tw-err", role: "status" }, st.err) : null, h("span", { class: "tw-clock" }, (st.snap && st.snap.clock) || ""));
     }
 
@@ -237,8 +255,8 @@ export default {
       const body = h("div", { class: "tw-card-body" });
       const live = Boolean(s.target);
       const card = h("article", { class: "tw-card", "data-state": s.state || "unknown" },
-        h("header", { class: "tw-card-head" }, h("span", { class: "tw-badge", "data-rt": s.runtime || "unknown" }, runtimeLabel(s.runtime)), h("span", { class: "tw-card-name" }, s.name), stateChip(s),
-          h("button", { class: "tw-open", type: "button", title: live ? "Enlarge" : "No terminal pane", "aria-label": "Enlarge " + s.name, disabled: !live, onClick: () => go(c.id, s.name) }, "↗")),
+        h("header", { class: "tw-card-head" }, h("span", { class: "tw-badge", "data-rt": s.runtime || "unknown" }, runtimeLabel(s.runtime)), h("span", { class: "tw-card-name" }, seatAddress(s)), stateChip(s),
+          h("button", { class: "tw-open", type: "button", title: live ? "Enlarge" : "No terminal pane", "aria-label": "Enlarge " + seatAddress(s), disabled: !live, onClick: () => go(c.id, s.name) }, "↗")),
         body);
       grid.appendChild(card);
       if (!live) return body.appendChild(h("p", { class: "tw-card-note" }, endedLabel(s) || "no terminal attached", s.now ? h("span", { class: "tw-now" }, s.now) : null));
@@ -252,7 +270,7 @@ export default {
     async function drawGrid(c) {
       const seats = seatsOf(c);
       const grid = h("div", { class: "tw-grid" });
-      const crumbs = h("div", { class: "tw-crumbs" }, h("strong", {}, c.id + " / All agents"), h("span", { class: "tw-task" }, c.task || ""));
+      const crumbs = h("div", { class: "tw-crumbs" }, h("strong", {}, spaceName(c) + " / All agents"), h("span", { class: "tw-task" }, c.title || c.task || ""), sourceLine(c) ? h("span", { class: "tw-source" }, sourceLine(c)) : null);
       replace(main, crumbs, seats.length ? grid : h("div", { class: "tw-empty" }, h("strong", {}, "No agents in this colony yet")));
       if (!seats.length) return;
       try { await loadXterm(); } catch (e) { st.err = String(e.message || e); return drawFoot(); }
@@ -265,7 +283,7 @@ export default {
     async function drawBig(c, s) {
       const el = h("div", { class: "tw-term tw-term-pane" });
       const back = h("button", { class: "tw-back btn", type: "button", onClick: () => go(c.id) }, "← All agents");
-      replace(main, h("div", { class: "tw-crumbs" }, back, h("strong", {}, s.name), h("span", { class: "tw-badge", "data-rt": s.runtime || "unknown" }, runtimeLabel(s.runtime)), stateChip(s), h("span", { class: "tw-task" }, "Esc outside the terminal or Shift+Esc to go back")), el);
+      replace(main, h("div", { class: "tw-crumbs" }, back, h("strong", {}, spaceName(c) + " / " + seatAddress(s)), s.role_title ? h("span", { class: "tw-sub" }, s.role_title) : null, h("span", { class: "tw-badge", "data-rt": s.runtime || "unknown" }, runtimeLabel(s.runtime)), stateChip(s), h("span", { class: "tw-task" }, "Esc outside the terminal or Shift+Esc to go back")), el);
       try { await loadXterm(); } catch (e) { st.err = String(e.message || e); return drawFoot(); }
       if (!el.isConnected || st.seat !== s.name) return;
       st.big = attachPty(el, "pane", { target: s.target });

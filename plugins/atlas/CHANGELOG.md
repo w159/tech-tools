@@ -4,6 +4,22 @@
 
 ### Changed
 
+- Colonies and agents have human names with their source session: the Terminal page, Colony page and the rail "This machine" rows show the colony `name` and `title`, a `from <harness> session <session> · lead <lead> · <project>` line, and seat addresses like `explorer-1@tui-review` with a role subtitle; ids stay in URLs.
+- Terminal workspace labels follow the OpenRig team workspace: SPACES with a muted title line, `Agents · N` with role subtitles, `<name> / All agents`, `<name> / <address>` when enlarged, and `<N> agents in <name> · live tmux panes`.
+
+### Added
+
+- Clickable Command Center TUI in the web page: clicking the terminal focuses it, and opening a colony or seat in the TUI (private OSC 7717 `open;<colony>[;<seat>]`) switches the web workspace to that space or agent.
+
+### Fixed
+
+- The seat NOW column no longer shows a literal `$1: $2` placeholder.
+- completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
+
+## 12.5.4 (2026-10-19)
+
+### Changed
+
 - The terminal workspace page (`#/terminal`) is now named **Terminal** in the nav, mobile tabs, settings, page header (`<host> · Terminal`) and document title, with its own `terminal` icon, so it is distinct from the **Colony** roster page; its space list heading reads `SPACES`. No page is called "Atlas Colony" any more.
 - Dashboard rail section "This machine" lists the live Atlas colonies from `term/snapshot` (id, project, state dot, seat count, link to `#/terminal?space=<id>`; `No colonies running` when none) instead of herdr workspaces, which stay on the herdr/integrations page only.
 - `atlas_colony_model.snapshot` lists only colonies with work in progress: a seat that is working, idle or blocked on a live pane, or a team record under 3 minutes old whose panes are not up yet (`TEAM_GRACE_S`). Colonies whose seats are all finished or dead, or that have no live pane, are hidden; the 24h `TEAM_FRESH_S` path is gone.
@@ -28,12 +44,6 @@
 
 - Atlas Colony terminal works under "All projects": the ws `kind=tui` treats a missing, empty or `all` project as every project (`atlas_tui.py --all`) instead of 400 `bad_project`, `term/snapshot` accepts `project=all`, and `atlas_colony_model.snapshot(all_projects=True)` now reads teams, channels, todos and notes from every known project (colonies and seats carry `project`). The page asks with `all=1` and never sends `project=all`, shows the server's reason on a 4xx behind a failed ws, and the Command Center xterm fills its pane (CSS height chain plus a ResizeObserver refit). The Colony page lists every live colony grouped by project under All projects. Root cause of the clipped xterm: xterm gives its root the class `terminal`, which the generic log-view rule (`max-height: 340px; min-height: 120px`) also matched; that rule is now `.terminal:not(.xterm)`, so the Command Center and enlarged pane fill their surface (98% of `.tw-term` measured at 1600x1000 and 1200x800). Lint: `_test_isolation.py` uses `contextlib.suppress`; `_omp_error_lines` no longer calls `.get` on a possibly-None value.
 - Command Center TUI fills the whole terminal and lists only real colonies. The PTY child now gets its winsize before exec and no `LINES`/`COLUMNS` env (ncurses let them override the tty size, so the TUI never followed the xterm or a browser resize), and the TUI repaints on `KEY_RESIZE` and uses the terminal's default colours. The TUI runs under `TERM=screen-256color`: ncurses' `xterm-256color` `rep` emitted a stray `\x01` for each `━` rule run, dropping the header/footer rules. `atlas_colony_model.snapshot` lists a colony only with a live pane or an un-reaped team record under 24h old, so old lead channels and aged teams no longer clutter the explorer, cards or Colony page.
-
-## Unreleased
-
-### Fixed
-
-- completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
 
 ## 12.5.1 (2026-10-16)
 
