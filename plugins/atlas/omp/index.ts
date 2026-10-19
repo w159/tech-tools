@@ -58,12 +58,14 @@ import { phaseFromName, registerChannelView, registerLaneToolRecorder } from "./
 import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { registerTeamTool } from "./team-tool";
+import { registerAtlasTuiCommand } from "./tui-command";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
 import { createShellEditTracker } from "./delegation";
 import { atlasStoreEnv, registerHookBridge } from "./hook-bridge";
 import { type RunStateSink, createRunStateSink } from "./run-state";
 import { createTranscriptCache, registerStopBridge, sessionFileOf } from "./stop-bridge";
 import { registerMandates } from "./mandates";
+import { pluginScript } from "./plugin-path";
 import { gatesArmed } from "./scope";
 import { defaultLeanCtxBin, registerShellRoute } from "./shell-route";
 import { registerStyle } from "./style";
@@ -73,8 +75,9 @@ import { registerWorkerReport } from "./worker-report";
 /** Absolute atlas plugin root: the directory containing scripts/atlas_todo.py. */
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 
-/** The durable todo board CLI, shipped alongside this module. */
-const TODO_SCRIPT = nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py");
+/** The durable todo board CLI, shipped alongside this module; resolved at call time so an
+ * `omp plugin upgrade atlas` mid-session is picked up (plugin-path). */
+const todoScript = (): string => pluginScript("atlas_todo.py");
 
 /** The only item statuses the atlas board vocabulary accepts. */
 const BOARD_STATUSES: Record<string, true> = { pending: true, in_progress: true, completed: true };
@@ -118,7 +121,7 @@ function todoPhases(): string[] {
  */
 export function ensureClaudePluginRoot(
 	env: Record<string, string | undefined> = process.env,
-	scriptPath: string = TODO_SCRIPT,
+	scriptPath: string = todoScript(),
 ): boolean {
 	const current = env.CLAUDE_PLUGIN_ROOT;
 	if (typeof current === "string" && current.trim() !== "") {
@@ -130,7 +133,8 @@ export function ensureClaudePluginRoot(
 	}
 	try {
 		if (statSync(scriptPath).isFile()) {
-			env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT;
+			// root of the install that actually ships the CLI (pluginScript may fall back to a sibling)
+			env.CLAUDE_PLUGIN_ROOT = nodePath.dirname(nodePath.dirname(scriptPath));
 			return true;
 		}
 	} catch {
@@ -193,7 +197,7 @@ export function boardMirrorArgv(
 	sessionId: string | undefined,
 	root: string,
 ): string[] {
-	const argv = ["python3", TODO_SCRIPT, "set", "--root", root];
+	const argv = ["python3", todoScript(), "set", "--root", root];
 	if (sessionId) argv.push("--session", sessionId);
 	argv.push(JSON.stringify(items));
 	return argv;
@@ -238,7 +242,7 @@ export function ircNoteArgv(
 		content.length > IRC_NOTE_MAX_CHARS
 			? `${content.slice(0, IRC_NOTE_MAX_CHARS)} [+${content.length - IRC_NOTE_MAX_CHARS} chars]`
 			: content;
-	return ["python3", TODO_SCRIPT, "note", "--root", root, "--owner", ircOwner(agentId), "--to", target, text];
+	return ["python3", todoScript(), "note", "--root", root, "--owner", ircOwner(agentId), "--to", target, text];
 }
 
 /** Kinds of native tool calls the tripwire redirects to a lean-ctx replacement (contracts/native-tools.json). */
@@ -751,6 +755,8 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	registerLaneToolRecorder(pi);
 	registerAdvisorGate(pi, defaultAdvisorDeps());
 	registerTeamTool(pi, PLUGIN_ROOT, undefined, process.env, channelView.open);
+	// /atlas-tui: hand the terminal to the curses TUI while omp's renderer is paused.
+	registerAtlasTuiCommand(pi);
 	register(pi, {
 		runState,
 		// getActiveTools() is omp's enabled set (top-level names plus live xd://

@@ -1,5 +1,7 @@
 """Tests for atlas_tui: text frames from a contract-shaped fixture snapshot (no live model)."""
 
+import contextlib
+import io
 import subprocess
 import sys
 import unittest
@@ -342,6 +344,76 @@ class Start(unittest.TestCase):
         argvs = [c.args[0] for c in run.call_args_list]
         self.assertIn("atlas-tui", argvs[0])
         self.assertEqual(argvs[1][-2:], ["automatic-rename", "off"])
+
+
+class LaunchWindow(unittest.TestCase):
+    OPENERS = {
+        "iTerm.app": 'tell application "iTerm"',
+        "Apple_Terminal": 'tell application "Terminal"',
+        "ghostty": "Ghostty",
+    }
+
+    def test_attach_open_argv_per_term_program(self):
+        self.assertIsNone(T._attach_open_argv({}))
+        self.assertIsNone(T._attach_open_argv({"TERM_PROGRAM": "vscode"}))
+        for tp, marker in self.OPENERS.items():
+            with self.subTest(term_program=tp):
+                res = T._attach_open_argv({"TERM_PROGRAM": tp})
+                assert res is not None
+                argv, label = res
+                self.assertEqual(argv[0], "open" if tp == "ghostty" else "osascript")
+                self.assertIn(marker, " ".join(argv))
+                self.assertIn("atlas-tui", " ".join(argv))
+
+    def _launch(self, env, opener_rc=0, has_session=1):
+        a = mock.Mock(project="/p", all=False, fixture=None)
+        calls, out = [], io.StringIO()
+
+        def fake(cmd, **kw):
+            calls.append(list(cmd))
+            r = mock.Mock()
+            r.returncode = has_session if cmd[:2] == ["tmux", "has-session"] else opener_rc
+            r.stdout = ""
+            return r
+
+        with mock.patch.dict(T.os.environ, env, clear=True), \
+                mock.patch("sys.platform", "darwin"), \
+                mock.patch.object(T.subprocess, "run", side_effect=fake), \
+                mock.patch.object(T, "once", return_value=0), \
+                contextlib.redirect_stdout(out):
+            T.launch(a)
+        return calls, out.getvalue()
+
+    def test_launch_opens_visible_window_per_term_program(self):
+        for tp, marker in self.OPENERS.items():
+            with self.subTest(term_program=tp):
+                calls, out = self._launch({"TERM_PROGRAM": tp})
+                self.assertEqual(calls[0][:2], ["tmux", "has-session"])
+                self.assertTrue(any("new-session" in " ".join(c) for c in calls))
+                self.assertTrue(any(marker in " ".join(c) for c in calls))
+                self.assertIn("opened a new", out)
+
+    def test_launch_reuses_existing_detached_session(self):
+        calls, out = self._launch({"TERM_PROGRAM": "vscode"}, has_session=0)
+        self.assertTrue(any("has-session" in " ".join(c) for c in calls))
+        self.assertFalse(any("new-session" in " ".join(c) for c in calls))
+        self.assertIn("reusing detached tmux session 'atlas-tui'", out)
+
+    def test_launch_falls_back_to_attach_command(self):
+        calls, out = self._launch({"TERM_PROGRAM": "vscode"})
+        self.assertFalse(any("osascript" in c or c[:1] == ["open"] for c in calls if c))
+        self.assertIn("attach with: tmux attach -t atlas-tui", out)
+        self.assertNotIn("inside omp:", out)
+
+    def test_launch_failed_opener_falls_back(self):
+        calls, out = self._launch({"TERM_PROGRAM": "iTerm.app"}, opener_rc=1)
+        self.assertTrue(any("osascript" in " ".join(c) for c in calls))
+        self.assertIn("attach with: tmux attach -t atlas-tui", out)
+        self.assertNotIn("opened a new", out)
+
+    def test_launch_prints_omp_hint(self):
+        _, out = self._launch({"TERM_PROGRAM": "vscode", "OMPCODE": "1"})
+        self.assertIn("inside omp: type /atlas-tui to open it in this session", out)
 
 
 class Attach(unittest.TestCase):

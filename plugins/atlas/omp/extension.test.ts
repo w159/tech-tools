@@ -23,6 +23,9 @@ const pi = {
 		handlers.set(name, list);
 	},
 	getActiveTools: () => [] as string[],
+	registerCommand() {
+		/* /atlas-tui registers but is never invoked here */
+	},
 } as unknown as ExtensionAPI;
 
 const ENV_KEYS = ["HOME", "ATLAS_DB", "ATLAS_DASHBOARD", "ATLAS_COLONY", "ATLAS_DASHBOARD_PORT", "ATLAS_STYLE"] as const;

@@ -88,6 +88,17 @@ class NamingTest(unittest.TestCase):
         self.assertEqual("completeness-critic@tui-review", got["critic-1"])
         self.assertEqual("d" * 39 + "…", seats[0]["role_title"])
 
+    def test_subagent_seats_address_by_member_name(self):
+        teams = [{"team_id": "t", "members": [{"name": "explorer-a"}, {"name": "scout-b"}, {"name": "critic-1"}]}]
+        cols = {"t": {"name": "tui-review"}}
+        seats = [{"name": n, "role": r, "colony": "t"} for n, r in
+                 (("scout-b", "subagent"), ("critic-1", "completeness-critic"), ("explorer-a", "subagent"))]
+        model._address_seats(seats, cols, teams, [])
+        got = {s["name"]: s["address"] for s in seats}
+        self.assertEqual("explorer-a@tui-review", got["explorer-a"])
+        self.assertEqual("scout-b@tui-review", got["scout-b"])
+        self.assertEqual("completeness-critic@tui-review", got["critic-1"])
+
 
 class ModelTest(unittest.TestCase):
     def setUp(self):
@@ -244,6 +255,65 @@ class ModelTest(unittest.TestCase):
         full = {"harness": "claude", "session": "s1", "lead": "L", "project": "p"}
         self.assertEqual(model._source_label(full, "c"), "from claude session s1 · lead L · p")
         self.assertEqual(model._source_label({"harness": "", "session": "", "lead": "", "project": ""}, "p@b/L"), "channel p@b/L")
+
+    def test_paneless_omp_channel_reports_subagent_and_harness(self):
+        reg = Path(self.root, ".atlas", ".run", "channels.json")
+        data = json.loads(reg.read_text())
+        data["channels"]["proj@main/lead-omp1"] = {
+            "name": "proj@main/lead-omp1", "kind": "lead", "lead": "lead-omp1", "harness": "omp",
+            "members": [{"name": "worker-o1", "role": "implementer", "exit_code": 0, "ended_at": time.time() - 60}],
+        }
+        reg.write_text(json.dumps(data))
+        s = model.snapshot(self.root)
+        c = next(c for c in s["colonies"] if c["channel"] == "proj@main/lead-omp1")
+        self.assertEqual(c["transport"], "subagent")
+        self.assertEqual(c["source"]["harness"], "omp")
+        seat = next(x for x in s["seats"] if x["name"] == "worker-o1")
+        self.assertEqual(seat["runtime"], "omp")
+
+    def _channel(self, name, lead, members, **extra):
+        reg = Path(self.root, ".atlas", ".run", "channels.json")
+        data = json.loads(reg.read_text())
+        data["channels"][name] = {
+            "name": name, "kind": "lead", "lead": lead, **extra, "members": members,
+        }
+        reg.write_text(json.dumps(data))
+
+    def test_running_paneless_omp_colony_is_live(self):
+        self._channel(
+            "proj@main/lead-live", "lead-live",
+            [{"name": "worker-l1", "role": "implementer", "joined": time.time() - 60}],
+            harness="omp", lead_pid=os.getpid(),
+        )
+        s = model.snapshot(self.root)
+        c = next(c for c in s["colonies"] if c["channel"] == "proj@main/lead-live")
+        self.assertFalse(c["finished"])
+        self.assertEqual(c["transport"], "subagent")
+        seat = next(x for x in s["seats"] if x["name"] == "worker-l1")
+        self.assertEqual(seat["state"], "working")
+        self.assertEqual(seat["runtime"], "omp")
+
+    def test_dead_lead_pid_marks_paneless_seat_dead(self):
+        import subprocess
+
+        pr = subprocess.Popen(["/bin/sleep", "0"])  # spawn + reap: a guaranteed-dead pid
+        pr.wait()
+        self._channel(
+            "proj@main/lead-dead", "lead-dead",
+            [{"name": "worker-d1", "role": "implementer", "ended_at": time.time() - 60}],
+            harness="omp", lead_pid=pr.pid,
+        )
+        s = model.snapshot(self.root)
+        seat = next(x for x in s["seats"] if x["name"] == "worker-d1")
+        self.assertEqual(seat["state"], "dead")
+
+    def test_name_colonies_harness_falls_back_to_channel_record(self):
+        chans = {"p@b/L": {"name": "p@b/L", "harness": "omp"}}
+        cols = {"t": {"id": "t", "channel": "p@b/L", "project": "/x/proj", "created": 1}}
+        model._name_colonies(cols, [{"team_id": "t"}], chans)
+        self.assertEqual("omp", cols["t"]["source"]["harness"])
+        model._name_colonies(cols, [{"team_id": "t"}])
+        self.assertEqual("", cols["t"]["source"]["harness"])  # recomputed: no chan_recs
 
     def test_only_colonies_with_work_in_progress_listed(self):
         now = time.time()

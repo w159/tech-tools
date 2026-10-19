@@ -1283,6 +1283,48 @@ def reap_channels(
     }
 
 
+_ANCESTOR_HARNESSES = ("omp", "bun", "claude", "codex", "node")
+
+
+def _ps_ancestor_table():
+    return subprocess.run(
+        ["ps", "-A", "-o", "pid=,ppid=,comm="],
+        capture_output=True, text=True, timeout=2,
+    )
+
+
+def _lead_pid(run=None) -> Optional[int]:
+    """Pid of the nearest ancestor whose comm basename is a harness process (omp runs as
+    `bun`, Claude Code hooks run via a shell under `claude`): one `ps -A` dump into a
+    pid -> (ppid, comm basename) map, then walk it upward from this process, at most 8
+    hops. None when none is found or ps fails."""
+    run = run or _ps_ancestor_table
+    try:
+        r = run()
+        if r.returncode != 0:
+            return None
+        table: dict[int, tuple[int, str]] = {}
+        for line in r.stdout.splitlines():
+            parts = line.strip().split(None, 2)  # comm may contain spaces (macOS full paths)
+            if len(parts) != 3 or not parts[0].isdigit() or not parts[1].isdigit():
+                continue
+            table[int(parts[0])] = (int(parts[1]), os.path.basename(parts[2].strip()))
+        pid = os.getpid()
+        for _ in range(8):
+            row = table.get(pid)
+            if row is None:
+                return None
+            ppid, comm = row
+            if comm in _ANCESTOR_HARNESSES:
+                return pid
+            if ppid <= 1 or ppid == pid:
+                return None
+            pid = ppid
+    except Exception:
+        return None
+    return None
+
+
 def open_lead_channel(
     root: Optional[str],
     lead_name: str,
@@ -1302,6 +1344,17 @@ def open_lead_channel(
         _add_member(mchan, lead, "lead", None)
         sub = _upsert(reg, f"{main}/{lead}", "lead", main, lead, base, branch)
         _add_member(sub, lead, "lead", None)
+        if "harness" not in sub:
+            # the harness of the caller that opened the channel (atlas_mux detection)
+            with contextlib.suppress(Exception):
+                from atlas_mux import _lead_harness
+
+                sub["harness"] = _lead_harness()
+        lp = _lead_pid()
+        if lp:  # overwrite on every open: a lead can restart
+            sub["lead_pid"] = lp
+        else:
+            sub.pop("lead_pid", None)
         for s in subagents or ():
             s = _sanitize_owner(s)
             if s != lead:

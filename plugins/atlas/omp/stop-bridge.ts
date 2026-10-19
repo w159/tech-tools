@@ -55,12 +55,13 @@ import {
 	runHook,
 	SESSION_END_EVENTS,
 } from "./hook-bridge";
-import { TODO_SCRIPT, leadName } from "./channels";
+import { leadName, todoScript } from "./channels";
 import { runCapture } from "./proc";
+import { pluginScript } from "./plugin-path";
 import { runStateArgv } from "./run-state";
 
-const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
-export const TRANSCRIPT_SCRIPT = nodePath.join(PLUGIN_ROOT, "scripts", "omp_transcript.py");
+/** Resolved at call time so an `omp plugin upgrade atlas` mid-session is picked up (plugin-path). */
+export const transcriptScript = (): string => pluginScript("omp_transcript.py");
 export const MAX_STOP_BLOCKS = 3;
 export const MAX_INGEST_PER_EVENT = 4;
 export const MAX_INGEST_PER_SESSION = 12;
@@ -83,7 +84,7 @@ export type ConvertFn = (sessionFile: string, out: string, timeoutMs: number) =>
 /** Real converter: `omp_transcript.py convert`; success means exit 0 and an `{"ok":true}` stdout line. */
 export const convertTranscript: ConvertFn = async (sessionFile, out, timeoutMs) => {
 	try {
-		const { code, stdout } = await runCapture(["python3", TRANSCRIPT_SCRIPT, "convert", "--session-file", sessionFile, "--out", out], { timeoutMs });
+		const { code, stdout } = await runCapture(["python3", transcriptScript(), "convert", "--session-file", sessionFile, "--out", out], { timeoutMs });
 		if (code !== 0) return false;
 		const parsed: unknown = JSON.parse(stdout.trim().split("\n").at(-1) ?? "");
 		return typeof parsed === "object" && parsed !== null && "ok" in parsed && parsed.ok === true && fs.existsSync(out);
@@ -315,7 +316,7 @@ function spawnDetachedReal(argv: string[], opts: DetachedOpts): void {
 /** Real reaper: detached, output discarded, fail open (channel-reap is bounded by its own --max-idle logic). */
 function reapReal(cwd: string): void {
 	try {
-		Bun.spawn(["python3", TODO_SCRIPT, "channel-reap", "--root", cwd], { cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
+		Bun.spawn(["python3", todoScript(), "channel-reap", "--root", cwd], { cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
 	} catch {
 		// fail open: stale channels get reaped by the next lead
 	}
@@ -324,7 +325,7 @@ function reapReal(cwd: string): void {
 /** Marks the lead member finished (exit 0) so the reap that follows can remove its channel; fail open. */
 async function finishLeadReal(cwd: string, lead: string): Promise<void> {
 	try {
-		await runCapture(["python3", TODO_SCRIPT, "member-finish", "--root", cwd, "--agent", lead, "--exit", "0"], { timeoutMs: 1_500 });
+		await runCapture(["python3", todoScript(), "member-finish", "--root", cwd, "--agent", lead, "--exit", "0"], { timeoutMs: 1_500 });
 	} catch {
 		// fail open: the next lead's reap handles an unfinished channel by idle age
 	}
@@ -431,7 +432,7 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			const id = String((ctx.agent as { id?: string } | undefined)?.id ?? "");
 			if (!id || off() || finished.has(id)) return;
 			finished.add(id);
-			const finish = (agent: string) => runCapture(["python3", nodePath.join(PLUGIN_ROOT, "scripts", "atlas_todo.py"), "member-finish", "--root", ctx.cwd, "--agent", agent, "--exit", "0", ...(report ? ["--message", report] : [])], { timeoutMs: 1_500 }); // --message: the sub's final text, so a valid DONE report also completes its board item
+			const finish = (agent: string) => runCapture(["python3", pluginScript("atlas_todo.py"), "member-finish", "--root", ctx.cwd, "--agent", agent, "--exit", "0", ...(report ? ["--message", report] : [])], { timeoutMs: 1_500 }); // --message: the sub's final text, so a valid DONE report also completes its board item
 			// omp 18.10 ids are `<Name>-<n>` (live "ProbeFin-5"); the resolver only strips a `<n>-` prefix or bare trailing digits,
 			// so retry once with the `-<n>` suffix removed when the raw id matched no member.
 			const first = await finish(id);
@@ -554,7 +555,8 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 			cwd: ctx.cwd,
 			stdinFile,
 			ownedDir: dir,
-			env: { CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT, ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_SOURCE_TRANSCRIPT: sessionFileOf(ctx) },
+			// the root of the install pluginScript resolved (a stale install falls back to the newest sibling)
+			env: { CLAUDE_PLUGIN_ROOT: nodePath.dirname(nodePath.dirname(pluginScript("atlas_todo.py"))), ATLAS_HARNESS: "omp", ATLAS_MANDATES: "off", ATLAS_SOURCE_TRANSCRIPT: sessionFileOf(ctx) },
 		});
 	};
 

@@ -905,6 +905,82 @@ class SweepManualOwners(unittest.TestCase):
         self.assertFalse(self._archived(blocked))
 
 
+class ChannelHarness(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = os.path.realpath(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        os.makedirs(os.path.join(self.root, ".atlas", ".run"))
+
+    def test_open_lead_channel_records_lead_harness(self):
+        with mock.patch("atlas_mux._lead_harness", return_value="omp"):
+            chan = atlas_todo.open_lead_channel(self.root, "lead-omp", [])
+        self.assertEqual(chan["harness"], "omp")
+        with mock.patch("atlas_mux._lead_harness", return_value="claude"):
+            chan = atlas_todo.open_lead_channel(self.root, "lead-omp", [])
+        self.assertEqual(chan["harness"], "omp")  # idempotent: first harness wins
+
+    def test_channel_record_without_harness_still_loads(self):
+        with mock.patch("atlas_mux._lead_harness", return_value=""):
+            chan = atlas_todo.open_lead_channel(self.root, "lead-old", [])
+        self.assertEqual(chan.get("harness", ""), "")
+        again = atlas_todo.get_channel(self.root, chan["name"])
+        assert again is not None
+        self.assertEqual(again["members"][0]["role"], "lead")  # legacy record shape intact
+
+    def test_open_lead_channel_records_lead_pid_and_overwrites(self):
+        with mock.patch.object(atlas_todo, "_lead_pid", return_value=4321):
+            chan = atlas_todo.open_lead_channel(self.root, "lead-p", [])
+        self.assertEqual(chan["lead_pid"], 4321)
+        with mock.patch.object(atlas_todo, "_lead_pid", return_value=None):
+            chan = atlas_todo.open_lead_channel(self.root, "lead-p", [])
+        self.assertNotIn("lead_pid", chan)  # a failed walk drops the stale pid
+
+
+class LeadPidWalk(unittest.TestCase):
+    def _runner(self, rows, returncode=0):
+        def run():
+            r = mock.Mock()
+            r.returncode = returncode
+            r.stdout = "".join(f"{pid} {ppid} {comm}\n" for pid, (ppid, comm) in rows.items())
+            return r
+
+        return run
+
+    def test_finds_harness_ancestor(self):
+        me = os.getpid()
+        rows = {me: (100, "/bin/zsh"), 100: (1, "/Users/x/.bun/bin/bun")}
+        self.assertEqual(atlas_todo._lead_pid(self._runner(rows)), 100)
+
+    def test_no_harness_ancestor_returns_none(self):
+        rows = {os.getpid(): (1, "/bin/zsh")}
+        self.assertIsNone(atlas_todo._lead_pid(self._runner(rows)))
+
+    def test_ps_failure_returns_none(self):
+        rows = {os.getpid(): (1, "/bin/zsh")}
+        self.assertIsNone(atlas_todo._lead_pid(self._runner(rows, returncode=1)))
+
+    def test_pid_missing_from_dump_returns_none(self):
+        rows = {999: (1, "/bin/zsh")}  # our own pid absent from the ps output
+        self.assertIsNone(atlas_todo._lead_pid(self._runner(rows)))
+
+    def test_walk_respects_eight_hop_cap(self):
+        me = os.getpid()
+        rows = {}
+        pid = me
+        for i in range(12):  # 12 shell ancestors: the harness beyond the cap is not found
+            nxt = 1000 + i
+            rows[pid] = (nxt, "/bin/zsh")
+            pid = nxt
+        rows[pid] = (1, "/usr/bin/omp")
+        self.assertIsNone(atlas_todo._lead_pid(self._runner(rows)))
+
+    def test_finds_harness_within_cap_and_spaced_comm(self):
+        me = os.getpid()
+        rows = {me: (100, "/bin/zsh"), 100: (1, "/Applications/My Tools/omp")}
+        self.assertEqual(atlas_todo._lead_pid(self._runner(rows)), 100)
+
+
 if __name__ == "__main__":
     unittest.main()
 

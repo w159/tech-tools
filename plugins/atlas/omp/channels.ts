@@ -12,9 +12,11 @@ import * as os from "node:os";
 import * as nodePath from "node:path";
 
 import { taskItems, recordFault } from "./hook-bridge";
+import { pluginScript } from "./plugin-path";
 import { runCaptureSync } from "./proc";
 
-export const TODO_SCRIPT = nodePath.resolve(import.meta.dir, "..", "scripts", "atlas_todo.py");
+/** Resolved at call time so an `omp plugin upgrade atlas` mid-session is picked up (plugin-path). */
+export const todoScript = (): string => pluginScript("atlas_todo.py");
 const BAD_NAME = /[^A-Za-z0-9_.-]/g;
 
 /** Same sanitising as atlas_todo._sanitize_owner. */
@@ -123,7 +125,7 @@ const memberTitle = (task: string): string =>
 function addMemberTodo(run: ChannelRunner, cwd: string, channel: string, item: Item, name: string): string {
 	const agent = agentOf(item);
 	if (!channel || !agent || agent === "task") return "";
-	const out = run(["python3", TODO_SCRIPT, "add", memberTitle(item.task as string), "--root", cwd, "--owner", name, "--channel", channel, "--origin", "dispatch"], cwd);
+	const out = run(["python3", todoScript(), "add", memberTitle(item.task as string), "--root", cwd, "--owner", name, "--channel", channel, "--origin", "dispatch"], cwd);
 	try {
 		return String(JSON.parse(out ?? "").item?.id ?? "");
 	} catch {
@@ -155,7 +157,7 @@ function openAndInject(
 	opts: { cwd: string; sessionId?: string; run?: ChannelRunner; onOpen?: OnChannelOpen; script?: string },
 	env: Record<string, string | undefined>,
 ): Item | undefined {
-	const script = opts.script ?? TODO_SCRIPT;
+	const script = opts.script ?? todoScript();
 	// A stale omp install lacks the script (python exits 2): say so once, with the fix, instead of a vague failure per dispatch.
 	if (!fs.existsSync(script)) {
 		faultOnce(`atlas omp install is stale: ${script} missing; run: omp plugin upgrade atlas, then restart omp sessions started before the upgrade`, opts.cwd);

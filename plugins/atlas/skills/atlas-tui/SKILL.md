@@ -17,11 +17,17 @@ the seat's pane (detach with `C-b d` to return), `q` quit.
 ## Run
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_tui.py" --launch
+python3 "<skill base directory>/../../scripts/atlas_tui.py" --launch
 ```
 
-`--launch` opens the TUI in a new tmux window when `$TMUX` is set; otherwise it starts a
-detached tmux session `atlas-tui` and prints `tmux attach -t atlas-tui`. It then prints a
+Replace `<skill base directory>` with the absolute skill directory your harness gave you
+(omp, Claude Code and Codex all provide it). Do not run the relative path from the project
+cwd. Under omp, the user can type `/atlas-tui` to open the TUI inside the omp session.
+Under Claude Code or Codex, `--launch` opens it in a new terminal window.
+
+`--launch` opens the TUI in a new tmux window when `$TMUX` is set; otherwise it reuses (or
+creates) the detached tmux session `atlas-tui` and tries to open a visible terminal window
+attached to it, falling back to printing `tmux attach -t atlas-tui`. It then prints a
 one-frame snapshot (`--once`) so the chat shows the current colony state.
 
 Report to the user: how to reach the TUI (new window or the attach command) and the

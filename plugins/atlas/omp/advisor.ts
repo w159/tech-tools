@@ -22,9 +22,9 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { runCaptureSync } from "./proc";
+import { pluginScript } from "./plugin-path";
 import { isRecord } from "./workers";
 
-const TODO_SCRIPT = nodePath.resolve(import.meta.dir, "..", "scripts", "atlas_todo.py");
 const MAX_STOP_BLOCKS = 3;
 const NOTE_PREFIX_LIMIT = 200;
 const CLI_TIMEOUT_MS = 10_000;
@@ -42,7 +42,7 @@ export interface AdvisorDeps {
 /** Deps backed by `python3 <plugin>/scripts/atlas_todo.py add|list` (argv only, no shell). */
 export function defaultAdvisorDeps(): AdvisorDeps {
 	const run = (args: string[]) => {
-		const { code, stdout } = runCaptureSync(["python3", TODO_SCRIPT, ...args], { timeoutMs: CLI_TIMEOUT_MS });
+		const { code, stdout } = runCaptureSync(["python3", pluginScript("atlas_todo.py"), ...args], { timeoutMs: CLI_TIMEOUT_MS });
 		if (code !== 0) throw new Error(`atlas_todo.py ${args[0]} failed (exit ${code ?? "killed"})`);
 		return stdout;
 	};
@@ -109,10 +109,10 @@ type OpenItem = { id: string; text: string };
 const itemLines = (items: OpenItem[]) => items.map(i => `- ${i.id}: ${i.text}`).join("\n");
 
 const reminder = (items: OpenItem[]) =>
-	`${REMINDER_MARKER}: this session has ${items.length} open advisor item(s) on the atlas board. Operating contract: verify each one against the cited code or output, fix it or refute it with evidence, and close it with \`python3 ${TODO_SCRIPT} complete --id <id> --evidence <proof>\` before any \`done\` header.\n${itemLines(items)}`;
+	`${REMINDER_MARKER}: this session has ${items.length} open advisor item(s) on the atlas board. Operating contract: verify each one against the cited code or output, fix it or refute it with evidence, and close it with \`python3 ${pluginScript("atlas_todo.py")} complete --id <id> --evidence <proof>\` before any \`done\` header.\n${itemLines(items)}`;
 
 const stopReason = (items: OpenItem[]) =>
-	`Advisor gate: this session has ${items.length} open advisor item(s) on the atlas board. An advisor note is a work item: for each id below, check the note against the cited code or output, fix it (or refute it with evidence), then close it with \`python3 ${TODO_SCRIPT} complete --id <id> --evidence <what you changed or the proof it does not hold>\`. (Set ATLAS_ADVISOR_GATE=off to disable this gate.)\n${itemLines(items)}`;
+	`Advisor gate: this session has ${items.length} open advisor item(s) on the atlas board. An advisor note is a work item: for each id below, check the note against the cited code or output, fix it (or refute it with evidence), then close it with \`python3 ${pluginScript("atlas_todo.py")} complete --id <id> --evidence <what you changed or the proof it does not hold>\`. (Set ATLAS_ADVISOR_GATE=off to disable this gate.)\n${itemLines(items)}`;
 
 export function registerAdvisorGate(pi: Pick<ExtensionAPI, "on">, deps: AdvisorDeps = defaultAdvisorDeps()): void {
 	const seen = new Set<string>();

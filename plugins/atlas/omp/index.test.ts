@@ -67,7 +67,7 @@ function harness(
 	spawnBoardMirror?: (argv: string[], opts: { cwd: string }) => void,
 ) {
 	const handlers: Record<string, Handler> = {};
-	const api = { on: (name: string, handler: Handler) => { handlers[name] = handler; } };
+	const api = { on: (name: string, handler: Handler) => { handlers[name] = handler; }, registerCommand: () => { } };
 	// Capture the two host-typed callbacks; the fake only supplies fields they consume.
 	const pi = api as unknown as Pick<ExtensionAPI, "on">;
 	const spawns: SpawnCapture[] = [];
@@ -289,7 +289,7 @@ test("naming notice is main-thread only and silent outside docs scope", () => {
 
 test("factory sets CLAUDE_PLUGIN_ROOT to the atlas plugin root when unset", () => {
 	delete process.env.CLAUDE_PLUGIN_ROOT;
-	const api = { on: () => { }, getAllTools: () => [] };
+	const api = { on: () => { }, getAllTools: () => [], registerCommand: () => { } };
 	extension(api as unknown as ExtensionAPI);
 	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe(resolve(import.meta.dir, ".."));
 });
@@ -299,7 +299,7 @@ test("factory preserves a CLAUDE_PLUGIN_ROOT that contains the board CLI", () =>
 	mkdirSync(join(custom, "scripts"), { recursive: true });
 	writeFileSync(join(custom, "scripts", "atlas_todo.py"), "");
 	process.env.CLAUDE_PLUGIN_ROOT = custom;
-	const api = { on: () => { }, getAllTools: () => [] };
+	const api = { on: () => { }, getAllTools: () => [], registerCommand: () => { } };
 	extension(api as unknown as ExtensionAPI);
 	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe(custom);
 	expect(custom).not.toBe(resolve(import.meta.dir, ".."));
@@ -307,7 +307,7 @@ test("factory preserves a CLAUDE_PLUGIN_ROOT that contains the board CLI", () =>
 
 test("factory replaces a stale CLAUDE_PLUGIN_ROOT whose board CLI is gone", () => {
 	process.env.CLAUDE_PLUGIN_ROOT = "/nowhere/tech-tools___atlas___8.6.0";
-	const api = { on: () => { }, getAllTools: () => [] };
+	const api = { on: () => { }, getAllTools: () => [], registerCommand: () => { } };
 	extension(api as unknown as ExtensionAPI);
 	expect(process.env.CLAUDE_PLUGIN_ROOT).toBe(resolve(import.meta.dir, ".."));
 });
@@ -846,6 +846,7 @@ test("the default export wires the agent guard: an explorer edit is blocked thro
 	const api = {
 		on: (name: string, handler: Chain) => { if (name === "tool_call") chain.push(handler); },
 		getActiveTools: () => ACTIVE_NONE,
+		registerCommand: () => { },
 	};
 	extension(api as unknown as ExtensionAPI);
 	// omp's emitToolCall: handlers run in registration order and the first `block` wins.
@@ -876,7 +877,7 @@ test("extension load exports ~/.atlas/settings.json env into process.env; an exp
 	delete process.env.ATLAS_LEAN_SHELL;
 	process.env.ATLAS_CHANNELS = "on"; // exported in the shell: must not be overridden
 	try {
-		extension({ on: () => {}, getActiveTools: () => [] } as unknown as ExtensionAPI);
+		extension({ on: () => {}, getActiveTools: () => [], registerCommand: () => {} } as unknown as ExtensionAPI);
 		expect(process.env.ATLAS_LEAN_SHELL).toBe("off");
 		expect(process.env.ATLAS_CHANNELS).toBe("on");
 		expect(process.env.NOT_ATLAS).toBeUndefined();

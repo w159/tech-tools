@@ -7763,5 +7763,24 @@
     "status": "open",
     "verified_at": "2026-10-19T17:22:10+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "ATLAS-TUI-HARNESS",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-tui works from omp/claude/codex: /atlas-tui omp command, skill path, visible launch, live in-process colonies",
+    "evidence": [
+      "real omp (-e plugins/atlas/omp/index.ts) in tmux: /atlas-tui rendered curses TUI, keys reached it, q restored omp editor",
+      "bun-parented channel-open: colony transport=subagent, source from omp, seats runtime omp working; gone after lead exit",
+      "pytest test_atlas_tui/colony_model/todo 122 passed; hooks+dash_term 884 passed; bun tui-command+index 81 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T17:54:39+00:00",
+    "verified_by": "lead"
   }
 ]

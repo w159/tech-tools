@@ -1,5 +1,15 @@
 # Changelog
 
+## 12.5.8 (2026-10-19)
+
+### Fixed
+
+- Command Center TUI works from any harness, not just Claude Code. omp gets a `/atlas-tui` extension command (`omp/tui-command.ts`) that pauses omp's renderer, runs `atlas_tui.py` in the same terminal and restores omp on `q`. The `atlas-tui` skill resolves the script relative to its own directory instead of `${CLAUDE_PLUGIN_ROOT}` (unset under Codex, stale in long-lived omp sessions). Outside tmux, `--launch` reuses the `atlas-tui` session and opens a visible iTerm / Terminal / Ghostty window attached to it, then falls back to the attach hint.
+- Colony model: in-process subagent colonies (omp `task`, Claude Agent) report transport `subagent` instead of `claude-bg`, take `source.harness` and seat runtime from the channel's recorded `harness`, and are listed live while the lead process (`lead_pid`, recorded by `channel-open`) is alive. Previously a running pane-less colony was hidden.
+- Colony seat addresses: seats whose role is the generic `subagent` are addressed by member name (`explorer-a@<colony>`) instead of `subagent-1@<colony>`, so the address no longer hides who the member is; all other roles unchanged.
+- `channel-open` and the other plugin script invocations survive a stale install: script paths resolve lazily at call time and, when the live cache dir was deleted by `omp plugin upgrade atlas`, fall back to the newest sibling install that still ships the script — an omp session started before the upgrade keeps working instead of silently never opening channels.
+- `channel-open`'s lead-pid detection makes one `ps -A` call (2 s timeout) instead of up to eight per-pid `ps` calls (5 s timeout each), so a dispatch hook can no longer stall ~40 s on a busy process table.
+
 ## 12.5.7 (2026-10-19)
 
 ### Fixed

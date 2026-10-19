@@ -13,6 +13,7 @@ Stdlib only. Never raises on a missing tmux/herdr/db: the matching fields just r
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -247,6 +248,21 @@ def _ended_fallback(seat: dict, pane: dict | None, team: dict | None, now: float
     if pane and pane["pane_dead"] == "1":
         cands.append(_f(pane.get("pane_dead_time")) or _DEAD_SEEN.setdefault(pane["pane_id"], now))
     return max(cands)
+
+
+def _pid_alive(pid: int) -> bool:
+    """True when a process with `pid` exists (os.kill probe; EPERM counts as alive)."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
 
 
 def _log_info(path: Path) -> tuple[str, str]:
@@ -520,7 +536,7 @@ def _source_label(src: dict, channel: str) -> str:
     return " · ".join(parts) if parts else (f"channel {channel}" if channel else "")
 
 
-def _name_colonies(colonies: dict, teams: list[dict]) -> None:
+def _name_colonies(colonies: dict, teams: list[dict], chan_recs: dict | None = None) -> None:
     """Give every colony a unique human `name`, a `title` and a `source`, in place. Oldest first so a name
     never changes when a later colony shares its slug (the later one gets the -2 suffix)."""
     rec = {t["team_id"]: t for t in teams}
@@ -541,7 +557,8 @@ def _name_colonies(colonies: dict, teams: list[dict]) -> None:
         c["source"] = {
             "project": src.get("project") or Path(c.get("project") or "").name,
             "lead": src.get("lead") or t.get("lead") or (chan.rsplit("/", 1)[-1] if "/" in chan else ""),
-            "harness": src.get("harness") or "",
+            "harness": src.get("harness")
+            or str(((chan_recs or {}).get(chan) or {}).get("harness") or ""),
             "session": src.get("session") or "",
         }
         c["source"]["label"] = _source_label(c["source"], chan)
@@ -549,14 +566,18 @@ def _name_colonies(colonies: dict, teams: list[dict]) -> None:
 
 def _address_seats(seats: list[dict], colonies: dict, teams: list[dict], specs: list[dict]) -> None:
     """Set each seat's `address` (<role>[-<n>]@<colony name>; n only when the role repeats, in spawn order
-    then name) and `role_title`, in place."""
+    then name; generic `subagent` seats use the member name, since <n> would hide who is who) and
+    `role_title`, in place."""
     spawn = {m["name"]: i for t in teams for i, m in enumerate(t.get("members") or [])}
     by_role: dict = {}
     for s in sorted(seats, key=lambda s: (spawn.get(s["name"], 10**6), s["name"])):
         by_role.setdefault((s["colony"], _role_label(s["role"])), []).append(s)
     for (cid, role), group in by_role.items():
         for i, s in enumerate(group, 1):
-            s["address"] = f"{role}{'-' + str(i) if len(group) > 1 else ''}@{colonies[cid]['name']}"
+            if role == "subagent":
+                s["address"] = f"{s['name']}@{colonies[cid]['name']}"
+            else:
+                s["address"] = f"{role}{'-' + str(i) if len(group) > 1 else ''}@{colonies[cid]['name']}"
             s["role_title"] = _role_title(role, specs)
 
 
@@ -571,6 +592,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     members: dict = {}  # name -> {role, channel, entry}
     team_of: dict = {}
     proj_of: dict = {}  # seat name / team_id -> owning project root
+    chan_recs: dict = {}  # channel name -> registry record (carries the lead harness)
     teams, items, board = [], [], []
     for r in roots:
         if all_projects and r != root and not _active(r, panes_all):
@@ -578,6 +600,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         rteams = _teams(r)
         teams += rteams
         for c in _registry(r).values():
+            chan_recs.setdefault(str(c.get("name") or ""), c)
             for m in c.get("members") or []:
                 if m.get("name") and m.get("role") != "lead" and m["name"] not in members:
                     members[m["name"]] = {
@@ -601,10 +624,8 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 )
                 members[m["name"]]["role"] = m.get("role") or members[m["name"]]["role"]
         items += [i for i in atlas_todo.load(r).get("items", []) if not i.get("archived")]
-        try:
+        with contextlib.suppress(OSError):
             board += _board_files(r)
-        except OSError:
-            pass
     notes = _recent_notes(board)
     session_team = {f"atlas-{t['team_id']}": t for t in teams}
 
@@ -647,6 +668,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         }
 
     out_seats = []
+    leadpid_live_names: set = set()  # pane-less seats classified via a live lead_pid
     for name, s in seats.items():
         p, m = s["pane"], members.get(name) or {"entry": {}, "channel": ""}
         entry = m["entry"]
@@ -663,7 +685,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "label": cid,
                 "session": p["session_name"] if p else "",
                 "project": proj_of.get(name) or _owner((p or {}).get("pane_current_path") or root, roots),
-                "transport": "tmux" if p else "claude-bg",
+                "transport": "tmux" if p else "subagent",
                 "task": "",
                 "channel": str(m.get("channel") or ""),
                 "created": None,
@@ -673,6 +695,8 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         runtime, model = _log_info(log)
         if runtime == "unknown" and p and p["pane_current_command"] in HARNESSES:
             runtime = p["pane_current_command"]
+        if runtime == "unknown" and not p:  # in-process subagent: its channel knows the harness
+            runtime = str((chan_recs.get(str(m.get("channel") or "")) or {}).get("harness") or "unknown")
         target = p["pane_id"] if p else ""
         text = capture(target, 60, ansi=False) if p and p["pane_dead"] != "1" else ""
         exit_code = entry.get("exit_code")
@@ -684,12 +708,22 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         ):
             exit_code = _i(p["pane_dead_status"])
         note = last_note.get(name)
+        leadpid_live = False  # classified via a live channel lead_pid, not a pane
         if exit_code is not None:
             state = "finished" if exit_code == 0 else "dead"
         elif p and p["pane_dead"] == "1":
             state = "dead"
         elif not p:
-            state = "dead" if _pid_gone(entry.get("pid")) else "unknown"
+            lp = (
+                _i((chan_recs.get(str(m.get("channel") or "")) or {}).get("lead_pid"))
+                if exit_code is None and not _i(entry.get("pid"))
+                else 0
+            )
+            if lp > 0:  # in-process subagent: its lead's liveness is the seat's liveness
+                leadpid_live = _pid_alive(lp)
+                state = "working" if leadpid_live else "dead"
+            else:
+                state = "dead" if _pid_gone(entry.get("pid")) else "unknown"
         else:
             state = pane_state(text, runtime)
             if (
@@ -698,6 +732,8 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 state = "working"
             if state == "working" and note and note.get("kind") == "blocked":
                 state = "blocked"
+        if leadpid_live:
+            leadpid_live_names.add(name)
         mine = [i for i in items if i.get("owner") == name and i.get("status") in OPEN]
         try:
             mtime = log.stat().st_mtime
@@ -738,11 +774,17 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "lead": atlas_todo.is_lead_name(name),
             }
         )
-    _name_colonies(colonies, teams)
+    _name_colonies(colonies, teams, chan_recs)
     _address_seats(out_seats, colonies, teams, _static("specs", _specs))
-    # Only colonies with work in progress: a live pane that is working/idle/blocked, or a team
-    # record younger than TEAM_GRACE_S whose panes are not up yet. Finished/dead/pane-less is history.
-    live = {s["colony"] for s in out_seats if s["target"] and s["state"] not in ("dead", "finished")}
+    # Only colonies with work in progress: a live pane that is working/idle/blocked, a team
+    # record younger than TEAM_GRACE_S whose panes are not up yet, or a pane-less in-process
+    # subagent classified via a live channel lead_pid. Finished/dead/pane-less is history.
+    live = {
+        s["colony"]
+        for s in out_seats
+        if (s["target"] or s["name"] in leadpid_live_names)
+        and s["state"] not in ("dead", "finished")
+    }
     fresh = {
         t["team_id"]
         for t in teams

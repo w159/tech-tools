@@ -137,6 +137,7 @@ test("the default export wires the worker report handler into the tool_call chai
 	const api = {
 		on: (name: string, handler: Handler) => { if (name === "tool_call") chain.push(handler); },
 		getActiveTools: () => [],
+		registerCommand: () => { },
 	};
 	extension(api as unknown as ExtensionAPI);
 	// A private dir: a bare tmpdir() cwd makes the channel code write `.atlas/` into the OS temp root,

@@ -10,6 +10,7 @@ Stdlib only. Layout mirrors the OpenRig native TUI captures.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -18,6 +19,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Mapping
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -487,12 +489,12 @@ def _list_view(snap, ui, h) -> list:
     elif sec == "projects":
         out = ["PROJECTS", ""]
         out += [
-            l
-            for l in (
+            ln
+            for ln in (
                 f"  {p.get('name'):<24} {p.get('channels')} channels  {p.get('root')}"
                 for p in snap.get("projects") or []
             )
-            if _match(l, flt)
+            if _match(ln, flt)
         ]
     elif sec == "terminals":
         out = [
@@ -1008,10 +1010,8 @@ def attach(snap, name: str, model=None):
             )
         subprocess.run(argv, check=False)
     finally:
-        try:
+        with contextlib.suppress(Exception):
             m.cleanup_view(vid)
-        except Exception:
-            pass
     return ""
 
 
@@ -1138,10 +1138,8 @@ def loop(stdscr, args):
         stdscr.erase()
         hits = hitmap(snap, ui, w, h) if h >= MIN_H and w >= MIN_W else []
         for i, ln in enumerate(frame[:h]):
-            try:
+            with contextlib.suppress(curses.error):
                 stdscr.addstr(i, 0, ln[: w - 1] if i == h - 1 else ln[:w], curses.A_DIM if "✓ finished" in ln else 0)
-            except curses.error:
-                pass
         stdscr.refresh()
         ch = stdscr.getch()
         if ch == -1:
@@ -1194,6 +1192,35 @@ def loop(stdscr, args):
                 ui["status"] = f"send failed: {e}"
 
 
+def _attach_open_argv(env: Mapping[str, str]):
+    """(argv, label) that opens a new visible terminal window attached to the atlas-tui
+    session, chosen from TERM_PROGRAM on macOS; None when there is no known opener."""
+    tp = env.get("TERM_PROGRAM")
+    if tp == "iTerm.app":
+        return (
+            ["osascript", "-e", 'tell application "iTerm" to create window with default profile command "tmux attach -t atlas-tui"'],
+            "iTerm",
+        )
+    if tp == "Apple_Terminal":
+        return (
+            ["osascript", "-e", 'tell application "Terminal" to do script "tmux attach -t atlas-tui"'],
+            "Terminal",
+        )
+    if tp == "ghostty":
+        return (["open", "-na", "Ghostty", "--args", "-e", "tmux", "attach", "-t", "atlas-tui"], "Ghostty")
+    return None
+
+
+def _lead_harness_safe(env: Mapping[str, str]) -> str:
+    """Harness the lead runs under (atlas_mux._lead_harness); '' when the import is unavailable."""
+    try:
+        from atlas_mux import _lead_harness
+
+        return _lead_harness(env)
+    except Exception:
+        return ""
+
+
 def launch(args) -> int:
     script = str(Path(__file__).resolve())
     cmd = [sys.executable, script, "--project", _root(args)] + (
@@ -1207,11 +1234,25 @@ def launch(args) -> int:
             subprocess.run(["tmux", "set-window-option", "-t", r.stdout.strip(), "automatic-rename", "off"], check=False)
         print("opened Atlas Command Center in a new tmux window 'atlas-tui'")
     else:
-        subprocess.run(
-            ["tmux", "new-session", "-d", "-s", "atlas-tui", "-n", "atlas-tui", line], check=False
-        )
+        if subprocess.run(["tmux", "has-session", "-t", "atlas-tui"], check=False, capture_output=True).returncode == 0:
+            print("reusing detached tmux session 'atlas-tui'")
+        else:
+            subprocess.run(
+                ["tmux", "new-session", "-d", "-s", "atlas-tui", "-n", "atlas-tui", line], check=False
+            )
         subprocess.run(["tmux", "set-window-option", "-t", "atlas-tui:atlas-tui", "automatic-rename", "off"], check=False)
-        print("attach with: tmux attach -t atlas-tui")
+        opener = _attach_open_argv(os.environ) if sys.platform == "darwin" else None
+        if opener:
+            argv, label = opener
+            r = subprocess.run(argv, check=False, capture_output=True)
+            if r.returncode == 0:
+                print(f"opened a new {label} window attached to 'atlas-tui'")
+            else:
+                print("attach with: tmux attach -t atlas-tui")
+        else:
+            print("attach with: tmux attach -t atlas-tui")
+        if _lead_harness_safe(os.environ) == "omp":
+            print("inside omp: type /atlas-tui to open it in this session")
     return once(args)
 
 
