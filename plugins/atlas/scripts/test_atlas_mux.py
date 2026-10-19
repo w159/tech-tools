@@ -2424,6 +2424,22 @@ class DeadFlagTests(unittest.TestCase):
             self.assertEqual(atlas_mux._dead_flag(bad), 0, repr(bad))
 
 
+class StrictTeamSpecTests(unittest.TestCase):
+    def test_bad_count_or_max_parallel_raises_naming_field(self):
+        import atlas_mux
+
+        cell = {"file_scope": [], "team": [{"role": "explorer", "count": "two"}], "max_parallel": 1, "isolation": "none"}
+        with mock.patch.object(atlas_mux.atlas_resolve, "resolve", return_value=cell):
+            with self.assertRaisesRegex(ValueError, r"count: expected an integer, got 'two'"):
+                atlas_mux.build_team("audit", "low")
+            cell["team"][0]["count"] = 1
+            self.assertEqual(len(atlas_mux.build_team("audit", "low")["members"]), 1)
+            cell["max_parallel"] = None
+            with self.assertRaisesRegex(ValueError, r"max_parallel: expected an integer, got None"):
+                atlas_mux.build_team("audit", "low")
+
+
+
 class TmuxStateRobustnessTests(unittest.TestCase):
     """Colony launches must not depend on the lead's tmux pane or on tmux being present."""
 

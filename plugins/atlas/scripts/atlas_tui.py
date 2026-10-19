@@ -32,6 +32,7 @@ TABS = ["table", "recent", "overview", "graph", "health"]
 RT = {"claude": "cl", "omp": "omp", "codex": "cx"}
 RT_GLYPH = {"claude": "><", "omp": ">_", "codex": "#>"}
 DOT = {"working": "●", "idle": "·", "blocked": "!", "finished": "✓", "dead": "✗"}
+DOUBLE_CLICK_S = 0.4
 HINTS = "↑↓ move · ←→ pane · ⏎ open · : command · / filter · t term · ? help · q quit"
 COMMANDS = [
     ("colony <id>", "open a colony"),
@@ -161,7 +162,7 @@ def explorer_rows(snap, ui) -> list:
                 last = i == len(colonies) - 1
                 rows.append(
                     (
-                        "    " + ("┗━" if last else "┣━") + " ▦ " + _cname(c),
+                        "    " + ("┗━" if last else "┣━") + " ▦ " + _cname(c) + (" ✓ finished" if c.get("finished") else ""),
                         "colony",
                         c.get("id"),
                     )
@@ -264,6 +265,8 @@ def _table(snap, ui, w) -> list:
         health = "ATTENTION · " + ", ".join(f"{s['name']} {s.get('state')}" for s in bad)
     else:
         health = f"OK · {len(allseats)} seats reporting · tmux {'ok' if tm.get('ok') else 'DOWN'}"
+    if (_find_colony(snap, ui["colony"]) or {}).get("finished"):
+        health = "✓ finished · " + health
     flt = ui.get("filter", "")
     out = [
         "  ▪ CONFIG · colony settings  (open ▸)",
@@ -308,7 +311,7 @@ def _recent_block(snap, ui, w, n=None) -> list:
     ev = [e for e in ev if _match(_ev(e), ui.get("filter", ""))]
     ev = ev[-n:] if n else ev
     out = [
-        ("  ── RECENT · colony " + str(ui["colony"]) + " ").ljust(w, "─"),
+        ("  ── RECENT · colony " + (_cname(c) or str(ui["colony"])) + " ").ljust(w, "─"),
         "  Recorded board notes · oldest to newest · Enter inspects",
     ]
     for e in ev:
@@ -695,15 +698,19 @@ def handle_click(snap, ui, hits, x: int, y: int):
     if not act:
         return None
     kind = act[0]
+    now = time.monotonic()
+    prev = ui.get("_click")
+    quick = bool(prev) and prev[0] == act[:2] and now - prev[1] < DOUBLE_CLICK_S
+    ui["_click"] = (act[:2], now)
     if kind == "explorer":
-        again = ui["cursor"] == act[1] and ui.get("focus") == "explorer"
+        again = quick or (ui["cursor"] == act[1] and ui.get("focus") == "explorer")
         ui.update(cursor=act[1], focus="explorer")
         if again:
             handle_key(snap, ui, "enter")
     elif kind == "tab":
         ui.update(tab=act[1], seat=None, focus="pane", pane_scroll=0)
     elif kind == "seatrow":
-        again = ui.get("row") == act[1] and ui.get("focus") == "pane"
+        again = quick or (ui.get("row") == act[1] and ui.get("focus") == "pane")
         ui.update(row=act[1], focus="pane")
         if again:
             handle_key(snap, ui, "enter")
@@ -1132,7 +1139,7 @@ def loop(stdscr, args):
         hits = hitmap(snap, ui, w, h) if h >= MIN_H and w >= MIN_W else []
         for i, ln in enumerate(frame[:h]):
             try:
-                stdscr.addstr(i, 0, ln[: w - 1] if i == h - 1 else ln[:w])
+                stdscr.addstr(i, 0, ln[: w - 1] if i == h - 1 else ln[:w], curses.A_DIM if "✓ finished" in ln else 0)
             except curses.error:
                 pass
         stdscr.refresh()

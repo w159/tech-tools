@@ -5,6 +5,12 @@
 ### Fixed
 
 - completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
+- `spawn-team` raises a `ValueError` naming the field for a non-integer team `count` / `max_parallel` instead of defaulting to 0/1.
+- TUI: RECENT header shows the colony name; a second click within 400 ms (or on the selection) opens a colony or seat row; finished colonies are marked `✓ finished` and dimmed in the explorer and TABLE.
+
+### Added
+
+- Snapshot: colonies carry `finished` (listed for 300 s after their last seat exits, then hidden; reaped colonies hide at once), `source.lead` falls back to the channel lead, and `source.label` is a ready-made display string.
 
 ## 12.5.5 (2026-10-19)
 

@@ -34,6 +34,7 @@ import atlas_todo  # noqa: E402
 PLUGIN_DIR = SCRIPTS_DIR.parent
 FEED_MAX = 200
 NOW_MAX = 120
+FINISHED_GRACE_S = 300  # a colony whose seats all exited stays listed (finished) this long
 TEAM_GRACE_S = 180  # a just-spawned team record is listed this long while its panes come up
 OPEN = ("pending", "in_progress")
 TMUX_TIMEOUT = 5
@@ -457,6 +458,19 @@ def _role_title(role: str, specs: list[dict]) -> str:
     return desc if len(desc) <= 40 else desc[:39].rstrip() + "…"
 
 
+def _source_label(src: dict, channel: str) -> str:
+    """`from <harness> session <session> · lead <lead> · <project>`, empty parts omitted, else `channel <channel>`."""
+    parts = [
+        f"from {src['harness']}" + (f" session {src['session']}" if src["session"] else "")
+        if src["harness"]
+        else (f"from session {src['session']}" if src["session"] else ""),
+        f"lead {src['lead']}" if src["lead"] else "",
+        src["project"],
+    ]
+    parts = [x for x in parts if x]
+    return " · ".join(parts) if parts else (f"channel {channel}" if channel else "")
+
+
 def _name_colonies(colonies: dict, teams: list[dict]) -> None:
     """Give every colony a unique human `name`, a `title` and a `source`, in place. Oldest first so a name
     never changes when a later colony shares its slug (the later one gets the -2 suffix)."""
@@ -470,14 +484,16 @@ def _name_colonies(colonies: dict, teams: list[dict]) -> None:
             name, n = f"{base}-{n}", n + 1
         taken.add(name)
         src = t.get("source") if isinstance(t.get("source"), dict) else {}
+        chan = str(c.get("channel") or "")
         c["name"] = name
         c["title"] = (c.get("task") or "")[:60]
         c["source"] = {
             "project": src.get("project") or Path(c.get("project") or "").name,
-            "lead": src.get("lead") or t.get("lead") or "",
+            "lead": src.get("lead") or t.get("lead") or (chan.rsplit("/", 1)[-1] if "/" in chan else ""),
             "harness": src.get("harness") or "",
             "session": src.get("session") or "",
         }
+        c["source"]["label"] = _source_label(c["source"], chan)
 
 
 def _address_seats(seats: list[dict], colonies: dict, teams: list[dict], specs: list[dict]) -> None:
@@ -683,7 +699,22 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         and now - float(t.get("created") or 0) < TEAM_GRACE_S
         and not any(s["target"] for s in out_seats if s["colony"] == t["team_id"])
     }
-    keep = live | fresh
+    reaped = {t["team_id"] for t in teams if t.get("state") in ("archived", "reaped")}
+    ended: dict = {}
+    for s_ in out_seats:
+        e = float((members.get(s_["name"]) or {"entry": {}})["entry"].get("ended_at") or 0)
+        ended[s_["colony"]] = max(ended.get(s_["colony"], 0.0), e)
+    done = {
+        cid
+        for cid in colonies
+        if cid not in live | fresh
+        and cid not in reaped
+        and 0 < now - ended.get(cid, 0.0) < FINISHED_GRACE_S
+        and all(s_["state"] in ("finished", "dead") for s_ in out_seats if s_["colony"] == cid)
+    }
+    keep = live | fresh | done
+    for cid, c in colonies.items():
+        c["finished"] = cid in done
     colonies = {k: v for k, v in colonies.items() if k in keep}
     out_seats = [s for s in out_seats if s["colony"] in keep]
     for seat in out_seats:

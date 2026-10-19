@@ -72,9 +72,9 @@ class NamingTest(unittest.TestCase):
         model._name_colonies(cols, teams)
         self.assertEqual(["audit-dashboard", "audit-dashboard-2", "review"], [cols[k]["name"] for k in "abc"])
         self.assertEqual(60, len(cols["c"]["title"]))
-        self.assertEqual({"project": "proj", "lead": "", "harness": "", "session": ""}, cols["a"]["source"])
+        self.assertEqual({"project": "proj", "lead": "", "harness": "", "session": "", "label": "proj"}, cols["a"]["source"])
         self.assertEqual("lead-x", cols["b"]["source"]["lead"])
-        self.assertEqual({"project": "p", "lead": "l", "harness": "omp", "session": "s1"}, cols["c"]["source"])
+        self.assertEqual({"project": "p", "lead": "l", "harness": "omp", "session": "s1", "label": "from omp session s1 · lead l · p"}, cols["c"]["source"])
 
     def test_seat_addresses_index_only_repeated_roles_in_spawn_order(self):
         teams = [{"team_id": "t", "members": [{"name": "explorer-z"}, {"name": "explorer-a"}, {"name": "critic-1"}]}]
@@ -183,6 +183,35 @@ class ModelTest(unittest.TestCase):
         (Path(root, ".atlas", ".run", "teams", f"{tid}.json")).write_text(
             json.dumps({"team_id": tid, "class": "fix", "effort": "low", "task": "x", "created": created, "members": [{"name": member, "role": "implementer"}], **extra})
         )
+
+    def _finished_colony(self, tid, ended_ago, **extra):
+        name = f"worker-{tid}"
+        self._team(self.root, tid, time.time() - 900, name, channel=f"proj@main/lead-{tid}", **extra)
+        reg = Path(self.root, ".atlas", ".run", "channels.json")
+        data = json.loads(reg.read_text())
+        data["channels"][f"proj@main/lead-{tid}"] = {
+            "name": f"proj@main/lead-{tid}", "kind": "lead", "lead": f"lead-{tid}",
+            "members": [{"name": name, "role": "implementer", "exit_code": 0, "ended_at": time.time() - ended_ago}],
+        }
+        reg.write_text(json.dumps(data))
+
+    def test_finished_grace_window(self):
+        self._finished_colony("fin60", 60)
+        self._finished_colony("fin400", 400)
+        self._finished_colony("fingone", 60, state="reaped")
+        by_id = {c["id"]: c for c in model.snapshot(self.root)["colonies"]}
+        self.assertTrue(by_id["fin60"]["finished"])
+        self.assertFalse(by_id["t1"]["finished"])
+        self.assertNotIn("fin400", by_id)
+        self.assertNotIn("fingone", by_id)
+
+    def test_source_lead_falls_back_to_channel_and_label(self):
+        src = {c["id"]: c["source"] for c in model.snapshot(self.root)["colonies"]}["t1"]
+        self.assertEqual(src["lead"], "lead-x")
+        self.assertEqual(src["label"], f"lead lead-x · {src['project']}")
+        full = {"harness": "claude", "session": "s1", "lead": "L", "project": "p"}
+        self.assertEqual(model._source_label(full, "c"), "from claude session s1 · lead L · p")
+        self.assertEqual(model._source_label({"harness": "", "session": "", "lead": "", "project": ""}, "p@b/L"), "channel p@b/L")
 
     def test_only_colonies_with_work_in_progress_listed(self):
         now = time.time()
@@ -301,7 +330,7 @@ class ModelTest(unittest.TestCase):
             ("t1", "t1 · audit/low", "atlas-t1", "tmux", "map it"),
         )
         self.assertEqual((col["name"], col["title"]), ("map", "map it"))
-        self.assertEqual(set(col["source"]), {"project", "lead", "harness", "session"})
+        self.assertEqual(set(col["source"]), {"project", "lead", "harness", "session", "label"})
         self.assertEqual(
             [p["id"] for p in col["pods"]], ["explorer", "implementer", "verifier"]
         )

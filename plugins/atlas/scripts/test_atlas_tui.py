@@ -162,6 +162,13 @@ class Render(unittest.TestCase):
             self.assertIn(s, f)
         self.assertEqual(f.count("explorer    ●"), 1)
 
+    def test_recent_header_uses_colony_name_and_finished_is_marked(self):
+        snap = {**SNAP, "colonies": [{**c, "name": "my-colony", "finished": True} if c["id"] == "lead-01" else c for c in SNAP["colonies"]]}
+        f = "\n".join(T.render(snap, T.new_ui(colony="lead-01"), 180, 50))
+        self.assertIn("── RECENT · colony my-colony ──", f)
+        self.assertIn("HEALTH  ✓ finished · ", f)
+        self.assertIn("▦ my-colony ✓ finished", f)
+
     def test_table_fits_long_seat_labels_at_150(self):
         snap = dict(SNAP, seats=[dict(SNAP["seats"][0], name="completeness-critic", address="completeness-critic@c", pod="explorer-1")])
         for w in (80, 150, 180):
@@ -379,7 +386,7 @@ class FirstPaint(unittest.TestCase):
         scr = mock.Mock()
         scr.getmaxyx.return_value = (40, 120)
         scr.erase.side_effect = cur.clear
-        scr.addstr.side_effect = lambda y, x, s: cur.append(s)
+        scr.addstr.side_effect = lambda y, x, s, *a: cur.append(s)
         scr.refresh.side_effect = lambda: frames.append((finished.is_set(), "\n".join(cur)))
 
         def getch():
@@ -451,6 +458,17 @@ class Mouse(unittest.TestCase):
         self.assertEqual((ui["cursor"], ui["colony"]), (i, None))
         T.handle_click(SNAP, ui, self.hits(ui), x + 2, r)
         self.assertEqual(ui["colony"], "ops")
+
+    def test_two_quick_clicks_open_even_when_selection_moved(self):
+        ui = T.new_ui()
+        rows = T.explorer_rows(SNAP, ui)
+        i = next(k for k, r in enumerate(rows) if r[1] == "colony" and r[2] == "ops")
+        r, x, _ = self.find(self.hits(ui), "explorer", lambda a: a[1] == i)
+        with mock.patch.object(T.time, "monotonic", side_effect=[10.0, 10.2, 20.0]):
+            T.handle_click(SNAP, ui, self.hits(ui), x + 2, r)
+            ui["cursor"] = 0  # selection moved away between the clicks
+            T.handle_click(SNAP, ui, self.hits(ui), x + 2, r)
+            self.assertEqual(ui["colony"], "ops")
 
     def test_click_tab_switches(self):
         ui = T.new_ui()

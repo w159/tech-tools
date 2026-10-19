@@ -592,6 +592,16 @@ def _num(kind, raw, default):
         return default
 
 
+def _cfg_int(field: str, raw) -> int:
+    """Strict int for team spec / config values: a bad value raises, it is never defaulted."""
+    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+        raise ValueError(f"{field}: expected an integer, got {raw!r}")
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(f"{field}: expected an integer, got {raw!r}") from None
+
+
 def _windows(session: str) -> list | None:
     res = _tmux(
         "list-windows",
@@ -1576,7 +1586,7 @@ def build_team(
     tid = team_id or "t" + _sha(task_class, effort, *scope, task)[:6]
     members = []
     for spec in cell["team"]:
-        for i in range(_num(int, spec["count"], 0)):
+        for i in range(_cfg_int("count", spec["count"])):
             members.append(
                 {
                     "name": f"{spec['role']}-{_sha(tid, spec['role'], i)[:4]}",
@@ -1591,7 +1601,7 @@ def build_team(
         "task": task,
         "file_scope": scope,
         "members": members,
-        "max_parallel": _num(int, cell["max_parallel"], 1),
+        "max_parallel": _cfg_int("max_parallel", cell["max_parallel"]),
         "isolation": cell["isolation"],
     }
 
