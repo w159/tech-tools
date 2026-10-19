@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.5.8 (2026-10-19)
+
+### Fixed
+
+- `/atlas-tui` works from omp, Claude Code and Codex, not only from tmux: omp gets a `/atlas-tui` command that runs the TUI in the omp terminal, the skill no longer depends on `${CLAUDE_PLUGIN_ROOT}`, `--launch` opens a visible terminal window, and in-process subagent colonies show as live with their harness and member names. The omp extension now finds the newest atlas install after an upgrade, so running sessions keep registering subagents. Details in `plugins/atlas/CHANGELOG.md` and `docs/atlas-colony.md`; commit `8449a9cd`.
+
 ## 12.5.7 (2026-10-19)
 
 ### Fixed
