@@ -95,7 +95,10 @@
 .tree-host { cursor: default; color: var(--text); font-weight: 550; padding-left: var(--s-2); }
 .tree-host:hover { background: none; }
 .tree-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--st-fail); flex: none; }
-.tree-dot[data-up="true"] { background: var(--st-ok); }
+.tree-dot[data-state="working"] { background: var(--st-ok); }
+.tree-dot[data-state="blocked"] { background: var(--st-input); }
+.tree-dot[data-state="idle"] { background: var(--st-idle); }
+.rail-colony { text-decoration: none; }
 .tree-tag { margin-left: auto; font-size: var(--fs-2xs); }
 .tree-ws { padding-left: var(--s-3); font-weight: 550; }
 .tree-chev { width: 14px; height: 14px; }

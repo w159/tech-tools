@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Dashboard rail section "This machine" lists the live Atlas colonies from `term/snapshot` (id, project, state dot, seat count, link to `#/terminal?space=<id>`; `No colonies running` when none) instead of herdr workspaces, which stay on the herdr/integrations page only.
+
 ### Fixed
 
 - `snapshot(all_projects=True)` never hides a live pane: a pane in a project subdirectory lists under that project root (not its cwd), and a non-team `atlas_mux.py spawn` pane is tagged `@atlas_worker` so it is listed whatever its cwd or registry (covered by `test_all_projects_skip_rule_keeps_live_panes`).

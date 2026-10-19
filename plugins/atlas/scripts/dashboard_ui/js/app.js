@@ -4,7 +4,8 @@
 import { h, icon, clear, replace, debounce } from "./dom.js";
 import { api, ApiError, setHiddenRoots } from "./api.js";
 import { toast, toastError, Modal, openModal, closeModal, hasOpenModal, closeDrawer, hasOpenDrawer, openPopover, closePopover, hasOpenPopover, openPalette, closePalette, isPaletteOpen, State, DegradedState, Button, Input, Select, HexGlyph, Keycap } from "./components.js";
-import { FleetStrip, RailTree, openAgentInspector, closeAgentInspector } from "./fleet.js";
+import { FleetStrip, openAgentInspector, closeAgentInspector } from "./fleet.js";
+import { MachineColonies } from "./machine-colonies.js";
 import { agentsStore, STATE_WORD } from "./agents-store.js";
 import overview from "./pages/overview.js";
 import work from "./pages/work.js";
@@ -359,8 +360,8 @@ function flyoutIfCollapsed(e) {
   if (isMobile() || !railCollapsed()) return;
   e.preventDefault();
   const a = e.currentTarget;
-  const tree = RailTree({ onSelect: (rec, o) => { closePopover(); openAgent(rec, { tab: o && o.terminal ? "terminal" : undefined }); }, onRecheck: () => agentsStore.recheck() });
-  tree.update(agentsStore.getState(), parseHash().params.agent);
+  const tree = MachineColonies({ getProject: () => store.get("project"), poll: false });
+  tree.addEventListener("click", () => closePopover());
   openPopover(a, h("div", { class: "flyout" }, h("a", { href: "#/agents?lens=fleet", class: "menu-item", onClick: () => closePopover() }, icon("agents"), "Open Agents"), tree), { label: "Agents", placement: "start" });
 }
 
@@ -827,8 +828,9 @@ async function boot() {
   applyTheme();
   buildNav();
   buildTopbar();
-  const tree = RailTree({ onSelect: (rec, o) => openAgent(rec, { tab: o && o.terminal ? "terminal" : undefined }), onRecheck: () => agentsStore.recheck() });
+  const tree = MachineColonies({ getProject: () => store.get("project") });
   document.getElementById("rail-tree-host").appendChild(tree);
+  store.subscribe("project", () => tree.refresh());
   agentsStore.watchColony();
 
   let lastStamp = -1;
@@ -836,7 +838,6 @@ async function boot() {
     if (st.generation === lastStamp) return;
     lastStamp = st.generation;
     strip.update(st.agents);
-    tree.update(st, parseHash().params.agent);
     buildLive(st);
     buildAttention();
     buildNav();

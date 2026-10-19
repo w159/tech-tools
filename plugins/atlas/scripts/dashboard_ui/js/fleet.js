@@ -8,7 +8,7 @@ import { agentsStore, STATE_WORD, ageSeconds, firstDownLayer } from "./agents-st
 import { Badge, Button, IconButton, Tabs, tabPanelProps, State, DegradedState } from "./ui-core.js";
 import { Drawer, openDrawer, closeDrawer, openMenu, openPopover, closePopover, toast, toastError } from "./ui-overlays.js";
 import { ChannelList, Composer, FeedItem } from "./ui-data.js";
-import { renamePane, renameTab, closePane, closeTab, renameWorkspace, closeWorkspace, newTab, hostReachable, QUICK_KEYS, sendKeys } from "./herdr-actions.js";
+import { renamePane, renameTab, closePane, closeTab, hostReachable, QUICK_KEYS, sendKeys } from "./herdr-actions.js";
 import { FilesPanel, hpThreadFor, openEditor } from "./integrations.js";
 import { pollCapture, CAPTURE_LINES } from "./capture-view.js";
 
@@ -269,78 +269,6 @@ export function AgentTable({ agents, sort, onSort, selectedKey, onOpen, actions,
   return h("div", { class: "agent-table-wrap" }, h("table", { class: "agent-table", "aria-label": "Agents" }, h("thead", null, head), h("tbody", null, rows)));
 }
 
-// ---- 7.1 rail tree: host > workspace > agent > subagent ------------------------------------------------------
-
-const TREE_AUTO_COLLAPSE = 40;
-
-// RailTree({ onSelect(rec, {terminal}), selectedKey }) -> role=tree; .update(storeState, selectedKey)
-// Up/Down move, Right/Left expand/collapse, Enter selects, Shift+Enter opens the Terminal tab.
-export function RailTree({ onSelect, onRecheck } = {}) {
-  const root = h("div", { class: "rail-tree", role: "tree", "aria-label": "Agents" });
-  const open = new Map(); // workspace id -> bool (user choice)
-  let last = null;
-  let sel = null;
-  const items = () => Array.from(root.querySelectorAll('[role="treeitem"]')).filter((x) => x.offsetParent !== null);
-  const focusAt = (n) => {
-    const list = items();
-    list.forEach((x) => (x.tabIndex = -1));
-    if (list[n]) { list[n].tabIndex = 0; list[n].focus(); }
-  };
-  const agentItem = (a, depth) => {
-    const kids = a.children || [];
-    const li = h("div", { class: "tree-row tree-agent", role: "treeitem", "aria-level": String(depth), "aria-selected": sel === a.key ? "true" : "false", "data-state": a.state, "data-key": a.key, tabindex: "-1", style: { "--depth": depth }, "aria-label": agentLabel(a), onClick: () => onSelect && onSelect(a, {}) }, HexGlyph(a.state, { size: depth > 3 ? [12, 14] : "mini" }), kindIcon(a.kind), h("span", { class: "tree-label truncate", title: a.title }, a.title), h("span", { class: "tree-age num dim" }, ageLabel(a)));
-    li.dataset.fresh = last && last.changed.has(a.key) ? "true" : "";
-    return [li, ...kids.flatMap((c) => agentItem(c, depth + 1))];
-  };
-  const draw = () => {
-    const st = last;
-    clear(root);
-    if (!st) return;
-    const host = h("div", { class: "tree-row tree-host", role: "treeitem", "aria-level": "1", "aria-expanded": "true", tabindex: "-1" }, h("span", { class: "tree-dot", "data-up": st.layers.herdr.state === "up" ? "true" : "false", "aria-hidden": "true" }), h("span", { class: "tree-label truncate" }, "This machine"), h("span", { class: "tree-tag dim" }, "Host"));
-    root.appendChild(host);
-    if (!st.loaded) { root.appendChild(h("p", { class: "tree-note dim", role: "status" }, "Loading agents")); return; }
-    if (st.layers.herdr.state === "down") {
-      root.appendChild(h("div", { class: "tree-note" }, h("p", null, "The agent runtime isn't running"), h("p", { class: "dim" }, "Atlas can't list agents until the agent runtime is up."), Button({ label: "Start runtime", size: "sm", variant: "primary", onClick: () => agentsStore.startHerdr() }), Button({ label: "Recheck", size: "sm", onClick: onRecheck })));
-      return;
-    }
-    if (!st.tree.length) { root.appendChild(h("p", { class: "tree-note dim" }, "No agents running")); return; }
-    const many = st.agents.length > TREE_AUTO_COLLAPSE;
-    for (const w of st.tree) {
-      const hasSel = w.agents.some((a) => a.key === sel);
-      const isOpen = open.has(w.id) ? open.get(w.id) : !many || hasSel;
-      const wsMenu = h("button", { class: "btn btn-ghost btn-icon row-menu", type: "button", "aria-label": "Actions for workspace " + wsLabel(w), "aria-haspopup": "menu", onClick: (e) => { e.stopPropagation(); openMenu(wsMenu, [{ label: "New tab", icon: "plus", onSelect: () => newTab(w.id) }, { label: "Rename workspace", icon: "edit", onSelect: () => renameWorkspace(w.id, wsLabel(w)) }, { label: "Close workspace", icon: "stop", danger: true, onSelect: () => closeWorkspace(w.id, wsLabel(w)) }], { placement: "end", label: "Actions for workspace " + wsLabel(w) }); } }, icon("more"));
-      const wr = h("div", { class: "tree-row tree-ws", role: "treeitem", "aria-level": "2", "aria-expanded": isOpen ? "true" : "false", tabindex: "-1", "data-id": w.id, onClick: () => { open.set(w.id, !isOpen); draw(); } }, icon(isOpen ? "chevron-down" : "chevron-right", { class: "icon tree-chev" }), h("span", { class: "tree-label truncate" }, wsLabel(w)), h("span", { class: "tree-count num dim" }, String(w.paneCount || w.agents.length)), HexGlyph(w.state, { size: "mini" }), wsMenu);
-      root.appendChild(wr);
-      if (isOpen) for (const a of w.agents) for (const n of agentItem(a, 3)) root.appendChild(n);
-    }
-    const all = items();
-    const idx = Math.max(0, all.findIndex((x) => x.dataset.key === sel));
-    if (all[idx]) all[idx].tabIndex = 0;
-  };
-  root.addEventListener("keydown", (e) => {
-    const list = items();
-    const i = list.indexOf(document.activeElement);
-    if (i < 0) return;
-    const cur = list[i];
-    if (e.key === "ArrowDown") { e.preventDefault(); focusAt(Math.min(list.length - 1, i + 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); focusAt(Math.max(0, i - 1)); }
-    else if (e.key === "ArrowRight" && cur.classList.contains("tree-ws") && cur.getAttribute("aria-expanded") === "false") { e.preventDefault(); open.set(cur.dataset.id, true); draw(); }
-    else if (e.key === "ArrowLeft" && cur.classList.contains("tree-ws") && cur.getAttribute("aria-expanded") === "true") { e.preventDefault(); open.set(cur.dataset.id, false); draw(); }
-    else if (e.key === "Enter") {
-      e.preventDefault();
-      if (cur.dataset.key) { const rec = agentsStore.get(cur.dataset.key); if (rec && onSelect) onSelect(rec, { terminal: e.shiftKey }); }
-      else cur.click();
-    }
-  });
-  root.update = (st, selectedKey) => {
-    last = st;
-    sel = selectedKey || null;
-    const had = root.contains(document.activeElement) ? document.activeElement.dataset.key : null;
-    draw();
-    if (had) { const el = root.querySelector('[data-key="' + CSS.escape(had) + '"]'); if (el) { el.tabIndex = 0; el.focus(); } }
-  };
-  return root;
-}
 
 // ---- 9.6 inspector --------------------------------------------------------------------------------------------
 
