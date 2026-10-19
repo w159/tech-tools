@@ -205,6 +205,38 @@ class ModelTest(unittest.TestCase):
         self.assertNotIn("fin400", by_id)
         self.assertNotIn("fingone", by_id)
 
+    def _no_ended_at(self, tid, log_ago, **extra):
+        self._finished_colony(tid, 0, **extra)
+        reg = Path(self.root, ".atlas", ".run", "channels.json")
+        data = json.loads(reg.read_text())
+        del data["channels"][f"proj@main/lead-{tid}"]["members"][0]["ended_at"]
+        reg.write_text(json.dumps(data))
+        old = time.time() - 900
+        os.utime(Path(self.root, ".atlas", ".run", "teams", f"{tid}.json"), (old, old))
+        log = Path(self.root, ".atlas", ".run", "logs", f"worker-{tid}.log")
+        log.write_text("$ claude\n")
+        os.utime(log, (time.time() - log_ago,) * 2)
+
+    def test_finished_grace_without_ended_at_uses_log_mtime(self):
+        self._no_ended_at("nolog60", 60)
+        self._no_ended_at("nolog400", 400)
+        self._no_ended_at("nologgone", 60, state="reaped")
+        by_id = {c["id"]: c for c in model.snapshot(self.root)["colonies"]}
+        self.assertTrue(by_id["nolog60"]["finished"])
+        self.assertNotIn("nolog400", by_id)
+        self.assertNotIn("nologgone", by_id)
+
+    def test_killed_seat_without_pane_exit_code_or_ended_at_is_finished(self):
+        self._no_ended_at("kill60", 60)
+        reg = Path(self.root, ".atlas", ".run", "channels.json")
+        data = json.loads(reg.read_text())
+        entry = data["channels"]["proj@main/lead-kill60"]["members"][0]
+        del entry["exit_code"]
+        entry["pid"] = 4194000  # not a live process
+        reg.write_text(json.dumps(data))
+        by_id = {c["id"]: c for c in model.snapshot(self.root)["colonies"]}
+        self.assertTrue(by_id["kill60"]["finished"])
+
     def test_source_lead_falls_back_to_channel_and_label(self):
         src = {c["id"]: c["source"] for c in model.snapshot(self.root)["colonies"]}["t1"]
         self.assertEqual(src["lead"], "lead-x")

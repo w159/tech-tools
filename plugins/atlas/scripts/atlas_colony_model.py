@@ -170,6 +170,7 @@ def _panes() -> list[dict]:
         "@atlas_role",
         "pane_current_command",
         "pane_current_path",
+        "pane_dead_time",
     )
     rc, out = _tmux("list-panes", "-a", "-F", "\t".join("#{%s}" % k for k in keys))
     if rc != 0:
@@ -196,11 +197,15 @@ def _json(path: Path):
 
 def _teams(root: str) -> list[dict]:
     d = Path(root) / ".atlas" / ".run" / "teams"
-    recs = [
-        r
-        for r in (_json(p) for p in sorted(d.glob("*.json")))
-        if isinstance(r, dict) and r.get("team_id")
-    ]
+    recs = []
+    for p in sorted(d.glob("*.json")):
+        r = _json(p)
+        if isinstance(r, dict) and r.get("team_id"):
+            try:
+                r["_mtime"] = p.stat().st_mtime
+            except OSError:
+                pass
+            recs.append(r)
     return sorted(recs, key=lambda r: r.get("created") or 0)
 
 
@@ -212,6 +217,36 @@ def _registry(root: str) -> dict:
 
 def _first_line(text) -> str:
     return next((ln.strip() for ln in str(text or "").splitlines() if ln.strip()), "")
+
+
+def _pid_gone(pid) -> bool:
+    """True when pid is a recorded process that no longer exists (a seat with no pane that exited)."""
+    pid = _i(pid)
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
+_DEAD_SEEN: dict = {}  # pane_id -> first time a snapshot saw it dead (when tmux has no dead time)
+
+
+def _ended_fallback(seat: dict, pane: dict | None, team: dict | None, now: float) -> float:
+    """End time of a seat whose channel entry has no ended_at (crash, kill --run, claude-bg exit):
+    the latest of the pane's dead time, the worker log mtime and the team record mtime."""
+    cands = [_f((team or {}).get("_mtime"))]
+    try:
+        cands.append(Path(seat["log_path"]).stat().st_mtime if seat["log_path"] else 0.0)
+    except OSError:
+        pass
+    if pane and pane["pane_dead"] == "1":
+        cands.append(_f(pane.get("pane_dead_time")) or _DEAD_SEEN.setdefault(pane["pane_id"], now))
+    return max(cands)
 
 
 def _log_info(path: Path) -> tuple[str, str]:
@@ -654,7 +689,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         elif p and p["pane_dead"] == "1":
             state = "dead"
         elif not p:
-            state = "unknown"
+            state = "dead" if _pid_gone(entry.get("pid")) else "unknown"
         else:
             state = pane_state(text, runtime)
             if (
@@ -717,13 +752,16 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     }
     reaped = {t["team_id"] for t in teams if t.get("state") in ("archived", "reaped")}
     ended: dict = {}
+    team_by_id = {t["team_id"]: t for t in teams}
     for s_ in out_seats:
         e = _f((members.get(s_["name"]) or {"entry": {}})["entry"].get("ended_at"))
+        if not e and s_["state"] in ("finished", "dead"):
+            e = _ended_fallback(s_, seats[s_["name"]]["pane"], team_by_id.get(s_["colony"]), now)
         ended[s_["colony"]] = max(ended.get(s_["colony"], 0.0), e)
     done = {
         cid
         for cid in colonies
-        if cid not in live | fresh
+        if cid not in live
         and cid not in reaped
         and 0 < now - ended.get(cid, 0.0) < FINISHED_GRACE_S
         and all(s_["state"] in ("finished", "dead") for s_ in out_seats if s_["colony"] == cid)

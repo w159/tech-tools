@@ -6,6 +6,7 @@
 
 - completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
 - `/api/v2/term/snapshot` is served from a process-wide single-flight cache with a 2 s TTL (keyed by project/all), so the rail and the Terminal page share one build and SPACES no longer sits on "Loading colonies…"; pi-lens error findings cleared in `atlas_dash_term.py`, `atlas_colony_model.py` and `test_atlas_dash_term.py` (tolerant `_i`/`_f` number coercion in the colony model).
+- dashboard reads its plugin version once at import, so `/api/health`, the UI version meta and the update banner keep the running version after an upgrade deletes the old cache dir; the colony model gives finished colonies the 300 s grace without `ended_at` (latest of pane dead time, worker log mtime, team record mtime) and treats a pane-less seat whose recorded pid is gone as dead (`kill --run`, crashes).
 
 ## 12.5.6 (2026-10-19)
 

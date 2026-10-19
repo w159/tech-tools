@@ -186,11 +186,21 @@ def _label_for(session: dict) -> str:
     return f"{live}{folder}{branch_bit}{age_bit} · {sid}"
 
 
-def _plugin_manifest():
+def _read_manifest() -> dict:
     path = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
-    if not path.is_file():
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+
+
+# Read once at import: a plugin upgrade deletes the old cache dir under a running dashboard,
+# and health, the UI version meta and the update banner must keep reporting the running version.
+_MANIFEST = _read_manifest()
+
+
+def _plugin_manifest():
+    return _MANIFEST
 
 
 def _mcp_json():

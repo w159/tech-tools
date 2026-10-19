@@ -27,6 +27,14 @@ class TestAtlasDashboard(unittest.TestCase):
         ver = self.mod._plugin_manifest()["version"]
         self.assertEqual(self.mod.Handler.server_version, f"AtlasDashboard/{ver}")
 
+    def test_version_survives_manifest_removal(self):
+        ver = self.mod._plugin_manifest()["version"]
+        manifest = self.mod.PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
+        with mock.patch.object(self.mod, "PLUGIN_ROOT", Path(tempfile.mkdtemp())):  # manifest now missing
+            self.assertFalse((self.mod.PLUGIN_ROOT / ".claude-plugin" / "plugin.json").exists())
+            self.assertEqual(self.mod._plugin_manifest()["version"], ver)
+        self.assertTrue(manifest.exists())
+
     def test_static_assets_never_cached(self):
         srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), self.mod.Handler)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
