@@ -1,5 +1,12 @@
 # Changelog
 
+## 12.5.3 (2026-10-19)
+
+### Fixed
+
+- Dashboard assets are never stale after an upgrade: `index.html`, `/ui/*` JS/CSS and vendor files are all served `Cache-Control: no-store` (covered by `test_static_assets_never_cached`), so a browser can't keep an old `app.js`/`terminal.js`.
+- Command Center draws on small windows. The TUI no longer refuses below 80x24: it renders a compact layout (24-col explorer, narrower table columns, footer kept) down to 60x18 and only shows the one-line hint below that. The browser terminal steps the xterm font 13 -> 10 until the grid reaches 100x30 before the TUI falls back to compact.
+
 ## 12.5.2 (2026-10-19)
 
 ### Fixed

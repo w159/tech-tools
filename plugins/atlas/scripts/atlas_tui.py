@@ -23,6 +23,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 LEFT = 32
+COMPACT_LEFT = 24  # explorer width below COMPACT_W columns
+COMPACT_W = 100
+MIN_W, MIN_H = 60, 18
 SECTIONS = ["topology", "specs", "projects", "terminals", "feed", "system"]
 TABS = ["table", "recent", "overview", "graph", "health"]
 RT = {"claude": "cl", "omp": "omp", "codex": "cx"}
@@ -177,7 +180,7 @@ def explorer_rows(snap, ui) -> list:
     return rows
 
 
-def _explorer_lines(rows, ui, h) -> list:
+def _explorer_lines(rows, ui, h, lw=LEFT) -> list:
     cur = max(0, min(ui["cursor"], len(rows) - 1))
     top = max(0, min(cur - h + 1, len(rows) - h)) if len(rows) > h else 0
     out = []
@@ -186,8 +189,8 @@ def _explorer_lines(rows, ui, h) -> list:
         mark = "▶" if i == cur and ui.get("focus") == "explorer" else " "
         text = mark + r[0]
         if len(r) > 3:
-            text = _fit(text, LEFT - len(str(r[3]))) + str(r[3])
-        out.append(_fit(text, LEFT))
+            text = _fit(text, lw - len(str(r[3]))) + str(r[3])
+        out.append(_fit(text, lw))
     return out
 
 
@@ -201,7 +204,7 @@ def _tabbar(ui, snap) -> str:
 
 def _table(snap, ui, w) -> list:
     seats = _seats(snap, ui["colony"], ui.get("pod"), ui.get("filter", ""))
-    pw, sw, mw, stw, ww, aw = 12, 16, 14, 11, 18, 8
+    pw, sw, mw, stw, ww, aw = (12, 16, 14, 11, 18, 8) if w >= 90 else (6, 12, 8, 9, 8, 8)
     nw = max(6, w - (pw + sw + 3 + mw + 4 + stw + 2 + ww + aw + 9) - 3)
     hdr = f"  {'POD':<{pw}} {'SEAT':<{sw}} {'RT':<3} {'MODEL':<{mw}} {'CTX':<4} {'STATE':<{stw}} {'Q':>2} {'WORK':<{ww}} {'NOW':<{nw}} ACTIONS"
     out = [hdr]
@@ -512,15 +515,16 @@ def render(snap: dict, ui: dict, width: int, height: int) -> list:
         hl = _help_lines(ui)
         body = [_fit(x, width) for x in (hl + [""] * bodyh)[: bodyh + 2]]
         return (lines + body)[: height - 2] + foot
-    rw = width - LEFT - 1
+    lw = LEFT if width >= COMPACT_W else COMPACT_LEFT
+    rw = width - lw - 1
     lines.append(
-        ("━ { EXPLORER } " + "━" * LEFT)[:LEFT]
+        ("━ { EXPLORER } " + "━" * lw)[:lw]
         + "╋"
         + ("━ " + _title(snap, ui) + " " + "━" * width)[:rw]
     )
     rows = explorer_rows(snap, ui)
-    left = _explorer_lines(rows, ui, bodyh)
-    left += [" " * LEFT] * (bodyh - len(left))
+    left = _explorer_lines(rows, ui, bodyh, lw)
+    left += [" " * lw] * (bodyh - len(left))
     right = right_lines(snap, ui, rw - 1, bodyh)
     off = ui.get("pane_scroll", 0) if not ui.get("seat") else 0
     right = right[off : off + bodyh]
@@ -528,7 +532,7 @@ def render(snap: dict, ui: dict, width: int, height: int) -> list:
         lines.append(
             left[i] + "┃" + " " + _fit(right[i] if i < len(right) else "", rw - 1)
         )
-    lines.append("━" * LEFT + "╋" + "━" * rw)
+    lines.append("━" * lw + "╋" + "━" * rw)
     return lines + foot
 
 
@@ -864,8 +868,8 @@ def loop(stdscr, args):
                 ui["seat_text"] = m.capture(s["target"], 200, False)
             last_cap = now
         h, w = stdscr.getmaxyx()
-        if h < 24 or w < 80:
-            frame = [f"terminal too small ({w}x{h}); need 80x24"]
+        if h < MIN_H or w < MIN_W:
+            frame = [f"terminal too small ({w}x{h}); need {MIN_W}x{MIN_H}"]
         else:
             frame = render(snap, ui, w, h)
         stdscr.erase()

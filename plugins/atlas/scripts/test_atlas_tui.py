@@ -114,6 +114,16 @@ class Render(unittest.TestCase):
             lines[1].startswith("━ { EXPLORER } ━") and "╋━ TOPOLOGY ━" in lines[1]
         )
 
+    def test_compact_frames_keep_explorer_and_footer(self):
+        for w, h in ((60, 18), (70, 20)):
+            lines = T.render(SNAP, T.new_ui(), w, h)
+            self.assertEqual(len(lines), h)
+            self.assertTrue(all(len(x) == w for x in lines))
+            self.assertTrue(lines[1].startswith("━ { EXPLORER } ━"))
+            self.assertEqual(lines[1].index("╋"), T.COMPACT_LEFT)
+            self.assertIn("TOPOLOGY", "\n".join(lines))
+            self.assertTrue(lines[-2].strip() and lines[-1].strip())
+
     def test_topology_tree(self):
         f = frame(T.new_ui())
         for s in (

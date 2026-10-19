@@ -43,12 +43,25 @@ export function loadXterm() {
   return xtermReady;
 }
 
+// Largest font in [min,max] whose fitted grid reaches 100x30; the floor when none does (the TUI then draws compact).
+// measure(size) -> {cols, rows} for that font size.
+export function stepFont(measure, max = 13, min = 10, cols = 100, rows = 30) {
+  let size = max;
+  while (size > min) { const m = measure(size); if (m.cols >= cols && m.rows >= rows) break; size--; }
+  return size;
+}
+
 function makeTerm(el, extra) {
   const term = new window.Terminal({ ...XTERM_OPTS, ...extra });
   const fit = new window.FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(el);
-  const doFit = () => { try { fit.fit(); } catch (_e) { /* not laid out yet */ } };
+  const doFit = () => {
+    try {
+      if (extra && extra.stepFont) term.options.fontSize = stepFont((n) => { term.options.fontSize = n; fit.fit(); return term; });
+      fit.fit();
+    } catch (_e) { /* not laid out yet */ }
+  };
   doFit();
   // Refit whenever the surface itself resizes (the window listener alone misses sidebar and flex changes).
   let ro = null;
@@ -147,7 +160,7 @@ export default {
     };
     const setStatus = (kind, text) => { st.ptyStatus = text; st.ptyErr = kind === "error"; drawFoot(); };
     const attachPty = (el, kind, extra) => {
-      const { term, fit, stop } = makeTerm(el, { cursorBlink: true });
+      const { term, fit, stop } = makeTerm(el, { cursorBlink: true, stepFont: kind === "tui" });
       const pty = connectPty({ term, kind, project: project(), probe: () => ctx.api.get("term/snapshot", snapParams()), onStatus: setStatus, ...extra });
       window.addEventListener("resize", fit);
       S.disposers.push(() => { pty.dispose(); stop(); term.dispose(); window.removeEventListener("resize", fit); });

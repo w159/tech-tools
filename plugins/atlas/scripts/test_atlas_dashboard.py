@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
-import importlib.util, json, os, tempfile, unittest
+import http.server, importlib.util, json, os, tempfile, threading, unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -26,6 +26,16 @@ class TestAtlasDashboard(unittest.TestCase):
     def test_server_header_uses_manifest_version(self):
         ver = self.mod._plugin_manifest()["version"]
         self.assertEqual(self.mod.Handler.server_version, f"AtlasDashboard/{ver}")
+
+    def test_static_assets_never_cached(self):
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), self.mod.Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+        for path in ("/", "/ui/js/app.js", "/ui/js/pages/terminal.js"):
+            with urllib.request.urlopen(base + path, timeout=10) as resp:
+                self.assertEqual(resp.headers["Cache-Control"], "no-store", path)
 
     def test_editable_projects_not_hidden_by_recency(self):
         import time

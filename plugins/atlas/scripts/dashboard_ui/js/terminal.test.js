@@ -180,3 +180,13 @@ test("a 4xx behind the ws close renders the server reason and stops retrying", a
   expect(sockets.length).toBe(1);
   page.destroy();
 });
+
+test("stepFont steps 13 -> 10 until the grid reaches 100x30", async () => {
+  const { stepFont } = await import("./pages/terminal.js");
+  const grid = (w, h) => (n) => ({ cols: Math.floor(w / (n * 0.6)), rows: Math.floor(h / (n * 1.2)) });
+  expect(stepFont(grid(1400, 900))).toBe(13);
+  const mid = stepFont(grid(700, 420));
+  expect(mid).toBeLessThan(13);
+  expect(mid).toBeGreaterThanOrEqual(10);
+  expect(stepFont(grid(500, 300))).toBe(10);
+});
