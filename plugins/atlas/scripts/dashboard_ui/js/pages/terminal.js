@@ -36,9 +36,11 @@ export function loadXterm() {
   if (window.Terminal && window.FitAddon) return Promise.resolve();
   xtermReady ??= (async () => {
     const v = base() + "/ui/vendor/xterm/";
-    await addAsset("link", { rel: "stylesheet", href: v + "xterm.css" });
-    await addAsset("script", { src: v + "xterm.js" });
-    await addAsset("script", { src: v + "addon-fit.js" });
+    await Promise.all([
+      addAsset("link", { rel: "stylesheet", href: v + "xterm.css" }),
+      addAsset("script", { src: v + "xterm.js" }),
+      addAsset("script", { src: v + "addon-fit.js" }),
+    ]);
   })().catch((e) => { xtermReady = null; throw e; });
   return xtermReady;
 }
@@ -70,7 +72,7 @@ function makeTerm(el, extra) {
 }
 
 // PTY over WebSocket with reconnect: binary frames in, {t:"in"|"resize"} JSON out. onStatus("live"|"connecting"|"closed", text).
-export function connectPty({ term, kind, target, project, onStatus, probe }) {
+export function connectPty({ term, kind, target, project, onStatus, probe, placeholder }) {
   let ws = null;
   let closed = false;
   let attempt = 0;
@@ -88,7 +90,10 @@ export function connectPty({ term, kind, target, project, onStatus, probe }) {
     ws = new WebSocket(url());
     ws.binaryType = "arraybuffer";
     ws.onopen = () => { attempt = 0; onStatus("live", "live"); send({ t: "resize", cols: term.cols, rows: term.rows }); };
-    ws.onmessage = (ev) => term.write(typeof ev.data === "string" ? ev.data : new Uint8Array(ev.data));
+    ws.onmessage = (ev) => {
+      if (waiting) { waiting = false; term.write("\x1b[2J\x1b[H"); }
+      term.write(typeof ev.data === "string" ? ev.data : new Uint8Array(ev.data));
+    };
     ws.onclose = () => {
       if (closed) return;
       const wait = Math.min(1000 * 2 ** attempt++, 10000);
@@ -103,6 +108,8 @@ export function connectPty({ term, kind, target, project, onStatus, probe }) {
     };
     ws.onerror = () => {};
   };
+  let waiting = !!placeholder;
+  if (waiting) term.write(placeholder);
   const subs = [term.onData((d) => send({ t: "in", d })), term.onResize(({ cols, rows }) => send({ t: "resize", cols, rows }))];
   open();
   return {
@@ -208,7 +215,7 @@ export default {
       replace(main, el);
       try { await loadXterm(); } catch (e) { st.err = String(e.message || e); return drawFoot(); }
       if (!el.isConnected || st.space !== CC) return;
-      st.cc = attachPty(el, "tui");
+      st.cc = attachPty(el, "tui", { placeholder: "starting Atlas Command Center…" });
     }
 
     async function pollOne(s) {

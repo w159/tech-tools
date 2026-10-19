@@ -6,6 +6,7 @@
 
 - Dashboard assets are never stale after an upgrade: `index.html`, `/ui/*` JS/CSS and vendor files are all served `Cache-Control: no-store` (covered by `test_static_assets_never_cached`), so a browser can't keep an old `app.js`/`terminal.js`.
 - Command Center draws on small windows. The TUI no longer refuses below 80x24: it renders a compact layout (24-col explorer, narrower table columns, footer kept) down to 60x18 and only shows the one-line hint below that. The browser terminal steps the xterm font 13 -> 10 until the grid reaches 100x30 before the TUI falls back to compact.
+- Command Center paints immediately (browser, 1440x900, All projects, 3 runs: first TUI frame 4.3-6.1 s -> 0.25 s, live colony data 4.3-6.1 s -> 1.0 s). The TUI draws its frame at once with `loading colonies…` and loads the snapshot in a background thread; the terminal page shows `starting Atlas Command Center…` until the first PTY byte; xterm css/js/fit load in parallel and start first thing in `boot()` so they no longer queue behind the API burst on the browser's 6-connection pool; the slow `/api/v2/projects` no longer gates the first route. `atlas_colony_model.snapshot(all_projects=True)` cold 1.0 s -> 0.6 s (warm 0.3 s): projects with no `.atlas/.run/teams` and no live pane are skipped, board files are read tail-only (newest files first) and cached by mtime, and specs/harness/herdr/rig availability is cached for 60 s. Snapshot output shape is unchanged.
 
 ## 12.5.2 (2026-10-19)
 

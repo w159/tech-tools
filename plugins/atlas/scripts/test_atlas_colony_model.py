@@ -40,6 +40,8 @@ esac
 
 class ModelTest(unittest.TestCase):
     def setUp(self):
+        model._STATIC.clear()
+        model._NOTES.clear()
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = os.path.realpath(tmp.name)
@@ -165,6 +167,32 @@ class ModelTest(unittest.TestCase):
         self.assertIn("worker-zz", {x["name"] for x in s["seats"] if x["colony"] == "t2"})
         with mock.patch.object(model, "_projects", return_value=projects[:1]):
             self.assertNotIn("t2", {c["id"] for c in model.snapshot(self.root)["colonies"]})
+
+    def test_all_projects_subprocess_budget_and_idle_projects_skipped(self):
+        idle = []
+        for i in range(30):  # registered projects with no teams dir and no live pane
+            d = Path(self.root, f"idle{i}")
+            d.mkdir()
+            idle.append({"root": str(d), "name": f"idle{i}", "channels": 0})
+        projects = [{"root": self.root, "name": "a", "channels": 1}] + idle
+        calls = []
+        real = model.subprocess.run
+        scanned = []
+        real_load = model.atlas_todo.load
+
+        def counting(*a, **k):
+            calls.append(a[0])
+            return real(*a, **k)
+
+        with mock.patch.object(model, "_projects", return_value=projects):
+            model.snapshot(self.root, True)  # warms the 60 s static caches
+            with mock.patch.object(model.subprocess, "run", counting), mock.patch.object(
+                model.atlas_todo, "load", lambda r: (scanned.append(r), real_load(r))[1]
+            ):
+                model.snapshot(self.root, True)
+        # list-panes, list-sessions and one capture per live pane (2); nothing per project
+        self.assertLessEqual(len(calls), 4, calls)
+        self.assertEqual(scanned, [self.root])
 
     def test_snapshot_shape_and_seats(self):
         s = model.snapshot(self.root)

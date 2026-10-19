@@ -819,6 +819,8 @@ function setTab(tab) {
 // ---- boot --------------------------------------------------------------------------------------------------------------
 
 async function boot() {
+  // First thing: the terminal's xterm assets must beat the API burst to the browser's 6-connection pool.
+  if (location.hash.startsWith("#/terminal")) import("./pages/terminal.js").then((m) => m.loadXterm()).catch(() => {});
   const local = loadLocalPrefs();
   store.set("prefs", Object.assign({ theme: "dark", density: "comfortable" }, local));
   store.set("project", local.default_project || "all");
@@ -848,17 +850,21 @@ async function boot() {
   document.addEventListener("atlas:fetched", stampAsOf);
 
   const probe = api.probe();
-  const [prefs, projects] = await Promise.all([api.get("prefs").catch(() => null), api.get("projects").catch(() => null), loadExternalPages()]).then((r) => [r[0], r[1]]);
+  const projectsReq = api.get("projects").catch(() => null);
+  const [prefs] = await Promise.all([api.get("prefs").catch(() => null), loadExternalPages()]);
   if (prefs) {
     store.set("prefs", Object.assign({}, store.get("prefs"), prefs));
     if (prefs.default_project) store.set("project", prefs.default_project);
     applyTheme();
   }
-  store.set("projects", projects && Array.isArray(projects.projects) ? projects.projects : []);
-  const known = new Set(["all", ...store.get("projects").map((p) => p.root)]);
-  if (!known.has(store.get("project"))) store.set("project", "all");
   applyPrefs();
   store.subscribe("prefs", applyPrefs);
+  // The project list is slow on a big install: it fills the switcher when it lands and never gates the first paint.
+  projectsReq.then((projects) => {
+    store.set("projects", projects && Array.isArray(projects.projects) ? projects.projects : []);
+    if (store.get("project") !== "all" && !store.get("projects").some((p) => p.root === store.get("project"))) setProject("all", false);
+    else applyPrefs();
+  });
   probe.then((p) => {
     if (p.up && p.data && p.data.version) {
       store.set("version", p.data.version);

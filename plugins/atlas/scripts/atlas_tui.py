@@ -16,6 +16,7 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -439,7 +440,7 @@ def _list_view(snap, ui, h) -> list:
         out = [
             f"TOPOLOGY · {snap.get('host')}",
             "Choose a colony to read its seats and work.",
-            f"{n} colonies · select one in Explorer",
+            "loading colonies…" if snap.get("loading") else f"{n} colonies · select one in Explorer",
             "Bright ▦ live agents · gray ▦ none · ? unknown",
         ]
     return out
@@ -837,14 +838,40 @@ def focus_first_live(snap, ui):
         ui["cursor"] = next(i for i, r in enumerate(explorer_rows(snap, ui)) if r[1] == "colony" and r[2] == pick)
 
 
+class Loader:
+    """Runs the (slow) colony snapshot off the UI thread; `take()` hands back the newest result once."""
+
+    def __init__(self, root, all_projects):
+        self.root, self.all, self.busy, self._res = root, all_projects, False, None
+
+    def start(self):
+        if self.busy:
+            return
+        self.busy = True
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        try:
+            res = _model().snapshot(self.root, self.all)
+        except Exception as e:  # a failed scan must not kill the TUI
+            res = e
+        self._res, self.busy = res, False
+
+    def take(self):
+        res, self._res = self._res, None
+        return res
+
+
 def loop(stdscr, args):
     import curses
 
-    m = _model()
     root = _root(args)
     ui = new_ui()
-    snap = m.snapshot(root, args.all)
-    focus_first_live(snap, ui)
+    ui["status"] = "loading colonies…"
+    snap = {"loading": True}
+    loader = Loader(root, args.all)
+    loader.start()
+    first = True
     last_snap = last_cap = 0.0
     curses.curs_set(0)
     try:  # terminal default fg/bg (-1): paint no grey box over the host background
@@ -857,15 +884,25 @@ def loop(stdscr, args):
     stdscr.keypad(True)
     while True:
         now = time.time()
+        res = loader.take()
+        if isinstance(res, Exception):
+            ui["status"] = f"snapshot failed: {res}"
+            last_snap = now
+        elif res is not None:
+            snap, last_snap = res, now
+            if first:
+                first = False
+                ui["status"] = ""
+                focus_first_live(snap, ui)
         if now - last_snap >= 2:
-            snap, last_snap = m.snapshot(root, args.all), now
+            loader.start()
         if ui.get("seat") and now - last_cap >= 1:
             s = next(
                 (x for x in snap.get("seats") or [] if x.get("name") == ui["seat"]),
                 None,
             )
             if s and s.get("target"):
-                ui["seat_text"] = m.capture(s["target"], 200, False)
+                ui["seat_text"] = _model().capture(s["target"], 200, False)
             last_cap = now
         h, w = stdscr.getmaxyx()
         if h < MIN_H or w < MIN_W:
@@ -898,13 +935,13 @@ def loop(stdscr, args):
         if eff[0] == "quit":
             return
         if eff[0] == "refresh":
-            snap, last_snap = m.snapshot(root, args.all), time.time()
+            loader.start()
         elif eff[0] == "term":
             curses.endwin()
-            err = attach(snap, eff[1], m)
+            err = attach(snap, eff[1], _model())
             stdscr.refresh()
             ui["status"] = err or f"returned from {eff[1]}"
-            snap, last_snap = m.snapshot(root, args.all), time.time()
+            loader.start()
         elif eff[0] == "send":
             try:
                 send(root, eff[1], eff[2], snap)

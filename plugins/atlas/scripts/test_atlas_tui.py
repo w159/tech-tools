@@ -9,6 +9,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import atlas_tui as T  # noqa: E402
+import time  # noqa: E402
 
 EV = {
     "ts": 1792181090,
@@ -322,6 +323,48 @@ class Attach(unittest.TestCase):
             sys.modules["atlas_todo"].note.assert_called_once_with(
                 "/r", "tui", "hi", to="ex-1"
             )
+
+
+class FirstPaint(unittest.TestCase):
+    def test_first_frame_is_drawn_before_slow_snapshot_finishes(self):
+        import curses
+        import threading
+
+        gate, finished, frames, cur = threading.Event(), threading.Event(), [], []
+
+        def slow_snapshot(root, all_projects):
+            gate.wait(5)
+            finished.set()
+            return SNAP
+
+        class Done(Exception):
+            pass
+
+        scr = mock.Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        scr.erase.side_effect = cur.clear
+        scr.addstr.side_effect = lambda y, x, s: cur.append(s)
+        scr.refresh.side_effect = lambda: frames.append((finished.is_set(), "\n".join(cur)))
+
+        def getch():
+            if len(frames) == 1:
+                gate.set()  # first frame is out; only now let the snapshot complete
+            if finished.is_set() and any("lead-01" in f for _, f in frames):
+                raise Done
+            time.sleep(0.01)
+            return -1
+
+        scr.getch.side_effect = getch
+        model = mock.Mock(snapshot=slow_snapshot)
+        args = mock.Mock(project="/p", all=False)
+        with mock.patch.multiple(curses, curs_set=mock.DEFAULT, start_color=mock.DEFAULT, use_default_colors=mock.DEFAULT), \
+                mock.patch.object(T, "_model", return_value=model), self.assertRaises(Done):
+            T.loop(scr, args)
+        done_before, first = frames[0]
+        self.assertFalse(done_before)
+        self.assertIn("EXPLORER", first)
+        self.assertIn("loading colonies…", first)
+        self.assertTrue(any("lead-01" in f for _, f in frames[1:]))
 
 
 class Cli(unittest.TestCase):

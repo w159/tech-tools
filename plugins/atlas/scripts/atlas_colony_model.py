@@ -278,7 +278,20 @@ def _projects(root: str, all_projects: bool) -> list[dict]:
     return out
 
 
-def _system() -> dict:
+_STATIC: dict = {}  # name -> (expires, value); specs and harness availability barely change
+STATIC_TTL_S = 60
+
+
+def _static(name: str, fn):
+    hit = _STATIC.get(name)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    val = fn()
+    _STATIC[name] = (time.time() + STATIC_TTL_S, val)
+    return val
+
+
+def _installed() -> dict:
     rc, ver = _tmux("-V")
     try:
         import atlas_seats
@@ -286,6 +299,15 @@ def _system() -> dict:
         herdr = bool(atlas_seats.agents()["reachable"])
     except Exception:
         herdr = False
+    return {
+        "tmux": {"ok": rc == 0, "version": ver.strip()},
+        "herdr": {"ok": herdr},
+        "rig": {"ok": bool(shutil.which("rig"))},
+        "harnesses": {h: bool(shutil.which(h)) for h in HARNESSES},
+    }
+
+
+def _system() -> dict:
     port = int(os.environ.get("ATLAS_DASHBOARD_PORT", "7421"))
     url = f"http://127.0.0.1:{port}/"
     try:
@@ -293,12 +315,13 @@ def _system() -> dict:
         dash = True
     except OSError:
         dash = False
+    inst = _static("installed", _installed)
     return {
-        "tmux": {"ok": rc == 0, "version": ver.strip()},
+        "tmux": inst["tmux"],
         "dashboard": {"ok": dash, "url": url},
-        "herdr": {"ok": herdr},
-        "rig": {"ok": bool(shutil.which("rig"))},
-        "harnesses": {h: bool(shutil.which(h)) for h in HARNESSES},
+        "herdr": inst["herdr"],
+        "rig": inst["rig"],
+        "harnesses": inst["harnesses"],
     }
 
 
@@ -323,6 +346,65 @@ def _terminals(panes_all: list[dict]) -> list[dict]:
     return res
 
 
+_NOTES: dict = {}  # board file path -> ((mtime_ns, size), tail records)
+NOTE_TAIL_LINES = 200  # the feed shows FEED_MAX; the per-seat "now" needs only each file's last note
+NOTE_TAIL_BYTES = 256 * 1024
+
+
+def _tail_notes(path: Path) -> list[dict]:
+    """Last NOTE_TAIL_LINES notes of one board file, re-read only when its mtime/size changed."""
+    try:
+        st = path.stat()
+        key = (st.st_mtime_ns, st.st_size)
+        hit = _NOTES.get(path)
+        if hit and hit[0] == key:
+            return hit[1]
+        with path.open("rb") as f:
+            start = max(0, st.st_size - NOTE_TAIL_BYTES)
+            f.seek(start)
+            lines = f.read().split(b"\n")
+    except OSError:
+        return []
+    if start:
+        lines = lines[1:]  # first line is cut mid-record
+    recs = []
+    for raw in lines[-NOTE_TAIL_LINES - 1 :]:
+        try:
+            rec = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(rec, dict):
+            recs.append(rec)
+    recs = recs[-NOTE_TAIL_LINES:]
+    _NOTES[path] = (key, recs)
+    return recs
+
+
+def _board_files(root: str) -> list[tuple[int, Path]]:
+    d = atlas_todo.notes_dir(root)
+    return [(p.stat().st_mtime_ns, p) for p in d.glob(f"*{atlas_todo.NOTE_FILE_SUFFIX}")]
+
+
+def _recent_notes(files: list[tuple[int, Path]]) -> list[dict]:
+    """Notes of the most recently written board files, until FEED_MAX are in hand, ts-sorted.
+    shortcut: a quiet file's older notes can miss the feed window, fine for a 200-line feed."""
+    recs: list[dict] = []
+    for _, p in sorted(files, key=lambda f: f[0], reverse=True):
+        recs += _tail_notes(p)
+        if len(recs) >= FEED_MAX:
+            break
+    recs.sort(key=lambda r: (atlas_todo._note_ts_key(r), atlas_todo._note_seq(r)))
+    return recs
+
+
+def _active(root: str, panes_all: list[dict]) -> bool:
+    """A project worth scanning: it has team records or a live pane running inside it."""
+    return (Path(root) / ".atlas" / ".run" / "teams").is_dir() or any(
+        p["pane_current_path"] == root or p["pane_current_path"].startswith(root + "/")
+        for p in panes_all
+    )
+
+
 # --- snapshot -------------------------------------------------------------------------------------
 def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     root = os.path.realpath(root or os.getcwd())
@@ -334,8 +416,10 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     members: dict = {}  # name -> {role, channel, entry}
     team_of: dict = {}
     proj_of: dict = {}  # seat name / team_id -> owning project root
-    teams, items, notes = [], [], []
+    teams, items, board = [], [], []
     for r in roots:
+        if all_projects and r != root and not _active(r, panes_all):
+            continue
         rteams = _teams(r)
         teams += rteams
         for c in _registry(r).values():
@@ -363,10 +447,10 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 members[m["name"]]["role"] = m.get("role") or members[m["name"]]["role"]
         items += [i for i in atlas_todo.load(r).get("items", []) if not i.get("archived")]
         try:
-            notes += atlas_todo.notes(r)
+            board += _board_files(r)
         except OSError:
             pass
-    notes.sort(key=lambda n: float(n.get("ts") or 0))
+    notes = _recent_notes(board)
     session_team = {f"atlas-{t['team_id']}": t for t in teams}
 
     # seats: tmux panes first (they carry the live facts), then registry/team members with no pane
@@ -387,6 +471,11 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         seats.setdefault(name, {"pane": None, "role": m["role"]})
 
     last_note = {str(n.get("owner")): n for n in notes}
+    for name in seats:  # a live seat's last note may sit in a file older than the feed window
+        if name not in last_note:
+            f = atlas_todo.notes_dir(proj_of.get(name) or root) / f"{name}{atlas_todo.NOTE_FILE_SUFFIX}"
+            if tail := _tail_notes(f):
+                last_note[name] = tail[-1]
 
     colonies: dict = {}
     for t in teams:
@@ -532,7 +621,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         "seats": out_seats,
         "feed": feed,
         "needs": [f for f in feed if f["kind"] == "blocked" or f["to"] == "human"],
-        "specs": _specs(),
+        "specs": _static("specs", _specs),
         "projects": projects,
         "terminals": _terminals(panes_all),
         "system": _system(),
