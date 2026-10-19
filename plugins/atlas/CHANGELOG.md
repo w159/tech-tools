@@ -1,12 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
+
 ## 12.5.1 (2026-10-16)
 
 ### Fixed
 
 - tests and reaps never touch the user's default tmux server: `_test_isolation.py` and `omp/test-isolation.ts` point `TMUX_TMPDIR` at a private dir (killed at exit), `atlas_mux` kill/reap use exact `=session` targets (a bare `-t` prefix-matches, so run `w` could kill `atlas-work`), and a leaked per-test server in `RealTmuxViewTest` is gone; guard `scripts/test_tmux_isolation.py`.
 - `bun test` from `plugins/atlas` no longer runs `colony/herdr-web-ui` tests (`pathIgnorePatterns` in `bunfig.toml`) and `omp/test-isolation.ts` points `HERDR_SOCKET` at a dead socket: run from there they used the live herdr and leaked blocked `herdr-web-ui-test-prompt-*` workspaces. Run them from `colony/herdr-web-ui`, whose bunfig gives them a private herdr session.
-- completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
 
 ## 12.5.0 (2026-10-16)
 
