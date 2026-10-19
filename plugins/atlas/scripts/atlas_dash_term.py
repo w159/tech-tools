@@ -305,6 +305,8 @@ def handle_ws(handler, query: dict, token: str) -> None:
         # ncurses' xterm-256color `rep` (CSI Nb) emits a stray \x01 for multibyte glyphs (every ━ rule run),
         # so the curses TUI gets a terminfo without rep; screen-256color is otherwise xterm.js-compatible.
         env = {**os.environ, "TERM": "screen-256color" if kind == "tui" else "xterm-256color"}
+        if kind == "tui":
+            env["ATLAS_TUI_BRIDGE"] = "1"  # atlas_tui emits the OSC 7717 open bridge only inside the dashboard
         env.pop("LINES", None)
         env.pop("COLUMNS", None)
         pid, master = pty.fork()
@@ -381,5 +383,10 @@ def _client_msg(master: int, payload: bytes) -> None:
         return  # ignore malformed client text
     if kind == "in" and isinstance(msg.get("d"), str):
         os.write(master, msg["d"].encode("utf-8"))
+    elif kind == "bin" and isinstance(msg.get("d"), str):  # xterm onBinary: one byte per char
+        try:
+            os.write(master, msg["d"].encode("latin-1"))
+        except UnicodeEncodeError:
+            return
     elif kind == "resize":
         _winsize(master, _dim(msg.get("cols"), 80), _dim(msg.get("rows"), 24))

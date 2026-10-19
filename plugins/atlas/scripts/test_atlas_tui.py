@@ -423,5 +423,106 @@ class Cli(unittest.TestCase):
         self.assertEqual(len(out.stdout.rstrip("\n").split("\n")), 30)
 
 
+class Mouse(unittest.TestCase):
+    W, H = 140, 40
+
+    def hits(self, ui, snap=SNAP):
+        return T.hitmap(snap, ui, self.W, self.H)
+
+    def find(self, hits, kind, pred=lambda a: True):
+        return next((r, x0, a) for r, x0, _x1, a in hits if a[0] == kind and pred(a))
+
+    def test_click_explorer_row_selects_then_opens(self):
+        ui = T.new_ui()
+        rows = T.explorer_rows(SNAP, ui)
+        i = next(k for k, r in enumerate(rows) if r[1] == "colony" and r[2] == "ops")
+        r, x, _ = self.find(self.hits(ui), "explorer", lambda a: a[1] == i)
+        self.assertIn("ops", T.render(SNAP, ui, self.W, self.H)[r])
+        T.handle_click(SNAP, ui, self.hits(ui), x + 2, r)
+        self.assertEqual((ui["cursor"], ui["colony"]), (i, None))
+        T.handle_click(SNAP, ui, self.hits(ui), x + 2, r)
+        self.assertEqual(ui["colony"], "ops")
+
+    def test_click_tab_switches(self):
+        ui = T.new_ui()
+        T.run_command(SNAP, ui, "colony lead-01")
+        r, x, _ = self.find(self.hits(ui), "tab", lambda a: a[1] == "graph")
+        self.assertTrue(T.render(SNAP, ui, self.W, self.H)[r][x:].startswith("  GRAPH"))
+        T.handle_click(SNAP, ui, self.hits(ui), x + 3, r)
+        self.assertEqual(ui["tab"], "graph")
+
+    def test_click_term_and_seat_row(self):
+        ui = T.new_ui()
+        T.run_command(SNAP, ui, "colony lead-01")
+        r, x, a = self.find(self.hits(ui), "term")
+        self.assertEqual(T.render(SNAP, ui, self.W, self.H)[r][x : x + 6], "term ▸")
+        self.assertEqual(T.handle_click(SNAP, ui, self.hits(ui), x + 1, r), ("term", a[1]))
+        r, x, a = self.find(self.hits(ui), "seatrow", lambda a: a[1] == 1)
+        T.handle_click(SNAP, ui, self.hits(ui), x + 1, r)
+        self.assertEqual(ui["row"], 1)
+        T.handle_click(SNAP, ui, self.hits(ui), x + 1, r)
+        self.assertEqual(ui["seat"], "impl-1")
+
+    def test_open_link_and_wheel(self):
+        ui = T.new_ui()
+        T.run_command(SNAP, ui, "colony lead-01")
+        r, x, _ = self.find(self.hits(ui), "open", lambda a: a[1] == "config")
+        T.handle_click(SNAP, ui, self.hits(ui), x, r)
+        self.assertEqual(ui["tab"], "overview")
+        T.scroll(ui, 1)
+        self.assertEqual(ui["pane_scroll"], 3)
+
+
+class Bridge(unittest.TestCase):
+    def emit(self, ui, env):
+        import io
+
+        out = io.StringIO()
+        T.emit_bridge(ui, out, env)
+        return out.getvalue()
+
+    def test_osc_only_with_env(self):
+        ui = T.new_ui()
+        T.run_command(SNAP, ui, "colony lead-01")
+        self.assertEqual(self.emit(dict(ui), {"ATLAS_TUI_BRIDGE": "1"}), "\x1b]7717;open;lead-01\x07")
+        self.assertEqual(self.emit(ui, {}), "")
+        T.run_command(SNAP, ui, "seat impl-1")
+        self.assertEqual(self.emit(ui, {"ATLAS_TUI_BRIDGE": "1"}), "\x1b]7717;open;lead-01;impl-1\x07")
+        self.assertEqual(self.emit(ui, {"ATLAS_TUI_BRIDGE": "1"}), "")
+
+    def test_autofocus_does_not_emit(self):
+        ui = T.new_ui()
+        T.focus_first_live(SNAP, ui)
+        self.assertEqual(self.emit(ui, {"ATLAS_TUI_BRIDGE": "1"}), "")
+
+
+class Names(unittest.TestCase):
+    def test_falls_back_to_ids(self):
+        ui = T.new_ui()
+        T.run_command(SNAP, ui, "colony lead-01")
+        f = "\n".join(T.render(SNAP, ui, 140, 40))
+        self.assertIn("▦ lead-01", f)
+        self.assertIn("colony lead-01", f)
+
+    def test_human_names(self):
+        import copy
+
+        s = copy.deepcopy(SNAP)
+        s["colonies"][0].update(name="read-atlas-tui", source={"project": "tt", "lead": "lead-01", "harness": "omp", "session": "S1"})
+        s["seats"][0].update(address="explorer-1@read-atlas-tui", role_title="Maps code")
+        ui = T.new_ui()
+        T.run_command(s, ui, "colony read-atlas-tui")
+        self.assertEqual(ui["colony"], "lead-01")
+        f = "\n".join(T.render(s, ui, 140, 40))
+        self.assertIn("▦ read-atlas-tui", f)
+        self.assertIn("colony read-atlas-tui", f)
+        self.assertIn("→ read-atlas-tui", f)
+        self.assertIn("explorer-1", f)
+        ui["tab"] = "overview"
+        self.assertIn("from omp session S1 · lead lead-01 · project tt", "\n".join(T.render(s, ui, 140, 40)))
+        T.run_command(s, ui, "seat ex-1")
+        self.assertIn("Maps code", "\n".join(T.render(s, ui, 140, 40)))
+
+
 if __name__ == "__main__":
     unittest.main()

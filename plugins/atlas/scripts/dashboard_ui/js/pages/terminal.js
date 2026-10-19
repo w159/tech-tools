@@ -110,7 +110,8 @@ export function connectPty({ term, kind, target, project, onStatus, probe, place
   };
   let waiting = !!placeholder;
   if (waiting) term.write(placeholder);
-  const subs = [term.onData((d) => send({ t: "in", d })), term.onResize(({ cols, rows }) => send({ t: "resize", cols, rows }))];
+  // xterm reports default-encoding mouse clicks through onBinary (bytes 0-255), not onData.
+  const subs = [term.onData((d) => send({ t: "in", d })), term.onBinary((d) => send({ t: "bin", d })), term.onResize(({ cols, rows }) => send({ t: "resize", cols, rows }))];
   open();
   return {
     dispose() {

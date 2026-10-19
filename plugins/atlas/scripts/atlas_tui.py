@@ -89,7 +89,8 @@ def _colonies(snap) -> list:
 
 
 def _find_colony(snap, cid):
-    return next((c for c in _colonies(snap) if c.get("id") == cid), None)
+    cs = _colonies(snap)
+    return next((c for c in cs if c.get("id") == cid), None) or next((c for c in cs if c.get("name") == cid), None)
 
 
 def _seats(snap, colony=None, pod=None, flt="") -> list:
@@ -134,6 +135,19 @@ def _attention(s) -> bool:
     return s.get("state") in ("blocked", "dead")
 
 
+def _cname(c) -> str:
+    return str((c or {}).get("name") or (c or {}).get("id") or "")
+
+
+def _cname_of(snap, cid) -> str:
+    return _cname(_find_colony(snap, cid)) or str(cid)
+
+
+def _slabel(s) -> str:
+    """Seat label from the contract `address` (`label@colony`); the raw id before names land."""
+    return str(s.get("address") or "").split("@")[0] or str(s.get("name"))
+
+
 # ---------------------------------------------------------------- explorer
 def explorer_rows(snap, ui) -> list:
     """[(text, kind, key)] for the left tree; kind in section|colony|pod|sub."""
@@ -147,7 +161,7 @@ def explorer_rows(snap, ui) -> list:
                 last = i == len(colonies) - 1
                 rows.append(
                     (
-                        "    " + ("┗━" if last else "┣━") + " ▦ " + str(c.get("id")),
+                        "    " + ("┗━" if last else "┣━") + " ▦ " + _cname(c),
                         "colony",
                         c.get("id"),
                     )
@@ -184,9 +198,14 @@ def explorer_rows(snap, ui) -> list:
     return rows
 
 
+def _explorer_top(rows, ui, h) -> int:
+    cur = max(0, min(ui["cursor"], len(rows) - 1))
+    return max(0, min(cur - h + 1, len(rows) - h)) if len(rows) > h else 0
+
+
 def _explorer_lines(rows, ui, h, lw=LEFT) -> list:
     cur = max(0, min(ui["cursor"], len(rows) - 1))
-    top = max(0, min(cur - h + 1, len(rows) - h)) if len(rows) > h else 0
+    top = _explorer_top(rows, ui, h)
     out = []
     for i in range(top, min(len(rows), top + h)):
         r = rows[i]
@@ -203,7 +222,7 @@ def _tabbar(ui, snap) -> str:
     bar = "".join(
         f"[ {t.upper()} ]" if t == ui["tab"] else f"  {t.upper()}  " for t in TABS
     )
-    return bar + f"   colony {ui['colony']}"
+    return bar + f"   colony {_cname_of(snap, ui['colony'])}"
 
 
 def _compact_now(text: str, w: int) -> str:
@@ -220,7 +239,7 @@ def _table(snap, ui, w) -> list:
     seats = _seats(snap, ui["colony"], ui.get("pod"), ui.get("filter", ""))
     allseats = _seats(snap, ui["colony"])
     wide = w >= 119  # narrower panes drop RT/MODEL/CTX/WORK so NOW keeps the room
-    pw, sw, rw, mw, stw, ww = (8, 15, 4, 17, 13, 15) if wide else (6, 11, 0, 0, 7, 0)
+    pw, sw, rw, mw, stw, ww = (8, 15, 4, 17, 13, 15) if wide else (6, 14, 0, 0, 7, 0)
     nw = max(8, w - (pw + sw + rw + mw + 3 + stw + 1 + ww + 9) - 7) if wide else max(8, w - (pw + 1 + sw + 1 + stw + 1 + 1 + 1) - 7)
     hdr = (
         f"{'POD':<{pw}} {'SEAT':<{sw}} {'RT':<{rw}} {'MODEL':<{mw}} {'CTX':<3} {'STATE':<{stw}} {'Q':<1} {'WORK':<{ww}} {'NOW':<{nw}} ACTIONS"
@@ -253,7 +272,7 @@ def _table(snap, ui, w) -> list:
         mark = "▶" if i == row and ui.get("focus") == "pane" else " "
         q = int(s.get("queue") or 0)
         now = _compact_now(str(s.get("now") or "—"), nw)
-        dotseat = _fit(DOT.get(st, "?") + " " + str(s.get("name")), sw)
+        dotseat = _fit(DOT.get(st, "?") + " " + _slabel(s), sw)
         pcell = _fit(pod if pod != prev else "", pw)
         act = "term ▸" if s.get("target") else "—"
         if wide:
@@ -299,10 +318,18 @@ def _overview(snap, ui) -> list:
     c = _find_colony(snap, ui["colony"]) or {}
     seats = _seats(snap, ui["colony"])
     out = [
-        f"OVERVIEW · {c.get('label') or ui['colony']}",
+        f"OVERVIEW · {c.get('label') or _cname(c) or ui['colony']}",
         f"  task       {c.get('task') or '—'}",
         f"  session    {c.get('session') or '—'} ({c.get('transport') or '?'})",
         f"  channel    {c.get('channel') or '—'}",
+    ]
+    src = c.get("source")
+    if src:
+        out.append(
+            f"  from {src.get('harness') or '?'} session {src.get('session') or '—'}"
+            f" · lead {src.get('lead') or '—'} · project {src.get('project') or '—'}"
+        )
+    out += [
         "",
     ]
     for state in ("working", "idle", "blocked", "finished", "dead", "unknown"):
@@ -327,7 +354,7 @@ def _graph(snap, ui, w) -> list:
     for pid, ps in pods:
         cells = []
         for s in ps:
-            l1 = f"{DOT.get(s.get('state'), '?')} {s.get('name')}"
+            l1 = f"{DOT.get(s.get('state'), '?')} {_slabel(s)}"
             l2 = f"{RT_GLYPH.get(s.get('runtime'), '??')} —"
             bw = max(len(l1), len(l2)) + 2
             cells.append(
@@ -377,7 +404,7 @@ def _graph(snap, ui, w) -> list:
                 row += a + ("────" if edge else "    " if nxt else "")
             body.append(row)
         body.append("")
-    title = f"╔═ ▦ COLONY {ui['colony']} "
+    title = f"╔═ ▦ COLONY {_cname_of(snap, ui['colony'])} "
     width = max([len(title) + 2, 20] + [len(x) + 4 for x in body])
     out = [title + "═" * (width - len(title) - 1) + "╗"]
     out += ["║ " + x.ljust(width - 3) + "║" for x in body] or [
@@ -414,8 +441,9 @@ def _seat_view(snap, ui, h) -> list:
     if not s:
         return [f"SEAT {ui['seat']} · not found"]
     head = [
-        f"SEAT {s['name']} · {s.get('runtime')} · {DOT.get(s.get('state'), '?')} {s.get('state')}",
-        f"  colony {s.get('colony')} · pod {s.get('pod')} · target {s.get('target') or '—'} · t = attach",
+        f"SEAT {_slabel(s)} · {s.get('runtime')} · {DOT.get(s.get('state'), '?')} {s.get('state')}"
+        + (f" · {s['role_title']}" if s.get("role_title") else ""),
+        f"  colony {_cname_of(snap, s.get('colony'))} · pod {s.get('pod')} · target {s.get('target') or '—'} · t = attach",
     ]
     txt = ui.get("seat_text") or ""
     lines = [
@@ -566,7 +594,7 @@ def render(snap: dict, ui: dict, width: int, height: int) -> list:
         _fit(
             ui.get("status")
             or f"[{snap.get('host') or 'atlas'}] {_title(snap, ui).lower()}"
-            + (f" · {snap.get('host')} → {ui['colony']}" if ui.get("colony") and not ui.get("seat") else ""),
+            + (f" · {snap.get('host')} → {_cname_of(snap, ui['colony'])}" if ui.get("colony") and not ui.get("seat") else ""),
             width,
         ),
     ]
@@ -596,6 +624,112 @@ def render(snap: dict, ui: dict, width: int, height: int) -> list:
     return lines + foot
 
 
+def hitmap(snap: dict, ui: dict, width: int, height: int) -> list:
+    """Clickable rects of the last render: [(row, x0, x1, action)], first match wins. Mirrors render()'s layout."""
+    width, height = max(width, 40), max(height, 8)
+    snap = snap or {}
+    if ui.get("mode") == "help":
+        return []
+    lw = LEFT if width >= COMPACT_W else COMPACT_LEFT
+    rw = width - lw - 1
+    bodyh = height - 6
+    hits = []
+    rows = explorer_rows(snap, ui)
+    top = _explorer_top(rows, ui, bodyh)
+    for k in range(min(len(rows) - top, bodyh)):
+        hits.append((2 + k, 0, lw, ("explorer", top + k)))
+    if ui.get("seat"):
+        return hits
+    right = right_lines(snap, ui, rw - 1, bodyh)
+    off = ui.get("pane_scroll", 0)
+    x0 = lw + 2
+    tabbed = ui["section"] == "topology" and ui.get("colony")
+    seats = _seats(snap, ui["colony"], ui.get("pod"), ui.get("filter", "")) if tabbed and ui["tab"] == "table" else []
+    body_from = next((j for j, ln in enumerate(right) if ln.startswith("━")), None) if seats else None
+    si = 0
+    for j, ln in enumerate(right):
+        r = 2 + j - off
+        seat_row = None
+        if body_from is not None and j > body_from and not ln.startswith("┈") and si < len(seats):
+            seat_row, si = seats[si], si + 1
+        if not 2 <= r < 2 + bodyh:
+            continue
+        ln = _fit(ln, rw - 1)
+        if j == 0 and tabbed:
+            pos = 0
+            for t in TABS:
+                hits.append((r, x0 + pos, x0 + pos + len(t) + 4, ("tab", t)))
+                pos += len(t) + 4
+            continue
+        i = ln.find("term ▸")
+        if seat_row is not None:
+            if i >= 0:
+                hits.append((r, x0 + i, x0 + i + 6, ("term", seat_row["name"])))
+            hits.append((r, x0, x0 + rw - 1, ("seatrow", si - 1)))
+            continue
+        i = ln.find("(open ▸)")
+        if i >= 0:
+            m = re.search(r"#(\S+)\s+\(open", ln)
+            act = ("open", f"note #{m.group(1)}") if m else ("open", "config")
+            hits.append((r, x0 + i, x0 + i + 8, act))
+    return hits
+
+
+def hit_at(hits, x: int, y: int):
+    return next((a for r, x0, x1, a in hits if r == y and x0 <= x < x1), None)
+
+
+def handle_click(snap, ui, hits, x: int, y: int):
+    """Left click at cell (x, y); returns a loop effect like handle_key. First click selects, a click on the selection opens."""
+    act = hit_at(hits, x, y)
+    if not act:
+        return None
+    kind = act[0]
+    if kind == "explorer":
+        again = ui["cursor"] == act[1] and ui.get("focus") == "explorer"
+        ui.update(cursor=act[1], focus="explorer")
+        if again:
+            handle_key(snap, ui, "enter")
+    elif kind == "tab":
+        ui.update(tab=act[1], seat=None, focus="pane", pane_scroll=0)
+    elif kind == "seatrow":
+        again = ui.get("row") == act[1] and ui.get("focus") == "pane"
+        ui.update(row=act[1], focus="pane")
+        if again:
+            handle_key(snap, ui, "enter")
+    elif kind == "term":
+        return _seat_target(snap, ui, act[1])
+    elif kind == "open":
+        if act[1] == "config":
+            ui.update(tab="overview", seat=None, focus="pane")
+        else:
+            ui["status"] = act[1]
+    _clamp(snap, ui)
+    return None
+
+
+def scroll(ui, d: int):
+    """Wheel: d=-1 up, +1 down, on the right pane."""
+    if ui.get("seat"):
+        ui["seat_scroll"] = max(0, ui.get("seat_scroll", 0) - d * 3)
+    else:
+        ui["pane_scroll"] = max(0, ui.get("pane_scroll", 0) + d * 3)
+
+
+def bridge_seq(cid, seat=None) -> str:
+    """Private OSC 7717 telling the web workspace to open this space/seat (OpenRig-style TUI to workspace bridge)."""
+    return f"\x1b]7717;open;{cid}" + (f";{seat}" if seat else "") + "\x07"
+
+
+def emit_bridge(ui, out=None, environ=None):
+    """Pop the pending open and write it only when ATLAS_TUI_BRIDGE=1 (set by the dashboard terminal)."""
+    pend = ui.pop("_bridge", None)
+    if pend and (environ if environ is not None else os.environ).get("ATLAS_TUI_BRIDGE") == "1":
+        out = out or sys.stdout
+        out.write(bridge_seq(*pend))
+        out.flush()
+
+
 # ---------------------------------------------------------------- input
 def _clamp(snap, ui):
     ui["cursor"] = max(0, min(ui["cursor"], len(explorer_rows(snap, ui)) - 1))
@@ -604,17 +738,22 @@ def _clamp(snap, ui):
 
 
 def _open_seat(snap, ui, name) -> str:
-    if not any(s.get("name") == name for s in snap.get("seats") or []):
+    s = next((x for x in snap.get("seats") or [] if x.get("name") == name), None)
+    if not s:
         ui["status"] = f"no seat {name}"
         return ""
     ui["seat"], ui["seat_scroll"], ui["seat_text"], ui["focus"] = name, 0, "", "pane"
+    ui["_bridge"] = (s.get("colony"), name)
     return name
 
 
 def _open_colony(snap, ui, cid):
-    if not _find_colony(snap, cid):
+    c = _find_colony(snap, cid)
+    if not c:
         ui["status"] = f"no colony {cid}"
         return
+    cid = c["id"]
+    ui["_bridge"] = (cid, None)
     ui.update(
         section="topology",
         colony=cid,
@@ -899,6 +1038,7 @@ def focus_first_live(snap, ui):
     ui["cursor"] = next(i for i, r in enumerate(rows) if r[1] == "colony" and r[2] == pick)
     _open_colony(snap, ui, pick)
     ui["focus"] = "explorer"
+    ui.pop("_bridge", None)  # autofocus is not a user open
 
 
 class Loader:
@@ -937,6 +1077,11 @@ def loop(stdscr, args):
     first = True
     last_snap = last_cap = 0.0
     curses.curs_set(0)
+    try:  # no mouse support (or no initscr under a test double): keyboard still works
+        curses.mouseinterval(0)  # press/release arrive raw; a click is the press
+        curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
+    except curses.error:
+        pass
     try:  # terminal default fg/bg (-1): paint no grey box over the host background
         curses.start_color()
         curses.use_default_colors()
@@ -973,6 +1118,7 @@ def loop(stdscr, args):
         else:
             frame = render(snap, ui, w, h)
         stdscr.erase()
+        hits = hitmap(snap, ui, w, h) if h >= MIN_H and w >= MIN_W else []
         for i, ln in enumerate(frame[:h]):
             try:
                 stdscr.addstr(i, 0, ln[: w - 1] if i == h - 1 else ln[:w])
@@ -986,13 +1132,30 @@ def loop(stdscr, args):
             curses.update_lines_cols()
             stdscr.clear()  # full repaint at the new size
             continue
-        if ch == 27:  # lone Esc arrives after the keypad timeout
-            key = "esc"
+        if ch == curses.KEY_MOUSE:
+            try:
+                _id, mx, my, _z, bs = curses.getmouse()
+            except curses.error:
+                continue
+            down = getattr(curses, "BUTTON5_PRESSED", 0)
+            if bs & curses.BUTTON4_PRESSED:
+                scroll(ui, -1)
+                continue
+            if down and bs & down:
+                scroll(ui, 1)
+                continue
+            if not bs & (curses.BUTTON1_PRESSED | curses.BUTTON1_CLICKED | curses.BUTTON1_DOUBLE_CLICKED):
+                continue
+            eff = handle_click(snap, ui, hits, mx, my)
         else:
-            key = _keyname(ch, curses)
-        if not key:
-            continue
-        eff = handle_key(snap, ui, key)
+            if ch == 27:  # lone Esc arrives after the keypad timeout
+                key = "esc"
+            else:
+                key = _keyname(ch, curses)
+            if not key:
+                continue
+            eff = handle_key(snap, ui, key)
+        emit_bridge(ui)
         if not eff:
             continue
         if eff[0] == "quit":

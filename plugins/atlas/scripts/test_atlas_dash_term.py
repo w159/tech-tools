@@ -109,6 +109,18 @@ class FramingTests(unittest.TestCase):
 # --- end to end ------------------------------------------------------------------
 
 
+class ClientMsgTests(unittest.TestCase):
+    def test_bin_writes_raw_bytes_and_ignores_non_latin1(self):
+        r, w = os.pipe()
+        try:
+            T._client_msg(w, '{"t":"bin","d":"\\u001b[M \\u00e9!"}'.encode())
+            T._client_msg(w, '{"t":"bin","d":"\\u20ac"}'.encode())  # not a byte: dropped, no crash
+            self.assertEqual(os.read(r, 64), b"\x1b[M \xe9!")
+        finally:
+            os.close(r)
+            os.close(w)
+
+
 class WsClient:
     def __init__(self, port, path, headers=None):
         self.sock = socket.create_connection(("127.0.0.1", port), timeout=10)
