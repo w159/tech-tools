@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
+
+## 12.5.5 (2026-10-19)
+
 ### Changed
 
 - TUI TABLE sizes POD and SEAT to the colony's longest labels (caps 22/26, NOW gives up the space), so `completeness-critic` and `explorer-1` no longer truncate at ~150 columns.
@@ -15,7 +21,6 @@
 ### Fixed
 
 - The seat NOW column no longer shows a literal `$1: $2` placeholder.
-- completion gate no longer prints a false "FAIL-OPEN ... unreadable" for Stop payloads with raw control characters (its readability probe now parses non-strictly like `load_payload`); `test_payload_guards` runs every registered hook against such a payload.
 
 ## 12.5.4 (2026-10-19)
 
