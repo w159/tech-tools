@@ -162,6 +162,12 @@ class Render(unittest.TestCase):
             self.assertIn(s, f)
         self.assertEqual(f.count("explorer ●"), 1)
 
+    def test_now_keeps_changing_range(self):
+        snap = dict(SNAP, seats=[dict(SNAP["seats"][0], now="ctx_read /a/very/long/path/to/atlas_dashboard.py:1501-1750")])
+        for w, want in ((150, "ctx_read atlas_dashboard.py:1501-1750"), (80, "py:1501-1750")):
+            f = "\n".join(T.render(snap, T.new_ui(colony="lead-01"), w, 40))
+            self.assertIn(want, f)
+
     def test_default_opens_live_colony_table(self):
         ui = T.new_ui()
         T.focus_first_live(SNAP, ui)

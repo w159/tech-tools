@@ -206,11 +206,27 @@ def _tabbar(ui, snap) -> str:
     return bar + f"   colony {ui['colony']}"
 
 
+def _compact_now(text: str, w: int) -> str:
+    """`tool path/to/file.py:1-50` -> `tool file.py:1-50`; a still-too-long range row keeps its tail, which is what changes."""
+    m = re.match(r"^(\S+)\s+(?:\S*/)?(\S+:\d+(?:-\d+)?)$", text)
+    if m:
+        text = f"{m.group(1)} {m.group(2)}"
+    if len(text) > w and re.search(r":\d+(?:-\d+)?$", text):
+        return "…" + text[-(w - 1) :] if w > 1 else text[-w:]
+    return text
+
+
 def _table(snap, ui, w) -> list:
     seats = _seats(snap, ui["colony"], ui.get("pod"), ui.get("filter", ""))
     allseats = _seats(snap, ui["colony"])
-    pw, sw, rw, mw, stw, ww = (8, 15, 4, 17, 13, 15) if w >= 119 else (6, 11, 3, 8, 8, 8)
-    nw = max(8, w - (pw + sw + rw + mw + 3 + stw + 1 + ww + 9) - 7)
+    wide = w >= 119  # narrower panes drop RT/MODEL/CTX/WORK so NOW keeps the room
+    pw, sw, rw, mw, stw, ww = (8, 15, 4, 17, 13, 15) if wide else (6, 11, 0, 0, 7, 0)
+    nw = max(8, w - (pw + sw + rw + mw + 3 + stw + 1 + ww + 9) - 7) if wide else max(8, w - (pw + 1 + sw + 1 + stw + 1 + 1 + 1) - 7)
+    hdr = (
+        f"{'POD':<{pw}} {'SEAT':<{sw}} {'RT':<{rw}} {'MODEL':<{mw}} {'CTX':<3} {'STATE':<{stw}} {'Q':<1} {'WORK':<{ww}} {'NOW':<{nw}} ACTIONS"
+        if wide
+        else f"{'POD':<{pw}} {'SEAT':<{sw}} {'STATE':<{stw}} {'Q':<1} {'NOW':<{nw}} ACTIONS"
+    )
     bad = [s for s in allseats if _attention(s)]
     tm = (snap.get("system") or {}).get("tmux") or {}
     if not allseats:
@@ -224,7 +240,7 @@ def _table(snap, ui, w) -> list:
         "  ▪ CONFIG · colony settings  (open ▸)",
         f"HEALTH  {health}",
         f"/ {flt}" if flt else "/ filter agents…",
-        f"{'POD':<{pw}} {'SEAT':<{sw}} {'RT':<{rw}} {'MODEL':<{mw}} {'CTX':<3} {'STATE':<{stw}} {'Q':<1} {'WORK':<{ww}} {'NOW':<{nw}} ACTIONS",
+        hdr,
         "━" * w,
     ]
     row = max(0, min(ui.get("row", 0), len(seats) - 1))
@@ -236,13 +252,17 @@ def _table(snap, ui, w) -> list:
             out.append("┈" * w)
         mark = "▶" if i == row and ui.get("focus") == "pane" else " "
         q = int(s.get("queue") or 0)
-        out.append(
-            f"{_fit(pod if pod != prev else '', pw)}{mark}{_fit(DOT.get(st, '?') + ' ' + str(s.get('name')), sw)} "
-            f"{_fit(RT.get(s.get('runtime'), '?'), rw)} {_fit(str(s.get('model') or '—'), mw)} {'—':<3} "
-            f"{_fit(st, stw)} {q or '·'} "
-            f"{_fit(str(s.get('work') or '—'), ww)} {_fit(str(s.get('now') or '—'), nw)} "
-            f"{'term ▸' if s.get('target') else '—'}"
-        )
+        now = _compact_now(str(s.get("now") or "—"), nw)
+        dotseat = _fit(DOT.get(st, "?") + " " + str(s.get("name")), sw)
+        pcell = _fit(pod if pod != prev else "", pw)
+        act = "term ▸" if s.get("target") else "—"
+        if wide:
+            out.append(
+                f"{pcell}{mark}{dotseat} {_fit(RT.get(s.get('runtime'), '?'), rw)} {_fit(str(s.get('model') or '—'), mw)} {'—':<3} "
+                f"{_fit(st, stw)} {q or '·'} {_fit(str(s.get('work') or '—'), ww)} {_fit(now, nw)} {act}"
+            )
+        else:
+            out.append(f"{pcell}{mark}{dotseat} {_fit(st, stw)} {q or '·'} {_fit(now, nw)} {act}")
         prev = pod
     if not seats:
         out.append("no seats match")
