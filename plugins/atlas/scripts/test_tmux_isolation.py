@@ -13,7 +13,7 @@ class TmuxIsolationTest(unittest.TestCase):
     def test_tmux_tmpdir_is_private(self):
         d = os.environ.get("TMUX_TMPDIR", "")
         self.assertTrue(d and os.path.isdir(d), "TMUX_TMPDIR unset: tmux would use the user's default socket")
-        self.assertEqual(d, _test_isolation.TMUX_TMPDIR)
+        self.assertEqual(d, os.environ["_ATLAS_TEST_TMUX_TMPDIR"])
         self.assertFalse(os.path.realpath(d).startswith(os.path.realpath(REAL_DEFAULT)))
         self.assertNotIn("TMUX", os.environ)
 

@@ -4,6 +4,7 @@
 
 ### Changed
 
+- TUI TABLE sizes POD and SEAT to the colony's longest labels (caps 22/26, NOW gives up the space), so `completeness-critic` and `explorer-1` no longer truncate at ~150 columns.
 - Colonies and agents have human names with their source session: the Terminal page, Colony page and the rail "This machine" rows show the colony `name` and `title`, a `from <harness> session <session> · lead <lead> · <project>` line, and seat addresses like `explorer-1@tui-review` with a role subtitle; ids stay in URLs.
 - Terminal workspace labels follow the OpenRig team workspace: SPACES with a muted title line, `Agents · N` with role subtitles, `<name> / All agents`, `<name> / <address>` when enlarged, and `<N> agents in <name> · live tmux panes`.
 

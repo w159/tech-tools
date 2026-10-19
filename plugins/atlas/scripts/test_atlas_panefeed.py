@@ -185,9 +185,9 @@ class RowTests(unittest.TestCase):
         self.assertIn("38;2;", rows[0])
 
     def test_header_wears_the_role_character_and_animates(self):
-        bar = lambda role, tick=0, state="run": plain(
-            pf.header("w-1", role, "t", "", "g", 80, (), tick, state).split("\n")[0]
-        )
+        def bar(role, tick=0, state="run"):
+            return plain(pf.header("w-1", role, "t", "", "g", 80, (), tick, state).split("\n")[0])
+
         self.assertIn("◔_◔ w-1", bar("explorer"))
         self.assertIn("◔o◔ w-1", bar("explorer", 1))
         self.assertNotEqual(bar("explorer", 0), bar("explorer", 1))
@@ -260,7 +260,7 @@ class RowTests(unittest.TestCase):
 
 class PaneFeedTests(unittest.TestCase):
     def events(self):
-        return [json.loads(l) for l in FIXTURE.read_text().splitlines() if l.strip()]
+        return [json.loads(line) for line in FIXTURE.read_text().splitlines() if line.strip()]
 
     def test_fixture_renders_tool_lines_and_result(self):
         out = []
@@ -356,6 +356,7 @@ class PaneFeedTests(unittest.TestCase):
 
     def test_mux_feed_keeps_report_text(self):
         import contextlib
+
         import atlas_mux
 
         lines = []
@@ -373,7 +374,7 @@ class CodexFeedTests(unittest.TestCase):
     """codex `exec --json`; fixture = documented item schema plus the thread/turn/error lines a live probe printed."""
 
     def events(self):
-        return [json.loads(l) for l in CODEX_FIXTURE.read_text().splitlines() if l.strip()]
+        return [json.loads(line) for line in CODEX_FIXTURE.read_text().splitlines() if line.strip()]
 
     def test_renders_command_message_file_change(self):
         out = "\n".join(plain(x) for ev in self.events() for x in pf.render_event(ev, 120))

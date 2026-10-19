@@ -90,9 +90,10 @@ function sessionIdOf(ctx: TeamCtx): string | undefined {
 	return typeof sid === "string" ? sid : undefined;
 }
 
-function lastJson(stdout: string): unknown {
+/** The mux's last stdout line parsed to a TeamView; undefined when it is not JSON or names no started member. */
+function lastTeamView(stdout: string): TeamView | undefined {
 	try {
-		return JSON.parse(stdout.trim().split("\n").at(-1) ?? "");
+		return teamView(JSON.parse(stdout.trim().split("\n").at(-1) ?? ""));
 	} catch {
 		return undefined;
 	}
@@ -128,7 +129,7 @@ function teamToolDef(T: any, pluginRoot: string, run: TeamRunner, env: Record<st
 	const beforeRun = (p: TeamParams, ctx: TeamCtx) => p.action === "wait" && show(ctx, teamRecordView(root(ctx), p.team));
 	// Reap archived the record and closed the channel: mount the idle panel (last wave) for the linger window.
 	const afterRun = (p: TeamParams, ctx: TeamCtx, stdout: string) => {
-		if (p.action === "spawn") show(ctx, teamView(lastJson(stdout)));
+		if (p.action === "spawn") show(ctx, lastTeamView(stdout));
 		if (p.action === "reap") show(ctx, teamRecordView(root(ctx), p.team, "archive"), true);
 	};
 	return {

@@ -146,10 +146,10 @@ class Render(unittest.TestCase):
             "▪ CONFIG · colony settings  (open ▸)",
             "HEALTH  ATTENTION · impl-1 blocked",
             "/ filter agents…",
-            "POD      SEAT            RT   MODEL             CTX STATE         Q WORK            NOW ",
+            "POD         SEAT            RT   MODEL             CTX STATE         Q WORK            NOW ",
             "━━━━━━━━",
             "┈┈┈┈┈┈┈┈",
-            "explorer ● ex-1",
+            "explorer    ● ex-1",
             "! impl-1",
             "· impl-2",
             "term ▸",
@@ -160,7 +160,16 @@ class Render(unittest.TestCase):
             "impl-1 → lead · blocked",
         ):
             self.assertIn(s, f)
-        self.assertEqual(f.count("explorer ●"), 1)
+        self.assertEqual(f.count("explorer    ●"), 1)
+
+    def test_table_fits_long_seat_labels_at_150(self):
+        snap = dict(SNAP, seats=[dict(SNAP["seats"][0], name="completeness-critic", address="completeness-critic@c", pod="explorer-1")])
+        for w in (80, 150, 180):
+            f = "\n".join(T.render(snap, T.new_ui(colony="lead-01"), w, 40))
+            if w >= 150:
+                self.assertIn("completeness-critic", f)
+                self.assertIn("explorer-1", f)
+            self.assertTrue(all(len(r) <= w for r in T.render(snap, T.new_ui(colony="lead-01"), w, 40)))
 
     def test_now_keeps_changing_range(self):
         snap = dict(SNAP, seats=[dict(SNAP["seats"][0], now="ctx_read /a/very/long/path/to/atlas_dashboard.py:1501-1750")])
@@ -174,7 +183,7 @@ class Render(unittest.TestCase):
         f = frame(ui, 180, 50)
         self.assertIn("▶   ┣━ ▦ lead-01", f)
         self.assertIn("[ TABLE ]", f)
-        self.assertIn("POD      SEAT", f)
+        self.assertIn("POD         SEAT", f)
 
     def test_no_live_colony_keeps_topology(self):
         snap = dict(SNAP, seats=[])

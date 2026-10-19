@@ -240,6 +240,9 @@ def _table(snap, ui, w) -> list:
     allseats = _seats(snap, ui["colony"])
     wide = w >= 119  # narrower panes drop RT/MODEL/CTX/WORK so NOW keeps the room
     pw, sw, rw, mw, stw, ww = (8, 15, 4, 17, 13, 15) if wide else (6, 14, 0, 0, 7, 0)
+    # POD/SEAT grow to the colony's longest labels (caps 22/26; SEAT carries a 2-col state dot); NOW pays for it below
+    pw = max(pw, min(22, max((len(str(x.get("pod") or "")) for x in allseats), default=0)))
+    sw = max(sw, min(26, max((len(_slabel(x)) + 2 for x in allseats), default=0)))
     nw = max(8, w - (pw + sw + rw + mw + 3 + stw + 1 + ww + 9) - 7) if wide else max(8, w - (pw + 1 + sw + 1 + stw + 1 + 1 + 1) - 7)
     hdr = (
         f"{'POD':<{pw}} {'SEAT':<{sw}} {'RT':<{rw}} {'MODEL':<{mw}} {'CTX':<3} {'STATE':<{stw}} {'Q':<1} {'WORK':<{ww}} {'NOW':<{nw}} ACTIONS"
