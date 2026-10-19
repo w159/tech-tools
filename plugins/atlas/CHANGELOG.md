@@ -9,6 +9,7 @@
 ### Fixed
 
 - `snapshot(all_projects=True)` never hides a live pane: a pane in a project subdirectory lists under that project root (not its cwd), and a non-team `atlas_mux.py spawn` pane is tagged `@atlas_worker` so it is listed whatever its cwd or registry (covered by `test_all_projects_skip_rule_keeps_live_panes`).
+- `atlas_mux.py`: numeric record fields parse through a guarded `_num`, and `_release_team_channel` returns early without a channel or lead, so a malformed record no longer raises and pyright is clean.
 
 ## 12.5.3 (2026-10-19)
 

@@ -581,7 +581,15 @@ def _validate(args) -> str | None:
 
 def _dead_flag(raw: str) -> int:
     """tmux #{window_dead} as 0/1; anything that is not a plain digit string is 0."""
-    return int(raw) if raw.isascii() and raw.isdigit() else 0
+    return _num(int, raw, 0) if raw.isascii() and raw.isdigit() else 0
+
+
+def _num(kind, raw, default):
+    """kind(raw) (int or float), or `default` when raw is not a valid number."""
+    try:
+        return kind(raw)
+    except (ValueError, TypeError):
+        return default
 
 
 def _windows(session: str) -> list | None:
@@ -793,7 +801,7 @@ def _team_pane_rows(session: str, root: str) -> list:
                 "pid": r[4],
                 "dead": dead,
                 "command": r[7],
-                "exit_status": int(r[6])
+                "exit_status": _num(int, r[6], None)
                 if dead and r[6].lstrip("-").isdigit()
                 else None,
                 "last_note": last.get(name),
@@ -877,11 +885,11 @@ def _relayout_team(session: str) -> None:
     win = f"{session}:{session}"
     res = _tmux("list-panes", "-t", win, "-F", "#{window_width}")
     widths = (
-        [int(w) for w in res.stdout.split() if w.isdigit()]
+        [_num(int, w, 1) for w in res.stdout.split() if w.isdigit()]
         if res.returncode == 0
         else []
     )
-    width = widths[0] if widths else int(_lead_size().split("x")[0])
+    width = widths[0] if widths else _num(int, _lead_size().split("x")[0], 80)
     _tmux("select-layout", "-t", win, _team_layout(max(1, len(widths)), width))
 
 
@@ -1568,7 +1576,7 @@ def build_team(
     tid = team_id or "t" + _sha(task_class, effort, *scope, task)[:6]
     members = []
     for spec in cell["team"]:
-        for i in range(int(spec["count"])):
+        for i in range(_num(int, spec["count"], 0)):
             members.append(
                 {
                     "name": f"{spec['role']}-{_sha(tid, spec['role'], i)[:4]}",
@@ -1583,7 +1591,7 @@ def build_team(
         "task": task,
         "file_scope": scope,
         "members": members,
-        "max_parallel": int(cell["max_parallel"]),
+        "max_parallel": _num(int, cell["max_parallel"], 1),
         "isolation": cell["isolation"],
     }
 
@@ -1879,9 +1887,9 @@ def cmd_wait(args) -> int:
         members.append(
             {
                 "name": n,
-                "exit": int(found.group(1)) if found else None,
+                "exit": _num(int, found.group(1), None) if found else None,
                 "dead_without_report": n in silent and not found,
-                "duration_s": round(float(mine[-1]["ts"]) - rec["created"], 1)
+                "duration_s": round(_num(float, mine[-1]["ts"], rec["created"]) - rec["created"], 1)
                 if found
                 else None,
                 "last_status": status,
@@ -1928,7 +1936,9 @@ def _release_team_channel(root: str, rec: dict) -> None:
     Once every other member has exited, the lead leaves it so the reap below archives and closes it; a still-running
     member (a `task` sub on the same channel) keeps the lead in and the channel open. The next open re-adds the lead."""
     name, lead = rec.get("channel"), rec.get("lead")
-    chan = atlas_todo.get_channel(root, name) if name and lead else None
+    if not (name and lead):
+        return
+    chan = atlas_todo.get_channel(root, name)
     others = [m for m in (chan or {}).get("members", []) if m.get("name") != lead]
     if others and all("exit_code" in m for m in others):
         atlas_todo.leave(root, name, lead)
@@ -1945,7 +1955,7 @@ def _post_wrapup(root: str, rec: dict) -> None:
         mine = [r for r in allnotes if str(r.get("owner")) == m["name"]]
         found = EXIT_NOTE_RE.search(str(mine[-1].get("text") or "")) if mine else None
         secs = (
-            f" {round(float(mine[-1]['ts']) - rec['created'])}s"
+            f" {round(_num(float, mine[-1]['ts'], rec['created']) - rec['created'])}s"
             if found and rec.get("created")
             else ""
         )
