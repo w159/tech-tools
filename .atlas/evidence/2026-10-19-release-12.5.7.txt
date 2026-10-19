@@ -1,0 +1,11 @@
+## test_payload_guards
+Ran 3 tests in 1.486s
+
+OK
+## versions
+plugins/atlas/.claude-plugin/plugin.json:3:    "version": "12.5.7",
+.claude-plugin/marketplace.json:50:            "version": "12.5.7"
+## remote
+1fdf90b98c95adc66b0d3e67b9b77d87f5d01067
+1fdf90b98c95adc66b0d3e67b9b77d87f5d01067	refs/heads/main
+## main...origin/main

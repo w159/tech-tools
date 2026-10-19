@@ -7712,5 +7712,56 @@
     "status": "verified",
     "verified_at": "2026-10-19T15:39:42+00:00",
     "verified_by": "ship-1256"
+  },
+  {
+    "id": "atlas-12.5.7-release",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 12.5.7 bumped, committed, pushed; HEAD equals origin/main; payload guard tests pass",
+    "evidence": [
+      ".atlas/evidence/2026-10-19-release-12.5.7.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_payload_guards; git ls-remote origin refs/heads/main",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T17:21:16+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-12.5.7-release",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 12.5.7 bumped, committed, pushed; HEAD equals origin/main; payload guard tests pass (orchestrator self-check, not independent)",
+    "evidence": [
+      ".atlas/evidence/2026-10-19-release-12.5.7.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_payload_guards; git ls-remote origin refs/heads/main",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-19T17:22:10+00:00",
+    "verified_by": "orchestrator-self-check"
+  },
+  {
+    "id": "colony-mux-optin-vs-docs",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_mux refuses unless ATLAS_MUX=tmux, contradicting docs/CHANGELOG.md 12.5.0 claim that tmux is the default colony transport; fix direction: enable by default to match shipped docs",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_mux.py:568"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -u ATLAS_MUX python3 plugins/atlas/scripts/atlas_mux.py spawn-team ... -> mux mode is opt-in: set ATLAS_MUX=tmux",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "open",
+    "verified_at": "2026-10-19T17:22:10+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.5.7 (2026-10-19)
+
+### Fixed
+
+- Release of already-committed but unpushed fixes so installs pick them up: cached colony snapshot for `/api/v2/term/snapshot` (`90482b17`), stable dashboard version after upgrade and finished-colony grace without `ended_at` (`c7192521`), and the completion gate's non-strict payload readability probe (`plugins/atlas/hooks/completion_gate_core.py`, test `test_payload_guards`). Version bumped in `plugins/atlas/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`; pushed as `1fdf90b9`.
+
 ## 12.5.0 (2026-10-16)
 
 ### Added
