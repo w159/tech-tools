@@ -87,7 +87,8 @@ class Decoder:
             msg = self._one()
             if msg is None:
                 return out
-            out.append(msg) if msg is not False else None
+            if isinstance(msg, tuple):  # False = fragment buffered, no message yet
+                out.append(msg)
 
     def _one(self):
         b = self.buf
@@ -155,6 +156,11 @@ def _model():
     return atlas_colony_model
 
 
+SNAPSHOT_TTL = 2.0
+_snap_lock = threading.Lock()
+_snap_cache: dict = {}  # (project, all) -> (built_at, snapshot)
+
+
 def _snapshot(ctx):
     q = ctx.query or {}
     try:
@@ -163,7 +169,15 @@ def _snapshot(ctx):
         return 501, {"ok": False, "error": "model_unavailable", "why": str(e)}
     proj = q.get("project") or None
     all_projects = proj == "all" or str(q.get("all") or "").lower() in ("1", "true", "yes")
-    return 200, m.snapshot(None if proj == "all" else proj, all_projects)
+    key = (None if proj == "all" else proj, all_projects)
+    # Single-flight: concurrent callers queue on the lock, then reuse the fresh build.
+    # shortcut: whole-cache lock serialises distinct keys, upgrade if many projects poll.
+    with _snap_lock:
+        hit = _snap_cache.get(key)
+        if hit is None or time.monotonic() - hit[0] >= SNAPSHOT_TTL:
+            hit = (time.monotonic(), m.snapshot(*key))
+            _snap_cache[key] = hit
+    return 200, hit[1]
 
 
 def _redact(text: str) -> str | None:

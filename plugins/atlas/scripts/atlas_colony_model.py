@@ -84,9 +84,23 @@ def _tmux(*args: str) -> tuple[int, str]:
     return r.returncode, r.stdout
 
 
+def _f(v, default: float = 0.0) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _i(v, default: int = 0) -> int:
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
 def capture(target: str, lines: int = 200, ansi: bool = True) -> str:
     argv = ["capture-pane", "-p", "-J"] + (["-e"] if ansi else [])
-    rc, out = _tmux(*argv, "-S", f"-{max(1, int(lines))}", "-t", target)
+    rc, out = _tmux(*argv, "-S", f"-{max(1, _i(lines, 200))}", "-t", target)
     return out if rc == 0 else ""
 
 
@@ -325,7 +339,7 @@ def _installed() -> dict:
 
 
 def _system() -> dict:
-    port = int(os.environ.get("ATLAS_DASHBOARD_PORT", "7421"))
+    port = _i(os.environ.get("ATLAS_DASHBOARD_PORT"), 7421)
     url = f"http://127.0.0.1:{port}/"
     try:
         socket.create_connection(("127.0.0.1", port), timeout=0.3).close()
@@ -355,8 +369,8 @@ def _terminals(panes_all: list[dict]) -> list[dict]:
             res.append(
                 {
                     "session": name,
-                    "windows": int(wins or 0),
-                    "attached": int(att or 0),
+                    "windows": _i(wins),
+                    "attached": _i(att),
                     "panes": sum(1 for p in panes_all if p["session_name"] == name),
                 }
             )
@@ -476,14 +490,16 @@ def _name_colonies(colonies: dict, teams: list[dict]) -> None:
     never changes when a later colony shares its slug (the later one gets the -2 suffix)."""
     rec = {t["team_id"]: t for t in teams}
     taken: set[str] = set()
-    for c in sorted(colonies.values(), key=lambda c: (float(c.get("created") or 0), c["id"])):
+    for c in sorted(colonies.values(), key=lambda c: (_f(c.get("created")), c["id"])):
         t = rec.get(c["id"]) or {}
         base = t.get("name") or _slug(c.get("task") or "", _slug(c["id"].replace("_", "-")) or "colony")
         name, n = base, 2
         while name in taken:
             name, n = f"{base}-{n}", n + 1
         taken.add(name)
-        src = t.get("source") if isinstance(t.get("source"), dict) else {}
+        src = t.get("source")
+        if not isinstance(src, dict):
+            src = {}
         chan = str(c.get("channel") or "")
         c["name"] = name
         c["title"] = (c.get("task") or "")[:60]
@@ -631,10 +647,10 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
             and p["pane_dead"] == "1"
             and p["pane_dead_status"].lstrip("-").isdigit()
         ):
-            exit_code = int(p["pane_dead_status"])
+            exit_code = _i(p["pane_dead_status"])
         note = last_note.get(name)
         if exit_code is not None:
-            state = "finished" if int(exit_code) == 0 else "dead"
+            state = "finished" if exit_code == 0 else "dead"
         elif p and p["pane_dead"] == "1":
             state = "dead"
         elif not p:
@@ -653,9 +669,9 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         except OSError:
             mtime = 0.0
         active = max(
-            mtime, float(note["ts"]) if note else 0.0, float(entry.get("joined") or 0)
+            mtime, _f(note["ts"]) if note else 0.0, _f(entry.get("joined"))
         )
-        pid = int(p["pane_pid"]) if p and p["pane_pid"].isdigit() else entry.get("pid")
+        pid = _i(p["pane_pid"]) if p and p["pane_pid"].isdigit() else entry.get("pid")
         out_seats.append(
             {
                 "name": name,
@@ -696,13 +712,13 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         t["team_id"]
         for t in teams
         if t.get("state") not in ("archived", "reaped")
-        and now - float(t.get("created") or 0) < TEAM_GRACE_S
+        and now - _f(t.get("created")) < TEAM_GRACE_S
         and not any(s["target"] for s in out_seats if s["colony"] == t["team_id"])
     }
     reaped = {t["team_id"] for t in teams if t.get("state") in ("archived", "reaped")}
     ended: dict = {}
     for s_ in out_seats:
-        e = float((members.get(s_["name"]) or {"entry": {}})["entry"].get("ended_at") or 0)
+        e = _f((members.get(s_["name"]) or {"entry": {}})["entry"].get("ended_at"))
         ended[s_["colony"]] = max(ended.get(s_["colony"], 0.0), e)
     done = {
         cid

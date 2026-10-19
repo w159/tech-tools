@@ -16,8 +16,10 @@ import threading
 import time
 import types
 import unittest
+import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -211,7 +213,7 @@ class InProcessDashboard(unittest.TestCase):
         os.environ.pop("TMUX", None)
         cls.env = dict(os.environ)
         cls.saved_model = sys.modules.get("atlas_colony_model")
-        m = types.ModuleType("atlas_colony_model")
+        m: Any = types.ModuleType("atlas_colony_model")
         m.attach_argv = lambda target, vid: (
             [
                 [
@@ -355,11 +357,37 @@ class InProcessDashboard(unittest.TestCase):
 
     def test_snapshot_all_projects(self):
         calls = []
-        m = sys.modules["atlas_colony_model"]
+        m: Any = sys.modules["atlas_colony_model"]
         m.snapshot = lambda root=None, all_projects=False: (calls.append((root, all_projects)), {"ok": True})[1]
+        T._snap_cache.clear()
         for q in ({"project": "all"}, {"all": "1"}, {"project": "/p"}):
             T._snapshot(types.SimpleNamespace(query=q, groups=()))
-        self.assertEqual(calls, [(None, True), (None, True), ("/p", False)])
+        # project=all and all=1 share one cache key, so the model runs once for them
+        self.assertEqual(calls, [(None, True), ("/p", False)])
+
+    def test_snapshot_single_flight_and_ttl(self):
+        calls = []
+        m: Any = sys.modules["atlas_colony_model"]
+
+        def slow(root=None, all_projects=False):
+            calls.append(1)
+            time.sleep(0.2)
+            return {"ok": True}
+
+        m.snapshot = slow
+        T._snap_cache.clear()
+        ctx = types.SimpleNamespace(query={"all": "1"}, groups=())
+        ts = [threading.Thread(target=T._snapshot, args=(ctx,)) for _ in range(6)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        self.assertEqual(len(calls), 1)
+        T._snapshot(ctx)  # within the TTL: no rebuild
+        self.assertEqual(len(calls), 1)
+        T._snap_cache[(None, True)] = (time.monotonic() - T.SNAPSHOT_TTL - 1, {})
+        T._snapshot(ctx)  # expired: rebuilds
+        self.assertEqual(len(calls), 2)
 
     # pane
     @unittest.skipUnless(shutil.which("tmux"), "tmux missing")
@@ -483,7 +511,7 @@ class RealServeTests(unittest.TestCase):
                 .decode()
             )
             m = re.search(r'name="atlas-token" content="([^"]+)"', html)
-            self.assertIsNotNone(m)
+            assert m is not None
             token = m.group(1)
             c = WsClient(port, f"/api/v2/term/ws?kind=tui&token={token}")
             try:
