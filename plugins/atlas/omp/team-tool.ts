@@ -17,6 +17,7 @@ export interface TeamToolHost {
 export interface TeamParams {
 	action: "spawn" | "wait" | "reap";
 	class?: string;
+	name?: string;
 	effort?: string;
 	harness?: "omp" | "claude" | "codex";
 	paths?: string[];
@@ -39,7 +40,7 @@ function spawnArgv(p: TeamParams, pluginRoot: string, sessionId?: string): strin
 	if (!["omp", "claude", "codex"].includes(harness)) throw new Error(`atlas_team: harness must be omp, claude or codex, got ${harness}`);
 	const argv = muxArgv(pluginRoot, "spawn-team", "--class", need(p.class, "class"), "--effort", need(p.effort, "effort"), "--task", need(p.task, "task"), "--harness", harness);
 	// --session pins the team wave and channel to this lead; without it mux falls back to the latest run (possibly a stale worker's).
-	return argv.concat(p.paths?.length ? ["--paths", p.paths.join(",")] : [], sessionId ? ["--session", sessionId] : []);
+	return argv.concat(p.paths?.length ? ["--paths", p.paths.join(",")] : [], p.name ? ["--name", p.name] : [], sessionId ? ["--session", sessionId] : []);
 }
 
 /** argv for atlas_mux.py; throws on a missing required field so the model gets a clear message. */
@@ -141,6 +142,7 @@ function teamToolDef(T: any, pluginRoot: string, run: TeamRunner, env: Record<st
 			class: T.Optional(T.String()),
 			effort: T.Optional(T.String()),
 			harness: T.Optional(T.String({ description: "worker harness: omp (default), claude or codex" })),
+			name: T.Optional(T.String({ description: "human colony name [a-z0-9-], up to 32 chars; derived from the task when omitted" })),
 			paths: T.Optional(T.Array(T.String())),
 			task: T.Optional(T.String()),
 			team: T.Optional(T.String()),

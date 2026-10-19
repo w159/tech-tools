@@ -1693,6 +1693,37 @@ def _team_lead(session_id: str | None, team_id: str) -> str:
     return name if name != "lead" else f"lead-{team_id}"
 
 
+COLONY_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
+
+
+def _lead_harness(env=None) -> str:
+    """The harness the lead runs under, from its env: ATLAS_HARNESS, else OMP_*/PI_*/OMPCODE -> omp (checked first:
+    omp also exports Claude-compat vars), CODEX_* -> codex, CLAUDECODE/CLAUDE_CODE_* -> claude. '' when unknown."""
+    env = os.environ if env is None else env
+    if env.get("ATLAS_HARNESS") in ("omp", "claude", "codex"):
+        return env["ATLAS_HARNESS"]
+    keys = list(env)
+    if "OMPCODE" in keys or any(k.startswith(("OMP_", "PI_")) for k in keys):
+        return "omp"
+    if any(k.startswith("CODEX_") for k in keys):
+        return "codex"
+    if "CLAUDECODE" in keys or any(k.startswith("CLAUDE_CODE_") for k in keys):
+        return "claude"
+    return ""
+
+
+def _lead_source(root: str, lead: str, sid: str | None, env=None) -> dict:
+    """Where a team came from: project, lead, lead harness and session id (omp exports no session title)."""
+    env = os.environ if env is None else env
+    session = sid or next((env[k] for k in SESSION_ENV if env.get(k)), "")
+    return {
+        "project": Path(root).name,
+        "lead": lead,
+        "harness": _lead_harness(env),
+        "session": session or "",
+    }
+
+
 def _log_wave(rec: dict, run_id, results=()) -> bool:
     """One dispatches row per member with wave_id=team_id (a TEXT column) and the
     model its spawn resolved (`results`, from supervise). Idempotent per (run, team, member): the table
@@ -1760,6 +1791,13 @@ def cmd_spawn_team(args) -> int:
         return _emit({"ok": False, "error": str(exc)}, 2)
     if not NAME_RE.match(rec["team_id"]):
         return _emit({"ok": False, "error": f"invalid team id {rec['team_id']!r}"}, 2)
+    if args.name:
+        if not COLONY_NAME_RE.match(args.name):
+            return _emit(
+                {"ok": False, "error": f"invalid --name {args.name!r}: use [a-z0-9-], 1-32 chars, no leading dash"},
+                2,
+            )
+        rec["name"] = args.name
     if args.dry_run:
         return _emit({"ok": True, "dry_run": True, "team": rec})
     path = _team_dir(root) / f"{rec['team_id']}.json"
@@ -1787,6 +1825,7 @@ def cmd_spawn_team(args) -> int:
     os.environ["ATLAS_CHANNEL"] = chan
     os.environ["ATLAS_LEAD_NAME"] = lead
     rec["channel"], rec["transport"], rec["lead"] = chan, transport(), lead
+    rec["source"] = _lead_source(root, lead, sid)
     rec["created"] = time.time()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
@@ -2120,6 +2159,7 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--task")
     st.add_argument("--task-file")
     st.add_argument("--team-id")
+    st.add_argument("--name", help="human colony name, [a-z0-9-] up to 32 chars")
     st.add_argument(
         "--session", help="lead session id for wave attribution and the team channel"
     )

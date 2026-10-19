@@ -3015,3 +3015,45 @@ class ReapMembersAndStatusArgsTests(unittest.TestCase):
         usage = msg.splitlines()[0]
         self.assertIn("--team", usage)
         self.assertIn("--run", usage)
+
+
+class ColonyNameSourceTests(unittest.TestCase):
+    def _dry(self, *extra):
+        import atlas_mux
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(
+                ["spawn-team", "--class", "audit", "--effort", "low", "--task", "t", "--dry-run", *extra]
+            )
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def test_name_is_validated_and_recorded(self):
+        code, out = self._dry("--name", "tui-review")
+        self.assertEqual((0, "tui-review"), (code, out["team"]["name"]))
+        for bad in ("TUI", "-x", "a" * 33, "a_b", "a b"):
+            code, out = self._dry(f"--name={bad}")
+            self.assertEqual(2, code, bad)
+            self.assertIn("invalid --name", out["error"])
+        self.assertNotIn("name", self._dry()[1]["team"])
+
+    def test_lead_harness_from_env(self):
+        import atlas_mux
+
+        h = atlas_mux._lead_harness
+        self.assertEqual("omp", h({"OMPCODE": "1", "CLAUDECODE": "1"}))
+        self.assertEqual("omp", h({"PI_CODING_AGENT_DIR": "/x"}))
+        self.assertEqual("codex", h({"CODEX_HOME": "/x"}))
+        self.assertEqual("claude", h({"CLAUDE_CODE_ENTRYPOINT": "cli"}))
+        self.assertEqual("claude", h({"ATLAS_HARNESS": "claude", "OMPCODE": "1"}))
+        self.assertEqual("", h({"PATH": "/bin"}))
+
+    def test_source_records_project_lead_harness_session(self):
+        import atlas_mux
+
+        env = {"CLAUDECODE": "1", "CLAUDE_SESSION_ID": "sess-9"}
+        self.assertEqual(
+            {"project": "proj", "lead": "lead-ab", "harness": "claude", "session": "sess-9"},
+            atlas_mux._lead_source("/a/proj", "lead-ab", None, env),
+        )
+        self.assertEqual("sid-1", atlas_mux._lead_source("/a/proj", "l", "sid-1", env)["session"])

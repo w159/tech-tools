@@ -184,6 +184,10 @@ def _note(words: list) -> tuple | None:
     return (to, " ".join(rest)) if to else None
 
 
+_FUNC_RE = re.compile(r"^(?:function\s+)?(\w+)\s*\(\)\s*\{?\s*(.*?)\s*\}?$")
+_POS_RE = re.compile(r"\$\{?(\d)\}?")
+
+
 def unwrap_shell(cmd: str) -> tuple:
     """(the first meaningful command for display, [(to, msg) for each peer note]).
 
@@ -191,6 +195,7 @@ def unwrap_shell(cmd: str) -> tuple:
     variables they set, and drops the board flags (--root/--channel/--owner) from note calls."""
     env: dict = {}
     loops: dict = {}  # `for p in a b` -> {"p": ["a", "b"]}, so `--to $p` names each peer
+    funcs: dict = {}  # `n() { ... $1 "$2"; }` -> body, expanded with each call's arguments
     first, setup, notes = "", "", []
     for stmt in _statements(_unwrap_lean_ctx(cmd)):
         stmt = _strip_keyword(stmt)
@@ -199,7 +204,14 @@ def unwrap_shell(cmd: str) -> tuple:
             loops[loop.group(1)] = _words(_expand(loop.group(2), env))
         if _SKIP.match(stmt):
             continue
+        if fn := _FUNC_RE.match(stmt):
+            funcs[fn.group(1)] = fn.group(2)  # a definition runs nothing and its $1/$2 are unbound
+            continue
         words = _record_assignments(_words(_expand(stmt, env)), env)
+        if words and words[0] in funcs:
+            args = words[1:]
+            body = _POS_RE.sub(lambda m: args[int(m.group(1)) - 1] if 0 < int(m.group(1)) <= len(args) else "", funcs[words[0]])
+            words = _words(_expand(body, env))
         if not words:
             continue
         note = _note(words)

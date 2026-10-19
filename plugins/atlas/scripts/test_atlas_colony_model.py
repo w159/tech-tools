@@ -46,6 +46,48 @@ class PaneActivityTest(unittest.TestCase):
         feed = "10:04:27  ctx_read    atlas_dashboard.py:1-100\n10:04:34  think       Chunk 1 done\n"
         self.assertEqual(model._pane_activity(feed), "ctx_read atlas_dashboard.py:1-100")
 
+    def test_peer_note_row_keeps_recipient_and_text(self):
+        feed = "10:04:27  peer       → lead: all done\n"
+        self.assertEqual(model._pane_activity(feed), "peer → lead: all done")
+        self.assertNotIn("$", model._pane_activity(feed))
+
+
+class NamingTest(unittest.TestCase):
+    def test_slug_from_task(self):
+        self.assertEqual(model._slug("Read-only: read atlas_tui.py in 10 chunks"), "read-atlas-tui")
+        self.assertEqual(model._slug("", "fallback"), "fallback")
+        self.assertEqual(model._slug("Fix the Login bug now please"), "fix-login-bug")
+
+    def test_colony_names_dedupe_oldest_first_and_explicit_wins(self):
+        teams = [
+            {"team_id": "b", "created": 2, "lead": "lead-x"},
+            {"team_id": "a", "created": 1},
+            {"team_id": "c", "created": 3, "name": "review", "source": {"harness": "omp", "session": "s1", "lead": "l", "project": "p"}},
+        ]
+        cols = {
+            "a": {"id": "a", "task": "Audit the dashboard", "created": 1, "project": "/x/proj"},
+            "b": {"id": "b", "task": "Audit the dashboard", "created": 2, "project": "/x/proj"},
+            "c": {"id": "c", "task": "x" * 90, "created": 3, "project": "/x/proj"},
+        }
+        model._name_colonies(cols, teams)
+        self.assertEqual(["audit-dashboard", "audit-dashboard-2", "review"], [cols[k]["name"] for k in "abc"])
+        self.assertEqual(60, len(cols["c"]["title"]))
+        self.assertEqual({"project": "proj", "lead": "", "harness": "", "session": ""}, cols["a"]["source"])
+        self.assertEqual("lead-x", cols["b"]["source"]["lead"])
+        self.assertEqual({"project": "p", "lead": "l", "harness": "omp", "session": "s1"}, cols["c"]["source"])
+
+    def test_seat_addresses_index_only_repeated_roles_in_spawn_order(self):
+        teams = [{"team_id": "t", "members": [{"name": "explorer-z"}, {"name": "explorer-a"}, {"name": "critic-1"}]}]
+        cols = {"t": {"name": "tui-review"}}
+        seats = [{"name": n, "role": r, "colony": "t"} for n, r in
+                 (("explorer-a", "explorer"), ("critic-1", "completeness-critic"), ("explorer-z", "explorer"))]
+        model._address_seats(seats, cols, teams, [{"kind": "agent", "name": "explorer", "description": "d" * 50}])
+        got = {s["name"]: s["address"] for s in seats}
+        self.assertEqual("explorer-1@tui-review", got["explorer-z"])
+        self.assertEqual("explorer-2@tui-review", got["explorer-a"])
+        self.assertEqual("completeness-critic@tui-review", got["critic-1"])
+        self.assertEqual("d" * 39 + "…", seats[0]["role_title"])
+
 
 class ModelTest(unittest.TestCase):
     def setUp(self):
@@ -258,6 +300,8 @@ class ModelTest(unittest.TestCase):
             (col["id"], col["label"], col["session"], col["transport"], col["task"]),
             ("t1", "t1 · audit/low", "atlas-t1", "tmux", "map it"),
         )
+        self.assertEqual((col["name"], col["title"]), ("map", "map it"))
+        self.assertEqual(set(col["source"]), {"project", "lead", "harness", "session"})
         self.assertEqual(
             [p["id"] for p in col["pods"]], ["explorer", "implementer", "verifier"]
         )
@@ -282,6 +326,8 @@ class ModelTest(unittest.TestCase):
                 "log_path",
                 "last_active",
                 "lead",
+                "address",
+                "role_title",
             },
         )
         self.assertEqual(

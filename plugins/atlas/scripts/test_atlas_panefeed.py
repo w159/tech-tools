@@ -63,6 +63,13 @@ class UnwrapTests(unittest.TestCase):
         self.assertEqual(first, "python3 atlas_todo.py note --to a,b")
         self.assertEqual(notes, [("a", "hi there"), ("b", "hi there")])
 
+    def test_shell_function_note_binds_positional_args(self):
+        # a `n() { note --to $1 "$2"; }` definition is not a note; its calls are, with $1/$2 bound
+        cmd = "S=/x/scripts/atlas_todo.py\nn() { python3 \"$S\" note --to $1 \"$2\"; }\nn lead 'all done'; n sib 'ping'"
+        first, notes = pf.unwrap_shell(cmd)
+        self.assertEqual(notes, [("lead", "all done"), ("sib", "ping")])
+        self.assertNotIn("$", first)
+
     def test_shared_fixtures_match_omp_cmd_unwrap(self):
         # same literal cases as plugins/atlas/omp/cmd-unwrap.test.ts: both sides must unwrap identically
         loop_cmd = "S=/x/scripts/atlas_todo.py\nfor p in a b; do python3 \"$S\" note --root /r --to $p 'hi there' 2>&1 | head -3; done"

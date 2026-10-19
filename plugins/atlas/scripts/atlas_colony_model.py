@@ -431,6 +431,68 @@ def _active(root: str, panes_all: list[dict]) -> bool:
     )
 
 
+
+_STOP = frozenset("a an and the of to in on for with from by only is are be as at it this that into over then please".split())
+_EXT = re.compile(r"\.(?:py|ts|tsx|js|jsx|md|json|sh|yml|yaml)\b")
+
+
+def _slug(text: str, fallback: str = "") -> str:
+    """A 3-word human slug of a task ('Read-only: read atlas_tui.py in 10 chunks' -> read-atlas-tui)."""
+    words: list[str] = []
+    for w in re.findall(r"[a-z0-9]+", _EXT.sub(" ", str(text or "").lower())):
+        if w not in _STOP and not w.isdigit() and w not in words:
+            words.append(w)
+        if len(words) == 3:
+            break
+    return "-".join(words)[:32].strip("-") or fallback
+
+
+def _role_label(role: str) -> str:
+    return re.sub(r"[^a-z0-9-]+", "-", str(role or "").lower().removeprefix("atlas:")).strip("-") or "worker"
+
+
+def _role_title(role: str, specs: list[dict]) -> str:
+    """One-line role description from agents/<role>.md, at most 40 chars."""
+    desc = next((s["description"] for s in specs if s["kind"] == "agent" and s["name"] == _role_label(role)), "")
+    return desc if len(desc) <= 40 else desc[:39].rstrip() + "…"
+
+
+def _name_colonies(colonies: dict, teams: list[dict]) -> None:
+    """Give every colony a unique human `name`, a `title` and a `source`, in place. Oldest first so a name
+    never changes when a later colony shares its slug (the later one gets the -2 suffix)."""
+    rec = {t["team_id"]: t for t in teams}
+    taken: set[str] = set()
+    for c in sorted(colonies.values(), key=lambda c: (float(c.get("created") or 0), c["id"])):
+        t = rec.get(c["id"]) or {}
+        base = t.get("name") or _slug(c.get("task") or "", _slug(c["id"].replace("_", "-")) or "colony")
+        name, n = base, 2
+        while name in taken:
+            name, n = f"{base}-{n}", n + 1
+        taken.add(name)
+        src = t.get("source") if isinstance(t.get("source"), dict) else {}
+        c["name"] = name
+        c["title"] = (c.get("task") or "")[:60]
+        c["source"] = {
+            "project": src.get("project") or Path(c.get("project") or "").name,
+            "lead": src.get("lead") or t.get("lead") or "",
+            "harness": src.get("harness") or "",
+            "session": src.get("session") or "",
+        }
+
+
+def _address_seats(seats: list[dict], colonies: dict, teams: list[dict], specs: list[dict]) -> None:
+    """Set each seat's `address` (<role>[-<n>]@<colony name>; n only when the role repeats, in spawn order
+    then name) and `role_title`, in place."""
+    spawn = {m["name"]: i for t in teams for i, m in enumerate(t.get("members") or [])}
+    by_role: dict = {}
+    for s in sorted(seats, key=lambda s: (spawn.get(s["name"], 10**6), s["name"])):
+        by_role.setdefault((s["colony"], _role_label(s["role"])), []).append(s)
+    for (cid, role), group in by_role.items():
+        for i, s in enumerate(group, 1):
+            s["address"] = f"{role}{'-' + str(i) if len(group) > 1 else ''}@{colonies[cid]['name']}"
+            s["role_title"] = _role_title(role, specs)
+
+
 # --- snapshot -------------------------------------------------------------------------------------
 def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     root = os.path.realpath(root or os.getcwd())
@@ -609,6 +671,8 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "lead": atlas_todo.is_lead_name(name),
             }
         )
+    _name_colonies(colonies, teams)
+    _address_seats(out_seats, colonies, teams, _static("specs", _specs))
     # Only colonies with work in progress: a live pane that is working/idle/blocked, or a team
     # record younger than TEAM_GRACE_S whose panes are not up yet. Finished/dead/pane-less is history.
     live = {s["colony"] for s in out_seats if s["target"] and s["state"] not in ("dead", "finished")}

@@ -24,6 +24,13 @@ test("spawn argv passes an explicit harness and rejects unknown ones", () => {
 	expect(() => teamArgv({ ...spawn, harness: "bogus" as unknown as "omp" }, ROOT)).toThrow("harness");
 });
 
+test("spawn argv passes --name only when given", () => {
+	const spawn = { action: "spawn" as const, class: "audit", effort: "low", task: "t" };
+	const argv = teamArgv({ ...spawn, name: "tui-review" }, ROOT);
+	expect(argv[argv.indexOf("--name") + 1]).toBe("tui-review");
+	expect(teamArgv(spawn, ROOT)).not.toContain("--name");
+});
+
 test("spawn argv passes the lead session id when known and omits --session otherwise", () => {
 	const spawn = { action: "spawn" as const, class: "audit", effort: "medium", task: "t" };
 	expect(teamArgv(spawn, ROOT, "sess-lead").slice(-2)).toEqual(["--session", "sess-lead"]);
