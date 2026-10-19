@@ -13,6 +13,7 @@ a second import (or a second test module in the same process) reuses it.
 from __future__ import annotations
 
 import atexit
+import contextlib
 import os
 import shutil
 import subprocess
@@ -43,10 +44,8 @@ if not os.environ.get("_ATLAS_TEST_TMUX_TMPDIR") or not os.path.isdir(os.environ
     os.environ["_ATLAS_TEST_TMUX_TMPDIR"] = _tmux_tmp
 
     def _reap_private_tmux(d=_tmux_tmp):
-        try:  # kill-server only ever sees the private socket here, so it cannot reach the user's server
+        with contextlib.suppress(Exception):  # kill-server only ever sees the private socket here, so it cannot reach the user's server
             subprocess.run(["tmux", "kill-server"], env={**os.environ, "TMUX_TMPDIR": d}, capture_output=True, timeout=5)
-        except Exception:
-            pass
         shutil.rmtree(d, ignore_errors=True)
 
     atexit.register(_reap_private_tmux)

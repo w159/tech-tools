@@ -1327,7 +1327,9 @@ def _omp_error_lines(event: dict) -> list[str]:
         "turn.failed",
         "error",
     ):  # classify sees 401/402/model-not-found in the failure text
-        err = event.get("error") if isinstance(event.get("error"), dict) else event
+        err = event.get("error")
+        if not isinstance(err, dict):
+            err = event
         return [str(err.get("message") or "")]
     msg = event.get("message") if kind == "message_end" else None
     err = msg.get("errorMessage") if isinstance(msg, dict) else None

@@ -317,7 +317,7 @@ button.feed-item:hover { background: var(--surface-2); }
 .feed-detail { color: var(--text-dim); font-size: var(--fs-sm); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .feed-count { color: var(--text-dim); font-size: var(--fs-xs); }
 
-.terminal, .logview { margin: 0; padding: var(--s-3); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-2); font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.5; color: var(--text); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 340px; min-height: 120px; }
+.terminal:not(.xterm), .logview { margin: 0; padding: var(--s-3); background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-2); font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.5; color: var(--text); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 340px; min-height: 120px; }
 .logview { display: flex; flex-direction: column; white-space: normal; }
 .log-line { display: grid; grid-template-columns: auto 1fr; gap: var(--s-3); }
 .log-line .ts { color: var(--text-dim); }
