@@ -302,6 +302,43 @@ class InProcessDashboard(unittest.TestCase):
             os.environ.pop("ATLAS_TERM_TUI_CMD", None)
         self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
 
+    def test_tui_all_projects_spawns_with_all_flag(self):
+        os.environ.pop("ATLAS_TERM_TUI_CMD", None)
+        seen = []
+        real = T._tui_argv
+        T._tui_argv = lambda root: (seen.append(root), ["sh", "-c", "echo up; exec cat"])[1]
+        try:
+            for proj in (None, "", "all"):
+                c = WsClient(self.port, self.ws_path(kind="tui", project=proj))
+                try:
+                    self.assertEqual(c.status, 101, (proj, c.head))
+                    c.read_until(b"up")
+                    c.send(T.OP_CLOSE, struct.pack(">H", 1000))
+                finally:
+                    c.close()
+                self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+        finally:
+            T._tui_argv = real
+        self.assertEqual(seen, [None, None, None])
+        self.assertEqual(real(None)[-1], "--all")
+        self.assertNotIn("--project", real(None))
+        self.assertEqual(real("/x")[-2:], ["--project", "/x"])
+
+    def test_tui_unknown_project_is_400(self):
+        self.assert_denied(self.ws_path(kind="tui", project="/no/such/dir-xyz"), code=400)
+        self.assert_denied(self.ws_path(kind="tui", project="nope"), code=400)
+
+    def test_pane_ignores_project(self):
+        self.assert_denied(self.ws_path(kind="pane", target="x;y", project="all"), code=400)
+
+    def test_snapshot_all_projects(self):
+        calls = []
+        m = sys.modules["atlas_colony_model"]
+        m.snapshot = lambda root=None, all_projects=False: (calls.append((root, all_projects)), {"ok": True})[1]
+        for q in ({"project": "all"}, {"all": "1"}, {"project": "/p"}):
+            T._snapshot(types.SimpleNamespace(query=q, groups=()))
+        self.assertEqual(calls, [(None, True), (None, True), ("/p", False)])
+
     # pane
     @unittest.skipUnless(shutil.which("tmux"), "tmux missing")
     def test_pane_attach_echo_and_cleanup(self):

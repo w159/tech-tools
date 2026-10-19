@@ -153,6 +153,7 @@ def _panes() -> list[dict]:
         "@atlas_worker",
         "@atlas_role",
         "pane_current_command",
+        "pane_current_path",
     )
     rc, out = _tmux("list-panes", "-a", "-F", "\t".join("#{%s}" % k for k in keys))
     if rc != 0:
@@ -325,31 +326,46 @@ def _terminals(panes_all: list[dict]) -> list[dict]:
 def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     root = os.path.realpath(root or os.getcwd())
     now = time.time()
-    teams, reg = _teams(root), _registry(root)
+    projects = _projects(root, all_projects)
+    roots = [root] + [p["root"] for p in projects if p["root"] != root]
     panes_all = _panes()
 
     members: dict = {}  # name -> {role, channel, entry}
-    for c in reg.values():
-        for m in c.get("members") or []:
-            if m.get("name") and m.get("role") != "lead":
-                members[m["name"]] = {
-                    "role": m.get("role") or "worker",
-                    "entry": m,
-                    "channel": c.get("name"),
-                }
     team_of: dict = {}
-    for t in teams:
-        for m in t.get("members") or []:
-            team_of[m["name"]] = t
-            members.setdefault(
-                m["name"],
-                {
-                    "role": m.get("role") or "worker",
-                    "entry": {},
-                    "channel": t.get("channel"),
-                },
-            )
-            members[m["name"]]["role"] = m.get("role") or members[m["name"]]["role"]
+    proj_of: dict = {}  # seat name / team_id -> owning project root
+    teams, items, notes = [], [], []
+    for r in roots:
+        rteams = _teams(r)
+        teams += rteams
+        for c in _registry(r).values():
+            for m in c.get("members") or []:
+                if m.get("name") and m.get("role") != "lead" and m["name"] not in members:
+                    members[m["name"]] = {
+                        "role": m.get("role") or "worker",
+                        "entry": m,
+                        "channel": c.get("name"),
+                    }
+                    proj_of[m["name"]] = r
+        for t in rteams:
+            proj_of[t["team_id"]] = r
+            for m in t.get("members") or []:
+                team_of.setdefault(m["name"], t)
+                proj_of.setdefault(m["name"], r)
+                members.setdefault(
+                    m["name"],
+                    {
+                        "role": m.get("role") or "worker",
+                        "entry": {},
+                        "channel": t.get("channel"),
+                    },
+                )
+                members[m["name"]]["role"] = m.get("role") or members[m["name"]]["role"]
+        items += [i for i in atlas_todo.load(r).get("items", []) if not i.get("archived")]
+        try:
+            notes += atlas_todo.notes(r)
+        except OSError:
+            pass
+    notes.sort(key=lambda n: float(n.get("ts") or 0))
     session_team = {f"atlas-{t['team_id']}": t for t in teams}
 
     # seats: tmux panes first (they carry the live facts), then registry/team members with no pane
@@ -369,17 +385,13 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     for name, m in members.items():
         seats.setdefault(name, {"pane": None, "role": m["role"]})
 
-    items = [i for i in atlas_todo.load(root).get("items", []) if not i.get("archived")]
-    try:
-        notes = atlas_todo.notes(root)
-    except OSError:
-        notes = []
     last_note = {str(n.get("owner")): n for n in notes}
 
     colonies: dict = {}
     for t in teams:
         colonies[t["team_id"]] = {
             "id": t["team_id"],
+            "project": proj_of.get(t["team_id"], root),
             "label": f"{t['team_id']} · {t.get('class', '?')}/{t.get('effort', '?')}",
             "session": f"atlas-{t['team_id']}",
             "transport": t.get("transport") or "tmux",
@@ -405,13 +417,14 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "id": cid,
                 "label": cid,
                 "session": p["session_name"] if p else "",
+                "project": proj_of.get(name) or (p or {}).get("pane_current_path") or root,
                 "transport": "tmux" if p else "claude-bg",
                 "task": "",
                 "channel": str(m.get("channel") or ""),
                 "created": None,
                 "pods": [],
             }
-        log = Path(root) / ".atlas" / ".run" / "logs" / f"{name}.log"
+        log = Path(proj_of.get(name) or root) / ".atlas" / ".run" / "logs" / f"{name}.log"
         runtime, model = _log_info(log)
         if runtime == "unknown" and p and p["pane_current_command"] in HARNESSES:
             runtime = p["pane_current_command"]
@@ -453,6 +466,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
             {
                 "name": name,
                 "colony": cid,
+                "project": colonies[cid].get("project") or root,
                 "pod": s["role"],
                 "role": s["role"],
                 "runtime": runtime,
@@ -506,7 +520,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         "feed": feed,
         "needs": [f for f in feed if f["kind"] == "blocked" or f["to"] == "human"],
         "specs": _specs(),
-        "projects": _projects(root, all_projects),
+        "projects": projects,
         "terminals": _terminals(panes_all),
         "system": _system(),
     }

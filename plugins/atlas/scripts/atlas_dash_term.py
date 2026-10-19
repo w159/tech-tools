@@ -161,8 +161,9 @@ def _snapshot(ctx):
         m = _model()
     except ImportError as e:
         return 501, {"ok": False, "error": "model_unavailable", "why": str(e)}
-    all_projects = str(q.get("all") or "").lower() in ("1", "true", "yes")
-    return 200, m.snapshot(q.get("project") or None, all_projects)
+    proj = q.get("project") or None
+    all_projects = proj == "all" or str(q.get("all") or "").lower() in ("1", "true", "yes")
+    return 200, m.snapshot(None if proj == "all" else proj, all_projects)
 
 
 def _redact(text: str) -> str | None:
@@ -203,11 +204,12 @@ ROUTES = [
 # --- websocket PTY bridge --------------------------------------------------------
 
 
-def _tui_argv(root: str) -> list[str]:
+def _tui_argv(root: str | None) -> list[str]:
     override = os.environ.get("ATLAS_TERM_TUI_CMD")  # test hook
     if override:
         return shlex.split(override)
-    return [sys.executable, str(SCRIPTS_DIR / "atlas_tui.py"), "--project", root]
+    tail = ["--all"] if root is None else ["--project", root]
+    return [sys.executable, str(SCRIPTS_DIR / "atlas_tui.py"), *tail]
 
 
 def _run_setup(cmds) -> None:
@@ -274,9 +276,11 @@ def handle_ws(handler, query: dict, token: str) -> None:
     view_id = ""
     setup: list = []
     if kind == "tui":
-        root = os.path.realpath(query.get("project") or os.getcwd())
-        if not os.path.isdir(root):
-            return _deny(handler, 400, "bad_project")
+        root = None  # empty / missing / "all" means every project
+        if query.get("project") not in (None, "", "all"):
+            root = os.path.realpath(query["project"])
+            if not os.path.isdir(root):
+                return _deny(handler, 400, "bad_project")
         argv = _tui_argv(root)
     elif kind == "pane":
         target = query.get("target") or ""

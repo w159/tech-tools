@@ -56,3 +56,12 @@ test("headless reads as no terminal pane, and the lead shows its real liveness t
   expect(livenessText({ liveness: { text: "active, last tool call 12s ago" } })).toBe("active, last tool call 12s ago");
   expect(livenessText({})).toBe("");
 });
+
+test("colonyGroups groups live colonies and their seats by project", async () => {
+  const { colonyGroups } = await import("./pages/colony.js");
+  const snap = { project: "/a", colonies: [{ id: "c1", project: "/a" }, { id: "c2", project: "/b/x" }], seats: [{ name: "w1", colony: "c1" }, { name: "w2", colony: "c2" }] };
+  const g = colonyGroups(snap);
+  expect(g.map((x) => x.name)).toEqual(["a", "x"]);
+  expect(g[1].colonies[0].seats.map((s) => s.name)).toEqual(["w2"]);
+  expect(colonyGroups({ colonies: [], seats: [] })).toEqual([]);
+});

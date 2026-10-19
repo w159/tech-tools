@@ -30,10 +30,27 @@ export function sendBlock(m) {
 
 const needsProject = (p) => !p || p === "all";
 const terminalBtn = (ctx) => Button({ label: "Open terminal", onClick: () => ctx.navigate("terminal") });
-const pickProject = (ctx) => {
-  const projects = (ctx.store && ctx.store.get("projects")) || [];
-  const buttons = projects.map((p) => Button({ label: p.name || p.root, onClick: () => ctx.setProject(p.root, true) }));
-  return State({ variant: "empty", title: "Pick a project", body: "The colony is one project's lead and workers. Choose the project:", action: h("div", { class: "row", style: { flexWrap: "wrap", maxHeight: "40vh", overflowY: "auto" } }, ...buttons, terminalBtn(ctx)) });
+// All projects: every live colony from the shared term snapshot, grouped by project, each member with a terminal deep link.
+export function colonyGroups(snap) {
+  const byProject = new Map();
+  for (const c of (snap && snap.colonies) || []) {
+    const key = c.project || (snap && snap.project) || "";
+    if (!byProject.has(key)) byProject.set(key, []);
+    byProject.get(key).push({ colony: c, seats: ((snap && snap.seats) || []).filter((s) => s.colony === c.id) });
+  }
+  return [...byProject].map(([project, colonies]) => ({ project, name: project.split("/").filter(Boolean).pop() || project, colonies }));
+}
+const allProjects = (snap, ctx) => {
+  const groups = colonyGroups(snap);
+  if (!groups.length) return State({ variant: "empty", title: "No live colonies in any project", body: "Start one from your agent and it appears here with its members.", action: terminalBtn(ctx) });
+  return h("div", { class: "colony-all-projects" }, ...groups.map((g) => h("section", { class: "colony-group" },
+    h("h2", { title: g.project }, g.name),
+    ...g.colonies.map(({ colony, seats }) => h("div", { class: "colony-card" },
+      h("div", { class: "colony-top" }, h("strong", { class: "mono" }, colony.id), h("span", { class: "dim truncate" }, colony.task || ""), h("span", { class: "grow" }),
+        Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + colony.id, onClick: () => ctx.navigate("terminal", { space: colony.id, project: g.project }) })),
+      ...seats.map((s) => h("div", { class: "colony-top" }, h("span", { class: "truncate", title: s.name }, s.name), h("span", { class: "chip-lite" }, s.role || "worker"), Badge({ status: BADGE[s.state] || s.state, text: s.state }),
+        h("span", { class: "grow" }),
+        Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + s.name, onClick: () => ctx.navigate("terminal", { ...terminalParams({ colony: colony.id, name: s.name }), project: g.project }) }))))))));
 };
 const noMembers = (ctx) => State({ variant: "empty", title: "No colony members yet", body: "Members appear here when atlas workers are dispatched into this project's channel. Turn on Show all panes to see every pane.", action: terminalBtn(ctx) });
 
@@ -209,9 +226,12 @@ export default {
       if (S.dead) return;
       const project = root();
       if (needsProject(project)) {
-        st.data = null;
-        st.sig = "";
-        return replace(body, pickProject(ctx));
+        try { st.all_snap = await ctx.api.get("term/snapshot", { all: "1" }); st.error = null; } catch (e) { st.error = e; }
+        if (S.dead) return;
+        const sig = JSON.stringify([st.error && String(st.error.message || st.error), st.all_snap]);
+        if (sig === st.sig) return;
+        st.sig = sig;
+        return st.error ? paint() : replace(body, allProjects(st.all_snap, ctx));
       }
       await load(ctx, st, project);
       if (S.dead) return;

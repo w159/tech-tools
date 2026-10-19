@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.5.2 (2026-10-19)
+
+### Fixed
+
+- Atlas Colony terminal works under "All projects": the ws `kind=tui` treats a missing, empty or `all` project as every project (`atlas_tui.py --all`) instead of 400 `bad_project`, `term/snapshot` accepts `project=all`, and `atlas_colony_model.snapshot(all_projects=True)` now reads teams, channels, todos and notes from every known project (colonies and seats carry `project`). The page asks with `all=1` and never sends `project=all`, shows the server's reason on a 4xx behind a failed ws, and the Command Center xterm fills its pane (CSS height chain plus a ResizeObserver refit). The Colony page lists every live colony grouped by project under All projects.
+
 ## Unreleased
 
 ### Fixed

@@ -125,6 +125,24 @@ class ModelTest(unittest.TestCase):
         p.start()
         self.addCleanup(p.stop)
 
+    def test_all_projects_includes_other_projects_teams(self):
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(other.cleanup)
+        o = os.path.realpath(other.name)
+        (Path(o, ".atlas", ".run", "teams")).mkdir(parents=True)
+        Path(o, ".atlas", ".run", "teams", "t2.json").write_text(
+            json.dumps({"team_id": "t2", "class": "fix", "effort": "low", "task": "other", "created": 2.0, "members": [{"name": "worker-zz", "role": "implementer"}]})
+        )
+        projects = [{"root": self.root, "name": "a", "channels": 1}, {"root": o, "name": "b", "channels": 0}]
+        with mock.patch.object(model, "_projects", return_value=projects):
+            s = model.snapshot(self.root, True)
+        by_id = {c["id"]: c for c in s["colonies"]}
+        self.assertEqual(by_id["t2"]["project"], o)
+        self.assertEqual(by_id["t1"]["project"], self.root)
+        self.assertIn("worker-zz", {x["name"] for x in s["seats"] if x["colony"] == "t2"})
+        with mock.patch.object(model, "_projects", return_value=projects[:1]):
+            self.assertNotIn("t2", {c["id"] for c in model.snapshot(self.root)["colonies"]})
+
     def test_snapshot_shape_and_seats(self):
         s = model.snapshot(self.root)
         self.assertEqual(
@@ -158,6 +176,7 @@ class ModelTest(unittest.TestCase):
             {
                 "name",
                 "colony",
+                "project",
                 "pod",
                 "role",
                 "runtime",

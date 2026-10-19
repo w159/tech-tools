@@ -157,3 +157,26 @@ test("?seat= alone resolves the colony from the snapshot", async () => {
   expect(text(root)).toContain("Agents · 2");
   page.destroy();
 });
+
+test("All projects: ws url carries no project, snapshot is asked with all=1", async () => {
+  sockets.length = 0;
+  const asked = [];
+  const ctx = { params: {}, project: "all", api: { get: async (_p, q) => { asked.push(q); return SNAP; } } };
+  const root = page.render(ctx); root.isConnected = true; walk(root).forEach((x) => (x.isConnected = true)); await tick();
+  expect(sockets[0].url).toContain("kind=tui");
+  expect(sockets[0].url).not.toContain("project=");
+  expect(asked[0]).toEqual({ all: "1" });
+  page.destroy();
+});
+
+test("a 4xx behind the ws close renders the server reason and stops retrying", async () => {
+  sockets.length = 0;
+  const ctx = { params: {}, project: "/nope", api: { get: async () => { throw Object.assign(new Error("bad_project"), { status: 400, error: "bad_project" }); } } };
+  const root = page.render(ctx); root.isConnected = true; walk(root).forEach((x) => (x.isConnected = true)); await tick();
+  sockets[0].onclose();
+  await tick();
+  expect(text(root)).toContain("refused by server: bad_project");
+  await new Promise((r) => setTimeout(r, 1100));
+  expect(sockets.length).toBe(1);
+  page.destroy();
+});

@@ -50,11 +50,14 @@ function makeTerm(el, extra) {
   term.open(el);
   const doFit = () => { try { fit.fit(); } catch (_e) { /* not laid out yet */ } };
   doFit();
-  return { term, fit: doFit };
+  // Refit whenever the surface itself resizes (the window listener alone misses sidebar and flex changes).
+  let ro = null;
+  if (typeof ResizeObserver !== "undefined") { ro = new ResizeObserver(doFit); ro.observe(el); }
+  return { term, fit: doFit, stop: () => ro && ro.disconnect() };
 }
 
 // PTY over WebSocket with reconnect: binary frames in, {t:"in"|"resize"} JSON out. onStatus("live"|"connecting"|"closed", text).
-export function connectPty({ term, kind, target, project, onStatus }) {
+export function connectPty({ term, kind, target, project, onStatus, probe }) {
   let ws = null;
   let closed = false;
   let attempt = 0;
@@ -63,7 +66,7 @@ export function connectPty({ term, kind, target, project, onStatus }) {
   const url = () => {
     const q = new URLSearchParams({ kind, token: tokenOf(), cols: String(term.cols || 80), rows: String(term.rows || 24) });
     if (target) q.set("target", target);
-    if (project) q.set("project", project);
+    if (project && project !== "all") q.set("project", project);
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     return proto + "//" + location.host + base() + "/api/v2/term/ws?" + q;
   };
@@ -78,6 +81,12 @@ export function connectPty({ term, kind, target, project, onStatus }) {
       const wait = Math.min(1000 * 2 ** attempt++, 10000);
       onStatus("closed", "disconnected, retrying in " + Math.round(wait / 1000) + "s");
       retry = setTimeout(open, wait);
+      // Browsers hide the ws handshake status: replay the request as a plain GET to learn why the server refused.
+      if (probe) Promise.resolve().then(probe).catch((e) => {
+        if (closed || !e || !(e.status >= 400 && e.status < 500)) return;
+        clearTimeout(retry);
+        onStatus("error", "refused by server: " + (e.error || e.message) + (e.why ? " (" + e.why + ")" : ""));
+      });
     };
     ws.onerror = () => {};
   };
@@ -123,7 +132,9 @@ export default {
     const foot = h("div", { class: "tw-foot" });
     const root = h("div", { class: "page terminal-page tw" }, header, h("div", { class: "tw-body" }, side, main), foot);
 
-    const project = () => ctx.params.project || ctx.project;
+    const isAll = () => { const p = ctx.params.project || ctx.project; return !p || p === "all"; };
+    const project = () => (isAll() ? "" : ctx.params.project || ctx.project);
+    const snapParams = () => (isAll() ? { all: "1" } : { project: project() });
     const colonies = () => (st.snap && st.snap.colonies) || [];
     const colony = () => colonies().find((c) => c.id === st.space) || null;
     const seatsOf = (c) => ((st.snap && st.snap.seats) || []).filter((s) => s.colony === c.id);
@@ -134,12 +145,12 @@ export default {
       S.disposers = [];
       st.cards = new Map(); st.big = null; st.cc = null;
     };
-    const setStatus = (_k, text) => { st.ptyStatus = text; drawFoot(); };
+    const setStatus = (kind, text) => { st.ptyStatus = text; st.ptyErr = kind === "error"; drawFoot(); };
     const attachPty = (el, kind, extra) => {
-      const { term, fit } = makeTerm(el, { cursorBlink: true });
-      const pty = connectPty({ term, kind, project: project(), onStatus: setStatus, ...extra });
+      const { term, fit, stop } = makeTerm(el, { cursorBlink: true });
+      const pty = connectPty({ term, kind, project: project(), probe: () => ctx.api.get("term/snapshot", snapParams()), onStatus: setStatus, ...extra });
       window.addEventListener("resize", fit);
-      S.disposers.push(() => { pty.dispose(); term.dispose(); window.removeEventListener("resize", fit); });
+      S.disposers.push(() => { pty.dispose(); stop(); term.dispose(); window.removeEventListener("resize", fit); });
       term.focus();
       return term;
     };
@@ -176,7 +187,7 @@ export default {
     function drawFoot() {
       const c = colony();
       const left = st.space === CC ? "Atlas Command Center · live" : c ? seatsOf(c).length + " agents in " + c.id + " · live tmux panes" : "";
-      replace(foot, h("span", {}, left), st.ptyStatus ? h("span", { class: "tw-status", role: "status" }, st.ptyStatus) : null, st.err ? h("span", { class: "tw-status tw-err", role: "status" }, st.err) : null, h("span", { class: "tw-clock" }, (st.snap && st.snap.clock) || ""));
+      replace(foot, h("span", {}, left), st.ptyStatus ? h("span", { class: "tw-status" + (st.ptyErr ? " tw-err" : ""), role: "status" }, st.ptyStatus) : null, st.err ? h("span", { class: "tw-status tw-err", role: "status" }, st.err) : null, h("span", { class: "tw-clock" }, (st.snap && st.snap.clock) || ""));
     }
 
     async function drawCommandCenter() {
@@ -272,7 +283,7 @@ export default {
 
     async function refresh() {
       try {
-        applySnap(await ctx.api.get("term/snapshot", { project: project(), all: ctx.params.all ? "1" : "" }));
+        applySnap(await ctx.api.get("term/snapshot", snapParams()));
       } catch (e) {
         st.err = "snapshot unavailable: " + String((e && (e.error || e.message)) || e);
         drawFoot();
