@@ -302,6 +302,16 @@ class InProcessDashboard(unittest.TestCase):
             os.environ.pop("ATLAS_TERM_TUI_CMD", None)
         self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
 
+    def test_tui_child_sees_requested_size_at_first_paint_and_no_rep_term(self):
+        os.environ["ATLAS_TERM_TUI_CMD"] = "sh -c 'echo size-$(stty size)-$TERM-${LINES:-x}; exec cat'"
+        c = WsClient(self.port, self.ws_path(kind="tui", cols=100, rows=30))
+        try:
+            c.read_until(b"size-30 100-screen-256color-x")
+            c.send(T.OP_CLOSE, struct.pack(">H", 1000))
+        finally:
+            c.close()
+            os.environ.pop("ATLAS_TERM_TUI_CMD", None)
+
     def test_tui_all_projects_spawns_with_all_flag(self):
         os.environ.pop("ATLAS_TERM_TUI_CMD", None)
         seen = []

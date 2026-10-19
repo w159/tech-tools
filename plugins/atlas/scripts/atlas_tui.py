@@ -843,6 +843,12 @@ def loop(stdscr, args):
     focus_first_live(snap, ui)
     last_snap = last_cap = 0.0
     curses.curs_set(0)
+    try:  # terminal default fg/bg (-1): paint no grey box over the host background
+        curses.start_color()
+        curses.use_default_colors()
+        stdscr.bkgd(" ", curses.A_NORMAL)
+    except curses.error:
+        pass
     stdscr.timeout(250)
     stdscr.keypad(True)
     while True:
@@ -873,6 +879,8 @@ def loop(stdscr, args):
         if ch == -1:
             continue
         if ch == curses.KEY_RESIZE:
+            curses.update_lines_cols()
+            stdscr.clear()  # full repaint at the new size
             continue
         if ch == 27:  # lone Esc arrives after the keypad timeout
             key = "esc"

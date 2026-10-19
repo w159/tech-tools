@@ -34,6 +34,7 @@ import atlas_todo  # noqa: E402
 PLUGIN_DIR = SCRIPTS_DIR.parent
 FEED_MAX = 200
 NOW_MAX = 120
+TEAM_FRESH_S = 24 * 3600  # an un-reaped team record older than this is history, not a colony
 OPEN = ("pending", "in_progress")
 TMUX_TIMEOUT = 5
 HARNESSES = ("claude", "omp", "codex")
@@ -492,6 +493,18 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "lead": atlas_todo.is_lead_name(name),
             }
         )
+    # Only real colonies: a live pane, or an un-reaped team record younger than TEAM_FRESH_S.
+    # Old lead channels (all seats finished, no pane) and aged/archived team records are history.
+    live = {s["colony"] for s in out_seats if s["target"] and s["state"] not in ("dead", "finished")}
+    fresh = {
+        t["team_id"]
+        for t in teams
+        if t.get("state") not in ("archived", "reaped")
+        and now - float(t.get("created") or 0) < TEAM_FRESH_S
+    }
+    keep = live | fresh
+    colonies = {k: v for k, v in colonies.items() if k in keep}
+    out_seats = [s for s in out_seats if s["colony"] in keep]
     for seat in out_seats:
         pods = colonies[seat["colony"]]["pods"]
         pod = next((x for x in pods if x["id"] == seat["pod"]), None)

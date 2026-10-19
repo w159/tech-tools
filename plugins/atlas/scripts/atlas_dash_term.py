@@ -301,15 +301,16 @@ def handle_ws(handler, query: dict, token: str) -> None:
         if setup:
             _run_setup(setup)
         cols, rows = _dim(query.get("cols"), 80), _dim(query.get("rows"), 24)
-        env = {
-            **os.environ,
-            "TERM": "xterm-256color",
-            "COLUMNS": str(cols),
-            "LINES": str(rows),
-        }
+        # No LINES/COLUMNS: ncurses lets them override the tty size, so the TUI never followed a resize.
+        # ncurses' xterm-256color `rep` (CSI Nb) emits a stray \x01 for multibyte glyphs (every ━ rule run),
+        # so the curses TUI gets a terminfo without rep; screen-256color is otherwise xterm.js-compatible.
+        env = {**os.environ, "TERM": "screen-256color" if kind == "tui" else "xterm-256color"}
+        env.pop("LINES", None)
+        env.pop("COLUMNS", None)
         pid, master = pty.fork()
         if pid == 0:  # child: only exec, never return into the server
             try:
+                _winsize(0, cols, rows)  # before exec, so first paint already sees the real size
                 os.execvpe(argv[0], argv, env)
             finally:
                 os._exit(127)
