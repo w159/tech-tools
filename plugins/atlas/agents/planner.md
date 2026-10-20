@@ -2,7 +2,9 @@
 name: planner
 description: "Multi-stage decomposition specialist that turns a task into a numbered stage map where each stage has one failable check, flags concurrent stages, and marks unverifiable output as proven versus assumed. Use when a task spans several stages or layers and needs an ordered, verifiable plan before work starts."
 model: sonnet
-effort: low
+effort: high
+tier_allow: [sonnet, opus]
+effort_allow: [medium, high]
 color: blue
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
 ---

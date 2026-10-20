@@ -92,6 +92,11 @@ function parseAgentMarkdown(content: string): { frontmatter: Record<string, unkn
 	return { frontmatter, body };
 }
 
+/** omp thinking level for a Claude frontmatter effort; the union is closed at off | low for now. */
+function thinkingLevelFor(effort: unknown): "off" | "low" {
+	return effort === "medium" || effort === "high" ? "low" : "off";
+}
+
 /** Render one generated agent file for a parsed source agent. */
 export function renderGeneratedAgent(sourceFile: string, content: string): string | null {
 	const { frontmatter, body } = parseAgentMarkdown(content);
@@ -100,10 +105,11 @@ export function renderGeneratedAgent(sourceFile: string, content: string): strin
 	if (typeof name !== "string" || !name.trim() || typeof description !== "string" || !description.trim()) {
 		return null;
 	}
-	const thinkingLevel = ATLAS_THINKING_LEVELS[name];
-	if (!thinkingLevel) {
+	if (!ATLAS_THINKING_LEVELS[name]) {
 		throw new Error("no thinkingLevel mapping for atlas agent " + name);
 	}
+	// Derived from the Claude frontmatter effort (none/low -> off, medium/high -> low) until omp's union widens (stage C4).
+	const thinkingLevel = thinkingLevelFor(frontmatter.effort);
 	// JSON.stringify output is valid YAML (double-quoted scalar), so
 	// descriptions containing colons/quotes stay safe without a YAML emitter.
 	const lines = [
@@ -113,6 +119,10 @@ export function renderGeneratedAgent(sourceFile: string, content: string): strin
 		`description: ${JSON.stringify(description)}`,
 		`thinkingLevel: ${JSON.stringify(thinkingLevel)}`,
 		`model: ${JSON.stringify(modelPatternsFor(name))}`,
+		// Atlas keys read by the hook bridge: the tiers/efforts a dispatch may name for this role.
+		...(["tier_allow", "effort_allow"] as const).flatMap(key =>
+			Array.isArray(frontmatter[key]) ? [`${key}: ${JSON.stringify(frontmatter[key])}`] : [],
+		),
 		"# Lead-only dispatch: atlas workers must not spawn subagents.",
 		`spawns: ${JSON.stringify("none")}`,
 		"---",

@@ -1,7 +1,10 @@
 """Tests for atlas_tui: text frames from a contract-shaped fixture snapshot (no live model)."""
 
 import contextlib
+import copy
+import curses  # noqa: F401  (import once up front: patch.dict(sys.modules) would evict a lazy import and 3.15 forbids reloading _curses)
 import io
+import re
 import subprocess
 import sys
 import unittest
@@ -166,24 +169,58 @@ class Render(unittest.TestCase):
         self.assertEqual(f.count("explorer    ●"), 1)
 
     def test_recent_header_uses_colony_name_and_finished_is_marked(self):
-        snap = {**SNAP, "colonies": [{**c, "name": "my-colony", "finished": True} if c["id"] == "lead-01" else c for c in SNAP["colonies"]]}
+        snap = {
+            **SNAP,
+            "colonies": [
+                {**c, "name": "my-colony", "finished": True}
+                if c["id"] == "lead-01"
+                else c
+                for c in SNAP["colonies"]
+            ],
+        }
         f = "\n".join(T.render(snap, T.new_ui(colony="lead-01"), 180, 50))
         self.assertIn("── RECENT · colony my-colony ──", f)
         self.assertIn("HEALTH  ✓ finished · ", f)
         self.assertIn("▦ my-colony ✓ finished", f)
 
     def test_table_fits_long_seat_labels_at_150(self):
-        snap = dict(SNAP, seats=[dict(SNAP["seats"][0], name="completeness-critic", address="completeness-critic@c", pod="explorer-1")])
+        snap = dict(
+            SNAP,
+            seats=[
+                dict(
+                    SNAP["seats"][0],
+                    name="completeness-critic",
+                    address="completeness-critic@c",
+                    pod="explorer-1",
+                )
+            ],
+        )
         for w in (80, 150, 180):
             f = "\n".join(T.render(snap, T.new_ui(colony="lead-01"), w, 40))
             if w >= 150:
                 self.assertIn("completeness-critic", f)
                 self.assertIn("explorer-1", f)
-            self.assertTrue(all(len(r) <= w for r in T.render(snap, T.new_ui(colony="lead-01"), w, 40)))
+            self.assertTrue(
+                all(
+                    len(r) <= w
+                    for r in T.render(snap, T.new_ui(colony="lead-01"), w, 40)
+                )
+            )
 
     def test_now_keeps_changing_range(self):
-        snap = dict(SNAP, seats=[dict(SNAP["seats"][0], now="ctx_read /a/very/long/path/to/atlas_dashboard.py:1501-1750")])
-        for w, want in ((150, "ctx_read atlas_dashboard.py:1501-1750"), (80, "01-1750")):
+        snap = dict(
+            SNAP,
+            seats=[
+                dict(
+                    SNAP["seats"][0],
+                    now="ctx_read /a/very/long/path/to/atlas_dashboard.py:1501-1750",
+                )
+            ],
+        )
+        for w, want in (
+            (150, "ctx_read atlas_dashboard.py:1501-1750"),
+            (80, "01-1750"),
+        ):
             f = "\n".join(T.render(snap, T.new_ui(colony="lead-01"), w, 40))
             self.assertIn(want, f)
 
@@ -200,7 +237,10 @@ class Render(unittest.TestCase):
         ui = T.new_ui()
         T.focus_first_live(snap, ui)
         self.assertIsNone(ui["colony"])
-        self.assertIn("2 colonies · select one in Explorer", "\n".join(T.render(snap, ui, 140, 40)))
+        self.assertIn(
+            "2 colonies · select one in Explorer",
+            "\n".join(T.render(snap, ui, 140, 40)),
+        )
 
     def test_graph_boxes(self):
         f = frame(T.new_ui(colony="lead-01", tab="graph"))
@@ -330,7 +370,9 @@ class Start(unittest.TestCase):
         ui = T.new_ui()
         T.focus_first_live(SNAP, ui)
         f = frame(ui)
-        self.assertIn("▶  ┣━ ▦ lead-01", f.replace("▶    ", "▶  ").replace("▶   ", "▶  "))
+        self.assertIn(
+            "▶  ┣━ ▦ lead-01", f.replace("▶    ", "▶  ").replace("▶   ", "▶  ")
+        )
         T.handle_key(SNAP, ui, "enter")
         self.assertEqual(ui["colony"], "lead-01")
         T.handle_key(SNAP, ui, "enter")
@@ -338,8 +380,12 @@ class Start(unittest.TestCase):
 
     def test_launch_names_window(self):
         a = mock.Mock(project="/p", all=False, fixture=None)
-        with mock.patch.dict(T.os.environ, {"TMUX": "1"}), mock.patch.object(T.subprocess, "run") as run, \
-                mock.patch.object(T, "once", return_value=0):
+        with (
+            mock.patch.dict(T.os.environ, {"TMUX": "1"}),
+            mock.patch.object(T.subprocess, "run") as run,
+            mock.patch.object(T, "once", return_value=0),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
             run.return_value.stdout = "@7\n"
             T.launch(a)
         argvs = [c.args[0] for c in run.call_args_list]
@@ -373,15 +419,19 @@ class LaunchWindow(unittest.TestCase):
         def fake(cmd, **kw):
             calls.append(list(cmd))
             r = mock.Mock()
-            r.returncode = has_session if cmd[:2] == ["tmux", "has-session"] else opener_rc
+            r.returncode = (
+                has_session if cmd[:2] == ["tmux", "has-session"] else opener_rc
+            )
             r.stdout = (wins + "\n") if cmd[:2] == ["tmux", "list-windows"] else ""
             return r
 
-        with mock.patch.dict(T.os.environ, env, clear=True), \
-                mock.patch("sys.platform", "darwin"), \
-                mock.patch.object(T.subprocess, "run", side_effect=fake), \
-                mock.patch.object(T, "once", return_value=0), \
-                contextlib.redirect_stdout(out):
+        with (
+            mock.patch.dict(T.os.environ, env, clear=True),
+            mock.patch("sys.platform", "darwin"),
+            mock.patch.object(T.subprocess, "run", side_effect=fake),
+            mock.patch.object(T, "once", return_value=0),
+            contextlib.redirect_stdout(out),
+        ):
             T.launch(a)
         return calls, out.getvalue()
 
@@ -395,7 +445,9 @@ class LaunchWindow(unittest.TestCase):
                 self.assertIn("opened a new", out)
 
     def test_launch_respawns_existing_detached_session(self):
-        calls, out = self._launch({"TERM_PROGRAM": "vscode"}, has_session=0, wins="atlas-tui")
+        calls, out = self._launch(
+            {"TERM_PROGRAM": "vscode"}, has_session=0, wins="atlas-tui"
+        )
         self.assertTrue(any("has-session" in " ".join(c) for c in calls))
         self.assertTrue(
             any(
@@ -409,7 +461,11 @@ class LaunchWindow(unittest.TestCase):
         )
         self.assertFalse(any("new-session" in " ".join(c) for c in calls))
         self.assertTrue(
-            any(c[:4] == ["tmux", "set-option", "-t", "atlas-tui"] and c[-2:] == ["mouse", "on"] for c in calls)
+            any(
+                c[:4] == ["tmux", "set-option", "-t", "atlas-tui"]
+                and c[-2:] == ["mouse", "on"]
+                for c in calls
+            )
         )
         self.assertIn("restarted the atlas-tui session with", out)
         self.assertNotIn("reusing", out)
@@ -453,6 +509,7 @@ class Attach(unittest.TestCase):
             ["tmux", "attach", "-t", "v"],
         )
         with mock.patch.object(T.subprocess, "run") as run:
+            run.return_value.returncode = 0
             self.assertEqual(T.attach(SNAP, "impl-1", m), "")
         self.assertEqual(
             [c.args[0][:2] for c in run.call_args_list],
@@ -488,7 +545,9 @@ class FirstPaint(unittest.TestCase):
         scr.getmaxyx.return_value = (40, 120)
         scr.erase.side_effect = cur.clear
         scr.addstr.side_effect = lambda y, x, s, *a: cur.append(s)
-        scr.refresh.side_effect = lambda: frames.append((finished.is_set(), "\n".join(cur)))
+        scr.refresh.side_effect = lambda: frames.append(
+            (finished.is_set(), "\n".join(cur))
+        )
 
         def getch():
             if len(frames) == 1:
@@ -501,12 +560,20 @@ class FirstPaint(unittest.TestCase):
         scr.getch.side_effect = getch
         model = mock.Mock(snapshot=slow_snapshot)
         args = mock.Mock(project="/p", all=False)
-        with mock.patch.multiple(curses, curs_set=mock.DEFAULT, start_color=mock.DEFAULT, use_default_colors=mock.DEFAULT), \
-                mock.patch.object(T, "_model", return_value=model), self.assertRaises(Done):
+        with (
+            mock.patch.multiple(
+                curses,
+                curs_set=mock.DEFAULT,
+                start_color=mock.DEFAULT,
+                use_default_colors=mock.DEFAULT,
+            ),
+            mock.patch.object(T, "_model", return_value=model),
+            self.assertRaises(Done),
+        ):
             T.loop(scr, args)
         done_before, first = frames[0]
         self.assertFalse(done_before)
-        self.assertIn("EXPLORER", first)
+        self.assertIn("SESSIONS", first)  # the colony workspace is the landing view
         self.assertIn("loading colonies…", first)
         self.assertTrue(any("lead-01" in f for _, f in frames[1:]))
 
@@ -582,7 +649,9 @@ class Mouse(unittest.TestCase):
         T.run_command(SNAP, ui, "colony lead-01")
         r, x, a = self.find(self.hits(ui), "button", lambda a: a[1] == "term")
         self.assertEqual(T.render(SNAP, ui, self.W, self.H)[r][x : x + 8], "[ term ]")
-        self.assertEqual(T.handle_click(SNAP, ui, self.hits(ui), x + 2, r), ("term", a[2]))
+        self.assertEqual(
+            T.handle_click(SNAP, ui, self.hits(ui), x + 2, r), ("term", a[2])
+        )
         r, x, a = self.find(self.hits(ui), "seatrow", lambda a: a[1] == 1)
         T.handle_click(SNAP, ui, self.hits(ui), x + 1, r)
         self.assertEqual((ui["row"], ui["seat"]), (1, "impl-1"))
@@ -607,7 +676,9 @@ class Buttons(unittest.TestCase):
         return next(
             (r, x0, a)
             for r, x0, _x1, a in hits
-            if a[0] == "button" and a[1] == label and (seat == "__any__" or a[2] == seat)
+            if a[0] == "button"
+            and a[1] == label
+            and (seat == "__any__" or a[2] == seat)
         )
 
     def click(self, snap, ui, r, x):
@@ -651,11 +722,23 @@ class Buttons(unittest.TestCase):
         self.assertIsNone(T.run_command(SNAP, ui, "stop impl-2"))
         self.assertIn("not stoppable", ui["status"])
 
+    def test_in_process_colony_sessions_and_peek(self):
+        snap = copy.deepcopy(SNAP)
+        snap["colonies"].append({"id": "lead-ip", "label": "lead-ip", "session": "", "transport": "in-process", "channel": "chx", "created": 5, "pods": []})
+        snap["seats"] += [seat(f"ip-{i}", "implementer", "claude", "idle", target="", colony="lead-ip", last_active=i) for i in range(35)]
+        rows = [r[0] for r in T.sessions_rows(snap)]
+        self.assertTrue(any("in-proc" in r for r in rows))
+        self.assertIn("  +5 more", rows)  # 35 seats, cap 30
+        ui = T.new_ui(section="colony", colony="lead-ip", seat="ip-34")
+        self.assertIn("no pane (in-process subagent)", "\n".join(T.render(snap, ui, self.W, self.H)))
+
     def test_msg_prefill_and_broadcast(self):
         ui = T.new_ui(colony="lead-01")
         self.assertIsNone(T.run_command(SNAP, ui, "msg impl-1"))
         self.assertEqual((ui["mode"], ui["buf"]), ("cmd", "send impl-1 "))
-        self.assertEqual(T.run_command(SNAP, ui, "broadcast stand down"), ("broadcast", "stand down"))
+        self.assertEqual(
+            T.run_command(SNAP, ui, "broadcast stand down"), ("broadcast", "stand down")
+        )
         ui = T.new_ui()
         self.assertIsNone(T.run_command(SNAP, ui, "broadcast x"))
         self.assertEqual(ui["status"], "no colony selected")
@@ -716,9 +799,17 @@ class Buttons(unittest.TestCase):
                 )
             ],
         )
-        m = mock.Mock(transcript_tail=mock.Mock(return_value=["▸ user task", "→ ctx_search", "  ← hits"]))
+        m = mock.Mock(
+            transcript_tail=mock.Mock(
+                return_value=["▸ user task", "→ ctx_search", "  ← hits"]
+            )
+        )
         with mock.patch.object(T, "_model", return_value=m):
-            f = "\n".join(T.render(snap, T.new_ui(colony="lead-01", seat="impl-2"), self.W, self.H))
+            f = "\n".join(
+                T.render(
+                    snap, T.new_ui(colony="lead-01", seat="impl-2"), self.W, self.H
+                )
+            )
         m.transcript_tail.assert_called_once_with("/t.jsonl", 200)
         self.assertIn("▸ user task", f)
         self.assertNotIn("no tmux pane", f)
@@ -735,10 +826,15 @@ class Bridge(unittest.TestCase):
     def test_osc_only_with_env(self):
         ui = T.new_ui()
         T.run_command(SNAP, ui, "colony lead-01")
-        self.assertEqual(self.emit(dict(ui), {"ATLAS_TUI_BRIDGE": "1"}), "\x1b]7717;open;lead-01\x07")
+        self.assertEqual(
+            self.emit(dict(ui), {"ATLAS_TUI_BRIDGE": "1"}), "\x1b]7717;open;lead-01\x07"
+        )
         self.assertEqual(self.emit(ui, {}), "")
         T.run_command(SNAP, ui, "seat impl-1")
-        self.assertEqual(self.emit(ui, {"ATLAS_TUI_BRIDGE": "1"}), "\x1b]7717;open;lead-01;impl-1\x07")
+        self.assertEqual(
+            self.emit(ui, {"ATLAS_TUI_BRIDGE": "1"}),
+            "\x1b]7717;open;lead-01;impl-1\x07",
+        )
         self.assertEqual(self.emit(ui, {"ATLAS_TUI_BRIDGE": "1"}), "")
 
     def test_autofocus_does_not_emit(self):
@@ -759,8 +855,18 @@ class Names(unittest.TestCase):
         import copy
 
         s = copy.deepcopy(SNAP)
-        s["colonies"][0].update(name="read-atlas-tui", source={"project": "tt", "lead": "lead-01", "harness": "omp", "session": "S1"})
-        s["seats"][0].update(address="explorer-1@read-atlas-tui", role_title="Maps code")
+        s["colonies"][0].update(
+            name="read-atlas-tui",
+            source={
+                "project": "tt",
+                "lead": "lead-01",
+                "harness": "omp",
+                "session": "S1",
+            },
+        )
+        s["seats"][0].update(
+            address="explorer-1@read-atlas-tui", role_title="Maps code"
+        )
         ui = T.new_ui()
         T.run_command(s, ui, "colony read-atlas-tui")
         self.assertEqual(ui["colony"], "lead-01")
@@ -770,7 +876,10 @@ class Names(unittest.TestCase):
         self.assertIn("→ read-atlas-tui", f)
         self.assertIn("explorer-1", f)
         ui["tab"] = "overview"
-        self.assertIn("from omp session S1 · lead lead-01 · project tt", "\n".join(T.render(s, ui, 140, 40)))
+        self.assertIn(
+            "from omp session S1 · lead lead-01 · project tt",
+            "\n".join(T.render(s, ui, 140, 40)),
+        )
         T.run_command(s, ui, "seat ex-1")
         self.assertIn("Maps code", "\n".join(T.render(s, ui, 140, 40)))
 
@@ -798,7 +907,10 @@ class EmptyStates(unittest.TestCase):
         ui = T.new_ui(section="topology")
         f = "\n".join(T.render(EMPTY, ui, self.W, self.H))
         self.assertIn("no colonies · watching /w/proj", f)
-        self.assertIn("dispatches subagents (omp `task`, Claude `Agent`) or `atlas_mux spawn-team`", f)
+        self.assertIn(
+            "dispatches subagents (omp `task`, Claude `Agent`) or `atlas_mux spawn-team`",
+            f,
+        )
         self.assertIn("`a` toggles all projects", f)
         self.assertIn("Enter/click a PROJECTS row to switch the watched project", f)
 
@@ -844,8 +956,13 @@ class WatchControls(unittest.TestCase):
         row_hits = [a for *_, a in hits if a[0] == "project"]
         self.assertIn(("project", "/w/proj"), row_hits)
         self.assertIn(("project", "/w/other"), row_hits)
-        j = hits.index(next(h for h in hits if h[3][0] == "project" and h[3][1] == "/w/other"))
-        self.assertEqual(T.handle_click(EMPTY, ui, hits, T.LEFT + 10, hits[j][0]), ("project", "/w/other"))
+        j = hits.index(
+            next(h for h in hits if h[3][0] == "project" and h[3][1] == "/w/other")
+        )
+        self.assertEqual(
+            T.handle_click(EMPTY, ui, hits, T.LEFT + 10, hits[j][0]),
+            ("project", "/w/other"),
+        )
 
     def test_projects_rows_filterable_and_not_clickable_when_filtered(self):
         ui = T.new_ui(section="projects")
@@ -863,14 +980,23 @@ class LeadSeatUi(unittest.TestCase):
         return seat("lead-abc123", "lead", "omp", "working", target="", lead=True, **kw)
 
     def snap_with_lead(self, s):
-        snap = {**SNAP, "seats": SNAP["seats"] + [s]}
-        snap["colonies"][0]["pods"] = snap["colonies"][0]["pods"] + [{"id": "lead", "seats": ["lead-abc123"]}]
+        snap = {
+            **copy.deepcopy(SNAP),
+            "seats": SNAP["seats"] + [s],
+        }  # deepcopy: colonies is mutated below
+        snap["colonies"][0]["pods"] = snap["colonies"][0]["pods"] + [
+            {"id": "lead", "seats": ["lead-abc123"]}
+        ]
         return snap
 
     def test_no_msg_or_stop_buttons_for_lead(self):
         s = self.lead()
         snap = self.snap_with_lead(s)
-        f = "\n".join(T.render(snap, T.new_ui(colony="lead-01", seat="lead-abc123"), self.W, self.H))
+        f = "\n".join(
+            T.render(
+                snap, T.new_ui(colony="lead-01", seat="lead-abc123"), self.W, self.H
+            )
+        )
         self.assertIn("[ view ]", f)
         self.assertNotIn("[ msg ]", f)
         self.assertNotIn("[ stop ]", f)
@@ -881,8 +1007,11 @@ class LeadSeatUi(unittest.TestCase):
         self.assertIsNone(T._button_effect(snap, ui, "msg", "lead-abc123"))
         self.assertIn("is the lead", ui["status"])
         ui = T.new_ui(colony="lead-01", seat="lead-abc123")
-        self.assertIsNone(T.run_command(snap, ui, "send lead-abc123 hi"))
-        self.assertIn("is the lead", ui["status"])
+        # Decision 1: sending to the lead is allowed; do_steer says when it reads
+        self.assertEqual(
+            T.run_command(snap, ui, "send lead-abc123 hi"),
+            ("steer", "lead-abc123", "hi", "lead-01"),
+        )
 
     def test_stops_still_work_for_workers(self):
         ui = T.new_ui(colony="lead-01")
@@ -924,8 +1053,23 @@ class SeatDetail(unittest.TestCase):
     W, H = 140, 48
 
     def test_pane_seat_sections(self):
-        ui = T.new_ui(colony="lead-01", seat="impl-1", seat_text="pane-line-1\npane-line-2")
-        snap = dict(SNAP, seats=[dict(SNAP["seats"][1], open_items=[{"id": "t9", "title": "Build the panel", "status": "in_progress"}])]
+        ui = T.new_ui(
+            colony="lead-01", seat="impl-1", seat_text="pane-line-1\npane-line-2"
+        )
+        snap = dict(
+            SNAP,
+            seats=[
+                dict(
+                    SNAP["seats"][1],
+                    open_items=[
+                        {
+                            "id": "t9",
+                            "title": "Build the panel",
+                            "status": "in_progress",
+                        }
+                    ],
+                )
+            ],
         )
         f = "\n".join(T.render(snap, ui, self.W, self.H))
         for s in (
@@ -975,12 +1119,30 @@ class Wall(unittest.TestCase):
     W, H = 140, 48
 
     def ui(self, **kw):
-        return T.new_ui(colony="lead-01", tab="wall", wall_text={"ex-1": "wall-out-1\nwall-out-2"}, **kw)
+        return T.new_ui(
+            colony="lead-01",
+            tab="wall",
+            wall_text={"ex-1": "wall-out-1\nwall-out-2"},
+            **kw,
+        )
 
     def snap_with_lead(self):
-        lead = seat("lead-abc123", "lead", "omp", "working", target="", lead=True, address="lead-abc123@lead-01")
-        snap = {**SNAP, "seats": SNAP["seats"] + [lead]}
-        snap["colonies"][0]["pods"] = snap["colonies"][0]["pods"] + [{"id": "lead", "seats": ["lead-abc123"]}]
+        lead = seat(
+            "lead-abc123",
+            "lead",
+            "omp",
+            "working",
+            target="",
+            lead=True,
+            address="lead-abc123@lead-01",
+        )
+        snap = {
+            **copy.deepcopy(SNAP),
+            "seats": SNAP["seats"] + [lead],
+        }  # deepcopy: colonies is mutated below
+        snap["colonies"][0]["pods"] = snap["colonies"][0]["pods"] + [
+            {"id": "lead", "seats": ["lead-abc123"]}
+        ]
         return snap
 
     def test_wall_renders_tiles_and_footer(self):
@@ -1012,16 +1174,22 @@ class Wall(unittest.TestCase):
         self.assertEqual(ui["seat"], "ex-1")
         ui = self.ui(focus="pane")
         hits = T.hitmap(SNAP, ui, self.W, self.H)
-        r, x0, _x1, a = next(h for h in hits if h[3][0] == "walltile" and h[3][2] == "impl-1")
+        r, x0, _x1, a = next(
+            h for h in hits if h[3][0] == "walltile" and h[3][2] == "impl-1"
+        )
         T.handle_click(SNAP, ui, hits, x0 + 3, r)
         self.assertEqual((ui["row"], ui["seat"]), (a[1], "impl-1"))
 
     def test_wall_read_cadence_uses_model_once_per_refresh(self):
-        m = mock.Mock(capture=mock.Mock(return_value="cap"), transcript_tail=mock.Mock(return_value=["tail"]))
+        m = mock.Mock(
+            capture=mock.Mock(return_value="cap"),
+            transcript_tail=mock.Mock(return_value=["tail"]),
+        )
         ui = self.ui(focus="pane")
         snap = self.snap_with_lead()
         snap["seats"] = [
-            s if s["name"] != "impl-2" else dict(s, transcript="/t.jsonl") for s in snap["seats"]
+            s if s["name"] != "impl-2" else dict(s, transcript="/t.jsonl")
+            for s in snap["seats"]
         ]
         T.refresh_wall(snap, ui, m)
         self.assertEqual(ui["wall_text"]["ex-1"], "cap")
@@ -1035,7 +1203,11 @@ class Terminals(unittest.TestCase):
     W, H = 140, 40
 
     def snap_nonatlas(self):
-        return dict(SNAP, terminals=SNAP["terminals"] + [{"session": "work", "windows": 1, "panes": 1, "attached": 0}])
+        return dict(
+            SNAP,
+            terminals=SNAP["terminals"]
+            + [{"session": "work", "windows": 1, "panes": 1, "attached": 0}],
+        )
 
     def test_rows_show_seat_names(self):
         f = "\n".join(T.render(SNAP, T.new_ui(section="terminals"), self.W, self.H))
@@ -1047,7 +1219,9 @@ class Terminals(unittest.TestCase):
         self.assertEqual(T.handle_key(SNAP, ui, "enter"), ("attach", "atlas-lead-01"))
         hits = T.hitmap(SNAP, ui, self.W, self.H)
         r, x0, _x1, a = next(h for h in hits if h[3][0] == "termsess")
-        self.assertEqual(T.handle_click(SNAP, ui, hits, x0 + 2, r), ("attach", "atlas-lead-01"))
+        self.assertEqual(
+            T.handle_click(SNAP, ui, hits, x0 + 2, r), ("attach", "atlas-lead-01")
+        )
 
     def test_kill_gate_confirms_and_refuses(self):
         ui = T.new_ui(section="terminals", focus="pane")
@@ -1055,7 +1229,12 @@ class Terminals(unittest.TestCase):
         self.assertEqual((ui["mode"], ui["confirm_sess"]), ("confirm", "atlas-lead-01"))
         self.assertEqual(T.handle_key(SNAP, ui, "y"), ("kill", "atlas-lead-01"))
         # atlas-tui is refused outright
-        snap = dict(SNAP, terminals=[{"session": "atlas-tui", "windows": 1, "panes": 1, "attached": 1}])
+        snap = dict(
+            SNAP,
+            terminals=[
+                {"session": "atlas-tui", "windows": 1, "panes": 1, "attached": 1}
+            ],
+        )
         ui = T.new_ui(section="terminals", focus="pane")
         self.assertIsNone(T.handle_key(snap, ui, "x"))
         self.assertIn("refusing to kill atlas-tui", ui["status"])
@@ -1067,20 +1246,138 @@ class Terminals(unittest.TestCase):
         self.assertIsNone(ui["confirm_sess"])
 
     def test_own_session_refused(self):
-        with mock.patch.dict(T.os.environ, {"TMUX": "sock,1,0"}), mock.patch.object(
-            T, "_run_tmux", return_value=mock.Mock(returncode=0, stdout="atlas-lead-01\n")
+        with (
+            mock.patch.dict(T.os.environ, {"TMUX": "sock,1,0"}),
+            mock.patch.object(
+                T,
+                "_run_tmux",
+                return_value=mock.Mock(returncode=0, stdout="atlas-lead-01\n"),
+            ),
         ):
-            self.assertEqual(T._kill_refusal("atlas-lead-01", T.os.environ), "refusing to kill atlas-lead-01: this TUI runs there")
+            self.assertEqual(
+                T._kill_refusal("atlas-lead-01", T.os.environ),
+                "refusing to kill atlas-lead-01: this TUI runs there",
+            )
             self.assertEqual(T._kill_refusal("atlas-other", T.os.environ), "")
         self.assertEqual(T._kill_refusal("atlas-other", {}), "")
 
     def test_attach_target_runs_setup_argv_cleanup(self):
         m = mock.Mock()
-        m.attach_argv.return_value = ([["tmux", "new-session"]], ["tmux", "attach", "-t", "v"])
+        m.attach_argv.return_value = (
+            [["tmux", "new-session"]],
+            ["tmux", "attach", "-t", "v"],
+        )
         with mock.patch.object(T.subprocess, "run") as run:
+            run.return_value.returncode = 0
             self.assertEqual(T.attach_target("atlas-lead-01", m), "")
-        self.assertEqual([c.args[0][:2] for c in run.call_args_list], [["tmux", "new-session"], ["tmux", "attach"]])
+        self.assertEqual(
+            [c.args[0][:2] for c in run.call_args_list],
+            [["tmux", "new-session"], ["tmux", "attach"]],
+        )
         m.cleanup_view.assert_called_once()
+
+
+class ColonySection(unittest.TestCase):
+    """S3: the default colony workspace (SESSIONS region plus CHANNEL/PEEK/STEER stubs) at both layouts."""
+
+    def setUp(self):
+        import json
+
+        fx = Path(__file__).resolve().parent / "fixtures" / "colony_snap.json"
+        self.snap = T.normalize_snapshot(json.loads(fx.read_text()))
+
+    def _once(self, *extra):
+        fx = Path(__file__).resolve().parent / "fixtures" / "colony_snap.json"
+        r = subprocess.run(
+            [
+                sys.executable,
+                str(Path(T.__file__)),
+                "--once",
+                "--fixture",
+                str(fx),
+                *extra,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,
+        )
+        return r.stdout
+
+    def test_default_section_is_colony_and_branded(self):
+        out = self._once("--width", "100", "--height", "30")
+        self.assertIn("ATLAS COLONY", out)
+        self.assertIn("6 colonies 16 seats", out)
+        self.assertEqual(T.SECTIONS[-1], "colony")
+
+    def test_every_sessions_row_has_a_hit_that_selects_it(self):
+        rows = T.sessions_rows(self.snap)
+        kinds = [r[1] for r in rows]
+        self.assertEqual(kinds.count("colony"), 6)
+        self.assertEqual(kinds.count("seat"), 16)
+        self.assertEqual(kinds.count("orphan"), 1)
+        for i, (_t, kind, key) in enumerate(rows):
+            with self.subTest(row=i, kind=kind, key=key):
+                ui = T.new_ui(section="colony")
+                hits = T.hitmap(self.snap, ui, 100, 30)
+                hit = next(h for h in hits if h[3] == ("srow", i))
+                self.assertEqual(T.hit_at(hits, 2, hit[0]), ("srow", i))
+                eff = T.handle_click(self.snap, ui, hits, 2, hit[0])
+                if kind == "colony":
+                    self.assertEqual(ui["colony"], key)
+                elif kind == "seat":
+                    self.assertEqual(ui["seat"], key)
+                else:
+                    self.assertEqual(eff, ("attach", key))
+
+    def test_frame_has_needs_and_steer_titles_at_100x30(self):
+        f = "\n".join(T.render(self.snap, T.new_ui(section="colony"), 100, 30))
+        for want in (
+            "SESSIONS",
+            "CHANNEL",
+            "PEEK",
+            "STEER",
+            "NEEDS 1",
+            "atlas-orphan-9",
+        ):
+            self.assertIn(want, f)
+        self.assertEqual(
+            len(T.render(self.snap, T.new_ui(section="colony"), 100, 30)), 30
+        )
+
+    def test_stacked_60x18_titles_and_zoom(self):
+        def titles(region):
+            ui = T.new_ui(section="colony", region=region)
+            lines = T.render(self.snap, ui, 60, 18)
+            self.assertEqual(len(lines), 18)
+            self.assertTrue(all(len(x) <= 60 for x in lines))
+            return lines
+
+        lines = titles("channel")
+        f = "\n".join(lines)
+        for want in ("SESSIONS", "CHANNEL", "STEER"):
+            self.assertIn(want, f)
+        # focused region gets more rows than the others
+        idx = [i for i, x in enumerate(lines) if x.startswith("━")]
+        sizes = {lines[a][:12].strip("━ {}"): b - a for a, b in zip(idx, idx[1:])}
+        ch = next(v for k, v in sizes.items() if k.startswith("CHANNEL"))
+        se = next(v for k, v in sizes.items() if k.startswith("SESSIONS"))
+        self.assertGreater(ch, se)
+
+    def test_W_returns_to_colony_from_topology(self):
+        ui = T.new_ui(section="topology", colony="lead-01")
+        T.handle_key(self.snap, ui, "W")
+        self.assertEqual(ui["section"], "colony")
+        self.assertIsNone(ui["seat"])
+
+    def test_region_focus_and_tab_cycle(self):
+        ui = T.new_ui(section="colony")
+        T.handle_key(self.snap, ui, "3")
+        self.assertEqual(ui["region"], "steer")
+        T.handle_key(self.snap, ui, "tab")
+        self.assertEqual(ui["region"], "sessions")
+        T.handle_key(self.snap, ui, "up")  # wraps from the first row to the last
+        self.assertEqual(ui["srow"], len(T.sessions_rows(self.snap)) - 1)
 
 
 if __name__ == "__main__":
@@ -1125,54 +1422,448 @@ class Effects(unittest.TestCase):
             return eff
 
         args = mock.Mock(project="/p", all=False)
-        with mock.patch.multiple(
-            curses, curs_set=mock.DEFAULT, start_color=mock.DEFAULT, use_default_colors=mock.DEFAULT
-        ), mock.patch.object(T, "_model", return_value=model), mock.patch.object(
-            T, "handle_key", side_effect=handle_key
-        ), self.assertRaises(Done):
+        with (
+            mock.patch.multiple(
+                curses,
+                curs_set=mock.DEFAULT,
+                start_color=mock.DEFAULT,
+                use_default_colors=mock.DEFAULT,
+            ),
+            mock.patch.object(T, "_model", return_value=model),
+            mock.patch.object(T, "handle_key", side_effect=handle_key),
+            self.assertRaises(Done),
+        ):
             T.loop(scr, args)
         return frames
 
     def test_stop_targets_the_seat_project(self):
-        snap = dict(SNAP, seats=[seat("ex-1", "explorer", "claude", "working", project="/other")])
-        with mock.patch("atlas_dash_colony.kill_member", return_value=(200, {"ok": True})) as km:
+        snap = dict(
+            SNAP,
+            seats=[seat("ex-1", "explorer", "claude", "working", project="/other")],
+        )
+        with mock.patch(
+            "atlas_dash_colony.kill_member", return_value=(200, {"ok": True})
+        ) as km:
             self._drive([("stop", "ex-1")], snap)
         km.assert_called_once_with("/other", "ex-1")
 
     def test_stop_falls_back_to_the_watched_root_without_seat_project(self):
-        with mock.patch("atlas_dash_colony.kill_member", return_value=(200, {"ok": True})) as km:
+        with mock.patch(
+            "atlas_dash_colony.kill_member", return_value=(200, {"ok": True})
+        ) as km:
             self._drive([("stop", "ex-1")], SNAP)
         km.assert_called_once_with("/p", "ex-1")
 
     def test_send_targets_the_seat_project(self):
-        snap = dict(SNAP, seats=[seat("ex-1", "explorer", "claude", "working", project="/other")])
+        snap = dict(
+            SNAP,
+            seats=[seat("ex-1", "explorer", "claude", "working", project="/other")],
+        )
         todo = mock.Mock()
         with mock.patch.dict(sys.modules, {"atlas_todo": todo}):
             self._drive([("send", "ex-1", "hi")], snap)
         todo.note.assert_called_once_with("/other", "tui", "hi", to="ex-1")
 
     def test_broadcast_targets_the_colony_project(self):
-        snap = dict(SNAP, colonies=[dict(SNAP["colonies"][0], project="/other"), SNAP["colonies"][1]])
+        snap = dict(
+            SNAP,
+            colonies=[dict(SNAP["colonies"][0], project="/other"), SNAP["colonies"][1]],
+        )
         todo = mock.Mock()
         with mock.patch.dict(sys.modules, {"atlas_todo": todo}):
             self._drive([("broadcast", "stand down")], snap)
-        todo.note.assert_called_once_with("/other", "tui", "stand down", to="all", channel="ch1")
+        todo.note.assert_called_once_with(
+            "/other", "tui", "stand down", to="all", channel="ch1"
+        )
 
     def test_failed_snapshot_shows_the_error_frame(self):
-        model = mock.Mock(snapshot=mock.Mock(side_effect=RuntimeError("boom: registry unreadable")))
+        model = mock.Mock(
+            snapshot=mock.Mock(side_effect=RuntimeError("boom: registry unreadable"))
+        )
         frames = self._drive([], marker="SNAPSHOT ERROR", model=model)
-        self.assertTrue(any("SNAPSHOT ERROR" in f and "boom: registry unreadable" in f for f in frames))
+        self.assertTrue(
+            any(
+                "SNAPSHOT ERROR" in f and "boom: registry unreadable" in f
+                for f in frames
+            )
+        )
         # The loop frame renders at 120 cols, whose right pane fits ~86 chars (_fit truncates);
         # the exact diagnose command exceeds that on long checkouts. Its content is pinned at a
         # fitting width by test_snapshot_error_frame_renders; here the frame carries the section.
         self.assertTrue(any("Diagnose:" in f for f in frames))
 
     def test_snapshot_error_frame_renders(self):
-        text = "\n".join(T.render({"error": "boom: registry unreadable", "root": "/p"}, T.new_ui(), 200, 30))
+        text = "\n".join(
+            T.render(
+                {"error": "boom: registry unreadable", "root": "/p"},
+                T.new_ui(),
+                200,
+                30,
+            )
+        )
         self.assertIn("SNAPSHOT ERROR", text)
         self.assertIn("boom: registry unreadable", text)
         self.assertIn(f"python3 {T.HERE / 'atlas_colony_model.py'} --root /p", text)
 
 
+class SteerRegion(unittest.TestCase):
+    """S5: STEER input mode, @target retargeting, hold/release, stop gate."""
+
+    def setUp(self):
+        self.snap = copy.deepcopy(
+            dict(
+                SNAP,
+                seats=SNAP["seats"]
+                + [seat("lead", "lead", "claude", "working", lead=True)],
+            )
+        )
+        self.ui = T.new_ui(section="colony", colony="lead-01")
+
+    def _type(self, text, enter=True):
+        eff = None
+        for ch in text:
+            eff = T.handle_key(self.snap, self.ui, ch)
+        return T.handle_key(self.snap, self.ui, "enter") if enter else eff
+
+    def _run(self, eff):
+        todo = mock.Mock()
+        with mock.patch.dict(sys.modules, {"atlas_todo": todo}):
+            T.do_steer(self.snap, self.ui, eff, "/p")
+        return todo
+
+    def test_seat_message(self):
+        self.ui["seat"] = "impl-1"
+        T.handle_key(self.snap, self.ui, "i")
+        eff = self._type("hello")
+        todo = self._run(eff)
+        todo.note.assert_called_once_with(
+            "/p", "tui", "hello", to="impl-1", channel="ch1", kind="steer"
+        )
+        self.assertEqual(self.ui["steer_text"], "")
+        self.assertEqual(self.ui["chat_scroll"], 0)
+
+    def test_at_all(self):
+        T.handle_key(self.snap, self.ui, "i")
+        todo = self._run(self._type("@all hi"))
+        todo.note.assert_called_once_with(
+            "/p", "tui", "hi", to="all", channel="ch1", kind="steer"
+        )
+
+    def test_at_lead_hint(self):
+        T.handle_key(self.snap, self.ui, "l")
+        self.assertEqual(self.ui["steer_text"], "@lead ")
+        todo = self._run(self._type("hi"))
+        todo.note.assert_called_once_with(
+            "/p", "tui", "hi", to="lead", channel="ch1", kind="steer"
+        )
+        self.assertIn("lead reads the board at its next turn", self.ui["status"])
+
+    def test_b_prefills_all(self):
+        T.handle_key(self.snap, self.ui, "b")
+        self.assertEqual(self.ui["steer_text"], "@all ")
+
+    def test_held_seat_refused(self):
+        self.snap["seats"][1]["held"] = True
+        self.ui["seat"] = "impl-1"
+        T.handle_key(self.snap, self.ui, "i")
+        eff = self._type("hello")
+        self.assertIsNone(eff)
+        self.assertIn("impl-1 is held; h to release", self.ui["status"])
+
+    def test_hold_then_release(self):
+        self.ui["seat"] = "impl-1"
+        dash = mock.Mock()
+        dash.hold_member.return_value = (200, {"ok": True})
+        dash.release_member.return_value = (200, {"ok": True})
+        with mock.patch.dict(sys.modules, {"atlas_dash_colony": dash}):
+            eff = T.handle_key(self.snap, self.ui, "h")
+            T.do_hold(self.snap, self.ui, eff, "/p")
+            dash.hold_member.assert_called_once_with("/p", "lead-01", "impl-1")
+            self.snap["seats"][1]["held"] = True
+            eff = T.handle_key(self.snap, self.ui, "h")
+            T.do_hold(self.snap, self.ui, eff, "/p")
+            dash.release_member.assert_called_once_with("/p", "lead-01", "impl-1")
+
+    def test_hold_lead_shows_409(self):
+        self.ui["seat"] = "lead"
+        dash = mock.Mock()
+        dash.hold_member.return_value = (409, {"error": "lead cannot be held"})
+        with mock.patch.dict(sys.modules, {"atlas_dash_colony": dash}):
+            T.do_hold(self.snap, self.ui, T.handle_key(self.snap, self.ui, "h"), "/p")
+        self.assertIn("lead cannot be held", self.ui["status"])
+
+    def test_x_still_gated(self):
+        self.ui["seat"] = "impl-1"
+        self.assertIsNone(T.handle_key(self.snap, self.ui, "x"))
+        self.assertEqual(self.ui["mode"], "confirm")
+        self.assertEqual(T.handle_key(self.snap, self.ui, "y"), ("stop", "impl-1"))
+
+    def test_esc_cancels(self):
+        T.handle_key(self.snap, self.ui, "i")
+        T.handle_key(self.snap, self.ui, "a")
+        T.handle_key(self.snap, self.ui, "esc")
+        self.assertEqual(self.ui["steer_text"], "")
+        self.assertNotEqual(self.ui.get("mode"), "steer")
+
+    def test_render_rows(self):
+        self.ui.update(seat="impl-1", region="steer")
+        T.handle_key(self.snap, self.ui, "i")
+        T.handle_key(self.snap, self.ui, "a")
+        out = "\n".join(T.render(self.snap, self.ui, 100, 30))
+        self.assertIn("STEER -> impl-1", out)
+        self.assertIn("say to impl-1 > a_", out)
+        self.assertNotIn("pause", out.lower())
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class DegradedSnapshot(unittest.TestCase):
+    """B1: a snapshot with missing/None fields and an unknown tab must not crash render/hitmap."""
+
+    def _snap(self):
+        s = copy.deepcopy(SNAP)
+        nameless = seat("x", "implementer", "omp", "idle")
+        del nameless["name"]
+        nulls = seat(
+            "y-1",
+            "implementer",
+            "omp",
+            "working",
+            description=None,
+            channels=None,
+            session=None,
+        )
+        nulls.update(state=None, now=None, work=None, model=None)
+        s["seats"] += [nameless, nulls]
+        s["specs"].append({"kind": "agent", "name": None, "description": None})
+        s["projects"].append({"root": None, "name": None, "channels": None})
+        s["terminals"].append(
+            {"session": None, "windows": None, "panes": None, "attached": None}
+        )
+        return getattr(T, "normalize_snapshot", lambda x: x)(s)
+
+    def test_render_hitmap_all_tabs_and_sections(self):
+        snap = self._snap()
+        for w, h in ((100, 30), (60, 18)):
+            ui_list = [T.new_ui(section=sec) for sec in T.SECTIONS]
+            for tab in list(T.TABS) + ["bogus"]:
+                ui = T.new_ui()
+                ui.update(colony="lead-01", tab=tab)
+                ui_list.append(ui)
+            for ui in ui_list:
+                with self.subTest(w=w, h=h, section=ui["section"], tab=ui["tab"]):
+                    self.assertEqual(len(T.render(snap, ui, w, h)), h)
+                    T.hitmap(snap, ui, w, h)
+
+    def test_body_height_agrees(self):
+        for h in (18, 30, 40):
+            self.assertEqual(
+                T.body_height(h), len(T.render(SNAP, T.new_ui(), 100, h)) - 5
+            )
+
+    def test_bridge_seq_strips_separators(self):
+        seq = T.bridge_seq("a;b\x07", "c\x1bd;e")
+        self.assertEqual(seq, "\x1b]7717;open;ab;cde\x07")
+
+    def test_attach_target_returns_rc(self):
+        m = mock.Mock()
+        m.attach_argv.return_value = ([], ["false"])
+        with mock.patch.object(T.subprocess, "run") as run:
+            run.return_value.returncode = 3
+            self.assertEqual(T.attach_target("%1", m), "attach failed (rc 3)")
+            run.return_value.returncode = 0
+            self.assertEqual(T.attach_target("%1", m), "")
+
+
+class ChannelRegion(unittest.TestCase):
+    """S4: the CHANNEL region is a real IRC view (ordering, tags, clip, filter, NEEDS, tail-follow)."""
+
+    def setUp(self):
+        import json
+
+        fx = Path(__file__).resolve().parent / "fixtures" / "colony_snap.json"
+        self.snap = T.normalize_snapshot(json.loads(fx.read_text()))
+        self.cid = T._colonies(self.snap)[0]["id"]
+        self.ch = T._find_colony(self.snap, self.cid)["channel"]
+        self.snap["chat"][self.ch].append(
+            {
+                "seq": 99,
+                "ts": 1792181100,
+                "from": "tui",
+                "to": "w1",
+                "kind": "steer",
+                "text": "x" * 120,
+                "lead": False,
+            }
+        )
+        self.ui = T.new_ui(section="colony", colony=self.cid)
+
+    def test_order_newest_last_and_tags(self):
+        ls = T.chat_lines(self.snap, self.ui, 65, 20)
+        self.assertTrue(ls[0].startswith("NEEDS"))
+        body = ls[1:]
+        self.assertIn("ch1 msg 0", body[0])
+        self.assertIn("(you)", body[-1])
+        self.assertTrue(any("lead (lead) >" in x for x in body))
+
+    def test_clip_widths(self):
+        for w in (65, 36):
+            self.assertTrue(
+                all(len(x) <= w for x in T.chat_lines(self.snap, self.ui, w, 20))
+            )
+
+    def test_filter_by_seat(self):
+        self.ui["chat_filter"] = "w2"
+        body = T.chat_lines(self.snap, self.ui, 65, 20)[1:]
+        self.assertTrue(body)
+        self.assertTrue(all(" w2" in x or "> all" in x for x in body))
+        self.assertNotIn("ch1 msg 1", "".join(body))
+
+    def test_f_key_toggles_filter(self):
+        self.ui.update(seat="w1", region="channel")
+        T._colony_key(self.snap, self.ui, "f")
+        self.assertEqual(self.ui["chat_filter"], "w1")
+        T._colony_key(self.snap, self.ui, "f")
+        self.assertIsNone(self.ui["chat_filter"])
+
+    def test_scrolled_up_shows_new_badge_and_end_clears(self):
+        self.ui["region"] = "channel"
+        T.chat_lines(self.snap, self.ui, 65, 4)
+        self.assertNotIn("new", T._chat_title(self.snap, self.ui, self.cid))
+        T._colony_key(self.snap, self.ui, "pgup")
+        self.snap["chat"][self.ch].append(
+            {
+                "seq": 100,
+                "ts": 1792181101,
+                "from": "w1",
+                "to": "all",
+                "kind": "note",
+                "text": "late",
+                "lead": False,
+            }
+        )
+        T.chat_lines(self.snap, self.ui, 65, 4)
+        self.assertIn("1 new", T._chat_title(self.snap, self.ui, self.cid))
+        T._colony_key(self.snap, self.ui, "end")
+        T.chat_lines(self.snap, self.ui, 65, 4)
+        self.assertNotIn("new", T._chat_title(self.snap, self.ui, self.cid))
+
+    def test_frames_render_in_both_layouts(self):
+        for w, h in ((100, 30), (60, 18)):
+            self.assertEqual(len(T.render(self.snap, self.ui, w, h)), h)
+
+
+class KeymapContract(unittest.TestCase):
+    """S6: KEYMAP is the one declared key contract; dispatch, help and the click targets agree with it."""
+
+    def setUp(self):
+        import json
+
+        fx = Path(__file__).resolve().parent / "fixtures" / "colony_snap.json"
+        self.snap = T.normalize_snapshot(json.loads(fx.read_text()))
+        self.cid = T._colonies(self.snap)[0]["id"]
+
+    def _keys(self, mode):
+        out = []
+        for ks, _act, _h in T.KEYMAP[mode]:
+            out += [ks] if isinstance(ks, str) else list(ks)
+        return out
+
+    def test_no_key_bound_twice_within_a_mode(self):
+        for mode in T.KEYMAP:
+            ks = self._keys(mode)
+            self.assertEqual(len(ks), len(set(ks)), f"duplicate key in {mode}: {sorted(k for k in ks if ks.count(k) > 1)}")
+
+    def test_every_help_text_is_in_help_lines(self):
+        text = "\n".join(T._help_lines(T.new_ui()))
+        for mode, rows in T.KEYMAP.items():
+            for _k, _a, h in rows:
+                self.assertIn(h, text, f"{mode}: {h!r} missing from help")
+
+    def test_help_names_the_required_keys(self):
+        text = "\n".join(T._help_lines(T.new_ui()))
+        for tok in ("W", "1/2/3", "Tab", "i ", "b ", "l ", "m ", "h ", "f ", "x ", "t ", "v ", "Home/End"):
+            self.assertIn(tok, text)
+
+    def _ui(self, **kw):
+        ui = T.new_ui(section="colony", colony=self.cid, seat="impl-1")
+        ui.update(kw)
+        return ui
+
+    def test_each_colony_key_has_its_effect(self):
+        S = self.snap
+        rows = {
+            "1": lambda u, e: self.assertEqual(u["region"], "sessions"),
+            "2": lambda u, e: self.assertEqual(u["region"], "channel"),
+            "3": lambda u, e: self.assertEqual(u["region"], "steer"),
+            "tab": lambda u, e: self.assertEqual(u["region"], "channel"),
+            "up": lambda u, e: self.assertNotEqual(u["srow"], 0),  # wraps to the last row
+            "down": lambda u, e: self.assertEqual(u["srow"], 1),
+            "pgup": lambda u, e: self.assertEqual(u["srow"], 0),
+            "pgdn": lambda u, e: self.assertEqual(u["srow"], min(10, len(T.sessions_rows(S)) - 1)),
+            "enter": lambda u, e: self.assertIsNone(u["seat"]),  # row 0 is a colony row
+            "left": lambda u, e: self.assertIsNone(e),
+            "right": lambda u, e: self.assertIsNone(e),
+            "home": lambda u, e: self.assertGreater(u["chat_scroll"], 0),
+            "end": lambda u, e: self.assertEqual(u["chat_scroll"], 0),
+            "i": lambda u, e: self.assertEqual((u["mode"], u["steer_text"]), ("steer", "")),
+            "m": lambda u, e: self.assertEqual((u["mode"], u["steer_text"]), ("steer", "")),
+            "b": lambda u, e: self.assertEqual((u["mode"], u["steer_text"]), ("steer", "@all ")),
+            "l": lambda u, e: self.assertEqual((u["mode"], u["steer_text"]), ("steer", "@lead ")),
+            "h": lambda u, e: self.assertEqual(e[:2], ("hold", "impl-1")),
+            "f": lambda u, e: self.assertEqual(u["chat_filter"], "impl-1"),
+            "v": lambda u, e: self.assertEqual(u["seat"], "impl-1"),
+        }
+        self.assertEqual(set(rows), set(self._keys("colony")), "add a row here for every KEYMAP colony key")
+        for key, check in rows.items():
+            ui = self._ui(region="channel" if key in ("home", "end") else "sessions")
+            if key == "tab":
+                ui["region"] = "sessions"
+            if key == "end":
+                ui["chat_scroll"] = 5
+            if key in ("pgup",):
+                ui["srow"] = 2
+            with self.subTest(key=key):
+                check(ui, T.handle_key(S, ui, key))
+
+    def test_hold_release_and_at_hints_are_clickable(self):
+        ui = self._ui(region="steer")
+        hits = T.hitmap(self.snap, ui, 100, 30)
+        for label, want in (("hold", "hold"), ("@all", "@all"), ("@lead", "@lead")):
+            r = [h for h in hits if h[3][:2] == ("button", label)]
+            self.assertTrue(r, f"no rect for {label}")
+            row, x0, _x1, _a = r[0]
+            self.assertEqual(T.hit_at(hits, x0, row)[1], want)
+        row, x0, _x1, _a = next(h for h in hits if h[3][:2] == ("button", "@all"))
+        T.handle_click(self.snap, ui, hits, x0, row)
+        self.assertEqual((ui["mode"], ui["steer_text"]), ("steer", "@all "))
+        row, x0, _x1, _a = next(h for h in hits if h[3][:2] == ("button", "hold"))
+        eff = T.handle_click(self.snap, self.ui_fresh(), hits, x0, row)
+        self.assertEqual(eff[:2], ("hold", "impl-1"))
+
+    def ui_fresh(self):
+        return self._ui(region="steer")
+
+    def test_wheel_over_channel_scrolls_it(self):
+        ui = self._ui(region="sessions")
+        hits = T.hitmap(self.snap, ui, 100, 30)
+        row, x0, _x1, _a = next(h for h in hits if h[3][0] == "chan")
+        T.wheel(self.snap, ui, hits, x0, row, -1)
+        self.assertGreater(ui["chat_scroll"], 0)
+        T.wheel(self.snap, ui, hits, x0, row, 1)
+        self.assertEqual(ui["chat_scroll"], 0)
+
+    def test_wheel_over_sessions_moves_selection(self):
+        ui = self._ui()
+        hits = T.hitmap(self.snap, ui, 100, 30)
+        row, x0, _x1, _a = next(h for h in hits if h[3][0] == "srow")
+        T.wheel(self.snap, ui, hits, x0, row, 1)
+        self.assertEqual(ui["srow"], 1)
+
+    def test_stacked_60x18_shows_chat_rows(self):
+        import test_colony_golden as G
+
+        chat = [x for x in G.frame(60, 18).splitlines() if re.match(r"\d\d:\d\d \S+", x)]
+        self.assertGreaterEqual(len(chat), 2, chat)

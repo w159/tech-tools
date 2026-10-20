@@ -1071,6 +1071,15 @@ def cmd_spawn(args) -> int:
     # Lead side: this process runs in the lead's env, so the worker joins the lead's channel
     # here; a worker never registers itself (an inherited env grants no membership).
     chan = atlas_todo.register_member(root, args.name)
+    try:
+        return _spawn_registered(args, root, chan)
+    except BaseException:
+        # Any raise between register and a live pane (_open_window, atlas_seats, ...) would strand a pane-less member.
+        atlas_todo.leave(root, chan, args.name)
+        raise
+
+
+def _spawn_registered(args, root: str, chan) -> int:
     session = _session(args.run)
     model, level, _, tier_error = _tier(
         args.harness,

@@ -5,6 +5,8 @@ name: "docs-curator"
 description: "Post-ship maintainer of the canonical atlas project structure (docs-ssot.md). Writes only docs/**, durable .atlas/ subfolders, root entry files (README.md, AGENTS.md, CLAUDE.md), and .gitignore; never edits source code. Moves verified ROADMAP items to CHANGELOG, distills findings into the .atlas/findings/ ledger, maintains docs/wiki/. Use when a shipped change needs docs updated or the structure repaired."
 thinkingLevel: "off"
 model: ["@atlas-worker","sonnet","@smol"]
+tier_allow: ["haiku","sonnet"]
+effort_allow: ["low","medium"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

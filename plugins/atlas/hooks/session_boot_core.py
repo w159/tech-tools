@@ -347,10 +347,45 @@ def has_cmd(name):
 # saw no suppression, and current Claude Code docs say force-for-plugin overrides the
 # user setting. Boot re-injects the contract every session as a cheap hedge either way.
 ATLAS_OUTPUT_STYLE = "Atlas Orchestrator"
-_STATUS_GLYPHS = (
+_CONTRACT_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..",
+    "contracts",
+    "operating-contract.json",
+)
+# Fail-open fallbacks, used only when contracts/operating-contract.json is unreadable.
+_FALLBACK_TEMPLATE = "ATLAS | <glyph> <phase> | <state>"
+_FALLBACK_GLYPHS = (
     "research 🔍 | theory 💡 | test 🧪 | validate 📋 | "
     "implement 🔧 | verify ✅ | done 🏁 | blocked ⛔"
 )
+
+
+def _contract():
+    try:
+        with open(_CONTRACT_FILE, encoding="utf-8") as fh:
+            doc = json.load(fh)
+        return doc if isinstance(doc, dict) else {}
+    except Exception:
+        return {}
+
+
+def header_template():
+    """Status-header template from the operating contract (single source)."""
+    t = _contract().get("headerTemplate")
+    return t if isinstance(t, str) and t else _FALLBACK_TEMPLATE
+
+
+def _status_glyphs():
+    phases = [
+        p
+        for p in (_contract().get("phases") or [])
+        if isinstance(p, dict) and p.get("id") and p.get("glyph")
+    ]
+    return " | ".join(f"{p['id']} {p['glyph']}" for p in phases) or _FALLBACK_GLYPHS
+
+
+_STATUS_GLYPHS = _status_glyphs()
 
 
 def read_output_style(settings_path=None):
@@ -376,11 +411,11 @@ def status_contract_lines(active_style=""):
     style = (active_style or "").strip()
     if not style or style == ATLAS_OUTPUT_STYLE:
         return [
-            f"Every substantive reply opens `ATLAS | <glyph> <phase> | <state>` ({_STATUS_GLYPHS})."
+            f"Every substantive reply opens `{header_template()}` ({_STATUS_GLYPHS})."
         ]
     return [
         f"STYLE OVERRIDE: outputStyle is {style!r}, not {ATLAS_OUTPUT_STYLE!r}; it may suppress the atlas style. "
-        f"Every substantive reply opens `ATLAS | <glyph> <phase> | <state>` ({_STATUS_GLYPHS}); "
+        f"Every substantive reply opens `{header_template()}` ({_STATUS_GLYPHS}); "
         "before done re-read the request and show evidence; build only what was named; "
         "without TodoWrite add `LEDGER | n/m | now: ... | left: ...`."
     ]
@@ -934,7 +969,9 @@ def open_lead_channel_once(payload, run=None):
         return None
     import subprocess
 
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+    sys.path.insert(
+        0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+    )
     import atlas_todo
     import worker_inbox
 
@@ -942,7 +979,9 @@ def open_lead_channel_once(payload, run=None):
         return None  # a mux worker's own session must not pose as a lead
     root = atlas_todo.find_root(payload.get("cwd") or os.getcwd())
     if not atlas_todo.lead_channel_allowed(root):
-        return None  # only an existing atlas board; never create channels state elsewhere
+        return (
+            None  # only an existing atlas board; never create channels state elsewhere
+        )
     (run or subprocess.run)(
         [
             sys.executable,

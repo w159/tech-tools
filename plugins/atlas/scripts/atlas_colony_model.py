@@ -39,6 +39,10 @@ NOW_MAX = 120
 FINISHED_GRACE_S = 300  # a colony whose seats all exited stays listed (finished) this long
 TEAM_GRACE_S = 180  # a just-spawned team record is listed this long while its panes come up
 OPEN = ("pending", "in_progress")
+# A lead channel with no lead_pid (in-process Claude Code subagents) is live while its registry
+# last_activity is this fresh.
+LIVE_WINDOW_S = int(os.environ.get("ATLAS_COLONY_LIVE_WINDOW") or 1800)
+WORKING_S = 120  # a board note this fresh marks a pane-less seat working
 TMUX_TIMEOUT = 5
 HARNESSES = ("claude", "omp", "codex")
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
@@ -700,6 +704,26 @@ def _tail_notes(path: Path) -> list[dict]:
     return recs
 
 
+CHAT_MAX = 100  # notes kept per channel in snapshot["chat"]
+_WAVE: dict = {}  # wave file path -> ((mtime_ns, size), held member names)
+
+
+def _held(root: str) -> set:
+    """Members with a hold (the `paused` flag in colony_wave.json, same file atlas_dash_colony writes)."""
+    p = Path(root) / ".atlas" / ".run" / "colony_wave.json"
+    try:
+        st = p.stat()
+        key = (st.st_mtime_ns, st.st_size)
+        if (hit := _WAVE.get(p)) and hit[0] == key:
+            return hit[1]
+        members = json.loads(p.read_text()).get("members") or {}
+        names = {n for n, v in members.items() if isinstance(v, dict) and v.get("paused")}
+    except (OSError, ValueError, AttributeError):
+        return set()
+    _WAVE[p] = (key, names)
+    return names
+
+
 def _board_files(root: str) -> list[tuple[int, Path]]:
     d = atlas_todo.notes_dir(root)
     return [(p.stat().st_mtime_ns, p) for p in d.glob(f"*{atlas_todo.NOTE_FILE_SUFFIX}")]
@@ -886,6 +910,13 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     for name, m in members.items():
         seats.setdefault(name, {"pane": None, "role": m["role"]})
 
+    reg_live = {  # registry-backed colonies: a lead channel with no lead_pid and recent activity
+        cn
+        for cn, c in chan_recs.items()
+        if c.get("kind") == "lead"
+        and _i(c.get("lead_pid")) <= 0
+        and now - _f(c.get("last_activity")) < LIVE_WINDOW_S
+    }
     last_note = {str(n.get("owner")): n for n in notes}
     for name in seats:  # a live seat's last note may sit in a file older than the feed window
         if name not in last_note:
@@ -968,7 +999,19 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                     if exit_code is None and not _i(entry.get("pid"))
                     else 0
                 )
-                if lp > 0:  # in-process subagent: its lead's liveness is the seat's liveness
+                if str(m.get("channel") or "") in reg_live and not _i(entry.get("pid")):
+                    # in-process subagent of a registry-live colony: state comes from its last board note
+                    kind = str((note or {}).get("kind") or "")
+                    if kind in ("done", "handback"):
+                        state, exit_code = "finished", 0
+                    elif kind == "blocked":
+                        state = "blocked"
+                    elif note and now - _f(note.get("ts")) < WORKING_S:
+                        state = "working"
+                    else:
+                        state = "idle"
+                    leadpid_live = True
+                elif lp > 0:  # in-process subagent: its lead's liveness is the seat's liveness
                     leadpid_live = _pid_alive(lp)
                     state = "working" if leadpid_live else "dead"
                 else:
@@ -1043,10 +1086,13 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     for cname, c in chan_recs.items():
         lname = str(c.get("lead") or "")
         lp = _i(c.get("lead_pid"))
-        if not lname or lp <= 0 or not _pid_alive(lp) or lname in seats:
+        if not lname or lname in seats or not (cname in reg_live or (lp > 0 and _pid_alive(lp))):
             continue
         seats[lname] = {"pane": None, "role": "lead"}  # _ended_fallback looks seats up by name
-        cid = str(cname or "colony").rsplit("/", 1)[-1]
+        # merge with a team colony that already carries this channel
+        cid = next((k for k, v in colonies.items() if v.get("channel") == cname), None) or str(
+            cname or "colony"
+        ).rsplit("/", 1)[-1]
         if cid not in colonies:
             colonies[cid] = {
                 "id": cid,
@@ -1083,6 +1129,10 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
             }
         )
         leadpid_live_names.add(lname)
+    for c in colonies.values():
+        if c.get("channel") in reg_live and c["transport"] == "subagent":
+            c["transport"] = "in-process"
+            c["created"] = c.get("created") or chan_recs[c["channel"]].get("created")
     _name_colonies(colonies, teams, chan_recs)
     _address_seats(out_seats, colonies, teams, _static("specs", _specs))
     # Only colonies with work in progress: a live pane that is working/idle/blocked, a team
@@ -1143,6 +1193,32 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         }
         for n in notes[-FEED_MAX:]
     ]
+    # per-channel chat slices from the notes already tailed above (no extra reads)
+    lead_names = {str(c.get("lead") or "") for c in chan_recs.values()} - {""}
+    chat: dict = {}
+    for n in notes:
+        chat.setdefault(str(n.get("channel") or ""), []).append(n)
+    chat = {
+        ch: [
+            {
+                "seq": n.get("seq"),
+                "ts": n.get("ts"),
+                "from": n.get("owner"),
+                "to": n.get("to") or "all",
+                "kind": n.get("kind") or "note",
+                "text": str(n.get("text") or ""),
+                "lead": str(n.get("owner") or "") in lead_names or atlas_todo.is_lead_name(str(n.get("owner") or "")),
+            }
+            for n in sorted(ns, key=lambda n: (_f(n.get("seq")), atlas_todo._note_ts_key(n)))[-CHAT_MAX:]
+        ]
+        for ch, ns in chat.items()
+    }
+    for c in colonies.values():
+        c["seat_count"] = sum(1 for s in out_seats if s["colony"] == c["id"])
+        c["age_s"] = max(0.0, now - _f(c.get("created"))) if c.get("created") else None
+    held = {r: _held(r) for r in {s["project"] for s in out_seats}}
+    for s in out_seats:
+        s["held"] = s["name"] in held[s["project"]]
     return {
         "ok": True,
         "host": socket.gethostname().split(".")[0],
@@ -1150,6 +1226,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         "project": root,
         "colonies": list(colonies.values()),
         "seats": out_seats,
+        "chat": chat,
         "feed": feed,
         "needs": [f for f in feed if f["kind"] == "blocked" or f["to"] == "human"],
         "specs": _static("specs", _specs),

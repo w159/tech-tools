@@ -1044,6 +1044,105 @@ def _inherited_selector(selector, live):
     return with_level(a, b) or with_level(b, a)
 
 
+def _frontmatter_list(agent, key):
+    """Lowercased items of a one-line frontmatter list (`tier_allow: [haiku, sonnet]`); [] when the
+    definition is unreadable or lacks the key (callers fail closed on an empty allow-list)."""
+    if not _SAFE_AGENT_NAME.match(agent or ""):
+        return []
+    try:
+        text = (AGENTS_DIR / f"{agent}.md").read_text(encoding="utf-8")
+    except Exception:
+        return []
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return []
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped.startswith(key + ":"):
+            body = stripped[len(key) + 1 :].strip().strip("[]")
+            return [i.strip().strip("'\"").lower() for i in body.split(",") if i.strip()]
+    return []
+
+
+def _resolver_values(tinput, role, field):
+    """What atlas_resolve emits for `field` ("model" or "effort") on `role`'s seats, across every
+    SCOPE line in the prompt. Empty set when there is no SCOPE line, none resolves, or the
+    resolver cannot be loaded: callers then accept nothing new (fail closed)."""
+    try:
+        resolve, _classes, _known, (class_alias, effort_alias) = _scope_matrix()
+    except Exception as exc:
+        _record_fault(exc)
+        return set()
+    out = set()
+    for cls, effort in _SCOPE_LINE.findall(str(tinput.get("prompt") or "")):
+        try:
+            team = resolve(class_alias.get(cls.lower(), cls), effort_alias.get(effort.lower(), effort))["team"]
+        except ValueError:
+            continue
+        out.update(str(t.get(field) or "").lower() for t in team if t["role"] == role)
+    out.discard("")
+    return out
+
+
+def _tier_accepted(tinput, role, given, field):
+    """True when `given` is in the role's tier_allow/effort_allow AND is what the resolver emits for the
+    prompt's SCOPE line. Both halves are required: the allow-list alone would reopen the drop-the-model hole."""
+    key = "tier_allow" if field == "model" else "effort_allow"
+    given = given.lower()
+    allowed = _frontmatter_list(role, key)
+    emitted = _resolver_values(tinput, role, field)
+    if given not in allowed:
+        return False
+    return given in emitted or (
+        field == "model" and any(_expands_pin(given, e) for e in emitted)
+    )
+
+
+def _tier_hint(tinput, role):
+    """Deny-text tail naming the accepted values for this role and SCOPE."""
+    return (
+        f" For {role} (SCOPE-bound): tier_allow={_frontmatter_list(role, 'tier_allow')}, "
+        f"resolver model={sorted(_resolver_values(tinput, role, 'model')) or 'none (add a SCOPE line)'}; "
+        f"effort_allow={_frontmatter_list(role, 'effort_allow')}, "
+        f"resolver effort={sorted(_resolver_values(tinput, role, 'effort')) or 'none'}."
+    )
+
+
+def _effort_override(tinput):
+    """An atlas:* dispatch whose `effort` is not the definition's and not tier-accepted. Returns
+    (agent, declared, given) or None (no effort arg, unreadable definition, or accepted)."""
+    agent = str(tinput.get("subagent_type") or "")
+    if not agent.startswith("atlas:"):
+        return None
+    given = str(tinput.get("effort") or "").strip()
+    role = agent[len("atlas:") :]
+    declared = _frontmatter_value(role, "effort")
+    if not given or declared is None:
+        return None
+    if given.lower() == declared.lower() or _tier_accepted(tinput, role, given, "effort"):
+        return None
+    return agent, declared, given
+
+
+def _frontmatter_value(agent, key):
+    """Raw frontmatter `key:` value; None when the definition is unreadable."""
+    if not _SAFE_AGENT_NAME.match(agent or ""):
+        return None
+    try:
+        lines = (AGENTS_DIR / f"{agent}.md").read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return None
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped.startswith(key + ":"):
+            return stripped[len(key) + 1 :].strip().strip("'\"")
+    return ""
+
+
 def _model_override(tinput, session_model=""):
     """An atlas:* dispatch whose per-call `model` is NOT the definition's pin.
     Per-role tiers are set once per colony; a per-call override drifts them
@@ -1071,6 +1170,8 @@ def _model_override(tinput, session_model=""):
         if given.lower() == sel or _expands_pin(given, sel):
             return None
     if _inherited_selector(given, session_model):
+        return None
+    if _tier_accepted(tinput, agent[len("atlas:") :], given, "model"):
         return None
     return agent, declared, given
 
@@ -1319,7 +1420,19 @@ def _pre_tool_use(
                 f"definition pins model: {declared}; per-role models are the colony's "
                 "cost/runtime contract and a per-call override drifts it quietly. "
                 "Drop the `model` param and re-dispatch. Wrong tier for the job? "
-                "Fix the definition, not the dispatch.",
+                "Fix the definition, not the dispatch."
+                + _tier_hint(tinput or {}, over_agent[len("atlas:") :]),
+            )
+            return
+        eff = _effort_override(tinput or {})
+        if eff:
+            e_agent, e_declared, e_given = eff
+            deny(
+                "effort_override",
+                f"DENY - this {tool} dispatch to {e_agent} sets effort '{e_given}'; the definition pins "
+                f"effort: {e_declared}. Drop the `effort` param, or pass the value the resolver emits "
+                "for your SCOPE line if it is in the role's effort_allow."
+                + _tier_hint(tinput or {}, e_agent[len("atlas:") :]),
             )
             return
         # (c) A dispatch that never names the toolset gets a subagent that greps.

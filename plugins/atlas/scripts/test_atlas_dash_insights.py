@@ -254,6 +254,7 @@ class TestHealth(InsightsBase):
                 "dispatch",
                 "mux",
                 "dashboard",
+                "reaper",
                 "db",
                 "connectors",
                 "memory",

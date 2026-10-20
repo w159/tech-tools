@@ -2,8 +2,10 @@
 name: naming-glossary-audit
 description: "Read-only audit of PostgreSQL table and column names against a project glossary, focused on a user_* to client_* transition. Use when running the nomenclature half of a database audit."
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
-model: sonnet
+model: haiku
 effort: low
+tier_allow: [haiku, sonnet]
+effort_allow: [low]
 color: orange
 ---
 

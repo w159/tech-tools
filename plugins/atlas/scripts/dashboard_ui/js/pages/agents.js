@@ -2,6 +2,7 @@
 // Board mounts the work page. Colony is its own route (#/colony).
 
 import { h, replace } from "../dom.js";
+import { reportFetchFail, clearFetchFail } from "../fetch-fail.js";
 import { agentsStore, STATES, STATE_WORD } from "../agents-store.js";
 import { AgentCard, AgentTable, nowLine } from "../fleet.js";
 import { Chip, Button, State, DegradedState, toast, toastError } from "../components.js";
@@ -23,8 +24,10 @@ async function loadChans(force) {
     const next = (d && d.channels) || [];
     const key = JSON.stringify(next.map((c) => [c.name, (c.members || []).map((m) => m.name + (m.pane_id || ""))]));
     S.chans = next;
+    clearFetchFail("channels");
     if (key !== S.chansKey) { S.chansKey = key; if (S.lens === "fleet" && !S.destroyed) drawFleet(); }
   } catch (_e) {
+    reportFetchFail("agents", "channels", _e);
     S.chans = []; // fleet still renders: groups fall back to the folder name
   }
 }

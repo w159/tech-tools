@@ -53,13 +53,13 @@ If it feels too small to delegate, delegate anyway.
 2. 2+ workers: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class C --effort E --paths a,b --task "..."` (omp: the `atlas_team` tool), then `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T`.
 3. One bounded worker (e.g. a single read-only lookup) may stay an in-process `atlas:*` Agent call; its prompt carries `SCOPE: <class>/<effort>` and its role must be on that team. The tripwire denies an unscoped or off-team `atlas:*` dispatch (`ATLAS_SCOPE_GATE=off` makes it advisory) and advises spawn-team on a 2nd dispatch within 10 s.
 
-Full laws, decision gate, TodoWrite rules, and mid-run steering: **load `references/laws-and-gates.md`**.
+Up front: delegate every edit, one message for independent agents, writers get isolated worktrees, evidence is the failing case turned green, a different agent verifies. Full laws, TodoWrite rules and mid-run steering: load `references/laws-and-gates.md` on the first dispatch of a run.
 
 ## The loop (load full text when running a wave)
 
 Orient → Plan (+ TodoWrite) → Dispatch (resolve, then tmux team) → Verify (findings.json / test stamp / verifier) → Self-critique → Synthesize → Gate writes → Finish through definition of done. **Implementation-unit discipline** governs every implementer dispatch: idempotency check before redoing a unit, an explicit per-unit evidence strategy (`proof-first` / `characterization` / `no-test-exception`) named in the prompt, independent-unit waves isolated via `atlas-worktree`, and a machine-readable per-unit evidence receipt folded into findings.json. **Parallel implementers work on isolated branches:** lead `atlas_wt.py add <name>` per worker (branch `worker/<name>`, worktree `.atlas/wt/<name>`), a verifier per branch, then `atlas_wt.py merge <name>` one at a time only after the verified finding, tests rerun once on the merged tree (protocol: `references/implementation-units.md`; gate (q) blocks unmerged branches). Full checklists: `references/implementation-units.md`. Each implementer step runs red-green: failing check first, then pass (loop method in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-debug/references/feedback-loop.md`, unit shape in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-plan/references/tracer-slices.md`).
 
-Full loop, fan-out mechanisms, and definition of done: **load `references/the-loop.md`**.
+Up front: each wave is dispatch, verify (findings.json stamp or test run), then the next wave; nothing ships without a verified finding and a docs update. Full loop, fan-out mechanisms and definition of done: load `references/the-loop.md` when running a wave.
 
 Verification doctrine: `references/verification-and-grounding.md`. Stage maps: `references/multi-stage-planning.md`.
 
@@ -73,7 +73,7 @@ If you think "too small," "I'll just read it," "I already tested it," "docs late
 
 ## Squad and cost tiers
 
-Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-and-report. Full tier table + squad list: **load `references/squad-and-tiers.md`**. Routing map: `references/capability-routing.md`. Dispatch template: `references/subagent-kit.md`.
+Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-and-report. Full tier table + squad list: load `references/squad-and-tiers.md` when choosing a tier. Routing map: `references/capability-routing.md`. Dispatch template: `references/subagent-kit.md`.
 
 **Fork** planner / completeness-critic / docs-curator when history helps. **Never fork** verifier or explorer.
 
@@ -135,7 +135,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" mark-orchestrating "${CLAUDE
 
 ## First move
 
-Run **Orient** (recall + roots + manifests + capabilities). Present orientation + plan, **write the todo list**, **wait for go-ahead before any write**. Then load `references/the-loop.md` and execute.
+Run **Orient** (recall + roots + manifests + capabilities). Present orientation + plan, **write the todo list**, **wait for go-ahead before any write**. Then execute; load `references/the-loop.md` when the first wave starts.
 
 **Opening from `atlas-audit` act-on-finding mode (`atlas-audit <id>`):** treat the handoff acceptance criterion as done; still Orient; do not re-derive the finding.
 

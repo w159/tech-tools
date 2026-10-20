@@ -11,6 +11,7 @@ import {
 	STYLE_END,
 	STYLE_PATH,
 	adaptTodoGatingForOmp,
+	headerTemplate,
 	loadStyleBody,
 	loadToolNames,
 	mcpDevice,
@@ -301,4 +302,10 @@ test("a render that failed (unreadable sources) is not frozen: the next turn ret
 	writeFileSync(bad, "---\nname: x\n---\nbody\n");
 	expect(turn()?.systemPrompt?.[1]).toContain("Atlas output style");
 	expect(turn()?.systemPrompt?.length).toBe(2); // now readable: rendered, not stuck on the earlier failure
+});
+
+test("headerTemplate returns the operating-contract template", () => {
+	const doc = JSON.parse(readFileSync(join(import.meta.dir, "..", "contracts", "operating-contract.json"), "utf8"));
+	expect(headerTemplate()).toBe(doc.headerTemplate);
+	expect(headerTemplate("/nonexistent.json")).toContain("<glyph> <phase>");
 });

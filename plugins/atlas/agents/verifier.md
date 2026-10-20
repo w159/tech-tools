@@ -2,7 +2,9 @@
 name: verifier
 description: "Adversarial verifier that independently confirms or REFUTES a claimed finding or fix in a fresh context: re-opens cited lines, re-runs tests, re-queries data, re-reads the diff. Never fixes; returns an evidence-backed verdict. Use when a finding or fix must be checked before it is recorded as verified."
 model: sonnet
-effort: low
+effort: medium
+tier_allow: [sonnet, opus]
+effort_allow: [low, medium, high]
 color: red
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
 ---

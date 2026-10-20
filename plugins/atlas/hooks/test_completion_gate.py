@@ -1058,7 +1058,21 @@ class InProcessMainTest(unittest.TestCase):
         self._init_git_repo()
         self._stage_mixed_diff()
         self._log_dispatches(implementers=2, verifiers=2)
-        rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        # (o) phased todo and (p) colony channel traffic are satisfied explicitly,
+        # so this test isolates (g); markers stay under the temp root.
+        atlas_todo.mirror(
+            self.tmp,
+            [
+                {"content": "[implement] fixture step", "status": "completed"},
+                {"content": "[verify] fixture check", "status": "completed"},
+            ],
+            "sess-orch",
+        )
+        _seed_report_notes(self.tmp)
+        rc, out = self._invoke(
+            {"session_id": "sess-orch", "cwd": self.tmp},
+            env_extra={"ATLAS_CONTRACT_GATE_DIR": os.path.join(self.tmp, "markers")},
+        )
         self.assertEqual(rc, 0)
         self.assertNotIn('"decision": "block"', out)
 
@@ -1087,6 +1101,8 @@ class InProcessMainTest(unittest.TestCase):
         -> (g) is never evaluated."""
         self._satisfy_all()
         self._log_dispatches(implementers=1, verifiers=0)
+        # Fixture explorer + this implementer = 2 workers: (p) needs a worker note.
+        _seed_report_notes(self.tmp, ("worker-a",))
         rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertEqual(rc, 0)
         self.assertNotIn('"decision": "block"', out)

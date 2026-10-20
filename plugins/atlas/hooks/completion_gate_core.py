@@ -2129,6 +2129,10 @@ def _status_header_would_block(data: dict, contract: dict | None) -> bool:
 
 
 def _header_reason_part(contract: dict | None) -> str:
+    # Contract is the single source; literal only as the unreadable-contract fallback.
+    template = (
+        (contract or {}).get("headerTemplate") or "ATLAS | <glyph> <phase> | <state>"
+    ).replace("<state>", "<one-line state>")
     phases = ", ".join(
         f"{p.get('id')} {p.get('glyph')}"
         for p in ((contract or {}).get("phases") or [])
@@ -2137,10 +2141,11 @@ def _header_reason_part(contract: dict | None) -> str:
     return (
         "  (n) Status header: your final reply does not start with the atlas status "
         "header, so the user's terminal shows no phase or state line. The first "
-        "non-empty line must be `ATLAS | <glyph> <phase> | <one-line state>`. "
+        "non-empty line must be `%s`. "
         "Phases and glyphs: %s. -> Re-send your final reply with that header as its "
         "first line and nothing else changed, then retry Stop. (This check blocks "
-        "once per session.)" % (phases or "see contracts/operating-contract.json")
+        "once per session.)"
+        % (template, phases or "see contracts/operating-contract.json")
     )
 
 

@@ -4,7 +4,9 @@
 name: "schema-inventory"
 description: "Read-only PostgreSQL catalog inventory that enumerates tables, columns, types, constraints, indexes, and RLS flags from the live database. Use when running the schema half of a database audit."
 thinkingLevel: "off"
-model: ["@atlas-worker","sonnet","@smol"]
+model: ["@atlas-mechanic","haiku","@smol"]
+tier_allow: ["haiku","sonnet"]
+effort_allow: ["low"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

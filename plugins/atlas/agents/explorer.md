@@ -1,8 +1,10 @@
 ---
 name: explorer
 description: "Read-only codebase explorer that maps a feature, module, or call path, locates the symbol owning a behavior, or summarizes structure without reading whole files. Returns a compact map with file:line refs, not dumps. Use when a task needs to know where something lives or how code connects before it is changed."
-model: sonnet
+model: haiku
 effort: low
+tier_allow: [haiku, sonnet]
+effort_allow: [low, medium]
 color: cyan
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
 ---

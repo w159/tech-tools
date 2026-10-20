@@ -7,6 +7,7 @@ import { toast, toastError, Modal, openModal, closeModal, hasOpenModal, closeDra
 import { FleetStrip, openAgentInspector, closeAgentInspector } from "./fleet.js";
 import { MachineColonies } from "./machine-colonies.js";
 import { watchVersion } from "./version-banner.js";
+import { reportFetchFail } from "./fetch-fail.js";
 import { agentsStore, STATE_WORD } from "./agents-store.js";
 import overview from "./pages/overview.js";
 import work from "./pages/work.js";
@@ -822,7 +823,7 @@ function setTab(tab) {
 
 async function boot() {
   // First thing: the terminal's xterm assets must beat the API burst to the browser's 6-connection pool.
-  if (location.hash.startsWith("#/terminal")) import("./pages/terminal.js").then((m) => m.loadXterm()).catch(() => {});
+  if (location.hash.startsWith("#/terminal")) import("./pages/terminal.js").then((m) => m.loadXterm()).catch((e) => reportFetchFail("app", "xterm assets", e));
   const local = loadLocalPrefs();
   store.set("prefs", Object.assign({ theme: "dark", density: "comfortable" }, local));
   store.set("project", local.default_project || "all");

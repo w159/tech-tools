@@ -55,7 +55,7 @@ Overlapping capabilities are modes of one skill rather than separate skills: atl
 | atlas-sweep | auto | Turns feedback into triaged findings. Sweep mode ingests new GitHub issues, triages them, verifies claimed fixes and updates a docs/features/ triage doc, never auto-closing or replying. Analyze mode turns a transcript, support thread or notes into findings tied to verbatim quotes. Use when feedback needs triage or analysis. |
 | atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs. Use to build or test an iOS or Xcode project; macOS only. |
 | atlas-testing | auto | Plans, generates, and runs tests in any language: detects the stack and existing tests, maps gaps across every testing type (unit through mutation, fuzz, load, security, accessibility), recommends the highest-value next test, writes it, runs it, and reports evidence. Use to add tests, choose a test strategy, or find what testing is missing. |
-| atlas-tui | auto | Opens the Atlas Command Center TUI over live colony tmux workers (omp/claude/codex). |
+| atlas-tui | auto | Opens the Atlas Colony workspace TUI (SESSIONS, CHANNEL, PEEK, STEER) over live colony tmux workers (omp/claude/codex); read the channel, steer or hold a seat. |
 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness. Use for a full UI/UX pass or persona testing. |
 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing. Use when a plugin is believed complete. |
 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify. Use when architecture docs changed, before the completion gate, or when wiki diagrams are stale. |
@@ -138,7 +138,8 @@ this CLI needs: native `grep`/`glob` route to lean-ctx, `read`/`bash` get one
 nudge per session, and `session_stop` blocks once for main-thread non-docs
 `edit`/`write` calls without a `task` dispatch. Native atlas agents (generated
 from `agents/*.md` with tuned `thinkingLevel` and model-role fallbacks -- see
-`omp/README.md`) make omp workers first-class colony members: the lead's omp
+`omp/README.md`; agents carry `tier_allow` and `effort_allow` in frontmatter and
+the scope resolver emits the `model` per seat) make omp workers first-class colony members: the lead's omp
 `todo` plan mirrors into the durable board, and workers get
 `CLAUDE_PLUGIN_ROOT` set so `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py`
 works. The same `ATLAS_TRIPWIRE_HARD=off` and `ATLAS_GATE=off` kill switches

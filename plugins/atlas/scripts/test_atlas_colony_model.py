@@ -359,6 +359,60 @@ class ModelTest(unittest.TestCase):
             next(x for x in s["seats"] if x["name"] == "worker-f1")["state"], "finished"
         )
 
+    def test_registry_only_recent_channel_is_in_process_colony(self):
+        now = time.time()
+        self._channel(
+            "proj@main/lead-reg", "lead-reg",
+            [{"name": "worker-r1", "role": "implementer", "joined": now - 600},
+             {"name": "worker-r2", "role": "explorer", "joined": now - 500}],
+            last_activity=now - 30,
+        )
+        s = model.snapshot(self.root)
+        c = next(c for c in s["colonies"] if c["channel"] == "proj@main/lead-reg")
+        self.assertEqual(c["transport"], "in-process")
+        self.assertFalse(c["finished"])
+        names = {x["name"] for x in s["seats"] if x["colony"] == c["id"]}
+        self.assertEqual(names, {"lead-reg", "worker-r1", "worker-r2"})
+        self.assertTrue(all(x["target"] == "" for x in s["seats"] if x["name"] in names))
+
+    def test_registry_only_stale_or_dead_channel_absent(self):
+        import subprocess
+
+        pr = subprocess.Popen(["/bin/sleep", "0"])
+        pr.wait()
+        old = time.time() - 2 * 86400
+        self._channel("proj@main/lead-old", "lead-old", [], last_activity=old)
+        self._channel(
+            "proj@main/lead-dd", "lead-dd", [{"name": "worker-dd", "role": "x", "joined": old}],
+            last_activity=time.time() - 5, lead_pid=pr.pid,
+        )
+        chans = {c["channel"] for c in model.snapshot(self.root)["colonies"]}
+        self.assertNotIn("proj@main/lead-old", chans)
+        self.assertNotIn("proj@main/lead-dd", chans)
+
+    def test_registry_only_channel_merges_with_team_colony(self):
+        # t1's channel is proj@main/lead-x: a registry-live lead-x must not add a second colony
+        self._channel("proj@main/lead-x", "lead-x", [], last_activity=time.time() - 5)
+        s = model.snapshot(self.root)
+        self.assertEqual(1, sum(1 for c in s["colonies"] if c["channel"] == "proj@main/lead-x"))
+
+    def test_registry_only_seat_state_from_notes(self):
+        now = time.time()
+        self._channel(
+            "proj@main/lead-st", "lead-st",
+            [{"name": "worker-b1", "role": "x", "joined": now - 900},
+             {"name": "worker-i1", "role": "x", "joined": now - 900}],
+            last_activity=now - 5,
+        )
+        with mock.patch.object(model, "_recent_notes", return_value=[
+            {"owner": "worker-b1", "kind": "blocked", "ts": now - 10, "text": "stuck"},
+            {"owner": "worker-i1", "kind": "note", "ts": now - 600, "text": "old"},
+        ]):
+            s = model.snapshot(self.root)
+        st = {x["name"]: x["state"] for x in s["seats"]}
+        self.assertEqual(st["worker-b1"], "blocked")
+        self.assertEqual(st["worker-i1"], "idle")
+
     def test_named_lead_without_sid6_gets_no_transcript(self):
         self.assertEqual(model._lead_transcript("/r", "lead-boss", {"harness": "omp"}), "")
         self.assertEqual(model._lead_transcript("/r", "lead-abc123", {"harness": "codex"}), "")
@@ -463,6 +517,47 @@ class ModelTest(unittest.TestCase):
         self.assertLessEqual(len(calls), 4, calls)
         self.assertEqual(scanned, [self.root])
 
+    def test_snapshot_chat_slices_age_and_held(self):
+        board = Path(self.root, ".atlas", ".run", "board")
+        with (board / "implementer-bb.jsonl").open("w") as f:
+            for i in range(1, 121):
+                ch = "proj@main/lead-x" if i % 3 else "other@main/lead-y"
+                owner = "lead-x" if i == 119 else "implementer-bb"
+                f.write(json.dumps({"ts": 10.0 + i, "seq": i, "owner": owner, "to": "all",
+                                    "text": f"m{i}", "kind": "note", "channel": ch}) + "\n")
+        s = model.snapshot(self.root)
+        chat = s["chat"]
+        self.assertEqual(set(chat), {"proj@main/lead-x", "other@main/lead-y"})
+        px = chat["proj@main/lead-x"]
+        self.assertLessEqual(len(px), 100)
+        self.assertEqual([m["seq"] for m in px], sorted(m["seq"] for m in px))
+        self.assertTrue(all(m["text"] and "lead" in m for m in px))
+        self.assertTrue(px[-1]["lead"] and not px[0]["lead"])  # seq 119 is from the lead
+        self.assertTrue(all(m["from"] == "implementer-bb" for m in chat["other@main/lead-y"]))
+        col = s["colonies"][0]
+        self.assertEqual(col["seat_count"], 3)
+        self.assertGreater(col["age_s"], 0)
+        self.assertTrue(all(x["held"] is False for x in s["seats"]))
+
+    def test_snapshot_does_not_reread_unchanged_board_files(self):
+        model.snapshot(self.root)
+        real, opened = Path.open, []
+
+        def spy(self_, *a, **k):
+            opened.append(str(self_))
+            return real(self_, *a, **k)
+
+        with mock.patch.object(Path, "open", spy):
+            model.snapshot(self.root)
+        self.assertEqual([o for o in opened if o.endswith(".jsonl")], [])
+
+    def test_seat_held_reads_the_wave_flag(self):
+        wave = Path(self.root, ".atlas", ".run", "colony_wave.json")
+        wave.write_text(json.dumps({"members": {"implementer-bb": {"paused": True}}}))
+        seat = {x["name"]: x for x in model.snapshot(self.root)["seats"]}
+        self.assertTrue(seat["implementer-bb"]["held"])
+        self.assertFalse(seat["explorer-aa"]["held"])
+
     def test_snapshot_shape_and_seats(self):
         s = model.snapshot(self.root)
         self.assertEqual(
@@ -474,6 +569,7 @@ class ModelTest(unittest.TestCase):
                 "project",
                 "colonies",
                 "seats",
+                "chat",
                 "feed",
                 "needs",
                 "specs",
@@ -514,6 +610,7 @@ class ModelTest(unittest.TestCase):
                 "log_path",
                 "transcript",
                 "last_active",
+                "held",
                 "lead",
                 "address",
                 "role_title",

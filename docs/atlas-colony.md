@@ -67,9 +67,50 @@ Everything above this section describes the herdr backend. Since the OpenRig wor
 
 The Command Center Terminal page (`#/terminal`, `js/pages/terminal.js`) replaces the herdr iframe: a live card grid of every colony tmux window, refreshed from `atlas_colony_model.py`. Enlarge opens an interactive attach, a websocket PTY served by `scripts/atlas_dash_term.py` and rendered with the vendored xterm.js (`dashboard_ui/vendor/xterm/`). `/atlas-tui` (`scripts/atlas_tui.py`, skill `atlas-tui`) shows the same colony model in a terminal. tmux is the default colony transport (session `atlas-<run>`, one window per worker); codex workers run through the same mux harness (`atlas_mux.py`, `atlas_panefeed.py`). herdr remains a forceable transport (`ATLAS_COLONY_TRANSPORT=herdr`) but no longer has a Terminal page.
 
-The TUI runs from any harness that loads atlas. Under omp, `/atlas-tui` (`omp/tui-command.ts`) pauses omp's renderer, runs `atlas_tui.py` in the same terminal, and restores omp when you press `q`. Under Claude Code or Codex, the skill runs `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_tui.py" --launch` (omp rewrites `${CLAUDE_PLUGIN_ROOT}` to the live install at call time; where it is unset, the plugin root is two directories above the skill directory). Inside tmux, `--launch` opens a new window. Outside tmux, it restarts the `atlas-tui` session's window with the current script and project (`respawn-window -k`; a session left by an older install is never reused), turns tmux `mouse on` for it, and opens an iTerm, Terminal or Ghostty window attached to it (from `TERM_PROGRAM`). If none of those apply, it prints `tmux attach -t atlas-tui`. In-process subagent colonies (omp `task`, Claude `Agent`) have transport `subagent`. Their harness comes from the channel record's `harness`, and they count as live while the channel's `lead_pid` is alive. `channel-open` records `lead_pid` as the nearest omp/bun/claude/codex/node ancestor process. At session start the lead's channel is opened with zero members (`channel-open --only-project`), but only where an atlas board already exists (`atlas_todo.lead_channel_allowed`), so the live session shows as a colony before any dispatch.
+The TUI runs from any harness that loads atlas. Under omp, `/atlas-tui` (`omp/tui-command.ts`) pauses omp's renderer, runs `atlas_tui.py` in the same terminal, and restores omp when you press `q`. Under Claude Code or Codex, the skill runs `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_tui.py" --launch` (omp rewrites `${CLAUDE_PLUGIN_ROOT}` to the live install at call time; where it is unset, the plugin root is two directories above the skill directory). Inside tmux, `--launch` opens a new window. Outside tmux, it restarts the `atlas-tui` session's window with the current script and project (`respawn-window -k`; a session left by an older install is never reused), turns tmux `mouse on` for it, and opens an iTerm, Terminal or Ghostty window attached to it (from `TERM_PROGRAM`). If none of those apply, it prints `tmux attach -t atlas-tui`. In-process subagent colonies (omp `task`, Claude `Agent`) have transport `subagent`. Their harness comes from the channel record's `harness`, and they count as live while the channel's `lead_pid` is alive. `channel-open` records `lead_pid` as the nearest omp/bun/claude/codex/node ancestor process. Opt-outs: `ATLAS_CHANNELS=off` skips the session-start lead channel (`hooks/session_boot_core.py:930`); `ATLAS_COLONY=off` skips the whole colony ensure step (`hooks/session_boot_core.py:221`). They are independent: either one set leaves the other step running. At session start the lead's channel is opened with zero members (`channel-open --only-project`), but only where an atlas board already exists (`atlas_todo.lead_channel_allowed`), so the live session shows as a colony before any dispatch.
 
 Using the TUI: one click (or Enter) opens a colony or a seat. The topology tree lists each pod's seats under it (`● name · open queue count`); Enter or a click on a seat row opens that seat. The TABLE's ACTIONS column and the seat header carry clickable buttons: `[ msg ]` (`m`) posts a board note the seat reads on its next tool call, `[ view ]` (`v`) opens its output, `[ term ]` (`t`) attaches its tmux pane, and `[ stop ]` (`x`, with a y/n confirm) uses the dashboard kill contract. `term` and `stop` only appear for seats with a pane; the lead and in-process subagents can't be stopped from outside. The colony header has `[ msg all ]` and `[ refresh ]`. The seat view is an OpenRig-style AGENT DETAIL page: CONTEXT (runtime, model, terminal), CURRENT ACTIVITY, CURRENT WORK (open board items), QUEUE (counts by status), NEEDS YOU (blocked / to-human notes), SEAT, COMMUNICATION (board notes from/to the seat, newest last), then OUTPUT — in order of preference, the live pane, the subagent's transcript (`atlas_colony_model.transcript_tail`: omp `~/.omp/agent/sessions/*/*_<sid6>*/<name>.jsonl`, Claude `~/.claude/projects/*/*/subagents/agent-<id>.jsonl`), the worker log, or its board notes. An omp transcript ending in `session_exit` marks the seat finished. Tab (or `tab wall`) switches to the WALL tab: a 2-column grid of every agent's output tile (`<runtime label> <address>`, lead first), arrows move the selection and Enter/click opens the seat; tile bodies are read only at the snapshot cadence. In the TERMINALS section, Enter/click attaches an atlas tmux session through a grouped view (`C-b d` returns) and `x` kills that session after a y/n confirm — refused for `atlas-tui`, the TUI's own session, and non-`atlas-` names.
+
+## Colony workspace (TUI)
+
+`atlas_tui.py` lands on the colony workspace: SESSIONS, CHANNEL, PEEK and STEER. Frame at 100x30 (golden `plugins/atlas/scripts/fixtures/golden/colony_100x30.txt`; `<TS>` replaces the wall-clock stamp so the file is stable):
+
+```text
+cmd ▸ ▊  Tab region · ? help · last <TS>
+━ { SESSIONS } ━━━━━━━━━━━━━━━━━━━╋━ ATLAS COLONY . macbook-pro . 5 colonies 10 seats ━━━━━━━━━━━━━━
+> lead-01 tmux 3s attn            ┃ ━ CHANNEL lead-01 (all) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ● ex-1 working                ┃ NEEDS 1: impl-1 blocked
+    ! impl-1 blocked              ┃ 20:03 lead (lead) > all  ch1 msg 0 [note]
+    · impl-2 idle                 ┃ 20:03 w1 > lead  ch1 msg 1 [status]
+  ops tmux 0s empty               ┃ 20:03 lead (lead) > w1  ch1 msg 2 [note]
+  tm-02 tmux 4s attn              ┃ 20:03 w2 > lead  ch1 msg 3 [blocked]
+    ● tm-lead working             ┃ 20:03 lead (lead) > w2  ch1 msg 4 [note]
+    ● tm-w1 working               ┃ 20:03 w1 > all  ch1 msg 5 [handoff]
+    ! tm-w2 blocked               ┃ 20:03 tui (you) > w1  ch1 msg 6 [steer]
+    · tm-w3 idle held             ┃ ━ PEEK - (t attach . v view) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  hd-03 herdr 2s work             ┃ (no capture yet)
+    ● hd-1 working                ┃ ━ STEER -> lead ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    · hd-2 idle                   ┃ say to lead >
+  bg-04 claude-bg 1s work         ┃ [ msg all ] [ @all ] [ @lead ]
+    ● bg-1 working                ┃
+  term atlas-orphan-9 1win        ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↑↓ move · ⏎ pick · tab region · [ ? help ]  [ q quit ]
+[macbook-pro] colony
+```
+
+In-process colonies: lead channels in `.atlas/.run/channels.json` with no `lead_pid` whose `last_activity` is within `ATLAS_COLONY_LIVE_WINDOW` seconds (`scripts/atlas_colony_model.py:44`) appear as colonies with transport `in-process` (`in-proc` in the TUI). Seat state comes from the latest board note (done/handback finished, blocked, note under 120 s working, else idle). SESSIONS caps at 30 seats per colony with a `+N more` row (`scripts/atlas_tui.py:1030`). PEEK reads `no pane (in-process subagent)` and `t` does nothing for them; steer and hold work, since both are board operations.
+
+Keys, mouse, hold semantics and the golden regenerate command: skill `plugins/atlas/skills/atlas-tui/SKILL.md`. Design inspired by OpenRig's team workspace.
 
 ## Spawning workers (transport)
 
@@ -221,6 +262,7 @@ python3 plugins/atlas/scripts/atlas_remote.py url              # https://<node>.
 |---|---|---|
 | `ATLAS_COLONY` | `hooks/session_boot.py:ensure_colony` | `off`/`0`/`false`/`no` skips starting the colony web UI at session start. Default on. |
 | `ATLAS_COLONY_TRANSPORT` | `scripts/atlas_mux.py:transport` | `herdr\|tmux\|claude-bg` forces a transport; otherwise tmux whenever it is installed, else `claude-bg`. |
+| `ATLAS_COLONY_LIVE_WINDOW` | `scripts/atlas_colony_model.py:44` | Seconds of channel activity that keep a pane-less (in-process) colony listed. Default 1800. |
 | `ATLAS_MUX` | `scripts/atlas_mux.py:_validate` | Must be `tmux` for `atlas_mux.py spawn` (the opt-in gate, kept as is). |
 | `ATLAS_REMOTE_PORT` | `scripts/atlas_remote.py` | Tailnet HTTPS port, default 8443. |
 | `ATLAS_DASHBOARD_PORT` | `scripts/atlas_dashboard.py` | Dashboard listen port, default 7421. |

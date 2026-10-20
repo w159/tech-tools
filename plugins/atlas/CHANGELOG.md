@@ -1,5 +1,50 @@
 # Changelog
 
+## 12.6.0 - 2026-10-20
+
+The 2026-10-20 audit (`docs/plans/2026-10-20-atlas-feature-audit.md`) found every agent pinned to sonnet/low, docs contradicting code, 0 of 7 TUI defects fixed and silent web UI failures.
+This release ships cost tiering, the Atlas Colony workspace TUI, a single-sourced status header, context cuts and the codex contract block.
+Known: the installed-parity test stays red until the plugin is reinstalled; herdr-web-ui has 9 codex-binding tests that need a live herdr.
+
+### Added
+
+- Atlas Colony TUI workspace: `atlas_tui.py` gains the `colony` section, now the landing view of `--once` and the live loop, branded "ATLAS COLONY". SESSIONS lists every colony (transport, seat count, state, age) with its seats (lead first) and orphan `atlas-*` terminals; PEEK shows the seat pane tail. Two-pane at 100+ columns, stacked with a zoomed focused region below that. `W` returns to it, `1`/`2`/`3` focus a region, Tab cycles regions here (right-pane tabs elsewhere). Every SESSIONS row and region title has a click rect; `render()`/`hitmap()` normalize an unmarked snapshot.
+- Colony TUI CHANNEL region: `chat_lines()` in `atlas_tui.py` renders the selected colony's channel as `HH:MM from > to  text [kind]`, newest last, lead rows tagged `(lead)`, TUI-sent rows `(you)`, a NEEDS strip first, `f` seat filter, PgUp/PgDn/Home/End scrolling with an "N new" title badge while scrolled up.
+- Colony TUI STEER region: `i` (selected seat or lead), `b` (@all), `l` (@lead) and `m` open an input mode; `@name`/`@all`/`@lead` retarget; Enter writes a `steer` note on the colony channel (the lead gets "lead reads the board at its next turn" instead of a refusal); `h` holds/releases the selected seat (SESSIONS shows `held`, STEER title shows `(held)`); held seats refuse steering; `x` keeps the y/n stop gate. `SteerRegion` tests.
+- Colony TUI keymap and mouse: `KEYMAP` table in `atlas_tui.py` drives colony/steer key dispatch and the help text (generated, with a no-duplicate-key contract test); `[ hold ]`/`[ release ]`/`[ @all ]`/`[ @lead ]` are clickable; the mouse wheel scrolls CHANNEL and moves the SESSIONS selection; stacked layouts keep CHANNEL at 4+ rows (PEEK degrades first).
+- Colony TUI snapshot data: `atlas_colony_model.snapshot()` gains `chat` (per-channel last 100 notes with `seq/ts/from/to/kind/text/lead`, built from the already-tailed board files), `colony.seat_count` and `colony.age_s`, and `seat.held` (the `paused` flag in `colony_wave.json`, mtime-cached). `atlas_dash_colony` gains `hold_member` / `release_member` beside `kill_member`; the `/pause` and `/resume` routes now share the same `_hold` / `_release` helpers.
+- Colony TUI golden harness: `scripts/fixtures/colony_snap.json` (tmux, herdr and claude-bg colonies, orphan terminal, chat, held seat, needs) and `scripts/test_colony_golden.py` pin `atlas_tui --once` frames at 100x30, 60x18 and 160x48 in `fixtures/golden/`. Regenerate deliberately with `ATLAS_GOLDEN_UPDATE=1`.
+- Codex contract block: `scripts/atlas_codex_contract.py` renders the header rule, phases, evidence rule, dispatch spec blocks and tier table from `contracts/operating-contract.json`, `agents/*.md` and `REQUIRED_SPEC_BLOCKS` into a fenced `atlas:contract` block in the repo `AGENTS.md` (`--write` / `--check`; text outside the fence is untouched). Codex reads it but nothing enforces it.
+- `plugins/atlas/omp/package.json` gains a `test` script (`bun test`), so the omp suite runs via `bun run test`. Baseline: 471 pass, 1 fail across 28 files. Known red: `channels.test.ts` "openLeadChannel: SessionStart opens the lead's channel with zero members, reusing the dispatch lead name" (fixed below).
+
+### Changed
+
+- Cost tiering: agent frontmatter now carries `model`, `effort`, `tier_allow`, `effort_allow` per `docs/plans/2026-10-20-atlas-tiering-design.md` (haiku: runner, schema-inventory, naming-glossary-audit, docs-auditor, explorer; medium effort: implementer, test-engineer, verifier, completeness-critic, rls-privilege-audit; planner high). `scope-matrix.json` seats gain `model`; new `db-audit` class takes `rls-privilege-audit` out of plain `audit/high`. `atlas_resolve.py` and `omp/resolve.ts` emit `model` per seat. `omp/gen-agents.ts` derives `thinkingLevel` from effort and passes through the allow lists. `squad-and-tiers.md` tier table updated; `TierTableContract` pins all four.
+- Tripwire tier accept: a dispatch `model` (or `effort`) now passes when it is in the role's `tier_allow` (`effort_allow`) AND equals what `atlas_resolve` emits for the prompt's `SCOPE:` line, besides the three legacy accepts (pin, alias, parent model). No SCOPE line or an unloadable resolver accepts nothing new. The `model_override` deny names the role's `tier_allow` and the resolver's model; a new `effort_override` deny covers an `effort` arg outside the definition and the resolver.
+- Status header template is single-sourced in `contracts/operating-contract.json` (`headerTemplate`, with `phases` and `headerFirstLinePattern`); session boot, gate (n) and omp `style.ts` read it and keep a literal only as the unreadable-contract fallback. Contract test guards against stray copies.
+- Context cuts: the output style drops from 9,151 to 6,977 chars (header glyph/template text lives only in session_boot, the unenforced 12-line prose cap is gone, prose tightened with every rule kept once); `atlas-orchestrate/SKILL.md` loads `laws-and-gates.md`, `the-loop.md` and `squad-and-tiers.md` only on named triggers (unconditional load about 46.5 KB to 13.1 KB); the style, `omp/lead-addendum.md` (898 to 894 chars) and `subagent-kit.md` now share one TOOLS rule; new `ContextBudget` contract tests pin all three.
+
+### Fixed
+
+- Colony TUI lists registry-only colonies: a lead channel with no `lead_pid` and `last_activity` inside `ATLAS_COLONY_LIVE_WINDOW` (default 1800s) shows in SESSIONS (`in-proc`) and CHANNEL, its in-process subagents as pane-less seats (state from the latest board note). Merges with a team colony on the same channel; SESSIONS caps at 30 seats per colony with a `+N more` row; PEEK says `no pane (in-process subagent)`.
+- Dashboard: fetch failures are no longer silent. `dashboard_ui/js/fetch-fail.js` adds one shared dismissable "Stale data" banner (page, endpoint, error, time, count; clears on the next success), reported from agents (channels), supervision lens (board), terminal (capture, snapshot), colony, overview (`/api/v2/health`) and the xterm preload in `app.js`.
+- Dashboard reaper failures are visible: `/api/v2/health` has a `reaper` subsystem (`warn`, last 20 failures with path, exception class, message and time in `evidence[]`) instead of a log-only `reap_tick ... PermissionError` line.
+- TUI degraded-data hardening: `atlas_tui.normalize_snapshot` fills seat/spec/project/terminal defaults once at load (no KeyError on a seat without `name`, no None format TypeError); `body_height()` is shared by `render` and `hitmap` (hit rows were off by one); an unknown `ui.tab` falls back to the table view; `attach_target` returns `attach failed (rc N)` and the `term` effect is wrapped like `attach`; `bridge_seq` strips BEL, ESC and `;` from cid/seat; the `capture()` call in the loop is documented as non-raising. `test_atlas_tui` gains `DegradedSnapshot` and the launch test no longer prints to stdout.
+- TUI: STEER buttons no longer land on the wrong row when STEER is focused in the stacked layout.
+- `atlas_mux.py` `cmd_spawn`: any exception raised after the member registers and before the pane exists (`_open_window`, `atlas_seats`) now leaves the member again before re-raising, so a failed spawn no longer strands a pane-less ghost on the colony board.
+- `atlas_doctor` orchestration-wiring messages name the file actually scanned (`dispatch_tripwire_core.py` when the shim delegates to it) instead of always blaming `dispatch_tripwire.py`; a shim-plus-core pair with the markers in the core stays PASS.
+- Tests: `test_atlas_team` follows the retiered matrix: team size and `max_parallel` are read from `atlas_resolve` instead of a hardcoded 5, and the omp team-level test expects the Claude-tier effort per role (completeness-critic medium); `_team_thinking` was already correct, the test premise was stale.
+- Tests: omp `channels.test.ts` openLeadChannel test: fixture now creates `.atlas/.run` (the board marker `lead_channel_allowed` requires since 12.5.12); product code unchanged.
+- Tests: `test_atlas_codex_contract.py` imports `_test_isolation`; `test_paired_verifier_no_block_condition_g` seeds a phased plan and channel report notes so gates (o) and (p) do not fire in a test aimed at (g). Product code unchanged.
+- Tests: hooks suite baseline: `test_completion_gate.FailOpenUnreadablePayloadTest` now seeds a worker report note for the (p) colony-channel gate (the gate was right; the test dispatched 2 workers with no channel traffic), and `scripts/test_sweep_state.py` is plain `unittest` so it imports without pytest.
+- Tests: `scripts/test_atlas_tui.py` order pollution: `curses` is imported once at module top (`mock.patch.dict(sys.modules)` evicted a lazy import and Python 3.15 refuses to reload `_curses`), and the lead-seat snapshot helpers deepcopy `SNAP` so they no longer mutate the shared colony pods that `test_topology_tree` reads.
+
+### Docs
+
+- In-process colonies in the colony workspace: documented in the atlas-tui skill and `docs/atlas-colony.md` (registry-backed, `ATLAS_COLONY_LIVE_WINDOW`, 30-seat cap, PEEK/`t`/steer/hold behavior).
+- Colony workspace docs: atlas-tui skill rewritten for the colony workspace (full key table, mouse, hold, steer); "Colony workspace (TUI)" in `docs/atlas-colony.md`; "Reading and steering from the TUI" in `docs/atlas-channels.md`.
+- Reconciled docs with code (`docs/plans/2026-10-20-atlas-feature-audit.md`): colony is tmux-default with herdr forceable (`references/dashboard-api.md:144`, `references/subagent-kit.md` mux section); bracketed correction to the 12.5.12 session-start wording; `docs/atlas-harness-parity.md` header states its reconcile version and rows (n)/(o) added; repo `CLAUDE.md` and `references/subagent-kit.md` carry the full dispatch contract with tripwire deny strings; `docs/atlas-colony.md` documents `ATLAS_COLONY=off` next to `ATLAS_CHANNELS=off`.
+
 ## 12.5.13 (2026-10-19)
 
 ### Fixed
@@ -11,7 +56,7 @@
 
 ### Fixed
 
-- The session-start lead channel (12.5.11) created `.atlas/.run` in whatever directory a session started in. `channel-open --only-project` now opens it only in a real project (existing atlas board or a git repo, never `$HOME`, `~/Downloads` or a bare temp root) and otherwise answers `{"skipped": "not_a_project"}` without writing; omp's `session_start` passes it. Dispatch-time opens are unchanged.
+- The session-start lead channel (12.5.11) created `.atlas/.run` in whatever directory a session started in. `channel-open --only-project` now opens it only in a real project (existing atlas board or a git repo [correction, 12.5.13: a git repo alone is not enough; `scripts/atlas_todo.py:1142-1149` requires `not_a_project_root(base) and is_project(base)`, i.e. an existing atlas board], never `$HOME`, `~/Downloads` or a bare temp root) and otherwise answers `{"skipped": "not_a_project"}` without writing; omp's `session_start` passes it. Dispatch-time opens are unchanged.
 
 ## 12.5.11 (2026-10-19)
 

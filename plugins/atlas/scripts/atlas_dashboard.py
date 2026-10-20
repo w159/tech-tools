@@ -2970,6 +2970,19 @@ _REAP_WARNED: set[str] = set()
 def _reap_warn(what: str, exc: Exception) -> None:
     """Log a swallowed reaper error once per distinct message per process (the tick repeats every 5 min)."""
     msg = f"reap_tick {what}: {exc!r}"
+    try:  # every failure (not just the first) feeds /api/v2/health "reaper"
+        import atlas_dash_insights as ins
+
+        ins.REAP_FAILURES.append(
+            {
+                "ts": time.time(),
+                "path": what,
+                "error": type(exc).__name__,
+                "message": str(exc),
+            }
+        )
+    except Exception:  # ponytail: health surfacing must never break the reaper
+        pass
     if msg not in _REAP_WARNED:
         _REAP_WARNED.add(msg)
         log.warning(msg)

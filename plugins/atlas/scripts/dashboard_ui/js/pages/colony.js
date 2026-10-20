@@ -4,6 +4,7 @@
 // is the separate #/terminal route (pages/terminal.js).
 
 import { h, replace, fmtRelative } from "../dom.js";
+import { reportFetchFail, clearFetchFail } from "../fetch-fail.js";
 import { spaceName, seatAddress, sourceLine } from "./terminal.js";
 import { Badge, Button, State, toast, toastError, confirm } from "../components.js";
 
@@ -60,7 +61,9 @@ async function load(ctx, st, project) {
   try {
     st.data = await ctx.api.get("colony", { project, all: st.all ? "1" : "" });
     st.error = null;
+    clearFetchFail("colony");
   } catch (e) {
+    reportFetchFail("colony", "colony", e);
     st.error = e;
   }
 }

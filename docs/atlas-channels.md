@@ -157,6 +157,10 @@ atlas_mux.py reap --team T
 - Stale install: `omp/channels.ts` checks that `scripts/atlas_todo.py` exists next to the plugin; if not it records one fault ("atlas omp install is stale ... reinstall atlas in omp") per cwd instead of one per dispatch.
 - Widget header: the `atlas-channel` widget (`omp/channel-view.ts`) leads with `ATLAS <phase> n/m <bar> . N live . M gates` and one row per live worker (4 shown, then `+N more`). Since 12.2.0 the widget renders the Mission Control panel (`omp/mission-panel.ts`): framed, phase rail, up to 4 worker lanes with 10-cell elapsed bars, channel ticker, and real gate status from `scripts/atlas_gates.py` (async, cached 10 s, armed projects only) instead of the old todo-based proxy. omp lanes do not yet show role or tool (see ROADMAP).
 
+## Reading and steering from the TUI
+
+The colony workspace (`atlas_tui.py`) reads the channel in CHANNEL and writes to it from STEER. A send is a note with kind `steer` and owner `tui` (`atlas_tui.py:1765`). Targets: `@<seat>`, `@all` (broadcast) or `@lead`. A note to the lead is not a refusal: the TUI shows "lead reads the board at its next turn". A held seat refuses sends. Keys: `docs/atlas-colony.md`, "Colony workspace (TUI)".
+
 ## Limits
 
 - One project root and one branch per main channel; the registry lives in the project's `.atlas/.run/`, so a channel never spans projects.

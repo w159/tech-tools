@@ -2,6 +2,7 @@
   "name": "atlas-omp-extension",
   "private": true,
   "scripts": {
+    "test": "bun test",
     "typecheck": "bunx --package typescript tsc -p . --noEmit"
   },
   "omp": {

@@ -4,7 +4,9 @@
 name: "docs-auditor"
 description: "Read-only drift auditor for the canonical atlas project structure (docs-ssot.md). Compares docs/ (CHANGELOG, ROADMAP, architecture, AGENTS.md), .atlas/, root entry files, and .gitignore against real code and returns a per-area verdict (current/stale/missing) with file:line evidence. Never writes. Use when checking whether docs and project structure still match the code."
 thinkingLevel: "off"
-model: ["@atlas-worker","sonnet","@smol"]
+model: ["@atlas-mechanic","haiku","@smol"]
+tier_allow: ["haiku","sonnet"]
+effort_allow: ["low","medium"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

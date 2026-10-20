@@ -273,6 +273,8 @@ class AtlasDoctorTest(unittest.TestCase):
         problems = atlas_doctor.check_orchestration_wiring(ip)
         self.assertTrue(any("ORCH_SKILLS" in p for p in problems))
         self.assertTrue(any("mark_orchestrating" in p for p in problems))
+        # The message must name the core file the check actually scanned.
+        self.assertTrue(any("dispatch_tripwire_core.py" in p for p in problems))
 
     def test_norm_repo_treats_url_variants_as_equal(self):
         for u in (

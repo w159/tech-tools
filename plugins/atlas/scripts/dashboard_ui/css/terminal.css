@@ -58,3 +58,4 @@
 .update-banner { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: 8px 12px; background: var(--accent); color: var(--bg, #0a0f12); font-weight: 600; }
 .tw-source { color: var(--text-faint); font-size: 12px; }
 .tw-crumbs { flex-wrap: wrap; }
+.fetch-fail-banner { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: 8px 12px; background: var(--danger, #b3261e); color: #fff; font-weight: 600; }

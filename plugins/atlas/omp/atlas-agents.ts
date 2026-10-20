@@ -10,9 +10,10 @@ import { pluginRoot } from "./plugin-path";
  * by `index.ts` (which detects atlas-bound task dispatches for the naming
  * notice). Tier map (atlas colony):
  *
- * - off:    explorer, docs-auditor, docs-curator, schema-inventory, naming-glossary-audit, runner
- * - low:    planner, db-prober, ui-runtime-tester, implementer, verifier, completeness-critic, rls-privilege-audit
- * (every worker is sonnet at low effort: one task + one test, then the lead ends it and spawns a fresh one)
+ * Derived from frontmatter effort (none/low -> off, medium/high -> low; see tiering design 2026-10-20):
+ * - off:    explorer, docs-auditor, docs-curator, schema-inventory, naming-glossary-audit, runner, db-prober, ui-runtime-tester
+ * - low:    planner, implementer, verifier, completeness-critic, rls-privilege-audit, test-engineer
+ * (one task + one test, then the lead ends the worker and spawns a fresh one)
  *
  * Mechanical tier (Claude `model: haiku`: runner, docs-auditor, schema-inventory, naming-glossary-audit) uses
  * `@atlas-mechanic` with `@smol` as the guaranteed fallback.
@@ -36,10 +37,10 @@ export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low"> = {
 	"schema-inventory": "off",
 	"naming-glossary-audit": "off",
 	runner: "off",
-	implementer: "low", // sonnet at low effort executes one task + test; the lead escalates, not the worker
+	"db-prober": "off",
+	"ui-runtime-tester": "off",
+	implementer: "low",
 	planner: "low",
-	"db-prober": "low",
-	"ui-runtime-tester": "low",
 	verifier: "low",
 	"completeness-critic": "low",
 	"rls-privilege-audit": "low",

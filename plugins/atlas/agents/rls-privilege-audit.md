@@ -3,7 +3,9 @@ name: rls-privilege-audit
 description: "Read-only PostgreSQL security audit of row-level security, table grants, and roles against least privilege. Use when running the security half of a database audit in regulated environments."
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
 model: sonnet
-effort: low
+effort: medium
+tier_allow: [sonnet, opus]
+effort_allow: [low, medium, high]
 color: orange
 ---
 

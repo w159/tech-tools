@@ -2355,6 +2355,46 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")
 
+    # C3: a model/effort arg passes only when it is in the role's tier_allow/effort_allow AND equals
+    # what the resolver emits for the prompt's SCOPE line. Matrix (C2): audit/medium explorer=haiku,
+    # audit/high explorer=sonnet, implement/high planner=sonnet (NOT opus), implement/medium implementer=sonnet.
+    def _tier(self, agent, scope, **extra):
+        tinput = {
+            "subagent_type": agent,
+            "name": "tier-slice",
+            "prompt": self.SPEC + (f"\nSCOPE: {scope}\n" if scope else ""),
+            **extra,
+        }
+        return self._pre(tinput)
+
+    def _denied(self, r):
+        out = r.stdout.strip()
+        return bool(out) and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_tier_model_matching_resolver_is_accepted(self):
+        self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/medium", model="haiku")))
+        self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/high", model="sonnet")))
+
+    def test_tier_model_must_equal_resolver_not_just_tier_allow(self):
+        # opus is in implementer's tier_allow but the resolver says sonnet for implement/medium.
+        # (explorer+haiku is the definition's own pin, a legacy accept, so it cannot be the deny case.)
+        r = self._tier("atlas:implementer", "implement/medium", model="opus")
+        self.assertTrue(self._denied(r))
+        self.assertIn("tier_allow", r.stdout)
+        self.assertIn("resolver", r.stdout)
+
+    def test_tier_model_outside_tier_allow_keeps_existing_deny(self):
+        r = self._tier("atlas:explorer", "audit/medium", model="opus")
+        self.assertTrue(self._denied(r))
+        self.assertIn("Drop the `model` param", r.stdout)
+
+    def test_tier_opus_planner_denied_because_matrix_says_sonnet(self):
+        self.assertTrue(self._denied(self._tier("atlas:planner", "implement/high", model="opus")))
+
+    def test_tier_effort_matches_resolver(self):
+        self.assertFalse(self._denied(self._tier("atlas:implementer", "implement/medium", effort="medium")))
+        self.assertTrue(self._denied(self._tier("atlas:runner", "implement/medium", effort="high")))
+
     def _unnamed(self, env=None, **extra):
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)  # project root
         env = dict(self.env if env is None else env)
@@ -2754,6 +2794,23 @@ class ColonyGuardUnitTest(unittest.TestCase):
                     {"subagent_type": "atlas:probe", "model": "opus"}
                 )
             )
+
+    def test_tier_no_scope_line_denies_model_arg(self):
+        # sonnet is in explorer's tier_allow but there is no SCOPE line to bind it to.
+        self.assertIsNotNone(
+            self.dt._model_override(
+                {"subagent_type": "atlas:explorer", "model": "sonnet", "prompt": "no scope"}
+            )
+        )
+
+    def test_tier_resolver_failure_leaves_only_legacy_accepts(self):
+        tin = {"subagent_type": "atlas:explorer", "model": "sonnet",
+               "prompt": "SCOPE: audit/high\n"}
+        self.assertIsNone(self.dt._model_override(tin))  # resolver healthy: accepted
+        with patch.object(self.dt, "_scope_matrix", side_effect=ImportError("boom")):
+            self.assertIsNotNone(self.dt._model_override(tin))
+            # legacy accepts survive: exact pin (haiku)
+            self.assertIsNone(self.dt._model_override({**tin, "model": "haiku"}))
 
     def test_guards_ignore_non_atlas_agents(self):
         self.assertIsNone(self.dt._name_missing({"subagent_type": "Explore"}))
@@ -3889,12 +3946,9 @@ class PinTierDefaultsTwinTest(unittest.TestCase):
             "@atlas-mechanic": "mechanic",
         }
         expected = (
-            ("explorer", "@atlas-worker"),
+            ("explorer", "@atlas-mechanic"),  # haiku in the tiering table
             ("verifier", "@atlas-verifier"),
-            (
-                "runner",
-                "@atlas-worker",
-            ),  # every worker is sonnet now; mechanic tier is unused
+            ("runner", "@atlas-mechanic"),  # haiku -> omp mechanic alias (roleFor)
             ("docs-curator", "@atlas-worker"),  # the DOCSCUR case
         )
         for agent, alias in expected:

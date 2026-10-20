@@ -1556,3 +1556,48 @@ class TestSelfHeal(unittest.TestCase):
             hint = d._ui_missing_hint()
         self.assertTrue(hint.startswith("python3 "))
         self.assertTrue(hint.endswith("atlas_dashboard.py ensure"))
+
+
+class TestReapTickHealth(unittest.TestCase):
+    def test_reaper_failure_surfaces_in_health(self):
+        import sqlite3
+        import tempfile
+
+        import atlas_dash_insights as ins
+        import atlas_dashboard as d
+
+        class Ctx:
+            query = {"window": "7d"}
+
+        with tempfile.TemporaryDirectory() as t:
+            real = os.path.join(os.path.realpath(t), "real")
+            os.makedirs(os.path.join(real, ".atlas", ".run"))
+            db = os.path.join(t, "x.db")
+            c = sqlite3.connect(db)
+            c.execute("CREATE TABLE projects(root_path TEXT)")
+            c.execute("INSERT INTO projects VALUES(?)", (real,))
+            c.commit()
+            c.close()
+            orig, d._REAP_LAST = d.dashboard_db_path, 0.0
+            d.dashboard_db_path = lambda: db
+            ins.REAP_FAILURES.clear()
+            try:
+                with (
+                    mock.patch("atlas_dash_work._junk_root", lambda _p: False),
+                    mock.patch(
+                        "atlas_todo.reap_channels",
+                        side_effect=PermissionError(1, "Operation not permitted"),
+                    ),
+                ):
+                    d.reap_tick(now=1000.0, interval=0)
+            finally:
+                d.dashboard_db_path = orig
+            with mock.patch.object(
+                ins, "_open", lambda ctx: ins._Db(sqlite3.connect(":memory:"))
+            ):
+                card = {s["id"]: s for s in ins._health_payload(Ctx())["subsystems"]}
+        r = card["reaper"]
+        self.assertEqual(r["status"], "warn")
+        self.assertIn("recent failures", r["detail"])
+        self.assertTrue(any(real in e and "PermissionError" in e for e in r["evidence"]))
+        self.assertIn(f"reap {real}", [f["path"] for f in ins.REAP_FAILURES])

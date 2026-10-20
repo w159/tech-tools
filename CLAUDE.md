@@ -114,6 +114,10 @@ here; do not duplicate it.
 - Dispatch gate (`dispatch_denied:name`): pass a non-empty `name` (`<role>-<slice>`, e.g. `auth-explorer`) as the Agent/`task` tool argument on every `atlas:*` dispatch, each batch entry. Unnamed dispatches are auto-named by the hook unless `ATLAS_AUTONAME=off`, which turns the miss into a deny; re-issuing the same unnamed call just repeats the deny.
 - Dispatch gate (`dispatch_denied:scope`): every `atlas:*` Agent/Task/`task` prompt needs a line-anchored `SCOPE: <class>/<effort>` line (regex `^SCOPE:\s*([\w-]+)/(\w+)\s*$`, plugins/atlas/hooks/dispatch_tripwire_core.py:370). Classes: implement, fix, verify, audit, docs, db, ui-test. Efforts are exactly `low`, `medium`, `high`; abbreviations like `med` or `lo` do not resolve and are denied. The resolved team must include the dispatched role: check with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort>` first. Example: `SCOPE: audit/medium` for an atlas:explorer.
 
+## Dispatch contract (all denials: `dispatch_denied:<code>`; canonical list in `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md`)
+
+Beyond name, TOOLS and SCOPE above, `hooks/dispatch_tripwire_core.py` also requires: `GOAL:`, `DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (`REQUIRED_SPEC_BLOCKS` :69, deny `... is unbounded: missing <labels>`; REPORT alone is auto-injected; first offense per session is an advisory); exactly one `GOAL:` (:1342, `carries N GOAL: blocks`); numbered `STEPS:` for `atlas:runner` (:644, `must carry numbered STEPS:`); no `model` param (:1317, `overrides model with`); no built-in agent types (:1281, `uses the built-in agent`). Subagents may not dispatch (:197).
+
 ## Completion-gate friction (top blockers, last 14d)
 
 Recurring Stop-gate blocks: (m) delegation mandate, (c,d,e) CHANGELOG/ROADMAP/README

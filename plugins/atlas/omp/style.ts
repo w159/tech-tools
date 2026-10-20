@@ -186,6 +186,19 @@ export function renderOmpStyle(
  * header rule under ATLAS_HARNESS=omp, so without this omp sessions would have none. Glyphs come from the operating
  * contract (single source); an unreadable contract still yields the bare rule.
  */
+/** Status-header template from the operating contract; the literal is only the unreadable-contract fallback. */
+export function headerTemplate(path: string = nodePath.join(pluginRoot(), "contracts", "operating-contract.json")): string {
+	try {
+		const doc: unknown = JSON.parse(fs.readFileSync(path, "utf8"));
+		if (doc && typeof doc === "object" && "headerTemplate" in doc && typeof doc.headerTemplate === "string" && doc.headerTemplate) {
+			return doc.headerTemplate;
+		}
+	} catch {
+		/* fall through */
+	}
+	return "ATLAS | <glyph> <phase> | <state>";
+}
+
 function renderHeaderFallback(path: string = nodePath.join(pluginRoot(), "contracts", "operating-contract.json")): string {
 	let phases = "";
 	try {
@@ -198,7 +211,7 @@ function renderHeaderFallback(path: string = nodePath.join(pluginRoot(), "contra
 	} catch {
 		/* bare rule */
 	}
-	const rule = "Open every reply with the header line `ATLAS | <glyph> <phase> | <state>`" + (phases ? `, phase and glyph one of: ${phases}.` : ".");
+	const rule = "Open every reply with the header line `" + headerTemplate(path) + "`" + (phases ? `, phase and glyph one of: ${phases}.` : ".");
 	return `${STYLE_BEGIN}\n${rule}\n${STYLE_END}`;
 }
 

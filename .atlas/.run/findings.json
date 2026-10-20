@@ -7874,5 +7874,522 @@
     "status": "verified",
     "verified_at": "2026-10-19T21:50:57+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "A4",
+    "surface": "omp",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp test script wired; baseline 471 pass / 1 fail (channels.test.ts openLeadChannel)",
+    "evidence": [
+      "cd plugins/atlas/omp && bun run test -> 471 pass, 1 fail, 472 tests, 28 files"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:18:53+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "A6",
+    "surface": "scripts",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "doctor orchestration-wiring message names the file scanned (core behind shim)",
+    "evidence": [
+      "python3 -m unittest test_atlas_doctor -> Ran 126 tests OK",
+      "atlas_doctor.py | grep orchestration -> PASS"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:18:53+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "A5",
+    "surface": "docs",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "docs reconciled: colony transport, 12.5.12 predicate, parity header, gates (n)/(o), dispatch contract, env opt-outs",
+    "evidence": [
+      "cd plugins/atlas/hooks && python3 -m unittest test_atlas_contract -> Ran 96 tests OK",
+      "banned-glyph regex 0 hits on 6 edited files"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:18:53+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "B2",
+    "surface": "webui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dashboard fetch failures surface in a shared stale-data banner (6 call sites)",
+    "evidence": [
+      ".atlas/evidence/audit-2026-10-20/b2-fetch-fail-banner.jpg",
+      "bun test dashboard_ui/js -> 78 pass 0 fail",
+      "unittest test_atlas_dashboard* -> Ran 113 tests OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "serve :7998, override fetch for /api/v2/health to 500, open #/overview",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:18:53+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "B6",
+    "surface": "mux",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "cmd_spawn never leaves a ghost member on window-open failure",
+    "evidence": [
+      "test_atlas_mux.SpawnGhostMemberTests failed before, python3 -m unittest test_atlas_mux -> Ran 110 tests OK after"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:18:53+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "A2",
+    "surface": "scripts",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "test_atlas_tui order pollution fixed at root (sys.modules patch evicting curses; shallow SNAP copy mutating shared fixture)",
+    "evidence": [
+      "python3 -m unittest test_atlas_tui -> Ran 79 tests OK",
+      "python3 -m unittest discover -s plugins/atlas/scripts -p 'test_*.py' -> Ran 2084 tests in 185.8s OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:20:58+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "A1",
+    "surface": "hooks",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hooks (p) channel-gate test seeded correctly (gate was right); test_sweep_state converted to unittest",
+    "evidence": [
+      "test_implementer_dispatch_with_no_diff_does_not_block_condition_g passes",
+      "python3 -m unittest test_sweep_state -> Ran 11 tests OK",
+      "hooks discover: 1559 ran, only remaining failure is the C2 pin twin test (routed to C2)"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:22:37+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "B3",
+    "surface": "webui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dashboard reaper failures surface as 'reaper' subsystem in /api/v2/health",
+    "evidence": [
+      "test_atlas_dashboard.TestReapTickHealth failed before (no REAP_FAILURES), passes after",
+      "unittest discover test_atlas_dash*.py -> Ran 346 tests OK",
+      "dashboard-api.md /api/v2/health row updated"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:22:37+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "B1",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_tui tolerates degraded snapshots: normalize_snapshot, shared body_height, tab fallback, attach rc, OSC escape",
+    "evidence": [
+      "test_atlas_tui.DegradedSnapshot: TypeError at _list_view:767 before, Ran 4 tests OK after",
+      "python3 -m unittest test_atlas_tui -> Ran 83 tests OK",
+      "atlas_tui.py --once --width 100 --height 30 renders"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:23:47+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "C2",
+    "surface": "agents",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "tier table in agent frontmatter, scope matrix, resolver (model per seat), omp gen-agents; db-audit class; squad doc aligned",
+    "evidence": [
+      "test_atlas_contract.TierTableContract: 5 failures + 1 error before, OK after",
+      "python3 -m unittest test_dispatch_tripwire test_atlas_contract test_atlas_resolve -> Ran 385 tests OK",
+      "atlas_resolve.py audit high -> no rls seat; db-audit high -> explorer haiku, rls sonnet/medium",
+      "omp bun run test -> 471 pass / 1 fail (known)",
+      "[unverified] Claude Code ignores unknown frontmatter keys; needs reinstall to test live"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:24:20+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "OMP-CHAN",
+    "surface": "omp",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp channels.test.ts openLeadChannel fixture creates .atlas/.run (project predicate); omp suite green",
+    "evidence": [
+      "bun run test -> 472 pass, 0 fail, 28 files",
+      "python3 -m unittest test_session_boot_colony test_channel_dispatch -> Ran 30 tests OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:24:43+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S1",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "colony fixture + golden-frame harness (100x30, 60x18, 160x48) with ATLAS_GOLDEN_UPDATE switch",
+    "evidence": [
+      "python3 -m unittest test_colony_golden: 3 failures before goldens, OK after; wrong-byte fails, update restores",
+      "python3 -m unittest test_colony_golden test_atlas_tui -> Ran 86 tests OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:25:35+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S2",
+    "surface": "colony",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "colony snapshot carries chat per channel, colony seat_count/age_s, seat.held; hold_member/release_member share the wave flag",
+    "evidence": [
+      "python3 -m unittest test_atlas_colony_model test_atlas_dash_colony test_atlas_colony_notes -> Ran 78 tests OK",
+      "discover test_atlas_dash*.py -> Ran 348 tests OK",
+      "snapshot() ~10.7ms, repeat snapshot opens zero board jsonl files"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:26:12+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "B5",
+    "surface": "hooks",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ATLAS status header template single-sourced in contracts/operating-contract.json (session_boot, completion_gate, omp/style.ts)",
+    "evidence": [
+      "test_atlas_contract.HeaderSsotTests: 1 failure + 2 errors before, Ran 3 tests OK after",
+      "omp bun run test -> 473 pass 0 fail",
+      "session_boot.py additionalContext carries header rule from contract"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:28:58+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "D3",
+    "surface": "codex",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "codex gets generated atlas contract block in root AGENTS.md (atlas_codex_contract.py --write/--check); Codex supports hooks and .codex/agents per Context7 (follow-up)",
+    "evidence": [
+      "python3 -m unittest test_atlas_codex_contract OK",
+      "atlas_codex_contract.py --check rc=0",
+      "git diff --stat AGENTS.md -> 29 insertions, 0 deletions",
+      "Context7 /openai/codex agents_md.rs: AGENTS.md collected root to cwd"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:30:06+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S3",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ATLAS COLONY landing section with SESSIONS region, region focus, two-pane and stacked layouts, stub CHANNEL/PEEK/STEER",
+    "evidence": [
+      "test_atlas_tui.ColonySection: 4 failures + 2 errors before, Ran 6 tests OK after",
+      "python3 -m unittest test_atlas_tui test_colony_golden -> Ran 92 tests OK",
+      "--once --width 60 --height 18 --fixture shows SESSIONS, CHANNEL, STEER titles"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:32:35+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "C3",
+    "surface": "hooks",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "tripwire sanctioned tier override: model/effort accepted only when in tier_allow/effort_allow AND equal to resolver output for the SCOPE line; fail-closed without resolver",
+    "evidence": [
+      "ColonyDenyTest/ColonyGuardUnitTest tier tests failed before, pass after",
+      "hooks discover 1575 tests: no dispatch_tripwire failures; 5 reds owned by D1/D3/S4/install/env",
+      "omp bun run test -> 473 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:32:50+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S4",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "CHANNEL region: chat_lines with lead/(you) tags, NEEDS strip, seat filter f, scroll, N new badge, Home/End",
+    "evidence": [
+      "python3 -m unittest test_atlas_tui test_colony_golden -> Ran 98 tests OK (ChannelRegion 6 tests; implementation preceded tests, no red-first capture)",
+      "100x30 golden shows 7 chat rows with (lead) and (you) tags"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:35:00+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "D1",
+    "surface": "style",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "context cuts: style 9151->6951 chars, unconditional orchestrate load ~64KB->13KB, length-budget cap dropped, one TOOLS rule for CC+omp; ContextBudget contract test",
+    "evidence": [
+      "test_atlas_contract.ContextBudget: 3 failures before, OK after",
+      "omp bun test -> 473 pass 0 fail",
+      "session_boot additionalContext 3098 chars at repo root (header injected once, by session_boot)"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:37:13+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S5",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "STEER: steer mode i/b/l/m, @target parsing, send/broadcast/lead-note, hold/release h, kill via y/n gate; lead refusal replaced by board hint",
+    "evidence": [
+      "test_atlas_tui.SteerRegion: failures=2 errors=7 before, Ran 10 tests OK after",
+      "python3 -m unittest test_atlas_tui test_colony_golden -> Ran 108 tests OK",
+      "grep -c pause atlas_tui.py -> 0"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:38:44+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S6",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "KEYMAP table drives colony/steer dispatch and help; hold/release/@all/@lead buttons clickable; wheel scroll; stacked CHANNEL keeps chat rows",
+    "evidence": [
+      "test_atlas_tui.KeymapContract: failures=3 errors=5 before, OK after",
+      "python3 -m unittest test_atlas_tui test_colony_golden -> Ran 116 tests OK",
+      "60x18 golden shows SESSIONS, CHANNEL with 2 chat rows, STEER"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:43:46+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S7",
+    "surface": "docs",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Atlas Colony TUI docs: SKILL.md key table from KEYMAP, atlas-colony.md frame, atlas-channels.md steering, README, ROADMAP follow-up",
+    "evidence": [
+      "KEYMAP help strings in SKILL.md: keys 31 misses []",
+      "lint_docs_names.py exit 0",
+      "banned glyphs in added lines: 0"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T10:45:16+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "C2b",
+    "surface": "tests",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "test_atlas_team derives team size from the resolver; critic level expectation follows the tier table (test was stale, product correct)",
+    "evidence": [
+      "python3 -m unittest test_atlas_team -> Ran 13 tests OK (3 failures before)",
+      "hooks test_atlas_resolve + TierTableContract -> Ran 14 tests OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T11:02:25+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "CLEANUP",
+    "surface": "tests",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "test hygiene: codex-contract isolation import; (g)/(o)/(p) paired-verifier test seeds plan+notes in its temp root",
+    "evidence": [
+      "FailOpenUnreadablePayloadTest.test_paired_verifier_no_block_condition_g + TestIsolationContract -> Ran 4 tests OK",
+      "scripts discover 2130 ran; dashboard_ui bun 78/78; omp bun 473/473; herdr-web-ui 1707 pass 9 fail (live herdr needed)"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T11:02:25+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S-LIVE",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "live TUI under tmux: 5/9 claims confirmed (1,2 refuted; 3 scroll,6 untestable)",
+    "evidence": [
+      ".atlas/evidence/audit-2026-10-20/tui-live/01-launch.txt,.atlas/evidence/audit-2026-10-20/tui-live/09-help.txt,.atlas/evidence/audit-2026-10-20/tui-live/11-small.txt,.atlas/evidence/audit-2026-10-20/tui-live/15-help.txt,.atlas/evidence/audit-2026-10-20/tui-live/22-quit.txt,.atlas/evidence/audit-2026-10-20/tui-live/stderr.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "tmux new-session -d -s atlas-verify -x 100 -y 30 'python3 plugins/atlas/scripts/atlas_tui.py' then send-keys 2,PageUp,End,i,l,Enter,?,h,q; capture-pane per step",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-20T11:07:11+00:00",
+    "verified_by": "verifier-tui-live"
+  },
+  {
+    "id": "SUITES-12.6.0",
+    "surface": "tests",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "full suites green before S8: hooks 1578, scripts 2130, omp 473, dashboard_ui 78",
+    "evidence": [
+      "scratchpad/final-suites.txt: hooks OK (skipped=3); scripts OK; omp 473 pass 0 fail; dashboard_ui 78 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T11:09:36+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S8",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "registry-backed in-process colonies appear in SESSIONS/CHANNEL (transport in-proc, seat cap 30, state from board notes)",
+    "evidence": [
+      "test_atlas_colony_model: errors=2 before, python3 -m unittest test_atlas_colony_model test_atlas_tui test_colony_golden -> Ran 162 tests OK",
+      "atlas_tui.py --once --all -> lead-edc720 in-proc with member seats and channel notes (grep -c edc720 = 20)",
+      "discover test_atlas_dash*.py -> 348 OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T11:13:42+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S-LIVE-2",
+    "surface": "tui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "live TUI re-run after S8: 6/6 confirmed",
+    "evidence": [
+      ".atlas/evidence/audit-2026-10-20/tui-live-2/04-down-more.txt,.atlas/evidence/audit-2026-10-20/tui-live-2/08-lead-edc.txt,.atlas/evidence/audit-2026-10-20/tui-live-2/10-pgup.txt,.atlas/evidence/audit-2026-10-20/tui-live-2/11-end.txt,.atlas/evidence/audit-2026-10-20/tui-live-2/19-short-held.txt,.atlas/evidence/audit-2026-10-20/tui-live-2/20-short-released.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-20T11:15:25+00:00",
+    "verified_by": "verifier-tui-live-2"
   }
 ]

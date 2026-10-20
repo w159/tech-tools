@@ -3,6 +3,7 @@
 // enlarge = interactive ws kind=pane). Data: GET term/snapshot, GET term/capture, ws /api/v2/term/ws (see colony contract §3).
 
 import { h, replace } from "../dom.js";
+import { reportFetchFail, clearFetchFail } from "../fetch-fail.js";
 
 export const CC = "command-center";
 const SNAP_MS = 3000;
@@ -264,7 +265,8 @@ export default {
           card.fit();
           card.term.write("\x1b[?7l" + r.text.replace(/\r?\n/g, "\r\n"));
         }
-      } catch (_e) { /* the next tick retries; the snapshot poll reports server loss */ }
+        clearFetchFail("term/capture");
+      } catch (_e) { reportFetchFail("terminal", "term/capture", _e); } // the next tick retries
     }
     const pollCaptures = (c) => Promise.all(seatsOf(c).map((s) => pollOne(s)));
 
@@ -340,7 +342,9 @@ export default {
     async function refresh() {
       try {
         applySnap(await ctx.api.get("term/snapshot", snapParams()));
+        clearFetchFail("term/snapshot");
       } catch (e) {
+        reportFetchFail("terminal", "term/snapshot", e);
         st.err = "snapshot unavailable: " + String((e && (e.error || e.message)) || e);
         drawFoot();
       }

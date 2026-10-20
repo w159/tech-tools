@@ -1,0 +1,1 @@
+colony_snap.json feeds golden/colony_*.txt (atlas_tui --once frames). After an intentional TUI change regenerate with: `ATLAS_GOLDEN_UPDATE=1 python3 -m unittest test_colony_golden` (run in plugins/atlas/scripts), then review the golden diff.

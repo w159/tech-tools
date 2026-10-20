@@ -298,14 +298,18 @@ def check_orchestration_wiring(ip):
         # Since 12.4.1 the tripwire is a shim; the markers live in the core
         # module, which older installs lack. Scan whichever exist.
         src = ""
+        scanned = []
         for path in (tripwire, os.path.join(ip, "hooks", "dispatch_tripwire_core.py")):
             if path == tripwire or os.path.exists(path):
+                scanned.append(os.path.basename(path))
                 with open(path, encoding="utf-8") as f:
                     src += f.read() + "\n"
+        # Name the file that holds the logic (core when present), not the shim.
+        where = scanned[-1]
         if "ORCH_SKILLS" not in src:
-            problems.append("dispatch_tripwire.py lacks ORCH_SKILLS auto-marking")
+            problems.append(f"{where} lacks ORCH_SKILLS auto-marking")
         if "mark_orchestrating" not in src:
-            problems.append("dispatch_tripwire.py never calls mark_orchestrating")
+            problems.append(f"{where} never calls mark_orchestrating")
     except Exception as e:
         problems.append(f"dispatch_tripwire.py unreadable: {e}")
     return problems

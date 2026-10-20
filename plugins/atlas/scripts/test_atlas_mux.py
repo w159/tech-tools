@@ -3073,3 +3073,31 @@ class ColonyNameSourceTests(unittest.TestCase):
             atlas_mux._lead_source("/a/proj", "lead-ab", None, env),
         )
         self.assertEqual("sid-1", atlas_mux._lead_source("/a/proj", "l", "sid-1", env)["session"])
+
+
+class SpawnGhostMemberTests(Base):
+    def test_window_open_exception_leaves_no_registered_member(self):
+        import atlas_mux
+
+        prompt = self.make_prompt("p-ghost", "x")
+        argv = [
+            "spawn", "--run", "r1", "--name", "Ghost", "--harness", "omp",
+            "--agent", "implementer", "--prompt-file", prompt, "--model", "x/y",
+            "--thinking", "low", "--root", self.root,
+        ]  # fmt: skip
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, self.spawn_env(), clear=True), mock.patch.object(
+            atlas_mux, "_open_window", side_effect=RuntimeError("boom")
+        ), contextlib.redirect_stdout(buf):
+            rc = atlas_mux.main(argv)
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertNotEqual(0, rc)
+        self.assertFalse(out["ok"])
+        self.assertIn("boom", out["error"])
+        reg = pathlib.Path(self.root) / ".atlas/.run/channels.json"
+        names = (
+            [m["name"] for c in json.loads(reg.read_text())["channels"].values() for m in c["members"]]
+            if reg.exists()
+            else []
+        )
+        self.assertNotIn("Ghost", names)
