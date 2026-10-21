@@ -339,6 +339,43 @@
             "title": "PAN-OS REST API version",
             "description": "Optional. Leave blank to use the default (v11.1). This is the /restapi/<version>/ path segment and must match the PAN-OS release on the appliance.",
             "default": ""
+        },
+        "sonicwall_host": {
+            "type": "string",
+            "title": "SonicWall host",
+            "description": "SonicWall firewall hostname / IP, no scheme and no path. Required, with no vendor default because the base URL is the appliance itself. Leave blank to disable SonicWall.",
+            "default": ""
+        },
+        "sonicwall_username": {
+            "type": "string",
+            "title": "SonicWall admin username",
+            "description": "Required. Use a dedicated least-privilege API admin, not the built-in admin, so audit entries are attributable.",
+            "default": ""
+        },
+        "sonicwall_password": {
+            "type": "string",
+            "title": "SonicWall admin password",
+            "description": "Required. Sent only in the Basic Authorization header over HTTPS.",
+            "sensitive": true,
+            "default": ""
+        },
+        "sonicwall_port": {
+            "type": "string",
+            "title": "SonicWall management port",
+            "description": "Optional. Management HTTPS port. Leave blank to use the default (443).",
+            "default": ""
+        },
+        "sonicwall_verify_tls": {
+            "type": "string",
+            "title": "SonicWall TLS verification",
+            "description": "Optional, defaults to true. Set to false ONLY for an appliance still on its factory self-signed certificate; that disables certificate verification for it.",
+            "default": ""
+        },
+        "sonicwall_session_override": {
+            "type": "string",
+            "title": "SonicWall session override",
+            "description": "Optional, defaults to false. When true, login and config mode preempt whichever admin currently holds the session. Off by default so automation never silently boots a human out of the console.",
+            "default": ""
         }
     },
     "keywords": [

@@ -11,7 +11,7 @@ plugin defaults to `""`. Filling a vendor's required keys **on the atlas plugin*
 
 | Kind | Connectors |
 | --- | --- |
-| Node bundles (`mcp/<name>/server.mjs`) | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, paylocity, threatlocker, vanta |
+| Node bundles (`mcp/<name>/server.mjs`) | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, paylocity, threatlocker, vanta, sonicwall |
 | Python vendored (`mcp/falcon/`) | falcon (requires `uv` on PATH) |
 
 ## userConfig key reference
@@ -37,6 +37,7 @@ Verified 2026-09-02 against `plugins/atlas/.mcp.json`,
 | Paylocity | `mcp/paylocity/server.mjs` | paylocity_client_id, paylocity_client_secret, paylocity_company_id, paylocity_base_url, paylocity_sandbox | paylocity_client_id, paylocity_client_secret | base_url default `https://api.paylocity.com` | Paylocity API partner credentials |
 | ThreatLocker | `mcp/threatlocker/server.mjs` | threatlocker_api_key, threatlocker_organization_id, threatlocker_base_url | threatlocker_api_key | base_url must match portal instance (blank assumes instance `g`, not universal) | ThreatLocker portal → API user key |
 | Vanta | `mcp/vanta/server.mjs` | vanta_client_id, vanta_client_secret, vanta_base_url | vanta_client_id, vanta_client_secret | base_url default `https://api.vanta.com/v1` | Vanta → Settings → Developer / API |
+| SonicWall | `mcp/sonicwall/server.mjs` | sonicwall_host, sonicwall_username, sonicwall_password, sonicwall_port, sonicwall_verify_tls, sonicwall_session_override | sonicwall_host, sonicwall_username, sonicwall_password | no vendor default host (the appliance); port default `443`, verify_tls default `true`, session_override default `false` | SonicOS → Device → Settings → Administration (dedicated API admin) |
 
 ## Tool disclosure (verified live)
 
