@@ -197,7 +197,7 @@ class TestDisclosureDocMatchesHarness(unittest.TestCase):
 
     def test_table_matches_harness_for_every_connector(self) -> None:
         harness = self._harness()
-        self.assertEqual(len(harness), 12)
+        self.assertEqual(len(harness), 13)
         self.assertEqual(self._doc(), harness)
 
 

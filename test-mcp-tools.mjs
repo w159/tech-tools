@@ -155,6 +155,14 @@ const CONNECTORS = {
       needs: ['PAYLOCITY_CLIENT_ID', 'PAYLOCITY_CLIENT_SECRET'],
     },
   },
+  sonicwall: {
+    floor: 48,
+    nocreds: {
+      status: 'sonicwall_status',
+      bare: ['sonicwall_navigate', 'sonicwall_status'],
+      needs: ['SONICWALL_HOST', 'SONICWALL_USERNAME', 'SONICWALL_PASSWORD'],
+    },
+  },
   spanning: {
     floor: 14,
     nocreds: {
@@ -361,7 +369,7 @@ function startAuthStub() {
 // and union the listed surfaces.
 //
 // A `*_navigate` tool either only describes its domains (knowbe4, ninjaone, panos,
-// paylocity, spanning, threatlocker, vanta - all of which list everything up
+// paylocity, sonicwall, spanning, threatlocker, vanta - all of which list everything up
 // front) or actually swaps which tools are listed (blumira). Unioning covers
 // both: the describe-only case contributes nothing, the gating case contributes
 // the tools a bare `tools/list` can never show.
