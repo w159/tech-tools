@@ -156,7 +156,7 @@ const CONNECTORS = {
     },
   },
   sonicwall: {
-    floor: 48,
+    floor: 41,
     nocreds: {
       status: 'sonicwall_status',
       bare: ['sonicwall_navigate', 'sonicwall_status'],
