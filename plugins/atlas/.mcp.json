@@ -197,6 +197,24 @@
         "CFG_PANOS_VERIFY_TLS": "${user_config.panos_verify_tls}",
         "CFG_PANOS_REST_VERSION": "${user_config.panos_rest_version}"
       }
+    },
+    "sonicwall": {
+      "command": "node",
+      "args": [
+        "--import",
+        "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
+        "${CLAUDE_PLUGIN_ROOT}/mcp/sonicwall/server.mjs"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "ATLAS_ENV_FILE": "${CLAUDE_PLUGIN_ROOT}/.env",
+        "CFG_SONICWALL_HOST": "${user_config.sonicwall_host}",
+        "CFG_SONICWALL_USERNAME": "${user_config.sonicwall_username}",
+        "CFG_SONICWALL_PASSWORD": "${user_config.sonicwall_password}",
+        "CFG_SONICWALL_PORT": "${user_config.sonicwall_port}",
+        "CFG_SONICWALL_VERIFY_TLS": "${user_config.sonicwall_verify_tls}",
+        "CFG_SONICWALL_SESSION_OVERRIDE": "${user_config.sonicwall_session_override}"
+      }
     }
   }
 }

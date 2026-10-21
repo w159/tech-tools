@@ -4,7 +4,7 @@ Atlas bundles **twelve** vendor MCP connectors inside the atlas plugin itself:
 
 | Kind | Path | Connectors |
 | --- | --- | --- |
-| Node ESM bundles | `mcp/<name>/server.mjs` | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta |
+| Node ESM bundles | `mcp/<name>/server.mjs` | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta, sonicwall |
 | Python (uv project) | `mcp/falcon/` | falcon |
 
 There is **no** department subdirectory layout (`mcp/hr/`, `mcp/security/`, …) in

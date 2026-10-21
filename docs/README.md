@@ -50,6 +50,7 @@ stub that answers `POST /oauth2/token` and nothing else.
 | ninjaone | PASS | 45 (45) | 9 marked mutating, 14 annotated mutating |
 | panos | PASS | 60 (60) | 32 marked mutating, 34 annotated mutating |
 | paylocity | PASS | 16 (16) | no prose effect markers, so AGREEMENT is vacuous here |
+| sonicwall | pending | pending S2-U2 | server not built yet; wired in `.mcp.json` and `plugin.json` only |
 | spanning | PASS | 14 (14) | 1 marked, 1 annotated |
 | threatlocker | PASS | 30 (30) | 1 marked, 1 annotated |
 | vanta | PASS | 28 (28) | no prose effect markers, so AGREEMENT is vacuous here |

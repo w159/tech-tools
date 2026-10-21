@@ -31,7 +31,7 @@ Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELO
 | Role agents (`atlas:*`) | 13 | `plugins/atlas/agents/` |
 | Hooks | 17 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 49 non-test Python scripts | `plugins/atlas/scripts/` |
-| MCP connectors | 12, each off until credentials exist | `plugins/atlas/.mcp.json` |
+| MCP connectors | 13, each off until credentials exist | `plugins/atlas/.mcp.json` |
 | omp agents | 13, generated | `plugins/atlas/omp/agents/` |
 
 ## Contents
