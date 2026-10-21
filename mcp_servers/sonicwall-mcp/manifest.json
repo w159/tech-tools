@@ -1,0 +1,97 @@
+{
+  "manifest_version": "0.3",
+  "name": "sonicwall-mcp",
+  "version": "0.1.0",
+  "display_name": "SonicWall MCP Server",
+  "description": "Manage SonicWall firewalls via the SonicOS 7 REST API: objects, policies, interfaces, VPN, logs, and an explicit config commit step.",
+  "long_description": "Structured access to the SonicOS 7 REST API. Every write is staged into the pending config and nothing takes effect until the separate sonicwall_config_commit tool runs. The server logs in itself (HTTP Basic over HTTPS), keeps the session in process memory, and releases the single admin slot on exit. A grounded generic request tool is checked against the vendor endpoint inventory. Not yet validated against hardware.",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/w159/tech-tools"
+  },
+  "homepage": "https://github.com/w159/tech-tools/tree/main/mcp_servers/sonicwall-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "sonicwall",
+    "sonicos",
+    "firewall",
+    "network-security"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
+      "env": {
+        "SONICWALL_HOST": "${user_config.sonicwall_host}",
+        "SONICWALL_USERNAME": "${user_config.sonicwall_username}",
+        "SONICWALL_PASSWORD": "${user_config.sonicwall_password}",
+        "SONICWALL_PORT": "${user_config.sonicwall_port}",
+        "SONICWALL_VERIFY_TLS": "${user_config.sonicwall_verify_tls}",
+        "SONICWALL_SESSION_OVERRIDE": "${user_config.sonicwall_session_override}",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  },
+  "tools_generated": true,
+  "user_config": {
+    "sonicwall_host": {
+      "type": "string",
+      "title": "SonicWall host",
+      "description": "Firewall hostname or IP (no scheme, no path). Required, no default: the base URL is the appliance itself.",
+      "required": true
+    },
+    "sonicwall_username": {
+      "type": "string",
+      "title": "SonicWall admin username",
+      "description": "Dedicated least-privilege API admin, not the built-in admin, so audit entries are attributable.",
+      "required": true
+    },
+    "sonicwall_password": {
+      "type": "string",
+      "title": "SonicWall admin password",
+      "description": "Sent only in the Basic Authorization header over HTTPS.",
+      "required": true,
+      "sensitive": true
+    },
+    "sonicwall_port": {
+      "type": "string",
+      "title": "Management HTTPS port",
+      "description": "Optional. Defaults to 443.",
+      "required": false,
+      "default": "443"
+    },
+    "sonicwall_verify_tls": {
+      "type": "string",
+      "title": "Verify TLS",
+      "description": "Optional. Defaults to true. Set to false ONLY for an appliance still on its factory self-signed certificate; sonicwall_status reports it as a warning.",
+      "required": false,
+      "default": "true"
+    },
+    "sonicwall_session_override": {
+      "type": "string",
+      "title": "Session override",
+      "description": "Optional. Defaults to false. When true, login and config-mode preempt whichever admin currently holds the session.",
+      "required": false,
+      "default": "false"
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    },
+    "claude_desktop": ">=0.10.0"
+  }
+}
