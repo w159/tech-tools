@@ -14,6 +14,7 @@ import * as nodePath from "node:path";
 import { taskItems, recordFault } from "./fault-log";
 import { pluginScript } from "./plugin-path";
 import { runCaptureSync } from "./proc";
+import { atlasKnob } from "./knobs";
 
 /** Resolved at call time so an `omp plugin upgrade atlas` mid-session is picked up (plugin-path). */
 export const todoScript = (): string => pluginScript("atlas_todo.py");
@@ -72,7 +73,7 @@ export function reviseForChannel(
 	opts: { cwd: string; sessionId?: string; env?: Record<string, string | undefined>; run?: ChannelRunner; onOpen?: OnChannelOpen; script?: string },
 ): Record<string, unknown> | undefined {
 	const env = opts.env ?? process.env;
-	if (env.ATLAS_CHANNELS === "off") return undefined;
+	if (atlasKnob("ATLAS_CHANNELS", env) === "off") return undefined;
 	const revised = structuredClone(input);
 	const items = taskItems(revised).filter(i => typeof i.task === "string");
 	if (!items.length) return undefined;
@@ -190,7 +191,7 @@ export function openLeadChannel(
 	opts: { cwd: string; sessionId?: string; env?: Record<string, string | undefined>; run?: ChannelRunner; script?: string; onOpen?: OnChannelOpen },
 ): string | undefined {
 	const env = opts.env ?? process.env;
-	if (env.ATLAS_CHANNELS === "off") return undefined;
+	if (atlasKnob("ATLAS_CHANNELS", env) === "off") return undefined;
 	const script = opts.script ?? todoScript();
 	if (!fs.existsSync(script)) {
 		faultOnce(`atlas omp install is stale: ${script} missing; run: omp plugin upgrade atlas, then restart omp sessions started before the upgrade`, opts.cwd);

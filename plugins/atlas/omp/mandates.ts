@@ -23,6 +23,7 @@ import * as nodePath from "node:path";
 
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
+import { atlasKnob } from "./knobs";
 
 /** The shared mandate contract (also read by the Python hooks). */
 export interface Mandates {
@@ -157,7 +158,7 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 	let recalled = false; // true only once a real claude-mem call happened; a denial never sets it
 	/** The recall line once rendered, re-served byte for byte so the provider's prompt cache is not rewritten when a route changes mid-session. Absence is never stored. */
 	let recallLine: string | undefined;
-	const off = () => (deps.env ?? process.env).ATLAS_MANDATES === "off";
+	const off = () => atlasKnob("ATLAS_MANDATES", deps.env ?? process.env) === "off";
 	const reset = () => {
 		ponytailListed = false;
 		commitNudged = false;

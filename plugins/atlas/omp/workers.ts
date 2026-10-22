@@ -17,7 +17,7 @@
  * added, or created. Unknown payloads pass through untouched. Fail open.
  */
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { atlasKnob } from "./hook-bridge";
+import { atlasKnob } from "./knobs";
 
 export const ATLAS_WORKER_MAX_TOKENS_DEFAULT = 32000;
 

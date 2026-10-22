@@ -829,3 +829,19 @@ test("finalReportOf falls back past empty assistant text to the last yield data,
 	expect(finalReportOf([{ role: "assistant", content: "hi" }, { role: "assistant", content: [] }])).toBe("hi");
 	expect(finalReportOf([{ role: "toolResult", content: "Result submitted." }, { role: "assistant", content: "" }])).toBe("");
 });
+
+test("a store save of ATLAS_STOP_BRIDGE=off applies on the next Stop without reloading the extension", async () => {
+	const home = process.env.ATLAS_HOME as string;
+	const h = harness();
+	await h.stop();
+	expect(h.log).toContain("hook:completion_gate.py");
+	h.log.length = 0;
+	mkdirSync(home, { recursive: true });
+	writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_STOP_BRIDGE: "off" } }));
+	try {
+		await h.stop();
+		expect(h.log.some(l => l.startsWith("hook:"))).toBe(false);
+	} finally {
+		rmSync(join(home, "settings.json"), { force: true });
+	}
+});

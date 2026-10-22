@@ -18,6 +18,7 @@ import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import { loadNativeTools } from "./contracts";
 import { pluginRoot } from "./plugin-path";
+import { atlasKnob } from "./knobs";
 
 export const STYLE_PATH = nodePath.resolve(import.meta.dir, "..", "output-styles", "atlas-orchestrator.md");
 
@@ -256,7 +257,7 @@ export function registerStyle(pi: Pick<ExtensionAPI, "on">, deps: StyleDeps = {}
 	pi.on("before_agent_start", (event, ctx) => {
 		try {
 			if (ctx.agent.kind !== "main") return undefined;
-			const styleOff = (deps.env ?? process.env).ATLAS_STYLE === "off";
+			const styleOff = atlasKnob("ATLAS_STYLE", deps.env ?? process.env) === "off";
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			const has = (marker: string) => base.some(entry => typeof entry === "string" && entry.includes(marker));
 			const additions: string[] = [];

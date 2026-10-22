@@ -9487,5 +9487,43 @@
     "status": "verified",
     "verified_at": "2026-10-22T22:56:20+00:00",
     "verified_by": "lead-playwright"
+  },
+  {
+    "id": "toggles-fix",
+    "surface": "frontend",
+    "category": "settings",
+    "severity": "high",
+    "title": "worker/toggles-fix: on-when-unset toggles paint real state and save",
+    "evidence": [
+      "wt test_atlas_control Ran 52 OK (lead rerun)",
+      "wt bun test 154 pass 0 fail (lead rerun)",
+      "live 7421 repro before fix: click on st-ATLAS_HOOK_BRIDGE sent no request; on='' equal to snapshot"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T23:11:45+00:00",
+    "verified_by": "lead-tests"
+  },
+  {
+    "id": "omp-knobs",
+    "surface": "backend",
+    "category": "settings",
+    "severity": "high",
+    "title": "worker/omp-knobs: omp reads every behavior knob per use via knobs.ts atlasKnob",
+    "evidence": [
+      "main with patch applied: cd plugins/atlas/omp && bun test 480 pass 0 fail (lead rerun)",
+      "implementer red run: style/shell-route/stop-bridge live-save tests failed before the change",
+      "fallow circular_dependencies 0 after knobs.ts extraction"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T23:22:00+00:00",
+    "verified_by": "lead-tests"
   }
 ]

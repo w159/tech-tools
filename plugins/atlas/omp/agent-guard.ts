@@ -36,6 +36,7 @@ import * as nodePath from "node:path";
 import { loadToolNames, mcpDevice } from "./style";
 import { isRecord } from "./workers";
 import { pluginRoot } from "./plugin-path";
+import { atlasKnob } from "./knobs";
 
 /** One omp tool's guard rule: blocked when any listed Claude tool is in the agent's disallowedTools. */
 export interface GuardRule {
@@ -318,7 +319,7 @@ function decide(event: GuardEvent, ctx: GuardCtx, deps: AgentGuardDeps): { block
 export function registerAgentGuard(pi: Pick<ExtensionAPI, "on">, deps: AgentGuardDeps = {}): void {
 	pi.on("tool_call", (event, ctx) => {
 		try {
-			return (deps.env ?? process.env).ATLAS_TRIPWIRE_HARD === "off" ? undefined : decide(event, ctx, deps);
+			return atlasKnob("ATLAS_TRIPWIRE_HARD", deps.env ?? process.env) === "off" ? undefined : decide(event, ctx, deps);
 		} catch {
 			return undefined; // fail open — never strand the agent
 		}

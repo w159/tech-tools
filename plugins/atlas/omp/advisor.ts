@@ -24,7 +24,7 @@ import * as nodePath from "node:path";
 import { runCaptureSync } from "./proc";
 import { pluginScript } from "./plugin-path";
 import { isRecord } from "./workers";
-import { atlasKnob } from "./hook-bridge";
+import { atlasKnob } from "./knobs";
 
 const MAX_STOP_BLOCKS = 3;
 const NOTE_PREFIX_LIMIT = 200;

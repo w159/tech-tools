@@ -62,7 +62,8 @@ import { registerUsageStatusline, userStatuslineCopyExists } from "./usage-statu
 import { registerAtlasTuiCommand } from "./tui-command";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
 import { createShellEditTracker } from "./delegation";
-import { atlasStoreEnv, registerHookBridge } from "./hook-bridge";
+import { atlasKnob, atlasStoreEnv } from "./knobs";
+import { registerHookBridge } from "./hook-bridge";
 import { type RunStateSink, createRunStateSink } from "./run-state";
 import { createTranscriptCache, registerStopBridge, sessionFileOf } from "./stop-bridge";
 import { registerMandates } from "./mandates";
@@ -525,7 +526,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			const contract = loadNativeTools();
 			const kind = kindOfOmpTool(tool, contract);
 			if ((tool === "grep" || tool === "glob") && kind && contract?.kinds[kind].mode === "deny") {
-				if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
+				if (atlasKnob("ATLAS_TRIPWIRE_HARD") === "off") return undefined;
 				const active = activeToolsOf(deps);
 				if (!active) return undefined; // availability unknown: allow silently, never claim "unreachable"
 				const replacement = resolveLeanReplacement(kind, active);
@@ -542,7 +543,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 			if ((tool === "read" || tool === "bash") && kind) {
 				// Exploration-only shell (cat/grep/find/...) is denied toward lean-ctx when a
 				// replacement is reachable now (contracts/native-tools.json explorationShell).
-				if (tool === "bash" && process.env.ATLAS_TRIPWIRE_HARD !== "off") {
+				if (tool === "bash" && atlasKnob("ATLAS_TRIPWIRE_HARD") !== "off") {
 					const command = typeof input.command === "string" ? input.command : "";
 					const picked = explorationTool(command, contract);
 					const route = picked ? resolveLeanToolRoute(picked, activeToolsOf(deps)) : undefined;
@@ -610,7 +611,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 	// definition pins its tier (atlas-agents.ts), and a per-call override drifts it quietly.
 	pi.on("before_subagent_spawn", (event, ctx) => {
 		try {
-			if (process.env.ATLAS_TRIPWIRE_HARD === "off") return undefined;
+			if (atlasKnob("ATLAS_TRIPWIRE_HARD") === "off") return undefined;
 			const armed = gatesArmed(ctx?.cwd);
 			const spawn = event as { agent?: unknown; patterns?: unknown; modelRole?: unknown };
 			const agent = typeof spawn.agent === "string" ? spawn.agent.trim() : "";
@@ -652,7 +653,7 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 	pi.on("session_stop", (_event, ctx) => {
 		try {
 			if (stopBlocked || ctx.agent.kind === "sub" || !docsRoot(ctx.cwd) || !gatesArmed(ctx.cwd)) return undefined;
-			if (process.env.ATLAS_GATE === "off") return undefined;
+			if (atlasKnob("ATLAS_GATE") === "off") return undefined;
 			// A standalone `omp -p` worker launched by atlas_mux is reported as a main session (kind is never "sub"), but its
 			// lead owns delegation. atlas_mux pins ATLAS_WORKER_NAME in the worker env, and nothing else sets it.
 			if ((process.env.ATLAS_WORKER_NAME ?? "").trim() !== "") return undefined;

@@ -8,8 +8,13 @@
 - `plugins/atlas/scripts/atlas_env.py` `apply_store_env()` at the top of all 17 hook entry points (`plugins/atlas/hooks/hooks.json`): the settings store overrides the session-start environment, so every knob applies on the next hook run.
 - 66 typed knobs in seven groups (`plugins/atlas/scripts/atlas_control.py`); `GET /api/behavior` shape `groups, advanced, paths, hidden, note`; `POST` of `ATLAS_HOME`, `ATLAS_DB` or `ATLAS_DASHBOARD_PORT` returns 400 `read_only`.
 
+### Changed
+
+- omp extension knobs `ATLAS_STOP_BRIDGE`, `ATLAS_INGEST`, `ATLAS_STYLE`, `ATLAS_LEAN_SHELL`, `ATLAS_MANDATES`, `ATLAS_GATES`, `ATLAS_CHANNELS`, `ATLAS_TRIPWIRE_HARD` and `ATLAS_GATE` now go through `atlasKnob()` (`plugins/atlas/omp/knobs.ts`), which re-reads the Atlas store on every call; a dashboard save applies to a running omp on its next use. Not routed: `ATLAS_STATUSLINE`, `ATLAS_WORKER_SCHEMA`, `ATLAS_TODO_EXPANDED`. The output style block stays frozen per session. Tests: `style.test.ts`, `shell-route.test.ts`, `stop-bridge.test.ts`.
+
 ### Fixed
 
+- Toggles `ATLAS_GATE`, `ATLAS_HOOK_BRIDGE` and `ATLAS_ADVISOR_GATE` were dead on the Settings page (empty on value, so a click sent no request). The catalog now uses on="on", off="off", default="on", and `isOn()` treats unset as on when the default equals the on value. Tests: `test_no_toggle_has_an_empty_or_ambiguous_on_value`, two in `settings.test.js`; verified on the live dashboard.
 - Number rows saved with Enter no longer show "unchanged"; text rows save on blur; a no-op commit keeps a verified status.
 
 ### Removed

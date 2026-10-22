@@ -37,6 +37,7 @@
  * Kill switches: ATLAS_HOOK_BRIDGE=off (all bridges), ATLAS_STOP_BRIDGE=off (this
  * module only), ATLAS_INGEST=off (no detached ingest spawns).
  */
+import { atlasKnob } from "./knobs";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -48,7 +49,6 @@ import {
 	type StopHookOutput,
 	recordFault,
 	type HookRunner,
-	atlasKnob,
 	claudeLifecyclePayload,
 	hookTimeoutMs,
 	loadBridgedHooksFor,
@@ -395,7 +395,7 @@ export function finalReportOf(messages: unknown[]): string {
 
 export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridgeDeps = {}): void {
 	const env = () => deps.env ?? process.env;
-	const off = () => atlasKnob("ATLAS_HOOK_BRIDGE", env()) === "off" || env().ATLAS_STOP_BRIDGE === "off";
+	const off = () => atlasKnob("ATLAS_HOOK_BRIDGE", env()) === "off" || atlasKnob("ATLAS_STOP_BRIDGE", env()) === "off";
 	const run = deps.run ?? runHook;
 	const cache = deps.cache ?? createTranscriptCache({ tmpDir: deps.tmpDir });
 	const spawnDetached = deps.spawnDetached ?? spawnDetachedReal;
@@ -536,7 +536,7 @@ export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridg
 
 	/** Converts, then spawns the event's ingest hook detached. Never awaits the child. */
 	const ingest = async (hookEvent: "SessionEnd" | "SubagentStop" | "PreCompact", ctx: BridgeCtx, kind: "main" | "sub", timeoutMs: number): Promise<void> => {
-		if (off() || env().ATLAS_INGEST === "off") return;
+		if (off() || atlasKnob("ATLAS_INGEST", env()) === "off") return;
 		const sessionId = sessionIdOf(ctx);
 		const command = hooksFor(hookEvent)[0]?.command;
 		if (!sessionId || !command) return;

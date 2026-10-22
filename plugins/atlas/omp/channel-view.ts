@@ -23,6 +23,7 @@ import { type GatesCache,type IdleWave, type LaneTool, type PanelNote, type Pane
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
+import { atlasKnob } from "./knobs";
 
 export const WIDGET_KEY = "atlas-channel";
 const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
@@ -348,7 +349,7 @@ function recorderName(ctx: RecorderCtx, env: Record<string, string | undefined>)
 
 /** <root>/.atlas/.run/logs for a session that has a lane and an armed (.atlas) tree; undefined otherwise. */
 function recorderDir(ctx: RecorderCtx, env: Record<string, string | undefined>): string | undefined {
-	if (env.ATLAS_CHANNELS === "off" || !ctx.cwd) return undefined;
+	if (atlasKnob("ATLAS_CHANNELS", env) === "off" || !ctx.cwd) return undefined;
 	const root = boardRoot(ctx.cwd, env);
 	return existsSync(nodePath.join(root, ".atlas")) ? logsDir(root) : undefined;
 }
@@ -625,7 +626,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	return {
 		open(u, i) {
 			try {
-				if (env.ATLAS_CHANNELS === "off" || !i.channel) return;
+				if (atlasKnob("ATLAS_CHANNELS", env) === "off" || !i.channel) return;
 				if (linger !== undefined) clearTo(linger);
 				linger = undefined;
 				const same = info?.channel === i.channel;
