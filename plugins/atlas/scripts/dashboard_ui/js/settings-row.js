@@ -82,6 +82,8 @@ export function SettingRow(item, deps) {
   let value = String((item.value ?? item.default) ?? '');
 
   const commit = async (next, extra) => {
+    // Unchanged value: no write, and the status line must not keep a stale error from the previous attempt.
+    if (!extra && String(next) === value) { setStatus('unchanged', 'ok'); return true; }
     setStatus('saving…', 'busy');
     try {
       const res = await deps.save(item, next, extra);
@@ -133,7 +135,7 @@ export function SettingRow(item, deps) {
     const go = async () => {
       const raw = String(input.value).trim();
       if (raw === '' || !Number.isFinite(Number(raw))) { setStatus('✗ not saved: enter a number', 'fail'); input.value = value; return; }
-      if (raw !== value && !(await commit(raw)) && !/outside/.test(status.textContent)) input.value = value;
+      if (!(await commit(raw)) && !/outside/.test(status.textContent)) input.value = value;
     };
     const step = (dir) => () => { const st = (item.range && item.range.step) || 1; const n = clampNumber(item.range, Number(input.value || value || 0) + dir * st); input.value = String(n); return go(); };
     input.addEventListener('change', go);

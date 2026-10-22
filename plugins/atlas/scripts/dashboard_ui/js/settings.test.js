@@ -259,3 +259,35 @@ test("settings.css: content column is minmax(0,1fr) and the card grid is two col
   expect(css).toContain("grid-template-columns: 200px minmax(0, 1fr)");
   expect(css).toMatch(/@media \(min-width: 1100px\) \{ \.st-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
+
+test("a later successful save replaces an earlier error status, and an unchanged value reads `unchanged`", async () => {
+  let fail = true;
+  const api = mkApi({ post: async () => { if (fail) throw Object.assign(new Error("boom"), { status: 500 }); return { ok: true, layers: [{ layer: "store", ok: true }] }; } });
+  const row = SettingRow(KNOBS[5], deps(api));
+  const input = byTag(row, "input")[0];
+  const save = byClass(row, "btn").find((b) => b.attrs.id === "st-ATLAS_OLLAMA_URL-save") || byTag(row, "button")[0];
+  input.value = "http://x:1";
+  await save.listeners.click();
+  const status = byClass(row, "st-status")[0];
+  expect(status.textContent).toContain("not saved");
+  fail = false;
+  input.value = "http://x:1";
+  await save.listeners.click();
+  expect(status.textContent).toBe("✓ verified · atlas store");
+  await save.listeners.click();
+  expect(status.textContent).toBe("unchanged");
+});
+
+test("restoring the previous value after an error clears the error with `unchanged`", async () => {
+  const api = mkApi({ post: async () => { throw Object.assign(new Error("boom"), { status: 500 }); } });
+  const row = SettingRow(KNOBS[5], deps(api));
+  const input = byTag(row, "input")[0];
+  const save = byTag(row, "button")[0];
+  input.value = "http://other";
+  await save.listeners.click();
+  const status = byClass(row, "st-status")[0];
+  expect(status.textContent).toContain("not saved");
+  input.value = "http://127.0.0.1:11434";
+  await save.listeners.click();
+  expect(status.textContent).toBe("unchanged");
+});

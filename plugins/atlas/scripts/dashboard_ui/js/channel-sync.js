@@ -4,7 +4,8 @@
 
 export const FALLBACK_MS = 30000;
 
-export function startChannelSync({ store, refresh, skip = () => false, fallbackMs = FALLBACK_MS, timers = { set: setInterval, clear: clearInterval } }) {
+export function startChannelSync({ store, refresh, skip = () => false, fallbackMs = FALLBACK_MS, timers = { set: (f, ms) => setInterval(f, ms), clear: (id) => clearInterval(id) } }) {
+  // Arrow wrappers: a bare `setInterval` called as timers.set() gets this=timers and browsers throw "Illegal invocation".
   let iv = null;
   const tick = () => {
     if (typeof document !== "undefined" && document.hidden) return;
