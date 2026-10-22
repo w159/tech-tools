@@ -30,8 +30,6 @@
             "data-theme",
             t === "light" ? "light" : "dark",
           );
-          if (localStorage.getItem("atlas.collapsed") === "1")
-            document.documentElement.setAttribute("data-collapsed", "true");
         } catch (e) {}
         [
           "tokens",
@@ -59,7 +57,14 @@
   </head>
   <body>
     <a class="sr-only" href="#page-root">Skip to content</a>
-    <div class="app" id="app"></div>
+    <header class="band" id="band" aria-label="Mission control"></header>
+    <div class="cols" id="cols">
+      <section class="col col-left" id="col-left" aria-label="Seats"></section>
+      <section class="col col-main" id="col-main" aria-label="Run">
+        <div class="page" id="page-root" tabindex="-1"></div>
+      </section>
+      <section class="col col-right" id="col-right" aria-label="Feed"></section>
+    </div>
     <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
     <noscript>Atlas Command Center needs JavaScript.</noscript>
   </body>

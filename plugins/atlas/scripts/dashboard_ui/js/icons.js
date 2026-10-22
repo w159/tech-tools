@@ -57,7 +57,7 @@ export function icon(name, size = 16) {
 }
 
 /** The hex cube brand mark (the only kept Atlas asset). */
-export function brandMark() {
+function brandMark() {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("class", "brand-mark");

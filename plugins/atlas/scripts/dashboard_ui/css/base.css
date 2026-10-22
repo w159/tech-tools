@@ -1,4 +1,4 @@
-/* Reset, typography scale, focus ring, reduced motion. */
+/* v15 base: mono/sans, .label, .hd, rules. Reset, typography scale, focus ring, reduced motion. */
 *,
 *::before,
 *::after {
@@ -11,7 +11,7 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--text);
-  font: 400 13px/20px var(--font-sans);
+  font: 400 13px/20px var(--sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -67,14 +67,14 @@ table {
 code,
 pre,
 .mono {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-size: 12.5px;
   line-height: 18px;
 }
 .meta {
   font-size: 12px;
   line-height: 16px;
-  color: var(--text-2);
+  color: var(--dim);
 }
 .label {
   font-size: 11px;
@@ -82,7 +82,15 @@ pre,
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-3);
+  color: var(--faint);
+}
+.hd {
+  font: 600 11px/16px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--rule);
 }
 .num {
   font-weight: 500;
@@ -116,7 +124,7 @@ pre,
 }
 
 ::selection {
-  background: var(--brand-soft);
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
 }
 
 /* One slow pulse exists (state dot); reduced motion removes all animation. */
