@@ -1,0 +1,553 @@
+{
+  "ok": true,
+  "project": "~/MEGA/Projects/Agentic/tech-tools",
+  "lead": {
+    "name": "lead-17b803",
+    "channel": "tech-tools@main/lead-17b803"
+  },
+  "channel": {
+    "name": "tech-tools@main/lead-17b803",
+    "lead": "lead-17b803",
+    "project": "~/MEGA/Projects/Agentic/tech-tools",
+    "created": 1792683179.8872252,
+    "branch": "main",
+    "members": 14
+  },
+  "members": [
+    {
+      "name": "lead-17b803",
+      "kind": "lead",
+      "state": "running",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 1,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": true,
+      "liveness": {
+        "active": true,
+        "at": 1792697200.2577615,
+        "source": "session write",
+        "text": "active, last session write 67s ago"
+      },
+      "deliver": {
+        "ok": true,
+        "how": "hook",
+        "reason": "queued on the channel board; it reads it on its next tool call"
+      },
+      "last_active": 1792697200.2577615,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [
+        {
+          "id": "tbc88116c",
+          "title": "Design: research, mockups, approved design doc and plan (done)",
+          "status": "completed"
+        },
+        {
+          "id": "t4b3063c4",
+          "title": "Baseline: v14 committed on main (38af30e7), worker/cc15 worktree",
+          "status": "completed"
+        },
+        {
+          "id": "tb80bc52a",
+          "title": "T1 glyph and role tables pinned to theme.ts",
+          "status": "completed"
+        },
+        {
+          "id": "ta3593ad0",
+          "title": "T2 tokens and contrast gate",
+          "status": "completed"
+        },
+        {
+          "id": "t94fbe5f6",
+          "title": "T3 shell, router, band",
+          "status": "completed"
+        },
+        {
+          "id": "t03a082b6",
+          "title": "T4 run page adapters with live fixtures",
+          "status": "in_progress"
+        },
+        {
+          "id": "tbaaa1c47",
+          "title": "T5 read-only /api/v2/gates",
+          "status": "pending"
+        },
+        {
+          "id": "t2643b86a",
+          "title": "T6 run page",
+          "status": "pending"
+        },
+        {
+          "id": "t05f442b2",
+          "title": "T7 keys and palette",
+          "status": "pending"
+        },
+        {
+          "id": "tbc8e1ebe",
+          "title": "T8 remaining pages on the shell",
+          "status": "pending"
+        },
+        {
+          "id": "t5d57b158",
+          "title": "T9 version, docs, spec sync",
+          "status": "pending"
+        },
+        {
+          "id": "t2bfcd7d9",
+          "title": "T10 runtime acceptance + final review + merge",
+          "status": "pending"
+        }
+      ],
+      "last_note": null,
+      "log_path": null,
+      "exit_code": null,
+      "ended_at": null
+    },
+    {
+      "name": "explorer-plan-facts",
+      "kind": "worker",
+      "state": "parked",
+      "parked": true,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": true,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "explorer-plan-facts is parked: no process or pane and no activity for 10 min, so it makes no tool calls to read a board note until it is revived"
+      },
+      "last_active": 1792689130.630669,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792689130.630669,
+        "text": "explorer-plan-facts done: PARTIAL facts sheet at ~/MEGA/Projects/Agentic/tech-tools/.atlas/.run/cc15-plan-facts.md; sections 1,5,6,9(partial),7(partial) unresolved"
+      },
+      "log_path": null,
+      "exit_code": null,
+      "ended_at": null
+    },
+    {
+      "name": "impl-cc15-t4",
+      "kind": "worker",
+      "state": "running",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": true,
+      "liveness": null,
+      "deliver": {
+        "ok": true,
+        "how": "hook",
+        "reason": "queued on the channel board; it reads it on its next tool call"
+      },
+      "last_active": 1792697210.831733,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [
+        {
+          "id": "t380b1baf",
+          "title": "ship js/run-data.js (pure adapters toBand, toSeats, toFeed, toNeeds, toGates, toMetrics) with captured JSON fixtures and a node test file, committed on worker/cc15 inside the worktree.",
+          "status": "in_progress"
+        }
+      ],
+      "last_note": {
+        "ts": 1792697210.831733,
+        "text": "claims: plugins/atlas/scripts/dashboard_ui/js/run-data.js, plugins/atlas/scripts/dashboard_ui/js/run-data.test.js, plugins/atlas/scripts/dashboard_ui/js/fixtures"
+      },
+      "log_path": null,
+      "exit_code": null,
+      "ended_at": null
+    },
+    {
+      "name": "explorer-atlas-identity",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "explorer-atlas-identity is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792687925.338191,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792687925.338191,
+        "text": "releases: .atlas/.run/cc15-identity-inventory.md"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792687930.596777
+    },
+    {
+      "name": "explorer-builder-check",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "explorer-builder-check is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792688985.6775548,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792688985.6775548,
+        "text": "explorer-builder-check done: wrote .atlas/.run/cc15-builder-check.md, 9 questions, 4 answered by code."
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792688994.240709
+    },
+    {
+      "name": "explorer-plan-facts-2",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "explorer-plan-facts-2 is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792689290.317215,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792689290.317215,
+        "text": "explorer-plan-facts-2 done: section 13 a-f appended to cc15-plan-facts.md; node --test (dir form) fails on Node 22, glob form 18/18 pass; b, c-drawer, e-wave-member, d-route partly [not found]/[unverified]."
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792689301.235347
+    },
+    {
+      "name": "impl-cc15-mockups",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "impl-cc15-mockups is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792688254.257843,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792688254.257843,
+        "text": "done: A fixed, B created, cc15-a.png and cc15-b.png saved, 0 console errors each"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792688261.010679
+    },
+    {
+      "name": "impl-cc15-t1",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "impl-cc15-t1 is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792696210.5182662,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792696210.5182662,
+        "text": "T1 done, committed on worker/cc15"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792696237.904308
+    },
+    {
+      "name": "impl-cc15-t2",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "impl-cc15-t2 is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792696371.681928,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792696371.681928,
+        "text": "T2 start: tokens.css + contrast.py in cc15 worktree"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792696574.096769
+    },
+    {
+      "name": "impl-cc15-t3",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "impl-cc15-t3 is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792696890.9247732,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792696890.9247732,
+        "text": "T3 done: 8576a98d, node 32/32, #/run band 0 console errors"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792697085.5102358
+    },
+    {
+      "name": "impl-fallow-baseline",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "impl-fallow-baseline is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792696022.222404,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792696022.222404,
+        "text": "done: dead_code 0, node tests 18/18; fallow exit 1 only from 63 complexity findings"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792696030.75873
+    },
+    {
+      "name": "rereview-cc15-t3-r1",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "rereview-cc15-t3-r1 is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792697136.9880588,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792697136.9880588,
+        "text": "T3 r1: both findings ADDRESSED, no new Critical/Important; stamped verified"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792697143.3124979
+    },
+    {
+      "name": "review-cc15-t1",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "review-cc15-t1 is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792696314.769654,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792696314.769654,
+        "text": "T1 review: spec compliant, Approved, 0 Critical/Important, stamped verified"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792696323.468752
+    },
+    {
+      "name": "review-cc15-t2",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "review-cc15-t2 is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792696658.377101,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792696658.377101,
+        "text": "T2 review Approved, no Critical/Important, T2 stamped verified"
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792696666.202352
+    },
+    {
+      "name": "review-cc15-t3",
+      "kind": "worker",
+      "state": "finished",
+      "parked": false,
+      "pane_id": null,
+      "steerable": false,
+      "queued": 0,
+      "wave": {
+        "paused": false,
+        "canceled": false
+      },
+      "headless": false,
+      "liveness": null,
+      "deliver": {
+        "ok": false,
+        "how": null,
+        "reason": "review-cc15-t3 is finished: nothing will read a message sent to it"
+      },
+      "last_active": 1792697002.320704,
+      "last_sent": null,
+      "channel": "tech-tools@main/lead-17b803",
+      "tasks": [],
+      "last_note": {
+        "ts": 1792697002.320704,
+        "text": "T3 review: Needs fixes (2 Important: glyph not dots, non-ASCII copy). stamped rejected."
+      },
+      "log_path": null,
+      "exit_code": 0,
+      "ended_at": 1792697010.8758242
+    }
+  ],
+  "herdr_url": "http://127.0.0.1:7317"
+}

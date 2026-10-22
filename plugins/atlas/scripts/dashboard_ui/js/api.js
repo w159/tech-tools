@@ -11,7 +11,7 @@ const meta = (name) => {
 export const BASE =
   (typeof window !== "undefined" && window.__ATLAS_BASE__) || "";
 const TOKEN = meta("atlas-token");
-export const VERSION = meta("atlas-version");
+const VERSION = meta("atlas-version");
 
 /** Error raised for any non-2xx or {ok:false} reply. Carries the server envelope as .data. */
 class ApiError extends Error {

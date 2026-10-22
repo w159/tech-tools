@@ -37,7 +37,7 @@ export function applyDensity(density) {
 }
 
 /** Dark -> light -> system -> dark. Returns the new choice. */
-export function cycleTheme() {
+function cycleTheme() {
   const next =
     { dark: "light", light: "system", system: "dark" }[getTheme()] || "dark";
   applyTheme(next);
@@ -51,7 +51,7 @@ export function watchSystemTheme() {
   });
 }
 
-export function setCollapsed(on) {
+function setCollapsed(on) {
   if (on) document.documentElement.setAttribute("data-collapsed", "true");
   else document.documentElement.removeAttribute("data-collapsed");
   store((s) => s.setItem("atlas.collapsed", on ? "1" : "0"));

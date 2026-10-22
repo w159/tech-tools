@@ -1,19 +1,13 @@
 // Hash router. parseHash/buildHash/redirectOld are pure (unit-tested in router.test.js).
 
-export const ROUTES = [
-  "overview",
-  "agents",
-  "board",
-  "channels",
-  "activity",
-  "health",
-  "improve",
-  "projects",
-  "settings",
-];
+export const ROUTES = ["run", "agents", "board", "channels", "health", "settings"];
 
 // Removed pages and their new owners (brief section 2).
 const OLD_HASHES = {
+  overview: "run",
+  activity: "channels",
+  improve: "health",
+  projects: "settings",
   colony: "agents",
   terminal: "agents",
   herd: "agents",
@@ -21,7 +15,7 @@ const OLD_HASHES = {
   irc: "channels",
 };
 
-/** "#/agents?agent=x&project=/a/b" -> {route, params, redirected}. Unknown routes fall back to overview. */
+/** "#/agents?agent=x&project=/a/b" -> {route, params, redirected}. Unknown routes fall back to run. */
 export function parseHash(hash) {
   const raw = String(hash || "").replace(/^#\/?/, "");
   const q = raw.indexOf("?");
@@ -30,7 +24,7 @@ export function parseHash(hash) {
   if (q >= 0) {
     for (const [k, v] of new URLSearchParams(raw.slice(q + 1))) params[k] = v;
   }
-  let route = path.split("/")[0] || "overview";
+  let route = path.split("/")[0] || "run";
   let redirected = false;
   if (OLD_HASHES[route]) {
     // The terminal page's content is the drawer's Terminal tab.
@@ -39,7 +33,7 @@ export function parseHash(hash) {
     redirected = true;
   }
   if (!ROUTES.includes(route)) {
-    route = "overview";
+    route = "run";
     redirected = true;
   }
   return { route, params, redirected };

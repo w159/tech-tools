@@ -9,9 +9,9 @@ test("parses route and query params", () => {
   assert.equal(r.redirected, false);
 });
 
-test("empty and unknown hashes land on overview", () => {
-  assert.equal(parseHash("").route, "overview");
-  assert.equal(parseHash("#/nope").route, "overview");
+test("empty and unknown hashes land on run", () => {
+  assert.equal(parseHash("").route, "run");
+  assert.equal(parseHash("#/nope").route, "run");
   assert.equal(parseHash("#/nope").redirected, true);
 });
 
@@ -37,18 +37,36 @@ test("buildHash drops empty values and round-trips", () => {
     buildHash("board", { status: "open", project: "" }),
     "#/board?status=open",
   );
-  assert.equal(buildHash("overview"), "#/overview");
+  assert.equal(buildHash("run"), "#/run");
   const p = { agent: "a b", tab: "messages" };
   assert.deepEqual(parseHash(buildHash("agents", p)).params, p);
 });
 
-test("all nine routes are routable", () => {
-  assert.equal(ROUTES.length, 9);
+test("v14 hashes redirect to the six v15 routes", () => {
+  for (const [old, now] of [
+    ["overview", "run"],
+    ["activity", "channels"],
+    ["improve", "health"],
+    ["projects", "settings"],
+    ["colony", "agents"],
+    ["terminal", "agents"],
+  ])
+    assert.equal(parseHash(`#/${old}`).route, now, old);
+  assert.equal(redirectOld("#/overview"), "#/run");
+  assert.equal(redirectOld("#/activity"), "#/channels");
+  assert.equal(redirectOld("#/improve"), "#/health");
+  assert.equal(redirectOld("#/projects"), "#/settings");
+  assert.equal(redirectOld("#/colony"), "#/agents");
+  assert.equal(redirectOld("#/terminal"), "#/agents?tab=terminal");
+});
+
+test("all six routes are routable", () => {
+  assert.equal(ROUTES.length, 6);
   for (const r of ROUTES) assert.equal(parseHash(`#/${r}`).route, r);
 });
 
 test("a stale render is rejected", () => {
-  assert.equal(acceptRender("activity", "channels"), false);
-  assert.equal(acceptRender("activity", "activity", { isConnected: false }), false);
-  assert.equal(acceptRender("activity", "activity", { isConnected: true }), true);
+  assert.equal(acceptRender("health", "channels"), false);
+  assert.equal(acceptRender("health", "health", { isConnected: false }), false);
+  assert.equal(acceptRender("health", "health", { isConnected: true }), true);
 });
