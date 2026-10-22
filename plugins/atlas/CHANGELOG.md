@@ -8,6 +8,7 @@ Atlas statusline: the omp usage widget ships with atlas, and Claude Code gets th
 
 ### Added
 
+- Releases: `.github/workflows/release.yml` publishes a GitHub release `atlas <version>` (tag `atlas-v<version>`) when `plugin.json` changes on main, with the CHANGELOG section as notes (`scripts/release_notes.py`, exit 2 when missing or unreleased). docs-curator owns keeping the CHANGELOG release-ready. Contract tests tie `plugin.json`, `marketplace.json` and the CHANGELOG top version together.
 - omp: `omp/usage-statusline.ts` exports `registerUsageStatusline(pi)` and `USAGE_STATUSLINE_WIDGET_KEY`; `atlasOmpExtension` registers it unless `ATLAS_STATUSLINE=off` or a personal copy exists at `~/.omp/agent/extensions/usage-statusline.ts` or `<cwd>/.omp/extensions/usage-statusline.ts` (two copies would race on one widget key). `fallow` is found with `Bun.which("fallow")` only; the fallow column is skipped when it does not resolve.
 - Claude Code: `scripts/atlas_statusline.py` (stdlib Python) renders rows from the `statusLine` stdin JSON. `install` writes `statusLine` into `~/.claude/settings.json` and saves the previous value once to `~/.atlas/statusline.previous.json`; `uninstall` restores it (or deletes the key); `--settings <path>` and `--width N` exist for tests.
 - Both harnesses read the shared config file `~/.omp/agent/usage-statusline.json`, so one edit restyles both.

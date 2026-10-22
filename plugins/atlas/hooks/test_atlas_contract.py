@@ -1873,3 +1873,29 @@ class HeaderSsotTests(unittest.TestCase):
             "`" + doc["headerTemplate"].replace("<state>", "<one-line state>") + "`",
             cg._header_reason_part(doc),
         )
+
+
+class ReleaseVersionContractTests(unittest.TestCase):
+    """A bump must land in plugin.json, marketplace.json and CHANGELOG together
+    (.github/workflows/release.yml publishes from them)."""
+
+    @staticmethod
+    def _vt(v):
+        return tuple(int(x) for x in v.split("."))
+
+    def _plugin_version(self):
+        return json.loads(
+            (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text("utf-8")
+        )["version"]
+
+    def test_marketplace_matches_plugin_json(self):
+        mk = json.loads(
+            (REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text("utf-8")
+        )
+        got = [p["version"] for p in mk["plugins"] if p["name"] == "atlas"]
+        self.assertEqual(got, [self._plugin_version()])
+
+    def test_changelog_top_version_not_behind_plugin_json(self):
+        text = (PLUGIN_ROOT / "CHANGELOG.md").read_text("utf-8")
+        top = re.search(r"^##\s+(\d+\.\d+\.\d+)", text, re.M).group(1)
+        self.assertGreaterEqual(self._vt(top), self._vt(self._plugin_version()))
