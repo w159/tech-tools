@@ -533,7 +533,7 @@ def probe_spawn(ctx):
     root.mkdir(exist_ok=True)
     pf = d / "prompt.txt"
     pf.write_text("do work")
-    # ATLAS_COLONY_TRANSPORT=tmux: the default transport is `claude --bg`, which needs a trusted
+    # ATLAS_COLONY_TRANSPORT=tmux: the claude-bg fallback (no tmux) needs a trusted
     # workspace and measures claude, not spawning; the override command then runs in a tmux window.
     env = {
         **env,
