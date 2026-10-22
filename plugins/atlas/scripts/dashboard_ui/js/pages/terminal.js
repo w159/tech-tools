@@ -302,15 +302,15 @@ export default {
       body, foot);
       const c = { seat: s, el, body, foot, badge, pty: null, ph: null, paused: false, inView: !st.io, offTimer: null, conn: "", last: null };
       if (!hasTerminal(s)) {
-        content.appendChild(h("p", { class: "tw-card-note" }, s.state === "ended" || s.state === "finished" || s.state === "dead" ? "ended" : "no terminal attached"));
+        content.appendChild(h("p", { class: "tw-card-note" }, s.state === "ended" || s.state === "finished" || s.state === "dead" ? "ended" : s.attach_hint || "no terminal attached"));
       } else {
         const t = makeTerm(content, s.kind === "tui" ? { stepFont: true } : {});
         Object.assign(c, { term: t.term, fit: t.fit, stop: t.stop });
         if (t.term.attachCustomKeyEventHandler) t.term.attachCustomKeyEventHandler((ev) => !(ev.type === "keydown" && ev.key === "Tab" && ev.shiftKey)); // Shift+Tab leaves the terminal
         window.addEventListener("resize", t.fit);
         if (s.kind === "tui" && t.term.parser) t.term.parser.registerOscHandler(7717, (data) => { const o = parseOpen(data); if (o) go(o.space, o.seat); return true; });
-        body.addEventListener("click", () => { if (!st.seat) open(); });
       }
+      body.addEventListener("click", () => { if (!st.seat) open(); }); // the whole card body enlarges, terminal or not
       drawFooter(c);
       if (st.io) { st.ioMap.set(el, c); st.io.observe(el); }
       st.cards.set(s.address, c);
@@ -365,7 +365,7 @@ export default {
       const sps = spaces();
       const items = sps.map((sp) => h("button", { class: "tw-space", type: "button", "aria-current": sp.id === st.space ? "page" : null, title: sp.name, onClick: () => go(sp.id) },
         h("span", { class: "tw-agent-name" }, sp.name || sp.id), h("span", { class: "tw-agent-role tw-sub2" }, sp.kind === "host" ? "this machine" : seatsOf(sp).length + " seats")));
-      const parts = [h("div", { class: "tw-side-label" }, "SPACES"), ...items];
+      const parts = [h("div", { class: "tw-side-label" }, "Spaces"), ...items];
       const sp = space();
       if (sp) {
         parts.push(h("div", { class: "tw-side-label" }, "Agents · " + seatsOf(sp).length));

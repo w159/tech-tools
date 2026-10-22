@@ -18,6 +18,7 @@ _iso_sys.path.insert(
     ),
 )
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
+import glob
 import io
 import json
 import os
@@ -1341,6 +1342,28 @@ class LeadChannelOpenTest(unittest.TestCase):
             os.path.realpath(argv[argv.index("--root") + 1]),
             os.path.realpath(proj),
         )
+
+    def _pane_files(self, proj):  # the lead name may come from ATLAS_LEAD_NAME in the env
+        return glob.glob(os.path.join(proj, ".atlas", ".run", "lead-pane-*.json"))
+
+    def test_records_lead_pane_when_tmux_pane_is_set(self):
+        proj = self._project()
+        with mock.patch.dict(os.environ, {"TMUX_PANE": "%7"}):
+            session_boot.open_lead_channel_once(
+                {"session_id": "sess123456", "cwd": proj}, run=self._rec([])
+            )
+        (path,) = self._pane_files(proj)
+        with open(path) as fh:
+            self.assertEqual(json.load(fh)["pane"], "%7")
+
+    def test_records_no_lead_pane_without_tmux_pane(self):
+        proj = self._project()
+        env = {k: v for k, v in os.environ.items() if k != "TMUX_PANE"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            session_boot.open_lead_channel_once(
+                {"session_id": "sess123456", "cwd": proj}, run=self._rec([])
+            )
+        self.assertEqual(self._pane_files(proj), [])
 
     def test_second_session_start_reuses_the_same_channel(self):
         proj = self._project()

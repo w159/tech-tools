@@ -219,6 +219,9 @@ def _runtime(raw) -> str:
     return "omp" if "omp" in r else "codex" if "codex" in r else "claude"
 
 
+LEAD_ATTACH_HINT = "start claude inside tmux or herdr to stream this seat"
+
+
 def _seats(ctx):
     """Seat directory for the Terminal grid: colony seats (lead first), one synthetic
     shell seat per colony, then the host space (shell + TUI)."""
@@ -252,6 +255,8 @@ def _seats(ctx):
                     "last_activity": s.get("last_active"),
                 }
             )
+            if s.get("lead") and not ended and not target:
+                seats[-1]["attach_hint"] = LEAD_ATTACH_HINT
         name = c.get("name") or c.get("label") or c.get("id")
         seats.append(_shell_seat(f"shell@{name}", root, "shell", root))
         spaces.append(

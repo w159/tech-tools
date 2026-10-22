@@ -343,3 +343,32 @@ test("sourceLine and parseOpen keep their human-name contract", async () => {
   expect(parseOpen("open;c1")).toEqual({ space: "c1", seat: "" });
   expect(parseOpen("close;c1")).toBeNull();
 });
+
+test("a pane-less lead seat shows the server attach_hint, and a click on the card body enlarges it", async () => {
+  reset();
+  const HINT = "start claude inside tmux or herdr to stream this seat";
+  const data = { ...SEATS, spaces: [{ id: "run1", name: "run1", kind: "colony", seats: [seat("lead@run1", { state: "working", target: null, pane: null, attach_hint: HINT }), seat("shell@run1", { kind: "shell", runtime: "shell", target: null })] }] };
+  const sets = [];
+  const ctx = mk(data, { space: "run1" });
+  ctx.setParams = (p) => sets.push(p);
+  const root = await mountCtx(ctx);
+  const cards = byClass(root, "terminal-card");
+  expect(text(cards[0])).toContain(HINT);
+  expect(text(cards[0])).not.toContain("no terminal attached");
+  byClass(cards[0], "terminal-body")[0].listeners.click(); // body, not the arrow button
+  await tick();
+  expect(sets.pop()).toEqual({ space: "run1", seat: "lead@run1" });
+  expect(byClass(root, "tw-grid")[0].attrs.class).toContain("enlarged");
+  page.destroy();
+});
+
+test("rail labels use one source case, styled identically, in every space", async () => {
+  reset();
+  for (const space of ["run1", "host"]) {
+    const root = await mount(SEATS, { space });
+    const labs = byClass(root, "tw-side-label");
+    expect(labs.map((n) => n.attrs.class)).toEqual(["tw-side-label", "tw-side-label"]);
+    expect(labs.map((n) => text(n).replace(/\d+/, "N"))).toEqual(["Spaces", "Agents · N"]);
+    page.destroy();
+  }
+});
