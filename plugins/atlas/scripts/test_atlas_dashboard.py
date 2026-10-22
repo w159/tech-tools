@@ -1110,18 +1110,46 @@ class SecurityGuardTest(unittest.TestCase):
             conn.close()
             self.assertEqual(resp.status, 400, payload)
 
+    def test_behavior_post_returns_the_verified_write_shape(self):
+        status, body = self._req(
+            "POST", "/api/behavior", {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "8"}}, self._tok()
+        )
+        self.assertEqual(status, 200)
+        body = json.loads(body)
+        self.assertTrue(body["ok"], body)
+        self.assertEqual((body["key"], body["wanted"]), ("ATLAS_TRIPWIRE_THRESHOLD", "8"))
+        self.assertTrue(all(x["ok"] for x in body["layers"]))
+
+    def test_behavior_post_status_codes_for_confirm_and_range(self):
+        cmd = {"updates": {"ATLAS_OPTIMIZE_CMD": "my-opt {prompt}"}}
+        status, body = self._req("POST", "/api/behavior", cmd, self._tok())
+        self.assertEqual((status, json.loads(body)["error"]), (409, "needs_confirm"))
+        status, body = self._req(
+            "POST", "/api/behavior", {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "999"}}, self._tok()
+        )
+        self.assertEqual((status, json.loads(body)["error"]), (400, "out_of_range"))
+
+    def test_ollama_routes_are_mounted_and_delete_needs_the_token(self):
+        self.assertEqual(self._req("GET", "/api/v2/ollama/status")[0], 200)
+        json_only = {"Content-Type": "application/json"}
+        self.assertEqual(
+            self._req("DELETE", "/api/v2/ollama/models/ghost%3A1b", {"confirm": True}, json_only)[0], 401
+        )
+        status, body = self._req("DELETE", "/api/v2/ollama/models/ghost%3A1b", {}, self._tok())
+        self.assertEqual((status, json.loads(body)["error"]), (409, "needs_confirm"))
+
     def test_behavior_post_writes_only_the_override_file(self):
         real = Path.home() / ".claude" / "settings.json"
         before = real.stat().st_mtime_ns if real.exists() else None
         status, _ = self._req(
             "POST",
             "/api/behavior",
-            {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "1234"}},
+            {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "12"}},
             self._tok(),
         )
         self.assertEqual(status, 200)
         data = json.loads(self.settings.read_text())
-        self.assertEqual(data["env"]["ATLAS_TRIPWIRE_THRESHOLD"], "1234")
+        self.assertEqual(data["env"]["ATLAS_TRIPWIRE_THRESHOLD"], "12")
         self.assertEqual(real.stat().st_mtime_ns if real.exists() else None, before)
 
 

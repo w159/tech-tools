@@ -2007,6 +2007,7 @@ def _mount_v2_routes() -> None:
         "atlas_dash_herd",
         "atlas_dash_integrations",
         "atlas_dash_term",
+        "atlas_ollama",
     ):
         try:
             mod = importlib.import_module(name)
@@ -2614,7 +2615,7 @@ class Handler(BaseHTTPRequestHandler):
         # No CORS preflight is honoured: the UI is same-origin, so cross-origin
         # pages get no Allow-* headers and the browser blocks them.
         self.send_response(204)
-        self.send_header("Allow", "GET, HEAD, POST, PUT")
+        self.send_header("Allow", "GET, HEAD, POST, PUT, DELETE")
         self.end_headers()
 
     def do_HEAD(self):
@@ -2830,6 +2831,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         return self._mutate("PUT")
 
+    def do_DELETE(self):
+        return self._mutate("DELETE")
+
     def _legacy_post(self, u, data):
         if u.path == "/api/connectors/env":
             updates = data.get("updates") or {}
@@ -2859,9 +2863,11 @@ class Handler(BaseHTTPRequestHandler):
             # atlas_control binds SETTINGS_PATH at import; re-point it so the
             # ATLAS_CLAUDE_SETTINGS override (tests) is honoured.
             atlas_control.SETTINGS_PATH = _settings_path()
-            return self._json(
-                200, atlas_control.write_behavior_updates(data.get("updates") or {})
+            result = atlas_control.write_behavior_updates(
+                data.get("updates") or {}, confirm=data.get("confirm") is True
             )
+            # needs_confirm 409, unknown_model/out_of_range/bad_* 400; legacy errors stay 200
+            return self._json(result.pop("status", 200), result)
         if u.path == "/api/mcp/toggle":
             return self._json(
                 200,
