@@ -179,17 +179,6 @@ function CountBadge(n, tone) {
 
 // --- Layout ---
 
-/** Panel({title, actions, flush}, ...body) */
-export function Panel({ title, actions, flush } = {}, ...body) {
-  return h(
-    "section",
-    { class: "panel" },
-    (title || actions) &&
-      h("div", { class: "panel-head" }, title && h("h2", {}, title), actions),
-    h("div", { class: cls("panel-body", flush && "flush") }, ...body),
-  );
-}
-
 /** PageHeader({title, description, actions}) -> title block, one-line description, actions right. */
 export function PageHeader({ title, description, actions }) {
   return h(
@@ -202,95 +191,6 @@ export function PageHeader({ title, description, actions }) {
       description && h("p", {}, description),
     ),
     actions && h("div", { class: "page-actions" }, actions),
-  );
-}
-
-/** KPI({label, value, delta, href}) -> tile; a link when href is set. */
-export function KPI({ label, value, delta, href }) {
-  return h(
-    href ? "a" : "div",
-    { class: "kpi", href },
-    h("span", { class: "label" }, label),
-    h("span", { class: "kpi-value" }, value ?? "-"),
-    delta ? h("span", { class: "kpi-delta" }, delta) : null,
-  );
-}
-
-/**
- * Table({columns:[{key,label,render(row),class}], rows, onRowClick, rowKey, selected, empty})
- * A row shaped {__group: node} renders as a full-width group row.
- */
-export function Table({
-  columns,
-  rows,
-  onRowClick,
-  rowKey = (r) => r.key,
-  selected,
-  empty,
-}) {
-  const body = h("tbody");
-  if (!rows.length) {
-    body.append(
-      h(
-        "tr",
-        {},
-        h(
-          "td",
-          { class: "empty-cell", colspan: columns.length },
-          empty || Empty({ title: "Nothing here." }),
-        ),
-      ),
-    );
-  }
-  for (const row of rows) {
-    if (row.__group !== undefined) {
-      body.append(
-        h(
-          "tr",
-          { class: "group" },
-          h("td", { colspan: columns.length }, row.__group),
-        ),
-      );
-      continue;
-    }
-    const tr = h("tr", {
-      class: cls(
-        onRowClick && "clickable",
-        selected != null && rowKey(row) === selected && "selected",
-      ),
-    });
-    if (onRowClick) {
-      tr.tabIndex = 0;
-      tr.addEventListener("click", (ev) => {
-        if (!ev.target.closest("button, a, input, select")) onRowClick(row);
-      });
-      tr.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter" && ev.target === tr) onRowClick(row);
-      });
-    }
-    for (const c of columns)
-      tr.append(
-        h("td", { class: c.class }, c.render ? c.render(row) : row[c.key]),
-      );
-    body.append(tr);
-  }
-  return h(
-    "div",
-    { class: "table-wrap" },
-    h(
-      "table",
-      { class: "table" },
-      h(
-        "thead",
-        {},
-        h(
-          "tr",
-          {},
-          columns.map((c) => h("th", { class: c.class }, c.label)),
-        ),
-      ),
-      body,
-    ),
   );
 }
 
