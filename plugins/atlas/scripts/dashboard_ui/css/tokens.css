@@ -1,4 +1,5 @@
-/* Design tokens. Dark is the default; html[data-theme=light] overrides. */
+/* Command Center v15 tokens (BRAND palette; origin: contract.ts, gated by design/contrast.py).
+   Dark is the default. Hex values must equal the DARK/LIGHT dicts in design/contrast.py. */
 @font-face {
   font-family: "Geist";
   src: url("../fonts/Geist-Variable.woff2") format("woff2");
@@ -16,32 +17,40 @@
 
 :root {
   color-scheme: dark;
-  --font-sans:
-    "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono:
-    "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --canvas: #0c1215;
+  --chrome: #0a0e11;
+  --well: #121a1e;
+  --rule: #263540;
+  --rule-2: #62798a;
+  --text: #e6edf0;
+  --dim: #9fb0b8;
+  --faint: #7a8b96;
+  --brand: #2fbd9f;
+  --brand-ink: #05211b;
+  --focus: #7fe0cb;
+  --ok: #52c872;
+  --working: #62b8e6;
+  --needs: #f2aa40;
+  --fail: #ff7570;
+  --idle: #93a4ac;
+  --sub: #b5a3fa;
 
-  --canvas: #0b0e13;
-  --panel: #11151c;
-  --raised: #171c25;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.18);
-  --text: #e8ecf1;
-  --text-2: #9aa4b2;
-  --text-3: #6b7684;
-  --brand: #3ddbb8;
-  --brand-ink: #04221b;
-  --brand-soft: rgba(61, 219, 184, 0.12);
-  --ok: #56c98a;
-  --working: #5bb2f0;
-  --needs: #f5b14a;
-  --fail: #f2705f;
-  --idle: #8793a3;
-  --focus: #7fe9d2;
+  --sans: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r1: 4px;
+  --r2: 8px;
+  --t-tick: 250ms;
 
-  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line);
-  --scrim: rgba(3, 5, 8, 0.6);
-
+  /* v14 names kept as aliases until Tasks 3, 6 and 8 restyle their users. */
+  --panel: var(--well);
+  --raised: color-mix(in srgb, var(--well), var(--text) 5%);
+  --line: var(--rule);
+  --line-strong: var(--rule-2);
+  --text-2: var(--dim);
+  --text-3: var(--faint);
+  --brand-soft: color-mix(in srgb, var(--brand) 14%, transparent);
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
   --r-control: 6px;
   --r-panel: 10px;
   --r-pill: 999px;
@@ -52,6 +61,9 @@
   --s5: 24px;
   --s6: 32px;
   --s7: 48px;
+
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--rule);
+  --scrim: rgba(3, 5, 8, 0.6);
 
   --control-h: 32px;
   --row-h: 40px;
@@ -64,27 +76,53 @@
   --t-fast: 120ms;
 }
 
-html[data-theme="light"] {
+:root[data-theme="light"] {
   color-scheme: light;
-  --canvas: #f5f7f9;
-  --panel: #ffffff;
-  --raised: #eef1f5;
-  --line: rgba(15, 20, 25, 0.08);
-  --line-strong: rgba(15, 20, 25, 0.22);
-  --text: #0f1419;
-  --text-2: #4a5564;
-  --text-3: #6f7a88;
-  --brand: #0e8a74;
+  --canvas: #f2f6f7;
+  --chrome: #e8eef0;
+  --well: #ffffff;
+  --rule: #d0dbdf;
+  --rule-2: #73868f;
+  --text: #12222a;
+  --dim: #465962;
+  --faint: #566a74;
+  --brand: #0c7d6c;
   --brand-ink: #ffffff;
-  --brand-soft: rgba(14, 138, 116, 0.1);
-  --ok: #1b7a45;
-  --working: #0b6bb5;
-  --needs: #8a5300;
-  --fail: #b3261e;
-  --idle: #5c6875;
-  --focus: #0e8a74;
-  --shadow-float: 0 12px 32px rgba(15, 20, 25, 0.18), 0 0 0 1px var(--line);
-  --scrim: rgba(15, 20, 25, 0.35);
+  --focus: #0a6e5f;
+  --ok: #17692f;
+  --working: #0a6396;
+  --needs: #8a4b00;
+  --fail: #ac211a;
+  --idle: #4f616a;
+  --sub: #5b3bb8;
+  --shadow-float: 0 12px 32px rgba(18, 34, 42, 0.18), 0 0 0 1px var(--rule);
+  --scrim: rgba(18, 34, 42, 0.35);
+}
+
+/* data-theme="system" follows the OS; explicit dark/light above always win. */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    color-scheme: light;
+    --canvas: #f2f6f7;
+    --chrome: #e8eef0;
+    --well: #ffffff;
+    --rule: #d0dbdf;
+    --rule-2: #73868f;
+    --text: #12222a;
+    --dim: #465962;
+    --faint: #566a74;
+    --brand: #0c7d6c;
+    --brand-ink: #ffffff;
+    --focus: #0a6e5f;
+    --ok: #17692f;
+    --working: #0a6396;
+    --needs: #8a4b00;
+    --fail: #ac211a;
+    --idle: #4f616a;
+    --sub: #5b3bb8;
+    --shadow-float: 0 12px 32px rgba(18, 34, 42, 0.18), 0 0 0 1px var(--rule);
+    --scrim: rgba(18, 34, 42, 0.35);
+  }
 }
 
 /* Density pref (default compact per brief 3.4). */
