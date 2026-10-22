@@ -4,13 +4,11 @@ const ROUTES = [
   ["channels", "Channels"], ["health", "Health"], ["settings", "Settings"],
 ];
 
-// fallow-ignore-next-line unused-export -- consumed by the T7b wiring unit
 export function filterCommands(commands, query) {
   const q = (query || "").toLowerCase();
   return commands.filter((c) => c.label.toLowerCase().includes(q));
 }
 
-// fallow-ignore-next-line unused-export -- consumed by the T7b wiring unit
 export function defaultCommands({ navigate, steerLead, holdSelected, toggleTheme }) {
   return [
     ...ROUTES.map(([id, name]) => ({ id: `go-${id}`, label: `Go to ${name}`, run: () => navigate(id) })),
@@ -20,7 +18,6 @@ export function defaultCommands({ navigate, steerLead, holdSelected, toggleTheme
   ];
 }
 
-// fallow-ignore-next-line unused-export -- consumed by the T7b wiring unit
 export function openPalette(commands, { root = document.body, onClose } = {}) {
   if (!root) throw new Error("openPalette: root element is required (document.body is not available)");
   const doc = root.ownerDocument;
@@ -61,15 +58,20 @@ export function openPalette(commands, { root = document.body, onClose } = {}) {
     sel = 0;
     paint();
   });
+  const step = (dir) => {
+    if (shown.length) sel = (sel + dir + shown.length) % shown.length;
+    paint();
+  };
+  const KEYS = {
+    Escape: close,
+    Enter: () => shown[sel] && run(shown[sel]),
+    ArrowDown: () => step(1),
+    ArrowUp: () => step(-1),
+  };
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { e.preventDefault(); close(); }
-    else if (e.key === "Enter") { e.preventDefault(); if (shown[sel]) run(shown[sel]); }
-    else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      if (!shown.length) return;
-      sel = (sel + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length;
-      paint();
-    }
+    if (!KEYS[e.key]) return;
+    e.preventDefault();
+    KEYS[e.key]();
   });
   paint();
   root.append(box);
