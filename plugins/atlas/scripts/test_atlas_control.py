@@ -157,20 +157,17 @@ class TestBehaviorKnobs(ControlTestCase):
             k = self._find_knob(key)
             self.assertEqual((k["value"], k["source"]), ("7", "process"))
 
-    def test_advanced_vars_get_the_same_detail(self):
-        adv = self.mod.behavior_state()["advanced"]
-        self.assertTrue(adv)
-        for row in adv[:3]:
-            for field in (
-                "value",
-                "source",
-                "layers",
-                "reaches",
-                "default",
-                "changed",
-                "ref",
-            ):
-                self.assertIn(field, row)
+    def test_advanced_bucket_is_empty_and_every_key_is_placed(self):
+        st = self.mod.behavior_state()
+        self.assertEqual(st["advanced"], [])
+        grouped = {k["key"] for g in st["groups"] for k in g["knobs"]}
+        paths = {p["key"] for p in st["paths"]}
+        self.assertEqual(paths, {"ATLAS_HOME", "ATLAS_DB", "ATLAS_DASHBOARD_PORT"})
+        self.assertEqual(st["hidden"], sorted(st["hidden"]))
+        self.assertFalse(grouped & set(st["hidden"]))
+        self.assertFalse(paths & (grouped | set(st["hidden"])))
+        # every key a shipped file reads is a knob, a path, or hidden plumbing
+        self.assertEqual(set(self.mod.discovered_env_keys()) - grouped - paths - set(st["hidden"]), set())
 
     def test_refs_point_at_a_line_that_names_the_variable(self):
         """The 'Read at' evidence must be a real reader, not a docstring or a stale line number."""
@@ -195,9 +192,34 @@ class TestBehaviorKnobs(ControlTestCase):
         ):
             self.assertNotIn(key, found)
 
-    def test_every_documented_advanced_key_is_still_read(self):
-        stale = [k for k in self.mod._AD if k not in self.mod.discovered_env_keys()]
-        self.assertEqual(stale, [], f"documented but no shipped file reads: {stale}")
+    def test_seven_groups_in_order_with_contract_fields(self):
+        st = self.mod.behavior_state()
+        self.assertEqual(
+            [g["title"] for g in st["groups"]],
+            ["Session automation", "Guardrails", "Colony", "omp extension", "Prompt optimizer", "Decision model", "Turn scoring"],
+        )
+        self.assertEqual(st["note"], "Saved values reach running sessions on their next hook run.")
+        for g in st["groups"]:
+            self.assertTrue(g["knobs"], g["title"])
+            self.assertTrue(g["intro"].isascii(), g["title"])
+            for k in g["knobs"]:
+                self.assertEqual(k["applies"], "now", k["key"])
+                self.assertEqual(k["scope"], "hooks", k["key"])
+                self.assertIn(k["kind"], self.mod.KIND_SET, k["key"])
+                self.assertNotIn("Undocumented", k["description"], k["key"])
+                self.assertTrue(k["description"], k["key"])
+
+    def test_plumbing_keys_are_hidden_not_knobs(self):
+        hidden = set(self.mod.behavior_state()["hidden"])
+        for key in ("ATLAS_SESSION_ID", "ATLAS_SOURCE", "ATLAS_LEAD_AGENT", "ATLAS_RIG_PORT", "ATLAS_STATUSLINE_CONFIG"):
+            self.assertIn(key, hidden)
+
+    def test_path_keys_are_read_only(self):
+        for key in ("ATLAS_HOME", "ATLAS_DB", "ATLAS_DASHBOARD_PORT"):
+            res = self.mod.write_behavior_updates({key: "/tmp/x"})
+            self.assertEqual((res["ok"], res["error"], res["status"]), (False, "read_only", 400), key)
+            self.assertIn("shell", res["hint"])
+        self.assertEqual(self.read_settings(), {})
 
     def test_a_stale_value_for_a_shell_knob_can_still_be_cleared(self):
         self.settings.write_text(
@@ -541,7 +563,6 @@ class TestSettingsRegistry(ControlTestCase):
     def knobs(self):
         st = self.mod.behavior_state()
         out = {k["key"]: k for g in st["groups"] for k in g["knobs"]}
-        out.update({k["key"]: k for k in st["advanced"]})
         return out
 
     def test_every_knob_carries_kind_effect_applies_scope_and_five_layers(self):
@@ -549,8 +570,8 @@ class TestSettingsRegistry(ControlTestCase):
         for key, k in self.knobs().items():
             self.assertIn(k["kind"], kinds, key)
             self.assertTrue(k["effect"], key)
-            self.assertIn(k["applies"], ("now", "next-session", "dashboard-restart"), key)
-            self.assertIn(k["scope"], ("hooks", "shell"), key)
+            self.assertEqual(k["applies"], "now", key)
+            self.assertEqual(k["scope"], "hooks", key)
             self.assertEqual(
                 set(k["layers"]),
                 {"live_env", "store", "claude_settings", "omp_config", "shell_rc"},
@@ -572,19 +593,18 @@ class TestSettingsRegistry(ControlTestCase):
         self.assertEqual(k["ATLAS_DECISION_MODEL"]["kind"], "model")
         self.assertEqual(k["ATLAS_OLLAMA_URL"]["kind"], "url")
         self.assertEqual(k["ATLAS_OPTIMIZE_CMD"]["kind"], "command")
-        self.assertEqual(k["ATLAS_DASHBOARD_PORT"]["applies"], "dashboard-restart")
 
-    def test_inferred_kinds_for_named_and_scanned_advanced_keys(self):
+    def test_kinds_for_formerly_advanced_keys(self):
         k = self.knobs()
         self.assertEqual((k["ATLAS_COLONY"]["kind"], k["ATLAS_TODO"]["kind"]), ("toggle", "toggle"))
+        self.assertEqual(k["ATLAS_DOCS_REPAIR"]["kind"], "toggle")
         self.assertEqual(k["ATLAS_COLONY_TRANSPORT"]["kind"], "select")
         self.assertEqual(
             [o["value"] for o in k["ATLAS_COLONY_TRANSPORT"]["options"]], ["herdr", "tmux", "claude-bg"]
         )
         self.assertEqual(k["ATLAS_COLONY_LIVE_WINDOW"]["kind"], "number")
-        self.assertEqual(k["ATLAS_REMOTE_PORT"]["range"], {"min": 1, "max": 65535, "step": 1})
-        texts = [x for x in self.mod.behavior_state()["advanced"] if x["kind"] == "text"]
-        self.assertLessEqual(len(texts), 37)  # was 40 text rows in Advanced before inference
+        self.assertEqual(k["ATLAS_REMOTE_PORT"]["range"], {"min": 1024, "max": 65535, "step": 1})
+        self.assertEqual((k["ATLAS_DECISION_URL"]["kind"], k["ATLAS_DECISION_MODEL"]["kind"]), ("url", "model"))
         for bad in ("0", "70000"):
             res = self.mod.write_behavior_updates({"ATLAS_REMOTE_PORT": bad})
             self.assertEqual(res.get("error"), "out_of_range", bad)
@@ -613,7 +633,7 @@ class TestSettingsRegistry(ControlTestCase):
     def test_verified_write_shape_for_a_hooks_knob(self):
         res = self.mod.write_behavior_updates({"ATLAS_TRIPWIRE_THRESHOLD": "9"})
         self.assertTrue(res["ok"], res)
-        self.assertEqual((res["key"], res["wanted"], res["applies"]), ("ATLAS_TRIPWIRE_THRESHOLD", "9", "next-session"))
+        self.assertEqual((res["key"], res["wanted"], res["applies"]), ("ATLAS_TRIPWIRE_THRESHOLD", "9", "now"))
         self.assertEqual(
             sorted((x["layer"], x["wrote"], x["got"], x["ok"]) for x in res["layers"]),
             [("claude_settings", "9", "9", True), ("store", "9", "9", True)],
@@ -630,7 +650,7 @@ class TestSettingsRegistry(ControlTestCase):
         res = self.mod.write_behavior_updates({"ATLAS_WORKER_MAX_TOKENS": "5000"})
         self.assertTrue(res["ok"], res)
         self.assertEqual(
-            sorted(x["layer"] for x in res["layers"]), ["claude_settings", "omp_config", "shell_rc"]
+            sorted(x["layer"] for x in res["layers"]), ["claude_settings", "omp_config", "shell_rc", "store"]
         )
         self.assertEqual(self.read_settings()["env"]["ATLAS_WORKER_MAX_TOKENS"], "5000")
         self.assertIn('ATLAS_WORKER_MAX_TOKENS: "5000"', self.mod.omp_config_path().read_text())
@@ -640,7 +660,7 @@ class TestSettingsRegistry(ControlTestCase):
             [layers[n]["value"] for n in ("claude_settings", "omp_config", "shell_rc")],
             ["5000"] * 3,
         )
-        self.assertFalse(layers["store"]["supported"])
+        self.assertEqual(layers["store"]["value"], "5000")
 
     def test_env_sh_block_and_zshenv_guard_are_idempotent(self):
         zsh = self.mod.zshenv_path()
@@ -679,13 +699,6 @@ class TestSettingsRegistry(ControlTestCase):
             'env:\n  # note\n  OTHER: "1"\n  ATLAS_WORKER_MAX_TOKENS: "7000"\n  ATLAS_ADVISOR_GATE: "off"\nafter: 1\n',
         )
         self.assertEqual(self.mod.read_omp_env()["OTHER"], "1")
-
-    def test_shell_path_value_must_be_absolute_and_creatable(self):
-        for bad in ("relative/dir", "/proc-nope-xyz/none/deeper"):
-            res = self.mod.write_behavior_updates({"ATLAS_HOME": bad})
-            self.assertEqual(res["error"], "bad_path", bad)
-        ok = self.mod.write_behavior_updates({"ATLAS_HOME": str(Path(self.tmp.name) / "new-home")})
-        self.assertTrue(ok["ok"], ok)
 
     def test_optimize_cmd_needs_confirm(self):
         res = self.mod.write_behavior_updates({"ATLAS_OPTIMIZE_CMD": "my-opt {prompt}"})
