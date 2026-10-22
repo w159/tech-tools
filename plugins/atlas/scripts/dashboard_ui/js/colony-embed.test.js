@@ -68,3 +68,40 @@ test("Open terminal on a member row deep-links to terminal?space=&seat=", async 
   expect(terminalParams({ name: "impl-1", colony: "run1" })).toEqual({ space: "run1", seat: "impl-1" });
   expect(terminalParams({ name: "impl-1" })).toEqual({ seat: "impl-1" });
 });
+
+// All-projects roster: worker seats get Stop/Pause/Cancel, posting with the seat's own project root; the lead gets none.
+test("all-projects roster: worker seat has Stop/Pause/Cancel and posts its own project root, lead has none", async () => {
+  const { allProjects, rosterDeps } = await import("./pages/colony.js");
+  const posts = [];
+  rosterDeps.api = { post: async (path, body) => { posts.push([path, body]); } };
+  rosterDeps.confirm = async () => true;
+  document.getElementById = () => null; // toast() looks up its host
+  try {
+    const snap = {
+      colonies: [{ id: "c1", project: "/p/one", title: "t" }],
+      seats: [
+        { name: "lead-1", colony: "c1", project: "/p/one", role: "lead", state: "working", lead: true },
+        { name: "impl-1", colony: "c1", project: "/p/one", role: "implementer", state: "working", lead: false },
+      ],
+    };
+    const root = allProjects(snap, { navigate() {}, params: {} }, () => {});
+    const text = (n) => (n.children || []).map((c) => (typeof c.text === "string" ? c.text : text(c))).join("");
+    const rows = [];
+    const walk = (n) => { if (n.attrs && n.attrs.class === "colony-top" && /-1/.test(text(n))) rows.push(n); (n.children || []).forEach((c) => c.children && walk(c)); };
+    walk(root);
+    const buttons = (row) => row.children.filter((c) => c.tag === "button");
+    const labels = (row) => buttons(row).map(text);
+    const lead = rows.find((r) => /lead-1/.test(text(r)));
+    const worker = rows.find((r) => /impl-1/.test(text(r)));
+    expect(labels(worker)).toEqual(expect.arrayContaining(["Stop", "Pause", "Cancel"]));
+    expect(labels(lead).filter((l) => ["Stop", "Pause", "Cancel", "Resume"].includes(l))).toEqual([]);
+    const stop = buttons(worker).find((b) => text(b) === "Stop");
+    await (stop.listeners.click || stop.onClick)({});
+    await new Promise((r) => setTimeout(r, 0));
+    expect(posts).toEqual([["colony/impl-1/kill", { project: "/p/one" }]]);
+  } finally {
+    delete rosterDeps.api;
+    delete rosterDeps.confirm;
+    delete document.getElementById;
+  }
+});

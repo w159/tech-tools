@@ -1,7 +1,7 @@
 // Colony (#/colony): the Atlas-scoped roster for the selected project. Data: GET /api/v2/colony?project=<root>[&all=1]
 // -> { lead, members:[{ name, kind, state, pane_id, steerable, headless, channel, tasks, last_note, log_path, exit_code,
 // ended_at }], herdr_url }. Send: POST colony/<name>/send {text, project}; Kill: POST colony/<name>/kill {project}. The live terminal workspace
-// is the separate #/terminal route (pages/terminal.js).
+// is the separate #/terminal route (pages/terminal.js). Both the per-project and all-projects rosters expose Stop/Pause/Resume/Cancel per worker seat.
 
 import { h, replace, fmtRelative } from "../dom.js";
 import { reportFetchFail, clearFetchFail } from "../fetch-fail.js";
@@ -42,7 +42,10 @@ export function colonyGroups(snap) {
   }
   return [...byProject].map(([project, colonies]) => ({ project, name: project.split("/").filter(Boolean).pop() || project, colonies }));
 }
-const allProjects = (snap, ctx) => {
+// Snapshot seat states -> colony member states, so canSteer gates the controls the same way in both rosters.
+export const SNAP_STATE = { working: "running", blocked: "stuck", unknown: "running" };
+const seatMember = (s) => ({ name: s.name, kind: s.lead ? "lead" : "worker", state: SNAP_STATE[s.state] || s.state, paused: s.paused, canceled: s.canceled });
+export const allProjects = (snap, ctx, refresh) => {
   const groups = colonyGroups(snap);
   if (!groups.length) return State({ variant: "empty", title: "No live colonies in any project", body: "Start one from your agent and it appears here with its members.", action: terminalBtn(ctx) });
   return h("div", { class: "colony-all-projects" }, ...groups.map((g) => h("section", { class: "colony-group" },
@@ -51,9 +54,10 @@ const allProjects = (snap, ctx) => {
       h("div", { class: "colony-top" }, h("strong", { title: colony.id }, spaceName(colony)), colony.finished ? h("span", { class: "tw-fin" }, "finished") : null, h("span", { class: "dim truncate" }, colony.title || colony.task || ""), h("span", { class: "grow" }),
         Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + spaceName(colony), onClick: () => ctx.navigate("terminal", { space: colony.id, project: g.project }) })),
       sourceLine(colony) ? h("div", { class: "dim colony-source" }, sourceLine(colony)) : null,
-      ...seats.map((s) => h("div", { class: "colony-top" }, h("span", { class: "truncate", title: s.name }, seatAddress(s)), h("span", { class: "chip-lite" }, s.role_title || s.role || "worker"), Badge({ status: BADGE[s.state] || s.state, text: s.state }),
+      ...seats.map((s) => { const mm = seatMember(s); return h("div", { class: "colony-top" }, h("span", { class: "truncate", title: s.name }, seatAddress(s)), h("span", { class: "chip-lite" }, s.role_title || s.role || "worker"), Badge({ status: BADGE[s.state] || s.state, text: s.state }),
         h("span", { class: "grow" }),
-        Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + seatAddress(s), onClick: () => ctx.navigate("terminal", { ...terminalParams({ colony: colony.id, name: s.name }), project: g.project }) }))))))));
+        Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + seatAddress(s), onClick: () => ctx.navigate("terminal", { ...terminalParams({ colony: colony.id, name: s.name }), project: g.project }) }),
+        seatControls(mm, () => killMember(ctx, mm, refresh, g.project), (verb) => waveMember(ctx, mm, verb, refresh, g.project))); }))))));
 };
 const noMembers = (ctx) => State({ variant: "empty", title: "No colony members yet", body: "Members appear here when atlas workers are dispatched into this project's channel. Turn on Show all panes to see every pane.", action: terminalBtn(ctx) });
 
@@ -108,13 +112,13 @@ async function sendMessage(ctx, m, box, btn, refresh) {
 // Test seam: lets tests inject api/confirm into killSeat/waveAction; empty in production.
 export const rosterDeps = {};
 
-async function killMember(ctx, m, refresh) {
-  await killSeat({ name: m.name, kind: m.kind, project: projectOf(ctx) }, rosterDeps);
+async function killMember(ctx, m, refresh, project = projectOf(ctx)) {
+  await killSeat({ name: m.name, kind: m.kind, project }, rosterDeps);
   refresh();
 }
 
-async function waveMember(ctx, m, verb, refresh) {
-  await waveAction(verb, { name: m.name, project: projectOf(ctx) }, rosterDeps);
+async function waveMember(ctx, m, verb, refresh, project = projectOf(ctx)) {
+  await waveAction(verb, { name: m.name, project }, rosterDeps);
   refresh();
 }
 
@@ -144,9 +148,14 @@ function rowTop(m, onKill, onTerm, onWave) {
     chip(m.channel, m.channel, "Channel", "mono"),
     h("span", { class: "grow" }),
     Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + m.name, onClick: onTerm }),
-    waveButtons(m, onWave),
-    canSteer(m) && m.kind !== "lead" ? Button({ label: "Stop", size: "sm", variant: "danger", ariaLabel: "Stop " + m.name, onClick: onKill }) : null);
+    seatControls(m, onKill, onWave));
 }
+
+// Pause/Resume/Cancel + Stop for one worker seat; shared by the per-project and all-projects rosters.
+const seatControls = (m, onKill, onWave) => [
+  waveButtons(m, onWave),
+  canSteer(m) && m.kind !== "lead" ? Button({ label: "Stop", size: "sm", variant: "danger", ariaLabel: "Stop " + m.name, onClick: onKill }) : null,
+];
 
 // The lead's "active, last tool call 12s ago" / "idle 7 min": real session signals, shown beside (never instead of) the pane chip.
 export const livenessText = (m) => (m.liveness && m.liveness.text) || "";
@@ -248,7 +257,7 @@ export function mountRoster(ctx, body, opts = {}) {
       const sig = JSON.stringify([st.error && String(st.error.message || st.error), st.all_snap]);
       if (sig === st.sig) return;
       st.sig = sig;
-      return st.error ? paint() : replace(list, allProjects(st.all_snap, ctx));
+      return st.error ? paint() : replace(list, allProjects(st.all_snap, ctx, refresh));
     }
     await load(ctx, st, project);
     if (S.dead) return;

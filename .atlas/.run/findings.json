@@ -8552,5 +8552,295 @@
     "status": "verified",
     "verified_at": "2026-10-22T07:46:18+00:00",
     "verified_by": "verifier-u1"
+  },
+  {
+    "id": "W1-runtime",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/pages/terminal.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "W1 Terminal seat grid live in browser (source server 7499)",
+    "evidence": [
+      "ui-tester-w1: cold load #/terminal stays; 5 cards; shell seat echo round trip 'cc-live-20538'; tui@host shows atlas_tui; enlarge/Esc/Enter/deep link ok; computed style bg rgb(22,22,22) border rgb(56,56,56) radius 4px JetBrains Mono 14px; POST term/ticket 200, GET term/seats 200; no app console errors. Unverified: ws 101 count, scroll restore, 700px width. Gap: Claude seats without a tmux pane show 'no terminal attached' (lead runs in ghostty, no TMUX_PANE); card body click did not enlarge (button/Enter did). Report .atlas/.run/cc-w1-runtime.md, shots .atlas/.run/cc-shots-w1/"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T07:51:07+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W1-U2-flake",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/terminal.test.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "deterministic terminal js tests",
+    "evidence": [
+      "implementer-u2-flake: 10/10 runs 81 pass 0 fail under CPU load; test-only change (17+/9-)"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T07:52:12+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W1-U2-flake",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/terminal.test.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/u2-flake: deterministic terminal js tests",
+    "evidence": [
+      "branch worker/u2-flake in .atlas/wt/u2-flake: 10/10 runs of bun test plugins/atlas/scripts/dashboard_ui/js -> 81 pass 0 fail under CPU load (implementer-u2-flake); test-only change pinning Date.now and afterEach destroy"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T07:52:31+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W2-U4",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/pages/settings.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/u4: W2-U4 settings page restructure and model picker",
+    "evidence": [
+      "worker/u4@9045e2d3: bun full js dir 3 runs = 98p/2f (terminal.test.js known flake), 98p/2f, 100p/0f; settings.test.js+model-picker.test.js 19 pass 0 fail 59 expects; against base js dir both files fail (Cannot find module ./settings-row.js, 0 pass 2 fail 2 errors). Bullets covered: nav+counts settings.js:920-927, grid css/settings.css repeat(auto-fit,minmax(420px,1fr)) + <=900px 1col, filter applyFilter, row contract settings-row.js verifyStatus:31-41, controls by kind settings-row.js:101-165, shell Writes line, model-picker.js chips/sort/search/running dot/Pull/status, prefs via SettingRow settings.js:874-891. No new third-party imports, no /Users/jerry, no inline styles, index.html only adds settings css, no pre-existing tests modified. Contract vs worker/u3@2ced5b87 minor non-breaking mismatches: modified_at is epoch number but client fmtAge Date.parse (age blank), job progress key is percent but client reads progress (falls back to last line), Test button sends ?url= which GET /ollama/status ignores (tests default host). Page renders unaffected."
+    ],
+    "doc_refs": [],
+    "reproduction": "cd .atlas/wt/u4 && bun test plugins/atlas/scripts/dashboard_ui/js (x3); bun test settings.test.js model-picker.test.js; same files in copied base js dir",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:01:00+00:00",
+    "verified_by": "verifier-u4"
+  },
+  {
+    "id": "W2-U3",
+    "surface": "plugins/atlas/scripts/atlas_control.py, plugins/atlas/scripts/atlas_ollama.py",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/u3: W2-U3 settings registry, layers, verified writes, ollama API",
+    "evidence": [
+      "branch worker/u3 @2ced5b87: HOME=tmp unittest control+ollama+dashboard 157 run, only 3 failures (TestMcpServers x2, TestPlugins x1) that also fail identically on main with empty HOME (plugin-discovery env, pre-existing); branch tests vs main scripts: 14 errors+1 failure (new tests fail without change); omp config.yml diff only appends env map; env.sh/zshenv single guarded block idempotent; out_of_range 400, needs_confirm 409 confirmed; NAME_RE validates ollama names, no shell=True; live :7497 ollama/status reachable, models?scope=cloud rows incl size null, /api/behavior knob has options+layers; real ~/.zshenv no atlas, ~/.atlas/env.sh absent. Caveat: removed old shell-knob-readonly test intentionally replaced; token scrape regex unmatched, GETs unauthenticated worked"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:01:53+00:00",
+    "verified_by": "verifier-u3"
+  },
+  {
+    "id": "W2-fix",
+    "surface": "plugins/atlas/scripts/atlas_ollama.py, plugins/atlas/scripts/dashboard_ui/js/model-picker.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/w2-fix: W2 contract fixes (modified_at, percent, status url)",
+    "evidence": [
+      "branch worker/w2-fix 47158f65: lead ran branch tests against main -> test_atlas_ollama FAILED (failures=1), model-picker.test.js 5 pass 2 fail on main; on branch: unittest test_atlas_ollama Ran 23 OK, bun test js dir 102 pass 0 fail (implementer-w2-fix)"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:04:55+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W2-polish",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/pages/settings.js, plugins/atlas/scripts/atlas_control.py",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/w2-polish: settings one-category view, range errors, inferred kinds, picker reset/capabilities",
+    "evidence": [
+      "branch worker/w2-polish: lead ran branch tests against main -> python FAILED, js settings/model-picker tests fail on main (counts above); on branch unittest test_atlas_control test_atlas_ollama Ran 75 OK, bun test js 108 pass 0 fail (implementer-w2-polish). Height under 6000px still to be measured headless."
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:11:34+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W3-U7",
+    "surface": "plugins/atlas/hooks/session_boot_core.py, plugins/atlas/scripts/atlas_colony_model.py, plugins/atlas/scripts/dashboard_ui/css/terminal.css",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/u7: W3-U7 lead seat attach via TMUX_PANE",
+    "evidence": [
+      "worker/u7 7ab8f588: unittest dash_term+colony_model 82 OK, test_session_boot 78 OK, bun 83 pass; new tests fail on base. REJECT: (1) terminal.css:8 .tw-side-label-mixed{text-transform:none} precedes .tw-side-label (line 9, uppercase) at equal specificity so the later rule wins; label still renders uppercase, the Agents label bullet is a no-op, test only checks class name. (2) _lead_pane liveness uses _panes() (atlas_colony_model.py:~181) which keeps only tmux sessions named atlas-* (not atlas-view-*), so a lead in an ordinary tmux session never gets a target; real-world attach unproven, test mocks _panes. Pane id never reaches argv unvalidated (matched against tmux list); json under project .atlas/.run only; boot has no format check on pane. Pre-existing test_opens_lead_channel_with_zero_members did not fail here on base or branch."
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-22T08:13:45+00:00",
+    "verified_by": "verifier-u7"
+  },
+  {
+    "id": "W3-U5",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/pages/agents.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/u5: W3-U5 one operate surface",
+    "evidence": [
+      "worker/u5 dfcf501f: bun test dashboard_ui/js 100 pass 0 fail x3; on base cd53dc66 + new tests: 11 fail (agents-page, send-path module missing, work.test stale/error); terminal.js:424 resolves ?seat= by name without space; caveat: pages/channel-lens.js:179 still posts channels with to= (U6 scope)"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:13:48+00:00",
+    "verified_by": "verifier-u5"
+  },
+  {
+    "id": "W3-U6",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/pages/channels.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/u6: W3-U6 channels on SSE, single send path",
+    "evidence": [
+      "worker/u6 387aadea + u5 send-path.js on temp merge: bun test 89 pass 0 fail x3; channels.test.js on main js+send-path fails (channel-sync.js missing); no setInterval/CHANNELS_MS in channels.js/channel-lens.js; sendToMember/sendToMembers exports match U5 send-path.js:23,25; no direct POST in channel-lens.js"
+    ],
+    "doc_refs": [],
+    "reproduction": "cp -R wt/u6 dashboard_ui to scratchpad, add u5 js/send-path.js, cd js && bun test (x3)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:13:53+00:00",
+    "verified_by": "verifier-u6"
+  },
+  {
+    "id": "W3-U7",
+    "surface": "plugins/atlas/scripts/atlas_colony_model.py",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/u7: W3-U7 lead seat attach via TMUX_PANE (re-verify 28824b4c)",
+    "evidence": [
+      "worker/u7 28824b4c: colony_model+dash_term 84 OK; test_session_boot 78 OK; bun 83 pass 0 fail. Base 7ab8f588 colony_model: test_lead_seat_exposes_recorded_live_pane + test_snapshot_shape_and_seats FAIL; terminal.js/css from 7ab8f588: 'rail labels use one source case' FAIL (1 fail). atlas_colony_model.py:905 _lead_pane: fullmatch %\\d+ before _tmux, display-message pane_id pane_dead liveness, per-snapshot lead_live dict. tw-side-label-mixed: 0 hits. Real-tmux test uses u7test-<pid> session, killed in finally; tmux ls after shows only pre-existing atlas-selffix. Caveat: real-tmux and invalid-pane tests also pass on base (weak discriminators)."
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:19:09+00:00",
+    "verified_by": "verifier-u7b"
+  },
+  {
+    "id": "W3-mockleak",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/channels.test.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/mockleak: channels tests no longer leak a global module mock",
+    "evidence": [
+      "branch worker/mockleak: lead ran bun test js dir 3x in the worktree -> 135 pass 0 fail each (above); grep mock.module -> 0; cause: bun mock.module is process-global"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:20:09+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "transport-default",
+    "surface": "plugins/atlas/scripts/atlas_control.py, plugins/atlas/omp/README.md",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/transport-default: tmux default transport text, knob default, contract test",
+    "evidence": [
+      "branch worker/transport-default: resolver already tmux-first (atlas_mux.py:255-260); stale text and ATLAS_COLONY_TRANSPORT knob default fixed in 8 files; lead ran unittest test_atlas_mux.SeatTransportTests in the worktree -> OK (above); implementer ran test_atlas_mux test_atlas_control test_atlas_launch Ran 180 OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:20:09+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "releases",
+    "surface": ".github/workflows/release.yml, plugins/atlas/scripts/release_notes.py",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/releases: automatic GitHub release per atlas version with CHANGELOG notes",
+    "evidence": [
+      "branch worker/releases 34d6d99b: lead ran test_release_notes (Ran 6 OK), ReleaseVersionContractTests OK, release.yml parses (ruby yaml, jobs listed); implementer proved marketplace/plugin.json mismatch fails the contract test in a temp copy; actions/checkout pinned by SHA; gh release create with GITHUB_TOKEN"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:23:26+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W3-polish",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/channel-sync.js, js/pages/colony.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/w3-polish: channel-sync timer, roster controls, header count, settings status",
+    "evidence": [
+      "branch worker/w3-polish: lead ran the 3 branch test files against main -> failures (counts above); in the worktree bun test js dir 3x -> 142 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T08:28:47+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W3-runtime-b",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/pages/agents.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "W3 operate pages headless re-test after polish (main 0063ffbc)",
+    "evidence": [
+      "ui-tester-w3b: 7/8 PASS: Stop confirm modal 'Kill <seat>?', header Pause/Resume/Cancel with Cancel modal, subtitle '1 colony member working', no Illegal invocation on channels/agents, settings restore reads 'unchanged', Open terminal lands enlarged (tw-grid enlarged, 1 card), 700px one column no overflow. Unverified: scroll restore and WS cap (need herdr and >6 seats). Gotcha: Stop/Pause/Cancel render only with &project=<root> in the URL. Report .atlas/.run/cc-w3b-runtime.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T09:16:07+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W3-runtime-c",
+    "surface": "dashboard Agents roster, all-projects view",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "All-projects roster exposes Stop/Pause/Resume/Cancel per worker seat with the seat's project root",
+    "evidence": [
+      "plugins/atlas/scripts/dashboard_ui/js/colony-embed.test.js (all-projects roster test; mutation null&&seatControls fails it)",
+      "bun test: 143 pass 0 fail across 23 files"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts/dashboard_ui && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T09:32:03+00:00",
+    "verified_by": "lead"
   }
 ]
