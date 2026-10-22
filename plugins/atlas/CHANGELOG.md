@@ -40,6 +40,7 @@ Command Center overhaul: the Terminal becomes a grid of real terminals, Settings
 - Deterministic terminal JS tests (finding W1-U2-flake, `37d8a75a`).
 - Cold load of `#/terminal` no longer lands on another page (deep-link race, W1-U2).
 - W2 runtime failures fixed by the polish branch: Settings main height 25799 px at 1280 wide is now 1090 px with one visible category, and `99999999` for `ATLAS_TRIPWIRE_THRESHOLD` shows `not saved: 99999999 is outside 1..50` instead of being clamped to 50 and saved.
+- Boot probes (finding W3-probe-home): the panos and sonicwall probes spawn the server with a throwaway `HOME`, because the shared env loader reads `~/.config/atlas/atlas.env` and `~/.claude/settings.json` through homedir() before the probe's missing `ATLAS_ENV_FILE`; a developer's real credentials made the panos probe fail ten cases on a machine with PANOS_ entries.
 
 ### Verified
 

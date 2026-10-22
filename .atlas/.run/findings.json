@@ -8861,5 +8861,23 @@
     "status": "verified",
     "verified_at": "2026-10-22T09:49:34+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "W3-probe-home",
+    "surface": "boot probes",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "panos and sonicwall boot probes isolate HOME so the developer's atlas.env never reaches a probe case",
+    "evidence": [
+      "mcp_servers/panos-mcp: npm test PROBE PASS (was PROBE FAIL: 10 problem(s)); HOME line commented -> fails again",
+      "mcp_servers/sonicwall-mcp: npm test PROBE PASS"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/panos-mcp && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T09:55:18+00:00",
+    "verified_by": "lead"
   }
 ]

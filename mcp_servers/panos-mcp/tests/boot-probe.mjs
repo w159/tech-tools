@@ -2,9 +2,11 @@
 // AGENTS.md:95 names test-mcp-tools.mjs for this; that harness is absent from the
 // tree, so this does the same job directly against the bundle.
 import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve as resolvePath } from 'node:path';
+import { dirname, join, resolve as resolvePath } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_MCP = resolvePath(HERE, '../../../plugins/atlas/mcp');
@@ -75,7 +77,12 @@ function probe(label, env) {
 
 // ATLAS_ENV_FILE is pointed at a path that does not exist so the loader falls
 // through to the CFG_ translation instead of reading a developer's real .env.
+// The loader reads ~/.config/atlas/atlas.env and ~/.claude/settings.json through homedir(),
+// so a throwaway HOME keeps a developer's real credentials out of every case.
+const PROBE_HOME = mkdtempSync(join(tmpdir(), 'probe-home-'));
+process.on('exit', () => rmSync(PROBE_HOME, { recursive: true, force: true }));
 const CLEAN = {
+  HOME: PROBE_HOME,
   ATLAS_ENV_FILE: resolvePath(HERE, 'no-such-env-file'),
   PANOS_HOST: '', PANOS_API_KEY: '', PANOS_USERNAME: '', PANOS_PASSWORD: '',
   PANOS_TARGET: '', PANOS_VERIFY_TLS: '', PANOS_REST_VERSION: '',

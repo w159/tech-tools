@@ -3,8 +3,10 @@
 // plugins/atlas/.mcp.json launches it: `node --import _env/load.mjs server.mjs`,
 // so CFG_SONICWALL_* translation is exercised, not bypassed.
 import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve as resolvePath } from 'node:path';
+import { dirname, join, resolve as resolvePath } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_MCP = resolvePath(HERE, '../../../plugins/atlas/mcp');
@@ -67,7 +69,11 @@ const FAKE_PASSWORD = ['Zx9', 'Qm4', 'Lw2', 'Rt8', 'Vb6', 'Kd3'].join('-');
 const UNREACHABLE = { HOST: '127.0.0.1', PORT: '1' };
 
 const NAMES = ['HOST', 'USERNAME', 'PASSWORD', 'PORT', 'VERIFY_TLS', 'SESSION_OVERRIDE'];
-const CLEAN = { ATLAS_ENV_FILE: resolvePath(HERE, 'no-such-env-file') };
+// The loader reads ~/.config/atlas/atlas.env and ~/.claude/settings.json through homedir(),
+// so a throwaway HOME keeps a developer's real credentials out of every case.
+const PROBE_HOME = mkdtempSync(join(tmpdir(), 'probe-home-'));
+process.on('exit', () => rmSync(PROBE_HOME, { recursive: true, force: true }));
+const CLEAN = { HOME: PROBE_HOME, ATLAS_ENV_FILE: resolvePath(HERE, 'no-such-env-file') };
 for (const n of NAMES) { CLEAN[`SONICWALL_${n}`] = ''; CLEAN[`CFG_SONICWALL_${n}`] = ''; }
 const bare = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [`SONICWALL_${k}`, v]));
 const cfg = (o) => ({
