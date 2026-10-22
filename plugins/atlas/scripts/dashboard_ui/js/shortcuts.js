@@ -1,4 +1,4 @@
-// Keyboard: g-prefixed chords, "/" to focus search, "?" for the list. Esc is handled by the layers in ui.js.
+// Keyboard: g-prefixed chords, "/" opens the palette (app.js), "?" for the list. Esc is handled by the layers in ui.js.
 import { h } from "./dom.js";
 import { Modal, Kbd, Button } from "./ui.js";
 import { navigate } from "./router.js";
@@ -33,7 +33,7 @@ function showShortcuts() {
   ]);
   rows.push(
     h("span", {}, Kbd("/")),
-    h("span", {}, "Focus search"),
+    h("span", {}, "Command palette"),
     h("span", {}, Kbd("Esc")),
     h("span", {}, "Close drawer or dialog"),
     h("span", {}, Kbd("?")),
@@ -63,13 +63,7 @@ export function initShortcuts() {
     }
     armed = 0;
     if (ev.key === "g") armed = Date.now();
-    else if (ev.key === "/") {
-      const s = document.querySelector("[data-page-search]");
-      if (s) {
-        ev.preventDefault();
-        s.focus();
-      }
-    } else if (ev.key === "?") {
+    else if (ev.key === "?") {
       ev.preventDefault();
       showShortcuts();
     }

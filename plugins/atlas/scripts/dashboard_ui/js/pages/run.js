@@ -6,7 +6,8 @@ import { mergeAgents, countStates } from "../state.js";
 import { renderBand } from "../band.js";
 import { roleLetter, spin } from "../glyph-table.js";
 import { renderRegionState } from "../region-state.js";
-import { sendSteer, steerTarget, resolveTarget } from "../steer.js";
+import { sendSteer, steerTarget, resolveTarget, holdSeat } from "../steer.js";
+import { bindKeys, isTypingIn } from "../keys.js";
 import { projectParam, parseTarget } from "./monitor-model.js";
 import { toBand, toSeats, toFeed, toNeeds, toGates, toMetrics } from "../run-data.js";
 
@@ -118,6 +119,9 @@ const LABEL = { seats: "seats", feed: "messages", needs: "needs", gates: "gates"
 // The server's own message (why / do) from sendSteer, escaped for the inline error under the input.
 export const renderSteerError = (r) => esc(r.message || r.error);
 
+// Keys render() binds: RUN_KEYS minus "/", which app.js owns for the palette.
+export const RUN_KEYMAP_IDS = ["1", "2", "3", "f", "i", "m", "h", "Escape"];
+
 const SHELL_CENTER =
   '<div class="chan-head"><span class="lbl">CHANNEL</span> <span class="chan-name" data-chan></span></div>' +
   '<div class="feed" data-region="feed" role="log" aria-live="polite" tabindex="0"></div>' +
@@ -138,7 +142,7 @@ export function render({ root, project, setParams }) {
   const mq = matchMedia("(max-width: 699px)");
   const st = {
     overview: null, agents: null, colony: { ok: false }, notes: [], gates: [], projects: [],
-    selected: null, frame: 0, stick: true, rs: {},
+    selected: null, filter: true, frame: 0, stick: true, rs: {},
   };
   const timers = new Map();
   const later = (key, ms, fn) => {
@@ -170,7 +174,7 @@ export function render({ root, project, setParams }) {
       }
       case "feed": {
         const rows = toFeed(st.notes);
-        return rows.length ? renderFeed(rows, st.selected) : "";
+        return rows.length ? renderFeed(rows, st.filter ? st.selected : null) : "";
       }
       case "needs": {
         const items = toNeeds(st.overview, st.agents, Date.now());
@@ -190,6 +194,7 @@ export function render({ root, project, setParams }) {
     if (!el) return;
     const r = st.rs[name] || { status: "loading" };
     const feed = name === "feed";
+    if (feed) el.dataset.filter = st.filter ? "on" : "off";
     if (feed) st.stick = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     const html = r.status === "ready" ? body(name) : "";
     el.innerHTML =
@@ -338,6 +343,41 @@ export function render({ root, project, setParams }) {
   };
   const mqChange = () => paintBand();
 
+  // Region focus: the landmark gets tabindex -1 plus a ring class, so Tab continues inside it.
+  const focusRegion = (el) => {
+    if (!el) return;
+    document.querySelectorAll(".region-focus").forEach((n) => n.classList.remove("region-focus"));
+    el.tabIndex = -1;
+    el.classList.add("region-focus");
+    el.focus();
+  };
+  const steerErr = () => $("data-steer-err");
+  const note = (msg) => {
+    const el = steerErr();
+    el.textContent = msg;
+    el.hidden = false;
+  };
+  const hold = async () => {
+    if (!st.selected) return note("Select a seat first, then press h to hold it.");
+    const r = await holdSeat(channelName(), st.selected);
+    if (r.ok) steerErr().hidden = true;
+    else note(r.message || r.error);
+  };
+  const handlers = {
+    1: () => focusRegion(left),
+    2: () => focusRegion(root),
+    3: () => focusRegion(regionEl("needs").closest("section")),
+    f: () => ((st.filter = !st.filter), paint("feed")),
+    i: () => input.focus(),
+    m: () => input.focus(),
+    h: hold,
+    Escape: () => (input.blur(), (steerErr().hidden = true)),
+  };
+  const unbindKeys = bindKeys(Object.fromEntries(RUN_KEYMAP_IDS.map((k) => [k, handlers[k]])), {
+    isTyping: () => isTypingIn(document.activeElement) || !!document.activeElement?.closest?.(".xterm"),
+  });
+  window.addEventListener("atlas:hold-selected", hold);
+
   root.addEventListener("click", onClick);
   left.addEventListener("click", onClick);
   right.addEventListener("click", onClick);
@@ -377,6 +417,8 @@ export function render({ root, project, setParams }) {
 
   return () => {
     dead = true;
+    unbindKeys();
+    window.removeEventListener("atlas:hold-selected", hold);
     unsubs.forEach((u) => u());
     for (const t of timers.values()) clearTimeout(t);
     clearInterval(spinTimer);

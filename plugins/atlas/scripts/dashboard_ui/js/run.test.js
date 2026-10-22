@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { renderSeats, renderFeed, renderNeeds, renderGates, renderMetrics, renderSteerError } from "./pages/run.js";
+import { renderSeats, renderFeed, renderNeeds, renderGates, renderMetrics, renderSteerError, RUN_KEYMAP_IDS } from "./pages/run.js";
+import { RUN_KEYS } from "./keys.js";
 import { renderRegionState } from "./region-state.js";
 import { renderBand } from "./band.js";
 import { toSeats, toFeed, toNeeds, toGates, toMetrics } from "./run-data.js";
@@ -127,4 +128,8 @@ test("run page sources have no literal non-ASCII characters", () => {
   for (const f of ["pages/run.js", "steer.js", "region-state.js"]) {
     assert.equal(/[^\x00-\x7F]/.test(readFileSync(new URL(`./${f}`, import.meta.url), "utf8")), false, f);
   }
+});
+
+test("run keymap: exactly RUN_KEYS minus the global slash", () => {
+  assert.deepEqual([...RUN_KEYMAP_IDS].sort(), RUN_KEYS.filter((k) => k !== "/").sort());
 });

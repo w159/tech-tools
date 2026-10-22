@@ -12,6 +12,7 @@ import {
   startStream,
   primePrefs,
   primeTopics,
+  savePrefs,
   describeError,
 } from "./api.js";
 import {
@@ -21,6 +22,8 @@ import {
   watchSystemTheme,
 } from "./theme.js";
 import { initShortcuts } from "./shortcuts.js";
+import { bindKeys, isTypingIn } from "./keys.js";
+import { openPalette, defaultCommands } from "./palette.js";
 
 const BASE_TITLE = "Atlas Command Center";
 
@@ -101,6 +104,37 @@ async function show({ route, params }) {
   }
 }
 
+// --- Palette ---
+
+let palette = null; // only one palette at a time
+
+function toggleTheme() {
+  const next = getTheme() === "light" ? "dark" : "light";
+  applyTheme(next); // repaints at once via the atlas:theme event
+  savePrefs({ theme: next }).catch((e) => toast(describeError(e).message, { kind: "error" }));
+}
+
+function steerLead() {
+  const focus = () => document.querySelector("[data-steer-input]")?.focus();
+  if (currentRoute === "run") return focus();
+  navigate("run");
+  setTimeout(focus, 400); // ponytail: fixed wait for the Run page mount; upgrade to a mount event if flaky
+}
+
+function openCommandPalette() {
+  if (palette) return;
+  const commands = defaultCommands({
+    navigate,
+    steerLead,
+    holdSelected: () => {
+      if (currentRoute !== "run") navigate("run");
+      window.dispatchEvent(new CustomEvent("atlas:hold-selected"));
+    },
+    toggleTheme,
+  });
+  palette = openPalette(commands, { onClose: () => (palette = null) });
+}
+
 // --- Boot ---
 
 function applyPrefs() {
@@ -112,6 +146,7 @@ function applyPrefs() {
 async function boot() {
   watchSystemTheme();
   initShortcuts();
+  bindKeys({ "/": openCommandPalette }, { isTyping: () => isTypingIn(document.activeElement) || !!document.activeElement?.closest?.(".xterm") });
   topics.agents.subscribe(paintBand);
   live.subscribe(paintBand);
   project.subscribe(paintBand);
