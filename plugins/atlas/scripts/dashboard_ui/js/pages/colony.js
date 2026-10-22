@@ -6,11 +6,11 @@
 import { h, replace, fmtRelative } from "../dom.js";
 import { reportFetchFail, clearFetchFail } from "../fetch-fail.js";
 import { spaceName, seatAddress, sourceLine } from "./terminal.js";
-import { Badge, Button, State, toast, toastError, confirm } from "../components.js";
+import { Badge, Button, State, toast, toastError } from "../components.js";
+import { sendToMember, killSeat, waveAction } from "../send-path.js";
 
 const BADGE = { running: "working", idle: "idle", stuck: "input", finished: "done", dead: "fail", parked: "idle" };
-const POLL_MS = 8000;
-const S = { timer: null, dead: true, drafts: {} };
+const S = { dead: true, drafts: {} };
 
 export const canSteer = (m) => m.state === "running" || m.state === "idle" || m.state === "stuck";
 
@@ -93,7 +93,7 @@ async function sendMessage(ctx, m, box, btn, refresh) {
   if (!text) return;
   btn.disabled = true;
   try {
-    const r = await ctx.api.post("colony/" + encodeURIComponent(m.name) + "/send", sendBody(ctx, text));
+    const r = await sendToMember(ctx, m.name, text);
     box.value = "";
     delete S.drafts[m.name];
     toast(sentText(m, r), { kind: "ok" });
@@ -106,14 +106,12 @@ async function sendMessage(ctx, m, box, btn, refresh) {
 }
 
 async function killMember(ctx, m, refresh) {
-  const ok = await confirm({ title: "Kill " + m.name + "?", body: "Stops this " + m.kind + " and closes its pane. Its unfinished work stays on the board.", danger: true, confirmLabel: "Kill" });
-  if (!ok) return;
-  try {
-    await ctx.api.post("colony/" + encodeURIComponent(m.name) + "/kill", killBody(ctx));
-    toast(m.name + " killed", { kind: "ok" });
-  } catch (e) {
-    toastError(e, "Could not kill " + m.name);
-  }
+  await killSeat({ name: m.name, kind: m.kind, project: projectOf(ctx) });
+  refresh();
+}
+
+async function waveMember(ctx, m, verb, refresh) {
+  await waveAction(verb, { name: m.name, project: projectOf(ctx) });
   refresh();
 }
 
@@ -125,7 +123,15 @@ const parked = (m) => m.state === "parked" || m.parked === true;
 // Deep link into the Terminal workspace; without a colony id the page finds the seat in its snapshot.
 export const terminalParams = (m) => (m.colony ? { space: m.colony, seat: m.name } : { seat: m.name });
 
-function rowTop(m, onKill, onTerm) {
+// Pause/Resume/Cancel act on a worker's wave hold (the lead cannot be held); Resume replaces Pause once it is paused or canceled.
+const waveButtons = (m, onWave) => (m.kind === "lead" || !canSteer(m) ? null : [
+  m.paused || m.canceled
+    ? Button({ label: "Resume", size: "sm", ariaLabel: "Resume " + m.name, onClick: () => onWave("resume") })
+    : Button({ label: "Pause", size: "sm", ariaLabel: "Pause " + m.name, onClick: () => onWave("pause") }),
+  m.canceled ? null : Button({ label: "Cancel", size: "sm", variant: "danger", ariaLabel: "Cancel " + m.name, onClick: () => onWave("cancel") }),
+]);
+
+function rowTop(m, onKill, onTerm, onWave) {
   return h("div", { class: "colony-top" },
     h("strong", { class: "truncate", title: m.name }, m.address || m.name),
     h("span", { class: "chip-lite" }, m.kind),
@@ -135,6 +141,7 @@ function rowTop(m, onKill, onTerm) {
     chip(m.channel, m.channel, "Channel", "mono"),
     h("span", { class: "grow" }),
     Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + m.name, onClick: onTerm }),
+    waveButtons(m, onWave),
     canSteer(m) && m.kind !== "lead" ? Button({ label: "Kill", size: "sm", variant: "danger", ariaLabel: "Kill " + m.name, onClick: onKill }) : null);
 }
 
@@ -188,10 +195,13 @@ const rowSent = (m) => {
     h("strong", { class: "colony-sent-st" }, s.delivery_text || s.status));
 };
 
+// The seat picked by a deep link (?seat=<name>, or ?agent=<name|pane id>); no param selects nothing.
+const isSelected = (ctx, m) => { const want = ctx.params.seat || ctx.params.agent; return Boolean(want) && (want === m.name || want === m.pane_id); };
+
 function MemberRow(m, ctx, refresh) {
   const block = sendBlock(m);
-  return h("li", { class: "colony-row", "data-kind": m.kind, "data-state": m.state },
-    rowTop(m, () => killMember(ctx, m, refresh), () => ctx.navigate("terminal", terminalParams(m))),
+  return h("li", { class: "colony-row", "data-kind": m.kind, "data-state": m.state, "data-selected": isSelected(ctx, m) ? "true" : null },
+    rowTop(m, () => killMember(ctx, m, refresh), () => ctx.navigate("terminal", terminalParams(m)), (verb) => waveMember(ctx, m, verb, refresh)),
     rowMeta(m),
     rowTasks(m),
     rowNote(m),
@@ -200,63 +210,45 @@ function MemberRow(m, ctx, refresh) {
     sendWhy(m, block));
 }
 
-export default {
-  id: "colony",
-  title: "Colony",
-  icon: "herd",
-  group: "Operate",
-  async load() {
-    this.destroy();
-    S.dead = false;
-    return null;
-  },
-  render(ctx) {
-    const st = { all: false, data: null, error: null };
-    const root = () => ctx.params.project || ctx.project;
-    const body = h("div", { class: "colony-body" });
-    const toggle = h("input", { type: "checkbox", id: "colony-all", onChange: (e) => { st.all = e.target.checked; refresh(); } });
-    const bar = h("div", { class: "colony-bar" },
-      h("label", { class: "colony-all", for: "colony-all" }, toggle, " Show all panes"),
-      h("span", { class: "grow" }),
-      Button({ label: "Open terminal", size: "sm", icon: "external-link", onClick: () => ctx.navigate("terminal") }));
-    const page = h("div", { class: "page colony-roster" }, h("h1", null, "Colony"), bar, body);
+// Roster lens body for the Agents page. No timer: the page calls refresh() on SSE herd/agents events (and on its poll tick when SSE is down).
+export function mountRoster(ctx, body) {
+  const st = { all: false, data: null, error: null };
+  S.dead = false;
+  const toggle = h("input", { type: "checkbox", id: "colony-all", onChange: (e) => { st.all = e.target.checked; refresh(); } });
+  const bar = h("div", { class: "colony-bar" },
+    h("label", { class: "colony-all", for: "colony-all" }, toggle, " Show all panes"),
+    h("span", { class: "grow" }),
+    Button({ label: "Open terminal", size: "sm", icon: "external-link", onClick: () => ctx.navigate("terminal") }));
+  const list = h("div", { class: "colony-body" });
+  replace(body, h("div", { class: "colony-roster" }, bar, list));
 
-    function paint() {
-      if (st.error) return replace(body, State({ variant: "error", error: st.error, onRetry: refresh }));
-      if (!st.data) return replace(body, State({ variant: "loading", label: "colony", shape: "rows" }));
-      replace(body, ...rosterNodes(st.data, ctx, refresh));
-    }
+  function paint() {
+    if (st.error) return replace(list, State({ variant: "error", error: st.error, onRetry: refresh }));
+    if (!st.data) return replace(list, State({ variant: "loading", label: "colony", shape: "rows" }));
+    replace(list, ...rosterNodes(st.data, ctx, refresh));
+  }
 
-    async function refresh() {
+  async function refresh() {
+    if (S.dead) return;
+    const project = projectOf(ctx);
+    if (needsProject(project)) {
+      try { st.all_snap = await ctx.api.get("term/snapshot", { all: "1" }); st.error = null; } catch (e) { st.error = e; }
       if (S.dead) return;
-      const project = root();
-      if (needsProject(project)) {
-        try { st.all_snap = await ctx.api.get("term/snapshot", { all: "1" }); st.error = null; } catch (e) { st.error = e; }
-        if (S.dead) return;
-        const sig = JSON.stringify([st.error && String(st.error.message || st.error), st.all_snap]);
-        if (sig === st.sig) return;
-        st.sig = sig;
-        return st.error ? paint() : replace(body, allProjects(st.all_snap, ctx));
-      }
-      await load(ctx, st, project);
-      if (S.dead) return;
-      // Repaint only when the data changed: a poll that finds nothing new must not rebuild rows (scroll, focus, drafts).
-      const sig = JSON.stringify([st.error && String(st.error.message || st.error), st.data]);
-      if (sig !== st.sig) {
-        st.sig = sig;
-        paint();
-      }
+      const sig = JSON.stringify([st.error && String(st.error.message || st.error), st.all_snap]);
+      if (sig === st.sig) return;
+      st.sig = sig;
+      return st.error ? paint() : replace(list, allProjects(st.all_snap, ctx));
     }
+    await load(ctx, st, project);
+    if (S.dead) return;
+    // Repaint only when the data changed: a refresh that finds nothing new must not rebuild rows (scroll, focus, drafts).
+    const sig = JSON.stringify([st.error && String(st.error.message || st.error), st.data]);
+    if (sig === st.sig) return;
+    st.sig = sig;
+    if (!document.querySelector(".colony-send-text:focus")) paint();
+  }
 
-    paint();
-    refresh();
-    clearInterval(S.timer);
-    S.timer = setInterval(() => { if (!document.hidden && !document.querySelector(".colony-send-text:focus")) refresh(); }, POLL_MS);
-    return page;
-  },
-  destroy() {
-    S.dead = true;
-    clearInterval(S.timer);
-    S.timer = null;
-  },
-};
+  paint();
+  refresh();
+  return { refresh, destroy: () => { S.dead = true; } };
+}

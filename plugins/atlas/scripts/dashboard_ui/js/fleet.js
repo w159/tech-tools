@@ -10,6 +10,7 @@ import { Drawer, openDrawer, closeDrawer, openMenu, openPopover, closePopover, t
 import { ChannelList, Composer, FeedItem } from "./ui-data.js";
 import { renamePane, renameTab, closePane, closeTab, hostReachable, QUICK_KEYS, sendKeys } from "./herdr-actions.js";
 import { FilesPanel, hpThreadFor, openEditor } from "./integrations.js";
+import { sendToSeat } from "./send-path.js";
 import { pollCapture, CAPTURE_LINES } from "./capture-view.js";
 
 // <pre> of one seat's text for runtimes with no web UI. Polls herd/capture until it leaves the DOM; skips ticks while hidden.
@@ -296,6 +297,10 @@ export function paneUrl(rec) {
   return u.toString();
 }
 
+// Drawer deep links: the roster lens with this seat selected, and the Terminal workspace on its seat.
+export const colonyHref = (rec) => "#/agents?lens=roster&seat=" + encodeURIComponent(rec.name || rec.key);
+export const terminalHref = (rec) => "#/terminal?seat=" + encodeURIComponent(rec.name || rec.key);
+
 const TABS = ["now", "channel", "tasks", "files", "terminal"];
 
 // Inspector({ agent, tab, onTab(id), store }) -> Drawer node. Re-render with .update(agent, state).
@@ -311,18 +316,16 @@ export function Inspector({ agent, tab, onTab } = {}) {
   const head = h("div", { class: "insp-head grow" });
   const composerHost = h("div", { class: "insp-composer" });
 
-  const send = async (mode, text) => {
-    if (mode === "prompt") {
-      await api.post("herd/agents/" + encodeURIComponent(rec.pane_id) + "/prompt", { text });
-      toast("Prompt sent to " + rec.name + " in " + (rec.workspace || "workspace"), { kind: "ok" });
-    } else {
-      const res = await api.post("irc", { project: rec.project || "all", to: rec.name, body: text, from: "human" });
-      toast(res && res.delivered ? "Posted to " + rec.name : "Posted to the channel", { kind: "ok", why: res && res.next });
-      agentsStore.refresh(["irc"]);
-    }
+  // Prompt and Message are one action: the colony send handler (wave gate included), the single client send path.
+  const send = async (_mode, text) => {
+    const res = await sendToSeat({ to: rec.name, body: text, project: rec.project || rec.cwd });
+    toast(res && res.delivered ? "Delivered to " + rec.name : "Queued for " + rec.name, { kind: "ok", why: res && res.message && res.message.delivery_text });
+    agentsStore.refresh(["irc"]);
   };
 
-  const consoleButton = () => Button({ label: "Open in Colony", size: "sm", icon: "external-link", onClick: () => { location.hash = "#/terminal?pane=" + encodeURIComponent(rec.pane_id || rec.key); } });
+  const consoleButton = () => h("span", { class: "row" },
+    Button({ label: "Open in Colony", size: "sm", icon: "external-link", onClick: () => { location.hash = colonyHref(rec); } }),
+    Button({ label: "Open terminal", size: "sm", icon: "terminal", onClick: () => { location.hash = terminalHref(rec); } }));
   const nowPanel = () => {
     const state = agentsStore.getState();
     const rows = [["State", Badge({ status: rec.state })], ["Age", (ageLabel(rec) || "n/a") + (rec.sinceApprox ? " (since this page opened)" : "")], ["Kind", kindWord(rec.kind)], ["Workspace", rec.workspace || ""], ["Pane", h("span", { class: "mono" }, rec.pane_id)], ["Directory", h("span", { class: "mono cwd", title: rec.cwd }, rec.cwd, h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", "aria-label": "Copy directory", onClick: () => copyText(rec.cwd) }, icon("copy")))], ["Project", rec.project ? rec.project.split("/").pop() : "None matched"], ["Latest task", rec.task || "Not attached to an atlas task"]];
