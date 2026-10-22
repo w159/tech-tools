@@ -2,6 +2,8 @@
 
 ## 12.8.0 - 2026-10-22 (unreleased)
 
+- Docs and knob metadata now match the code: tmux is the default colony worker transport whenever installed, `claude-bg` only the fallback (or forced); `ATLAS_COLONY_TRANSPORT` knob default is `tmux`; contract test in `test_atlas_mux.py`.
+
 Atlas statusline: the omp usage widget ships with atlas, and Claude Code gets the closest equivalent from the `statusLine` stdin JSON. Design: `docs/plans/2026-10-22-atlas-statusline.md`.
 
 ### Added

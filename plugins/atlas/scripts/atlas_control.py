@@ -639,8 +639,8 @@ _AD = {
         "hooks",
     ),
     "ATLAS_COLONY_TRANSPORT": (
-        "`herdr` or `tmux` forces a pane transport; the default is claude-bg (claude workers run via `claude --bg`).",
-        "claude-bg",
+        "`herdr`, `tmux` or `claude-bg` forces a transport; the default is tmux when installed, else claude-bg (`claude --bg`).",
+        "tmux",
         "shell",
     ),
     "ATLAS_STOP_BRIDGE": ("`off` disables only omp's session-end bridge.", "", "shell"),

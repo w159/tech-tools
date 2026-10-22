@@ -1786,7 +1786,7 @@ class HerdrTransportTests(Base):
         self.fake = th.FakeHerdr(self.handler)
         self.addCleanup(self.fake.close)
         self.env["ATLAS_COLONY_TRANSPORT"] = (
-            "herdr"  # herdr is opt-in under the claude-bg default
+            "herdr"  # herdr is opt-in; tmux is the default
         )
         self.env["HERDR_SOCKET_PATH"] = self.fake.path
         self.env["ATLAS_SEAT_BACKEND"] = "herdr"
@@ -1889,7 +1889,7 @@ class HerdrTransportTests(Base):
         )
         env.pop(
             "ATLAS_COLONY_TRANSPORT"
-        )  # the claude-bg default: omp falls back to panes
+        )  # omp always runs as panes
         prompt = self.make_prompt("p", "x")
         rc, data, _, err = _run(
             "spawn", "--run", "r1", "--name", "Alpha", "--harness", "omp",
@@ -1918,7 +1918,7 @@ class HerdrTransportTests(Base):
 
 
 class ClaudeBgTests(Base):
-    """claude-bg transport (the default for claude workers): `claude --bg` runs the harness as a
+    """claude-bg transport (the fallback when tmux is missing): `claude --bg` runs the harness as a
     supervised background agent, status reads `claude agents --json`, kill is `claude stop`. The
     fake claude on PATH answers all three from the fake-state dir."""
 
@@ -2579,6 +2579,24 @@ class SeatTransportTests(unittest.TestCase):
 
         with mock.patch.object(atlas_mux.shutil, "which", return_value=None):
             self.assertEqual(("claude-bg", "tmux"), self._t(False))
+
+    def test_no_shipped_text_claims_claude_bg_default(self):
+        # contract: tmux is the default transport; claude-bg is only the fallback
+        import pathlib
+        import re
+
+        root = pathlib.Path(__file__).resolve().parents[1]
+        files = [
+            root / "omp/README.md",
+            root / "scripts/atlas_control.py",
+            root / "scripts/atlas_mux.py",
+            root.parents[1] / "docs/atlas-colony.md",
+            root.parents[1] / "docs/atlas-harness-parity.md",
+        ]
+        bad = re.compile(r"claude-bg (default|is the default)|default is claude-bg|by default[^.\n]{0,40}claude --bg", re.I)
+        for f in files:
+            for n, line in enumerate(f.read_text().splitlines(), 1):
+                self.assertIsNone(bad.search(line), f"{f}:{n}: {line[:120]}")
 
     def test_env_force_herdr(self):
         self.assertEqual(("herdr", "herdr"), self._t(True, "herdr"))
