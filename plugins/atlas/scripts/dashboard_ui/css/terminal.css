@@ -5,6 +5,7 @@
 .tw-sub { color: var(--text-faint); font-size: 12px; }
 .tw-body { flex: 1; min-height: 0; display: flex; }
 .tw-side { width: 232px; flex: none; overflow-y: auto; padding: var(--s-3); border-right: 1px solid var(--border); background: var(--surface-1); display: flex; flex-direction: column; gap: 2px; }
+.tw-side-label-mixed { text-transform: none; } /* "Agents · N" keeps one case in every space */
 .tw-side-label { margin: var(--s-3) 0 var(--s-1); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
 .tw-space, .tw-agent { display: flex; align-items: center; gap: var(--s-2); width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .tw-space:hover, .tw-agent:hover { background: var(--surface-2); }

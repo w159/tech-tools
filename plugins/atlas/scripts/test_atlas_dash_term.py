@@ -700,6 +700,10 @@ class InProcessDashboard(unittest.TestCase):
             (lead["runtime"], lead["kind"], lead["target"]), ("claude", "pane", None)
         )
         self.assertEqual(
+            lead["attach_hint"], "start claude inside tmux or herdr to stream this seat"
+        )
+        self.assertNotIn("attach_hint", impl)
+        self.assertEqual(
             (impl["runtime"], impl["target"], impl["pane"], impl["state"]),
             ("omp", "%3", "%3", "working"),
         )

@@ -329,6 +329,27 @@ class ModelTest(unittest.TestCase):
         self.assertFalse(c["finished"])
         self.assertTrue(next(x for x in s["seats"] if x["name"] == "worker-s1")["state"] == "working")
 
+    def _lead_with_pane_file(self, panes, write=True):
+        model._TRANSCRIPTS.clear()
+        run = Path(self.root) / ".atlas" / ".run"
+        run.mkdir(parents=True, exist_ok=True)
+        if write:
+            (run / "lead-pane-lead-abc123.json").write_text(json.dumps({"pane": "%9"}))
+        with mock.patch.object(model, "_omp_sessions_root", return_value=Path(self.root) / "no-sessions"), \
+                mock.patch.object(model, "_panes", return_value=panes):
+            self._channel("proj@main/lead-abc123", "lead-abc123", [], harness="claude", lead_pid=os.getpid())
+            s = model.snapshot(self.root)
+        return next(x for x in s["seats"] if x["name"] == "lead-abc123")
+
+    def test_lead_seat_exposes_recorded_live_pane(self):
+        pane = {"pane_id": "%9", "session_name": "x", "window_name": "w", "pane_current_path": self.root,
+                "pane_dead": "0", "@atlas_worker": "", "@atlas_role": ""}
+        self.assertEqual(self._lead_with_pane_file([pane])["target"], "%9")
+
+    def test_lead_seat_target_empty_without_record_or_pane(self):
+        self.assertEqual(self._lead_with_pane_file([], write=False)["target"], "")
+        self.assertEqual(self._lead_with_pane_file([])["target"], "")  # recorded pane is gone
+
     def test_dead_lead_pid_adds_no_lead_seat(self):
         import subprocess
 

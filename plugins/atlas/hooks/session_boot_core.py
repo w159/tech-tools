@@ -982,6 +982,16 @@ def open_lead_channel_once(payload, run=None):
         return (
             None  # only an existing atlas board; never create channels state elsewhere
         )
+    lead = atlas_todo.lead_name(sid)
+    # Record the lead's tmux pane so the colony snapshot can attach the lead seat; absent
+    # outside tmux (the seats route then returns an attach_hint). Best-effort.
+    pane = os.environ.get("TMUX_PANE", "").strip()
+    if pane:
+        with contextlib.suppress(Exception):
+            rd = os.path.join(root, ".atlas", ".run")
+            os.makedirs(rd, exist_ok=True)
+            with open(os.path.join(rd, f"lead-pane-{lead}.json"), "w") as fh:
+                json.dump({"lead": lead, "pane": pane, "session": sid}, fh)
     (run or subprocess.run)(
         [
             sys.executable,
@@ -997,7 +1007,7 @@ def open_lead_channel_once(payload, run=None):
             "--root",
             root,
             "--lead",
-            atlas_todo.lead_name(sid),
+            lead,
             "--members",
             "",
         ],

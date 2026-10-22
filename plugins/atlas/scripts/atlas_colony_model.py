@@ -844,6 +844,17 @@ def _address_seats(seats: list[dict], colonies: dict, teams: list[dict], specs: 
 
 
 # --- snapshot -------------------------------------------------------------------------------------
+def _lead_pane(root: str, lead: str, panes_all: list[dict]) -> str:
+    """The lead's tmux pane id recorded by session_boot (`lead-pane-<lead>.json`); '' when it
+    was not started in tmux or the pane is gone."""
+    try:
+        f = Path(root) / ".atlas" / ".run" / f"lead-pane-{lead}.json"
+        pane = str(json.loads(f.read_text()).get("pane") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+    return pane if any(p["pane_id"] == pane for p in panes_all) else ""
+
+
 def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     root = os.path.realpath(root or os.getcwd())
     now = time.time()
@@ -1116,7 +1127,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "model": "",
                 "state": "working",
                 "exit_code": None,
-                "target": "",
+                "target": _lead_pane(chan_root.get(cname) or root, lname, panes_all),
                 "pid": lp,
                 "queue": 0,
                 "open_items": [],
