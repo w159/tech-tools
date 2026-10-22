@@ -1968,8 +1968,10 @@ TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
 # GETs that expose transcripts/agent output or live streams: token required.
 _SENSITIVE_GET = re.compile(
     r"^/api/v2/(stream|irc|colony|channels(/[^/]+)?|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
-    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/herd/capture$|^/api/v2/term/(snapshot|capture)$"
+    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/herd/capture$|^/api/v2/term/(snapshot|capture|seats)$"
 )
+# GETs served straight from do_GET (SSE, websocket upgrade), not through V2_ROUTES.
+V2_RAW_GET = frozenset({"/api/v2/stream", "/api/v2/term/ws"})
 _TOKEN_EXEMPT = ("/api/health", "/health")
 _MIME = {
     ".html": "text/html; charset=utf-8",
