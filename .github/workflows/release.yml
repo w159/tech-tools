@@ -1,0 +1,83 @@
+name: release
+
+# Publishes a GitHub release `atlas <version>` (tag atlas-v<version>) whenever
+# plugins/atlas/.claude-plugin/plugin.json changes on main. Notes come from
+# plugins/atlas/CHANGELOG.md via plugins/atlas/scripts/release_notes.py.
+on:
+  push:
+    branches: [main]
+    paths:
+      - plugins/atlas/.claude-plugin/plugin.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Read version
+        id: v
+        run: |
+          set -euo pipefail
+          ver=$(python3 -c "import json;print(json.load(open('plugins/atlas/.claude-plugin/plugin.json'))['version'])")
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "tag=atlas-v$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if tag exists
+        id: skip
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.v.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.v.outputs.tag }} already exists; nothing to do."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check marketplace.json version
+        if: steps.skip.outputs.exists == 'false'
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          want = "${{ steps.v.outputs.version }}"
+          m = json.load(open(".claude-plugin/marketplace.json"))
+          got = [p.get("version") for p in m["plugins"] if p.get("name") == "atlas"]
+          if got != [want]:
+              sys.exit(f"::error::marketplace.json atlas version {got} != plugin.json {want}; bump both before releasing")
+          PY
+
+      - name: Extract release notes
+        if: steps.skip.outputs.exists == 'false'
+        run: |
+          python3 plugins/atlas/scripts/release_notes.py "${{ steps.v.outputs.version }}" > notes.md || {
+            echo "::error::CHANGELOG has no released '## ${{ steps.v.outputs.version }}' section (missing or marked unreleased)"; exit 1; }
+
+      - name: Package plugin
+        if: steps.skip.outputs.exists == 'false'
+        run: |
+          zip -qr atlas.zip plugins/atlas -x '*/node_modules/*' '*/.git/*'
+          size=$(stat -c %s atlas.zip)
+          if [ "$size" -ge 104857600 ]; then
+            rm atlas.zip
+            printf '\n\nNote: plugin zip exceeded 100 MB, so no asset is attached.\n' >> notes.md
+          else
+            mv atlas.zip "atlas-${{ steps.v.outputs.version }}.zip"
+          fi
+
+      - name: Create release
+        if: steps.skip.outputs.exists == 'false'
+        run: |
+          assets=$(ls atlas-*.zip 2>/dev/null || true)
+          gh release create "${{ steps.v.outputs.tag }}" $assets \
+            --target "$GITHUB_SHA" \
+            --title "atlas ${{ steps.v.outputs.version }}" \
+            --notes-file notes.md

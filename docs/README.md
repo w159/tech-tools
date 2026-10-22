@@ -59,6 +59,10 @@ A vacuous AGREEMENT row is a known limitation, not a clean bill of health: the c
 prose against annotations, so a connector that marks nothing as mutating passes by agreeing with
 itself. `.atlas/.run/vacuous-check.mjs` is the heuristic used to probe that blind spot.
 
+## Releases
+
+Atlas releases are automatic. Bump `version` in `plugins/atlas/.claude-plugin/plugin.json` and the atlas entry in `.claude-plugin/marketplace.json`, add a released `## <version> - <date>` section to `plugins/atlas/CHANGELOG.md` (no `(unreleased)` marker; check with `python3 plugins/atlas/scripts/release_notes.py <version>`), and push to main. `.github/workflows/release.yml` tags `atlas-v<version>` and publishes the release `atlas <version>` with that section as notes, plus a zip of `plugins/atlas` when it is under 100 MB. It skips versions whose tag exists and fails if the two version files disagree. The docs-curator role keeps the CHANGELOG release-ready.
+
 ## Known gaps
 
 - **Paylocity, ThreatLocker, Spanning, NinjaOne, ConnectWise**: no public SDK on GitHub. Docs are authored from upstream Swagger/portal where available + the local MCP source.

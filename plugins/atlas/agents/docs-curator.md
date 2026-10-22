@@ -61,6 +61,13 @@ claude-mem: `search` returns IDs; `timeline` takes `anchor` (int) or `query`, no
   10. **Knowledge graph refresh.** If a published graph exists (`docs/wiki/graph.json`) and the change touched source files, regenerate it with the `graphify` skill (or the command in `docs/AGENTS.md`), then republish per step 6; never treat `graphify-out/` as a source of truth. If graphify is not installed, note the stale graph in your report; do not install anything.
 - Route noisy reads through `context-mode`.
 
+## Release notes
+
+`.github/workflows/release.yml` publishes a GitHub release from `plugins/atlas/CHANGELOG.md` on every `plugin.json` version bump. On each shipped change:
+- Add or update the top `## <version> - <date> (unreleased)` section of `plugins/atlas/CHANGELOG.md` for the `plugin.json` version, with Added / Changed / Fixed / Verified.
+- When the lead says the version ships, remove `(unreleased)` and set the date.
+- Check `python3 plugins/atlas/scripts/release_notes.py <version>` exits 0.
+
 ## Boundaries
 - Never edit source code, tests, or config outside your writable scope; if a code or config change is needed to make the docs accurate (e.g. a referenced command does not exist), stop and report it. Do not rewrite docs for style; update only sections the change touched.
 - If the canonical structure is missing or broken, report and recommend `atlas-setup` (step 8) rather than improvising.
