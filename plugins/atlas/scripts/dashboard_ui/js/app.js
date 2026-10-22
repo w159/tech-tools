@@ -13,7 +13,7 @@ import overview from "./pages/overview.js";
 import work from "./pages/work.js";
 import { openEditor } from "./integrations.js";
 import { openNewThread } from "./hp.js";
-import { normalizeNav, orderGroups, MOBILE_TABS, LENS_ROUTES } from "./nav-order.js";
+import { normalizeNav, orderGroups, MOBILE_TABS, LENS_ROUTES, bootHash } from "./nav-order.js";
 
 // ---- store ----------------------------------------------------------------
 
@@ -822,6 +822,9 @@ function setTab(tab) {
 // ---- boot --------------------------------------------------------------------------------------------------------------
 
 async function boot() {
+  // Seed the default route before any await so the end of boot never writes "#/overview" over a deep link; replaceState fires no hashchange.
+  const seed = bootHash(location.hash);
+  if (seed) history.replaceState(null, "", seed);
   // First thing: the terminal's xterm assets must beat the API burst to the browser's 6-connection pool.
   if (location.hash.startsWith("#/terminal")) import("./pages/terminal.js").then((m) => m.loadXterm()).catch((e) => reportFetchFail("app", "xterm assets", e));
   const local = loadLocalPrefs();
@@ -898,8 +901,7 @@ async function boot() {
     }
   });
   agentsStore.start({ project: store.get("project"), pollMs: refreshMs() });
-  if (!location.hash) location.hash = "#/overview";
-  else route();
+  route();
   refreshAttention();
 }
 
