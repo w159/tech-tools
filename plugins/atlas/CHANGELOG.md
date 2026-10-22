@@ -1,14 +1,69 @@
 # Changelog
 
-## 12.8.0 - 2026-10-22 (unreleased)
+## 13.0.0 - 2026-10-22 (unreleased)
 
-- Docs and knob metadata now match the code: tmux is the default colony worker transport whenever installed, `claude-bg` only the fallback (or forced); `ATLAS_COLONY_TRANSPORT` knob default is `tmux`; contract test in `test_atlas_mux.py`.
+Command Center overhaul: the Terminal becomes a grid of real terminals, Settings becomes a categorized page with verified saves, and the operate pages collapse into one Agents surface. Plan: `docs/plans/2026-10-22-command-center-overhaul.md`. Breaking changes are listed first.
+
+### Breaking changes
+
+- Terminal page semantics. `#/terminal` is now a seat grid (one card per colony seat plus shell and TUI seats). `atlas_tui`, which the page used to stream as the whole page, is demoted to one TUI seat (`tui@host`). Anything that assumed a single full-page `atlas_tui` stream no longer holds.
+- `#/colony`, `#/board` and `#/supervise` are aliases of `#/agents` (to the `roster`, `board` and `supervise` lenses). Colony is no longer a separate page.
+- Shell-scope settings (the six rows the server used to refuse) are now writable. A save writes `~/.claude/settings.json` `env`, `~/.omp/agent/config.yml` `env`, and `~/.atlas/env.sh` (a block between `# >>> atlas managed >>>` and `# <<< atlas managed <<<`), plus one guarded `[ -f ~/.atlas/env.sh ] && . ~/.atlas/env.sh` line in `~/.zshenv` inside the same markers. Nothing outside the markers is touched.
+- Terminal websocket auth is by single-use ticket: `POST /api/v2/term/ticket` returns `{ticket, expires_in: 30}`, then `ws?ticket=`. The old `token=` query form still works for one release and logs a deprecation line.
+- The colony worker transport defaults to tmux whenever it is installed; `claude-bg` is only the fallback (or forced).
+
+### Added
+
+- Terminal (W1-U1, W1-U2): `GET /api/v2/term/seats?project=<root>|all` lists spaces and seats (`address, name, role, runtime, state, pane, target, kind, project, cwd, started_at, last_activity`); every colony space ends with a `shell@<space>` seat and the host space carries `shell@host` and `tui@host`. `kind=shell` on `term/ws` forks `$SHELL -l`. A PTY with no client frames for `ATLAS_TERM_IDLE_S` (default 900) closes with code 1000 reason `idle`. The page is an openrig-style grid of xterm cards, connects a card when it scrolls into view (at most 6 live sockets), enlarges on click, Enter or `?seat=` deep link, and shows an error line with Retry after 5 s without a frame. The lead seat attaches through `TMUX_PANE` (W3-U7, `7ab8f588`, `28824b4c`).
+- Settings (W2-U3, W2-U4): every behavior knob carries `kind`, `options`, `range`, `effect`, `applies`, `scope` and `layers`; ranges are enforced on write. A write returns `{ok, key, wanted, layers[], applies}` and the UI shows `✓ verified` with the layers that read back, or `✗ not saved`. `ATLAS_OPTIMIZE_CMD` needs `confirm:true` (409 `needs_confirm`). The page is a sticky category nav with one category visible at a time and a filter across all of them. The model picker has Local, Cloud and All chips, sort by Latest, Size, Name or Popular, search, current/reset/capabilities, and a `Pull another...` job.
+- Ollama API (`atlas_ollama.py`): `GET /api/v2/ollama/models|status`, `POST /api/v2/ollama/pull`, `GET /api/v2/ollama/jobs/<id>`, `DELETE /api/v2/ollama/models/<name>` (with `confirm:true`). Model-kind knobs are validated against the local list (400 `unknown_model`).
+- Agents (W3-U5, W3-U6): one roster with `Roster`, `Supervise` and `Board` lenses and a single send path with the wave gate; Stop/Kill asks for confirmation and goes through the identity-checked colony kill (409 `member_dead`); Pause, Resume and Cancel are wired to the colony routes. The Board lens has loading, empty and error states with a stale banner. Channels refresh on the SSE `irc` event instead of a 5 s timer.
+- Releases: `.github/workflows/release.yml` publishes a GitHub release `atlas <version>` (tag `atlas-v<version>`) when `plugin.json` changes on main, with the CHANGELOG section as notes (`scripts/release_notes.py`, exit 2 when missing or unreleased). docs-curator owns keeping the CHANGELOG release-ready. Contract tests tie `plugin.json`, `marketplace.json` and the CHANGELOG top version together (`34d6d99b`).
+
+### Changed
+
+- Docs and knob metadata match the code: `ATLAS_COLONY_TRANSPORT` knob default is `tmux`; contract test in `test_atlas_mux.py` (`77c7e803`).
+- W2 contract fixes (`47158f65`): `modified_at`, `percent` and the status URL.
+- Settings polish (`e14abd5e`): one-category view, range errors shown instead of silent clamping, inferred kinds, model picker current/reset/capabilities.
+- Channels tests inject the send path instead of a global module mock (`b1fe6a9c`, finding W3-mockleak).
+- Root and plugin READMEs: install versus update commands, current counts and pages (`a9d69f92`).
+
+### Removed
+
+- The Terminal page's full-page `atlas_tui` stream and the old render path that polled captures for every card at once.
+- Three of the four client send paths and the separate Colony page; the colony 8 s and channels 5 s refresh timers (replaced by SSE events); the unreachable `agents.js` channel-lens branch.
+
+### Fixed
+
+- Deterministic terminal JS tests (finding W1-U2-flake, `37d8a75a`).
+- Cold load of `#/terminal` no longer lands on another page (deep-link race, W1-U2).
+- W2 runtime failures fixed by the polish branch: Settings main height 25799 px at 1280 wide is now 1090 px with one visible category, and `99999999` for `ATLAS_TRIPWIRE_THRESHOLD` shows `not saved: 99999999 is outside 1..50` instead of being clamped to 50 and saved.
+
+### Verified
+
+Findings `W1-U1`, `W1-U2`, `W1-U2-flake`, `W1-runtime`, `W2-U3`, `W2-U4`, `W2-fix`, `W2-polish`, `W3-U5`, `W3-U6`, `W3-U7` (re-verified at `28824b4c` after a first rejection), `W3-mockleak`, `transport-default` and `releases` are `verified` in `.atlas/.run/findings.json`. Runtime verdicts, quoted:
+
+- W1 (`.atlas/.run/cc-w1-runtime.md`): "The Terminal page renders an openrig-style grid of cards: real xterm terminals for shell and TUI seats (echo round trip proven in the shell, atlas_tui screen live in tui@host), placeholders for Claude seats without an attached terminal, working enlarge, Escape, Enter and deep link, and styling matching the plan tokens. Unverified: websocket 101 count, scroll restoration, and the 700 px mobile width (resize did not apply). No app console errors."
+- W2 (`.atlas/.run/cc-w2-runtime.md`): "Settings saves are solid: stepper, model picker, shell-scope and theme writes all returned "✓ verified" with the written layers, API read-back matched, the managed env.sh/.zshenv block appeared in the temp HOME only, and the console and network were clean." It also failed two plan criteria (25799 px height, silent clamp); both are fixed in `e14abd5e` and the 1090 px height and the range error were re-observed in the W3 run.
+- W3 (`.atlas/.run/cc-w3-runtime.md`): "W3 operate pages work headless: aliases redirect to the right lenses, Board shows counts and a clear offline card with Retry and clean recovery, Channels gets a posted note via SSE in about 1 s, Open terminal routes to the seat, and Settings is 1090 px tall with two columns and one category."
+- Real home untouched in the W2 and W3 runs: `~/.atlas/env.sh` absent, `grep -c atlas ~/.zshenv` 0; port 7421 untouched.
+
+### Known
+
+A polish branch (`worker/w3-polish`) is in flight for these open items from `cc-w3-runtime.md`:
+
+- `channel-sync.js:16` throws `TypeError: Illegal invocation` when the SSE connection is not live (`timers.set(tick, fallbackMs)` calls `setInterval` with `this = timers`), so the 30 s fallback poll never starts.
+- The roster has no Stop, Kill, Pause, Resume or Cancel buttons (only "Open terminal" per row), and the Cards and List views show the runtime-not-running card; the kill confirm dialog could not be exercised.
+- The Agents header says "No agents running" while the roster lists working members (it counts the runtime fleet only).
+- The Settings status line keeps a stale `not saved` message after the value is restored.
+- Not verified in W1: the websocket 101 count, scroll restoration after leaving an enlarged seat, and the 700 px width. In W3, "Enlarged seat" after Open terminal was not confirmed from text.
+
+## 12.8.0 - 2026-10-22
 
 Atlas statusline: the omp usage widget ships with atlas, and Claude Code gets the closest equivalent from the `statusLine` stdin JSON. Design: `docs/plans/2026-10-22-atlas-statusline.md`.
 
 ### Added
 
-- Releases: `.github/workflows/release.yml` publishes a GitHub release `atlas <version>` (tag `atlas-v<version>`) when `plugin.json` changes on main, with the CHANGELOG section as notes (`scripts/release_notes.py`, exit 2 when missing or unreleased). docs-curator owns keeping the CHANGELOG release-ready. Contract tests tie `plugin.json`, `marketplace.json` and the CHANGELOG top version together.
 - omp: `omp/usage-statusline.ts` exports `registerUsageStatusline(pi)` and `USAGE_STATUSLINE_WIDGET_KEY`; `atlasOmpExtension` registers it unless `ATLAS_STATUSLINE=off` or a personal copy exists at `~/.omp/agent/extensions/usage-statusline.ts` or `<cwd>/.omp/extensions/usage-statusline.ts` (two copies would race on one widget key). `fallow` is found with `Bun.which("fallow")` only; the fallow column is skipped when it does not resolve.
 - Claude Code: `scripts/atlas_statusline.py` (stdlib Python) renders rows from the `statusLine` stdin JSON. `install` writes `statusLine` into `~/.claude/settings.json` and saves the previous value once to `~/.atlas/statusline.previous.json`; `uninstall` restores it (or deletes the key); `--settings <path>` and `--width N` exist for tests.
 - Both harnesses read the shared config file `~/.omp/agent/usage-statusline.json`, so one edit restyles both.

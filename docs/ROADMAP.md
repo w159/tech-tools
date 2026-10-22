@@ -6,6 +6,17 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
+### Command Center next (added 2026-10-22, after 13.0.0)
+
+Branch `worker/w3-polish` is in flight for the first four; none is verified yet. Source: `.atlas/.run/cc-w1-runtime.md`, `cc-w3-runtime.md`.
+
+- [in-progress] `plugins/atlas/scripts/dashboard_ui/js/channel-sync.js:16` throws `Illegal invocation` when SSE is not live (`timers.set(tick, fallbackMs)` calls `setInterval` with `this = timers`), so the 30 s fallback poll never starts. Suggested fix in the report: default `timers = { set: (f,ms)=>setInterval(f,ms), clear: (i)=>clearInterval(i) }`. Awaiting verification.
+- [in-progress] Roster has no Stop, Kill, Pause, Resume or Cancel buttons (only "Open terminal" per row); the confirm dialog and runtime-not-running card paths are unexercised. Awaiting verification.
+- [in-progress] Agents header says "No agents running" while the roster lists working members (header counts the runtime fleet only). Awaiting verification.
+- [in-progress] Settings status text stays on the old `not saved` error after the value is restored. Awaiting verification.
+- [planned] W1 unverified: websocket `101` count on `term/ws`, scroll restoration after leaving an enlarged seat, and the 700 px mobile width (the resize did not apply in the run).
+- [planned] W3 unverified: the "Enlarged seat" state after Open terminal, and the fleet drawer (needs the agent runtime running).
+
 - [in-progress] Claude Code native parity research (2026-10-09): research-only
   sweep behind the mod build above, mapping what Claude Code natively provides
   (agent view, dynamic workflows, cloud Projects, routines, model/persona

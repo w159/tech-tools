@@ -1,6 +1,6 @@
 # Command Center overhaul: real terminals, settings with full control, one operate surface
 
-Date: 2026-10-22. Status: in progress. Target version: 13.0.0.
+Date: 2026-10-22. Status: shipped 13.0.0 (unreleased); polish branch worker/w3-polish in flight. Target version: 13.0.0.
 
 ## Why
 
@@ -117,3 +117,26 @@ Unit tests, then ui-runtime-tester: `#/board`, `#/colony`, `#/supervise` all lan
 - Version 13.0.0 in `plugins/atlas/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`; CHANGELOG `## 13.0.0` with Added/Changed/Removed/Verified; `plugins/atlas/README.md` Command Center section rewritten for the new Terminal, Settings and Agents pages; `dashboard_ui/design/PAGES.md` and `design/API.md` updated with the new routes and page contracts.
 - Every unit: proof-first (failing test, then pass), worktree per implementer (`atlas_wt.py add <unit>`), verifier per branch, merge one at a time, full suites rerun on the merged tree.
 - No edits under `~/.claude/plugins/cache` or `~/.omp`; the runtime tester uses port 7499 and never stops the user's 7421 instance.
+- Browser tests are headless only (user correction 2026-10-22): no chrome-devtools MCP, no playwright MCP (the plugin's launches a headed Chrome), no cmux browser. Testers drive `playwright-core` from a node script with `chromium.launch({headless: true, channel: "chrome"})` (`NODE_PATH=~/.npm/_npx/9833c18b2d85bc59/node_modules`), saving screenshots to `.atlas/.run/`.
+
+## Outcome
+
+Merged on main (merge commit, verified finding):
+
+| Unit | Merge commit | Finding |
+|---|---|---|
+| W1-U1 server | `320d969b` (feat `128dc289`) | W1-U1 |
+| W1-U2 client | `0663499d` (feat `3cd9964c`); flake fix `76369382` (`37d8a75a`) | W1-U2, W1-U2-flake |
+| W2-U3 server | `98e47ece` (feat `2ced5b87`) | W2-U3 |
+| W2-U4 client | `f97ccfa9` (feat `9045e2d3`) | W2-U4 |
+| W2 contract fixes | `a7986654` (`47158f65`) | W2-fix |
+| W2 polish | `cd53dc66` (`e14abd5e`) | W2-polish |
+| W3-U5 operate surface | `66d70aa4` (`dfcf501f`) | W3-U5 |
+| W3-U6 channels | `9a2998f5` (`387aadea`) | W3-U6 |
+| W3-U7 lead seat attach | `895a6c5e` (`7ab8f588`, `28824b4c`) | W3-U7 |
+| W3 mock-leak fix | `4053f426` (`b1fe6a9c`) | W3-mockleak |
+| tmux default transport | `1d24ddd7` (`77c7e803`) | transport-default |
+| Releases workflow | `91ab0bc5` (`34d6d99b`) | releases |
+
+Runtime reports: `.atlas/.run/cc-w1-runtime.md`, `.atlas/.run/cc-w2-runtime.md`, `.atlas/.run/cc-w3-runtime.md`. Open items are in `docs/ROADMAP.md` under "Command Center next".
+

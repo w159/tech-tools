@@ -341,6 +341,30 @@ States: each section independent; a failing section shows its own State without 
 
 ---
 
+## 11a. Settings (13.0.0 contract, supersedes the section list and layout in section 11)
+
+One category at a time. Left: sticky category nav (Preferences, Session automation, Guardrails, Prompt optimizer, Decision model, Storage, Colony, Scoring, Integrations, Ecosystem, Connectors, Agents, Advanced); right: the setting cards of the selected category only. A filter box above the nav searches every category and shows a count per category. Main height at 1280 wide was 1090 px in the W3 runtime run (`.atlas/.run/cc-w3-runtime.md`); one column under 900 px.
+
+Row contract: title, one-line description, `effect` line, `applies` badge (`applies now`, `next session`, `restart dashboard`), the control chosen by `kind`, `live: x - saved: y` when they differ, and after a save `✓ verified` with the layers that read back or `✗ not saved: <reason>`. Controls by `kind`: `toggle` switch, `select` dropdown from `options`, `number` stepper with `range` (an out-of-range value is rejected with `not saved: N is outside min..max`, never clamped), `model` picker, `url` text with Test, `command` text with confirm, `text` only when the server gives no options.
+
+Model picker: chips Local, Cloud, All; sort Latest, Size, Name, Popular; search; per row name, params, size or `cloud`, modified age, running dot; current value, reset to default, capabilities; `Pull another...` runs a pull job and shows its progress; the status line shows ollama reachability. The picked value is saved through the normal knob save and read back.
+
+Shell-scope rows are editable. The save writes the Claude Code `settings.json` `env`, the omp `config.yml` `env` and `~/.atlas/env.sh` (managed block, plus one guarded line in `~/.zshenv`); the `layers` line lists exactly the files written. Preferences (`GET|PUT /api/v2/prefs`) use the same row component.
+
+## 11b. Terminal (`#/terminal`, 13.0.0)
+
+`#/terminal?space=<id>&seat=<address>&project=<root>`
+
+Left rail: spaces (colony projects, then the host space) and an `Agents · N` seat list with role subtitles. Main: a card grid (two columns, one under 760 px). Each card is an xterm instance: title row left = runtime label (`Claude Code`, `omp`, `Codex CLI`, `Shell`, `TUI`), right = address; footer shows the seat state, `last_activity` age and a spinner while `running`. Seats: one per colony member (lead first), a `shell@<space>` seat per space, and `shell@host` and `tui@host` in the host space. A seat whose pane is gone stays listed as `ended`; a Claude or omp seat without an attached terminal shows "no terminal attached" (the lead seat attaches only when `TMUX_PANE` is set).
+
+Connection: a card connects when it scrolls into view and disconnects after 60 s offscreen; the enlarged seat always connects; at most 6 live sockets, the rest show the last `term/capture` text with a `paused` badge. Connect with `POST /api/v2/term/ticket` then `ws?ticket=`. Placeholder `connecting to <address>...`; after 5 s without a frame it becomes an error line with Retry.
+
+Interaction: click, Enter or the deep link enlarges; `All agents` returns (scroll restoration is [unverified]); arrows move between cards, Escape backs out, Shift+Tab leaves the terminal. `atlas_tui` is the `tui@host` seat, not the page.
+
+## 11c. Agents lenses (13.0.0, supersedes the lens list in sections 2 and 5 to 8)
+
+`#/agents?lens=roster|supervise|board&agent=&project=`. Lenses: `Roster` (colony members with Send, Stop/Kill with a confirm dialog naming the seat, Pause, Resume, Cancel with confirm, Open terminal which routes to `#/terminal?seat=`), `Supervise`, `Board` (loading, empty and error states; a failed refresh shows a stale banner with the last good time). Aliases: `#/colony` to `lens=roster`, `#/board` to `lens=board`, `#/supervise` to `lens=supervise`. Every composer posts through the one colony send path with the wave gate. Refresh is on the SSE `herd`, `agents` and `irc` events with an 8 s poll fallback. Channels (`#/channels`, alias `#/irc`) refresh on the `irc` event.
+
 ## 12. Backend gaps (listed once)
 
 | Id | Need | Used by | Fallback today |

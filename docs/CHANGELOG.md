@@ -1,5 +1,11 @@
 # Changelog
 
+## 13.0.0 (2026-10-22, unreleased)
+
+### Added
+
+- Command Center overhaul. Terminal is a seat grid of real terminals (`GET /api/v2/term/seats`, shell and TUI seats, single-use `POST /api/v2/term/ticket` then `ws?ticket=`, `ATLAS_TERM_IDLE_S` idle close); Settings is one category at a time with `kind options range effect applies scope layers` on every knob, verified saves (`{ok,key,wanted,layers[],applies}`), writable shell-scope rows (claude settings `env`, omp `config.yml` `env`, `~/.atlas/env.sh` plus one guarded `~/.zshenv` line) and an Ollama model picker (`/api/v2/ollama/*`); Agents has Roster, Supervise and Board lenses with `#/colony`, `#/board`, `#/supervise` as aliases, one send path and Channels on the SSE `irc` event. Also: tmux is the default worker transport; automatic GitHub release per atlas version. Breaking: Terminal semantics (`atlas_tui` is one TUI seat), `token=` ws auth deprecated. Narrative, verdict lines and Known items: `plugins/atlas/CHANGELOG.md` 13.0.0; plan: `docs/plans/2026-10-22-command-center-overhaul.md`. Verified: findings W1-*, W2-*, W3-*, `transport-default`, `releases` in `.atlas/.run/findings.json`; runtime reports `.atlas/.run/cc-w1-runtime.md`, `cc-w2-runtime.md`, `cc-w3-runtime.md`. Open: see ROADMAP "Command Center next".
+
 ## 12.8.0 (2026-10-22, unreleased)
 
 ### Added
