@@ -206,6 +206,10 @@ firebase-adminsdk*.json
 !docs/
 !docs/**
 
+# README images (root README.md references img/ and img/showcase/)
+!img/
+!img/**
+
 # ---- .atlas/ - atlas-internal state only, never a docs/ subdirectory ----
 # .atlas/ holds atlas's own self-improvement state, all durable and must ship
 # except .run/ (ephemeral, re-excluded in Section 5 below except findings.json).
