@@ -1,0 +1,972 @@
+{
+  "ok": true,
+  "layers": {
+    "atlas": {
+      "ok": true
+    },
+    "herdr_socket": {
+      "reachable": true,
+      "reason": null
+    },
+    "herdr_web_ui": {
+      "healthy": true,
+      "url": "http://127.0.0.1:7437",
+      "auth_required": false
+    }
+  },
+  "counts": {
+    "working": 0,
+    "blocked": 0,
+    "idle": 0,
+    "done": 0,
+    "unknown": 0
+  },
+  "states": {
+    "input": 0,
+    "fail": 0,
+    "working": 0,
+    "idle": 0,
+    "done": 0,
+    "unknown": 24
+  },
+  "workspaces": [],
+  "tabs": [],
+  "agents": [
+    {
+      "key": "docs-curator-guide-agents",
+      "name": "docs-curator-guide-agents",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t61d835a8",
+          "content": "Make the living docs describe the two new in-app guide agents and the backend proxy accurately, close or re-home the stale ROADMAP items, and record the operato",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "docs-curator-guide-proof",
+      "name": "docs-curator-guide-proof",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 3,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:01:01+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "explorer-backend-proxy",
+      "name": "explorer-backend-proxy",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t0bc77581",
+          "content": "Map what an implementer needs to add a backend LLM proxy route that the in-browser `page-agent` library will call (OpenAI chat-completions format, forwarded to ",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "explorer-frontend",
+      "name": "explorer-frontend",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t55a42e80",
+          "content": "Map everything an in-app AI guide agent for CLIENTS (first responders using the planning app) would need to know about frontend/, so a later implementer can emb",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "impl-cc15-t1",
+      "name": "impl-cc15-t1",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:10:10+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "impl-cc15-t2",
+      "name": "impl-cc15-t2",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 1,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:12:51+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "impl-cc15-t3",
+      "name": "impl-cc15-t3",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:21:30+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "impl-cc15-t4",
+      "name": "impl-cc15-t4",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Agentic/tech-tools",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t380b1baf",
+          "content": "ship js/run-data.js (pure adapters toBand, toSeats, toFeed, toNeeds, toGates, toMetrics) with captured JSON fixtures and a node test file, committed on worker/c",
+          "status": "in_progress",
+          "project": "~/MEGA/Projects/Agentic/tech-tools"
+        }
+      ],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:26:50+00:00"
+      },
+      "sources": [
+        "todo",
+        "irc"
+      ]
+    },
+    {
+      "key": "impl-fallow-baseline",
+      "name": "impl-fallow-baseline",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:07:02+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "implementer-admin-guide",
+      "name": "implementer-admin-guide",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t9ad1a337",
+          "content": "Embed an in-app guide for STAFF (Henssler operations and advisory staff using the admin console) built on the `page-agent` npm library: it explains what is on t",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "implementer-backend-guide",
+      "name": "implementer-backend-guide",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t323c4431",
+          "content": "Add a backend proxy that the in-browser page-agent library calls, so no LLM key ever reaches the browser: two mounts of one route module, forwarding OpenAI-form",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "implementer-frontend-guide",
+      "name": "implementer-frontend-guide",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "ta2182458",
+          "content": "Embed an in-app guide for CLIENTS (first responders using the planning app) built on the `page-agent` npm library: it explains what is on the current page, what",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "lead-17b803",
+      "name": "lead-17b803",
+      "kind": "lead",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 25,
+        "unread": 1,
+        "last_message_at": "2026-10-22T19:26:44+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "lead-72b281",
+      "name": "lead-72b281",
+      "kind": "lead",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 30,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:01:01+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "rereview-cc15-t3-r1",
+      "name": "rereview-cc15-t3-r1",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:25:36+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "review-cc15-t1",
+      "name": "review-cc15-t1",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:11:54+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "review-cc15-t2",
+      "name": "review-cc15-t2",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 1,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:17:38+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "review-cc15-t3",
+      "name": "review-cc15-t3",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": null,
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T19:23:22+00:00"
+      },
+      "sources": [
+        "irc"
+      ]
+    },
+    {
+      "key": "ui-runtime-tester-client-guide",
+      "name": "ui-runtime-tester-client-guide",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "tf127fa22",
+          "content": "Produce screenshot plus network plus console evidence that a signed-in client sees the \"Open guide\" launcher on http://localhost:8080, opens the page-agent pane",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T18:54:04+00:00"
+      },
+      "sources": [
+        "todo",
+        "irc"
+      ]
+    },
+    {
+      "key": "ui-runtime-tester-staff-guide",
+      "name": "ui-runtime-tester-staff-guide",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t2aadbd0e",
+          "content": "Produce screenshot plus network plus console evidence that a signed-in staff user sees the \"Open staff guide\" launcher on http://localhost:8081, opens the page-",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T18:54:39+00:00"
+      },
+      "sources": [
+        "todo",
+        "irc"
+      ]
+    },
+    {
+      "key": "verifier-admin-guide",
+      "name": "verifier-admin-guide",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t5f645614",
+          "content": "Independently verify the staff guide agent on branch worker/admin-guide (worktree ~/MEGA/Projects/Web/gwh-firstrespondersapp/.atlas/wt/admin-guide, h",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "verifier-backend-guide",
+      "name": "verifier-backend-guide",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t4e021b10",
+          "content": "Independently verify the backend guide-LLM proxy on branch worker/backend-guide (worktree ~/MEGA/Projects/Web/gwh-firstrespondersapp/.atlas/wt/backen",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "verifier-gcloudignore",
+      "name": "verifier-gcloudignore",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t2f71c7c3",
+          "content": "Prove that the root .gcloudignore in ~/MEGA/Projects/Web/gwh-firstrespondersapp excludes a henssler-idv/ directory from a repo-root gcloud source upl",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 0,
+        "unread": 0,
+        "last_message_at": null
+      },
+      "sources": [
+        "todo"
+      ]
+    },
+    {
+      "key": "verifier-guide-proxy-live",
+      "name": "verifier-guide-proxy-live",
+      "kind": "unknown",
+      "status": "unknown",
+      "state": "unknown",
+      "pane_id": null,
+      "workspace_id": null,
+      "workspace": "",
+      "tab_id": null,
+      "tab_label": "",
+      "cwd": "",
+      "title": "",
+      "focused": false,
+      "deep_link": null,
+      "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp",
+      "colony": false,
+      "run": null,
+      "parent_pane": null,
+      "children": [],
+      "children_total": 0,
+      "state_change_seq": null,
+      "completion_seq": null,
+      "state_changed_at": null,
+      "state_changed_source": null,
+      "tasks": [
+        {
+          "id": "t9cbf2a23",
+          "content": "Confirm or refute, on the live server surface, that: unauthenticated calls get 401; an enrolled client gets {\"enabled\":true,\"model\":\"claude-sonnet-5\"} from GET ",
+          "status": "blocked",
+          "project": "~/MEGA/Projects/Web/gwh-firstrespondersapp"
+        }
+      ],
+      "messages": {
+        "count": 2,
+        "unread": 0,
+        "last_message_at": "2026-10-22T18:54:14+00:00"
+      },
+      "sources": [
+        "todo",
+        "irc"
+      ]
+    }
+  ],
+  "fetched_ms": 701.87
+}

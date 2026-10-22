@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "session": "fixture-lead-session",
+  "lines": [
+    { "letter": "m", "label": "delegation", "passed": true, "message": "ok", "gist": "delegation mandate met" },
+    { "letter": "c", "label": "changelog", "passed": false, "message": "CHANGELOG missing an entry", "gist": "update CHANGELOG" },
+    { "letter": "i", "label": "open todos", "passed": true, "message": "ok", "gist": "no open todos" }
+  ]
+}
