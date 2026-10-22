@@ -462,6 +462,7 @@ CONNECTOR_AUTH = {
     "threatlocker": [["THREATLOCKER_API_KEY"]],
     "vanta": [["VANTA_CLIENT_ID", "VANTA_CLIENT_SECRET"]],
     "panos": [["PANOS_HOST", "PANOS_API_KEY"]],
+    "sonicwall": [["SONICWALL_HOST", "SONICWALL_USERNAME", "SONICWALL_PASSWORD"]],
 }
 
 

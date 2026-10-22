@@ -1,5 +1,29 @@
 # Changelog
 
+## 12.8.0 (2026-10-22, unreleased)
+
+### Added
+
+- Atlas statusline. omp: `plugins/atlas/omp/usage-statusline.ts` registered from the extension (off with `ATLAS_STATUSLINE=off`; skipped when a personal copy exists). Claude Code: `plugins/atlas/scripts/atlas_statusline.py` with `install`/`uninstall`; both read `~/.omp/agent/usage-statusline.json`. Claude Code omits the critter lane, tok/s, tools, runs, multi-provider rows and the pi-lens merge. `omp/tsconfig.json` gains pi-catalog and pi-tui paths. Narrative, field mapping and smoke render: `plugins/atlas/CHANGELOG.md` 12.8.0; plan: `docs/plans/2026-10-22-atlas-statusline.md`. Verified: `test_atlas_statusline.py` Ran 7 OK; `bun test` in `plugins/atlas/omp` 476 pass 0 fail; the two tsc errors (`index.ts:760`, `mission-panel.ts:11`) are unchanged from baseline.
+
+## 12.7.0 (2026-10-21)
+
+### Added
+
+- SonicWall connector `sonicwall` (SonicOS 7.x REST). 41 tools: 29 read, 11 mutating (`DESTRUCTIVE:` prefixed) and 1 unprefixed mutating, `sonicwall_request`. Client `mcp_node/node-sonicwall` (19 vitest tests), server `mcp_servers/sonicwall-mcp` (inventory `sonicos-endpoints.json`, 2877 rows; boot probe), bundle `plugins/atlas/mcp/sonicwall/server.mjs` (1,019,315 bytes), six `SONICWALL_*` userConfig keys wired in `plugins/atlas/.mcp.json` and `plugin.json`. Narrative, decisions and verification: `plugins/atlas/CHANGELOG.md` 12.7.0; contract: `docs/sonicwall-connector-design.md`. Evidence: `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md` (findings S2-U1..U4 and S3-sonicwall verified). Live hardware validation NOT performed.
+
+## 12.6.0 (2026-10-20)
+
+Cost tiering, the Atlas Colony workspace TUI, a single-sourced status header, context cuts and the codex contract block (summary of `plugins/atlas/CHANGELOG.md` 12.6.0; the installed-parity test stays red until the plugin is reinstalled).
+
+### Added
+
+- Atlas Colony workspace TUI (SESSIONS, CHANNEL, PEEK, STEER): plan `docs/plans/2026-10-20-atlas-colony-tui.md`, goldens in `plugins/atlas/scripts/fixtures/golden/`, docs in `docs/atlas-colony.md`. Moved here from ROADMAP; evidence: `plugins/atlas/CHANGELOG.md` 12.6.0.
+
+### Changed
+
+- Cost tiering (agent `model`/`effort`/`tier_allow`, resolver emits model, tripwire tier accept), status header single-sourced, context budget cuts, dashboard error visibility (stale-data banner, reaper health). Moved here from ROADMAP; evidence: `plugins/atlas/CHANGELOG.md` 12.6.0 and the `ContextBudget` contract tests.
+
 ## 12.5.13 (2026-10-19)
 
 ### Fixed

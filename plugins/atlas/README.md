@@ -262,6 +262,21 @@ decision (the lead may still edit inline and then dispatch a verifier).
 Row-by-row status and how each surface is created, read, updated, and deleted:
 [docs/atlas-harness-parity.md](../../docs/atlas-harness-parity.md).
 
+## Statusline
+
+One widget, two harnesses: project, model and effort, a context meter, 5h and 7d rate-limit meters, session cost and tokens, a provider row and a fallow impact row.
+
+- omp: atlas registers `omp/usage-statusline.ts` from its extension. A personal `~/.omp/agent/extensions/usage-statusline.ts` (or `<cwd>/.omp/extensions/usage-statusline.ts`) takes precedence and atlas skips its own copy. `ATLAS_STATUSLINE=off` disables it.
+- Claude Code: the same layout from the `statusLine` stdin JSON, without the critter lane, tok/s, tools, runs, extra provider rows or the pi-lens merge. Install and remove:
+
+```
+python3 ~/.claude/plugins/cache/tech-tools/atlas/<version>/scripts/atlas_statusline.py install
+python3 ~/.claude/plugins/cache/tech-tools/atlas/<version>/scripts/atlas_statusline.py uninstall
+```
+
+`install` saves your previous `statusLine` once and `uninstall` restores it.
+- Both read `~/.omp/agent/usage-statusline.json` (bar style, widths, which rows show), so one edit restyles both.
+
 ## The Claude Code mod (in-terminal UI)
 
 The plugin ships an in-process mods module (`mod/`, wired by the `modules` entry in

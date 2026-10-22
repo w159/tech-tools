@@ -235,8 +235,7 @@ Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026
 
 ### Command Center and colony repair (2026-10-14)
 
-- [done] Atlas Colony workspace TUI (SESSIONS, CHANNEL, PEEK, STEER; plan `docs/plans/2026-10-20-atlas-colony-tui.md`): shipped in `plugins/atlas/CHANGELOG.md` 12.6.0; goldens in `plugins/atlas/scripts/fixtures/golden/`, docs in `docs/atlas-colony.md`.
-- [done] Cost tiering (agent `model`/`effort`/`tier_allow`, resolver emits model, tripwire tier accept), status header single-sourced, context budget cuts, dashboard error visibility (stale-data banner, reaper health): shipped in `plugins/atlas/CHANGELOG.md` 12.6.0.
+- [planned] SonicWall connector follow-ups (shipped 12.7.0 without hardware): live validation against an appliance (`sonicwall_status` under real `SONICWALL_*` credentials, expect `session.loggedIn: true`), TFA/CHAP login, VPN writes.
 - [planned] Live TUI check under tmux if the verifier reports gaps.
 - [planned] herdr transport attach from the TUI.
 - [planned] Re-run one W1 explorer brief on haiku to validate the tier (an ASSUMED item in `docs/plans/2026-10-20-atlas-tiering-design.md`).

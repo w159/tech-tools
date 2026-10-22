@@ -95,3 +95,4 @@ bun test plugins/atlas/omp
 ```
 
 The tests drive the documented handlers with fake events and temporary docs-scoped projects. Runtime contracts: [Extensions](omp://extensions.md), sections Handler context (`ctx.agent.kind`), Prompt and turn lifecycle (`session_stop`, a true blocking primitive rather than notification-only `agent_end`), and Tool lifecycle (`tool_call`, `additionalContext`).
+- Usage statusline (`omp/usage-statusline.ts`): `atlasOmpExtension` calls `registerUsageStatusline(pi)` unless `ATLAS_STATUSLINE=off`, or a personal copy exists at `~/.omp/agent/extensions/usage-statusline.ts` or `<cwd>/.omp/extensions/usage-statusline.ts` (two copies would race on the same widget key). Reads `~/.omp/agent/usage-statusline.json`; the fallow column needs `fallow` on PATH.

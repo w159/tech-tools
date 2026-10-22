@@ -1,5 +1,81 @@
 # Changelog
 
+## 12.8.0 - 2026-10-22 (unreleased)
+
+Atlas statusline: the omp usage widget ships with atlas, and Claude Code gets the closest equivalent from the `statusLine` stdin JSON. Design: `docs/plans/2026-10-22-atlas-statusline.md`.
+
+### Added
+
+- omp: `omp/usage-statusline.ts` exports `registerUsageStatusline(pi)` and `USAGE_STATUSLINE_WIDGET_KEY`; `atlasOmpExtension` registers it unless `ATLAS_STATUSLINE=off` or a personal copy exists at `~/.omp/agent/extensions/usage-statusline.ts` or `<cwd>/.omp/extensions/usage-statusline.ts` (two copies would race on one widget key). `fallow` is found with `Bun.which("fallow")` only; the fallow column is skipped when it does not resolve.
+- Claude Code: `scripts/atlas_statusline.py` (stdlib Python) renders rows from the `statusLine` stdin JSON. `install` writes `statusLine` into `~/.claude/settings.json` and saves the previous value once to `~/.atlas/statusline.previous.json`; `uninstall` restores it (or deletes the key); `--settings <path>` and `--width N` exist for tests.
+- Both harnesses read the shared config file `~/.omp/agent/usage-statusline.json`, so one edit restyles both.
+- Field mapping (Claude Code source for each omp element):
+
+| omp element | Claude Code source |
+|---|---|
+| project | `workspace.current_dir` basename, else `cwd` |
+| model and effort | `model.display_name`, `effort.level` (effort omitted when absent) |
+| activity lane | `cost.total_duration_ms`, `cost.total_lines_added/removed`, rendered `2m14s · +12/-3 lines` |
+| ctx | `context_window.current_usage` (input + cache_creation + cache_read) over `context_window_size`; `used_percentage` when `current_usage` is null; `--%` before the first call |
+| 5h and 7d | `rate_limits.five_hour` / `seven_day` `used_percentage`, `resets_at`; empty track when `rate_limits` is absent |
+| session | `cost.total_cost_usd`, `total_input_tokens + total_output_tokens`, cache % from `current_usage`; cost shows `plan` when `rate_limits` is present |
+| provider row | one `anthropic` row, `model.id` shortened |
+| fallow row | `fallow --root <cwd> impact statusline`, first line only when it starts with `fallow impact`; cached 60 s in `~/.atlas/statusline-fallow.cache` keyed by cwd |
+
+### Excluded on Claude Code
+
+- Critter lane, tok/s, tools N, N runs, multi-provider rows and `+N more`, and the pi-lens/ponytail row merge: no run span events exist there.
+
+### Changed
+
+- `omp/tsconfig.json` gains `paths` for pi-catalog and pi-tui so bun and tsc resolve the runtime imports of `usage-statusline.ts`.
+
+### Verified
+
+- `python3 -m unittest plugins/atlas/scripts/test_atlas_statusline.py`: Ran 7 tests, OK.
+- `cd plugins/atlas/omp && bun test`: 476 pass, 0 fail.
+- tsc: the two errors in `omp/index.ts:760` and `omp/mission-panel.ts:11` are unchanged from the committed baseline; no new errors.
+- Smoke render of a subscriber fixture at width 120 (ANSI stripped, `ATLAS_FALLOW=off`):
+
+```
+📁  tech-tools   ⏱ 2m14s · +12/-3 lines     👾  Claude Opus 5.5  ·  high
+
+📚  ctx  51% ▅▅▅▅▅▁▁▁▁  513.0k / 1M         │  💰  session         plan   391.7k tok  cache 99%
+⏳  5h   62% ▅▅▅▅▅▅▁▁▁  4h39m anthropic     │  🔌  anthropic       plan   391.7k tok  claude-opus-5-5
+📅  7d   18% ▅▅▁▁▁▁▁▁▁  6d15h anthropic     │
+```
+
+## 12.7.0 - 2026-10-21
+
+New vendor `sonicwall`: SonicWall firewalls over the SonicOS 7.x REST API. `mcp_node/node-sonicwall` holds the client, `mcp_servers/sonicwall-mcp` the server; the bundle lands at `plugins/atlas/mcp/sonicwall/server.mjs` (1,019,315 bytes) and is registered in `.mcp.json` with six `CFG_SONICWALL_*` values (`SONICWALL_HOST`, `USERNAME`, `PASSWORD`, `PORT`, `VERIFY_TLS`, `SESSION_OVERRIDE`). Design contract: `docs/sonicwall-connector-design.md`.
+
+### Added
+
+- 41 tools: 29 read, 11 mutating (`DESTRUCTIVE:` prefixed) and 1 unprefixed mutating, the generic `sonicwall_request`. The inventory `mcp_servers/sonicwall-mcp/sonicos-endpoints.json` holds 2877 rows from the vendor swagger (SonicOS 7.3.2-7010).
+- Auth: Basic auth over HTTPS; the session is held in process memory and the client re-logs in once on a 401. A 401 after login surfaces as error class `auth-session`. TFA, CHAP and Digest session security are out of scope for v1.
+- Writes are staged only; `sonicwall_config_commit` is a separate call. Session override is off by default (`SONICWALL_SESSION_OVERRIDE`).
+- `sonicwall_request` is allowlisted against the swagger inventory and carries a hard-deny list: restart, import, factory-default, delete-all (`/all-` and `DELETE .../all`), current-config export and auth endpoints.
+- Wiring: `plugin.json` userConfig (six keys), `.env.template`, `atlas-setup` `vendors.md` and `connectors.md`, `references/connector-tool-disclosure.md` row, `test-mcp-tools.mjs` registration (floor 41), `test_connectors_wiring.py` (13 harness connectors).
+
+### Changed
+
+- The design tool table summed to 41 while the prose and harness said 48; corrected to 41 before merge (S2-U4 commit 7fc22c3e).
+- The S2-U2 commit ran with `ATLAS_FALLOW=off`: the fallow findings are the shared connector pattern (dynamic-import domain exports, panos-pattern duplication), not new defects.
+
+### Verified
+
+Merged tree main at e8204552, evidence `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`:
+
+- `cd mcp_node/node-sonicwall && npm test`: vitest 1 file, 19 passed.
+- `cd mcp_servers/sonicwall-mcp && npm run test:boot`: PROBE PASS; no-creds 2 tools; full 41 (read=29, mutating=11, unprefixed-mutating=1); CFG_-only through `_env/load.mjs` 41; six guard cases rejected locally.
+- `node test-mcp-tools.mjs sonicwall`: PASS (placeholders) floor 41, 0 mismatches; PASS (no-creds) 2 meta tools.
+- `test_connectors_wiring.py`: Ran 10 tests, OK. `test_atlas_contract.py`: Ran 108 tests, OK (skipped=3).
+
+### Not shipped
+
+- Live validation against an appliance. Next step: `sonicwall_status` under real `SONICWALL_*` credentials, expected to report `GET /version` output and `session.loggedIn: true`.
+- TFA/CHAP/Digest login, VPN writes.
+
 ## 12.6.0 - 2026-10-20
 
 The 2026-10-20 audit (`docs/plans/2026-10-20-atlas-feature-audit.md`) found every agent pinned to sonnet/low, docs contradicting code, 0 of 7 TUI defects fixed and silent web UI failures.

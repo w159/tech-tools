@@ -58,6 +58,7 @@ import { phaseFromName, registerChannelView, registerLaneToolRecorder } from "./
 import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { registerTeamTool } from "./team-tool";
+import { registerUsageStatusline, userStatuslineCopyExists } from "./usage-statusline";
 import { registerAtlasTuiCommand } from "./tui-command";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
 import { createShellEditTracker } from "./delegation";
@@ -757,6 +758,8 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	registerLaneToolRecorder(pi);
 	registerAdvisorGate(pi, defaultAdvisorDeps());
 	registerTeamTool(pi, pluginRoot(), undefined, process.env, channelView.open);
+	// Skip when the user keeps their own copy: two copies would race on one widget key.
+	if (process.env.ATLAS_STATUSLINE !== "off" && !userStatuslineCopyExists(process.cwd())) registerUsageStatusline(pi);
 	// /atlas-tui: hand the terminal to the curses TUI while omp's renderer is paused.
 	registerAtlasTuiCommand(pi);
 	register(pi, {

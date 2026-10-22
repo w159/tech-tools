@@ -8391,5 +8391,166 @@
     "status": "verified",
     "verified_at": "2026-10-20T11:15:25+00:00",
     "verified_by": "verifier-tui-live-2"
+  },
+  {
+    "id": "S2-U3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "S2-U3: worker/u3-wiring 24b00f57 PASS (only bundle-presence failure, expected)",
+    "evidence": [
+      ".atlas/evidence/2026-10-21-S2-U3-verify.md",
+      "plugins/atlas/scripts/test_connectors_wiring.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_connectors_wiring.py in worktree -> 10 tests, 1 failure (test_every_mcp_server_has_a_bundle: ['sonicwall'] != []); json load exit 0; grep -c SONICWALL .env.template=11; 0 banned chars",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-21T14:09:57+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S2-U1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "S2-U1: worker/u1-client 069c2374 PASS",
+    "evidence": [
+      ".atlas/evidence/2026-10-21-S2-U1-verify.md",
+      "mcp_node/node-sonicwall/tests/client.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd .atlas/wt/u1-client/mcp_node/node-sonicwall && npm install && npm test -> 19 passed; npm run build -> dist/index.{js,cjs,d.ts} emitted; deps {}; 0 banned chars",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-21T14:12:04+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S2-U2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "S2-U2: worker/u2-server f73d59d4 PASS",
+    "evidence": [
+      ".atlas/evidence/2026-10-21-S2-U2-verify.md",
+      "mcp_servers/sonicwall-mcp/tests/boot-probe.mjs"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd .atlas/wt/u2-server/mcp_servers/sonicwall-mcp && npm run build && npm run bundle:atlas && npm run test:boot -> PROBE PASS, 41 tools; wiring test 10 OK; harness PASS",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-21T14:45:16+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S2-U4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "S2-U4: worker/u4-fleet 7fc22c3e PASS (harness floor 41, disclosure row; only bundle-presence failure on branch, expected)",
+    "evidence": [
+      ".atlas/evidence/2026-10-21-S2-U4-receipt.md",
+      "plugins/atlas/scripts/test_connectors_wiring.py::test_table_matches_harness_for_every_connector",
+      "plugins/atlas/hooks/test_atlas_contract.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd .atlas/wt/u4-fleet && python3 -m unittest discover -s plugins/atlas/scripts -p test_connectors_wiring.py -> Ran 10, FAILED (failures=1: test_every_mcp_server_has_a_bundle only); python3 -m unittest discover -s plugins/atlas/hooks -p test_atlas_contract.py -> Ran 108 OK (skipped=4); lead re-ran both on 7fc22c3e",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-21T14:46:02+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S3-sonicwall",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "S3: sonicwall connector green on merged tree e8204552 (vitest 19/19, boot probe PASS 41 tools, test-mcp-tools PASS, wiring 10/10, contract 108 OK)",
+    "evidence": [
+      ".atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md",
+      "mcp_node/node-sonicwall/tests/client.test.ts",
+      "mcp_servers/sonicwall-mcp/tests/boot-probe.mjs"
+    ],
+    "doc_refs": [],
+    "reproduction": "node test-mcp-tools.mjs sonicwall -> PASS (placeholders) 41 tools, PASS (no-creds); cd mcp_servers/sonicwall-mcp && npm run test:boot -> PROBE PASS; cd mcp_node/node-sonicwall && npm test -> 19 passed",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-21T14:47:12+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "S4-sonicwall-docs",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "S4: docs + 12.7.0 bump + dashboard CONNECTOR_AUTH; docs audit all areas current; dashboard live 18 OK, wiring 10 OK, contract 108 OK, harness PASS 41",
+    "evidence": [
+      ".atlas/evidence/2026-10-21-S4-version-receipt.md",
+      "plugins/atlas/scripts/test_atlas_dashboard_live.py::ConnectorTruth.test_table_covers_every_shipped_connector_and_real_keys"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_dashboard_live.py -> Ran 18 OK; node test-mcp-tools.mjs sonicwall -> PASS 41 tools",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-21T15:00:03+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "statusline-12.8.0",
+    "surface": "plugins/atlas/scripts/atlas_statusline.py, plugins/atlas/omp/usage-statusline.ts, plugins/atlas/omp/index.ts",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas statusline: omp usage-statusline module + Claude Code atlas_statusline.py renderer",
+    "evidence": [
+      "python3 -m unittest plugins/atlas/scripts/test_atlas_statusline.py: Ran 7 OK; cd plugins/atlas/omp && bun test usage-statusline.test.ts index.test.ts: 78 pass 0 fail (full: 476 pass); tsc errors unchanged from HEAD baseline (index.ts:760, mission-panel.ts:11); smoke render width 120 subscriber fixture: 5 rows, rule aligned, ctx 42% 5h 44% 7d 71% plan cache 96%"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T07:05:15+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "W1-U2",
+    "surface": "plugins/atlas/scripts/dashboard_ui/js/pages/terminal.js",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "W1-U2 openrig seat grid terminal page",
+    "evidence": [
+      "wt/u2 3cd9964c: bun test js dir 81 pass 0 fail on 4 reruns (1st run had 1 flaky timing fail in enlarge test, 2 fail, not reproduced); terminal.test.js against base terminal.js: 14 fail 4 pass; terminal.js:14 TUNE 60000/6/5000, :261 POST term/ticket, :311 OSC 7717, :254 Retry, :371 Agents count; terminal.css:50-51,72 tokens/#383838/4px/14px/760px; cold-load bootHash test in app.js/nav-order.js; no token= use except fetchTicket-absent legacy fallback terminal.js:86; no new deps or /Users/jerry paths"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T07:46:03+00:00",
+    "verified_by": "verifier-u2"
+  },
+  {
+    "id": "W1-U1",
+    "surface": "plugins/atlas/scripts/atlas_dash_term.py",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "W1-U1 term seats API, shell seats, ticket auth, idle timeout",
+    "evidence": [
+      "unittest test_atlas_dash_term 35 OK, test_atlas_dashboard 83 OK in wt/u1 128dc289; base tree with branch tests: 8 FAIL 4 ERROR (seats, shell pty, ticket single-use/expiry, legacy deprecation, idle, first frame, route-table); test diff only reformat, no assertion removed; hmac.compare_digest at atlas_dash_term.py:415; shell shares _slots acquire :460; live GET term/seats on :7498 returned ok JSON, 401 without token. Not live-checked: ws upgrade"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_atlas_dash_term (cd wt/u1/plugins/atlas/scripts); curl -H X-Atlas-Token ... :7498/api/v2/term/seats",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T07:46:18+00:00",
+    "verified_by": "verifier-u1"
   }
 ]
