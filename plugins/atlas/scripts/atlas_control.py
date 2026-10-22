@@ -129,18 +129,21 @@ def _write_store(env: dict, changed: dict) -> None:
 
 BEHAVIOR_KNOBS = []  # filled by _k() below, in display order
 
-# scope "hooks": a Python hook reads it, so a value saved here reaches Claude Code hooks (settings.json env,
-# next session) and omp's bridged hooks (store, next hook run). scope "shell": it is read straight from the
-# environment of the process that runs it (the omp extension, an atlas CLI, the dashboard), which never sees
-# either saved layer, so the page shows it read-only and refuses to save it.
+# Every knob is saved to the atlas store (read by every hook on each run) and to Claude Code settings.json env.
+# Knobs read straight from the environment of a process atlas does not start (omp extension, an atlas CLI)
+# keep an internal scope of "shell", which also writes omp's config.yml env and ~/.atlas/env.sh. The API
+# reports scope "hooks" for all of them. Group order here is the display order.
 GROUP_INTROS = {
-    "Session automation": "Things atlas does by itself when a session starts or ends.",
+    "Session automation": "Things atlas does by itself when a session starts or ends, and housekeeping around them.",
     "Guardrails": "Checks that block or nudge a session that skips delegation or evidence. Turning these off removes protection.",
+    "Colony": "How multi-worker runs start, talk and are cleaned up: transport, channels, seats and worktree checks.",
+    "omp extension": "Read by the omp extension and its bridged hooks. Saved values also go to omp's config and ~/.atlas/env.sh.",
     "Prompt optimizer": "Rewrites your prompt with a local Ollama model before the agent sees it. By default it only runs when the prompt starts with a trigger prefix such as `opt:`.",
+    "Decision model": "A local model that classifies each prompt so atlas can decide whether to arm orchestration.",
     "Turn scoring": "Optional model scoring of finished replies. Nothing is sent unless TYPESAFE_API_KEY (or a loopback ATLAS_TYPESAFE_URL) is set.",
-    "omp extension": "Read by the omp extension from the shell omp was launched from. They cannot be saved from this page: export them before starting omp.",
-    "Storage paths": "Where atlas keeps its state. Shown for reference; set them in your shell profile (the settings file that stores these edits lives inside ATLAS_HOME, so it cannot move itself).",
 }
+SAVE_NOTE = "Saved values reach running sessions on their next hook run."
+KIND_SET = {"toggle", "select", "number", "model", "url", "command", "text"}
 
 
 def _norm_options(options):
@@ -187,14 +190,7 @@ def _k(
     )
 
 
-_SA, _GR, _PO, _TS, _OMP, _ST = (
-    "Session automation",
-    "Guardrails",
-    "Prompt optimizer",
-    "Turn scoring",
-    "omp extension",
-    "Storage paths",
-)
+_SA, _GR, _COL, _OMP, _PO, _DM, _TS = tuple(GROUP_INTROS)
 _k(
     "ATLAS_DASHBOARD",
     _SA,
@@ -202,15 +198,6 @@ _k(
     "Each new session launches this dashboard if it is not already running.",
     default="on",
     details="Off means nothing starts it; run `atlas_dashboard.py ensure` yourself. Sessions in scratch or temp directories never start the shared dashboard either way.",
-)
-_k(
-    "ATLAS_DASHBOARD_PORT",
-    _SA,
-    "Command Center port",
-    "Loopback port the dashboard listens on.",
-    "number",
-    "7421",
-    details="Sessions look for the dashboard on this port, so every terminal and the running dashboard must agree. A running dashboard keeps its old port until restarted.",
 )
 _k(
     "ATLAS_INGEST",
@@ -422,24 +409,57 @@ _k(
     scope="shell",
     on="",
 )
-_k(
-    "ATLAS_HOME",
-    _ST,
-    "Atlas state directory",
-    "Holds atlas.db, memory/, the saved-settings file, the dashboard pidfile and log.",
-    "text",
-    str(Path.home() / ".atlas"),
-    scope="shell",
-)
-_k(
-    "ATLAS_DB",
-    _ST,
-    "Telemetry database",
-    "The sqlite file every hook writes to and this dashboard reads. Pointing elsewhere hides existing history.",
-    "text",
-    str(Path.home() / ".atlas" / "atlas.db"),
-    scope="shell",
-)
+# --- knobs added from the discovered ATLAS_* readers; each `details` names the line that reads it ---
+# Session automation
+_k("ATLAS_TODO", _SA, "Mirror session todos to the board", "Copy the session's todo list onto the atlas board.", default="on", details="Off stops the copy. Read at hooks/session_boot_core.py:1097.")
+_k("ATLAS_DOCS_REPAIR", _SA, "Check for a missing docs/ tree", "At session start, notice a project that has no docs/ tree.", default="on", details="Off skips the check and its notice. Read at hooks/session_boot_core.py:1146.")
+_k("ATLAS_HERDR_AUTOSTART", _SA, "Start the herdr server at session start", "Start the herdr server when a session begins and none is running.", default="on", details="Off, 0, false or no leaves it stopped. Read at hooks/session_boot_core.py:178.")
+_k("ATLAS_DOCTOR_HOOK_TTL_MIN", _SA, "Doctor hook recheck (minutes)", "Minutes a healthy atlas-doctor result is trusted before the session-start hook runs it again. 0 reruns every time.", "number", "30", scope="shell", details="Read at scripts/atlas_doctor.py:55; default HOOK_TTL_MIN_DEFAULT = 30.")
+_k("ATLAS_SELFFIX", _SA, "Dashboard self-fix scheduler", "Let the dashboard schedule its own self-fix runs.", default="1", on="1", off="0", scope="shell", details="Only the exact value 0 disables it. Read at scripts/atlas_selffix.py:768.")
+
+# Guardrails
+_k("ATLAS_MANDATES", _GR, "Recall and commit reminders", "Remind the session to recall prior work and nudge once before a git commit.", default="on", details="Off silences both. Read at hooks/bash_advisor.py:283.")
+_k("ATLAS_GATE_HEADER", _GR, "Gate: ATLAS header line", "Require a final reply to start with the ATLAS status header line.", default="on", details="Off skips that one completion-gate check. Read at hooks/completion_gate_core.py:2010.")
+_k("ATLAS_GATE_PHASES", _GR, "Gate: required todo phases", "After code shipped, require the board to cover the required todo phases.", default="on", details="Off skips that one completion-gate check. Read at hooks/completion_gate_core.py:2011.")
+_k("ATLAS_GATE_REPORT", _GR, "Gate: worker report container", "Block a worker's final message when it is not the fixed report container.", default="on", details="Read at hooks/worker_report_gate_core.py:324.")
+_k("ATLAS_WT_GATE", _GR, "Gate: unmerged worker branches", "Block completion while worker/* branches have unmerged commits or a dirty worktree.", default="on", details="Off, 0 or false disables it; it fails open. Read at hooks/completion_gate_core.py:838.")
+_k("ATLAS_GATE_BLOCK_LOOP", _GR, "Gate: repeat-block limit", "How many identical consecutive blocks the completion gate issues before it lets the Stop through. Clamped to 1-7.", "number", "3", details="Keeps the gate's own breaker below Claude Code's 8-block Stop cap. Read at hooks/completion_gate_core.py:1579.")
+_k("ATLAS_MODE", _GR, "Solo mode", "Treat the session as solo work: the delegation requirement is relaxed.", default="", on="solo", off="", details="Only the value solo has an effect. Read at hooks/completion_gate_core.py:324.")
+_k("ATLAS_GATES", _GR, "When the gates arm", "auto arms the orchestration gates in real projects only, always arms them in scratch directories too, off disarms them everywhere.", "select", "auto", options=["auto", "always", "off"], details="Any value other than always or off behaves as auto. Read at scripts/atlas_scope.py:70.")
+_k("ATLAS_FOOTPRINT_FILES", _GR, "Inline footprint (files)", "Distinct code files an unflagged run may touch before the tripwire treats it as orchestration. 0 disables.", "number", "3", details="Read at hooks/dispatch_tripwire_core.py:1611.")
+_k("ATLAS_AUTONAME", _GR, "Name unnamed dispatches", "Give a subagent dispatch that has no name one, instead of denying it.", default="on", details="Off turns the missing-name case into a denial. Read at hooks/dispatch_tripwire_core.py:1398.")
+_k("ATLAS_BUILTIN_AGENT_NUDGE", _GR, "Nudge off built-in agents", "Advise using an atlas:* role when a dispatch picks a built-in agent type.", default="on", details="Read at hooks/dispatch_tripwire_core.py:916.")
+_k("ATLAS_SCOPE_GATE", _GR, "Enforce dispatch SCOPE", "Deny a dispatch whose SCOPE line is missing or wrong. Off downgrades it to advice.", default="on", details="Read at hooks/dispatch_tripwire_core.py:504.")
+_k("ATLAS_BURST_SECS", _GR, "Dispatch burst window (seconds)", "Window in which several dispatches count as one burst for the burst advisory. 0 or less disables the advisory.", "number", "10", details="Read at hooks/dispatch_tripwire_core.py:480; default BURST_SECS = 10.")
+
+# Colony
+_k("ATLAS_COLONY", _COL, "Start the colony at session start", "Start the herdr colony when a session begins.", default="on", details="Off, 0, false or no skips it. Read at hooks/session_boot_core.py:221.")
+_k("ATLAS_CHANNELS", _COL, "Steer dispatches onto a channel", "Steer subagent dispatches onto a colony channel.", default="on", details="Read at hooks/dispatch_tripwire_core.py:2116.")
+_k("ATLAS_GATE_COLONY", _COL, "Gate: colony channel used", "Require a run with two or more workers to have used its colony channel.", default="on", details="Off skips that one completion-gate check. Read at hooks/completion_gate_core.py:2012.")
+_k("ATLAS_COLONY_TRANSPORT", _COL, "Worker transport", "How colony workers are launched. The default is tmux when installed, else claude-bg.", "select", "tmux", scope="shell", options=["herdr", "tmux", "claude-bg"], details="Read at scripts/atlas_mux.py:257.")
+_k("ATLAS_COLONY_LIVE_WINDOW", _COL, "Live window (seconds)", "Seconds an agent counts as live in the colony roster after its last activity.", "number", "1800", details="Read at scripts/atlas_colony_model.py:48.")
+_k("ATLAS_SEAT_BACKEND", _COL, "Seat backend", "Which backend holds worker seats: rig, herdr, or off for none. auto prefers rig when available.", "select", "auto", scope="shell", options=["auto", "rig", "herdr", "off"], details="Any other value behaves as auto. Read at scripts/atlas_seats.py:42.")
+_k("ATLAS_TASKS_MIRROR", _COL, "Mirror board items to TaskCreate", "Tell workers to mirror the board item they claim into the session task list.", default="off", scope="shell", details="Read at scripts/atlas_mux.py:973. The board stays the source of truth.")
+_k("ATLAS_LEAD_IDLE_TTL", _COL, "Idle lead timeout (seconds)", "A lead channel with no exit code and no activity for this long is treated as a crashed session.", "number", "7200", scope="shell", details="Read at scripts/atlas_todo.py:1245; default LEAD_IDLE_TTL_S = 7200.")
+_k("ATLAS_TERM_IDLE_S", _COL, "Dashboard terminal idle limit (seconds)", "The dashboard closes a terminal session after this long with no client.", "number", "900", scope="shell", details="Read each loop at scripts/atlas_dash_term.py:532.")
+_k("ATLAS_MUX_OMP_CONFIG", _COL, "omp config for colony roles", "omp config file the colony reads model roles from.", "text", "~/.omp/agent/config.yml", scope="shell", details="Read at scripts/atlas_mux.py:378.")
+_k("ATLAS_MUX_OMP_EXTENSION", _COL, "omp extension for workers", "omp extension path passed to colony workers. Blank passes none.", "text", "", scope="shell", details="Read at scripts/atlas_mux.py:1135.")
+_k("ATLAS_REMOTE_PORT", _COL, "Remote colony port", "Tailnet port for remote colony access.", "number", "8443", scope="shell", details="Read at scripts/atlas_remote.py:46.")
+_k("ATLAS_PACKS_CACHE_ROOT", _COL, "Packs cache directory", "Where the packs git cache lives. Blank uses <repo>/.atlas/.run/packs-cache.", "text", "", scope="shell", details="Read at scripts/atlas_packs.py:230.")
+_k("ATLAS_PACKS_GIT_TIMEOUT", _COL, "Packs git timeout (seconds)", "Seconds before a packs git operation is abandoned.", "number", "60", scope="shell", details="Read at scripts/atlas_packs.py:60.")
+
+# omp extension
+_k("ATLAS_STOP_BRIDGE", _OMP, "Session-end bridge", "omp's session-end bridge records the finished session. Off disables only that bridge.", default="on", scope="shell", details="Read at omp/stop-bridge.ts:397.")
+_k("ATLAS_LEAN_SHELL", _OMP, "Route bash through lean-ctx", "omp routes bash commands through lean-ctx.", default="on", scope="shell", details="Read at omp/shell-route.ts:94.")
+_k("ATLAS_STYLE", _OMP, "Inject the atlas output style", "omp injects the atlas output style into its prompt.", default="on", scope="shell", details="Read at omp/style.ts:259.")
+
+# Decision model
+_k("ATLAS_DECISION", _DM, "Classify prompts with a model", "Ask a local model to classify each prompt. Off keeps the regex result.", default="on", details="Read at hooks/prompt_decision.py:56.")
+_k("ATLAS_DECISION_MODEL", _DM, "Classifier model", "Ollama model the prompt classifier asks.", "model", "nimble", details="Read at hooks/prompt_decision.py:66.")
+_k("ATLAS_DECISION_URL", _DM, "Classifier address", "Loopback endpoint for the prompt classifier. Blank uses Ollama on 127.0.0.1:11434.", "url", "", details="Read at hooks/prompt_decision.py:53.")
+
+# Turn scoring
+_k("ATLAS_TYPESAFE_URL", _TS, "Scoring endpoint", "Alternate scoring endpoint. A loopback URL scores locally with no API key.", "url", "https://api.typesafe.ai", details="Read at scripts/typesafe_client.py:58.")
 
 
 # --- knob metadata: kind overrides, finite option sets, ranges, effect, applies ---
@@ -468,20 +488,26 @@ _OPTIONS = {
     ],
 }
 _RANGE = {
-    "ATLAS_DASHBOARD_PORT": {"min": 1024, "max": 65535, "step": 1},
     "ATLAS_TRIPWIRE_THRESHOLD": {"min": 1, "max": 50, "step": 1},
     "ATLAS_OPTIMIZE_MINLEN": {"min": 0, "max": 500, "step": 1},
     "ATLAS_OPTIMIZE_TIMEOUT": {"min": 1, "max": 115, "step": 1},
     "ATLAS_TYPESAFE_MAX_CALLS": {"min": 1, "max": 5000, "step": 1},
     "ATLAS_BRIDGE_HOOK_TIMEOUT_S": {"min": 1, "max": 30, "step": 1},
     "ATLAS_WORKER_MAX_TOKENS": {"min": 1000, "max": 200000, "step": 1000},
+    "ATLAS_DOCTOR_HOOK_TTL_MIN": {"min": 0, "max": 1440, "step": 1},
+    "ATLAS_GATE_BLOCK_LOOP": {"min": 1, "max": 7, "step": 1},
+    "ATLAS_FOOTPRINT_FILES": {"min": 0, "max": 50, "step": 1},
+    "ATLAS_BURST_SECS": {"min": 0, "max": 3600, "step": 1},
+    "ATLAS_COLONY_LIVE_WINDOW": {"min": 60, "max": 86400, "step": 60},
+    "ATLAS_LEAD_IDLE_TTL": {"min": 60, "max": 604800, "step": 60},
+    "ATLAS_TERM_IDLE_S": {"min": 30, "max": 86400, "step": 30},
+    "ATLAS_REMOTE_PORT": {"min": 1024, "max": 65535, "step": 1},
+    "ATLAS_PACKS_GIT_TIMEOUT": {"min": 1, "max": 3600, "step": 1},
 }
 # Model knobs whose value must be an installed Ollama model (the typesafe model is a hosted id).
 _OLLAMA_VALIDATED = {"ATLAS_OPTIMIZER_MODEL", "ATLAS_DECISION_MODEL"}
-_APPLIES = {"ATLAS_DASHBOARD_PORT": "dashboard-restart"}
 _EFFECT = {
     "ATLAS_DASHBOARD": "New sessions start, or stop starting, the Command Center.",
-    "ATLAS_DASHBOARD_PORT": "Sessions look for the dashboard on this port; the running dashboard keeps its old port until restarted.",
     "ATLAS_INGEST": "Finished sessions are, or are not, written to the telemetry database.",
     "ATLAS_CHRONICLE": "Session facets are, or are not, recorded at session end.",
     "ATLAS_MEMORY_CAPTURE": "Durable lessons are, or are not, saved to ~/.atlas/memory/ at session end.",
@@ -508,38 +534,21 @@ _EFFECT = {
     "ATLAS_BRIDGE_HOOK_TIMEOUT_S": "Each bridged hook is cut off after this many seconds.",
     "ATLAS_WORKER_MAX_TOKENS": "Larger worker max_tokens requests are lowered to this.",
     "ATLAS_ADVISOR_GATE": "omp does, or does not, block stopping while advisor items are open.",
-    "ATLAS_HOME": "Atlas reads and writes its state (database, memory, saved settings) in this directory.",
-    "ATLAS_DB": "Hooks write, and this dashboard reads, telemetry in this sqlite file.",
     "ATLAS_DECISION_MODEL": "The prompt classifier uses this Ollama model.",
     "ATLAS_DECISION_URL": "The prompt classifier calls this address; blank uses local Ollama.",
 }
-_ADV_KIND = {"ATLAS_DECISION_MODEL": "model", "ATLAS_DECISION_URL": "url"}
-_PATH_KEYS = {"ATLAS_HOME", "ATLAS_DB"}
-
-# Advanced (scanned) keys carry no hand-written metadata, so their control kind is inferred from the
-# name and the documented default; anything that fits no rule stays free text.
-_ADV_SELECT = {"ATLAS_COLONY_TRANSPORT": ["herdr", "tmux", "claude-bg"]}  # accepted values: atlas_mux.py docstring
-_ADV_TOGGLES = {"ATLAS_COLONY", "ATLAS_TODO"}
-_ADV_NUMBER_NAME = re.compile(r"(_PORT|_S|_SECS|_TTL|_THRESHOLD)$|_TIMEOUT|_MAX_|^ATLAS_COLONY_LIVE_WINDOW$")
-_TOGGLE_PAIRS = {"on": ("on", "off"), "off": ("on", "off"), "1": ("1", "0"), "0": ("1", "0"),
-                 "true": ("true", "false"), "false": ("true", "false")}
-
-
-def _adv_shape(key: str) -> dict:
-    """kind (+ options / range / on / off) for an Advanced key, from its name and default."""
-    default = str((_AD.get(key) or ("", "", ""))[1])
-    if key in _ADV_KIND:
-        return {"kind": _ADV_KIND[key]}
-    if key in _ADV_SELECT:
-        return {"kind": "select", "options": _norm_options(_ADV_SELECT[key])}
-    pair = _TOGGLE_PAIRS.get(default.lower())
-    if key in _ADV_TOGGLES or pair:
-        on, off = pair or _TOGGLE_PAIRS["on"]
-        return {"kind": "toggle", "on": on, "off": off}
-    if _ADV_NUMBER_NAME.search(key) and re.fullmatch(r"\d+", default):
-        hi = 65535 if key.endswith("_PORT") else 100000 if "_MAX_" in key else 86400
-        return {"kind": "number", "range": {"min": 1 if key.endswith("_PORT") else 0, "max": hi, "step": 1}}
-    return {"kind": "text"}
+# Read-only: they decide where the saved settings live, so a settings page cannot move them.
+PATH_KEYS = ("ATLAS_HOME", "ATLAS_DB", "ATLAS_DASHBOARD_PORT")
+_PATH_DOC = {
+    "ATLAS_HOME": ("Atlas state directory", "Holds atlas.db, memory/, the saved-settings file, the dashboard pidfile and log."),
+    "ATLAS_DB": ("Telemetry database", "The sqlite file every hook writes to and this dashboard reads. Pointing elsewhere hides existing history."),
+    "ATLAS_DASHBOARD_PORT": ("Command Center port", "Loopback port the dashboard listens on. Sessions look for the dashboard here, so every terminal must agree."),
+}
+_PATH_DEFAULT = {
+    "ATLAS_HOME": str(Path.home() / ".atlas"),
+    "ATLAS_DB": str(Path.home() / ".atlas" / "atlas.db"),
+    "ATLAS_DASHBOARD_PORT": "7421",
+}
 
 
 def _finish_knob(knob: dict) -> dict:
@@ -553,126 +562,12 @@ def _finish_knob(knob: dict) -> dict:
     if knob["kind"] == "model":
         knob["validate"] = "ollama" if key in _OLLAMA_VALIDATED else ""
     knob["effect"] = _EFFECT.get(key) or knob.get("description", "").split(". ")[0]
-    knob["applies"] = _APPLIES.get(key, "next-session")
+    knob["applies"] = "now"
     return knob
 
 
 for _knob in BEHAVIOR_KNOBS:
     _finish_knob(_knob)
-
-# Documented ATLAS_* variables outside the curated groups. A discovered key missing here is shown as undocumented.
-_AD = {
-    "ATLAS_MANDATES": (
-        "`off` silences the recall reminder and the one-time commit nudge.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_GATE_HEADER": (
-        "`off` skips the completion-gate check that a final reply starts with the ATLAS header line.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_GATE_PHASES": (
-        "`off` skips the check that the board covers the required todo phases after code shipped.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_GATE_COLONY": (
-        "`off` skips the check that a run with two or more workers actually used its colony channel.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_GATE_REPORT": (
-        "`off` disables the gate that blocks a worker's final message when it is not the fixed report container.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_FOOTPRINT_FILES": (
-        "Distinct code files an unflagged run may touch before the tripwire treats it as orchestration. 0 disables.",
-        "3",
-        "hooks",
-    ),
-    "ATLAS_CHANNELS": (
-        "`off` stops atlas steering subagent dispatches onto a colony channel.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_DECISION": (
-        "`off` skips the local-model prompt classifier and keeps the regex result.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_DECISION_URL": (
-        "Loopback endpoint for the prompt classifier. Blank uses Ollama on 127.0.0.1:11434.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_DECISION_MODEL": ("Model the prompt classifier asks.", "nimble", "hooks"),
-    "ATLAS_COLONY": (
-        "`off` skips starting the herdr colony when a session begins.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_TODO": (
-        "`off` stops copying the session's todo list onto the atlas board.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_DOCS_REPAIR": (
-        "`off` skips the session-start check for a project that has no docs/ tree, and its notice.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_GATES": (
-        "`always` arms the orchestration gates even in scratch directories; `off` disarms them everywhere.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_TYPESAFE_URL": (
-        "Alternate scoring endpoint. A loopback URL scores locally with no API key.",
-        "https://api.typesafe.ai",
-        "hooks",
-    ),
-    "ATLAS_COLONY_LIVE_WINDOW": (
-        "Seconds an agent counts as live in the colony roster after its last activity.",
-        "1800",
-        "hooks",
-    ),
-    "ATLAS_COLONY_TRANSPORT": (
-        "`herdr`, `tmux` or `claude-bg` forces a transport; the default is tmux when installed, else claude-bg (`claude --bg`).",
-        "tmux",
-        "shell",
-    ),
-    "ATLAS_STOP_BRIDGE": ("`off` disables only omp's session-end bridge.", "", "shell"),
-    "ATLAS_LEAN_SHELL": ("`off` stops omp routing bash through lean-ctx.", "", "shell"),
-    "ATLAS_STYLE": ("`off` stops omp injecting the atlas output style.", "", "shell"),
-    "ATLAS_MUX_OMP_CONFIG": (
-        "omp config file the colony reads model roles from.",
-        "~/.omp/agent/config.yml",
-        "shell",
-    ),
-    "ATLAS_MUX_OMP_EXTENSION": (
-        "omp extension path passed to colony workers.",
-        "",
-        "shell",
-    ),
-    "ATLAS_PACKS_CACHE_ROOT": (
-        "Where the packs git cache lives.",
-        "<repo>/.atlas/.run/packs-cache",
-        "shell",
-    ),
-    "ATLAS_PACKS_GIT_TIMEOUT": (
-        "Seconds before a packs git operation is abandoned.",
-        "60",
-        "shell",
-    ),
-    "ATLAS_REMOTE_PORT": (
-        "Tailnet port for remote colony access, clamped to 1024-65535.",
-        "8443",
-        "shell",
-    ),
-    "ATLAS_SELFFIX": ("`0` disables the dashboard's self-fix scheduler.", "", "shell"),
-}
 
 # Set by atlas itself, or test/isolation wiring: saving one from a settings page can only break something.
 _INTERNAL = {
@@ -744,7 +639,6 @@ def _scan_env_readers() -> dict:
                         lang == "ts"
                         and key not in found
                         and key not in _KNOBS_BY_KEY
-                        and key not in _AD
                     ):
                         continue
                     if lang == "ts" and re.search(rf"\.{key}\s*=(?!=)", line):
@@ -942,28 +836,6 @@ def write_omp_env(updates: dict, removed) -> None:
     _write_text(path, "\n".join(lines) + "\n")
 
 
-def _creatable(path_text: str) -> bool:
-    """Absolute, and either present or placeable under an existing writable directory."""
-    p = Path(path_text)
-    if not p.is_absolute():
-        return False
-    if p.exists():
-        return True
-    for parent in p.parents:
-        if parent.exists():
-            return parent.is_dir() and os.access(parent, os.W_OK | os.X_OK)
-    return False
-
-
-def _adv_meta(key: str, doc) -> dict:
-    text = doc[0] if doc else "Undocumented: nothing here says what it does."
-    return {
-        "effect": _EFFECT.get(key) or text.split(". ")[0].replace("`", ""),
-        "applies": _APPLIES.get(key, "next-session"),
-        **({"validate": "ollama"} if key in _OLLAMA_VALIDATED else {}),
-    }
-
-
 _SOURCE_NAME = {"live_env": "process", "claude_settings": "claude"}  # legacy `source` values
 
 
@@ -971,18 +843,16 @@ def _scope_of(key: str) -> str:
     knob = _KNOBS_BY_KEY.get(key)
     if knob:
         return knob["scope"]
-    if key in _AD:
-        return _AD[key][2]
-    return "hooks" if key not in discovered_env_keys() else "shell"
+    return "hooks"
 
 
 def _layer_view(key: str, scope: str, store_env, claude_env, omp_env, rc_env) -> dict:
     """The five layers for one key: {layer: {supported, value}}. value None = not set there."""
     proc = os.environ.get(key)
-    hooks, shell = scope == "hooks", scope == "shell"
+    shell = scope == "shell"
     return {
         "live_env": {"supported": True, "value": proc if proc not in (None, "") else None},
-        "store": {"supported": hooks, "value": store_env.get(key)},
+        "store": {"supported": True, "value": store_env.get(key)},
         "claude_settings": {
             "supported": True,
             "value": str(claude_env[key]) if key in claude_env else None,
@@ -1044,80 +914,42 @@ def behavior_state() -> dict:
         info = scanned.get(key) or {}
         return "ts" in (info.get("langs") or []) and "py" in (info.get("langs") or [])
 
-    groups: dict[str, dict] = {}
+    groups: dict[str, dict] = {
+        t: {"id": t, "title": t, "intro": GROUP_INTROS[t], "knobs": []} for t in GROUP_INTROS
+    }
     for knob in BEHAVIOR_KNOBS:
         entry = dict(knob)
         entry.update(detail(knob["key"], knob.get("default", ""), knob["scope"]))
+        entry["scope"] = "hooks"  # one save path for every knob; the internal scope only picks extra layers
         entry["ref"] = (scanned.get(knob["key"]) or {}).get("ref", "")
         entry["shell_also"] = shell_also(knob["key"])
-        g = groups.setdefault(
-            knob["group"],
-            {
-                "id": knob["group"],
-                "title": knob["group"],
-                "intro": GROUP_INTROS.get(knob["group"], ""),
-                "knobs": [],
-            },
-        )
-        g["knobs"].append(entry)
+        groups[knob["group"]]["knobs"].append(entry)
 
-    advanced = []
-    seen = set(_KNOBS_BY_KEY)
-    for key, info in sorted(scanned.items()):
-        if key in seen:
-            continue
-        doc = _AD.get(key)
-        advanced.append(
-            {
-                "key": key,
-                "ref": info["ref"],
-                "title": key,
-                "description": doc[0]
-                if doc
-                else "Undocumented: nothing here says what it does. The reading line is shown under Details.",
-                "documented": bool(doc),
-                "scope": doc[2] if doc else "shell",
-                **_adv_shape(key),
-                **_adv_meta(key, doc),
-                "shell_also": shell_also(key),
-                **detail(key, doc[1] if doc else "", doc[2] if doc else "shell"),
-            }
+    paths = []
+    for key in PATH_KEYS:
+        title, desc = _PATH_DOC[key]
+        paths.append(
+            {"key": key, "title": title, "description": desc, "value": os.environ.get(key) or _PATH_DEFAULT[key]}
         )
-        seen.add(key)
-    # Keys set somewhere that no shipped file reads: still show them, so a stale value can be cleared.
-    for key in sorted(set(claude_env) | set(store["env"])):
-        if key.startswith("ATLAS_") and key not in seen and key not in _INTERNAL:
-            advanced.append(
-                {
-                    "key": key,
-                    "ref": "",
-                    "title": key,
-                    "documented": False,
-                    "scope": "hooks",
-                    "kind": "text",
-                    "effect": "Nothing reads this value.",
-                    "applies": "next-session",
-                    "shell_also": False,
-                    "description": "Saved, but no shipped file reads it. Clear it.",
-                    "unread": True,
-                    **detail(key, "", "hooks"),
-                }
-            )
+    shown = set(_KNOBS_BY_KEY) | set(PATH_KEYS)
+    hidden = sorted(k for k in scanned if k not in shown)
 
     return {
         "groups": list(groups.values()),
-        "advanced": advanced,
+        "advanced": [],  # kept for compatibility with older pages; every key is now in a group, paths or hidden
+        "paths": paths,
+        "hidden": hidden,
         "settings_path": str(SETTINGS_PATH),
         "store_path": str(store_path()),
         "omp": omp_model_roles(),
-        "note": "A change is saved to the atlas store (read by omp's bridged hooks on their next run) and to Claude Code settings.json env (read when a Claude Code session starts).",
+        "note": SAVE_NOTE,
     }
 
 
 def _check_value(key: str, value: str, confirm: bool):
     """None when the value may be saved, else the error dict (with its HTTP `status`)."""
     knob = _KNOBS_BY_KEY.get(key) or {}
-    meta = _finish_knob(dict(knob)) if knob else _adv_shape(key)
+    meta = _finish_knob(dict(knob)) if knob else {"kind": "text"}
     kind = meta["kind"]
     if kind == "select" and meta.get("options"):
         allowed = [o["value"] for o in meta["options"]]
@@ -1131,13 +963,6 @@ def _check_value(key: str, value: str, confirm: bool):
             n = None
         if n is None or not r["min"] <= n <= r["max"]:
             return {"error": "out_of_range", "key": key, "range": r, "status": 400}
-    if key in _PATH_KEYS and not _creatable(value):
-        return {
-            "error": "bad_path",
-            "key": key,
-            "hint": "Use an absolute path that exists or can be created.",
-            "status": 400,
-        }
     if key == "ATLAS_OPTIMIZE_CMD" and not confirm:
         return {"error": "needs_confirm", "key": key, "command": value, "status": 409}
     if key in _OLLAMA_VALIDATED:
@@ -1171,6 +996,14 @@ def write_behavior_updates(updates: dict, confirm: bool = False) -> dict:
     bad: list[str] = []
     for key, raw in updates.items():
         key = str(key or "").strip()
+        if key in PATH_KEYS:
+            return {
+                "ok": False,
+                "error": "read_only",
+                "keys": [key],
+                "hint": f"{key} cannot be saved here. Set it in your shell before starting atlas.",
+                "status": 400,
+            }
         if not ENV_KEY_RE.match(key) or key not in clearable:
             bad.append(key)
             continue
@@ -1206,8 +1039,8 @@ def write_behavior_updates(updates: dict, confirm: bool = False) -> dict:
             by_scope[sc][0][key] = cleaned[key]
         else:
             by_scope[sc][1].append(key)
-    hook_set, hook_rm = by_scope["hooks"]
     shell_set, shell_rm = by_scope["shell"]
+    hook_set, hook_rm = cleaned, removed  # every hook reads the store, so every knob goes there
 
     errors: dict[str, str] = {}  # layer -> why the write itself failed
     now = time.time()
@@ -1254,8 +1087,8 @@ def write_behavior_updates(updates: dict, confirm: bool = False) -> dict:
     for key in sorted(set(cleaned) | set(removed)):
         wanted = cleaned.get(key, "")
         scope = _scope_of(key)
-        names = ["claude_settings"] + (
-            ["omp_config", "shell_rc"] if scope == "shell" else ["store"]
+        names = ["claude_settings", "store"] + (
+            ["omp_config", "shell_rc"] if scope == "shell" else []
         )
         layers = []
         for name in names:
@@ -1274,7 +1107,7 @@ def write_behavior_updates(updates: dict, confirm: bool = False) -> dict:
                 "key": key,
                 "wanted": wanted,
                 "layers": layers,
-                "applies": _APPLIES.get(key, "next-session"),
+                "applies": "now",
                 "ok": all(x["ok"] for x in layers),
             }
         )
@@ -1285,7 +1118,7 @@ def write_behavior_updates(updates: dict, confirm: bool = False) -> dict:
         "results": results,
         "settings_path": str(SETTINGS_PATH),
         "store_path": str(store_path()),
-        "note": "Saved. Reload the Claude Code or omp session (or start a new shell) so processes pick up the new environment.",
+        "note": SAVE_NOTE,
     }
     if len(results) == 1:
         one = results[0]
