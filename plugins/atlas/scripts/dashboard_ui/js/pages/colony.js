@@ -105,13 +105,16 @@ async function sendMessage(ctx, m, box, btn, refresh) {
   }
 }
 
+// Test seam: lets tests inject api/confirm into killSeat/waveAction; empty in production.
+export const rosterDeps = {};
+
 async function killMember(ctx, m, refresh) {
-  await killSeat({ name: m.name, kind: m.kind, project: projectOf(ctx) });
+  await killSeat({ name: m.name, kind: m.kind, project: projectOf(ctx) }, rosterDeps);
   refresh();
 }
 
 async function waveMember(ctx, m, verb, refresh) {
-  await waveAction(verb, { name: m.name, project: projectOf(ctx) });
+  await waveAction(verb, { name: m.name, project: projectOf(ctx) }, rosterDeps);
   refresh();
 }
 
@@ -142,7 +145,7 @@ function rowTop(m, onKill, onTerm, onWave) {
     h("span", { class: "grow" }),
     Button({ label: "Open terminal", size: "sm", ariaLabel: "Open terminal for " + m.name, onClick: onTerm }),
     waveButtons(m, onWave),
-    canSteer(m) && m.kind !== "lead" ? Button({ label: "Kill", size: "sm", variant: "danger", ariaLabel: "Kill " + m.name, onClick: onKill }) : null);
+    canSteer(m) && m.kind !== "lead" ? Button({ label: "Stop", size: "sm", variant: "danger", ariaLabel: "Stop " + m.name, onClick: onKill }) : null);
 }
 
 // The lead's "active, last tool call 12s ago" / "idle 7 min": real session signals, shown beside (never instead of) the pane chip.
@@ -198,7 +201,7 @@ const rowSent = (m) => {
 // The seat picked by a deep link (?seat=<name>, or ?agent=<name|pane id>); no param selects nothing.
 const isSelected = (ctx, m) => { const want = ctx.params.seat || ctx.params.agent; return Boolean(want) && (want === m.name || want === m.pane_id); };
 
-function MemberRow(m, ctx, refresh) {
+export function MemberRow(m, ctx, refresh) {
   const block = sendBlock(m);
   return h("li", { class: "colony-row", "data-kind": m.kind, "data-state": m.state, "data-selected": isSelected(ctx, m) ? "true" : null },
     rowTop(m, () => killMember(ctx, m, refresh), () => ctx.navigate("terminal", terminalParams(m)), (verb) => waveMember(ctx, m, verb, refresh)),
@@ -211,13 +214,21 @@ function MemberRow(m, ctx, refresh) {
 }
 
 // Roster lens body for the Agents page. No timer: the page calls refresh() on SSE herd/agents events (and on its poll tick when SSE is down).
-export function mountRoster(ctx, body) {
+// Header Pause/Resume/Cancel act on every live worker (never the lead); Cancel confirms once per worker via waveAction.
+export async function waveAll(ctx, verb, members) {
+  const workers = (members || []).filter((m) => m.kind !== "lead" && canSteer(m));
+  for (const m of workers) await waveAction(verb, { name: m.name, project: projectOf(ctx) }, rosterDeps);
+  return workers.length;
+}
+
+export function mountRoster(ctx, body, opts = {}) {
   const st = { all: false, data: null, error: null };
   S.dead = false;
   const toggle = h("input", { type: "checkbox", id: "colony-all", onChange: (e) => { st.all = e.target.checked; refresh(); } });
   const bar = h("div", { class: "colony-bar" },
     h("label", { class: "colony-all", for: "colony-all" }, toggle, " Show all panes"),
     h("span", { class: "grow" }),
+    ...["pause", "resume", "cancel"].map((verb) => Button({ label: verb[0].toUpperCase() + verb.slice(1), size: "sm", variant: verb === "cancel" ? "danger" : undefined, ariaLabel: verb + " all workers", onClick: async () => { await waveAll(ctx, verb, st.data && st.data.members); refresh(); } })),
     Button({ label: "Open terminal", size: "sm", icon: "external-link", onClick: () => ctx.navigate("terminal") }));
   const list = h("div", { class: "colony-body" });
   replace(body, h("div", { class: "colony-roster" }, bar, list));
@@ -245,6 +256,7 @@ export function mountRoster(ctx, body) {
     const sig = JSON.stringify([st.error && String(st.error.message || st.error), st.data]);
     if (sig === st.sig) return;
     st.sig = sig;
+    if (opts.onMembers && st.data) opts.onMembers(st.data.members || []);
     if (!document.querySelector(".colony-send-text:focus")) paint();
   }
 

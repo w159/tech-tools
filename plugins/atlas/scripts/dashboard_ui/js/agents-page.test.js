@@ -5,7 +5,8 @@ const read = (rel) => Bun.file(new URL(rel, import.meta.url)).text();
 installDom();
 const agents = (await import("./pages/agents.js")).default;
 const { lensOf } = await import("./pages/agents.js");
-const { mountRoster } = await import("./pages/colony.js");
+const { mountRoster, rosterDeps } = await import("./pages/colony.js");
+const { headerSub } = await import("./pages/agents.js");
 const { colonyHref, terminalHref } = await import("./fleet.js");
 restoreDom();
 
@@ -46,7 +47,7 @@ test("Agents has exactly Roster, Supervise and Board lenses; old ids resolve; ch
   expect(src).not.toContain("is-chan");
 });
 
-test("roster lens shows Send, Kill, Pause/Resume and Cancel on workers, none on the lead except Send", async () => {
+test("roster lens shows Send, Stop, Pause/Resume and Cancel on workers, none on the lead except Send", async () => {
   body.replaceChildren();
   const host = document.createElement("div");
   body.appendChild(host);
@@ -57,12 +58,41 @@ test("roster lens shows Send, Kill, Pause/Resume and Cancel on workers, none on 
   const lead = buttonsOf(rows[0]);
   const w1 = buttonsOf(rows[1]);
   const w2 = buttonsOf(rows[2]);
-  expect(lead).not.toContain("Kill");
+  expect(lead).not.toContain("Stop");
   expect(lead).not.toContain("Pause");
-  expect(w1).toEqual(expect.arrayContaining(["Kill", "Pause", "Cancel", "Send"]));
+  expect(w1).toEqual(expect.arrayContaining(["Stop", "Pause", "Cancel", "Send"]));
   expect(w2).toContain("Resume");
   expect(w2).not.toContain("Pause");
   roster.destroy();
+});
+
+test("Stop opens a confirm naming the seat; cancelling sends nothing; header has Pause/Resume/Cancel", async () => {
+  body.replaceChildren();
+  const host = document.createElement("div");
+  body.appendChild(host);
+  const asked = [];
+  const posts = [];
+  rosterDeps.confirm = async (o) => { asked.push(o.title); return false; };
+  rosterDeps.api = { post: async (p) => { posts.push(p); return {}; } };
+  const roster = mountRoster(mkCtx(), host);
+  await tick();
+  const bar = host.querySelector("div.colony-bar");
+  expect(buttonsOf(bar)).toEqual(expect.arrayContaining(["Pause", "Resume", "Cancel"]));
+  const stop = host.querySelectorAll("li.colony-row")[1].querySelectorAll("button").find((b) => b.textContent === "Stop");
+  stop.click();
+  await tick();
+  expect(asked).toEqual(["Kill impl-1?"]);
+  expect(posts).toEqual([]);
+  roster.destroy();
+  delete rosterDeps.confirm;
+  delete rosterDeps.api;
+});
+
+test("header subtitle counts working colony members when the herdr fleet is empty", () => {
+  const st = { loaded: true, counts: { total: 0 } };
+  expect(headerSub(st, 0)).toBe("No agents running");
+  expect(headerSub(st, 1)).toBe("1 colony member working");
+  expect(headerSub(st, 3)).toBe("3 colony members working");
 });
 
 test("refresh is event driven: a herd event refetches the roster, no timers are installed", async () => {

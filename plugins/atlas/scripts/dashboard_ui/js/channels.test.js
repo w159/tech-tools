@@ -132,3 +132,15 @@ test("composer posts through the single send path", async () => {
   expect(sent).toEqual([["w1", "hi"]]);
   lens.destroy();
 });
+
+test("default timers call setInterval unbound: a strict global that rejects this=timers still starts the fallback", () => {
+  const realSet = globalThis.setInterval;
+  const realClear = globalThis.clearInterval;
+  const strict = function (fn, ms) { if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation"); return realSet(fn, ms); };
+  globalThis.setInterval = strict;
+  try {
+    const store = fakeStore("poll");
+    const stop = startChannelSync({ store, refresh: () => {} });
+    stop();
+  } finally { globalThis.setInterval = realSet; globalThis.clearInterval = realClear; }
+});

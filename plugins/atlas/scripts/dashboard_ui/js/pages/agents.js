@@ -18,7 +18,7 @@ export const LENS_COMPAT = { fleet: "roster", colony: "roster", supervision: "su
 export const lensOf = (id) => { const l = LENS_COMPAT[id] || id; return LENS.some(([x]) => x === l) ? l : "roster"; };
 const VIEWS = [["members", "Members"], ["cards", "Cards"], ["list", "List"]];
 
-const S = { ctx: null, lens: "roster", view: "members", filter: new Set(), q: "", unsub: null, body: null, legacy: null, sup: null, roster: null, mount: null, tick: null, sort: { key: "state", dir: 1 }, chans: [], chansAt: 0 };
+const S = { colonyWorking: 0, ctx: null, lens: "roster", view: "members", filter: new Set(), q: "", unsub: null, body: null, legacy: null, sup: null, roster: null, mount: null, tick: null, sort: { key: "state", dir: 1 }, chans: [], chansAt: 0 };
 
 // Channels give each agent's project branch (`folder@branch`) and channel chip; refreshed at most every 20s.
 async function loadChans(force) {
@@ -57,13 +57,18 @@ function lensBar(ctx) {
   return h("div", { class: "seg", role: "radiogroup", "aria-label": "Agents lens" }, LENS.map(([id, label]) => h("button", { class: "seg-btn", type: "button", role: "radio", "aria-checked": id === S.lens ? "true" : "false", onClick: () => ctx.navigate("agents", { lens: id }) }, label)));
 }
 
+// Header subtitle: herdr fleet counts, else colony members in working state (the roster works without the herdr runtime).
+export function headerSub(st, colonyWorking) {
+  if (!st.loaded) return "Loading agents";
+  if (st.counts.total) return STATES.filter((k) => st.counts[k]).map((k) => st.counts[k] + " " + STATE_WORD[k].toLowerCase()).join(", ");
+  return colonyWorking ? colonyWorking + " colony member" + (colonyWorking === 1 ? "" : "s") + " working" : "No agents running";
+}
+
 function header(ctx, extra) {
   const st = agentsStore.getState();
-  const c = st.counts;
-  const bits = STATES.filter((k) => c[k]).map((k) => c[k] + " " + STATE_WORD[k].toLowerCase()).join(", ");
   const views = S.lens === "roster" ? h("div", { class: "seg", role: "radiogroup", "aria-label": "View" }, VIEWS.map(([id, label]) => h("button", { class: "seg-btn", type: "button", role: "radio", "aria-checked": S.view === id ? "true" : "false", onClick: () => { S.view = id; S.paintHead(); draw(); } }, label))) : null;
   const create = S.lens === "roster" ? Button({ label: "New workspace", icon: "plus", size: "sm", onClick: () => newWorkspace(ctx.project !== "all" ? ctx.project : "") }) : null;
-  return h("div", { class: "page-head" }, h("div", null, h("h1", null, "Agents"), h("p", { class: "sub" }, st.loaded ? (c.total ? bits : "No agents running") : "Loading agents")), h("div", { class: "page-actions" }, lensBar(ctx), views, create, extra || null));
+  return h("div", { class: "page-head" }, h("div", null, h("h1", null, "Agents"), h("p", { class: "sub" }, headerSub(st, S.colonyWorking))), h("div", { class: "page-actions" }, lensBar(ctx), views, create, extra || null));
 }
 
 // ---- lens: fleet -----------------------------------------------------------------------------------------
@@ -149,7 +154,7 @@ async function mountLegacy(id) {
 // The Members view and the Cards/List views share the toolbar (view switch) so the operator never loses the toggle.
 function drawRoster() {
   if (S.view === "members") {
-    S.roster = mountRoster(S.ctx, S.body);
+    S.roster = mountRoster(S.ctx, S.body, { onMembers: (ms) => { const n = ms.filter((m) => m.state === "running").length; if (n !== S.colonyWorking) { S.colonyWorking = n; if (S.paintHead) S.paintHead(); } } });
     return;
   }
   drawFleet();
