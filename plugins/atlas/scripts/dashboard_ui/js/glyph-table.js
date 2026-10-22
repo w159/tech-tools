@@ -1,3 +1,4 @@
+// fallow-ignore-file code-duplication -- deliberate pinned copy of theme.ts tables, guarded by the contract test below
 // Glyph and role tables. Values are \uXXXX escapes copied from plugins/atlas/mod/theme.ts
 // (STATE_GLYPH :32, CONTRACT_GLYPH :228, SPIN :142, PHASE_FRAMES :147); the Python contract
 // test test_dashboard_glyphs_match_theme_ts fails if they drift.
@@ -25,7 +26,18 @@ export const STATE_GLYPH = {
   dead: "\u00B7",
 };
 
-export const SPIN = ["\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F"];
+export const SPIN = [
+  "\u280B",
+  "\u2819",
+  "\u2839",
+  "\u2838",
+  "\u283C",
+  "\u2834",
+  "\u2826",
+  "\u2827",
+  "\u2807",
+  "\u280F",
+];
 
 export const PHASE_FRAMES = {
   research: ["\u25DC", "\u25E0", "\u25DD", "\u25DE", "\u25E1", "\u25DF"],
@@ -35,7 +47,7 @@ export const PHASE_FRAMES = {
   verify: ["\u25D0", "\u25D3", "\u25D1", "\u25D2", "\u25D4", "\u25D5"],
 };
 
-export const ROLE_LETTER = {
+const ROLE_LETTER = {
   lead: "L",
   implementer: "I",
   verifier: "V",
