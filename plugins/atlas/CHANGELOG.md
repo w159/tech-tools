@@ -1,6 +1,34 @@
 # Changelog
 
-## 14.0.0 - 2026-10-22 (unreleased)
+## 15.0.0 - 2026-10-22
+
+Command Center v15: the dashboard becomes a band, a seats rail and six routes. The nine v14 pages fold into Run, Agents, Board, Channels, Health and Settings.
+
+### Breaking changes
+
+- Routes are now Run, Agents, Board, Channels, Health and Settings. Old hashes redirect: Activity, Improve, Projects, Colony and Terminal land on the page that absorbed them.
+
+### Added
+
+- Band: title row, chevron phase rail and live counts. Seats rail and channel feed with steer (`POST /api/v2/channels`), a needs-you list, gates chips and a last-7-days table on Run.
+- `GET /api/v2/gates` (token required, `?project=` or `?session=`) feeds the gates chips.
+- Keys `1`, `2`, `3`, `f`, `i`, `m`, `h`, `Escape` and the `/` palette, wired into run and shell.
+- `BRAND` tokens from `mod/contract.ts`, gated by `design/contrast.py`. Glyphs are pinned to `mod/theme.ts` by a contract test.
+
+### Changed
+
+- Settings keeps every control from v14 on the band shell.
+
+### Removed
+
+- The separate Activity, Improve, Projects, Colony and Terminal pages.
+
+### Known
+
+- Band phase n/m is not wired (the header value is null).
+- The terminal-focus key guard is untested.
+
+## 14.0.0 - 2026-10-22
 
 Command Center v14: the dashboard UI is rebuilt from scratch as a sidebar shell with nine flat pages, and every `ATLAS_*` key is editable in Settings with its current value. Contract: `docs/command-center-redesign.md` (sections 1-11). Breaking changes are listed first.
 
