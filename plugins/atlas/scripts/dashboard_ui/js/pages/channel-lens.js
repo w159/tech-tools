@@ -2,11 +2,12 @@
 // one row of member chips, Messages/Board tabs), the message log or the per-member board (the only scroller) and a composer
 // (To, one textarea, Send). To = Everyone posts to the channel; To = a member prompts that agent when its pane is idle,
 // else posts addressed to it. Board = GET /api/v2/channels/<name> board.owners joined to members (chan-names memberBoard).
-// Data: GET /api/v2/channels, GET /api/v2/channels/<name>?limit=, POST /api/v2/channels. Mounted by pages/channels.js (#/channels).
+// Send goes through the single send path (js/send-path.js). Data: GET /api/v2/channels, GET /api/v2/channels/<name>?limit=, POST /api/v2/channels. Mounted by pages/channels.js (#/channels).
 
 import { h, replace, icon, fmtRelative } from "../dom.js";
 import { agentsStore } from "../agents-store.js";
 import { chanInfo, presenceWord, memberState, memberBoard, todoSummary } from "../chan-names.js";
+import { sendToMember, sendToMembers } from "../send-path.js";
 import { Button, State, ChannelList, Composer, HexGlyph, toast } from "../components.js";
 
 const LIMIT = 100;
@@ -176,8 +177,10 @@ export function mountChannelLens(ctx, body) {
         lead: sel,
         // Always the board: the server types it into an idle claude/omp pane, else queues it for the member's next tool call, and records it here with its delivery status.
         onSend: async (_mode, text) => {
-          const r = await ctx.api.post("channels", { channel: meta.name, to: S.to, body: text, from: "human", project: meta.project });
-          const t = r && r.message && r.message.delivery_text;
+          // Everyone = every member that can receive; a named recipient goes through the same colony send handler.
+          const names = S.to === "all" ? mem.filter(reachable).map((m) => m.name) : [S.to];
+          const res = S.to === "all" ? await sendToMembers(ctx, names, text) : [await sendToMember(ctx, S.to, text)];
+          const t = res.map((r) => r && r.message && r.message.delivery_text).filter(Boolean)[0];
           toast(t || "Posted to " + (S.to === "all" ? meta.name : S.to), { kind: "ok" });
           await loadDetail();
           paintLog();
