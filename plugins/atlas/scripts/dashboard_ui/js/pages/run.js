@@ -114,12 +114,9 @@ export function renderMetrics(rows) {
 // --- Page ---
 
 const LABEL = { seats: "seats", feed: "messages", needs: "needs", gates: "gates", metrics: "metrics" };
-const STEER_ERR = {
-  held: "That seat is on hold.",
-  bad_token: "The dashboard token was rejected. Reload the page.",
-  no_channel: "Pick a project with an active channel to steer.",
-  empty: "Type a message first.",
-};
+
+// The server's own message (why / do) from sendSteer, escaped for the inline error under the input.
+export const renderSteerError = (r) => esc(r.message || r.error);
 
 const SHELL_CENTER =
   '<div class="chan-head"><span class="lbl">CHANNEL</span> <span class="chan-name" data-chan></span></div>' +
@@ -335,7 +332,7 @@ export function render({ root, project, setParams }) {
     const { to, text } = resolveTarget(input.value.trim(), $("data-target").textContent);
     const r = await sendSteer({ channel: channelName(), to, text });
     errEl.hidden = r.ok;
-    if (!r.ok) return void (errEl.textContent = STEER_ERR[r.error] || r.error); // typed text stays
+    if (!r.ok) return void (errEl.innerHTML = renderSteerError(r)); // typed text stays
     input.value = "";
     await run(["feed"]); // the stream tick would also bring it; this makes the round trip immediate
   };
@@ -348,7 +345,6 @@ export function render({ root, project, setParams }) {
   root.querySelector("[data-steer]").addEventListener("submit", onSubmit);
   band && band.addEventListener("change", onBand);
   mq.addEventListener("change", mqChange);
-  if (band) band.dataset.owner = "run";
 
   const unsubs = [
     topics.agents.subscribe((a) => {
@@ -368,6 +364,8 @@ export function render({ root, project, setParams }) {
     paint(name);
   }
   paintBand();
+  // Own the band only after the first paint succeeded: a render exception must not freeze it on other routes.
+  if (band) band.dataset.owner = "run";
   get("/api/v2/projects")
     .then((r) => ((st.projects = (r.projects || []).filter((p) => p.root)), dead || paintBand()))
     .catch(() => {}); // the select still lists the current project

@@ -20,14 +20,17 @@ export function resolveTarget(input, target) {
 }
 
 async function send(kind, { channel, to, text }, postFn) {
-  if (!channel) return { ok: false, error: "no_channel" };
-  if (!String(text || "").trim()) return { ok: false, error: "empty" };
+  if (!channel) return { ok: false, error: "no_channel", message: "Pick a project with an active channel to steer." };
+  if (!String(text || "").trim()) return { ok: false, error: "empty", message: "Type a message first." };
   try {
     await postFn("/api/v2/channels", { channel, to: strip(to), body: text, kind });
     return { ok: true };
   } catch (e) {
     // ApiError carries the server envelope in .data; anything else (network) keeps its message.
-    return { ok: false, error: (e && e.data && e.data.error) || (e && e.message) || "failed" };
+    const d = (e && e.data) || {};
+    const error = d.error || (e && e.message) || "failed";
+    // message: the first non-empty of the server's why / do / error, for the inline error.
+    return { ok: false, error, message: d.why || d.do || error };
   }
 }
 

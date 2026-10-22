@@ -31,13 +31,21 @@ test("sendSteer posts body (the server field), kind steer, to without @", async 
 
 test("sendSteer maps a 409 held reply to {ok:false,error} without throwing", async () => {
   const r = await sendSteer({ channel: "c", to: "lead", text: "go" }, reject(409, { error: "held" }));
-  assert.deepEqual(r, { ok: false, error: "held" });
+  assert.deepEqual(r, { ok: false, error: "held", message: "held" });
+});
+
+test("sendSteer carries the server why as message on a 409 agent_busy", async () => {
+  const r = await sendSteer(
+    { channel: "c", to: "lead", text: "go" },
+    reject(409, { error: "agent_busy", why: "seat is held" }),
+  );
+  assert.deepEqual(r, { ok: false, error: "agent_busy", message: "seat is held" });
 });
 
 test("sendSteer maps 401 bad_token and a network failure", async () => {
   assert.deepEqual(
     await sendSteer({ channel: "c", to: "lead", text: "x" }, reject(401, { error: "bad_token" })),
-    { ok: false, error: "bad_token" },
+    { ok: false, error: "bad_token", message: "bad_token" },
   );
   const r = await sendSteer({ channel: "c", to: "lead", text: "x" }, async () => {
     throw new Error("the dashboard daemon is not reachable");
@@ -48,8 +56,12 @@ test("sendSteer maps 401 bad_token and a network failure", async () => {
 
 test("sendSteer refuses an empty channel or empty text without posting", async () => {
   const never = async () => assert.fail("must not post");
-  assert.deepEqual(await sendSteer({ channel: "", to: "lead", text: "x" }, never), { ok: false, error: "no_channel" });
-  assert.deepEqual(await sendSteer({ channel: "c", to: "lead", text: "  " }, never), { ok: false, error: "empty" });
+  const noChan = await sendSteer({ channel: "", to: "lead", text: "x" }, never);
+  assert.deepEqual([noChan.ok, noChan.error], [false, "no_channel"]);
+  assert.ok(noChan.message);
+  const empty = await sendSteer({ channel: "c", to: "lead", text: "  " }, never);
+  assert.deepEqual([empty.ok, empty.error], [false, "empty"]);
+  assert.ok(empty.message);
 });
 
 test("holdSeat posts kind hold to the seat", async () => {

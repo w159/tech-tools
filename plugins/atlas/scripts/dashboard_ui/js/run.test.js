@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { renderSeats, renderFeed, renderNeeds, renderGates, renderMetrics } from "./pages/run.js";
+import { renderSeats, renderFeed, renderNeeds, renderGates, renderMetrics, renderSteerError } from "./pages/run.js";
 import { renderRegionState } from "./region-state.js";
 import { renderBand } from "./band.js";
 import { toSeats, toFeed, toNeeds, toGates, toMetrics } from "./run-data.js";
@@ -110,6 +110,12 @@ test("band: projectOptions renders a select with the selected option", () => {
   assert.match(html, /<select class="proj"/);
   assert.match(html, /<option value="\/r\/tech-tools" selected>tech-tools<\/option>/);
   assert.equal(count(html, /<option /g), 2);
+});
+
+test("steer error: the inline renderer prints the server message, escaped", () => {
+  assert.equal(renderSteerError({ ok: false, error: "agent_busy", message: "seat is held" }), "seat is held");
+  assert.equal(renderSteerError({ ok: false, error: "x", message: "<b>no</b>" }).includes("<b>"), false);
+  assert.equal(renderSteerError({ ok: false, error: "agent_busy" }), "agent_busy");
 });
 
 test("app.js no longer maps run to the v14 overview page", () => {
