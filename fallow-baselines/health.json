@@ -1425,6 +1425,11 @@
         "count": 2
       }
     },
+    "plugins/atlas/scripts/dashboard_ui/js/app-keys.test.js": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
     "plugins/atlas/scripts/dashboard_ui/js/app.js": {
       "crap_high": {
         "count": 1
@@ -1470,15 +1475,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/scripts/dashboard_ui/js/pages/activity-model.js": {
-      "crap_moderate": {
-        "count": 1
-      }
-    },
-    "plugins/atlas/scripts/dashboard_ui/js/pages/activity.js": {
-      "crap_high": {
-        "count": 1
-      },
+    "plugins/atlas/scripts/dashboard_ui/js/html.js": {
       "crap_moderate": {
         "count": 1
       }
@@ -1497,9 +1494,6 @@
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/agents.js": {
-      "crap_high": {
-        "count": 1
-      },
       "crap_moderate": {
         "count": 3
       }
@@ -1514,28 +1508,34 @@
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/board.js": {
       "crap_high": {
-        "count": 3
+        "count": 2
       },
       "crap_moderate": {
         "count": 5
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/channels-model.js": {
+      "crap_critical": {
+        "count": 1
+      },
       "crap_moderate": {
-        "count": 2
+        "count": 3
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/channels.js": {
+      "crap_critical": {
+        "count": 1
+      },
       "crap_high": {
-        "count": 2
+        "count": 1
       },
       "crap_moderate": {
-        "count": 1
+        "count": 4
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/health-model.js": {
       "crap_moderate": {
-        "count": 1
+        "count": 3
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/health.js": {
@@ -1543,23 +1543,13 @@
         "count": 1
       },
       "crap_critical": {
-        "count": 1
-      },
-      "crap_moderate": {
-        "count": 1
-      }
-    },
-    "plugins/atlas/scripts/dashboard_ui/js/pages/improve-model.js": {
-      "crap_moderate": {
         "count": 2
-      }
-    },
-    "plugins/atlas/scripts/dashboard_ui/js/pages/improve.js": {
+      },
       "crap_high": {
-        "count": 2
+        "count": 3
       },
       "crap_moderate": {
-        "count": 1
+        "count": 2
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/pages/monitor-model.js": {
@@ -1634,10 +1624,10 @@
         "count": 1
       },
       "crap_high": {
-        "count": 1
+        "count": 2
       },
       "crap_moderate": {
-        "count": 3
+        "count": 4
       }
     },
     "plugins/atlas/scripts/dashboard_ui/js/region-state.js": {
@@ -1688,7 +1678,7 @@
         "count": 2
       },
       "crap_moderate": {
-        "count": 4
+        "count": 3
       }
     },
     "test-mcp-tools.mjs": {
@@ -1709,63 +1699,62 @@
   "runtime_coverage_findings": [],
   "target_keys": [
     "plugins/atlas/mod/band.tsx:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/run.js:untested risk",
     "plugins/atlas/mod/data/live.ts:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/agents-model.js:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/health.js:untested risk",
     "plugins/atlas/mod/notify.ts:complexity",
     "plugins/atlas/omp/hook-bridge.ts:high impact",
-    "plugins/atlas/omp/index.ts:high impact",
     "plugins/atlas/omp/contracts.ts:high impact",
+    "plugins/atlas/omp/index.ts:high impact",
     "plugins/atlas/mod/register.ts:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/run.js:untested risk",
-    "plugins/atlas/mod/restyle.tsx:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/agents-model.js:high impact",
     "plugins/atlas/mod/data/orchestration.ts:high impact",
+    "plugins/atlas/mod/restyle.tsx:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/state.js:high impact",
     "plugins/atlas/mod/gates.ts:high impact",
     "plugins/atlas/omp/worker-report.ts:high impact",
     "plugins/atlas/omp/style.ts:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/monitor-model.js:high impact",
     "plugins/atlas/mod/pane/sidebar-team.tsx:untested risk",
     "plugins/atlas/omp/channels.ts:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/keys.js:high impact",
+    "plugins/atlas/mod/sprites/api.ts:high impact",
     "plugins/atlas/omp/channel-view.ts:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/state.js:high impact",
     "plugins/atlas/omp/mission-panel.ts:high impact",
     "plugins/atlas/mod/data/todos.ts:high impact",
-    "plugins/atlas/mod/sprites/api.ts:high impact",
     "plugins/atlas/omp/run-state.ts:high impact",
-    "plugins/atlas/mod/routing.ts:high impact",
     "mcp_servers/blumira-mcp/src/utils/logger.ts:high impact",
     "mcp_servers/kaseya-spanning-backup-mcp/src/utils/logger.ts:high impact",
+    "plugins/atlas/mod/routing.ts:high impact",
     "mcp_servers/auvik-mcp/scripts/smoke.ts:complexity",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/monitor-model.js:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/dom.js:high impact",
     "plugins/atlas/omp/advisor.ts:high impact",
     "plugins/atlas/omp/agent-guard.ts:untested risk",
     "plugins/atlas/omp/mandates.ts:untested risk",
     "plugins/atlas/mod/pane/sidebar-route.tsx:untested risk",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/improve-model.js:high impact",
     "mcp_servers/threatlocker-mcp/src/utils/resolve.ts:high impact",
     "plugins/atlas/omp/todo-panel.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/pages/overview-model.js:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/activity-model.js:high impact",
-    "plugins/atlas/mod/transcript/cards.tsx:high impact",
-    "plugins/atlas/omp/stop-bridge.ts:high impact",
     "plugins/atlas/mod/pane/sidebar-channel.tsx:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/api.js:high impact",
+    "plugins/atlas/mod/transcript/cards.tsx:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/router.js:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/settings-model.js:high impact",
+    "plugins/atlas/omp/stop-bridge.ts:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/api.js:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/health-model.js:high impact",
     "mcp_servers/auvik-mcp/scripts/probe-all-tools.mjs:untested risk",
-    "mcp_servers/cipp-mcp/src/mcp/server.ts:complexity",
     "plugins/atlas/mod/data/herdr.ts:complexity",
     "mcp_node/node-blumira/src/http.ts:complexity",
+    "mcp_servers/cipp-mcp/src/mcp/server.ts:complexity",
+    "mcp_node/node-vanta/src/pagination.ts:high impact",
     "plugins/atlas/mod/data/mux.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/band.js:high impact",
-    "mcp_node/node-vanta/src/pagination.ts:high impact",
-    "mcp_servers/paylocity-mcp/src/utils/client.ts:high impact",
     "mcp_servers/panos-mcp/src/utils/logger.ts:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/settings-model.js:high impact",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/health-model.js:high impact",
+    "mcp_servers/paylocity-mcp/src/utils/client.ts:high impact",
     "mcp_servers/threatlocker-mcp/src/utils/logger.ts:high impact",
     "mcp_servers/paylocity-mcp/src/utils/logger.ts:high impact",
     "mcp_servers/vanta-mcp/src/utils/logger.ts:high impact",
     "mcp_node/node-vanta/src/http.ts:complexity",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/projects-model.js:high impact",
     "mcp_node/node-auvik/src/http.ts:complexity",
     "mcp_servers/_shared/zod-shape.ts:high impact",
     "plugins/atlas/omp/plugin-path.ts:high impact",
@@ -1774,16 +1763,17 @@
     "mcp_node/node-threatlocker/src/http.ts:complexity",
     "plugins/atlas/mod/data/channels.ts:untested risk",
     "plugins/atlas/omp/workers.ts:high impact",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/channels-model.js:high impact",
     "plugins/atlas/omp/scope.ts:high impact",
-    "mcp_servers/knowbe4-mcp/src/domains/training.ts:complexity",
     "mcp_servers/ninjaone-mcp/src/domains/alerts.ts:complexity",
     "plugins/atlas/scripts/dashboard_ui/js/run-data.js:high impact",
     "mcp_servers/knowbe4-mcp/src/domains/phishing.ts:complexity",
+    "mcp_servers/knowbe4-mcp/src/domains/training.ts:complexity",
     "mcp_servers/knowbe4-mcp/src/domains/reporting.ts:complexity",
-    "plugins/atlas/omp/style.test.ts:untested risk",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/channels-model.js:high impact",
     "plugins/atlas/mod/intents.ts:complexity",
     "mcp_servers/auvik-mcp/src/client-factory.ts:complexity",
+    "plugins/atlas/omp/style.test.ts:untested risk",
+    "plugins/atlas/scripts/dashboard_ui/js/palette.js:high impact",
     "mcp_servers/knowbe4-mcp/src/domains/users.ts:complexity",
     "mcp_servers/sonicwall-mcp/src/utils/sonicwall-error.ts:untested risk",
     "plugins/atlas/omp/shell-route.ts:untested risk",
@@ -1793,10 +1783,10 @@
     "mcp_servers/blumira-mcp/src/http.ts:complexity",
     "plugins/atlas/mcp/_env/load.mjs:untested risk",
     "mcp_servers/knowbe4-mcp/src/domains/groups.ts:complexity",
-    "plugins/atlas/omp/index.test.ts:untested risk",
     "mcp_servers/ninjaone-mcp/src/domains/automation.ts:complexity",
-    "mcp_servers/cipp-mcp/src/handlers/tool.handler.ts:complexity",
+    "plugins/atlas/omp/index.test.ts:untested risk",
     "mcp_servers/blumira-mcp/src/domains/findings.ts:complexity",
+    "mcp_servers/cipp-mcp/src/handlers/tool.handler.ts:complexity",
     "mcp_servers/ninjaone-mcp/src/domains/devices.ts:complexity",
     "test-mcp-tools.mjs:complexity"
   ]

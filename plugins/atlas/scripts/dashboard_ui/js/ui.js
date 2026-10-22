@@ -33,7 +33,7 @@ export function Button(
 }
 
 /** IconButton({icon, label, size}) -> square button with an accessible name and a tooltip. */
-export function IconButton({ icon: iconName, label, size, ...attrs }) {
+function IconButton({ icon: iconName, label, size, ...attrs }) {
   return h(
     "button",
     {
@@ -339,38 +339,6 @@ export function Tabs({ tabs, active, onSelect }) {
     el.append(b);
   }
   return el;
-}
-
-/** Sparkline({buckets:[{ok,fail}]|number[], width, height}) -> inline SVG bars. */
-export function Sparkline({ buckets = [], width = 80, height = 20 }) {
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("class", "spark");
-  svg.setAttribute("width", width);
-  svg.setAttribute("height", height);
-  svg.setAttribute("role", "img");
-  const vals = buckets.map((b) =>
-    typeof b === "number" ? { ok: b, fail: 0 } : b,
-  );
-  const max = Math.max(1, ...vals.map((v) => (v.ok || 0) + (v.fail || 0)));
-  const gap = 2;
-  const bw = Math.max(
-    1,
-    (width - gap * (vals.length - 1)) / Math.max(1, vals.length),
-  );
-  vals.forEach((v, i) => {
-    const total = (v.ok || 0) + (v.fail || 0);
-    const bh = total ? Math.max(2, (total / max) * height) : 1;
-    const r = document.createElementNS(NS, "rect");
-    r.setAttribute("x", i * (bw + gap));
-    r.setAttribute("y", height - bh);
-    r.setAttribute("width", bw);
-    r.setAttribute("height", bh);
-    r.setAttribute("rx", 1);
-    if (v.fail) r.setAttribute("class", "bad");
-    svg.append(r);
-  });
-  return svg;
 }
 
 export function Kbd(text) {
