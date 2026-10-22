@@ -39,8 +39,8 @@ test("F4: terminal is in the nav and saved herd/console/herdr entries survive", 
   for (const alias of ["herd", "console", "herdr"]) expect(normalizeNav([alias])[0]).toBe("terminal");
 });
 
-test("F5: agents?lens=colony routes to the Colony page, console to terminal", () => {
-  expect(LENS_ROUTES.colony).toBe("colony");
+test("F5: console and channel lenses become routes; colony is an Agents alias, not a page", () => {
+  expect(LENS_ROUTES.colony).toBeUndefined();
   expect(LENS_ROUTES.console).toBe("terminal");
   expect(LENS_ROUTES.channel).toBe("channels");
 });
