@@ -1,0 +1,526 @@
+/* Component kit. Every class here is produced by js/ui.js. */
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-h);
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+.btn:hover:not(:disabled) {
+  background: var(--raised);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.btn-sm {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.btn-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand);
+  filter: brightness(1.08);
+}
+.btn-ghost {
+  border-color: transparent;
+}
+.btn-danger {
+  border-color: var(--fail);
+  color: var(--fail);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fail) 14%, transparent);
+}
+.btn.is-busy {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text-2);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--raised);
+  color: var(--text);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.icon-btn.sm {
+  width: 26px;
+  height: 26px;
+}
+
+/* Form controls */
+.input,
+.select,
+.textarea {
+  height: var(--control-h);
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--text);
+  min-width: 0;
+  max-width: 100%;
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-3);
+}
+.textarea {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+  width: 100%;
+}
+.select {
+  padding-right: 28px;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-2) 50%),
+    linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 55%,
+    calc(100% - 10px) 55%;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+.input[aria-invalid="true"],
+.select[aria-invalid="true"] {
+  border-color: var(--fail);
+}
+.input.mono,
+.textarea.mono {
+  font-family: var(--font-mono);
+}
+.field {
+  display: grid;
+  gap: 4px;
+}
+.field > .label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.field-error {
+  color: var(--fail);
+  font-size: 12px;
+}
+
+/* Switch */
+.switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--raised);
+  padding: 0;
+  transition: background var(--t-fast) var(--ease);
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-pill);
+  background: var(--text-2);
+  transition:
+    transform var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+.switch[aria-checked="true"] {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.switch[aria-checked="true"]::after {
+  transform: translateX(16px);
+  background: var(--brand-ink);
+}
+.switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Segmented */
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--raised);
+}
+.segmented button {
+  height: calc(var(--control-h) - 8px);
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.segmented button[aria-pressed="true"] {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.segmented button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* State dot and badge: status colours always come with a word */
+.dot {
+  --status: var(--idle);
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--status);
+  flex: none;
+}
+.dot.s-working {
+  --status: var(--working);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.dot.s-needs {
+  --status: var(--needs);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--needs) 40%, transparent);
+}
+.dot.s-ok,
+.dot.s-done {
+  --status: var(--ok);
+}
+.dot.s-fail {
+  --status: var(--fail);
+}
+.dot.s-idle,
+.dot.s-ready,
+.dot.s-unknown {
+  --status: var(--idle);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.badge {
+  --status: var(--idle);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--r-control);
+  background: color-mix(in srgb, var(--status) 14%, transparent);
+  color: var(--status);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.badge.s-working {
+  --status: var(--working);
+}
+.badge.s-needs {
+  --status: var(--needs);
+}
+.badge.s-ok,
+.badge.s-done {
+  --status: var(--ok);
+}
+.badge.s-fail {
+  --status: var(--fail);
+}
+.badge.neutral {
+  background: var(--raised);
+  color: var(--text-2);
+}
+.count-badge {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--raised);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.count-badge.alert {
+  background: color-mix(in srgb, var(--needs) 18%, transparent);
+  color: var(--needs);
+}
+.count-badge.fail {
+  background: color-mix(in srgb, var(--fail) 18%, transparent);
+  color: var(--fail);
+}
+
+/* Panel */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.panel-head h2 {
+  margin-right: auto;
+}
+.panel-body {
+  padding: 16px;
+}
+.panel-body.flush {
+  padding: 0;
+}
+
+/* Table */
+.table-wrap {
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+}
+.table th {
+  height: 32px;
+  padding: 0 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.table td {
+  height: var(--row-h);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.table th:first-child,
+.table td:first-child {
+  padding-left: 16px;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table tr.clickable {
+  cursor: pointer;
+}
+.table tr.clickable:hover td {
+  background: var(--raised);
+}
+.table tr.selected td {
+  background: var(--brand-soft);
+}
+.table tr.group td {
+  height: 32px;
+  background: var(--raised);
+  font-weight: 600;
+}
+.table td.empty-cell {
+  height: auto;
+  padding: 0;
+}
+
+/* KPI */
+.kpi {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  color: inherit;
+}
+a.kpi:hover {
+  text-decoration: none;
+  background: var(--raised);
+}
+.kpi-value {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-delta {
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skeleton */
+.skeleton {
+  display: block;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--raised);
+}
+.skeleton-row {
+  height: var(--row-h);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.skeleton-row .skeleton {
+  width: 100%;
+}
+
+/* Empty */
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-2);
+}
+.empty h3 {
+  color: var(--text);
+}
+.empty p {
+  max-width: 44ch;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.tabs button {
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.tabs button[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--brand);
+}
+
+/* Sparkline */
+.spark {
+  display: inline-block;
+  vertical-align: middle;
+}
+.spark rect {
+  fill: var(--ok);
+}
+.spark rect.bad {
+  fill: var(--fail);
+}
+
+/* Kbd, Copy */
+.kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--text-2);
+  font: 500 11px/18px var(--font-mono);
+  text-align: center;
+}
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.copy code {
+  padding: 4px 8px;
+  border-radius: var(--r-control);
+  background: var(--raised);
+  overflow: auto;
+  white-space: nowrap;
+}
+
+/* Notice (inline) */
+.notice {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--raised);
+  color: var(--text-2);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.notice.warn {
+  border-color: color-mix(in srgb, var(--needs) 50%, transparent);
+}

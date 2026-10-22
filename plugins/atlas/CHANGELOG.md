@@ -1,5 +1,31 @@
 # Changelog
 
+## 14.0.0 - 2026-10-22 (unreleased)
+
+Command Center v14: the dashboard UI is rebuilt from scratch as a sidebar shell with nine flat pages, and every `ATLAS_*` key is editable in Settings with its current value. Contract: `docs/command-center-redesign.md` (sections 1-11). Breaking changes are listed first.
+
+### Breaking changes
+
+- The Colony and Terminal pages are removed, and the Agents lenses (Roster, Supervise, Board) are gone. `#/colony`, `#/terminal`, `#/herd`, `#/work` and `#/irc` redirect to the page that now owns them (Agents, Board or Channels). Bookmarks of `?lens=` URLs land on the owning page.
+- `plugins/atlas/scripts/dashboard_ui/` is deleted and rebuilt: the v13 pages, CSS, design notes, `contrast.py` and their tests are removed. Pretendard and JetBrains Mono are replaced by vendored Geist fonts (OFL).
+- Settings rows now show the current value, its source and when it applies. `behavior_state()` entries gained `current {value, source, applies}`, `live {value, differs}`, `editable` and `read_only_reason`.
+
+### Added
+
+- Shell and pages: sidebar plus nine flat pages (Overview, Agents, Board, Channels, Activity, Health, Improve, Projects, Settings); component kit `js/ui.js`, plus `api.js`, `state.js`, `router.js`, `pages/*.js` with `*-model.js` and `node:test` files, and a `drawer/` (terminal, messages, tasks).
+- Terminal inside the Agents drawer: `POST /api/v2/term/ticket` then `ws?ticket=`.
+- Settings backend (`scripts/atlas_control.py`): 20 new `_AD` rows so every documented `ATLAS_*` key has a row, 16 keys became toggles, 3 selects (`ATLAS_GATES`, `ATLAS_MODE`, `ATLAS_SEAT_BACKEND`), 7 bounded numbers, and `ATLAS_TYPESAFE_URL` has kind `url`. Tests: `scripts/test_atlas_control_settings.py`.
+
+### Changed
+
+- 5 internal keys moved from the settings catalog to `_INTERNAL` (not shown in the UI).
+- Docs: `README.md`, `plugins/atlas/README.md`, `docs/atlas-workboard.md` and `docs/ROADMAP.md` use the new page list.
+
+### Known
+
+- herdr pane ids are not streamable through `term/ws`; only tmux targets stream in the drawer.
+- The Needs-you wait time is blank when the API row has no `state_changed_at`.
+
 ## 13.0.0 - 2026-10-22
 
 Command Center overhaul: the Terminal becomes a grid of real terminals, Settings becomes a categorized page with verified saves, and the operate pages collapse into one Agents surface. Plan: `docs/plans/2026-10-22-command-center-overhaul.md`. Breaking changes are listed first.
@@ -30,6 +56,7 @@ Command Center overhaul: the Terminal becomes a grid of real terminals, Settings
 - Fallow baselines (`fallow-baselines/dead-code.json`, `health.json`, `dupes.json`) re-saved with fallow 3.26.0 so the plugin commit gate (`fallow audit`, gate new-only) passes again; the Oct 13-16 baselines matched 224 of 2064 health entries and blocked every commit from this checkout.
 - Dead code (finding W3-deadcode): every fallow unused-export finding in sonicwall-mcp, panos-mcp and the dashboard JS is cleared (module-private where the only caller is in-file, deleted where nothing calls it, including the dead fleet overflow menu and the herdr tab/pane rename and close actions); `.fallowrc.json` exempts the dynamically imported `*Handler` exports and registers `theme-boot.js` as an entry; `usage-statusline.ts` render, computeTallies and scopedWindows are split into helpers under cyclomatic 20 with byte-identical output.
 - Dead code, whole repo (finding W3-deadcode-2): every remaining fallow finding outside the vendored tree is cleared. `.fallowrc.json` ignores the vendored herdr-web-ui under `plugins/atlas/colony/`, skill templates and assets; registers the `_shared` templates, per-server dev scripts, the omp test preload and the ninjaone Cloudflare worker as entries; exempts the dynamically imported `*Handler` exports of all nine domain-based servers; and turns `unused-class-member` off under `mcp_node/*/src/` because the node SDKs mirror vendor endpoints the servers only partly consume. In code: `effectClassFor` and `annotationsFor` are module-private in the annotate-tool template and every copy; unused `_helpers` re-exports, list-tool helpers, `resetClient`, `errorResult`, knowbe4 `elicitText`/`elicitConfirmation`, cipp's unused type barrel and `ToolHandler.setServer`, and 20 omp/mod constants are removed or de-exported; `ToolResult` is declared once in `_shared/error-envelope.ts`; the omp `channels` <-> `hook-bridge` cycle is broken by `omp/fault-log.ts` and the dashboard `app.js` <-> `pages/agents.js` cycle by a direct `work.js` import.
+- Live-UI checks are headless only: ui-runtime-tester and tool-routing forbid headed browser windows; Playwright MCP is driven with PLAYWRIGHT_MCP_HEADLESS=1. Root .prettierignore keeps the format_after_edit hook off markdown so agent frontmatter stays single-line.
 
 ### Removed
 

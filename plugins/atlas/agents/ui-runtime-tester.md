@@ -33,7 +33,7 @@ Route: `ctx_search` (`action=semantic` for meaning) over `Grep`; `ctx_batch_exec
 ## Method
 1. **Static gate first** (fast, cheap): typecheck, lint, dead-code, unit tests, prod build - commands derived from `package.json` (never invented). A red here stops you before running the app.
 2. **Run it live**: start the dev server in the background; capture the URL. Route build/server output through `context-mode`.
-3. **Drive the real browser** via the cmux browser (see "Browser toolkit" below) when present, else the **Claude_Preview MCP** (`preview_start`/navigate, `preview_click`, `preview_fill`, `preview_console_logs`, `preview_network`, `preview_screenshot`) or the `webapp-testing` skill (Playwright). Observe and assert:
+3. **Drive the real browser** via the cmux browser (see "Browser toolkit" below) when present, else the **Claude_Preview MCP** (`preview_start`/navigate, `preview_click`, `preview_fill`, `preview_console_logs`, `preview_network`, `preview_screenshot`) or the `webapp-testing` skill (Playwright). The browser is always headless: never launch a headed or visible window, because it steals the operator's focus. Playwright MCP needs `PLAYWRIGHT_MCP_HEADLESS=1` in the environment (or `--headless` in the server args); chrome-devtools-mcp needs `--headless`. If the only available driver is headed, report `[unverified: no headless browser]` instead of opening it. Observe and assert:
    - the target view renders;
    - **console is clean** - capture any error/warning;
    - **network calls fire and succeed** - record URL, method, status, and response shape (this is the bridge to the backend; a failing call here is your handoff to backend/db diagnosis);
@@ -47,7 +47,7 @@ Preferred driver when `cmux capabilities` answers and the `cmux-browser` MCP is 
 - Flow: `browser_snapshot` (interactive) -> take the element `ref` -> act (`browser_click`/`browser_fill`/`browser_type`/`browser_press`) -> `browser_snapshot` again. Never guess selectors.
 - The server shares ONE `defaultSurface` across subagents: `browser_open` once, record the returned surface, and pass that `surface` explicitly on every later call. Never rely on the default.
 - Screenshots: `browser_screenshot` with `output_path=/tmp/atlas-shots/<your-agent-name>-<n>.png`; the report cites that path and the snapshot ref it shows. `browser_console`/`browser_errors`: list only, never clear.
-- Absent cmux or MCP (or not macOS): fall back to Playwright via `bun` (`webapp-testing`) and say so. cmux has no allowed network tool: record request/response shapes via Claude_Preview or Playwright, else `[unverified]`; never claim a cmux observation you did not make.
+- Absent cmux or MCP (or not macOS): fall back to Playwright via `bun` (`webapp-testing`) and say so; that fallback is headless only (`PLAYWRIGHT_MCP_HEADLESS=1` or `--headless`), never a headed window, and a headed-only driver means `[unverified: no headless browser]`. cmux has no allowed network tool: record request/response shapes via Claude_Preview or Playwright, else `[unverified]`; never claim a cmux observation you did not make.
 
 ## Boundaries
 - You do not edit code. If you find the cause, report it precisely for an implementer.

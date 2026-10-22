@@ -8898,5 +8898,155 @@
     "status": "verified",
     "verified_at": "2026-10-22T10:18:34+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "headless-browser-rule",
+    "surface": "atlas",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Headless-only browser rule landed; Playwright MCP headless via settings env; prettierignore stops markdown reflow",
+    "evidence": [
+      "plugins/atlas/hooks/test_atlas_contract.py: Ran 110 tests OK",
+      "git diff --numstat: CHANGELOG 1/0, ui-runtime-tester.md 2/2, tool-routing.md 2/0",
+      "prettier --check plugins/atlas/agents/ui-runtime-tester.md: ignored, rc=0",
+      "~/.claude/settings.json env PLAYWRIGHT_MCP_HEADLESS=1"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_atlas_contract",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T12:35:02+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "headless-rule-reapply",
+    "surface": "atlas",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "headless rule reapplied without prettier reflow; contract test green",
+    "evidence": [
+      ".atlas/evidence/headless-rule-contract-test.txt",
+      "plugins/atlas/hooks/test_atlas_contract.py: Ran 110 tests OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_atlas_contract",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T12:35:58+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "CC14-ACCEPT",
+    "surface": "dashboard_ui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center v14 acceptance (brief section 9)",
+    "evidence": [
+      "1 PASS: 11 routes render, 0 console errors, 0 4xx/5xx; /activity h1 is Channels, /colony and /terminal h1 Agents (aliases)",
+      "2 PASS: live agent rows; drawer Terminal tab shows 'start claude inside tmux or herdr to stream this seat'; Open shell Connected, echo acceptance-ok printed acceptance-ok",
+      "3 PASS: 71/71 ATLAS rows have Current line (api 71); chronicle off persists; optimize always/trigger; threshold 99 -> 'Must be between 1 and 50', stays 4; OPTIMIZE_LOG persists then cleared; search gate 170->12; no 'Undocumented'; 3 model rows are selects",
+      "4 PASS: add -> Open, Start -> In progress, Mark done -> Done column, Remove (confirm dialog) -> /api/v2/todos has 0 matches",
+      "5 PASS: message appeared in tech-tools lead channel feed in ~1s",
+      "6 PASS with defects: light 390px no page horizontal scroll (sw==cw on 4 routes); Agents table and chip rows scroll inside container so TASK/Failed cut off; sidebar theme toggle (light) not reflected by Settings Theme control (still Dark pressed)",
+      "7 PASS: node 51/51; dashboard+settings unittest 93 OK; contract 110 OK (3 skipped)"
+    ],
+    "doc_refs": [],
+    "reproduction": "ATLAS_DASHBOARD_PORT=7492 python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7492 --foreground; headless Playwright per docs/command-center-redesign.md section 9",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-22T13:32:13+00:00",
+    "verified_by": "ui-tester-acceptance"
+  },
+  {
+    "id": "CC14-ACCEPT",
+    "surface": "dashboard_ui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center v14 acceptance (brief section 9), re-run after fixes",
+    "evidence": [
+      "a PASS: #/channels then #/activity after 6s: h1=Activity, 1 table with 312 rows, console errors 0, 4xx/5xx 0; nine routes h1: Overview, Agents, Board, Channels, Activity, Health, Improve, Projects, Settings, all 0 errors",
+      "b FAIL (intermittent): sidebar light then #/settings read Light in some runs, but first pass showed Dark pressed (Current: Dark saved) and a later full reload showed sidebar light with Settings row Dark; sidebar toggle does not reliably persist to the saved pref. Dark via Settings control sets sidebar icon dark: PASS",
+      "c PASS: 390x844 light #/agents: both .table-wrap scrollWidth==clientWidth (399/399), Task column no longer clipped; screenshot .playwright-mcp/acc2-mobile-agents.jpg",
+      "d PASS with race: Enter-only submitted 'acceptance enter' into Open and menu Remove deleted it (curl /api/v2/todos 0 matches); but opening Add task right after a page reload, before projects load, leaves Project select empty and Enter shows 'Pick a project first'",
+      "node --test: 52 tests, 52 pass, 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "ATLAS_DASHBOARD_PORT=7489 python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7489 --foreground; headless Playwright re-acceptance",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-22T13:40:26+00:00",
+    "verified_by": "ui-tester-acceptance"
+  },
+  {
+    "id": "CC14-ACCEPT",
+    "surface": "dashboard_ui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center v14 acceptance (brief section 9), final",
+    "evidence": [
+      "b 4/5 strict (fixed 3s wait): runs 1,2,3,5 sidebar light + Settings row Light pressed + Current Light; run 4 Settings row had no pressed button yet at 3s (render latency). Polled re-run 6/6 correct (Settings theme row took 1.0-6.5s to render); Dark via Settings control: sidebar aria-label dark and localStorage dark 5/5. Theme value never wrong, but Settings page render is slow/variable",
+      "e PASS: reload #/board then Add task: dialog showed disabled 'Loading projects...' select and disabled submit, resolved to first project within seconds; 'final smoke' + Enter added to Open; Remove deleted it; curl /api/v2/todos 0 matches",
+      "f PASS: nine routes h1 Overview, Agents, Board, Channels, Activity, Health, Improve, Projects, Settings; console errors 0, 4xx/5xx 0; overview navigation to h1 40/42/41 ms",
+      "suites: node --test 52/52 pass; test_atlas_dashboard+test_atlas_control_settings 93 OK; test_atlas_contract 110 OK (3 skipped)"
+    ],
+    "doc_refs": [],
+    "reproduction": "ATLAS_DASHBOARD_PORT=7488 python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7488 --foreground; headless Playwright final re-acceptance",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-22T13:49:02+00:00",
+    "verified_by": "ui-tester-acceptance"
+  },
+  {
+    "id": "CC14-ACCEPT",
+    "surface": "dashboard_ui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center v14 acceptance (brief section 9), final",
+    "evidence": [
+      "routes PASS: nine routes (Overview, Agents, Board, Channels, Activity, Health, Improve, Projects, Settings) 0 console errors, 0 4xx/5xx; first paint overview 40-42ms",
+      "agents/shell PASS: live rows, drawer Terminal tab shows attach hint, Open shell Connected and 'echo acceptance-ok' printed acceptance-ok",
+      "settings interactions PASS: 71/71 ATLAS rows have Current; toggle/select/number-range (1..50 inline)/text persist and restored; search narrows; no 'Undocumented'; 3 model rows are selects; after skeletons 170 .setting rows, 0 skeletons, 0 console errors",
+      "board PASS: add -> Open, Start, Done, Remove; Enter-only add works once projects load (disabled Loading projects... state before); curl confirms gone",
+      "channels PASS: message in lead channel feed in ~1s",
+      "mobile PASS: 390px light no page horizontal scroll, agents .table-wrap 399/399",
+      "suites PASS: node 52/52; dashboard+settings unittest 93 OK; contract 110 OK (3 skipped)",
+      "theme b FAIL by strict rule 3/5: Light half 5/5 (sidebar light, Settings row Light pressed + Current Light; row paint 180/2788/782/1786/783 ms, two over 1s); Dark half failed 2/5 only because sidebar aria-label took ~420-930ms to flip after the Settings Dark click and my check waited 700ms; ls dark every time; polled re-run 5/5 sidebar dark in 422-927ms"
+    ],
+    "doc_refs": [],
+    "reproduction": "ATLAS_DASHBOARD_PORT=7487 python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7487 --foreground; headless Playwright final re-acceptance",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-22T13:52:24+00:00",
+    "verified_by": "ui-tester-acceptance"
+  },
+  {
+    "id": "CC14-ACCEPT",
+    "surface": "dashboard_ui",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center v14 acceptance (brief section 9), final",
+    "evidence": [
+      "routes PASS: nine routes h1 Overview, Agents, Board, Channels, Activity, Health, Improve, Projects, Settings; 0 console errors, 0 4xx/5xx; overview nav to h1 40-42ms",
+      "agents/shell PASS: live rows, drawer Terminal tab attach hint, Open shell Connected, echo acceptance-ok printed acceptance-ok",
+      "settings interactions PASS: 71/71 ATLAS rows have Current; toggle/select/number range 1..50 inline/text persist and restored; search narrows; no 'Undocumented'; 3 model rows are selects; 170 .setting rows reached in 523ms, 0 console errors",
+      "board PASS: add -> Open, Start, Done, Remove; Enter-only add with disabled 'Loading projects...' state; curl confirms gone",
+      "channels PASS: message appeared in lead channel feed in ~1s",
+      "mobile PASS: 390px light, no page horizontal scroll, agents .table-wrap 399/399",
+      "suites PASS: node 52/52; dashboard+settings unittest 93 OK; contract 110 OK (3 skipped)",
+      "theme PASS 5/5 polled: Theme row pressed Light with Current Light after 103-104ms; sidebar flips to dark 1-2ms after Settings Dark click; localStorage dark every run"
+    ],
+    "doc_refs": [],
+    "reproduction": "ATLAS_DASHBOARD_PORT=7486 python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7486 --foreground; headless Playwright final re-acceptance",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T13:54:04+00:00",
+    "verified_by": "ui-tester-acceptance"
   }
 ]

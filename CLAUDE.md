@@ -117,6 +117,7 @@ here; do not duplicate it.
 ## Dispatch contract (all denials: `dispatch_denied:<code>`; canonical list in `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md`)
 
 Beyond name, TOOLS and SCOPE above, `hooks/dispatch_tripwire_core.py` also requires: `GOAL:`, `DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (`REQUIRED_SPEC_BLOCKS` :69, deny `... is unbounded: missing <labels>`; REPORT alone is auto-injected; first offense per session is an advisory); exactly one `GOAL:` (:1342, `carries N GOAL: blocks`); numbered `STEPS:` for `atlas:runner` (:644, `must carry numbered STEPS:`); no `model` param (:1317, `overrides model with`); no built-in agent types (:1281, `uses the built-in agent`). Subagents may not dispatch (:197).
+One `GOAL:` per dispatch, written as a single sentence: `GOAL: map the auth call path from login to token refresh.` Two concerns means two dispatches, not two `GOAL:` lines; sub-steps go under `STEPS:` or the body, never as a second `GOAL:` (deny `dispatch_denied:multi_goal`).
 
 ## Completion-gate friction (top blockers, last 14d)
 

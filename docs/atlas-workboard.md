@@ -15,6 +15,8 @@ It reads the shared `~/.atlas/atlas.db`, each project's `.atlas/.run/` (todo boa
 
 ## Information architecture
 
+> Updated 14.0.0: the Command Center is now a sidebar with nine flat pages (Overview, Agents, Board, Channels, Activity, Health, Improve, Projects, Settings). The Colony and Terminal pages and the Agents lenses (Fleet, Board, Channel, Supervision, Colony) described in the table below are removed; `#/colony`, `#/terminal`, `#/herd`, `#/work` and `#/irc` redirect to the owning page. Current contract: `docs/command-center-redesign.md`.
+
 Hash-routed (`#/<page>`, optional `?lens=<lens>`), default `#/overview`. The rail has four groups (Observe, Operate, Improve, Configure) and, under Operate, a live tree of herdr workspaces, tabs and agents; it collapses to a flyout. A project switcher scopes every page (`all` or one project root). Old route ids keep working as aliases that keep the query: `#/herd`, `#/herdr` and `#/console` redirect to `#/colony`, `#/work` is `agents?lens=board`, `#/irc` is `agents?lens=channel`, and `#/agents?lens=colony` (or `lens=console`) also redirects to `#/colony` (`ALIASES` and `route()` in `js/app.js`).
 
 | Group | Page | Question it answers | Backing routes |

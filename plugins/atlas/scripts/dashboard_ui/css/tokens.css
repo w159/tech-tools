@@ -1,195 +1,96 @@
-/* Atlas Command Center design tokens (MASTER sections 5.1-5.7). Dark-first; light via [data-theme="light"];
-   system via prefers-color-scheme; density via [data-density]. Run design/contrast.py after any palette change. */
-:root,
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #0c1215;
-  --chrome: #090e11;
-  --surface-1: #121a1e;
-  --surface-2: #19232a;
-  --surface-3: #212e36;
-  --border: #263540;
-  --border-strong: #62798a;
-  --text: #e6edf0;
-  --text-dim: #9fb0b8;
-  --text-faint: #8394a0;
-  --accent: #2fbd9f;
-  --accent-hover: #4fd1b5;
-  --accent-ink: #05211b;
-  --accent-text: #3fcfb0;
-  --focus: #7fe0cb;
-  --st-ok: #52c872;
-  --st-working: #62b8e6;
-  --st-input: #f2aa40;
-  --st-fail: #ff7570;
-  --st-idle: #93a4ac;
-  --st-sub: #b5a3fa;
-  --fail-ink: #1a0605;
-  --overlay: rgba(3, 7, 9, 0.62);
-  --elev-1: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border-strong);
-  --elev-2: -14px 0 36px rgba(0, 0, 0, 0.45);
-  --elev-3: 0 24px 64px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--border-strong);
+/* Design tokens. Dark is the default; html[data-theme=light] overrides. */
+@font-face {
+  font-family: "Geist";
+  src: url("../fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
-
-:root[data-theme="light"] {
-  color-scheme: light;
-  --bg: #f2f6f7;
-  --chrome: #e8eef0;
-  --surface-1: #ffffff;
-  --surface-2: #edf2f4;
-  --surface-3: #e0e8eb;
-  --border: #d0dbdf;
-  --border-strong: #73868f;
-  --text: #12222a;
-  --text-dim: #465962;
-  --text-faint: #566a74;
-  --accent: #0c7d6c;
-  --accent-hover: #096354;
-  --accent-ink: #ffffff;
-  --accent-text: #0a6e5f;
-  --focus: #0a6e5f;
-  --st-ok: #17692f;
-  --st-working: #0a6396;
-  --st-input: #8a4b00;
-  --st-fail: #ac211a;
-  --st-idle: #4f616a;
-  --st-sub: #5b3bb8;
-  --fail-ink: #ffffff;
-  --overlay: rgba(18, 34, 42, 0.38);
-  --elev-1: 0 6px 18px rgba(18, 34, 42, 0.14), 0 0 0 1px var(--border);
-  --elev-2: -14px 0 36px rgba(18, 34, 42, 0.16);
-  --elev-3: 0 24px 64px rgba(18, 34, 42, 0.2), 0 0 0 1px var(--border);
-}
-
-@media (prefers-color-scheme: light) {
-  :root[data-theme="system"] {
-    color-scheme: light;
-    --bg: #f2f6f7;
-    --chrome: #e8eef0;
-    --surface-1: #ffffff;
-    --surface-2: #edf2f4;
-    --surface-3: #e0e8eb;
-    --border: #d0dbdf;
-    --border-strong: #73868f;
-    --text: #12222a;
-    --text-dim: #465962;
-    --text-faint: #566a74;
-    --accent: #0c7d6c;
-    --accent-hover: #096354;
-    --accent-ink: #ffffff;
-    --accent-text: #0a6e5f;
-    --focus: #0a6e5f;
-    --st-ok: #17692f;
-    --st-working: #0a6396;
-    --st-input: #8a4b00;
-    --st-fail: #ac211a;
-    --st-idle: #4f616a;
-    --st-sub: #5b3bb8;
-    --fail-ink: #ffffff;
-    --overlay: rgba(18, 34, 42, 0.38);
-    --elev-1: 0 6px 18px rgba(18, 34, 42, 0.14), 0 0 0 1px var(--border);
-    --elev-2: -14px 0 36px rgba(18, 34, 42, 0.16);
-    --elev-3: 0 24px 64px rgba(18, 34, 42, 0.2), 0 0 0 1px var(--border);
-  }
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 :root {
-  /* 4px spacing scale */
-  --s-1: 4px;
-  --s-2: 8px;
-  --s-3: 12px;
-  --s-4: 16px;
-  --s-5: 20px;
-  --s-6: 24px;
-  --s-8: 32px;
-  --s-10: 40px;
-  --s-12: 48px;
+  color-scheme: dark;
+  --font-sans:
+    "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* radius tiers */
-  --r-1: 4px;
-  --r-2: 8px;
-  --r-3: 12px;
+  --canvas: #0b0e13;
+  --panel: #11151c;
+  --raised: #171c25;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --text: #e8ecf1;
+  --text-2: #9aa4b2;
+  --text-3: #6b7684;
+  --brand: #3ddbb8;
+  --brand-ink: #04221b;
+  --brand-soft: rgba(61, 219, 184, 0.12);
+  --ok: #56c98a;
+  --working: #5bb2f0;
+  --needs: #f5b14a;
+  --fail: #f2705f;
+  --idle: #8793a3;
+  --focus: #7fe9d2;
+
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line);
+  --scrim: rgba(3, 5, 8, 0.6);
+
+  --r-control: 6px;
+  --r-panel: 10px;
   --r-pill: 999px;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
 
-  --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono Web", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --fs-2xs: 11px;
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 28px;
-
-  /* layout */
-  --rail-w: 232px;
-  --topbar-h: 52px;
-  --inspector-w: 420px;
-  --content-max: 1320px;
-  --page-pad: 24px;
-
-  /* density: comfortable */
-  --fs-body: 14px;
-  --ctl-h: 32px;
+  --control-h: 32px;
   --row-h: 40px;
-  --tree-row-h: 36px;
-  --pad-card: 16px;
-  --pad-row: 12px;
-  --gap: 16px;
-  --cell-w: 56px;
-  --cell-h: 64px;
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 56px;
+  --drawer-w: 440px;
+  --modal-w: 520px;
 
-  /* motion */
-  --dur-instant: 0ms;
-  --dur-fast: 100ms;
-  --dur: 160ms;
-  --dur-slow: 240ms;
-  --dur-live: 600ms;
-  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-linear: linear;
-
-  /* z-index */
-  --z-sticky: 10;
-  --z-chrome: 20;
-  --z-popover: 40;
-  --z-drawer: 50;
-  --z-modal: 60;
-  --z-toast: 70;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 120ms;
 }
 
-:root[data-density="compact"] {
-  --fs-body: 13px;
-  --ctl-h: 28px;
-  --row-h: 30px;
-  --tree-row-h: 28px;
-  --pad-card: 12px;
-  --pad-row: 8px;
-  --gap: 12px;
-  --cell-w: 44px;
-  --cell-h: 50px;
+html[data-theme="light"] {
+  color-scheme: light;
+  --canvas: #f5f7f9;
+  --panel: #ffffff;
+  --raised: #eef1f5;
+  --line: rgba(15, 20, 25, 0.08);
+  --line-strong: rgba(15, 20, 25, 0.22);
+  --text: #0f1419;
+  --text-2: #4a5564;
+  --text-3: #6f7a88;
+  --brand: #0e8a74;
+  --brand-ink: #ffffff;
+  --brand-soft: rgba(14, 138, 116, 0.1);
+  --ok: #1b7a45;
+  --working: #0b6bb5;
+  --needs: #8a5300;
+  --fail: #b3261e;
+  --idle: #5c6875;
+  --focus: #0e8a74;
+  --shadow-float: 0 12px 32px rgba(15, 20, 25, 0.18), 0 0 0 1px var(--line);
+  --scrim: rgba(15, 20, 25, 0.35);
 }
 
-@media (min-width: 1920px) {
-  :root { --inspector-w: 480px; }
+/* Density pref (default compact per brief 3.4). */
+html[data-density="comfortable"] {
+  --control-h: 36px;
 }
-
-@media (max-width: 767px) {
-  :root { --page-pad: 16px; --topbar-h: 48px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --dur-fast: 0ms;
-    --dur: 0ms;
-    --dur-slow: 0ms;
-  }
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
+html[data-density="compact"] {
+  --control-h: 32px;
 }

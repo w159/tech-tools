@@ -39,7 +39,9 @@
   "ignoreExports": [
     {
       "file": "mcp_servers/_shared/response-shaper.ts",
-      "exports": ["makeShapeZodFields"]
+      "exports": [
+        "makeShapeZodFields"
+      ]
     },
     {
       "file": "mcp_servers/sonicwall-mcp/src/domains/*.ts",
@@ -161,6 +163,12 @@
         "vulnerabilitiesHandler",
         "policiesHandler",
         "monitoredComputersHandler"
+      ]
+    },
+    {
+      "file": "plugins/atlas/scripts/dashboard_ui/js/drawer/{messages,tasks,terminal}.js",
+      "exports": [
+        "*"
       ]
     }
   ],

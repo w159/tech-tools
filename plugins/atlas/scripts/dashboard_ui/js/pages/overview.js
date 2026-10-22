@@ -1,214 +1,247 @@
-// Overview: KPIs, attention feed (actionable only), trend, recent runs.
+// Overview (brief 5.1): needs you, six numbers, running now, recent runs.
+import { h, relTime, duration, num, delta, truncate } from "../dom.js";
+import { get, topics } from "../api.js";
+import { buildHash } from "../router.js";
+import {
+  PageHeader,
+  Panel,
+  KPI,
+  Table,
+  StateDot,
+  Badge,
+  Button,
+  Empty,
+} from "../ui.js";
+import {
+  normalizeWindow,
+  projectParam,
+  projectLabel,
+  secondsBetween,
+  severityState,
+  parseTarget,
+} from "./monitor-model.js";
+import {
+  kpiLink,
+  runningNow,
+  waitingAgents,
+  runState,
+} from "./overview-model.js";
+import { mountView, WindowControl } from "./monitor-view.js";
 
-import { h, debounce, fmtRelative, patchInto } from "../dom.js";
-import { stableJson } from "../api.js";
-import { reportFetchFail, clearFetchFail } from "../fetch-fail.js";
-import { Kpi, Card, Badge, StatusDot, Table, LineChart, EmptyState, toastError } from "../components.js";
-import { IntegrationsRow } from "../integrations.js";
-import { actionButton, dismissButton } from "../health-actions.js";
+const MAX_ATTENTION = 8;
 
-function attentionItem(item, ctx, subs, onDismissed) {
-  const sev = item.severity === "fail" || item.severity === "warn" ? item.severity : "info";
-  const meta = [];
-  if (item.project) meta.push(String(item.project).split("/").filter(Boolean).pop() || item.project);
-  if (item.count > 1) meta.push(item.count + " occurrences");
-  if (item.last) meta.push("last " + fmtRelative(item.last));
-  const action = item.action && item.action.target ? item.action : null;
-  return h(
-    "li",
-    { class: "attn-item", "data-severity": sev },
-    StatusDot({ status: sev }),
-    h(
-      "div",
-      { class: "grow" },
-      h("div", { class: "title" }, h("span", { class: "sr-only" }, sev === "fail" ? "Failure: " : sev === "warn" ? "Warning: " : "Note: "), item.title || "Untitled"),
-      item.detail ? h("div", { class: "detail" }, item.detail) : null,
-      item.what ? h("div", { class: "detail" }, item.what) : null,
-      item.next ? h("div", { class: "detail" }, h("strong", null, "Do this: "), item.next) : null,
-      meta.length ? h("div", { class: "meta" }, meta.join("  |  ")) : null
-    ),
-    action ? h("button", { class: "btn btn-sm", type: "button", onClick: () => ctx.navigate(action.target) }, action.label || "Open") : null,
-    item.kind ? actionButton({ kind: item.kind, sample: item.detail, next: item.next, finding_id: item.finding_id, session_id: item.session_id }, subs, ctx.navigate) : null,
-    item.kind ? dismissButton(item, ctx.api, onDismissed) : null
-  );
-}
-
-function runsTable(rows) {
-  return Table({
-    dense: true,
-    caption: "Recent runs",
-    empty: "No runs in this window.",
-    rows,
-    columns: [
-      { key: "status", label: "State", render: (r) => Badge({ status: r.state === "done" ? "ok" : r.state === "running" ? "info" : "warn", text: r.state === "unfinished" ? "never closed" : r.state || "done" }) },
-      { key: "name", label: "Session turn", render: (r) => h("span", null, r.task || [r.kind, r.model].filter(Boolean).join(" · ") || "(no summary)") },
-      { key: "project", label: "Project", render: (r) => (r.project ? String(r.project).split("/").filter(Boolean).pop() : "") },
-      { key: "started", label: "Started", render: (r) => h("span", { class: "dim", style: { whiteSpace: "nowrap" } }, fmtRelative(r.started || r.ts)) },
-    ],
-  });
-}
-
-// Overview data = the overview payload plus a health roll-up and live agent counts, fetched together so one key covers all.
-async function fetchAll(ctx) {
-  const [ov, health] = await Promise.all([
-    ctx.api.get("overview", { project: ctx.project, window: "7d" }),
-    ctx.api.get("/api/v2/health", { window: "7d", ...(ctx.project && ctx.project !== "all" ? { project: ctx.project } : {}) }).then((r) => { clearFetchFail("/api/v2/health"); return r; }, (e) => { reportFetchFail("overview", "/api/v2/health", e); return null; }),
-  ]);
-  return { ...ov, health, counts: { ...ctx.agents.getState().counts } };
-}
-
-// "Is Atlas healthy, what is running, what needs me" — three answers, each a link into its detail page.
-function healthKpi(d, ctx) {
-  const subs = (d.health && d.health.subsystems) || [];
-  const bad = subs.filter((s) => s.status === "fail").length;
-  const warn = subs.filter((s) => s.status === "warn").length;
-  let value = "Healthy";
-  let status = "ok";
-  if (!d.health) {
-    value = "Unknown";
-    status = undefined;
-  } else if (bad) {
-    value = bad + " failing";
-    status = "fail";
-  } else if (warn) {
-    value = warn + " warning" + (warn > 1 ? "s" : "");
-    status = "warn";
+function needsPanel(ctx, overview, agents) {
+  const waiting = waitingAgents(agents, ctx.project);
+  const items = overview.attention || [];
+  const rows = [];
+  for (const a of waiting) {
+    rows.push(
+      h(
+        "li",
+        { class: "attn-row" },
+        StateDot("input"),
+        h(
+          "div",
+          { class: "attn-main" },
+          h("strong", {}, a.name),
+          h(
+            "span",
+            { class: "meta" },
+            `${projectLabel(a.project)} - waiting ${relTime(a.since) || "now"}`,
+          ),
+        ),
+        Button(
+          {
+            size: "sm",
+            onClick: () =>
+              ctx.navigate("agents", {
+                agent: a.key,
+                project: projectParam(ctx.project),
+              }),
+          },
+          "Open",
+        ),
+      ),
+    );
   }
-  const hint = d.health ? bad + " failing, " + warn + " warning of " + subs.length + " subsystems, last 7 days (same as the Health page). Open Health." : "Health check did not answer.";
-  return Kpi({ label: "Is Atlas healthy?", value, status, hint, onClick: () => ctx.navigate("health") });
-}
-
-function needsKpi(c, attention, ctx) {
-  const input = c.input || 0;
-  const fail = c.fail || 0;
-  const items = attention.filter((a) => a.severity === "fail" || a.severity === "warn").length;
-  const needs = input + fail + items;
-  const hint = needs ? input + " agents waiting for input, " + fail + " failed, " + items + " attention items below. Same count as the top bar." : "Nothing is waiting on you.";
-  return Kpi({ label: "What needs me?", value: String(needs), status: needs ? "warn" : "ok", hint, onClick: () => ctx.navigate(input || fail ? "agents" : "overview#attention") });
-}
-
-function glance(d, ctx, attention) {
-  const c = d.counts || {};
-  return h(
-    "div",
-    { class: "kpi-grid ov-glance" },
-    healthKpi(d, ctx),
-    Kpi({ label: "What is running now?", value: String(c.working || 0), status: c.working ? "ok" : undefined, hint: (c.working || 0) + " working, " + (c.idle || 0) + " ready. Open Agents.", onClick: () => ctx.navigate("agents") }),
-    needsKpi(c, attention, ctx)
+  for (const it of items.slice(0, MAX_ATTENTION)) {
+    const sev = severityState(it.severity);
+    const target = parseTarget(it.action && it.action.target);
+    rows.push(
+      h(
+        "li",
+        { class: "attn-row" },
+        StateDot(sev.raw, { word: sev.word }),
+        h(
+          "div",
+          { class: "attn-main" },
+          h("strong", {}, truncate(it.title, 90)),
+          h(
+            "span",
+            { class: "meta" },
+            truncate(it.detail || it.what || "", 140),
+          ),
+        ),
+        target.route &&
+          Button(
+            {
+              size: "sm",
+              onClick: () =>
+                ctx.navigate(target.route, {
+                  project: projectParam(ctx.project),
+                  focus: target.focus,
+                }),
+            },
+            (it.action && it.action.label) || "Open",
+          ),
+      ),
+    );
+  }
+  const more = items.length - MAX_ATTENTION;
+  return Panel(
+    { title: "Needs you" },
+    rows.length
+      ? h("ul", { class: "attn-list" }, rows)
+      : h(
+          "p",
+          { class: "calm" },
+          StateDot("done", { word: "Nothing needs you." }),
+        ),
+    more > 0 && h("p", { class: "meta" }, `${more} more in Health.`),
   );
 }
 
-function pageHead(ctx) {
-  const sub = ctx.project === "all" ? "Everything Atlas touched across your projects in the last 7 days." : "Last 7 days in " + (ctx.project.split("/").filter(Boolean).pop() || ctx.project) + ".";
-  return h("div", { class: "page-head" }, h("div", null, h("h1", null, "Overview"), h("p", { class: "sub" }, sub)));
-}
-
-function weekKpi(k, ctx) {
-  const noDelta = k.delta === null || k.delta === undefined;
-  const hint = noDelta && typeof k.prior === "number" ? "prior 7 days: " + k.prior + ". " + (k.hint || "") : k.hint;
-  const target = { agents: "agents", todos: "agents?lens=board" }[k.id];
-  return Kpi({ label: k.label, value: k.value, delta: k.delta, status: k.status, hint, onClick: target ? () => ctx.navigate(target) : null });
-}
-
-function attentionCard(d, attention, ctx, onDismissed) {
-  const subs = (d.health && d.health.subsystems) || [];
-  const actionable = attention.filter((a) => a.severity === "fail" || a.severity === "warn").length;
-  const historic = d.attention_historic;
-  return Card({
-    id: "attention",
-    title: "Needs you: attention items" + (attention.length ? " (" + actionable + ")" : ""),
-    flush: true,
-    children: [
-      attention.length
-        ? h("ul", { class: "attn-list" }, attention.map((a) => attentionItem(a, ctx, subs, onDismissed)))
-        : h("div", { style: { padding: "var(--pad-card)" } }, h("div", { class: "row" }, StatusDot({ status: "ok" }), h("span", null, "Nothing needs you right now. Failures, stuck agents and blocked work show up here when they happen."))),
-      historic ? h("div", { class: "detail", style: { padding: "var(--pad-card)" } }, historic + " older failure" + (historic > 1 ? "s" : "") + " in the last 7 days have not recurred in 24h and need no action; they are listed as historic in Health.") : null,
-    ],
+function numbers(ctx, overview) {
+  const p = projectParam(ctx.project);
+  const win = normalizeWindow(ctx.params.window);
+  const tiles = (overview.kpis || []).slice(0, 6).map((k) => {
+    const link = kpiLink(k.id);
+    const d = delta(k.delta);
+    return KPI({
+      label: k.label,
+      value: num(k.value),
+      delta: d ? `${d}% vs previous ${win}` : "",
+      href: link
+        ? buildHash(link.route, { ...link.params, project: p, window: win })
+        : undefined,
+    });
   });
+  return h("div", { class: "grid-kpi" }, tiles);
 }
 
-function sideColumn(trend, runs) {
-  const t = trend || { labels: [], series: [] };
-  return h(
-    "div",
-    { class: "stack" },
-    Card({ title: "Activity trend", children: [t.series && t.series.length ? LineChart({ labels: t.labels, series: t.series, height: 160 }) : h("p", { class: "dim" }, "No trend data yet.")] }),
-    Card({ title: "Recent runs", flush: true, children: [runsTable(runs)] })
+function runningPanel(ctx, agents) {
+  const rows = runningNow(agents, ctx.project, 8);
+  return Panel(
+    {
+      title: "Running now",
+      actions: h(
+        "a",
+        { href: buildHash("agents", { project: projectParam(ctx.project) }) },
+        "See all agents",
+      ),
+    },
+    Table({
+      columns: [
+        { key: "state", label: "State", render: (r) => StateDot(r.state) },
+        {
+          key: "name",
+          label: "Agent",
+          render: (r) => h("span", { class: "mono" }, r.name),
+        },
+        { key: "task", label: "Task", render: (r) => truncate(r.task, 60) },
+        {
+          key: "since",
+          label: "Since",
+          class: "num",
+          render: (r) => relTime(r.since),
+        },
+      ],
+      rows,
+      empty: Empty({ title: "No agents running." }),
+    }),
   );
 }
 
-function emptyOverview() {
-  return EmptyState({ icon: "overview", title: "No Atlas activity recorded yet", body: "Run a session with the Atlas plugin enabled and this page fills in. Start with a project that has a .atlas directory.", command: "atlas doctor" });
+function runsPanel(overview) {
+  const rows = (overview.recent_runs || []).slice(0, 10);
+  return Panel(
+    { title: "Recent runs" },
+    Table({
+      columns: [
+        {
+          key: "started",
+          label: "Started",
+          class: "num",
+          render: (r) => relTime(r.started),
+        },
+        {
+          key: "project",
+          label: "Project",
+          render: (r) => projectLabel(r.project),
+        },
+        { key: "kind", label: "Kind", render: (r) => Badge(r.kind || "run") },
+        {
+          key: "task",
+          label: "Task",
+          render: (r) => truncate(r.task || "", 50),
+        },
+        {
+          key: "dur",
+          label: "Duration",
+          class: "num",
+          render: (r) =>
+            runState(r) === "running"
+              ? "running"
+              : duration(secondsBetween(r.started, r.ended)),
+        },
+      ],
+      rows,
+      empty: Empty({ title: "No runs in this window." }),
+    }),
+  );
 }
 
-let refresher = null;
-let lastKey = "";
-
-export default {
-  id: "overview",
-  title: "Overview",
-  icon: "overview",
-  group: "Observe",
-
-  async load(ctx) {
-    return fetchAll(ctx);
-  },
-  render(ctx, data) {
-    const d = data || {};
-    lastKey = stableJson(d);
-    const kpis = d.kpis || [];
-    const attention = d.attention || [];
-    ctx.store.set("attention", attention);
-    const runs = d.recent_runs || [];
-
-    const root = h("div", { class: "page", id: "overview-root" });
-    root.appendChild(pageHead(ctx));
-    root.appendChild(IntegrationsRow());
-
-    root.appendChild(h("h2", { class: "ov-h" }, "Right now", h("span", { class: "dim" }, " — click a card for the detail page")));
-    root.appendChild(glance(d, ctx, attention));
-    root.appendChild(h("h2", { class: "ov-h" }, "Last 7 days", h("span", { class: "dim" }, " — counted from the Atlas database")));
-    root.appendChild(kpis.length ? h("div", { class: "kpi-grid" }, kpis.map((k) => weekKpi(k, ctx))) : null);
-    root.appendChild(h("div", { class: "ov-grid" }, attentionCard(d, attention, ctx, () => this.reload(ctx)), sideColumn(d.trend, runs)));
-    if (!kpis.length && !attention.length && !runs.length) root.appendChild(emptyOverview());
-    return root;
-  },
-
-  // After a dismissal: refetch and patch in place so the card, KPI and top-bar badge drop it.
-  async reload(ctx) {
-    try {
-      const data = await fetchAll(ctx);
-      lastKey = stableJson(data);
-      const old = document.getElementById("overview-root");
-      if (old) patchInto(old, this.render(ctx, data));
-    } catch (err) {
-      toastError(err);
-    }
-  },
-
-  onEvent(evt, ctx) {
-    if (evt !== "health" && evt !== "herd" && evt !== "todos" && !(evt === "tick" && ctx.api.mode === "poll")) return;
-    if (!refresher) {
-      refresher = debounce(async () => {
-        try {
-          const data = await fetchAll(ctx);
-          ctx.store.set("attention", data.attention || []);
-          const key = stableJson(data);
-          if (key === lastKey) return;
-          lastKey = key;
-          const host = document.getElementById("page-root");
-          const old = document.getElementById("overview-root");
-          if (host && old) patchInto(old, this.render(ctx, data));
-        } catch (err) {
-          toastError(err);
-        }
-      }, 2500);
-    }
-    refresher();
-  },
-
-  destroy() {
-    if (refresher) refresher.cancel();
-    refresher = null;
-  },
-};
+export function render(ctx) {
+  const win = normalizeWindow(ctx.params.window);
+  const header = PageHeader({
+    title: "Overview",
+    description: "What needs you, what is running, what broke.",
+    actions: WindowControl(ctx),
+  });
+  let unsubAgents = null;
+  const stop = mountView(ctx.root, header, {
+    stores: [topics.health],
+    load: async () => {
+      const [overview, agents] = await Promise.all([
+        get("/api/v2/overview", {
+          window: win,
+          project: projectParam(ctx.project),
+        }),
+        topics.agents.get() || get("/api/v2/agents"),
+      ]);
+      return { overview, agents };
+    },
+    paint: ({ overview, agents }) => {
+      // The agent-driven panels repaint on the live agents topic without refetching the numbers.
+      const needs = h("div", {}, needsPanel(ctx, overview, agents));
+      const running = h("div", {}, runningPanel(ctx, agents));
+      if (unsubAgents) unsubAgents();
+      unsubAgents = topics.agents.subscribe((a) => {
+        if (!a) return;
+        needs.replaceChildren(needsPanel(ctx, overview, a));
+        running.replaceChildren(runningPanel(ctx, a));
+      });
+      return h(
+        "div",
+        { class: "stack" },
+        needs,
+        numbers(ctx, overview),
+        h("div", { class: "cols-2" }, running, runsPanel(overview)),
+      );
+    },
+  });
+  return () => {
+    stop();
+    if (unsubAgents) unsubAgents();
+  };
+}

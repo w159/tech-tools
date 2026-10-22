@@ -41,7 +41,7 @@ class TestAtlasDashboard(unittest.TestCase):
         self.addCleanup(srv.server_close)
         self.addCleanup(srv.shutdown)
         base = f"http://127.0.0.1:{srv.server_address[1]}"
-        for path in ("/", "/ui/js/app.js", "/ui/js/pages/terminal.js"):
+        for path in ("/", "/ui/js/app.js", "/ui/js/pages/overview.js"):
             with urllib.request.urlopen(base + path, timeout=10) as resp:
                 self.assertEqual(resp.headers["Cache-Control"], "no-store", path)
 

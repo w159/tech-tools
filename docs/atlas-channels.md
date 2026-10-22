@@ -83,6 +83,8 @@ Delivery is `worker_inbox.drain`, called from the PostToolUse path of the dispat
 
 ## Dashboard
 
+> Updated 14.0.0: Channels is one of nine flat pages (`#/channels`; `#/irc` redirects) and the colony roster is on `#/agents`; see `docs/command-center-redesign.md`. Lens and Colony page names below describe the v13 UI.
+
 The Channels page is `#/channels` (`js/pages/channels.js`; aliases `#/irc` and `#/agents?lens=channel`), the same Channel view as below as a top-level Operate page. The Colony roster (`#/colony`) reads the registry through `GET /api/v2/colony`; its states and routes are in `docs/atlas-colony.md`.
 
 | Route | Use |

@@ -8,6 +8,11 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ### Command Center next (added 2026-10-22, after 13.0.0)
 
+The 14.0.0 redesign (`docs/command-center-redesign.md`) rebuilt the UI and replaced the v13 pages, so the v13 items below that name `channel-sync.js`, the Roster or the old Settings page are superseded by the rebuild and stay listed only until re-checked against the new pages.
+
+- [planned] herdr pane ids are not streamable through `term/ws`; only tmux targets stream in the Agents drawer terminal.
+- [planned] Needs-you wait time is blank when the API row has no `state_changed_at`.
+
 Branch `worker/w3-polish` is in flight for the first four; none is verified yet. Source: `.atlas/.run/cc-w1-runtime.md`, `cc-w3-runtime.md`.
 
 - [in-progress] `plugins/atlas/scripts/dashboard_ui/js/channel-sync.js:16` throws `Illegal invocation` when SSE is not live (`timers.set(tick, fallbackMs)` calls `setInterval` with `this = timers`), so the 30 s fallback poll never starts. Suggested fix in the report: default `timers = { set: (f,ms)=>setInterval(f,ms), clear: (i)=>clearInterval(i) }`. Awaiting verification.

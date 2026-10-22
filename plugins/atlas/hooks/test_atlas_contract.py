@@ -1711,7 +1711,7 @@ class TodoBoardContract(unittest.TestCase):
         self.assertNotIn("UI_HTML", server)
         ui_dir = SCRIPTS_DIR / "dashboard_ui"
         self.assertTrue((ui_dir / "index.html").is_file())
-        self.assertTrue((ui_dir / "js" / "pages" / "work.js").is_file())
+        self.assertTrue((ui_dir / "js" / "pages" / "board.js").is_file())
         for module, routes in (
             ("atlas_dash_work.py", ("/api/v2/todos",)),
             ("atlas_dash_irc.py", ("/api/v2/irc",)),

@@ -1,10 +1,17 @@
 # Changelog
 
+## 14.0.0 (2026-10-22, unreleased)
+
+### Added
+
+- Command Center v14 redesign. `dashboard_ui/` rebuilt as a sidebar shell with nine flat pages (Overview, Agents, Board, Channels, Activity, Health, Improve, Projects, Settings), Geist fonts, component kit `js/ui.js`, and a terminal in the Agents drawer (`POST /api/v2/term/ticket` then `ws?ticket=`). Settings: every `ATLAS_*` key has a row (20 new `_AD` rows in `scripts/atlas_control.py`), typed controls, and `behavior_state()` returns `current`, `live`, `editable`, `read_only_reason`. Breaking: Colony and Terminal pages and the lenses are removed; `#/colony`, `#/terminal`, `#/herd`, `#/work`, `#/irc` redirect. Narrative and Known items: `plugins/atlas/CHANGELOG.md` 14.0.0; contract: `docs/command-center-redesign.md`. Test: `scripts/test_atlas_control_settings.py`.
+
 ## 13.0.0 (2026-10-22, unreleased)
 
 ### Added
 
 - Command Center overhaul. Terminal is a seat grid of real terminals (`GET /api/v2/term/seats`, shell and TUI seats, single-use `POST /api/v2/term/ticket` then `ws?ticket=`, `ATLAS_TERM_IDLE_S` idle close); Settings is one category at a time with `kind options range effect applies scope layers` on every knob, verified saves (`{ok,key,wanted,layers[],applies}`), writable shell-scope rows (claude settings `env`, omp `config.yml` `env`, `~/.atlas/env.sh` plus one guarded `~/.zshenv` line) and an Ollama model picker (`/api/v2/ollama/*`); Agents has Roster, Supervise and Board lenses with `#/colony`, `#/board`, `#/supervise` as aliases, one send path and Channels on the SSE `irc` event. Also: tmux is the default worker transport; automatic GitHub release per atlas version. Breaking: Terminal semantics (`atlas_tui` is one TUI seat), `token=` ws auth deprecated. Narrative, verdict lines and Known items: `plugins/atlas/CHANGELOG.md` 13.0.0; plan: `docs/plans/2026-10-22-command-center-overhaul.md`. Verified: findings W1-*, W2-*, W3-*, `transport-default`, `releases` in `.atlas/.run/findings.json`; runtime reports `.atlas/.run/cc-w1-runtime.md`, `cc-w2-runtime.md`, `cc-w3-runtime.md`. Open: see ROADMAP "Command Center next".
+- Live-UI checks are headless only. `agents/ui-runtime-tester.md` and `atlas-orchestrate/references/tool-routing.md` forbid headed browser windows (Playwright MCP via `PLAYWRIGHT_MCP_HEADLESS=1`, chrome-devtools-mcp via `--headless`; a headed-only driver reports `[unverified: no headless browser]`). Root `.prettierignore` keeps the `format_after_edit` hook off markdown so agent frontmatter stays single-line for `test_atlas_contract`. Verified: `test_atlas_contract` Ran 110 OK; findings `headless-browser-rule`, `headless-rule-reapply`; evidence `.atlas/evidence/headless-rule-contract-test.txt`.
 
 ## 12.8.0 (2026-10-22, unreleased)
 
