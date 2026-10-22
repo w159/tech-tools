@@ -233,9 +233,8 @@ _k(
     _GR,
     "Completion gate",
     "Blocks a 'done' claim that has no verified finding, and flags source changes with no matching docs/ update.",
-    default="",
-    on="",
-    details="Off removes atlas's main evidence guarantee and also disables the worker report gate. Empty (the default) means on.",
+    default="on",
+    details="Off removes atlas's main evidence guarantee and also disables the worker report gate. Unset also means on.",
 )
 _k(
     "ATLAS_TRIPWIRE",
@@ -378,9 +377,8 @@ _k(
     _OMP,
     "Run atlas hooks inside omp",
     "The omp extension runs atlas's Claude hooks inside omp. `off` disables every bridged guardrail under omp.",
-    default="",
+    default="on",
     scope="shell",
-    on="",
 )
 _k(
     "ATLAS_BRIDGE_HOOK_TIMEOUT_S",
@@ -405,9 +403,8 @@ _k(
     _OMP,
     "Advisor gate",
     "Blocks stopping under omp while advisor items are open on the atlas board. `off` skips it.",
-    default="",
+    default="on",
     scope="shell",
-    on="",
 )
 # --- knobs added from the discovered ATLAS_* readers; each `details` names the line that reads it ---
 # Session automation

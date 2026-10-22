@@ -454,3 +454,21 @@ test("boolean connector credential renders a switch; a text one still renders an
   page.destroy();
   globalThis.location.search = "";
 });
+
+test("a toggle whose on value is 'on' and value is unset paints On and POSTs off on click", async () => {
+  const api = mkApi();
+  const row = SettingRow({ ...KNOBS[0], on: "on", off: "off", value: "", default: "on" }, deps(api));
+  const sw = byTag(row, "button")[0];
+  expect(sw.textContent).toBe("On");
+  await sw.listeners.click();
+  expect(api.posts[0][1].updates.ATLAS_TRIPWIRE).toBe("off");
+});
+
+test("a toggle with an empty on value and an unset value paints On and POSTs off on click", async () => {
+  const api = mkApi();
+  const row = SettingRow({ ...KNOBS[0], on: "", off: "off", value: "", default: "" }, deps(api));
+  const sw = byTag(row, "button")[0];
+  expect(sw.textContent).toBe("On");
+  await sw.listeners.click();
+  expect(api.posts[0][1].updates.ATLAS_TRIPWIRE).toBe("off");
+});
