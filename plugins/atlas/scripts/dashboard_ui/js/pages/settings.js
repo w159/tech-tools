@@ -19,8 +19,7 @@
 // navigating away from Settings while credential drafts are unsaved.
 import { h, replace } from '../dom.js';
 import { Badge, Card, EmptyState, StatusDot, confirm } from '../components.js';
-import { SettingRow, CATEGORIES, slug, categoryOf, rowMatches, countByCategory } from '../settings-row.js';
-import { IntegrationsPanel } from '../integrations.js';
+import { SettingRow, rowMatches } from '../settings-row.js';
 
 import { DEFAULT_NAV, normalizeNav } from '../nav-order.js';
 
@@ -43,16 +42,33 @@ function describeError(err) {
 
 let S = null;
 
-// One category at a time: ?cat= picks it, else the first. A non-empty filter overrides and shows every match.
-function initialCat() {
-  let c = null;
-  try { c = new URLSearchParams((globalThis.location && globalThis.location.search) || '').get('cat'); } catch { /* no location */ }
-  return CATEGORIES.includes(c) ? c : CATEGORIES[0];
+// Five tabs, one visible at a time. ?tab= picks it; a legacy ?cat= maps to the nearest tab; else Dashboard.
+// A non-empty filter overrides and stacks every tab that has a match.
+const TABS = [
+  { id: 'dashboard', label: 'Dashboard' }, { id: 'behavior', label: 'Behavior' }, { id: 'models', label: 'Models' },
+  { id: 'integrations', label: 'Integrations' }, { id: 'agents', label: 'Agents' },
+];
+const LEGACY_CAT = {
+  preferences: 'dashboard', 'session-automation': 'behavior', guardrails: 'behavior', colony: 'behavior', advanced: 'behavior',
+  'prompt-optimizer': 'models', 'decision-model': 'models', scoring: 'models',
+  ecosystem: 'integrations', connectors: 'integrations', integrations: 'integrations', agents: 'agents',
+};
+const BEHAVIOR_GROUPS = ['Session automation', 'Guardrails', 'Colony', 'omp extension'];
+const MODEL_GROUPS = ['Prompt optimizer', 'Decision model', 'Turn scoring'];
+const tabOf = (title) => (MODEL_GROUPS.includes(title) ? 'models' : 'behavior');
+
+function initialTab() {
+  let q = null;
+  try { q = new URLSearchParams((globalThis.location && globalThis.location.search) || ''); } catch { /* no location */ }
+  const tab = q && q.get('tab');
+  if (TABS.some((t) => t.id === tab)) return tab;
+  const cat = q && q.get('cat');
+  return (cat && LEGACY_CAT[String(cat).toLowerCase().replace(/[^a-z0-9]+/g, '-')]) || 'dashboard';
 }
 
 function freshState(ctx) {
   return {
-    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {}, query: '', cat: initialCat(), entries: null, ui: null,
+    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {}, query: '', tab: initialTab(), entries: null, ui: null,
     behavior: null, ecosystem: null, connectors: null, prefs: null, projects: [],
     credDrafts: {}, projectList: null, agentPid: null, agents: null,
     ecoTab: 'plugins', ecoQuery: '', ecoLimit: ECO_PAGE,
@@ -298,32 +314,6 @@ async function reloadAll() {
 // ---- Behavior knobs ---------------------------------------------------------
 
 
-// Read-only: shows the omp roles atlas's agents name and whether each resolves to a model.
-function ompSection(omp) {
-  if (!omp) return null;
-  if (!omp.exists) {
-    return h('section', { class: 'pg-knob-group', 'aria-label': 'omp model roles' },
-      h('h3', { class: 'pg-h3' }, 'omp model roles'),
-      h('p', { class: 'pg-hint' }, `No omp config found at ${omp.path}. Atlas’s omp agents are not in use on this machine.`));
-  }
-  const unresolved = (omp.roles || []).filter((r) => !r.resolves);
-  return h('section', { class: 'pg-knob-group', 'aria-label': 'omp model roles' },
-    h('h3', { class: 'pg-h3' }, 'omp model roles'),
-    h('p', { class: 'pg-hint' }, `Read from ${omp.path} (read-only; edit it with omp). Atlas’s omp agents name @atlas-worker, @atlas-verifier and @atlas-mechanic first, then fall back to @default / @smol. `
-      + (unresolved.length ? `${unresolved.length} role${unresolved.length === 1 ? '' : 's'} not defined, so those agents use their fallback.` : 'Every role resolves.')),
-    h('div', { class: 'pg-table-wrap' }, h('table', { class: 'pg-table', 'aria-label': 'omp model roles' },
-      h('thead', {}, h('tr', {}, ...['Role', 'Resolves', 'Model', 'Falls back to'].map((t) => h('th', { scope: 'col' }, t)))),
-      h('tbody', {}, ...(omp.roles || []).map((r) => h('tr', {},
-        h('th', { scope: 'row', class: 'pg-mono' }, `@${r.role}`),
-        h('td', {}, Badge({ status: r.resolves ? 'ok' : (r.falls_back_to ? 'warn' : 'fail'), text: r.resolves ? 'yes' : 'not defined' })),
-        h('td', { class: 'pg-mono' }, r.model || '—'),
-        h('td', { class: 'pg-mono' }, r.resolves ? '—' : (r.falls_back_to ? `@${r.falls_back_to} (${r.fallback_model})` : 'nothing'))))))),
-    (omp.other || []).length
-      ? h('details', { class: 'pg-evidence' }, h('summary', {}, `Other roles (${omp.other.length})`),
-        h('ul', { class: 'pg-rows' }, ...omp.other.map((o) => nameRow(`@${o.role}`, o.model))))
-      : null);
-}
-
 // Filtering only toggles `hidden` on existing rows: no rebuild, so typing never loses focus or scroll.
 // ---- Ecosystem toggles ------------------------------------------------------
 // Rebuild one inventory row from fresh data (the current tab only shows one list, so the row is looked up by key).
@@ -450,7 +440,7 @@ function ecosystemSection() {
     id: 'pg-sec-ecosystem',
     title: 'Ecosystem',
     children: [
-      h('p', { class: 'pg-hint' }, 'What Claude Code has installed that atlas can see. Plugin and MCP switches edit Claude Code’s settings and take effect when Claude Code restarts; every other tab is a read-only list of what atlas ships or what you have in ~/.claude.'),
+      h('p', { class: 'pg-hint' }, "What Claude Code has installed that atlas can see. Plugin and MCP switches edit Claude Code's settings.json. Claude Code reads them when it starts. Every other tab is a read-only list of what atlas ships or what you have in ~/.claude."),
       atlas.hooks_disabled_globally
         ? h('p', { class: 'pg-banner is-warn', role: 'alert' }, 'Hooks are disabled globally (disableAllHooks) — Atlas hooks will not run.')
         : null,
@@ -836,15 +826,6 @@ function navEditor(p) {
   );
 }
 
-function integrationsSection() {
-  return Card({
-    id: 'integrations',
-    title: 'Integrations',
-    actions: [h('span', { class: 'pg-hint' }, 'terminal tooling and atlas MCP connectors, read-only')],
-    children: [S.integrations || (S.integrations = IntegrationsPanel())],
-  });
-}
-
 // Selects revert to the saved value when a save fails, so the control never lies about what is stored.
 
 // A jump bar for a very long page. Buttons, not links: a "#id" href would be read as a route change.
@@ -897,79 +878,119 @@ function prefItems() {
   ];
 }
 
+// entries: [{tab, group, el, search}]; group is the h3 title for knob rows.
 function buildEntries() {
-  const byCat = Object.fromEntries(CATEGORIES.map((c) => [c, []]));
   const deps = rowDeps();
-  const add = (cat, item) => { const el = SettingRow(item, deps); byCat[cat].push({ cat, el, search: el.search }); };
-  prefItems().forEach((it) => add('Preferences', it));
+  const out = [];
+  const add = (tab, group, item) => { const el = SettingRow(item, deps); out.push({ tab, group, el, search: el.search }); };
+  prefItems().forEach((it) => add('dashboard', '', it));
   const b = S.behavior || {};
-  for (const g of b.groups || []) for (const k of g.knobs || []) add(categoryOf(k, g.title), { ...k, value: k.hook_value ?? k.value });
-  for (const k of b.advanced || []) add(categoryOf(k, ''), { ...k, value: k.hook_value ?? k.value });
-  return byCat;
+  for (const g of b.groups || []) for (const k of g.knobs || []) add(tabOf(g.title), g.title, { ...k, value: k.hook_value ?? k.value });
+  // Old servers still send `advanced`; those rows live under Behavior.
+  for (const k of b.advanced || []) add('behavior', 'Advanced', { ...k, value: k.hook_value ?? k.value });
+  return out;
 }
 
-const WIDE = {
-  Integrations: () => integrationsSection(), Ecosystem: () => ecosystemSection(),
-  Connectors: () => connectorsSection(), Agents: () => agentsSection(),
-};
-const wideCount = (cat) => {
-  const list = { Connectors: S.connectors && S.connectors.connectors, Agents: agentRoster(),
-    Ecosystem: S.ecosystem && [...(S.ecosystem.plugins || []), ...((S.ecosystem.mcp && S.ecosystem.mcp.servers) || [])] }[cat];
-  return Array.isArray(list) ? list.length : null;
+const wideCount = (tab) => {
+  const eco = S.ecosystem ? [...(S.ecosystem.plugins || []), ...((S.ecosystem.mcp && S.ecosystem.mcp.servers) || [])].length : 0;
+  const conn = S.connectors && S.connectors.connectors ? S.connectors.connectors.length : 0;
+  return tab === 'agents' ? agentRoster().length : eco + conn;
 };
 
 // Filtering only toggles `hidden`; rows keep their status, focus and scroll.
 function applyFilter() {
-  const q = S.query;
-  const all = Object.values(S.entries).flat();
-  all.forEach((e) => { e.el.hidden = !rowMatches(e.search, q); });
-  const counts = countByCategory(all, q);
-  for (const cat of CATEGORIES) {
-    const ui = S.ui[cat];
-    const wide = !!WIDE[cat];
-    const n = wide ? wideCount(cat) : (counts[cat] || 0);
-    const shown = q.trim() ? (wide ? cat.toLowerCase().includes(q.trim().toLowerCase()) : n > 0) : cat === S.cat;
-    ui.section.hidden = !shown;
-    ui.btn.setAttribute('aria-current', String(cat === S.cat && !q.trim()));
-    ui.count.textContent = n === null ? '' : String(n);
+  const q = S.query.trim();
+  const counts = {};
+  for (const e of S.entries) {
+    const hit = rowMatches(e.search, q);
+    e.el.hidden = !hit;
+    if (hit) counts[e.tab] = (counts[e.tab] || 0) + 1;
+  }
+  for (const g of S.ui.groups) g.section.hidden = !S.entries.some((e) => e.tab === g.tab && e.group === g.title && !e.el.hidden);
+  for (const t of TABS) {
+    const ui = S.ui.tabs[t.id];
+    const wide = t.id === 'integrations' || t.id === 'agents';
+    const n = wide ? wideCount(t.id) : (counts[t.id] || 0);
+    const hasHit = wide ? t.label.toLowerCase().includes(q.toLowerCase()) : n > 0;
+    ui.panel.hidden = q ? !hasHit : t.id !== S.tab;
+    ui.heading.hidden = !q;
+    ui.btn.setAttribute('aria-selected', String(t.id === S.tab));
+    ui.btn.setAttribute('tabindex', t.id === S.tab ? '0' : '-1');
+    ui.count.textContent = String(n);
   }
 }
 
-function categoryBody(cat) {
-  if (WIDE[cat]) return h('div', { class: 'st-grid' }, h('div', { class: 'st-wide' }, WIDE[cat]()));
-  const rows = (S.entries[cat] || []).map((e) => e.el);
-  const omp = cat === 'Advanced' && S.behavior ? ompSection(S.behavior.omp) : null;
-  return h('div', { class: 'st-grid' }, ...rows, omp ? h('div', { class: 'st-wide' }, omp) : null);
+function selectTab(id, focus) {
+  S.tab = id;
+  try { const u = new URL(globalThis.location.href); u.searchParams.set('tab', id); u.searchParams.delete('cat'); globalThis.history.replaceState(null, '', u); } catch { /* no history */ }
+  applyFilter();
+  if (focus) S.ui.tabs[id].btn.focus();
+}
+
+function onTabKey(e) {
+  const i = TABS.findIndex((t) => t.id === S.tab);
+  const to = { ArrowRight: (i + 1) % TABS.length, ArrowLeft: (i + TABS.length - 1) % TABS.length, Home: 0, End: TABS.length - 1 }[e.key];
+  if (to === undefined) return;
+  e.preventDefault();
+  selectTab(TABS[to].id, true);
+}
+
+// Knob groups for one tab: an h3 and the server's intro over the two-column card grid. Groups without rows are skipped.
+function knobGroups(tab, order) {
+  const titles = [...new Set(S.entries.filter((e) => e.tab === tab).map((e) => e.group))];
+  const ranked = [...order.filter((t) => titles.includes(t)), ...titles.filter((t) => !order.includes(t))];
+  const intros = Object.fromEntries(((S.behavior && S.behavior.groups) || []).map((g) => [g.title, g.intro]));
+  return ranked.map((title) => {
+    const section = h('section', { class: 'st-group', 'aria-label': title },
+      h('h3', { class: 'st-group-title' }, title),
+      intros[title] ? h('p', { class: 'st-group-intro' }, intros[title]) : null,
+      h('div', { class: 'st-grid' }, ...S.entries.filter((e) => e.tab === tab && e.group === title).map((e) => e.el)));
+    S.ui.groups.push({ tab, title, section });
+    return section;
+  });
+}
+
+function pathsFooter() {
+  const paths = (S.behavior && S.behavior.paths) || [];
+  if (!paths.length) return null;
+  return h('p', { class: 'st-paths' }, `${paths.map((p) => `${p.title}: ${p.value}`).join(' | ')}. Set these in your shell before starting atlas.`);
+}
+
+function panelBody(tab) {
+  if (tab === 'dashboard') return [h('div', { class: 'st-grid' }, ...S.entries.filter((e) => e.tab === 'dashboard').map((e) => e.el))];
+  if (tab === 'behavior') return [...knobGroups('behavior', BEHAVIOR_GROUPS), pathsFooter()];
+  if (tab === 'models') return knobGroups('models', MODEL_GROUPS);
+  if (tab === 'integrations') {
+    return [h('h3', { class: 'st-group-title' }, 'Ecosystem'), ecosystemSection(), h('h3', { class: 'st-group-title' }, 'Connectors'), connectorsSection()];
+  }
+  return [agentsSection()];
 }
 
 function draw() {
   if (!S || !S.mount || S.destroyed) return;
   if (!S.entries) S.entries = buildEntries();
-  S.ui = {};
+  S.ui = { tabs: {}, groups: [] };
   const filter = h('input', { id: 'st-filter', class: 'input st-filter', type: 'search', value: S.query, placeholder: 'Filter settings by name, key or effect', 'aria-label': 'Filter settings' });
   filter.addEventListener('input', () => { S.query = filter.value; applyFilter(); });
-  const navButtons = [];
-  const sections = CATEGORIES.map((cat) => {
+  const buttons = [];
+  const panels = TABS.map((t) => {
     const count = h('span', { class: 'st-count' });
-    const section = h('section', { class: 'st-cat', id: slug(cat), 'aria-label': cat }, h('h2', { class: 'st-cat-title' }, cat), categoryBody(cat));
-    const btn = h('button', { type: 'button', class: 'st-nav-item' }, cat, ' ', count);
-    btn.addEventListener('click', () => {
-      S.cat = cat;
-      try { const u = new URL(globalThis.location.href); u.searchParams.set('cat', cat); globalThis.history.replaceState(null, '', u); } catch { /* no history */ }
-      applyFilter();
-    });
-    navButtons.push(btn);
-    S.ui[cat] = { section, count, btn };
-    return section;
+    const btn = h('button', { type: 'button', role: 'tab', id: `st-tab-${t.id}`, class: 'st-tab', 'aria-controls': `st-panel-${t.id}` }, t.label, ' ', count);
+    btn.addEventListener('click', () => selectTab(t.id));
+    const heading = h('h2', { class: 'st-tab-heading' }, t.label);
+    const panel = h('div', { role: 'tabpanel', id: `st-panel-${t.id}`, class: 'st-panel', 'aria-labelledby': `st-tab-${t.id}` }, heading, ...panelBody(t.id));
+    S.ui.tabs[t.id] = { btn, count, panel, heading };
+    buttons.push(btn);
+    return panel;
   });
+  const tablist = h('div', { class: 'st-tabs', role: 'tablist', 'aria-label': 'Settings sections' }, ...buttons);
+  tablist.addEventListener('keydown', onTabKey);
   replace(S.mount,
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Settings'),
       h('p', { class: 'pg-sub' }, 'Every row says what it changes and when. A save only turns green after the server reads each written layer back equal.'),
       filter),
-    h('div', { class: 'st-layout' },
-      h('nav', { class: 'st-nav', 'aria-label': 'Settings categories' }, ...navButtons),
-      h('div', { class: 'st-main' }, ...sections)));
+    tablist, ...panels);
   applyFilter();
 }
 

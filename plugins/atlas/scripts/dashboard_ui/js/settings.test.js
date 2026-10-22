@@ -8,6 +8,7 @@ class N {
   setAttribute(k, v) { this.attrs[k] = v; }
   getAttribute(k) { return this.attrs[k] ?? null; }
   addEventListener(k, fn) { this.listeners[k] = fn; }
+  focus() {}
   contains() { return false; }
   closest() { return null; }
   querySelector() { return null; }
@@ -23,7 +24,7 @@ globalThis.document = {
   documentElement: new N("html"), body: new N("body"), activeElement: null,
 };
 
-const { SettingRow, verifyStatus, clampNumber, categoryOf, liveVsSaved } = await import("./settings-row.js");
+const { SettingRow, verifyStatus, clampNumber, liveVsSaved } = await import("./settings-row.js");
 const { default: page } = await import("./pages/settings.js");
 
 const walk = (n, out = []) => { if (n && n.children) { out.push(n); n.children.forEach((c) => walk(c, out)); } return out; };
@@ -34,21 +35,38 @@ const tick = (ms = 10) => new Promise((r) => setTimeout(r, ms));
 
 const L = (live, store) => ({ live_env: { supported: true, value: live }, store: { supported: true, value: store }, claude_settings: { supported: true, value: store } });
 const KNOBS = [
-  { key: "ATLAS_TRIPWIRE", title: "Tripwire", description: "Dispatch gate.", effect: "Blocks unbounded dispatches.", applies: "next-session", kind: "toggle", on: "on", off: "off", value: "on", scope: "hooks", layers: L("on", "on") },
-  { key: "ATLAS_TRIPWIRE_THRESHOLD", title: "Tripwire threshold", description: "Inline op budget.", effect: "Raises or lowers the budget.", applies: "next-session", kind: "number", range: { min: 1, max: 20, step: 1 }, value: "7", scope: "hooks", layers: L("7", "7") },
-  { key: "ATLAS_OPTIMIZE", title: "Prompt optimizer", description: "When to rewrite prompts.", effect: "Rewrites prompts.", applies: "next-session", kind: "select", options: [{ value: "off", label: "Off", hint: "never" }, { value: "trigger", label: "Trigger" }, { value: "always", label: "Always" }], value: "off", scope: "hooks", layers: L("off", "off") },
-  { key: "ATLAS_DECISION_MODEL", title: "Decision model", description: "Classifier model.", effect: "Picks the classifier.", applies: "next-session", kind: "model", value: "nimble:latest", scope: "hooks", layers: L("nimble:latest", "nimble:latest") },
-  { key: "ATLAS_OPTIMIZE_CMD", title: "Optimizer command", description: "Shell command.", effect: "Runs per prompt.", applies: "next-session", kind: "command", value: "", scope: "hooks", layers: L("", "") },
-  { key: "ATLAS_OLLAMA_URL", title: "Ollama URL", description: "Server.", effect: "Where models load.", applies: "next-session", kind: "url", value: "http://127.0.0.1:11434", scope: "hooks", layers: L("http://127.0.0.1:11434", "http://127.0.0.1:11434") },
-  { key: "ATLAS_HOOK_BRIDGE", title: "Hook bridge", description: "omp bridge.", effect: "Enables the bridge.", applies: "next-session", kind: "toggle", on: "1", off: "0", value: "1", scope: "shell",
+  { key: "ATLAS_TRIPWIRE", title: "Tripwire", description: "Dispatch gate.", effect: "Blocks unbounded dispatches.", applies: "now", kind: "toggle", on: "on", off: "off", value: "on", scope: "hooks", layers: L("on", "on") },
+  { key: "ATLAS_TRIPWIRE_THRESHOLD", title: "Tripwire threshold", description: "Inline op budget.", effect: "Raises or lowers the budget.", applies: "now", kind: "number", range: { min: 1, max: 20, step: 1 }, value: "7", scope: "hooks", layers: L("7", "7") },
+  { key: "ATLAS_OPTIMIZE", title: "Prompt optimizer", description: "When to rewrite prompts.", effect: "Rewrites prompts.", applies: "now", kind: "select", options: [{ value: "off", label: "Off", hint: "never" }, { value: "trigger", label: "Trigger" }, { value: "always", label: "Always" }], value: "off", scope: "hooks", layers: L("off", "off") },
+  { key: "ATLAS_DECISION_MODEL", title: "Decision model", description: "Classifier model.", effect: "Picks the classifier.", applies: "now", kind: "model", value: "nimble:latest", scope: "hooks", layers: L("nimble:latest", "nimble:latest") },
+  { key: "ATLAS_OPTIMIZE_CMD", title: "Optimizer command", description: "Shell command.", effect: "Runs per prompt.", applies: "now", kind: "command", value: "", scope: "hooks", layers: L("", "") },
+  { key: "ATLAS_OLLAMA_URL", title: "Ollama URL", description: "Server.", effect: "Where models load.", applies: "now", kind: "url", value: "http://127.0.0.1:11434", scope: "hooks", layers: L("http://127.0.0.1:11434", "http://127.0.0.1:11434") },
+  { key: "ATLAS_HOOK_BRIDGE", title: "Hook bridge", description: "omp bridge.", effect: "Enables the bridge.", applies: "now", kind: "toggle", on: "1", off: "0", value: "1", scope: "shell",
     layers: { live_env: { supported: true, value: "1" }, claude_settings: { supported: true, value: "1" }, omp_config: { supported: true, value: "1" }, shell_rc: { supported: true, value: "1" } } },
+];
+const EXTRA = [
+  { key: "ATLAS_SESSION_AUTO", title: "Session automation", description: "Runs steps at session start.", effect: "Starts helpers.", applies: "now", kind: "toggle", on: "on", off: "off", value: "on", scope: "hooks", layers: L("on", "on") },
+  { key: "ATLAS_COLONY", title: "Colony", description: "Colony channel.", effect: "Opens the channel.", applies: "now", kind: "toggle", on: "on", off: "off", value: "on", scope: "hooks", layers: L("on", "on") },
+  { key: "ATLAS_SCORE_TURNS", title: "Score turns", description: "Turn scoring.", effect: "Scores each turn.", applies: "now", kind: "toggle", on: "on", off: "off", value: "on", scope: "hooks", layers: L("on", "on") },
 ];
 const BEHAVIOR = {
   groups: [
-    { title: "Guardrails", knobs: [KNOBS[0], KNOBS[1]] }, { title: "Prompt optimizer", knobs: [KNOBS[2], KNOBS[3], KNOBS[4], KNOBS[5]] },
-    { title: "omp extension", knobs: [KNOBS[6]] },
+    { title: "Session automation", intro: "Session steps.", knobs: [EXTRA[0]] },
+    { title: "Guardrails", intro: "Dispatch gates.", knobs: [KNOBS[0], KNOBS[1]] },
+    { title: "Colony", intro: "Colony channel.", knobs: [EXTRA[1]] },
+    { title: "omp extension", intro: "omp bridge.", knobs: [KNOBS[6]] },
+    { title: "Prompt optimizer", intro: "Prompt rewriting.", knobs: [KNOBS[2], KNOBS[4]] },
+    { title: "Decision model", intro: "Classifier.", knobs: [KNOBS[3], KNOBS[5]] },
+    { title: "Turn scoring", intro: "Scoring.", knobs: [EXTRA[2]] },
   ],
   advanced: [],
+  paths: [
+    { key: "ATLAS_HOME", title: "ATLAS_HOME", value: "/home/a", description: "" },
+    { key: "ATLAS_DB", title: "ATLAS_DB", value: "/home/a/atlas.db", description: "" },
+    { key: "ATLAS_DASHBOARD_PORT", title: "ATLAS_DASHBOARD_PORT", value: "7421", description: "" },
+  ],
+  hidden: [],
+  note: "",
 };
 const mkApi = (extra = {}) => {
   const posts = [];
@@ -62,7 +80,7 @@ const mkApi = (extra = {}) => {
       if (p === "/api/v2/projects") return { projects: [] };
       return {};
     },
-    post: async (p, b) => { posts.push([p, b]); return extra.post ? extra.post(p, b) : { ok: true, key: Object.keys(b.updates)[0], layers: [{ layer: "store", wrote: "1", got: "1", ok: true }, { layer: "claude_settings", wrote: "1", got: "1", ok: true }], applies: "next-session" }; },
+    post: async (p, b) => { posts.push([p, b]); return extra.post ? extra.post(p, b) : { ok: true, key: Object.keys(b.updates)[0], layers: [{ layer: "store", wrote: "1", got: "1", ok: true }, { layer: "claude_settings", wrote: "1", got: "1", ok: true }], applies: "now" }; },
     put: async (p, b) => ({ state: { theme: "light", density: "comfortable", default_project: "all", refresh_seconds: 8, noise: { min_severity: "info" }, nav_order: [], ...b } }),
   };
 };
@@ -164,53 +182,128 @@ test("url rows have a Test button; live vs saved shows only when they differ", a
   const row = SettingRow(KNOBS[5], deps(mkApi()));
   const test = byTag(row, "button").find((b) => b.attrs.id.endsWith("-test"));
   await test.listeners.click();
-  expect(text(row)).toContain("✓ reachable");
-  expect(liveVsSaved({ kind: "toggle", off: "off", layers: L("on", "off") })).toBe("live: on · saved: off");
+  expect(text(row)).toContain("\u2713 reachable");
+  expect(liveVsSaved({ kind: "toggle", off: "off", layers: L("on", "off") })).toBe("live: on \u00b7 saved: off");
   expect(liveVsSaved({ kind: "toggle", layers: L("on", "on") })).toBe(null);
 });
 
-test("shell-scope rows are editable, list the files written and say next session", async () => {
+test("shell-scope rows are editable, list the files written and show no applies badge for `now`", async () => {
   const api = mkApi();
   const row = SettingRow(KNOBS[6], deps(api));
   expect(text(row)).toContain("Writes: claude settings.json, omp config, ~/.atlas/env.sh");
-  expect(text(row)).toContain("next session");
+  expect(text(row)).not.toContain("next session");
+  expect(byClass(row, "st-badge").length).toBe(0);
   await byTag(row, "button")[0].listeners.click();
   expect(api.posts.at(-1)[1].updates.ATLAS_HOOK_BRIDGE).toBe("0");
 });
 
-test("categoryOf routes decision, colony and storage keys, then groups, else Advanced", () => {
-  expect(categoryOf({ key: "ATLAS_DECISION_MODEL" }, "")).toBe("Decision model");
-  expect(categoryOf({ key: "ATLAS_COLONY" }, "")).toBe("Colony");
-  expect(categoryOf({ key: "ATLAS_DB" }, "omp extension")).toBe("Storage");
-  expect(categoryOf({ key: "ATLAS_X" }, "Turn scoring")).toBe("Scoring");
-  expect(categoryOf({ key: "ATLAS_X" }, "")).toBe("Advanced");
+test("an applies value other than now still renders a badge", () => {
+  const row = SettingRow({ ...KNOBS[0], applies: "dashboard-restart" }, deps(mkApi()));
+  expect(byClass(row, "st-badge")[0].children[0].text).toBe("restart dashboard");
 });
 
-test("the page renders every category in the nav and the sections, with counts", async () => {
+const tabsOf = (root) => byClass(root, "st-tab");
+const panelsOf = (root) => byClass(root, "st-panel");
+const shownPanels = (root) => panelsOf(root).filter((p) => !p.hidden);
+const tabLabel = (b) => b.children[0].text;
+const tabCount = (b) => b.children.at(-1).textContent;
+const key = (k) => ({ key: k, preventDefault() {} });
+
+test("the page renders five tabs with labels and row counts", async () => {
   const root = await mountPage(mkApi());
-  const nav = byClass(root, "st-nav")[0];
-  const labels = byClass(nav, "st-nav-item").map((b) => b.children[0].text);
-  expect(labels).toEqual(["Preferences", "Session automation", "Guardrails", "Prompt optimizer", "Decision model", "Storage", "Colony", "Scoring", "Integrations", "Ecosystem", "Connectors", "Agents", "Advanced"]);
-  expect(byClass(root, "st-cat").length).toBe(13);
-  const counts = Object.fromEntries(byClass(nav, "st-nav-item").map((b) => [b.children[0].text, b.children.at(-1).textContent]));
-  expect(counts.Preferences).toBe("6");
-  expect(counts.Guardrails).toBe("2");
-  expect(counts["Prompt optimizer"]).toBe("3");
-  expect(counts["Decision model"]).toBe("1");
+  const tabs = tabsOf(root);
+  expect(tabs.map(tabLabel)).toEqual(["Dashboard", "Behavior", "Models", "Integrations", "Agents"]);
+  const counts = Object.fromEntries(tabs.map((b) => [tabLabel(b), tabCount(b)]));
+  expect(counts.Dashboard).toBe("6");
+  expect(counts.Behavior).toBe("5");
+  expect(counts.Models).toBe("5");
+  expect(byClass(root, "st-nav").length).toBe(0);
+  expect(byClass(root, "st-layout").length).toBe(0);
   page.destroy();
 });
 
-test("the filter narrows rows across categories and updates the counts", async () => {
+test("Dashboard is the default tab; ?tab= and legacy ?cat= pick a tab", async () => {
+  const selected = (root) => tabsOf(root).filter((b) => b.attrs["aria-selected"] === "true").map(tabLabel);
+  const root = await mountPage(mkApi());
+  expect(selected(root)).toEqual(["Dashboard"]);
+  expect(shownPanels(root).length).toBe(1);
+  page.destroy();
+  for (const [search, label] of [["?tab=behavior", "Behavior"], ["?cat=guardrails", "Behavior"], ["?cat=Prompt%20optimizer", "Models"], ["?cat=Connectors", "Integrations"], ["?tab=nope", "Dashboard"]]) {
+    globalThis.location.search = search;
+    const r = await mountPage(mkApi());
+    expect([search, selected(r)]).toEqual([search, [label]]);
+    page.destroy();
+  }
+  globalThis.location.search = "";
+});
+
+test("tabs follow WAI-ARIA: roving tabindex, arrows move, Home and End jump", async () => {
+  const root = await mountPage(mkApi());
+  const list = byClass(root, "st-tabs")[0];
+  const sel = () => tabsOf(root).filter((b) => b.attrs["aria-selected"] === "true").map(tabLabel)[0];
+  expect(tabsOf(root).map((b) => b.attrs.tabindex)).toEqual(["0", "-1", "-1", "-1", "-1"]);
+  list.listeners.keydown(key("ArrowRight"));
+  expect(sel()).toBe("Behavior");
+  list.listeners.keydown(key("End"));
+  expect(sel()).toBe("Agents");
+  list.listeners.keydown(key("ArrowRight"));
+  expect(sel()).toBe("Dashboard");
+  list.listeners.keydown(key("ArrowLeft"));
+  expect(sel()).toBe("Agents");
+  list.listeners.keydown(key("Home"));
+  expect(sel()).toBe("Dashboard");
+  expect(shownPanels(root).length).toBe(1);
+  page.destroy();
+});
+
+test("Behavior lists server groups in order with h3 titles, intros and the paths footer", async () => {
+  globalThis.location.search = "?tab=behavior";
+  const root = await mountPage(mkApi());
+  const panel = shownPanels(root)[0];
+  expect(byTag(panel, "h3").map((x) => x.textContent || x.children[0].text)).toEqual(["Session automation", "Guardrails", "Colony", "omp extension"]);
+  expect(byClass(panel, "st-group-intro").map((x) => x.children[0].text)).toContain("Dispatch gates.");
+  expect(byClass(panel, "st-paths")[0].children[0].text).toBe("ATLAS_HOME: /home/a | ATLAS_DB: /home/a/atlas.db | ATLAS_DASHBOARD_PORT: 7421. Set these in your shell before starting atlas.");
+  page.destroy();
+  globalThis.location.search = "?tab=models";
+  const models = shownPanels(await mountPage(mkApi()))[0];
+  expect(byTag(models, "h3").map((x) => x.textContent || x.children[0].text)).toEqual(["Prompt optimizer", "Decision model", "Turn scoring"]);
+  expect(byClass(models, "st-paths").length).toBe(0);
+  page.destroy();
+  globalThis.location.search = "";
+});
+
+test("Integrations drops the read-only inventory panel and holds the ecosystem and connectors", async () => {
+  globalThis.location.search = "?tab=integrations";
+  const root = await mountPage(mkApi());
+  const panel = shownPanels(root)[0];
+  expect(byTag(panel, "h3").map((x) => x.textContent || x.children[0].text)).toEqual(["Ecosystem", "Connectors"]);
+  expect(walk(panel).some((x) => x.attrs.id === "integrations")).toBe(false);
+  expect(text(panel)).toContain("Claude Code reads them when it starts.");
+  expect(text(panel)).not.toContain("next session");
+  page.destroy();
+  globalThis.location.search = "";
+});
+
+test("the filter shows matches from several tabs stacked under tab headings, then returns to one tab", async () => {
   const root = await mountPage(mkApi());
   const filter = byClass(root, "st-filter")[0];
+  filter.value = "when";
+  filter.listeners.input();
+  const panels = shownPanels(root);
+  expect(panels.length).toBeGreaterThan(1);
+  expect(panels.map((p) => byTag(p, "h2").find((x) => (x.attrs.class || "").includes("st-tab-heading") && !x.hidden)).every(Boolean)).toBe(true);
+  const visible = byClass(root, "st-card").filter((c) => !c.hidden).map((c) => c.attrs.id);
+  expect(visible).toContain("st-ATLAS_OPTIMIZE-row");
+  expect(visible).not.toContain("st-ATLAS_TRIPWIRE-row");
   filter.value = "threshold";
   filter.listeners.input();
-  const visible = byClass(root, "st-card").filter((c) => !c.hidden);
-  expect(visible.map((c) => c.attrs.id)).toEqual(["st-ATLAS_TRIPWIRE_THRESHOLD-row"]);
-  const nav = byClass(root, "st-nav")[0];
-  const counts = Object.fromEntries(byClass(nav, "st-nav-item").map((b) => [b.children[0].text, b.children.at(-1).textContent]));
-  expect(counts.Guardrails).toBe("1");
-  expect(counts.Preferences).toBe("0");
+  expect(byClass(root, "st-card").filter((c) => !c.hidden).map((c) => c.attrs.id)).toEqual(["st-ATLAS_TRIPWIRE_THRESHOLD-row"]);
+  expect(tabCount(tabsOf(root)[1])).toBe("1");
+  expect(tabCount(tabsOf(root)[0])).toBe("0");
+  filter.value = "";
+  filter.listeners.input();
+  expect(shownPanels(root).length).toBe(1);
+  expect(tabCount(tabsOf(root)[0])).toBe("6");
   page.destroy();
 });
 
@@ -220,52 +313,75 @@ test("preferences use the same row component and verify against the saved state"
   const sel = byTag(theme, "select")[0];
   sel.value = "light";
   await sel.listeners.change();
-  expect(byClass(theme, "st-status")[0].textContent).toBe("✓ verified · dashboard prefs");
+  expect(byClass(theme, "st-status")[0].textContent).toBe("\u2713 verified \u00b7 dashboard prefs");
   page.destroy();
 });
 
-test("one category renders at a time; the nav switches; ?cat= and the first category are the defaults", async () => {
-  const root = await mountPage(mkApi());
-  const shown = () => byClass(root, "st-cat").filter((c) => !c.hidden).map((c) => c.attrs["aria-label"]);
-  expect(shown()).toEqual(["Preferences"]);
-  const btn = (label) => byClass(byClass(root, "st-nav")[0], "st-nav-item").find((b) => b.children[0].text === label);
-  btn("Guardrails").listeners.click();
-  expect(shown()).toEqual(["Guardrails"]);
-  page.destroy();
-  globalThis.location.search = "?cat=Colony";
-  const root2 = await mountPage(mkApi());
-  expect(byClass(root2, "st-cat").filter((c) => !c.hidden).map((c) => c.attrs["aria-label"])).toEqual(["Colony"]);
-  globalThis.location.search = "";
-  page.destroy();
-});
-
-test("a non-empty filter shows matches from every category under their headers", async () => {
-  const root = await mountPage(mkApi());
-  const filter = byClass(root, "st-filter")[0];
-  filter.value = "model";
-  filter.listeners.input();
-  const shown = byClass(root, "st-cat").filter((c) => !c.hidden).map((c) => c.attrs["aria-label"]);
-  expect(shown).toContain("Prompt optimizer");
-  expect(shown).toContain("Decision model");
-  expect(shown).not.toContain("Preferences");
-  filter.value = "";
-  filter.listeners.input();
-  expect(byClass(root, "st-cat").filter((c) => !c.hidden).length).toBe(1);
-  page.destroy();
-});
-
-test("settings.css: content column is minmax(0,1fr) and the card grid is two columns from 1100px", async () => {
+test("settings.css: tabs replace the sidebar grid and the card grid is two columns from 1100px", async () => {
   const css = await Bun.file(new URL("../css/settings.css", import.meta.url)).text();
-  expect(css).toContain("grid-template-columns: 200px minmax(0, 1fr)");
+  expect(css).not.toContain("200px minmax");
+  expect(css).not.toContain(".st-nav");
+  expect(css).toContain(".st-tabs");
   expect(css).toMatch(/@media \(min-width: 1100px\) \{ \.st-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
 
-test("a later successful save replaces an earlier error status, and an unchanged value reads `unchanged`", async () => {
+const arrowEnter = { key: "Enter", preventDefault() {} };
+
+test("number row: Enter then blur sends exactly one POST and the status stays verified", async () => {
+  const api = mkApi();
+  const row = SettingRow(KNOBS[1], deps(api));
+  const input = byTag(row, "input")[0];
+  input.blur = () => input.listeners.change();
+  input.value = "11";
+  await input.listeners.keydown(arrowEnter);
+  await tick();
+  await input.listeners.change();
+  expect(api.posts.length).toBe(1);
+  expect(byClass(row, "st-status")[0].textContent).toContain("\u2713 verified");
+});
+
+test("a failed number save posts once per Enter, not once per handler", async () => {
+  const api = mkApi({ post: async () => { throw Object.assign(new Error("boom"), { status: 500 }); } });
+  const row = SettingRow(KNOBS[1], deps(api));
+  const input = byTag(row, "input")[0];
+  input.blur = () => input.listeners.change();
+  input.value = "11";
+  await input.listeners.keydown(arrowEnter);
+  await tick();
+  expect(api.posts.length).toBe(1);
+});
+
+test("a second commit while one is pending is ignored", async () => {
+  let release;
+  const api = mkApi({ post: () => new Promise((r) => { release = () => r({ ok: true, layers: [{ layer: "store", ok: true }] }); }) });
+  const row = SettingRow(KNOBS[1], deps(api));
+  const input = byTag(row, "input")[0];
+  input.value = "12";
+  const first = input.listeners.change();
+  input.value = "13";
+  await input.listeners.change();
+  expect(api.posts.length).toBe(1);
+  release();
+  await first;
+});
+
+test("text rows save on blur", async () => {
+  const api = mkApi();
+  const row = SettingRow(KNOBS[5], deps(api));
+  const input = byTag(row, "input")[0];
+  input.value = "http://x:1";
+  await input.listeners.change();
+  expect(api.posts.length).toBe(1);
+  expect(api.posts[0][1].updates.ATLAS_OLLAMA_URL).toBe("http://x:1");
+  expect(byClass(row, "st-status")[0].textContent).toContain("\u2713 verified");
+});
+
+test("a later successful save replaces an earlier error, and a repeat save never reads `unchanged`", async () => {
   let fail = true;
   const api = mkApi({ post: async () => { if (fail) throw Object.assign(new Error("boom"), { status: 500 }); return { ok: true, layers: [{ layer: "store", ok: true }] }; } });
   const row = SettingRow(KNOBS[5], deps(api));
   const input = byTag(row, "input")[0];
-  const save = byClass(row, "btn").find((b) => b.attrs.id === "st-ATLAS_OLLAMA_URL-save") || byTag(row, "button")[0];
+  const save = byTag(row, "button")[0];
   input.value = "http://x:1";
   await save.listeners.click();
   const status = byClass(row, "st-status")[0];
@@ -273,12 +389,13 @@ test("a later successful save replaces an earlier error status, and an unchanged
   fail = false;
   input.value = "http://x:1";
   await save.listeners.click();
-  expect(status.textContent).toBe("✓ verified · atlas store");
+  expect(status.textContent).toBe("\u2713 verified \u00b7 atlas store");
   await save.listeners.click();
-  expect(status.textContent).toBe("unchanged");
+  expect(status.textContent).toBe("\u2713 verified \u00b7 atlas store");
+  expect(api.posts.length).toBe(2);
 });
 
-test("restoring the previous value after an error clears the error with `unchanged`", async () => {
+test("restoring the previous value after an error clears the error", async () => {
   const api = mkApi({ post: async () => { throw Object.assign(new Error("boom"), { status: 500 }); } });
   const row = SettingRow(KNOBS[5], deps(api));
   const input = byTag(row, "input")[0];
@@ -289,5 +406,5 @@ test("restoring the previous value after an error clears the error with `unchang
   expect(status.textContent).toContain("not saved");
   input.value = "http://127.0.0.1:11434";
   await save.listeners.click();
-  expect(status.textContent).toBe("unchanged");
+  expect(status.textContent).toBe("");
 });

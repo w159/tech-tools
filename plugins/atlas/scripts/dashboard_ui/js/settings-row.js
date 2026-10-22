@@ -5,13 +5,14 @@
 import { h } from './dom.js';
 import { ModelPicker } from './model-picker.js';
 
-const APPLIES_LABEL = { now: 'applies now', 'next-session': 'next session', 'dashboard-restart': 'restart dashboard' };
+const APPLIES_LABEL = { 'dashboard-restart': 'restart dashboard' };
 const LAYER_LABEL = {
   live_env: 'live env', store: 'atlas store', claude_settings: 'claude settings.json',
   omp_config: 'omp config', shell_rc: '~/.atlas/env.sh', prefs: 'dashboard prefs',
 };
 
-const appliesLabel = (a) => APPLIES_LABEL[a] || APPLIES_LABEL.now;
+// 'now' is the normal case and gets no badge; only a delayed effect is worth saying.
+const appliesLabel = (a) => APPLIES_LABEL[a] || '';
 const layerName = (l) => LAYER_LABEL[l] || String(l);
 const show = (v) => (v === '' || v === null || v === undefined ? '(nothing)' : String(v));
 
@@ -78,12 +79,16 @@ const writtenLayers = (item) => Object.entries(item.layers || {}).filter(([k, v]
 export function SettingRow(item, deps) {
   const id = `st-${item.key}`;
   const status = h('span', { class: 'st-status', role: 'status', id: `${id}-status` });
-  const setStatus = (text, kind) => { status.textContent = text; status.setAttribute('class', `st-status is-${kind || 'idle'}`); };
+  const setStatus = (text, kind) => { statusKind = kind || 'idle'; status.textContent = text; status.setAttribute('class', `st-status is-${kind || 'idle'}`); };
   let value = String((item.value ?? item.default) ?? '');
+  let statusKind = 'idle';
+  let inflight = false;
 
   const commit = async (next, extra) => {
-    // Unchanged value: no write, and the status line must not keep a stale error from the previous attempt.
-    if (!extra && String(next) === value) { setStatus('unchanged', 'ok'); return true; }
+    // Same value as the last saved one: send nothing. Only a stale error is cleared; a good status stays.
+    if (!extra && String(next) === value) { if (statusKind === 'fail') setStatus('', 'idle'); return true; }
+    if (inflight) return false;
+    inflight = true;
     setStatus('saving…', 'busy');
     try {
       const res = await deps.save(item, next, extra);
@@ -94,6 +99,7 @@ export function SettingRow(item, deps) {
     } catch (err) {
       const d = (err && err.data) || {};
       if (err && (err.status === 409 || d.error === 'needs_confirm') && !(extra && extra.confirm)) {
+        inflight = false; // the confirmed retry below is a fresh commit, not a second click
         const go = await deps.confirm({ title: `Save ${item.key}?`, body: `${item.key} runs as a shell command: ${d.command || next}`, danger: true, confirmLabel: 'Save command' });
         if (go) return commit(next, { confirm: true });
         setStatus('✗ not saved: cancelled', 'fail');
@@ -101,6 +107,8 @@ export function SettingRow(item, deps) {
       }
       setStatus(errorStatus(err, next), 'fail');
       return false;
+    } finally {
+      inflight = false;
     }
   };
 
@@ -138,8 +146,9 @@ export function SettingRow(item, deps) {
       if (!(await commit(raw)) && !/outside/.test(status.textContent)) input.value = value;
     };
     const step = (dir) => () => { const st = (item.range && item.range.step) || 1; const n = clampNumber(item.range, Number(input.value || value || 0) + dir * st); input.value = String(n); return go(); };
+    // One save path: the change event. Enter blurs the field, so Enter and blur make exactly one request.
     input.addEventListener('change', go);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
     const dec = h('button', { type: 'button', class: 'btn st-step', 'aria-label': `Decrease ${item.title || item.key}` }, '−');
     const inc = h('button', { type: 'button', class: 'btn st-step', 'aria-label': `Increase ${item.title || item.key}` }, '+');
     dec.addEventListener('click', step(-1));
@@ -151,7 +160,13 @@ export function SettingRow(item, deps) {
   } else {
     // url, command and text: a text input; only these kinds ever take free text.
     const input = textInput('text');
+    let saving = false;
     const save = async () => {
+      if (saving) return;
+      saving = true;
+      try { await saveNow(); } finally { saving = false; }
+    };
+    const saveNow = async () => {
       let extra;
       if (item.kind === 'command' && input.value !== value) {
         if (!(await deps.confirm({ title: `Save ${item.key}?`, body: `This is run as a shell command on every matching prompt:\n${input.value}`, danger: true, confirmLabel: 'Save command' }))) { setStatus('✗ not saved: cancelled', 'fail'); return; }
@@ -159,7 +174,9 @@ export function SettingRow(item, deps) {
       }
       if (!(await commit(input.value, extra))) input.value = value;
     };
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+    // Blur saves (change event); Enter blurs, so Enter, blur and the Save button never double-send.
+    input.addEventListener('change', save);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
     const btns = [h('button', { type: 'button', class: 'btn', id: `${id}-save` }, 'Save')];
     btns[0].addEventListener('click', save);
     if (item.kind === 'url') {
@@ -180,7 +197,7 @@ export function SettingRow(item, deps) {
   const el = h('li', { class: 'st-card', id: `${id}-row` },
     h('div', { class: 'st-head' },
       h('label', { class: 'st-title', for: id }, item.title || item.key),
-      h('span', { class: 'st-badge', 'data-applies': item.applies || 'now' }, appliesLabel(item.applies))),
+      appliesLabel(item.applies) ? h('span', { class: 'st-badge', 'data-applies': item.applies }, appliesLabel(item.applies)) : null),
     item.description ? h('p', { class: 'st-desc' }, item.description) : null,
     item.effect ? h('p', { class: 'st-effect' }, `Effect: ${item.effect}`) : null,
     h('div', { class: 'st-ctl' }, control),
@@ -192,38 +209,8 @@ export function SettingRow(item, deps) {
   return el;
 }
 
-// ---- categories --------------------------------------------------------------------------
-export const CATEGORIES = [
-  'Preferences', 'Session automation', 'Guardrails', 'Prompt optimizer', 'Decision model', 'Storage',
-  'Colony', 'Scoring', 'Integrations', 'Ecosystem', 'Connectors', 'Agents', 'Advanced',
-];
-export const slug = (t) => `st-cat-${String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-
-// Server-supplied `category` wins; otherwise key rules, then the curated group title, else Advanced.
-export function categoryOf(item, groupTitle) {
-  if (item.category && CATEGORIES.includes(item.category)) return item.category;
-  const k = String(item.key || '');
-  if (/^ATLAS_DECISION_/.test(k)) return 'Decision model';
-  if (/^ATLAS_COLONY|^ATLAS_TODO$/.test(k)) return 'Colony';
-  if (k === 'ATLAS_HOME' || k === 'ATLAS_DB') return 'Storage';
-  const g = String(groupTitle || '').toLowerCase();
-  if (/session|automation/.test(g)) return 'Session automation';
-  if (/guard/.test(g)) return 'Guardrails';
-  if (/optimi[sz]er/.test(g)) return 'Prompt optimizer';
-  if (/storage/.test(g)) return 'Storage';
-  if (/scor/.test(g)) return 'Scoring';
-  if (/colony/.test(g)) return 'Colony';
-  return 'Advanced';
-}
-
+// ---- filter ---------------------------------------------------------------------------------
 export function rowMatches(search, q) {
   const n = String(q || '').trim().toLowerCase();
   return !n || search.includes(n);
-}
-
-// entries: [{cat, search}] -> {category: visibleCount}
-export function countByCategory(entries, q) {
-  const out = {};
-  for (const e of entries) { out[e.cat] = (out[e.cat] || 0) + (rowMatches(e.search, q) ? 1 : 0); }
-  return out;
 }
