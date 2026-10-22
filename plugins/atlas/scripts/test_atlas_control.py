@@ -253,6 +253,14 @@ class TestBehaviorKnobs(ControlTestCase):
                 self.assertIn(knob["scope"], ("hooks", "shell"), knob["key"])
                 self.assertTrue(knob["ref"], knob["key"])
 
+    def test_no_toggle_has_an_empty_or_ambiguous_on_value(self):
+        # An empty "on" painted the switch Off and made the click a no-op.
+        for group in self.mod.behavior_state()["groups"]:
+            for knob in group["knobs"]:
+                if knob["kind"] == "toggle" and knob["key"] not in ("ATLAS_MODE", "ATLAS_OPTIMIZE_VERBOSE"):
+                    self.assertNotEqual(knob["on"], "", knob["key"])
+                    self.assertNotEqual(knob["on"], knob["off"], knob["key"])
+
     def _find_knob(self, key):
         for group in self.mod.behavior_state()["groups"]:
             for knob in group["knobs"]:

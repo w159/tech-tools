@@ -66,7 +66,11 @@ export function liveVsSaved(item) {
 }
 
 function isOn(item, v) {
-  return String(v ?? '').toLowerCase() !== String(item.off ?? 'off').toLowerCase() && String(v ?? '') !== '';
+  const s = String(v ?? '').toLowerCase();
+  if (s === String(item.off ?? 'off').toLowerCase()) return false;
+  // Unset means the knob's default: on for "unset is on" toggles, off for ATLAS_MODE-style ones.
+  if (s === '') return String(item.default ?? '').toLowerCase() === String(item.on ?? 'on').toLowerCase();
+  return true;
 }
 function fmtValue(item, v) {
   if (item.kind === 'toggle') return isOn(item, v) ? 'on' : 'off';
