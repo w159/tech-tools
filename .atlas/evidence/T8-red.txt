@@ -1,0 +1,23 @@
+   1 not ok 45 - settings: fixture data yields a row
+   1 not ok 44 - settings: error offers Retry
+   1 not ok 43 - settings: empty list says No projects yet.
+   1 not ok 42 - settings: loading state paints skeletons
+   1 not ok 40 - health: fixture data yields a row
+   1 not ok 39 - health: error offers Retry
+   1 not ok 38 - health: empty list says No subsystems yet.
+   1 not ok 37 - health: loading state paints skeletons
+   1 not ok 35 - channels: fixture data yields a row
+   1 not ok 34 - channels: error offers Retry
+   1 not ok 33 - channels: empty list says No messages yet.
+   1 not ok 32 - channels: loading state paints skeletons
+   1 not ok 30 - board: fixture data yields a row
+   1 not ok 29 - board: error offers Retry
+   1 not ok 28 - board: empty list says No tasks yet.
+   1 not ok 27 - board: loading state paints skeletons
+   1 not ok 25 - agents: fixture data yields a row
+   1 not ok 24 - agents: error offers Retry
+   1 not ok 23 - agents: empty list says No agents yet.
+   1 not ok 22 - agents: loading state paints skeletons
+   1 # tests 75
+   1 # pass 55
+   1 # fail 20

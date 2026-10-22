@@ -203,3 +203,15 @@ questions. None needs the user; each is settled here.
 10. Empty, loading and error copy: builder decides from the mockup.
 Also: the TUI binds both `i` and `m` to steer (atlas_tui.py:73-82);
 the web UI binds both.
+
+## As built (2026-10-22, main at 4a8d5593)
+
+Deviations from the design above:
+
+- Title row: the band shows project, branch and lead, with no wave number.
+- Phase n/m is not wired; the shell passes `header=null` (`js/app.js:49-50`, `js/run-data.js:37`).
+- Gates line shape is `{id,label,ok,detail,fix}` (`atlas_gates.py` completion lines), not the guessed letter/passed/message form; `toGates` was amended to match.
+- A project selector sits in the band.
+- Region states (loading, empty, error) live in one shared module, `js/region-state.js`.
+- Keys were built in two parts: 7a modules (`keys.js`, `palette.js`), 7b wiring into run and shell.
+- `ui.css` was kept rather than replaced.

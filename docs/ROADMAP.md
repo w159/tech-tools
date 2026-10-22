@@ -6,6 +6,15 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ## In Progress
 
+### Command Center v15 follow-ups (added 2026-10-22)
+
+Done 2026-10-22 (moved to `docs/CHANGELOG.md` 15.0.0): Command Center v15 band-and-rail, tasks 1-8, findings T1..T8 verified, evidence `.atlas/evidence/2026-10-22-T1-review.md` through `T8-review.md`.
+
+- [planned] Wire phase n/m into the band: `app.js:49-50` and `run-data.js:37` pass `n: null, m: null` and the header is null.
+- [planned] Keyboard terminal guard untested: `run.js:377` blocks keys inside `.xterm`, but no `.xterm` exists in the review runs (`.atlas/evidence/2026-10-22-T7b-receipt.md:15`, `T7b-review.md:30`).
+- [planned] Task 9 (version bump to 15.0.0, docs sync) and Task 10 (runtime acceptance at 1440, 1000 and 390 px) of `docs/plans/2026-10-22-command-center-v15-plan.md`.
+- [planned] Deferred minors (`.atlas/.run/cc15-ledger.md`, T7b and T8 reviews): glyph-table comment overstates what the contract test guards; `tokens.css` v14 alias block and color-mix aliases outside the contrast gate; `contrast.py` sync check is one-way; `?session=` gates form returns project null and matches roots by exact realpath; `holdSelected` from another route drops the event; fixed 400 ms wait in `steerLead` (`app.js:247`); palette a11y (no placeholder, no aria-activedescendant, stays open across hashchange); `shell.css:113` magic `top: 56px`; `pages.css:617` stale "v14 tables" comment; no tests for Retry wiring or the six old-hash redirects at runtime.
+
 ### Command Center next (added 2026-10-22, after 13.0.0)
 
 The 14.0.0 redesign (`docs/command-center-redesign.md`) rebuilt the UI and replaced the v13 pages, so the v13 items below that name `channel-sync.js`, the Roster or the old Settings page are superseded by the rebuild and stay listed only until re-checked against the new pages.

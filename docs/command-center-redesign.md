@@ -1,5 +1,7 @@
 # Atlas Command Center: redesign brief (v14)
 
+> Superseded by docs/plans/2026-10-22-command-center-v15-design.md (v15, 2026-10-22).
+
 Status: build contract. Every implementer of `plugins/atlas/scripts/dashboard_ui/` builds to this file.
 The backend (`atlas_dashboard.py` and the `atlas_dash_*.py` route modules) stays; only the settings
 metadata in `atlas_control.py` changes (section 8). The previous UI (v13 and earlier: shell, pages,

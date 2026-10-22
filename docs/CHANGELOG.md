@@ -1,5 +1,37 @@
 # Changelog
 
+## 15.0.0 (2026-10-22, unreleased)
+
+### Added
+
+- Command Center v15 (band and rail), commits `6a3055d1..4a8d5593` on main. Six routes: Run, Agents, Board, Channels, Health, Settings (`plugins/atlas/scripts/dashboard_ui/js/router.js`, `pages/run.js`). The shell is a band (title row, chevron phase rail, live counts; `js/band.js`) over a seats rail, a channel feed with a steer bar and a right column of needs-you, gates chips and a last-7-days table.
+- Steer bar posts to `POST /api/v2/channels` with the text in field `body` (`js/steer.js`); a 409 now shows the server reason, not the raw code (`bddead4b`).
+- `GET /api/v2/gates?project=<abs root>|session=<id>` (token required, read-only): `plugins/atlas/scripts/atlas_dash_gates.py`, registered in `atlas_dashboard.py:1972,2006`. Lines are `{id,label,ok,detail,fix}`. Test: `plugins/atlas/scripts/test_atlas_dash_gates.py`.
+- Keys `1 2 3 f i m h Escape` (`RUN_KEYMAP_IDS`, `pages/run.js:123`) and `/` for the command palette (`js/keys.js`, `js/palette.js`, `js/app.js`). Nine palette commands: Go to each of the six routes, Steer lead, Hold selected seat, Toggle theme. Modifier chords are ignored (`5b88ca74`); typing in an input or `.xterm` blocks every key except Escape.
+- Glyph and role tables `js/glyph-table.js`, pinned to `plugins/atlas/mod/theme.ts` by `test_dashboard_glyphs_match_theme_ts` in `plugins/atlas/hooks/test_atlas_contract.py`.
+- Shared region states (loading, empty, error with Retry): `js/region-state.js`, `js/region.js`.
+
+### Changed
+
+- Old hashes redirect: `#/overview` to `#/run`, `#/activity` to `#/channels`, `#/improve` to `#/health`, `#/projects` to `#/settings`, `#/colony` to `#/agents`, `#/terminal` to `#/agents?tab=terminal` (`js/router.js:7-12,30-31`). Replaces the v14 sidebar shell and nine pages.
+- Tokens come from `BRAND` in `plugins/atlas/mod/contract.ts:103` (`dashboard_ui/css/tokens.css`); `dashboard_ui/design/contrast.py` is restored and is the contrast gate (`ac86d7fb`). Vendored Geist fonts are kept (`dashboard_ui/fonts/`).
+- Agents, Board, Channels, Health and Settings restyled onto the band shell (`f3052302`). Settings keeps all 214 controls: 214 before and 214 after with identical id/label/tag lists (`.atlas/evidence/2026-10-22-T8-receipt.md:23`).
+- Fallow suppressions and baselines refreshed (`767b0cee`, `899ea19f`).
+
+### Removed
+
+- The v14 sidebar, the Overview, Activity, Improve and Projects pages as routes (their hashes redirect).
+
+### Fixed
+
+- Band count dots, svg mark and live dot (`bb477c06`); steer error message and band owner guard (`bddead4b`).
+
+### Known
+
+- Band shows project, branch and lead, no wave number. Phase n/m is not wired: `app.js:49-50` and `run-data.js:37` pass `n: null, m: null` and the header is null. See ROADMAP "Command Center v15 follow-ups".
+
+Verified: findings T1..T8 and `cc15-wave-a` in `.atlas/.run/findings.json`; reviews `.atlas/evidence/2026-10-22-T1-review.md` through `T8-review.md` (plus `T3-rereview-r1`, `T6-rereview-r1`, `T7a-rereview-r1`); receipts `2026-10-22-T*-receipt.md`. Design: `docs/plans/2026-10-22-command-center-v15-design.md`; plan: `docs/plans/2026-10-22-command-center-v15-plan.md`. Tasks 9 (version bump) and 10 (runtime acceptance) are not done.
+
 ## 14.0.0 (2026-10-22, unreleased)
 
 ### Added

@@ -44,13 +44,13 @@
 **Interfaces:**
 - Produces: `export const PHASE_GLYPH = { research, theory, test, validate, implement, verify, done, blocked }` (values from CONTRACT_GLYPH, theme.ts:228; validate is U+2630); `export const STATE_GLYPH = { spawning, running, idle, input, stuck, parked, finished, failed, dead }` (theme.ts:32-42); `export const SPIN` (10 braille frames, theme.ts:142); `export const PHASE_FRAMES = { research, theory, test, implement, verify }` (theme.ts:147-153); `export const ROLE_LETTER = { lead: "L", implementer: "I", verifier: "V", explorer: "E", runner: "R", "docs-curator": "D", "test-engineer": "T" }`; `export function roleLetter(role: string): string` (table hit, else first letter upper-cased, else "?"); `export function spin(frame: number, phase?: string): string` (phase table when present, else SPIN; `frame % length`).
 
-- [ ] **Step 1: Write the failing test** in glyph-table.test.js: `STATE_GLYPH.input === "◇"`, `PHASE_GLYPH.implement === "⚒"`, `spin(7, "verify") === "◓"`, `spin(10) === "⠋"`, `roleLetter("docs-curator") === "D"`, `roleLetter("zebra") === "Z"`, `roleLetter("") === "?"`.
-- [ ] **Step 2: Run** `cd plugins/atlas/scripts && node --test dashboard_ui/js/glyph-table.test.js`. Expected: FAIL, module not found.
-- [ ] **Step 3: Implement** glyph-table.js with the exports above; values copied from facts section 10 as `\uXXXX` escapes, not pasted glyphs.
-- [ ] **Step 4: Run** the same command. Expected: PASS.
-- [ ] **Step 5: Write the failing contract test** `test_dashboard_glyphs_match_theme_ts` in plugins/atlas/hooks/test_atlas_contract.py: regex-extract STATE_GLYPH and CONTRACT_GLYPH entries from plugins/atlas/mod/theme.ts and the `\uXXXX` literals from glyph-table.js; assert the two maps are equal (keys and codepoints) for the nine states and eight phases.
-- [ ] **Step 6: Run** `python3 -m unittest plugins.atlas.hooks.test_atlas_contract -k glyphs` (or the file path form the module supports). Expected: PASS. Then change one escape in glyph-table.js, run again, expected FAIL, revert.
-- [ ] **Step 7: Commit** `feat(cc15): glyph and role tables pinned to theme.ts`.
+- [x] **Step 1: Write the failing test** in glyph-table.test.js: `STATE_GLYPH.input === "◇"`, `PHASE_GLYPH.implement === "⚒"`, `spin(7, "verify") === "◓"`, `spin(10) === "⠋"`, `roleLetter("docs-curator") === "D"`, `roleLetter("zebra") === "Z"`, `roleLetter("") === "?"`.
+- [x] **Step 2: Run** `cd plugins/atlas/scripts && node --test dashboard_ui/js/glyph-table.test.js`. Expected: FAIL, module not found.
+- [x] **Step 3: Implement** glyph-table.js with the exports above; values copied from facts section 10 as `\uXXXX` escapes, not pasted glyphs.
+- [x] **Step 4: Run** the same command. Expected: PASS.
+- [x] **Step 5: Write the failing contract test** `test_dashboard_glyphs_match_theme_ts` in plugins/atlas/hooks/test_atlas_contract.py: regex-extract STATE_GLYPH and CONTRACT_GLYPH entries from plugins/atlas/mod/theme.ts and the `\uXXXX` literals from glyph-table.js; assert the two maps are equal (keys and codepoints) for the nine states and eight phases.
+- [x] **Step 6: Run** `python3 -m unittest plugins.atlas.hooks.test_atlas_contract -k glyphs` (or the file path form the module supports). Expected: PASS. Then change one escape in glyph-table.js, run again, expected FAIL, revert.
+- [x] **Step 7: Commit** `feat(cc15): glyph and role tables pinned to theme.ts`.
 
 ### Task 2: Tokens and the contrast gate
 
@@ -61,11 +61,11 @@
 **Interfaces:**
 - Produces CSS custom properties on `:root` (dark default, `color-scheme: dark`) and `:root[data-theme="light"]` plus `@media (prefers-color-scheme: light) :root[data-theme="system"]`: `--canvas --chrome --well --rule --rule-2 --text --dim --faint --brand --brand-ink --focus --ok --working --needs --fail --idle --sub --mono --sans --s1..--s7 --r1 --r2 --t-tick: 250ms`. Dark values: canvas #0c1215, chrome #0a0e11, well #121a1e (BRAND surface), text #e6edf0, dim #9fb0b8, brand #2fbd9f, focus #7fe0cb, ok #52c872, working #62b8e6, needs #f2aa40, fail #ff7570, idle #93a4ac, sub #b5a3fa; `--rule`, `--rule-2`, `--faint`, `--brand-ink` chosen by the builder to pass contrast.
 
-- [ ] **Step 1: Restore** contrast.py from HEAD into design/ and run `python3 plugins/atlas/scripts/dashboard_ui/design/contrast.py`. Expected: exit 0 on the v14 palette (baseline).
-- [ ] **Step 2: Edit** the DARK and LIGHT dicts in contrast.py to the v15 token values above; run it. Expected: FAIL list names any pair under threshold (this is the failing check).
-- [ ] **Step 3: Rewrite** tokens.css with the same values (one source: copy the dict values; add a comment line naming contract.ts as origin). Adjust `--rule`, `--rule-2`, `--faint`, `--brand-ink` until contrast.py exits 0; keep tokens.css and contrast.py in sync.
-- [ ] **Step 4: Run** contrast.py. Expected: exit 0, no FAIL lines. Run the JS suite. Expected: 25 pass (18 + 7 from Task 1), 0 fail.
-- [ ] **Step 5: Commit** `feat(cc15): BRAND tokens and restored contrast gate`.
+- [x] **Step 1: Restore** contrast.py from HEAD into design/ and run `python3 plugins/atlas/scripts/dashboard_ui/design/contrast.py`. Expected: exit 0 on the v14 palette (baseline).
+- [x] **Step 2: Edit** the DARK and LIGHT dicts in contrast.py to the v15 token values above; run it. Expected: FAIL list names any pair under threshold (this is the failing check).
+- [x] **Step 3: Rewrite** tokens.css with the same values (one source: copy the dict values; add a comment line naming contract.ts as origin). Adjust `--rule`, `--rule-2`, `--faint`, `--brand-ink` until contrast.py exits 0; keep tokens.css and contrast.py in sync.
+- [x] **Step 4: Run** contrast.py. Expected: exit 0, no FAIL lines. Run the JS suite. Expected: 25 pass (18 + 7 from Task 1), 0 fail.
+- [x] **Step 5: Commit** `feat(cc15): BRAND tokens and restored contrast gate`.
 
 ### Task 3: Shell, router and band
 
@@ -80,11 +80,11 @@
 - Produces: `export function renderBand(model: { project, branch, lead, phase, n, m, counts: { working, needs, failed, parked }, live: "live"|"connecting"|"reconnecting"|"offline", clock: string, narrow: boolean }): string` (HTML). Phase pills: past = check + name, current = `◆ NAME n/m` with class `now`, future = name dim; `narrow` renders only the current pill. Counts use STATE_GLYPH-colored dots; the live word uses LIVE_WORD (app.js:49-54).
 - NAV: `[["run","Run"],["agents","Agents"],["board","Board"],["channels","Channels"],["health","Health"],["settings","Settings"]]`.
 
-- [ ] **Step 1: Write the failing tests**: band.test.js: `renderBand({...phase:"implement", n:3, m:5...})` contains `IMPLEMENT 3/5` inside `class="pill now"`, contains four `pill past`, two future pills, and the string `1 needs you`; with `narrow:true` contains exactly one `pill`; with `live:"reconnecting"` contains `Reconnecting`. router.test.js: `redirectOld("#/overview") === "#/run"`, `"#/activity" -> "#/channels"`, `"#/improve" -> "#/health"`, `"#/projects" -> "#/settings"`, `"#/colony" -> "#/agents"`, `"#/terminal" -> "#/agents"`.
-- [ ] **Step 2: Run** the JS suite. Expected: FAIL (band.js missing, redirects wrong).
-- [ ] **Step 3: Implement** band.js, the NAV and redirect changes, index.html frame, shell.css (band two rows sticky; grid `272px 1fr 336px`; under 1100px the third column spans below; under 700px one column, rail scrolls x) and base.css (mono/sans, `.label`, `.hd`, rules). Delete sidebar markup and its CSS.
-- [ ] **Step 4: Run** the JS suite. Expected: PASS. Start `python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7499` and open `/#/overview`; expected URL becomes `/#/run` and the band renders with a phase rail (page body may be empty until Task 6).
-- [ ] **Step 5: Commit** `feat(cc15): band, six-route shell, redirects`.
+- [x] **Step 1: Write the failing tests**: band.test.js: `renderBand({...phase:"implement", n:3, m:5...})` contains `IMPLEMENT 3/5` inside `class="pill now"`, contains four `pill past`, two future pills, and the string `1 needs you`; with `narrow:true` contains exactly one `pill`; with `live:"reconnecting"` contains `Reconnecting`. router.test.js: `redirectOld("#/overview") === "#/run"`, `"#/activity" -> "#/channels"`, `"#/improve" -> "#/health"`, `"#/projects" -> "#/settings"`, `"#/colony" -> "#/agents"`, `"#/terminal" -> "#/agents"`.
+- [x] **Step 2: Run** the JS suite. Expected: FAIL (band.js missing, redirects wrong).
+- [x] **Step 3: Implement** band.js, the NAV and redirect changes, index.html frame, shell.css (band two rows sticky; grid `272px 1fr 336px`; under 1100px the third column spans below; under 700px one column, rail scrolls x) and base.css (mono/sans, `.label`, `.hd`, rules). Delete sidebar markup and its CSS.
+- [x] **Step 4: Run** the JS suite. Expected: PASS. Start `python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7499` and open `/#/overview`; expected URL becomes `/#/run` and the band renders with a phase rail (page body may be empty until Task 6).
+- [x] **Step 5: Commit** `feat(cc15): band, six-route shell, redirects`.
 
 ### Task 4: Run page data adapters (pure)
 
@@ -97,12 +97,12 @@
 - Consumes: `/api/v2/overview` (overview.js:216; `overview.attention[]` items with `severity, title, detail|what, action.target, action.label`; `waitingAgents` from agents with `name, project, since, key`; the runs/dispatches/silent-failures/tool-errors/doctor fields and deltas inside `runsPanel(overview)` at overview.js:239, which the implementer reads first and names in the fixture), `/api/v2/agents` (per-agent keys from atlas_dash_herd.py build_agents :614-720: at least `name, key, project, state, kind, session_id, state_changed_at, last_message_at, colony`), `/api/v2/colony` (`ok, project, lead{name,channel}, channel, members[]{name, kind, state, parked, steerable, queued, wave{paused,canceled}, last_active, tasks[]}`), `/api/v2/channels/<name>` (note records; dedupe key `seq` else `id` else `ts+from+text`), `/api/v2/gates` (Task 5 shape).
 - Produces: `toBand(overview, colony, header) -> BandModel` (Task 3 shape; phase and n/m parsed from the lead's last `ATLAS | <glyph> <phase>( n/m)? | ...` line with the regex in contracts/operating-contract.json:14, default phase "research"); `toSeats(agents, colony) -> Seat[]` where `Seat = { name, role, letter, state, glyph, tool, elapsedCells: 0..8, age, colony, lead, selected }`; `toFeed(notes) -> FeedRow[]` where `FeedRow = { key, t, kindGlyph, kindClass, from, fromClass, text, needs: boolean, phase?: string }`, dedupes by key and sorts by ts; `toNeeds(overview, agents) -> NeedItem[]` where `NeedItem = { key, title, detail, state: "waiting"|"failing"|"warning", stateLine, actions: [{label, target}] }` and `stateLine` omits the duration when `since` is missing; `toGates(gates) -> GateChip[]` `{ letter, label, ok, message }`; `toMetrics(overview) -> MetricRow[]` `{ id, label, n, cells: 0..13, delta: string, tone: "up"|"dn"|"flat"|"bad" }`.
 
-- [ ] **Step 1: Capture fixtures** with the 7499 server running: `curl -s -H "X-Atlas-Token: $(grep -o 'atlas-token" content="[^"]*' <(curl -s http://127.0.0.1:7499/) | cut -d'"' -f3)" http://127.0.0.1:7499/api/v2/overview?window=7d > fixtures/overview.json` and the same for agents, colony and `channels/<lead channel>`; redact any home paths to `~`. Read overview.js:239-300 and note the metric field names in a comment at the top of run-data.js.
-- [ ] **Step 2: Write the failing tests** against the fixtures: `toSeats` returns one row per agent with `letter` from ROLE_LETTER and `glyph` from STATE_GLYPH; `toFeed` of a fixture concatenated with itself has the same length as the fixture; `toNeeds` of an item with `since: null` has a `stateLine` that does not match `/NaN|undefined/` and starts with the state word; `toBand` of a colony with `ok:false` gives `phase:"research"` and `n === null`; `toMetrics` gives five rows in the spec order with `cells` between 0 and 13; `toGates` maps `lines[]` to chips with `ok === line.passed`.
-- [ ] **Step 3: Run** the suite. Expected: FAIL, run-data.js missing.
-- [ ] **Step 4: Implement** run-data.js (pure functions only; no DOM, no fetch).
-- [ ] **Step 5: Run** the suite. Expected: PASS.
-- [ ] **Step 6: Commit** `feat(cc15): run page adapters with live fixtures`.
+- [x] **Step 1: Capture fixtures** with the 7499 server running: `curl -s -H "X-Atlas-Token: $(grep -o 'atlas-token" content="[^"]*' <(curl -s http://127.0.0.1:7499/) | cut -d'"' -f3)" http://127.0.0.1:7499/api/v2/overview?window=7d > fixtures/overview.json` and the same for agents, colony and `channels/<lead channel>`; redact any home paths to `~`. Read overview.js:239-300 and note the metric field names in a comment at the top of run-data.js.
+- [x] **Step 2: Write the failing tests** against the fixtures: `toSeats` returns one row per agent with `letter` from ROLE_LETTER and `glyph` from STATE_GLYPH; `toFeed` of a fixture concatenated with itself has the same length as the fixture; `toNeeds` of an item with `since: null` has a `stateLine` that does not match `/NaN|undefined/` and starts with the state word; `toBand` of a colony with `ok:false` gives `phase:"research"` and `n === null`; `toMetrics` gives five rows in the spec order with `cells` between 0 and 13; `toGates` maps `lines[]` to chips with `ok === line.passed`.
+- [x] **Step 3: Run** the suite. Expected: FAIL, run-data.js missing.
+- [x] **Step 4: Implement** run-data.js (pure functions only; no DOM, no fetch).
+- [x] **Step 5: Run** the suite. Expected: PASS.
+- [x] **Step 6: Commit** `feat(cc15): run page adapters with live fixtures`.
 
 ### Task 5: Read-only gates route
 
@@ -115,11 +115,11 @@
 - Consumes: `atlas_gates.completion_group(session: str, root: Path, transcript: str) -> {"id","title","lines":[{letter,label,passed,message,gist}], "error"?}` (atlas_gates.py:73-100).
 - Produces: `GET /api/v2/gates?session=<id>` returning `{ ok: true, session, lines: [...] }` with the `lines` list passed through, HTTP 400 `{ok:false, error:"session_required"}` when the param is missing, 404 `{ok:false, error:"session_not_found"}` when `_session_detail(conn, session_id)` (atlas_dashboard.py:854) finds none. Handler signature follows the pattern used by `h_channels_post(ctx, b, root)` in atlas_dash_irc.py:659; transcript path resolved the way the completion gate hook resolves it (search `transcript` in plugins/atlas/hooks/completion_gate.py and reuse that helper).
 
-- [ ] **Step 1: Write the failing tests**: `test_gates_requires_session` (400), `test_gates_unknown_session` (404), `test_gates_passthrough` (monkeypatch `atlas_gates.completion_group` to return two lines; assert the response carries both and `ok` is true).
-- [ ] **Step 2: Run** `python3 -m unittest plugins/atlas/scripts/test_atlas_dash_gates.py`. Expected: FAIL (module missing).
-- [ ] **Step 3: Implement** atlas_dash_gates.py and register it.
-- [ ] **Step 4: Run** the test. Expected: PASS. With the 7499 server up: `curl -s -H "X-Atlas-Token: ..." "http://127.0.0.1:7499/api/v2/gates?session=<a live session id from /api/sessions>"`; expected a JSON object with `lines`. Also `curl ... /api/v2/gates` (no param); expected 400.
-- [ ] **Step 5: Commit** `feat(cc15): read-only /api/v2/gates`.
+- [x] **Step 1: Write the failing tests**: `test_gates_requires_session` (400), `test_gates_unknown_session` (404), `test_gates_passthrough` (monkeypatch `atlas_gates.completion_group` to return two lines; assert the response carries both and `ok` is true).
+- [x] **Step 2: Run** `python3 -m unittest plugins/atlas/scripts/test_atlas_dash_gates.py`. Expected: FAIL (module missing).
+- [x] **Step 3: Implement** atlas_dash_gates.py and register it.
+- [x] **Step 4: Run** the test. Expected: PASS. With the 7499 server up: `curl -s -H "X-Atlas-Token: ..." "http://127.0.0.1:7499/api/v2/gates?session=<a live session id from /api/sessions>"`; expected a JSON object with `lines`. Also `curl ... /api/v2/gates` (no param); expected 400.
+- [x] **Step 5: Commit** `feat(cc15): read-only /api/v2/gates`.
 
 ### Task 6: Run page
 
@@ -134,11 +134,11 @@
 - Produces: `render({ root, route, params, project, navigate, setParams })` returning a cleanup; region renderers exported for tests: `renderSeats(seats, selected) -> string`, `renderFeed(rows) -> string`, `renderNeeds(items) -> string`, `renderGates(chips) -> string`, `renderMetrics(rows) -> string`, each with `loading`, `empty`, `error(message)` variants exported as `renderRegionState(kind, name, message?) -> string`; `steer.js`: `export function sendSteer({ channel, to, text }) -> Promise<{ok, error?}>` and `export function steerTarget(selectedSeat, lead) -> string` (`@<seat>` when a seat is selected, else `@lead`, `@all` on request).
 - Keyboard: `1/2/3` focus regions, `f` filter feed to the selected seat, `i` and `m` focus the steer input, `h` hold the selected seat (POST the same note with `kind:"hold"`), `esc` blur, `/` palette (Task 7).
 
-- [ ] **Step 1: Write the failing tests**: run.test.js renders each region from the Task 4 fixtures and asserts: seats HTML contains `class="seat sel"` once and the letters `L` and `I`; feed HTML contains the needs row with `class="ev need"` and a `daymark`; needs HTML has `Answer` for waiting items and `Open` for warnings; gates HTML has one `gate ok` per passed line; metrics HTML has five rows; `renderRegionState("empty","seats")` contains "No seats"; `renderRegionState("error","channel","timeout")` contains "Retry". steer.test.js: `steerTarget(null, "lead-x") === "@lead"`, `steerTarget({name:"impl-a"}, "lead-x") === "@impl-a"`; `sendSteer` with a stubbed `post` rejecting `{status:409, data:{error:"held"}}` resolves `{ok:false, error:"held"}` and never throws.
-- [ ] **Step 2: Run** the suite. Expected: FAIL.
-- [ ] **Step 3: Implement** run.js, steer.js, run.css following the mockup: left rail groups per colony, seat rows (glyph, letter, name, age; tool, 8-cell bar, spinner or state word), machine line at the bottom; center `CHANNEL` header, feed rows with 72px mono gutter and 24px kind column, steer bar; right needs-you items (amber inset, red for failing), gates chips, metrics table with 13-cell bars. Stream updates re-render only the affected region. Spinner advances every 250 ms only while a seat is `running`.
-- [ ] **Step 4: Run** the suite. Expected: PASS. In the browser at 7499: `/#/run` shows all regions with live data; disconnect the server for 10 s and reconnect; expected the band shows Reconnecting then Live and the feed has no duplicate rows.
-- [ ] **Step 5: Commit** `feat(cc15): run page`.
+- [x] **Step 1: Write the failing tests**: run.test.js renders each region from the Task 4 fixtures and asserts: seats HTML contains `class="seat sel"` once and the letters `L` and `I`; feed HTML contains the needs row with `class="ev need"` and a `daymark`; needs HTML has `Answer` for waiting items and `Open` for warnings; gates HTML has one `gate ok` per passed line; metrics HTML has five rows; `renderRegionState("empty","seats")` contains "No seats"; `renderRegionState("error","channel","timeout")` contains "Retry". steer.test.js: `steerTarget(null, "lead-x") === "@lead"`, `steerTarget({name:"impl-a"}, "lead-x") === "@impl-a"`; `sendSteer` with a stubbed `post` rejecting `{status:409, data:{error:"held"}}` resolves `{ok:false, error:"held"}` and never throws.
+- [x] **Step 2: Run** the suite. Expected: FAIL.
+- [x] **Step 3: Implement** run.js, steer.js, run.css following the mockup: left rail groups per colony, seat rows (glyph, letter, name, age; tool, 8-cell bar, spinner or state word), machine line at the bottom; center `CHANNEL` header, feed rows with 72px mono gutter and 24px kind column, steer bar; right needs-you items (amber inset, red for failing), gates chips, metrics table with 13-cell bars. Stream updates re-render only the affected region. Spinner advances every 250 ms only while a seat is `running`.
+- [x] **Step 4: Run** the suite. Expected: PASS. In the browser at 7499: `/#/run` shows all regions with live data; disconnect the server for 10 s and reconnect; expected the band shows Reconnecting then Live and the feed has no duplicate rows.
+- [x] **Step 5: Commit** `feat(cc15): run page`.
 
 ### Task 7: Keys and palette
 
@@ -150,11 +150,11 @@
 **Interfaces:**
 - Produces: `export function bindKeys(map: Record<string, () => void>, { isTyping: () => boolean }) -> () => void` (returns unbind; ignores keys while `isTyping()` is true); `export const RUN_KEYS = ["1","2","3","f","i","m","h","Escape","/"]`; palette: `export function openPalette(commands: {id,label,run}[])` with the six routes plus `Steer lead`, `Hold selected seat`, `Toggle theme`.
 
-- [ ] **Step 1: Write the failing test**: dispatching a synthetic `keydown` for `f` calls the handler once; with `isTyping` true it is not called; `Escape` is delivered even while typing.
-- [ ] **Step 2: Run** the suite. Expected: FAIL.
-- [ ] **Step 3: Implement** keys.js and wire RUN_KEYS in run.js; palette entries.
-- [ ] **Step 4: Run** the suite. Expected: PASS. Browser: press `/`, expected the palette; press `3` then `Tab`, expected focus lands in the needs-you region.
-- [ ] **Step 5: Commit** `feat(cc15): keymap mirroring the TUI and palette`.
+- [x] **Step 1: Write the failing test**: dispatching a synthetic `keydown` for `f` calls the handler once; with `isTyping` true it is not called; `Escape` is delivered even while typing.
+- [x] **Step 2: Run** the suite. Expected: FAIL.
+- [x] **Step 3: Implement** keys.js and wire RUN_KEYS in run.js; palette entries.
+- [x] **Step 4: Run** the suite. Expected: PASS. Browser: press `/`, expected the palette; press `3` then `Tab`, expected focus lands in the needs-you region.
+- [x] **Step 5: Commit** `feat(cc15): keymap mirroring the TUI and palette`.
 
 ### Task 8: Agents, Board, Channels, Health, Settings on the new shell
 
@@ -164,11 +164,11 @@
 - Delete: `pages/overview.js`, `pages/activity.js`, `pages/improve.js`, `pages/projects.js`, `css/ui.css` if no longer imported
 - Test: one `*.test.js` per page asserting `render` returns a function and that the four `renderRegionState` variants appear for its main region.
 
-- [ ] **Step 1: Write the failing page tests** (five files, same assertions).
-- [ ] **Step 2: Run** the suite. Expected: FAIL for the pages not yet exporting the state renderers.
-- [ ] **Step 3: Restyle and merge** each page; remove the four deleted pages and any import of them; keep every Settings control id stable (the platform preserves form state by id).
-- [ ] **Step 4: Run** the suite. Expected: PASS. Browser: visit each of the six routes and the six old hashes; expected no console errors and each old hash lands on its new route. In Settings, change the theme; expected the band repaints before the projects request completes.
-- [ ] **Step 5: Commit** `feat(cc15): remaining pages on the band shell`.
+- [x] **Step 1: Write the failing page tests** (five files, same assertions).
+- [x] **Step 2: Run** the suite. Expected: FAIL for the pages not yet exporting the state renderers.
+- [x] **Step 3: Restyle and merge** each page; remove the four deleted pages and any import of them; keep every Settings control id stable (the platform preserves form state by id).
+- [x] **Step 4: Run** the suite. Expected: PASS. Browser: visit each of the six routes and the six old hashes; expected no console errors and each old hash lands on its new route. In Settings, change the theme; expected the band repaints before the projects request completes.
+- [x] **Step 5: Commit** `feat(cc15): remaining pages on the band shell`.
 
 ### Task 9: Version, docs and spec sync
 

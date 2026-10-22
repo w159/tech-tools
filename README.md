@@ -268,20 +268,18 @@ channels the hooks write.
 
 ![Overview](img/showcase/dashboard-overview.png)
 
-| Page | What it shows |
+| Route | What it shows |
 |---|---|
-| Overview | KPIs, the needs-attention inbox, recent runs |
-| Activity | Events by group, filter and live tail |
-| Health | Hooks, gates, dispatch, colony, daemon, DB, connectors, memory, doctor |
-| Agents | Colony members with send, stop, pause, resume; the drawer holds the terminal, messages and tasks. `#/colony`, `#/terminal` and `#/herd` redirect here |
-| Board | The durable todo board (`#/work` redirects here) |
-| Channels | What agents and you said to each other (`#/irc` redirects here) |
-| Improve | Doctor findings: mark fixed, dismiss, remeasure |
-| Projects | Pin, mute or hide projects |
-| Settings | Every `ATLAS_*` key with its current value, source and when it applies; typed controls |
+| Run | Band (project, branch, lead, phase rail, live counts), seats, channel feed with a steer bar, needs-you, gates, last 7 days. `#/overview` redirects here |
+| Agents | Colony members with send, stop, pause, resume; the drawer holds the terminal, messages and tasks. `#/colony` and `#/terminal` redirect here |
+| Board | The durable todo board |
+| Channels | What agents and you said to each other. `#/activity` redirects here |
+| Health | Hooks, gates, dispatch, colony, daemon, DB, connectors, memory, doctor, and doctor findings. `#/improve` redirects here |
+| Settings | Every `ATLAS_*` key with its current value, source and when it applies; project pin, mute and hide. `#/projects` redirects here |
+
+Keys on Run: `1` `2` `3` jump to the seats, channel and needs-you regions, `f` filters the feed, `i` or `m` focuses the steer bar, `h` holds the selected seat, `Escape` leaves a field. `/` opens the command palette (go to a route, steer lead, hold selected seat, toggle theme).
 
 ![Health](img/showcase/dashboard-health.png)
-![Improve](img/showcase/dashboard-improve.png)
 
 Every route checks the `Host` header, content type, origin and, for mutations,
 a per-start token. Details: [docs/atlas-workboard.md](docs/atlas-workboard.md).

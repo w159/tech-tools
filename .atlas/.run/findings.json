@@ -9048,5 +9048,296 @@
     "status": "verified",
     "verified_at": "2026-10-22T13:54:04+00:00",
     "verified_by": "ui-tester-acceptance"
+  },
+  {
+    "id": "T1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T1 glyph tables: proof-first, behavior_changed=yes, review Approved",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T1-review.md",
+      ".atlas/evidence/2026-10-22-T1-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js -> 25 pass (implementer report)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:11:54+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T2 tokens and contrast gate: proof-first, behavior_changed=yes, review Approved",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T2-review.md",
+      ".atlas/evidence/2026-10-22-T2-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/dashboard_ui/design/contrast.py -> ALL PAIRS PASS exit 0",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:17:38+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T3 shell router band: proof-first, behavior_changed=yes, review Needs fixes",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T3-review.md",
+      ".atlas/evidence/2026-10-22-T3-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js -> 32 pass (implementer report); #/overview -> #/run, 0 console errors",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-22T19:23:22+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T3 shell router band: proof-first, behavior_changed=yes, fix round 1 addressed",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T3-rereview-r1.md",
+      ".atlas/evidence/2026-10-22-T3-review.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js -> 34 pass (implementer report); #/run 0 console errors",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:25:36+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T4 run adapters: proof-first, behavior_changed=yes, review Approved",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T4-review.md",
+      ".atlas/evidence/2026-10-22-T4-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js -> 50 pass (implementer report; reviewer re-ran: 50 pass)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:31:47+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T5 gates route: proof-first, behavior_changed=yes, review Approved",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T5-review.md",
+      ".atlas/evidence/2026-10-22-T5-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest plugins/atlas/scripts/test_atlas_dash_gates.py -> 6 OK; curl /api/v2/gates no token -> 401",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:40:11+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "cc15-wave-a",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/cc15 Tasks 1-5 verified by independent reviewers (T1..T5 findings)",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T1-review.md",
+      ".atlas/evidence/2026-10-22-T2-review.md",
+      ".atlas/evidence/2026-10-22-T3-rereview-r1.md",
+      ".atlas/evidence/2026-10-22-T4-review.md",
+      ".atlas/evidence/2026-10-22-T5-review.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "branch worker/cc15 at 6ed61b0d: node 50 pass; test_atlas_dash_gates 6 OK; contrast.py ALL PAIRS PASS",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:40:36+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T7a",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T7a keys and palette modules: proof-first, behavior_changed=yes, review Needs fixes",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T7a-review.md",
+      ".atlas/evidence/2026-10-22-T7a-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/keys.test.js dashboard_ui/js/palette.test.js -> 10 pass (reviewer rerun); implementer: node --test dashboard_ui/js/*.test.js -> 60 pass",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-22T19:40:36+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T7a",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T7a keys and palette modules on worker/cc15-t7: proof-first, behavior_changed=yes, fix round 1 addressed",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T7a-rereview-r1.md",
+      ".atlas/evidence/2026-10-22-T7a-review.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js -> 61 pass (implementer report)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:43:57+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T6 run page on worker/cc15-t6: proof-first, behavior_changed=yes, review Needs fixes (409 server message not shown inline)",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T6-review.md",
+      ".atlas/evidence/2026-10-22-T6-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js -> 70 pass (reproduced); #/run live, 0 console errors, steer round trip 860 ms (implementer report)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-22T19:49:39+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T6 run page on worker/cc15-t6: proof-first, behavior_changed=yes, fix round 1 addressed",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T6-rereview-r1.md",
+      ".atlas/evidence/2026-10-22-T6-review.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js -> 72 pass (implementer report)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:51:38+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T7b",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T7b keys and palette wiring on worker/cc15-t7b: proof-first, behavior_changed=yes, review Approved",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T7b-review.md",
+      ".atlas/evidence/2026-10-22-T7b-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js -> 86 pass (reproduced in worktree cc15-t7b); browser: / opens palette, 3+Tab focuses needs region, Meta+f not prevented",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:57:42+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T8",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T8 remaining pages on worker/cc15-t8: proof-first, behavior_changed=yes, review Approved",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T8-review.md",
+      ".atlas/evidence/2026-10-22-T8-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "node --test dashboard_ui/js/*.test.js dashboard_ui/js/pages/*.test.js -> 109 pass 0 fail (reviewer re-run); cmp region-state.js IDENTICAL; implementer: 11 routes 0 console errors; Settings 214 controls before and after",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T19:58:33+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T9",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T9 release 15.0.0 on worker/cc15-t9: proof-first, behavior_changed=no, verified by the contract suite",
+    "evidence": [
+      "plugins/atlas/hooks/test_atlas_contract.py::test_marketplace_matches_plugin_json",
+      ".atlas/evidence/2026-10-22-T9-release-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd .atlas/wt/cc15-t9/plugins/atlas/hooks && python3 -m unittest test_atlas_contract -> Ran 111 tests OK (skipped=4); red on manifest-only bump: Lists differ ['14.0.0'] != ['15.0.0']",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T20:05:59+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T8c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T8c drop v14 overview and aliases on worker/cc15-t8c: characterization, behavior_changed=no, review Needs fixes (test_atlas_dashboard.py:44 404s on deleted overview.js)",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T8c-review.md",
+      ".atlas/evidence/2026-10-22-T8c-receipt.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_atlas_dashboard.TestAtlasDashboard.test_static_assets_never_cached -> HTTP 404; node --test dashboard_ui/js/*.test.js -> 111 pass; contrast.py ALL PAIRS PASS",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-22T20:06:23+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "T8c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "T8c drop v14 overview and aliases on worker/cc15-t8c: characterization, behavior_changed=no, fix round 1 addressed (test retarget verified by test run)",
+    "evidence": [
+      ".atlas/evidence/2026-10-22-T8c-review.md",
+      "plugins/atlas/scripts/test_atlas_dashboard.py::test_static_assets_never_cached"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd .atlas/wt/cc15-t8c/plugins/atlas/scripts && python3 -m unittest test_atlas_dashboard -> Ran 86 tests OK (was 404 on overview.js before 4efcbc94)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T20:08:09+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]
