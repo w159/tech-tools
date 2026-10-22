@@ -45,9 +45,18 @@ function count(n, tone, label, pulse) {
 const MARK =
   '<svg class="mark-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 12l9-5M12 12v10M12 12L3 7"/></svg>';
 
+function projectSelect(options) {
+  const opts = options
+    .map((o) => `<option value="${esc(o.value)}"${o.selected ? " selected" : ""}>${esc(o.label)}</option>`)
+    .join("");
+  return `<select class="proj" aria-label="Project" data-proj>${opts}</select>`;
+}
+
 export function renderBand(model) {
-  const { project, branch, lead, phase, n, m, counts, live, clock, narrow, route } = model;
-  const title = [project, branch, lead].filter(Boolean).map(esc).join(" \u00B7 ")  // middle dot, same separator as terminal band.tsx:72-76;
+  const { project, branch, lead, phase, n, m, counts, live, clock, narrow, route, projectOptions } = model;
+  // With projectOptions the project crumb is a select (run.js owns its change handler).
+  const crumb = projectOptions ? projectSelect(projectOptions) : project && esc(project);
+  const title = [crumb, branch && esc(branch), lead && esc(lead)].filter(Boolean).join(" \u00B7 ");  // middle dot, same separator as terminal band.tsx:72-76
   const cur = Math.max(0, PHASES.indexOf(phase));
   const pills = PHASES.map((p, i) => pill(p, i, cur, n, m)).filter(
     (_, i) => !narrow || i === cur,

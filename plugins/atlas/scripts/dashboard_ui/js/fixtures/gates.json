@@ -1,9 +1,10 @@
 {
   "ok": true,
   "session": "fixture-lead-session",
+  "project": "~/MEGA/Projects/Agentic/tech-tools",
   "lines": [
-    { "letter": "m", "label": "delegation", "passed": true, "message": "ok", "gist": "delegation mandate met" },
-    { "letter": "c", "label": "changelog", "passed": false, "message": "CHANGELOG missing an entry", "gist": "update CHANGELOG" },
-    { "letter": "i", "label": "open todos", "passed": true, "message": "ok", "gist": "no open todos" }
+    { "id": "m", "label": "delegation", "ok": true },
+    { "id": "c", "label": "changelog", "ok": false, "detail": "CHANGELOG missing an entry", "fix": "add a CHANGELOG entry for this change" },
+    { "id": "i", "label": "open todos", "ok": true, "detail": "none open" }
   ]
 }

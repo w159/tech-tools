@@ -170,14 +170,16 @@ test("toMetrics: rising errors are bad, missing kpis give n null, empty max give
   assert.equal(toMetrics({}).every((r) => r.n === null && r.cells === 0), true);
 });
 
-test("toGates: chips mirror lines, ok === passed", () => {
+test("toGates: chips mirror the real route lines (id, ok, detail, fix)", () => {
   const chips = toGates(gates);
   assert.equal(chips.length, gates.lines.length);
   chips.forEach((c, i) => {
-    assert.equal(c.ok, gates.lines[i].passed);
-    assert.equal(c.letter, gates.lines[i].letter);
-    assert.equal(c.message, gates.lines[i].message);
+    assert.equal(c.ok, gates.lines[i].ok);
+    assert.equal(c.letter, gates.lines[i].id);
+    assert.equal(c.message, gates.lines[i].detail || "");
+    assert.equal(c.fix, gates.lines[i].fix);
   });
+  assert.equal(chips.filter((c) => !c.ok).length, 1);
   assert.deepEqual(toGates({ ok: false }), []);
 });
 

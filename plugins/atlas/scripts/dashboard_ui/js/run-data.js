@@ -192,11 +192,13 @@ export function toNeeds(overview, agents, now) {
 }
 
 export function toGates(gates) {
+  // Real route shape (GET /api/v2/gates): lines[] {id,label,ok,detail?,fix?}.
   return ((gates && gates.ok && gates.lines) || []).map((l) => ({
-    letter: l.letter,
+    letter: l.id,
     label: l.label,
-    ok: l.passed,
-    message: l.message,
+    ok: l.ok,
+    message: l.detail || "",
+    ...(l.fix ? { fix: l.fix } : {}),
   }));
 }
 
