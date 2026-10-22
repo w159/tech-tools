@@ -574,6 +574,24 @@ class TestSettingsRegistry(ControlTestCase):
         self.assertEqual(k["ATLAS_OPTIMIZE_CMD"]["kind"], "command")
         self.assertEqual(k["ATLAS_DASHBOARD_PORT"]["applies"], "dashboard-restart")
 
+    def test_inferred_kinds_for_named_and_scanned_advanced_keys(self):
+        k = self.knobs()
+        self.assertEqual((k["ATLAS_COLONY"]["kind"], k["ATLAS_TODO"]["kind"]), ("toggle", "toggle"))
+        self.assertEqual(k["ATLAS_COLONY_TRANSPORT"]["kind"], "select")
+        self.assertEqual(
+            [o["value"] for o in k["ATLAS_COLONY_TRANSPORT"]["options"]], ["herdr", "tmux", "claude-bg"]
+        )
+        self.assertEqual(k["ATLAS_COLONY_LIVE_WINDOW"]["kind"], "number")
+        self.assertEqual(k["ATLAS_REMOTE_PORT"]["range"], {"min": 1, "max": 65535, "step": 1})
+        texts = [x for x in self.mod.behavior_state()["advanced"] if x["kind"] == "text"]
+        self.assertLessEqual(len(texts), 37)  # was 40 text rows in Advanced before inference
+        for bad in ("0", "70000"):
+            res = self.mod.write_behavior_updates({"ATLAS_REMOTE_PORT": bad})
+            self.assertEqual(res.get("error"), "out_of_range", bad)
+        self.assertEqual(
+            self.mod.write_behavior_updates({"ATLAS_COLONY_TRANSPORT": "zellij"}).get("error"), "bad_option"
+        )
+
     def test_every_number_knob_has_a_range(self):
         for key, k in self.knobs().items():
             if k["kind"] == "number":

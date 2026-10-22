@@ -107,3 +107,37 @@ test("pollJob reports every update and stops on error", async () => {
   expect(job.status).toBe("error");
   expect(seen).toEqual(["error"]);
 });
+
+test("the current value that is not an installed tag is pinned first as `current`; Reset to default saves the default", async () => {
+  const api = { get: async (p) => (p.endsWith("/status") ? { reachable: true } : { models: MODELS }) };
+  const picked = [];
+  const root = ModelPicker({ api, value: "nimble", defaultValue: "nimble", onPick: async (n) => picked.push(n) });
+  root.setOpen(true);
+  await tick();
+  const first = byClass(root, "mp-row")[0];
+  expect(first.attrs.class).toContain("mp-pinned");
+  expect(text(first)).toContain("nimble");
+  expect(text(first)).toContain("current");
+  expect(byClass(root, "mp-reset")[0].hidden).toBe(true); // already the default
+  const other = byClass(root, "mp-row").find((r) => text(r).includes("llama3.2:3b"));
+  await other.listeners.click();
+  expect(byClass(root, "mp-reset")[0].hidden).toBe(false);
+  await byClass(root, "mp-reset")[0].listeners.click();
+  expect(picked).toEqual(["llama3.2:3b", "nimble"]);
+});
+
+test("models without completion are hidden until Show all", async () => {
+  const withCaps = [...MODELS, { name: "nomic-embed-text:latest", cloud: false, size_bytes: 2.7e8, capabilities: ["embedding"] }];
+  expect(filterModels(withCaps, { showAll: false }).map((m) => m.name)).not.toContain("nomic-embed-text:latest");
+  expect(filterModels(withCaps, { showAll: true }).map((m) => m.name)).toContain("nomic-embed-text:latest");
+  const api = { get: async (p) => (p.endsWith("/status") ? { reachable: true } : { models: withCaps }) };
+  const root = ModelPicker({ api, value: "nimble:latest", onPick: async () => {} });
+  root.setOpen(true);
+  await tick();
+  const names = () => byClass(root, "mp-row").map((r) => text(r));
+  expect(names().some((t) => t.includes("nomic-embed"))).toBe(false);
+  const btn = byClass(root, "mp-show-all")[0];
+  expect(btn.hidden).toBe(false);
+  btn.listeners.click();
+  expect(names().some((t) => t.includes("nomic-embed"))).toBe(true);
+});

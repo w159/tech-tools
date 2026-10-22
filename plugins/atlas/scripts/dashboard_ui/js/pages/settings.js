@@ -43,9 +43,16 @@ function describeError(err) {
 
 let S = null;
 
+// One category at a time: ?cat= picks it, else the first. A non-empty filter overrides and shows every match.
+function initialCat() {
+  let c = null;
+  try { c = new URLSearchParams((globalThis.location && globalThis.location.search) || '').get('cat'); } catch { /* no location */ }
+  return CATEGORIES.includes(c) ? c : CATEGORIES[0];
+}
+
 function freshState(ctx) {
   return {
-    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {}, query: '', entries: null, ui: null,
+    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {}, query: '', cat: initialCat(), entries: null, ui: null,
     behavior: null, ecosystem: null, connectors: null, prefs: null, projects: [],
     credDrafts: {}, projectList: null, agentPid: null, agents: null,
     ecoTab: 'plugins', ecoQuery: '', ecoLimit: ECO_PAGE,
@@ -921,8 +928,9 @@ function applyFilter() {
     const ui = S.ui[cat];
     const wide = !!WIDE[cat];
     const n = wide ? wideCount(cat) : (counts[cat] || 0);
-    const shown = wide ? !q.trim() || cat.toLowerCase().includes(q.trim().toLowerCase()) : n > 0 || !q.trim();
+    const shown = q.trim() ? (wide ? cat.toLowerCase().includes(q.trim().toLowerCase()) : n > 0) : cat === S.cat;
     ui.section.hidden = !shown;
+    ui.btn.setAttribute('aria-current', String(cat === S.cat && !q.trim()));
     ui.count.textContent = n === null ? '' : String(n);
   }
 }
@@ -945,9 +953,13 @@ function draw() {
     const count = h('span', { class: 'st-count' });
     const section = h('section', { class: 'st-cat', id: slug(cat), 'aria-label': cat }, h('h2', { class: 'st-cat-title' }, cat), categoryBody(cat));
     const btn = h('button', { type: 'button', class: 'st-nav-item' }, cat, ' ', count);
-    btn.addEventListener('click', () => { if (typeof section.scrollIntoView === 'function') section.scrollIntoView({ block: 'start' }); });
+    btn.addEventListener('click', () => {
+      S.cat = cat;
+      try { const u = new URL(globalThis.location.href); u.searchParams.set('cat', cat); globalThis.history.replaceState(null, '', u); } catch { /* no history */ }
+      applyFilter();
+    });
     navButtons.push(btn);
-    S.ui[cat] = { section, count };
+    S.ui[cat] = { section, count, btn };
     return section;
   });
   replace(S.mount,

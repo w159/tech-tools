@@ -26,6 +26,7 @@ from pathlib import Path
 
 LIBRARY_URL = "https://ollama.com/library?sort=popular"
 LIBRARY_TTL_S = 600
+SHOW_TTL_S = 600
 LIBRARY_FETCH_TIMEOUT_S = 3
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 _UNITS = {"B": 1, "KB": 10**3, "MB": 10**6, "GB": 10**9, "TB": 10**12}
@@ -148,6 +149,54 @@ def parse_ps(text: str) -> list[dict]:
     return rows
 
 
+def parse_capabilities(text: str) -> list[str]:
+    """Lines under the "Capabilities" header of `ollama show` (indented items, ends at a blank line)."""
+    caps: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        if not inside:
+            inside = line.strip() == "Capabilities"
+        elif line.strip():
+            caps.append(line.strip())
+        else:
+            break
+    return caps
+
+
+def _show_cache() -> Path:
+    return Path.home() / ".atlas" / "ollama-show-cache.json"
+
+
+def capabilities(names: list[str], now=None) -> dict:
+    """{name: [capability]} via `ollama show`, cached 10 min. A failed show (or no block) assumes completion."""
+    now = time.time() if now is None else now
+    path = _show_cache()
+    try:
+        cache = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        cache = {}
+    out, dirty = {}, False
+    for name in names:
+        hit = cache.get(name) if isinstance(cache, dict) else None
+        if isinstance(hit, dict) and now - float(hit.get("ts", 0)) < SHOW_TTL_S:
+            out[name] = hit["caps"]
+            continue
+        rc, text, _ = run(["ollama", "show", name])
+        if rc != 0:
+            out[name] = ["completion"]  # unknown: do not hide it; not cached so the next call retries
+            continue
+        out[name] = parse_capabilities(text) or ["completion"]
+        cache[name] = {"ts": now, "caps": out[name]}
+        dirty = True
+    if dirty:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(cache), encoding="utf-8")
+        except OSError:
+            pass
+    return out
+
+
 # --- popularity (cached scrape of the public library page) -----------------
 
 
@@ -216,6 +265,9 @@ def list_models(scope="all", sort="latest", q="", detail=False) -> dict:
     q = (q or "").strip().lower()
     if q:
         models = [m for m in models if q in m["name"].lower()]
+    caps = capabilities([m["name"] for m in models if not m["cloud"]])
+    for m in models:
+        m["capabilities"] = caps.get(m["name"], ["completion"])
     if sort == "popular":
         order = popular_order()
         for m in models:

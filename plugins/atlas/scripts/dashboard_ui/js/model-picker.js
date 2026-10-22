@@ -5,9 +5,13 @@ import { h } from './dom.js';
 export const SCOPES = [['local', 'Local'], ['cloud', 'Cloud'], ['all', 'All']];
 export const SORTS = [['latest', 'Latest'], ['size', 'Size'], ['name', 'Name'], ['popular', 'Popular']];
 
-export function filterModels(models, { scope = 'all', q = '' } = {}) {
+// Models without the `completion` capability (embedding, image) cannot answer a prompt; hidden unless showAll.
+// A server that sends no capabilities is treated as completion-capable.
+export const canGenerate = (m) => !Array.isArray(m.capabilities) || m.capabilities.includes('completion');
+
+export function filterModels(models, { scope = 'all', q = '', showAll = true } = {}) {
   const needle = String(q).trim().toLowerCase();
-  return (models || []).filter((m) => (scope === 'all' || (scope === 'cloud') === !!m.cloud) && (!needle || String(m.name).toLowerCase().includes(needle)));
+  return (models || []).filter((m) => (showAll || canGenerate(m)) && (scope === 'all' || (scope === 'cloud') === !!m.cloud) && (!needle || String(m.name).toLowerCase().includes(needle)));
 }
 
 // Missing values sort last for every key so a cloud row with no size never outranks a real one.
@@ -56,33 +60,49 @@ export async function pollJob(api, id, onProgress, sleep = (ms) => new Promise((
 
 const rowText = (m) => [m.name, m.params || '', m.cloud ? 'cloud' : fmtSize(m.size_bytes), fmtAge(m.modified_at)].filter(Boolean);
 
-export function ModelPicker({ api, value, onPick }) {
+export function ModelPicker({ api, value, defaultValue = '', onPick }) {
   let current = value;
   let open = false;
   let models = null;
   let scope = 'all';
   let sort = 'latest';
   let q = '';
+  let showAll = false;
   const status = h('p', { class: 'mp-status', role: 'status' });
   const list = h('ul', { class: 'mp-list', role: 'listbox' });
   const pullBox = h('div', { class: 'mp-pull' });
   const trigger = h('button', { type: 'button', class: 'btn mp-trigger', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' }, current || 'Choose a model');
   const panel = h('div', { class: 'mp-panel', hidden: true });
 
+  const allBtn = h('button', { type: 'button', class: 'btn mp-show-all', hidden: true });
+  allBtn.addEventListener('click', () => { showAll = !showAll; paintList(); });
+  const resetBtn = h('button', { type: 'button', class: 'btn mp-reset', hidden: true }, 'Reset to default');
+  resetBtn.addEventListener('click', async () => {
+    current = defaultValue; trigger.textContent = current; setOpen(false); paintList();
+    await onPick(defaultValue);
+  });
   const paintList = () => {
-    const shown = sortModels(filterModels(models, { scope, q }), sort);
-    list.replaceChildren(...(shown.length ? shown.map((m) => {
+    const shown = sortModels(filterModels(models, { scope, q, showAll }), sort);
+    const hiddenN = (models || []).filter((m) => !canGenerate(m)).length;
+    allBtn.hidden = !hiddenN;
+    allBtn.textContent = showAll ? 'Hide non-text models' : `Show all (${hiddenN} hidden)`;
+    // The current value is pinned first even when it is not an installed tag (for example the default `nimble`).
+    const pinned = current && !(models || []).some((m) => m.name === current) ? h('li', {}, h('button', { type: 'button', class: 'mp-row is-current mp-pinned', role: 'option', 'aria-selected': 'true' },
+      h('span', { class: 'mp-name' }, current), h('span', { class: 'mp-meta' }, 'current'))) : null;
+    const rows = shown;
+    list.replaceChildren(...[pinned, ...(rows.length ? rows.map((m) => {
       const [name, ...meta] = rowText(m);
       const pick = h('button', { type: 'button', class: `mp-row${m.name === current ? ' is-current' : ''}`, role: 'option', 'aria-selected': String(m.name === current) },
         h('span', { class: m.running ? 'mp-dot is-running' : 'mp-dot', title: m.running ? 'running' : 'not loaded' }, m.running ? '●' : '○'),
         h('span', { class: 'mp-name' }, name),
         h('span', { class: 'mp-meta' }, meta.join(' · ')));
       pick.addEventListener('click', async () => {
-        current = m.name; trigger.textContent = current; setOpen(false);
+        current = m.name; trigger.textContent = current; setOpen(false); paintList();
         await onPick(m.name);
       });
       return h('li', {}, pick);
-    }) : [h('li', { class: 'mp-empty' }, models ? 'No models match.' : 'Loading…')]));
+    }) : [h('li', { class: 'mp-empty' }, models ? 'No models match.' : 'Loading…')])].filter(Boolean));
+    resetBtn.hidden = !defaultValue || current === defaultValue;
   };
 
   const load = async () => {
@@ -131,7 +151,7 @@ export function ModelPicker({ api, value, onPick }) {
 
   panel.appendChild(status); panel.appendChild(chipRow);
   panel.appendChild(h('div', { class: 'mp-tools' }, sortSel, search));
-  panel.appendChild(list); panel.appendChild(pullBtn); panel.appendChild(pullBox);
+  panel.appendChild(list); panel.appendChild(allBtn); panel.appendChild(resetBtn); panel.appendChild(pullBtn); panel.appendChild(pullBox);
   paintChips();
 
   function setOpen(next) {
