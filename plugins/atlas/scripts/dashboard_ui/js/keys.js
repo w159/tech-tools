@@ -10,10 +10,12 @@ export function isTypingIn(el) {
 
 // Returns an unbind function. Escape always passes so overlays can close from a field.
 export function bindKeys(map, { isTyping = () => false, target = document } = {}) {
+  // leave browser/OS chords alone
+  const chord = (ev) => ["metaKey", "ctrlKey", "altKey"].some((m) => ev[m]);
+  const blocked = (ev) => chord(ev) || (ev.key !== "Escape" && isTyping());
   const onKey = (ev) => {
-    const fn = map[ev.key];
+    const fn = !blocked(ev) && map[ev.key];
     if (!fn) return;
-    if (ev.key !== "Escape" && isTyping()) return;
     ev.preventDefault();
     fn(ev);
   };

@@ -13,6 +13,7 @@ function fakeTarget() {
       return ev;
     },
     size: () => ls.size,
+    listeners: () => [...ls],
   };
 }
 
@@ -56,4 +57,16 @@ test("isTypingIn recognises form fields and contenteditable", () => {
   assert.equal(isTypingIn({ tagName: "DIV", isContentEditable: true }), true);
   assert.equal(isTypingIn({ tagName: "DIV" }), false);
   assert.equal(isTypingIn(null), false);
+});
+
+test("modifier chords are ignored and not prevented", () => {
+  const target = fakeTarget();
+  let n = 0;
+  bindKeys({ f: () => n++ }, { isTyping: () => false, target });
+  for (const m of ["metaKey", "ctrlKey", "altKey"]) {
+    const ev = { key: "f", [m]: true, prevented: 0, preventDefault() { this.prevented++; } };
+    for (const fn of target.listeners()) fn(ev);
+    assert.equal(ev.prevented, 0);
+  }
+  assert.equal(n, 0);
 });

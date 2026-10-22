@@ -35,6 +35,13 @@ export function openPalette(commands, { root = document.body, onClose } = {}) {
 
   let shown = commands;
   let sel = 0;
+  const close = () => {
+    if (!box.isConnected) return;
+    box.remove();
+    onClose?.();
+  };
+  const run = (c) => { close(); c.run(); };
+
   const paint = () => {
     list.replaceChildren(...shown.map((c, i) => {
       const li = doc.createElement("li");
@@ -46,13 +53,6 @@ export function openPalette(commands, { root = document.body, onClose } = {}) {
       return li;
     }));
   };
-  const close = () => {
-    if (!box.isConnected) return;
-    box.remove();
-    onClose?.();
-  };
-  const run = (c) => { close(); c.run(); };
-
   input.addEventListener("input", () => {
     shown = filterCommands(commands, input.value);
     sel = 0;
