@@ -1,4 +1,3 @@
-// fallow-ignore-file unused-file
 // Boot: prefs, band shell, router, live counts. Pages are loaded on demand from ./pages/<route>.js.
 import { replace, baseName } from "./dom.js";
 import { Empty, Button, toast } from "./ui.js";

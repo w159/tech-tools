@@ -1,4 +1,3 @@
-// fallow-ignore-file unused-file
 // Keyboard: g-prefixed chords, "/" to focus search, "?" for the list. Esc is handled by the layers in ui.js.
 import { h } from "./dom.js";
 import { Modal, Kbd, Button } from "./ui.js";
@@ -52,7 +51,6 @@ function showShortcuts() {
   );
 }
 
-// fallow-ignore-next-line unused-export
 export function initShortcuts() {
   let armed = 0;
   document.addEventListener("keydown", (ev) => {

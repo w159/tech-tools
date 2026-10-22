@@ -37,6 +37,5 @@ async function send(kind, { channel, to, text }, postFn) {
 /** Never throws: resolves {ok:true} or {ok:false,error}. `postFn` is injectable for tests. */
 export const sendSteer = (args, postFn = post) => send("steer", args, postFn);
 
-// fallow-ignore-next-line unused-export -- bound to the `h` key in T7 (keys and palette)
 export const holdSeat = (channel, seat, postFn = post) =>
   send("hold", { channel, to: seat, text: "hold" }, postFn);
