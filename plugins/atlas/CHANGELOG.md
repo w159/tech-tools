@@ -28,6 +28,7 @@ Command Center overhaul: the Terminal becomes a grid of real terminals, Settings
 - Channels tests inject the send path instead of a global module mock (`b1fe6a9c`, finding W3-mockleak).
 - Root and plugin READMEs: install versus update commands, current counts and pages (`a9d69f92`).
 - Fallow baselines (`fallow-baselines/dead-code.json`, `health.json`, `dupes.json`) re-saved with fallow 3.26.0 so the plugin commit gate (`fallow audit`, gate new-only) passes again; the Oct 13-16 baselines matched 224 of 2064 health entries and blocked every commit from this checkout.
+- Dead code (finding W3-deadcode): every fallow unused-export finding in sonicwall-mcp, panos-mcp and the dashboard JS is cleared (module-private where the only caller is in-file, deleted where nothing calls it, including the dead fleet overflow menu and the herdr tab/pane rename and close actions); `.fallowrc.json` exempts the dynamically imported `*Handler` exports and registers `theme-boot.js` as an entry; `usage-statusline.ts` render, computeTallies and scopedWindows are split into helpers under cyclomatic 20 with byte-identical output.
 
 ### Removed
 

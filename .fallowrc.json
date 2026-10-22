@@ -17,6 +17,7 @@
     "plugins/atlas/scripts/sprite_review.ts",
     "plugins/atlas/scripts/dashboard_ui/js/*.test.js",
     "plugins/atlas/scripts/dashboard_ui/js/pages/*.js",
+    "plugins/atlas/scripts/dashboard_ui/js/theme-boot.js",
     "plugins/atlas/omp/*.test.ts",
     "plugins/atlas/omp/index.ts",
     "plugins/atlas/omp/test-env-preload.ts",
@@ -26,5 +27,37 @@
     "deadCodeBaseline": "fallow-baselines/dead-code.json",
     "healthBaseline": "fallow-baselines/health.json",
     "dupesBaseline": "fallow-baselines/dupes.json"
-  }
+  },
+  "ignoreExports": [
+    {
+      "file": "mcp_servers/sonicwall-mcp/src/domains/*.ts",
+      "exports": [
+        "sessionHandler",
+        "systemHandler",
+        "configHandler",
+        "objectsHandler",
+        "policiesHandler",
+        "interfacesHandler",
+        "vpnHandler",
+        "logsHandler",
+        "genericHandler",
+        "credentialIssuingTool"
+      ]
+    },
+    {
+      "file": "mcp_servers/panos-mcp/src/domains/*.ts",
+      "exports": [
+        "configHandler",
+        "commitsHandler",
+        "operationsHandler",
+        "logsHandler",
+        "reportsHandler",
+        "filesHandler",
+        "objectsHandler",
+        "policiesHandler",
+        "updatesHandler",
+        "certificatesHandler"
+      ]
+    }
+  ]
 }

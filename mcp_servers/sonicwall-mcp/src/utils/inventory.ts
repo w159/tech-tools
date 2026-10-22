@@ -15,7 +15,7 @@ const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const toRegex = (path: string): RegExp =>
   new RegExp('^' + path.split('/').map((seg) => (/^\{[^}]+\}$/.test(seg) ? '[^/]+' : escapeRe(seg))).join('/') + '$');
 
-export const OPS: Op[] = (inventory.ops as Array<{ method: string; path: string; tag: string }>).map((o) => ({
+const OPS: Op[] = (inventory.ops as Array<{ method: string; path: string; tag: string }>).map((o) => ({
   ...o,
   re: toRegex(o.path),
 }));

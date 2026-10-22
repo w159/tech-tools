@@ -5,13 +5,13 @@
 import { h } from './dom.js';
 import { ModelPicker } from './model-picker.js';
 
-export const APPLIES_LABEL = { now: 'applies now', 'next-session': 'next session', 'dashboard-restart': 'restart dashboard' };
-export const LAYER_LABEL = {
+const APPLIES_LABEL = { now: 'applies now', 'next-session': 'next session', 'dashboard-restart': 'restart dashboard' };
+const LAYER_LABEL = {
   live_env: 'live env', store: 'atlas store', claude_settings: 'claude settings.json',
   omp_config: 'omp config', shell_rc: '~/.atlas/env.sh', prefs: 'dashboard prefs',
 };
 
-export const appliesLabel = (a) => APPLIES_LABEL[a] || APPLIES_LABEL.now;
+const appliesLabel = (a) => APPLIES_LABEL[a] || APPLIES_LABEL.now;
 const layerName = (l) => LAYER_LABEL[l] || String(l);
 const show = (v) => (v === '' || v === null || v === undefined ? '(nothing)' : String(v));
 
@@ -38,7 +38,7 @@ export function verifyStatus(res) {
   return { ok: true, text: `✓ verified${names.length ? ` · ${names.join(', ')}` : ''}` };
 }
 
-export function errorStatus(err, typed) {
+function errorStatus(err, typed) {
   const d = (err && err.data) || {};
   if (d.error === 'out_of_range') {
     const r = d.range || {};
@@ -64,10 +64,10 @@ export function liveVsSaved(item) {
   return `live: ${f(live)} · saved: ${f(saved)}`;
 }
 
-export function isOn(item, v) {
+function isOn(item, v) {
   return String(v ?? '').toLowerCase() !== String(item.off ?? 'off').toLowerCase() && String(v ?? '') !== '';
 }
-export function fmtValue(item, v) {
+function fmtValue(item, v) {
   if (item.kind === 'toggle') return isOn(item, v) ? 'on' : 'off';
   return v === '' || v === null || v === undefined ? '(empty)' : String(v);
 }

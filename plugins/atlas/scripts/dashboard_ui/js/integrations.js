@@ -19,10 +19,10 @@ function cached(key, path, force, ttl) {
   cache.set(key, entry);
   return entry.p;
 }
-export const getIntegrations = (force) => cached("integrations", "integrations", force, 5000);
+const getIntegrations = (force) => cached("integrations", "integrations", force, 5000);
 export const getHp = (force) => cached("hp", "projects/hp", force, 5000);
-export const getDeck = (force) => cached("deck", "deck", force, 5000);
-export const hpSnapshot = () => (cache.get("hp") || {}).data || null;
+const getDeck = (force) => cached("deck", "deck", force, 5000);
+const hpSnapshot = () => (cache.get("hp") || {}).data || null;
 
 let hpKey = "";
 /** Loads herdr-projects data for chips; resolves true when it changed since the last call. Never throws. */
@@ -107,7 +107,7 @@ function normalize(path, root) {
   return "/" + out.join("/");
 }
 
-export async function openFile({ path, line, range, root, placement }) {
+async function openFile({ path, line, range, root, placement }) {
   if (!root || !root.startsWith("/")) return void toast("No folder to open this file in", { kind: "warn", why: "Atlas needs the agent or project directory as the root." });
   const abs = normalize(path, root);
   const body = { path: abs, root, placement: placement || "split" };
@@ -140,7 +140,7 @@ const EXTS = "py|js|mjs|cjs|ts|tsx|jsx|json|md|mdx|css|scss|html|sh|bash|zsh|tom
 const PATH_RE = new RegExp("(?<![\\w/:.~@-])((?:/[\\w.@+-]*[\\w@+-])+|(?:\\./)?(?:[\\w.@+-]+/)*[\\w@+-][\\w.@+-]*\\.(?:" + EXTS + "))(?::(\\d+)(?:-(\\d+))?)?(?![\\w/])", "g");
 
 /** Link for one path:line. root = directory the viewer is pinned to (agent cwd or project root). */
-export function PathLink({ path, line, range, root, text }) {
+function PathLink({ path, line, range, root, text }) {
   const label = text || path + (range ? ":" + range.join("-") : line ? ":" + line : "");
   return h("button", { class: "path-link mono", type: "button", "data-path": path, "data-line": line || null, title: "Open in the file viewer (root " + root + ")", onClick: (e) => { e.preventDefault(); e.stopPropagation(); openFile({ path, line, range, root }); } }, label);
 }
@@ -165,7 +165,7 @@ export function linkifyPaths(text, root, rest) {
 }
 
 /** Distinct { path, line } mentions in some texts, newest first, capped. */
-export function mentionedPaths(texts, root, cap = 20) {
+function mentionedPaths(texts, root, cap = 20) {
   const seen = new Map();
   for (const t of texts) {
     String(t || "").replace(PATH_RE, (m, path, a) => {

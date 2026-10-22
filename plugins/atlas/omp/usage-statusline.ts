@@ -300,6 +300,94 @@ function emptyTally(provider: string): ProviderTally {
  };
 }
 
+type BranchEntry = ReturnType<ExtensionContext["sessionManager"]["getBranch"]>[number];
+type AssistantPayload = { provider?: unknown; model?: unknown; usage?: AssistantUsage };
+
+/** Assistant-message payload of a branch entry, undefined for any other entry. */
+function assistantPayload(entry: BranchEntry): AssistantPayload | undefined {
+ if (entry.type !== "message" || !("message" in entry)) return undefined;
+ const msg: unknown = entry.message;
+ if (!msg || typeof msg !== "object" || !("role" in msg)) return undefined;
+ if (msg.role !== "assistant") return undefined;
+ // Boundary read: the branch entry type erases the assistant payload.
+ // Shape per @oh-my-pi/pi-ai AssistantMessage / pi-catalog Usage.
+ return msg as AssistantPayload;
+}
+
+function providerName(m: AssistantPayload): string {
+ return typeof m.provider === "string" && m.provider
+  ? m.provider
+  : typeof m.model === "string" && m.model.includes("/")
+   ? m.model.split("/")[0]
+   : "unknown";
+}
+
+interface MessageUsage {
+ provider: string;
+ model: string;
+ inp: number;
+ out: number;
+ cr: number;
+ cw: number;
+ cost: number;
+ totalTokens: number;
+}
+
+/** Normalized billable usage of one message; undefined when there is none. */
+function readMessageUsage(m: AssistantPayload): MessageUsage | undefined {
+ const usage = m.usage;
+ if (!usage) return undefined;
+ const inp = usage.input || 0;
+ const out = usage.output || 0;
+ const cr = usage.cacheRead || 0;
+ const cw = usage.cacheWrite || 0;
+ // a failed/aborted request can persist a message with an all-zero
+ // usage block; it carries no billable usage to display
+ if (inp === 0 && out === 0 && cr === 0 && cw === 0) return undefined;
+ return {
+  provider: providerName(m),
+  model: typeof m.model === "string" ? m.model : "",
+  inp,
+  out,
+  cr,
+  cw,
+  cost: usage.cost?.total || 0,
+  totalTokens: usage.totalTokens || inp + out + cr + cw,
+ };
+}
+
+function addToTally(t: ProviderTally, u: MessageUsage, models: Set<string>): void {
+ t.input += u.inp;
+ t.output += u.out;
+ t.cacheRead += u.cr;
+ t.cacheWrite += u.cw;
+ t.cost += u.cost;
+ if (u.model) {
+  models.add(u.model);
+  const mt = (t.modelOutput.get(u.model) || 0) + u.out;
+  t.modelOutput.set(u.model, mt);
+  if (mt > t.topModelTokens) {
+   t.topModelTokens = mt;
+   t.topModel = u.model;
+  }
+ }
+}
+
+/** Mark OAuth providers as subscription; returns the metered (API-key) spend. */
+function settleBilling(byProvider: Map<string, ProviderTally>, ctx: ExtensionContext): number {
+ const credentials = ctx.modelRegistry?.authStorage?.credentials;
+ let meteredCost = 0;
+ for (const p of byProvider.values()) {
+  try {
+   p.subscription = credentials?.hasOAuth(p.provider) ?? false;
+  } catch {
+   // unknown billing mode: treat as metered, never hide real spend
+  }
+  if (!p.subscription) meteredCost += p.cost;
+ }
+ return meteredCost;
+}
+
 /** Scan the session branch and group assistant-message usage by provider. */
 function computeTallies(ctx: ExtensionContext): Tallies {
  const byProvider = new Map<string, ProviderTally>();
@@ -319,72 +407,26 @@ function computeTallies(ctx: ExtensionContext): Tallies {
      typeof entry.configured === "string" ? entry.configured : typeof entry.thinkingLevel === "string" ? entry.thinkingLevel : undefined;
     continue;
    }
-   if (entry.type !== "message" || !("message" in entry)) continue;
-   const msg: unknown = entry.message;
-   if (!msg || typeof msg !== "object" || !("role" in msg)) continue;
-   if (msg.role !== "assistant") continue;
-   // Boundary read: the branch entry type erases the assistant payload.
-   // Shape per @oh-my-pi/pi-ai AssistantMessage / pi-catalog Usage.
-   const m = msg as {
-    provider?: unknown;
-    model?: unknown;
-    usage?: AssistantUsage;
-   };
-   const usage = m.usage;
-   if (!usage) continue;
-   const inp = usage.input || 0;
-   const out = usage.output || 0;
-   const cr = usage.cacheRead || 0;
-   const cw = usage.cacheWrite || 0;
-   // a failed/aborted request can persist a message with an all-zero
-   // usage block; it carries no billable usage to display
-   if (inp === 0 && out === 0 && cr === 0 && cw === 0) continue;
-   const provider =
-    typeof m.provider === "string" && m.provider
-     ? m.provider
-     : typeof m.model === "string" && m.model.includes("/")
-      ? m.model.split("/")[0]
-      : "unknown";
-   const model = typeof m.model === "string" ? m.model : "";
-   const cost = usage.cost?.total || 0;
-   let t = byProvider.get(provider);
+   const m = assistantPayload(entry);
+   if (!m) continue;
+   const u = readMessageUsage(m);
+   if (!u) continue;
+   let t = byProvider.get(u.provider);
    if (!t) {
-    t = emptyTally(provider);
-    byProvider.set(provider, t);
+    t = emptyTally(u.provider);
+    byProvider.set(u.provider, t);
    }
-   t.input += inp;
-   t.output += out;
-   t.cacheRead += cr;
-   t.cacheWrite += cw;
-   t.cost += cost;
-   if (model) {
-    models.add(model);
-    const mt = (t.modelOutput.get(model) || 0) + out;
-    t.modelOutput.set(model, mt);
-    if (mt > t.topModelTokens) {
-     t.topModelTokens = mt;
-     t.topModel = model;
-    }
-   }
-   totalTokens += usage.totalTokens || inp + out + cr + cw;
-   cacheRead += cr;
-   promptish += inp + cr + cw;
-   outputTokens += out;
+   addToTally(t, u, models);
+   totalTokens += u.totalTokens;
+   cacheRead += u.cr;
+   promptish += u.inp + u.cr + u.cw;
+   outputTokens += u.out;
   }
   configuredEffort = sawThinking ? lastConfigured : undefined;
  } catch {
   // branch unreadable — render with what we have
  }
- const credentials = ctx.modelRegistry?.authStorage?.credentials;
- let meteredCost = 0;
- for (const p of byProvider.values()) {
-  try {
-   p.subscription = credentials?.hasOAuth(p.provider) ?? false;
-  } catch {
-   // unknown billing mode: treat as metered, never hide real spend
-  }
-  if (!p.subscription) meteredCost += p.cost;
- }
+ const meteredCost = settleBilling(byProvider, ctx);
  const providers = [...byProvider.values()].sort((a, b) => {
   const ta = a.input + a.output + a.cacheRead + a.cacheWrite;
   const tb = b.input + b.output + b.cacheRead + b.cacheWrite;
@@ -462,9 +504,10 @@ const SEVEN_DAYS_MS = 7 * 86_400_000;
  * only shared limits plus the tier matching the model (a Fable weekly cap
  * never shows on Opus). Windows match by duration so `1w`/`300m` providers
  * (xAI, Muse) fill the 7d/5h meters too. Several survivors: the tightest. */
-function scopedWindows(ctx: ExtensionContext): { fiveHour?: Window; sevenDay?: Window } {
- const provider = ctx.model?.provider;
- const family = provider && ctx.model?.id ? classifyModel(provider, ctx.model.id).family : undefined;
+type UsageLimit = NonNullable<UsageReportLike["limits"]>[number];
+
+/** Reports to scan: the session's OAuth account when identifiable, else every account of the provider. */
+function sessionReports(ctx: ExtensionContext, provider: string | undefined): UsageReportLike[] {
  const ofProvider = usageReports.filter((r) => r.provider === provider);
  let identity: { accountId?: string; email?: string } | undefined;
  try {
@@ -477,22 +520,31 @@ function scopedWindows(ctx: ExtensionContext): { fiveHour?: Window; sevenDay?: W
    (identity?.accountId !== undefined && r.metadata?.accountId === identity.accountId) ||
    (identity?.email !== undefined && r.metadata?.email === identity.email),
  );
+ return mine.length > 0 ? mine : ofProvider;
+}
+
+function scopedWindows(ctx: ExtensionContext): { fiveHour?: Window; sevenDay?: Window } {
+ const provider = ctx.model?.provider;
+ const family = provider && ctx.model?.id ? classifyModel(provider, ctx.model.id).family : undefined;
  const out: { fiveHour?: Window; sevenDay?: Window } = {};
- for (const report of mine.length > 0 ? mine : ofProvider) {
-  for (const limit of report.limits || []) {
-   const tier = limit.scope?.tier;
-   if (tier && limit.scope?.shared !== true && tier !== family) continue;
-   const dur = limit.window?.durationMs;
-   const id = limit.window?.id;
-   const key = dur === FIVE_HOURS_MS || id === "5h" ? "fiveHour" : dur === SEVEN_DAYS_MS || id === "7d" ? "sevenDay" : undefined;
-   if (!key) continue;
-   const fraction = fractionUsed(limit.amount);
-   if (fraction === undefined) continue;
-   const w = { percent: fraction * 100, resetsAt: limit.window?.resetsAt, provider: report.provider };
-   if (!out[key] || w.percent > out[key].percent) out[key] = w;
-  }
+ for (const report of sessionReports(ctx, provider)) {
+  for (const limit of report.limits || []) foldLimit(out, report, limit, family);
  }
  return out;
+}
+
+/** Fold one limit into `out`, keeping the tightest window per slot. */
+function foldLimit(out: { fiveHour?: Window; sevenDay?: Window }, report: UsageReportLike, limit: UsageLimit, family: string | undefined): void {
+ const tier = limit.scope?.tier;
+ if (tier && limit.scope?.shared !== true && tier !== family) return;
+ const dur = limit.window?.durationMs;
+ const id = limit.window?.id;
+ const key = dur === FIVE_HOURS_MS || id === "5h" ? "fiveHour" : dur === SEVEN_DAYS_MS || id === "7d" ? "sevenDay" : undefined;
+ if (!key) return;
+ const fraction = fractionUsed(limit.amount);
+ if (fraction === undefined) return;
+ const w = { percent: fraction * 100, resetsAt: limit.window?.resetsAt, provider: report.provider };
+ if (!out[key] || w.percent > out[key].percent) out[key] = w;
 }
 
 // --- render ---
@@ -653,31 +705,20 @@ function applyCfg(): void {
  METER_W = ICON_W + ICON_GAP.length + 3 + 1 + 4 + 1 + BAR_CELLS + 2 + DETAIL_W;
 }
 
-function render(ctx: ExtensionContext): void {
- applyCfg();
- const t = computeTallies(ctx);
- const crit = CFG.iconStyle === "text" ? "*" : critter;
-
- // ── First line: cwd + activity flow together, no column rule — a single
- // unbroken status line, not a two-column row. ──
- const project = ctx.cwd.split("/").filter(Boolean).pop() ?? ctx.cwd;
- const model = ctx.model?.name ?? ctx.model?.id ?? "unknown";
- let effort: string | undefined;
- try {
-  effort = api?.getThinkingLevel();
- } catch {
-  // no effort segment
- }
+/** Selected-effort label for the first line, or undefined when hidden. */
+function effortLabelFor(effort: string | undefined): string | undefined {
+ if (!CFG.showEffort) return undefined;
  // Show what the user SELECTED only where the effective level can't convey it
  // (Shift+Tab cycles off → auto → levels): `off`, `auto · <resolved>`. For any
  // concrete or inherited selector, the effective level is always truthful
  // (it equals the selector unless the model clamps it).
- let effortLabel: string | undefined;
- if (CFG.showEffort) {
-  if (configuredEffort === "auto") effortLabel = effort ? `auto · ${effort}` : "auto";
-  else if (configuredEffort === "off") effortLabel = "off";
-  else effortLabel = effort;
- }
+ if (configuredEffort === "auto") return effort ? `auto · ${effort}` : "auto";
+ if (configuredEffort === "off") return "off";
+ return effort;
+}
+
+/** Activity segments for the first line: running, napping or ready. */
+function activitySegments(t: Tallies, crit: string): string[] {
  let segments: string[];
  if (spanStart > 0) {
   const elapsed = Math.max(0, Date.now() - spanStart);
@@ -700,7 +741,38 @@ function render(ctx: ExtensionContext): void {
  } else {
   segments = [`${I_READY}${ICON_GAP}${DIM}ready${R}`];
  }
- segments = segments.filter(Boolean);
+ return segments.filter(Boolean);
+}
+
+/** Join cwd, activity and model per `line1Mode`. */
+function composeFirstLine(cwdPart: string, work: string, modelPart: string, lineGap: string): string {
+ switch (CFG.line1Mode) {
+  case "cwd-activity":
+   return `${cwdPart}${work}`;
+  case "activity-model":
+   return `${work}${lineGap}${modelPart}`;
+  case "cwd-model":
+   return `${cwdPart.trimEnd()}${lineGap}${modelPart}`;
+  default:
+   return CFG.line1Pipe
+    ? `${padEnd(`${cwdPart}${work}`, METER_W)}${COL_GAP}${modelPart}`
+    : `${cwdPart}${work}${lineGap}${modelPart}`;
+ }
+}
+
+function buildFirstLine(ctx: ExtensionContext, t: Tallies, crit: string, rowCols: number): string {
+ // ── First line: cwd + activity flow together, no column rule — a single
+ // unbroken status line, not a two-column row. ──
+ const project = ctx.cwd.split("/").filter(Boolean).pop() ?? ctx.cwd;
+ const model = ctx.model?.name ?? ctx.model?.id ?? "unknown";
+ let effort: string | undefined;
+ try {
+  effort = api?.getThinkingLevel();
+ } catch {
+  // no effort segment
+ }
+ const effortLabel = effortLabelFor(effort);
+ const segments = activitySegments(t, crit);
  const FIRST_LINE_LEFT_W = METER_W + visibleWidth(COL_GAP); // aligns model under the right column's start, no jitter
  const cwdPart = `${CYAN}${I_DIR}${ICON_GAP}${clip(project, CFG.cwdWidth)}${R}   `;
  const modelPart = `${BLUE}${I_MODEL}${ICON_GAP}${clip(model, CFG.modelWidth)}${R}` + (effortLabel ? `${HSEP}${SOFT}${effortLabel}${R}` : "");
@@ -709,31 +781,13 @@ function render(ctx: ExtensionContext): void {
  // inside the meter column; without it the line spans the terminal, so budget
  // from the real width (cwd + gap + model all claim the same line). Panes under
  // 62 cols budget from their actual width: the 60-col floor would overfill them.
- const realCols = process.stdout.columns || 120;
- const termCols = Math.max(60, realCols - 2);
- const rowCols = Math.min(termCols, realCols - 1); // widest any row may be without wrapping
  const workBudget = CFG.line1Pipe
   ? Math.max(0, FIRST_LINE_LEFT_W - visibleWidth(cwdPart))
   : Math.max(0, rowCols - visibleWidth(cwdPart) - lineGap.length - visibleWidth(modelPart));
  // drop trailing segments rather than spill past the line width
  while (segments.length > 1 && visibleWidth(segments.join(HSEP_TIGHT)) > workBudget) segments.pop();
  const work = segments.join(HSEP_TIGHT);
- let firstLine: string;
- switch (CFG.line1Mode) {
-  case "cwd-activity":
-   firstLine = `${cwdPart}${work}`;
-   break;
-  case "activity-model":
-   firstLine = `${work}${lineGap}${modelPart}`;
-   break;
-  case "cwd-model":
-   firstLine = `${cwdPart.trimEnd()}${lineGap}${modelPart}`;
-   break;
-  default:
-   firstLine = CFG.line1Pipe
-    ? `${padEnd(`${cwdPart}${work}`, METER_W)}${COL_GAP}${modelPart}`
-    : `${cwdPart}${work}${lineGap}${modelPart}`;
- }
+ let firstLine = composeFirstLine(cwdPart, work, modelPart, lineGap);
  // Narrow panes: drop rather than overflow. Activity segments already shrank to
  // the real-width budget above; if the composed line still can't fit (piped
  // layout pins the model after the meter column; the flat line ends with it),
@@ -741,9 +795,11 @@ function render(ctx: ExtensionContext): void {
  if (visibleWidth(firstLine) > rowCols && firstLine.endsWith(modelPart)) {
   firstLine = firstLine.slice(0, firstLine.length - modelPart.length).trimEnd();
  }
+ return firstLine;
+}
 
- // ── Left column: ctx/5h/7d meters (3 rows) against session/providers on the
- // right (2–3 rows) — model/effort moved up onto the first line ──
+/** ctx/5h/7d meters (up to 3 rows), model/effort live on the first line. */
+function buildLeftColumn(ctx: ExtensionContext): string[] {
  // Some event-context frames lack getContextUsage; harvest when present and
  // fall back to the last successful snapshot.
  if (typeof ctx.getContextUsage === "function") {
@@ -757,7 +813,7 @@ function render(ctx: ExtensionContext): void {
  const cu = lastUsage;
  const windows = scopedWindows(ctx);
  const windowSize = cu?.contextWindow || ctx.model?.contextWindow || 0;
- const left = [
+ return [
   CFG.mCtx
    ? cu && cu.contextWindow > 0
     ? meter(I_CTX, "ctx", (cu.tokens / cu.contextWindow) * 100, `${formatTokens(cu.tokens)} / ${formatSize(cu.contextWindow)}`, ctxColor)
@@ -766,14 +822,17 @@ function render(ctx: ExtensionContext): void {
   CFG.m5h ? meter(I_5H, "5h", windows.fiveHour?.percent, resetDetail(windows.fiveHour, false)) : "",
   CFG.m7d ? meter(I_7D, "7d", windows.sevenDay?.percent, resetDetail(windows.sevenDay, true)) : "",
  ].filter(Boolean);
+}
 
- // ── Right column: spend table — session total, then providers ──
+type SpendRow = { icon: string; name: string; cost: string; tok: string; extra: string; total: boolean; plan: boolean };
+
+/** Right column rows: session total, then providers (overflow folded into `+N more`). */
+function buildSpendTable(t: Tallies): SpendRow[] {
  // Subscription providers have no per-token spend: they show `plan` and stay
  // out of the session total, which is metered API spend only.
  const cachePct = t.promptish > 0 ? Math.round((t.cacheRead / t.promptish) * 100) : 0;
  const anyMetered = t.providers.some((p) => !p.subscription);
- type Row = { icon: string; name: string; cost: string; tok: string; extra: string; total: boolean; plan: boolean };
- const table: Row[] = [
+ const table: SpendRow[] = [
   {
    icon: I_COST,
    name: "session",
@@ -810,12 +869,16 @@ function render(ctx: ExtensionContext): void {
    plan: restMetered.length === 0,
   });
  }
+ return table;
+}
+
+/** Format spend rows into aligned strings; also reports the widest row head. */
+function formatRightRows(table: SpendRow[], rightBudget: number): { right: string[]; widestHead: number } {
  const nameW = Math.min(NAME_W + 4, Math.max(NAME_W, ...table.map((r) => visibleWidth(r.name))));
  costHigh = Math.max(costHigh, ...table.map((r) => visibleWidth(r.cost)));
  tokHigh = Math.max(tokHigh, ...table.map((r) => visibleWidth(r.tok)));
  const costW = costHigh;
  const tokW = tokHigh;
- const rightBudget = termCols - METER_W - visibleWidth(COL_GAP);
  let widestHead = 0;
  const right = CFG.showRight
   ? table.map((r) => {
@@ -829,7 +892,20 @@ function render(ctx: ExtensionContext): void {
    return extraW >= 3 && r.extra ? `${head}  ${DIM}${clip(r.extra, extraW)}${R}` : head;
   })
   : [];
+ return { right, widestHead };
+}
 
+function render(ctx: ExtensionContext): void {
+ applyCfg();
+ const t = computeTallies(ctx);
+ const crit = CFG.iconStyle === "text" ? "*" : critter;
+ const realCols = process.stdout.columns || 120;
+ const termCols = Math.max(60, realCols - 2);
+ const rowCols = Math.min(termCols, realCols - 1); // widest any row may be without wrapping
+ const firstLine = buildFirstLine(ctx, t, crit, rowCols);
+ const left = buildLeftColumn(ctx);
+ const rightBudget = termCols - METER_W - visibleWidth(COL_GAP);
+ const { right, widestHead } = formatRightRows(buildSpendTable(t), rightBudget);
  // Narrow pane: a two-column row needs the meter column + gap + the widest right
  // head. When the REAL column count can't hold that, drop the right column (the
  // same assembly the showRight=false path uses) so rows never wrap.

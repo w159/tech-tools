@@ -3,13 +3,13 @@
 
 import { h, icon, clear, replace, copyText } from "./dom.js";
 import { api } from "./api.js";
-import { HexGlyph, describeStatus } from "./glyphs.js";
-import { agentsStore, STATE_WORD, ageSeconds, firstDownLayer } from "./agents-store.js";
-import { Badge, Button, IconButton, Tabs, tabPanelProps, State, DegradedState } from "./ui-core.js";
+import { HexGlyph } from "./glyphs.js";
+import { agentsStore, STATE_WORD, ageSeconds } from "./agents-store.js";
+import { Badge, Button, Tabs, tabPanelProps, State, DegradedState } from "./ui-core.js";
 import { Drawer, openDrawer, closeDrawer, openMenu, openPopover, closePopover, toast, toastError } from "./ui-overlays.js";
 import { ChannelList, Composer, FeedItem } from "./ui-data.js";
-import { renamePane, renameTab, closePane, closeTab, hostReachable, QUICK_KEYS, sendKeys } from "./herdr-actions.js";
-import { FilesPanel, hpThreadFor, openEditor } from "./integrations.js";
+import { hostReachable, QUICK_KEYS, sendKeys } from "./herdr-actions.js";
+import { FilesPanel, hpThreadFor } from "./integrations.js";
 import { sendToSeat } from "./send-path.js";
 import { pollCapture, CAPTURE_LINES } from "./capture-view.js";
 
@@ -28,7 +28,7 @@ function captureView(paneId) {
 }
 
 // herdr-projects thread/branch chip when the agent's cwd is a thread's cwd (null otherwise).
-export function hpChip(a) {
+function hpChip(a) {
   const hit = hpThreadFor(a.cwd);
   if (!hit) return null;
   const t = hit.thread;
@@ -37,7 +37,7 @@ export function hpChip(a) {
 
 // ---- helpers -----------------------------------------------------------------------------------
 
-export function fmtAge(sec) {
+function fmtAge(sec) {
   if (sec === null || sec === undefined) return "";
   if (sec < 5) return "now";
   if (sec < 60) return sec + "s";
@@ -47,20 +47,20 @@ export function fmtAge(sec) {
 }
 
 // Age since the last state change as stamped by the daemon (first_seen is a lower bound; shown via title, not a glyph).
-export function ageLabel(rec) {
+function ageLabel(rec) {
   return fmtAge(ageSeconds(rec));
 }
 
-export function ageTitle(rec) {
+function ageTitle(rec) {
   return rec.sinceApprox ? "Since Atlas first saw this state" : "Since the last state change";
 }
 
-export function kindIcon(kind) {
+function kindIcon(kind) {
   return icon("kind-" + kind, { class: "icon kind-icon", "aria-hidden": "true" });
 }
 
 const KIND_WORD = { omp: "omp", claude: "Claude Code", codex: "Codex", shell: "Shell", unknown: "Agent" };
-export const kindWord = (k) => KIND_WORD[k] || KIND_WORD.unknown;
+const kindWord = (k) => KIND_WORD[k] || KIND_WORD.unknown;
 
 // Workspace rows can arrive with a null label; fall back to the id basename, then "Unassigned".
 export function wsLabel(w) {
@@ -70,13 +70,8 @@ export function wsLabel(w) {
   return id || "Unassigned";
 }
 
-export function agentLabel(rec) {
+function agentLabel(rec) {
   return rec.title + " in " + (rec.workspace || "workspace") + ", " + STATE_WORD[rec.state].toLowerCase() + (ageLabel(rec) ? ", " + ageLabel(rec) : "");
-}
-
-// Hash for the Agents canvas: opens the inspector for an agent (and optionally a tab).
-export function agentHref(rec, tab) {
-  return "#/agents?agent=" + encodeURIComponent(rec.key) + (tab ? "&tab=" + tab : "");
 }
 
 // ---- 3 fleet strip -------------------------------------------------------------------------------
@@ -155,26 +150,6 @@ export function FleetStrip({ agents, onOpen, max } = {}) {
 
 // ---- 9.2 agent row / 9.3 agent card -----------------------------------------------------------------
 
-// Menu items for the overflow menu (Open terminal, Prompt, Message, Assign task, Stop).
-export function agentMenuItems(rec, a) {
-  const act = a || {};
-  const pane = rec.pane_id || rec.key;
-  return [
-    { label: "Open terminal", icon: "terminal", hint: "t", onSelect: () => act.onTerminal && act.onTerminal(rec) },
-    { label: "Prompt", icon: "send", onSelect: () => act.onPrompt && act.onPrompt(rec), disabled: rec.state !== "idle" },
-    { label: "Message", icon: "message", hint: "m", onSelect: () => act.onMessage && act.onMessage(rec) },
-    { label: "Assign task", icon: "plus", onSelect: () => act.onAssign && act.onAssign(rec) },
-    { label: "Copy pane id", icon: "copy", onSelect: () => copyText(pane) },
-    { label: "Open files", icon: "folder", onSelect: () => { location.hash = agentHref(rec, "files"); }, disabled: !rec.cwd },
-    { label: "Open in editor", icon: "external-link", onSelect: () => openEditor({ path: rec.cwd }), disabled: !rec.cwd },
-    { label: "Rename pane", icon: "edit", onSelect: () => renamePane(pane, rec.title), disabled: !rec.pane_id },
-    { label: "Rename tab", icon: "edit", onSelect: () => renameTab(rec.tab_id, ""), disabled: !rec.tab_id },
-    { label: "Close pane", icon: "stop", danger: true, onSelect: () => closePane(pane, rec.title), disabled: !rec.pane_id },
-    { label: "Close tab", icon: "stop", danger: true, onSelect: () => closeTab(rec.tab_id, rec.workspace || rec.tab_id), disabled: !rec.tab_id },
-    { label: "Stop", icon: "stop", danger: true, onSelect: () => act.onStop && act.onStop(rec), disabled: !rec.colony },
-  ];
-}
-
 function menuButton(rec, actions) {
   const b = h("button", { class: "btn btn-ghost btn-icon row-menu", type: "button", "aria-label": "Actions for " + rec.title, "aria-haspopup": "menu", title: "Actions", onClick: (e) => { e.stopPropagation(); openMenu(b, agentMenuItems(rec, actions), { placement: "end", label: "Actions for " + rec.title }); } }, icon("more"));
   return b;
@@ -242,7 +217,7 @@ export function AgentCard({ agent: a, selected, onOpen, onTerminal, actions, cha
 }
 
 // AgentTable({ agents, sort: {key, dir}, onSort(key), selectedKey, onOpen, actions, projectOf(rec), channelOf(rec) }) -> dense sortable table.
-export const TABLE_COLS = [["state", "State"], ["title", "Agent"], ["project", "Project"], ["now", "Now"], ["age", "In state"], ["subs", "Subagents"], ["channel", "Channel"]];
+const TABLE_COLS = [["state", "State"], ["title", "Agent"], ["project", "Project"], ["now", "Now"], ["age", "In state"], ["subs", "Subagents"], ["channel", "Channel"]];
 export function AgentTable({ agents, sort, onSort, selectedKey, onOpen, actions, projectOf, channelOf } = {}) {
   const head = h("tr", null, TABLE_COLS.map(([k, label]) => h("th", { scope: "col", "aria-sort": sort.key === k ? (sort.dir === 1 ? "ascending" : "descending") : "none" }, h("button", { type: "button", class: "th-btn", onClick: () => onSort(k) }, label, sort.key === k ? h("span", { class: "th-arrow", "aria-hidden": "true" }, sort.dir === 1 ? "\u2191" : "\u2193") : null))), h("th", { scope: "col" }, h("span", { class: "sr-only" }, "Actions")));
   const rows = agents.map((a) => {
@@ -289,7 +264,7 @@ function frameTheme() {
 }
 
 // Terminal URL: the herdr web UI pane link in chrome-less mode (?chrome=pane&theme=) so no second app chrome appears.
-export function paneUrl(rec) {
+function paneUrl(rec) {
   if (!rec.deep_link) return "";
   const u = toHost(new URL(rec.deep_link, location.href));
   u.searchParams.set("chrome", "pane");
@@ -449,5 +424,3 @@ export function openAgentInspector(rec, opts) {
 export function closeAgentInspector() {
   return closeDrawer();
 }
-
-export { firstDownLayer, describeStatus, IconButton };

@@ -42,12 +42,6 @@ export function getCredentials(): Credentials | null {
   };
 }
 
-export function resetClient(): void {
-  _client = null;
-  _credKey = null;
-  logger.debug('Reset PAN-OS client');
-}
-
 export async function getClient(): Promise<PanosClient> {
   const creds = getCredentials();
   if (!creds) {

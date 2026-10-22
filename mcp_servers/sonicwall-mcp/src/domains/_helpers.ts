@@ -12,8 +12,6 @@ import { shapeRaw } from '@shared/response-shaper.js';
 import { hasOp } from '../utils/inventory.js';
 
 import { toolError } from '@shared/error-envelope.js';
-export { toolError };
-export { shapeRaw };
 
 // Every domain reports SonicOS failures through this one mapping rather than
 // the generic @shared classifier: it is the only thing that reads a

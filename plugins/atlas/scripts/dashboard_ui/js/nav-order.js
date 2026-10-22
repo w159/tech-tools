@@ -4,7 +4,7 @@ export const DEFAULT_NAV = ["overview", "activity", "health", "agents", "colony"
 // Mobile bottom bar / More popover entries: [page id, label].
 export const MOBILE_TABS = [["overview", "Overview"], ["agents", "Agents"], ["activity", "Activity"], ["health", "Health"], ["colony", "Colony"], ["terminal", "Terminal"], ["channels", "Channels"], ["improve", "Improve"], ["projects", "Projects"], ["settings", "Settings"]];
 // Ids saved by older versions map onto canonical pages.
-export const NAV_ALIASES = { herd: "terminal", work: "agents", irc: "channels", console: "terminal", herdr: "terminal" };
+const NAV_ALIASES = { herd: "terminal", work: "agents", irc: "channels", console: "terminal", herdr: "terminal" };
 
 export function normalizeNav(order) {
   const seen = [];

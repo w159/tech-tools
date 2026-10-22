@@ -2,12 +2,12 @@
 // sorted here so the chips never refetch), with an ollama status line and a "Pull another…" job.
 import { h } from './dom.js';
 
-export const SCOPES = [['local', 'Local'], ['cloud', 'Cloud'], ['all', 'All']];
-export const SORTS = [['latest', 'Latest'], ['size', 'Size'], ['name', 'Name'], ['popular', 'Popular']];
+const SCOPES = [['local', 'Local'], ['cloud', 'Cloud'], ['all', 'All']];
+const SORTS = [['latest', 'Latest'], ['size', 'Size'], ['name', 'Name'], ['popular', 'Popular']];
 
 // Models without the `completion` capability (embedding, image) cannot answer a prompt; hidden unless showAll.
 // A server that sends no capabilities is treated as completion-capable.
-export const canGenerate = (m) => !Array.isArray(m.capabilities) || m.capabilities.includes('completion');
+const canGenerate = (m) => !Array.isArray(m.capabilities) || m.capabilities.includes('completion');
 
 export function filterModels(models, { scope = 'all', q = '', showAll = true } = {}) {
   const needle = String(q).trim().toLowerCase();

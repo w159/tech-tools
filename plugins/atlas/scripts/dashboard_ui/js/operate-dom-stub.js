@@ -1,5 +1,5 @@
 // Minimal DOM stand-in for the operate-surface tests (no DOM library is installed). Installs globals on import.
-export class N {
+class N {
   constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.listeners = {}; this.parent = null; this.style = { setProperty() {} }; this.dataset = {}; this.classList = { toggle() {}, remove() {}, add() {} }; this.isConnected = false; }
   appendChild(c) { if (c.parent) c.parent.children = c.parent.children.filter((x) => x !== c); c.parent = this; this.children.push(c); return c; }
   append(...c) { c.forEach((x) => this.appendChild(x)); }

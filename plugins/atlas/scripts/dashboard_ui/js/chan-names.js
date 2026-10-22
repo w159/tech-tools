@@ -38,7 +38,7 @@ export const presenceWord = (state) => PRESENCE[state] || "no pane";
 // Todo counts for one owner. Items (atlas_dash_work._todo_view statuses: open|in_progress|done|blocked) are the source of truth:
 // each counts once, blocked is its own bucket. Server owner counts (pending|in_progress|completed, blocked still inside
 // pending/in_progress) are only a fallback when no items were sent.
-export function todoCounts(c, items) {
+function todoCounts(c, items) {
   if (items && items.length) {
     const n = (s) => items.filter((i) => i.status === s).length;
     return { active: n("in_progress"), open: n("open"), blocked: n("blocked"), done: n("done") };
@@ -51,7 +51,7 @@ export function todoSummary(t) {
   const bits = [t.active && t.active + " active", t.open && t.open + " open", t.blocked && t.blocked + " blocked", t.done && t.done + " done"].filter(Boolean);
   return bits.length ? bits.join(", ") : "no todos";
 }
-export const noteText = (n) => (n ? (typeof n === "string" ? n : n.text || n.body || "") : "");
+const noteText = (n) => (n ? (typeof n === "string" ? n : n.text || n.body || "") : "");
 
 // Presence word state for a channel member: the live pane record wins, else what the channel API reports.
 export function memberState(m, rec) {

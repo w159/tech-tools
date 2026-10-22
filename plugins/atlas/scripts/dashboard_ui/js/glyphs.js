@@ -3,10 +3,10 @@
 import { s, normStatus } from "./dom.js";
 
 // Geometry of the brand mark: pointy-top hexagon, viewBox 0 0 24 28.
-export const HEX_PATH = "M12 1L22.5 7V21L12 27L1.5 21V7Z";
+const HEX_PATH = "M12 1L22.5 7V21L12 27L1.5 21V7Z";
 
 // tone = which --st-* token paints it; shape = inner glyph. One row per user-visible state.
-export const STATUS = {
+const STATUS = {
   input: { word: "Needs input", tone: "input", inner: "M12 8v8M12 19.4h.01" },
   fail: { word: "Failed", tone: "fail", inner: "M8.6 10.6l6.8 6.8M15.4 10.6l-6.8 6.8" },
   working: { word: "Working", tone: "working", inner: "" },

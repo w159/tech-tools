@@ -8842,5 +8842,24 @@
     "status": "verified",
     "verified_at": "2026-10-22T09:32:03+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "W3-deadcode",
+    "surface": "fallow dead-code / health",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Dead exports cleared in sonicwall-mcp, panos-mcp and dashboard_ui; usage-statusline.ts under cyclomatic 20",
+    "evidence": [
+      "fallow dead-code: 0 unused exports/types/files in mcp_servers/sonicwall-mcp, mcp_servers/panos-mcp, plugins/atlas/scripts/dashboard_ui",
+      "fallow health usage-statusline.ts: no function above cyclomatic 20; golden-before == golden-after",
+      "bun test dashboard 143 pass; omp 476 pass; sonicwall PROBE PASS; panos tsc clean (probe fails identically on untouched tree: env CFG_ placeholders)"
+    ],
+    "doc_refs": [],
+    "reproduction": "fallow dead-code --format json --quiet plugins/atlas/scripts/dashboard_ui",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-22T09:49:34+00:00",
+    "verified_by": "lead"
   }
 ]

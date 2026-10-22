@@ -136,7 +136,7 @@ function hashFor(id, params, anchor) {
   return "#/" + id + (anchor ? "#" + anchor : "") + (text ? "?" + text : "");
 }
 
-export function navigate(target, params) {
+function navigate(target, params) {
   let id = String(target);
   let anchor = "";
   let inline = {};
@@ -284,7 +284,7 @@ function syncInspector(params) {
 const hasOpenAgentInspector = () => hasOpenDrawer();
 
 // Open an agent in the inspector (and optionally its Terminal tab): the one entry point for rows, cards, strip, palette.
-export function openAgent(ref, opts) {
+function openAgent(ref, opts) {
   const rec = typeof ref === "string" ? agentsStore.find(ref) : ref;
   if (!rec) return;
   const tab = (opts && opts.tab) || undefined;

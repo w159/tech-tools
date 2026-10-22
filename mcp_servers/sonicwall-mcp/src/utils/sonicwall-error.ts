@@ -76,7 +76,7 @@ function isSonicwallApiError(err: unknown): err is SonicwallApiErrorLike {
 
 const TRANSPORT_RE = /fetch failed|ECONN|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ETIMEDOUT|certificate|self[- ]signed|SSL|TLS|timed out|timeout|aborted|socket/i;
 
-export function classify(err: SonicwallApiErrorLike): SonicwallFailureClass {
+function classify(err: SonicwallApiErrorLike): SonicwallFailureClass {
   const { httpStatus: h, code: c, message: m } = err;
   // The client words its errors "SonicOS <METHOD> <path> failed: ...".
   const onAuth = /SonicOS \w+ \/auth\b/.test(m);

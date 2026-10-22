@@ -126,10 +126,6 @@ export function icon(name, attrs) {
   );
 }
 
-export function iconNames() {
-  return Object.keys(ICONS);
-}
-
 export function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
   return node;
@@ -263,7 +259,7 @@ const UNITS = [
   ["s", 1],
 ];
 
-export function fmtDuration(seconds) {
+function fmtDuration(seconds) {
   if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) return "n/a";
   let n = Math.max(0, Math.floor(Number(seconds)));
   if (n < 1) return "0s";
@@ -295,13 +291,6 @@ export function fmtTime(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-}
-
-export function fmtNumber(n) {
-  if (n === null || n === undefined || n === "") return "n/a";
-  const v = Number(n);
-  if (Number.isNaN(v)) return String(n);
-  return v.toLocaleString();
 }
 
 const STATUS_ALIASES = {

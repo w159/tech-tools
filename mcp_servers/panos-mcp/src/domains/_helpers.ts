@@ -15,14 +15,9 @@ export {
   shapeRaw,
   extractShapeArgs,
   SHAPE_PROPS,
-  type SummaryFn,
-  type ShapeArgs,
 } from '@shared/response-shaper.js';
 
-export {
-  toolError,
-  missingCredsError,
-} from '@shared/error-envelope.js';
+export { toolError } from '@shared/error-envelope.js';
 
 // Every domain reports PAN-OS failures through this one mapping rather than
 // the generic @shared classifier: it is the only thing that reads a
@@ -34,11 +29,6 @@ export { panosToolError } from '../utils/panos-error.js';
 /** Legacy thin wrapper kept for navigate/status inline responses in server.ts. */
 export function jsonResult(data: unknown): CallToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-}
-
-/** Legacy thin wrapper; prefer panosToolError in domain handlers. */
-export function errorResult(msg: string): CallToolResult {
-  return { content: [{ type: 'text', text: msg }], isError: true };
 }
 
 /**
