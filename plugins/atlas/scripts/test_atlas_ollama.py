@@ -96,6 +96,42 @@ class TestParse(OllamaCase):
         self.assertTrue(row["cloud"])
 
 
+SHOW = """  Model
+    architecture    bert
+    context length  2048
+
+  Capabilities
+    embedding
+
+  Parameters
+    num_ctx    8192
+"""
+
+
+class TestCapabilities(OllamaCase):
+    def test_parse_capabilities_reads_the_block_only(self):
+        self.assertEqual(ol.parse_capabilities(SHOW), ["embedding"])
+        self.assertEqual(ol.parse_capabilities("  Capabilities\n    completion\n    vision\n"), ["completion", "vision"])
+        self.assertEqual(ol.parse_capabilities("  Model\n    x  y\n"), [])
+
+    def test_list_models_adds_capabilities_cached_and_defaulting_to_completion(self):
+        base, shows = self.fake.__call__, []
+        def show(argv, **kw):
+            if argv[1] == "show":
+                shows.append(argv[2])
+                return (0, SHOW, "") if argv[2] == "qwen3:8b" else base(argv, **kw)
+            return base(argv, **kw)
+        with mock.patch.object(ol, "run", show):
+            caps = {m["name"]: m["capabilities"] for m in ol.list_models()["models"]}
+            ol.list_models()
+        self.assertEqual(caps["qwen3:8b"], ["embedding"])
+        self.assertEqual(caps["nimble:latest"], ["completion"])  # no block: assume completion
+        self.assertEqual(caps["minimax-m3.1-flash:cloud"], ["completion"])
+        cache = json.loads(Path(self.tmp.name, ".atlas", "ollama-show-cache.json").read_text())
+        self.assertEqual(cache["qwen3:8b"]["caps"], ["embedding"])
+        self.assertEqual(shows.count("qwen3:8b"), 1)  # second list served from the 10 min cache
+
+
 class TestListModels(OllamaCase):
     def names(self, **kw):
         return [m["name"] for m in ol.list_models(**kw)["models"]]

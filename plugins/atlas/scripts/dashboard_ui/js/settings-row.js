@@ -15,7 +15,7 @@ export const appliesLabel = (a) => APPLIES_LABEL[a] || APPLIES_LABEL.now;
 const layerName = (l) => LAYER_LABEL[l] || String(l);
 const show = (v) => (v === '' || v === null || v === undefined ? '(nothing)' : String(v));
 
-// Number knobs: clamp to the server's range so the input can never hold a value the server refuses.
+// Stepper buttons only: clamp to the server's range so the input can never hold a value the server refuses.
 export function clampNumber(range, raw) {
   const n = Number(raw);
   if (raw === '' || raw === null || raw === undefined || !Number.isFinite(n)) return null;
@@ -38,8 +38,12 @@ export function verifyStatus(res) {
   return { ok: true, text: `✓ verified${names.length ? ` · ${names.join(', ')}` : ''}` };
 }
 
-export function errorStatus(err) {
+export function errorStatus(err, typed) {
   const d = (err && err.data) || {};
+  if (d.error === 'out_of_range') {
+    const r = d.range || {};
+    return `✗ not saved: ${typed ?? 'that value'} is outside ${r.min}..${r.max}`;
+  }
   if (d.error === 'unknown_model') {
     const m = d.matches || d.closest || [];
     return `✗ not saved: no such model${m.length ? ` (closest: ${m.slice(0, 3).join(', ')})` : ''}`;
@@ -93,7 +97,7 @@ export function SettingRow(item, deps) {
         setStatus('✗ not saved: cancelled', 'fail');
         return false;
       }
-      setStatus(errorStatus(err), 'fail');
+      setStatus(errorStatus(err, next), 'fail');
       return false;
     }
   };
@@ -125,11 +129,11 @@ export function SettingRow(item, deps) {
     control = sel;
   } else if (item.kind === 'number') {
     const input = textInput('number');
+    // Typed values go to the server as typed; its 400 out_of_range is shown and the field keeps what was typed.
     const go = async () => {
-      const n = clampNumber(item.range, input.value);
-      if (n === null) { setStatus('✗ not saved: enter a number', 'fail'); input.value = value; return; }
-      input.value = String(n);
-      if (String(n) !== value && !(await commit(String(n)))) input.value = value;
+      const raw = String(input.value).trim();
+      if (raw === '' || !Number.isFinite(Number(raw))) { setStatus('✗ not saved: enter a number', 'fail'); input.value = value; return; }
+      if (raw !== value && !(await commit(raw)) && !/outside/.test(status.textContent)) input.value = value;
     };
     const step = (dir) => () => { const st = (item.range && item.range.step) || 1; const n = clampNumber(item.range, Number(input.value || value || 0) + dir * st); input.value = String(n); return go(); };
     input.addEventListener('change', go);
@@ -141,7 +145,7 @@ export function SettingRow(item, deps) {
     clampTo = input;
     control = h('span', { class: 'st-inline' }, dec, input, inc);
   } else if (item.kind === 'model') {
-    control = ModelPicker({ api: deps.api, value, onPick: (name) => commit(name) });
+    control = ModelPicker({ api: deps.api, value, defaultValue: item.default, onPick: (name) => commit(name) });
   } else {
     // url, command and text: a text input; only these kinds ever take free text.
     const input = textInput('text');

@@ -111,13 +111,23 @@ test("number knobs clamp to range and the stepper moves by step", async () => {
   const api = mkApi();
   const row = SettingRow(KNOBS[1], deps(api));
   const input = byTag(row, "input")[0];
-  input.value = "999";
+  input.value = "20";
   await input.listeners.change();
-  expect(input.value).toBe("20");
   expect(api.posts.at(-1)[1].updates.ATLAS_TRIPWIRE_THRESHOLD).toBe("20");
   const [dec] = byClass(row, "st-step");
   await dec.listeners.click();
   expect(api.posts.at(-1)[1].updates.ATLAS_TRIPWIRE_THRESHOLD).toBe("19");
+});
+
+test("an out-of-range typed value is sent as typed; the server 400 is shown and the field keeps it", async () => {
+  const api = mkApi({ post: async () => { throw Object.assign(new Error("out_of_range"), { status: 400, data: { ok: false, error: "out_of_range", range: { min: 1, max: 20, step: 1 } } }); } });
+  const row = SettingRow(KNOBS[1], deps(api));
+  const input = byTag(row, "input")[0];
+  input.value = "99999999";
+  await input.listeners.change();
+  expect(api.posts.at(-1)[1].updates.ATLAS_TRIPWIRE_THRESHOLD).toBe("99999999");
+  expect(byClass(row, "st-status")[0].textContent).toBe("✗ not saved: 99999999 is outside 1..20");
+  expect(input.value).toBe("99999999");
 });
 
 test("command knobs confirm before saving; cancel saves nothing", async () => {
@@ -212,4 +222,40 @@ test("preferences use the same row component and verify against the saved state"
   await sel.listeners.change();
   expect(byClass(theme, "st-status")[0].textContent).toBe("✓ verified · dashboard prefs");
   page.destroy();
+});
+
+test("one category renders at a time; the nav switches; ?cat= and the first category are the defaults", async () => {
+  const root = await mountPage(mkApi());
+  const shown = () => byClass(root, "st-cat").filter((c) => !c.hidden).map((c) => c.attrs["aria-label"]);
+  expect(shown()).toEqual(["Preferences"]);
+  const btn = (label) => byClass(byClass(root, "st-nav")[0], "st-nav-item").find((b) => b.children[0].text === label);
+  btn("Guardrails").listeners.click();
+  expect(shown()).toEqual(["Guardrails"]);
+  page.destroy();
+  globalThis.location.search = "?cat=Colony";
+  const root2 = await mountPage(mkApi());
+  expect(byClass(root2, "st-cat").filter((c) => !c.hidden).map((c) => c.attrs["aria-label"])).toEqual(["Colony"]);
+  globalThis.location.search = "";
+  page.destroy();
+});
+
+test("a non-empty filter shows matches from every category under their headers", async () => {
+  const root = await mountPage(mkApi());
+  const filter = byClass(root, "st-filter")[0];
+  filter.value = "model";
+  filter.listeners.input();
+  const shown = byClass(root, "st-cat").filter((c) => !c.hidden).map((c) => c.attrs["aria-label"]);
+  expect(shown).toContain("Prompt optimizer");
+  expect(shown).toContain("Decision model");
+  expect(shown).not.toContain("Preferences");
+  filter.value = "";
+  filter.listeners.input();
+  expect(byClass(root, "st-cat").filter((c) => !c.hidden).length).toBe(1);
+  page.destroy();
+});
+
+test("settings.css: content column is minmax(0,1fr) and the card grid is two columns from 1100px", async () => {
+  const css = await Bun.file(new URL("../css/settings.css", import.meta.url)).text();
+  expect(css).toContain("grid-template-columns: 200px minmax(0, 1fr)");
+  expect(css).toMatch(/@media \(min-width: 1100px\) \{ \.st-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });

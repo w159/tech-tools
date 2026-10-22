@@ -516,6 +516,31 @@ _EFFECT = {
 _ADV_KIND = {"ATLAS_DECISION_MODEL": "model", "ATLAS_DECISION_URL": "url"}
 _PATH_KEYS = {"ATLAS_HOME", "ATLAS_DB"}
 
+# Advanced (scanned) keys carry no hand-written metadata, so their control kind is inferred from the
+# name and the documented default; anything that fits no rule stays free text.
+_ADV_SELECT = {"ATLAS_COLONY_TRANSPORT": ["herdr", "tmux", "claude-bg"]}  # accepted values: atlas_mux.py docstring
+_ADV_TOGGLES = {"ATLAS_COLONY", "ATLAS_TODO"}
+_ADV_NUMBER_NAME = re.compile(r"(_PORT|_S|_SECS|_TTL|_THRESHOLD)$|_TIMEOUT|_MAX_|^ATLAS_COLONY_LIVE_WINDOW$")
+_TOGGLE_PAIRS = {"on": ("on", "off"), "off": ("on", "off"), "1": ("1", "0"), "0": ("1", "0"),
+                 "true": ("true", "false"), "false": ("true", "false")}
+
+
+def _adv_shape(key: str) -> dict:
+    """kind (+ options / range / on / off) for an Advanced key, from its name and default."""
+    default = str((_AD.get(key) or ("", "", ""))[1])
+    if key in _ADV_KIND:
+        return {"kind": _ADV_KIND[key]}
+    if key in _ADV_SELECT:
+        return {"kind": "select", "options": _norm_options(_ADV_SELECT[key])}
+    pair = _TOGGLE_PAIRS.get(default.lower())
+    if key in _ADV_TOGGLES or pair:
+        on, off = pair or _TOGGLE_PAIRS["on"]
+        return {"kind": "toggle", "on": on, "off": off}
+    if _ADV_NUMBER_NAME.search(key) and re.fullmatch(r"\d+", default):
+        hi = 65535 if key.endswith("_PORT") else 100000 if "_MAX_" in key else 86400
+        return {"kind": "number", "range": {"min": 1 if key.endswith("_PORT") else 0, "max": hi, "step": 1}}
+    return {"kind": "text"}
+
 
 def _finish_knob(knob: dict) -> dict:
     """Fill the metadata fields every knob row carries (in place)."""
@@ -590,7 +615,7 @@ _AD = {
     ),
     "ATLAS_TODO": (
         "`off` stops copying the session's todo list onto the atlas board.",
-        "",
+        "on",
         "hooks",
     ),
     "ATLAS_DOCS_REPAIR": (
@@ -606,6 +631,11 @@ _AD = {
     "ATLAS_TYPESAFE_URL": (
         "Alternate scoring endpoint. A loopback URL scores locally with no API key.",
         "https://api.typesafe.ai",
+        "hooks",
+    ),
+    "ATLAS_COLONY_LIVE_WINDOW": (
+        "Seconds an agent counts as live in the colony roster after its last activity.",
+        "1800",
         "hooks",
     ),
     "ATLAS_COLONY_TRANSPORT": (
@@ -1047,7 +1077,7 @@ def behavior_state() -> dict:
                 else "Undocumented: nothing here says what it does. The reading line is shown under Details.",
                 "documented": bool(doc),
                 "scope": doc[2] if doc else "shell",
-                "kind": _ADV_KIND.get(key, "text"),
+                **_adv_shape(key),
                 **_adv_meta(key, doc),
                 "shell_also": shell_also(key),
                 **detail(key, doc[1] if doc else "", doc[2] if doc else "shell"),
@@ -1087,14 +1117,14 @@ def behavior_state() -> dict:
 def _check_value(key: str, value: str, confirm: bool):
     """None when the value may be saved, else the error dict (with its HTTP `status`)."""
     knob = _KNOBS_BY_KEY.get(key) or {}
-    meta = _finish_knob(dict(knob)) if knob else {"kind": _ADV_KIND.get(key, "text")}
+    meta = _finish_knob(dict(knob)) if knob else _adv_shape(key)
     kind = meta["kind"]
     if kind == "select" and meta.get("options"):
         allowed = [o["value"] for o in meta["options"]]
         if value not in allowed:
             return {"error": "bad_option", "key": key, "options": allowed, "status": 400}
-    if key in _RANGE:
-        r = _RANGE[key]
+    r = _RANGE.get(key) or meta.get("range")
+    if r:
         try:
             n = float(value)
         except ValueError:
