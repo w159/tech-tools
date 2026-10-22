@@ -3,20 +3,20 @@ import { h, replace, relTime, baseName } from "../dom.js";
 import {
   PageHeader,
   Button,
-  IconButton,
   Select,
   Switch,
   Textarea,
   Field,
   Modal,
-  Skeleton,
-  Empty,
   confirm,
   toast,
 } from "../ui.js";
+import { esc, gate } from "../html.js";
+import { bindRegion } from "../region.js";
 import { get, post, topics, describeError } from "../api.js";
 import { mergeAgents, statusOf } from "../state.js";
 import { COLUMNS, columnsOf, menuFor, opBody } from "./board-model.js";
+import { flattenTodos } from "./agents-model.js";
 
 /** Small popover menu under an anchor; closes on outside click or Escape. */
 function openMenu(anchor, entries, onPick) {
@@ -61,6 +61,64 @@ function openMenu(anchor, entries, onPick) {
   menu.querySelector("button").focus();
 }
 
+
+function taskRow(item, { showProject, toneOf }) {
+  const owner = item.owner
+    ? `<span class="task-owner mono"><i class="dot s-${esc(toneOf(item.owner))}" aria-hidden="true"></i>${esc(item.owner)}</span>`
+    : "";
+  const phase =
+    item.phase && item.phase !== "unphased"
+      ? `<span class="task-phase mono">${esc(item.phase)}</span>`
+      : "";
+  const proj =
+    showProject && item.project
+      ? `<span class="task-proj mono">${esc(baseName(item.project))}</span>`
+      : "";
+  return (
+    `<li class="task-row" data-id="${esc(item.id)}">` +
+    `<span class="task-text">${esc(item.content)}</span>` +
+    `<span class="task-facts">${phase}${owner}${proj}<span class="task-age mono">${esc(relTime(item.updated))}</span></span>` +
+    `<span class="task-more"><button type="button" class="btn btn-sm" data-action="menu" data-id="${esc(item.id)}" aria-haspopup="menu">Actions</button></span>` +
+    "</li>"
+  );
+}
+
+function boardColumn({ status, label }, items, opts) {
+  const collapsed = status === "done" && !opts.showDone && !opts.archived;
+  const toggle =
+    status === "done" && !opts.archived
+      ? `<button type="button" class="btn btn-sm" data-action="toggle-done">${opts.showDone ? "Hide" : "Show"}</button>`
+      : "";
+  const body = collapsed
+    ? ""
+    : `<ul class="board-list">${items.length ? items.map((i) => taskRow(i, opts)).join("") : '<li class="meta">Nothing here.</li>'}</ul>`;
+  return (
+    `<section class="board-col" data-status="${status}" aria-label="${esc(label)}">` +
+    `<header class="col-hd"><span class="hd">${esc(label)}</span><span class="mono count">${items.length}</span>${toggle}</header>${body}</section>`
+  );
+}
+
+/** Main region of the Board page as an HTML string (pure; unit-tested). */
+export function renderBoardRegion({
+  state = null,
+  loaded = false,
+  error = null,
+  archived = false,
+  showDone = false,
+  showProject = false,
+  toneOf = () => "unknown",
+}) {
+  const cols = columnsOf(state || {});
+  const total = COLUMNS.reduce((n, c) => n + cols[c.status].length, 0);
+  const gated = gate(
+    { loaded, error, count: total },
+    archived ? "archived tasks" : "tasks",
+  );
+  if (gated) return gated;
+  const opts = { archived, showDone, showProject, toneOf };
+  return `<div class="board">${COLUMNS.map((c) => boardColumn(c, cols[c.status], opts)).join("")}</div>`;
+}
+
 export function render(ctx) {
   const S = {
     state: null,
@@ -75,7 +133,7 @@ export function render(ctx) {
     stale: false,
   };
   const effective = () => (ctx.project !== "all" ? ctx.project : S.project);
-  const host = h("div");
+  const host = h("div", { class: "region" });
 
   async function load() {
     try {
@@ -204,29 +262,42 @@ export function render(ctx) {
     });
   }
 
-  function ownerView(item) {
-    if (!item.owner) return null;
-    const rows = agentRows();
-    const live = rows.find(
-      (r) => r.name === item.owner || r.key === item.owner,
-    );
-    const tone = live ? live.tone : statusOf("unknown").tone;
-    return h(
-      "span",
-      { class: "state" },
-      h("span", { class: `dot s-${tone}`, "aria-hidden": "true" }),
-      h("span", { class: "mono" }, item.owner),
-    );
+  const toneOf = (name) => {
+    const live = agentRows().find((r) => r.name === name || r.key === name);
+    return live ? live.tone : statusOf("unknown").tone;
+  };
+
+  function paint() {
+    if (S.disposed) return;
+    S.stale = !!document.querySelector(".menu");
+    if (S.stale) return;
+    host.innerHTML = renderBoardRegion({
+      state: S.state,
+      loaded: !!(S.state || S.error),
+      error: S.error,
+      archived: S.archived,
+      showDone: S.showDone,
+      showProject: ctx.project === "all",
+      toneOf,
+    });
   }
 
-  function card(item) {
-    const more = IconButton({
-      icon: "menu",
-      label: "Task actions",
-      size: "sm",
-    });
-    more.addEventListener("click", () =>
-      openMenu(more, menuFor(item, { archived: S.archived }), async (id) => {
+  const findItem = (id) =>
+    flattenTodos(S.state).find((it) => String(it.id) === id);
+  const unbind = bindRegion(host, {
+    "toggle-done": () => {
+      S.showDone = !S.showDone;
+      paint();
+    },
+    retry: () => {
+      S.error = null;
+      host.innerHTML = renderBoardRegion({ loaded: false });
+      load();
+    },
+    menu: (anchor) => {
+      const item = findItem(anchor.dataset.id);
+      if (!item) return;
+      openMenu(anchor, menuFor(item, { archived: S.archived }), async (id) => {
         if (id === "assign") return assignModal(item);
         if (id === "remove") {
           const ok = await confirm({
@@ -238,102 +309,9 @@ export function render(ctx) {
           if (!ok) return;
         }
         apply(id, item);
-      }),
-    );
-    return h(
-      "li",
-      { class: "card" },
-      h("div", { class: "card-text" }, item.content),
-      h(
-        "div",
-        { class: "card-meta meta" },
-        item.phase && item.phase !== "unphased"
-          ? h("span", { class: "label" }, item.phase)
-          : null,
-        ownerView(item),
-        ctx.project === "all" && item.project
-          ? h("span", {}, baseName(item.project))
-          : null,
-        h("span", {}, relTime(item.updated)),
-        h("span", { class: "card-more" }, more),
-      ),
-    );
-  }
-
-  function column({ status, label }, items) {
-    const collapsed = status === "done" && !S.showDone && !S.archived;
-    return h(
-      "section",
-      { class: "board-col", dataset: { status }, "aria-label": label },
-      h(
-        "header",
-        { class: "board-col-head" },
-        h("h2", {}, label),
-        h("span", { class: "count-badge" }, items.length),
-        status === "done" && !S.archived
-          ? Button(
-              {
-                size: "sm",
-                variant: "ghost",
-                onClick: () => {
-                  S.showDone = !S.showDone;
-                  paint();
-                },
-              },
-              S.showDone ? "Hide" : "Show",
-            )
-          : null,
-      ),
-      collapsed
-        ? null
-        : h(
-            "ul",
-            { class: "card-list" },
-            items.length
-              ? items.map(card)
-              : h("li", { class: "meta" }, "Nothing here."),
-          ),
-    );
-  }
-
-  function paint() {
-    if (S.disposed) return;
-    S.stale = !!document.querySelector(".menu");
-    if (S.stale) return;
-    if (!S.state && !S.error) return replace(host, Skeleton(6));
-    if (!S.state)
-      return replace(
-        host,
-        Empty({
-          title: "The board did not load.",
-          body: S.error,
-          action: Button({ onClick: load }, "Retry"),
-        }),
-      );
-    const cols = columnsOf(S.state);
-    const total = COLUMNS.reduce((n, c) => n + cols[c.status].length, 0);
-    if (!total)
-      return replace(
-        host,
-        Empty({
-          title: S.archived ? "No archived tasks." : "No tasks yet.",
-          action: S.archived
-            ? null
-            : Button(
-                { variant: "primary", icon: "plus", onClick: addModal },
-                "Add task",
-              ),
-        }),
-      );
-    replace(
-      host,
-      h(
-        "div",
-        { class: "board" },
-        COLUMNS.map((c) => column(c, cols[c.status])),
-      ),
-    );
-  }
+      });
+    },
+  });
 
   const projectSelect = Select({
     label: "Project",
@@ -409,5 +387,6 @@ export function render(ctx) {
     S.disposed = true;
     unsubscribe();
     document.removeEventListener("menu-closed", repaintAfterMenu);
+    unbind();
   };
 }

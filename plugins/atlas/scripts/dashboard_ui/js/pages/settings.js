@@ -1,7 +1,10 @@
 // Settings page (brief 5.9): section list, search, one row per setting with its current value and source.
-import { h, replace, on } from "../dom.js";
-import { PageHeader, Input, Empty, Skeleton, Copy, confirm } from "../ui.js";
-import { get, post, describeError } from "../api.js";
+import { h, replace, on, relTime, num } from "../dom.js";
+import { PageHeader, Input, Empty, Skeleton, Copy, confirm, toast } from "../ui.js";
+import { get, post, prefs, savePrefs, describeError } from "../api.js";
+import { buildHash } from "../router.js";
+import { esc, gate } from "../html.js";
+import { bindRegion } from "../region.js";
 import {
   SECTIONS,
   flattenBehavior,
@@ -17,6 +20,10 @@ import {
   countBySection,
   rangeText,
   resultSentence,
+  splitProjects,
+  pinPatch,
+  hidePatch,
+  projectHealth,
 } from "./settings-model.js";
 import {
   Row,
@@ -30,6 +37,8 @@ import {
   buildConnectorRows,
   buildPluginRows,
 } from "./settings-panels.js";
+
+const PROJECTS_ID = "projects";
 
 const LAYER_LABEL = {
   live_env: "Dashboard process",
@@ -189,13 +198,60 @@ function behaviorRow(entry, { saved, models }) {
   });
 }
 
-function SectionNav(onPick) {
+
+function projectRow(r, { pinned, isHidden }) {
+  const st = projectHealth(r.health);
+  const todos = (r.todos && r.todos.open) ?? null;
+  const cell = (label, value) =>
+    `<span class="proj-fact mono" title="${label}">${esc(num(value))}</span>`;
+  return (
+    `<div class="proj-row" role="row" data-root="${esc(r.root)}">` +
+    `<span class="proj-name"><a href="${esc(buildHash("run", { project: r.root }))}">${esc(r.name || r.root)}</a>` +
+    `<span class="mono meta wrap">${esc(r.root)}</span></span>` +
+    `<span class="proj-fact mono">${r.last_active ? `${esc(relTime(r.last_active))} ago` : "never"}</span>` +
+    cell("Runs 7d", r.runs_7d) +
+    cell("Agents active", r.agents_active) +
+    cell("Open tasks", todos) +
+    cell("Failures 7d", r.failures_7d) +
+    cell("Findings open", r.findings_open) +
+    `<span class="proj-fact mono st-${esc(st.raw)}">${esc(st.word)}</span>` +
+    '<span class="proj-acts">' +
+    (isHidden
+      ? ""
+      : `<button type="button" class="btn btn-sm" data-action="pin" data-root="${esc(r.root)}" aria-pressed="${pinned.has(r.root)}">${pinned.has(r.root) ? "Unpin" : "Pin"}</button>`) +
+    `<button type="button" class="btn btn-sm" data-action="hide" data-root="${esc(r.root)}">${isHidden ? "Show" : "Hide"}</button>` +
+    "</span></div>"
+  );
+}
+
+/** The Projects section (absorbed from the old Projects page) as an HTML string (pure; unit-tested). */
+export function renderProjectsRegion({
+  data = null,
+  loaded = false,
+  error = null,
+  prefs: p = {},
+}) {
+  const all = (data && data.projects) || [];
+  const gated = gate({ loaded, error, count: all.length }, "projects");
+  if (gated) return gated;
+  const { visible, hidden } = splitProjects(all, p.pinned_projects, p.hidden_projects);
+  const pinned = new Set(p.pinned_projects || []);
+  const rows = (list, isHidden) => list.map((r) => projectRow(r, { pinned, isHidden })).join("");
+  return (
+    `<div class="proj-list" role="table" aria-label="Projects">${rows(visible, false)}</div>` +
+    (hidden.length
+      ? `<details class="hidden-projects"><summary class="mono">Hidden projects (${hidden.length})</summary><div class="proj-list">${rows(hidden, true)}</div></details>`
+      : "")
+  );
+}
+
+function SectionNav(onPick, extra = []) {
   const nav = h("nav", {
     class: "settings-nav",
     "aria-label": "Settings sections",
   });
   const links = new Map();
-  for (const s of SECTIONS) {
+  for (const s of [...SECTIONS, ...extra]) {
     const count = h("span", { class: "count" });
     const b = h(
       "button",
@@ -247,10 +303,13 @@ export async function render(ctx) {
   const items = []; // {meta, node} for every row on the page, behavior or not
   const sectionEls = new Map();
   const content = h("div", { class: "settings-wrap" });
-  const nav = SectionNav((id) => {
-    const el = sectionEls.get(id);
-    if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
-  });
+  const nav = SectionNav(
+    (id) => {
+      const el = sectionEls.get(id);
+      if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
+    },
+    [{ id: PROJECTS_ID, title: "Projects" }],
+  );
   const empty = h("div", { hidden: true });
 
   async function refreshBehavior() {
@@ -297,6 +356,8 @@ export async function render(ctx) {
     );
     const counts = countBySection([...visible]);
     for (const i of items) i.node.hidden = !visible.has(i.meta);
+    // Projects is not a behavior setting: it hides only while a search is active.
+    counts[PROJECTS_ID] = query.trim() ? 0 : 1;
     for (const [id, el] of sectionEls)
       el.hidden = !counts[id] && !skeletons.has(id);
     nav.paint(counts);
@@ -330,6 +391,7 @@ export async function render(ctx) {
   }
 
   for (const s of SECTIONS) addSection(s.id, s.title);
+  const projectsBody = addSection(PROJECTS_ID, "Projects");
   replace(
     root,
     PageHeader({
@@ -349,6 +411,39 @@ export async function render(ctx) {
     query = search.value;
     applyFilter();
   });
+
+  // Projects: pin/hide state comes from prefs and paints with the dashboard rows; the list loads after.
+  const P = { data: null, loaded: false, error: null };
+  const paintProjects = () => {
+    projectsBody.innerHTML = renderProjectsRegion({ ...P, prefs: prefs.get() });
+  };
+  const savePref = async (patch) => {
+    try {
+      await savePrefs(patch);
+    } catch (e) {
+      const d = describeError(e);
+      toast(d.message, { kind: "error", detail: d.detail });
+    }
+  };
+  const loadProjects = async () => {
+    P.loaded = false;
+    P.error = null;
+    paintProjects();
+    try {
+      P.data = await get("/api/v2/projects");
+    } catch (e) {
+      P.error = describeError(e).message;
+    }
+    P.loaded = true;
+    paintProjects();
+  };
+  const stopProjects = bindRegion(projectsBody, {
+    pin: (el) => savePref(pinPatch(prefs.get(), el.dataset.root)),
+    hide: (el) => savePref(hidePatch(prefs.get(), el.dataset.root)),
+    retry: loadProjects,
+  });
+  const stopPrefs = prefs.subscribe(paintProjects);
+  paintProjects();
 
   // 1. Dashboard rows read the primed prefs store, so they paint at first render.
   // Behavior sections hold a skeleton until step 2 resolves, so the page never looks empty.
@@ -391,6 +486,7 @@ export async function render(ctx) {
     ["connectors", buildConnectorRows],
     ["plugins", buildPluginRows],
   ];
+  loadProjects(); // not awaited: the section shows its own loading state
   await Promise.all([
     loadBehavior(),
     ...panels.map(async ([id, build]) => {
@@ -412,5 +508,9 @@ export async function render(ctx) {
     }),
   ]);
   applyFilter();
-  return stopSearch;
+  return () => {
+    stopSearch();
+    stopProjects();
+    stopPrefs();
+  };
 }

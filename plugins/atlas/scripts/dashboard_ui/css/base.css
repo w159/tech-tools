@@ -137,3 +137,29 @@ pre,
     scroll-behavior: auto !important;
   }
 }
+
+/* Shared region states (see js/region-state.js): loading skeletons, empty, error with Retry. */
+.region-state {
+  padding: var(--s4) 0;
+  font: 12.5px/18px var(--mono);
+  color: var(--dim);
+  border-bottom: 1px solid var(--rule);
+}
+.region-state.loading {
+  display: grid;
+  gap: var(--s2);
+}
+.region-state.loading .skel {
+  height: 18px;
+  background: var(--well);
+}
+.region-state.empty {
+  color: var(--faint);
+}
+.region-state.error {
+  color: var(--fail);
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
