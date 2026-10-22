@@ -107,34 +107,35 @@
   flex: none;
   color: var(--dim);
 }
-.cnt.working .dot {
-  color: var(--working);
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--s1);
+  border-radius: 50%;
+  background: var(--idle);
 }
-.cnt.working.pulse .dot {
+.dot.working {
+  background: var(--brand);
+}
+.dot.working.pulse {
   animation: pulse 2s ease-in-out infinite;
 }
-.cnt.needs .dot {
-  color: var(--needs);
+.dot.needs {
+  background: var(--needs);
 }
-.cnt.fail .dot {
-  color: var(--fail);
+.dot.fail {
+  background: var(--fail);
 }
-.cnt.idle .dot {
-  color: var(--idle);
+.dot.parked,
+.dot.connecting {
+  background: var(--faint);
 }
-.live.ok .dot {
-  color: var(--ok);
+.dot.ok {
+  background: var(--ok);
 }
-.live.needs .dot {
-  color: var(--needs);
-}
-.live.fail .dot {
-  color: var(--fail);
-}
-.live.idle .dot {
-  color: var(--idle);
-}
-.dot {
+.mark-svg {
+  vertical-align: -3px;
   margin-right: var(--s1);
 }
 .clock {

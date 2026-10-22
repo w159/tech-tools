@@ -46,3 +46,19 @@ test("six route tabs render", () => {
 test("model strings are escaped", () => {
   assert.ok(!renderBand({ ...model, project: "<b>x</b>" }).includes("<b>x"));
 });
+
+test("counts and live marker are CSS dots, not glyph characters", () => {
+  const html = renderBand({ ...model, counts: { ...model.counts, working: 1 } });
+  assert.ok(html.includes('class="dot working pulse"'));
+  assert.ok(html.includes('class="dot ok"'));
+  assert.ok(!html.includes("\u25B6"));
+  assert.ok(!html.includes('class="dot working pulse"') || !renderBand(model).includes("dot working pulse") === false);
+  assert.ok(!renderBand({ ...model, counts: { ...model.counts, working: 0 } }).includes("working pulse"));
+  assert.ok(renderBand(model).includes("<svg"));
+});
+
+test("band.js source has no literal non-ASCII characters", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("./band.js", import.meta.url), "utf8");
+  assert.equal(/[^\x00-\x7F]/.test(src), false);
+});
