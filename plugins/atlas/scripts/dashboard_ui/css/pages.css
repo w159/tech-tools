@@ -1,15 +1,5 @@
 /* Page layout for Agents, Board, Channels, Health. Rules, not cards: hairline dividers, mono fact columns,
    no shadows, no rounded chrome. v15 tokens only. */
-.grid-kpi {
-  display: grid;
-  gap: var(--s4);
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-.cols-2 {
-  display: grid;
-  gap: var(--s4);
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-}
 .stack {
   display: grid;
   gap: var(--s4);
@@ -25,9 +15,7 @@
   margin-right: auto;
 }
 /* Grid children default to min-width:auto, which lets a wide row push the page sideways. */
-.stack > *,
-.cols-2 > *,
-.grid-kpi > * {
+.stack > * {
   min-width: 0;
 }
 .region {
@@ -92,8 +80,7 @@
   gap: var(--s1);
   justify-content: flex-end;
 }
-.plain-list,
-.attn-list {
+.plain-list {
   display: grid;
   gap: var(--s2);
 }
@@ -113,33 +100,6 @@
 }
 .table .disclosure {
   min-width: 160px;
-}
-
-/* ---- Overview (kept until the Run page replaces it) ---- */
-.attn-row {
-  display: grid;
-  grid-template-columns: 112px 1fr auto;
-  align-items: center;
-  gap: var(--s3);
-  min-height: 40px;
-}
-.attn-main {
-  display: grid;
-  min-width: 0;
-}
-.attn-main .meta {
-  overflow-wrap: anywhere;
-}
-.calm {
-  margin: 0;
-}
-@media (max-width: 759px) {
-  .attn-row {
-    grid-template-columns: 1fr auto;
-  }
-  .attn-row .state {
-    grid-column: 1 / -1;
-  }
 }
 
 /* ---- Agents: seats as full rows ---- */
@@ -614,7 +574,7 @@
   }
 }
 
-/* Phone width: drop wide columns from v14 tables so they fit without sideways scroll. */
+/* Phone width: drop wide columns from the wide tables so they fit without sideways scroll. */
 @media (max-width: 759px) {
   .table .col-wide {
     display: none;

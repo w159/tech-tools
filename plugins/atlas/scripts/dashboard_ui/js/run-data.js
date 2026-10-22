@@ -5,7 +5,7 @@
 // Payload facts (verified against the captured fixtures):
 //  - /api/v2/overview: kpis[] {id,label,value,delta (percent vs prior, number|null),prior,status,hint,series}.
 //    The five figures are the kpis with id runs, dispatches, silent_failures, tool_errors, findings_open
-//    (rendered by numbers() at pages/overview.js:~115; runsPanel at :165 is only the recent_runs table).
+//    (rendered by the Run page metrics rail via toMetrics below).
 //    attention[] {id,kind,severity,project,title,detail,what,next,count,first,last,action:{label,target}}.
 //  - /api/v2/agents: agents[] keys key,name,kind,status,state,pane_id,workspace_id,workspace,tab_id,tab_label,cwd,
 //    title,focused,deep_link,project,colony,run,parent_pane,children,children_total,state_change_seq,
@@ -15,7 +15,16 @@
 //  - /api/v2/channels/<name>: messages[] {id,ts (ISO),from,to,body,kind}; no seq, text lives in `body`.
 import { STATE_GLYPH, roleLetter } from "./glyph-table.js";
 import { relTime, baseName } from "./dom.js";
-import { waitingAgents } from "./pages/overview-model.js";
+import { mergeAgents } from "./state.js";
+
+/** Agents waiting on a person (state input), for the Needs you panel. */
+export function waitingAgents(agentsPayload, project) {
+  return mergeAgents(agentsPayload, null).filter(
+    (a) =>
+      a.state === "input" &&
+      (!project || project === "all" || a.project === project),
+  );
+}
 
 // ponytail: one cell per 7.5 minutes of idle time, 8 cells max; tune CELL_MS if the band feels too slow.
 const CELL_MS = 7.5 * 60 * 1000;
