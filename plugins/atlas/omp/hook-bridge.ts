@@ -413,8 +413,9 @@ export function toolResponseText(content: unknown): string {
 
 /** Hard per-hook cap in ms: min(the hooks.json timeout, ATLAS_BRIDGE_HOOK_TIMEOUT_S or the 25 s default). */
 export function hookTimeoutMs(configuredMs: number, env: Record<string, string | undefined> = process.env): number {
-	const requested = Number(env.ATLAS_BRIDGE_HOOK_TIMEOUT_S);
-	const capS = env.ATLAS_BRIDGE_HOOK_TIMEOUT_S && Number.isFinite(requested) && requested > 0 ? requested : DEFAULT_HOOK_CAP_S;
+	const raw = atlasKnob("ATLAS_BRIDGE_HOOK_TIMEOUT_S", env);
+	const requested = Number(raw);
+	const capS = raw && Number.isFinite(requested) && requested > 0 ? requested : DEFAULT_HOOK_CAP_S;
 	return Math.min(configuredMs, capS * 1000);
 }
 
@@ -423,7 +424,8 @@ export type HookRunner = (command: string, payload: Record<string, unknown>, tim
 /**
  * Knob values saved by the Command Center: `<ATLAS_HOME or ~/.atlas>/settings.json` `env` (scripts/atlas_control.py
  * owns the file; Claude Code gets the same values through its own settings.json env). Only ATLAS_* string values;
- * an unreadable or malformed file exports nothing. A variable already set in the real environment is not overridden.
+ * an unreadable or malformed file exports nothing. The store wins over the real environment: that value is the stale
+ * copy from session start (or from applyAtlasStoreEnv at load), so a knob saved mid-session applies on the next run.
  */
 function readStoredEnv(file: string): Record<string, unknown> {
 	try {
@@ -438,9 +440,14 @@ export function atlasStoreEnv(env: Record<string, string | undefined> = process.
 	const file = nodePath.join(env.ATLAS_HOME || nodePath.join(os.homedir(), ".atlas"), "settings.json");
 	const out: Record<string, string> = {};
 	for (const [k, v] of Object.entries(readStoredEnv(file))) {
-		if (/^ATLAS_[A-Z0-9_]+$/.test(k) && typeof v === "string" && v !== "" && (env[k] ?? "") === "") out[k] = v;
+		if (/^ATLAS_[A-Z0-9_]+$/.test(k) && typeof v === "string" && v !== "") out[k] = v;
 	}
 	return out;
+}
+
+/** One behavior knob, read per call: the saved store value, else the process env value. */
+export function atlasKnob(name: string, env: Record<string, string | undefined> = process.env): string | undefined {
+	return atlasStoreEnv(env)[name] ?? env[name];
 }
 
 /**
@@ -595,7 +602,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	let hooks: BridgedHook[] | undefined = deps.hooks;
 	const all = () => (hooks ??= loadBridgedHooks());
 	const run = deps.run ?? runHook;
-	const off = () => (deps.env ?? process.env).ATLAS_HOOK_BRIDGE === "off";
+	const off = () => atlasKnob("ATLAS_HOOK_BRIDGE", deps.env ?? process.env) === "off";
 	let sessionContext: Promise<string> | undefined;
 	let channelOpened = false;
 	const reset = () => {

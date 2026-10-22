@@ -18,6 +18,7 @@ import {
 	claudeNamesForCall,
 	loadBridgedHooks,
 	loadBridgedHooksFor,
+	atlasKnob,
 	atlasStoreEnv,
 	hookEnv,
 	matcherNames,
@@ -538,19 +539,35 @@ test("ast_edit is an Edit for the hooks, with every path it names", async () => 
 	expect(logOf("ast_pre.py")[0].tool_name).toBe("Edit");
 });
 
-test("hookEnv exports the atlas settings store; the real env wins; fixed omp vars win over the store", () => {
+test("hookEnv exports the atlas settings store; the store wins over the real env; fixed omp vars win over the store", () => {
 	const home = mkdtempSync(join(tmpdir(), "atlas-store-"));
 	try {
 		writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_GATE: "off", ATLAS_DEPTH: "3", ATLAS_HARNESS: "claude", NOT_ATLAS: "x", ATLAS_NUM: 5 } }));
 		const env = hookEnv({ ATLAS_HOME: home, ATLAS_DEPTH: "9" });
 		expect(env.ATLAS_GATE).toBe("off");
-		expect(env.ATLAS_DEPTH).toBeUndefined(); // already in process env: not re-exported, not overridden
+		expect(env.ATLAS_DEPTH).toBe("3"); // the inherited value is the stale session-start copy: the store wins
 		expect(env.ATLAS_HARNESS).toBe("omp");
 		expect(env.NOT_ATLAS).toBeUndefined();
 		expect(env.ATLAS_NUM).toBeUndefined();
 		expect(hookEnv({ ATLAS_HOME: join(home, "missing") }).ATLAS_HARNESS).toBe("omp"); // no store: unchanged behaviour
 		writeFileSync(join(home, "settings.json"), "{not json");
 		expect(atlasStoreEnv({ ATLAS_HOME: home })).toEqual({});
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("atlasKnob reads the saved store per call, else the process env, else undefined", () => {
+	const home = mkdtempSync(join(tmpdir(), "atlas-knob-"));
+	try {
+		const env = { ATLAS_HOME: home, ATLAS_HOOK_BRIDGE: "on", ATLAS_WORKER_MAX_TOKENS: "1024" };
+		expect(atlasKnob("ATLAS_HOOK_BRIDGE", env)).toBe("on"); // no store file: env value
+		writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_HOOK_BRIDGE: "off" } }));
+		expect(atlasKnob("ATLAS_HOOK_BRIDGE", env)).toBe("off"); // saved after the env was captured: store wins
+		expect(atlasKnob("ATLAS_WORKER_MAX_TOKENS", env)).toBe("1024"); // not in the store: env value
+		writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_HOOK_BRIDGE: "on" } }));
+		expect(atlasKnob("ATLAS_HOOK_BRIDGE", env)).toBe("on"); // re-read on every call
+		expect(atlasKnob("ATLAS_NOPE", env)).toBeUndefined();
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}

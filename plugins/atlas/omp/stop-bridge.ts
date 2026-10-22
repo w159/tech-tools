@@ -48,6 +48,7 @@ import {
 	type StopHookOutput,
 	recordFault,
 	type HookRunner,
+	atlasKnob,
 	claudeLifecyclePayload,
 	hookTimeoutMs,
 	loadBridgedHooksFor,
@@ -394,7 +395,7 @@ export function finalReportOf(messages: unknown[]): string {
 
 export function registerStopBridge(pi: Pick<ExtensionAPI, "on">, deps: StopBridgeDeps = {}): void {
 	const env = () => deps.env ?? process.env;
-	const off = () => env().ATLAS_HOOK_BRIDGE === "off" || env().ATLAS_STOP_BRIDGE === "off";
+	const off = () => atlasKnob("ATLAS_HOOK_BRIDGE", env()) === "off" || env().ATLAS_STOP_BRIDGE === "off";
 	const run = deps.run ?? runHook;
 	const cache = deps.cache ?? createTranscriptCache({ tmpDir: deps.tmpDir });
 	const spawnDetached = deps.spawnDetached ?? spawnDetachedReal;

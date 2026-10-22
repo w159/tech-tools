@@ -58,11 +58,15 @@ const MODEL_GROUPS = ['Prompt optimizer', 'Decision model', 'Turn scoring'];
 const tabOf = (title) => (MODEL_GROUPS.includes(title) ? 'models' : 'behavior');
 
 function initialTab() {
+  // The canonical link is #/settings?tab=x; ?tab=x#/settings still works as a fallback.
+  const loc = globalThis.location || {};
   let q = null;
-  try { q = new URLSearchParams((globalThis.location && globalThis.location.search) || ''); } catch { /* no location */ }
-  const tab = q && q.get('tab');
+  let qh = null;
+  try { q = new URLSearchParams(loc.search || ''); qh = new URLSearchParams(String(loc.hash || '').split('?')[1] || ''); } catch { /* no location */ }
+  const pick = (k) => (qh && qh.get(k)) || (q && q.get(k));
+  const tab = pick('tab');
   if (TABS.some((t) => t.id === tab)) return tab;
-  const cat = q && q.get('cat');
+  const cat = pick('cat');
   return (cat && LEGACY_CAT[String(cat).toLowerCase().replace(/[^a-z0-9]+/g, '-')]) || 'dashboard';
 }
 
@@ -614,14 +618,20 @@ function credFieldRow(c, f) {
   const baseline = String(f.value || '');
   const draft = S.credDrafts[key];
   const set = !!f.is_set;
-  const input = h('input', {
+  // Booleans (type 'bool') toggle between "true" and "false" in the same draft a text input would write.
+  const cur = draft !== undefined ? draft : baseline;
+  const control = f.type === 'bool' ? switchEl(id, cur !== 'false', `${c.name} ${f.title || key}`, (on) => {
+    if (String(on) === baseline) delete S.credDrafts[key]; else S.credDrafts[key] = String(on);
+    redrawConnector(c.name);
+  }) : null;
+  const input = control || h('input', {
     id, class: 'input', type: f.sensitive ? 'password' : 'text',
     value: draft !== undefined ? draft : baseline,
     placeholder: f.sensitive ? (set ? 'set — type to replace' : 'enter secret') : (set ? '' : 'not set'),
     autocomplete: f.sensitive ? 'new-password' : 'off', spellcheck: 'false',
     'aria-label': `${c.name} ${f.title || key}`,
   });
-  input.addEventListener('input', () => updateCredDraft(key, input, baseline));
+  if (!control) input.addEventListener('input', () => updateCredDraft(key, input, baseline));
   return h('div', { class: 'pg-field' },
     h('label', { class: 'pg-label pg-cred-label', for: id },
       h('span', { class: 'pg-mono' }, key),
@@ -922,7 +932,7 @@ function applyFilter() {
 
 function selectTab(id, focus) {
   S.tab = id;
-  try { const u = new URL(globalThis.location.href); u.searchParams.set('tab', id); u.searchParams.delete('cat'); globalThis.history.replaceState(null, '', u); } catch { /* no history */ }
+  try { globalThis.history.replaceState(null, '', `${String(globalThis.location.hash || '#/settings').split('?')[0]}?tab=${id}`); } catch { /* no history */ }
   applyFilter();
   if (focus) S.ui.tabs[id].btn.focus();
 }
@@ -953,7 +963,7 @@ function knobGroups(tab, order) {
 function pathsFooter() {
   const paths = (S.behavior && S.behavior.paths) || [];
   if (!paths.length) return null;
-  return h('p', { class: 'st-paths' }, `${paths.map((p) => `${p.title}: ${p.value}`).join(' | ')}. Set these in your shell before starting atlas.`);
+  return h('p', { class: 'st-paths' }, `${paths.map((p) => `${p.title} (${p.key}): ${p.value}`).join(' | ')}. Set these in your shell before starting atlas.`);
 }
 
 function panelBody(tab) {

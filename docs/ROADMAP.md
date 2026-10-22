@@ -9,6 +9,7 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 ### Dashboard redesign (withdrawn 2026-10-22)
 
 - [deferred] Dashboard redesign: withdrawn 2026-10-22; any new attempt starts from a user-approved mockup and a real-browser acceptance pass at 1024 and 1440 with the default landing state.
+- [done 15.1.0] Follow-up: the Settings page shipped as five tabs in 15.1.0 from a user-approved layout and a real-browser pass at 1024 and 1440 (`docs/plans/2026-10-22-settings-tabs-plan.md`).
 
 ### Command Center next (added 2026-10-22, after 13.0.0)
 

@@ -26,6 +26,9 @@ import os
 import re
 import sys
 from pathlib import Path
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 
 
 def _state_path() -> Path:

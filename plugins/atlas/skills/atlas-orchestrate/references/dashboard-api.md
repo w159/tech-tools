@@ -86,7 +86,7 @@ These live in `Handler._legacy_get` / `Handler._legacy_post`, are dispatched **a
 | `/api/sessions/{id}` | session detail (tools, prompts, dispatches) | `ok, session, ...` ; `404 session_not_found` |
 | `/api/connectors` | connector env coverage, no secrets | `ok, connectors, user_config, settings_path` |
 | `/api/connectors/export` | `.env` template, secrets blanked | `ok, text, env_path` |
-| `/api/behavior` | `ATLAS_*` knob groups + advanced list; each knob and `ATLAS_*` var shows value, source (process > store > claude settings > default), reached harnesses, default, `file:line` ref and last-changed | `ok, ...behavior_state()` |
+| `/api/behavior` | `ATLAS_*` knobs as `{groups, advanced, paths, hidden, note}` (`advanced` is always `[]`; 66 typed knobs in seven groups, 7 plumbing keys in `hidden`); each knob and `ATLAS_*` var shows value, source (process > store > claude settings > default), reached harnesses, default, `file:line` ref and last-changed | `ok, ...behavior_state()` |
 | `/api/ecosystem` | installed plugins, MCP servers, atlas hook wiring, skills/agents/output styles | `ok, ...ecosystem_inventory()` |
 | `/api/findings` | doctor findings | `ok, findings` |
 | `/api/runs[?limit=&project_id=]` | recent runs / run health (default limit 20) | `ok, health` |
@@ -103,7 +103,7 @@ These live in `Handler._legacy_get` / `Handler._legacy_post`, are dispatched **a
 | `/api/connectors/env` | `{"updates": {key: value}}` | allowlisted credential writes (userConfig keys or UPPER env keys); `400 updates_required` |
 | `/api/connectors/import` | `{"text": "KEY=VALUE\n..."}` | bulk `.env` paste, same allowlist; `400 no_assignments_found` |
 | `/api/connectors/test` | `{"name": "<connector>"}` | start the connector bundle and complete an MCP handshake |
-| `/api/behavior` | `{"updates": {ATLAS_KEY: value}}` | allowlisted writes to the atlas settings store `<ATLAS_HOME or ~/.atlas>/settings.json` (`{env, changed}`, atomic, 0600) and Claude `settings.json` `env`; the omp hook bridge exports the store into hook env; empty value removes the override; one bad key rejects the batch; advanced vars are editable; survives a daemon restart |
+| `/api/behavior` | `{"updates": {ATLAS_KEY: value}}` | allowlisted writes to the atlas settings store `<ATLAS_HOME or ~/.atlas>/settings.json` (`{env, changed}`, atomic, 0600) and Claude `settings.json` `env`; the omp hook bridge exports the store into hook env; empty value removes the override; one bad key rejects the batch; `ATLAS_HOME`, `ATLAS_DB` and `ATLAS_DASHBOARD_PORT` return 400 `read_only`; survives a daemon restart; every knob applies on the next hook run (see "How a saved knob reaches a running session") |
 | `/api/mcp/toggle` | `{"name", "enabled"}` | enable/disable one server via `disabledMcpServers` |
 | `/api/mcp/add` | server config object | user-scope server in `~/.claude.json` |
 | `/api/mcp/remove` | `{"name"}` | remove a user-scope server |
@@ -317,3 +317,7 @@ The credential and agent-override APIs below are unchanged and still enforced by
 - `ensure` restarts the daemon if health or status reports a different `db_path`.
 - It does **not** re-ingest transcripts on every request (avoids locking hooks out of the DB).
 - v2 insight routes never run `atlas_db.init` per request; missing tables degrade to empty data.
+
+## How a saved knob reaches a running session
+
+A Settings save writes `<ATLAS_HOME or ~/.atlas>/settings.json` `env`. Each of the 17 hook entry points in `hooks/hooks.json` calls `apply_store_env()` (`scripts/atlas_env.py`) before its other imports, which overlays that `env` onto the process environment; the saved value wins over the value exported at session start, so the next hook run in a live Claude Code session sees it. The omp bridge (`omp/hook-bridge.ts`) prefers the store over the exported variable and reads its four knobs per call through `atlasKnob()`. Plugin and MCP switches edit Claude Code's `settings.json`, which Claude Code reads at start. The page has five tabs (Dashboard, Behavior, Models, Integrations, Agents); see `docs/plans/2026-10-22-settings-tabs-plan.md`.

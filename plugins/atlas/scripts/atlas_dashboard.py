@@ -546,6 +546,9 @@ def _connector_status():
                     )
                     or "",
                     "sensitive": sensitive,
+                    # plugin.json declares every userConfig as a string, so the UI
+                    # needs this hint to render true/false switches.
+                    "type": "bool" if uk.endswith("_verify_tls") else "text",
                     "is_set": is_set,
                     "source": source,
                 }

@@ -24,6 +24,7 @@ import * as nodePath from "node:path";
 import { runCaptureSync } from "./proc";
 import { pluginScript } from "./plugin-path";
 import { isRecord } from "./workers";
+import { atlasKnob } from "./hook-bridge";
 
 const MAX_STOP_BLOCKS = 3;
 const NOTE_PREFIX_LIMIT = 200;
@@ -117,7 +118,7 @@ const stopReason = (items: OpenItem[]) =>
 export function registerAdvisorGate(pi: Pick<ExtensionAPI, "on">, deps: AdvisorDeps = defaultAdvisorDeps()): void {
 	const seen = new Set<string>();
 	let blocks = 0;
-	const off = () => (deps.env ?? process.env).ATLAS_ADVISOR_GATE === "off";
+	const off = () => atlasKnob("ATLAS_ADVISOR_GATE", deps.env ?? process.env) === "off";
 	/** This session's board coordinates, or undefined when the gate must stay out of the way. */
 	const scope = (ctx: { cwd: string; agent: { kind: string }; sessionManager?: { getSessionId?: () => unknown } }) => {
 		if (ctx.agent.kind !== "main" || off()) return undefined;

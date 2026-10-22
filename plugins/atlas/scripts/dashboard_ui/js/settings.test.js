@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 
 // Minimal DOM stand-in (same pattern as terminal.test.js; no DOM lib is installed).
 class N {
-  constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.listeners = {}; this.style = {}; this.textContent = ""; this.hidden = false; this.isConnected = true; }
+  constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.listeners = {}; this.style = {}; this.dataset = {}; this.textContent = ""; this.hidden = false; this.isConnected = true; }
   appendChild(c) { this.children.push(c); if (c instanceof N) c.parent = this; return c; }
   replaceChildren(...c) { this.children = []; c.forEach((x) => x && this.appendChild(x)); }
   setAttribute(k, v) { this.attrs[k] = v; }
@@ -61,9 +61,9 @@ const BEHAVIOR = {
   ],
   advanced: [],
   paths: [
-    { key: "ATLAS_HOME", title: "ATLAS_HOME", value: "/home/a", description: "" },
-    { key: "ATLAS_DB", title: "ATLAS_DB", value: "/home/a/atlas.db", description: "" },
-    { key: "ATLAS_DASHBOARD_PORT", title: "ATLAS_DASHBOARD_PORT", value: "7421", description: "" },
+    { key: "ATLAS_HOME", title: "Atlas state directory", value: "/home/a", description: "" },
+    { key: "ATLAS_DB", title: "Telemetry database", value: "/home/a/atlas.db", description: "" },
+    { key: "ATLAS_DASHBOARD_PORT", title: "Command Center port", value: "7421", description: "" },
   ],
   hidden: [],
   note: "",
@@ -262,7 +262,7 @@ test("Behavior lists server groups in order with h3 titles, intros and the paths
   const panel = shownPanels(root)[0];
   expect(byTag(panel, "h3").map((x) => x.textContent || x.children[0].text)).toEqual(["Session automation", "Guardrails", "Colony", "omp extension"]);
   expect(byClass(panel, "st-group-intro").map((x) => x.children[0].text)).toContain("Dispatch gates.");
-  expect(byClass(panel, "st-paths")[0].children[0].text).toBe("ATLAS_HOME: /home/a | ATLAS_DB: /home/a/atlas.db | ATLAS_DASHBOARD_PORT: 7421. Set these in your shell before starting atlas.");
+  expect(byClass(panel, "st-paths")[0].children[0].text).toBe("Atlas state directory (ATLAS_HOME): /home/a | Telemetry database (ATLAS_DB): /home/a/atlas.db | Command Center port (ATLAS_DASHBOARD_PORT): 7421. Set these in your shell before starting atlas.");
   page.destroy();
   globalThis.location.search = "?tab=models";
   const models = shownPanels(await mountPage(mkApi()))[0];
@@ -407,4 +407,50 @@ test("restoring the previous value after an error clears the error", async () =>
   input.value = "http://127.0.0.1:11434";
   await save.listeners.click();
   expect(status.textContent).toBe("");
+});
+
+test("hash-form tab and legacy cat links select a tab; selectTab writes the hash form", async () => {
+  const selected = (root) => tabsOf(root).filter((b) => b.attrs["aria-selected"] === "true").map(tabLabel);
+  globalThis.location.search = "";
+  for (const [hash, label] of [["#/settings?tab=models", "Models"], ["#/settings?cat=guardrails", "Behavior"]]) {
+    globalThis.location.hash = hash;
+    const r = await mountPage(mkApi());
+    expect([hash, selected(r)]).toEqual([hash, [label]]);
+    page.destroy();
+  }
+  globalThis.location.hash = "#/settings?tab=models";
+  const calls = [];
+  globalThis.history = { replaceState: (_s, _t, u) => calls.push(String(u)) };
+  const r = await mountPage(mkApi());
+  byClass(r, "st-tabs")[0].listeners.keydown(key("ArrowRight"));
+  expect(calls.at(-1)).toBe("#/settings?tab=integrations");
+  expect(calls.at(-1)).not.toContain("?tab=behavior#");
+  page.destroy();
+  globalThis.location.hash = "";
+  delete globalThis.history;
+});
+
+test("paths footer names the environment variables", async () => {
+  globalThis.location.search = "?tab=behavior";
+  const root = await mountPage(mkApi());
+  expect(text(byClass(root, "st-paths")[0])).toContain("(ATLAS_HOME)");
+  page.destroy();
+  globalThis.location.search = "";
+});
+
+test("boolean connector credential renders a switch; a text one still renders an input", async () => {
+  globalThis.location.search = "?tab=integrations";
+  const api = mkApi();
+  const get = api.get;
+  api.get = async (p) => (p === "/api/connectors" ? { connectors: [{ name: "panos", bundle_exists: true, health: "ok", enabled: true, fields: [
+    { user_config_key: "panos_verify_tls", env_key: "PANOS_VERIFY_TLS", type: "bool", value: "false", is_set: true, title: "TLS" },
+    { user_config_key: "panos_host", env_key: "PANOS_HOST", value: "fw", is_set: true, title: "Host" },
+  ] }] } : get(p));
+  const root = await mountPage(api);
+  const sw = walk(root).find((x) => x.attrs.id === "pg-cred-panos-panos_verify_tls");
+  expect(sw.attrs.role).toBe("switch");
+  expect(sw.attrs["aria-checked"]).toBe("false");
+  expect(walk(root).find((x) => x.attrs.id === "pg-cred-panos-panos_host").tag).toBe("input");
+  page.destroy();
+  globalThis.location.search = "";
 });

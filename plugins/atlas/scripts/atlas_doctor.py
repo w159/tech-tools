@@ -16,6 +16,11 @@ import json
 import os
 import sys
 import time
+import atlas_env
+
+# The hook entry (--hook) overlays saved knobs onto the environment; importers must not.
+if __name__ == "__main__":
+    atlas_env.apply_store_env()
 
 # --- environment (overridable so tests never touch the real install) ---
 PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.expanduser(

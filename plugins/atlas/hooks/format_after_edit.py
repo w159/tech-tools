@@ -40,6 +40,8 @@ import sys
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 )
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 import atlas_hook_guard  # noqa: E402
 
 # extension -> ordered list of candidate commands; the file path is appended as the last arg.

@@ -15,6 +15,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 
 MSG = (
     "[atlas] This inline edit of non-docs code will trip the completion gate's "

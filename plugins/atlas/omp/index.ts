@@ -687,8 +687,8 @@ function rewritePluginRoot(input: Record<string, unknown> | undefined): string |
 
 /**
  * Export the Command Center knobs (~/.atlas/settings.json `env`) into the real environment at load, before
- * style/mandates/agent-guard/shell-route/channels/stop-bridge read process.env. An already-exported variable wins
- * (atlasStoreEnv skips it). Detached ingest spawns inherit it, since they spread process.env.
+ * style/mandates/agent-guard/shell-route/channels/stop-bridge read process.env. The store overrides an
+ * already-exported variable; the four omp knobs are re-read per use through atlasKnob. Detached ingest spawns inherit it, since they spread process.env.
  */
 export function applyAtlasStoreEnv(env: Record<string, string | undefined> = process.env): void {
 	Object.assign(env, atlasStoreEnv(env));

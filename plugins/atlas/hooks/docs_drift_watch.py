@@ -42,6 +42,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 from docs_drift import docs_drift, find_root, git_changed_paths  # noqa: E402
 
 WARN_EVERY = 5

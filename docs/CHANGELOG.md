@@ -1,5 +1,21 @@
 # Changelog
 
+## 15.1.0 (2026-10-22, unreleased)
+
+### Added
+
+- Settings page as five tabs (Dashboard, Behavior, Models, Integrations, Agents) replacing the 13-category sidebar; `#/settings?tab=<slug>`, legacy `?cat=` mapped. Plan: `docs/plans/2026-10-22-settings-tabs-plan.md`.
+- `plugins/atlas/scripts/atlas_env.py` `apply_store_env()` at the top of all 17 hook entry points (`plugins/atlas/hooks/hooks.json`): the settings store overrides the session-start environment, so every knob applies on the next hook run.
+- 66 typed knobs in seven groups (`plugins/atlas/scripts/atlas_control.py`); `GET /api/behavior` shape `groups, advanced, paths, hidden, note`; `POST` of `ATLAS_HOME`, `ATLAS_DB` or `ATLAS_DASHBOARD_PORT` returns 400 `read_only`.
+
+### Fixed
+
+- Number rows saved with Enter no longer show "unchanged"; text rows save on blur; a no-op commit keeps a verified status.
+
+### Removed
+
+- Integrations inventory panel and the Advanced category.
+
 ## 15.0.1 (2026-10-22, unreleased)
 
 ### Removed

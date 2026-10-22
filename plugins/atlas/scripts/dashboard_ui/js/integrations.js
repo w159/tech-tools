@@ -1,11 +1,11 @@
 // Native herdr tooling in the Command Center (GET /api/v2/integrations, /deck, POST /open-file, /open-editor).
 // One module for: cached reads, honest error explanations (424 install command, 403 outside root, 429 duplicate),
 // path:line links that open the herdr-file-viewer, "Open in editor" (tode CLI only), the Files panel, and the
-// Integrations panel / compact status row. No innerHTML, nothing from tode's code-server is ever embedded or linked.
+// compact status row. No innerHTML, nothing from tode's code-server is ever embedded or linked.
 
 import { h, icon, replace, copyText } from "./dom.js";
 import { api } from "./api.js";
-import { Badge, Button, Input, CommandBlock } from "./ui-core.js";
+import { Button, Input, CommandBlock } from "./ui-core.js";
 import { Modal, openModal, closeModal, toast } from "./ui-overlays.js";
 
 // ---- cached reads --------------------------------------------------------------------------------
@@ -21,7 +21,6 @@ function cached(key, path, force, ttl) {
 }
 const getIntegrations = (force) => cached("integrations", "integrations", force, 5000);
 export const getHp = (force) => cached("hp", "projects/hp", force, 5000);
-const getDeck = (force) => cached("deck", "deck", force, 5000);
 const hpSnapshot = () => (cache.get("hp") || {}).data || null;
 
 let hpKey = "";
@@ -203,93 +202,6 @@ export function FilesPanel({ root, texts, label, chip }) {
 // ---- integrations panel --------------------------------------------------------------------------
 
 const TOOL_LABEL = { "herdr-projects": "herdr-projects", "herdr-file-viewer": "herdr-file-viewer", "captains-deck": "Captain's Deck", "cmux-browser-mcp": "cmux-browser MCP", tode: "tode" };
-const TOOL_ROLE = {
-  "herdr-projects": "Coordinator + worker threads on their own branches",
-  "herdr-file-viewer": "Read-only file viewer pane (path:line links)",
-  "captains-deck": "Read-only Firstmate kanban in a terminal pane",
-  "cmux-browser-mcp": "Browser automation for agents through the cmux app",
-  tode: "Editor launched from the CLI (Open in editor)",
-};
-
-function stateBadge(t) {
-  if (!t.installed) return Badge({ status: "idle", text: "Not installed" });
-  if (!t.enabled) return Badge({ status: "warn", text: "Installed, disabled" });
-  return Badge({ status: "ok", text: "Installed" });
-}
-
-function facts(t, mcp, deck) {
-  const rows = [["Enabled", t.enabled ? "yes" : "no"], ["Version", t.version || "unknown"]];
-  if (t.name === "herdr-projects") rows.push(["Configured", t.configured ? "yes, root exists" : "no, run configure --dry-run first"], ["Binary on PATH", t.binary ? "yes" : "no"]);
-  if (t.name === "cmux-browser-mcp") {
-    const reg = (mcp || []).filter((m) => /cmux-browser/.test(m.name));
-    rows.push(["MCP registration", reg.length ? "registered in " + reg.map((m) => m.source).join(", ") : "not registered in any MCP config"]);
-    if (t.cmux) rows.push(["cmux app", t.cmux.running ? "running" + (t.cmux.access_mode ? ", " + t.cmux.access_mode : "") : t.cmux.installed ? "installed, not running" : "not found"], ...(t.cmux.browser_capabilities !== undefined ? [["Browser methods", String(Array.isArray(t.cmux.browser_capabilities) ? t.cmux.browser_capabilities.length : t.cmux.browser_capabilities)]] : []));
-  }
-  if (t.name === "captains-deck" && deck) rows.push(["Board", deck.available ? "available, " + (deck.homes || []).length + " Firstmate home(s)" : "unavailable: needs Firstmate"]);
-  return rows;
-}
-
-function toolRow(t, ctx) {
-  const n = t.name;
-  return h("li", { class: "int-tool", "data-tool": n, "data-installed": t.installed ? "true" : "false" },
-    h("div", { class: "int-head" }, h("h3", null, TOOL_LABEL[n] || n), stateBadge(t), h("a", { class: "int-docs", href: t.docs_url, target: "_blank", rel: "noopener noreferrer" }, "Docs", icon("external-link"))),
-    h("p", { class: "dim int-role" }, TOOL_ROLE[n] || ""),
-    h("dl", { class: "kv int-facts" }, facts(t, ctx.mcp, ctx.deck).map(([k, v]) => [h("dt", null, k), h("dd", null, v)])),
-    t.notes ? h("p", { class: "dim int-notes" }, t.notes) : null,
-    !t.installed && t.install_cmd ? h("div", { class: "int-install" }, h("p", { class: "dim" }, "Install (Atlas never runs this for you):"), CommandBlock(t.install_cmd)) : null);
-}
-
-function deckBlock(deck) {
-  if (!deck) return null;
-  if (deck.available) {
-    return h("div", { class: "int-deck", "data-available": "true" }, h("h3", null, "Captain's Deck"), h("p", { class: "dim" }, "Firstmate homes found: " + (deck.homes || []).join(", ")), (deck.discovered || []).length ? h("ul", { class: "files-list mono" }, deck.discovered.map((l) => h("li", null, l))) : null, h("p", { class: "dim" }, "The board itself lives in the terminal pane (open-captain-deck); Atlas shows no copy of it."));
-  }
-  return h("div", { class: "int-deck", "data-available": "false" }, h("h3", null, "Captain's Deck board"), h("p", { class: deck.tone === "info" ? "dim" : null }, deck.status ? deck.status + (deck.hint ? ". " + deck.hint : "") : "Unavailable: " + (deck.reason || "needs Firstmate") + "."), h("p", { class: "dim" }, "Captain's Deck is a read-only view of a Firstmate flow. Atlas shows no board without Firstmate homes, and does not make one up."));
-}
-
-const CONN_STATUS = { ok: "ok", idle: "idle", degraded: "warn", unconfigured: "fail", disabled: "idle" };
-
-// The atlas MCP connectors (same rows Settings > Connectors and Health use): state + the env vars each needs.
-function connectorsBlock(list) {
-  if (!Array.isArray(list) || !list.length) return null;
-  const bad = list.filter((c) => c.health === "unconfigured" || c.health === "degraded").length;
-  return h("div", { class: "int-connectors" }, h("h3", null, "Atlas MCP connectors"),
-    h("p", { class: "dim" }, bad ? bad + " of " + list.length + " need attention. Set credentials under Settings > Connectors." : "All " + list.length + " connectors are configured."),
-    h("ul", { class: "int-list" }, list.map((c) => h("li", { class: "int-tool", "data-connector": c.name, "data-health": c.health },
-      h("div", { class: "int-head" }, h("h3", null, c.name), Badge({ status: CONN_STATUS[c.health] || "idle", text: c.health })),
-      h("dl", { class: "kv int-facts" },
-        [["Server", c.server_name], ["Enabled", c.enabled ? "yes" : "no"],
-          ["Calls (30d)", c.usage ? c.usage.calls + " calls, " + c.usage.errors + " errors" : "n/a"],
-          ["Needs", (c.env_vars || []).map((v) => v.env_key + (v.is_set ? " (set)" : " (missing)")).join(", ") || "nothing"],
-          ...((c.missing_required || []).length ? [["Missing", c.missing_required.join(", ")]] : [])]
-          .map(([k, v]) => [h("dt", null, k), h("dd", { class: "mono" }, v)]))))));
-}
-
-/** Full panel; .reload(force) refetches. */
-export function IntegrationsPanel() {
-  const root = h("div", { class: "int-panel", id: "integrations" });
-  let busy = false;
-  async function load(force) {
-    if (busy) return;
-    busy = true;
-    try {
-      const [d, deck] = await Promise.all([getIntegrations(force), getDeck(force).catch(() => null)]);
-      replace(root,
-        h("div", { class: "int-bar" }, h("p", { class: "dim" }, "Agent runtime " + (d.herdr ? "found" : "not found") + ". Atlas only reads this state; installing is always your call."), Button({ label: "Recheck", size: "sm", onClick: () => load(true) })),
-        h("ul", { class: "int-list" }, (d.tools || []).map((t) => toolRow(t, { mcp: d.mcp, deck }))),
-        connectorsBlock(d.connectors),
-        deckBlock(deck));
-    } catch (e) {
-      replace(root, h("div", { class: "state state-error", role: "alert" }, h("h2", { class: "state-title" }, "Could not read the integrations"), h("p", { class: "state-body" }, [e.error, e.why, e.do].filter(Boolean).join(". ")), Button({ label: "Retry", variant: "primary", onClick: () => load(true) })));
-    }
-    busy = false;
-  }
-  root.reload = load;
-  replace(root, h("p", { class: "dim", role: "status" }, "Reading integrations"));
-  load(false);
-  return root;
-}
-
 const ver = (v) => (/^v/i.test(String(v)) ? String(v) : "v" + v);
 
 /** Compact one-line status row for Overview. */

@@ -162,6 +162,31 @@ class WiringContract(unittest.TestCase):
         missing = [str(p) for p in _script_paths() if not p.is_file()]
         self.assertEqual(missing, [], "hooks.json references missing scripts")
 
+    def test_every_hook_entry_applies_store_knobs_before_local_imports(self):
+        """Saved dashboard knobs must reach already-running sessions: each entry applies
+        the Atlas store before it imports any atlas module (core modules read knobs)."""
+        entries = sorted({p for p in _script_paths() if p.suffix == ".py"})
+        self.assertEqual(len(entries), 17, [p.name for p in entries])
+        call = "atlas_env.apply_store_env()"
+        bad = []
+        for path in entries:
+            lines = path.read_text("utf-8").splitlines()
+            at = next((i for i, ln in enumerate(lines) if ln.strip() == call), None)
+            first_local = next(
+                (
+                    i
+                    for i, ln in enumerate(lines)
+                    for m in [re.match(r"(?:import|from)\s+(\w+)", ln)]
+                    if m
+                    and m.group(1) not in sys.stdlib_module_names
+                    and m.group(1) not in ("atlas_env", "__future__")
+                ),
+                None,
+            )
+            if at is None or (first_local is not None and at > first_local):
+                bad.append(path.name)
+        self.assertEqual(bad, [], "entries must call atlas_env.apply_store_env() first")
+
     def test_no_hook_creates_skills_or_commands(self):
         """Auto-generated skills were removed; nothing may recreate them.
 

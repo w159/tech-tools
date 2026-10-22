@@ -16,7 +16,7 @@ share one board, a Stop gate refuses "done" without evidence, and a doctor mines
 the session telemetry so the plugin can tune its own rules. It runs in Claude
 Code and, through its extension package, in omp.
 
-Current version: **15.0.1** (`plugins/atlas/.claude-plugin/plugin.json`). The 14.0.0 rework and the 15.0.0 Command Center were withdrawn on 2026-10-22; the dashboard is the 13.0.0 dashboard again.
+Current version: **15.1.0** (`plugins/atlas/.claude-plugin/plugin.json`). The 14.0.0 rework and the 15.0.0 Command Center were withdrawn on 2026-10-22; the dashboard is the 13.0.0 dashboard with a Settings page rebuilt as five tabs in 15.1.0.
 
 Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md)):
 
@@ -277,7 +277,7 @@ channels the hooks write.
 | Channels | What agents and you said to each other |
 | Improve | Doctor findings: mark fixed, dismiss, remeasure |
 | Projects | Pin, mute or hide projects |
-| Settings | One category at a time (behavior knobs, dashboard preferences, model picker, connector credentials) |
+| Settings | Five tabs: Dashboard, Behavior, Models, Integrations, Agents. A saved knob applies on the next hook run |
 
 ![Health](img/showcase/dashboard-health.png)
 ![Improve](img/showcase/dashboard-improve.png)

@@ -1,5 +1,37 @@
 # Changelog
 
+## 15.1.0 - 2026-10-22
+
+The Settings page is rebuilt as five tabs and every knob applies on the next hook run. Design and measurements: `docs/plans/2026-10-22-settings-tabs-plan.md`.
+
+### Added
+
+- Settings tabs: Dashboard, Behavior, Models, Integrations, Agents (WAI-ARIA tabs, arrow keys, `#/settings?tab=<slug>`; a legacy `?cat=` link maps to the nearest tab). Dashboard holds 6 preferences; Behavior holds the Session automation, Guardrails, Colony and omp extension groups (50 rows) plus a read-only footer naming `ATLAS_HOME`, `ATLAS_DB` and `ATLAS_DASHBOARD_PORT`, which are set in the shell; Models holds Prompt optimizer, Decision model and Turn scoring (16 rows); Integrations holds the plugin and MCP switches, then connector credentials; Agents holds project overrides. The filter searches across tabs.
+- `plugins/atlas/scripts/atlas_env.py` with `apply_store_env()`, called at the top of all 17 hook entry points in `hooks/hooks.json`. It overlays `<ATLAS_HOME or ~/.atlas>/settings.json` `env` onto the process environment, so the saved value wins over the stale value exported at session start. Contract test `test_every_hook_entry_applies_store_knobs_before_local_imports` pins the wiring; `test_atlas_env.py` covers the module.
+- Typed catalog in `plugins/atlas/scripts/atlas_control.py`: 66 knobs in seven groups, kinds toggle, select, number, model, url, command and text. 26 formerly "advanced" documented keys got real controls (`ATLAS_COLONY_TRANSPORT` is a select of herdr, tmux and claude-bg; `ATLAS_DOCS_REPAIR` is a toggle). 15 formerly undocumented keys got a description written from the code that reads them (for example `ATLAS_AUTONAME`, `ATLAS_SCOPE_GATE`, `ATLAS_WT_GATE`, `ATLAS_GATE_BLOCK_LOOP`, `ATLAS_MODE`, `ATLAS_BURST_SECS`, `ATLAS_BUILTIN_AGENT_NUDGE`, `ATLAS_HERDR_AUTOSTART`, `ATLAS_DOCTOR_HOOK_TTL_MIN`, `ATLAS_SEAT_BACKEND`, `ATLAS_TASKS_MIRROR`, `ATLAS_LEAD_IDLE_TTL`, `ATLAS_TERM_IDLE_S`).
+
+### Changed
+
+- Every knob reports applies `now`; the applies badge is no longer rendered for it. A save from the Settings page reaches running Claude Code sessions on their next hook run.
+- `GET /api/behavior` returns `groups`, `advanced` (always `[]`), `paths`, `hidden` and `note`. `POST /api/behavior` for `ATLAS_HOME`, `ATLAS_DB` or `ATLAS_DASHBOARD_PORT` returns 400 `read_only`.
+- omp bridge (`plugins/atlas/omp/hook-bridge.ts`) prefers the store over the exported variable; `ATLAS_HOOK_BRIDGE`, `ATLAS_BRIDGE_HOOK_TIMEOUT_S`, `ATLAS_WORKER_MAX_TOKENS` and `ATLAS_ADVISOR_GATE` are read per call through `atlasKnob()`.
+- Plugin and MCP switches still edit Claude Code's `settings.json`, which Claude Code reads when it starts; the hint on those rows says so.
+- 7 per-process plumbing keys are hidden: `ATLAS_SESSION_ID`, `ATLAS_SOURCE`, `ATLAS_LEAD_AGENT`, `ATLAS_RIG_PORT`, `ATLAS_STATUSLINE_CONFIG`, `ATLAS_TERM_TUI_CMD`, `ATLAS_TUI_BRIDGE`.
+
+### Fixed
+
+- A number row saved with Enter no longer flips to "unchanged" on blur: Enter blurs, one save path runs through the change event, one POST.
+- Text rows save on blur. A no-op commit never overwrites a verified status, and restoring the old value clears an error.
+
+### Removed
+
+- The 13-category second sidebar, the read-only Integrations inventory panel and the Advanced category.
+
+### Verified
+
+- `bun test` (dashboard_ui) 149 pass; `test_atlas_control` 51 OK; `test_atlas_dash*` 362 OK; hooks `test_*.py` 1583 OK; `test_atlas_contract` 70 OK; `test_atlas_env` 8 OK; omp `bun test` adds 1 test, no new failures.
+- Browser pass on a sandboxed instance at 1024 and 1440: five tabs, no "next session", "Undocumented" or "unchanged" text on any tab, no horizontal overflow, one POST per save.
+
 ## 15.0.1 - 2026-10-22
 
 Command Center v15 (15.0.0) and the same-day v14 rework (14.0.0) are withdrawn. The dashboard is the 13.0.0 dashboard again: the same pages, routes and settings that shipped in 13.0.0.
