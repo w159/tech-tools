@@ -1,4 +1,4 @@
-import { test, expect, mock } from "bun:test";
+import { test, expect } from "bun:test";
 
 // Minimal DOM stand-in (no DOM lib is installed), same shape as channel-lens.test.js.
 class N {
@@ -22,10 +22,9 @@ globalThis.navigator = {};
 globalThis.sessionStorage = { getItem: () => null, setItem() {} };
 globalThis.document = { createElement: (t) => new N(t), createElementNS: (_n, t) => new N(t), createTextNode: (t) => ({ text: t }), querySelector: () => null, documentElement: new N("html"), addEventListener() {}, body: new N("body"), hidden: false };
 
+const { api } = await import("./api.js");
+// Spy on the shared api.post (restored per test) instead of a module mock, which is process-global and leaks into send-path.test.js.
 const sent = [];
-const one = async (_ctx, name, text) => { sent.push([name, text]); return { ok: true, message: { delivery_text: "delivered" } }; };
-mock.module("./send-path.js", () => ({ sendToMember: one, sendToMembers: (ctx, names, text) => Promise.all(names.map((n) => one(ctx, n, text))) }));
-
 const { startChannelSync, FALLBACK_MS } = await import("./channel-sync.js");
 const { mountChannelLens } = await import("./pages/channel-lens.js");
 
@@ -127,7 +126,9 @@ test("composer posts through the single send path", async () => {
   const ta = all.find((n) => n.tag === "textarea");
   const send = all.find((n) => n.tag === "button" && n.textContent === "Send");
   ta.value = "hi";
-  await send.listeners.click();
+  const realPost = api.post;
+  api.post = async (path, b) => { sent.push([path.split("/")[1], b.text]); return { ok: true, message: { delivery_text: "delivered" } }; };
+  try { await send.listeners.click(); } finally { api.post = realPost; }
   expect(sent).toEqual([["w1", "hi"]]);
   lens.destroy();
 });
