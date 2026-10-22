@@ -41,10 +41,14 @@ esac
 class PaneActivityTest(unittest.TestCase):
     def test_latest_tool_row_wins(self):
         text = "● ctx_read atlas_dashboard.py:1-250\n  ⎿ ok\n● ctx_read atlas_dashboard.py:2501-2750\n\n❯ \n"
-        self.assertEqual(model._pane_activity(text), "ctx_read atlas_dashboard.py:2501-2750")
+        self.assertEqual(
+            model._pane_activity(text), "ctx_read atlas_dashboard.py:2501-2750"
+        )
         self.assertEqual(model._pane_activity("thinking…\n❯ "), "")
         feed = "10:04:27  ctx_read    atlas_dashboard.py:1-100\n10:04:34  think       Chunk 1 done\n"
-        self.assertEqual(model._pane_activity(feed), "ctx_read atlas_dashboard.py:1-100")
+        self.assertEqual(
+            model._pane_activity(feed), "ctx_read atlas_dashboard.py:1-100"
+        )
 
     def test_peer_note_row_keeps_recipient_and_text(self):
         feed = "10:04:27  peer       → lead: all done\n"
@@ -54,7 +58,9 @@ class PaneActivityTest(unittest.TestCase):
 
 class NamingTest(unittest.TestCase):
     def test_slug_from_task(self):
-        self.assertEqual(model._slug("Read-only: read atlas_tui.py in 10 chunks"), "read-atlas-tui")
+        self.assertEqual(
+            model._slug("Read-only: read atlas_tui.py in 10 chunks"), "read-atlas-tui"
+        )
         self.assertEqual(model._slug("", "fallback"), "fallback")
         self.assertEqual(model._slug("Fix the Login bug now please"), "fix-login-bug")
 
@@ -62,26 +68,87 @@ class NamingTest(unittest.TestCase):
         teams = [
             {"team_id": "b", "created": 2, "lead": "lead-x"},
             {"team_id": "a", "created": 1},
-            {"team_id": "c", "created": 3, "name": "review", "source": {"harness": "omp", "session": "s1", "lead": "l", "project": "p"}},
+            {
+                "team_id": "c",
+                "created": 3,
+                "name": "review",
+                "source": {
+                    "harness": "omp",
+                    "session": "s1",
+                    "lead": "l",
+                    "project": "p",
+                },
+            },
         ]
         cols = {
-            "a": {"id": "a", "task": "Audit the dashboard", "created": 1, "project": "/x/proj"},
-            "b": {"id": "b", "task": "Audit the dashboard", "created": 2, "project": "/x/proj"},
+            "a": {
+                "id": "a",
+                "task": "Audit the dashboard",
+                "created": 1,
+                "project": "/x/proj",
+            },
+            "b": {
+                "id": "b",
+                "task": "Audit the dashboard",
+                "created": 2,
+                "project": "/x/proj",
+            },
             "c": {"id": "c", "task": "x" * 90, "created": 3, "project": "/x/proj"},
         }
         model._name_colonies(cols, teams)
-        self.assertEqual(["audit-dashboard", "audit-dashboard-2", "review"], [cols[k]["name"] for k in "abc"])
+        self.assertEqual(
+            ["audit-dashboard", "audit-dashboard-2", "review"],
+            [cols[k]["name"] for k in "abc"],
+        )
         self.assertEqual(60, len(cols["c"]["title"]))
-        self.assertEqual({"project": "proj", "lead": "", "harness": "", "session": "", "label": "proj"}, cols["a"]["source"])
+        self.assertEqual(
+            {
+                "project": "proj",
+                "lead": "",
+                "harness": "",
+                "session": "",
+                "label": "proj",
+            },
+            cols["a"]["source"],
+        )
         self.assertEqual("lead-x", cols["b"]["source"]["lead"])
-        self.assertEqual({"project": "p", "lead": "l", "harness": "omp", "session": "s1", "label": "from omp session s1 · lead l · p"}, cols["c"]["source"])
+        self.assertEqual(
+            {
+                "project": "p",
+                "lead": "l",
+                "harness": "omp",
+                "session": "s1",
+                "label": "from omp session s1 · lead l · p",
+            },
+            cols["c"]["source"],
+        )
 
     def test_seat_addresses_index_only_repeated_roles_in_spawn_order(self):
-        teams = [{"team_id": "t", "members": [{"name": "explorer-z"}, {"name": "explorer-a"}, {"name": "critic-1"}]}]
+        teams = [
+            {
+                "team_id": "t",
+                "members": [
+                    {"name": "explorer-z"},
+                    {"name": "explorer-a"},
+                    {"name": "critic-1"},
+                ],
+            }
+        ]
         cols = {"t": {"name": "tui-review"}}
-        seats = [{"name": n, "role": r, "colony": "t"} for n, r in
-                 (("explorer-a", "explorer"), ("critic-1", "completeness-critic"), ("explorer-z", "explorer"))]
-        model._address_seats(seats, cols, teams, [{"kind": "agent", "name": "explorer", "description": "d" * 50}])
+        seats = [
+            {"name": n, "role": r, "colony": "t"}
+            for n, r in (
+                ("explorer-a", "explorer"),
+                ("critic-1", "completeness-critic"),
+                ("explorer-z", "explorer"),
+            )
+        ]
+        model._address_seats(
+            seats,
+            cols,
+            teams,
+            [{"kind": "agent", "name": "explorer", "description": "d" * 50}],
+        )
         got = {s["name"]: s["address"] for s in seats}
         self.assertEqual("explorer-1@tui-review", got["explorer-z"])
         self.assertEqual("explorer-2@tui-review", got["explorer-a"])
@@ -89,10 +156,25 @@ class NamingTest(unittest.TestCase):
         self.assertEqual("d" * 39 + "…", seats[0]["role_title"])
 
     def test_subagent_seats_address_by_member_name(self):
-        teams = [{"team_id": "t", "members": [{"name": "explorer-a"}, {"name": "scout-b"}, {"name": "critic-1"}]}]
+        teams = [
+            {
+                "team_id": "t",
+                "members": [
+                    {"name": "explorer-a"},
+                    {"name": "scout-b"},
+                    {"name": "critic-1"},
+                ],
+            }
+        ]
         cols = {"t": {"name": "tui-review"}}
-        seats = [{"name": n, "role": r, "colony": "t"} for n, r in
-                 (("scout-b", "subagent"), ("critic-1", "completeness-critic"), ("explorer-a", "subagent"))]
+        seats = [
+            {"name": n, "role": r, "colony": "t"}
+            for n, r in (
+                ("scout-b", "subagent"),
+                ("critic-1", "completeness-critic"),
+                ("explorer-a", "subagent"),
+            )
+        ]
         model._address_seats(seats, cols, teams, [])
         got = {s["name"]: s["address"] for s in seats}
         self.assertEqual("explorer-a@tui-review", got["explorer-a"])
@@ -192,17 +274,43 @@ class ModelTest(unittest.TestCase):
 
     def _team(self, root, tid, created, member, **extra):
         (Path(root, ".atlas", ".run", "teams", f"{tid}.json")).write_text(
-            json.dumps({"team_id": tid, "class": "fix", "effort": "low", "task": "x", "created": created, "members": [{"name": member, "role": "implementer"}], **extra})
+            json.dumps(
+                {
+                    "team_id": tid,
+                    "class": "fix",
+                    "effort": "low",
+                    "task": "x",
+                    "created": created,
+                    "members": [{"name": member, "role": "implementer"}],
+                    **extra,
+                }
+            )
         )
 
     def _finished_colony(self, tid, ended_ago, **extra):
         name = f"worker-{tid}"
-        self._team(self.root, tid, time.time() - 900, name, channel=f"proj@main/lead-{tid}", **extra)
+        self._team(
+            self.root,
+            tid,
+            time.time() - 900,
+            name,
+            channel=f"proj@main/lead-{tid}",
+            **extra,
+        )
         reg = Path(self.root, ".atlas", ".run", "channels.json")
         data = json.loads(reg.read_text())
         data["channels"][f"proj@main/lead-{tid}"] = {
-            "name": f"proj@main/lead-{tid}", "kind": "lead", "lead": f"lead-{tid}",
-            "members": [{"name": name, "role": "implementer", "exit_code": 0, "ended_at": time.time() - ended_ago}],
+            "name": f"proj@main/lead-{tid}",
+            "kind": "lead",
+            "lead": f"lead-{tid}",
+            "members": [
+                {
+                    "name": name,
+                    "role": "implementer",
+                    "exit_code": 0,
+                    "ended_at": time.time() - ended_ago,
+                }
+            ],
         }
         reg.write_text(json.dumps(data))
 
@@ -249,19 +357,38 @@ class ModelTest(unittest.TestCase):
         self.assertTrue(by_id["kill60"]["finished"])
 
     def test_source_lead_falls_back_to_channel_and_label(self):
-        src = {c["id"]: c["source"] for c in model.snapshot(self.root)["colonies"]}["t1"]
+        src = {c["id"]: c["source"] for c in model.snapshot(self.root)["colonies"]}[
+            "t1"
+        ]
         self.assertEqual(src["lead"], "lead-x")
         self.assertEqual(src["label"], f"lead lead-x · {src['project']}")
         full = {"harness": "claude", "session": "s1", "lead": "L", "project": "p"}
-        self.assertEqual(model._source_label(full, "c"), "from claude session s1 · lead L · p")
-        self.assertEqual(model._source_label({"harness": "", "session": "", "lead": "", "project": ""}, "p@b/L"), "channel p@b/L")
+        self.assertEqual(
+            model._source_label(full, "c"), "from claude session s1 · lead L · p"
+        )
+        self.assertEqual(
+            model._source_label(
+                {"harness": "", "session": "", "lead": "", "project": ""}, "p@b/L"
+            ),
+            "channel p@b/L",
+        )
 
     def test_paneless_omp_channel_reports_subagent_and_harness(self):
         reg = Path(self.root, ".atlas", ".run", "channels.json")
         data = json.loads(reg.read_text())
         data["channels"]["proj@main/lead-omp1"] = {
-            "name": "proj@main/lead-omp1", "kind": "lead", "lead": "lead-omp1", "harness": "omp",
-            "members": [{"name": "worker-o1", "role": "implementer", "exit_code": 0, "ended_at": time.time() - 60}],
+            "name": "proj@main/lead-omp1",
+            "kind": "lead",
+            "lead": "lead-omp1",
+            "harness": "omp",
+            "members": [
+                {
+                    "name": "worker-o1",
+                    "role": "implementer",
+                    "exit_code": 0,
+                    "ended_at": time.time() - 60,
+                }
+            ],
         }
         reg.write_text(json.dumps(data))
         s = model.snapshot(self.root)
@@ -275,15 +402,21 @@ class ModelTest(unittest.TestCase):
         reg = Path(self.root, ".atlas", ".run", "channels.json")
         data = json.loads(reg.read_text())
         data["channels"][name] = {
-            "name": name, "kind": "lead", "lead": lead, **extra, "members": members,
+            "name": name,
+            "kind": "lead",
+            "lead": lead,
+            **extra,
+            "members": members,
         }
         reg.write_text(json.dumps(data))
 
     def test_running_paneless_omp_colony_is_live(self):
         self._channel(
-            "proj@main/lead-live", "lead-live",
+            "proj@main/lead-live",
+            "lead-live",
             [{"name": "worker-l1", "role": "implementer", "joined": time.time() - 60}],
-            harness="omp", lead_pid=os.getpid(),
+            harness="omp",
+            lead_pid=os.getpid(),
         )
         s = model.snapshot(self.root)
         c = next(c for c in s["colonies"] if c["channel"] == "proj@main/lead-live")
@@ -296,12 +429,22 @@ class ModelTest(unittest.TestCase):
     def test_dead_lead_pid_marks_paneless_seat_dead(self):
         import subprocess
 
-        pr = subprocess.Popen(["/bin/sleep", "0"])  # spawn + reap: a guaranteed-dead pid
+        pr = subprocess.Popen(
+            ["/bin/sleep", "0"]
+        )  # spawn + reap: a guaranteed-dead pid
         pr.wait()
         self._channel(
-            "proj@main/lead-dead", "lead-dead",
-            [{"name": "worker-d1", "role": "implementer", "ended_at": time.time() - 60}],
-            harness="omp", lead_pid=pr.pid,
+            "proj@main/lead-dead",
+            "lead-dead",
+            [
+                {
+                    "name": "worker-d1",
+                    "role": "implementer",
+                    "ended_at": time.time() - 60,
+                }
+            ],
+            harness="omp",
+            lead_pid=pr.pid,
         )
         s = model.snapshot(self.root)
         seat = next(x for x in s["seats"] if x["name"] == "worker-d1")
@@ -309,11 +452,15 @@ class ModelTest(unittest.TestCase):
 
     def test_live_lead_pid_adds_lead_seat(self):
         model._TRANSCRIPTS.clear()
-        with mock.patch.object(model, "_omp_sessions_root", return_value=Path(self.root) / "no-sessions"):
+        with mock.patch.object(
+            model, "_omp_sessions_root", return_value=Path(self.root) / "no-sessions"
+        ):
             self._channel(
-                "proj@main/lead-abc123", "lead-abc123",
+                "proj@main/lead-abc123",
+                "lead-abc123",
                 [{"name": "worker-s1", "role": "scout", "joined": time.time() - 30}],
-                harness="omp", lead_pid=os.getpid(),
+                harness="omp",
+                lead_pid=os.getpid(),
             )
             s = model.snapshot(self.root)
         seat = next(x for x in s["seats"] if x["name"] == "lead-abc123")
@@ -327,54 +474,131 @@ class ModelTest(unittest.TestCase):
         c = next(c for c in s["colonies"] if c["channel"] == "proj@main/lead-abc123")
         self.assertIn("lead", [p["id"] for p in c["pods"]])
         self.assertFalse(c["finished"])
-        self.assertTrue(next(x for x in s["seats"] if x["name"] == "worker-s1")["state"] == "working")
+        self.assertTrue(
+            next(x for x in s["seats"] if x["name"] == "worker-s1")["state"]
+            == "working"
+        )
 
-    def _lead_with_pane_file(self, panes, write=True):
+    def _lead_with_pane_file(self, tmux_result, write=True, pane="%9", tmux=None):
         model._TRANSCRIPTS.clear()
         run = Path(self.root) / ".atlas" / ".run"
         run.mkdir(parents=True, exist_ok=True)
         if write:
-            (run / "lead-pane-lead-abc123.json").write_text(json.dumps({"pane": "%9"}))
-        with mock.patch.object(model, "_omp_sessions_root", return_value=Path(self.root) / "no-sessions"), \
-                mock.patch.object(model, "_panes", return_value=panes):
-            self._channel("proj@main/lead-abc123", "lead-abc123", [], harness="claude", lead_pid=os.getpid())
-            s = model.snapshot(self.root)
+            (run / "lead-pane-lead-abc123.json").write_text(json.dumps({"pane": pane}))
+        with (
+            mock.patch.object(
+                model,
+                "_omp_sessions_root",
+                return_value=Path(self.root) / "no-sessions",
+            ),
+            mock.patch.object(model, "_panes", return_value=[]),
+        ):
+            self._channel(
+                "proj@main/lead-abc123",
+                "lead-abc123",
+                [],
+                harness="claude",
+                lead_pid=os.getpid(),
+            )
+            if tmux is None:
+                s = (
+                    model.snapshot(self.root)
+                    if tmux_result is None
+                    else self._snap_with_tmux(tmux_result)
+                )
+            else:
+                s = model.snapshot(self.root)
         return next(x for x in s["seats"] if x["name"] == "lead-abc123")
 
+    def _snap_with_tmux(self, tmux_result):
+        with mock.patch.object(model, "_tmux", return_value=tmux_result):
+            return model.snapshot(self.root)
+
     def test_lead_seat_exposes_recorded_live_pane(self):
-        pane = {"pane_id": "%9", "session_name": "x", "window_name": "w", "pane_current_path": self.root,
-                "pane_dead": "0", "@atlas_worker": "", "@atlas_role": ""}
-        self.assertEqual(self._lead_with_pane_file([pane])["target"], "%9")
+        self.assertEqual(self._lead_with_pane_file((0, "%9 0\n"))["target"], "%9")
 
     def test_lead_seat_target_empty_without_record_or_pane(self):
-        self.assertEqual(self._lead_with_pane_file([], write=False)["target"], "")
-        self.assertEqual(self._lead_with_pane_file([])["target"], "")  # recorded pane is gone
+        self.assertEqual(self._lead_with_pane_file((1, ""), write=False)["target"], "")
+        self.assertEqual(
+            self._lead_with_pane_file((1, ""))["target"], ""
+        )  # recorded pane is gone
+        self.assertEqual(
+            self._lead_with_pane_file((0, "%9 1\n"))["target"], ""
+        )  # pane_dead=1
+
+    def test_invalid_recorded_pane_never_reaches_tmux(self):
+        with mock.patch.object(model, "_tmux") as tm:
+            tm.return_value = (0, "")
+            seat = self._lead_with_pane_file(None, pane="; rm -rf x", tmux=tm)
+        self.assertEqual(seat["target"], "")
+        self.assertNotIn(
+            "display-message", [c.args[0] for c in tm.call_args_list if c.args]
+        )
+
+    @unittest.skipUnless(shutil.which("tmux"), "tmux not installed")
+    def test_lead_pane_in_ordinary_tmux_session_gets_target(self):
+        import subprocess
+
+        sess = f"u7test-{os.getpid()}"  # deliberately not atlas-*
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", sess, "sleep 60"], check=True
+        )
+        try:
+            pane = subprocess.run(
+                ["tmux", "display", "-p", "-t", sess, "#{pane_id}"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            self.assertEqual(self._lead_with_pane_file(None, pane=pane)["target"], pane)
+        finally:
+            subprocess.run(["tmux", "kill-session", "-t", sess])
+        self.assertEqual(self._lead_with_pane_file(None, pane=pane)["target"], "")
 
     def test_dead_lead_pid_adds_no_lead_seat(self):
         import subprocess
 
-        pr = subprocess.Popen(["/bin/sleep", "0"])  # spawn + reap: a guaranteed-dead pid
+        pr = subprocess.Popen(
+            ["/bin/sleep", "0"]
+        )  # spawn + reap: a guaranteed-dead pid
         pr.wait()
         self._channel(
-            "proj@main/lead-dead2", "lead-dead2",
+            "proj@main/lead-dead2",
+            "lead-dead2",
             [],  # no members at all: nothing else can keep the colony alive
-            harness="omp", lead_pid=pr.pid,
+            harness="omp",
+            lead_pid=pr.pid,
         )
         s = model.snapshot(self.root)
         self.assertFalse(any(x["name"] == "lead-dead2" for x in s["seats"]))
-        self.assertFalse(any(c["channel"] == "proj@main/lead-dead2" for c in s["colonies"]))
+        self.assertFalse(
+            any(c["channel"] == "proj@main/lead-dead2" for c in s["colonies"])
+        )
 
     def test_colony_stays_live_with_only_lead_alive(self):
         model._TRANSCRIPTS.clear()
-        with mock.patch.object(model, "_omp_sessions_root", return_value=Path(self.root) / "no-sessions"):
+        with mock.patch.object(
+            model, "_omp_sessions_root", return_value=Path(self.root) / "no-sessions"
+        ):
             self._channel(
-                "proj@main/lead-only", "lead-only",
-                [{"name": "worker-f1", "role": "runner", "exit_code": 0, "ended_at": time.time() - 60}],
-                harness="omp", lead_pid=os.getpid(),
+                "proj@main/lead-only",
+                "lead-only",
+                [
+                    {
+                        "name": "worker-f1",
+                        "role": "runner",
+                        "exit_code": 0,
+                        "ended_at": time.time() - 60,
+                    }
+                ],
+                harness="omp",
+                lead_pid=os.getpid(),
             )
             s = model.snapshot(self.root)
         c = next(c for c in s["colonies"] if c["channel"] == "proj@main/lead-only")
-        self.assertFalse(c["finished"])  # the live lead keeps the colony live past the finished grace
+        self.assertFalse(
+            c["finished"]
+        )  # the live lead keeps the colony live past the finished grace
         self.assertTrue(any(x["name"] == "lead-only" for x in s["seats"]))
         self.assertEqual(  # the finished subagent stays listed under its lead's colony
             next(x for x in s["seats"] if x["name"] == "worker-f1")["state"], "finished"
@@ -383,9 +607,12 @@ class ModelTest(unittest.TestCase):
     def test_registry_only_recent_channel_is_in_process_colony(self):
         now = time.time()
         self._channel(
-            "proj@main/lead-reg", "lead-reg",
-            [{"name": "worker-r1", "role": "implementer", "joined": now - 600},
-             {"name": "worker-r2", "role": "explorer", "joined": now - 500}],
+            "proj@main/lead-reg",
+            "lead-reg",
+            [
+                {"name": "worker-r1", "role": "implementer", "joined": now - 600},
+                {"name": "worker-r2", "role": "explorer", "joined": now - 500},
+            ],
             last_activity=now - 30,
         )
         s = model.snapshot(self.root)
@@ -394,7 +621,9 @@ class ModelTest(unittest.TestCase):
         self.assertFalse(c["finished"])
         names = {x["name"] for x in s["seats"] if x["colony"] == c["id"]}
         self.assertEqual(names, {"lead-reg", "worker-r1", "worker-r2"})
-        self.assertTrue(all(x["target"] == "" for x in s["seats"] if x["name"] in names))
+        self.assertTrue(
+            all(x["target"] == "" for x in s["seats"] if x["name"] in names)
+        )
 
     def test_registry_only_stale_or_dead_channel_absent(self):
         import subprocess
@@ -404,8 +633,11 @@ class ModelTest(unittest.TestCase):
         old = time.time() - 2 * 86400
         self._channel("proj@main/lead-old", "lead-old", [], last_activity=old)
         self._channel(
-            "proj@main/lead-dd", "lead-dd", [{"name": "worker-dd", "role": "x", "joined": old}],
-            last_activity=time.time() - 5, lead_pid=pr.pid,
+            "proj@main/lead-dd",
+            "lead-dd",
+            [{"name": "worker-dd", "role": "x", "joined": old}],
+            last_activity=time.time() - 5,
+            lead_pid=pr.pid,
         )
         chans = {c["channel"] for c in model.snapshot(self.root)["colonies"]}
         self.assertNotIn("proj@main/lead-old", chans)
@@ -415,32 +647,52 @@ class ModelTest(unittest.TestCase):
         # t1's channel is proj@main/lead-x: a registry-live lead-x must not add a second colony
         self._channel("proj@main/lead-x", "lead-x", [], last_activity=time.time() - 5)
         s = model.snapshot(self.root)
-        self.assertEqual(1, sum(1 for c in s["colonies"] if c["channel"] == "proj@main/lead-x"))
+        self.assertEqual(
+            1, sum(1 for c in s["colonies"] if c["channel"] == "proj@main/lead-x")
+        )
 
     def test_registry_only_seat_state_from_notes(self):
         now = time.time()
         self._channel(
-            "proj@main/lead-st", "lead-st",
-            [{"name": "worker-b1", "role": "x", "joined": now - 900},
-             {"name": "worker-i1", "role": "x", "joined": now - 900}],
+            "proj@main/lead-st",
+            "lead-st",
+            [
+                {"name": "worker-b1", "role": "x", "joined": now - 900},
+                {"name": "worker-i1", "role": "x", "joined": now - 900},
+            ],
             last_activity=now - 5,
         )
-        with mock.patch.object(model, "_recent_notes", return_value=[
-            {"owner": "worker-b1", "kind": "blocked", "ts": now - 10, "text": "stuck"},
-            {"owner": "worker-i1", "kind": "note", "ts": now - 600, "text": "old"},
-        ]):
+        with mock.patch.object(
+            model,
+            "_recent_notes",
+            return_value=[
+                {
+                    "owner": "worker-b1",
+                    "kind": "blocked",
+                    "ts": now - 10,
+                    "text": "stuck",
+                },
+                {"owner": "worker-i1", "kind": "note", "ts": now - 600, "text": "old"},
+            ],
+        ):
             s = model.snapshot(self.root)
         st = {x["name"]: x["state"] for x in s["seats"]}
         self.assertEqual(st["worker-b1"], "blocked")
         self.assertEqual(st["worker-i1"], "idle")
 
     def test_named_lead_without_sid6_gets_no_transcript(self):
-        self.assertEqual(model._lead_transcript("/r", "lead-boss", {"harness": "omp"}), "")
-        self.assertEqual(model._lead_transcript("/r", "lead-abc123", {"harness": "codex"}), "")
+        self.assertEqual(
+            model._lead_transcript("/r", "lead-boss", {"harness": "omp"}), ""
+        )
+        self.assertEqual(
+            model._lead_transcript("/r", "lead-abc123", {"harness": "codex"}), ""
+        )
 
     def test_name_colonies_harness_falls_back_to_channel_record(self):
         chans = {"p@b/L": {"name": "p@b/L", "harness": "omp"}}
-        cols = {"t": {"id": "t", "channel": "p@b/L", "project": "/x/proj", "created": 1}}
+        cols = {
+            "t": {"id": "t", "channel": "p@b/L", "project": "/x/proj", "created": 1}
+        }
         model._name_colonies(cols, [{"team_id": "t"}], chans)
         self.assertEqual("omp", cols["t"]["source"]["harness"])
         model._name_colonies(cols, [{"team_id": "t"}])
@@ -448,14 +700,23 @@ class ModelTest(unittest.TestCase):
 
     def test_only_colonies_with_work_in_progress_listed(self):
         now = time.time()
-        self._team(self.root, "grace1", now - 60, "worker-k1")  # 1 min old, no panes: startup grace
-        self._team(self.root, "stale1", now - 600, "worker-o1")  # 10 min old, no panes: hidden
+        self._team(
+            self.root, "grace1", now - 60, "worker-k1"
+        )  # 1 min old, no panes: startup grace
+        self._team(
+            self.root, "stale1", now - 600, "worker-o1"
+        )  # 10 min old, no panes: hidden
         self._team(self.root, "gone1", now - 60, "worker-g1", state="reaped")
         reg = Path(self.root, ".atlas", ".run", "channels.json")
         data = json.loads(reg.read_text())
         data["channels"]["proj@main/lead-old"] = {  # all seats finished, no pane
-            "name": "proj@main/lead-old", "kind": "lead", "lead": "lead-old",
-            "members": [{"name": f"explorer-s{i}", "role": "explorer", "exit_code": 0} for i in range(3)],
+            "name": "proj@main/lead-old",
+            "kind": "lead",
+            "lead": "lead-old",
+            "members": [
+                {"name": f"explorer-s{i}", "role": "explorer", "exit_code": 0}
+                for i in range(3)
+            ],
         }
         reg.write_text(json.dumps(data))
         s = model.snapshot(self.root)
@@ -469,21 +730,40 @@ class ModelTest(unittest.TestCase):
         o = os.path.realpath(other.name)
         (Path(o, ".atlas", ".run", "teams")).mkdir(parents=True)
         Path(o, ".atlas", ".run", "teams", "t2.json").write_text(
-            json.dumps({"team_id": "t2", "class": "fix", "effort": "low", "task": "other", "created": time.time(), "members": [{"name": "worker-zz", "role": "implementer"}]})
+            json.dumps(
+                {
+                    "team_id": "t2",
+                    "class": "fix",
+                    "effort": "low",
+                    "task": "other",
+                    "created": time.time(),
+                    "members": [{"name": "worker-zz", "role": "implementer"}],
+                }
+            )
         )
-        projects = [{"root": self.root, "name": "a", "channels": 1}, {"root": o, "name": "b", "channels": 0}]
+        projects = [
+            {"root": self.root, "name": "a", "channels": 1},
+            {"root": o, "name": "b", "channels": 0},
+        ]
         with mock.patch.object(model, "_projects", return_value=projects):
             s = model.snapshot(self.root, True)
         by_id = {c["id"]: c for c in s["colonies"]}
         self.assertEqual(by_id["t2"]["project"], o)
         self.assertEqual(by_id["t1"]["project"], self.root)
-        self.assertIn("worker-zz", {x["name"] for x in s["seats"] if x["colony"] == "t2"})
+        self.assertIn(
+            "worker-zz", {x["name"] for x in s["seats"] if x["colony"] == "t2"}
+        )
         with mock.patch.object(model, "_projects", return_value=projects[:1]):
-            self.assertNotIn("t2", {c["id"] for c in model.snapshot(self.root)["colonies"]})
+            self.assertNotIn(
+                "t2", {c["id"] for c in model.snapshot(self.root)["colonies"]}
+            )
 
     def _skip_rule_snapshot(self, panes, projects):
         env = {"FAKE_PANES": panes}
-        with mock.patch.dict(os.environ, env), mock.patch.object(model, "_projects", return_value=projects):
+        with (
+            mock.patch.dict(os.environ, env),
+            mock.patch.object(model, "_projects", return_value=projects),
+        ):
             return model.snapshot(self.root, True)
 
     def test_all_projects_skip_rule_keeps_live_panes(self):
@@ -497,9 +777,14 @@ class ModelTest(unittest.TestCase):
         sub.mkdir(parents=True)
         outside = os.path.realpath(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, outside, True)
-        Path(c, ".atlas", ".run", "board").mkdir(parents=True)  # old files only, no teams dir
+        Path(c, ".atlas", ".run", "board").mkdir(
+            parents=True
+        )  # old files only, no teams dir
         Path(c, ".atlas", ".run", "board", "old.jsonl").write_text("{}\n")
-        projects = [{"root": r, "name": Path(r).name, "channels": 0} for r in (self.root, a, b, c)]
+        projects = [
+            {"root": r, "name": Path(r).name, "channels": 0}
+            for r in (self.root, a, b, c)
+        ]
         panes = (
             f"%11\tatlas-skipa\tw\t1\t0\t0\tworker-a\timplementer\tomp\t{a}\n"
             f"%12\tatlas-skipb\tw\t2\t0\t0\tworker-b\timplementer\tomp\t{sub}\n"
@@ -508,8 +793,12 @@ class ModelTest(unittest.TestCase):
         s = self._skip_rule_snapshot(panes, projects)
         proj = {x["id"]: x["project"] for x in s["colonies"]}
         self.assertEqual(proj.get("skipa"), a)  # (a) non-team spawn, cwd == project
-        self.assertEqual(proj.get("skipb"), b)  # (b) cwd in a subdir lists under the project
-        self.assertEqual(proj.get("skipo"), outside)  # (c) no registered project: its cwd
+        self.assertEqual(
+            proj.get("skipb"), b
+        )  # (b) cwd in a subdir lists under the project
+        self.assertEqual(
+            proj.get("skipo"), outside
+        )  # (c) no registered project: its cwd
         self.assertNotIn(c, proj.values())  # (d) no teams dir, no panes: history only
 
     def test_all_projects_subprocess_budget_and_idle_projects_skipped(self):
@@ -530,8 +819,13 @@ class ModelTest(unittest.TestCase):
 
         with mock.patch.object(model, "_projects", return_value=projects):
             model.snapshot(self.root, True)  # warms the 60 s static caches
-            with mock.patch.object(model.subprocess, "run", counting), mock.patch.object(
-                model.atlas_todo, "load", lambda r: (scanned.append(r), real_load(r))[1]
+            with (
+                mock.patch.object(model.subprocess, "run", counting),
+                mock.patch.object(
+                    model.atlas_todo,
+                    "load",
+                    lambda r: (scanned.append(r), real_load(r))[1],
+                ),
             ):
                 model.snapshot(self.root, True)
         # list-panes, list-sessions and one capture per live pane (2); nothing per project
@@ -544,8 +838,20 @@ class ModelTest(unittest.TestCase):
             for i in range(1, 121):
                 ch = "proj@main/lead-x" if i % 3 else "other@main/lead-y"
                 owner = "lead-x" if i == 119 else "implementer-bb"
-                f.write(json.dumps({"ts": 10.0 + i, "seq": i, "owner": owner, "to": "all",
-                                    "text": f"m{i}", "kind": "note", "channel": ch}) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "ts": 10.0 + i,
+                            "seq": i,
+                            "owner": owner,
+                            "to": "all",
+                            "text": f"m{i}",
+                            "kind": "note",
+                            "channel": ch,
+                        }
+                    )
+                    + "\n"
+                )
         s = model.snapshot(self.root)
         chat = s["chat"]
         self.assertEqual(set(chat), {"proj@main/lead-x", "other@main/lead-y"})
@@ -553,8 +859,12 @@ class ModelTest(unittest.TestCase):
         self.assertLessEqual(len(px), 100)
         self.assertEqual([m["seq"] for m in px], sorted(m["seq"] for m in px))
         self.assertTrue(all(m["text"] and "lead" in m for m in px))
-        self.assertTrue(px[-1]["lead"] and not px[0]["lead"])  # seq 119 is from the lead
-        self.assertTrue(all(m["from"] == "implementer-bb" for m in chat["other@main/lead-y"]))
+        self.assertTrue(
+            px[-1]["lead"] and not px[0]["lead"]
+        )  # seq 119 is from the lead
+        self.assertTrue(
+            all(m["from"] == "implementer-bb" for m in chat["other@main/lead-y"])
+        )
         col = s["colonies"][0]
         self.assertEqual(col["seat_count"], 3)
         self.assertGreater(col["age_s"], 0)
@@ -605,7 +915,9 @@ class ModelTest(unittest.TestCase):
             ("t1", "t1 · audit/low", "atlas-t1", "tmux", "map it"),
         )
         self.assertEqual((col["name"], col["title"]), ("map", "map it"))
-        self.assertEqual(set(col["source"]), {"project", "lead", "harness", "session", "label"})
+        self.assertEqual(
+            set(col["source"]), {"project", "lead", "harness", "session", "label"}
+        )
         self.assertEqual(
             [p["id"] for p in col["pods"]], ["explorer", "implementer", "verifier"]
         )
@@ -707,9 +1019,14 @@ class ModelTest(unittest.TestCase):
         self.assertIn(["tmux", "select-window", "-t", "atlas-view-ab12:@4"], setup)
         self.assertIn(["tmux", "select-pane", "-t", "%2"], setup)
         self.assertEqual(argv[:4], ["tmux", "attach-session", "-t", "atlas-view-ab12"])
-        self.assertEqual(argv[4:], [";", "set-option", "-t", "atlas-view-ab12", "destroy-unattached", "on"])
+        self.assertEqual(
+            argv[4:],
+            [";", "set-option", "-t", "atlas-view-ab12", "destroy-unattached", "on"],
+        )
         self.assertFalse(any("destroy-unattached" in c for c in setup))
-        self.assertTrue(any(c[1] == "if-shell" and "resize-pane -Z -t %2" in c[-1] for c in setup))
+        self.assertTrue(
+            any(c[1] == "if-shell" and "resize-pane -Z -t %2" in c[-1] for c in setup)
+        )
         setup, _ = model.attach_argv("atlas-t1:worker", "cd34")
         self.assertIn(["tmux", "select-window", "-t", "atlas-view-cd34:worker"], setup)
         model.cleanup_view("ab12")
@@ -726,8 +1043,23 @@ class RealTmuxViewTest(unittest.TestCase):
             env = {**os.environ, "TMUX_TMPDIR": tmp}
             env.pop("TMUX", None)
             with mock.patch.dict(os.environ, env, clear=True):
-                tm = lambda *a: subprocess.run(["tmux", *a], capture_output=True, text=True, env=env)  # noqa: E731
-                made = tm("new-session", "-d", "-s", "atlas-rt", "-x", "80", "-y", "24", "-P", "-F", "#{pane_id}", "cat")
+                tm = lambda *a: subprocess.run(
+                    ["tmux", *a], capture_output=True, text=True, env=env
+                )  # noqa: E731
+                made = tm(
+                    "new-session",
+                    "-d",
+                    "-s",
+                    "atlas-rt",
+                    "-x",
+                    "80",
+                    "-y",
+                    "24",
+                    "-P",
+                    "-F",
+                    "#{pane_id}",
+                    "cat",
+                )
                 pane = made.stdout.strip()
                 self.assertTrue(pane.startswith("%"), made.stderr)
                 tm("split-window", "-d", "-t", "atlas-rt", "cat")
@@ -736,11 +1068,26 @@ class RealTmuxViewTest(unittest.TestCase):
                     r = subprocess.run(c, capture_output=True, text=True, env=env)
                     self.assertEqual(r.returncode, 0, (c, r.stderr))
                 time.sleep(0.5)
-                self.assertEqual(tm("has-session", "-t", "atlas-view-rt1").returncode, 0)
-                self.assertEqual(tm("display-message", "-p", "-t", "atlas-view-rt1", "#{window_zoomed_flag}").stdout.strip(), "1")
+                self.assertEqual(
+                    tm("has-session", "-t", "atlas-view-rt1").returncode, 0
+                )
+                self.assertEqual(
+                    tm(
+                        "display-message",
+                        "-p",
+                        "-t",
+                        "atlas-view-rt1",
+                        "#{window_zoomed_flag}",
+                    ).stdout.strip(),
+                    "1",
+                )
                 model.cleanup_view("rt1")
-                self.assertNotEqual(tm("has-session", "-t", "atlas-view-rt1").returncode, 0)
-                tm("kill-server")  # inside the with: a cleanup would run after TMPDIR is gone and leak the server
+                self.assertNotEqual(
+                    tm("has-session", "-t", "atlas-view-rt1").returncode, 0
+                )
+                tm(
+                    "kill-server"
+                )  # inside the with: a cleanup would run after TMPDIR is gone and leak the server
 
 
 class TranscriptTailTest(unittest.TestCase):
@@ -752,15 +1099,25 @@ class TranscriptTailTest(unittest.TestCase):
     @staticmethod
     def _write_jsonl(path, records):
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+        path.write_text(
+            "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8"
+        )
         return path
 
     def test_omp_tail_rendering_order_and_format(self):
         p = self._write_jsonl(
             Path(self.tmp, "s", "w.jsonl"),
             [
-                {"type": "session", "timestamp": "2026-10-19T10:00:00.000Z", "id": "s1"},
-                {"type": "model_change", "timestamp": "2026-10-19T10:00:01.000Z", "model": "m"},
+                {
+                    "type": "session",
+                    "timestamp": "2026-10-19T10:00:00.000Z",
+                    "id": "s1",
+                },
+                {
+                    "type": "model_change",
+                    "timestamp": "2026-10-19T10:00:01.000Z",
+                    "model": "m",
+                },
                 {
                     "type": "message",
                     "timestamp": "2026-10-19T10:00:02.000Z",
@@ -774,29 +1131,62 @@ class TranscriptTailTest(unittest.TestCase):
                         "content": [
                             {"type": "thinking", "thinking": "hidden"},
                             {"type": "text", "text": "on it\nline two"},
-                            {"type": "toolCall", "id": "c1", "name": "read", "arguments": {"path": "a.py"}},
+                            {
+                                "type": "toolCall",
+                                "id": "c1",
+                                "name": "read",
+                                "arguments": {"path": "a.py"},
+                            },
                         ],
                     },
                 },
                 {
                     "type": "message",
                     "timestamp": "2026-10-19T10:00:04.000Z",
-                    "message": {"role": "toolResult", "content": [{"type": "text", "text": "\x1b[31mdef f(): pass\x1b[0m\nmore"}]},
+                    "message": {
+                        "role": "toolResult",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "\x1b[31mdef f(): pass\x1b[0m\nmore",
+                            }
+                        ],
+                    },
                 },
-                {"type": "model_usage", "timestamp": "2026-10-19T10:00:05.000Z", "usage": {}},
-                {"type": "custom", "customType": "session_exit", "data": {"reason": "dispose"}, "timestamp": "2026-10-19T10:00:06.000Z"},
+                {
+                    "type": "model_usage",
+                    "timestamp": "2026-10-19T10:00:05.000Z",
+                    "usage": {},
+                },
+                {
+                    "type": "custom",
+                    "customType": "session_exit",
+                    "data": {"reason": "dispose"},
+                    "timestamp": "2026-10-19T10:00:06.000Z",
+                },
             ],
         )
         self.assertEqual(
             model.transcript_tail(str(p)),
-            ["▸ fix the bug", "please", "on it", "line two", "→ read {\"path\": \"a.py\"}", "  ← def f(): pass"],
+            [
+                "▸ fix the bug",
+                "please",
+                "on it",
+                "line two",
+                '→ read {"path": "a.py"}',
+                "  ← def f(): pass",
+            ],
         )
 
     def test_claude_tail_rendering_order_and_format(self):
         p = self._write_jsonl(
             Path(self.tmp, "c", "a.jsonl"),
             [
-                {"type": "user", "timestamp": "2026-10-19T10:00:00.000Z", "message": {"role": "user", "content": "run it"}},
+                {
+                    "type": "user",
+                    "timestamp": "2026-10-19T10:00:00.000Z",
+                    "message": {"role": "user", "content": "run it"},
+                },
                 {
                     "type": "assistant",
                     "timestamp": "2026-10-19T10:00:01.000Z",
@@ -804,34 +1194,54 @@ class TranscriptTailTest(unittest.TestCase):
                         "role": "assistant",
                         "content": [
                             {"type": "text", "text": "running"},
-                            {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "ls -la"}},
+                            {
+                                "type": "tool_use",
+                                "id": "t1",
+                                "name": "Bash",
+                                "input": {"command": "ls -la"},
+                            },
                         ],
                     },
                 },
                 {
                     "type": "user",
                     "timestamp": "2026-10-19T10:00:02.000Z",
-                    "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "file.txt\nother.txt"}]},
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "t1",
+                                "content": "file.txt\nother.txt",
+                            }
+                        ],
+                    },
                 },
             ],
         )
         self.assertEqual(
             model.transcript_tail(str(p)),
-            ["▸ run it", "running", "→ Bash {\"command\": \"ls -la\"}", "  ← file.txt"],
+            ["▸ run it", "running", '→ Bash {"command": "ls -la"}', "  ← file.txt"],
         )
 
     def test_lines_limit_keeps_latest(self):
         p = self._write_jsonl(
             Path(self.tmp, "l", "x.jsonl"),
             [
-                {"type": "message", "timestamp": f"2026-10-19T10:00:0{i}.000Z", "message": {"role": "assistant", "content": f"line {i}"}}
+                {
+                    "type": "message",
+                    "timestamp": f"2026-10-19T10:00:0{i}.000Z",
+                    "message": {"role": "assistant", "content": f"line {i}"},
+                }
                 for i in range(5)
             ],
         )
         self.assertEqual(model.transcript_tail(str(p), lines=2), ["line 3", "line 4"])
 
     def test_error_returns_empty(self):
-        self.assertEqual(model.transcript_tail(str(Path(self.tmp, "missing.jsonl"))), [])
+        self.assertEqual(
+            model.transcript_tail(str(Path(self.tmp, "missing.jsonl"))), []
+        )
         d = Path(self.tmp, "adir")
         d.mkdir()
         self.assertEqual(model.transcript_tail(str(d)), [])
@@ -846,7 +1256,14 @@ class TranscriptResolutionTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name)
-        p = mock.patch.dict(os.environ, {"HOME": str(self.home), "PI_CODING_AGENT_DIR": "", "CLAUDE_CONFIG_DIR": ""})
+        p = mock.patch.dict(
+            os.environ,
+            {
+                "HOME": str(self.home),
+                "PI_CODING_AGENT_DIR": "",
+                "CLAUDE_CONFIG_DIR": "",
+            },
+        )
         p.start()
         self.addCleanup(p.stop)
 
@@ -859,41 +1276,98 @@ class TranscriptResolutionTest(unittest.TestCase):
         return f
 
     def test_omp_transcript_resolves_by_sid_and_member_name(self):
-        want = self._omp_session("-x-proj", "2026-10-19T17-24-15-712Z_abcdef11-48e0-7359-867a-da09d7910de0", "TuiX", mtime=100)
-        self._omp_session("-x-proj", "2026-10-19T16-00-00-000Z_abcdef11-0000-0000-0000-000000000000", "TuiX", mtime=50)
-        self._omp_session("-y-proj", "2026-10-19T17-00-00-000Z_abcdef11-9999-0000-0000-000000000000", "TuiX", mtime=200)
+        want = self._omp_session(
+            "-x-proj",
+            "2026-10-19T17-24-15-712Z_abcdef11-48e0-7359-867a-da09d7910de0",
+            "TuiX",
+            mtime=100,
+        )
+        self._omp_session(
+            "-x-proj",
+            "2026-10-19T16-00-00-000Z_abcdef11-0000-0000-0000-000000000000",
+            "TuiX",
+            mtime=50,
+        )
+        self._omp_session(
+            "-y-proj",
+            "2026-10-19T17-00-00-000Z_abcdef11-9999-0000-0000-000000000000",
+            "TuiX",
+            mtime=200,
+        )
         got = model._seat_transcript("/x/proj", "TuiX", {}, {"lead": "lead-abcdef"})
         self.assertEqual(got, str(want))
 
     def test_omp_transcript_prefers_cwd_slug_over_newer_other_project(self):
-        want = self._omp_session("-x-proj", "2026-10-19T17-24-15-712Z_abcdef22-48e0-7359-867a-da09d7910de0", "TuiY", mtime=100)
-        self._omp_session("-x-proj2", "2026-10-19T18-00-00-000Z_abcdef22-48e0-7359-867a-da09d7910de0", "TuiY", mtime=900)
+        want = self._omp_session(
+            "-x-proj",
+            "2026-10-19T17-24-15-712Z_abcdef22-48e0-7359-867a-da09d7910de0",
+            "TuiY",
+            mtime=100,
+        )
+        self._omp_session(
+            "-x-proj2",
+            "2026-10-19T18-00-00-000Z_abcdef22-48e0-7359-867a-da09d7910de0",
+            "TuiY",
+            mtime=900,
+        )
         got = model._seat_transcript("/x/proj", "TuiY", {}, {"lead": "lead-abcdef22"})
         self.assertEqual(got, str(want))
 
     def test_omp_transcript_missing_returns_empty(self):
-        self.assertEqual(model._seat_transcript("/x/proj", "Nobody", {}, {"lead": "lead-abcdef"}), "")
+        self.assertEqual(
+            model._seat_transcript("/x/proj", "Nobody", {}, {"lead": "lead-abcdef"}), ""
+        )
 
     def test_omp_sessions_root_honours_pi_coding_agent_dir(self):
-        with mock.patch.dict(os.environ, {"PI_CODING_AGENT_DIR": str(self.home / "agentdir")}):
-            self.assertEqual(model._omp_sessions_root(), self.home / "agentdir" / "sessions")
-        self.assertEqual(model._omp_sessions_root(), self.home / ".omp" / "agent" / "sessions")
+        with mock.patch.dict(
+            os.environ, {"PI_CODING_AGENT_DIR": str(self.home / "agentdir")}
+        ):
+            self.assertEqual(
+                model._omp_sessions_root(), self.home / "agentdir" / "sessions"
+            )
+        self.assertEqual(
+            model._omp_sessions_root(), self.home / ".omp" / "agent" / "sessions"
+        )
 
     def test_claude_transcript_resolves_by_recorded_agent_id(self):
-        f = self.home / ".claude" / "projects" / "-x-proj" / "sess-1" / "subagents" / "agent-adfb194813edbfebf.jsonl"
+        f = (
+            self.home
+            / ".claude"
+            / "projects"
+            / "-x-proj"
+            / "sess-1"
+            / "subagents"
+            / "agent-adfb194813edbfebf.jsonl"
+        )
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text("{}\n")
-        self.assertEqual(model._seat_transcript("/x/proj", "w", {"agent_id": "adfb194813edbfebf"}, None), str(f))
+        self.assertEqual(
+            model._seat_transcript(
+                "/x/proj", "w", {"agent_id": "adfb194813edbfebf"}, None
+            ),
+            str(f),
+        )
         self.assertEqual(model._seat_transcript("/x/proj", "w", {}, None), "")
-        self.assertEqual(model._seat_transcript("/x/proj", "w", {"agent_id": "nope"}, None), "")
+        self.assertEqual(
+            model._seat_transcript("/x/proj", "w", {"agent_id": "nope"}, None), ""
+        )
 
     def test_transcript_cache_honours_ttl(self):
-        self._omp_session("-x-proj", "2026-10-19T17-24-15-712Z_abcdef33-48e0-7359-867a-da09d7910de0", "TuiZ")
+        self._omp_session(
+            "-x-proj",
+            "2026-10-19T17-24-15-712Z_abcdef33-48e0-7359-867a-da09d7910de0",
+            "TuiZ",
+        )
         first = model._seat_transcript("/x/proj", "TuiZ", {}, {"lead": "lead-abcdef"})
         shutil.rmtree(self.home / ".omp")  # a rescan would find nothing
-        self.assertEqual(model._seat_transcript("/x/proj", "TuiZ", {}, {"lead": "lead-abcdef"}), first)
+        self.assertEqual(
+            model._seat_transcript("/x/proj", "TuiZ", {}, {"lead": "lead-abcdef"}),
+            first,
+        )
         model._TRANSCRIPTS.clear()
-        self.assertEqual(model._seat_transcript("/x/proj", "TuiZ", {}, {"lead": "lead-abcdef"}), "")
+        self.assertEqual(
+            model._seat_transcript("/x/proj", "TuiZ", {}, {"lead": "lead-abcdef"}), ""
+        )
 
     def test_session_exit_marks_seat_finished_and_sets_end_time(self):
         root = Path(self.tmp.name, "proj")
@@ -901,24 +1375,57 @@ class TranscriptResolutionTest(unittest.TestCase):
         (root / ".atlas" / ".run" / "logs").mkdir()
         chan = "proj@main/lead-abcdef"
         (root / ".atlas" / ".run" / "teams" / "se.json").write_text(
-            json.dumps({"team_id": "se", "class": "fix", "effort": "low", "task": "x", "created": time.time() - 900,
-                        "members": [{"name": "TuiZ", "role": "implementer"}], "channel": chan})
+            json.dumps(
+                {
+                    "team_id": "se",
+                    "class": "fix",
+                    "effort": "low",
+                    "task": "x",
+                    "created": time.time() - 900,
+                    "members": [{"name": "TuiZ", "role": "implementer"}],
+                    "channel": chan,
+                }
+            )
         )
         (root / ".atlas" / ".run" / "channels.json").write_text(
-            json.dumps({"version": 1, "channels": {chan: {"name": chan, "kind": "lead", "lead": "lead-abcdef", "harness": "omp",
-                                                          "members": [{"name": "TuiZ", "role": "implementer"}]}}})
+            json.dumps(
+                {
+                    "version": 1,
+                    "channels": {
+                        chan: {
+                            "name": chan,
+                            "kind": "lead",
+                            "lead": "lead-abcdef",
+                            "harness": "omp",
+                            "members": [{"name": "TuiZ", "role": "implementer"}],
+                        }
+                    },
+                }
+            )
         )
         exit_at = time.time() - 120
         f = self._omp_session(
-            "-" + str(root).strip("/").replace("/", "-"), "2026-10-19T17-24-15-712Z_abcdef44-48e0-7359-867a-da09d7910de0", "TuiZ"
+            "-" + str(root).strip("/").replace("/", "-"),
+            "2026-10-19T17-24-15-712Z_abcdef44-48e0-7359-867a-da09d7910de0",
+            "TuiZ",
         )
         f.write_text(
             "".join(
                 json.dumps(r) + "\n"
                 for r in (
-                    {"type": "message", "timestamp": "2026-10-19T10:00:00.000Z", "message": {"role": "assistant", "content": "done"}},
-                    {"type": "custom", "customType": "session_exit", "data": {"reason": "dispose"},
-                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(exit_at))},
+                    {
+                        "type": "message",
+                        "timestamp": "2026-10-19T10:00:00.000Z",
+                        "message": {"role": "assistant", "content": "done"},
+                    },
+                    {
+                        "type": "custom",
+                        "customType": "session_exit",
+                        "data": {"reason": "dispose"},
+                        "timestamp": time.strftime(
+                            "%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(exit_at)
+                        ),
+                    },
                 )
             )
         )

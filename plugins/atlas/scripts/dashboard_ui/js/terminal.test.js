@@ -362,12 +362,13 @@ test("a pane-less lead seat shows the server attach_hint, and a click on the car
   page.destroy();
 });
 
-test("the `Agents · N` rail label carries the no-uppercase class in every space", async () => {
+test("rail labels use one source case, styled identically, in every space", async () => {
   reset();
   for (const space of ["run1", "host"]) {
     const root = await mount(SEATS, { space });
-    const lab = byClass(root, "tw-side-label").find((n) => text(n).startsWith("Agents · "));
-    expect(lab.attrs.class).toContain("tw-side-label-mixed");
+    const labs = byClass(root, "tw-side-label");
+    expect(labs.map((n) => n.attrs.class)).toEqual(["tw-side-label", "tw-side-label"]);
+    expect(labs.map((n) => text(n).replace(/\d+/, "N"))).toEqual(["Spaces", "Agents · N"]);
     page.destroy();
   }
 });

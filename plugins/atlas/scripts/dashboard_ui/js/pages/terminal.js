@@ -365,10 +365,10 @@ export default {
       const sps = spaces();
       const items = sps.map((sp) => h("button", { class: "tw-space", type: "button", "aria-current": sp.id === st.space ? "page" : null, title: sp.name, onClick: () => go(sp.id) },
         h("span", { class: "tw-agent-name" }, sp.name || sp.id), h("span", { class: "tw-agent-role tw-sub2" }, sp.kind === "host" ? "this machine" : seatsOf(sp).length + " seats")));
-      const parts = [h("div", { class: "tw-side-label" }, "SPACES"), ...items];
+      const parts = [h("div", { class: "tw-side-label" }, "Spaces"), ...items];
       const sp = space();
       if (sp) {
-        parts.push(h("div", { class: "tw-side-label tw-side-label-mixed" }, "Agents · " + seatsOf(sp).length));
+        parts.push(h("div", { class: "tw-side-label" }, "Agents · " + seatsOf(sp).length));
         for (const s of seatsOf(sp)) {
           parts.push(h("button", { class: "tw-agent", type: "button", "aria-current": s.address === st.seat ? "true" : null, onClick: () => go(sp.id, s.address) },
             h("span", { class: "tw-dot", "data-state": s.state || "unknown" }), h("span", { class: "tw-agent-name" }, seatAddress(s), s.role ? h("span", { class: "tw-agent-role tw-sub2" }, s.role) : null)));
