@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect, afterEach } from "bun:test";
 
 // Minimal DOM stand-in (no DOM lib is installed): enough for h()/replace() and the workspace page.
 class N {
@@ -76,6 +76,8 @@ const reset = () => { terms.length = 0; sockets.length = 0; tickets.length = 0; 
 const mountCtx = async (ctx) => { const root = page.render(ctx); root.isConnected = true; walk(root).forEach((x) => (x.isConnected = true)); await tick(); return root; };
 const mount = (data, params, extra) => mountCtx(mk(data, params, extra));
 const click = (el) => el.listeners.click();
+// A failed assertion skips the inline page.destroy(), leaking the keydown listener and poll timer into the next test.
+afterEach(() => page.destroy());
 
 test("rail lists spaces and `Agents · N`; the grid has one openrig terminal-card per seat in server order, shell seat last", async () => {
   reset();
@@ -94,14 +96,20 @@ test("rail lists spaces and `Agents · N`; the grid has one openrig terminal-car
 
 test("the footer shows state and last_activity age; the spinner only while running", async () => {
   reset();
-  const root = await mount(SEATS, { space: "run1" });
-  const [lead, ended] = byClass(root, "terminal-card");
-  expect(text(lead)).toContain("✻");
-  expect(text(lead)).toContain("running");
-  expect(text(lead)).toContain("12s ago");
-  expect(text(ended)).not.toContain("✻");
-  expect(text(ended)).toContain("ended");
-  page.destroy();
+  // Pin the clock: fmtRelative reads Date.now(), so an age built at module load drifts past 12s on a slow run.
+  const realNow = Date.now, NOW = 1_800_000_000_000;
+  Date.now = () => NOW;
+  try {
+    const at = (extra) => seat("x@run1", { last_activity: NOW / 1000 - 12, ...extra });
+    const data = { ...SEATS, spaces: [{ id: "run1", name: "run1", kind: "colony", seats: [at({ address: "lead@run1", state: "running", runtime: "omp" }), at({ address: "impl@run1", runtime: "codex", state: "ended", target: null })] }] };
+    const root = await mount(data, { space: "run1" });
+    const [lead, ended] = byClass(root, "terminal-card");
+    expect(text(lead)).toContain("✻");
+    expect(text(lead)).toContain("running");
+    expect(text(lead)).toContain("12s ago");
+    expect(text(ended)).not.toContain("✻");
+    expect(text(ended)).toContain("ended");
+  } finally { Date.now = realNow; }
 });
 
 test("a card connects by ticket: POST term/ticket then ws?ticket= (no token=)", async () => {
