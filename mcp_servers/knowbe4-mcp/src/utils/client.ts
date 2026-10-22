@@ -187,9 +187,3 @@ export function describeKnowBe4BaseUrl(): string {
   return `${KNOWBE4_REGIONS.us} (default; KNOWBE4_REGION='${region}' is not a known region, set KNOWBE4_REGION to one of us, eu, ca, uk, de)`;
 }
 
-/**
- * Clear cached credentials (useful for testing)
- */
-export function clearCredentials(): void {
-  // No-op — credentials are read fresh from env each call
-}

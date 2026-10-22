@@ -24,8 +24,6 @@ import * as nodePath from "node:path";
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
 
-export const MANDATES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "mandates.json");
-
 /** The shared mandate contract (also read by the Python hooks). */
 export interface Mandates {
 	commitNudge: string;
@@ -73,7 +71,7 @@ const RECALL_EXEMPT: Record<string, true> = { todo: true, todowrite: true };
  * True when a tool call IS the claude-mem recall: a bare claude-mem tool, or a `write`
  * to an `xd://mcp__` claude-mem device (`path`, or `file_path` as Claude Code names it).
  */
-export function satisfiesRecall(toolName: string, input: unknown): boolean {
+function satisfiesRecall(toolName: string, input: unknown): boolean {
 	if (CLAUDE_MEM_SERVER.test(toolName)) return true;
 	if (toolName.toLowerCase() !== "write" || !input || typeof input !== "object") return false;
 	const { path, file_path: filePath } = input as { path?: unknown; file_path?: unknown };

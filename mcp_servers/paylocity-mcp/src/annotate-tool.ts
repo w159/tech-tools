@@ -135,7 +135,7 @@ function matchesAny(name: string, patterns: RegExp[]): boolean {
   return false;
 }
 
-export type ToolClass = "read" | "create" | "destructive";
+type ToolClass ="read" | "create" | "destructive";
 
 // A tool's own description declaring that it changes state. Authoritative.
 const MUTATING_DESCRIPTION_MARKER = /^\s*(?:DESTRUCTIVE|VISIBLE-TO-OTHERS):/;
@@ -155,7 +155,7 @@ const CLASS_OVERRIDES: Record<string, ToolClass> = {
  * deliberately has no default: a name-pattern heuristic must never answer
  * "safe" for a name it does not recognize. Callers use effectClassFor().
  */
-export function classifyTool(name: string): ToolClass | undefined {
+function classifyTool(name: string): ToolClass | undefined {
   const override = CLASS_OVERRIDES[name];
   if (override) return override;
   if (matchesAny(name, DESTRUCTIVE_PATTERNS)) return "destructive";
@@ -168,7 +168,7 @@ export function classifyTool(name: string): ToolClass | undefined {
  * The class actually annotated: description marker, then name, then fail
  * closed. `description` is the tool's own description text.
  */
-export function effectClassFor(name: string, description?: string): ToolClass {
+function effectClassFor(name: string, description?: string): ToolClass {
   if (MUTATING_DESCRIPTION_MARKER.test(description ?? "")) return "destructive";
   const byName = classifyTool(name);
   if (byName) return byName;
@@ -202,7 +202,7 @@ const ANNOTATION_PRESETS: Record<ToolClass, ToolAnnotations> = {
   },
 };
 
-export function annotationsFor(name: string, title?: string, description?: string): ToolAnnotations {
+function annotationsFor(name: string, title?: string, description?: string): ToolAnnotations {
   const base = ANNOTATION_PRESETS[effectClassFor(name, description)];
   return title ? { title, ...base } : base;
 }

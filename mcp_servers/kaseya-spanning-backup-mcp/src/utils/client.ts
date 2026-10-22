@@ -48,11 +48,6 @@ export function getCredentials(): Credentials | null {
   };
 }
 
-export function resetClient(): void {
-  _client  = null;
-  _credKey = null;
-}
-
 export function getClient(): SpanningClient {
   const creds = getCredentials();
   if (!creds) {

@@ -103,7 +103,6 @@ export class CippMcpServer {
       );
     }
 
-    toolHandler.setServer(server.server);
     return server;
   }
 

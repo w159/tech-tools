@@ -10,7 +10,6 @@ import { watchVersion } from "./version-banner.js";
 import { reportFetchFail } from "./fetch-fail.js";
 import { agentsStore, STATE_WORD } from "./agents-store.js";
 import overview from "./pages/overview.js";
-import work from "./pages/work.js";
 import { openEditor } from "./integrations.js";
 import { openNewThread } from "./hp.js";
 import { normalizeNav, orderGroups, MOBILE_TABS, LENS_ROUTES, bootHash } from "./nav-order.js";
@@ -77,8 +76,6 @@ const ALIASES = { herd: "terminal", work: "agents?lens=board", board: "agents?le
 
 const pages = new Map();
 for (const p of [overview]) pages.set(p.id, p);
-// The legacy pages stay mounted as lens content until their rebuilds land (js/pages/agents.js reads them from here).
-export const legacyPages = { work };
 
 async function loadExternalPage(id) {
   try {

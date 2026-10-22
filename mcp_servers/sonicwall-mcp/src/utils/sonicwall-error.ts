@@ -14,7 +14,7 @@
 import { toolError, toolErrorFromCatch } from '@shared/error-envelope.js';
 import type { ErrorCode, ToolResult } from '@shared/error-envelope.js';
 
-export type SonicwallFailureClass =
+type SonicwallFailureClass =
   | 'auth-credential'
   | 'auth-session'
   | 'session-conflict'

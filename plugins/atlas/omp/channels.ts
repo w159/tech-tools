@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as nodePath from "node:path";
 
-import { taskItems, recordFault } from "./hook-bridge";
+import { taskItems, recordFault } from "./fault-log";
 import { pluginScript } from "./plugin-path";
 import { runCaptureSync } from "./proc";
 

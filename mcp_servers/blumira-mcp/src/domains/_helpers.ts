@@ -8,13 +8,11 @@ export {
   extractShapeArgs,
   SHAPE_PROPS,
   type SummaryFn,
-  type ShapeArgs,
 } from '@shared/response-shaper.js';
 
 export {
   toolError,
   toolErrorFromCatch,
-  missingCredsError,
 } from '@shared/error-envelope.js';
 
 export {

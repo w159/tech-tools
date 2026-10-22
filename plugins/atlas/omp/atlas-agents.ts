@@ -26,8 +26,8 @@ import { pluginRoot } from "./plugin-path";
  * fallback aliases are still kept so the cheap tier is chosen rather than the
  * parent (see SMOL_FALLBACK_ROLE and ATLAS_DEFAULT_FALLBACK_ROLE).
  */
-export const ATLAS_WORKER_ROLE = "@atlas-worker";
-export const ATLAS_VERIFIER_ROLE = "@atlas-verifier";
+const ATLAS_WORKER_ROLE = "@atlas-worker";
+const ATLAS_VERIFIER_ROLE = "@atlas-verifier";
 export const ATLAS_MECHANIC_ROLE = "@atlas-mechanic";
 
 export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low"> = {

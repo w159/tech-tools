@@ -8,7 +8,7 @@ import { NinjaOneAuthenticationError } from './errors.js';
 /**
  * Token information
  */
-export interface TokenInfo {
+interface TokenInfo {
   /** Access token */
   accessToken: string;
   /** Token type (usually 'Bearer') */

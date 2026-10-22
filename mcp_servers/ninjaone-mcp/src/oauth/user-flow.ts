@@ -10,8 +10,8 @@ import { generatePkce, generateState } from "./pkce.js";
 import { openInBrowser } from "./browser.js";
 import { saveTokens, type StoredTokens } from "./token-store.js";
 
-export const CALLBACK_PORT = 53682;
-export const CALLBACK_PATH = "/oauth/callback";
+const CALLBACK_PORT = 53682;
+const CALLBACK_PATH = "/oauth/callback";
 export const REDIRECT_URI = `http://127.0.0.1:${CALLBACK_PORT}${CALLBACK_PATH}`;
 export const DEFAULT_SCOPES = ["monitoring", "management", "control", "offline_access"];
 

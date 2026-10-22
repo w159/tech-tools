@@ -10,8 +10,6 @@ import {
   toolError,
   toolErrorFromCatch,
   type SummaryFn,
-  legacyListTool,
-  getTool,
 } from './_helpers.js';
 
 /**

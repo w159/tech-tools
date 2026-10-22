@@ -1,6 +1,6 @@
 # Changelog
 
-## 13.0.0 - 2026-10-22 (unreleased)
+## 13.0.0 - 2026-10-22
 
 Command Center overhaul: the Terminal becomes a grid of real terminals, Settings becomes a categorized page with verified saves, and the operate pages collapse into one Agents surface. Plan: `docs/plans/2026-10-22-command-center-overhaul.md`. Breaking changes are listed first.
 
@@ -29,6 +29,7 @@ Command Center overhaul: the Terminal becomes a grid of real terminals, Settings
 - Root and plugin READMEs: install versus update commands, current counts and pages (`a9d69f92`).
 - Fallow baselines (`fallow-baselines/dead-code.json`, `health.json`, `dupes.json`) re-saved with fallow 3.26.0 so the plugin commit gate (`fallow audit`, gate new-only) passes again; the Oct 13-16 baselines matched 224 of 2064 health entries and blocked every commit from this checkout.
 - Dead code (finding W3-deadcode): every fallow unused-export finding in sonicwall-mcp, panos-mcp and the dashboard JS is cleared (module-private where the only caller is in-file, deleted where nothing calls it, including the dead fleet overflow menu and the herdr tab/pane rename and close actions); `.fallowrc.json` exempts the dynamically imported `*Handler` exports and registers `theme-boot.js` as an entry; `usage-statusline.ts` render, computeTallies and scopedWindows are split into helpers under cyclomatic 20 with byte-identical output.
+- Dead code, whole repo (finding W3-deadcode-2): every remaining fallow finding outside the vendored tree is cleared. `.fallowrc.json` ignores the vendored herdr-web-ui under `plugins/atlas/colony/`, skill templates and assets; registers the `_shared` templates, per-server dev scripts, the omp test preload and the ninjaone Cloudflare worker as entries; exempts the dynamically imported `*Handler` exports of all nine domain-based servers; and turns `unused-class-member` off under `mcp_node/*/src/` because the node SDKs mirror vendor endpoints the servers only partly consume. In code: `effectClassFor` and `annotationsFor` are module-private in the annotate-tool template and every copy; unused `_helpers` re-exports, list-tool helpers, `resetClient`, `errorResult`, knowbe4 `elicitText`/`elicitConfirmation`, cipp's unused type barrel and `ToolHandler.setServer`, and 20 omp/mod constants are removed or de-exported; `ToolResult` is declared once in `_shared/error-envelope.ts`; the omp `channels` <-> `hook-bridge` cycle is broken by `omp/fault-log.ts` and the dashboard `app.js` <-> `pages/agents.js` cycle by a direct `work.js` import.
 
 ### Removed
 

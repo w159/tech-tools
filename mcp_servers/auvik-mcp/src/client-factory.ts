@@ -16,7 +16,7 @@ export interface JsonApiResponse<T = JsonApiResource | JsonApiResource[]> {
   meta?: Record<string, unknown>;
 }
 
-export interface AuvikApiError extends Error {
+interface AuvikApiError extends Error {
   status: number;
   body: unknown;
   retryAfter?: number;

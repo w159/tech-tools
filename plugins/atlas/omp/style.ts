@@ -20,7 +20,6 @@ import { loadNativeTools } from "./contracts";
 import { pluginRoot } from "./plugin-path";
 
 export const STYLE_PATH = nodePath.resolve(import.meta.dir, "..", "output-styles", "atlas-orchestrator.md");
-export const TOOL_NAMES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "tool-names.json");
 
 export const STYLE_BEGIN = "<!-- atlas-orchestrator-style:begin -->";
 export const STYLE_END = "<!-- atlas-orchestrator-style:end -->";
@@ -242,7 +241,7 @@ export interface StyleDeps {
  * (measured: one gated stop cost a 55k-token cache write). `undefined` means "not rendered yet or failed", so
  * a failed render is retried on the next turn instead of being frozen.
  */
-export interface FrozenBlocks {
+interface FrozenBlocks {
 	style?: string;
 	addendum?: string;
 }

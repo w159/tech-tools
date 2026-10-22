@@ -7,22 +7,18 @@ import {
   extractShapeArgs,
   SHAPE_PROPS,
   type SummaryFn,
-  type ToolResult,
   type ShapeArgs,
 } from '@shared/response-shaper.js';
+import type { ToolResult } from '@shared/error-envelope.js';
 import {
   toolErrorFromCatch,
   missingCredsError,
-  toolError,
-  type ErrorCode,
-  type ErrorContext,
 } from '@shared/error-envelope.js';
 
 // Re-export for convenience so tool files only import from './shared.js'.
-export type { ToolResult, SummaryFn, ShapeArgs };
-export { shapeList, shapeItem, shapeRaw, extractShapeArgs, SHAPE_PROPS };
-export { toolError, toolErrorFromCatch, missingCredsError };
-export type { ErrorCode, ErrorContext };
+export type { SummaryFn, ShapeArgs };
+export { shapeRaw, extractShapeArgs, SHAPE_PROPS };
+export { toolErrorFromCatch, missingCredsError };
 
 // ---------------------------------------------------------------------------
 // JSON:API helpers
@@ -38,7 +34,7 @@ export type FlatResource = Record<string, unknown> & { id: string; _type: string
  * Spreads attributes onto the top level; preserves `id` and stashes `type` as `_type`.
  * Relationships are kept as-is under `relationships` for callers that need them.
  */
-export function flattenResource(r: JsonApiResource): FlatResource {
+function flattenResource(r: JsonApiResource): FlatResource {
   return {
     id: r.id,
     _type: r.type,
@@ -51,7 +47,7 @@ export function flattenResource(r: JsonApiResource): FlatResource {
  * Extract and flatten the data array from a JSON:API list response.
  * Returns [] if data is missing or not an array (e.g. empty-body 200).
  */
-export function flattenList(resp: JsonApiResponse): FlatResource[] {
+function flattenList(resp: JsonApiResponse): FlatResource[] {
   const data = resp.data;
   if (!Array.isArray(data)) return [];
   return data.map(flattenResource);
@@ -61,7 +57,7 @@ export function flattenList(resp: JsonApiResponse): FlatResource[] {
  * Extract and flatten a single-item JSON:API response.
  * Returns null if data is null or not an object.
  */
-export function flattenItem(resp: JsonApiResponse): FlatResource | null {
+function flattenItem(resp: JsonApiResponse): FlatResource | null {
   const data = resp.data;
   if (!data || Array.isArray(data)) return null;
   return flattenResource(data as JsonApiResource);

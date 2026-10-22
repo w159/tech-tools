@@ -61,13 +61,13 @@ import { pluginScript } from "./plugin-path";
 import { runStateArgv } from "./run-state";
 
 /** Resolved at call time so an `omp plugin upgrade atlas` mid-session is picked up (plugin-path). */
-export const transcriptScript = (): string => pluginScript("omp_transcript.py");
+const transcriptScript = (): string => pluginScript("omp_transcript.py");
 export const MAX_STOP_BLOCKS = 3;
 export const MAX_INGEST_PER_EVENT = 4;
-export const MAX_INGEST_PER_SESSION = 12;
+const MAX_INGEST_PER_SESSION = 12;
 const MAX_TRACKED_SESSIONS = 64;
 /** Budget for folding tool state into the dirty snapshot; the gate runs after it, so it must stay small. */
-export const REBASELINE_BUDGET_MS = 3_000;
+const REBASELINE_BUDGET_MS = 3_000;
 const COMPACT_THROTTLE_MS = 60_000;
 /** Conversion budget for tool-hook and Stop payloads. */
 const CONVERT_TIMEOUT_MS = 15_000;
@@ -289,7 +289,7 @@ function discardQuietly(cache: TranscriptCache, transcriptPath: string | undefin
  * variable cannot point the cleanup anywhere else. No path is shared with another child or with the synchronous
  * Stop path, so one child's exit can never remove a file another child is about to open.
  */
-export const DETACHED_SCRIPT = `trap 'case "$(basename "$ATLAS_OWNED_DIR")" in atlas-ingest-*) rm -f "$ATLAS_OWNED_DIR"/*.json "$ATLAS_OWNED_DIR"/*.jsonl "$ATLAS_OWNED_DIR"/subagents/*.jsonl; rmdir "$ATLAS_OWNED_DIR"/subagents "$ATLAS_OWNED_DIR" 2>/dev/null;; esac' EXIT; ("$@") <"$ATLAS_PROC_STDIN" >/dev/null 2>&1`;
+const DETACHED_SCRIPT = `trap 'case "$(basename "$ATLAS_OWNED_DIR")" in atlas-ingest-*) rm -f "$ATLAS_OWNED_DIR"/*.json "$ATLAS_OWNED_DIR"/*.jsonl "$ATLAS_OWNED_DIR"/subagents/*.jsonl; rmdir "$ATLAS_OWNED_DIR"/subagents "$ATLAS_OWNED_DIR" 2>/dev/null;; esac' EXIT; ("$@") <"$ATLAS_PROC_STDIN" >/dev/null 2>&1`;
 
 type DetachedOpts = { cwd: string; stdinFile: string; env: Record<string, string>; ownedDir: string };
 

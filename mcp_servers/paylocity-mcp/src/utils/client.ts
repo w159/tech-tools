@@ -33,12 +33,6 @@ export function getCredentials(): Credentials | null {
   return { clientId, clientSecret, defaultCompanyId, baseUrl, sandbox };
 }
 
-export function resetClient(): void {
-  _client = null;
-  _credKey = null;
-  logger.debug('Reset Paylocity client');
-}
-
 export async function getClient(): Promise<PaylocityClient> {
   const creds = getCredentials();
   if (!creds) {

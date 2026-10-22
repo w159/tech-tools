@@ -10,7 +10,7 @@ import { activeCount, callBuckets, type LiveWorker } from './data/live';
 import { routeCounts } from './data/todos';
 import { groupOpenCount, openGateCount } from './gates';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
-import { chip, eighthBar, gradientBar, merge, nickColor, padRow, seg, sparkline, spread } from './paint';
+import { chip, eighthBar, gradientBar, merge, nickColor, padRow, seg, sparkline } from './paint';
 import { charFrame, type CharState } from './roles';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';

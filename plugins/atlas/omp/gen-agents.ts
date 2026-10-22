@@ -20,7 +20,7 @@
 import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import * as path from "node:path";
 import { YAML } from "bun";
-import { ATLAS_AGENT_NAMES, ATLAS_THINKING_LEVELS, modelPatternsFor, roleFor } from "./atlas-agents";
+import { ATLAS_THINKING_LEVELS, modelPatternsFor } from "./atlas-agents";
 import { loadToolNames, translateToolNames } from "./style";
 
 export interface GenerateOptions {
@@ -169,7 +169,3 @@ function main(): void {
 }
 
 if (import.meta.main) main();
-
-// Re-exported for tests and tooling that need the shared maps without
-// importing the generator's side-effectful module graph.
-export { ATLAS_AGENT_NAMES, ATLAS_THINKING_LEVELS, modelPatternsFor, roleFor };

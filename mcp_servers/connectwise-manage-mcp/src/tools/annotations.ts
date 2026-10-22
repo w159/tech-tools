@@ -27,13 +27,6 @@ export const WRITE_UPDATE: ToolAnnotations = {
   openWorldHint: true,
 };
 
-export const WRITE_APPEND: ToolAnnotations = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: false,
-  openWorldHint: true,
-};
-
 export const titled = (title: string, base: ToolAnnotations): ToolAnnotations => ({
   title,
   ...base,

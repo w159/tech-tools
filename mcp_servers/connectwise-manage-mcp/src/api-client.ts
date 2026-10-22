@@ -62,7 +62,7 @@ export function getConfig(): CwManageConfig | null {
  * it to the correct canonical code (NOT_FOUND, RATE_LIMITED, FORBIDDEN, etc.)
  * instead of falling through to INTERNAL_ERROR.
  */
-export class CwHttpError extends Error {
+class CwHttpError extends Error {
   readonly status: number;
 
   constructor(status: number, message: string) {

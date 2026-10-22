@@ -12,7 +12,6 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { DomainHandler, CallToolResult } from "../utils/types.js";
 import { apiRequest } from "../utils/client.js";
 import { logger } from "../utils/logger.js";
-import { elicitText } from "../utils/elicitation.js";
 import { shapeList, shapeItem, extractShapeArgs, type SummaryFn } from "../../../_shared/response-shaper.js";
 import { toolErrorFromCatch, toolError } from "../../../_shared/error-envelope.js";
 

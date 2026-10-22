@@ -12,6 +12,7 @@ import { killSeat } from "../send-path.js";
 import { mountSupervisionLens } from "./supervision-lens.js";
 import { newWorkspace, focusPane } from "../herdr-actions.js";
 import { warmHp } from "../integrations.js";
+import work from "./work.js";
 const LENS = [["roster", "Roster"], ["supervise", "Supervise"], ["board", "Board"]];
 // Lens ids saved by older links.
 export const LENS_COMPAT = { fleet: "roster", colony: "roster", supervision: "supervise" };
@@ -133,7 +134,7 @@ function drawFleet() {
 
 async function mountLegacy(id) {
   replace(S.body, State({ variant: "loading", label: "board", shape: "rows" }));
-  const mod = await import("../app.js").then((m) => m.legacyPages).catch(() => ({}));
+  const mod = { work };
   const page = mod[id];
   if (!page) return replace(S.body, State({ variant: "error", title: "This lens didn't load", error: { error: id + "_module_missing" }, onRetry: () => draw() }));
   S.legacy = page;

@@ -28,14 +28,8 @@
 // Public types
 // ---------------------------------------------------------------------------
 
-/**
- * Subset of the MCP SDK's CallToolResult used by every server in this repo.
- * Defined inline so this file has zero runtime imports.
- */
-export type ToolResult = {
-  content: Array<{ type: "text"; text: string }>;
-  isError?: boolean;
-};
+// Type-only (erased at build), so this file still has zero runtime imports.
+import type { ToolResult } from "./error-envelope.js";
 
 /**
  * Args subset that any tool handler can pass through from its raw `args` map.

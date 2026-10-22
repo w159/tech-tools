@@ -168,7 +168,7 @@ export function classifyTool(name: string): ToolClass | undefined {
  * The class actually annotated: description marker, then name, then fail
  * closed. `description` is the tool's own description text.
  */
-export function effectClassFor(name: string, description?: string): ToolClass {
+function effectClassFor(name: string, description?: string): ToolClass {
   if (MUTATING_DESCRIPTION_MARKER.test(description ?? "")) return "destructive";
   const byName = classifyTool(name);
   if (byName) return byName;
@@ -202,7 +202,7 @@ const ANNOTATION_PRESETS: Record<ToolClass, ToolAnnotations> = {
   },
 };
 
-export function annotationsFor(name: string, title?: string, description?: string): ToolAnnotations {
+function annotationsFor(name: string, title?: string, description?: string): ToolAnnotations {
   const base = ANNOTATION_PRESETS[effectClassFor(name, description)];
   return title ? { title, ...base } : base;
 }

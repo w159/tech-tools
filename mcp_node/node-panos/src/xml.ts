@@ -16,7 +16,7 @@ const parser = new XMLParser({
   parseAttributeValue: false,
 });
 
-export function parseXml(text: string): Record<string, any> {
+function parseXml(text: string): Record<string, any> {
   return parser.parse(text);
 }
 

@@ -36,17 +36,20 @@ import { resolveTarget } from "./contracts";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
 import { pluginRoot } from "./plugin-path";
 import { openLeadChannel } from "./channels";
+import { recordFault, taskItems } from "./fault-log";
 import type { WidgetUi } from "./channel-view";
 import { runCapture } from "./proc";
+
+// Still reachable from here for run-state, stop-bridge, worker-report and tests; defined in fault-log (breaks the channels cycle).
+export { recordFault, taskItems };
 
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 export const HOOKS_JSON = nodePath.join(PLUGIN_ROOT, "hooks", "hooks.json");
 export const BRIDGE_CONTRACT = nodePath.join(PLUGIN_ROOT, "contracts", "hook-bridge.json");
-export const TOOL_NAMES = nodePath.join(PLUGIN_ROOT, "contracts", "tool-names.json");
 export const MCP_SERVERS = nodePath.join(PLUGIN_ROOT, "contracts", "mcp-servers.json");
 const DEFAULT_TIMEOUT_S = 60;
 /** Default per-hook hard cap (s); ATLAS_BRIDGE_HOOK_TIMEOUT_S overrides. omp cuts a handler at 30 s. */
-export const DEFAULT_HOOK_CAP_S = 25;
+const DEFAULT_HOOK_CAP_S = 25;
 /**
  * Budget shared by every hook of one before_agent_start or session_stop handler. omp cuts those handlers at 30 s
  * (extensions/runner.ts EXTENSION_HANDLER_TIMEOUT_MS) and then delivers NOTHING, so the bridge stays 5 s under it.
@@ -58,7 +61,7 @@ export const HANDLER_BUDGET_MS = 25_000;
  */
 export const TOOL_CALL_BUDGET_MS = 20_000;
 /** A runner that ignores its timeoutMs is abandoned this long after the slot ends. */
-export const HOOK_KILL_GRACE_MS = 250;
+const HOOK_KILL_GRACE_MS = 250;
 export const SESSION_MARKER = "<!-- atlas-session-start -->";
 
 export type ClaudeEvent =
@@ -71,7 +74,7 @@ export type ClaudeEvent =
 	| "SubagentStop"
 	| "PreCompact";
 /** Events driven per turn / tool call by registerHookBridge. */
-export const TURN_EVENTS: readonly ClaudeEvent[] = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse"];
+const TURN_EVENTS: readonly ClaudeEvent[] = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse"];
 /** Events driven at session end by omp/stop-bridge.ts. */
 export const SESSION_END_EVENTS: readonly ClaudeEvent[] = ["Stop", "SessionEnd", "SubagentStop", "PreCompact"];
 export interface BridgedHook {
@@ -296,7 +299,7 @@ const UNDERSCORED_SERVERS_FALLBACK: readonly string[] = [
 ];
 
 /** `underscoredServers` from the MCP server contract, longest first; the built-in list when the file is unreadable or malformed. */
-export function loadUnderscoredServers(path: string = nodePath.join(pluginRoot(), "contracts", "mcp-servers.json"), fallback: readonly string[] = UNDERSCORED_SERVERS_FALLBACK): readonly string[] {
+function loadUnderscoredServers(path: string = nodePath.join(pluginRoot(), "contracts", "mcp-servers.json"), fallback: readonly string[] = UNDERSCORED_SERVERS_FALLBACK): readonly string[] {
 	let list: readonly string[] = fallback;
 	try {
 		const doc = readJson(path);
@@ -361,14 +364,6 @@ export function claudeNamesForCall(tool: string, input: unknown, namesPath?: str
 	}
 	if (/^mcp__[A-Za-z0-9_]+$/.test(tool) && !tool.slice("mcp__".length).includes("__")) return [mcpClaudeName(tool)];
 	return claudeNamesFor(tool, namesPath).map(claudeMcpName);
-}
-
-/** The omp `task` tool's dispatch items: `tasks[]` entries, else the single top-level dispatch. */
-export function taskItems(input: unknown): Record<string, unknown>[] {
-	if (!input || typeof input !== "object") return [];
-	const tasks = (input as Record<string, unknown>).tasks;
-	if (Array.isArray(tasks)) return tasks.filter((t): t is Record<string, unknown> => t !== null && typeof t === "object" && !Array.isArray(t));
-	return [input as Record<string, unknown>];
 }
 
 /**
@@ -509,24 +504,6 @@ async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | und
 		return await Promise.race([promise.catch(() => undefined), expired.promise]);
 	} finally {
 		clearTimeout(timer);
-	}
-}
-
-const FAULT_LOG_MAX_BYTES = 1 << 20;
-
-/**
- * One row in `<ATLAS_HOME or ~/.atlas>/hook-faults.jsonl`, the same file and row shape scripts/atlas_faults.py writes,
- * so the doctor sees bridge fail-opens beside python hook crashes. Best effort, never throws.
- * ponytail: skipped once the file passes 1 MiB (atlas_faults.py owns truncation), so a flood cannot grow it.
- */
-export function recordFault(hook: string, error: string, type: string, cwd: string | undefined): void {
-	try {
-		const file = nodePath.join(process.env.ATLAS_HOME || nodePath.join(os.homedir(), ".atlas"), "hook-faults.jsonl");
-		fs.mkdirSync(nodePath.dirname(file), { recursive: true });
-		if (fs.existsSync(file) && fs.statSync(file).size > FAULT_LOG_MAX_BYTES) return;
-		fs.appendFileSync(file, `${JSON.stringify({ ts: Date.now() / 1000, hook, error: error.slice(0, 500), type, cwd: cwd ?? process.cwd() })}\n`);
-	} catch {
-		// the fault log must never be the thing that fails
 	}
 }
 

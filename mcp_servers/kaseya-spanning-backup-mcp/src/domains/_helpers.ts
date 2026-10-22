@@ -14,18 +14,12 @@ export {
   extractShapeArgs,
   SHAPE_PROPS,
   type SummaryFn,
-  type ShapeArgs,
 } from '../../../_shared/response-shaper.js';
 
 export {
   toolError,
   toolErrorFromCatch,
 } from '../../../_shared/error-envelope.js';
-
-export {
-  resolveBaseUrl,
-  describeBaseUrl,
-} from '../../../_shared/base-url.js';
 
 // ---------------------------------------------------------------------------
 // Convenience helpers shared across Spanning domain handlers.

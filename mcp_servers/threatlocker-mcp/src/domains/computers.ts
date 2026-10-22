@@ -186,5 +186,4 @@ async function handleCall(toolName: string, args: Record<string, unknown>): Prom
   }
 }
 
-export { OS_TYPE_NAME };
 export const computersHandler: DomainHandler = { getTools, handleCall };
