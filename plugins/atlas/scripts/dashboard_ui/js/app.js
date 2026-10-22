@@ -23,8 +23,6 @@ import {
 } from "./theme.js";
 import { initShortcuts } from "./shortcuts.js";
 
-// ponytail: run.js lands in Task 6; until then the v14 overview page mounts under #/run.
-const PAGE_MODULE = { run: "overview" };
 const BASE_TITLE = "Atlas Command Center";
 
 let cleanup = null;
@@ -40,7 +38,8 @@ function paintBand() {
   const rows = mergeAgents(topics.agents.get(), null);
   const c = countStates(rows);
   const p = project.get();
-  el.innerHTML = renderBand({
+  // A page that paints the band itself (run.js, with real colony data) marks it owned.
+  if (!el.dataset.owner) el.innerHTML = renderBand({
     project: p === "all" ? "all projects" : baseName(p),
     branch: null,
     lead: null,
@@ -77,7 +76,7 @@ function showFailure(root, route, params, e) {
 }
 
 async function mount(root, route, params, want) {
-  const mod = await import(`./pages/${PAGE_MODULE[route] || route}.js`);
+  const mod = await import(`./pages/${route}.js`);
   if (currentRoute !== route) return; // user navigated away while the module loaded
   const done =
     (await mod.render({ root, route, params, project: want, navigate, setParams })) || null;
@@ -89,9 +88,9 @@ async function show({ route, params }) {
   const want = params.project || "all";
   if (project.get() !== want) project.set(want);
   currentRoute = route;
-  paintBand();
   if (typeof cleanup === "function") cleanup();
   cleanup = null;
+  paintBand(); // after cleanup so a page that owned the band has released it
   // Fresh root per navigation: a late paint from the previous page lands on a detached node.
   const old = document.getElementById("page-root");
   const root = old.cloneNode(false);
