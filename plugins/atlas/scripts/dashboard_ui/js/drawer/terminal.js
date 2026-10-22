@@ -43,7 +43,7 @@ function termTheme() {
     background: v("--canvas"),
     foreground: v("--text"),
     cursor: v("--brand"),
-    selectionBackground: v("--brand-soft"),
+    selectionBackground: `color-mix(in srgb, ${v("--brand")} 18%, transparent)`,
   };
 }
 
@@ -176,7 +176,7 @@ function streamView(ctx, plan) {
       if (disposed) return;
       term = new window.Terminal({
         fontFamily: getComputedStyle(document.documentElement).getPropertyValue(
-          "--font-mono",
+          "--mono",
         ),
         fontSize: TERM_FONT_PX,
         theme: termTheme(),

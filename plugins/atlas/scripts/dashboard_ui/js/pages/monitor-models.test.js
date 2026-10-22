@@ -7,12 +7,7 @@ import {
   severityState,
   parseTarget,
 } from "./monitor-model.js";
-import {
-  runningNow,
-  waitingAgents,
-  kpiLink,
-  runState,
-} from "./overview-model.js";
+import { waitingAgents } from "../run-data.js";
 import { activityToFeed, filterFeed, seatOptions } from "./channels-model.js";
 import {
   healthState,
@@ -51,15 +46,8 @@ test("overview agent selection", () => {
       { key: "c", name: "c", state: "done", project: "/q" },
     ],
   };
-  assert.deepEqual(
-    runningNow(payload, "all").map((r) => r.name),
-    ["b", "a"],
-  );
-  assert.deepEqual(runningNow(payload, "/q"), []);
   assert.equal(waitingAgents(payload, "/p").length, 1);
-  assert.equal(kpiLink("runs").route, "activity");
-  assert.equal(kpiLink("nope"), null);
-  assert.equal(runState({ ended: null }), "running");
+  assert.equal(waitingAgents(payload, "/q").length, 0);
 });
 
 test("activity history feed", () => {

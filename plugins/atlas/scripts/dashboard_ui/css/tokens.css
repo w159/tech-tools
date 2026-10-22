@@ -41,19 +41,6 @@
   --r2: 8px;
   --t-tick: 250ms;
 
-  /* v14 names kept as aliases until Tasks 3, 6 and 8 restyle their users. */
-  --panel: var(--well);
-  --raised: color-mix(in srgb, var(--well), var(--text) 5%);
-  --line: var(--rule);
-  --line-strong: var(--rule-2);
-  --text-2: var(--dim);
-  --text-3: var(--faint);
-  --brand-soft: color-mix(in srgb, var(--brand) 14%, transparent);
-  --font-sans: var(--sans);
-  --font-mono: var(--mono);
-  --r-control: 6px;
-  --r-panel: 10px;
-  --r-pill: 999px;
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -66,7 +53,6 @@
   --scrim: rgba(3, 5, 8, 0.6);
 
   --control-h: 32px;
-  --row-h: 40px;
   --sidebar-w: 232px;
   --sidebar-w-collapsed: 56px;
   --drawer-w: 440px;
