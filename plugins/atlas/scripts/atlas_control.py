@@ -22,6 +22,8 @@ import logging
 import os
 import queue
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -141,6 +143,19 @@ GROUP_INTROS = {
 }
 
 
+def _norm_options(options):
+    """Options as [{value, label, hint}]; a bare string is its own label."""
+    out = []
+    for o in options or []:
+        if isinstance(o, dict):
+            out.append(
+                {"value": o["value"], "label": o.get("label", o["value"]), "hint": o.get("hint", "")}
+            )
+        else:
+            out.append({"value": o, "label": o, "hint": ""})
+    return out
+
+
 def _k(
     key,
     group,
@@ -154,6 +169,8 @@ def _k(
     options=None,
     details="",
 ):
+    if kind == "choice":
+        kind = "select"
     BEHAVIOR_KNOBS.append(
         {
             "key": key,
@@ -165,7 +182,7 @@ def _k(
             "scope": scope,
             "details": details,
             **({"on": on, "off": off} if kind == "toggle" else {}),
-            **({"options": options} if options else {}),
+            **({"options": _norm_options(options)} if options else {}),
         }
     )
 
@@ -424,6 +441,100 @@ _k(
     scope="shell",
 )
 
+
+# --- knob metadata: kind overrides, finite option sets, ranges, effect, applies ---
+# Kept beside the _k() calls as data so each row's behavior is one lookup, not 34 edited signatures.
+
+_OPT = _norm_options
+_KIND = {
+    "ATLAS_OPTIMIZER_MODEL": "model",
+    "ATLAS_TYPESAFE_MODEL": "model",
+    "ATLAS_OLLAMA_URL": "url",
+    "ATLAS_OPTIMIZE_CMD": "command",
+    "ATLAS_OPTIMIZE_TRIGGER": "select",
+}
+_OPTIONS = {
+    "ATLAS_OPTIMIZE": [
+        {"value": "off", "label": "Off", "hint": "Never rewrite prompts."},
+        {"value": "trigger", "label": "Trigger prefix", "hint": "Only prompts that start with a trigger prefix."},
+        {"value": "always", "label": "Always", "hint": "Every non-trivial prompt; adds model latency each time."},
+    ],
+    "ATLAS_OPTIMIZE_TRIGGER": [
+        {"value": "opt:,optimize:,++", "label": "opt:, optimize:, ++", "hint": "All three prefixes (default)."},
+        {"value": "opt:,optimize:", "label": "opt:, optimize:", "hint": "Word prefixes only."},
+        {"value": "opt:", "label": "opt:", "hint": ""},
+        {"value": "optimize:", "label": "optimize:", "hint": ""},
+        {"value": "++", "label": "++", "hint": ""},
+    ],
+}
+_RANGE = {
+    "ATLAS_DASHBOARD_PORT": {"min": 1024, "max": 65535, "step": 1},
+    "ATLAS_TRIPWIRE_THRESHOLD": {"min": 1, "max": 50, "step": 1},
+    "ATLAS_OPTIMIZE_MINLEN": {"min": 0, "max": 500, "step": 1},
+    "ATLAS_OPTIMIZE_TIMEOUT": {"min": 1, "max": 115, "step": 1},
+    "ATLAS_TYPESAFE_MAX_CALLS": {"min": 1, "max": 5000, "step": 1},
+    "ATLAS_BRIDGE_HOOK_TIMEOUT_S": {"min": 1, "max": 30, "step": 1},
+    "ATLAS_WORKER_MAX_TOKENS": {"min": 1000, "max": 200000, "step": 1000},
+}
+# Model knobs whose value must be an installed Ollama model (the typesafe model is a hosted id).
+_OLLAMA_VALIDATED = {"ATLAS_OPTIMIZER_MODEL", "ATLAS_DECISION_MODEL"}
+_APPLIES = {"ATLAS_DASHBOARD_PORT": "dashboard-restart"}
+_EFFECT = {
+    "ATLAS_DASHBOARD": "New sessions start, or stop starting, the Command Center.",
+    "ATLAS_DASHBOARD_PORT": "Sessions look for the dashboard on this port; the running dashboard keeps its old port until restarted.",
+    "ATLAS_INGEST": "Finished sessions are, or are not, written to the telemetry database.",
+    "ATLAS_CHRONICLE": "Session facets are, or are not, recorded at session end.",
+    "ATLAS_MEMORY_CAPTURE": "Durable lessons are, or are not, saved to ~/.atlas/memory/ at session end.",
+    "ATLAS_CONNECTOR_WATCH": "Failed connector calls are, or are not, explained as credential problems.",
+    "ATLAS_GATE": "The completion gate blocks, or stops blocking, a done claim without verified evidence.",
+    "ATLAS_TRIPWIRE": "Inline-work coaching messages are shown, or hidden.",
+    "ATLAS_TRIPWIRE_HARD": "The tripwire may, or may not, deny a tool call instead of only advising.",
+    "ATLAS_TRIPWIRE_THRESHOLD": "The tripwire acts after this many inline operations in an armed run.",
+    "ATLAS_ENGINE_ARM": "Prompts are, or are not, classified to arm orchestration before the first edit.",
+    "ATLAS_FALLOW": "git commit and push run, or skip, the fallow audit gate.",
+    "ATLAS_OPTIMIZE": "Sets when prompts go through the optimizer model.",
+    "ATLAS_OPTIMIZE_TRIGGER": "Sets which prompt prefixes request optimization in trigger mode.",
+    "ATLAS_OPTIMIZER_MODEL": "The optimizer rewrites prompts with this Ollama model.",
+    "ATLAS_OLLAMA_URL": "Optimizer calls go to this Ollama address instead of $OLLAMA_HOST or the default.",
+    "ATLAS_OPTIMIZE_MINLEN": "Prompts shorter than this skip the optimizer.",
+    "ATLAS_OPTIMIZE_TIMEOUT": "The optimizer gives up and passes the original prompt after this many seconds.",
+    "ATLAS_OPTIMIZE_CMD": "A shell command replaces Ollama for rewriting prompts; it runs with your prompt on every optimized prompt.",
+    "ATLAS_OPTIMIZE_VERBOSE": "A banner is, or is not, printed when a prompt is rewritten.",
+    "ATLAS_OPTIMIZE_LOG": "Each rewrite is appended to this file; blank keeps no log.",
+    "ATLAS_TYPESAFE_SCORING": "Replies are, or are not, scored by the typesafe service (needs TYPESAFE_API_KEY).",
+    "ATLAS_TYPESAFE_MODEL": "Scoring requests name this model.",
+    "ATLAS_TYPESAFE_MAX_CALLS": "A scoring pass makes at most this many requests.",
+    "ATLAS_HOOK_BRIDGE": "omp runs, or skips, atlas's bridged Claude hooks.",
+    "ATLAS_BRIDGE_HOOK_TIMEOUT_S": "Each bridged hook is cut off after this many seconds.",
+    "ATLAS_WORKER_MAX_TOKENS": "Larger worker max_tokens requests are lowered to this.",
+    "ATLAS_ADVISOR_GATE": "omp does, or does not, block stopping while advisor items are open.",
+    "ATLAS_HOME": "Atlas reads and writes its state (database, memory, saved settings) in this directory.",
+    "ATLAS_DB": "Hooks write, and this dashboard reads, telemetry in this sqlite file.",
+    "ATLAS_DECISION_MODEL": "The prompt classifier uses this Ollama model.",
+    "ATLAS_DECISION_URL": "The prompt classifier calls this address; blank uses local Ollama.",
+}
+_ADV_KIND = {"ATLAS_DECISION_MODEL": "model", "ATLAS_DECISION_URL": "url"}
+_PATH_KEYS = {"ATLAS_HOME", "ATLAS_DB"}
+
+
+def _finish_knob(knob: dict) -> dict:
+    """Fill the metadata fields every knob row carries (in place)."""
+    key = knob["key"]
+    knob["kind"] = _KIND.get(key, knob["kind"])
+    if key in _OPTIONS:
+        knob["options"] = _OPT(_OPTIONS[key])
+    if key in _RANGE:
+        knob["range"] = _RANGE[key]
+    if knob["kind"] == "model":
+        knob["validate"] = "ollama" if key in _OLLAMA_VALIDATED else ""
+    knob["effect"] = _EFFECT.get(key) or knob.get("description", "").split(". ")[0]
+    knob["applies"] = _APPLIES.get(key, "next-session")
+    return knob
+
+
+for _knob in BEHAVIOR_KNOBS:
+    _finish_knob(_knob)
+
 # Documented ATLAS_* variables outside the curated groups. A discovered key missing here is shown as undocumented.
 _AD = {
     "ATLAS_MANDATES": (
@@ -643,6 +754,214 @@ def _settings_env() -> dict:
     return env if isinstance(env, dict) else {}
 
 
+# --- shell-scope layers: omp config env, ~/.atlas/env.sh, ~/.zshenv -------------
+#
+# A shell-scope knob is read from the environment of a process atlas does not
+# start (omp, a CLI). So a write reaches it three ways: Claude settings env,
+# omp's config.yml `env:` map, and a managed block in ~/.atlas/env.sh that
+# ~/.zshenv sources. Nothing outside the markers (or the `env:` block) is touched.
+
+MANAGED_BEGIN = "# >>> atlas managed >>>"
+MANAGED_END = "# <<< atlas managed <<<"
+ZSHENV_LINE = "[ -f ~/.atlas/env.sh ] && . ~/.atlas/env.sh"
+_BLOCK_RE = re.compile(
+    re.escape(MANAGED_BEGIN) + r"\n(.*?)" + re.escape(MANAGED_END) + r"\n?", re.S
+)
+_OMP_ENV_HEAD = re.compile(r"^env:\s*(\{\s*\})?\s*(#.*)?$")
+_OMP_ENTRY = re.compile(r"^(\s+)([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*?)\s*$")
+
+
+def omp_config_path() -> Path:
+    return OMP_CONFIG_PATH or Path.home() / ".omp" / "agent" / "config.yml"
+
+
+def env_sh_path() -> Path:
+    return Path.home() / ".atlas" / "env.sh"
+
+
+def zshenv_path() -> Path:
+    return Path.home() / ".zshenv"
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _write_text(path: Path, text: str) -> None:
+    """Atomic write that keeps the existing file's mode (these are the user's files)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.atlas-tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        if path.exists():
+            shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _set_block(text: str, body: str) -> str:
+    block = f"{MANAGED_BEGIN}\n{body + chr(10) if body else ''}{MANAGED_END}\n"
+    if _BLOCK_RE.search(text):
+        return _BLOCK_RE.sub(lambda _m: block, text, count=1)
+    if text and not text.endswith("\n"):
+        text += "\n"
+    return text + block
+
+
+def read_env_sh() -> dict:
+    m = _BLOCK_RE.search(_read_text(env_sh_path()))
+    out: dict = {}
+    for line in (m.group(1) if m else "").splitlines():
+        mm = re.match(r"^export ([A-Za-z_][A-Za-z0-9_]*)=(.*)$", line)
+        if mm:
+            try:
+                parts = shlex.split(mm.group(2))
+            except ValueError:
+                continue
+            out[mm.group(1)] = parts[0] if parts else ""
+    return out
+
+
+def write_env_sh(updates: dict, removed) -> None:
+    merged = read_env_sh()
+    merged.update(updates)
+    for key in removed:
+        merged.pop(key, None)
+    body = "\n".join(f"export {k}={shlex.quote(v)}" for k, v in sorted(merged.items()))
+    _write_text(env_sh_path(), _set_block(_read_text(env_sh_path()), body))
+    zsh = _read_text(zshenv_path())
+    if MANAGED_BEGIN not in zsh:  # idempotent: the guard line is added once
+        _write_text(zshenv_path(), _set_block(zsh, ZSHENV_LINE))
+
+
+def _unyaml(value: str) -> str:
+    if value.startswith('"'):
+        try:
+            return str(json.loads(value))
+        except ValueError:
+            return value.strip('"')
+    if value.startswith("'") and value.endswith("'") and len(value) > 1:
+        return value[1:-1].replace("''", "'")
+    return value
+
+
+def _omp_env_span(lines: list):
+    """(head index, end index exclusive) of the top-level `env:` block, or None."""
+    for i, line in enumerate(lines):
+        if line.startswith("env:"):
+            if not _OMP_ENV_HEAD.match(line):
+                raise ValueError("omp config `env:` is not a block map")
+            end = i + 1
+            while end < len(lines) and (
+                lines[end].strip() == "" or lines[end].startswith((" ", "\t"))
+            ):
+                end += 1
+            while end > i + 1 and lines[end - 1].strip() == "":
+                end -= 1
+            return i, end
+    return None
+
+
+def read_omp_env() -> dict:
+    lines = _read_text(omp_config_path()).split("\n")
+    try:
+        span = _omp_env_span(lines)
+    except ValueError:
+        return {}
+    out: dict = {}
+    for line in lines[span[0] + 1 : span[1]] if span else []:
+        m = _OMP_ENTRY.match(line)
+        if m and not line.lstrip().startswith("#"):
+            out[m.group(2)] = _unyaml(m.group(3))
+    return out
+
+
+def write_omp_env(updates: dict, removed) -> None:
+    """Set/remove keys in config.yml `env:`; every other line is kept verbatim."""
+    path = omp_config_path()
+    text = _read_text(path)
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    span = _omp_env_span(lines)
+    quote = json.dumps  # double-quoted YAML scalar, so `on` stays a string, not a boolean
+    if span is None:
+        entries = [f"  {k}: {quote(v)}" for k, v in sorted(updates.items())]
+        if entries:
+            lines += ["env:"] + entries
+    else:
+        head, end = span
+        body, pending, indent = [], dict(updates), "  "
+        for line in lines[head + 1 : end]:
+            m = _OMP_ENTRY.match(line)
+            if m and not line.lstrip().startswith("#"):
+                indent, key = m.group(1), m.group(2)
+                if key in removed:
+                    continue
+                if key in pending:
+                    line = f"{indent}{key}: {quote(pending.pop(key))}"
+            body.append(line)
+        body += [f"{indent}{k}: {quote(v)}" for k, v in sorted(pending.items())]
+        has_entry = any(_OMP_ENTRY.match(x) and not x.lstrip().startswith("#") for x in body)
+        lines[head:end] = ["env:" if has_entry else "env: {}"] + (body if has_entry else [])
+    _write_text(path, "\n".join(lines) + "\n")
+
+
+def _creatable(path_text: str) -> bool:
+    """Absolute, and either present or placeable under an existing writable directory."""
+    p = Path(path_text)
+    if not p.is_absolute():
+        return False
+    if p.exists():
+        return True
+    for parent in p.parents:
+        if parent.exists():
+            return parent.is_dir() and os.access(parent, os.W_OK | os.X_OK)
+    return False
+
+
+def _adv_meta(key: str, doc) -> dict:
+    text = doc[0] if doc else "Undocumented: nothing here says what it does."
+    return {
+        "effect": _EFFECT.get(key) or text.split(". ")[0].replace("`", ""),
+        "applies": _APPLIES.get(key, "next-session"),
+        **({"validate": "ollama"} if key in _OLLAMA_VALIDATED else {}),
+    }
+
+
+_SOURCE_NAME = {"live_env": "process", "claude_settings": "claude"}  # legacy `source` values
+
+
+def _scope_of(key: str) -> str:
+    knob = _KNOBS_BY_KEY.get(key)
+    if knob:
+        return knob["scope"]
+    if key in _AD:
+        return _AD[key][2]
+    return "hooks" if key not in discovered_env_keys() else "shell"
+
+
+def _layer_view(key: str, scope: str, store_env, claude_env, omp_env, rc_env) -> dict:
+    """The five layers for one key: {layer: {supported, value}}. value None = not set there."""
+    proc = os.environ.get(key)
+    hooks, shell = scope == "hooks", scope == "shell"
+    return {
+        "live_env": {"supported": True, "value": proc if proc not in (None, "") else None},
+        "store": {"supported": hooks, "value": store_env.get(key)},
+        "claude_settings": {
+            "supported": True,
+            "value": str(claude_env[key]) if key in claude_env else None,
+        },
+        "omp_config": {"supported": shell, "value": omp_env.get(key)},
+        "shell_rc": {"supported": shell, "value": rc_env.get(key)},
+    }
+
+
 def behavior_state() -> dict:
     """Curated knob groups plus every other ATLAS_* key the code reads.
 
@@ -654,31 +973,31 @@ def behavior_state() -> dict:
     """
     claude_env = _settings_env()
     store = read_store()
+    omp_env = read_omp_env()
+    rc_env = read_env_sh()
     scanned = {k: v for k, v in _scan_env_readers().items() if k not in _INTERNAL}
 
-    def detail(key, default):
-        proc = os.environ.get(key)
-        layers = {
-            "process": proc if proc not in (None, "") else None,
-            "store": store["env"].get(key),
-            "claude": str(claude_env[key]) if key in claude_env else None,
-        }
+    def detail(key, default, scope):
+        layers = _layer_view(key, scope, store["env"], claude_env, omp_env, rc_env)
+        order = ("live_env", "store", "claude_settings", "omp_config", "shell_rc")
         value, source = default, "default"
-        for name in ("process", "store", "claude"):
-            if layers[name] is not None:
-                value, source = layers[name], name
+        for name in order:
+            if layers[name]["value"] is not None:
+                value, source = layers[name]["value"], _SOURCE_NAME.get(name, name)
                 break
         hook_value, hook_source = default, "default"
-        for name in ("store", "claude"):
-            if layers[name] is not None:
-                hook_value, hook_source = layers[name], name
+        for name in ("store", "claude_settings"):
+            if layers[name]["value"] is not None:
+                hook_value, hook_source = layers[name]["value"], _SOURCE_NAME.get(name, name)
                 break
         reaches = []
-        if layers["claude"] is not None:
+        if layers["claude_settings"]["value"] is not None:
             reaches.append("claude")
-        if layers["store"] is not None:
+        if layers["store"]["value"] is not None:
             reaches.append("omp")
-        if layers["process"] is not None:
+        if layers["omp_config"]["value"] is not None:
+            reaches.append("omp")
+        if layers["live_env"]["value"] is not None:
             reaches.append("dashboard-process")
         return {
             "value": value,
@@ -686,7 +1005,7 @@ def behavior_state() -> dict:
             "hook_value": hook_value,
             "hook_source": hook_source,
             "layers": layers,
-            "reaches": reaches,
+            "reaches": sorted(set(reaches)),
             "default": default,
             "changed": store["changed"].get(key),
         }
@@ -698,7 +1017,7 @@ def behavior_state() -> dict:
     groups: dict[str, dict] = {}
     for knob in BEHAVIOR_KNOBS:
         entry = dict(knob)
-        entry.update(detail(knob["key"], knob.get("default", "")))
+        entry.update(detail(knob["key"], knob.get("default", ""), knob["scope"]))
         entry["ref"] = (scanned.get(knob["key"]) or {}).get("ref", "")
         entry["shell_also"] = shell_also(knob["key"])
         g = groups.setdefault(
@@ -728,9 +1047,10 @@ def behavior_state() -> dict:
                 else "Undocumented: nothing here says what it does. The reading line is shown under Details.",
                 "documented": bool(doc),
                 "scope": doc[2] if doc else "shell",
-                "kind": "text",
+                "kind": _ADV_KIND.get(key, "text"),
+                **_adv_meta(key, doc),
                 "shell_also": shell_also(key),
-                **detail(key, doc[1] if doc else ""),
+                **detail(key, doc[1] if doc else "", doc[2] if doc else "shell"),
             }
         )
         seen.add(key)
@@ -745,10 +1065,12 @@ def behavior_state() -> dict:
                     "documented": False,
                     "scope": "hooks",
                     "kind": "text",
+                    "effect": "Nothing reads this value.",
+                    "applies": "next-session",
                     "shell_also": False,
                     "description": "Saved, but no shipped file reads it. Clear it.",
                     "unread": True,
-                    **detail(key, ""),
+                    **detail(key, "", "hooks"),
                 }
             )
 
@@ -762,15 +1084,58 @@ def behavior_state() -> dict:
     }
 
 
-def write_behavior_updates(updates: dict) -> dict:
-    """Write ATLAS_* knobs to the atlas store and Claude settings env. Empty removes."""
+def _check_value(key: str, value: str, confirm: bool):
+    """None when the value may be saved, else the error dict (with its HTTP `status`)."""
+    knob = _KNOBS_BY_KEY.get(key) or {}
+    meta = _finish_knob(dict(knob)) if knob else {"kind": _ADV_KIND.get(key, "text")}
+    kind = meta["kind"]
+    if kind == "select" and meta.get("options"):
+        allowed = [o["value"] for o in meta["options"]]
+        if value not in allowed:
+            return {"error": "bad_option", "key": key, "options": allowed, "status": 400}
+    if key in _RANGE:
+        r = _RANGE[key]
+        try:
+            n = float(value)
+        except ValueError:
+            n = None
+        if n is None or not r["min"] <= n <= r["max"]:
+            return {"error": "out_of_range", "key": key, "range": r, "status": 400}
+    if key in _PATH_KEYS and not _creatable(value):
+        return {
+            "error": "bad_path",
+            "key": key,
+            "hint": "Use an absolute path that exists or can be created.",
+            "status": 400,
+        }
+    if key == "ATLAS_OPTIMIZE_CMD" and not confirm:
+        return {"error": "needs_confirm", "key": key, "command": value, "status": 409}
+    if key in _OLLAMA_VALIDATED:
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        import atlas_ollama
+
+        ok, matches = atlas_ollama.validate_model(value)
+        if ok is False:  # None: ollama unreachable, cannot validate, so accept
+            return {"error": "unknown_model", "key": key, "value": value, "matches": matches, "status": 400}
+    return None
+
+
+def write_behavior_updates(updates: dict, confirm: bool = False) -> dict:
+    """Write ATLAS_* knobs to every layer their scope reaches, then read each layer back.
+
+    hooks scope: atlas store + Claude settings env. shell scope: Claude settings env,
+    omp config.yml env, ~/.atlas/env.sh. Empty removes. `ok` is false when any written
+    layer does not read back equal to what was wanted.
+    """
     if not isinstance(updates, dict) or not updates:
         return {"ok": False, "error": "updates_required"}
-    settable = {k["key"] for k in BEHAVIOR_KNOBS if k["scope"] == "hooks"} | {
-        k for k in discovered_env_keys() if _AD.get(k, ("", "", "shell"))[2] == "hooks"
-    }
-    # A value saved earlier for a key that is no longer settable (or no longer read) can still be cleared.
-    clearable = settable | set(_settings_env()) | set(read_store()["env"])
+    clearable = (
+        {k["key"] for k in BEHAVIOR_KNOBS}
+        | set(discovered_env_keys())
+        | set(_settings_env())
+        | set(read_store()["env"])
+    ) - _INTERNAL
     cleaned: dict[str, str] = {}
     removed: list[str] = []
     bad: list[str] = []
@@ -790,27 +1155,48 @@ def write_behavior_updates(updates: dict) -> dict:
             }
         if value == "":
             removed.append(key)
-        elif key not in settable:
-            bad.append(key)
-        else:
-            cleaned[key] = value
+            continue
+        problem = _check_value(key, value, confirm)
+        if problem:
+            return {"ok": False, **problem}
+        cleaned[key] = value
     if bad:
         return {
             "ok": False,
             "error": "keys_not_allowlisted",
             "keys": bad,
-            "hint": "Only ATLAS_* variables a shipped hook reads can be saved here. Variables read by omp or atlas CLIs come from the shell that starts them.",
+            "hint": "Only ATLAS_* variables a shipped file reads can be saved here.",
         }
 
-    store = read_store()
+    by_scope = {"hooks": ({}, []), "shell": ({}, [])}
+    for key in sorted(set(cleaned) | set(removed)):
+        sc = _scope_of(key)
+        sc = sc if sc in by_scope else "hooks"
+        if key in cleaned:
+            by_scope[sc][0][key] = cleaned[key]
+        else:
+            by_scope[sc][1].append(key)
+    hook_set, hook_rm = by_scope["hooks"]
+    shell_set, shell_rm = by_scope["shell"]
+
+    errors: dict[str, str] = {}  # layer -> why the write itself failed
     now = time.time()
-    store["env"].update(cleaned)
-    for key in cleaned:
-        store["changed"][key] = now
-    for key in removed:
-        store["env"].pop(key, None)
-        store["changed"].pop(key, None)
-    _write_store(store["env"], store["changed"])
+
+    def attempt(layer, fn):
+        try:
+            fn()
+        except (OSError, ValueError) as e:
+            errors[layer] = f"{type(e).__name__}: {e}"
+
+    def write_store():
+        store = read_store()
+        store["env"].update(hook_set)
+        for key in hook_set:
+            store["changed"][key] = now
+        for key in hook_rm:
+            store["env"].pop(key, None)
+            store["changed"].pop(key, None)
+        _write_store(store["env"], store["changed"])
 
     def apply(data):
         env = data.get("env")
@@ -821,15 +1207,62 @@ def write_behavior_updates(updates: dict) -> dict:
         for key in removed:
             env.pop(key, None)
 
-    mutate_settings(apply)
-    return {
-        "ok": True,
+    if hook_set or hook_rm:
+        attempt("store", write_store)
+    attempt("claude_settings", lambda: mutate_settings(apply))
+    if shell_set or shell_rm:
+        attempt("omp_config", lambda: write_omp_env(shell_set, shell_rm))
+        attempt("shell_rc", lambda: write_env_sh(shell_set, shell_rm))
+
+    back = {
+        "store": read_store()["env"],
+        "claude_settings": {k: str(v) for k, v in _settings_env().items()},
+        "omp_config": read_omp_env(),
+        "shell_rc": read_env_sh(),
+    }
+    results = []
+    for key in sorted(set(cleaned) | set(removed)):
+        wanted = cleaned.get(key, "")
+        scope = _scope_of(key)
+        names = ["claude_settings"] + (
+            ["omp_config", "shell_rc"] if scope == "shell" else ["store"]
+        )
+        layers = []
+        for name in names:
+            got = back[name].get(key)
+            row = {
+                "layer": name,
+                "wrote": wanted,
+                "got": "" if got is None else got,
+                "ok": name not in errors and ("" if got is None else got) == wanted,
+            }
+            if name in errors:
+                row["error"] = errors[name]
+            layers.append(row)
+        results.append(
+            {
+                "key": key,
+                "wanted": wanted,
+                "layers": layers,
+                "applies": _APPLIES.get(key, "next-session"),
+                "ok": all(x["ok"] for x in layers),
+            }
+        )
+    out = {
+        "ok": all(r["ok"] for r in results),
         "set": sorted(cleaned),
         "cleared": sorted(removed),
+        "results": results,
         "settings_path": str(SETTINGS_PATH),
         "store_path": str(store_path()),
-        "note": "Saved. Reload the Claude Code or omp session so hooks pick up the new environment.",
+        "note": "Saved. Reload the Claude Code or omp session (or start a new shell) so processes pick up the new environment.",
     }
+    if len(results) == 1:
+        one = results[0]
+        out.update(key=one["key"], wanted=one["wanted"], layers=one["layers"], applies=one["applies"])
+    if not out["ok"]:
+        out["error"] = "readback_mismatch"
+    return out
 
 
 # --- MCP servers --------------------------------------------------------------
@@ -1534,7 +1967,7 @@ def connector_health(configured: bool, enabled: bool, usage: dict | None) -> str
 
 # --- omp (oh-my-pi) model roles, read-only ------------------------------------
 
-OMP_CONFIG_PATH = Path.home() / ".omp" / "agent" / "config.yml"
+OMP_CONFIG_PATH: Path | None = None  # None: resolve ~/.omp/agent/config.yml from HOME per call (tests patch it)
 OMP_ROLES = ("atlas-worker", "atlas-verifier", "atlas-mechanic", "default", "smol")
 
 
@@ -1563,7 +1996,7 @@ def omp_model_roles(path: Path | None = None) -> dict:
     ``@atlas-mechanic`` first and fall back to ``@default`` / ``@smol``; a role
     missing from ``modelRoles`` means that agent falls through to its fallback.
     """
-    path = path or OMP_CONFIG_PATH
+    path = path or omp_config_path()
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
