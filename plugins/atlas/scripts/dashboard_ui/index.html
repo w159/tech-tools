@@ -17,7 +17,7 @@
       var base = (m && m.getAttribute("content") || "").replace(/\/+$/, "");
       window.__ATLAS_BASE__ = base;
       document.write('<script src="' + base + '/ui/js/theme-boot.js"><\/script>');
-      ["tokens", "fonts", "base", "components", "shell", "fleet", "pages", "pages-insights", "integrations", "terminal"].forEach(function (n) {
+      ["tokens", "fonts", "base", "components", "shell", "fleet", "pages", "pages-insights", "integrations", "terminal", "settings"].forEach(function (n) {
         document.write('<link rel="stylesheet" href="' + base + '/ui/css/' + n + '.css">');
       });
     })();

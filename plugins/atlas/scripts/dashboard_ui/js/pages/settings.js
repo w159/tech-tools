@@ -18,7 +18,8 @@
 // and stay empty; a dirty-draft guard warns before reload/close and before
 // navigating away from Settings while credential drafts are unsaved.
 import { h, replace } from '../dom.js';
-import { Badge, Card, EmptyState, StatusDot } from '../components.js';
+import { Badge, Card, EmptyState, StatusDot, confirm } from '../components.js';
+import { SettingRow, CATEGORIES, slug, categoryOf, rowMatches, countByCategory } from '../settings-row.js';
 import { IntegrationsPanel } from '../integrations.js';
 
 import { DEFAULT_NAV, normalizeNav } from '../nav-order.js';
@@ -44,7 +45,7 @@ let S = null;
 
 function freshState(ctx) {
   return {
-    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {}, knobQuery: '',
+    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {}, query: '', entries: null, ui: null,
     behavior: null, ecosystem: null, connectors: null, prefs: null, projects: [],
     credDrafts: {}, projectList: null, agentPid: null, agents: null,
     ecoTab: 'plugins', ecoQuery: '', ecoLimit: ECO_PAGE,
@@ -136,6 +137,7 @@ async function loadAll() {
     loadSection('projectList', () => api.get('/api/projects?editable=1')),
   ]);
   S.projects = (S.projectsRes && S.projectsRes.projects) || [];
+  S.entries = null;
   await bootstrapAgents();
 }
 
@@ -255,13 +257,6 @@ async function savePrefs(patch, statusId) {
 }
 
 // ---- small form helpers -----------------------------------------------------
-function field(id, label, control, hint) {
-  return h('div', { class: 'pg-field' },
-    h('label', { class: 'pg-label', for: id }, label),
-    control,
-    hint ? h('p', { class: 'pg-hint', id: `${id}-hint` }, hint) : null);
-}
-
 function selectEl(id, value, options, onChange, describedBy) {
   const props = { id, class: 'select', onchange: (e) => onChange(e.target.value) };
   if (describedBy) props['aria-describedby'] = describedBy;
@@ -294,148 +289,7 @@ async function reloadAll() {
 }
 
 // ---- Behavior knobs ---------------------------------------------------------
-const isOn = (knob, v) => String(v ?? '').toLowerCase() !== String(knob.off ?? 'off').toLowerCase();
 
-function findKnob(key) {
-  const b = S.behavior || {};
-  for (const g of b.groups || []) for (const k of g.knobs || []) if (k.key === key) return k;
-  return (b.advanced || []).find((a) => a.key === key);
-}
-
-function knobRowEl(key) {
-  return [...S.mount.querySelectorAll('li[data-knob]')].find((li) => li.dataset.knob === key);
-}
-
-function setBusy(el, on) {
-  if (el) for (const c of el.querySelectorAll('input,select,button')) c.disabled = on;
-}
-
-async function saveKnob(knob, value) {
-  const key = `knob:${knob.key}`;
-  if (S.busy.has(key)) return;
-  S.busy.add(key);
-  setBusy(knobRowEl(knob.key), true);
-  try {
-    await legacyPost('/api/behavior', { updates: { [knob.key]: value } });
-    delete S.drafts[knob.key];
-    S.behavior = await S.ctx.api.get('/api/behavior');
-    delete S.errors.behavior;
-    S.busy.delete(key);
-    const fresh = findKnob(knob.key);
-    const old = knobRowEl(knob.key);
-    if (fresh) flash(swapEl(old, () => knobRow(fresh)), value === '' ? 'Reset to default' : 'Saved');
-    else if (old) old.remove(); // a stale value nothing reads, now cleared
-  } catch (err) {
-    const d = describeError(err);
-    S.busy.delete(key);
-    const old = knobRowEl(knob.key);
-    const cur = findKnob(knob.key);
-    flash(swapEl(old, () => knobRow(cur || knob)), `Not saved: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
-  }
-}
-
-function knobControl(knob) {
-  const id = `pg-knob-${knob.key}`;
-  const busy = S.busy.has(`knob:${knob.key}`);
-  if (knob.scope === 'shell') return h('span', { class: 'pg-hint pg-mono', id }, 'set in shell');
-  if (knob.unread) return h('button', { type: 'button', class: 'btn', id, disabled: busy, onclick: () => saveKnob(knob, '') }, 'Clear');
-  const value = String((knob.hook_value ?? knob.value) ?? '');
-  if (knob.kind === 'toggle') {
-    return switchEl(id, isOn(knob, value), knob.title || knob.key, (next) => saveKnob(knob, next ? (knob.on ?? 'on') : (knob.off ?? 'off')), busy);
-  }
-  if (knob.kind === 'choice') {
-    return selectEl(id, value, (knob.options || []).map((o) => ({ value: o, label: o })), (v) => saveKnob(knob, v));
-  }
-  const draft = S.drafts[knob.key] !== undefined ? S.drafts[knob.key] : value;
-  const input = h('input', {
-    id, class: 'input', type: knob.kind === 'number' ? 'number' : 'text', value: draft,
-    disabled: busy, 'aria-label': knob.title || knob.key,
-  });
-  input.addEventListener('input', (e) => { S.drafts[knob.key] = e.target.value; });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); saveKnob(knob, input.value); } });
-  return h('span', { class: 'pg-inline' }, input,
-    h('button', { type: 'button', class: 'btn', disabled: busy, onclick: () => saveKnob(knob, input.value),
-      'aria-label': `Save ${knob.title || knob.key}` }, 'Save'));
-}
-
-const SOURCE_LABEL = { store: 'saved here (atlas store)', claude: 'Claude Code settings.json only', process: 'this dashboard’s own environment', default: 'built-in default' };
-
-function whenText(epochS) {
-  return epochS ? `${ago(epochS)} (${new Date(Number(epochS) * 1000).toLocaleString()})` : 'never changed from this page';
-}
-
-function showValue(knob, v) {
-  if (knob.kind === 'toggle') return isOn(knob, v) ? 'On' : 'Off';
-  return v === '' || v == null ? '(empty)' : String(v);
-}
-
-function shellKnobRows(knob, layers) {
-  return [
-    ['Now', layers.process != null ? `${layers.process} in this dashboard’s environment (your terminal may differ)` : 'not set in this dashboard’s environment, so the default applies'],
-    ['Set it with', `export ${knob.key}=… in the shell that starts the program that reads it.`],
-    ['Takes effect', 'The next time that program is launched from a shell where the variable is exported.'],
-  ];
-}
-
-function hookKnobRows(knob, layers) {
-  const src = knob.hook_source || knob.source || 'default';
-  const now = knob.hook_value ?? knob.value;
-  const reach = [layers.claude != null ? 'Claude Code (settings.json env)' : null, layers.store != null ? 'omp (atlas store)' : null].filter(Boolean);
-  const envNote = layers.process != null && layers.process !== now ? `; this dashboard’s own environment has ${layers.process}, which only affects this dashboard` : '';
-  return [
-    ['Now', `${showValue(knob, now)} — ${SOURCE_LABEL[src] || src}${envNote}`],
-    ['Reaches', reach.length ? reach.join(' + ') : 'nothing saved: every session uses the built-in default'],
-    ['Takes effect', 'Claude Code: when a new session starts. omp: on the next hook run. A variable exported in your shell overrides both.'],
-  ];
-}
-
-function knobDetailRows(knob, layers, shell) {
-  const [now, reaches, effect] = shell ? shellKnobRows(knob, layers) : hookKnobRows(knob, layers);
-  return [
-    knob.details ? ['What it does', knob.details] : null,
-    ['Default', showValue(knob, knob.default)],
-    now, reaches, effect,
-    knob.shell_also ? ['Also read by omp', 'omp’s own extension reads this from its shell environment too, so under omp export it there as well; the saved value does not reach that part.'] : null,
-    ['Last changed', whenText(knob.changed)],
-    ['Read at', knob.ref || 'no shipped file reads it'],
-  ].filter(Boolean);
-}
-
-function knobDetailActions(knob, layers, shell) {
-  if (shell) return [null, null];
-  const claudeOnly = layers.claude != null && layers.store == null;
-  return [
-    claudeOnly ? h('button', { type: 'button', class: 'btn', onclick: () => saveKnob(knob, layers.claude) }, 'Apply to omp too') : null,
-    layers.store != null || layers.claude != null
-      ? h('button', { type: 'button', class: 'btn', onclick: () => saveKnob(knob, '') }, 'Reset to default') : null,
-  ];
-}
-
-function knobDetail(knob) {
-  const layers = knob.layers || {};
-  const shell = knob.scope === 'shell';
-  const rows = knobDetailRows(knob, layers, shell);
-  return h('details', { class: 'pg-evidence', dataset: { keep: `knob:${knob.key}` } },
-    h('summary', {}, 'Details'),
-    h('dl', { class: 'pg-kvs' }, ...rows.map(([k, v]) => h('div', { class: 'pg-kv' }, h('dt', {}, k), h('dd', { class: k === 'Read at' ? 'pg-mono' : '' }, v)))),
-    h('p', { class: 'pg-actions' }, ...knobDetailActions(knob, layers, shell)));
-}
-
-function knobRow(knob) {
-  const title = knob.title || knob.key;
-  const search = `${knob.key} ${title} ${knob.description || ''}`.toLowerCase();
-  const custom = knob.scope !== 'shell' && (knob.hook_source || knob.source) !== 'default' && String(knob.hook_value ?? knob.value) !== String(knob.default);
-  return h('li', { class: 'pg-row', dataset: { knob: knob.key, search }, hidden: !knobMatches(search) },
-    h('div', { class: 'pg-row-main' },
-      h('label', { class: 'pg-row-title', for: `pg-knob-${knob.key}` }, title,
-        knob.scope === 'shell' ? Badge({ status: 'info', text: 'set in shell' }) : null,
-        knob.documented === false ? Badge({ status: 'warn', text: knob.unread ? 'not read' : 'undocumented' }) : null,
-        custom ? Badge({ status: 'ok', text: 'customised' }) : null),
-      h('p', { class: 'pg-hint' }, knob.description || ''),
-      savedTag(),
-      knobDetail(knob)),
-    h('div', { class: 'pg-row-ctl' }, knobControl(knob)));
-}
 
 // Read-only: shows the omp roles atlas's agents name and whether each resolves to a model.
 function ompSection(omp) {
@@ -463,67 +317,7 @@ function ompSection(omp) {
       : null);
 }
 
-function knobMatches(search) {
-  const q = S.knobQuery.trim().toLowerCase();
-  return !q || search.includes(q);
-}
-
 // Filtering only toggles `hidden` on existing rows: no rebuild, so typing never loses focus or scroll.
-function applyKnobFilter() {
-  const q = S.knobQuery.trim().toLowerCase();
-  const rows = [...S.mount.querySelectorAll('li[data-knob]')];
-  for (const li of rows) li.hidden = !knobMatches(li.dataset.search);
-  for (const g of S.mount.querySelectorAll('section[data-group]')) g.hidden = !g.querySelector('li[data-knob]:not([hidden])');
-  const adv = S.mount.querySelector('details[data-keep="advanced"]');
-  if (adv) {
-    const any = !!adv.querySelector('li[data-knob]:not([hidden])');
-    adv.hidden = !!q && !any;
-    if (q && any) adv.open = true;
-  }
-  const count = S.mount.querySelector('#pg-knob-count');
-  if (count) count.textContent = q ? `${rows.filter((li) => !li.hidden).length} of ${rows.length} match` : `${rows.length} switches`;
-}
-
-function behaviorSection() {
-  const err = sectionError('behavior', 'Behavior knobs');
-  if (err) return Card({ id: 'pg-sec-behavior', title: 'Behavior', children: [err] });
-  if (!S.behavior) return Card({ id: 'pg-sec-behavior', title: 'Behavior', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
-  const groups = S.behavior.groups || [];
-  const advanced = S.behavior.advanced || [];
-  const filter = h('input', {
-    id: 'pg-knob-filter', class: 'input', type: 'search', value: S.knobQuery,
-    placeholder: 'Filter switches by name or what they do', 'aria-label': 'Filter behavior switches',
-  });
-  filter.addEventListener('input', (e) => { S.knobQuery = e.target.value; applyKnobFilter(); });
-  const slug = (t) => `pg-grp-${t.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-  const jump = (id) => () => { const el = document.getElementById(id); if (el) { if (el.tagName === 'DETAILS') el.open = true; el.scrollIntoView({ block: 'start' }); } };
-  const card = Card({
-    id: 'pg-sec-behavior',
-    title: 'Behavior',
-    actions: [h('span', { class: 'pg-hint pg-mono' }, S.behavior.store_path || '')],
-    children: [
-      h('p', { class: 'pg-hint' }, 'Switches for what atlas’s hooks do inside Claude Code and omp. Each row says what it changes; open Details for the default, where it is read and when a change takes effect. A change is saved to the atlas store (omp reads it on its next hook run) and to Claude Code’s settings.json (read when a session starts); sessions already running keep their old value. Rows marked “set in shell” are read straight from the environment of the program that uses them, so they cannot be saved here.'),
-      h('div', { class: 'pg-field' }, filter, h('span', { class: 'pg-hint', id: 'pg-knob-count', role: 'status' }, '')),
-      h('nav', { class: 'pg-index', 'aria-label': 'Behavior groups' },
-        ...groups.map((g) => h('button', { type: 'button', class: 'pg-tab', onclick: jump(slug(g.title)) }, g.title)),
-        advanced.length ? h('button', { type: 'button', class: 'pg-tab', onclick: jump('pg-grp-advanced') }, 'Advanced') : null),
-      ...groups.map((g) => h('section', { class: 'pg-knob-group', id: slug(g.title), dataset: { group: g.title }, 'aria-label': g.title },
-        h('h3', { class: 'pg-h3' }, g.title),
-        g.intro ? h('p', { class: 'pg-hint' }, g.intro) : null,
-        h('ul', { class: 'pg-rows' }, ...(g.knobs || []).map(knobRow)))),
-      advanced.length
-        ? h('details', { class: 'pg-evidence', id: 'pg-grp-advanced', dataset: { keep: 'advanced' } },
-          h('summary', {}, `Advanced: other ATLAS_* variables the code reads (${advanced.length})`),
-          h('p', { class: 'pg-hint' }, 'Rarely needed: kill switches and overrides for single hooks. Internal wiring that atlas sets itself is not listed. “Undocumented” means the code reads the variable but nothing explains it; open Details to see the reading line.'),
-          h('ul', { class: 'pg-rows' }, ...advanced.map(knobRow)))
-        : null,
-      ompSection(S.behavior.omp),
-    ],
-  });
-  queueMicrotask(() => S.mount && applyKnobFilter());
-  return card;
-}
-
 // ---- Ecosystem toggles ------------------------------------------------------
 // Rebuild one inventory row from fresh data (the current tab only shows one list, so the row is looked up by key).
 function redrawEcoRow(kind, id, msg, tone) {
@@ -1035,27 +829,6 @@ function navEditor(p) {
   );
 }
 
-function refreshField(p) {
-  const input = h('input', {
-    id: 'pg-pref-refresh', class: 'input', type: 'number', min: '2', max: '300', value: String(p.refresh_seconds),
-    'aria-describedby': 'pg-pref-refresh-hint',
-  });
-  const err = h('p', { class: 'pg-field-error', role: 'alert' }, '');
-  const commit = async () => {
-    const n = Number(input.value);
-    if (!Number.isInteger(n) || n < 2 || n > 300) { err.textContent = 'Enter a whole number from 2 to 300.'; return; }
-    err.textContent = '';
-    if (n !== prefs().refresh_seconds && !(await savePrefs({ refresh_seconds: n }, 'pg-pref-refresh-status'))) input.value = String(prefs().refresh_seconds);
-  };
-  input.addEventListener('change', commit);
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
-  return h('div', { class: 'pg-field' },
-    h('label', { class: 'pg-label', for: 'pg-pref-refresh' }, 'Fallback refresh interval (seconds)'),
-    h('span', { class: 'pg-inline' }, input, savedTag('pg-pref-refresh-status')),
-    h('p', { class: 'pg-hint', id: 'pg-pref-refresh-hint' }, 'How often pages re-fetch when the live connection to the dashboard drops. It does not slow the normal live updates. 2 to 300.'),
-    err);
-}
-
 function integrationsSection() {
   return Card({
     id: 'integrations',
@@ -1066,88 +839,126 @@ function integrationsSection() {
 }
 
 // Selects revert to the saved value when a save fails, so the control never lies about what is stored.
-function prefSelect(id, label, current, options, patchOf, hint) {
-  const sel = selectEl(id, current, options, async (v) => {
-    if (!(await savePrefs(patchOf(v), `${id}-status`))) sel.value = current;
-  }, hint ? `${id}-hint` : undefined);
-  return field(id, label, h('span', { class: 'pg-inline' }, sel, savedTag(`${id}-status`)), hint);
-}
-
-function prefsSection() {
-  const p = prefs();
-  const fail = S.errors.prefs && !S.prefs
-    ? h('p', { class: 'pg-banner is-warn', role: 'alert' },
-      `Saved preferences could not be loaded (${describeError(S.errors.prefs).title}); showing defaults.`)
-    : null;
-  const projectOptions = [{ value: 'all', label: 'All projects' },
-    ...S.projects.map((x) => ({ value: x.root, label: x.name || x.root }))];
-  if (!projectOptions.some((o) => o.value === p.default_project)) {
-    projectOptions.push({ value: p.default_project, label: p.default_project });
-  }
-  return Card({
-    id: 'pg-sec-prefs',
-    title: 'Dashboard preferences',
-    children: [
-      h('p', { class: 'pg-hint' }, 'How this dashboard looks and behaves. Each change is saved as soon as you make it and applies to this dashboard only; it never touches Claude Code or omp.'),
-      fail,
-      h('div', { class: 'pg-form' },
-        prefSelect('pg-pref-theme', 'Theme', p.theme,
-          [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }, { value: 'system', label: 'Match system' }],
-          (v) => ({ theme: v }), 'Colour scheme of this dashboard.'),
-        prefSelect('pg-pref-density', 'Density', p.density,
-          [{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }],
-          (v) => ({ density: v }), 'Row spacing across every page.'),
-        prefSelect('pg-pref-project', 'Default project', p.default_project, projectOptions,
-          (v) => ({ default_project: v }), 'The project selected when the dashboard opens. Takes effect the next time you open it.'),
-        refreshField(p),
-        prefSelect('pg-pref-minsev', 'Activity page: hide events below', p.noise.min_severity,
-          [{ value: 'info', label: 'Show everything' }, { value: 'warn', label: 'Warnings and failures' }, { value: 'fail', label: 'Failures only' }],
-          (v) => ({ noise: { ...prefs().noise, min_severity: v } }), 'Filters the Activity page only. Duplicate events are always collapsed with a ×count.'),
-        h('fieldset', { class: 'pg-fieldset' }, h('legend', { class: 'pg-label' }, 'Sidebar order'),
-          h('p', { class: 'pg-hint' }, 'Move pages up or down in the left sidebar. ', savedTag('pg-pref-nav-status')),
-          navEditor(p))),
-    ],
-  });
-}
-
-const SECTIONS = [
-  ['pg-sec-prefs', 'Preferences'], ['integrations', 'Integrations'], ['pg-sec-behavior', 'Behavior'],
-  ['pg-sec-ecosystem', 'Ecosystem'], ['pg-sec-connectors', 'Connectors'], ['pg-sec-agents', 'Agents'],
-];
 
 // A jump bar for a very long page. Buttons, not links: a "#id" href would be read as a route change.
-function sectionIndex() {
-  return h('nav', { class: 'pg-index', 'aria-label': 'Settings sections' },
-    ...SECTIONS.map(([id, label]) => h('button', {
-      type: 'button', class: 'pg-tab',
-      onclick: () => { const el = document.getElementById(id); if (el) el.scrollIntoView({ block: 'start' }); },
-    }, label)));
+// ---- Settings rows: knobs and preferences share SettingRow --------------------------------
+// A knob save returns the server's per-layer read-back; without one the save is reported as unverified.
+async function saveKnob(item, value, extra = {}) {
+  const res = await S.ctx.api.post('/api/behavior', { updates: { [item.key]: value }, ...extra });
+  if (!res || !Array.isArray(res.layers)) return { ok: false, error: 'the server returned no read-back' };
+  return res;
+}
+
+const getPath = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+
+// Prefs verify against the state the PUT returns (what the server wrote to disk).
+async function savePref(item, value) {
+  const num = item.kind === 'number' ? Number(value) : value;
+  const patch = item.path.includes('.') ? { noise: { ...prefs().noise, [item.path.split('.')[1]]: num } } : { [item.path]: num };
+  const res = await S.ctx.api.put('/api/v2/prefs', patch);
+  const next = res && res.state ? res.state : res;
+  if (next && typeof next === 'object') { S.prefs = next; S.ctx.prefs = next; if (S.ctx.store) S.ctx.store.set('prefs', next); }
+  const got = getPath(next, item.path);
+  return { ok: String(got) === String(num), layers: [{ layer: 'prefs', wrote: num, got, ok: String(got) === String(num) }], applies: item.applies };
+}
+
+const rowDeps = () => ({
+  api: S.ctx.api, confirm,
+  save: (item, value, extra) => (item.pref ? savePref(item, value) : saveKnob(item, value, extra)),
+  testUrl: async (url) => {
+    const r = await S.ctx.api.get('/api/v2/ollama/status', { url });
+    return { text: r.reachable ? `✓ reachable${r.version ? ` · ollama ${r.version}` : ''}` : '✗ not reachable' };
+  },
+});
+
+function prefItems() {
+  const p = prefs();
+  const projects = [{ value: 'all', label: 'All projects' }, ...S.projects.map((x) => ({ value: x.root, label: x.name || x.root }))];
+  const base = { pref: true, scope: 'dashboard', applies: 'now' };
+  return [
+    { ...base, key: 'theme', path: 'theme', title: 'Theme', description: 'Colour scheme of this dashboard.', effect: 'Repaints every page.', kind: 'select', value: p.theme,
+      options: [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }, { value: 'system', label: 'Match system' }] },
+    { ...base, key: 'density', path: 'density', title: 'Density', description: 'Row spacing across every page.', effect: 'Tightens or loosens rows.', kind: 'select', value: p.density,
+      options: [{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }] },
+    { ...base, key: 'default_project', path: 'default_project', title: 'Default project', description: 'The project selected when the dashboard opens.', effect: 'Changes the project filter on the next open.', kind: 'select', value: p.default_project,
+      options: projects.some((o) => o.value === p.default_project) ? projects : [...projects, { value: p.default_project, label: p.default_project }] },
+    { ...base, key: 'refresh_seconds', path: 'refresh_seconds', title: 'Fallback refresh (seconds)', description: 'How often pages re-fetch when the live connection drops.', effect: 'Does not slow normal live updates.', kind: 'number', value: p.refresh_seconds, range: { min: 2, max: 300, step: 1 } },
+    { ...base, key: 'noise_min_severity', path: 'noise.min_severity', title: 'Activity: hide events below', description: 'Filters the Activity page only; duplicates always collapse.', effect: 'Hides lower severity rows on Activity.', kind: 'select', value: p.noise.min_severity,
+      options: [{ value: 'info', label: 'Show everything' }, { value: 'warn', label: 'Warnings and failures' }, { value: 'fail', label: 'Failures only' }] },
+    { ...base, key: 'nav_order', title: 'Sidebar order', description: 'Move pages up or down in the left sidebar.', effect: 'Reorders the sidebar.', kind: 'custom',
+      control: h('div', {}, savedTag('pg-pref-nav-status'), navEditor(p)) },
+  ];
+}
+
+function buildEntries() {
+  const byCat = Object.fromEntries(CATEGORIES.map((c) => [c, []]));
+  const deps = rowDeps();
+  const add = (cat, item) => { const el = SettingRow(item, deps); byCat[cat].push({ cat, el, search: el.search }); };
+  prefItems().forEach((it) => add('Preferences', it));
+  const b = S.behavior || {};
+  for (const g of b.groups || []) for (const k of g.knobs || []) add(categoryOf(k, g.title), { ...k, value: k.hook_value ?? k.value });
+  for (const k of b.advanced || []) add(categoryOf(k, ''), { ...k, value: k.hook_value ?? k.value });
+  return byCat;
+}
+
+const WIDE = {
+  Integrations: () => integrationsSection(), Ecosystem: () => ecosystemSection(),
+  Connectors: () => connectorsSection(), Agents: () => agentsSection(),
+};
+const wideCount = (cat) => {
+  const list = { Connectors: S.connectors && S.connectors.connectors, Agents: agentRoster(),
+    Ecosystem: S.ecosystem && [...(S.ecosystem.plugins || []), ...((S.ecosystem.mcp && S.ecosystem.mcp.servers) || [])] }[cat];
+  return Array.isArray(list) ? list.length : null;
+};
+
+// Filtering only toggles `hidden`; rows keep their status, focus and scroll.
+function applyFilter() {
+  const q = S.query;
+  const all = Object.values(S.entries).flat();
+  all.forEach((e) => { e.el.hidden = !rowMatches(e.search, q); });
+  const counts = countByCategory(all, q);
+  for (const cat of CATEGORIES) {
+    const ui = S.ui[cat];
+    const wide = !!WIDE[cat];
+    const n = wide ? wideCount(cat) : (counts[cat] || 0);
+    const shown = wide ? !q.trim() || cat.toLowerCase().includes(q.trim().toLowerCase()) : n > 0 || !q.trim();
+    ui.section.hidden = !shown;
+    ui.count.textContent = n === null ? '' : String(n);
+  }
+}
+
+function categoryBody(cat) {
+  if (WIDE[cat]) return h('div', { class: 'st-grid' }, h('div', { class: 'st-wide' }, WIDE[cat]()));
+  const rows = (S.entries[cat] || []).map((e) => e.el);
+  const omp = cat === 'Advanced' && S.behavior ? ompSection(S.behavior.omp) : null;
+  return h('div', { class: 'st-grid' }, ...rows, omp ? h('div', { class: 'st-wide' }, omp) : null);
 }
 
 function draw() {
   if (!S || !S.mount || S.destroyed) return;
-  const active = document.activeElement;
-  const keepId = active && S.mount.contains(active) ? active.id : '';
-  const caret = keepId && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
-  const main = scroller();
-  const scroll = main ? main.scrollTop : 0;
-  const open = new Set([...S.mount.querySelectorAll('details[data-keep]')].filter((d) => d.open).map((d) => d.dataset.keep));
+  if (!S.entries) S.entries = buildEntries();
+  S.ui = {};
+  const filter = h('input', { id: 'st-filter', class: 'input st-filter', type: 'search', value: S.query, placeholder: 'Filter settings by name, key or effect', 'aria-label': 'Filter settings' });
+  filter.addEventListener('input', () => { S.query = filter.value; applyFilter(); });
+  const navButtons = [];
+  const sections = CATEGORIES.map((cat) => {
+    const count = h('span', { class: 'st-count' });
+    const section = h('section', { class: 'st-cat', id: slug(cat), 'aria-label': cat }, h('h2', { class: 'st-cat-title' }, cat), categoryBody(cat));
+    const btn = h('button', { type: 'button', class: 'st-nav-item' }, cat, ' ', count);
+    btn.addEventListener('click', () => { if (typeof section.scrollIntoView === 'function') section.scrollIntoView({ block: 'start' }); });
+    navButtons.push(btn);
+    S.ui[cat] = { section, count };
+    return section;
+  });
   replace(S.mount,
     h('header', { class: 'pg-head' },
       h('h1', { class: 'pg-title' }, 'Settings'),
-      h('p', { class: 'pg-sub' }, 'Dashboard preferences apply to this page at once. Behavior switches are written to Claude Code settings and the atlas store; a session that is already running keeps its old values until it restarts.'),
-      sectionIndex()),
-    h('div', { class: 'pg-settings' },
-      prefsSection(), integrationsSection(), behaviorSection(), ecosystemSection(), connectorsSection(), agentsSection()));
-  for (const d of S.mount.querySelectorAll('details[data-keep]')) if (open.has(d.dataset.keep)) d.open = true;
-  if (main) main.scrollTop = scroll;
-  if (keepId) {
-    const el = S.mount.querySelector(`#${CSS.escape ? CSS.escape(keepId) : keepId}`);
-    if (el && typeof el.focus === 'function') el.focus({ preventScroll: true });
-    if (el && caret && typeof el.setSelectionRange === 'function') {
-      try { el.setSelectionRange(caret[0], caret[1]); } catch { /* input types without a caret */ }
-    }
-  }
+      h('p', { class: 'pg-sub' }, 'Every row says what it changes and when. A save only turns green after the server reads each written layer back equal.'),
+      filter),
+    h('div', { class: 'st-layout' },
+      h('nav', { class: 'st-nav', 'aria-label': 'Settings categories' }, ...navButtons),
+      h('div', { class: 'st-main' }, ...sections)));
+  applyFilter();
 }
 
 export default {
