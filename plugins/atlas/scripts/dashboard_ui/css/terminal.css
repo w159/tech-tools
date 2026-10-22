@@ -16,19 +16,10 @@
 .tw-dot[data-state="blocked"] { background: var(--st-input); }
 .tw-dot[data-state="finished"] { background: var(--st-ok); }
 .tw-dot[data-state="dead"] { background: var(--st-fail); }
-.tw-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--s-3); gap: var(--s-3); overflow: auto; }
+.tw-main { background: #0c0a09; flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--s-3); gap: var(--s-3); overflow: auto; }
 .tw-crumbs { flex: none; white-space: nowrap; display: flex; align-items: center; gap: var(--s-3); }
 .tw-task { flex: 1; min-width: 0; color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tw-grid { width: 100%; align-items: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
-.tw-card { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); overflow: hidden; }
-.tw-card-head { display: flex; align-items: center; gap: var(--s-2); padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
-.tw-card-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tw-open { border: 0; background: none; color: var(--text-dim); cursor: pointer; font-size: 14px; }
-.tw-open:hover:not(:disabled) { color: var(--accent-text); }
-.tw-open:disabled { opacity: .4; cursor: default; }
-.tw-card-body { height: 45vh; min-height: 220px; padding: 4px; background: #0a0f12; cursor: pointer; overflow: hidden; }
-.tw-card-note { margin: var(--s-3); color: var(--text-dim); display: flex; flex-direction: column; gap: var(--s-1); }
-.tw-now { color: var(--text-faint); font-size: 12px; }
 .tw-badge { padding: 1px 6px; border-radius: 4px; font-size: 11px; background: var(--surface-3); color: var(--text-dim); }
 .tw-badge[data-rt="claude"] { color: var(--st-input); }
 .tw-badge[data-rt="omp"] { color: var(--st-working); }
@@ -38,7 +29,6 @@
 .tw-chip[data-state="blocked"] { color: var(--st-input); }
 .tw-chip[data-state="finished"] { color: var(--st-ok); }
 .tw-chip[data-state="dead"] { color: var(--st-fail); }
-.tw-term { flex: 1; min-height: 0; height: 100%; display: flex; flex-direction: column; background: #0a0f12; border: 1px solid var(--border); border-radius: 8px; padding: 6px; overflow: hidden; }
 .tw-foot { display: flex; gap: var(--s-4); padding: 6px var(--page-pad); border-top: 1px solid var(--border); background: var(--chrome); color: var(--text-dim); font-size: 12px; }
 .tw-clock { margin-left: auto; color: var(--text-faint); }
 .tw-err { color: var(--st-fail); }
@@ -46,16 +36,38 @@
 .tw-empty p { margin: var(--s-2) 0; }
 .tw-empty code { font-size: 11px; white-space: pre-wrap; color: var(--accent-text); }
 @media (max-width: 900px) { .tw-grid { grid-template-columns: 1fr; } .tw-side { width: 160px; } }
-.tw-card-body .xterm, .tw-term .xterm { height: 100%; }
-.tw-card-body .xterm-screen, .tw-card-body .xterm-rows { white-space: pre; }
 .tw-space { flex-direction: column; align-items: flex-start; gap: 0; }
 .tw-agent-name { display: flex; flex-direction: column; min-width: 0; }
 .tw-sub2 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tw-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3); }
-.tw-pane[hidden], .tw-term-cc[hidden] { display: none; }
 .tw-space.is-finished, .rail-colony.is-finished, .colony-card.is-finished { opacity: .55; }
 .tw-fin { margin-left: var(--s-2); font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
 .update-banner { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: 8px 12px; background: var(--accent); color: var(--bg, #0a0f12); font-weight: 600; }
 .tw-source { color: var(--text-faint); font-size: 12px; }
 .tw-crumbs { flex-wrap: wrap; }
 .fetch-fail-banner { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: 8px 12px; background: var(--danger, #b3261e); color: #fff; font-weight: 600; }
+
+/* openrig terminal-card (tokens from the openrig team workspace) */
+.tw { --terminal-bg: #161616; --terminal-ink: #dedede; --terminal-muted: #8b8b8b; --terminal-prompt: #3c4249; --terminal-orange: #d79878; --terminal-model: #d9bd7e; --terminal-cwd: #a4d397; }
+.terminal-card { display: flex; flex-direction: column; min-width: 0; min-height: 480px; padding: 18px; border: 1px solid #383838; border-radius: 4px; background: var(--terminal-bg); color: var(--terminal-ink); font: 14px/1.45 "JetBrains Mono Web", Menlo, monospace; cursor: pointer; }
+.terminal-card:focus-visible { outline: 2px solid var(--terminal-orange); outline-offset: 2px; }
+.terminal-card[hidden] { display: none; }
+.runtime-title { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; color: var(--terminal-muted); }
+.runtime-name { color: var(--terminal-orange); }
+.seat-address { flex: 1; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tw-open { border: 0; background: none; color: var(--terminal-muted); cursor: pointer; font: inherit; }
+.tw-open:hover { color: var(--terminal-orange); }
+.terminal-body { position: relative; flex: 1; min-height: 360px; display: flex; flex-direction: column; }
+.terminal-content { flex: 1; min-height: 0; }
+.terminal-content .xterm { height: 100%; }
+.paused-badge { position: absolute; top: 4px; right: 4px; padding: 1px 6px; border-radius: 3px; background: var(--terminal-prompt); color: var(--terminal-model); font-size: 11px; }
+.tw-ph { position: absolute; inset: auto 0 0 0; display: flex; align-items: center; gap: 12px; padding: 8px; background: var(--terminal-prompt); color: var(--terminal-orange); }
+.activity { display: flex; gap: 8px; margin-top: 10px; color: var(--terminal-muted); }
+.activity .spinner { color: var(--terminal-orange); display: inline-block; animation: tw-spin 1.6s linear infinite; }
+@keyframes tw-spin { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .activity .spinner { animation: none; } }
+.tw-grid.enlarged { grid-template-columns: minmax(0, 1fr); }
+.terminal-card.enlarged { min-height: 70vh; cursor: default; }
+.tw-keys { color: var(--text-dim); font-size: 12px; }
+.tw-keys p { margin: var(--s-1) 0 0; max-width: 60ch; }
+@media (max-width: 760px) { .tw-grid { grid-template-columns: 1fr; } }
+.tw-card-note { margin: var(--s-3); color: var(--terminal-muted); }

@@ -30,3 +30,7 @@ export function orderGroups(groups, order) {
 
 // Old Agents lenses that became their own routes (lens=colony opens the Colony page, same as chord c).
 export const LENS_ROUTES = { console: "terminal", colony: "colony", channel: "channels" };
+
+// Hash to seed before boot awaits anything: only an empty hash gets the default. The final route() then reads the LIVE hash,
+// so a deep link (#/terminal) set or kept during boot is never overwritten by a late "#/overview" write.
+export const bootHash = (hash) => (hash ? null : "#/overview");
