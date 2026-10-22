@@ -33,7 +33,8 @@ export function fmtSize(bytes) {
 }
 
 export function fmtAge(iso, now = Date.now()) {
-  const t = Date.parse(iso);
+  // Server sends epoch seconds; ISO strings and epoch ms are also accepted.
+  const t = typeof iso === 'number' ? (iso < 1e11 ? iso * 1000 : iso) : Date.parse(iso);
   if (!Number.isFinite(t)) return '';
   const s = Math.max(0, Math.round((now - t) / 1000));
   if (s < 90) return `${s}s ago`;
@@ -120,7 +121,7 @@ export function ModelPicker({ api, value, onPick }) {
       progress.textContent = 'starting…';
       try {
         const start = await api.post('/api/v2/ollama/pull', { name: name.value.trim() });
-        const job = await pollJob(api, start.job || start.id, (j) => { progress.textContent = j.progress != null ? `${j.status} ${j.progress}%` : (j.lines && j.lines[j.lines.length - 1]) || j.status; });
+        const job = await pollJob(api, start.job || start.id, (j) => { progress.textContent = j.percent != null ? `${j.status} ${j.percent}%` : (j.lines && j.lines[j.lines.length - 1]) || j.status; });
         progress.textContent = job.status === 'done' ? `✓ pulled ${name.value.trim()}` : `✗ pull failed: ${job.error || 'error'}`;
         if (job.status === 'done') await load();
       } catch (err) { progress.textContent = `✗ pull failed: ${(err && err.error) || 'request failed'}`; }

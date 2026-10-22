@@ -11,7 +11,7 @@ class N {
 globalThis.Node = N;
 globalThis.document = { createElement: (t) => new N(t), createTextNode: (t) => ({ text: t }) };
 
-const { ModelPicker, filterModels, sortModels, fmtSize, pollJob } = await import("./model-picker.js");
+const { ModelPicker, filterModels, sortModels, fmtSize, pollJob, fmtAge } = await import("./model-picker.js");
 
 const MODELS = [
   { name: "nimble:latest", params: "9B", size_bytes: 9.5e9, modified_at: "2026-10-08T00:00:00Z", cloud: false, running: true, popularity_rank: 3 },
@@ -61,7 +61,7 @@ test("Pull another posts the pull job and shows its progress until done", async 
   const posts = [];
   let n = 0;
   const api = {
-    get: async (p) => (p.includes("/jobs/") ? (++n < 2 ? { status: "running", progress: 40 } : { status: "done" }) : p.endsWith("/status") ? { reachable: true } : { models: MODELS }),
+    get: async (p) => (p.includes("/jobs/") ? (++n < 2 ? { status: "running", percent: 42 } : { status: "done" }) : p.endsWith("/status") ? { reachable: true } : { models: MODELS }),
     post: async (p, b) => { posts.push([p, b]); return { job: "j1" }; },
   };
   const root = ModelPicker({ api, value: "", onPick: async () => {} });
@@ -75,6 +75,29 @@ test("Pull another posts the pull job and shows its progress until done", async 
   await done;
   expect(posts).toEqual([["/api/v2/ollama/pull", { name: "qwen3:8b" }]]);
   expect(progress.textContent).toContain("pulled qwen3:8b");
+});
+
+test("pull progress renders the server percent field", async () => {
+  const seen = [];
+  const api = { get: async () => ({ status: "running", percent: 42 }), post: async () => ({ job: "j" }) };
+  const orig = api.get; let n = 0;
+  api.get = async (p) => (p.includes("/jobs/") ? (++n < 2 ? { status: "running", percent: 42 } : { status: "done" }) : p.endsWith("/status") ? { reachable: true } : { models: MODELS });
+  const root = ModelPicker({ api, value: "", onPick: async () => {} });
+  root.setOpen(true); await tick();
+  byClass(root, "mp-pull-open")[0].listeners.click();
+  const [input, go, progress] = byClass(root, "mp-pull")[0].children;
+  input.value = "x:1";
+  const p = go.listeners.click(); await tick();
+  seen.push(progress.textContent); await p;
+  expect(seen[0]).toContain("42%");
+});
+
+test("fmtAge accepts epoch seconds, epoch ms and ISO strings", () => {
+  const now = Date.parse("2026-01-02T00:00:00Z");
+  const hourAgo = now - 3600000;
+  expect(fmtAge(hourAgo / 1000, now)).toBe("60m ago");
+  expect(fmtAge(hourAgo, now)).toBe("60m ago");
+  expect(fmtAge(new Date(hourAgo).toISOString(), now)).toBe("60m ago");
 });
 
 test("pollJob reports every update and stops on error", async () => {

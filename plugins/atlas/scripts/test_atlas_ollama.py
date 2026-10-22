@@ -41,8 +41,9 @@ class FakeOllama:
         self.pull_rc = 0
         self.calls = []
 
-    def __call__(self, argv, timeout=15, on_line=None):
+    def __call__(self, argv, timeout=15, on_line=None, host=None):
         self.calls.append(list(argv))
+        self.hosts = getattr(self, "hosts", []) + [host]
         cmd = argv[1]
         if cmd == "list":
             return 0, self.listing, ""
@@ -190,6 +191,13 @@ class TestRoutes(OllamaCase):
         _, body = ol._status(Ctx())
         self.assertEqual((body["reachable"], body["version"]), (True, "0.12.3"))
         self.assertEqual(body["ps"][0]["name"], "qwen3:8b")
+
+    def test_status_honors_url_and_rejects_public_hosts(self):
+        _, body = ol._status(Ctx({"url": "http://192.168.1.5:11434"}))
+        self.assertEqual((body["reachable"], body["version"]), (True, "0.12.3"))
+        self.assertEqual(set(self.fake.hosts), {"http://192.168.1.5:11434"})
+        status, body = ol._status(Ctx({"url": "http://evil.example"}))
+        self.assertEqual((status, body["error"]), (400, "bad_url"))
 
     def test_status_when_unreachable(self):
         with mock.patch.object(

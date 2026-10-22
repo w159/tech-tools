@@ -12,6 +12,7 @@ prints no size for models served from ollama.com).
 from __future__ import annotations
 
 import difflib
+import ipaddress
 import json
 import os
 import re
@@ -40,14 +41,14 @@ _AGE = {
 _ROW = re.compile(r"^(\S+)\s+(\S+)\s+(-|[\d.]+\s*[KMGT]?B)\s+(.+?)\s*$")
 
 
-def _env() -> dict:
+def _env(host: str | None = None) -> dict:
     env = dict(os.environ)
-    if os.environ.get("ATLAS_OLLAMA_URL"):
-        env["OLLAMA_HOST"] = os.environ["ATLAS_OLLAMA_URL"]
+    if host or os.environ.get("ATLAS_OLLAMA_URL"):
+        env["OLLAMA_HOST"] = host or os.environ["ATLAS_OLLAMA_URL"]
     return env
 
 
-def run(argv, timeout: float | None = 15, on_line=None):
+def run(argv, timeout: float | None = 15, on_line=None, host: str | None = None):
     """(returncode, stdout, stderr). With on_line, stdout+stderr stream to it line by line.
 
     rc 127 means the binary is missing; rc 124 means it timed out.
@@ -55,7 +56,7 @@ def run(argv, timeout: float | None = 15, on_line=None):
     try:
         if on_line is None:
             p = subprocess.run(
-                argv, capture_output=True, text=True, timeout=timeout, env=_env()
+                argv, capture_output=True, text=True, timeout=timeout, env=_env(host)
             )
             return p.returncode, p.stdout, p.stderr
         p = subprocess.Popen(
@@ -246,9 +247,25 @@ def show_detail(name: str) -> dict:
     }
 
 
-def status() -> dict:
-    vrc, vout, _ = run(["ollama", "--version"])
-    prc, pout, perr = run(["ollama", "ps"])
+def valid_host(url: str) -> bool:
+    """http(s) URL whose host is loopback, RFC1918, or Tailscale (100.64/10, *.ts.net)."""
+    u = urllib.parse.urlparse(url)
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return False
+    h = u.hostname
+    if h == "localhost" or h.endswith(".ts.net"):
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip in ipaddress.ip_network("100.64.0.0/10")
+
+
+def status(url: str | None = None) -> dict:
+    kw = {"host": url} if url else {}
+    vrc, vout, _ = run(["ollama", "--version"], **kw)
+    prc, pout, perr = run(["ollama", "ps"], **kw)
     ver = re.search(r"(\d+\.\d+[\w.\-]*)", vout or "")
     return {
         "ok": True,
@@ -344,7 +361,10 @@ def _models(ctx):
 
 
 def _status(ctx):
-    return 200, status()
+    url = ctx.query.get("url")
+    if url and not valid_host(url):
+        return 400, {"ok": False, "error": "bad_url"}
+    return 200, status(url)
 
 
 def _pull(ctx):
