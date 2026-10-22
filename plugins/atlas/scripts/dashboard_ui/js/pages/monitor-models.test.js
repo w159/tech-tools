@@ -13,20 +13,18 @@ import {
   kpiLink,
   runState,
 } from "./overview-model.js";
-import { normalizeGroup, kindOptions } from "./activity-model.js";
+import { activityToFeed, filterFeed, seatOptions } from "./channels-model.js";
 import {
   healthState,
   hasHistory,
   sortSubsystems,
   successLabel,
-} from "./health-model.js";
-import {
   remeasurable,
   batchSummary,
   remeasureSentence,
   findingTone,
-} from "./improve-model.js";
-import { splitProjects, hidePatch, pinPatch } from "./projects-model.js";
+} from "./health-model.js";
+import { splitProjects, hidePatch, pinPatch } from "./settings-model.js";
 
 test("window and project params", () => {
   assert.equal(normalizeWindow("30d"), "30d");
@@ -64,11 +62,18 @@ test("overview agent selection", () => {
   assert.equal(runState({ ended: null }), "running");
 });
 
-test("activity options", () => {
-  assert.equal(normalizeGroup("x"), "project");
-  const opts = kindOptions({ run: { label: "Session run" } });
-  assert.deepEqual(opts[0], { value: "", label: "All kinds" });
-  assert.equal(opts[1].label, "Session run");
+test("activity history feed", () => {
+  const feed = activityToFeed({
+    groups: [
+      { items: [{ id: "2", ts: "2026-01-02", agent: "impl-a", title: "ran tests", kind: "run" }] },
+      { items: [{ id: "1", ts: "2026-01-01", kind: "dispatch", title: "dispatched" }] },
+    ],
+  });
+  assert.deepEqual(feed.map((m) => m.id), ["1", "2"]);
+  assert.equal(feed[0].from, "dispatch");
+  assert.deepEqual(filterFeed(feed, { seat: "impl-a" }).map((m) => m.id), ["2"]);
+  assert.deepEqual(filterFeed(feed, { q: "DISPATCHED" }).map((m) => m.id), ["1"]);
+  assert.deepEqual(seatOptions(feed).map((o) => o.value), ["", "dispatch", "impl-a"]);
 });
 
 test("health helpers", () => {

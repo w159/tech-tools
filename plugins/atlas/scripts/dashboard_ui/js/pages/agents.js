@@ -3,22 +3,20 @@ import { h, replace, relTime, truncate } from "../dom.js";
 import {
   PageHeader,
   Button,
-  IconButton,
   Input,
   Segmented,
-  Table,
-  Skeleton,
-  Empty,
   StateDot,
   confirm,
   toast,
 } from "../ui.js";
+import { esc, gate } from "../html.js";
+import { bindRegion } from "../region.js";
+import { STATE_GLYPH, roleLetter } from "../glyph-table.js";
 import { get, post, topics, describeError } from "../api.js";
 import { mergeAgents } from "../state.js";
 import { current, buildHash } from "../router.js";
 import {
   STATE_FILTERS,
-  NAME_PATTERN,
   inProject,
   filterRows,
   groupByProject,
@@ -56,6 +54,91 @@ async function stopRow(row, reload) {
     const d = describeError(e);
     toast(d.message, { kind: "error", detail: d.detail });
   }
+}
+
+
+const GLYPH_KEY = {
+  working: "running",
+  input: "input",
+  ready: "idle",
+  done: "finished",
+  fail: "failed",
+  unknown: "dead",
+};
+const PREFIX_ROLE = {
+  impl: "implementer",
+  docs: "docs-curator",
+  test: "test-engineer",
+  review: "reviewer",
+  rereview: "reviewer",
+};
+
+/** Role letter for a seat: the name prefix names the role (impl-x is an implementer), else the kind. */
+function seatLetter(row) {
+  const prefix = String(row.name || "").split("-")[0];
+  return roleLetter(PREFIX_ROLE[prefix] || (row.kind === "lead" ? "lead" : prefix));
+}
+
+function seatActions(r, webUp) {
+  const btn = (action, label, extra = "") =>
+    `<button type="button" class="btn btn-sm" data-action="${action}" data-key="${esc(r.key)}"${extra}>${label}</button>`;
+  return [
+    r.deep_link && webUp
+      ? `<a class="btn btn-sm" href="${esc(r.deep_link)}" target="_blank" rel="noopener">herdr</a>`
+      : "",
+    promptState(r).ok ? btn("prompt", "Prompt") : "",
+    canStop(r) ? btn("stop", "Stop") : "",
+  ].join("");
+}
+
+function seatRow(r, { selected, webUp }) {
+  const glyph = STATE_GLYPH[GLYPH_KEY[r.state] || "dead"];
+  return (
+    `<div class="seat-row" role="row" tabindex="0" data-action="open" data-key="${esc(r.key)}" data-state="${esc(r.state)}"` +
+    (selected === r.key ? ' aria-selected="true"' : "") +
+    ">" +
+    `<span class="seat-letter mono">${esc(seatLetter(r))}</span>` +
+    `<span class="seat-glyph mono st-${esc(r.state)}" aria-hidden="true">${glyph}</span>` +
+    `<span class="seat-name mono">${esc(r.name)}</span>` +
+    `<span class="seat-state mono st-${esc(r.state)}">${esc(r.word)}</span>` +
+    `<span class="seat-age mono">${esc(relTime(r.since))}</span>` +
+    `<span class="seat-task">${esc(truncate(r.task, 90))}</span>` +
+    `<span class="seat-acts">${seatActions(r, webUp)}</span>` +
+    "</div>"
+  );
+}
+
+/** Main region of the Agents page as an HTML string (pure; unit-tested). */
+export function renderAgentsRegion({
+  rows = [],
+  loaded = false,
+  error = null,
+  selected = null,
+  q = "",
+  filter = "all",
+  webUp = true,
+}) {
+  const state = gate({ loaded, error, count: rows.length }, "agents");
+  if (state) return state;
+  const visible = filterRows(rows, { q, state: filter });
+  if (!visible.length)
+    return '<div class="region-state empty">No agents match.</div>';
+  const { live, recent } = splitRecent(visible);
+  const opts = { selected, webUp };
+  const groups = groupByProject(live)
+    .map(
+      (g) =>
+        `<div class="grp-hd mono">${esc(g.label)} <span>${g.rows.length}</span></div>` +
+        g.rows.map((r) => seatRow(r, opts)).join(""),
+    )
+    .join("");
+  const rest = recent.length
+    ? `<details class="recent-participants"><summary class="mono">Recent participants <span>${recent.length}</span></summary>` +
+      '<p class="meta">Seen on a channel recently; no live pane.</p>' +
+      recent.map((r) => seatRow(r, opts)).join("") +
+      "</details>"
+    : "";
+  return `<div class="seat-list" role="table" aria-label="Agents">${groups}${rest}</div>`;
 }
 
 export function render(ctx) {
@@ -212,7 +295,7 @@ export function render(ctx) {
   });
   const chipsHost = h("div", { class: "chips" });
   const noticeHost = h("div");
-  const tableHost = h("div");
+  const tableHost = h("div", { class: "region" });
   const listView = h(
     "div",
     { class: "stack" },
@@ -221,67 +304,6 @@ export function render(ctx) {
     tableHost,
   );
   const fullView = h("div", { class: "agents-full", hidden: true });
-
-  function rowActions(r) {
-    const webUp = !(
-      layers().herdr_web_ui && layers().herdr_web_ui.healthy === false
-    );
-    const open = IconButton({
-      icon: "external",
-      label: !r.deep_link
-        ? "No herdr link for this row"
-        : webUp
-          ? "Open in herdr"
-          : "The herdr web UI is not running",
-      size: "sm",
-      disabled: !r.deep_link || !webUp,
-      onClick: () => window.open(r.deep_link, "_blank", "noopener"),
-    });
-    const acts = [open];
-    if (promptState(r).ok)
-      acts.push(
-        IconButton({
-          icon: "message",
-          label: "Prompt",
-          size: "sm",
-          onClick: () => openRow(r, "messages", "prompt"),
-        }),
-      );
-    if (canStop(r))
-      acts.push(
-        IconButton({
-          icon: "stop",
-          label: "Stop",
-          size: "sm",
-          onClick: () => stopRow(r, reload),
-        }),
-      );
-    return h("div", { class: "row-actions" }, acts);
-  }
-
-  const columns = [
-    { key: "state", label: "State", render: (r) => StateDot(r.state) },
-    {
-      key: "name",
-      label: "Name",
-      render: (r) =>
-        h("span", { class: NAME_PATTERN.test(r.name) ? "mono" : "" }, r.name),
-    },
-    { key: "kind", label: "Kind", class: "col-wide", render: (r) => r.kind || "" },
-    {
-      key: "task",
-      label: "Task",
-      class: "truncate-cell",
-      render: (r) => truncate(r.task, 80),
-    },
-    {
-      key: "since",
-      label: "Since",
-      class: "num col-wide",
-      render: (r) => relTime(r.since),
-    },
-    { key: "actions", label: "", render: rowActions },
-  ];
 
   function paintChips(rows) {
     const c = chipCounts(rows);
@@ -322,61 +344,40 @@ export function render(ctx) {
   }
 
   function paintTable(rows) {
-    if (!S.loaded) return replace(tableHost, Skeleton(6));
-    if (S.error && !S.agents)
-      return replace(
-        tableHost,
-        Empty({
-          title: "Agents did not load.",
-          body: S.error,
-          action: Button({ onClick: reload }, "Retry"),
-        }),
-      );
-    const visible = filterRows(rows, { q: S.q, state: S.filter });
-    if (!rows.length)
-      return replace(
-        tableHost,
-        Empty({
-          title: "No agents running.",
-          action: Button(
-            { variant: "primary", icon: "plus", onClick: launch },
-            "Launch agent",
-          ),
-        }),
-      );
-    const { live, recent } = splitRecent(visible);
-    const tableRows = groupByProject(live).flatMap((g) => [
-      {
-        __group: h("span", {}, h("strong", {}, g.label), ` · ${g.rows.length}`),
-      },
-      ...g.rows,
-    ]);
-    const table = (rs, emptyEl) =>
-      Table({
-        columns,
-        rows: rs,
-        selected: S.drawerKey,
-        onRowClick: (r) => openRow(r),
-        empty: emptyEl,
-      });
-    replace(
-      tableHost,
-      table(tableRows, Empty({ title: "No agents match." })),
-      recent.length &&
-        h(
-          "details",
-          { class: "recent-participants" },
-          h(
-            "summary",
-            {},
-            h("strong", {}, "Recent participants"),
-            ` · ${recent.length}`,
-          ),
-          h("p", { class: "meta" }, "Seen on a channel recently; no live pane."),
-          table(recent, null),
-        ),
-    );
+    tableHost.innerHTML = renderAgentsRegion({
+      rows,
+      loaded: S.loaded,
+      error: S.error,
+      selected: S.drawerKey,
+      q: S.q,
+      filter: S.filter,
+      webUp: !(layers().herdr_web_ui && layers().herdr_web_ui.healthy === false),
+    });
   }
+
+  const byKey = (el) => rowByKey(el.dataset.key);
+  const unbind = bindRegion(tableHost, {
+    open: (el) => {
+      const r = byKey(el);
+      if (r) openRow(r);
+    },
+    prompt: (el) => {
+      const r = byKey(el);
+      if (r) openRow(r, "messages", "prompt");
+    },
+    stop: (el) => {
+      const r = byKey(el);
+      if (r) stopRow(r, reload);
+    },
+    retry: () => {
+      S.loaded = false;
+      paint();
+      reload().then(() => {
+        S.loaded = true;
+        paint();
+      });
+    },
+  });
 
   function paint() {
     if (S.disposed) return;
@@ -432,6 +433,7 @@ export function render(ctx) {
     unsubscribe();
     clearInterval(timer);
     document.removeEventListener("visibilitychange", onVisible);
+    unbind();
     closeDrawer();
     hideFull();
   };

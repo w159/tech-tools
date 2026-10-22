@@ -1,11 +1,14 @@
 /* Settings page (brief 5.9). Content caps at 960px per brief 3.4; the cap lives in one custom property. */
 .settings-layout {
-  --settings-nav-w: 200px;
+  --settings-nav-w: 168px;
   --settings-max-w: 960px;
   display: grid;
   grid-template-columns: var(--settings-nav-w) minmax(0, 1fr);
   gap: var(--s6);
   align-items: start;
+}
+.settings-layout > div {
+  min-width: 0;
 }
 .settings-wrap {
   max-width: var(--settings-max-w);
@@ -28,23 +31,23 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--s2);
-  height: var(--control-h);
+  height: 32px;
   padding: 0 var(--s3);
   border: 0;
-  border-radius: var(--r-control);
+  border-radius: var(--r1);
   background: transparent;
-  color: var(--text-2);
+  color: var(--dim);
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background var(--t-fast) var(--ease);
 }
 .settings-nav-link:hover {
-  background: var(--raised);
+  background: var(--well);
   color: var(--text);
 }
 .settings-nav-link .count {
-  color: var(--text-3);
+  font-family: var(--mono);
+  color: var(--faint);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
@@ -57,18 +60,13 @@
   font-weight: 600;
 }
 .settings-rows {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-panel);
+  border-top: 1px solid var(--rule);
 }
 .setting {
   display: grid;
   gap: var(--s1);
-  padding: var(--s4);
-  border-top: 1px solid var(--line);
-}
-.setting:first-child {
-  border-top: 0;
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--rule);
 }
 .setting[hidden] {
   display: none;
@@ -91,10 +89,10 @@
   flex-wrap: wrap;
 }
 .setting-key {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 400;
   font-size: 11px;
-  color: var(--text-3);
+  color: var(--faint);
 }
 .setting-control {
   display: flex;
@@ -105,10 +103,10 @@
 .setting-current,
 .setting-extra .meta {
   margin: 0;
-  color: var(--text-2);
+  color: var(--dim);
 }
 .setting-current {
-  color: var(--text-3);
+  color: var(--faint);
   font-size: 12px;
   line-height: 16px;
 }
@@ -154,11 +152,11 @@
 /* More */
 .setting-more {
   margin-top: var(--s1);
-  color: var(--text-2);
+  color: var(--dim);
 }
 .setting-more summary {
   cursor: pointer;
-  color: var(--text-3);
+  color: var(--faint);
   font-size: 12px;
 }
 .setting-more > * {
@@ -174,7 +172,7 @@
   text-align: left;
 }
 .layers th {
-  color: var(--text-3);
+  color: var(--faint);
   font-weight: 500;
 }
 
@@ -211,5 +209,37 @@
   }
   .setting-input .input {
     width: 100%;
+  }
+}
+
+/* Projects section (absorbed from the old Projects page): rules and mono fact columns. */
+.proj-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 72px repeat(5, 48px) 72px auto;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 40px;
+  padding: var(--s1) 0;
+  border-bottom: 1px solid var(--rule);
+}
+.proj-name {
+  display: grid;
+  min-width: 0;
+}
+.proj-fact {
+  text-align: right;
+  white-space: nowrap;
+}
+.proj-acts {
+  display: flex;
+  gap: var(--s1);
+  justify-content: flex-end;
+}
+@media (max-width: 759px) {
+  .proj-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .proj-fact {
+    display: none;
   }
 }

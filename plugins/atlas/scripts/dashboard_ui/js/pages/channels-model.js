@@ -66,3 +66,42 @@ export function sameFeed(a, b) {
   const last = (l) => (l && l.length ? l[l.length - 1].id : null);
   return (a || []).length === (b || []).length && last(a) === last(b);
 }
+
+/** The synthetic channel that shows what Atlas recorded (the old Activity page). */
+export const HISTORY_CHANNEL = "~activity";
+
+/** /api/v2/activity groups -> one chronological feed (oldest first, newest at the bottom). */
+export function activityToFeed(data) {
+  const out = [];
+  for (const g of (data && data.groups) || [])
+    for (const it of g.items || [])
+      out.push({
+        id: it.id,
+        ts: it.ts,
+        from: it.agent || it.kind || "atlas",
+        to: "",
+        body: it.title || "",
+        kind: it.kind || "",
+      });
+  return out.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+}
+
+/** Messages from or to `seat` (when set) whose text, author or recipient contains `q`. */
+export function filterFeed(messages, { seat = "", q = "" } = {}) {
+  const needle = q.trim().toLowerCase();
+  return (messages || []).filter((m) => {
+    if (seat && m.from !== seat && m.to !== seat) return false;
+    if (!needle) return true;
+    return [m.from, m.to, m.body].join("\n").toLowerCase().includes(needle);
+  });
+}
+
+/** Seat filter options: everyone first, then every author in the feed, sorted. */
+export function seatOptions(messages) {
+  const names = new Set();
+  for (const m of messages || []) if (m.from) names.add(m.from);
+  return [
+    { value: "", label: "All seats" },
+    ...[...names].sort().map((n) => ({ value: n, label: n })),
+  ];
+}
