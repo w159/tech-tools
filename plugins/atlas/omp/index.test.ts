@@ -869,18 +869,18 @@ test("the default export wires the agent guard: an explorer edit is blocked thro
 	expect(emit(explorer, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
 });
 
-test("extension load exports ~/.atlas/settings.json env into process.env; an exported var wins", () => {
+test("extension load exports ~/.atlas/settings.json env into process.env; the store wins over an exported var", () => {
 	const home = process.env.ATLAS_HOME as string;
 	mkdirSync(home, { recursive: true });
 	writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_LEAN_SHELL: "off", ATLAS_CHANNELS: "off", NOT_ATLAS: "x" } }));
 	const oldShell = process.env.ATLAS_LEAN_SHELL;
 	const oldChannels = process.env.ATLAS_CHANNELS;
 	delete process.env.ATLAS_LEAN_SHELL;
-	process.env.ATLAS_CHANNELS = "on"; // exported in the shell: must not be overridden
+	process.env.ATLAS_CHANNELS = "on"; // exported in the shell: a dashboard save in the store must still win
 	try {
 		extension({ on: () => {}, getActiveTools: () => [], registerCommand: () => {} } as unknown as ExtensionAPI);
 		expect(process.env.ATLAS_LEAN_SHELL).toBe("off");
-		expect(process.env.ATLAS_CHANNELS).toBe("on");
+		expect(process.env.ATLAS_CHANNELS).toBe("off");
 		expect(process.env.NOT_ATLAS).toBeUndefined();
 	} finally {
 		if (oldShell === undefined) delete process.env.ATLAS_LEAN_SHELL; else process.env.ATLAS_LEAN_SHELL = oldShell;
