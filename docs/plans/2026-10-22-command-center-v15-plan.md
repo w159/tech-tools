@@ -1,5 +1,7 @@
 # Command Center v15 Implementation Plan
 
+> Withdrawn 2026-10-22 in atlas 15.0.1. The code this describes was reverted to the 13.0.0 dashboard (commit 5aa2c48f). Kept as history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the dashboard_ui frontend with the "Band and Rail" design: terminal band and phase rail on top, seats rail, channel feed with steer, needs-you and gates, on the existing v2 API.

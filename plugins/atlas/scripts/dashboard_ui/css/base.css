@@ -1,165 +1,116 @@
-/* v15 base: mono/sans, .label, .hd, rules. Reset, typography scale, focus ring, reduced motion. */
+/* Reset, typography, page primitives and the single-shell grid (MASTER 4, 7). Shell chrome lives in shell.css. */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
+
 html {
   -webkit-text-size-adjust: 100%;
-}
-body {
-  margin: 0;
-  background: var(--canvas);
-  color: var(--text);
-  font: 400 13px/20px var(--sans);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-h1,
-h2,
-h3,
-p {
-  margin: 0;
-}
-h1 {
-  font-size: 22px;
-  line-height: 28px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-h2 {
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 600;
-}
-h3 {
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-}
-a {
-  color: var(--brand);
-  text-decoration: none;
-}
-a:hover {
-  text-decoration: underline;
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-button {
-  cursor: pointer;
-}
-ul,
-ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-code,
-pre,
-.mono {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  line-height: 18px;
-}
-.meta {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dim);
-}
-.label {
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--faint);
-}
-.hd {
-  font: 600 11px/16px var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--dim);
-  padding-bottom: var(--s2);
-  border-bottom: 1px solid var(--rule);
-}
-.num {
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+  text-size-adjust: 100%;
+  height: 100%;
 }
 
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden; /* the document never scrolls; .main does (shell-level scrollHeight == innerHeight) */
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  font-weight: 450;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, p, ul, ol, dl, dd, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+h1 { font-size: var(--fs-xl); font-weight: 650; letter-spacing: -0.01em; line-height: 1.3; }
+h2 { font-size: var(--fs-lg); font-weight: 650; line-height: 1.35; }
+h3 { font-size: var(--fs-md); font-weight: 550; line-height: 1.4; }
+
+a { color: var(--accent-text); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled, input:disabled, select:disabled, textarea:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: 0.45; }
+
+code, kbd, pre, samp, .mono { font-family: var(--font-mono); font-weight: 400; }
+.num, .table, time { font-variant-numeric: tabular-nums; }
+
+:focus { outline: none; }
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
-}
-:focus:not(:focus-visible) {
-  outline: none;
+  border-radius: var(--r-1);
 }
 
-[hidden] {
-  display: none !important;
+[hidden] { display: none !important; }
+
+/* top/left pin the box to its containing block so it never stretches a scroll area. */
+.sr-only {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-::selection {
-  background: color-mix(in srgb, var(--brand) 14%, transparent);
+.skip-link {
+  position: fixed;
+  top: var(--s-2);
+  left: var(--s-2);
+  z-index: 100;
+  padding: var(--s-2) var(--s-3);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: var(--r-1);
+  transform: translateY(-200%);
 }
+.skip-link:focus { transform: none; }
 
-/* One slow pulse exists (state dot); reduced motion removes all animation. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition: none !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* Shared region states (see js/region-state.js): loading skeletons, empty, error with Retry. */
-.region-state {
-  padding: var(--s4) 0;
-  font: 12.5px/18px var(--mono);
-  color: var(--dim);
-  border-bottom: 1px solid var(--rule);
-}
-.region-state.loading {
-  display: grid;
-  gap: var(--s2);
-}
-.region-state.loading .skel {
-  height: 18px;
-  background: var(--well);
-}
-.region-state.empty {
-  color: var(--faint);
-}
-.region-state.error {
-  color: var(--fail);
+/* page primitives (legacy pages build on these) */
+.page {
+  max-width: var(--content-max);
+  margin: 0 auto;
   display: flex;
-  align-items: center;
-  gap: var(--s3);
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+.page.is-wide { max-width: 1920px; }
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-4);
   flex-wrap: wrap;
+}
+.page-head .sub { color: var(--text-dim); margin-top: var(--s-1); }
+.page-actions { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+
+.dim { color: var(--text-dim); }
+.row { display: flex; align-items: center; gap: var(--s-2); }
+.stack { display: flex; flex-direction: column; gap: var(--s-3); }
+.grow { flex: 1; min-width: 0; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* skeleton: static blocks at 6% text opacity, never a shimmer */
+.skel { display: block; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: var(--r-1); }
+.skel-rows { display: flex; flex-direction: column; gap: var(--s-2); }
+.skel-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: var(--gap); }
+
+/* data-fresh: one 600ms flash when a live update changes a row/tile/feed item */
+@keyframes fresh { from { background-color: color-mix(in srgb, var(--accent) 12%, transparent); } to { background-color: transparent; } }
+[data-fresh="true"] { animation: fresh var(--dur-live) var(--ease) 1; }
+@media (prefers-reduced-motion: reduce) {
+  [data-fresh="true"] { animation: none; outline: 1.5px solid var(--accent); outline-offset: -1px; }
 }

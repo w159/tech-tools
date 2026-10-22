@@ -1,5 +1,7 @@
 # Command Center v15: design
 
+> Withdrawn 2026-10-22 in atlas 15.0.1. The code this describes was reverted to the 13.0.0 dashboard (commit 5aa2c48f). Kept as history.
+
 Status: APPROVED by the user on 2026-10-22 (after the builder check).
 Direction A ("Band and Rail") was picked by the user from two mockups. Vocabulary decision: keep the
 terminal's words (seats, colony, channel, steer) in the web UI.

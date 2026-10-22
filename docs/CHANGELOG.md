@@ -1,5 +1,12 @@
 # Changelog
 
+## 15.0.1 (2026-10-22, unreleased)
+
+### Removed
+
+- The 14.0.0 rework and the 15.0.0 Command Center are withdrawn. The dashboard code under `plugins/atlas/scripts`, `hooks/test_atlas_contract.py` and `agents/ui-runtime-tester.md` is restored from 13.0.0 (commit `5aa2c48f`); the 14.0.0 and 15.0.0 entries below are history only.
+- Design notes `docs/command-center-redesign.md` and `docs/plans/2026-10-22-command-center-v15-*.md` are kept and marked withdrawn.
+
 ## 15.0.0 (2026-10-22, unreleased)
 
 ### Added

@@ -1,5 +1,14 @@
 # Changelog
 
+## 15.0.1 - 2026-10-22
+
+Command Center v15 (15.0.0) and the same-day v14 rework (14.0.0) are withdrawn. The dashboard is the 13.0.0 dashboard again: the same pages, routes and settings that shipped in 13.0.0.
+
+### Changed
+
+- `plugins/atlas/scripts/dashboard_ui/`, the dashboard server modules (`atlas_dashboard.py`, `atlas_dash_*.py`, `atlas_control.py`), `hooks/test_atlas_contract.py`, `agents/ui-runtime-tester.md`, `.fallowrc.json` and `fallow-baselines/` are restored from 13.0.0 (commit 5aa2c48f). `GET /api/v2/gates`, the band, the seats rail and the six-route shell are gone with them.
+- The 15.0.0 and 14.0.0 entries below describe code that no longer ships. The design notes stay under `docs/plans/` marked withdrawn.
+
 ## 15.0.0 - 2026-10-22
 
 Command Center v15: the dashboard becomes a band, a seats rail and six routes. The nine v14 pages fold into Run, Agents, Board, Channels, Health and Settings.

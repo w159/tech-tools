@@ -16,7 +16,7 @@ share one board, a Stop gate refuses "done" without evidence, and a doctor mines
 the session telemetry so the plugin can tune its own rules. It runs in Claude
 Code and, through its extension package, in omp.
 
-Current version: **14.0.0** (`plugins/atlas/.claude-plugin/plugin.json`), unreleased: the Command Center redesign.
+Current version: **15.0.1** (`plugins/atlas/.claude-plugin/plugin.json`). The 14.0.0 rework and the 15.0.0 Command Center were withdrawn on 2026-10-22; the dashboard is the 13.0.0 dashboard again.
 
 Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md)):
 
@@ -260,26 +260,27 @@ The parity matrix is in [docs/atlas-harness-parity.md](docs/atlas-harness-parity
 
 ## Command Center web UI
 
-Design contract: [docs/command-center-redesign.md](docs/command-center-redesign.md).
-
 A loopback-only dashboard (`http://127.0.0.1:7421/`) starts at session start
 and is shared by every open terminal. It reads the same telemetry DB, boards and
 channels the hooks write.
 
 ![Overview](img/showcase/dashboard-overview.png)
 
-| Route | What it shows |
+| Page | What it shows |
 |---|---|
-| Run | Band (project, branch, lead, phase rail, live counts), seats, channel feed with a steer bar, needs-you, gates, last 7 days. `#/overview` redirects here |
-| Agents | Colony members with send, stop, pause, resume; the drawer holds the terminal, messages and tasks. `#/colony` and `#/terminal` redirect here |
-| Board | The durable todo board |
-| Channels | What agents and you said to each other. `#/activity` redirects here |
-| Health | Hooks, gates, dispatch, colony, daemon, DB, connectors, memory, doctor, and doctor findings. `#/improve` redirects here |
-| Settings | Every `ATLAS_*` key with its current value, source and when it applies; project pin, mute and hide. `#/projects` redirects here |
-
-Keys on Run: `1` `2` `3` jump to the seats, channel and needs-you regions, `f` filters the feed, `i` or `m` focuses the steer bar, `h` holds the selected seat, `Escape` leaves a field. `/` opens the command palette (go to a route, steer lead, hold selected seat, toggle theme).
+| Overview | KPIs, the needs-attention inbox, recent runs |
+| Activity | Events by group, filter and live tail |
+| Health | Hooks, gates, dispatch, colony, daemon, DB, connectors, memory, doctor |
+| Agents | Three lenses: Roster (colony members with send, stop, pause, resume), Supervise, and Board. `#/colony`, `#/board` and `#/supervise` are aliases for them |
+| Colony | The roster of the lead and its workers (the Roster lens) |
+| Terminal | A seat grid of real terminals, one per colony worker |
+| Channels | What agents and you said to each other |
+| Improve | Doctor findings: mark fixed, dismiss, remeasure |
+| Projects | Pin, mute or hide projects |
+| Settings | One category at a time (behavior knobs, dashboard preferences, model picker, connector credentials) |
 
 ![Health](img/showcase/dashboard-health.png)
+![Improve](img/showcase/dashboard-improve.png)
 
 Every route checks the `Host` header, content type, origin and, for mutations,
 a per-start token. Details: [docs/atlas-workboard.md](docs/atlas-workboard.md).

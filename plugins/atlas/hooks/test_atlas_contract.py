@@ -1711,7 +1711,7 @@ class TodoBoardContract(unittest.TestCase):
         self.assertNotIn("UI_HTML", server)
         ui_dir = SCRIPTS_DIR / "dashboard_ui"
         self.assertTrue((ui_dir / "index.html").is_file())
-        self.assertTrue((ui_dir / "js" / "pages" / "board.js").is_file())
+        self.assertTrue((ui_dir / "js" / "pages" / "work.js").is_file())
         for module, routes in (
             ("atlas_dash_work.py", ("/api/v2/todos",)),
             ("atlas_dash_irc.py", ("/api/v2/irc",)),
@@ -1899,56 +1899,3 @@ class ReleaseVersionContractTests(unittest.TestCase):
         text = (PLUGIN_ROOT / "CHANGELOG.md").read_text("utf-8")
         top = re.search(r"^##\s+(\d+\.\d+\.\d+)", text, re.M).group(1)
         self.assertGreaterEqual(self._vt(top), self._vt(self._plugin_version()))
-
-
-class DashboardGlyphContract(unittest.TestCase):
-    def test_dashboard_glyphs_match_theme_ts(self):
-        """dashboard_ui/js/glyph-table.js escapes must equal theme.ts glyphs (keys and codepoints)."""
-        ts = (PLUGIN_ROOT / "mod" / "theme.ts").read_text("utf-8")
-        js = (
-            PLUGIN_ROOT / "scripts" / "dashboard_ui" / "js" / "glyph-table.js"
-        ).read_text("utf-8")
-
-        def block(text, start, end):
-            i = text.index(start)
-            return text[i : text.index(end, i)]
-
-        def js_obj(name):
-            body = block(js, f"export const {name} = {{", "};")
-            return {
-                k: chr(int(h, 16))
-                for k, h in re.findall(r"(\w+)\s*:\s*\"\\u([0-9A-Fa-f]{4})\"", body)
-            }
-
-        glyph = dict(
-            re.findall(
-                r"^\s*(\w+):\s*'(.)',?\s*$",
-                block(ts, "export const glyph = {", "} as const"),
-                re.M,
-            )
-        )
-        states = {
-            k: glyph[v]
-            for k, v in re.findall(
-                r"^\s*(\w+):\s*glyph\.(\w+),?\s*$",
-                block(ts, "export const STATE_GLYPH = {", "} as const"),
-                re.M,
-            )
-        }
-        contract = re.findall(
-            r"'[^']+':\s*'(.)'",
-            block(ts, "const CONTRACT_GLYPH", "};"),
-        )
-        phases = dict(
-            zip(
-                [
-                    "research", "theory", "test", "validate",
-                    "implement", "verify", "done", "blocked",
-                ],
-                contract,
-            )
-        )
-        self.assertEqual(len(states), 9)
-        self.assertEqual(len(phases), 8)
-        self.assertEqual(js_obj("STATE_GLYPH"), states)
-        self.assertEqual(js_obj("PHASE_GLYPH"), phases)

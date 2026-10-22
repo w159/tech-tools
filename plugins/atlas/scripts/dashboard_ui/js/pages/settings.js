@@ -1,516 +1,1002 @@
-// Settings page (brief 5.9): section list, search, one row per setting with its current value and source.
-import { h, replace, on, relTime, num } from "../dom.js";
-import { PageHeader, Input, Empty, Skeleton, Copy, confirm, toast } from "../ui.js";
-import { get, post, prefs, savePrefs, describeError } from "../api.js";
-import { buildHash } from "../router.js";
-import { esc, gate } from "../html.js";
-import { bindRegion } from "../region.js";
-import {
-  SECTIONS,
-  flattenBehavior,
-  controlFor,
-  currentLine,
-  liveSentence,
-  exportLine,
-  optionsFor,
-  modelOptions,
-  isOn,
-  toggleValue,
-  filterEntries,
-  countBySection,
-  rangeText,
-  resultSentence,
-  splitProjects,
-  pinPatch,
-  hidePatch,
-  projectHealth,
-} from "./settings-model.js";
-import {
-  Row,
-  makeFeedback,
-  SwitchControl,
-  SelectControl,
-  InputControl,
-} from "./settings-row.js";
-import {
-  buildDashboardRows,
-  buildConnectorRows,
-  buildPluginRows,
-} from "./settings-panels.js";
+// Atlas Command Center — Settings page: Behavior knobs, Ecosystem toggles,
+// connectors, and dashboard preferences (theme, density, noise filters, default
+// project, nav order, refresh rate).
+// Reuses the existing legacy routes unchanged:
+//   GET/POST /api/behavior            {updates:{KEY:value}} (empty value removes the key)
+//   GET      /api/ecosystem           plugins[] + mcp.servers[]
+//   POST     /api/plugins/toggle      {key,enabled}
+//   POST     /api/mcp/toggle          {name,enabled}
+//   GET      /api/connectors          connectors[] (secret field values come back
+//                                     empty by design — set/missing only, never echoed)
+//   POST     /api/connectors/env      {updates:{KEY:value}} credential save, sent
+//                                     through api.post so X-Atlas-Token rides along
+//   POST     /api/connectors/test     {name}
+//   GET      /api/projects            legacy project rows (numeric id) for the Agents editor
+//   GET/POST /api/agents              agent override editor (v1 parity)
+// and the v2 prefs route GET/PUT /api/v2/prefs.
+// No innerHTML; all data via h() text children. Secret inputs are type=password
+// and stay empty; a dirty-draft guard warns before reload/close and before
+// navigating away from Settings while credential drafts are unsaved.
+import { h, replace } from '../dom.js';
+import { Badge, Card, EmptyState, StatusDot, confirm } from '../components.js';
+import { SettingRow, CATEGORIES, slug, categoryOf, rowMatches, countByCategory } from '../settings-row.js';
+import { IntegrationsPanel } from '../integrations.js';
 
-const PROJECTS_ID = "projects";
+import { DEFAULT_NAV, normalizeNav } from '../nav-order.js';
 
-const LAYER_LABEL = {
-  live_env: "Dashboard process",
-  store: "Atlas store",
-  claude_settings: "Claude settings",
-  omp_config: "omp config",
-  shell_rc: "Shell profile",
+const NAV_LABELS = {
+  overview: 'Overview', activity: 'Activity', health: 'Health', agents: 'Agents', colony: 'Colony', terminal: 'Terminal', channels: 'Channels',
+  improve: 'Improve', projects: 'Projects', settings: 'Settings',
+};
+const DEFAULT_PREFS = {
+  theme: 'dark', density: 'comfortable', default_project: 'all', refresh_seconds: 8,
+  nav_order: DEFAULT_NAV, noise: { collapse_duplicates: true, min_severity: 'info' },
 };
 
-function layersTable(entry) {
-  const rows = Object.entries(entry.layers || {}).filter(
-    ([, l]) => l.supported,
-  );
-  if (!rows.length) return null;
-  return h(
-    "table",
-    { class: "layers" },
-    h("thead", {}, h("tr", {}, h("th", {}, "Layer"), h("th", {}, "Value"))),
-    h(
-      "tbody",
-      {},
-      rows.map(([name, l]) =>
-        h(
-          "tr",
-          {},
-          h("td", {}, LAYER_LABEL[name] || name),
-          h(
-            "td",
-            { class: "mono" },
-            l.value == null || l.value === "" ? "not set" : l.value,
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-function moreBlock(entry) {
-  const body = [
-    entry.details && h("p", {}, entry.details),
-    entry.effect && h("p", { class: "meta" }, entry.effect),
-    entry.ref &&
-      h("p", { class: "meta" }, "Read at ", h("code", {}, entry.ref)),
-    layersTable(entry),
-  ].filter(Boolean);
-  if (!body.length) return null;
-  return h(
-    "details",
-    { class: "setting-more" },
-    h("summary", {}, "More"),
-    ...body,
-  );
-}
-
-/** Build one behavior row. `saved(key, sentence)` re-fetches the server state and redraws it. */
-function behaviorRow(entry, { saved, models }) {
-  const fb = makeFeedback();
-  const kind = controlFor(entry);
-  const haveModels =
-    kind === "model" && Array.isArray(models) && models.length > 0;
-  const cur = entry.current || {};
-
-  // POST one key. Resolves true when saved; shows the failure sentence inline otherwise.
-  async function save(value, confirmed = false) {
-    fb.clear();
-    try {
-      const res = await post("/api/behavior", {
-        updates: { [entry.key]: value },
-        confirm: confirmed || undefined,
-      });
-      const s = resultSentence(res);
-      if (s.tone === "ok") {
-        await saved(entry.key, s.text);
-        return true;
-      }
-      fb.fail(s.text);
-    } catch (e) {
-      const s = resultSentence(
-        (e && e.data) || { error: "network", why: describeError(e).message },
-      );
-      if (s.confirm && !confirmed) {
-        const yes = await confirm({
-          title: "Run this command on every prompt?",
-          body: s.confirm,
-          confirmLabel: "Save command",
-          danger: true,
-        });
-        if (yes) return save(value, true);
-        return false;
-      }
-      fb.fail(s.text);
-    }
-    return false;
-  }
-
-  // A refused switch or select snaps back to the value the server still holds.
-  let control = null;
-  if (kind === "switch")
-    control = SwitchControl({
-      checked: isOn(entry, cur.value),
-      label: entry.title,
-      save: async (next) => {
-        if (!(await save(toggleValue(entry, next))))
-          control.setAttribute("aria-checked", String(!next));
-      },
-    });
-  else if (kind === "select" || haveModels)
-    control = SelectControl({
-      options: haveModels ? modelOptions(models, cur.value) : optionsFor(entry),
-      value: cur.value,
-      label: entry.title,
-      save: async (v) => {
-        if (!(await save(v))) control.value = String(cur.value ?? "");
-      },
-    });
-  else if (kind === "number")
-    control = InputControl({
-      number: true,
-      value: cur.value,
-      range: entry.range,
-      placeholder: rangeText(entry.range),
-      label: entry.title,
-      save,
-    });
-  else if (kind !== "readonly")
-    control = InputControl({
-      mono: true,
-      value: cur.value,
-      placeholder: String(entry.default || "not set"),
-      label: entry.title,
-      save,
-      type: kind === "url" ? "url" : undefined,
-    });
-
-  const extra = [];
-  const live = liveSentence(entry);
-  if (live) extra.push(h("p", { class: "meta" }, live));
-  if (kind === "model" && !haveModels)
-    extra.push(h("p", { class: "meta" }, "Ollama list unavailable"));
-  if (kind === "readonly")
-    extra.push(
-      h(
-        "p",
-        { class: "meta" },
-        entry.read_only_reason || "This value cannot be saved here.",
-      ),
-      Copy(exportLine(entry)),
-    );
-
-  return Row({
-    meta: { ...entry, section: entry.section },
-    control,
-    current: currentLine(entry),
-    extra,
-    more: moreBlock(entry),
-    feedback: fb,
-  });
-}
-
-
-function projectRow(r, { pinned, isHidden }) {
-  const st = projectHealth(r.health);
-  const todos = (r.todos && r.todos.open) ?? null;
-  const cell = (label, value) =>
-    `<span class="proj-fact mono" title="${label}">${esc(num(value))}</span>`;
-  return (
-    `<div class="proj-row" role="row" data-root="${esc(r.root)}">` +
-    `<span class="proj-name"><a href="${esc(buildHash("run", { project: r.root }))}">${esc(r.name || r.root)}</a>` +
-    `<span class="mono meta wrap">${esc(r.root)}</span></span>` +
-    `<span class="proj-fact mono">${r.last_active ? `${esc(relTime(r.last_active))} ago` : "never"}</span>` +
-    cell("Runs 7d", r.runs_7d) +
-    cell("Agents active", r.agents_active) +
-    cell("Open tasks", todos) +
-    cell("Failures 7d", r.failures_7d) +
-    cell("Findings open", r.findings_open) +
-    `<span class="proj-fact mono st-${esc(st.raw)}">${esc(st.word)}</span>` +
-    '<span class="proj-acts">' +
-    (isHidden
-      ? ""
-      : `<button type="button" class="btn btn-sm" data-action="pin" data-root="${esc(r.root)}" aria-pressed="${pinned.has(r.root)}">${pinned.has(r.root) ? "Unpin" : "Pin"}</button>`) +
-    `<button type="button" class="btn btn-sm" data-action="hide" data-root="${esc(r.root)}">${isHidden ? "Show" : "Hide"}</button>` +
-    "</span></div>"
-  );
-}
-
-/** The Projects section (absorbed from the old Projects page) as an HTML string (pure; unit-tested). */
-export function renderProjectsRegion({
-  data = null,
-  loaded = false,
-  error = null,
-  prefs: p = {},
-}) {
-  const all = (data && data.projects) || [];
-  const gated = gate({ loaded, error, count: all.length }, "projects");
-  if (gated) return gated;
-  const { visible, hidden } = splitProjects(all, p.pinned_projects, p.hidden_projects);
-  const pinned = new Set(p.pinned_projects || []);
-  const rows = (list, isHidden) => list.map((r) => projectRow(r, { pinned, isHidden })).join("");
-  return (
-    `<div class="proj-list" role="table" aria-label="Projects">${rows(visible, false)}</div>` +
-    (hidden.length
-      ? `<details class="hidden-projects"><summary class="mono">Hidden projects (${hidden.length})</summary><div class="proj-list">${rows(hidden, true)}</div></details>`
-      : "")
-  );
-}
-
-function SectionNav(onPick, extra = []) {
-  const nav = h("nav", {
-    class: "settings-nav",
-    "aria-label": "Settings sections",
-  });
-  const links = new Map();
-  for (const s of [...SECTIONS, ...extra]) {
-    const count = h("span", { class: "count" });
-    const b = h(
-      "button",
-      {
-        type: "button",
-        class: "settings-nav-link",
-        dataset: { section: s.id },
-      },
-      h("span", {}, s.title),
-      count,
-    );
-    b.addEventListener("click", () => onPick(s.id));
-    links.set(s.id, { b, count });
-    nav.append(b);
-  }
+function describeError(err) {
+  if (!err) return { title: 'Request failed', body: '' };
   return {
-    el: nav,
-    paint(c) {
-      for (const [id, { b, count }] of links) {
-        count.textContent = c[id] || 0;
-        b.hidden = !c[id];
-      }
-    },
+    title: err.status === 404 ? 'Endpoint not available' : (err.error || err.message || 'Request failed'),
+    body: [err.why, err.do, err.hint].filter(Boolean).join(' — '),
   };
 }
 
-export async function render(ctx) {
-  const root = ctx.root;
-  let query = "";
-  const search = Input({
-    type: "search",
-    placeholder: "Search settings",
-    "aria-label": "Search settings",
-    class: "settings-search",
-  });
-  replace(
-    root,
-    PageHeader({
-      title: "Settings",
-      description: "How Atlas behaves. Every row shows its current value.",
-      actions: search,
-    }),
-    Skeleton(8),
-  );
+let S = null;
 
-  let entries = [];
-  let models = null; // Ollama model list; null when the endpoint failed
-  const skeletons = new Map(); // section id -> loading placeholder, removed when behavior rows arrive
-  const items = []; // {meta, node} for every row on the page, behavior or not
-  const sectionEls = new Map();
-  const content = h("div", { class: "settings-wrap" });
-  const nav = SectionNav(
-    (id) => {
-      const el = sectionEls.get(id);
-      if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
-    },
-    [{ id: PROJECTS_ID, title: "Projects" }],
-  );
-  const empty = h("div", { hidden: true });
+// One category at a time: ?cat= picks it, else the first. A non-empty filter overrides and shows every match.
+function initialCat() {
+  let c = null;
+  try { c = new URLSearchParams((globalThis.location && globalThis.location.search) || '').get('cat'); } catch { /* no location */ }
+  return CATEGORIES.includes(c) ? c : CATEGORIES[0];
+}
 
-  async function refreshBehavior() {
-    const fresh = flattenBehavior(await get("/api/behavior"));
-    entries = fresh;
-    return fresh;
-  }
-
-  // Redraw one row from fresh server state, keeping its inline result.
-  async function saved(key, sentence) {
-    let entry;
-    try {
-      entry = (await refreshBehavior()).find((e) => e.key === key);
-    } catch (e) {
-      entry = entries.find((x) => x.key === key);
-    }
-    const idx = items.findIndex((i) => i.meta.key === key);
-    if (!entry || idx < 0) return;
-    const node = behaviorRow(entry, { saved, models });
-    node.hidden = items[idx].node.hidden;
-    items[idx].node.replaceWith(node);
-    items[idx] = { meta: entry, node };
-    showSaved(node, sentence);
-  }
-  function showSaved(node, sentence) {
-    const slot = node.querySelector(".setting-result");
-    slot.className = "setting-result is-ok";
-    slot.replaceChildren(
-      h("span", { class: "dot s-ok", "aria-hidden": "true" }),
-      h("span", {}, sentence),
-    );
-    setTimeout(() => {
-      slot.replaceChildren();
-      slot.className = "setting-result";
-    }, 3000);
-  }
-
-  function applyFilter() {
-    const visible = new Set(
-      filterEntries(
-        items.map((i) => i.meta),
-        query,
-      ),
-    );
-    const counts = countBySection([...visible]);
-    for (const i of items) i.node.hidden = !visible.has(i.meta);
-    // Projects is not a behavior setting: it hides only while a search is active.
-    counts[PROJECTS_ID] = query.trim() ? 0 : 1;
-    for (const [id, el] of sectionEls)
-      el.hidden = !counts[id] && !skeletons.has(id);
-    nav.paint(counts);
-    replace(
-      empty,
-      !visible.size ? Empty({ title: `No setting matches ${query}` }) : null,
-    );
-    empty.hidden = !!visible.size;
-  }
-
-  function addSection(id, title) {
-    const body = h("div", { class: "settings-rows" });
-    const sec = h(
-      "section",
-      { class: "settings-section", id: `settings-${id}` },
-      h("h2", {}, title),
-      body,
-    );
-    sectionEls.set(id, sec);
-    content.append(sec);
-    return body;
-  }
-
-  function addRows(sectionId, rows) {
-    const body = sectionEls.get(sectionId).querySelector(".settings-rows");
-    for (const r of rows) {
-      body.append(r.node);
-      items.push({ meta: { ...r.meta, section: sectionId }, node: r.node });
-    }
-    applyFilter();
-  }
-
-  for (const s of SECTIONS) addSection(s.id, s.title);
-  const projectsBody = addSection(PROJECTS_ID, "Projects");
-  replace(
-    root,
-    PageHeader({
-      title: "Settings",
-      description: "How Atlas behaves. Every row shows its current value.",
-      actions: search,
-    }),
-    h(
-      "div",
-      { class: "settings-layout" },
-      nav.el,
-      h("div", {}, content, empty),
-    ),
-  );
-
-  const stopSearch = on(search, "input", () => {
-    query = search.value;
-    applyFilter();
-  });
-
-  // Projects: pin/hide state comes from prefs and paints with the dashboard rows; the list loads after.
-  const P = { data: null, loaded: false, error: null };
-  const paintProjects = () => {
-    projectsBody.innerHTML = renderProjectsRegion({ ...P, prefs: prefs.get() });
+function freshState(ctx) {
+  return {
+    ctx, mount: null, destroyed: false, busy: new Set(), drafts: {}, tests: {}, query: '', cat: initialCat(), entries: null, ui: null,
+    behavior: null, ecosystem: null, connectors: null, prefs: null, projects: [],
+    credDrafts: {}, projectList: null, agentPid: null, agents: null,
+    ecoTab: 'plugins', ecoQuery: '', ecoLimit: ECO_PAGE,
+    agentName: null, agentBody: '', agentNote: '',
+    errors: {}, note: '',
   };
-  const savePref = async (patch) => {
-    try {
-      await savePrefs(patch);
-    } catch (e) {
-      const d = describeError(e);
-      toast(d.message, { kind: "error", detail: d.detail });
-    }
-  };
-  const loadProjects = async () => {
-    P.loaded = false;
-    P.error = null;
-    paintProjects();
-    try {
-      P.data = await get("/api/v2/projects");
-    } catch (e) {
-      P.error = describeError(e).message;
-    }
-    P.loaded = true;
-    paintProjects();
-  };
-  const stopProjects = bindRegion(projectsBody, {
-    pin: (el) => savePref(pinPatch(prefs.get(), el.dataset.root)),
-    hide: (el) => savePref(hidePatch(prefs.get(), el.dataset.root)),
-    retry: loadProjects,
-  });
-  const stopPrefs = prefs.subscribe(paintProjects);
-  paintProjects();
+}
 
-  // 1. Dashboard rows read the primed prefs store, so they paint at first render.
-  // Behavior sections hold a skeleton until step 2 resolves, so the page never looks empty.
-  for (const s of SECTIONS) {
-    if (["dashboard", "connectors", "plugins"].includes(s.id)) continue;
-    const sk = Skeleton(2);
-    skeletons.set(s.id, sk);
-    sectionEls.get(s.id).querySelector(".settings-rows").append(sk);
+function notify(msg, kind) {
+  if (S && S.ctx && typeof S.ctx.toast === 'function') S.ctx.toast(msg, { kind });
+}
+
+// The page scrolls inside <main id="main">; the document itself never scrolls.
+const scroller = () => (S && S.mount && S.mount.closest('#main')) || document.getElementById('main');
+
+// Inline "Saved" / error line that sits next to a control. Saved clears itself; an error stays until the next save.
+function savedTag(id) {
+  return h('span', { class: 'pg-saved', role: 'status', ...(id ? { id } : {}) });
+}
+
+const flashTimers = new WeakMap();
+function flash(host, text, kind = 'ok') {
+  const el = typeof host === 'string' ? document.getElementById(host)
+    : host && (host.classList.contains('pg-saved') ? host : host.querySelector('.pg-saved'));
+  if (!el) return;
+  clearTimeout(flashTimers.get(el));
+  el.textContent = text;
+  el.className = `pg-saved is-${kind}`;
+  if (kind === 'ok') flashTimers.set(el, setTimeout(() => { el.textContent = ''; el.className = 'pg-saved'; }, 4000));
+}
+
+// Replace one element in place, keeping which <details> were open and where focus and the caret were.
+function focusRestored(next, keepId, caret) {
+  const el = keepId && next.querySelector(`#${CSS.escape(keepId)}`);
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  if (caret && typeof el.setSelectionRange === 'function') { try { el.setSelectionRange(caret[0], caret[1]); } catch { /* no caret on this input type */ } }
+}
+
+function swapEl(old, make) {
+  const next = make();
+  if (!old || !old.isConnected) return next;
+  const open = [...old.querySelectorAll('details')].map((d) => d.open);
+  const active = document.activeElement;
+  const keepId = active && old.contains(active) ? active.id : '';
+  const caret = keepId && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
+  old.replaceWith(next);
+  next.querySelectorAll('details').forEach((d, i) => { if (open[i]) d.open = true; });
+  focusRestored(next, keepId, caret);
+  return next;
+}
+
+// Legacy routes answer `{ok:false,error,hint}` with HTTP 200, so check `ok` too.
+async function legacyPost(path, body) {
+  const res = await S.ctx.api.post(path, body);
+  if (res && res.ok === false) throw Object.assign(new Error(res.error || 'request_failed'), res);
+  return res;
+}
+
+const SECTION_TIMEOUT_MS = 15000;
+
+// A section that never answers becomes an honest error (with Retry), never an endless skeleton.
+async function loadSection(name, fn) {
+  let timer;
+  try {
+    const slow = new Promise((_, reject) => {
+      timer = setTimeout(() => reject({ error: 'timed_out', why: `${name} did not answer within ${SECTION_TIMEOUT_MS / 1000}s.` }), SECTION_TIMEOUT_MS);
+    });
+    S[name] = await Promise.race([fn(), slow]);
+    delete S.errors[name];
+  } catch (err) {
+    S.errors[name] = err;
+  } finally {
+    clearTimeout(timer);
   }
-  addRows("dashboard", buildDashboardRows());
+}
 
-  // 2. Behavior rows and the Ollama list load in parallel.
-  const loadBehavior = async () => {
-    const [behavior, ollama] = await Promise.allSettled([
-      refreshBehavior(),
-      get("/api/v2/ollama/models", {}, { timeoutMs: 8000 }),
-    ]);
-    for (const sk of skeletons.values()) sk.remove();
-    skeletons.clear();
-    if (ollama.status === "fulfilled") models = ollama.value.models || [];
-    else console.warn("ollama model list unavailable", ollama.reason); // model rows fall back to a text input
-    if (behavior.status === "rejected") {
-      content.prepend(
-        Empty({
-          title: "Behavior settings did not load.",
-          body: describeError(behavior.reason).message,
-        }),
-      );
-      applyFilter();
-      return;
-    }
-    for (const e of entries)
-      addRows(e.section, [
-        { meta: e, node: behaviorRow(e, { saved, models }) },
-      ]);
-  };
-
-  // 3. Connectors and plugins run alongside step 2, not after it.
-  const panels = [
-    ["connectors", buildConnectorRows],
-    ["plugins", buildPluginRows],
-  ];
-  loadProjects(); // not awaited: the section shows its own loading state
+async function loadAll() {
+  const api = S.ctx.api;
   await Promise.all([
-    loadBehavior(),
-    ...panels.map(async ([id, build]) => {
-      try {
-        addRows(id, await build());
-      } catch (e) {
-        sectionEls
-          .get(id)
-          .querySelector(".settings-rows")
-          .append(
-            h(
-              "p",
-              { class: "setting-result is-fail" },
-              `This section did not load: ${describeError(e).message}`,
-            ),
-          );
-        sectionEls.get(id).hidden = false;
-      }
+    loadSection('behavior', () => api.get('/api/behavior')),
+    loadSection('ecosystem', () => api.get('/api/ecosystem')),
+    loadSection('connectors', () => api.get('/api/connectors')),
+    loadSection('prefs', async () => {
+      const r = await api.get('/api/v2/prefs');
+      return r && r.state ? r.state : r;
     }),
+    loadSection('projectsRes', () => api.get('/api/v2/projects')),
+    loadSection('projectList', () => api.get('/api/projects?editable=1')),
   ]);
-  applyFilter();
-  return () => {
-    stopSearch();
-    stopProjects();
-    stopPrefs();
+  S.projects = (S.projectsRes && S.projectsRes.projects) || [];
+  S.entries = null;
+  await bootstrapAgents();
+}
+
+// ---- Agents editor (v1 parity: overrides live in <project>/.claude/agents) ---
+// The legacy agent routes want the numeric projects.id, not the v2 root path.
+function legacyProjects() {
+  return (S.projectList && S.projectList.projects) || [];
+}
+
+function agentRoster() {
+  return (S.agents && S.agents.agents) || [];
+}
+
+async function loadAgentBody(name) {
+  if (!S.agentPid || !name) { S.agentName = null; S.agentBody = ''; return; }
+  try {
+    const d = await S.ctx.api.get(`/api/agents/${encodeURIComponent(name)}?project_id=${encodeURIComponent(S.agentPid)}`);
+    S.agentName = name;
+    S.agentBody = d.content || '';
+    delete S.errors.agentBody;
+  } catch (err) {
+    S.agentName = name;
+    S.agentBody = '';
+    S.errors.agentBody = err;
+  }
+}
+
+async function loadAgentRoster() {
+  if (!S.agentPid) {
+    await loadSection('agents', () => S.ctx.api.get('/api/agents'));
+    S.agentName = null; S.agentBody = '';
+    return;
+  }
+  await loadSection('agents', () => S.ctx.api.get(`/api/agents?project_id=${encodeURIComponent(S.agentPid)}`));
+  const roster = agentRoster();
+  const keep = roster.some((a) => a.name === S.agentName) ? S.agentName : (roster[0] && roster[0].name) || null;
+  await loadAgentBody(keep);
+}
+
+// "All projects" is not a project, so default to the most recently active real
+// one (the list is recency-ordered and already free of fixtures and missing dirs).
+async function bootstrapAgents() {
+  const list = legacyProjects();
+  const match = list.find((p) => String(p.root_path) === String(S.ctx.project)) || list[0];
+  S.agentPid = match ? match.id : null;
+  await loadAgentRoster();
+}
+
+async function pickAgentProject(pid) {
+  S.agentPid = pid || null;
+  S.agentNote = '';
+  S.agentName = null;
+  await loadAgentRoster();
+  draw();
+}
+
+async function pickAgent(name) {
+  S.agentNote = '';
+  await loadAgentBody(name);
+  draw();
+}
+
+async function agentAction(action) {
+  if (S.busy.has('agents') || !S.agentPid || !S.agentName) return;
+  S.busy.add('agents');
+  draw();
+  const name = S.agentName;
+  try {
+    const res = await legacyPost('/api/agents', {
+      project_id: S.agentPid, action, name, ...(action === 'save' ? { content: S.agentBody } : {}),
+    });
+    S.agentNote = res.note || (action === 'save' ? 'Override saved.' : 'Override removed.');
+    await loadAgentRoster();
+    notify(`${name}: ${S.agentNote}`, 'ok');
+  } catch (err) {
+    const d = describeError(err);
+    S.agentNote = [d.title, d.body].filter(Boolean).join(' — ');
+    notify(`Could not ${action} ${name}: ${S.agentNote}`, 'fail');
+  }
+  S.busy.delete('agents');
+  draw();
+}
+
+function prefs() {
+  const base = (S.prefs && typeof S.prefs === 'object') ? S.prefs : (S.ctx.prefs || {});
+  return {
+    ...DEFAULT_PREFS, ...base,
+    noise: { ...DEFAULT_PREFS.noise, ...(base.noise || {}) },
+    nav_order: normalizeNav(base.nav_order),
   };
 }
+
+// Saves one preference and reports inline next to the control (statusId); nothing else on the page is rebuilt.
+async function savePrefs(patch, statusId) {
+  const key = 'prefs';
+  if (S.busy.has(key)) return false;
+  S.busy.add(key);
+  let ok = false;
+  try {
+    const res = await S.ctx.api.put('/api/v2/prefs', patch);
+    const next = res && res.state ? res.state : res;
+    if (next && typeof next === 'object') {
+      S.prefs = next;
+      S.ctx.prefs = next;
+      if (S.ctx.store) S.ctx.store.set('prefs', next);
+    }
+    delete S.errors.prefsSave;
+    flash(statusId, 'Saved');
+    ok = true;
+  } catch (err) {
+    S.errors.prefsSave = err;
+    const d = describeError(err);
+    flash(statusId, `Not saved: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
+  }
+  S.busy.delete(key);
+  return ok;
+}
+
+// ---- small form helpers -----------------------------------------------------
+function selectEl(id, value, options, onChange, describedBy) {
+  const props = { id, class: 'select', onchange: (e) => onChange(e.target.value) };
+  if (describedBy) props['aria-describedby'] = describedBy;
+  return h('select', props,
+    ...options.map((o) => h('option', { value: o.value, selected: o.value === value }, o.label)));
+}
+
+function switchEl(id, on, label, onToggle, disabled) {
+  return h('button', {
+    type: 'button', id, role: 'switch', class: `pg-switch${on ? ' is-on' : ''}`,
+    'aria-checked': String(!!on), 'aria-label': label, disabled: !!disabled,
+    onclick: () => onToggle(!on),
+  }, h('span', { class: 'pg-switch-knob', 'aria-hidden': 'true' }), h('span', { class: 'pg-switch-text' }, on ? 'On' : 'Off'));
+}
+
+function sectionError(name, what) {
+  const err = S.errors[name];
+  if (!err) return null;
+  const d = describeError(err);
+  return EmptyState({
+    icon: 'alert', title: `${what} unavailable: ${d.title}`, body: d.body || 'The route did not answer.',
+    actions: [h('button', { type: 'button', class: 'btn', onclick: reloadAll }, 'Retry')],
+  });
+}
+
+async function reloadAll() {
+  if (!S || S.destroyed) return;
+  await loadAll();
+  draw();
+}
+
+// ---- Behavior knobs ---------------------------------------------------------
+
+
+// Read-only: shows the omp roles atlas's agents name and whether each resolves to a model.
+function ompSection(omp) {
+  if (!omp) return null;
+  if (!omp.exists) {
+    return h('section', { class: 'pg-knob-group', 'aria-label': 'omp model roles' },
+      h('h3', { class: 'pg-h3' }, 'omp model roles'),
+      h('p', { class: 'pg-hint' }, `No omp config found at ${omp.path}. Atlas’s omp agents are not in use on this machine.`));
+  }
+  const unresolved = (omp.roles || []).filter((r) => !r.resolves);
+  return h('section', { class: 'pg-knob-group', 'aria-label': 'omp model roles' },
+    h('h3', { class: 'pg-h3' }, 'omp model roles'),
+    h('p', { class: 'pg-hint' }, `Read from ${omp.path} (read-only; edit it with omp). Atlas’s omp agents name @atlas-worker, @atlas-verifier and @atlas-mechanic first, then fall back to @default / @smol. `
+      + (unresolved.length ? `${unresolved.length} role${unresolved.length === 1 ? '' : 's'} not defined, so those agents use their fallback.` : 'Every role resolves.')),
+    h('div', { class: 'pg-table-wrap' }, h('table', { class: 'pg-table', 'aria-label': 'omp model roles' },
+      h('thead', {}, h('tr', {}, ...['Role', 'Resolves', 'Model', 'Falls back to'].map((t) => h('th', { scope: 'col' }, t)))),
+      h('tbody', {}, ...(omp.roles || []).map((r) => h('tr', {},
+        h('th', { scope: 'row', class: 'pg-mono' }, `@${r.role}`),
+        h('td', {}, Badge({ status: r.resolves ? 'ok' : (r.falls_back_to ? 'warn' : 'fail'), text: r.resolves ? 'yes' : 'not defined' })),
+        h('td', { class: 'pg-mono' }, r.model || '—'),
+        h('td', { class: 'pg-mono' }, r.resolves ? '—' : (r.falls_back_to ? `@${r.falls_back_to} (${r.fallback_model})` : 'nothing'))))))),
+    (omp.other || []).length
+      ? h('details', { class: 'pg-evidence' }, h('summary', {}, `Other roles (${omp.other.length})`),
+        h('ul', { class: 'pg-rows' }, ...omp.other.map((o) => nameRow(`@${o.role}`, o.model))))
+      : null);
+}
+
+// Filtering only toggles `hidden` on existing rows: no rebuild, so typing never loses focus or scroll.
+// ---- Ecosystem toggles ------------------------------------------------------
+// Rebuild one inventory row from fresh data (the current tab only shows one list, so the row is looked up by key).
+function redrawEcoRow(kind, id, msg, tone) {
+  const key = `eco:${kind}:${id}`;
+  const old = [...S.mount.querySelectorAll('li[data-eco]')].find((li) => li.dataset.eco === key);
+  if (!old) return;
+  const list = kind === 'plugin' ? (S.ecosystem.plugins || []) : ((S.ecosystem.mcp && S.ecosystem.mcp.servers) || []);
+  const item = list.find((x) => (kind === 'plugin' ? x.key : x.name) === id);
+  if (!item) return;
+  const next = swapEl(old, () => (kind === 'plugin' ? pluginRow(item) : mcpRow(item)));
+  if (msg) flash(next, msg, tone);
+}
+
+async function toggleEco(kind, id, enabled) {
+  const key = `eco:${kind}:${id}`;
+  if (S.busy.has(key)) return;
+  S.busy.add(key);
+  redrawEcoRow(kind, id);
+  try {
+    if (kind === 'plugin') await legacyPost('/api/plugins/toggle', { key: id, enabled });
+    else await legacyPost('/api/mcp/toggle', { name: id, enabled });
+    await loadSection('ecosystem', () => S.ctx.api.get('/api/ecosystem'));
+    S.busy.delete(key);
+    redrawEcoRow(kind, id, `${enabled ? 'Enabled' : 'Disabled'}. Restart Claude Code to apply.`);
+  } catch (err) {
+    const d = describeError(err);
+    S.busy.delete(key);
+    redrawEcoRow(kind, id, `Not changed: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
+  }
+}
+
+function pluginRow(p) {
+  const key = `eco:plugin:${p.key}`;
+  const host = String(p.key).startsWith('atlas@');
+  return h('li', { class: 'pg-row', dataset: { eco: key } },
+    h('div', { class: 'pg-row-main' },
+      h('span', { class: 'pg-row-title' }, p.name || p.key, ' ', h('span', { class: 'pg-mono pg-hint' }, p.version || '')),
+      h('p', { class: 'pg-hint' }, p.description || ''),
+      h('p', { class: 'pg-mono pg-hint' }, `${p.key} · ${p.skills || 0} skills · ${p.agents || 0} agents · ${(p.mcp_servers || []).length} MCP`),
+      savedTag()),
+    h('div', { class: 'pg-row-ctl' },
+      host
+        ? Badge({ status: 'info', text: 'host plugin' })
+        : switchEl(`pg-plugin-${p.key}`, p.enabled, `Enable plugin ${p.name || p.key}`,
+          (next) => toggleEco('plugin', p.key, next), S.busy.has(key) || !p.installed)));
+}
+
+function mcpRow(m) {
+  const key = `eco:mcp:${m.name}`;
+  return h('li', { class: 'pg-row', dataset: { eco: key } },
+    h('div', { class: 'pg-row-main' },
+      h('span', { class: 'pg-row-title pg-mono' }, m.name),
+      h('p', { class: 'pg-mono pg-hint' }, `${m.origin}${m.origin_detail ? ` · ${m.origin_detail}` : ''} · ${m.transport}`),
+      savedTag()),
+    h('div', { class: 'pg-row-ctl' },
+      switchEl(`pg-mcp-${m.name}`, m.enabled, `Enable MCP server ${m.name}`,
+        (next) => toggleEco('mcp', m.name, next), S.busy.has(key) || (m.origin === 'plugin' && m.plugin_enabled === false))));
+}
+
+const ECO_PAGE = 100;
+
+// A read-only name row for inventory items that have no toggle.
+function nameRow(title, detail, badge) {
+  return h('li', { class: 'pg-row' },
+    h('div', { class: 'pg-row-main' },
+      h('span', { class: 'pg-row-title pg-mono' }, title),
+      detail ? h('p', { class: 'pg-mono pg-hint' }, detail) : null),
+    badge ? h('div', { class: 'pg-row-ctl' }, badge) : null);
+}
+
+function bindingRow(b) {
+  return nameRow(`${b.event}${b.matcher && b.matcher !== '*' ? ` [${b.matcher}]` : ''}`,
+    `${b.script}${b.timeout ? ` · timeout ${b.timeout}s` : ''}`,
+    Badge({ status: b.present ? 'ok' : 'fail', text: b.present ? 'wired' : 'script missing' }));
+}
+
+// tab id -> { label, items, row, text } ; text is what the search box matches.
+function ecoTabs() {
+  const e = S.ecosystem;
+  const atlas = e.atlas || {};
+  const user = e.user || {};
+  const names = (list, owner) => (list || []).map((n) => ({ n, owner }));
+  const plain = (it) => nameRow(it.n, it.owner);
+  return [
+    { id: 'plugins', label: 'Plugins', items: e.plugins || [], row: pluginRow, text: (p) => `${p.key} ${p.name} ${p.description}` },
+    { id: 'mcp', label: 'MCP servers', items: (e.mcp && e.mcp.servers) || [], row: mcpRow, text: (m) => `${m.name} ${m.origin} ${m.origin_detail || ''}` },
+    { id: 'skills', label: 'Atlas skills', items: names(atlas.skills, 'atlas plugin'), row: plain, text: (x) => x.n },
+    { id: 'agents', label: 'Atlas agents', items: names(atlas.agents, 'atlas plugin'), row: plain, text: (x) => x.n },
+    { id: 'styles', label: 'Output styles', items: names(atlas.output_styles, 'atlas plugin'), row: (x) => nameRow(x.n, x.owner,
+      x.n === (atlas.output_style || user.active_output_style) ? Badge({ status: 'ok', text: 'active' }) : null), text: (x) => x.n },
+    { id: 'bindings', label: 'Hook wirings', items: atlas.bindings || [], row: bindingRow, text: (b) => `${b.event} ${b.matcher} ${b.script}`,
+      flag: (atlas.bindings || []).filter((b) => !b.present).length },
+    { id: 'uskills', label: 'User skills', items: names(user.skills, '~/.claude/skills'), row: plain, text: (x) => x.n },
+    { id: 'uagents', label: 'User agents', items: names(user.agents, '~/.claude/agents'), row: plain, text: (x) => x.n },
+    { id: 'uhooks', label: 'User hook events', items: names(user.hook_events, '~/.claude/settings.json hooks'), row: plain, text: (x) => x.n },
+  ];
+}
+
+// Search and tab changes rebuild only the Ecosystem card (focus and caret kept), never the whole page.
+function setEco(patch) {
+  Object.assign(S, patch);
+  const old = document.getElementById('pg-sec-ecosystem');
+  if (old) swapEl(old, ecosystemSection);
+}
+
+function ecosystemSection() {
+  const err = sectionError('ecosystem', 'Ecosystem');
+  if (err) return Card({ id: 'pg-sec-ecosystem', title: 'Ecosystem', children: [err] });
+  if (!S.ecosystem) return Card({ id: 'pg-sec-ecosystem', title: 'Ecosystem', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
+  const atlas = S.ecosystem.atlas || {};
+  const tabs = ecoTabs();
+  const tab = tabs.find((t) => t.id === S.ecoTab) || tabs[0];
+  const q = S.ecoQuery.trim().toLowerCase();
+  const matched = q ? tab.items.filter((it) => tab.text(it).toLowerCase().includes(q)) : tab.items;
+  const shown = matched.slice(0, S.ecoLimit);
+  const style = atlas.output_style || (S.ecosystem.user || {}).active_output_style || 'default';
+  const search = h('input', {
+    id: 'pg-eco-search', class: 'input', type: 'search', value: S.ecoQuery, placeholder: `Search ${tab.label.toLowerCase()}`,
+    'aria-label': `Search ${tab.label}`,
+  });
+  search.addEventListener('input', (ev) => { setEco({ ecoQuery: ev.target.value, ecoLimit: ECO_PAGE }); });
+  return Card({
+    id: 'pg-sec-ecosystem',
+    title: 'Ecosystem',
+    children: [
+      h('p', { class: 'pg-hint' }, 'What Claude Code has installed that atlas can see. Plugin and MCP switches edit Claude Code’s settings and take effect when Claude Code restarts; every other tab is a read-only list of what atlas ships or what you have in ~/.claude.'),
+      atlas.hooks_disabled_globally
+        ? h('p', { class: 'pg-banner is-warn', role: 'alert' }, 'Hooks are disabled globally (disableAllHooks) — Atlas hooks will not run.')
+        : null,
+      h('p', { class: 'pg-hint' }, `Active output style: ${style}. Atlas plugin ${atlas.plugin_enabled ? 'enabled' : 'not enabled'} at ${atlas.plugin_root || 'unknown path'}.`),
+      h('div', { class: 'pg-tabs', role: 'tablist', 'aria-label': 'Ecosystem inventory' },
+        ...tabs.map((t) => h('button', {
+          type: 'button', role: 'tab', id: `pg-eco-tab-${t.id}`, class: `pg-tab${t.id === tab.id ? ' is-active' : ''}`,
+          'aria-selected': String(t.id === tab.id), onclick: () => setEco({ ecoTab: t.id, ecoQuery: '', ecoLimit: ECO_PAGE }),
+        }, `${t.label} (${t.items.length})`, t.flag ? ` · ${t.flag} missing` : ''))),
+      h('div', { class: 'pg-field' }, search),
+      h('div', { role: 'tabpanel', 'aria-labelledby': `pg-eco-tab-${tab.id}` },
+        shown.length
+          ? h('ul', { class: 'pg-rows' }, ...shown.map(tab.row))
+          : h('p', { class: 'pg-hint' }, q ? `Nothing in ${tab.label.toLowerCase()} matches “${S.ecoQuery}”.` : `No ${tab.label.toLowerCase()} found.`),
+        matched.length > shown.length
+          ? h('p', { class: 'pg-hint' }, `Showing ${shown.length} of ${matched.length}. `,
+            h('button', { type: 'button', class: 'btn', onclick: () => setEco({ ecoLimit: S.ecoLimit + ECO_PAGE }) }, 'Show more'))
+          : null),
+    ],
+  });
+}
+
+// ---- Connectors -------------------------------------------------------------
+async function testConnector(c) {
+  const key = `test:${c.name}`;
+  if (S.busy.has(key)) return;
+  S.busy.add(key);
+  delete S.tests[c.name];
+  redrawConnector(c.name);
+  try {
+    const res = await S.ctx.api.post('/api/connectors/test', { name: c.name });
+    S.tests[c.name] = res;
+  } catch (err) {
+    S.tests[c.name] = { ok: false, error: describeError(err).title, hint: describeError(err).body };
+  }
+  S.busy.delete(key);
+  redrawConnector(c.name);
+}
+
+async function toggleConnector(c, enabled) {
+  const key = `eco:mcp:${c.server_name}`;
+  if (S.busy.has(key)) return;
+  S.busy.add(key);
+  redrawConnector(c.name);
+  try {
+    await legacyPost('/api/mcp/toggle', { name: c.server_name, enabled });
+    await loadSection('connectors', () => S.ctx.api.get('/api/connectors'));
+    S.busy.delete(key);
+    redrawConnector(c.name, `${enabled ? 'Enabled' : 'Disabled'}. Restart Claude Code to apply.`);
+  } catch (err) {
+    const d = describeError(err);
+    S.busy.delete(key);
+    redrawConnector(c.name, `Not changed: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
+  }
+}
+
+// ---- Connector credentials --------------------------------------------------
+// Saved secrets are never read back: the API returns an empty `value` for
+// sensitive keys and the form only reports set/missing. A draft exists only for
+// keys the user actually changed, and only those keys are sent.
+function credKey(f) {
+  return (f && (f.user_config_key || f.env_key)) || '';
+}
+
+function credDirty() {
+  return !!S && Object.keys(S.credDrafts).length > 0;
+}
+
+function connectorDirty(c) {
+  return (c.fields || []).some((f) => S.credDrafts[credKey(f)] !== undefined);
+}
+
+// Dirty-draft guard: reload/close always prompts while drafts exist; a click on a
+// sidebar link to another page asks first. Wired on the first draft, removed when
+// the last one is saved/reverted or the page is destroyed.
+let guardWired = false;
+
+function credGuard(e) {
+  if (!S || S.destroyed || !credDirty()) return;
+  if (e.type === 'beforeunload') {
+    e.preventDefault();
+    e.returnValue = '';
+    return;
+  }
+  const a = e.target && e.target.closest ? e.target.closest('a[href^="#/"]') : null;
+  if (!a || a.dataset.page === 'settings') return;
+  if (!window.confirm('Unsaved credential edits on Settings will be lost. Leave this page anyway?')) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}
+
+function wireGuard() {
+  if (guardWired) return;
+  guardWired = true;
+  window.addEventListener('beforeunload', credGuard);
+  document.addEventListener('click', credGuard, true);
+}
+
+function unwireGuard() {
+  if (!guardWired) return;
+  guardWired = false;
+  window.removeEventListener('beforeunload', credGuard);
+  document.removeEventListener('click', credGuard, true);
+}
+
+// Reflect draft state without a redraw (a redraw per keystroke would steal focus):
+// the page banner, plus each connector's Save/Revert enablement and edited badge.
+function syncGuard() {
+  if (credDirty()) wireGuard();
+  else unwireGuard();
+  if (!S || !S.mount) return;
+  const banner = S.mount.querySelector('#pg-cred-dirty');
+  if (banner) banner.hidden = !credDirty();
+  const list = (S.connectors && S.connectors.connectors) || [];
+  for (const c of list) {
+    const row = S.mount.querySelector(`li.pg-cred-row[data-connector="${CSS.escape ? CSS.escape(c.name) : c.name}"]`);
+    if (!row) continue;
+    const dirty = connectorDirty(c);
+    const busy = S.busy.has(`cred:${c.name}`);
+    const edited = row.querySelector('.pg-cred-edited');
+    if (edited) edited.hidden = !dirty;
+    for (const b of row.querySelectorAll('button[data-cred-action]')) b.disabled = busy || !dirty;
+  }
+}
+
+function updateCredDraft(key, input, baseline) {
+  if (input.value === baseline) delete S.credDrafts[key];
+  else S.credDrafts[key] = input.value;
+  syncGuard();
+}
+
+function revertCreds(c) {
+  for (const f of c.fields || []) delete S.credDrafts[credKey(f)];
+  syncGuard();
+  redrawConnector(c.name);
+}
+
+async function saveCreds(c) {
+  const busyKey = `cred:${c.name}`;
+  if (S.busy.has(busyKey)) return;
+  const updates = {};
+  for (const f of c.fields || []) {
+    const k = credKey(f);
+    if (k && S.credDrafts[k] !== undefined) updates[k] = S.credDrafts[k];
+  }
+  if (!Object.keys(updates).length) {
+    notify(`Nothing changed for ${c.name}.`, 'info');
+    return;
+  }
+  S.busy.add(busyKey);
+  redrawConnector(c.name);
+  try {
+    const res = await legacyPost('/api/connectors/env', { updates });
+    for (const k of Object.keys(updates)) delete S.credDrafts[k];
+    await loadSection('connectors', () => S.ctx.api.get('/api/connectors'));
+    const saved = [...new Set([...(res.updated_user_config_keys || []), ...(res.updated_env_keys || [])])];
+    S.busy.delete(busyKey);
+    redrawConnector(c.name, `Saved ${saved.join(', ') || Object.keys(updates).join(', ')}. Restart Claude Code so the server re-reads credentials.`);
+  } catch (err) {
+    const d = describeError(err);
+    S.busy.delete(busyKey);
+    redrawConnector(c.name, `Not saved: ${[d.title, d.body].filter(Boolean).join(' — ')}`, 'fail');
+  }
+}
+
+function credFieldRow(c, f) {
+  const key = credKey(f);
+  if (!key) return null;
+  const id = `pg-cred-${`${c.name}-${key}`.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+  const baseline = String(f.value || '');
+  const draft = S.credDrafts[key];
+  const set = !!f.is_set;
+  const input = h('input', {
+    id, class: 'input', type: f.sensitive ? 'password' : 'text',
+    value: draft !== undefined ? draft : baseline,
+    placeholder: f.sensitive ? (set ? 'set — type to replace' : 'enter secret') : (set ? '' : 'not set'),
+    autocomplete: f.sensitive ? 'new-password' : 'off', spellcheck: 'false',
+    'aria-label': `${c.name} ${f.title || key}`,
+  });
+  input.addEventListener('input', () => updateCredDraft(key, input, baseline));
+  return h('div', { class: 'pg-field' },
+    h('label', { class: 'pg-label pg-cred-label', for: id },
+      h('span', { class: 'pg-mono' }, key),
+      Badge({ status: set ? 'ok' : 'warn', text: set ? 'set' : 'missing' }),
+      f.source && f.source !== 'missing' ? h('span', { class: 'pg-hint' }, `· ${f.source}`) : null),
+    f.description ? h('p', { class: 'pg-hint' }, f.description) : null,
+    input);
+}
+
+function testLine(t) {
+  if (!t) return null;
+  const text = t.ok
+    ? `Handshake ok${t.tool_count !== undefined ? ` — ${t.tool_count} tools` : ''}${t.elapsed_ms !== undefined ? ` in ${t.elapsed_ms}ms` : ''}.${t.note ? ` ${t.note}` : ''}`
+    : `Test failed: ${t.error || 'unknown'}${t.hint ? ` — ${t.hint}` : ''}`;
+  return h('p', { class: `pg-test is-${t.ok ? 'ok' : 'fail'}`, role: 'status' }, text);
+}
+
+const HEALTH_VIEW = {
+  ok: ['ok', 'healthy'], idle: ['info', 'configured, unused'], degraded: ['fail', 'degraded'],
+  unconfigured: ['warn', 'needs credentials'], disabled: ['idle', 'disabled'],
+};
+
+function usageLine(c) {
+  const u = c.usage || {};
+  if (!u.calls_total) return h('p', { class: 'pg-hint' }, 'Never called in recorded sessions.');
+  const rate = u.calls ? `${Math.round((u.error_rate || 0) * 100)}% errors` : 'no calls in window';
+  return h('p', { class: 'pg-hint pg-mono' },
+    `${u.calls} ${u.calls === 1 ? 'call' : 'calls'} in ${u.window_days}d (${u.errors} failed, ${rate}) · ${u.calls_total} total · last used ${u.last_used ? ago(u.last_used) : 'unknown'}`);
+}
+
+function connectorRow(c) {
+  const [hs, hl] = HEALTH_VIEW[c.health] || ['idle', c.health || 'unknown'];
+  const status = !c.bundle_exists ? 'fail' : hs;
+  const label = !c.bundle_exists ? 'bundle missing' : hl;
+  const fields = (c.fields || []).map((f) => credFieldRow(c, f)).filter(Boolean);
+  const dirty = connectorDirty(c);
+  const saving = S.busy.has(`cred:${c.name}`);
+  const testing = S.busy.has(`test:${c.name}`);
+  return h('li', { class: 'pg-row pg-cred-row', dataset: { connector: c.name } },
+    h('div', { class: 'pg-row-main' },
+      h('span', { class: 'pg-row-title' }, StatusDot({ status }), ' ', c.name, ' ', Badge({ status, text: label }),
+        h('span', { class: 'pg-cred-edited', hidden: !dirty }, Badge({ status: 'info', text: 'unsaved edits' }))),
+      usageLine(c),
+      (c.missing_required || []).length
+        ? h('p', { class: 'pg-hint' }, `Missing: ${c.missing_required.join(', ')}.`)
+        : null,
+      testLine(S.tests[c.name]),
+      savedTag()),
+    h('div', { class: 'pg-row-ctl' },
+      h('button', {
+        type: 'button', class: 'btn', disabled: testing, 'aria-label': `Test connector ${c.name}`,
+        onclick: () => testConnector(c),
+      }, testing ? 'Testing…' : 'Test'),
+      h('button', {
+        type: 'button', class: 'btn btn-primary', disabled: saving || !dirty, 'aria-label': `Save credentials for ${c.name}`,
+        dataset: { credAction: 'save' }, onclick: () => saveCreds(c),
+      }, saving ? 'Saving…' : 'Save'),
+      h('button', {
+        type: 'button', class: 'btn btn-ghost', disabled: saving || !dirty, 'aria-label': `Discard unsaved edits for ${c.name}`,
+        dataset: { credAction: 'revert' }, onclick: () => revertCreds(c),
+      }, 'Revert'),
+      switchEl(`pg-conn-${c.name}`, c.enabled, `Enable connector ${c.name}`,
+        (next) => toggleConnector(c, next), S.busy.has(`eco:mcp:${c.server_name}`))),
+    fields.length
+      ? h('div', { class: 'pg-cred-fields', role: 'group', 'aria-label': `${c.name} credentials` }, ...fields)
+      : h('p', { class: 'pg-hint pg-cred-none' }, 'No credential fields declared for this connector.'));
+}
+
+function connectorsTitle(list) {
+  const ready = list.filter((c) => c.configured_hint).length;
+  const degraded = list.filter((c) => c.health === 'degraded').length;
+  return `Connectors (${ready}/${list.length} configured${degraded ? `, ${degraded} degraded` : ''})`;
+}
+
+// Rebuild one connector row (and the card's count) from state, leaving the rest of the page untouched.
+function redrawConnector(name, msg, kind) {
+  const list = (S.connectors && S.connectors.connectors) || [];
+  const c = list.find((x) => x.name === name);
+  const old = [...S.mount.querySelectorAll('li.pg-cred-row[data-connector]')].find((li) => li.dataset.connector === name);
+  if (!c || !old) return;
+  const next = swapEl(old, () => connectorRow(c));
+  const head = S.mount.querySelector('#pg-sec-connectors h2');
+  if (head) head.textContent = connectorsTitle(list);
+  if (msg) flash(next, msg, kind);
+  syncGuard();
+}
+
+function connectorsSection() {
+  const err = sectionError('connectors', 'Connectors');
+  if (err) return Card({ id: 'pg-sec-connectors', title: 'Connectors', children: [err] });
+  if (!S.connectors) return Card({ id: 'pg-sec-connectors', title: 'Connectors', children: [h('p', { class: 'pg-hint', role: 'status' }, 'Loading…')] });
+  const list = S.connectors.connectors || [];
+  return Card({
+    id: 'pg-sec-connectors',
+    title: connectorsTitle(list),
+    actions: [h('span', { class: 'pg-hint' }, S.connectors.settings_path || '')],
+    children: [
+      h('p', { class: 'pg-banner is-warn', id: 'pg-cred-dirty', role: 'status', hidden: !credDirty() },
+        'Unsaved credential edits. Save or Revert each connector before leaving; the browser will also ask before reload or close.'),
+      h('p', { class: 'pg-hint' }, 'Vendor connectors atlas ships as MCP servers (CrowdStrike, NinjaOne, Vanta, …). Each needs its own credentials before Claude Code can use it. Saved credentials are never shown or read back — a field only reports set or missing, and typing a new value replaces it. Only fields you changed are sent. Test starts the connector and completes an MCP handshake; it proves the bundle runs, not that vendor credentials are accepted — use the connector’s own status tool for that. Enabling or disabling a connector, or saving credentials, takes effect when Claude Code restarts.'),
+      list.length ? h('ul', { class: 'pg-rows' }, ...list.map(connectorRow)) : h('p', { class: 'pg-hint' }, 'No connectors declared.'),
+    ],
+  });
+}
+
+function ago(epochS) {
+  const s = Math.max(0, Date.now() / 1000 - Number(epochS));
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+
+// ---- Agents editor ----------------------------------------------------------
+function agentsSection() {
+  const err = sectionError('agents', 'Agents');
+  if (err) return Card({ id: 'pg-sec-agents', title: 'Agents', children: [err] });
+  const projects = legacyProjects();
+  const roster = agentRoster();
+  const rosterTable = roster.length
+    ? h('div', { class: 'pg-table-wrap' }, h('table', { class: 'pg-table', 'aria-label': 'Agent roster' },
+      h('thead', {}, h('tr', {},
+        ...['Agent', 'Model', 'Effort', 'omp chain', 'Dispatched 7d', 'Total', 'Last used'].map((t) => h('th', { scope: 'col' }, t)))),
+      h('tbody', {}, ...roster.map((a) => {
+        const d = a.dispatches || {};
+        return h('tr', { class: a.name === S.agentName ? 'is-selected' : '' },
+          h('th', { scope: 'row', class: 'pg-mono' }, a.name, a.overridden ? ' ' : '', a.overridden ? Badge({ status: 'info', text: 'overridden' }) : null),
+          h('td', { class: 'pg-mono' }, a.model || '—'),
+          h('td', { class: 'pg-mono' }, a.effort || (a.omp && a.omp.effort) || '—'),
+          h('td', { class: 'pg-mono' }, a.omp && a.omp.model_chain.length ? a.omp.model_chain.join(' → ') : 'not generated'),
+          h('td', {}, String(d.last7d || 0)),
+          h('td', {}, String(d.total || 0)),
+          h('td', { title: d.last_used ? new Date(d.last_used * 1000).toISOString() : '' }, d.last_used ? ago(d.last_used) : 'never'));
+      }))))
+    : null;
+  if (S.errors.projectList) {
+    // A failed or slow /api/projects fetch is not "no projects"; say so and offer Retry.
+    return Card({ id: 'pg-sec-agents', title: 'Agents', children: [sectionError('projectList', 'Project list'), rosterTable] });
+  }
+  if (!projects.length) {
+    return Card({ id: 'pg-sec-agents', title: 'Agents', children: [
+      h('p', { class: 'pg-hint' }, 'No registered projects yet, so overrides cannot be edited. The plugin’s own agents are listed below; run Claude Code or omp in a project to register it.'),
+      rosterTable] });
+  }
+  const entry = roster.find((a) => a.name === S.agentName);
+  const busy = S.busy.has('agents');
+  const source = !entry ? '—' : entry.overridden ? 'overridden (project)' : entry.source === 'override' ? 'override (project-only)' : 'plugin';
+  const canReset = !!entry && (entry.overridden || entry.source === 'override');
+  const body = h('textarea', {
+    id: 'pg-agent-body', class: 'pg-agent-body', rows: '16', spellcheck: 'false', disabled: busy || !entry,
+    'aria-label': 'Agent definition',
+  });
+  body.value = S.agentBody;
+  body.addEventListener('input', (e) => { S.agentBody = e.target.value; });
+  const bodyErr = S.errors.agentBody ? describeError(S.errors.agentBody) : null;
+  return Card({
+    id: 'pg-sec-agents',
+    title: 'Agents',
+    children: [
+      h('p', { class: 'pg-hint' }, 'Plugin agents are listed beside this project’s same-name overrides in <project>/.claude/agents/. Save writes a project override; Reset deletes it so the plugin definition applies again. Dispatch counts come from the dispatches table; its model column is not populated, so the model shown is the agent definition’s, not what actually ran.'),
+      rosterTable,
+      h('div', { class: 'pg-agent-controls' },
+        h('label', { class: 'pg-label', for: 'pg-agent-project' }, 'Project'),
+        selectEl('pg-agent-project', String(S.agentPid || ''),
+          projects.map((p) => ({ value: String(p.id), label: p.label || p.folder || p.name || p.root_path })),
+          (v) => pickAgentProject(Number(v))),
+        h('label', { class: 'pg-label', for: 'pg-agent-name' }, 'Agent'),
+        selectEl('pg-agent-name', S.agentName || '',
+          roster.map((a) => ({ value: a.name, label: `${a.name}${a.overridden ? ' (overridden)' : ''}` })),
+          (v) => pickAgent(v)),
+        Badge({ status: canReset ? 'info' : 'idle', text: source })),
+      bodyErr ? h('p', { class: 'pg-field-error', role: 'alert' }, `${bodyErr.title}${bodyErr.body ? ` — ${bodyErr.body}` : ''}`) : null,
+      body,
+      h('div', { class: 'pg-actions' },
+        h('button', { type: 'button', class: 'btn btn-primary', disabled: busy || !entry, onclick: () => agentAction('save') }, 'Save override'),
+        h('button', { type: 'button', class: 'btn', disabled: busy || !canReset, onclick: () => agentAction('reset') }, 'Reset'),
+        h('span', { class: 'pg-hint', role: 'status' }, S.agentNote || '')),
+    ],
+  });
+}
+
+// ---- Preferences ------------------------------------------------------------
+function moveNav(order, i, d) {
+  const j = i + d;
+  if (j < 0 || j >= order.length) return;
+  const next = [...order];
+  [next[i], next[j]] = [next[j], next[i]];
+  savePrefs({ nav_order: next }, 'pg-pref-nav-status').then((ok) => {
+    if (ok) swapEl(S.mount.querySelector('.pg-nav-edit'), () => navEditor(prefs()));
+  });
+}
+
+function navEditor(p) {
+  const order = [...p.nav_order];
+  return h('ol', { class: 'pg-nav-edit', 'aria-label': 'Navigation order' },
+    ...order.map((id, i) => h('li', { class: 'pg-nav-item' },
+      h('span', {}, NAV_LABELS[id] || id),
+      h('span', { class: 'pg-actions' },
+        h('button', { type: 'button', class: 'btn btn-ghost', disabled: i === 0 || S.busy.has('prefs'),
+          'aria-label': `Move ${NAV_LABELS[id] || id} up`, onclick: () => moveNav(order, i, -1) }, '↑'),
+        h('button', { type: 'button', class: 'btn btn-ghost', disabled: i === order.length - 1 || S.busy.has('prefs'),
+          'aria-label': `Move ${NAV_LABELS[id] || id} down`, onclick: () => moveNav(order, i, 1) }, '↓')))),
+  );
+}
+
+function integrationsSection() {
+  return Card({
+    id: 'integrations',
+    title: 'Integrations',
+    actions: [h('span', { class: 'pg-hint' }, 'terminal tooling and atlas MCP connectors, read-only')],
+    children: [S.integrations || (S.integrations = IntegrationsPanel())],
+  });
+}
+
+// Selects revert to the saved value when a save fails, so the control never lies about what is stored.
+
+// A jump bar for a very long page. Buttons, not links: a "#id" href would be read as a route change.
+// ---- Settings rows: knobs and preferences share SettingRow --------------------------------
+// A knob save returns the server's per-layer read-back; without one the save is reported as unverified.
+async function saveKnob(item, value, extra = {}) {
+  const res = await S.ctx.api.post('/api/behavior', { updates: { [item.key]: value }, ...extra });
+  if (!res || !Array.isArray(res.layers)) return { ok: false, error: 'the server returned no read-back' };
+  return res;
+}
+
+const getPath = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+
+// Prefs verify against the state the PUT returns (what the server wrote to disk).
+async function savePref(item, value) {
+  const num = item.kind === 'number' ? Number(value) : value;
+  const patch = item.path.includes('.') ? { noise: { ...prefs().noise, [item.path.split('.')[1]]: num } } : { [item.path]: num };
+  const res = await S.ctx.api.put('/api/v2/prefs', patch);
+  const next = res && res.state ? res.state : res;
+  if (next && typeof next === 'object') { S.prefs = next; S.ctx.prefs = next; if (S.ctx.store) S.ctx.store.set('prefs', next); }
+  const got = getPath(next, item.path);
+  return { ok: String(got) === String(num), layers: [{ layer: 'prefs', wrote: num, got, ok: String(got) === String(num) }], applies: item.applies };
+}
+
+const rowDeps = () => ({
+  api: S.ctx.api, confirm,
+  save: (item, value, extra) => (item.pref ? savePref(item, value) : saveKnob(item, value, extra)),
+  testUrl: async (url) => {
+    const r = await S.ctx.api.get('/api/v2/ollama/status', { url });
+    return { text: r.reachable ? `✓ reachable${r.version ? ` · ollama ${r.version}` : ''}` : '✗ not reachable' };
+  },
+});
+
+function prefItems() {
+  const p = prefs();
+  const projects = [{ value: 'all', label: 'All projects' }, ...S.projects.map((x) => ({ value: x.root, label: x.name || x.root }))];
+  const base = { pref: true, scope: 'dashboard', applies: 'now' };
+  return [
+    { ...base, key: 'theme', path: 'theme', title: 'Theme', description: 'Colour scheme of this dashboard.', effect: 'Repaints every page.', kind: 'select', value: p.theme,
+      options: [{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }, { value: 'system', label: 'Match system' }] },
+    { ...base, key: 'density', path: 'density', title: 'Density', description: 'Row spacing across every page.', effect: 'Tightens or loosens rows.', kind: 'select', value: p.density,
+      options: [{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }] },
+    { ...base, key: 'default_project', path: 'default_project', title: 'Default project', description: 'The project selected when the dashboard opens.', effect: 'Changes the project filter on the next open.', kind: 'select', value: p.default_project,
+      options: projects.some((o) => o.value === p.default_project) ? projects : [...projects, { value: p.default_project, label: p.default_project }] },
+    { ...base, key: 'refresh_seconds', path: 'refresh_seconds', title: 'Fallback refresh (seconds)', description: 'How often pages re-fetch when the live connection drops.', effect: 'Does not slow normal live updates.', kind: 'number', value: p.refresh_seconds, range: { min: 2, max: 300, step: 1 } },
+    { ...base, key: 'noise_min_severity', path: 'noise.min_severity', title: 'Activity: hide events below', description: 'Filters the Activity page only; duplicates always collapse.', effect: 'Hides lower severity rows on Activity.', kind: 'select', value: p.noise.min_severity,
+      options: [{ value: 'info', label: 'Show everything' }, { value: 'warn', label: 'Warnings and failures' }, { value: 'fail', label: 'Failures only' }] },
+    { ...base, key: 'nav_order', title: 'Sidebar order', description: 'Move pages up or down in the left sidebar.', effect: 'Reorders the sidebar.', kind: 'custom',
+      control: h('div', {}, savedTag('pg-pref-nav-status'), navEditor(p)) },
+  ];
+}
+
+function buildEntries() {
+  const byCat = Object.fromEntries(CATEGORIES.map((c) => [c, []]));
+  const deps = rowDeps();
+  const add = (cat, item) => { const el = SettingRow(item, deps); byCat[cat].push({ cat, el, search: el.search }); };
+  prefItems().forEach((it) => add('Preferences', it));
+  const b = S.behavior || {};
+  for (const g of b.groups || []) for (const k of g.knobs || []) add(categoryOf(k, g.title), { ...k, value: k.hook_value ?? k.value });
+  for (const k of b.advanced || []) add(categoryOf(k, ''), { ...k, value: k.hook_value ?? k.value });
+  return byCat;
+}
+
+const WIDE = {
+  Integrations: () => integrationsSection(), Ecosystem: () => ecosystemSection(),
+  Connectors: () => connectorsSection(), Agents: () => agentsSection(),
+};
+const wideCount = (cat) => {
+  const list = { Connectors: S.connectors && S.connectors.connectors, Agents: agentRoster(),
+    Ecosystem: S.ecosystem && [...(S.ecosystem.plugins || []), ...((S.ecosystem.mcp && S.ecosystem.mcp.servers) || [])] }[cat];
+  return Array.isArray(list) ? list.length : null;
+};
+
+// Filtering only toggles `hidden`; rows keep their status, focus and scroll.
+function applyFilter() {
+  const q = S.query;
+  const all = Object.values(S.entries).flat();
+  all.forEach((e) => { e.el.hidden = !rowMatches(e.search, q); });
+  const counts = countByCategory(all, q);
+  for (const cat of CATEGORIES) {
+    const ui = S.ui[cat];
+    const wide = !!WIDE[cat];
+    const n = wide ? wideCount(cat) : (counts[cat] || 0);
+    const shown = q.trim() ? (wide ? cat.toLowerCase().includes(q.trim().toLowerCase()) : n > 0) : cat === S.cat;
+    ui.section.hidden = !shown;
+    ui.btn.setAttribute('aria-current', String(cat === S.cat && !q.trim()));
+    ui.count.textContent = n === null ? '' : String(n);
+  }
+}
+
+function categoryBody(cat) {
+  if (WIDE[cat]) return h('div', { class: 'st-grid' }, h('div', { class: 'st-wide' }, WIDE[cat]()));
+  const rows = (S.entries[cat] || []).map((e) => e.el);
+  const omp = cat === 'Advanced' && S.behavior ? ompSection(S.behavior.omp) : null;
+  return h('div', { class: 'st-grid' }, ...rows, omp ? h('div', { class: 'st-wide' }, omp) : null);
+}
+
+function draw() {
+  if (!S || !S.mount || S.destroyed) return;
+  if (!S.entries) S.entries = buildEntries();
+  S.ui = {};
+  const filter = h('input', { id: 'st-filter', class: 'input st-filter', type: 'search', value: S.query, placeholder: 'Filter settings by name, key or effect', 'aria-label': 'Filter settings' });
+  filter.addEventListener('input', () => { S.query = filter.value; applyFilter(); });
+  const navButtons = [];
+  const sections = CATEGORIES.map((cat) => {
+    const count = h('span', { class: 'st-count' });
+    const section = h('section', { class: 'st-cat', id: slug(cat), 'aria-label': cat }, h('h2', { class: 'st-cat-title' }, cat), categoryBody(cat));
+    const btn = h('button', { type: 'button', class: 'st-nav-item' }, cat, ' ', count);
+    btn.addEventListener('click', () => {
+      S.cat = cat;
+      try { const u = new URL(globalThis.location.href); u.searchParams.set('cat', cat); globalThis.history.replaceState(null, '', u); } catch { /* no history */ }
+      applyFilter();
+    });
+    navButtons.push(btn);
+    S.ui[cat] = { section, count, btn };
+    return section;
+  });
+  replace(S.mount,
+    h('header', { class: 'pg-head' },
+      h('h1', { class: 'pg-title' }, 'Settings'),
+      h('p', { class: 'pg-sub' }, 'Every row says what it changes and when. A save only turns green after the server reads each written layer back equal.'),
+      filter),
+    h('div', { class: 'st-layout' },
+      h('nav', { class: 'st-nav', 'aria-label': 'Settings categories' }, ...navButtons),
+      h('div', { class: 'st-main' }, ...sections)));
+  applyFilter();
+}
+
+export default {
+  id: 'settings',
+  title: 'Settings',
+  icon: 'settings',
+  group: 'Configure',
+  async load(ctx) {
+    if (S) this.destroy();
+    const mine = S = freshState(ctx);
+    // Do not block the route on the slowest endpoint: render the page now (each section shows
+    // its own "Loading…" or error state) and redraw as data lands.
+    loadAll().then(() => { if (S === mine) draw(); });
+    return { ok: true };
+  },
+  render(ctx) {
+    if (!S) S = freshState(ctx);
+    S.ctx = ctx;
+    S.mount = h('div', { class: 'pg-page pg-settings-page' });
+    draw();
+    return S.mount;
+  },
+  destroy() {
+    if (!S) return;
+    unwireGuard();
+    S.destroyed = true;
+    S = null;
+  },
+};

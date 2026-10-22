@@ -1,5 +1,7 @@
 # Atlas Command Center: redesign brief (v14)
 
+> Withdrawn 2026-10-22 in atlas 15.0.1. The code this describes was reverted to the 13.0.0 dashboard (commit 5aa2c48f). Kept as history.
+
 > Superseded by docs/plans/2026-10-22-command-center-v15-design.md (v15, 2026-10-22).
 
 Status: build contract. Every implementer of `plugins/atlas/scripts/dashboard_ui/` builds to this file.

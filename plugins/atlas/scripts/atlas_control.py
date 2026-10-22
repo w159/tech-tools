@@ -149,11 +149,7 @@ def _norm_options(options):
     for o in options or []:
         if isinstance(o, dict):
             out.append(
-                {
-                    "value": o["value"],
-                    "label": o.get("label", o["value"]),
-                    "hint": o.get("hint", ""),
-                }
+                {"value": o["value"], "label": o.get("label", o["value"]), "hint": o.get("hint", "")}
             )
         else:
             out.append({"value": o, "label": o, "hint": ""})
@@ -460,28 +456,12 @@ _KIND = {
 _OPTIONS = {
     "ATLAS_OPTIMIZE": [
         {"value": "off", "label": "Off", "hint": "Never rewrite prompts."},
-        {
-            "value": "trigger",
-            "label": "Trigger prefix",
-            "hint": "Only prompts that start with a trigger prefix.",
-        },
-        {
-            "value": "always",
-            "label": "Always",
-            "hint": "Every non-trivial prompt; adds model latency each time.",
-        },
+        {"value": "trigger", "label": "Trigger prefix", "hint": "Only prompts that start with a trigger prefix."},
+        {"value": "always", "label": "Always", "hint": "Every non-trivial prompt; adds model latency each time."},
     ],
     "ATLAS_OPTIMIZE_TRIGGER": [
-        {
-            "value": "opt:,optimize:,++",
-            "label": "opt:, optimize:, ++",
-            "hint": "All three prefixes (default).",
-        },
-        {
-            "value": "opt:,optimize:",
-            "label": "opt:, optimize:",
-            "hint": "Word prefixes only.",
-        },
+        {"value": "opt:,optimize:,++", "label": "opt:, optimize:, ++", "hint": "All three prefixes (default)."},
+        {"value": "opt:,optimize:", "label": "opt:, optimize:", "hint": "Word prefixes only."},
         {"value": "opt:", "label": "opt:", "hint": ""},
         {"value": "optimize:", "label": "optimize:", "hint": ""},
         {"value": "++", "label": "++", "hint": ""},
@@ -533,76 +513,16 @@ _EFFECT = {
     "ATLAS_DECISION_MODEL": "The prompt classifier uses this Ollama model.",
     "ATLAS_DECISION_URL": "The prompt classifier calls this address; blank uses local Ollama.",
 }
-_ADV_KIND = {
-    "ATLAS_DECISION_MODEL": "model",
-    "ATLAS_DECISION_URL": "url",
-    "ATLAS_TYPESAFE_URL": "url",
-}
+_ADV_KIND = {"ATLAS_DECISION_MODEL": "model", "ATLAS_DECISION_URL": "url"}
 _PATH_KEYS = {"ATLAS_HOME", "ATLAS_DB"}
 
 # Advanced (scanned) keys carry no hand-written metadata, so their control kind is inferred from the
 # name and the documented default; anything that fits no rule stays free text.
-_ADV_SELECT = {
-    "ATLAS_COLONY_TRANSPORT": [
-        "herdr",
-        "tmux",
-        "claude-bg",
-    ],  # accepted values: atlas_mux.py docstring
-    # Each set below is exactly what the reader compares against: any other value behaves as the first listed.
-    "ATLAS_MODE": [  # completion_gate_core.py:324 compares to "solo"
-        {"value": "team", "label": "Team", "hint": "The normal completion gate."},
-        {
-            "value": "solo",
-            "label": "Solo",
-            "hint": "Relaxed gate for a single-session run.",
-        },
-    ],
-    "ATLAS_SEAT_BACKEND": [  # atlas_seats.py:42 accepts rig, herdr, off; anything else detects
-        {
-            "value": "auto",
-            "label": "Auto",
-            "hint": "Use rig when available, else herdr.",
-        },
-        {"value": "rig", "label": "rig", "hint": ""},
-        {"value": "herdr", "label": "herdr", "hint": ""},
-        {"value": "off", "label": "Off", "hint": "No seat backend."},
-    ],
-    "ATLAS_GATES": [  # atlas_scope.py:68 gates_armed: always, off, else project detection
-        {
-            "value": "on",
-            "label": "Project directories",
-            "hint": "Armed inside projects, never in scratch directories.",
-        },
-        {
-            "value": "always",
-            "label": "Always",
-            "hint": "Armed even in scratch directories.",
-        },
-        {"value": "off", "label": "Off", "hint": "Disarmed everywhere."},
-    ],
-}
-# Ranges for numeric keys whose name the pattern below cannot place, or where the reader clamps tighter.
-_ADV_RANGE = {
-    "ATLAS_BURST_SECS": (0, 600),
-    "ATLAS_DOCTOR_HOOK_TTL_MIN": (0, 1440),
-    "ATLAS_GATE_BLOCK_LOOP": (1, 7),
-    "ATLAS_FOOTPRINT_FILES": (0, 100),
-    "ATLAS_LEAD_IDLE_TTL": (60, 86400),
-    "ATLAS_RIG_PORT": (1024, 65535),
-    "ATLAS_TERM_IDLE_S": (10, 86400),
-}
+_ADV_SELECT = {"ATLAS_COLONY_TRANSPORT": ["herdr", "tmux", "claude-bg"]}  # accepted values: atlas_mux.py docstring
 _ADV_TOGGLES = {"ATLAS_COLONY", "ATLAS_TODO"}
-_ADV_NUMBER_NAME = re.compile(
-    r"(_PORT|_S|_SECS|_TTL|_THRESHOLD)$|_TIMEOUT|_MAX_|^ATLAS_COLONY_LIVE_WINDOW$"
-)
-_TOGGLE_PAIRS = {
-    "on": ("on", "off"),
-    "off": ("on", "off"),
-    "1": ("1", "0"),
-    "0": ("1", "0"),
-    "true": ("true", "false"),
-    "false": ("true", "false"),
-}
+_ADV_NUMBER_NAME = re.compile(r"(_PORT|_S|_SECS|_TTL|_THRESHOLD)$|_TIMEOUT|_MAX_|^ATLAS_COLONY_LIVE_WINDOW$")
+_TOGGLE_PAIRS = {"on": ("on", "off"), "off": ("on", "off"), "1": ("1", "0"), "0": ("1", "0"),
+                 "true": ("true", "false"), "false": ("true", "false")}
 
 
 def _adv_shape(key: str) -> dict:
@@ -612,19 +532,13 @@ def _adv_shape(key: str) -> dict:
         return {"kind": _ADV_KIND[key]}
     if key in _ADV_SELECT:
         return {"kind": "select", "options": _norm_options(_ADV_SELECT[key])}
-    if key in _ADV_RANGE:
-        lo, hi = _ADV_RANGE[key]
-        return {"kind": "number", "range": {"min": lo, "max": hi, "step": 1}}
     pair = _TOGGLE_PAIRS.get(default.lower())
     if key in _ADV_TOGGLES or pair:
         on, off = pair or _TOGGLE_PAIRS["on"]
         return {"kind": "toggle", "on": on, "off": off}
     if _ADV_NUMBER_NAME.search(key) and re.fullmatch(r"\d+", default):
         hi = 65535 if key.endswith("_PORT") else 100000 if "_MAX_" in key else 86400
-        return {
-            "kind": "number",
-            "range": {"min": 1 if key.endswith("_PORT") else 0, "max": hi, "step": 1},
-        }
+        return {"kind": "number", "range": {"min": 1 if key.endswith("_PORT") else 0, "max": hi, "step": 1}}
     return {"kind": "text"}
 
 
@@ -648,29 +562,75 @@ for _knob in BEHAVIOR_KNOBS:
 
 # Documented ATLAS_* variables outside the curated groups. A discovered key missing here is shown as undocumented.
 _AD = {
-    "ATLAS_AUTONAME": (
-        "`off` makes a dispatch of an atlas agent that carries no name a denial; on, the hook names it for you.",
-        "on",
+    "ATLAS_MANDATES": (
+        "`off` silences the recall reminder and the one-time commit nudge.",
+        "",
         "hooks",
     ),
-    "ATLAS_BUILTIN_AGENT_NUDGE": (
-        "`off` stops the dispatch check that denies a built-in agent type where an atlas agent should be used.",
-        "on",
+    "ATLAS_GATE_HEADER": (
+        "`off` skips the completion-gate check that a final reply starts with the ATLAS header line.",
+        "",
         "hooks",
     ),
-    "ATLAS_BURST_SECS": (
-        "Seconds within which back-to-back dispatches trigger the burst advisory. 0 silences it.",
-        "10",
+    "ATLAS_GATE_PHASES": (
+        "`off` skips the check that the board covers the required todo phases after code shipped.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_GATE_COLONY": (
+        "`off` skips the check that a run with two or more workers actually used its colony channel.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_GATE_REPORT": (
+        "`off` disables the gate that blocks a worker's final message when it is not the fixed report container.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_FOOTPRINT_FILES": (
+        "Distinct code files an unflagged run may touch before the tripwire treats it as orchestration. 0 disables.",
+        "3",
         "hooks",
     ),
     "ATLAS_CHANNELS": (
         "`off` stops atlas steering subagent dispatches onto a colony channel.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_DECISION": (
+        "`off` skips the local-model prompt classifier and keeps the regex result.",
         "on",
         "hooks",
     ),
+    "ATLAS_DECISION_URL": (
+        "Loopback endpoint for the prompt classifier. Blank uses Ollama on 127.0.0.1:11434.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_DECISION_MODEL": ("Model the prompt classifier asks.", "nimble", "hooks"),
     "ATLAS_COLONY": (
         "`off` skips starting the herdr colony when a session begins.",
         "on",
+        "hooks",
+    ),
+    "ATLAS_TODO": (
+        "`off` stops copying the session's todo list onto the atlas board.",
+        "on",
+        "hooks",
+    ),
+    "ATLAS_DOCS_REPAIR": (
+        "`off` skips the session-start check for a project that has no docs/ tree, and its notice.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_GATES": (
+        "`always` arms the orchestration gates even in scratch directories; `off` disarms them everywhere.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_TYPESAFE_URL": (
+        "Alternate scoring endpoint. A loopback URL scores locally with no API key.",
+        "https://api.typesafe.ai",
         "hooks",
     ),
     "ATLAS_COLONY_LIVE_WINDOW": (
@@ -683,91 +643,9 @@ _AD = {
         "tmux",
         "shell",
     ),
-    "ATLAS_DECISION": (
-        "`off` skips the local-model prompt classifier and keeps the regex result.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_DECISION_MODEL": (
-        "Model the prompt classifier asks.",
-        "nimble",
-        "hooks",
-    ),
-    "ATLAS_DECISION_URL": (
-        "Loopback endpoint for the prompt classifier. Blank uses Ollama on 127.0.0.1:11434.",
-        "",
-        "hooks",
-    ),
-    "ATLAS_DOCS_REPAIR": (
-        "`off` skips the session-start check for a project that has no docs/ tree, and its notice.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_DOCTOR_HOOK_TTL_MIN": (
-        "Minutes a healthy atlas-doctor hook check stays fresh before it runs again. 0 runs it every time.",
-        "30",
-        "shell",
-    ),
-    "ATLAS_FOOTPRINT_FILES": (
-        "Distinct code files an unflagged run may touch before the tripwire treats it as orchestration. 0 disables.",
-        "3",
-        "hooks",
-    ),
-    "ATLAS_GATE_BLOCK_LOOP": (
-        "How many identical consecutive completion-gate blocks are allowed before the gate lets the stop through (1 to 7).",
-        "3",
-        "hooks",
-    ),
-    "ATLAS_GATE_COLONY": (
-        "`off` skips the check that a run with two or more workers actually used its colony channel.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_GATE_HEADER": (
-        "`off` skips the completion-gate check that a final reply starts with the ATLAS header line.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_GATE_PHASES": (
-        "`off` skips the check that the board covers the required todo phases after code shipped.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_GATE_REPORT": (
-        "`off` disables the gate that blocks a worker's final message when it is not the fixed report container.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_GATES": (
-        "`always` arms the orchestration gates even in scratch directories; `off` disarms them everywhere; `on` arms them only inside project directories.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_HERDR_AUTOSTART": (
-        "`off` stops session start from launching the headless herdr server.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_LEAD_IDLE_TTL": (
-        "Seconds an idle lead channel with no exit code is kept before it is treated as a crashed session.",
-        "7200",
-        "shell",
-    ),
-    "ATLAS_LEAN_SHELL": (
-        "`off` stops omp routing bash through lean-ctx.",
-        "on",
-        "shell",
-    ),
-    "ATLAS_MANDATES": (
-        "`off` silences the recall reminder and the one-time commit nudge.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_MODE": (
-        "`solo` relaxes the completion gate for a single-session run: one executed test command pairs with direct main-thread changes. `team` is the normal gate.",
-        "team",
-        "hooks",
-    ),
+    "ATLAS_STOP_BRIDGE": ("`off` disables only omp's session-end bridge.", "", "shell"),
+    "ATLAS_LEAN_SHELL": ("`off` stops omp routing bash through lean-ctx.", "", "shell"),
+    "ATLAS_STYLE": ("`off` stops omp injecting the atlas output style.", "", "shell"),
     "ATLAS_MUX_OMP_CONFIG": (
         "omp config file the colony reads model roles from.",
         "~/.omp/agent/config.yml",
@@ -793,66 +671,7 @@ _AD = {
         "8443",
         "shell",
     ),
-    "ATLAS_RIG_PORT": (
-        "Local port of the rig seat backend.",
-        "7437",
-        "shell",
-    ),
-    "ATLAS_SCOPE_GATE": (
-        "`off` turns the missing-SCOPE dispatch denial into an advisory.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_SEAT_BACKEND": (
-        "`rig`, `herdr` or `off` forces the seat backend for colony panes; `auto` detects rig, then herdr.",
-        "auto",
-        "shell",
-    ),
-    "ATLAS_SELFFIX": (
-        "`0` disables the dashboard's self-fix scheduler.",
-        "1",
-        "shell",
-    ),
-    "ATLAS_STATUSLINE_CONFIG": (
-        "JSON file the usage statusline reads its settings from.",
-        "~/.omp/agent/usage-statusline.json",
-        "shell",
-    ),
-    "ATLAS_STOP_BRIDGE": (
-        "`off` disables only omp's session-end bridge.",
-        "on",
-        "shell",
-    ),
-    "ATLAS_STYLE": (
-        "`off` stops omp injecting the atlas output style.",
-        "on",
-        "shell",
-    ),
-    "ATLAS_TASKS_MIRROR": (
-        "`on` adds a paragraph to colony worker prompts asking them to mirror the atlas board into TaskCreate.",
-        "off",
-        "shell",
-    ),
-    "ATLAS_TERM_IDLE_S": (
-        "Seconds a Command Center terminal may sit with no client attached before it closes.",
-        "900",
-        "shell",
-    ),
-    "ATLAS_TODO": (
-        "`off` stops copying the session's todo list onto the atlas board.",
-        "on",
-        "hooks",
-    ),
-    "ATLAS_TYPESAFE_URL": (
-        "Alternate scoring endpoint. A loopback URL scores locally with no API key.",
-        "https://api.typesafe.ai",
-        "hooks",
-    ),
-    "ATLAS_WT_GATE": (
-        "`off` skips the completion-gate check for unmerged or dirty worker worktrees.",
-        "on",
-        "hooks",
-    ),
+    "ATLAS_SELFFIX": ("`0` disables the dashboard's self-fix scheduler.", "", "shell"),
 }
 
 # Set by atlas itself, or test/isolation wiring: saving one from a settings page can only break something.
@@ -877,11 +696,6 @@ _INTERNAL = {
     "ATLAS_CLAUDE_SETTINGS",
     "ATLAS_SKILLS_DIR",
     "ATLAS_DASHBOARD_DB",
-    "ATLAS_SESSION_ID",  # exported by atlas for the session it starts
-    "ATLAS_SOURCE",  # checkout path atlas-doctor exports for itself
-    "ATLAS_LEAD_AGENT",  # the lead names itself to its workers
-    "ATLAS_TUI_BRIDGE",  # the dashboard terminal sets it for the TUI it spawns
-    "ATLAS_TERM_TUI_CMD",  # test hook for the dashboard terminal
 }
 
 _KNOBS_BY_KEY = {k["key"]: k for k in BEHAVIOR_KNOBS}
@@ -1105,9 +919,7 @@ def write_omp_env(updates: dict, removed) -> None:
     if lines and lines[-1] == "":
         lines.pop()
     span = _omp_env_span(lines)
-    quote = (
-        json.dumps
-    )  # double-quoted YAML scalar, so `on` stays a string, not a boolean
+    quote = json.dumps  # double-quoted YAML scalar, so `on` stays a string, not a boolean
     if span is None:
         entries = [f"  {k}: {quote(v)}" for k, v in sorted(updates.items())]
         if entries:
@@ -1125,12 +937,8 @@ def write_omp_env(updates: dict, removed) -> None:
                     line = f"{indent}{key}: {quote(pending.pop(key))}"
             body.append(line)
         body += [f"{indent}{k}: {quote(v)}" for k, v in sorted(pending.items())]
-        has_entry = any(
-            _OMP_ENTRY.match(x) and not x.lstrip().startswith("#") for x in body
-        )
-        lines[head:end] = ["env:" if has_entry else "env: {}"] + (
-            body if has_entry else []
-        )
+        has_entry = any(_OMP_ENTRY.match(x) and not x.lstrip().startswith("#") for x in body)
+        lines[head:end] = ["env:" if has_entry else "env: {}"] + (body if has_entry else [])
     _write_text(path, "\n".join(lines) + "\n")
 
 
@@ -1156,10 +964,7 @@ def _adv_meta(key: str, doc) -> dict:
     }
 
 
-_SOURCE_NAME = {
-    "live_env": "process",
-    "claude_settings": "claude",
-}  # legacy `source` values
+_SOURCE_NAME = {"live_env": "process", "claude_settings": "claude"}  # legacy `source` values
 
 
 def _scope_of(key: str) -> str:
@@ -1176,10 +981,7 @@ def _layer_view(key: str, scope: str, store_env, claude_env, omp_env, rc_env) ->
     proc = os.environ.get(key)
     hooks, shell = scope == "hooks", scope == "shell"
     return {
-        "live_env": {
-            "supported": True,
-            "value": proc if proc not in (None, "") else None,
-        },
+        "live_env": {"supported": True, "value": proc if proc not in (None, "") else None},
         "store": {"supported": hooks, "value": store_env.get(key)},
         "claude_settings": {
             "supported": True,
@@ -1216,10 +1018,7 @@ def behavior_state() -> dict:
         hook_value, hook_source = default, "default"
         for name in ("store", "claude_settings"):
             if layers[name]["value"] is not None:
-                hook_value, hook_source = (
-                    layers[name]["value"],
-                    _SOURCE_NAME.get(name, name),
-                )
+                hook_value, hook_source = layers[name]["value"], _SOURCE_NAME.get(name, name)
                 break
         reaches = []
         if layers["claude_settings"]["value"] is not None:
@@ -1230,36 +1029,7 @@ def behavior_state() -> dict:
             reaches.append("omp")
         if layers["live_env"]["value"] is not None:
             reaches.append("dashboard-process")
-        # What a NEW session reads: the layers a session can see, never the dashboard's own process env.
-        chain = (
-            ("store", "claude_settings")
-            if scope == "hooks"
-            else ("claude_settings", "omp_config", "shell_rc")
-        )
-        cur_value, cur_source = default, "default"
-        for name in chain:
-            if layers[name]["value"] is not None:
-                cur_value, cur_source = (
-                    layers[name]["value"],
-                    "saved" if name in ("store", "claude_settings") else "shell",
-                )
-                break
-        live_value = layers["live_env"]["value"]
-        editable = key not in _INTERNAL and bool(ENV_KEY_RE.match(key))
         return {
-            "current": {
-                "value": cur_value,
-                "source": cur_source,
-                "applies": _APPLIES.get(key, "next-session"),
-            },
-            "live": {
-                "value": live_value,
-                "differs": live_value is not None and live_value != cur_value,
-            },
-            "editable": editable,
-            "read_only_reason": ""
-            if editable
-            else "Atlas sets this itself; saving it from here would break something.",
             "value": value,
             "source": source,
             "hook_value": hook_value,
@@ -1352,12 +1122,7 @@ def _check_value(key: str, value: str, confirm: bool):
     if kind == "select" and meta.get("options"):
         allowed = [o["value"] for o in meta["options"]]
         if value not in allowed:
-            return {
-                "error": "bad_option",
-                "key": key,
-                "options": allowed,
-                "status": 400,
-            }
+            return {"error": "bad_option", "key": key, "options": allowed, "status": 400}
     r = _RANGE.get(key) or meta.get("range")
     if r:
         try:
@@ -1382,13 +1147,7 @@ def _check_value(key: str, value: str, confirm: bool):
 
         ok, matches = atlas_ollama.validate_model(value)
         if ok is False:  # None: ollama unreachable, cannot validate, so accept
-            return {
-                "error": "unknown_model",
-                "key": key,
-                "value": value,
-                "matches": matches,
-                "status": 400,
-            }
+            return {"error": "unknown_model", "key": key, "value": value, "matches": matches, "status": 400}
     return None
 
 
@@ -1530,12 +1289,7 @@ def write_behavior_updates(updates: dict, confirm: bool = False) -> dict:
     }
     if len(results) == 1:
         one = results[0]
-        out.update(
-            key=one["key"],
-            wanted=one["wanted"],
-            layers=one["layers"],
-            applies=one["applies"],
-        )
+        out.update(key=one["key"], wanted=one["wanted"], layers=one["layers"], applies=one["applies"])
     if not out["ok"]:
         out["error"] = "readback_mismatch"
     return out
@@ -2243,9 +1997,7 @@ def connector_health(configured: bool, enabled: bool, usage: dict | None) -> str
 
 # --- omp (oh-my-pi) model roles, read-only ------------------------------------
 
-OMP_CONFIG_PATH: Path | None = (
-    None  # None: resolve ~/.omp/agent/config.yml from HOME per call (tests patch it)
-)
+OMP_CONFIG_PATH: Path | None = None  # None: resolve ~/.omp/agent/config.yml from HOME per call (tests patch it)
 OMP_ROLES = ("atlas-worker", "atlas-verifier", "atlas-mechanic", "default", "smol")
 
 

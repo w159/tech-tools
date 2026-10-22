@@ -1969,7 +1969,7 @@ TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
 # GETs that expose transcripts/agent output or live streams: token required.
 _SENSITIVE_GET = re.compile(
     r"^/api/v2/(stream|irc|colony|channels(/[^/]+)?|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
-    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/gates$|^/api/v2/herd/capture$|^/api/v2/term/(snapshot|capture|seats)$"
+    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/herd/capture$|^/api/v2/term/(snapshot|capture|seats)$"
 )
 # GETs served straight from do_GET (SSE, websocket upgrade), not through V2_ROUTES.
 V2_RAW_GET = frozenset({"/api/v2/stream", "/api/v2/term/ws"})
@@ -2003,7 +2003,6 @@ def _mount_v2_routes() -> None:
     for name in (
         "atlas_dash_work",
         "atlas_dash_irc",
-        "atlas_dash_gates",
         "atlas_dash_insights",
         "atlas_dash_herd",
         "atlas_dash_integrations",
