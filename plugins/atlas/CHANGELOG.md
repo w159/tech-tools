@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Self-fix verify no longer runs a database-supplied command through a shell. The command is parsed into arguments and must be a known test runner; anything else falls back to the contract test.
+- The git commit and push gate can no longer be skipped with a newline, a subshell, a wrapper such as `env` or `time`, or a git global option such as `--no-pager`.
+- The read-only SQL guard checks the command both with and without comments, so `SELECT 1 -- x'; DROP TABLE ...` is blocked, and it blocks instead of allowing when jq or perl is missing.
+- ConnectWise connector: turning off certificate checks now affects only ConnectWise requests, not every connection in the process. Token-exchange failures log the status and error code only.
+
+### Fixed
+
+- The findings ledger is written under a lock, and a corrupt ledger is set aside instead of being silently replaced.
+- The completion gate's loop limit resets after a passing Stop, so it no longer turns itself off for the rest of a session.
+- Fewer false alarms: credential warnings ignore 4xx fields inside successful results, and the secret warning ignores credentials piped into another command.
+- Docs drift now counts new, untracked files. The nudge hook honors `ATLAS_HOME`.
+- `atlas_todo.py --help` prints usage. TypeScript types match the board's real data.
+
+### Changed
+
+- The recall gate checks its cached result before scanning the plugin directory, removing about 16 ms from most tool calls.
+- The prompt optimizer has one 25-second budget in total (was up to 220 seconds).
+- The native Grep/Glob deny message names its escape hatch.
+
 ## 15.0.0 - 2026-10-22
 
 Command Center v15: the dashboard becomes a band, a seats rail and six routes. The nine v14 pages fold into Run, Agents, Board, Channels, Health and Settings.
