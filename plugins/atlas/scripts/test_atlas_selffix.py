@@ -16,6 +16,11 @@ import atlas_doctor  # noqa: E402
 import atlas_selffix as sf  # noqa: E402
 
 
+# Allowlisted test-runner commands that exit 0 / non-zero without needing a project.
+PASS_CMD = "python3 -m unittest -h"
+FAIL_CMD = "python3 -m unittest no_such_module_zz"
+
+
 class SelffixTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -76,7 +81,7 @@ class SelffixTest(unittest.TestCase):
             title=f"t{n}",
             severity="MED",
             target_path=target,
-            evidence_json=json.dumps({"test_command": cmd or "true"}),
+            evidence_json=json.dumps({"test_command": cmd or PASS_CMD}),
         )
         return fid
 
@@ -147,7 +152,7 @@ class SelffixTest(unittest.TestCase):
         self.assertEqual(atlas_db.get_finding(self.conn, fid)["status"], "applied")
 
     def test_failure_retries_twice_then_terminal_until_manual_retry(self):
-        fid = self.add(1, cmd="false")
+        fid = self.add(1, cmd=FAIL_CMD)
         sf.tick(self.conn)
         self.live = False
         sf.tick(
@@ -412,6 +417,97 @@ class SurfaceTargetTest(unittest.TestCase):
         top, _, why = sf.resolve_target({"target_path": "builtin:bash"})
         self.assertIsNone(top)
         self.assertIn("not a source file", why)
+
+
+class VerifyCommandSandbox(unittest.TestCase):
+    def finding(self, cmd):
+        return {"evidence_json": json.dumps({"test_command": cmd})}
+
+    def test_allowlisted_runners_are_kept(self):
+        for cmd in (
+            "python3 -m pytest -q tests",
+            "python -m unittest discover",
+            "pytest -x",
+            "npm test",
+            "pnpm run test",
+            "yarn test",
+            "bun test",
+            "npx vitest run",
+            "npx jest",
+            "go test ./...",
+            "cargo test",
+            "make test",
+        ):
+            argv, why = sf._resolve_verify(self.finding(cmd))
+            self.assertEqual(argv, cmd.split(), cmd)
+            self.assertEqual(why, "")
+
+    def test_non_runner_falls_back_to_contract_with_reason(self):
+        contract = sf.shlex.split(sf.CONTRACT_TEST)
+        for cmd in (
+            "touch /tmp/pwned",
+            "pytest; rm -rf /",
+            "python3 -c 'import os'",
+            "./pytest",
+            "/tmp/x/pytest",
+            "FOO=1 pytest",
+            "make install",
+            "unterminated 'quote",
+        ):
+            argv, why = sf._resolve_verify(self.finding(cmd))
+            self.assertEqual(argv, contract, cmd)
+            self.assertIn("CONTRACT_TEST", why)
+
+    def test_contract_test_is_valid_argv(self):
+        argv = sf.shlex.split(sf.CONTRACT_TEST)
+        self.assertTrue(sf._allowed_test_argv(argv))
+
+    def test_verify_injection_never_reaches_a_shell(self):
+        tmp = tempfile.mkdtemp()
+        marker = os.path.join(tmp, "pwned")
+        conn = atlas_db.connect(os.path.join(tmp, "t.db"))
+        atlas_db.init(conn)
+        fid = atlas_db.upsert_finding(
+            conn,
+            "m:inj",
+            title="t",
+            severity="MED",
+            target_path="src/a.py",
+            evidence_json=json.dumps({"test_command": f"touch {marker}"}),
+        )
+        wt = os.path.join(tmp, "wt")
+        os.makedirs(wt)
+        conn.execute(
+            "UPDATE findings SET fix_worktree=?, fix_branch='b' WHERE id=?", (wt, fid)
+        )
+        conn.commit()
+        f = atlas_db.get_finding(conn, fid)
+        seen = []
+
+        def fake_run(argv, **kw):
+            seen.append((argv, kw.get("shell")))
+            return mock.Mock(returncode=1, stdout="", stderr="boom")
+
+        def fake_git(args, cwd, timeout=120):
+            return (0, "1") if args[:2] == ["rev-list", "--count"] else (0, "")
+
+        with mock.patch.object(sf, "_git", fake_git), mock.patch.object(
+            sf.subprocess, "run", fake_run
+        ):
+            sf._verify(conn, f, tmp)
+        self.assertFalse(os.path.exists(marker))
+        self.assertEqual(seen[0][0], sf.shlex.split(sf.CONTRACT_TEST))
+        self.assertFalse(seen[0][1])
+        log = atlas_db.get_finding(conn, fid)["fix_log"]
+        self.assertIn("not an allowlisted test runner", log)
+
+    def test_set_rejects_unknown_column(self):
+        tmp = tempfile.mkdtemp()
+        conn = atlas_db.connect(os.path.join(tmp, "t.db"))
+        atlas_db.init(conn)
+        fid = atlas_db.upsert_finding(conn, "m:c", title="t", severity="MED")
+        with self.assertRaises(AssertionError):
+            sf._set(conn, fid, "failed", **{"fix_log=1, title": "x"})
 
 
 if __name__ == "__main__":

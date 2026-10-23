@@ -1055,6 +1055,28 @@ class LeadPidWalk(unittest.TestCase):
         self.assertEqual(atlas_todo._lead_pid(self._runner(rows)), 100)
 
 
+class CliHelp(unittest.TestCase):
+    def _run(self, *args):
+        return subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), "atlas_todo.py"), *args],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_help_variants_print_usage_and_exit_zero(self):
+        for flag in ("--help", "-h", "help"):
+            r = self._run(flag)
+            self.assertEqual(r.returncode, 0, (flag, r.stdout, r.stderr))
+            self.assertIn("usage:", r.stdout)
+            self.assertIn("complete", r.stdout)
+            self.assertNotIn("unknown_command", r.stdout)
+
+    def test_unknown_command_still_errors(self):
+        r = self._run("definitely-not-a-verb")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("unknown_command", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
 

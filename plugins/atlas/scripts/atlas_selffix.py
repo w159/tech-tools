@@ -24,6 +24,7 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import threading
@@ -239,10 +240,26 @@ def _row(conn, fid):
     return atlas_db.get_finding(conn, int(fid))
 
 
+# Column names `_set` may write; keys are interpolated into SQL, so they are allowlisted.
+_SET_COLUMNS = frozenset(
+    {
+        "fix_state",
+        "fix_updated_at",
+        "fix_log",
+        "fix_worktree",
+        "fix_branch",
+        "fix_target",
+        "fix_attempts",
+    }
+)
+
+
 def _set(conn, fid, state, log=None, **cols):
     cols.update(fix_state=state, fix_updated_at=time.time())
     if log is not None:
         cols["fix_log"] = log[-4000:]
+    bad = set(cols) - _SET_COLUMNS
+    assert not bad, f"_set: unexpected column(s) {sorted(bad)}"
     sets = ",".join(f"{k}=?" for k in cols)
     conn.execute(f"UPDATE findings SET {sets} WHERE id=?", (*cols.values(), fid))
     conn.commit()
@@ -314,8 +331,54 @@ def build_prompt(f, wt, branch) -> str:
     )
 
 
+_PY_RUNNER_RE = re.compile(r"^python(\d+(\.\d+)?)?$")
+
+
+def _allowed_test_argv(argv: list) -> bool:
+    """True only for a bare test-runner invocation. argv[0] must be a bare command
+    name (a path such as ./pytest could be a worker-planted binary)."""
+    if not argv or "/" in argv[0] or "\\" in argv[0]:
+        return False
+    exe, rest = argv[0], argv[1:]
+    if _PY_RUNNER_RE.match(exe):
+        return len(rest) >= 2 and rest[0] == "-m" and rest[1] in ("pytest", "unittest")
+    if exe in ("pytest", "py.test"):
+        return True
+    if exe in ("npm", "pnpm", "yarn", "bun"):
+        return bool(rest) and (
+            rest[0] == "test" or (rest[0] == "run" and rest[1:2] == ["test"])
+        )
+    if exe == "npx":
+        names = [a for a in rest if not a.startswith("-")]
+        return bool(names) and names[0] in ("vitest", "jest")
+    if exe in ("go", "cargo", "make"):
+        return rest[:1] == ["test"]
+    return False
+
+
+def _resolve_verify(f) -> tuple:
+    """(argv, note). Uses evidence test_command only when it parses and is an
+    allowlisted test runner; otherwise CONTRACT_TEST, with `note` saying why."""
+    default = shlex.split(CONTRACT_TEST)
+    raw = _evidence(f).get("test_command")
+    if not raw:
+        return default, ""
+    if not isinstance(raw, str):
+        return default, "test_command is not a string; used CONTRACT_TEST"
+    try:
+        argv = shlex.split(raw)
+    except ValueError as e:
+        return default, f"test_command unparseable ({e}); used CONTRACT_TEST"
+    if not _allowed_test_argv(argv):
+        return default, (
+            f"test_command `{raw[:200]}` is not an allowlisted test runner; "
+            "used CONTRACT_TEST"
+        )
+    return argv, ""
+
+
 def _verify_cmd(f) -> str:
-    return _evidence(f).get("test_command") or CONTRACT_TEST
+    return shlex.join(_resolve_verify(f)[0])
 
 
 def _worker_launch(top, f, wt):
@@ -509,11 +572,12 @@ def _verify(conn, f, top) -> str:
             "infrastructure: " + ", ".join(infra[:20]),
         )
         return f"#{fid} held for review: {', '.join(infra[:5])}"
-    cmd = _verify_cmd(f)
+    argv, why = _resolve_verify(f)
+    cmd = shlex.join(argv)
     try:
         p = subprocess.run(
-            cmd,
-            shell=True,
+            argv,
+            shell=False,
             cwd=wt,
             env=_scrubbed_env(),
             capture_output=True,
@@ -523,6 +587,10 @@ def _verify(conn, f, top) -> str:
         ok, out = p.returncode == 0, (p.stdout + p.stderr)[-1500:]
     except subprocess.TimeoutExpired:
         ok, out = False, f"verify timed out after {VERIFY_TIMEOUT_S}s"
+    except OSError as e:  # runner not installed / not executable
+        ok, out = False, f"verify could not start: {e}"
+    if why:
+        out = f"{why}\n{out}"
     if not ok:
         return _fail(conn, fid, f"verify failed: `{cmd}`\n{out}")
     base = _baseline(f)
@@ -537,7 +605,7 @@ def _verify(conn, f, top) -> str:
         out += f"\nremeasure error: {e}"
     if after is not None and base is not None and _worse(f, base, after):
         return _fail(conn, fid, f"remeasure worsened: {base} -> {after}")
-    _set(conn, fid, "ready", f"verified `{cmd}`; metric {base} -> {after}")
+    _set(conn, fid, "ready", f"verified `{cmd}`; metric {base} -> {after}" + (f"\n{why}" if why else ""))
     return f"#{fid} ready ({n} commit(s))"
 
 
