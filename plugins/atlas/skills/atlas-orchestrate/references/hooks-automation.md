@@ -38,7 +38,7 @@ advisory tier: `ATLAS_TRIPWIRE=off` silences drift coaching only (the nested-dis
 policy are unaffected; the latter is switched by `ATLAS_TRIPWIRE_HARD=off`, which disables only
 the deny tier and leaves the advisory nag in place). `hooks/validate-readonly-query.sh` is
 not wired in hooks.json; it is a read-only SQL guard available for the DB-audit
-subagents to invoke during read-only audits. In total 17 hook programs / 22 bindings are wired.
+subagents to invoke during read-only audits. In total 18 hook programs / 22 bindings are wired.
 
 ## Install (gated, idempotent)
 

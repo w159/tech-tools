@@ -218,26 +218,12 @@ Source: `docs/audits/2026-10-26_atlas-state-examination.md`.
 
 ### Follow-ups: audit fixes (added 2026-10-23)
 
-Source: `docs/audits/2026-10-23-atlas-deep-dive.md`, section "Status after implementation". Shipped items are in `plugins/atlas/CHANGELOG.md`.
+Source: `docs/audits/2026-10-23-atlas-deep-dive.md`, section "Status after implementation". Shipped items moved to `plugins/atlas/CHANGELOG.md`, `plugins/armada/CHANGELOG.md` and `docs/CHANGELOG.md` (Unreleased). What remains:
 
-- [planned] Hook latency: run one dispatcher process per event instead of one Python process per hook (target: an edit under 120 ms serial).
-- [planned] Config and data extensions exempt from the delegation mandate (m), so a single `package.json` edit needs no dispatch. Needs an owner decision first.
-- [planned] tmux workers: configurable team cap, and an opt-in kill on `wait` timeout.
-- [planned] Mask secret-shaped values in tmux scrollback and panefeed rows; set `history-limit` on atlas sessions.
-- [planned] Coalesce panefeed repaints with a dirty flag and a 33 ms timer.
-- [planned] `atlas_rig.create_pane` takes a file lock, and the `_ps` cache is cleared on create and close.
-- [planned] `reap_channels` accepts a `pane_live` callback so a quiet but live seat is not archived after the TTL.
-- [planned] Route `/api/v2/herd/capture` through `_read_pane` so it works on herdr.
-- [planned] Dedupe the duplicated skill reference files: one copy per topic, with an identity check in `validate_skills.py`.
-- [planned] The project selector filters with `_real_project`, with a Settings pin.
-- [planned] One JS escape helper that covers `& < > " '`, with a test.
-- [planned] Friction metadata side table so friction can be queried by role.
-- [planned] Alert-only spike detector in `atlas_doctor --mine` (raises a finding, never changes gate config).
-- [planned] Rule for bumping `SCHEMA_VERSION`, with a migration test from a v1 database.
-- [planned] Retention for the `messages` table (scheduled purge with a row cap or TTL).
-- [planned] Armada department `.mcp.json` files point at a `launch.sh` that does not exist; fix the paths or add the script.
-- [planned] Licensing: add license files for each plugin, and review the licensing of the book content that programmer ships.
-- [planned] Rewrite the public README and marketplace copy, and review the plugin names (from the first audit).
+- [planned] Config and data extensions exempt from the delegation mandate (m), so a single `package.json` edit needs no dispatch. The owner declined this for now.
+- [planned] Retention for the `messages` table (scheduled purge with a row cap or TTL) and not storing thinking text. The owner declined both for now.
+- [planned] Review the plugin names (from the first audit).
+- [planned] Review the licensing of the book content that programmer ships.
 
 ### Follow-ups: atlas 12.1.0 and 12.2.0 (added 2026-10-13)
 

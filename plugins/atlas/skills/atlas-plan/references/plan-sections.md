@@ -9,13 +9,13 @@
 - [Ready checks (gate before Phase 4)](#ready-checks-gate-before-phase-4)
 - [Write via atlas:docs-curator](#write-via-atlasdocs-curator)
 
-Ported from CE `ce-plan/references/plan-sections.md` (Goal Capsule + Product Contract + Planning Contract + Implementation Units + Verification Contract + DoD), adapted to atlas date-first naming, docs-ssot write ownership, and orchestrate's consumption contract. This artifact is **implementation-ready** - the exact complement of the brainstorm artifact, which is requirements-only.
+Sections: Goal Capsule, Product Contract, Planning Contract, Implementation Units, Verification Contract, DoD, with atlas date-first naming, docs-ssot write ownership and orchestrate's consumption contract. This artifact is **implementation-ready** - the exact complement of the brainstorm artifact, which is requirements-only.
 
 ## Path and naming
 
 `docs/plans/<YYYY-MM-DD>_<slug>-plan.md`
 
-- `<YYYY-MM-DD>` = today's date (atlas date-first convention, enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py` - never CE's HHMM-timestamped or undated names).
+- `<YYYY-MM-DD>` = today's date (atlas date-first convention, enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py` - never timestamped or undated names).
 - `<slug>`: lowercase; every character outside `a-z 0-9 . _ -` replaced by `-`; collapsed and trimmed (Windows-safe per docs-ssot).
 - Collision: if the exact path exists and is NOT the resume target, suffix `-2`, `-3`, ... Do not overwrite. If it IS the resume target, edit it in place under resume semantics (`references/intake.md`).
 
@@ -112,7 +112,7 @@ test scenarios, verification, definition of done>
 
 ## Metadata contract
 
-`artifact_contract: atlas-plan/v1` marks this as an atlas plan (CE's `ce-unified-plan/v1` frontmatter does not port - different naming, different execution plane). `product_contract_source` records provenance for the resume path. `execution: atlas-orchestrate` names the only consumer - execution goes through orchestrate's dispatch + verification machinery.
+`artifact_contract: atlas-plan/v1` marks this as an atlas plan. `product_contract_source` records provenance for the resume path. `execution: atlas-orchestrate` names the only consumer - execution goes through orchestrate's dispatch + verification machinery.
 
 ## Consumption by atlas-orchestrate
 

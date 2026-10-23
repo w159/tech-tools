@@ -22,7 +22,7 @@ Current version: **16.0.1** (`plugins/atlas/.claude-plugin/plugin.json`), a test
 |---|---|---|
 | Skills | 39 (3 manual) | `plugins/atlas/skills/` |
 | Role agents (`atlas:*`) | 14 | `plugins/atlas/agents/` |
-| Hooks | 17 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
+| Hooks | 18 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 70 non-test Python files | `plugins/atlas/scripts/` |
 | MCP connectors | 13, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
 | omp agents | 14, generated | `plugins/atlas/omp/agents/` |
@@ -111,7 +111,7 @@ command that fixes it. A worker's card updates in place when it reports.
 
 ## What it changes on your machine
 
-- **Hooks.** The plugin registers 22 hook bindings (17 programs) from `plugins/atlas/hooks/hooks.json` for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas-setup` step you approve.
+- **Hooks.** The plugin registers 22 hook bindings (18 programs) from `plugins/atlas/hooks/hooks.json` for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas-setup` step you approve.
 - **Project files.** `/atlas-setup` creates `docs/` and `.atlas/` in the project it onboards (evidence, the todo board at `.atlas/.run/`, findings). Worktrees for isolated parallel implementers go under `.atlas/wt/`.
 - **State in `~/.atlas/`.** `atlas.db` (SQLite telemetry), `memory/` (lessons saved at Stop and reloaded at boot), `dashboard-prefs.json`, and self-fix worktrees.
 - **Transcript storage.** At Stop, `ingest_session.py` copies the session transcript into `~/.atlas/atlas.db`. Text passes through one shared redactor first: credential-shaped strings and a few personal-identifier patterns (SSN, routing and account numbers, card numbers, dates of birth) are replaced with `[REDACTED]` placeholders. The redactor is pattern matching and best effort; it misses unlabeled values, names and addresses. `ATLAS_INGEST=off` turns ingest off.

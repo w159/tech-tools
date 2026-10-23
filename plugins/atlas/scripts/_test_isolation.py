@@ -85,6 +85,9 @@ os.environ.pop("TMUX_PANE", None)
 # does anyway, it gets a spare port instead of the live 7421.
 os.environ["ATLAS_DASHBOARD"] = "off"
 os.environ["ATLAS_COLONY"] = "off"
+# A real dashboard started by a test (or a child it spawns) must not run the self-fix scheduler: that
+# thread creates git worktrees and atlas/selffix-* branches in whatever repo the test points at.
+os.environ["ATLAS_SELFFIX"] = "0"
 os.environ["ATLAS_DASHBOARD_PORT"] = "17969"
 
 # The values this helper set, so tests can assert against them even if another test

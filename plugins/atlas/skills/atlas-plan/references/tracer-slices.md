@@ -1,6 +1,6 @@
 # Tracer-bullet slices and blocking edges
 
-Source: adapted from Matt Pocock's `to-tickets` skill. Applies to the unit decomposition in `units.md`.
+Applies to the unit decomposition in `units.md`.
 
 - A unit is a vertical slice: a narrow but complete path through every layer it needs (schema, API, UI, tests), not one layer across the whole feature. Done when the slice is demoable or verifiable alone.
 - One unit = one worker task = one failing check written first (red), then made green. A unit with no failable check is not a unit yet.

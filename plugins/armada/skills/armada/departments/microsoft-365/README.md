@@ -44,15 +44,18 @@ Grant admin consent for all permissions.
 
 App registration -> Certificates & secrets -> New client secret. Copy the value.
 
-### 4. Configure Environment
+### 4. Configure the CIPP connector
 
-Copy `.env.example` to `.env` and fill in:
+The connector reads its credentials from the armada plugin's `userConfig`
+keys (set through `/plugin config` on armada), not from `MICROSOFT_*`
+environment variables. Set:
 
-```bash
-MICROSOFT_CLIENT_ID=your-app-client-id
-MICROSOFT_CLIENT_SECRET=your-client-secret
-MICROSOFT_TENANT_ID=your-tenant-id  # or "common" for multi-tenant
-```
+- `cipp_base_url` - URL of your deployed CIPP Azure Function (required; leave blank to disable CIPP)
+- Either `cipp_api_key` (legacy static bearer token), or all three of `cipp_tenant_id`, `cipp_client_id` and `cipp_client_secret` (CIPP OAuth2 app registration)
+
+The app registration from steps 1-3 supplies the tenant ID, client ID and
+client secret for the OAuth2 option. `~/.config/atlas/atlas.env` still works as
+a fallback. See `skills/armada/references/connector-provisioning.md`.
 
 ### 5. Add to Claude Code
 

@@ -17,6 +17,12 @@ class TmuxIsolationTest(unittest.TestCase):
         self.assertFalse(os.path.realpath(d).startswith(os.path.realpath(REAL_DEFAULT)))
         self.assertNotIn("TMUX", os.environ)
 
+    def test_selffix_scheduler_is_off_under_test(self):
+        self.assertEqual(os.environ.get("ATLAS_SELFFIX"), "0")
+        import atlas_selffix
+
+        self.assertIsNone(atlas_selffix.start_scheduler())
+
     def test_mux_kills_use_exact_session_match(self):
         src = pathlib.Path(__file__).with_name("atlas_mux.py").read_text()
         self.assertNotIn('"kill-session", "-t", session', src)  # bare -t prefix-matches other sessions

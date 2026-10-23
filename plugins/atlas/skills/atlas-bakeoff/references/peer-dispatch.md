@@ -14,11 +14,10 @@ How to add independent voices to an atlas-bakeoff verdict run. This file is read
 
 ## 1. The substitution - state this honestly, every time
 
-Compound Engineering's `ce-pov` panel shells out to real external CLIs (`codex`, `cursor`,
-`grok-cli`) on fixed routes and verifies cross-model independence with identity receipts
-proving a different served model family. **Atlas never does that.** Shelling to external
-agent binaries is CE's host-specific mechanism and does not belong in atlas: it breaks
-host-portability and adds binary dependencies atlas cannot assume.
+**Atlas never shells out to external agent CLIs** (`codex`, `cursor`, `grok-cli`) and does
+not claim cross-model independence from identity receipts. Shelling to external agent
+binaries is host-specific: it breaks host-portability and adds binary dependencies atlas
+cannot assume.
 
 The honest, portable substitute:
 
@@ -38,7 +37,7 @@ Peers open ONLY on an explicit user request for a second opinion. Triggers:
 
 NEVER by default:
 
-- A warm `atlas-bakeoff verdict` invocation never opens a panel (CE rule, kept verbatim).
+- A warm `atlas-bakeoff verdict` invocation never opens a panel.
 - "oracle" with no named peer: up to TWO peers. Named peers: honored as roles (e.g.
   "security reviewer", "a DB specialist"), still capped at two, still non-voting. If the
   named peer maps to an installed specialist agent (e.g. `security-engineer`), dispatch that

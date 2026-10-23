@@ -68,7 +68,7 @@ Dispatch constantly. Three complementary sets:
 
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 
-This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; 17 hook programs / 22 bindings ship (16 under `hooks/`, plus `atlas_doctor.py` physically under `scripts/`) and all auto-load via `hooks/hooks.json` on install (no manual step).
+This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; 18 hook programs / 22 bindings ship (17 under `hooks/`, plus `atlas_doctor.py` physically under `scripts/`) and all auto-load via `hooks/hooks.json` on install (no manual step).
 
 
 
