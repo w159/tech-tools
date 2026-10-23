@@ -5,12 +5,12 @@ when_to_use: "first run, set up atlas, boot the workspace, SSOT scaffolding, too
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[onboard | install | connectors | repair [--fix] | tour | task description | menu [need]]"
-allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/evidence/**), Write(docs/audits/**), Write(.claude/atlas.local.md)
+allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/evidence/**), Write(docs/audits/**), Write(.claude/atlas.local.md), AskUserQuestion
 ---
 
 # atlas-setup - onboarding, install, connectors, repair
 
-The one manual skill in the fleet: the user invokes it explicitly and it never auto-triggers.
+One of three manual skills in the fleet (with atlas-prompt and atlas-tui): the user invokes it explicitly and it never auto-triggers.
 Every other atlas skill auto-triggers from its description.
 
 atlas-setup configures, fixes, and organizes any project it runs in. First run
@@ -99,7 +99,7 @@ When `docs/` does not exist:
    untouched, which is how atlas-setup fixes and organizes a project on
    every later run, not only the first.
 3. **Wire graphify** - record the wiki producer pipeline (architecture/
-   in, wiki/diagrams/ out) per `references/graphify-wiring.md`.
+   in, wiki/diagrams/ out) per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-wiki/references/graphify-wiring.md`.
 4. **Update .gitignore** - write or repair a zero-trust, deny-by-default
    `.gitignore` (see `atlas-gitignore`): allowlist the full `docs/` and
    `.atlas/` durable trees, ensure `.atlas/.run/` stays ignored except its
@@ -107,7 +107,7 @@ When `docs/` does not exist:
 5. **Inventory skills** - read `references/manual-vs-auto-map.md` and
    report which skills just came online.
 6. **Run the freshness gate** - wiki fresh, stale, missing, or N/A per
-   `references/graphify-wiring.md`.
+   `${CLAUDE_PLUGIN_ROOT}/skills/atlas-wiki/references/graphify-wiring.md`.
 7. **Deploy self-improvement** - verify the atlas self-improvement system
    is deployed and functional:
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
@@ -154,7 +154,7 @@ The "what should I run next" mode. The analysis checks, in priority order:
    codebase? Is the map older than the last code change?
 5. **Run health regressing** - self-telemetry metrics (verifier_coverage,
    inline_ops, unpaired dispatches) trending the wrong way? See
-   `${CLAUDE_SKILL_DIR}/references/self-telemetry.md`.
+   `${CLAUDE_PLUGIN_ROOT}/skills/atlas-audit/references/self-telemetry.md`.
 6. **UX coverage gap** - is there a frontend atlas-ux-test has not tested?
 7. **Docs drift** - does AGENTS.md match the stack? Is CHANGELOG current?
 8. **Recurring task identified** - repeated prompts atlas-loop could
@@ -176,15 +176,15 @@ task. When routing is ambiguous, present the candidates as one
 AskUserQuestion, recommendation first. See `references/skill-routing.md`
 for the full task-to-skill mapping.
 
-## The skill inventory (39 skills)
+## The skill inventory
 
-- **1 manual skill** - atlas-setup (this skill).
-- **38 auto-trigger skills** - the full list with one-line triggers is
+- **3 manual skills** - atlas-setup (this skill), atlas-prompt, atlas-tui. Invoke by name.
+- **36 auto-trigger skills** - the full list with one-line triggers is
   `references/manual-vs-auto-map.md`; the intent-to-skill table is
   `${CLAUDE_PLUGIN_ROOT}/references/skill-finder.md`.
 
-Org deployment (11 departments, 156 department skills) now lives in the
-separate `armada` plugin; install it only for org use.
+Org deployment (department agents and skills) lives in the separate
+`armada` plugin; install it only for org use.
 
 ## The wiki pipeline (graphify wiring)
 
@@ -194,7 +194,7 @@ graphify lives at the repo root (`skills/graphify/SKILL.md`), not inside
 the atlas plugin. atlas-audit populates `architecture/`; graphify renders
 it into `wiki/diagrams/`. If `architecture/` is newer than
 `wiki/diagrams/`, the wiki is stale: recommend a graphify refresh. See
-`references/graphify-wiring.md`.
+`${CLAUDE_PLUGIN_ROOT}/skills/atlas-wiki/references/graphify-wiring.md`.
 
 ## No-args behavior
 

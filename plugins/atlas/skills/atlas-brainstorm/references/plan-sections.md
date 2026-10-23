@@ -38,7 +38,7 @@ Rules for requirement statements: observable outcome, not mechanism ("quotes ren
 
 ### Open questions and assumptions
 
-- **Assumption A-001:** <every unknown that survived dialogue, phrased as a decision the plan may take unless challenged> 
+- **Assumption A-001:** <every unknown that survived dialogue, phrased as a decision the plan may take unless challenged>
 - <Open question Q-001: ... - only if a genuine blocking question was consciously deferred>
 
 ### Settled decisions

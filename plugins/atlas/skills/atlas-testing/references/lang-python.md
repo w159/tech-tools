@@ -73,7 +73,7 @@ For a uv-managed FastAPI service:
 2. **mypy (or pyrefly) in strict mode on `src/`** as the merge gate; pyrefly is now stable and dramatically faster on big repos; ty stays a second opinion until it leaves beta.
 3. **ruff** for lint and format with bandit rules (`S`) enabled.
 4. **Hypothesis on every money/date/parse function**; property tests find boundary bugs example tests never sample.
-5. **TestClient + dependency_overrides** for API and authz; testcontainers for real Postgres paths.
+5. **TestClient + dependency_overrides** for API and authz; testcontainers for real PostgreSQL paths.
 6. **schemathesis nightly** against the OpenAPI schema; pip-audit + bandit + ZAP baseline in nightly CI.
 7. **Playwright for e2e** (chromium on PR, full matrix nightly); mutmut nightly scoped to `src/money` and authz modules.
 

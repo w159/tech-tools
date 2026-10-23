@@ -13,11 +13,11 @@ WHEN INVOKED
 INPUTS
 - RUN_DIR, the persona IDs to run, the dev base URL (from contract-snapshot.json), and the
   auth mechanism (from the prompt).
-- Canonical harness: docs/claude_testers/harness/run_persona.py with auth.sh beside it
-  (copy into RUN_DIR/harness/ if not already there).
+- Driver: write a small script under RUN_DIR/harness/ (curl or python) that replays the
+  contract below; keep it in the run dir, never in the repo.
 - The data-entry contract: references/data-entry-contract.md. That file is the canonical
   ordered API contract; OBEY it. It uses the discovered contract from contract-snapshot.json
-  for endpoints, methods, and payload field names. run_persona.py implements it; do not
+  for endpoints, methods, and payload field names. Your driver implements it; do not
   invent a different call order or different field names.
 - The discovered contract: RUN_DIR/coverage/contract-snapshot.json (primary_write,
   secondary_writes, primary_read). Use these values for every API call.
@@ -27,15 +27,15 @@ HARD RULES
 - The only writes allowed are data your persona enters through the app's own endpoints. No
   deletes of anything you did not create this run, no admin or bulk operations.
 - Tag every account as test data (seed names already follow the pattern; keep them).
-- Treat the seed's expected_signal column as a hypothesis to confirm or refute, never ground truth.
+- Treat the persona row's expected_signal column as a hypothesis to confirm or refute, never ground truth.
 - NEVER grade on HTTP 200 alone. A write returning 200 is necessary, never sufficient. A
   persona passes data-entry ONLY when the client-surface read-back confirms the value persisted.
 
 AUTH (standard path, not a workaround)
-Mint a fresh run-scoped account per persona: RUN_DIR/harness/auth.sh create <pid>-r<NN>
-(lowercase pid, NN = run number). The auth helper creates a test account using the
-domain/pattern defined in the harness for this app.
-Get its token with auth.sh token <pid>-r<NN>; run_persona.py reads it from PERSONA_TOKEN.
+Mint a fresh run-scoped account per persona through the app's own signup path, named
+<pid>-r<NN> (lowercase pid, NN = run number), using the test-account pattern the dispatch
+prompt gives. Pass its token to your driver via the PERSONA_TOKEN env var. If no signup
+path or test-account pattern is supplied, stop and report BLOCKED.
 Never reuse a prior run's accounts (they may carry MFA or prior state).
 Keep evidence filenames on the plain persona id (P05.json), not the suffixed account id.
 

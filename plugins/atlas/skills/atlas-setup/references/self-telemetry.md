@@ -1,4 +1,4 @@
-# Atlas self-telemetry (atlas-audit mode)
+# Atlas self-telemetry
 
 ## Contents
 

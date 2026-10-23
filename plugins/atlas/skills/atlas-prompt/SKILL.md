@@ -1,8 +1,8 @@
 ---
 name: atlas-prompt
-description: "Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous. Use when a request is underspecified."
-when_to_use: "improve my prompt, rewrite this request, make this actionable, vague ask, prompt engineering"
-allowed-tools: Read, Glob, Grep, Bash, Write
+description: "Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous. Use when a request is underspecified; also invoked by name as /atlas-prompt."
+when_to_use: "invoked by name: /atlas-prompt to sharpen an underspecified request"
+allowed-tools: Read, Glob, Grep, Bash, Write, Agent, Task, AskUserQuestion
 argument-hint: '<the vague request to sharpen>'
 disable-model-invocation: true
 ---

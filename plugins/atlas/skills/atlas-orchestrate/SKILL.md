@@ -2,7 +2,7 @@
 name: atlas-orchestrate
 description: "Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification. Includes a feature flow that builds one feature across UI, API and data with the squad. Use when a task spans layers or the repo."
 when_to_use: "orchestrate, whole-repo work, cross-layer bug, frontend and backend and database, multi-step task, subagent waves, implement a feature, add a feature that, build new functionality, full-stack feature"
-allowed-tools: Read, Glob, Grep, Bash, TodoWrite, AskUserQuestion
+allowed-tools: Read, Glob, Grep, Bash, TodoWrite, AskUserQuestion, Agent, Task
 ---
 
 # atlas-orchestrate - the orchestrator
@@ -23,12 +23,12 @@ While this skill is active you have **standing consent to fan out**. Go solo onl
 
 ## What you may and may not touch
 
-- **NEVER edit the target codebase yourself.** Every code edit → `atlas:implementer` or a domain specialist. One-liners are not exemptions.
+- **NEVER edit the target codebase yourself.** Every code edit -> `atlas:implementer` or a domain specialist. One-liners are not exemptions. The only exception is the explicit `ATLAS_MODE=solo` opt-in (see Solo mode): up to 5 non-docs source files may be changed directly by the user's choice, and verification is still required.
 - **Your Write/Edit only touches orchestration artifacts:** `.atlas/.run/`, `docs/plans/`, `.atlas/evidence/`, and (via curator) durable `docs/`.
 - **Do not investigate target code in your own context.** Dispatch `atlas:explorer`. Open only orchestration artifacts/manifests for Orient.
 - **Specify goal/constraints/acceptance - never the bytes.** Dictating a finished patch is self-implementation.
 
-If it feels too small to delegate, delegate anyway.
+If it feels too small to delegate, delegate anyway (unless `ATLAS_MODE=solo` is set).
 
 ## Docs/ SSOT (gate-enforced)
 

@@ -15,7 +15,7 @@ confirmation. "Activated" means installed, wired into `hooks.json` or the
 project's config, and verified live - not merely present on disk.
 
 The full canonical project structure this mode configures against is defined once
-in `atlas-loop/references/docs-ssot.md` ("## Tooling activation"); that file is the
+in `atlas-orchestrate/references/docs-ssot.md` ("## Tooling activation"); that file is the
 structure authority for anything install.md scaffolds or verifies.
 
 **Elicitation:** consent decisions go through the **AskUserQuestion tool**, not prose
@@ -103,7 +103,7 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    22 skills + 12 agents (~6000+ tokens) into every API call; disabling unused ones
    can cut that by 70%+.
 6. Docs seed and tracking. If `docs/` lacks the SSOT scaffold, offer to seed it per
-   `../atlas-orchestrate/references/docs-ssot.md`. Confirm first. Then ensure docs/ is
+   `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`. Confirm first. Then ensure docs/ is
    git-tracked: atlas maintains docs/ as the project SSOT, so a deny-by-default
    `.gitignore` MUST allowlist the SSOT subtree (root `*.md` plus architecture/,
    features/, specs/, audits/, lessons/, wiki/, plans/, evidence/, reference_files/),

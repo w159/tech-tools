@@ -2,14 +2,13 @@
 name: atlas-ux-test
 description: "UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness. Use when a full UI/UX pass or persona testing is needed."
 when_to_use: "UX test swarm, persona testing, pre-release sweep, full UI pass, re-test after fixes, fuzz the forms"
-allowed-tools: Read, Glob, Grep, Bash
+allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion
 ---
 
 
 # UX Test Swarm
 
-This skill is the single authority for the UX test swarm. It supersedes the old
-`docs/claude_testers/RUNBOOK.md` (now a stub). It orchestrates persona generation,
+This skill is the single authority for the UX test swarm. It orchestrates persona generation,
 scripted data entry, real-browser walks, fuzzing, and an independent calc oracle, then
 enforces three hard gates before reporting a verdict.
 
@@ -22,8 +21,7 @@ discovered by the cartographer phase, never asked.
 
 You orchestrate and verify only. Never navigate the app, enter data, or edit app source
 yourself. The swarm DETECTS and REPORTS app bugs with evidence; it never fixes
-`frontend/`/`backend/` code. Your only writes are under `.claude/skills/atlas-ux-test/`,
-`docs/claude_testers/harness/`, `templates/`, and the run dir.
+`frontend/`/`backend/` code. Your only writes are under the run dir (`docs/claude_testers/run-*/`).
 
 ## Why this exists
 
@@ -35,7 +33,7 @@ the surface the CLIENT actually reads.
 ## Invocation options (args -> env knobs)
 
 Parse `key=value` args from the user prompt. Apply defaults for anything omitted, then map
-to env knobs passed to `run_all.sh`.
+to env knobs passed to `scripts/ux-swarm-driver.sh`.
 
 | Option | Values | Default | Env knob |
 |---|---|---|---|
@@ -138,18 +136,19 @@ See `references/discovery.md`.
 
 ## Agent roster
 
-The skill dispatches `general-purpose` subagents, pasting the matching
-`references/roles/<role>.md` file as the prompt prefix. Run independent personas and roles
-in parallel: one message, multiple Agent dispatches.
+The skill dispatches atlas agents, pasting the matching `references/roles/<role>.md` file
+into the dispatch prompt (with the usual `GOAL:`/`SCOPE:`/`TOOLS:` envelope from
+`${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`). Run independent
+personas and roles in parallel: one message, multiple Agent dispatches.
 
-| Role file | Runs in tiers |
-|---|---|
-| `references/roles/cartographer.md` | all (phase 0) |
-| `references/roles/scripted-persona.md` | all (phase 2) |
-| `references/roles/browser-persona.md` | standard, full (phase 3) |
-| `references/roles/fuzz-boundary.md` | full only (phase 4) |
-| `references/roles/calc-verifier.md` | all (phase 5) |
-| `references/roles/synthesis-reporter.md` | all (phase 6) |
+| Role file | Agent | Runs in tiers |
+|---|---|---|
+| `references/roles/cartographer.md` | `atlas:explorer` | all (phase 0) |
+| `references/roles/scripted-persona.md` | `atlas:test-engineer` | all (phase 2) |
+| `references/roles/browser-persona.md` | `atlas:ui-runtime-tester` | standard, full (phase 3) |
+| `references/roles/fuzz-boundary.md` | `atlas:ui-runtime-tester` | full only (phase 4) |
+| `references/roles/calc-verifier.md` | `atlas:verifier` | all (phase 5) |
+| `references/roles/synthesis-reporter.md` | `atlas:verifier` | all (phase 6) |
 
 Reconcile every agent claim against the evidence files it cites before accepting it. A
 claim with no resolvable evidence path is not a result.
@@ -172,20 +171,26 @@ is a Blocker. Release gate: zero unresolved Nielsen-4 (Blocker) and zero accurac
 mismatches.
 
 Headline metric = completion rate (personas meeting G1 / total). Counts in every report
-MUST reconcile with files on disk; `aggregate_results.py` asserts this.
+MUST reconcile with files on disk; the synthesis reporter recounts them.
 
 ## Run setup
 
 1. Run phase 0 (discover) first. All URLs and contracts come from discovery, not from
    constants in this file.
-2. Create `docs/claude_testers/run-YYYYMMDD[-nn]/` with subdirs
-   `coverage/ harness/ evidence/ notes/ reports/`. If `run-YYYYMMDD` exists for today,
-   suffix `-02`, `-03`, and so on (the unsuffixed dir is the day's first run).
-3. Copy `docs/claude_testers/harness/` into the run's `harness/`.
-4. If a previous run exists, read its `reports/bug-log.md` (and `coverage-report.md` where
+2. Create the run directory and resolve the knobs by running
+   `COUNT=12 COVERAGE=standard PROFILE=mixed FAST=1 GEN_SEED=<seed> bash "${CLAUDE_SKILL_DIR}/scripts/ux-swarm-driver.sh" <RUN_DIR> <REPO_ROOT>`
+   with `RUN_DIR=docs/claude_testers/run-YYYYMMDD[-nn]`. If `run-YYYYMMDD` exists for
+   today, suffix `-02`, `-03`, and so on (the unsuffixed dir is the day's first run). The
+   driver creates `coverage/ harness/ evidence/ notes/ reports/` and writes
+   `notes/phase-plan.json`; follow that plan.
+3. If a previous run exists, read its `reports/bug-log.md` (and `coverage-report.md` where
    present) first; those findings become explicit regression targets in the agent briefs.
-5. Run the swarm through `RUN_DIR/harness/run_all.sh` with the mapped env knobs, e.g.
-   `COUNT=12 COVERAGE=standard PROFILE=mixed FAST=1 GEN_SEED=<seed> bash run_all.sh`.
+4. Dispatch the role agents per the roster, one wave per phase in the plan (parallel within
+   a wave). The scripted-persona agent writes any data-entry or persona-generation script
+   it needs under `RUN_DIR/harness/`; nothing is read from outside the plugin or the run dir.
+5. Use the templates in `${CLAUDE_SKILL_DIR}/templates/` for every deliverable
+   (`RESULTS-SCHEMA.md`, `bug-report.md`, `user-story.md`, `persona-feedback.md`,
+   `feature-request.md`, `run-summary.md`).
 
 No agent deletes data it did not create. The user purges test accounts; you never delete.
 List the test accounts created (`notes/test-accounts-created.txt`) when you report back.
@@ -211,10 +216,10 @@ invoked for `standard` and `full` tiers; `smoke` runs no browser walk.
 
 - `references/discovery.md` - phase 0: cartographer + live-contract probe; the
   `coverage/contract-snapshot.json` output.
-- `references/personas.md` - `datagen.py` generation, the 42-column schema, profile/seed
+- `references/personas.md` - persona generator contract, discovery-driven schema, profile/seed
   semantics, user-count presets.
-- `references/data-entry-contract.md` - the canonical ordered API contract; the canonical
-  reference the scripted role and harness both obey.
+- `references/data-entry-contract.md` - the canonical ordered API contract the scripted
+  role obeys.
 - `references/evidence-severity.md` - evidence requirements, Nielsen 0-4 severity, the
   bug/story/feedback template required fields.
 - `references/accuracy-oracle.md` - metamorphic relations, Decimal/cents rules, the
@@ -227,6 +232,8 @@ invoked for `standard` and `full` tiers; `smoke` runs no browser walk.
 - `references/roles/<role>.md` - the six folded agent prompts (see roster above).
 - `scripts/ux-swarm-driver.sh` - run-directory setup and phase-plan emission
   for the chosen tier.
+- `templates/` - deliverable shapes (results schema, bug report, user story, persona
+  feedback, feature request, run summary).
 
 ## Reporting back
 

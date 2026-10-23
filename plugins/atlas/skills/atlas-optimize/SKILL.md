@@ -2,7 +2,7 @@
 name: atlas-optimize
 description: "Single-experiment loop: baseline, one hypothesis, one change, identical re-measure, real delta reported. Use when a working system's metric should improve; not for bugs or restructuring."
 when_to_use: "performance tuning, reduce latency, bundle size, build time, benchmark, bottleneck, make it faster"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '<target to optimize and the metric that should move>'
 ---
 
@@ -16,9 +16,9 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 Read `${CLAUDE_SKILL_DIR}/references/measurement-protocol.md` before capturing the baseline and again before re-measuring. It defines baseline validity, the identical-method parity checklist, and the rejection conditions. Read `${CLAUDE_SKILL_DIR}/references/verifier-brief.md` before dispatching the parity verifier.
 
-## Provenance: what was ported and why
+## Scope: one measured loop
 
-This skill ports Compound Engineering's `ce-optimize`, a spec-YAML-driven optimization runtime with four phases, parallel experiment worktrees, judge-scored variants, a worktree budget, and a `decide.mjs` accept/revert engine. Atlas runs sessions, not standing infrastructure, so the **measurement-first discipline** survives and the **machinery** is reduced to one loop iteration done honestly:
+Atlas runs sessions, not standing infrastructure, so the **measurement-first discipline** is kept and the machinery is reduced to one loop iteration done honestly:
 
 - Spec YAML + phases 0-4 -> a single measured loop: frame, baseline gate, hypothesis, one experiment, re-measure, verdict. Multi-experiment batching, variant scoring, judge dispatch, ladder/repeat stability modes, worktree budgets, and `decide.mjs` are dropped; if the user wants a scored variant space, run this skill once per variant or say plainly that is beyond one session.
 - CE's clean-tree gate -> kept, scoped to files the experiment may touch.

@@ -26,7 +26,7 @@ Command: `/atlas-setup install`.
 
 ### 2. Structural completeness (confidence: high)
 
-Check: does the canonical structure from `atlas-loop/references/docs-ssot.md`
+Check: does the canonical structure from `atlas-orchestrate/references/docs-ssot.md`
 actually exist? Any absent root file (`README.md`, `AGENTS.md`, `CLAUDE.md`)?
 Any missing `docs/` base subfolder (architecture/, decisions/, plans/,
 specs/, features/, lessons/, wiki/)? Any missing `.atlas/` subfolder

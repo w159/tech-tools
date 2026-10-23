@@ -1,4 +1,4 @@
-# Apply and Verify — triage, mutation boundary, gate
+# Apply and Verify - triage, mutation boundary, gate
 
 ## Contents
 
@@ -25,7 +25,7 @@ Apply a finding only when ALL of these hold:
 - **Behavior-preserving and provable.** The fix preserves outputs, errors, side
   effects, and ordering. If that cannot be established from the code and its tests,
   skip it.
-- **Worthwhile.** It removes real duplication, waste, or confusion — not a lateral
+- **Worthwhile.** It removes real duplication, waste, or confusion - not a lateral
   style move. Fewer lines is not the goal.
 - **Within the mutation boundary** (below).
 - **Not a safety-check removal.** Trust-boundary validation, data-loss protection,
@@ -53,8 +53,8 @@ existing mutation boundary; otherwise preserve it. If uncertain, skip.
 ## Session-settled structure pins
 
 A plan artifact passed with the scope (`docs/plans/<date>-<slug>.md` or a caller-named
-plan) is context, not scope. Preserve its settled decisions — including deliberate
-duplication or deliberate separation — exactly as written. A reviewer finding that
+plan) is context, not scope. Preserve its settled decisions - including deliberate
+duplication or deliberate separation - exactly as written. A reviewer finding that
 undoes a settled decision is skipped by definition.
 
 ## Applying via atlas:implementer
@@ -64,8 +64,8 @@ spec (GOAL / CONTEXT / TOOLS / DELIVERABLE / SUCCESS CRITERIA / OUT OF SCOPE / S
 CONDITIONS). One dispatch per independent file group; all groups in ONE message when
 independent; `isolation: "worktree"` when groups touch overlapping files. Give each
 implementer the exact findings for its files (location, evidence, fix, autofix class)
-— findings do the specifying, the implementer does the editing. The implementer runs
-the local gate for its own change; that is NOT the final gate — Step 5's verifier owns
+ -  findings do the specifying, the implementer does the editing. The implementer runs
+the local gate for its own change; that is NOT the final gate - Step 5's verifier owns
 that.
 
 ## The gate (blast-radius verification)
@@ -73,7 +73,7 @@ that.
 Exactly like `atlas-refactor`'s VERIFY phase, run the project's real gate:
 
 1. **Project-wide typecheck and lint**, whatever the repo configures (tsc, mypy,
-   ruff, eslint, ...). Not just changed files — the point is blast radius.
+   ruff, eslint, ...). Not just changed files - the point is blast radius.
 2. **Tests matched to blast radius**: scoped tests for local changes, broader tests
    for shared or wide-reach changes, and the full suite when the runner cannot scope
    tests.

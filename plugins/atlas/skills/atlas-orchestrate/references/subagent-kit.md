@@ -187,9 +187,9 @@ before starting, so two agents never build the same thing:
 - One item per agent. `claimed_by_other` means someone else holds it: claim a
   different open item or stop and report.
 - Optional native mirror (env-gated): when the lead exports `ATLAS_TASKS_MIRROR`,
-  mirror your claim with the TaskCreate tool (subject `[<phase>] <content>`) at
+  mirror your claim with a TodoWrite item (content `[<phase>] <content>`) at
   claim time and mark it completed when you post your completion. The atlas board
-  stays the source of truth — don't duplicate status updates beyond the one
+  stays the source of truth - don't duplicate status updates beyond the one
   completion; skip entirely when the var is unset or off.
 - `--force` steals a stale claim (30 min idle). Never force-steal a live agent's item.
 - Done: `complete --id <id> --evidence "<command + output, or file:line>"`.
@@ -211,7 +211,7 @@ Dispatches into the colony are named, and the name is load-bearing. A dispatch
 without `name: <role>-<slice>` (e.g. `auth-explorer`) is denied by the dispatch
 tripwire: only a named sibling appears on the sibling roster, and the roster is
 what makes the channel below work. One exception: with
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` the name requirement is lifted — in
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` the name requirement is lifted - in
 teams mode a named dispatch from the main conversation launches as a teammate
 (inherits the lead's effort, runs in the lead's cwd) instead of a scoped
 subagent, so atlas workers must stay nameless to keep their definition's
@@ -272,7 +272,7 @@ SessionStart.
   credit / auth patterns is recorded as `exit 1`.
   Workers post their own notes with `atlas_todo.py note --owner <Name>`.
 - claude-bg workers have no run-worker wrapper: the brief itself carries the note command,
-  and — only when the lead exports `ATLAS_LEAD_AGENT` (its lead session name) — a best-effort
+  and - only when the lead exports `ATLAS_LEAD_AGENT` (its lead session name) - a best-effort
   native wake: send the same report text via `SendMessage` to that session right after
   posting the note (no retries; skip when unset or the session is not listed). The board
   note is the transport of record.

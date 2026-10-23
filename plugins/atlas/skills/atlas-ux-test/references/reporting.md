@@ -2,7 +2,7 @@
 
 How the synthesis-reporter turns evidence into deliverables, what the headline metric is, and
 the two gates that keep a report honest. Every deliverable is template-driven (templates in
-`docs/claude_testers/templates/`) so runs stay comparable over time.
+`${CLAUDE_SKILL_DIR}/templates/`) so runs stay comparable over time.
 
 ## Headline metric: completion rate
 
@@ -44,7 +44,7 @@ Every claimed total in every report MUST equal the count of matching artifacts o
 - figures verified == rows across `*-verify.rows.csv`.
 - screenshots referenced == files that exist under `RUN_DIR/evidence/`.
 
-`aggregate_results.py` asserts this. If a claimed number does not match the on-disk count, the
+The synthesis reporter checks this by counting files and rows itself. If a claimed number does not match the on-disk count, the
 run verdict is INCOMPLETE and the report names the discrepancy. Never write a total the files
 do not support. Never round 96% up to "fully tested." A scenario that failed to run is reported
 as failed-to-run, not omitted and not passed.

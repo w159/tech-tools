@@ -2,7 +2,7 @@
 name: atlas-worktree
 description: "Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection. Use when isolating parallel implementer waves, spikes or bakeoffs, or closing them at wave end."
 when_to_use: "worktree isolation, parallel waves, spike branch, reuse worktree, clean up worktrees"
-allowed-tools: Read, Glob, Grep, Bash, Write, Edit
+allowed-tools: Read, Glob, Grep, Bash, Write, Edit, AskUserQuestion
 ---
 
 # atlas-worktree - atlas's portable worktree primitive
@@ -15,10 +15,9 @@ other skills that need an isolated tree this session (`atlas-simplify`, `atlas-r
 `apply:local` path, `atlas-prototype`, `atlas-bakeoff` spikes). Callers invoke this skill by name;
 they do not reimplement worktree commands, naming, or cleanup inline.
 
-Mechanics and safety rules port from Compound Engineering's `ce-worktree`: isolation detection,
-one-branch-one-worktree, naming discipline, non-fatal fetch, and refuse-on-failure. CE's
-"prefer the harness's native worktree tool and stop" does not port - atlas replaces it with the
-`.atlas/.run/worktrees.json` ledger, which is what lets sibling skills discover and reuse a tree
+Mechanics and safety rules: isolation detection, one-branch-one-worktree, naming discipline,
+non-fatal fetch, and refuse-on-failure. Worktrees are tracked in the
+`.atlas/.run/worktrees.json` ledger, which lets sibling skills discover and reuse a tree
 instead of creating duplicates the harness cannot see.
 
 Apply the Operating Contract to this entire task. It is injected below.
@@ -86,7 +85,7 @@ blocker has been reported instead.
 2. **Discover before creating.** Read `.atlas/.run/worktrees.json`, then reconcile it against
    `git worktree list --porcelain`: prune entries whose path no longer exists or that git no longer
    reports (this is the stale-worktree detection; run `git worktree prune` afterward only if
-   metadata is left over). If an `active` entry already matches the requested ref or purpose  - 
+   metadata is left over). If an `active` entry already matches the requested ref or purpose  -
    same base SHA and a compatible purpose - **reuse it**: report its path and branch and stop. Two
    worktrees for one job is a defect this step exists to prevent.
 

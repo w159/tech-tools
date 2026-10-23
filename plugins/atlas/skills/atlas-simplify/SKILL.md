@@ -2,7 +2,7 @@
 name: atlas-simplify
 description: "Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate. Use when code was just implemented, before review or commit; restructuring is atlas-refactor."
 when_to_use: "simplify my changes, tidy the diff, reduce duplication in new code, post-implementation cleanup"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, AskUserQuestion
 argument-hint: '[blank = current branch diff; base:<ref> = diff against base; or named files/dirs]'
 ---
 
@@ -18,7 +18,7 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 Simplify recently changed code for clarity, reuse, quality, and efficiency while preserving exact behavior. Prioritize readable, explicit code over compact code - fewer lines is not the goal. This is a bounded POST-IMPLEMENTATION simplification pass over a fresh diff: the change already works and this pass trims it without changing what it does. It does not restructure (that is `atlas-refactor` over an arbitrary named target), review (that is `atlas-audit` / the review wave), or fix bugs (that is `atlas-debug`).
 
-Ported from Compound Engineering's `ce-simplify-code`; adapted to atlas dispatch (Task/Agent + subagent-kit envelope), verification (independent `atlas:verifier` + `.atlas/.run/findings.json`), and artifact conventions. **Never push, open a PR, or merge** - this skill ends at local verification; commits and pushes stay user-gated like every atlas skill.
+Dispatch uses the Task/Agent subagent-kit envelope; verification is an independent `atlas:verifier` plus `.atlas/.run/findings.json`. **Never push, open a PR, or merge** - this skill ends at local verification; commits and pushes stay user-gated like every atlas skill.
 
 ## Step 1 - Resolve scope
 

@@ -59,7 +59,7 @@ Verified 2026-09-02 against `plugins/armada/.mcp.json`,
 
 ## Migration note
 
-Older docs referred to department folders (`mcp/hr/`, `mcp/it-operations/`, …) and
+Older docs referred to department folders (`mcp/hr/`, `mcp/it-operations/`, ...) and
 `.mcpb` bundles. Those paths are **obsolete**. Current source is flat
 `mcp/<name>/server.mjs` (or `mcp/falcon/` for Python). Credentials always live on
 the **armada** plugin.

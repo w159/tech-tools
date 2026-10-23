@@ -24,7 +24,7 @@ Read the code AROUND the diff, not just the diff: a correct-looking hunk inside 
 
 ## Suppression (delete, do not report)
 
-Style/lint-only; pre-existing defects the diff does not worsen; unclaimed intent ("should also…"); issues handled elsewhere in the diff or by an adjacent guard; speculation without a concrete trigger path.
+Style/lint-only; pre-existing defects the diff does not worsen; unclaimed intent ("should also..."); issues handled elsewhere in the diff or by an adjacent guard; speculation without a concrete trigger path.
 
 ## Output
 

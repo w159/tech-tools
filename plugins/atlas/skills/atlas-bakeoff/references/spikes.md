@@ -1,16 +1,16 @@
-# Phase 3 — Proof-of-concept spikes (optional)
+# Phase 3 - Proof-of-concept spikes (optional)
 
 Spikes exist because some comparisons cannot be settled by reading: does the migration actually preserve the query pattern? Is the library's streaming API usable under our backpressure? Does the data-model shape express the hot query without a join explosion?
 
-## When to spike — the uncertainty test
+## When to spike - the uncertainty test
 
 Spike a claim only when ALL of these hold:
 
 1. **Decisive**: the score on a named criterion could flip the recommendation based on this claim.
-2. **Genuinely uncertain**: reading docs or code did not settle it — you would otherwise be asserting an `unverified` score as if it were known.
+2. **Genuinely uncertain**: reading docs or code did not settle it - you would otherwise be asserting an `unverified` score as if it were known.
 3. **Cheap**: the spike fits in a bounded scratch exercise (minutes, not days), in throwaway files or a throwaway branch.
 
-If a claim is decisive but NOT cheap to check, do not spike it — return it as an explicit evidence need in the final report and let the recommendation carry that caveat. If it is cheap but not decisive, skip it; a bake-off is not a playground.
+If a claim is decisive but NOT cheap to check, do not spike it - return it as an explicit evidence need in the final report and let the recommendation carry that caveat. If it is cheap but not decisive, skip it; a bake-off is not a playground.
 
 ## How to run a spike
 
@@ -47,4 +47,4 @@ All independent spikes go out in one message, in parallel. Spikes for different 
 
 ## Feeding the comparison
 
-A confirmed claim turns its criterion score from `unverified` to scored WITH the evidence path cited. A refuted claim scores the criterion on the refutation — and if the refutation kills a hard constraint, the candidate is eliminated and the report says so plainly. An inconclusive spike stays `unverified` and becomes a named evidence need; it never silently rounds to `adequate`.
+A confirmed claim turns its criterion score from `unverified` to scored WITH the evidence path cited. A refuted claim scores the criterion on the refutation - and if the refutation kills a hard constraint, the candidate is eliminated and the report says so plainly. An inconclusive spike stays `unverified` and becomes a named evidence need; it never silently rounds to `adequate`.

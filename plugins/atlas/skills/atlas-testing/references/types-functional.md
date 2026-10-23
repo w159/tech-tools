@@ -132,11 +132,11 @@ Catches: schema mismatches, query errors, authz middleware wiring, container/por
 
 When to choose: one tier below every e2e you would otherwise write. Avoid: pointing at shared development environments; time-based tests without clock control; testing business math here that belongs unit-level.
 
-PR vs nightly: PR for service-scoped integration with ephemeral containers. Nightly for the full matrix (Postgres versions, provider permutations). Budget 15 min PR.
+PR vs nightly: PR for service-scoped integration with ephemeral containers. Nightly for the full matrix (PostgreSQL versions, provider permutations). Budget 15 min PR.
 
 Interpreting: fail fast on container startup (5 min timeout), one shared container per suite not per test, truncate tables not rebuild.
 
-Testcontainers pattern (verified versions, 2026-10-14): real dependencies (Postgres, Kafka, LocalStack) in Docker, started per test session, logs and readiness probed by the library.
+Testcontainers pattern (verified versions, 2026-10-14): real dependencies (PostgreSQL, Kafka, LocalStack) in Docker, started per test session, logs and readiness probed by the library.
 
 | Language | Testcontainers lib (verified) | Typical run |
 |---|---|---|
@@ -147,7 +147,7 @@ Testcontainers pattern (verified versions, 2026-10-14): real dependencies (Postg
 | Rust | testcontainers-rs 0.28.0 | `cargo test --test integration` |
 | TS/JS | testcontainers-node [package name `testcontainers`; version [unverified]] | `vitest run integration/` |
 | PHP | testcontainers-php and docker-compose based harnesses [memory; verify per repo] | `phpunit --testsuite integration` |
-| Swift/iOS | no canonical lib; run Postgres against localhost in CI container, or in-memory doubles (SQLite caveat below) | `xcodebuild test` with scheme Integration |
+| Swift/iOS | no canonical lib; run PostgreSQL against localhost in CI container, or in-memory doubles (SQLite caveat below) | `xcodebuild test` with scheme Integration |
 | C/C++ | docker-compose harness controlled from CTest scripts | `ctest -L integration` |
 | Ruby | docker + `sqlite3`/pg gem harnesses [ecosystem practice, no lib verified] | `bundle exec rspec spec/integration` |
 | PowerShell | Pester against live Windows components (registry, services, IIS); containers rare for PS workloads | `Invoke-Pester -Tag Integration` |
@@ -162,7 +162,7 @@ Service virtualization (stub the HTTP others, so integration tests own one proce
 | Multi-protocol virtualization (HTTP, TCP, SMTP, SOAP), config-file driven | mountebank 2.9.1 (npm; last stable 2023-08, only betas since: effectively maintenance mode) | Legacy SOAP/TCP partners; prefer WireMock for plain HTTP |
 | Pact-level contract stubs | Pact mock server (Rust core via FFI) in each Pact lib | See contract type; use broker + stub server, not WireMock, so pacts stay source of truth |
 
-Regulated priority: integration tests prove the authz path end to end (token, policy, data filter). Postgres RLS is invisible to SQLite doubles: any tenant-isolation claim requires a real Postgres container test that executes `SET LOCAL app.current_user` and asserts the row filter. Mark data-faking: synthetic client names only, never production row dumps in fixtures.
+Regulated priority: integration tests prove the authz path end to end (token, policy, data filter). PostgreSQL RLS is invisible to SQLite doubles: any tenant-isolation claim requires a real PostgreSQL container test that executes `SET LOCAL app.current_user` and asserts the row filter. Mark data-faking: synthetic client names only, never production row dumps in fixtures.
 
 ### component
 

@@ -37,14 +37,14 @@ Reviewer: atlas (or the persona/agent name, e.g. atlas:verifier)
 
 **Comment:** what is wrong or worth discussing, and why.
 
-**Proposal** (only when a concrete change is warranted — tracked change, never applied directly):
+**Proposal** (only when a concrete change is warranted - tracked change, never applied directly):
 
 ```diff
 - current line as it appears in review.md
 + proposed replacement
 ```
 
-**Resolved:** <YYYY-MM-DD> — <reason | superseded-by: a-004>
+**Resolved:** <YYYY-MM-DD> - <reason | superseded-by: a-004>
 ````
 
 Rules:
@@ -60,7 +60,7 @@ Rules:
 
 ## Publish checklist
 
-1. Read the source file in full. If it is HTML or non-markdown, do not publish it — return the local path and say why.
+1. Read the source file in full. If it is HTML or non-markdown, do not publish it - return the local path and say why.
 2. Decide the surface:
    - Durable (plan/spec/feature/decision) → its docs SSOT path: `docs/plans/<task-slug>.md`, `docs/specs/<YYYY-MM-DD>_<slug>.md`, `docs/features/<slug>.md`, `docs/decisions/<slug>.md`. Date-first naming per `plugins/atlas/scripts/lint_docs_names.py`.
    - Ephemeral → `.atlas/.run/proof/<YYYY-MM-DD>_<slug>/review.md` (verbatim bytes) plus the scaffolded `annotations.md` header shown above.
@@ -70,7 +70,7 @@ Rules:
    ```
 4. Hand the user the surface path (one line), plus the source path if they differ. Do not delete anything, do not commit (offer `atlas-ship commit-only` if asked), do not push.
 
-When a planning skill hands off a publish (`atlas-plan`, `atlas-orchestrate`), it supplies the file path and title. Label the title by readiness when known, e.g. `Plan: <title> (requirements-only)` or `Plan: <title> (implementation-ready)` — carry that label into the H1 and the ROADMAP status.
+When a planning skill hands off a publish (`atlas-plan`, `atlas-orchestrate`), it supplies the file path and title. Label the title by readiness when known, e.g. `Plan: <title> (requirements-only)` or `Plan: <title> (implementation-ready)` - carry that label into the H1 and the ROADMAP status.
 
 ## Collect recipe
 
@@ -86,19 +86,19 @@ When a planning skill hands off a publish (`atlas-plan`, `atlas-orchestrate`), i
      Upgrade to `verified` only after the verifier's PASS lands in `.atlas/.run/findings.json`.
    - `note` with no follow-up → resolve with reason `no-action`.
 2. Update each annotation's status line: `collected: <artifact path>` (or `resolved`), never delete the thread.
-3. Report the ledger: annotation id → artifact path, one line each. Every open annotation ends the run as `collected`, `resolved`, or explicitly `deferred` with a reason — no silent drops.
+3. Report the ledger: annotation id -> artifact path, one line each. Every open annotation ends the run as `collected`, `resolved`, or explicitly `deferred` with a reason - no silent drops.
 
 ## Gated PR review (only on explicit user request)
 
-The user must name the PR (number/URL/branch). Surface PR threads live on GitHub — no sidecar file. Before posting anything, show the user the exact comment text and stop for their confirmation; posting is an external side effect. Never push branches, open PRs, or merge here.
+The user must name the PR (number/URL/branch). Surface PR threads live on GitHub - no sidecar file. Before posting anything, show the user the exact comment text and stop for their confirmation; posting is an external side effect. Never push branches, open PRs, or merge here.
 
 ```bash
 # Line-anchored review comment (request-changes carries your threads):
 gh pr review <number> --request-changes \
-  --body "atlas review (<run date>) — <n> findings below"
+  --body "atlas review (<run date>) - <n> findings below"
 
 # One comment per finding, anchored by quoting the code/doc text in the body:
-gh pr comment <number> --body "Anchor: '<exact quoted line>' — <comment> (atlas a-003)"
+gh pr comment <number> --body "Anchor: '<exact quoted line>' - <comment> (atlas a-003)"
 
 # Read the reviewer side before collecting:
 gh pr view <number> --json reviews,comments

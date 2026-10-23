@@ -15,14 +15,10 @@ explicit accept. This is what distinguishes atlas-doctor from atlas-audit's
 the user accepts get applied in this session, and the next /atlas-doctor run
 remeasures whether they actually helped.
 
-**Provenance.** The REFRESH phase and the measurement-first gate in MEASURE
-fold two compound-engineering skills into atlas-doctor: `ce-compound-refresh`
-(learning-store maintenance - auditing captured learnings against current code)
-and `ce-retune` (measurement-first retuning of the skill corpus). They are
-deliberately not separate skills here: atlas-doctor already owns exactly this
-measure-and-self-improve role over atlas.db telemetry, and a standalone
-counterpart would compete for the same trigger and split the loop this skill
-exists to close.
+**Provenance.** The REFRESH phase and the measurement-first gate in MEASURE are
+folded into atlas-doctor (not separate skills) because it already owns the
+measure-and-self-improve role over atlas.db telemetry; a standalone counterpart
+would compete for the same trigger and split the loop. Lineage: `skills/PROVENANCE.md`.
 
 All deterministic work (mining, fingerprinting, baseline, remeasure) is
 machinery in `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py`, not improvised SQL in this file. Call
@@ -105,7 +101,7 @@ miner reads model-scored replies (`turn_scores`), so score first:
 1. Score: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/turn_scoring.py" --recent-days 14`
 2. Mine: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --mine`
 3. Review `turn_quality:*` findings. Each names the surface to fix
-   (`target_path`: an `atlas-orchestrator.md` section, a hook, or a skill) and
+   (`target_path`: an `atlas-orchestrator.md` output-style section, a hook, or a skill) and
    its detail shows whether the judgment predicts next-turn user corrections;
    treat a judgment that does not predict them as noise.
 4. Apply the fix to that surface (Phase 4), then `--baseline`, and later
@@ -211,9 +207,8 @@ Do not apply a change you cannot measure; define the metric and baseline first. 
 A lesson in `docs/lessons/` only compounds value while its evidence still
 holds. A lesson citing `plugins/atlas/hooks/completion_gate.py:88-104` was
 true when written; after the next refactor the citation may point at nothing.
-Trusted silently forever, the store starts lying. This pass - ported from CE's
-`ce-compound-refresh` and folded into this skill rather than shipped
-standalone (see Provenance) - audits the store against the current tree.
+Trusted silently forever, the store starts lying. This pass (folded into this skill, see
+Provenance) audits the store against the current tree.
 
 Run it in this same session, after MEASURE, at least every few runs (it is
 cheap next to mining):

@@ -2,7 +2,7 @@
 name: atlas-db-audit
 description: "Audits a live database read-only via parallel subagents: schema inventory, schema-to-code reconciliation, privileges, naming. Use when a schema or permission change is coming."
 when_to_use: "database audit, schema drift, table inventory, privilege review, naming conventions, compare schema to code"
-allowed-tools: Read, Glob, Grep, Bash
+allowed-tools: Read, Glob, Grep, Bash, Agent, Task
 paths: ["**/*.sql", "migrations/**", "supabase/**"]
 argument-hint: '[repo path] [db connection] [glossary path] [naming-convention notes]'
 ---

@@ -1,4 +1,4 @@
-# docs/ + .atlas/ Single Source of Truth
+# Docs SSOT
 
 ## Contents
 
