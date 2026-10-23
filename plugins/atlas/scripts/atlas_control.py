@@ -778,6 +778,16 @@ _AD = {
         "",
         "shell",
     ),
+    "ATLAS_NOTE_ARCHIVE_BYTES": (
+        "Size an owner's board note file may reach before notes older than 14 days move to board/archive.",
+        "2097152",
+        "shell",
+    ),
+    "ATLAS_NOTE_MAX_BYTES": (
+        "Largest board note body accepted, in bytes; longer notes are refused with body_too_large.",
+        "8192",
+        "shell",
+    ),
     "ATLAS_PACKS_CACHE_ROOT": (
         "Where the packs git cache lives.",
         "<repo>/.atlas/.run/packs-cache",
