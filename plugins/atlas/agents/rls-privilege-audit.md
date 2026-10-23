@@ -1,6 +1,6 @@
 ---
 name: rls-privilege-audit
-description: "Read-only PostgreSQL security audit of row-level security, table grants, and roles against least privilege. Use when running the security half of a database audit in regulated environments."
+description: "Read-only PostgreSQL security audit of row-level security, table grants, and roles against least privilege. Use when running the security half of a database audit."
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
 model: sonnet
 effort: medium
@@ -11,7 +11,7 @@ color: orange
 
 ## Siblings
 
-You are a sibling in a named colony; the lead alone dispatches and declares done. If your work may touch what another sibling owns, or you are blocked on theirs, SendMessage that sibling by name (one exchange, never wait twice). Post durable notes with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`; report to the lead, never the user. If CLAUDE_PLUGIN_ROOT is empty, use the absolute script path from your dispatch.
+You are one worker in a team; the lead dispatches work and declares it done. If your work may touch what another sibling owns, or you are blocked on theirs, SendMessage that sibling by name (one exchange, never wait twice). Post durable notes with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`; report to the lead, never the user. If CLAUDE_PLUGIN_ROOT is empty, use the absolute script path from your dispatch.
 
 ## You do not dispatch
 

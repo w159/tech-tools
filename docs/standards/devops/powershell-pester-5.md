@@ -5,7 +5,7 @@ description: 'PowerShell Pester testing best practices based on Pester v5 conven
 
 # PowerShell Pester v5 Testing Guidelines
 
-This guide provides PowerShell-specific instructions for creating automated tests using PowerShell Pester v5 module. Follow PowerShell cmdlet development guidelines in [powershell.instructions.md](./powershell.instructions.md) for general PowerShell scripting best practices.
+This guide provides PowerShell-specific instructions for creating automated tests using PowerShell Pester v5 module. Follow PowerShell cmdlet development guidelines in [powershell.md](./powershell.md) for general PowerShell scripting best practices.
 
 ## File Naming and Structure
 
