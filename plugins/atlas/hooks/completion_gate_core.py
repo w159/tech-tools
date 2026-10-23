@@ -18,7 +18,7 @@ still lists an in-flight subagent, workflow, or teammate dispatch (see
 work is still running, so the gate does not fire once per wave-Stop. A
 long-running `shell` or `monitor` task does not suppress it.
 
-Sixteen conditions must ALL hold before the gate passes (else block ONCE):
+Seventeen conditions (a)-(q) must ALL hold before the gate passes (else block ONCE):
   (a) At least one file exists under `.atlas/evidence/` with an mtime at or
       after THIS RUN's start (via `_run_started_at`). Scoped like (f)/(g):
       only checked when THIS RUN shipped non-docs code (_nondocs_changed on
@@ -32,8 +32,9 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
       start. Same scoping and same "any entry" fallback as (a): a `verified`
       row stamped during an earlier session must not satisfy today's gate.
   (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
-  (d) `docs/ROADMAP.md` exists and is non-empty.
-  (e) `README.md` at the project root exists and is non-empty.
+      Scoped like (a): only checked when THIS RUN shipped non-docs code.
+  (d) `docs/ROADMAP.md` exists and is non-empty. Same code-shipped scoping.
+  (e) `README.md` at the project root exists and is non-empty. Same scoping.
   (f) No docs drift: if THIS RUN's own activity (atlas_db events + tool_calls,
       not the whole working tree) wrote non-docs files, at least one docs/
       file changed too -- this is the deterministic trigger that forces an
@@ -59,7 +60,7 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
   (h) ROADMAP reconciliation: if docs/ROADMAP.md contains items with status
       "done" that should have been moved to CHANGELOG, block. A "done" item
       in ROADMAP is a defect -- it belongs in CHANGELOG with a date and
-      evidence citation.
+      evidence citation. Same code-shipped scoping as (c)/(d)/(e).
   (i) Todo drain: if this run shipped code and the most recent plan still
       holds non-"completed" items, block. TodoWrite writes the whole list
       every time, so the last call is current state. (i) enforces DRAINING a
@@ -111,22 +112,28 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
       run -- the exact sources are listed in `_colony_channel_used`. Kill switch
       ATLAS_GATE_COLONY=off. Fails open on any read error.
 
+  (q) Unmerged worker branches: worker/* branches that still hold commits not
+      merged into the base (`atlas_wt.py status`) or a dirty worktree must be
+      verified and merged (`atlas_wt.py merge <agent>`) before the run is done.
+      Not scoped to code-shipping runs; sidechains exempt. Kill switch
+      ATLAS_WT_GATE=off. Fails open on any read error.
+
 (n), (o), and (p) ask the model to repair presentation, not to produce work, so
 each blocks AT MOST ONCE per session: an O_EXCL marker `<cond>-<session>` under
 CONTRACT_GATE_MARKER_DIR (tmp dir `atlas-contract-gate`, overridable with
 ATLAS_CONTRACT_GATE_DIR) records the block, and a marked condition counts as
 satisfied. They are evaluated only for orchestrating sessions, never for a
-sidechain, and not while a dispatch is in flight. Conditions (a)-(m) re-block
+sidechain, and not while a dispatch is in flight. Conditions (a)-(m) and (q) re-block
 on every Stop until they hold. So a stuck run cannot wedge, the loop cap
 allows the Stop after BLOCK_LOOP_LIMIT identical consecutive blocks
 (default 3; tunable with ATLAS_GATE_BLOCK_LOOP, clamped to 1-7 -- the
 native Stop-hook block cap is 8, so this breaker must fire first) and
 records one gate_block_loop friction row.
 
-(a), (b), (f), and (g) all share one signal: whether THIS RUN shipped
-non-docs code (_nondocs_changed on the run-write signal from atlas_db). A
-run that shipped no code -- a question answered, a read-only audit --
-has nothing for those four conditions to check, so they are skipped
+(a), (b), (c), (d), (e), (f), (g), (h), (i), (j), (k), and (o) all share one
+signal: whether THIS RUN shipped non-docs code (_nondocs_changed on the
+run-write signal from atlas_db). A run that shipped no code -- a question
+answered, a read-only audit -- has nothing for those conditions to check, so they are skipped
 rather than blocking on manufactured busywork or narrating a pass.
 
 If any condition is missing the hook blocks and names exactly which condition
@@ -170,6 +177,15 @@ from docs_drift import git_changed_paths as _git_changed_paths  # noqa: E402
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 
 
+# Bounds on the recursive (a) scan of .atlas/evidence/.
+_EVIDENCE_MAX_DEPTH = 4
+_EVIDENCE_MAX_FILES = 5000
+
+
+def _raise_oserror(err: OSError) -> None:
+    raise err
+
+
 def _check_evidence(root: Path, started: float | None = None) -> bool:
     """(a) At least one file under .atlas/evidence/ produced during THIS RUN.
 
@@ -184,13 +200,27 @@ def _check_evidence(root: Path, started: float | None = None) -> bool:
     try:
         if not evidence.is_dir():
             return False
-        if started is None:
-            return any(p.is_file() for p in evidence.iterdir())
-        return any(
-            p.is_file() and p.stat().st_mtime >= started for p in evidence.iterdir()
-        )
+        # The skills document .atlas/evidence/<YYYY-MM-DD>-<slug>/..., so scan
+        # recursively (bounded depth and file count; symlinks never counted).
+        seen = 0
+        base_depth = len(evidence.parts)
+        for dirpath, dirnames, filenames in os.walk(
+            evidence, followlinks=False, onerror=_raise_oserror
+        ):
+            if len(Path(dirpath).parts) - base_depth >= _EVIDENCE_MAX_DEPTH:
+                dirnames[:] = []
+            for name in filenames:
+                seen += 1
+                if seen > _EVIDENCE_MAX_FILES:
+                    return False
+                fp = os.path.join(dirpath, name)
+                if os.path.islink(fp):
+                    continue
+                if started is None or os.stat(fp).st_mtime >= started:
+                    return True
+        return False
     except OSError:
-        return True  # can't read -> fail open  # can't read -> fail open
+        return True  # can't read -> fail open
 
 
 def _check_findings(root: Path, started: float | None = None) -> bool:
@@ -1164,10 +1194,13 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     started = _run_started_at(str(data.get("session_id") or ""))
     ok_a = _check_evidence(root, started) if code_changed else True
     ok_b = _check_findings(root, started) if code_changed else True
-    ok_c = _check_changelog(root)
-    ok_d = _check_roadmap(root)
-    ok_e = _check_readme(root)
-    ok_h = _check_roadmap_reconciled(root)
+    # (c)/(d)/(e)/(h) are docs-currency checks: scoped to code-shipping runs
+    # like (a)/(b), so a research-only or docs-only run is not blocked for
+    # missing CHANGELOG/ROADMAP/README or a stale ROADMAP "done" item.
+    ok_c = _check_changelog(root) if code_changed else True
+    ok_d = _check_roadmap(root) if code_changed else True
+    ok_e = _check_readme(root) if code_changed else True
+    ok_h = _check_roadmap_reconciled(root) if code_changed else True
     # (f) Docs drift BLOCKS: THIS RUN's own writes shipped code and
     # docs/CHANGELOG.md was not among them. The primary signal is
     # tool-call-scoped and therefore blind to docs written by a
