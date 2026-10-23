@@ -14,16 +14,16 @@ Covers SQL linting, database unit tests, schema migrations, RLS and authorizatio
 
 | TYPE ID | Tool (current version) | Install | Run | Notes |
 | --- | --- | --- | --- | --- |
-| static-lint | sqlfluff (SQL lint + fix); squawk (Postgres migration linter); Atlas lint (ariga/atlas) | sqlfluff: pip; squawk: npm i -g squawk-cli; atlas brew | sqlfluff lint --dialect postgres .; sqlfluff fix .; squawk migrations/*.sql | sqlfluff 4.4.0 current (2026-10); supports dbt templater; per-dialect config in .sqlfluff. squawk rules include ban-drop-table, require-concurrent-index-creation, adding-required-field, prefer-timestamptz |
+| static-lint | sqlfluff (SQL lint + fix); squawk (PostgreSQL migration linter); Atlas lint (ariga/atlas) | sqlfluff: pip; squawk: npm i -g squawk-cli; atlas brew | sqlfluff lint --dialect postgres .; sqlfluff fix .; squawk migrations/*.sql | sqlfluff 4.4.0 current (2026-10); supports dbt templater; per-dialect config in .sqlfluff. squawk rules include ban-drop-table, require-concurrent-index-creation, adding-required-field, prefer-timestamptz |
 | type-check | sqlfluff parse errors; Atlas schema lint (desired schema vs policy) | atlas binary | atlas schema lint --env prod | Atlas analyzers cover destructive (DS*), data-dependent (MF*), backward-incompatible (BC*), table locks (MY*), concurrent index policy (PG101-109), naming (NM*) |
-| unit | pgTAP (Postgres, TAP assertions); tSQLt (SQL Server); dbt unit tests | pgtap extension + pg_prove; tSQLt CLR from tsqlt.org; dbt built in (pip dbt-core) | pg_prove -d testdb tests/*.sql; runtests() for xUnit style; dbt test --select "test_type:unit" | pgTAP 1.3.4 current; has_table/has_column/results_eq/throws_ok etc. dbt unit tests: native since 1.8, defined in YAML under models/, static dict/csv/sql fixtures with expected rows; run in dev/CI only, never prod |
-| integration | testcontainers (ephemeral Postgres/MySQL/etc.); pgTAP inside container; up/down migration replay | pip testcontainers[postgres] or Go/JS variants | pytest with container fixture; apply migrations to container, run pgTAP suite | Apply migrations to a prod-like snapshot, not just empty schema; catches data-dependent migration failures |
+| unit | pgTAP (PostgreSQL, TAP assertions); tSQLt (SQL Server); dbt unit tests | pgtap extension + pg_prove; tSQLt CLR from tsqlt.org; dbt built in (pip dbt-core) | pg_prove -d testdb tests/*.sql; runtests() for xUnit style; dbt test --select "test_type:unit" | pgTAP 1.3.4 current; has_table/has_column/results_eq/throws_ok etc. dbt unit tests: native since 1.8, defined in YAML under models/, static dict/csv/sql fixtures with expected rows; run in dev/CI only, never prod |
+| integration | testcontainers (ephemeral PostgreSQL/MySQL/etc.); pgTAP inside container; up/down migration replay | pip testcontainers[postgres] or Go/JS variants | pytest with container fixture; apply migrations to container, run pgTAP suite | Apply migrations to a prod-like snapshot, not just empty schema; catches data-dependent migration failures |
 | db-migration | squawk + Atlas migrate lint (static); Flyway/Liquibase/Alembic/EF Core migration tests; up/down + idempotency tests | flyway binary; liquibase; alembic pip; dotnet-ef | squawk + atlas migrate lint --env ci; atlas migrate apply on container; alembic upgrade head && alembic downgrade -1 && upgrade head | Atlas migrate lint requires Atlas Pro since v0.38 (atlas login). EF Core: generate idempotent scripts (dotnet ef migrations script --idempotent) and migration bundles (dotnet ef migrations bundle) to test apply; from>to generates rollback scripts |
 | data-quality | Great Expectations (GX Core 1.x), Soda Core 3.5 (SodaCL), pandera (dataframes), dbt generic/singular data tests | pip install gx / soda-core / pandera | gx validate; soda scan -d db checks.yml; pandera schema.validate(df) | dbt data_tests: generic (unique, not_null, accepted_values, relationships) in YAML, singular as .sql files returning failing rows; run with dbt test, exclude in prod with --exclude-resource-type |
 | contract | dbt model contracts (constraints), Soda contracts, Open Data Contract Standard (ODCS) | built into dbt; soda-contracts | dbt build (contract enforcement fails on schema drift); soda contract test | Contract enforcement in dbt fails the build when model output schema differs from declared columns/types; ODCS is the vendor-neutral YAML contract spec |
 | authz | pgTAP RLS/policy tests + privilege assertions; manual SET ROLE visibility scripts | pgTAP (includes policies_are, policy_roles_are, policy_cmd_is, table_privs_are) | run per-role suite in CI nightly against prod-like snapshot | For Reg S-P: assert per-role visibility explicitly, not just "RLS enabled". Pattern: SET ROLE analyst; SELECT count(*) FROM clients; must return only the allowed set. Also assert grants: table_privs_are('clients','app_user',ARRAY['SELECT']) |
 | snapshot-approval | golden result sets: pg_regress, stored expected CSVs, dbt unit expect rows | built in | compare query output to committed golden file after changes | Keep goldens small and stable; sanitize timestamps and IDs |
-| benchmark | pgbench; EXPLAIN latency baselines | bundled with Postgres | pgbench -c 20 -t 100; psql -c "EXPLAIN ANALYZE ..." > baseline.txt | Compare against committed baseline in nightly job; fail on >N% regression |
+| benchmark | pgbench; EXPLAIN latency baselines | bundled with PostgreSQL | pgbench -c 20 -t 100; psql -c "EXPLAIN ANALYZE ..." > baseline.txt | Compare against committed baseline in nightly job; fail on >N% regression |
 | regression | EXPLAIN plan baselines, pg_stat_statements (top queries by total time, IO) | pg_stat_statements extension | nightly: diff plan shapes; pg_stat_statements top-10 report | Plan flips (nested loop -> seq scan) are the early warning; thresholds on mean exec time |
 | flakiness | deterministic fixtures: fixed timestamps, seeded IDs, ordered results, frozen clocks | none | apply in test harness | Timezones, CURRENT_TIMESTAMP defaults, and unordered SELECTs are the top flake sources; always ORDER BY in assertions |
 | fuzz | sqlsmith (random valid SQL against a schema, crash finding) | build from source or distro package | sqlsmith --target=... | Niche, maintenance low [unverified]; use for hardening parser/optimizer edge cases, not as a gate |
@@ -33,14 +33,14 @@ Not applicable (with reason): mutation testing has no standard implementation fo
 
 ## Recommended default stack
 
-- Postgres shop: sqlfluff in pre-commit; squawk on every migration diff; testcontainers + pgTAP for unit and migration tests in PR; a nightly authz suite (per-role RLS assertions on a prod-like snapshot) as the regulated-data gate; pg_stat_statements + EXPLAIN baselines nightly.
+- PostgreSQL shop: sqlfluff in pre-commit; squawk on every migration diff; testcontainers + pgTAP for unit and migration tests in PR; a nightly authz suite (per-role RLS assertions on a prod-like snapshot) as the regulated-data gate; pg_stat_statements + EXPLAIN baselines nightly.
 - SQL Server shop: tSQLt for unit tests, run inside a testcontainers-style throwaway database; sqlfluff with tsql dialect for lint.
 - Analytics/warehouse: dbt first, sqlfluff with dbt templater for lint; dbt unit tests on models with complex regex/date/window logic; generic + singular data tests for quality; model contracts on public/contracted models; GX or Soda where checks must run outside dbt or against non-dbt sources.
 - Any shop: no production PII in test data without masking; seed data from generators or masked snapshots only.
 
 ## Config snippets
 
-.sqlfluff (Postgres, dbt templater):
+.sqlfluff (PostgreSQL, dbt templater):
 
 ```ini
 [sqlfluff]
@@ -206,15 +206,15 @@ PII masking for test data (compliance-critical):
 ## Gotchas
 
 - PR vs nightly: lint (sqlfluff, squawk), Atlas migrate lint, dbt unit tests, dbt data tests in PR on staging data, testcontainers migration tests in PR; authz suite, EXPLAIN baselines, pg_stat_statements diffs, pgbench, big snapshot restores on nightly schedules.
-- pgTAP runs inside Postgres; install the extension in the test container image (or use the pgtap Docker image), and run via pg_prove from CI. pgTAP xUnit-style runtests() rolls back between test functions; sequences are not rolled back.
+- pgTAP runs inside PostgreSQL; install the extension in the test container image (or use the pgtap Docker image), and run via pg_prove from CI. pgTAP xUnit-style runtests() rolls back between test functions; sequences are not rolled back.
 - tSQLt runs in-transactions and rolls back after each test, which is safe for prod clones but conflicts with tools needing committed state; run against throwaway databases.
-- Atlas migrate lint needs Atlas Pro (atlas login) since v0.38; drift detection is also Pro. Squawk is free but Postgres-only. If neither is an option, write your own Conftest/OPA or plpgsql checks for the top rules (drop table/column, missing concurrent index, NOT NULL without default on populated tables).
+- Atlas migrate lint needs Atlas Pro (atlas login) since v0.38; drift detection is also Pro. Squawk is free but PostgreSQL-only. If neither is an option, write your own Conftest/OPA or plpgsql checks for the top rules (drop table/column, missing concurrent index, NOT NULL without default on populated tables).
 - dbt: run unit tests in dev/CI only; static fixtures mean no reason to spend warehouse cycles in prod. dbt unit tests do not support introspective queries or recursive SQL; fixture inputs must cover every ref/source the model reads.
 - sqlfluff with the dbt templater needs a working dbt project (compile) to lint; that is fine in CI, slower locally.
 - Migration tests must run against a prod-like snapshot, not an empty schema: NOT NULL without default, unique index creation on populated data, and type changes are exactly the failures an empty-DB test hides. Keep one anonymized snapshot in CI (masked per the PII section).
 - Up/down round trips are necessary, not sufficient: a downgrade that loses data (dropped columns) will "pass". Test downgrade only where it is actually part of your deploy strategy; otherwise gate deploys on forward-only plans.
 - Golden result files: sanitize timestamps, ordering, and generated IDs or the goldens will flake. Prefer bag/set comparisons (pgTAP set_eq/bag_eq) over row-order equality.
-- EXPLAIN baselines are machine-dependent; pin the CI Postgres version and small_scale factor, and compare plan shapes (join algorithm, scan type) rather than raw milliseconds where possible.
+- EXPLAIN baselines are machine-dependent; pin the CI PostgreSQL version and small_scale factor, and compare plan shapes (join algorithm, scan type) rather than raw milliseconds where possible.
 - Reg S-P framing: treat the authz suite as a control with an owner, run it on schedule, and keep the output as evidence. A green nightly RLS suite is auditable proof that per-role visibility holds.
 
 ## Sources

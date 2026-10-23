@@ -17,7 +17,7 @@ Language-specific tooling for testing Go modules. For type definitions and proce
 | static-lint | golangci-lint v2.14.0 (2026-09; 2.x series) + staticcheck (merged into golangci-lint as `staticcheck` linter) | binary release, `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` | `golangci-lint run ./...` | v2 config format is incompatible with v1; `staticcheck`, `gosimple`, `stylecheck` are one linter now. govet ships with it. |
 | type-check | go build + go vet (built in) | none | `go build ./... && go vet ./...` | No separate static type tool; vet catches printf, copylocks, shadow. |
 | unit | testing pkg + testify v1.12.1 (assert/require), table-driven + `t.Run`, `t.Parallel()` | `go get github.com/stretchr/testify` | `go test ./... -count=1` | Prefer `require` over `assert` for precondition failures. Mocks: go.uber.org/mock v0.6.0 (`mockgen`) or mockery v3.8.1 (`golang/mock` is archived). testifylint via golangci-lint flags misuse. |
-| integration | testcontainers-go v0.44.0 | `go get github.com/testcontainers/testcontainers-go` | `go test ./...` (tagged) | Auto-terminates containers per test; Docker required; modules provided for Postgres, Kafka, Redis, LocalStack. |
+| integration | testcontainers-go v0.44.0 | `go get github.com/testcontainers/testcontainers-go` | `go test ./...` (tagged) | Auto-terminates containers per test; Docker required; modules provided for PostgreSQL, Kafka, Redis, LocalStack. |
 | component | go test + httptest against subrouters / in-memory dependencies | none | `go test ./...` | Treat as unit-with-fakes; no fixed tool. |
 | api | httptest (stdlib) + testify assert | none | `go test ./...` | Test handlers with `httptest.NewRecorder`, real routers (chi/gin) mounted per test. |
 | contract | pact-go v2.8.0 | `go get github.com/pact-foundation/pact-go/v2` + `pact-go install` (cgo required) | go test files using `consumer.NewV2Pact` / `HTTPVerifier` | Spec 2/3/4; needs Pact Broker or Pactflow for CI workflows. musl Linux has known segfaults. |
@@ -51,7 +51,7 @@ Language-specific tooling for testing Go modules. For type definitions and proce
 | container-scan | cross-ref `infra-iac-containers-ci.md` (trivy for built images) | n/a | n/a | |
 | authz | unit-test wrappers/middleware with table-driven cases | none | `go test ./...` | No dedicated tool; enumerate roles in table columns. |
 | data-quality | cross-ref `data-sql-databases.md` | n/a | n/a | |
-| db-migration | golang-migrate + testcontainers-go with init SQL | `go get github.com/golang-migrate/migrate/v4` | go test with Postgres container | Assert migrations up and down cleanly. |
+| db-migration | golang-migrate + testcontainers-go with init SQL | `go get github.com/golang-migrate/migrate/v4` | go test with PostgreSQL container | Assert migrations up and down cleanly. |
 | docs-examples | Go example functions (`func ExampleFoo()` with `// Output:`) | none | `go test ./...` | Runnable docs; mismatches fail the build. |
 | notebook | n/a (Go kernels rare; if notebooks exist use language-agnostic checks) | n/a | n/a | see `docs-notebooks-web-assets.md`. |
 | link-check | language-agnostic | n/a | n/a | see `docs-notebooks-web-assets.md`. |

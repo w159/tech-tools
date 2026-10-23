@@ -73,7 +73,7 @@ confirm before writing.
 ## The docs/ scaffold
 
 If `docs/` lacks the SSOT scaffold, offer to seed it per
-`../atlas-orchestrate/references/docs-ssot.md`. Confirm first. Then ensure
+`${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`. Confirm first. Then ensure
 `docs/` is git-tracked: a deny-by-default `.gitignore` MUST
 allowlist the SSOT subtree (root `*.md` plus `architecture/`,
 `features/`, `specs/`, `audits/`, `lessons/`, `wiki/`, `plans/`,

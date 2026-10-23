@@ -8,7 +8,7 @@ The recap - the decisions from the capsule, plus the prototype path when the run
 
 - If the run has no directly related brainstorm or plan file (passed on invoke, passed by the calling skill, or named in this session as the file this prototype is for), and product-level questions remain: recap in chat from `decisions.md`, then recommend `atlas-brainstorm` with this session as the seed. If the session is enough to plan, recommend `atlas-plan` instead.
 - If more than one file could be the promotion target: do not pick one because it exists in the repo. Ask which, or recap and let the user route it.
-- If a durable docs write is warranted (a settled decision that outlives the session, e.g. a spec-level fact), dispatch `atlas:docs-curator` to record it under `docs/specs/` or `docs/decisions/` with the date-first naming from the docs SSOT (`plugins/atlas/skills/atlas-loop/references/docs-ssot.md`). Never write durable docs inline in this skill when a curator pass is warranted; when the curator is unavailable, write the dated file yourself following the SSOT exactly.
+- If a durable docs write is warranted (a settled decision that outlives the session, e.g. a spec-level fact), dispatch `atlas:docs-curator` to record it under `docs/specs/` or `docs/decisions/` with the date-first naming from the docs SSOT (`plugins/atlas/skills/atlas-orchestrate/references/docs-ssot.md`). Never write durable docs inline in this skill when a curator pass is warranted; when the curator is unavailable, write the dated file yourself following the SSOT exactly.
 
 ## Promoting into an existing brainstorm or plan
 

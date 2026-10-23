@@ -112,7 +112,7 @@ test scenarios, verification, definition of done>
 
 ## Metadata contract
 
-`artifact_contract: atlas-plan/v1` marks this as an atlas plan (CE's `ce-unified-plan/v1` frontmatter does not port - different naming, different execution plane). `product_contract_source` records provenance for the resume path. `execution: atlas-orchestrate` names the only consumer - there is no `atlas-work` executor and never will be; execution goes through orchestrate's dispatch + verification machinery.
+`artifact_contract: atlas-plan/v1` marks this as an atlas plan (CE's `ce-unified-plan/v1` frontmatter does not port - different naming, different execution plane). `product_contract_source` records provenance for the resume path. `execution: atlas-orchestrate` names the only consumer - execution goes through orchestrate's dispatch + verification machinery.
 
 ## Consumption by atlas-orchestrate
 

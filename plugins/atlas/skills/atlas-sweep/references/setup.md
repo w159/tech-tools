@@ -20,14 +20,14 @@ infer sources, actions, or approvals without asking.
 
 The interview writes ONE file: `.atlas/sweep.yaml` at the project root's
 `.atlas/` directory (durable, committable operational config per the docs
-SSOT — no secrets belong in it). State always lives at the fixed path
+SSOT - no secrets belong in it). State always lives at the fixed path
 `.atlas/.run/sweep-state.json`; there is no state-location question.
 
 ## Interaction method
 
 Use the host's blocking question tool already in the current tool list
 (match by capability, not name). If none exists, the run behaves as
-non-interactive — stop and tell the user to run setup interactively. Ask one
+non-interactive - stop and tell the user to run setup interactively. Ask one
 question at a time. Every question with a default states the default; the
 user accepts or overrides, you never pick silently.
 
@@ -41,7 +41,7 @@ For each source:
 1. **Type.** `github-issues` is the only connected type in this harness.
    Anything else the user names (Slack, email, Discord, ...) is captured
    verbatim as its type and runs **manual-input-only** until a connector
-   exists — say so plainly, do not promise integration.
+   exists - say so plainly, do not promise integration.
 2. **Identity.** For github-issues: the repo as `owner/repo`. For
    manual-input-only types: a free-form target describing where feedback
    arrives (kept for context; nothing fetches from it).
@@ -62,8 +62,8 @@ Two source-side actions plus the approval that governs them:
   `feedback:resolved`. Manual types -> none.
 - **Standing approval, verbatim:**
 
-  > "Do you approve the sweep applying these labels — `<ack>` and
-  > `<closeout>` on `<source id>` — on **every future run without asking
+  > "Do you approve the sweep applying these labels - `<ack>` and
+  > `<closeout>` on `<source id>` - on **every future run without asking
   > again**? Yes authorizes these two label writes only. No keeps this
   > source read-only: items are ingested and triaged but the source is
   > never touched, and items land as `ack_deferred` for you to action
@@ -131,5 +131,5 @@ GitHub Actions) and note that a scheduled invocation must include
 ## Reconfigure
 
 A later `setup`/`reconfigure` run loads this file, walks sections 1-5 with
-current values shown as defaults, and merges the result — never deleting
+current values shown as defaults, and merges the result - never deleting
 sources wholesale without the user naming them.

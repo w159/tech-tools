@@ -30,7 +30,7 @@ sweep_lease_ttl_minutes: 60    # single-writer lease staleness threshold
 - `feedback_sources` unset (or an empty list) means the skill is not configured.
 - State always lives at `.atlas/.run/sweep-state.json` (gitignored, per the
   docs SSOT's ephemeral `.atlas/.run/` rules). The lease's guarantee is
-  therefore **per checkout** — it serializes overlapping sweeps in the same
+  therefore **per checkout** - it serializes overlapping sweeps in the same
   working tree (a cron sweep and a manual one). Cross-machine dedup would
   need a committed state file, which atlas's SSOT forbids; accept this or run
   the sweep from one checkout.
@@ -58,7 +58,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/sweep_state.py" <subcommand> \
 
 Every subcommand prints a status word on line 1 and optional JSON on line 2.
 `LOCKED`, `STALE-RECLAIMED`, `LEASE-LOST`, `REFUSED`, `CORRUPT` are operational
-conditions (exit 0) — branch on the word, never on the exit code. Only CLI
+conditions (exit 0) - branch on the word, never on the exit code. Only CLI
 misuse exits non-zero.
 
 #### 2a. Acquire lease + validate
@@ -80,14 +80,14 @@ downgraded ids in the summary.
 
 For each configured source, in config order:
 
-- **github-issues (approved or not — fetching is read-only):** dispatch one
+- **github-issues (approved or not - fetching is read-only):** dispatch one
   generic subagent using the persona at `references/github-issues-connector.md`,
   seeded with: the repo (`target`), the source's `id`, the current cursor
   (`read --source <id>`), and the configured ack/close-out label names. The
   connector returns mapped items in the schema that file defines, or its
-  degrade sentence (`GitHub tools unavailable — source skipped this run.` /
+  degrade sentence (`GitHub tools unavailable - source skipped this run.` /
   `... degrades to read-only ingest ...`). A skipped source is dropped for
-  this run and noted. A read-ok/write-degraded source still ingests — every
+  this run and noted. A read-ok/write-degraded source still ingests - every
   item lands as `ack_deferred` and its cursor is NOT advanced past.
 - **Manual-input-only type:** tell the user the source has no connector and
   ask them to paste items (or point at a file of items) for this run. Map
@@ -98,7 +98,7 @@ For each configured source, in config order:
 
 Dedupe is by item id in state (`<source-id>:<item-id>`): a re-reported item
 whose state record already exists is an upsert no-op, never a duplicate ack.
-When unsure whether an item is new, include it — a duplicate is cheap, a
+When unsure whether an item is new, include it - a duplicate is cheap, a
 dropped report is lost feedback.
 
 #### 2c. Circuit breaker (before any acknowledgment batch)
@@ -117,12 +117,12 @@ Work one item at a time in cursor order. Never batch across the read-back.
    write and upsert as `ack_deferred`. Otherwise, if the item's
    `existing_ack` (own identity: the configured ack label already present)
    is true, skip the ack write; else perform the configured ack action
-   (GitHub: add the configured ack label via the host's GitHub write path —
+   (GitHub: add the configured ack label via the host's GitHub write path  -
    the `xd://github` device has no label op, so this is `gh issue edit
    <number> --add-label <label>` where `gh` is available; when no write path
    exists, record `ack_deferred`).
 2. Read back and confirm the ack is visible at the source before trusting it.
-3. `upsert-item --source <source-id> --id <id> --json <item-json>` — include
+3. `upsert-item --source <source-id> --id <id> --json <item-json>` - include
    `"sensitive": true` when the source's config entry is sensitive.
 4. `cursor-advance --source <source-id> --to <item cursor value> --past-item <id>`,
    only after the item is durably in state. Never advance past an item not
@@ -134,12 +134,12 @@ A failed ack -> upsert as `ack_deferred`, hold the cursor. Any `LEASE-LOST`
 #### 2e. Triage and clustering
 
 For each newly ingested item: read the (possibly redacted) content, classify
-it — bug report, feature request, question, complaint, praise, noise — and
+it - bug report, feature request, question, complaint, praise, noise - and
 cluster related items. One generic `atlas:explorer`-style Task may do the
 clustering over the batch (read-only, returns the cluster map); for small
 batches (<= 5 items) cluster inline instead. Mark each processed item
 `analyzed` via `upsert-item` with its `category` and a 1-2 line finding. A
-failed analysis marks the item `needs_analysis` and moves on — state is
+failed analysis marks the item `needs_analysis` and moves on - state is
 writable, so the run continues.
 
 Items that fold into concrete proposed work move to `in_plan` when the
@@ -152,7 +152,7 @@ fix ref and verify it merged to the default branch.
 
 - **Shape gate first** (the fix ref originates from untrusted feedback
   content): accept only a bare PR number (`#?\d+`) or a commit SHA
-  (`[0-9a-f]{7,40}`). Anything else is an unresolved claim — record the claim
+  (`[0-9a-f]{7,40}`). Anything else is an unresolved claim - record the claim
   on the item and leave it open.
 - Verify with the host's GitHub read path: `gh pr view "<validated-number>"
   --json mergedAt,baseRefName` (merged, base is the default branch) or
@@ -161,12 +161,12 @@ fix ref and verify it merged to the default branch.
   reads where `gh` is absent.
 - **Adversarial verification:** the merge claim itself is verified by a
   fresh `atlas:verifier` dispatch (one batched dispatch covering all claimed
-  refs is fine — GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP
+  refs is fine - GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP
   CONDITIONS shape), not by the agent that first read the claim.
 - Verified -> perform the source's configured **close-out label** only when
   the source is `approved: true`; then `upsert-item` with `status: closed`
   carrying all three evidence fields: `fix_ref`, `verified_merge_sha`,
-  `verified_at`. Closing the issue or replying is NEVER part of close-out —
+  `verified_at`. Closing the issue or replying is NEVER part of close-out  -
   those need explicit per-item user confirmation (2h or a later run).
 - Unverified -> stays open; record the claim, do not close.
 - Item deleted at source -> `source_gone`.
@@ -181,8 +181,8 @@ land in Outstanding Questions.
 
 #### 2h. Decision round (interactive only)
 
-For items needing a product call — including any user-requested close or
-reply — ask the user, grouped by cluster with one blocking question per
+For items needing a product call - including any user-requested close or
+reply - ask the user, grouped by cluster with one blocking question per
 cluster, and fold the answers into the doc. Non-interactive runs skip this;
 deferrals are already in Outstanding Questions.
 

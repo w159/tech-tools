@@ -16,7 +16,7 @@ here.
 
 - Architecture, plans, specs, or feature docs -- those belong in `docs/`.
 - A `docs/` subdirectory -- `.atlas/docs/` is a legacy layout the scaffold
-  refuses to run over; see `docs-ssot.md` in the atlas-loop skill.
+  refuses to run over; see `docs-ssot.md` in the atlas-orchestrate skill.
 
-See the atlas-loop skill's `references/docs-ssot.md` for the full,
+See the atlas-orchestrate skill's `references/docs-ssot.md` for the full,
 canonical definition of this tree.

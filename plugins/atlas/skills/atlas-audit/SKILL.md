@@ -1,9 +1,9 @@
 ---
 name: atlas-audit
-description: "Audits a codebase: CODE (quality, security, hotspots, dead code, docs drift), ARCHITECTURE (flowcharts, duplication), SELF (atlas run health), or ACT (open a remediation session for one audit finding by id; no id lists them). Use to audit a repo, map architecture or fix a finding."
-when_to_use: "full-codebase quality or security audit, OWASP review, architecture map, find duplication, dead code, coverage gaps, atlas run health, session transcript forensics, fix finding, remediate audit finding, pick a finding, act on audit results, list findings"
+description: "Audits a codebase in four modes: CODE (quality, security, dead code), ARCHITECTURE (flowcharts, duplication), SELF (atlas run health), ACT (remediate one finding by id; no id lists them). Use to audit a repo or fix a finding."
+when_to_use: "code audit, OWASP review, architecture map, atlas run health, fix finding"
 argument-hint: '[act [finding-id]]'
-allowed-tools: Read, Glob, Grep, Bash, Agent, Task
+allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion
 ---
 
 
@@ -79,7 +79,7 @@ Write the audit report and the findings output exactly as the output spec define
 
 ## Workflow shape
 
-This skill runs as a Workflow following the skeleton in `${CLAUDE_SKILL_DIR}/references/workflow-template.md`. The shape is a pipeline from graph through per-dimension review through per-finding verify, with verification starting as each dimension completes - no barrier between dimensions.
+This skill runs as a Workflow following the skeleton in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/workflow-template.md`. The shape is a pipeline from graph through per-dimension review through per-finding verify, with verification starting as each dimension completes - no barrier between dimensions.
 
 The synthesis step (Phase 4), the seven dimensions, severity assignment, and the docs gate are documented in `references/synthesis-framework.md`. Read it when running Phase 4 or when a report comes out unbalanced across dimensions.
 

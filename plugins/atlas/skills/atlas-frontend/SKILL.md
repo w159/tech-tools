@@ -2,7 +2,7 @@
 name: atlas-frontend
 description: "Builds, refactors or polishes frontend UI on one design system (shadcn/ui, Tailwind, Radix), verified live in the browser. Modes: build (screens, flows), component (one reusable async component), polish (live visual refinement). Use when creating or reworking UI."
 when_to_use: "build a screen, shadcn, Tailwind, Radix, refactor UI, design system, form, dashboard, page, async component, progress modal, upload widget, job panel, polish the UI, tweak spacing, animation, final UI touches"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 paths: ["**/*.tsx", "**/*.css", "**/*.scss", "components/**"]
 argument-hint: '[build|component|polish] [project] [screens/flows] [design intent]'
 ---

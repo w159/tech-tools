@@ -37,7 +37,7 @@ If you cannot write the failable check for a stage, you do not yet understand th
 The loop runs forward AND backward. If a fix at stage N invalidates an earlier stage's output, re-run that earlier check before continuing. A change that makes stage 4 pass but quietly breaks stage 2's assumption is a regression you created.
 
 ```
-... Stage 3 fix lands -> does it touch anything Stage 1 or 2 proved? 
+... Stage 3 fix lands -> does it touch anything Stage 1 or 2 proved?
     yes -> re-run that earlier check now (not at the end)
     no  -> proceed to Stage 4
 ```

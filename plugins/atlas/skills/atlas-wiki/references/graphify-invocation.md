@@ -58,7 +58,7 @@ graphify from the repo root and moves `graphify-out/` into
 `docs/wiki/diagrams/` afterward. This matches the wiring
 contract's fallback ("then move graphify-out/ into
 docs/wiki/diagrams/") in
-`plugins/atlas/skills/atlas-setup/references/graphify-wiring.md`.
+`${CLAUDE_PLUGIN_ROOT}/skills/atlas-wiki/references/graphify-wiring.md`.
 
 ## Flags used and why
 
