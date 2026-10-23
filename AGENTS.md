@@ -88,6 +88,7 @@ Before declaring a task done that touched any vendor's tooling, verify:
 - [ ] `mcp_servers/<svc>-mcp/package.json` version bumped if user-visible surface changed
 - [ ] `npm run build && npm run pack:mcpb` re-ran successfully; `.mcpb` artifact is fresh
 - [ ] `plugins/<svc>-*/skills/.../SKILL.md` updated if any skill references the touched tool
+- [ ] Bundled server output (`npm run bundle:atlas`) lands in `plugins/armada/mcp/<svc>/server.mjs` and the `plugins/armada/.mcp.json` entry matches
 - [ ] `plugins/<svc>-*/plugin.json` kept current (mcp_servers list, description, keywords)
 - [ ] `README.md` table rows and counts still accurate
 - [ ] `.env.template` updated if env contract changed

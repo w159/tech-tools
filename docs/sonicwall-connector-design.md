@@ -190,7 +190,7 @@ types,sonicwall-error}.ts`, `src/annotate-tool.ts`, `src/domains/` with one modu
 per domain exporting a `DomainHandler`, `src/domains/_helpers.ts` carrying the
 four effect-class wrappers (`readOnlyTool`, `destructiveTool`,
 `credentialIssuingTool`, `unknownEffectTool`), `tests/boot-probe.mjs`,
-`tsup.bundle.config.ts` writing `plugins/atlas/mcp/sonicwall/server.mjs`,
+`tsup.bundle.config.ts` writing `plugins/armada/mcp/sonicwall/server.mjs`,
 `scripts/pack-mcpb.js`, `manifest.json`.
 
 ### Progressive disclosure gate
@@ -338,8 +338,8 @@ this document.
 - [x] `mcp_servers/sonicwall-mcp/src/` (domains, helpers, annotate-tool, error map, navigation + inventory) (evidence: S2-U2; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
 - [x] `mcp_servers/sonicwall-mcp/sonicos-endpoints.json` (inventory, committed; the 9.5 MB swagger HTML is not) (evidence: S2-U2, 2877 rows; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
 - [x] `mcp_servers/sonicwall-mcp/manifest.json` user_config (six keys, matching `plugin.json`) (evidence: S2-U2; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
-- [x] `npm run build` + `bundle:atlas` -> `plugins/atlas/mcp/sonicwall/server.mjs` (evidence: S2-U2, bundle 1,019,315 bytes; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
-- [x] `plugins/atlas/.mcp.json` server entry with six `CFG_SONICWALL_*` values (evidence: S2-U3; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
+- [x] `npm run build` + `bundle:atlas` -> `plugins/armada/mcp/sonicwall/server.mjs` (evidence: S2-U2, bundle 1,019,315 bytes; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
+- [x] `plugins/armada/.mcp.json` server entry with six `CFG_SONICWALL_*` values (evidence: S2-U3; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
 - [x] `plugins/atlas/.claude-plugin/plugin.json` userConfig block (evidence: S2-U3; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
 - [x] `.env.template` block (evidence: S2-U3; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)
 - [x] `plugins/atlas/skills/atlas-setup/references/vendors.md` and `connectors.md` rows (evidence: S2-U3; `.atlas/evidence/2026-10-21-S3-sonicwall-merged-verify.md`)

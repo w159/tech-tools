@@ -1,15 +1,16 @@
 # Connector Authoring Pattern
 
-How a vendor MCP connector is structured inside the atlas plugin, and how
+How a vendor MCP connector is structured inside the armada plugin, and how
 atlas-setup reasons about it. Read this alongside `vendors.md` (the per-vendor
 table) when guiding setup.
 
 ## Ownership rule
 
-Every connector lives inside the atlas plugin's **flat** `mcp/` tree:
+Every connector lives inside the armada plugin's **flat** `mcp/` tree (atlas and
+armada must be installed together for connectors):
 
 ```
-plugins/atlas/
+plugins/armada/
   .claude-plugin/
     plugin.json          # declares all connector userConfig keys (defaults to "")
   .mcp.json              # launches every connector server (plugin root)
@@ -24,10 +25,13 @@ plugins/atlas/
     spanning/server.mjs
     knowbe4/server.mjs
     ninjaone/server.mjs
+    panos/server.mjs
     paylocity/server.mjs
+    sonicwall/server.mjs
     threatlocker/server.mjs
     vanta/server.mjs
     falcon/              # vendored Python project (pyproject.toml + falcon_mcp/)
+plugins/atlas/
   skills/atlas-setup/
     references/vendors.md
     references/connectors.md
@@ -54,14 +58,14 @@ for any new Python connectors.
 For each connector, `vendors.md` carries these columns. The connectors mode reads
 them directly, never from memory:
 
-1. **owning plugin** — always `atlas` for the bundled connectors.
+1. **owning plugin** - always `armada` for the bundled connectors.
 2. **required_to_enable** — the `userConfig` keys that must be non-empty.
 3. **optional** — keys that may stay blank (typically `*_base_url` / region).
 4. **entry point** — `mcp/<name>/server.mjs` or `mcp/falcon/` for Python.
 
 ## Status detection (no-args scan)
 
-1. Resolve the atlas plugin as the owning plugin from `vendors.md`.
+1. Resolve the armada plugin as the owning plugin from `vendors.md`.
 2. Read effective credentials (pluginConfigs / `.env` / dashboard marks).
 3. Mark ENABLED if every `required_to_enable` key is non-empty, else DISABLED.
 4. When a `*_status` tool exists, prefer calling it after reload for runtime proof.
@@ -70,7 +74,7 @@ them directly, never from memory:
 
 1. Open `vendors.md`, find the connector row.
 2. Tell the user the required keys, optional keys, defaults, and entry path.
-3. Point at dashboard Credentials or `/plugin config` on the **atlas** plugin.
+3. Point at dashboard Credentials or `/plugin config` on the **armada** plugin.
 4. Re-read effective config to confirm; never ask the user to paste secret values.
 
 ## What the connectors mode never does
