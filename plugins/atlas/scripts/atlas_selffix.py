@@ -388,7 +388,10 @@ def _worker_launch(top, f, wt):
     # (ATLAS_CHANNEL/ATLAS_LEAD_NAME) happens to be running it: they get their own
     # `<main>/selffix` channel, so no lead's inbox ever receives their notes.
     todo = atlas_launch.atlas_mux.atlas_todo
-    chan = todo.open_lead_channel(top, "selffix", [])["name"]
+    try:
+        chan = todo.open_lead_channel(top, "selffix", [])["name"]
+    except todo.LockTimeout as exc:  # bounded registry lock: the caller marks the launch failed
+        return {"ok": False, "reason": f"channel registry lock busy: {exc}"}
     return atlas_launch.launch(
         top,
         f"fix-{f['id']}",

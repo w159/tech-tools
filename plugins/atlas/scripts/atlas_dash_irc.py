@@ -356,6 +356,15 @@ def _post(ctx, b, root):
         )
     if not body.strip():
         return _err(400, "body_required", "empty message", "type something to send")
+    limit = atlas_todo.note_max_bytes()
+    size = len(body.encode("utf-8"))
+    if size > limit:
+        return _err(
+            400,
+            "body_too_large",
+            f"message is {size} bytes; the limit is {limit}",
+            "shorten the message or split it into several",
+        )
     if to != "all" and not _valid(to):
         return _err(
             400,
