@@ -59,7 +59,7 @@ CREATE INDEX IF NOT EXISTS ix_facets_enriched_at ON facets(enriched_at);
 CREATE INDEX IF NOT EXISTS ix_facets_created_at ON facets(created_at);
 CREATE TABLE IF NOT EXISTS friction_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, category TEXT,
-  weight REAL, snippet TEXT, ts REAL);
+  weight REAL, snippet TEXT, ts REAL, role TEXT, gate_letter TEXT, tool_name TEXT);
 CREATE INDEX IF NOT EXISTS ix_friction_events_category_ts ON friction_events(category, ts);
 CREATE INDEX IF NOT EXISTS ix_friction_events_session ON friction_events(session_id);
 CREATE TABLE IF NOT EXISTS findings (
@@ -152,7 +152,7 @@ def db_path():
 # Bump when init() gains DDL or a migration. A DB whose PRAGMA user_version is
 # at least this skips all of it, so the per-tool-call hook pays one pragma read
 # instead of ~30 CREATE IF NOT EXISTS statements and a dozen failing ALTERs.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def connect(path=None):
@@ -286,6 +286,14 @@ def init(conn, backfill=True):
     ):
         try:
             conn.execute(f"ALTER TABLE findings ADD COLUMN {_col} {_decl}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already present
+    # Idempotent migration (v2): who/which gate/which tool a friction event
+    # belongs to. No DEFAULT, so pre-existing rows stay NULL.
+    for _col in ("role", "gate_letter", "tool_name"):
+        try:
+            conn.execute(f"ALTER TABLE friction_events ADD COLUMN {_col} TEXT")
             conn.commit()
         except sqlite3.OperationalError:
             pass  # column already present
@@ -1108,12 +1116,16 @@ def pending_facets(conn, limit=50):
     )
 
 
-def record_friction(conn, session_id, category, weight=1.0, snippet=None, ts=None):
+def record_friction(
+    conn, session_id, category, weight=1.0, snippet=None, ts=None,
+    *, role=None, gate_letter=None, tool_name=None,
+):
     """Log one categorized friction event for a session."""
     cur = conn.execute(
-        "INSERT INTO friction_events(session_id,category,weight,snippet,ts) "
-        "VALUES(?,?,?,?,?)",
-        (session_id, category, weight, snippet, ts if ts is not None else time.time()),
+        "INSERT INTO friction_events(session_id,category,weight,snippet,ts,"
+        "role,gate_letter,tool_name) VALUES(?,?,?,?,?,?,?,?)",
+        (session_id, category, weight, snippet,
+         ts if ts is not None else time.time(), role, gate_letter, tool_name),
     )
     conn.commit()
     return cur.lastrowid
