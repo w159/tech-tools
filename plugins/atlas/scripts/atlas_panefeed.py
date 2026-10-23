@@ -37,6 +37,7 @@ CHIP_W = 10
 # new work = input + output + cache writes; cache reads are re-sent context, shown apart once large
 _NEW_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens")
 CACHED_SHOWN = 10_000
+PAINT_INTERVAL_S = 0.033  # live repaints are coalesced: at most one frame per ~30 fps tick
 MAX_CALLS = 64  # call-time history kept per lane (omp/channel-view.ts MAX_CALLS)
 # tool input fields worth showing, first match wins
 _ARG_KEYS = ("file_path", "path", "command", "pattern", "query", "description", "url", "prompt")
@@ -276,8 +277,18 @@ def _stamp(now: float | None) -> tuple:
     return seg(" " + time.strftime("%H:%M:%S", time.localtime(now)) + " ", DIM)
 
 
+def _mask(text: str) -> str:
+    """Tool arguments are shown in a pane that tmux keeps as scrollback: mask secret shapes with the shared redactor."""
+    try:
+        import atlas_memory
+
+        return atlas_memory.redact_secrets(text)
+    except Exception:  # a feed without masking must not die, but never show a half-redacted row
+        return "[unmasked argument hidden]" if text else text
+
+
 def _row(now, label: str, color, arg: str) -> list:
-    return [_stamp(now), chip(label, color), seg(" " + arg, TXT)]
+    return [_stamp(now), chip(label, color), seg(" " + _mask(arg), TXT)]
 
 
 def _tool_rows(block: dict, now) -> list:
@@ -484,7 +495,7 @@ class Feed:
     ticker for the spinner and clock, the size re-read on every paint so a resize reflows);
     live=False prints rows in order."""
 
-    def __init__(self, name="", role="", team="", channel="", prompt="", out=None, live=None, calls_file=None):
+    def __init__(self, name="", role="", team="", channel="", prompt="", out=None, live=None, calls_file=None, clock=None):
         self.out = out or sys.stdout
         self.live = bool(self.out.isatty()) if live is None else live
         self.head = (name, role, team, channel, goal_of(prompt), peers_of(prompt))
@@ -493,6 +504,9 @@ class Feed:
         self.usage: dict = {}
         self.lock = threading.Lock()
         self.painted_size: tuple | None = None
+        self.clock = clock or time.monotonic  # injected in tests; paces the coalesced repaint
+        self.last_paint = float("-inf")
+        self.dirty = False
         self.calls_file = calls_file  # <name>.tool.json: claude workers' call times for the omp widget sparkline
 
     def _size(self) -> tuple:
@@ -518,12 +532,27 @@ class Feed:
         threading.Thread(target=self._ticker, daemon=True).start()
 
     def _ticker(self) -> None:
+        """Wakes every PAINT_INTERVAL_S to flush coalesced rows; the spinner and clock still advance at 4 Hz."""
+        beats = 0
         while self.state == "run":
-            time.sleep(0.25)
+            time.sleep(PAINT_INTERVAL_S)
+            beats += 1
             with self.lock:
-                self.tick += 1
+                if beats % 8 == 0:
+                    self.tick += 1
+                    self.dirty = True
                 if self.state == "run":
-                    self._paint()
+                    self._flush()
+
+    def flush(self) -> None:
+        """Paint pending rows when the interval since the last frame has elapsed."""
+        with self.lock:
+            self._flush()
+
+    def _flush(self) -> None:
+        """Caller holds the lock."""
+        if self.dirty and self.clock() - self.last_paint >= PAINT_INTERVAL_S:
+            self._paint()
 
     def _paint(self, spare: int = 0) -> None:
         """Repaint every row of the pane (caller holds the lock). The frame is drawn `spare` rows
@@ -544,6 +573,7 @@ class Feed:
             out = ESC + "2J" + out
             self.painted_size = (width, height)
         self._write(out)
+        self.last_paint, self.dirty = self.clock(), False
 
     def _write(self, text: str) -> None:
         self.out.write(text)
@@ -553,7 +583,8 @@ class Feed:
         with self.lock:
             self.rows.extend(rows)
             if self.live:
-                self._paint()
+                self.dirty = True
+                self._flush()
             else:
                 width = self._size()[0]
                 self._write("".join(paint(r, width) + "\n" for r in rows))

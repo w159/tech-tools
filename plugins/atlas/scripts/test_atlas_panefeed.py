@@ -397,5 +397,73 @@ class CodexFeedTests(unittest.TestCase):
         self.assertEqual({0: (250, 1000)}, feed.usage)
 
 
+class CoalescedRepaintTests(unittest.TestCase):
+    """live repaints are marked dirty by _add and painted at most every PAINT_INTERVAL_S, one write per frame."""
+
+    class Counting(io.StringIO):
+        def __init__(self):
+            super().__init__()
+            self.writes = 0
+
+        def write(self, text):
+            self.writes += 1
+            return super().write(text)
+
+    def make(self):
+        from unittest import mock
+
+        self.now = [100.0]
+        out = self.Counting()
+        feed = pf.Feed("w1", "explorer", "t", "", "# Task\ngo", out=out, live=True, clock=lambda: self.now[0])
+        patcher = mock.patch.object(pf.Feed, "_size", return_value=(60, 14))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return feed, out
+
+    def test_burst_paints_once_then_flush_paints_the_rest(self):
+        feed, out = self.make()
+        feed.event(tool("Read", file_path="/a/one.txt"))
+        self.assertEqual(1, out.writes)  # first add paints at once: nothing was painted yet
+        for n in range(2, 6):
+            self.now[0] += 0.001
+            feed.event(tool("Read", file_path=f"/a/f{n}.txt"))
+        self.assertEqual(1, out.writes)  # inside the 33 ms window: dirty, not painted
+        feed.flush()
+        self.assertEqual(1, out.writes)  # still too early
+        self.now[0] += pf.PAINT_INTERVAL_S
+        feed.flush()
+        self.assertEqual(2, out.writes)  # one single-write frame carrying every row
+        self.assertIn("f5.txt", plain(out.getvalue()))
+        feed.flush()
+        self.assertEqual(2, out.writes)  # clean again
+
+    def test_add_after_the_interval_paints_immediately(self):
+        feed, out = self.make()
+        feed.event(tool("Read", file_path="/a/one.txt"))
+        self.now[0] += 1
+        feed.event(tool("Read", file_path="/a/two.txt"))
+        self.assertEqual(2, out.writes)
+
+    def test_finish_always_paints_pending_rows(self):
+        feed, out = self.make()
+        feed.event(tool("Read", file_path="/a/one.txt"))
+        self.now[0] += 0.001
+        feed.event(tool("Read", file_path="/a/late.txt"))
+        feed.finish(0)
+        self.assertIn("late.txt", plain(out.getvalue()))
+
+
+class SecretMaskingTests(unittest.TestCase):
+    def test_secret_shaped_tool_arguments_are_masked_in_rows(self):
+        buf = io.StringIO()
+        feed = pf.Feed("w1", out=buf, live=False)
+        feed.event(tool("Bash", command='curl -H "Authorization: Bearer sk-ant-api03-FAKEFAKEFAKEFAKEFAKEFAKE00" https://x'))
+        feed.event(tool("Bash", command="export API_KEY=hunter2hunter2hunter2"))
+        text = plain(buf.getvalue())
+        self.assertNotIn("FAKEFAKEFAKE", text)
+        self.assertNotIn("hunter2hunter2", text)
+        self.assertIn("[REDACTED]", text)
+
+
 if __name__ == "__main__":
     unittest.main()
