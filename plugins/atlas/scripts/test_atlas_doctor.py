@@ -2276,6 +2276,76 @@ class TestContextToolingRoot(unittest.TestCase):
             self.assertEqual(os.path.realpath(got), os.path.realpath(d))
 
 
+class FixContextToolingTest(unittest.TestCase):
+    """--fix appends the AGENTS.md tool-routing block; tmp repos only."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root)
+        self.agents = os.path.join(self.root, "AGENTS.md")
+        healthy = ([{"check": "x", "ok": True, "detail": ""}], {})
+        for p in (
+            mock.patch.object(atlas_doctor, "_repo_root", return_value=self.root),
+            mock.patch.object(atlas_doctor, "run_checks", return_value=healthy),
+            mock.patch.dict(os.environ, {"ATLAS_DOCTOR_HOOK_TTL_MIN": "0"}),
+        ):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _write(self, text):
+        with open(self.agents, "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def _read(self):
+        with open(self.agents, encoding="utf-8") as f:
+            return f.read()
+
+    def _main(self, *argv):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            atlas_doctor.main(list(argv))
+        return out.getvalue()
+
+    def test_fix_appends_block_once_and_is_idempotent(self):
+        self._write("# AGENTS.md\n\nNo tooling block here.\n")
+        out = self._main("--fix")
+        body = self._read()
+        self.assertEqual(body.count(atlas_doctor.ATLAS_TOOLING_MARKER), 1)
+        self.assertTrue(body.startswith("# AGENTS.md\n\nNo tooling block here.\n"))
+        self.assertIn("inserted", out)
+        self._main("--fix")
+        self.assertEqual(self._read(), body)
+
+    def test_check_and_hook_alone_never_write(self):
+        original = "# AGENTS.md\n\nNo tooling block here.\n"
+        self._write(original)
+        self._main()
+        self._main("--hook")
+        self.assertEqual(self._read(), original)
+
+    def test_missing_agents_md_is_not_created(self):
+        out = self._main("--fix")
+        self.assertFalse(os.path.exists(self.agents))
+        self.assertIn("does not exist", out)
+
+    def test_malformed_marker_leaves_file_untouched(self):
+        original = f"# A\n{atlas_doctor.ATLAS_TOOLING_MARKER}\nunpaired start\n"
+        self._write(original)
+        self._main("--fix")
+        self.assertEqual(self._read(), original)
+
+    def test_home_dir_root_refused(self):
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        original = "# AGENTS.md\n"
+        with open(os.path.join(home, "AGENTS.md"), "w") as f:
+            f.write(original)
+        with mock.patch.dict(os.environ, {"HOME": home}):
+            line = atlas_doctor.fix_context_tooling(root_path=home)
+        self.assertIn("not a project root", line)
+        with open(os.path.join(home, "AGENTS.md")) as f:
+            self.assertEqual(f.read(), original)
+
+
 class ContentDriftTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

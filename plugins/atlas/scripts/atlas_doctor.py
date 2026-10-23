@@ -493,6 +493,40 @@ def check_context_tooling(root_path=None):
     )
 
 
+def fix_context_tooling(root_path=None):
+    """--fix only: append the atlas-tooling block to an EXISTING AGENTS.md that
+    lacks the marker. Never creates the file, never touches a file that already
+    has any marker (ensure_tooling_block would rewrite it), never runs in a
+    non-project root. Returns one line saying what was done or why skipped."""
+    root = root_path or _repo_root(os.getcwd())
+    path = os.path.join(root, "AGENTS.md")
+    if atlas_db.not_a_project_root(root):
+        return f"SKIP tooling block: {root} is not a project root"
+    if not os.path.isfile(path):
+        return f"SKIP tooling block: {path} does not exist (run atlas-setup)"
+    try:
+        with open(path, encoding="utf-8") as f:
+            has_marker = "atlas-tooling" in f.read()
+    except OSError as e:
+        return f"SKIP tooling block: {path} unreadable: {e}"
+    if has_marker:
+        return f"tooling block already present: {path}"
+    import importlib.util
+    from pathlib import Path
+
+    src = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "skills",
+        "atlas-setup",
+        "scripts",
+        "scaffold_docs.py",
+    )
+    spec = importlib.util.spec_from_file_location("atlas_scaffold_docs", src)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.ensure_tooling_block(Path(path), mod.AGENTS_TOOLING_BLOCK)
+
+
 def _omp_plugins_dir():
     """omp's plugin registry. Overridable; otherwise the sibling of the claude
     plugins dir's home (~/.claude/plugins -> ~/.omp/plugins) so a test that
@@ -3155,6 +3189,10 @@ def main(argv=None):
             print(f"FIX: {a}")
         results, ctx = run_checks(args.plugin)  # VERIFY
         failed = [r for r in results if not r["ok"] and r.get("severity") != "warn"]
+
+    if args.fix:
+        # own branch: the check is severity "warn", so `failed` never holds it
+        print(f"FIX: {fix_context_tooling()}")
 
     if (args.hook or args.fix) and ctx.get("new_state"):
         try:
