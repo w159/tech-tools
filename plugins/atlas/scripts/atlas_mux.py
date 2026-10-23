@@ -885,10 +885,13 @@ def _split_team_window(
 
 
 def _team_layout(count: int, width: int) -> str:
-    """Side by side while each pane keeps >= 70 cols, else one wide pane over the rest; 4+ tile."""
-    if count == 3:
-        return "even-horizontal" if (width - 2) // 3 >= 70 else "main-horizontal"
-    return "even-horizontal" if count <= 2 else "tiled"
+    """Side by side while each pane keeps >= 70 cols, else one wide pane over the rest (3) or tiled (4+)."""
+    if count < 3:
+        return "even-horizontal"
+    if (width - 2) // count >= 70:
+        return "even-horizontal"
+    # ponytail: no tabbed windows; very narrow terminals with 4+ workers still get tiled.
+    return "main-horizontal" if count == 3 else "tiled"
 
 
 def _relayout_team(session: str) -> None:

@@ -2709,8 +2709,10 @@ class TeamWindowTests(unittest.TestCase):
         self.assertEqual("even-horizontal", pick(2, 120))
         self.assertEqual("even-horizontal", pick(3, 212))
         self.assertEqual("main-horizontal", pick(3, 200))
-        self.assertEqual("tiled", pick(4, 400))
-        self.assertEqual("tiled", pick(6, 400))
+        self.assertEqual("even-horizontal", pick(4, 400))  # (400-2)//4 = 99
+        self.assertEqual("tiled", pick(4, 200))  # 49 per pane
+        self.assertEqual("even-horizontal", pick(5, 400))  # 79 per pane
+        self.assertEqual("tiled", pick(6, 400))  # 66 per pane
         _, calls = self.drive(["a", "b", "c"], width=240)
         self.assertEqual(
             "even-horizontal", [c for c in calls if c[0] == "select-layout"][-1][-1]
