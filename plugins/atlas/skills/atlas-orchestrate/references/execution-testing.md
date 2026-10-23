@@ -9,7 +9,7 @@ Always derive commands from the project's manifests/scripts (`package.json` scri
 1. **Detect** dev/build/test/lint/typecheck scripts from `package.json`.
 2. **Static gate** (fast, cheap, run first): typecheck, lint, dead-code (knip if present), unit tests, prod build. A red here stops before you bother running the app.
 3. **Run it live**: start the dev server in the background; capture the URL.
-4. **Drive the real UI** with the **Claude_Preview MCP** (`preview_start`/navigate, `preview_click`, `preview_fill`, `preview_console_logs`, `preview_network`, `preview_screenshot`) or the `webapp-testing` skill (Playwright). Confirm by observation:
+4. **Drive the real UI** with the **Claude_Preview MCP** (`preview_start`/navigate, `preview_click`, `preview_fill`, `preview_console_logs`, `preview_network`, `preview_screenshot`) or headless Playwright (see `${CLAUDE_PLUGIN_ROOT}/skills/atlas-ux-test/references/webapp-testing-integration.md`). Confirm by observation:
    - the page renders; **console is clean** (capture errors/warnings);
    - the **network calls fire and succeed** (status + payload shape) - this is the bridge to the backend;
    - every user-facing **state** is handled: loading, empty, error, success;

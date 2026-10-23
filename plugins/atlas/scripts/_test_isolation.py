@@ -123,3 +123,20 @@ def make_real_project_dir(testcase) -> str:
     testcase.addCleanup(shutil.rmtree, d, True)
     os.makedirs(os.path.join(d, ".git"))
     return os.path.realpath(d)
+
+
+def enter_real_project_cwd():
+    """chdir into a fresh non-temp project dir (see make_real_project_dir) and return a callable that restores the
+    previous cwd and removes it. For setUpModule/tearDownModule of tests that pass cwd-relative paths such as
+    ``src/app.py`` which the product resolves against cwd and treats as junk when the checkout lives under /tmp."""
+    prev = os.getcwd()
+    d = tempfile.mkdtemp(prefix="atlas-test-realproj-", dir=REAL_HOME)
+    os.makedirs(os.path.join(d, ".git"))
+    os.chdir(d)
+
+    def _leave():
+        with contextlib.suppress(OSError):
+            os.chdir(prev)
+        shutil.rmtree(d, ignore_errors=True)
+
+    return _leave

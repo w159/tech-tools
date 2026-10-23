@@ -42,7 +42,7 @@ The browser work is never done inline and never via an external browser CLI.
 1. **Dispatch `atlas:ui-runtime-tester`** (the atlas pink agent) to drive the live browser:
    it navigates, inspects rendered/interactive state, clicks/fills/presses, captures
    screenshots, and reads console + network - via the harness's own browser surface
-   (Claude_Preview MCP / `webapp-testing`), not standalone Playwright/Puppeteer installs.
+   (Claude_Preview MCP, else headless Playwright; see `${CLAUDE_PLUGIN_ROOT}/skills/atlas-ux-test/references/webapp-testing-integration.md`), not standalone Playwright/Puppeteer installs.
 2. **One dispatched tester per batch of routes** (or one per route for large diffs). Do not
    mix browser sessions across testers; each tester owns its navigation session.
 3. **Do not introduce a third browser stack.** Never shell out to `codex`/`cursor`/`grok`-style

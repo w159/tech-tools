@@ -76,7 +76,7 @@ CONTEXT: Dev server at http://localhost:<PORT>. Affected routes from diff
   Evidence dir: .atlas/evidence/<YYYY-MM-DD>_<slug>/ (create it).
 TOOLS (required):
   ToolSearch("select:mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_shell")
-  plus the harness browser surface (Claude_Preview MCP or webapp-testing skill).
+  plus the harness browser surface (Claude_Preview MCP or headless Playwright; see `${CLAUDE_PLUGIN_ROOT}/skills/atlas-ux-test/references/webapp-testing-integration.md`).
 DELIVERABLE: A per-route table (Route | Pass/Fail/Skip | Evidence) plus, for each Fail,
   the exact console line, the failing network entry (URL, method, status), and the
   screenshot path. Evidence files saved under the evidence dir.

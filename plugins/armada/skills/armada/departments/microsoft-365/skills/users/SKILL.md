@@ -135,7 +135,7 @@ POST /v1.0/users/{id}/revokeSignInSessions
 
 ## MFA Status Checking
 
-The Softeria MCP server wraps Graph API calls. To check MFA status:
+Through the cipp connector, `cipp_list_mfa_users` reports per-user MFA registration for a tenant (`tenantFilter`), and `cipp_reset_mfa` / `cipp_revoke_sessions` act on one user. The underlying Microsoft Graph call to check a single user's MFA status is:
 
 ```http
 GET /v1.0/users/{id}/authentication/methods
