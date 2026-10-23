@@ -32,33 +32,65 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import atlas_todo  # noqa: E402  (import has no side effects; shares the gate's root logic)
+from atlas_memory import _file_lock  # noqa: E402
 
 STATUSES = ("verified", "rejected", "needs-evidence", "open")
 RELPATH = (".atlas", ".run", "findings.json")
 
 
 def find_root(start: Path) -> Path | None:
-    """Nearest ancestor holding docs/ or .atlas/ -- same root notion the gate uses."""
-    for candidate in [start, *start.parents]:
-        if (candidate / "docs").is_dir() or (candidate / ".atlas").is_dir():
-            return candidate
-    return None
+    """Project root via `atlas_todo.find_root` (the board's root notion: nearest
+    .git, .atlas or docs/ within a bounded walk, linked worktrees mapped to the main
+    repo). Returns None when no marker exists on the walk, so the CLI still demands
+    --root rather than writing into an arbitrary directory."""
+    root = Path(atlas_todo.find_root(str(start)))
+    markers = (".git", ".atlas", "docs")
+    return root if any((root / m).exists() for m in markers) else None
+
+
+def _quarantine(path: Path) -> Path | None:
+    """Move an unparseable ledger aside (findings.json.corrupt-<ns>) so a later
+    save cannot silently erase it. Returns the new path, or None if the move failed."""
+    dest = path.with_name(f"{path.name}.corrupt-{time.time_ns()}")
+    try:
+        os.replace(path, dest)
+    except OSError:
+        return None
+    return dest
 
 
 def load(path: Path) -> list:
-    """Existing findings as a list. A missing or unreadable file starts fresh;
-    a file holding {"findings": [...]} is unwrapped so both shapes round-trip."""
+    """Existing findings as a list. A missing file starts fresh; a file holding
+    {"findings": [...]} is unwrapped so both shapes round-trip. A file that exists
+    but is unreadable/corrupt is quarantined with a stderr warning, never dropped."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, ValueError):
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return []
+    except OSError:
+        text = None
+    data = None
+    if text is not None:
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
     if isinstance(data, list):
         return data
-    if isinstance(data, dict):
-        items = data.get("findings")
-        return items if isinstance(items, list) else []
+    if isinstance(data, dict) and isinstance(data.get("findings"), list):
+        return data["findings"]
+    moved = _quarantine(path)
+    print(
+        "atlas_finding: WARNING %s is corrupt or not a findings ledger; %s"
+        % (path, "preserved as %s" % moved if moved else "could not be preserved"),
+        file=sys.stderr,
+    )
     return []
 
 
@@ -116,10 +148,11 @@ def main(argv: list | None = None) -> int:
 
     path = root.joinpath(*RELPATH)
     entry = build_entry(args)
-    findings = load(path)
-    findings.append(entry)
     try:
-        save(path, findings)
+        with _file_lock(path):
+            findings = load(path)
+            findings.append(entry)
+            save(path, findings)
     except OSError as exc:
         print("atlas_finding: could not write %s: %s" % (path, exc), file=sys.stderr)
         return 1
