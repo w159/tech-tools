@@ -10,8 +10,8 @@ This plugin ships as part of the [tech-tools marketplace](https://github.com/w15
 |---|---|---|
 | Skills | 4 | `code-review` (user-run 6-lens, multi-agent review), `code-principles` (auto-fires while you work to surface relevant book principles), `tpp-audit` (Pragmatic Programmer audit), and `tpp-principles` (Pragmatic Programmer principles advisor) |
 | Agents | 7 | `code-review-architecture`, `code-review-correctness`, `code-review-craft`, `code-review-security`, `code-review-data`, `code-review-process`, `tpp-auditor` |
-| Hooks | 0 | disabled — see "The nudge hook" below |
-| References | 89 | the book's concept glossary, repackaged as `references/concepts/*.md` for citation |
+| Hooks | 0 | none registered; the nudge script is kept on disk, unwired (see "The nudge hook (disabled)" below) |
+| References | 95 | 89 concept files (`skills/tpp-principles/references/concepts/*.md`) plus 6 rubric, book-map, index, and dimension files |
 
 ## The 6 review lenses
 
@@ -26,12 +26,12 @@ This plugin ships as part of the [tech-tools marketplace](https://github.com/w15
 
 ## Install
 
-Install from the atlas marketplace, then enable the `programmer` plugin. Restart Claude Code after install so the hook loads.
+Install from the tech-tools marketplace, then enable the `programmer` plugin.
 
 If you are developing this plugin in place, you can also point Claude Code at the plugin dir directly:
 
 ```bash
-cc --plugin-dir /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/programmer
+claude --plugin-dir <path-to-clone>/plugins/programmer
 ```
 
 ## Usage
@@ -82,7 +82,7 @@ Is this DRY?
 
 The `UserPromptSubmit` command hook has been disabled: `hooks/hooks.json` now registers no hooks. The implementation (`hooks/tpp_nudge.py`) is preserved on disk, unwired, in case the nudge is wanted again. It matches prompts against a deterministic domain keyword map and injects a single one-line pointer to the most relevant concept; it never lectures, never outputs more than one line, and can never block a prompt (it always exits 0).
 
-To re-enable: add a `UserPromptSubmit` entry back to `hooks/hooks.json` calling `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/tpp_nudge.py"`. Hook changes require a Claude Code restart to take effect.
+To re-enable: add a `UserPromptSubmit` entry back to `hooks/hooks.json` calling `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/tpp_nudge.py"`, then restart Claude Code. Until then no hook runs.
 
 ## Book corpus
 
