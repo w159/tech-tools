@@ -79,7 +79,7 @@ CONTEXT:
   Grounding dossier: <run-dir>/grounding-dossier.md (read it; spot-check its file:line
   citations yourself - treat it as one input, not as truth; report any error you find)
 TOOLS (required):
-  ToolSearch first, ONE batched call, per references/tool-routing.md; include web_search +
+  ToolSearch first, ONE batched call, per ${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/tool-routing.md; include web_search +
   Context7 if the packet's deciding facts extend beyond the repo
 TOOLS ALLOWED: Read, Glob, Grep, web_search, Context7, lean-ctx/serena reads
 TOOLS FORBIDDEN: Write - Edit - git push - any modification
