@@ -86,7 +86,7 @@ To re-enable: add a `UserPromptSubmit` entry back to `hooks/hooks.json` calling 
 
 ## Book corpus
 
-The `code-review` and `code-principles` skills use a curated 31-book corpus as their principle map. The corpus is not a replacement for the books. It is an operational index: each review finding cites a book and a lens so you can trace the recommendation back to the source.
+The `code-review` and `code-principles` skills use a curated 30-book corpus as their principle map. The corpus is not a replacement for the books. It is an operational index: each review finding cites a book and a lens so you can trace the recommendation back to the source.
 
 ## Source
 

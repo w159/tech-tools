@@ -126,19 +126,14 @@ describe("PAN-OS request building", () => {
     expect(u.searchParams.get("cmd")).toContain("<commit-all>");
   });
 
-  // KNOWN GAP (reported, not fixed here): node-panos client.commit() accepts
-  // `action` ('partial' | 'all') but never puts it on the request, so
-  // panos_commit {partial:true} and panos_commit_all do not send action=... .
-  // it.fails passes while the gap exists and starts failing once it is fixed,
-  // which is the cue to turn these into plain it() tests.
-  it.fails("panos_commit with partial sends action=partial", async () => {
+  it("panos_commit with partial sends action=partial", async () => {
     const calls = mockFetch();
     const h = await handler("commits");
     await h.handleCall("panos_commit", { partial: true });
     expect(calls[0].url.searchParams.get("action")).toBe("partial");
   });
 
-  it.fails("panos_commit_all sends action=all", async () => {
+  it("panos_commit_all sends action=all", async () => {
     const calls = mockFetch();
     const h = await handler("commits");
     await h.handleCall("panos_commit_all", { cmd: "<commit-all></commit-all>" });

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed: PAN-OS `panos_commit` with `partial: true` and `panos_commit_all` now
+  send `action=partial` / `action=all` on the commit request (node-panos
+  `commit()` previously dropped it). The panos bundle was rebuilt.
 - The 13 vendor MCP connectors moved here from the atlas plugin: CrowdStrike
   Falcon, Auvik, Blumira, CIPP, ConnectWise Manage, Kaseya Spanning, KnowBe4,
   NinjaOne, PAN-OS, Paylocity, SonicWall, ThreatLocker, and Vanta. The servers
