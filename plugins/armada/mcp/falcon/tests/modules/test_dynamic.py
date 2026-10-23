@@ -1307,7 +1307,9 @@ class TestDynamicServerIntegration(unittest.TestCase):
         tool_names = [
             call.kwargs["name"] for call in mock_server_instance.add_tool.call_args_list
         ]
-        self.assertEqual(len(tool_names), 3)
+        # falcon_status is the always-on config probe; the other three are the dynamic surface
+        self.assertEqual(len(tool_names), 4)
+        self.assertIn("falcon_status", tool_names)
         self.assertIn("falcon_list_enabled_tools", tool_names)
         self.assertIn("falcon_search_tools", tool_names)
         self.assertIn("falcon_execute_tool", tool_names)

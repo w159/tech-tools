@@ -19,7 +19,9 @@ test("scratch dirs are unarmed, even with a marker", () => {
 });
 
 test("repo dir is armed; markerless dir under home is not; ancestor marker arms", () => {
-	expect(gatesArmed(REPO, {})).toBe(true);
+	// a checkout under a scratch root (e.g. staged in /tmp) is unarmed by design; the ancestor-marker case below covers arming
+	const repoInScratch = [REPO, realpathSync(REPO)].some(p => SCRATCH_ROOTS.some(r => p === r || p.startsWith(`${r}/`)));
+	if (!repoInScratch) expect(gatesArmed(REPO, {})).toBe(true);
 	const d = mkdtempSync(join(homedir(), ".atlas-scope-test-"));
 	try {
 		expect(gatesArmed(d, {})).toBe(false);
