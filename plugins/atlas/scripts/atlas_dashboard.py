@@ -220,7 +220,9 @@ def _connector_manifest() -> dict:
     if root is None:
         return {}
     try:
-        return json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        return json.loads(
+            (root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return {}
 
@@ -2568,7 +2570,10 @@ class Handler(BaseHTTPRequestHandler):
             body = (
                 target.read_bytes()
                 .replace(TOKEN_PLACEHOLDER.encode(), DASH_TOKEN.encode())
-                .replace(b"__ATLAS_VERSION__", str(_plugin_manifest().get("version") or "").encode())
+                .replace(
+                    b"__ATLAS_VERSION__",
+                    str(_plugin_manifest().get("version") or "").encode(),
+                )
             )
             if DASH_TOKEN.encode() not in body:
                 tag = f'<meta name="atlas-token" content="{DASH_TOKEN}">'.encode()
@@ -2718,7 +2723,7 @@ class Handler(BaseHTTPRequestHandler):
         ):  # single-use ticket is checked in the handler (browsers cannot set headers)
             import atlas_dash_term
 
-            return atlas_dash_term.handle_ws(self, query, DASH_TOKEN)
+            return atlas_dash_term.handle_ws(self, query)
         if self._dispatch_v2("GET", u.path, query, {}):
             return
         return self._legacy_get(u)
@@ -3184,7 +3189,10 @@ def _install_qualifies(d: Path, ver_text: str, parent_real: str) -> bool:
     and a realpath that stays inside the install parent (no escaping symlinks)."""
     try:
         real = os.path.realpath(d)
-        if os.path.commonpath([real, parent_real]) != parent_real or real == parent_real:
+        if (
+            os.path.commonpath([real, parent_real]) != parent_real
+            or real == parent_real
+        ):
             return False
         manifest = json.loads(
             (d / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
@@ -3198,7 +3206,9 @@ def _install_qualifies(d: Path, ver_text: str, parent_real: str) -> bool:
     )
 
 
-def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[int, ...], Path]]:
+def _sibling_installs(
+    own_roots: list[Path] | None = None,
+) -> list[tuple[tuple[int, ...], Path]]:
     """(version, daemon script) of sibling installs of this same plugin.
 
     Layouts: omp .../tech-tools___atlas___<ver>/ and claude .../<mkt>/atlas/<ver>/.
@@ -3219,7 +3229,7 @@ def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[i
         for d in entries:
             if fam and not d.name.startswith(fam):
                 continue
-            ver_text = d.name[len(fam):]
+            ver_text = d.name[len(fam) :]
             ver = _version_tuple(ver_text)
             if not ver or not (d / "scripts" / "atlas_dashboard.py").is_file():
                 continue
