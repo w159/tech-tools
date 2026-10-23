@@ -1,6 +1,6 @@
 # programmer (Claude Code plugin in the tech-tools marketplace)
 
-Turns The Pragmatic Programmer (20th Anniversary Edition) into an active codebase auditor and coding-time advisor. The book's principles, tips, practices, and lessons become things you can run against a real codebase, not just quotes on a page.
+A code reviewer, codebase auditor and coding-time advisor based on The Pragmatic Programmer (20th Anniversary Edition). The book's principles and tips become checks you can run against a real codebase.
 
 This plugin ships as part of the [tech-tools marketplace](https://github.com/w159/tech-tools) (owner w159), alongside the `atlas` and `armada` plugins. Skills are namespaced `tpp-*` (The Pragmatic Programmer).
 
@@ -36,7 +36,7 @@ claude --plugin-dir <path-to-clone>/plugins/programmer
 
 ## Usage
 
-### Run a book-derived code review
+### Run a code review
 
 ```text
 /programmer:code-review ./my-project
@@ -46,7 +46,7 @@ claude --plugin-dir <path-to-clone>/plugins/programmer
 
 The skill dispatches 6 reviewer agents in parallel. Each agent scans for concrete evidence signals defined in `skills/code-review/references/rubric.md` and returns a JSON findings array. The skill synthesizes a ranked report (blockers first, then majors, minors, notes) with `file:line` citations, the source book, and an actionable fix. It writes the report to `.code-review-report.md` (or the `--report` path) and prints a summary table plus the top 10 findings.
 
-### Principles while you work
+### Principles from the book corpus (`code-principles`)
 
 ```text
 What book principle applies to this refactor?
@@ -67,7 +67,7 @@ The skill dispatches one `tpp-auditor` per selected dimension in parallel. Each 
 
 The audit reports only. It never modifies code. Re-run it after fixes to verify progress.
 
-### Principles while you work
+### Pragmatic Programmer principles (`tpp-principles`)
 
 The `tpp-principles` skill auto-fires when you are designing, debugging, refactoring, testing, naming, handling concurrency or errors, securing code, estimating, or asking what the book says about a situation. It surfaces 1-4 relevant principles, each with the book tip number, a concrete in-practice pointer tied to your situation, and a citation to the concept file. It is advisory and terse by design.
 
@@ -86,7 +86,11 @@ To re-enable: add a `UserPromptSubmit` entry back to `hooks/hooks.json` calling 
 
 ## Book corpus
 
-The `code-review` and `code-principles` skills use a curated 31-book corpus as their principle map. The corpus is not a replacement for the books. It is an operational index: each review finding cites a book and a lens so you can trace the recommendation back to the source.
+The `code-review` and `code-principles` skills use a curated list of software engineering books as their principle map (`skills/code-review/references/books.md`). The corpus is not a replacement for the books. It is an operational index: each review finding cites a book and a lens so you can trace the recommendation back to the source.
+
+## License
+
+Plugin code is MIT (`LICENSE` in this directory). The concept files are the author's own summaries of The Pragmatic Programmer, included as citation; `LICENSE` has the exact notice. Other plugins in this marketplace (atlas, armada) are Apache-2.0.
 
 ## Source
 

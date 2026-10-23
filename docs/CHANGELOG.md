@@ -12,6 +12,7 @@ Audit fixes and the connector move on branch `claude/atlas-audit-fixes`. Details
 - Completion gate: nested dated evidence folders count, and the CHANGELOG, ROADMAP, README and stale-ROADMAP checks apply only to runs that shipped code. The dispatch template now passes the tripwire.
 - Test suites no longer depend on session environment, user id or checkout path; install-parity checks are opt-in with `ATLAS_CHECK_INSTALL_PARITY=1`.
 - programmer now ships its six code-review lens agents.
+- Public surface: Apache-2.0 `LICENSE` files (repo root, atlas, armada), a rewritten root README, shorter manifests, per-plugin license listing, CONTRIBUTING scope rule, and the atlas changelog before 12.5.10 archived under `docs/archive/`.
 
 ## 15.0.0 (2026-10-22, unreleased)
 

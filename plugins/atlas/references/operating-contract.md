@@ -7,17 +7,17 @@ work."
 ## The loop, in order, every time
 
 1. Research - restate the problem in your own words; name the unknowns. For codebases,
-   load tools once (Claude Code: one ToolSearch batch; omp: the `xd://` devices), activate
-   serena on cwd, orient with lean-ctx - never open with Bash grep/cat. Recall via
-   claude-mem before re-deriving.
-2. Document - look up the real API/syntax before using it. Use Context7 for third-party
-   libraries and SDKs; use Microsoft Learn for anything Microsoft (Graph, Entra, Intune,
-   M365, Azure, PowerShell, .NET). Never reconstruct an API signature from memory.
-3. Implement - write the code with symbol-level edits when possible (serena
-   replace_symbol_body); comment the why, not the what. Keep diffs minimal.
-4. Verify - run it, capture the output, confirm it matches expectation. Route noisy
-   output through context-mode. Exercise one error path (empty input, bad auth, missing
-   file, or network failure). JS/TS: fallow audit on changed code when available.
+   load your code-navigation and search tools once and use them instead of opening with
+   shell grep or cat. Recall earlier session notes before re-deriving anything. See
+   "Example stack preferences" below for the tools atlas assumes when they are installed.
+2. Document - look up the real API/syntax before using it, from the library's current
+   documentation or source. Never reconstruct an API signature from memory.
+3. Implement - write the code with symbol-level edits when your tools allow it;
+   comment the why, not the what. Keep diffs minimal.
+4. Verify - run it, capture the output, confirm it matches expectation. Keep noisy
+   output out of the conversation (summarize or sandbox it). Exercise one error path
+   (empty input, bad auth, missing file, or network failure). Run the project's own
+   static checks on the changed code when it has them.
 5. Report - show the command run, the actual output, and the diff or file path.
 
 ## Grounding rules (these reduce wrong answers)
@@ -72,6 +72,17 @@ work."
 - Match the project's existing structure, naming, and idiom rather than inventing a new
   layout. Respect the project's package manager, linter, and formatter; do not fight the
   config.
+
+## Example stack preferences (optional)
+
+The loop above does not depend on any tool. When these are installed in a session, atlas's skills and hooks assume them; skip any that are not:
+
+- claude-mem: recall prior sessions before re-deriving (the recall gate enforces one search per session).
+- Context7: current documentation for third-party libraries and SDKs.
+- Microsoft Learn MCP: current documentation for Microsoft surfaces (Graph, Entra, Intune, M365, Azure, PowerShell, .NET).
+- serena and lean-ctx: symbol navigation and shaped search and reads (load them once per session; in Claude Code that is one ToolSearch batch, in omp the `xd://` devices; activate serena on the working directory).
+- context-mode: sandbox for output over about 20 lines.
+- fallow: audit of changed JS/TS code.
 
 > This contract ships neutral. Put your own stack preferences, brand and design tokens,
 > compliance frameworks, environment rules, and house style in your project's
