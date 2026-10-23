@@ -179,12 +179,28 @@ class ManifestTest(unittest.TestCase):
         names = [p["name"] for p in mp["plugins"]]
         self.assertIn("armada", names)
 
-    def test_armada_declares_no_credentials(self):
+    def test_armada_declares_the_vendor_connectors_and_atlas_declares_none(self):
+        """The 13 vendor MCP connectors and their 57 credential keys live on armada."""
         manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
-        for key in ("userConfig", "mcpServers"):
-            self.assertNotIn(
-                key, manifest, f"credentials live on atlas, not armada ({key})"
+        self.assertEqual(manifest.get("mcpServers"), "./.mcp.json")
+        servers = json.loads((PLUGIN / ".mcp.json").read_text())["mcpServers"]
+        self.assertEqual(
+            sorted(servers),
+            sorted(
+                "auvik blumira cipp connectwise falcon knowbe4 ninjaone panos "
+                "paylocity sonicwall spanning threatlocker vanta".split()
+            ),
+        )
+        self.assertEqual(len(manifest["userConfig"]), 57)
+        for name in servers:
+            self.assertTrue(
+                (PLUGIN / "mcp" / name).is_dir(), f"mcp/{name} missing on armada"
             )
+        atlas = json.loads(
+            (REPO / "plugins" / "atlas" / ".claude-plugin" / "plugin.json").read_text()
+        )
+        self.assertNotIn("mcpServers", atlas)
+        self.assertEqual(sorted(atlas.get("userConfig", {})), ["atlas_mod_sound"])
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@
 //     re-issued after each and the results are unioned. `blumira_navigate` swaps
 //     the listed surface rather than adding to it, so without the union a bare
 //     `tools/list` sees 2 of 31 tools.
-//   - A Python connector (falcon) is spawned exactly the way plugins/atlas/.mcp.json
+//   - A Python connector (falcon) is spawned exactly the way plugins/armada/.mcp.json
 //     spawns it (`uv run --project ... python mcp/_env/load.py <module>`), not as
 //     `node server.mjs`. It registers its domain modules only after a successful
 //     OAuth exchange, so the probe points its base URL at a loopback stub that
@@ -55,7 +55,7 @@ import { basename, delimiter, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const PLUGIN_DIR = process.env.ATLAS_PLUGIN_DIR ? resolve(process.env.ATLAS_PLUGIN_DIR) : resolve(ROOT, 'plugins/atlas');
+const PLUGIN_DIR = process.env.ATLAS_PLUGIN_DIR ? resolve(process.env.ATLAS_PLUGIN_DIR) : resolve(ROOT, 'plugins/armada');
 const MCP_DIR = resolve(PLUGIN_DIR, 'mcp');
 const MCP_CONFIG_FILE = resolve(PLUGIN_DIR, '.mcp.json');
 const PROBE_TIMEOUT_MS = 30_000;
@@ -70,7 +70,7 @@ process.on('exit', () => rmSync(PROBE_HOME, { recursive: true, force: true }));
 // Baseline tool-count floors.
 //
 // OBSERVED VALUES, not targets: every number below was read off a live probe of
-// the connectors as plugins/atlas/.mcp.json launches them, on 2026-09-17. A
+// the connectors as plugins/armada/.mcp.json launches them, on 2026-09-17. A
 // connector failing its floor means tools disappeared - usually a build that did
 // not re-pack, or a domain that stopped registering.
 //
@@ -114,7 +114,7 @@ const CONNECTORS = {
   },
   falcon: {
     // Python connector: no server.mjs bundle. Spawned exactly as
-    // plugins/atlas/.mcp.json spawns it (uv run --project ... python
+    // plugins/armada/.mcp.json spawns it (uv run --project ... python
     // mcp/_env/load.py falcon_mcp.server).
     //
     // falcon registers its 27 domain modules only after FalconClient.authenticate()
@@ -260,9 +260,9 @@ function envFor(connector, strategy, extra) {
 // ---------------------------------------------------------------------------
 // How to launch a connector.
 //
-// Node connectors are the shipped bundle under plugins/atlas/mcp/<svc>/server.mjs.
+// Node connectors are the shipped bundle under plugins/armada/mcp/<svc>/server.mjs.
 // A connector marked `launch: 'mcp-config'` (falcon: Python, no bundle) is spawned
-// with the exact command plugins/atlas/.mcp.json declares for it, so the harness
+// with the exact command plugins/armada/.mcp.json declares for it, so the harness
 // cannot drift from how the plugin actually runs it.
 // ---------------------------------------------------------------------------
 const PREREQ_HINT = {
@@ -580,7 +580,7 @@ async function evaluate(connector, spec) {
     const rebuild = spec.launch === 'mcp-config'
       ? `the Python project under ${relative(resolve(MCP_DIR, connector))} is out of date - re-sync it with` +
         ` \`uv sync --project ${relative(resolve(MCP_DIR, connector))}\``
-      : `the bundle under plugins/atlas/mcp/ is stale - rebuild it with \`npm run build && npm run bundle:atlas\`` +
+      : `the bundle under plugins/armada/mcp/ is stale - rebuild it with \`npm run build && npm run bundle:atlas\`` +
         ` in mcp_servers/${connector}-mcp (bundle:atlas is what emits server.mjs here; pack:mcpb builds the` +
         ` separate .mcpb desktop archive)`;
     failures.push(

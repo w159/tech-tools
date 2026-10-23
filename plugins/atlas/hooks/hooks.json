@@ -130,7 +130,7 @@
         ]
       },
       {
-        "matcher": "mcp__plugin_atlas_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*",
+        "matcher": "mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*",
         "hooks": [
           {
             "type": "command",

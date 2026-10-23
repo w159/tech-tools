@@ -58,7 +58,7 @@ os.environ["ATLAS_HOME"] = tempfile.mkdtemp()
 sys.path.insert(0, os.environ["SC_SCRIPTS"])
 import atlas_dashboard as d
 import atlas_control
-man = d._plugin_manifest(); uc = man["userConfig"]
+man = d._connector_manifest(); uc = man["userConfig"]  # connectors ship in armada
 sens = [k for k, v in uc.items() if v.get("sensitive")]
 d._env_file_present_keys = lambda: set(); d._env_file_values = lambda: {}; d._load_cred_marks = lambda: {}
 d._connector_usage_map = lambda: {}
@@ -82,10 +82,15 @@ ACTIONABLE = re.compile(
 )
 
 
+def _armada(ctx):
+    """The armada plugin root beside atlas: it owns the vendor connectors."""
+    return ctx.root.parent / "armada"
+
+
 def _services(ctx):
     return sorted(
         p.name
-        for p in (ctx.root / "mcp").iterdir()
+        for p in (_armada(ctx) / "mcp").iterdir()
         if p.is_dir()
         and not p.name.startswith("_")
         and ((p / "server.mjs").exists() or p.name == "falcon")
@@ -111,7 +116,7 @@ def probe_nocreds_boot(ctx):
     script.write_text(PROBE_MJS)
     n = 3 if ctx.quick else 8
     env.update(
-        SC_PLUGIN=str(ctx.root),
+        SC_PLUGIN=str(_armada(ctx)),
         SC_HOME=str(home),
         SC_N=str(n),
     )

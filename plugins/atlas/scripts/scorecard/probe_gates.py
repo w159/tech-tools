@@ -1083,7 +1083,7 @@ def probe_credwatch(ctx):
     must_silent = [
         (
             "blumira-finding-text",
-            "mcp__plugin_atlas_blumira__blumira_findings_list",
+            "mcp__plugin_armada_blumira__blumira_findings_list",
             txt(
                 json.dumps(
                     {
@@ -1099,25 +1099,25 @@ def probe_credwatch(ctx):
         ),
         (
             "vanta-count-403",
-            "mcp__plugin_atlas_vanta__vanta_tests_list",
+            "mcp__plugin_armada_vanta__vanta_tests_list",
             txt(json.dumps({"totalCount": 403, "results": []})),
         ),
         (
             "falcon-forbidden-text",
-            "mcp__plugin_atlas_falcon__falcon_search_detections",
+            "mcp__plugin_armada_falcon__falcon_search_detections",
             txt("Forbidden process execution blocked by policy"),
         ),
         (
             "ninja-id-401",
-            "mcp__plugin_atlas_ninjaone__ninjaone_devices_get",
+            "mcp__plugin_armada_ninjaone__ninjaone_devices_get",
             txt('{"id": 401, "name":"pc"}'),
         ),
-        ("clean", "mcp__plugin_atlas_auvik__auvik_status", txt('{"ok":true}')),
+        ("clean", "mcp__plugin_armada_auvik__auvik_status", txt('{"ok":true}')),
     ]
     must_warn = [
         (
             "real-401",
-            "mcp__plugin_atlas_connectwise__cw_search_tickets",
+            "mcp__plugin_armada_connectwise__cw_search_tickets",
             txt("HTTP 401 Unauthorized: Invalid Token", True),
         )
     ]

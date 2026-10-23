@@ -9,12 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PLUGIN_MCP = resolvePath(HERE, '../../../plugins/atlas/mcp');
+const PLUGIN_MCP = resolvePath(HERE, '../../../plugins/armada/mcp');
 const SERVER = resolvePath(PLUGIN_MCP, 'panos/server.mjs');
 const ENV_LOADER = resolvePath(PLUGIN_MCP, '_env/load.mjs');
 
 /**
- * Spawn exactly the way plugins/atlas/.mcp.json does: `node --import
+ * Spawn exactly the way plugins/armada/.mcp.json does: `node --import
  * <_env/load.mjs> <server.mjs>`. The loader is what turns the `CFG_PANOS_*`
  * values the MCP host injects into the bare `PANOS_*` names the server reads,
  * so probing the server directly would skip the step most likely to be wrong.

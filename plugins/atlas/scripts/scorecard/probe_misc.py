@@ -128,10 +128,11 @@ def probe_doctor(ctx):
 def probe_mcp_drift(ctx):
     cmd = CMD + "mcp_drift"
     root = ctx.root
+    armada = root.parent / "armada"  # the vendor connectors ship in armada
     try:
-        mcp = json.loads((root / ".mcp.json").read_text())["mcpServers"]
+        mcp = json.loads((armada / ".mcp.json").read_text())["mcpServers"]
         uc = set(
-            json.loads((root / ".claude-plugin/plugin.json").read_text()).get(
+            json.loads((armada / ".claude-plugin/plugin.json").read_text()).get(
                 "userConfig", {}
             )
         )
@@ -147,7 +148,7 @@ def probe_mcp_drift(ctx):
         ]
     dirs = {
         p.name
-        for p in (root / "mcp").iterdir()
+        for p in (armada / "mcp").iterdir()
         if p.is_dir() and not p.name.startswith(("_", ".")) and "cache" not in p.name.lower()
     }
     refs = set(re.findall(r"\$\{user_config\.([A-Za-z0-9_]+)\}", json.dumps(mcp)))
