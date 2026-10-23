@@ -129,5 +129,66 @@ class AtlasFindingCli(unittest.TestCase):
         self.assertFalse(completion_gate._check_findings(self.root))
 
 
+class AtlasFindingLedgerSafety(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        (self.root / "docs").mkdir()
+        self.ledger = self.root / ".atlas" / ".run" / "findings.json"
+
+    def test_corrupt_ledger_is_quarantined_not_overwritten(self):
+        self.ledger.parent.mkdir(parents=True)
+        self.ledger.write_text("{not json", encoding="utf-8")
+        r = _run(["--id", "S1", "--status", "open", "--title", "a"], self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("corrupt", r.stderr)
+        kept = list(self.ledger.parent.glob("findings.json.corrupt-*"))
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0].read_text(encoding="utf-8"), "{not json")
+        self.assertEqual([i["id"] for i in _findings(self.root)], ["S1"])
+
+    def test_missing_ledger_starts_fresh_silently(self):
+        r = _run(["--id", "S1", "--status", "open", "--title", "a"], self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stderr, "")
+        self.assertEqual(list(self.ledger.parent.glob("*.corrupt-*")), [])
+
+    def test_concurrent_appends_lose_nothing(self):
+        n = 12
+        procs = [
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--id",
+                    "C%d" % i,
+                    "--status",
+                    "open",
+                    "--title",
+                    "t",
+                ],
+                cwd=str(self.root),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            for i in range(n)
+        ]
+        for p in procs:
+            p.wait()
+        ids = sorted(i["id"] for i in _findings(self.root))
+        self.assertEqual(ids, sorted("C%d" % i for i in range(n)))
+
+    def test_find_root_matches_board_root_and_accepts_git(self):
+        sys.path.insert(0, str(SCRIPT.parent))
+        import atlas_finding
+
+        repo = self.root / "repo"
+        (repo / ".git").mkdir(parents=True)
+        sub = repo / "a" / "b"
+        sub.mkdir(parents=True)
+        self.assertEqual(atlas_finding.find_root(sub), repo)
+
+
 if __name__ == "__main__":
     unittest.main()
