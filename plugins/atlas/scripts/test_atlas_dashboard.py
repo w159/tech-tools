@@ -1082,9 +1082,72 @@ class SecurityGuardTest(unittest.TestCase):
         self.assertNotIn(self._req("GET", "/api/v2/colony", None, tok)[0], (401, 404))
         self.assertEqual(self._req("GET", "/api/health")[0], 200)
 
-    def test_query_token_only_honoured_on_stream(self):
+    def test_query_token_is_never_honoured(self):
         tok = self.mod.DASH_TOKEN
         self.assertEqual(self._req("GET", "/api/v2/irc?token=" + tok)[0], 401)
+        self.assertEqual(self._stream_status("/api/v2/stream?token=" + tok), 401)
+
+    def _stream_status(self, path, headers=None):
+        import http.client
+
+        conn = http.client.HTTPConnection(self.mod.LOOPBACK, self.port, timeout=10)
+        hdrs = {"Host": "%s:%d" % (self.mod.LOOPBACK, self.port)}
+        hdrs.update(headers or {})
+        conn.request("GET", path, headers=hdrs)
+        status = conn.getresponse().status
+        conn.close()
+        return status
+
+    def _mint_stream_ticket(self):
+        status, raw = self._req("POST", "/api/v2/stream/ticket", {}, self._tok())
+        self.assertEqual(status, 200, raw)
+        return json.loads(raw)["ticket"]
+
+    def test_stream_header_token_works(self):
+        self.assertEqual(
+            self._stream_status(
+                "/api/v2/stream", {"X-Atlas-Token": self.mod.DASH_TOKEN}
+            ),
+            200,
+        )
+
+    def test_stream_ticket_mint_needs_token(self):
+        status, _ = self._req(
+            "POST", "/api/v2/stream/ticket", {}, {"Content-Type": "application/json"}
+        )
+        self.assertEqual(status, 401)
+
+    def test_stream_ticket_is_single_use(self):
+        t = self._mint_stream_ticket()
+        self.assertEqual(self._stream_status("/api/v2/stream?ticket=" + t), 200)
+        self.assertIn(self._stream_status("/api/v2/stream?ticket=" + t), (401, 403))
+
+    def test_stream_ticket_expires(self):
+        with mock.patch.object(self.mod, "STREAM_TICKET_TTL_S", 0):
+            t = self._mint_stream_ticket()
+        self.assertIn(self._stream_status("/api/v2/stream?ticket=" + t), (401, 403))
+
+    def test_unknown_stream_ticket_is_refused(self):
+        self.assertIn(self._stream_status("/api/v2/stream?ticket=nope"), (401, 403))
+
+    def test_ticket_does_not_authorise_other_routes(self):
+        t = self._mint_stream_ticket()
+        self.assertEqual(self._req("GET", "/api/v2/irc?ticket=" + t)[0], 401)
+
+    def test_access_log_redacts_token_and_ticket(self):
+        import io
+
+        buf = io.StringIO()
+        with mock.patch.object(self.mod.sys, "stderr", buf):
+            for q in ("token=abc123secret&project=all", "project=all&ticket=tkt456secret"):
+                self.mod.Handler.log_message(
+                    None, '"%s" %s %s', f"GET /api/v2/stream?{q} HTTP/1.1", "401", "-"
+                )
+        out = buf.getvalue()
+        self.assertIn("/api/v2/stream", out)
+        self.assertIn("project=all", out)
+        self.assertNotIn("abc123secret", out)
+        self.assertNotIn("tkt456secret", out)
 
     def test_non_sensitive_gets_need_no_token(self):
         self.assertEqual(self._req("GET", "/api/behavior")[0], 200)
@@ -1503,10 +1566,23 @@ class TestSelfHeal(unittest.TestCase):
         cls.d = d
 
     @staticmethod
-    def _install(root: Path, rel: str, with_ui: bool = True) -> Path:
+    def _install(
+        root: Path,
+        rel: str,
+        with_ui: bool = True,
+        manifest: bool = True,
+        version: str | None = None,
+    ) -> Path:
         scripts = root / rel / "scripts"
         scripts.mkdir(parents=True, exist_ok=True)
         (scripts / "atlas_dashboard.py").write_text("# fake install\n")
+        if manifest:
+            (scripts.parent / ".claude-plugin").mkdir(exist_ok=True)
+            (scripts.parent / ".claude-plugin" / "plugin.json").write_text(
+                json.dumps(
+                    {"name": "atlas", "version": version or rel.split("___")[-1]}
+                )
+            )
         if with_ui:
             ui = scripts / "dashboard_ui"
             ui.mkdir(exist_ok=True)
@@ -1562,6 +1638,36 @@ class TestSelfHeal(unittest.TestCase):
             self.assertEqual(
                 os.path.realpath(got), os.path.realpath(s110)
             )  # same file; spelled via the resolved root when only it has siblings
+
+    def test_unqualified_siblings_are_never_chosen(self):
+        d = self.d
+        with tempfile.TemporaryDirectory() as t:
+            plugin = Path(t) / "cache" / "mkt" / "atlas"
+            s19 = self._install(plugin, "1.9.0", with_ui=False)
+            self._install(plugin, "2.0.0", with_ui=False, manifest=False)  # no plugin.json
+            self._install(plugin, "2.1.0", with_ui=False, version="9.9.9")  # version != dir
+            bad_name = self._install(plugin, "2.2.0", with_ui=False)
+            (bad_name.parent.parent / ".claude-plugin" / "plugin.json").write_text(
+                json.dumps({"name": "evil", "version": "2.2.0"})
+            )
+            corrupt = self._install(plugin, "2.3.0", with_ui=False)
+            (corrupt.parent.parent / ".claude-plugin" / "plugin.json").write_text("{nope")
+            own_root = plugin / "1.9.0"
+            self.assertEqual([p for _v, p in d._sibling_installs([own_root])], [s19])
+            self.assertIsNone(d._self_heal_target([own_root], {os.path.realpath(s19)}))
+
+    def test_escaping_symlink_sibling_is_never_chosen(self):
+        d = self.d
+        with tempfile.TemporaryDirectory() as t:
+            plugin = Path(t) / "cache" / "mkt" / "atlas"
+            s19 = self._install(plugin, "1.9.0", with_ui=False)
+            elsewhere = Path(t) / "attacker"
+            self._install(elsewhere, "3.0.0", with_ui=False)
+            (plugin / "3.0.0").symlink_to(elsewhere / "3.0.0")
+            own_root = plugin / "1.9.0"
+            got = [p.parent.parent.name for _v, p in d._sibling_installs([own_root])]
+            self.assertNotIn("3.0.0", got)
+            self.assertIsNone(d._self_heal_target([own_root], {os.path.realpath(s19)}))
 
     def test_no_sibling_means_no_replacement(self):
         d = self.d
