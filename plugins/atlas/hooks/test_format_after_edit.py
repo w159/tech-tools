@@ -349,6 +349,27 @@ class MainInProcessTest(unittest.TestCase):
             self.assertEqual(len(faults), before_faults + 1, reason)
             self.assertIn("formatter skipped: " + reason, str(faults[-1]), reason)
 
+    def test_skip_row_records_the_edit_tool_name(self):
+        import atlas_db
+
+        class Bad:
+            returncode = 1
+
+        with (
+            mock.patch.object(format_after_edit.shutil, "which", return_value="/x"),
+            mock.patch.object(format_after_edit.subprocess, "run", return_value=Bad()),
+        ):
+            self._run_main(_payload("Edit", self.target, cwd=self.tmp))
+        conn = atlas_db.connect()
+        try:
+            row = conn.execute(
+                "SELECT tool_name, gate_letter, role FROM friction_events "
+                "WHERE category LIKE 'formatter_skipped:%' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(row, ("Edit", None, None))
+
     def _faults_and_rows(self, which, run_kw, sid="s1", target=None):
         import atlas_faults
 

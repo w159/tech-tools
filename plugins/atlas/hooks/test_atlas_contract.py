@@ -327,6 +327,29 @@ class CompletionGateContract(unittest.TestCase):
         self.assertEqual([r[0] for r in rows], ["gate_block"])
         self.assertIn("conditions:", rows[0][1])
 
+    def test_a_block_row_carries_the_failed_condition_letters(self):
+        import sqlite3
+
+        repo, db = _mkorchestrating_repo(session_id="s-letter", with_telemetry=False)
+        Path(repo, "app.py").write_text("1\n", encoding="utf-8")
+        _run_hook(
+            "completion_gate.py",
+            {"cwd": repo, "session_id": "s-letter"},
+            cwd=repo,
+            db=db,
+        )
+        conn = sqlite3.connect(db)
+        row = conn.execute(
+            "SELECT snippet, gate_letter, tool_name, role FROM friction_events "
+            "WHERE session_id=? AND category='gate_block'",
+            ("s-letter",),
+        ).fetchone()
+        conn.close()
+        letters = row[0].split()[1]  # "conditions: <letters> (<names>)"
+        self.assertTrue(letters)
+        self.assertEqual(row[1], letters)
+        self.assertEqual((row[2], row[3]), (None, None))
+
     def test_no_docs_tree_is_a_noop(self):
         repo = _mkrepo(with_docs=False)
         res = _run_hook(

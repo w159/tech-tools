@@ -524,6 +524,28 @@ class TripwireTest(unittest.TestCase):
             ("atlas:implementer", "auth-impl", "sonnet", "Agent"),
         )
 
+    def test_pre_deny_row_carries_tool_name_and_role(self):
+        run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "name": "auth-impl",
+                    "prompt": TOOLS_BLOCK + "GOAL: fix it.\n",
+                },
+            ),
+            self.env,
+        )
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        row = conn.execute(
+            "SELECT tool_name, role, gate_letter FROM friction_events "
+            "WHERE category LIKE 'dispatch_denied:%'"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(row, ("Agent", "atlas:implementer", None))
+
     def test_post_logs_the_dispatch_model(self):
         run_hook(
             self._post_payload(
@@ -1254,10 +1276,13 @@ class InProcessTest(unittest.TestCase):
             )
         conn = self.atlas_db.connect(self.db_path)
         row = conn.execute(
-            "SELECT session_id, category FROM friction_events"
+            "SELECT session_id, category, role FROM friction_events"
         ).fetchone()
         conn.close()
-        self.assertEqual(row, ("sess-atlas-fail", "orchestration_flag_arm_failed"))
+        # _arm_orchestrating returns early for workers, so a row means a lead.
+        self.assertEqual(
+            row, ("sess-atlas-fail", "orchestration_flag_arm_failed", "lead")
+        )
 
     def test_ip_friction_write_failure_still_fail_open(self):
         # Doubly failing DB: the friction write itself must not raise out of

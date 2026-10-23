@@ -162,7 +162,13 @@ def _record_skip(data: dict, fp: str, reason: str) -> None:
                 (sid, category, ext),
             ).fetchone()
             if not seen:
-                atlas_db.record_friction(conn, sid, category, snippet=ext)
+                atlas_db.record_friction(
+                    conn,
+                    sid,
+                    category,
+                    snippet=ext,
+                    tool_name=data.get("tool_name") or None,
+                )
         finally:
             conn.close()
     except Exception:
