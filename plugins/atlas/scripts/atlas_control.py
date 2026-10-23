@@ -447,6 +447,15 @@ _k(
     str(Path.home() / ".atlas" / "atlas.db"),
     scope="shell",
 )
+_k(
+    "ATLAS_PINNED_PROJECTS",
+    _ST,
+    "Pinned projects",
+    "Folders that always appear in the Command Center project selector, even without a .git, docs/ or package manifest.",
+    "text",
+    "",
+    details="Separate several folders with the OS path separator (':' on Linux and macOS, ';' on Windows). Without a pin, a folder only shows once it holds a .git, docs/, pyproject.toml or package.json.",
+)
 
 
 # --- knob metadata: kind overrides, finite option sets, ranges, effect, applies ---

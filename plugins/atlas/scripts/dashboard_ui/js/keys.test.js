@@ -8,7 +8,13 @@ function fakeTarget() {
     addEventListener: (t, fn) => t === "keydown" && ls.add(fn),
     removeEventListener: (t, fn) => t === "keydown" && ls.delete(fn),
     dispatch(key) {
-      const ev = { key, prevented: 0, preventDefault() { this.prevented++; } };
+      const ev = {
+        key,
+        prevented: 0,
+        preventDefault() {
+          this.prevented++;
+        },
+      };
       for (const fn of [...ls]) fn(ev);
       return ev;
     },
@@ -18,7 +24,17 @@ function fakeTarget() {
 }
 
 test("RUN_KEYS lists the TUI keys", () => {
-  assert.deepEqual(RUN_KEYS, ["1", "2", "3", "f", "i", "m", "h", "Escape", "/"]);
+  assert.deepEqual(RUN_KEYS, [
+    "1",
+    "2",
+    "3",
+    "f",
+    "i",
+    "m",
+    "h",
+    "Escape",
+    "/",
+  ]);
 });
 
 test("handled key calls its handler once and prevents default", () => {
@@ -34,7 +50,10 @@ test("handled key calls its handler once and prevents default", () => {
 test("keys are ignored while typing, Escape is not", () => {
   const target = fakeTarget();
   const hit = [];
-  bindKeys({ f: () => hit.push("f"), Escape: () => hit.push("Escape") }, { isTyping: () => true, target });
+  bindKeys(
+    { f: () => hit.push("f"), Escape: () => hit.push("Escape") },
+    { isTyping: () => true, target },
+  );
   target.dispatch("f");
   target.dispatch("Escape");
   assert.deepEqual(hit, ["Escape"]);
@@ -59,12 +78,54 @@ test("isTypingIn recognises form fields and contenteditable", () => {
   assert.equal(isTypingIn(null), false);
 });
 
+test("isTypingIn treats anything inside .xterm as typing", () => {
+  assert.equal(
+    isTypingIn({
+      tagName: "DIV",
+      closest: (s) => (s === ".xterm" ? {} : null),
+    }),
+    true,
+  );
+  assert.equal(isTypingIn({ tagName: "DIV", closest: () => null }), false);
+});
+
+test("bindKeys blocks on ev.target being a field even when isTyping says no", () => {
+  const target = fakeTarget();
+  let n = 0;
+  bindKeys({ f: () => n++ }, { isTyping: () => false, target });
+  for (const fn of target.listeners())
+    fn({ key: "f", target: { tagName: "INPUT" }, preventDefault() {} });
+  assert.equal(n, 0);
+});
+
+test("bindKeys default isTyping is safe without a document and blocks xterm targets", () => {
+  const target = fakeTarget();
+  let n = 0;
+  bindKeys({ f: () => n++ }, { target });
+  target.dispatch("f");
+  assert.equal(n, 1);
+  for (const fn of target.listeners())
+    fn({
+      key: "f",
+      target: { tagName: "DIV", closest: () => ({}) },
+      preventDefault() {},
+    });
+  assert.equal(n, 1);
+});
+
 test("modifier chords are ignored and not prevented", () => {
   const target = fakeTarget();
   let n = 0;
   bindKeys({ f: () => n++ }, { isTyping: () => false, target });
   for (const m of ["metaKey", "ctrlKey", "altKey"]) {
-    const ev = { key: "f", [m]: true, prevented: 0, preventDefault() { this.prevented++; } };
+    const ev = {
+      key: "f",
+      [m]: true,
+      prevented: 0,
+      preventDefault() {
+        this.prevented++;
+      },
+    };
     for (const fn of target.listeners()) fn(ev);
     assert.equal(ev.prevented, 0);
   }
