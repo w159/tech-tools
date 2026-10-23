@@ -262,6 +262,13 @@ class DocsDriftWatchInProcessTest(unittest.TestCase):
             sys.stdin = old_stdin
         return buf.getvalue()
 
+    def test_git_changed_paths_includes_untracked_files(self):
+        import docs_drift
+
+        with open(os.path.join(self.tmp, "brand_new.py"), "w") as f:
+            f.write("x\n")
+        self.assertIn("brand_new.py", docs_drift.git_changed_paths(Path(self.tmp)))
+
     def test_git_cache_reused_within_ttl_and_refreshed_after(self):
         path = os.path.join(self.tmp, "app.py")
         payload = {

@@ -32,7 +32,8 @@ Configuration (environment variables):
                                 http://127.0.0.1:11434
   ATLAS_OPTIMIZE_CMD      override: run this instead of ollama. "{prompt}" is
                                 substituted, else the prompt is appended as the final argv item
-  ATLAS_OPTIMIZE_TIMEOUT  seconds before giving up  (default: 110)
+  ATLAS_OPTIMIZE_TIMEOUT  total seconds (API + CLI fallback share it) before giving up
+                                (default: 25; hooks.json caps UserPromptSubmit at 120)
   ATLAS_OPTIMIZE_MINLEN   skip triggered prompts shorter than this many chars
                                 (default: 12)
   ATLAS_OPTIMIZE_VERBOSE  if set, print a one-line stderr banner (quiet by default)
@@ -245,8 +246,15 @@ def ollama_base_url() -> str:
     return url.rstrip("/")
 
 
+# Set by run_via_api: True when its last call died on a timeout, so run_optimizer
+# can skip the CLI fallback (a hung server will not answer the CLI either).
+_api_timed_out = False
+
+
 def run_via_api(prompt: str, model: str, timeout: float) -> str | None:
     """Hit the ollama HTTP API (clean text, no terminal renderer). None on any failure."""
+    global _api_timed_out
+    _api_timed_out = False
     body = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode(
         "utf-8"
     )
@@ -258,24 +266,38 @@ def run_via_api(prompt: str, model: str, timeout: float) -> str | None:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
-    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError) as exc:
+        reason = getattr(exc, "reason", None)
+        _api_timed_out = isinstance(exc, TimeoutError) or isinstance(
+            reason, TimeoutError
+        )
         return None
     return clean(data.get("response", "")) or None
 
 
 def run_optimizer(prompt: str) -> str | None:
-    """Optimize via override cmd -> HTTP API -> CLI fallback. Returns cleaned text or None."""
-    timeout = _env_num("ATLAS_OPTIMIZE_TIMEOUT", 110.0, float)
+    """Optimize via override cmd -> HTTP API -> CLI fallback. Returns cleaned text or None.
+
+    One shared deadline (ATLAS_OPTIMIZE_TIMEOUT, default 25 s) covers the API call and
+    the CLI fallback, and an API timeout skips the fallback: the hook must finish well
+    inside hooks.json's UserPromptSubmit cap."""
+    timeout = _env_num("ATLAS_OPTIMIZE_TIMEOUT", 25.0, float)
+    deadline = time.monotonic() + timeout
     override = override_command(prompt)
     if override is not None:
         return _run_argv(override, timeout)
     model = _env("ATLAS_OPTIMIZER_MODEL", DEFAULT_MODEL)
     # Prefer the HTTP API (pristine output); fall back to the CLI if the server is down.
+    global _api_timed_out
+    _api_timed_out = False  # a stubbed/previous run_via_api must not leak its verdict
     via_api = run_via_api(prompt, model, timeout)
     if via_api:
         return via_api
+    remaining = deadline - time.monotonic()
+    if _api_timed_out or remaining <= 0:
+        return None
     if shutil.which("ollama"):
-        return _run_argv(["ollama", "run", model, prompt], timeout)
+        return _run_argv(["ollama", "run", model, prompt], remaining)
     return None
 
 

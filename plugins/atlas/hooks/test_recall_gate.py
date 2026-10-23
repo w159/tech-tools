@@ -205,6 +205,24 @@ class RecallGateTest(unittest.TestCase):
             [m for m in os.listdir(self.tmp) if m.startswith("recall-")], []
         )
 
+    def test_satisfied_session_skips_the_mounted_scan(self):
+        sat, blk = CASES["satisfy"][0], CASES["block"][0]
+        _run_main(self._payload(sat, session_id="fast"))
+        with patch.object(recall_gate, "_mem_server_mounted") as mounted:
+            code, out = _run_main(self._payload(blk, session_id="fast"))
+        self.assertEqual((code, out), (0, ""))
+        mounted.assert_not_called()
+
+    def test_unmounted_verdict_is_cached_per_session(self):
+        blk = CASES["block"][0]
+        with patch.object(
+            recall_gate, "_mem_server_mounted", return_value=False
+        ) as mounted:
+            for _ in range(3):
+                code, out = _run_main(self._payload(blk, session_id="cached"))
+                self.assertEqual((code, out), (0, ""))
+        self.assertEqual(mounted.call_count, 1)
+
     def test_mem_server_mounted_reads_project_mcp_json(self):
         home = os.path.join(self.tmp, "home")
         proj = os.path.join(home, "proj")
