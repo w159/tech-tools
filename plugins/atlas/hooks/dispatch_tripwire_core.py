@@ -1343,7 +1343,11 @@ def _record_dispatch_deny(
     try:
         who = dict(_dispatch_attribution(tinput or {}, session_model), tool=tool)
         atlas_db.record_friction(
-            conn, session, "dispatch_denied:" + code, snippet=json.dumps(who)
+            conn,
+            session,
+            "dispatch_denied:" + code,
+            snippet=json.dumps(who),
+            meta={"role": who["agent"], "tool": tool, "code": code},
         )
     except Exception as exc:
         _record_fault(exc)

@@ -524,6 +524,36 @@ class TripwireTest(unittest.TestCase):
             ("atlas:implementer", "auth-impl", "sonnet", "Agent"),
         )
 
+    def test_pre_deny_writes_structured_friction_meta(self):
+        run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "name": "auth-impl",
+                    "prompt": TOOLS_BLOCK + "GOAL: fix it.\n",
+                },
+            ),
+            self.env,
+        )
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        meta = dict(
+            conn.execute(
+                "SELECT key, value FROM friction_meta WHERE friction_id IN "
+                "(SELECT id FROM friction_events WHERE category LIKE 'dispatch_denied:%')"
+            )
+        )
+        snippet = conn.execute(
+            "SELECT snippet FROM friction_events WHERE category LIKE 'dispatch_denied:%'"
+        ).fetchone()[0]
+        conn.close()
+        self.assertEqual(meta["role"], "atlas:implementer")
+        self.assertEqual(meta["tool"], "Agent")
+        self.assertEqual(meta["code"], "spec")
+        self.assertIn("auth-impl", snippet)  # the snippet is kept
+
     def test_post_logs_the_dispatch_model(self):
         run_hook(
             self._post_payload(
@@ -2375,11 +2405,18 @@ class ColonyDenyTest(unittest.TestCase):
 
     def _denied(self, r):
         out = r.stdout.strip()
-        return bool(out) and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+        return (
+            bool(out)
+            and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+        )
 
     def test_tier_model_matching_resolver_is_accepted(self):
-        self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/medium", model="haiku")))
-        self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/high", model="sonnet")))
+        self.assertFalse(
+            self._denied(self._tier("atlas:explorer", "audit/medium", model="haiku"))
+        )
+        self.assertFalse(
+            self._denied(self._tier("atlas:explorer", "audit/high", model="sonnet"))
+        )
 
     def test_tier_model_must_equal_resolver_not_just_tier_allow(self):
         # opus is in implementer's tier_allow but the resolver says sonnet for implement/medium.
@@ -2395,11 +2432,19 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertIn("Drop the `model` param", r.stdout)
 
     def test_tier_opus_planner_denied_because_matrix_says_sonnet(self):
-        self.assertTrue(self._denied(self._tier("atlas:planner", "implement/high", model="opus")))
+        self.assertTrue(
+            self._denied(self._tier("atlas:planner", "implement/high", model="opus"))
+        )
 
     def test_tier_effort_matches_resolver(self):
-        self.assertFalse(self._denied(self._tier("atlas:implementer", "implement/medium", effort="medium")))
-        self.assertTrue(self._denied(self._tier("atlas:runner", "implement/medium", effort="high")))
+        self.assertFalse(
+            self._denied(
+                self._tier("atlas:implementer", "implement/medium", effort="medium")
+            )
+        )
+        self.assertTrue(
+            self._denied(self._tier("atlas:runner", "implement/medium", effort="high"))
+        )
 
     def _unnamed(self, env=None, **extra):
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)  # project root
@@ -2805,13 +2850,20 @@ class ColonyGuardUnitTest(unittest.TestCase):
         # sonnet is in explorer's tier_allow but there is no SCOPE line to bind it to.
         self.assertIsNotNone(
             self.dt._model_override(
-                {"subagent_type": "atlas:explorer", "model": "sonnet", "prompt": "no scope"}
+                {
+                    "subagent_type": "atlas:explorer",
+                    "model": "sonnet",
+                    "prompt": "no scope",
+                }
             )
         )
 
     def test_tier_resolver_failure_leaves_only_legacy_accepts(self):
-        tin = {"subagent_type": "atlas:explorer", "model": "sonnet",
-               "prompt": "SCOPE: audit/high\n"}
+        tin = {
+            "subagent_type": "atlas:explorer",
+            "model": "sonnet",
+            "prompt": "SCOPE: audit/high\n",
+        }
         self.assertIsNone(self.dt._model_override(tin))  # resolver healthy: accepted
         with patch.object(self.dt, "_scope_matrix", side_effect=ImportError("boom")):
             self.assertIsNotNone(self.dt._model_override(tin))
@@ -3622,8 +3674,16 @@ class TeamMuxDispatchTest(ReadOnlyInvestigationTest):
         env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
         hooks = os.path.dirname(os.path.abspath(__file__))
         out = subprocess.run(
-            [sys.executable, "-c", "import dispatch_tripwire as d;print(d.RESOLVE_CMD);print(d.SPAWN_TEAM_CMD)"],
-            cwd=hooks, env=env, capture_output=True, text=True, check=True,
+            [
+                sys.executable,
+                "-c",
+                "import dispatch_tripwire as d;print(d.RESOLVE_CMD);print(d.SPAWN_TEAM_CMD)",
+            ],
+            cwd=hooks,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.splitlines()
         scripts = Path(hooks).resolve().parent / "scripts"
         for cmd, script in zip(out, ("atlas_resolve.py", "atlas_mux.py")):

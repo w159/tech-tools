@@ -2004,3 +2004,100 @@ class ReapStaleWorkerRunsTest(unittest.TestCase):
         rows = dict(c.execute("SELECT id, ended_at FROM runs"))
         self.assertEqual(rows, {1: now - 8000, 2: None, 3: None})
         self.assertEqual(atlas_db.reap_stale_worker_runs(c, now=now), 0)
+
+
+class FrictionMetaAndMigrationTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "atlas.db")
+        self.conn = atlas_db.connect(self.path)
+        atlas_db.init(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_record_friction_meta_roundtrip(self):
+        fid = atlas_db.record_friction(
+            self.conn,
+            "s1",
+            "dispatch_denied:spec",
+            snippet="x",
+            meta={"role": "atlas:implementer", "tool": "Agent", "code": "spec"},
+        )
+        got = dict(
+            self.conn.execute(
+                "SELECT key, value FROM friction_meta WHERE friction_id=?", (fid,)
+            )
+        )
+        self.assertEqual(
+            got, {"role": "atlas:implementer", "tool": "Agent", "code": "spec"}
+        )
+
+    def test_record_friction_without_meta_writes_no_rows(self):
+        atlas_db.record_friction(self.conn, "s1", "gate_block")
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM friction_meta").fetchone()[0], 0
+        )
+
+    def test_friction_meta_index_exists(self):
+        names = [r[1] for r in self.conn.execute("PRAGMA index_list(friction_meta)")]
+        cols = [
+            [c[2] for c in self.conn.execute(f"PRAGMA index_info({n})")] for n in names
+        ]
+        self.assertIn(["friction_id", "key"], cols)
+
+    def test_v1_db_missing_new_table_is_migrated_without_data_loss(self):
+        atlas_db.record_friction(self.conn, "s1", "gate_block", snippet="keep")
+        self.conn.execute("DROP TABLE friction_meta")
+        self.conn.execute("PRAGMA user_version=1")  # the pre-meta schema stamp
+        self.conn.commit()
+        atlas_db.init(self.conn)
+        self.assertEqual(
+            self.conn.execute("PRAGMA user_version").fetchone()[0],
+            atlas_db.SCHEMA_VERSION,
+        )
+        fid = atlas_db.record_friction(self.conn, "s1", "x", meta={"k": "v"})
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT value FROM friction_meta WHERE friction_id=?", (fid,)
+            ).fetchone()[0],
+            "v",
+        )
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT snippet FROM friction_events WHERE category='gate_block'"
+            ).fetchone()[0],
+            "keep",
+        )
+
+    def test_v0_db_missing_a_column_is_migrated(self):
+        self.conn.execute("ALTER TABLE tool_calls DROP COLUMN error_snippet")
+        self.conn.execute("PRAGMA user_version=0")
+        self.conn.commit()
+        atlas_db.init(self.conn)
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(tool_calls)")]
+        self.assertIn("error_snippet", cols)
+
+    def test_every_schema_version_has_exactly_one_migration_step(self):
+        # Adding a step without bumping SCHEMA_VERSION (or vice versa) fails here.
+        baseline = 0
+        self.assertEqual(
+            sorted(atlas_db.MIGRATIONS),
+            list(range(baseline + 1, atlas_db.SCHEMA_VERSION + 1)),
+        )
+        self.assertEqual(len(atlas_db.MIGRATIONS), atlas_db.SCHEMA_VERSION - baseline)
+
+    def test_steps_only_run_above_the_stored_version(self):
+        calls = []
+        steps = {
+            1: lambda c: calls.append(1),
+            2: lambda c: calls.append(2),
+            3: lambda c: calls.append(3),
+        }
+        with patch.object(atlas_db, "MIGRATIONS", steps), patch.object(
+            atlas_db, "SCHEMA_VERSION", 3
+        ):
+            self.conn.execute("PRAGMA user_version=1")
+            self.conn.commit()
+            atlas_db.init(self.conn)
+        self.assertEqual(calls, [2, 3])
