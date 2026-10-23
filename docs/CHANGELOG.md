@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-10-23 (unreleased, no version bump)
+
+Twelve changes from the 2026-10-23 proposal landed on main after `c06754b6`. Per-item evidence: `docs/audits/2026-10-23-atlas-proposal-evidence.md`. This file is the current changelog (its top section is the unreleased 15.1.0 work); `plugins/atlas/CHANGELOG.md` was not edited because its top entry, 15.1.0, is already dated.
+
+### Added
+
+- Owner tokens for board notes (`6412d17f`, delivery `f4c56642`): secret `.atlas/.run/owner-token.secret` (0600), markers `.atlas/.run/owner-tokens/<name>`, HMAC-SHA256 token, `note --owner-token` or `ATLAS_OWNER_TOKEN`; `owner_token_required` and `owner_token_invalid` exit 1. Tests: `scripts/test_atlas_channels.py:539` (`OwnerTokens`), `scripts/test_atlas_mux.py:3129` (`OwnerTokenDeliveryTests`).
+- `friction_events` columns `role`, `gate_letter`, `tool_name`, schema version 2 (`6fd53a03`); writers `gate_block`, `gate_block_loop`, `dispatch_denied`, `orchestration_flag_arm_failed`, `formatter_skipped` fill them (`1693e1cd`, `26041b77`). Test: `scripts/test_atlas_db.py:1220`.
+- `doctor --mine` prints a `gate_block` spike line (`e9ad1349`). Test: `scripts/test_atlas_doctor.py:2450`.
+- `doctor --fix` appends the atlas-tooling block to an existing `AGENTS.md` (`d9974d07`). Test: `scripts/test_atlas_doctor.py:2279`.
+- herdr seats support `atlas_seats.capture` via `pane.read` (`73f4baae`); the dashboard herd capture no longer returns 501 under herdr. Test: `scripts/test_atlas_seats.py:117`.
+
+### Changed
+
+- Completion gate counts evidence under `.atlas/evidence/` at any depth (`728273d5`). Tests: `hooks/test_completion_gate.py:1215`.
+- Live panefeed repaints at most every 0.1 s (`c80c54c6`). Test: `scripts/test_atlas_panefeed.py:327`.
+- tmux team layout is width-gated for 3 or more workers (`2eed40ef`). Test: `scripts/test_atlas_mux.py:2708`.
+- Dashboard project selector drops marker-less directories (`254ab55e`). Test: `scripts/test_atlas_dashboard.py:1476`.
+- All 39 skill descriptions carry a literal "Use when" (`7ccdfb03`; 19 lacked it). Test: `scripts/test_skill_agent_conformance.py:713`.
+
+### Verified
+
+- Final suites on main `f85d6f3e`: hooks Ran 1589 OK (skipped=3); scripts Ran 2248, FAILED (failures=3), the same 3 tests that failed at `c06754b6` (two `test_atlas_control` `TestBehaviorKnobs`, one `test_typesafe_client` `test_retries_429_then_succeeds`).
+
 ## 15.1.0 (2026-10-22, unreleased)
 
 ### Added

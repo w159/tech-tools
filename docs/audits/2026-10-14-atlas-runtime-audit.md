@@ -85,3 +85,12 @@ Static audit: the UI version chip reads `/api/health`, which reads `plugin.json`
 6. Fix the docs-curator output schema.
 7. Record per-hook fire counts and latency; today only faults are recorded, so a silent hook cannot be told from a dead one.
 8. Review the colony UI iframe sandbox (W1) under the Safeguards Rule access-control lens.
+
+## Correction notes (2026-10-23)
+
+The text above is unchanged. Each figure below was re-measured on 2026-10-23.
+
+- Skills on disk: 39 SKILL.md files (`find plugins/atlas/skills -name SKILL.md | wc -l`), not 37. Agents on disk: 14 (`ls plugins/atlas/agents/*.md | wc -l`), not 13. The audit's own skill-usage figures ("4 of 37 invoked in 14 days", "27 never invoked in the whole DB history") are the audit's numbers from 2026-10-14 and were not re-queried. A later proposal quoted them as "rarely invoked".
+- Hook scripts: `plugins/atlas/hooks/hooks.json` binds 17 distinct hook scripts across 22 bindings. The "six orphan hook files" claim does not hold. `memory_capture.py` and `nudge.py` are run by `hooks/stop_tail.py` (`TAIL` at :22, `__import__(name).main()` in `_run`), and `stop_tail.py` is bound at `hooks.json:154`. `chronicle_facet.py` also runs from `stop_tail.py`. `docs_drift.py` and `prompt_decision.py` are imported by other hook modules. The one hook file with no runtime referrer is `hooks/testenv.py` (imported only by `test_session_boot.py` and `test_memory_capture.py`). Decision: all files stay in place, no moves or deletes.
+- Self-dispatch denials: read-only query on `~/.atlas/atlas.db` for `tool_calls` rows with `error_snippet` starting "DENY - a subagent must never dispatch another subagent" returns 113 rows with `is_sidechain=0` and 37 with `is_sidechain=1`. The 113 figure reproduces. All 14 `plugins/atlas/agents/*.md` already list `Agent` and `Task` in `disallowedTools` (for example `explorer.md:9`), so removing them from worker tool lists was already done. The deny is the backstop in `hooks/dispatch_tripwire_core.py` (`_in_subagent` at :176, the check near :2364). `tool_calls` has no role column, so denials cannot be grouped by role.
+- `colony/herdr-web-ui` size: 83,008 TS and TSX lines (`find plugins/atlas/colony/herdr-web-ui -name '*.ts' -o -name '*.tsx' | grep -v node_modules | xargs wc -l | tail -1`).

@@ -184,6 +184,15 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Proposal follow-ups (2026-10-23)
+
+Twelve shipped changes are in `docs/CHANGELOG.md` (2026-10-23) with evidence in `docs/audits/2026-10-23-atlas-proposal-evidence.md`.
+
+- [blocked] 1.1 per-seat env on OpenRig seats: OpenRig is an external runtime reached through `atlas_rig.py`, and `atlas_rig.py:369` documents that `env` and `focus` are ignored, so it cannot be done in this repo. herdr retirement depends on it; nothing destructive was done.
+- [planned] 3.1 worker-side push of board notes: the dashboard side already streams `irc`, `herd` and `todos` topics over SSE (`/api/v2/stream`, `scripts/atlas_dashboard.py:2249`). Worker-side push is a hook design change and was not done.
+- [planned] 4.1 optional fleet capture over SSE: only the fleet text view polls `herd/capture` (`scripts/dashboard_ui/js/fleet.js:16-21`). The terminal page already uses a WebSocket. Adding another hand-rolled WebSocket is ruled out by the project rules, so this stays optional.
+- [planned] Run a UI check of the 4.2 project selector against a dashboard served from this repo. The dashboard on 127.0.0.1:7421 serves the installed plugin cache copy, so it did not reflect these commits.
+
 ## Backlog
 
 ### Follow-ups: atlas 12.1.0 and 12.2.0 (added 2026-10-13)
@@ -247,7 +256,7 @@ Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026
 - [planned] OpenRig pin policy: `RIG_VERSION` in `atlas_rig.py` pins 0.6.10; bumps need the spike rerun (install, `--no-kernel` daemon, terminal seat, `rig send --raw`, `rig add`) because the project is pre-1.0 with weekly releases and its docs lag the release.
 - [planned] `claude-code` seats (OpenRig-managed Claude sessions with `permission_policy: builtin:yolo`, activity telemetry) once OpenRig supports per-seat env vars; today `ATLAS_*` pins require terminal seats.
 - [planned] `rig capture` of a seat whose process has exited returns only the shell; `agents()` reports terminal seats as `unknown` activity. Map exit status from the board notes instead.
-- [planned] `atlas_seats.capture` on the herdr backend returns `not_supported` (501); the dashboard falls back to the iframe there.
+- [done 2026-10-23] `atlas_seats.capture` on the herdr backend now reads the pane via `pane.read` (`73f4baae`, `scripts/test_atlas_seats.py:117`); moved to `docs/CHANGELOG.md`.
 
 ### Command Center and colony repair (2026-10-14)
 
