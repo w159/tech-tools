@@ -22,6 +22,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@shared': resolve(__dirname, '../_shared'),
+      // Run against the library source so the unit tests need no prior build of node-sonicwall.
+      'node-sonicwall': resolve(__dirname, '../../mcp_node/node-sonicwall/src/index.ts'),
     },
   },
 });

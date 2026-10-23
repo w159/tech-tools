@@ -78,15 +78,20 @@ const client = new BlumiraClient({
 ```typescript
 import { BlumiraError, AuthenticationError, NotFoundError } from 'node-blumira';
 
+// Inside an MCP server, stdout is the JSON-RPC channel, so log to stderr only.
+// blumira-mcp does the same with a small leveled logger over console.error.
+const log = (level: string, message: string): void =>
+  console.error(`${new Date().toISOString()} [${level}] ${message}`);
+
 try {
   await client.findings.get('nonexistent-id');
 } catch (error) {
   if (error instanceof NotFoundError) {
-    console.log('Finding not found');
+    log('WARN', 'Finding not found');
   } else if (error instanceof AuthenticationError) {
-    console.log('Invalid JWT token');
+    log('ERROR', 'Invalid JWT token');
   } else if (error instanceof BlumiraError) {
-    console.log(`API error ${error.statusCode}: ${error.message}`);
+    log('ERROR', `API error ${error.statusCode}: ${error.message}`);
   }
 }
 ```

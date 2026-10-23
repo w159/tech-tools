@@ -1,45 +1,21 @@
 {
+  "_comment": "Pointer, not a server launch config. These connectors are served by the armada plugin itself: see plugins/armada/.mcp.json (server entries of the same name) and the userConfig keys in plugins/armada/.claude-plugin/plugin.json. Credentials and setup: skills/armada/references/connector-provisioning.md. Kept so armada-connect and armada-department can list this department's connectors.",
   "mcpServers": {
     "vanta": {
-      "command": "bash",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "vanta", "dist/index.js"],
-      "env": {
-        "VANTA_CLIENT_ID": "${user_config.vanta_client_id}",
-        "VANTA_CLIENT_SECRET": "${user_config.vanta_client_secret}",
-        "VANTA_BASE_URL": "${user_config.vanta_base_url}",
-        "MCP_TRANSPORT": "stdio"
-      }
+      "providedBy": "plugins/armada/.mcp.json",
+      "server": "vanta"
     },
     "knowbe4": {
-      "command": "bash",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "knowbe4", "dist/mcp_servers/knowbe4-mcp/src/index.js"],
-      "env": {
-        "KNOWBE4_API_KEY": "${user_config.knowbe4_api_key}",
-        "KNOWBE4_REGION": "${user_config.knowbe4_region}",
-        "KNOWBE4_BASE_URL": "${user_config.knowbe4_base_url}",
-        "MCP_TRANSPORT": "stdio"
-      }
+      "providedBy": "plugins/armada/.mcp.json",
+      "server": "knowbe4"
     },
     "threatlocker": {
-      "command": "bash",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "threatlocker", "dist/index.js"],
-      "env": {
-        "THREATLOCKER_API_KEY": "${user_config.threatlocker_api_key}",
-        "THREATLOCKER_ORGANIZATION_ID": "${user_config.threatlocker_organization_id}",
-        "THREATLOCKER_BASE_URL": "${user_config.threatlocker_base_url}",
-        "MCP_TRANSPORT": "stdio"
-      }
+      "providedBy": "plugins/armada/.mcp.json",
+      "server": "threatlocker"
     },
     "blumira": {
-      "command": "bash",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "blumira", "dist/index.js"],
-      "env": {
-        "BLUMIRA_CLIENT_ID": "${user_config.blumira_client_id}",
-        "BLUMIRA_CLIENT_SECRET": "${user_config.blumira_client_secret}",
-        "BLUMIRA_JWT_TOKEN": "${user_config.blumira_jwt_token}",
-        "BLUMIRA_BASE_URL": "${user_config.blumira_base_url}",
-        "MCP_TRANSPORT": "stdio"
-      }
+      "providedBy": "plugins/armada/.mcp.json",
+      "server": "blumira"
     }
   }
 }
