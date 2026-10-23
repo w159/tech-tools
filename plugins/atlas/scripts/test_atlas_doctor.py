@@ -844,7 +844,10 @@ class AtlasDoctorTest(unittest.TestCase):
     def test_main_fix_runs_fix_and_rechecks(self):
         # lines 593-596: --fix branch applies fixes then re-checks
         buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
+        # tmp root: --fix may append to AGENTS.md, never the real one
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            atlas_doctor, "_repo_root", return_value=tmp
+        ), contextlib.redirect_stdout(buf):
             rc = atlas_doctor.main(["--fix"])
         self.assertIn("FIX:", buf.getvalue())
         self.assertIn(rc, (0, 1))
