@@ -1972,9 +1972,11 @@ class RegisterProjectRefusals(unittest.TestCase):
             self.home,
             d,
             "/tmp",  # noqa: S108  # asserts the literal /tmp prefix
-            "/private/tmp",
+            "/private/tmp",  # macOS-only; skipped below where it does not exist
             tempfile.gettempdir(),
         ):
+            if p == "/private/tmp" and not os.path.exists(p):
+                continue
             self.assertIsNone(atlas_db.register_project(self.conn, p), p)
         self.assertEqual(self._rows(), [])
 

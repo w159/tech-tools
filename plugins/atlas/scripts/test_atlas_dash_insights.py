@@ -1615,8 +1615,8 @@ class TestProjectPicker(unittest.TestCase):
     def test_fixture_temp_and_missing_roots_are_excluded(self):
         home = Path.home()
         self.assertFalse(
-            ins._is_fixture_root(str(SCRIPTS.parents[2]))
-        )  # a live, non-temp checkout stays
+            ins._is_fixture_root(_test_isolation.make_real_project_dir(self))
+        )  # a live, non-temp project stays (not the checkout: its path may contain "worktrees")
         with tempfile.TemporaryDirectory() as tmp:
             self.assertTrue(ins._is_fixture_root(tmp))  # exists, but under the temp dir
         for gone in (str(home / "no-such-project-dir"), "/definitely/not/here"):
