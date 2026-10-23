@@ -60,6 +60,7 @@ class TestAtlasDashboard(unittest.TestCase):
         with (
             mock.patch.object(self.mod, "_q", return_value=[dict(row)]),
             mock.patch.object(self.mod, "_is_junk_project", return_value=False),
+            mock.patch.object(self.mod, "_junk_project_row", return_value=False),
         ):
             self.assertEqual(self.mod._projects(None), [])
             got = self.mod._projects(None, editable_only=True)
@@ -1471,6 +1472,24 @@ class TestJunkProjectRow(unittest.TestCase):
             self.assertTrue(
                 d._junk_project_row(os.path.join(home, ".atlas", "worktrees", "w"))
             )
+
+    def test_markerless_dir_is_junk_marked_dir_is_not(self):
+        import atlas_dashboard as d
+
+        with tempfile.TemporaryDirectory() as t:
+            t = os.path.realpath(t)
+            downloads = os.path.join(t, "Downloads")
+            os.makedirs(downloads)
+            docs_proj = os.path.join(t, "notes")
+            os.makedirs(os.path.join(docs_proj, "docs"))
+            with (
+                mock.patch("atlas_dash_work._junk_root", lambda _p: False),
+                mock.patch.dict(os.environ, {"HOME": t}),
+            ):
+                self.assertTrue(d._junk_project_row(downloads, require_marker=True))
+                self.assertFalse(d._junk_project_row(docs_proj, require_marker=True))
+                # reaper path (no flag) is unchanged: marker-less dirs are not junk here
+                self.assertFalse(d._junk_project_row(downloads))
 
 
 class TestSelfHeal(unittest.TestCase):
