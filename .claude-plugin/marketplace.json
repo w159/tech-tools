@@ -1,7 +1,7 @@
 {
     "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
     "name": "tech-tools",
-    "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 39 plainly named skills, 14 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 4 invocable setup skills, 11 department agents, and 156 department skills, and a book-derived code-review engine (programmer) with 4 skills and 7 specialized reviewer agents.",
+    "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 39 plainly named skills, 14 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 4 invocable setup skills, 11 department agents, and 156 department skills, and a book-derived code-review engine (programmer) with 4 skills and 7 agents (6 lens reviewers plus tpp-auditor).",
     "version": "4.6.2",
     "owner": {
         "name": "w159",
@@ -66,7 +66,7 @@
         {
             "name": "programmer",
             "source": "./plugins/programmer",
-            "description": "A book-derived code-review engine: 4 skills (code-review runs a 6-lens, multi-agent review across a target or diff and produces an evidence-backed report; code-principles surfaces 1-4 relevant book principles while you work; tpp-audit is the Pragmatic Programmer audit; tpp-principles is the Pragmatic Programmer principles advisor), 7 specialized reviewer agents, and a UserPromptSubmit nudge hook.",
+            "description": "A book-derived code-review engine: 4 skills (code-review runs a 6-lens, multi-agent review across a target or diff and produces an evidence-backed report; code-principles surfaces 1-4 relevant book principles while you work; tpp-audit is the Pragmatic Programmer audit; tpp-principles is the Pragmatic Programmer principles advisor), 7 agents (6 code-review lens reviewers and the tpp-auditor).",
             "category": "developer-tools",
             "keywords": [
                 "tpp",

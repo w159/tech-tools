@@ -13,7 +13,7 @@ This directory holds the three plugins published from this repo, plus the shared
 |--------|------------|
 | `atlas` | The multi-agent coding architect plugin: self-configuring, drives verification-gated work via subagents and hooks. |
 | `armada` | The org deployment layer split out of atlas. Setup runs as four invocable skills in order: `armada` (status and router), `armada-brand` (branding, first), `armada-department` (activate one of 11 departments), `armada-connect` (vendor connectors). Behind them sit 11 department agents plus their department skills, for organizations that want atlas's capabilities wired with department-specific branding/policy/compliance context. Install alongside atlas only for org use. See `plugins/armada/README.md`. |
-| `programmer` | The Pragmatic Programmer (20th Anniversary Edition) turned into an active codebase auditor and coding-time advisor: a 10-dimension audit skill with file:line evidence, a principle-surfacing nudge hook while you work, and an 89-concept glossary repackaged for citation. |
+| `programmer` | The Pragmatic Programmer (20th Anniversary Edition) turned into an active codebase auditor and coding-time advisor: a 10-dimension audit skill with file:line evidence, a 6-lens code-review skill backed by 6 reviewer agents, principle-advisor skills that surface relevant principles while you work, and an 89-concept glossary repackaged for citation (no hooks are registered). |
 
 ## Shared assets
 
