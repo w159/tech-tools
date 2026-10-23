@@ -1128,7 +1128,13 @@ def main():
                 with contextlib.suppress(
                     Exception
                 ):  # fail-open: dead lead channels must never block boot
-                    atlas_todo.reap_channels(_todo_root)
+                    try:
+                        import atlas_seats
+
+                        _seat_live = atlas_seats.pane_live
+                    except Exception:  # fail-open: pid/TTL rules only
+                        _seat_live = None
+                    atlas_todo.reap_channels(_todo_root, pane_live=_seat_live)
             c = carry.get("counts") or {}
             if c.get("needed") or carry.get("carried"):
                 todo_line = (

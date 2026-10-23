@@ -1712,6 +1712,38 @@ class TestSelfHeal(unittest.TestCase):
         self.assertTrue(hint.endswith("atlas_dashboard.py ensure"))
 
 
+class TestReapTickSeatProbe(unittest.TestCase):
+    def test_reap_tick_passes_seat_pane_probe(self):
+        import sqlite3
+        import tempfile
+
+        import atlas_dashboard as d
+        import atlas_seats
+
+        with tempfile.TemporaryDirectory() as t:
+            real = os.path.join(os.path.realpath(t), "real")
+            os.makedirs(os.path.join(real, ".atlas", ".run"))
+            db = os.path.join(t, "x.db")
+            c = sqlite3.connect(db)
+            c.execute("CREATE TABLE projects(root_path TEXT)")
+            c.execute("INSERT INTO projects VALUES(?)", (real,))
+            c.commit()
+            c.close()
+            orig, d._REAP_LAST = d.dashboard_db_path, 0.0
+            d.dashboard_db_path = lambda: db
+            try:
+                with (
+                    mock.patch("atlas_dash_work._junk_root", lambda _p: False),
+                    mock.patch("atlas_todo.is_project", return_value=True),
+                    mock.patch("atlas_todo.reap_channels", return_value={}) as reap,
+                ):
+                    d.reap_tick(now=1000.0, interval=0)
+            finally:
+                d.dashboard_db_path = orig
+        self.assertTrue(reap.called)
+        self.assertIs(reap.call_args.kwargs.get("pane_live"), atlas_seats.pane_live)
+
+
 class TestReapTickHealth(unittest.TestCase):
     def test_reaper_failure_surfaces_in_health(self):
         import sqlite3

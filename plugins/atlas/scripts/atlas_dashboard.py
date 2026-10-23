@@ -3126,7 +3126,13 @@ def reap_tick(
         ):
             continue  # reaping must never create .atlas/.run in a non-project dir
         try:
-            out[root] = atlas_todo.reap_channels(root)
+            try:
+                import atlas_seats
+
+                _seat_live = atlas_seats.pane_live
+            except Exception:  # fail-open: pid/TTL rules only
+                _seat_live = None
+            out[root] = atlas_todo.reap_channels(root, pane_live=_seat_live)
         except Exception as exc:
             _reap_warn(f"reap {root}", exc)
     try:
