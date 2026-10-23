@@ -2250,7 +2250,13 @@ def cmd_reap(args) -> int:
     ):  # an archived or recovered team already got (or never had) a wrap-up
         _post_wrapup(root, rec)
     _release_team_channel(root, rec)
-    reaped = atlas_todo.reap_channels(root)
+    try:
+        import atlas_seats
+
+        _seat_live = atlas_seats.pane_live
+    except Exception:  # fail-open: no seat module means TTL/pid rules only
+        _seat_live = None
+    reaped = atlas_todo.reap_channels(root, pane_live=_seat_live)
     if state == "live":
         arch.mkdir(parents=True, exist_ok=True)
         (_team_dir(root) / f"{rec['team_id']}.json").replace(archived_path)

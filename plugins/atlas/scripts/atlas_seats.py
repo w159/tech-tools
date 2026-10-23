@@ -193,6 +193,8 @@ def status() -> dict:
     """Backend status plus `backend` and `web_ui` (True only for herdr: the rig url is a health URL, not an iframe)."""
     b = backend()
     base = _NullBackend.status() if b == "none" else _status()
+    if b == "rig" and not shutil.which("tmux"):  # rig seats are tmux sessions: say so before rig up fails
+        base = {**base, "ok": False, "reason": "tmux is not installed (rig seats run in tmux)"}
     return {**base, "backend": b, "web_ui": b == "herdr"}
 
 

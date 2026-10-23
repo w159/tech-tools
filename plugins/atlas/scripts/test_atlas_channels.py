@@ -166,6 +166,37 @@ class ChannelModel(unittest.TestCase):
         self._live_lead("fresh", 600)
         self.assertEqual(todo.reap_channels(self.root)["reaped"], 0)
 
+    def _seat_lead(self, name, idle_s):
+        """A lead channel whose only member is a seat (pane_id, no pid), idle past every TTL."""
+        todo.open_lead_channel(self.root, name, ["w1"])
+        todo.set_member_handles(self.root, "w1", f"{self.main}/{name}", pane_id="w-w1@run")
+        todo._reg_update(
+            self.root,
+            lambda r: r["channels"][f"{self.main}/{name}"].update(last_activity=time.time() - idle_s),
+        )
+
+    def test_reap_keeps_idle_seat_member_with_live_pane(self):
+        self._seat_lead("seat", 10 * 86400)
+        seen = []
+        out = todo.reap_channels(self.root, pane_live=lambda p: seen.append(p) or True)
+        self.assertEqual(out["reaped"], 0)
+        self.assertEqual(seen, ["w-w1@run"])
+        self.assertIn(f"{self.main}/seat", list(todo._reg_read(self.root)["channels"]))
+
+    def test_reap_seat_member_with_dead_pane_or_no_probe_is_reaped(self):
+        self._seat_lead("seat", 10 * 86400)
+        self.assertEqual(todo.reap_channels(self.root, pane_live=lambda p: False)["reaped"], 1)
+        self._seat_lead("seat2", 10 * 86400)
+        self.assertEqual(todo.reap_channels(self.root)["reaped"], 1)
+
+    def test_reap_pane_probe_error_falls_back_to_ttl(self):
+        self._seat_lead("seat", 10 * 86400)
+
+        def boom(_):
+            raise RuntimeError("probe down")
+
+        self.assertEqual(todo.reap_channels(self.root, pane_live=boom)["reaped"], 1)
+
     def test_reap_lead_idle_env_override(self):
         self._live_lead("env", 600)
         with mock.patch.dict(os.environ, {"ATLAS_LEAD_IDLE_TTL": "60"}):

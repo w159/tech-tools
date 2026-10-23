@@ -49,7 +49,7 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atlas_paths  # noqa: E402
@@ -1424,11 +1424,14 @@ def reap_channels(
     keep: Optional[str] = None,
     dry_run: bool = False,
     lead_idle: Optional[float] = None,
+    pane_live: Optional[Callable[[str], bool]] = None,
 ) -> dict:
     """Archive then delete dead lead channels; prune dead main-channel members.
     A lead channel is dead when every member has exit_code or no activity for max_idle
     and no member holds a live pid (pid_matches). `keep` names a lead whose channel is
-    never reaped. Archive line goes to .atlas/.run/archive/channels-YYYYMM.jsonl first.
+    never reaped. `pane_live(pane_id)` (optional, supplied by callers that know seats, e.g.
+    atlas_seats.pane_live) marks a seat member with a live pane as live even without a pid;
+    a probe error counts as not live. Archive line goes to .atlas/.run/archive/channels-YYYYMM.jsonl first.
     Returns {reaped, archived_path, kept}."""
     if not is_project(root):  # never create .atlas/.run in a non-project dir
         return {"reaped": 0, "would_reap": 0, "archived_path": None, "kept": 0}
@@ -1450,7 +1453,14 @@ def reap_channels(
         return now - float(chan.get("last_activity") or 0) > ttl
 
     def live(m: dict) -> bool:
-        return bool(m.get("pid")) and pid_matches(m.get("pid"), m.get("pid_start"))
+        if m.get("pid") and pid_matches(m.get("pid"), m.get("pid_start")):
+            return True
+        if pane_live and m.get("pane_id"):
+            try:
+                return bool(pane_live(str(m["pane_id"])))
+            except Exception:
+                return False
+        return False
 
     arch_dir = Path(_resolve_base(root)) / BOARD_DIR / "archive"
     arch = arch_dir / f"channels-{time.strftime('%Y%m', time.gmtime(now))}.jsonl"

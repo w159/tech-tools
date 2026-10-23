@@ -162,6 +162,25 @@ class BackendTests(unittest.TestCase):
                 s.status(), {"url": "y", "backend": "herdr", "web_ui": True}
             )
 
+    def test_status_reports_missing_tmux_for_rig_backend(self):
+        self.env(ATLAS_SEAT_BACKEND="rig")
+        with (
+            mock.patch.object(atlas_rig, "status", return_value={"ok": True, "url": "x"}),
+            mock.patch.object(s.shutil, "which", return_value=None),
+        ):
+            out = s.status()
+        self.assertFalse(out["ok"])
+        self.assertIn("tmux", out["reason"])
+        self.assertEqual(out["backend"], "rig")
+
+    def test_status_rig_with_tmux_is_untouched(self):
+        self.env(ATLAS_SEAT_BACKEND="rig")
+        with (
+            mock.patch.object(atlas_rig, "status", return_value={"ok": True, "url": "x"}),
+            mock.patch.object(s.shutil, "which", return_value="/usr/bin/tmux"),
+        ):
+            self.assertTrue(s.status()["ok"])
+
     def test_capture_rig_delegates(self):
         self.env(ATLAS_SEAT_BACKEND="rig")
         with mock.patch.object(

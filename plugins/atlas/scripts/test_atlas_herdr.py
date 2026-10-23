@@ -11,6 +11,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -835,16 +836,23 @@ class PaneTests(SockBase):
 
 
 class InstallCheckTests(unittest.TestCase):
-    def check(self, installed, pin=None):
+    def check(self, installed, pin=None, rsync="/usr/bin/rsync"):
         saved = atlas_herdr._herdr_version, atlas_herdr._pin
         atlas_herdr._herdr_version = lambda: installed
         atlas_herdr._pin = lambda: (
             pin or {"version": "0.9.3", "install_url": "https://h"}
         )
         try:
-            return atlas_herdr.install_check()
+            with mock.patch.object(atlas_herdr.shutil, "which", return_value=rsync):
+                return atlas_herdr.install_check()
         finally:
             atlas_herdr._herdr_version, atlas_herdr._pin = saved
+
+    def test_missing_rsync_fails_with_actionable_message(self):
+        r = self.check("0.9.3", rsync=None)
+        self.assertFalse(r["ok"])
+        self.assertIn("rsync", r["why"])
+        self.assertIn("install rsync", r["do"])
 
     def test_older_than_pin_fails_with_actionable_message(self):
         r = self.check("0.9.2")
