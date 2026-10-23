@@ -1836,6 +1836,31 @@ def mine_low_cache_hit(conn, root):
     ]
 
 
+def gate_block_spike(conn, now=None):
+    """Read-only: gate_block friction in the last 24h vs the prior 7-day daily
+    mean. Spike = at least 2x that mean AND at least 5 rows. Printed by --mine
+    only; never part of mine() findings or counts. SELECTs only."""
+    # ponytail: fixed 2x/5 thresholds and one 24h window for gate_block only,
+    # no per-category windows or auto-tuning; add them if a second category needs it
+    now = time.time() if now is None else now
+    tmp_sql, tmp_args = atlas_db.tmp_sessions_sql()
+
+    def count(lo, hi):
+        return conn.execute(
+            "SELECT COUNT(*) FROM friction_events WHERE category='gate_block' "
+            f"AND ts > ? AND ts <= ? AND COALESCE(session_id,'') NOT IN ({tmp_sql})",
+            (lo, hi, *tmp_args),
+        ).fetchone()[0]
+
+    last = count(now - 86400, now)
+    mean = count(now - 8 * 86400, now - 86400) / 7.0
+    return {
+        "last_24h": last,
+        "prior_daily_mean": mean,
+        "spike": last >= 5 and last >= 2 * mean,
+    }
+
+
 def mine_recurring_friction(conn, root, min_count=3):
     """Behavioral check: friction_events categories (user_correction,
     assumption_admission, error_report, ...) recurring often enough to be a
@@ -3005,8 +3030,14 @@ def main(argv=None):
         conn = atlas_db.connect()
         atlas_db.init(conn)
         counts = mine(conn, self_manifest()[0])
+        spike = gate_block_spike(conn)
         conn.close()
         print(json.dumps(counts, indent=2) if args.json else counts)
+        # stderr under --json keeps stdout a single parseable document
+        print(
+            "gate_block spike: " + json.dumps(spike),
+            file=sys.stderr if args.json else sys.stdout,
+        )
         return 0
 
     if args.list_findings:
