@@ -20,7 +20,7 @@ Audit fixes and the connector move on branch `claude/atlas-audit-fixes`. Details
 - Dashboard: one HTML escape helper, typing guard in `keys.js`, project selector needs a marker unless pinned, gateway strips the ticket, health payload split.
 - Skills: `atlas-ux-test` is self-sufficient, one copy per reference, accurate manual-skill and tool lists, ASCII cleanup.
 - PAN-OS: `panos_commit` (partial) and `panos_commit_all` now send `action=`; found by the audit and fixed.
-- programmer: the code-review skill description cites 30 books (count taken from that description, not independently verified).
+- programmer: the code-review skill description cites 30 books (verified: 30 book rows in `plugins/programmer/skills/code-review/references/books.md`).
 - New env vars and flags are listed in `docs/reference/atlas-reference.md`.
 
 ## 15.0.0 (2026-10-22, unreleased)

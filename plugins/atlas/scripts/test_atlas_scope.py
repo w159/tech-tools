@@ -41,8 +41,12 @@ class GatesArmedTest(unittest.TestCase):
         self.assertFalse(atlas_scope.gates_armed(d))
 
     def test_repo_dir_true(self):
-        self.assertTrue(atlas_scope.gates_armed(REPO))
-        self.assertTrue(atlas_scope.gates_armed(os.path.join(REPO, "plugins", "atlas")))
+        # A real project outside every temp dir: the checkout itself may live under /tmp, which is never armed.
+        repo = _test_isolation.make_real_project_dir(self)
+        sub = os.path.join(repo, "plugins", "atlas")
+        os.makedirs(sub)
+        self.assertTrue(atlas_scope.gates_armed(repo))
+        self.assertTrue(atlas_scope.gates_armed(sub))
 
     def test_no_marker_under_home_false(self):
         self.assertFalse(atlas_scope.gates_armed(self._home_dir()))

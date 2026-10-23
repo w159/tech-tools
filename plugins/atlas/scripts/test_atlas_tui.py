@@ -921,9 +921,11 @@ class EmptyStates(unittest.TestCase):
 
     def test_specs_empty_removed_install_message(self):
         ui = T.new_ui(section="specs")
-        f = "\n".join(T.render(EMPTY, ui, self.W, self.H))
+        agents_dir = f"{T._model().PLUGIN_DIR / 'agents'}"
+        # The path is truncated to the pane width: widen the terminal so a long checkout path still fits.
+        f = "\n".join(T.render(EMPTY, ui, max(self.W, len(agents_dir) + 80), self.H))
         self.assertIn("no agent specs found under", f)
-        self.assertIn(f"{T._model().PLUGIN_DIR / 'agents'}", f)
+        self.assertIn(agents_dir, f)
         self.assertIn("this TUI process may be from a removed install; relaunch it", f)
 
     def test_specs_empty_respects_filter(self):
