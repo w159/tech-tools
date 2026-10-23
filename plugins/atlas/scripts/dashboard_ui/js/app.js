@@ -22,7 +22,7 @@ import {
   watchSystemTheme,
 } from "./theme.js";
 import { initShortcuts } from "./shortcuts.js";
-import { bindKeys, isTypingIn } from "./keys.js";
+import { bindKeys } from "./keys.js";
 import { openPalette, defaultCommands } from "./palette.js";
 
 const BASE_TITLE = "Atlas Command Center";
@@ -41,24 +41,25 @@ function paintBand() {
   const c = countStates(rows);
   const p = project.get();
   // A page that paints the band itself (run.js, with real colony data) marks it owned.
-  if (!el.dataset.owner) el.innerHTML = renderBand({
-    project: p === "all" ? "all projects" : baseName(p),
-    branch: null,
-    lead: null,
-    phase: "research",
-    n: null,
-    m: null,
-    counts: {
-      working: c.working || 0,
-      needs: c.input || 0,
-      failed: c.fail || 0,
-      parked: c.ready || 0,
-    },
-    live: live.get(),
-    clock: new Date().toTimeString().slice(0, 8),
-    narrow: mq.matches,
-    route: currentRoute,
-  });
+  if (!el.dataset.owner)
+    el.innerHTML = renderBand({
+      project: p === "all" ? "all projects" : baseName(p),
+      branch: null,
+      lead: null,
+      phase: "research",
+      n: null,
+      m: null,
+      counts: {
+        working: c.working || 0,
+        needs: c.input || 0,
+        failed: c.fail || 0,
+        parked: c.ready || 0,
+      },
+      live: live.get(),
+      clock: new Date().toTimeString().slice(0, 8),
+      narrow: mq.matches,
+      route: currentRoute,
+    });
   document.title = c.input ? `(${c.input}) ${BASE_TITLE}` : BASE_TITLE;
 }
 
@@ -81,7 +82,14 @@ async function mount(root, route, params, want) {
   const mod = await import(`./pages/${route}.js`);
   if (currentRoute !== route) return; // user navigated away while the module loaded
   const done =
-    (await mod.render({ root, route, params, project: want, navigate, setParams })) || null;
+    (await mod.render({
+      root,
+      route,
+      params,
+      project: want,
+      navigate,
+      setParams,
+    })) || null;
   if (acceptRender(currentRoute, route, root)) cleanup = done;
   else if (typeof done === "function") done();
 }
@@ -111,7 +119,9 @@ let palette = null; // only one palette at a time
 function toggleTheme() {
   const next = getTheme() === "light" ? "dark" : "light";
   applyTheme(next); // repaints at once via the atlas:theme event
-  savePrefs({ theme: next }).catch((e) => toast(describeError(e).message, { kind: "error" }));
+  savePrefs({ theme: next }).catch((e) =>
+    toast(describeError(e).message, { kind: "error" }),
+  );
 }
 
 function steerLead() {
@@ -146,7 +156,7 @@ function applyPrefs() {
 async function boot() {
   watchSystemTheme();
   initShortcuts();
-  bindKeys({ "/": openCommandPalette }, { isTyping: () => isTypingIn(document.activeElement) || !!document.activeElement?.closest?.(".xterm") });
+  bindKeys({ "/": openCommandPalette });
   topics.agents.subscribe(paintBand);
   live.subscribe(paintBand);
   project.subscribe(paintBand);

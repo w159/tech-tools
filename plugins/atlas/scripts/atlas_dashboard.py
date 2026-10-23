@@ -220,7 +220,9 @@ def _connector_manifest() -> dict:
     if root is None:
         return {}
     try:
-        return json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        return json.loads(
+            (root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return {}
 
@@ -759,16 +761,40 @@ def _is_junk_project(root) -> bool:
     return atlas_control.is_fixture_project(root)
 
 
-def _junk_project_row(root) -> bool:
-    """Rows that are not a project of their own: $HOME, worktrees/caches/scratch, and
-    subdirs of another repo (those belong to the enclosing repo's project)."""
+def _pinned_projects() -> set:
+    """Realpaths the user pinned in Settings (atlas store env ATLAS_PINNED_PROJECTS,
+    os.pathsep-separated; the process env of the same name is honoured too). A pinned
+    root stays in the selector even without a project marker."""
+    raw = [os.environ.get("ATLAS_PINNED_PROJECTS", "")]
+    try:
+        raw.append(atlas_control.read_store()["env"].get("ATLAS_PINNED_PROJECTS", ""))
+    except Exception:
+        pass
+    return {
+        os.path.realpath(os.path.expanduser(p))
+        for chunk in raw
+        for p in chunk.split(os.pathsep)
+        if p.strip()
+    }
+
+
+def _junk_project_row(root, require_marker: bool = False) -> bool:
+    """Rows that are not a project of their own: $HOME, worktrees/caches/scratch, subdirs of
+    another repo (those belong to the enclosing repo's project). With require_marker (the
+    project selector, not the reaper) markerless dirs (no .git/docs/manifest, see
+    atlas_dash_work._real_project) are dropped too unless pinned in Settings."""
     if not root:
         return True
-    from atlas_dash_work import _junk_root
+    from atlas_dash_work import _junk_root, _real_project
 
     d = os.path.realpath(root)
     if d == os.path.realpath(os.path.expanduser("~")) or _junk_root(d):
         return True
+    if require_marker:
+        if d in _pinned_projects():
+            return False
+        if not _real_project(d):
+            return True
     p = os.path.dirname(d)
     while p != os.path.dirname(p):
         if os.path.exists(os.path.join(p, ".git")):
@@ -796,7 +822,7 @@ def _projects(conn, recent_only=True, editable_only=False):
     )
     out = []
     for r in rows:
-        if _junk_project_row(r.get("root_path")) or (
+        if _junk_project_row(r.get("root_path"), require_marker=True) or (
             editable_only and _is_junk_project(r.get("root_path"))
         ):
             continue
@@ -2562,7 +2588,10 @@ class Handler(BaseHTTPRequestHandler):
             body = (
                 target.read_bytes()
                 .replace(TOKEN_PLACEHOLDER.encode(), DASH_TOKEN.encode())
-                .replace(b"__ATLAS_VERSION__", str(_plugin_manifest().get("version") or "").encode())
+                .replace(
+                    b"__ATLAS_VERSION__",
+                    str(_plugin_manifest().get("version") or "").encode(),
+                )
             )
             if DASH_TOKEN.encode() not in body:
                 tag = f'<meta name="atlas-token" content="{DASH_TOKEN}">'.encode()
@@ -2712,7 +2741,7 @@ class Handler(BaseHTTPRequestHandler):
         ):  # single-use ticket is checked in the handler (browsers cannot set headers)
             import atlas_dash_term
 
-            return atlas_dash_term.handle_ws(self, query, DASH_TOKEN)
+            return atlas_dash_term.handle_ws(self, query)
         if self._dispatch_v2("GET", u.path, query, {}):
             return
         return self._legacy_get(u)
@@ -3172,7 +3201,10 @@ def _install_qualifies(d: Path, ver_text: str, parent_real: str) -> bool:
     and a realpath that stays inside the install parent (no escaping symlinks)."""
     try:
         real = os.path.realpath(d)
-        if os.path.commonpath([real, parent_real]) != parent_real or real == parent_real:
+        if (
+            os.path.commonpath([real, parent_real]) != parent_real
+            or real == parent_real
+        ):
             return False
         manifest = json.loads(
             (d / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
@@ -3186,7 +3218,9 @@ def _install_qualifies(d: Path, ver_text: str, parent_real: str) -> bool:
     )
 
 
-def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[int, ...], Path]]:
+def _sibling_installs(
+    own_roots: list[Path] | None = None,
+) -> list[tuple[tuple[int, ...], Path]]:
     """(version, daemon script) of sibling installs of this same plugin.
 
     Layouts: omp .../tech-tools___atlas___<ver>/ and claude .../<mkt>/atlas/<ver>/.
@@ -3207,7 +3241,7 @@ def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[i
         for d in entries:
             if fam and not d.name.startswith(fam):
                 continue
-            ver_text = d.name[len(fam):]
+            ver_text = d.name[len(fam) :]
             ver = _version_tuple(ver_text)
             if not ver or not (d / "scripts" / "atlas_dashboard.py").is_file():
                 continue

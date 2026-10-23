@@ -1,10 +1,7 @@
-// Shared loading / empty / error states for every region. Kept dependency-free;
-// identical copies land from two branches, so do not edit without the lead.
-const esc = (s) =>
-  String(s ?? "").replace(
-    /[&<>"]/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
-  );
+// Shared loading / empty / error states for every region. Escaping comes from
+// html.js (the single helper); the html.js <-> region-state.js import cycle is
+// safe because esc is only used at call time.
+import { esc } from "./html.js";
 
 export function renderRegionState(kind, name, message) {
   if (kind === "loading") {

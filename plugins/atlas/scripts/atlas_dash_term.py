@@ -12,7 +12,6 @@ from __future__ import annotations
 import base64
 import fcntl
 import hashlib
-import hmac
 import json
 import os
 import pty
@@ -407,9 +406,9 @@ def _deny(handler, code: int, error: str) -> None:
     handler._json(code, {"ok": False, "error": error})
 
 
-def handle_ws(handler, query: dict, token: str) -> None:
+def handle_ws(handler, query: dict) -> None:
     """Upgrade and bridge one PTY. Host/Origin were already checked by the dashboard
-    guard; the token, request shape and target are validated here before any 101."""
+    guard; the ticket, request shape and target are validated here before any 101."""
     ticket = query.get("ticket")
     params = redeem(ticket) if ticket else None
     if params is None:  # no ticket, unknown/used/expired; a ?token= is never accepted

@@ -182,7 +182,9 @@ export function createAtlasGateway(options: AtlasGatewayOptions): AtlasGateway {
       if (decoded.includes("//") || decoded.includes("\\") || decoded.split("/").some((part) => part === ".." || part === ".")) return jsonResponse({ ok: false, error: "bad_path" }, 400);
       const target = new URL(rest, upstream.url);
       target.search = url.search;
-      target.searchParams.delete("token"); // the gateway owns the dashboard token; a stale page token must not win
+      // the gateway authenticates with the X-Atlas-Token header; a browser-supplied token or ticket must not win
+      target.searchParams.delete("token");
+      target.searchParams.delete("ticket");
 
       let body: Blob | null = null;
       if (mutating) {

@@ -149,9 +149,9 @@ describe("atlas gateway", () => {
     expect(asset.headers.get("set-cookie")).toBeNull();
   });
 
-  it("streams SSE without buffering, authenticates by header only (no token in the URL), and aborts the dashboard when the client leaves", async () => {
+  it("streams SSE without buffering, authenticates by header only (no token or ticket in the URL), and aborts the dashboard when the client leaves", async () => {
     const abort = new AbortController();
-    const response = await gateway.handle(new Request("http://127.0.0.1:7317/atlas/api/v2/stream?project=all&token=stale", { signal: abort.signal }), ctx(drive));
+    const response = await gateway.handle(new Request("http://127.0.0.1:7317/atlas/api/v2/stream?project=all&token=stale&ticket=stale", { signal: abort.signal }), ctx(drive));
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/event-stream");
     const reader = response.body!.getReader();

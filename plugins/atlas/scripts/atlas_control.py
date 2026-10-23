@@ -34,6 +34,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 import armada_root  # noqa: E402
+
 CLAUDE_DIR = Path.home() / ".claude"
 SETTINGS_PATH = CLAUDE_DIR / "settings.json"
 CLAUDE_JSON_PATH = Path.home() / ".claude.json"
@@ -445,6 +446,15 @@ _k(
     "text",
     str(Path.home() / ".atlas" / "atlas.db"),
     scope="shell",
+)
+_k(
+    "ATLAS_PINNED_PROJECTS",
+    _ST,
+    "Pinned projects",
+    "Folders that always appear in the Command Center project selector, even without a .git, docs/ or package manifest.",
+    "text",
+    "",
+    details="Separate several folders with the OS path separator (':' on Linux and macOS, ';' on Windows). Without a pin, a folder only shows once it holds a .git, docs/, pyproject.toml or package.json.",
 )
 
 
