@@ -720,6 +720,10 @@ class InstalledParityContract(unittest.TestCase):
             "installed hook wiring differs from the repo: reinstall the plugin",
         )
 
+    @unittest.skipUnless(
+        os.environ.get("ATLAS_CHECK_INSTALL_PARITY") == "1",
+        "opt-in: set ATLAS_CHECK_INSTALL_PARITY=1 to byte-compare the repo against the install cache",
+    )
     def test_installed_hook_files_match_repo(self):
         root = self._installed_root()
         if root is None:

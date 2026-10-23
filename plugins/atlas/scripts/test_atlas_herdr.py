@@ -372,6 +372,9 @@ class FakeHerdr:
                 c, _ = self.srv.accept()
             except OSError:
                 return
+            if self.stop:  # the wake-up connection from close()
+                c.close()
+                return
             threading.Thread(target=self._serve, args=(c,), daemon=True).start()
 
     def _serve(self, c):
@@ -391,7 +394,17 @@ class FakeHerdr:
                 time.sleep(1.0)  # hang past the client's timeout
 
     def close(self):
+        # Closing the listener does not wake a thread blocked in accept(), and the kernel keeps that
+        # listener alive: a stale fake kept answering on its old path and, with fd reuse, cross-served the
+        # next test's connections (flaky pane-name/liveness asserts). Wake it with a connection, then join.
         self.stop = True
+        try:
+            with socket.socket(socket.AF_UNIX) as k:
+                k.settimeout(1.0)
+                k.connect(self.path)
+        except OSError:
+            pass
+        self.t.join(timeout=2.0)
         self.srv.close()
 
 
