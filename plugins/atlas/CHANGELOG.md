@@ -2,12 +2,24 @@
 
 ## Unreleased
 
+### Breaking changes
+
+- The vendor connectors moved from the atlas plugin to the armada plugin. Tool names change from `mcp__plugin_atlas_<vendor>__*` to `mcp__plugin_armada_<vendor>__*`, so permission rules and prompts that name the old tools need updating.
+- Connector credentials are now set in `/plugin` config for armada, with the same key names. The loaders fall back to values saved under atlas and to `~/.config/atlas/atlas.env`, so existing credentials keep working. Install atlas and armada together.
+- The dashboard stream and terminal no longer accept `?token=`. The browser uses `POST /api/v2/stream/ticket` for a single-use ticket; non-browser callers send the `X-Atlas-Token` header.
+
 ### Security
 
 - Self-fix verify no longer runs a database-supplied command through a shell. The command is parsed into arguments and must be a known test runner; anything else falls back to the contract test.
 - The git commit and push gate can no longer be skipped with a newline, a subshell, a wrapper such as `env` or `time`, or a git global option such as `--no-pager`.
 - The read-only SQL guard checks the command both with and without comments, so `SELECT 1 -- x'; DROP TABLE ...` is blocked, and it blocks instead of allowing when jq or perl is missing.
 - ConnectWise connector: turning off certificate checks now affects only ConnectWise requests, not every connection in the process. Token-exchange failures log the status and error code only.
+- Self-fix treats finding text as untrusted data, holds worker changes that touch test or build config for human review, and runs verify with credentials removed from the environment. Self-fix remains on by default.
+- Board notes reach agents wrapped as untrusted data instead of as instructions to act on.
+- Recalled memory is framed as untrusted, and imperative entries are flagged.
+- One shared redactor, with best-effort SSN, routing number, account number, card number and date-of-birth patterns, is applied to stored transcript text and thinking. Existing rows are not rewritten.
+- The dashboard access log redacts token and ticket values.
+- Self-heal only execs a verified sibling install.
 
 ### Fixed
 
@@ -16,12 +28,24 @@
 - Fewer false alarms: credential warnings ignore 4xx fields inside successful results, and the secret warning ignores credentials piped into another command.
 - Docs drift now counts new, untracked files. The nudge hook honors `ATLAS_HOME`.
 - `atlas_todo.py --help` prints usage. TypeScript types match the board's real data.
+- Live leads are no longer reaped on hosts without `ps`.
+- Seat routing falls back to herdr when rig errors, and never raises when no backend exists.
+- The inbox reads only new bytes, and a corrupt cursor no longer replays history.
+- Torn note lines are repaired before the next append. A corrupt `channels.json` is preserved instead of overwritten.
+- The lead-channel lock wait is bounded at 2 seconds.
+- The completion gate counts evidence in nested dated folders, and only checks CHANGELOG, ROADMAP, README and stale ROADMAP items on runs that shipped code.
+- The dispatch template now passes the dispatch tripwire, and the docs say never to pass `model`.
+- Broken skill references are fixed.
+- Test suites pass regardless of session environment, user id or checkout path.
 
 ### Changed
 
 - The recall gate checks its cached result before scanning the plugin directory, removing about 16 ms from most tool calls.
 - The prompt optimizer has one 25-second budget in total (was up to 220 seconds).
 - The native Grep/Glob deny message names its escape hatch.
+- Notes are capped at 8 KB (system exit and wrap-up notes are truncated instead of refused) and archived after 14 days once a file passes 2 MB.
+- Backend detection is cached for 30 seconds.
+- The install-parity checks are opt-in: set `ATLAS_CHECK_INSTALL_PARITY=1`.
 
 ## 15.0.0 - 2026-10-22
 

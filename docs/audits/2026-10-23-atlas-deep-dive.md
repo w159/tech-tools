@@ -338,3 +338,37 @@ test that failed before and passes after:
 Suite results after the merge: hooks 1605 tests, 7 failures (5 environment leakage, 1
 root-only, 1 install-cache parity); scripts 2229 tests, 3 failures (environment). No new
 failures from wave 1.
+
+## Status after implementation (2026-10-23)
+
+Waves 2 and 3 landed on `claude/atlas-audit-fixes`. Self-fix stays on by default; that is an owner decision, so item 1 was hardened rather than switched off. Existing `atlas.db` rows are not backfilled: the redactor applies to text stored from now on.
+
+| # | Finding | What shipped |
+|---|---|---|
+| 1 | Self-fix on by default | Partially: still on by default (owner decision). Finding text is treated as untrusted data and worker changes that touch test or build config are held for human review. Remaining: per-finding launch approval and prompts built from templates. |
+| 2 | Self-fix verify runs worker code | Partially: verify runs with credentials removed from the environment, and changes to test or build config are held. Remaining: verify in a clean checkout of the base branch with the worker's diff applied and no network. |
+| 3 | Notes injected as instructions | Shipped. Board notes reach agents wrapped as untrusted data. |
+| 4 | Dashboard token in URLs and logs | Shipped. `?token=` is rejected on the stream and terminal; browsers use a single-use 30 s ticket; non-browser callers use the header; the access log redacts token and ticket values. |
+| 5 | Unredacted transcripts, two redactors | Partially: one shared redactor with best-effort SSN, routing, account, card and date-of-birth patterns now covers transcript text and thinking. Remaining: existing rows are not rewritten, thinking is still stored (redacted), and `messages` has no retention. |
+| 6 | Live leads reaped without `ps` | Shipped. |
+| 7 | Seat routing on rig error, `off` raises | Shipped. Routing falls back to herdr and never raises when no backend exists. |
+| 8 | Unbounded notes, full rescans | Shipped. Notes are capped at 8 KB (system exit and wrap-up notes are truncated), archived after 14 days once a file passes 2 MB, and the inbox reads only new bytes. Torn lines are repaired, a corrupt `channels.json` is preserved, and the lead-channel lock wait is bounded at 2 s. |
+| 9 | Dispatch template denied by the tripwire | Shipped. The template passes the tripwire and the docs say never to pass `model`. |
+| 10 | Memory re-injected as instructions | Shipped. Recalled memory is framed as untrusted and imperative entries are flagged. |
+| 11 | Non-hermetic test suites | Shipped. Suites pass regardless of session environment, user id and checkout path; install-parity checks are opt-in with `ATLAS_CHECK_INSTALL_PARITY=1`. |
+| 12 | Gate (a) ignores nested evidence | Shipped. Nested dated folders count, and (c), (d), (e) and (h) apply only to code-shipping runs. |
+
+Also shipped in these waves: self-heal execs only a verified sibling install; backend detection is cached for 30 s; the vendor connectors moved to the armada plugin; programmer ships its six code-review lens agents.
+
+### Endorsed designs not yet implemented
+
+- One hook dispatcher process per event (latency).
+- Exempt config and data extensions from the delegation mandate (m); needs an owner decision.
+- tmux team cap and kill-on-timeout; second team window by width; orphan sweep on spawn; `--disallowedTools Agent,Task` on the worker argv.
+- Secret masking in scrollback and panefeed rows; `history-limit` on atlas sessions.
+- Panefeed repaint coalescing.
+- A lock around `atlas_rig.create_pane` and `_ps` cache invalidation; a `pane_live` callback for the channel reaper.
+- `/herd/capture` through `_read_pane`.
+- One copy per skill reference topic with an identity check in `validate_skills.py`.
+- Selector filtering with `_real_project`; one JS escape helper.
+- Friction metadata side table; alert-only spike detector; a `SCHEMA_VERSION` bump rule with a migration test; retention for the `messages` table.
