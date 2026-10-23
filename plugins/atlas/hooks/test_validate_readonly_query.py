@@ -276,5 +276,52 @@ class ValidateReadonlyQueryTest(unittest.TestCase):
         self.assertIn("read-only", p.stderr)
 
 
+class ValidateReadonlyBypassTest(unittest.TestCase):
+    def test_write_after_dashes_inside_quoted_sql_blocked(self):
+        # `--` inside a quoted string is not a comment to the shell; the stripped
+        # text would lose the DROP, the raw text must still be checked.
+        p = run_hook(payload("psql -c 'SELECT 1 -- x'; DROP TABLE users"))
+        self.assertEqual(p.returncode, 2)
+
+    def test_write_after_dashes_on_same_line_blocked(self):
+        p = run_hook(payload("psql -c \"SELECT '--'\"; psql -c 'DELETE FROM t'"))
+        self.assertEqual(p.returncode, 2)
+
+    def test_select_with_trailing_comment_still_passes(self):
+        self.assertEqual(run_hook(payload("SELECT 1 -- just a note")).returncode, 0)
+
+    def test_select_with_block_comment_passes(self):
+        self.assertEqual(run_hook(payload("SELECT /* hi */ 1")).returncode, 0)
+
+    def _run_without(self, missing):
+        import shutil
+        import tempfile
+
+        shim = tempfile.mkdtemp()
+        for tool in ("cat", "tr", "grep", "jq", "perl"):
+            if tool == missing:
+                continue
+            src = shutil.which(tool)
+            if src:
+                os.symlink(src, os.path.join(shim, tool))
+        return subprocess.run(
+            ["/bin/bash", HOOK],
+            input=json.dumps(payload("SELECT 1")),
+            capture_output=True,
+            text=True,
+            env={"PATH": shim},
+        )
+
+    def test_missing_jq_fails_closed(self):
+        p = self._run_without("jq")
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("jq", p.stderr)
+
+    def test_missing_perl_fails_closed(self):
+        p = self._run_without("perl")
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("perl", p.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

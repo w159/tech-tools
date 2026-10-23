@@ -267,5 +267,21 @@ class SubprocessEndToEndTest(unittest.TestCase):
         self.assertEqual(proc.stdout, "")
 
 
+class ShellSyntaxBypassTests(unittest.TestCase):
+    def test_wrapped_and_multiline_push_commit_gated(self):
+        for cmd in (
+            "cd repo\ngit commit -m x",
+            "git --no-pager commit -m x",
+            "(git commit -m x)",
+            "time git push origin main",
+            "xargs git commit",
+            "env FOO=1 git push",
+            "nohup git push",
+            "git -C dir push",
+            "git -c k=v commit -m x",
+        ):
+            self.assertTrue(fg._is_git_commit_or_push(cmd), cmd)
+
+
 if __name__ == "__main__":
     unittest.main()

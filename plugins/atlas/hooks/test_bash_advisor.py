@@ -487,5 +487,75 @@ class CommitReviewNudgeTest(unittest.TestCase):
         self.assertNotIn("ponytail-review", ctx)
 
 
+class GitSubcommandBypassTests(unittest.TestCase):
+    """Ordinary shell syntax must not hide a git subcommand from the gates."""
+
+    COMMIT = (
+        "cd repo\ngit commit -m x",
+        "git --no-pager commit -m x",
+        "(git commit -m x)",
+        "time git commit -m x",
+        "xargs git commit",
+        "xargs -n1 git commit",
+        "env FOO=1 git commit -m x",
+        "env -u X FOO=1 git commit -m x",
+        "FOO=1 BAR=2 git commit -m x",
+        "nohup git commit -m x",
+        "command git commit -m x",
+        "exec git commit -m x",
+        "sudo -u bob git commit -m x",
+        "git -C dir commit -m x",
+        "git -c k=v commit -m x",
+        "git -c k=v -C d --no-pager -p commit",
+        "git --git-dir=.git --work-tree=. commit",
+        "git --git-dir .git commit",
+        "git --paginate --bare commit",
+        "if true; then git commit -m x; fi",
+        "! git commit -m x",
+        "true & git commit -m x",
+        "echo $(git commit -m x)",
+        "git commit -m 'a; b'",
+    )
+    NOT_COMMIT = (
+        "git --no-pager log",
+        "echo git commit",
+        "echo 'a;\ngit commit'",
+        "time git status",
+        "env FOO=1 git status",
+        "command -v git commit",
+        "git -C dir status",
+        "git commit-tree HEAD",
+    )
+
+    def test_commit_forms_detected(self):
+        for cmd in self.COMMIT:
+            with self.subTest(cmd=cmd):
+                self.assertTrue(_match_git_commit(cmd))
+
+    def test_non_commit_forms_ignored(self):
+        for cmd in self.NOT_COMMIT:
+            with self.subTest(cmd=cmd):
+                self.assertFalse(_match_git_commit(cmd))
+
+    def test_subcommand_values(self):
+        from bash_advisor import _git_subcommands
+
+        self.assertEqual(list(_git_subcommands("git --no-pager commit -m x")), ["commit"])
+        self.assertEqual(list(_git_subcommands("time git push origin main")), ["push"])
+        self.assertEqual(list(_git_subcommands("nohup git push")), ["push"])
+        self.assertEqual(list(_git_subcommands("env FOO=1 git push")), ["push"])
+        self.assertEqual(list(_git_subcommands("git -C dir push")), ["push"])
+        self.assertEqual(list(_git_subcommands("cd r\ngit status\ngit push")), ["status", "push"])
+
+    def test_unbalanced_quote_falls_back_without_raising(self):
+        from bash_advisor import _git_subcommands
+
+        self.assertEqual(list(_git_subcommands("echo 'oops; git commit -m x")), ["commit"])
+
+    def test_padding_beyond_shlex_bound_does_not_hide_commit(self):
+        cmd = "echo " + "A" * 40000 + "\ngit commit -m x"
+        self.assertTrue(_match_git_commit(cmd))
+
+
 if __name__ == "__main__":
     unittest.main()

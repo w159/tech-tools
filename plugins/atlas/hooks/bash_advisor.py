@@ -199,10 +199,45 @@ def _match_secrets(command: str) -> str | None:
     return None
 
 
-_SEGMENT_SPLIT = re.compile(r"&&|\|\||;|\|")
+_SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|&()`\n]")
 _ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-_GIT_VALUE_OPTS = ("-C", "-c")
-_GIT_EQ_OPTS = ("--git-dir=", "--work-tree=", "--exec-path=", "--namespace=")
+# git global options that consume the NEXT token as their value (`--opt=v` forms
+# are covered by the generic "starts with -" rule below).
+_GIT_VALUE_OPTS = frozenset(
+    {
+        "-C",
+        "-c",
+        "--git-dir",
+        "--work-tree",
+        "--namespace",
+        "--exec-path",
+        "--super-prefix",
+        "--config-env",
+        "--attr-source",
+    }
+)
+# Prefix wrappers that run their remaining argv; value = flags that take a value.
+_WRAPPERS = {
+    "env": frozenset({"-u", "-C", "-S", "--unset", "--chdir", "--split-string"}),
+    "time": frozenset({"-f", "-o", "--format", "--output"}),
+    "nohup": frozenset(),
+    "command": frozenset(),
+    "exec": frozenset({"-a"}),
+    "builtin": frozenset(),
+    "setsid": frozenset(),
+    "nice": frozenset({"-n"}),
+    "xargs": frozenset(
+        {"-I", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "-l"}
+    ),
+    "sudo": frozenset(
+        {"-u", "-g", "-h", "-p", "-C", "-r", "-t", "-U", "-D", "-R", "-T"}
+    ),
+}
+# Shell keywords / grouping tokens that merely precede a command.
+_LEADERS = frozenset(
+    {"then", "do", "else", "elif", "if", "while", "until", "!", "{", "}"}
+)
+_SEPARATOR_CHARS = frozenset(";&|()`\n")
 
 
 # Bounds that keep the git parse linear in practice: shlex is quadratic on a
@@ -210,6 +245,9 @@ _GIT_EQ_OPTS = ("--git-dir=", "--work-tree=", "--exec-path=", "--namespace=")
 # first segments are visited. A `git ... commit` head is far shorter than either.
 _SEGMENT_HEAD = 2048
 _MAX_SEGMENTS = 4096
+# Commands up to this size are tokenised whole (quote-aware); larger ones use the
+# bounded regex split so padding cannot hide a later segment and cost stays flat.
+_SHLEX_MAX = 16384
 
 
 # `sh -c '...'` / `bash -lc "..."`: the quoted script runs as its own command line.
@@ -219,34 +257,101 @@ _SHELL_C = re.compile(
 )
 
 
-def _git_subcommands(command: str, _depth: int = 0):
-    """Yield the git subcommand each shell segment runs.
+def _regex_segments(command: str):
+    """Fallback segmentation (old behaviour, bounded): quote-unaware regex split."""
+    import shlex
 
-    Parse contract (mirrored by omp/mandates.ts): split on && || ; |, skip leading
-    NAME=value assignments, the first token must be `git` (or a path ending /git),
-    consume -C <v>, -c <v>, --git-dir=/--work-tree=/--exec-path=/--namespace= and a
-    bare `--`; the next token is the subcommand. So `echo git commit` and
-    `git stash commit` run no commit; `git commit --amend` does. The quoted script of
-    `sh|bash|zsh -c` is parsed the same way (two levels deep), so wrapping is no bypass.
+    for segment in _SEGMENT_SPLIT.split(command, _MAX_SEGMENTS):
+        segment = segment[:_SEGMENT_HEAD]
+        if "git" not in segment:
+            continue
+        try:
+            yield shlex.split(segment)
+        except ValueError:
+            yield segment.split()
+
+
+def _command_segments(command: str):
+    """Yield one argv token list per shell segment of `command`.
+
+    Segments end at ; & | && || ( ) ` and newlines. Tokenised with shlex (posix,
+    punctuation_chars) so quoted operators stay inside their word. On unbalanced
+    quotes, or for very large commands, falls back to the bounded regex split.
+    Shared by bash_advisor and fallow_gate (via _git_subcommands).
     """
     import shlex
 
+    command = command or ""
+    if len(command) > _SHLEX_MAX:
+        yield from _regex_segments(command)
+        return
+    lex = shlex.shlex(command, posix=True, punctuation_chars=";&|()<>`\n")
+    lex.whitespace = " \t\r"  # newline is a separator, not whitespace
+    lex.whitespace_split = True
+    try:
+        tokens = list(lex)
+    except ValueError:
+        yield from _regex_segments(command)
+        return
+    current: list[str] = []
+    for tok in tokens:
+        if all(ch in _SEPARATOR_CHARS for ch in tok):
+            if current:
+                yield current
+            current = []
+        else:
+            current.append(tok)
+    if current:
+        yield current
+
+
+def _strip_wrappers(tokens: list[str]) -> list[str]:
+    """Drop leading NAME=val, shell keywords and prefix wrappers (env, time, nohup,
+    command, exec, xargs, sudo ...) with their flags; return the real argv."""
+    while tokens:
+        tok = tokens[0]
+        if _ENV_ASSIGN.match(tok) or tok in _LEADERS:
+            tokens = tokens[1:]
+            continue
+        name = tok.rsplit("/", 1)[-1]
+        if name not in _WRAPPERS:
+            break
+        value_flags = _WRAPPERS[name]
+        tokens = tokens[1:]
+        if name == "command" and tokens and tokens[0] in ("-v", "-V"):
+            return []  # lookup only, runs nothing
+        while tokens and tokens[0].startswith("-"):
+            flag = tokens[0]
+            tokens = tokens[1:]
+            if flag == "--":
+                break
+            if flag in value_flags and tokens:
+                tokens = tokens[1:]
+    return tokens
+
+
+def _git_subcommands(command: str, _depth: int = 0):
+    """Yield the git subcommand each shell segment runs.
+
+    Parse contract: segments split on && || ; | & ( ) newline (shlex, quote-aware);
+    leading NAME=value assignments and wrappers (env, time, nohup, command, exec,
+    xargs, sudo, then/do/else, !) are skipped; the first real token must be `git`
+    (or a path ending /git); git global options are skipped (-C <v>, -c <v>,
+    --git-dir/--work-tree/--namespace/--exec-path (= or separate value), --no-pager,
+    -p, --paginate, --bare, any other leading -flag, and a bare `--`); the next token
+    is the subcommand. So `echo git commit` and `git stash commit` run no commit;
+    `git commit --amend` does. The quoted script of `sh|bash|zsh -c` is parsed the
+    same way (two levels deep), so wrapping is no bypass. `$(...)` and backtick
+    bodies are segmented like any other command.
+    """
     command = command or ""
     if "git" not in command:
         return
     if _depth < 2:
         for m in _SHELL_C.finditer(command[: _SEGMENT_HEAD * 4]):
             yield from _git_subcommands(m.group(2), _depth + 1)
-    for segment in _SEGMENT_SPLIT.split(command, _MAX_SEGMENTS):
-        segment = segment[:_SEGMENT_HEAD]
-        if "git" not in segment:
-            continue
-        try:
-            tokens = shlex.split(segment)
-        except ValueError:
-            tokens = segment.split()
-        while tokens and _ENV_ASSIGN.match(tokens[0]):
-            tokens = tokens[1:]
+    for tokens in _command_segments(command):
+        tokens = _strip_wrappers(tokens)
         if not tokens or not (tokens[0] == "git" or tokens[0].endswith("/git")):
             continue
         i = 1
@@ -254,7 +359,7 @@ def _git_subcommands(command: str, _depth: int = 0):
             tok = tokens[i]
             if tok in _GIT_VALUE_OPTS:
                 i += 2
-            elif tok == "--" or tok.startswith(_GIT_EQ_OPTS):
+            elif tok.startswith("-"):
                 i += 1
             else:
                 break
