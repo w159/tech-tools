@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed: the Falcon unit suite is hermetic (dummy credentials via an autouse fixture) and counts `falcon_status` as the always-on meta tool; the NinjaOne bundle was rebuilt from source (the PAN-OS bundle already matched a fresh build).
 - Fixed: PAN-OS `panos_commit` with `partial: true` and `panos_commit_all` now
   send `action=partial` / `action=all` on the commit request (node-panos
   `commit()` previously dropped it). The panos bundle was rebuilt.
