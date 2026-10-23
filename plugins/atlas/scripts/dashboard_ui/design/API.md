@@ -4,7 +4,8 @@ Every route the Command Center UI calls. JSON bodies below are trimmed copies of
 
 Conventions
 - `GET` routes accept `?project=<root|all>` unless noted. Mutations (`POST`, `PUT`) need `X-Atlas-Token` (the `<meta name="atlas-token">` value) and `Content-Type: application/json`. Failures return `{ok:false, error, why, do}`.
-- Token is also required for GETs that expose terminal output or message text: `/api/v2/stream` (`?token=` allowed), `/api/v2/irc`, `/api/v2/channels[/<name>]`, `/api/v2/agents/<id>/peek`, `/api/v2/herd/agents/<pane>/peek`.
+- Token is also required for GETs that expose terminal output or message text: `/api/v2/stream` (header, or a single-use `?ticket=`; see below), `/api/v2/irc`, `/api/v2/channels[/<name>]`, `/api/v2/agents/<id>/peek`, `/api/v2/herd/agents/<pane>/peek`.
+- Stream auth: send `X-Atlas-Token`, or for `EventSource` (no custom headers) call `POST /api/v2/stream/ticket` with the token header and open `/api/v2/stream?ticket=<ticket>`. A ticket works once and expires after 30 seconds. `?token=` is rejected on the stream and on the terminal websocket. The terminal websocket takes only a ticket from `POST /api/v2/term/ticket`. The dashboard access log replaces `token` and `ticket` query values with a placeholder.
 - `agents`, `herd`, `todos`, `irc`, `health`, `improve` are SSE topics on `GET /api/v2/stream` (event name = topic, data = the same body as the GET). A topic is re-sent only when its body changes, ignoring volatile fields (`fetched_ms`, `updated`, `last_ok`, `last_ts`, `now`, `generated_at`, `age_seconds`, `idle_seconds`, `preview`).
 - Timestamps are ISO-8601 UTC strings.
 

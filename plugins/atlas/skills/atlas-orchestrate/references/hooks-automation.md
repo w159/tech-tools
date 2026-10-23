@@ -127,15 +127,15 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   up to 6 levels). Conditions (a)-(l) and (n)-(p) additionally require an orchestration flag in
   the atlas DB (set by an orchestration skill or `atlas:*` dispatch); condition (m)
   deliberately checks unarmed runs too. Without docs/ every condition is silent.
-- **What satisfies it.** All sixteen conditions (a)-(p) must hold:
-  - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured). Only checked when this run wrote non-docs code; files older than the run start do not count.
+- **What satisfies it.** All seventeen conditions (a)-(q) must hold:
+  - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured), at any depth, so nested dated folders such as `.atlas/evidence/<date>-<slug>/` count. Only checked when this run wrote non-docs code; files older than the run start do not count.
   - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
     (an independent check happened - a deterministic test recorded via
     `scripts/atlas_finding.py`, or an atlas:verifier result). Only checked when this run wrote non-docs
     code; stamps older than the run start (`verified_at`) do not count.
-  - (c) `docs/CHANGELOG.md` exists and is non-empty.
-  - (d) `docs/ROADMAP.md` exists and is non-empty.
-  - (e) `README.md` at the project root exists and is non-empty.
+  - (c) `docs/CHANGELOG.md` exists and is non-empty Only checked when this run wrote non-docs code.
+  - (d) `docs/ROADMAP.md` exists and is non-empty Only checked when this run wrote non-docs code.
+  - (e) `README.md` at the project root exists and is non-empty Only checked when this run wrote non-docs code.
   - (f) No docs drift: if non-docs files changed this run, `docs/CHANGELOG.md` must be
     among them -- the deterministic trigger forcing an `atlas:docs-curator` dispatch
     before "done". Any single `docs/` path used to clear this, so a one-line edit to a
@@ -156,7 +156,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     about the code this run shipped. A stamp earns credit only if the run actually executed a
     test-runner command; a stamp with no executed test earns nothing.
   - (h) ROADMAP reconciliation: a `docs/ROADMAP.md` item marked `done` is a defect -- it
-    belongs in `docs/CHANGELOG.md` with a date and an evidence citation.
+    belongs in `docs/CHANGELOG.md` with a date and an evidence citation. Only checked when this run wrote non-docs code.
   - (i) Todo drain: if this run shipped code and the most recent plan still holds
     non-`completed` items, block. TodoWrite rewrites the whole list every call, so the last
     one is current state. (i) enforces DRAINING a list; (k) is what enforces having one.
@@ -195,9 +195,10 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     or departed member that is not a lead; or IRC/SendMessage traffic). A lead's own note, another
     lead's channel and a non-member's note do not count. `agent://` traffic logged under sibling run
     ids of the same session counts. Kill switch `ATLAS_GATE_COLONY=off`.
+  - (q) Unmerged worker branches: `worker/*` branches that still hold commits not merged into the base, or a dirty worker worktree (`atlas_wt.py status`), must be verified and merged (`atlas_wt.py merge <agent>`) before the run is done. Not limited to code-shipping runs; sidechains are exempt. Kill switch `ATLAS_WT_GATE=off`. Fails open on a read error.
   (n)-(p) ask for a presentation repair, so each blocks at most once per session. All three fail open.
   The block message names exactly which condition(s) are missing and, for (p), the one fix command.
-- **Re-blocks, never a wedge.** Blocks every Stop until (a)-(p) hold, except: a Stop that is already a
+- **Re-blocks, never a wedge.** Blocks every Stop until (a)-(m) and (q) hold, except: a Stop that is already a
   forced continuation (`stop_hook_active`) is allowed, and after >5 Stop events in 120 s the circuit
   breaker silences the gate for the session. On omp the bridge additionally allows at most 3
   consecutive blocks (`MAX_STOP_BLOCKS` in `omp/stop-bridge.ts`). Fail-open on any error. Disable

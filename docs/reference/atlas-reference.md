@@ -259,12 +259,12 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
 `ATLAS_TRIPWIRE=off` disables the drift tiers (nudges); `ATLAS_TRIPWIRE_THRESHOLD`
 (default 4) sets the nudge tier.
 
-**Completion gate** (`hooks/completion_gate.py`, Stop). Sixteen conditions,
-(a) to (p). It engages only in a project with a `docs/` directory, stays silent
+**Completion gate** (`hooks/completion_gate.py`, Stop). Seventeen conditions,
+(a) to (q). It engages only in a project with a `docs/` directory, stays silent
 while a dispatch is in flight, and prints one block message listing exactly
 which conditions are unmet:
 
-- (a) evidence saved under `.atlas/evidence/` during this run
+- (a) evidence saved under `.atlas/evidence/` during this run; nested dated folders (`.atlas/evidence/<date>-<slug>/...`) count
 - (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run
 - (c) `docs/CHANGELOG.md` exists and is non-empty
 - (d) `docs/ROADMAP.md` exists and is non-empty
@@ -281,10 +281,11 @@ which conditions are unmet:
 - (n) status header: an orchestrating session's final reply starts with `ATLAS | <glyph> <phase> | <state>`
 - (o) phased todo: when code shipped, the session's board items cover the `implement` and `verify` phases
 - (p) colony channel: with two or more atlas workers dispatched, the board notes or IRC show use: a board note on this run's lead channel authored by a registered (or departed) member that is not a lead, or IRC/`SendMessage` traffic recorded for the run
+- (q) unmerged worker branches: no `worker/*` branch holding commits that are not merged into the base, and no dirty worker worktree (`atlas_wt.py status`); merge with `atlas_wt.py merge <agent>`. Not limited to code-shipping runs; sidechains are exempt
 
-(a), (b), (f) and (g) apply only when the run shipped non-docs code. (n), (o)
+(a) to (i), (k) and (o) apply only when the run shipped non-docs code, so (c), (d), (e) and (h) (CHANGELOG, ROADMAP, README and stale ROADMAP items) are skipped on a run that shipped no code. (n), (o)
 and (p) ask for presentation repairs, so each blocks at most once per session;
-(a) to (m) re-block on every Stop until they hold. Fix the listed condition
+(a) to (m) and (q) re-block on every Stop until they hold. Fix the listed condition
 (paste the test output, write the finding with
 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py"`, dispatch the
 verifier), then stop again.
