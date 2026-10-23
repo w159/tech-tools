@@ -539,12 +539,12 @@ class ArmOrchestrationTest(unittest.TestCase):
         fake.connect.return_value = fake_conn
         fake.mark_orchestrating.side_effect = Exception("db down")
         calls = []
+        kws = []
         fake.record_friction.side_effect = lambda conn, s, cat, **kw: (
             calls.append((conn, s, cat)) or kws.append(kw) or 1
         )
         with (
             mock.patch.dict(sys.modules, {"atlas_db": fake}),
-        kws = []
         ):
             self.assertIsNone(
                 po.arm_orchestration(
@@ -553,13 +553,13 @@ class ArmOrchestrationTest(unittest.TestCase):
                 )
             )
         self.assertEqual(calls, [(fake_conn, "s1", "orchestration_flag_arm_failed")])
+        # arm_orchestration returns early for workers, so this caller is a lead.
+        self.assertEqual(kws[0].get("role"), "lead")
 
     def test_friction_write_failure_still_fail_open(self):
         fake_conn = mock.MagicMock()
         fake = mock.MagicMock()
         fake.connect.return_value = fake_conn
-        # arm_orchestration returns early for workers, so this caller is a lead.
-        self.assertEqual(kws[0].get("role"), "lead")
         fake.mark_orchestrating.side_effect = Exception("db down")
         fake.record_friction.side_effect = Exception("db still down")
         with (
