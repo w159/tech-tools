@@ -95,7 +95,7 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    - `scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
    - `scripts/atlas_curator.py` exists
    - `scripts/atlas_context_optimizer.py` exists
-   - `hooks/memory_capture.py` and `hooks/auto_skill.py` are wired in hooks.json
+   - `hooks/memory_capture.py` and `hooks/chronicle_facet.py` exist; both run in-process from `hooks/stop_tail.py` (the single Stop entry in hooks.json), not as separate hook entries
    Run the context optimizer to disable unused skills/agents:
    `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py optimize --dry-run`
    Present the savings estimate to the user and confirm before applying.

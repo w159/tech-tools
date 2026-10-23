@@ -9,8 +9,8 @@ Model/effort tiers and squad
 **Opus is the orchestrator's tier.** A subagent works from a spec you already wrote, so it runs on
 the cheapest tier that can do the job. The tier table is `agents/<role>.md` frontmatter
 (`model`, `effort`, `tier_allow`, `effort_allow`), mirrored per seat in `contracts/scope-matrix.json`.
-**Never guess a model: copy the model the resolver emits** (`atlas_resolve.py <class> <effort>`, one
-`model` per seat) into the Agent call. Opus is allowed only for roles whose `tier_allow` lists it and
+**Never pass `model` in the Agent call; agents pin their own model.** The resolver
+(`atlas_resolve.py <class> <effort>`, one `model` per seat) tells you the team and tier: do not copy the model the resolver emits into the Agent call; the dispatch carries only `SCOPE:`. Opus is allowed only for roles whose `tier_allow` lists it and
 only where the matrix cell says so; the lead stays opus.
 
 | Tier | Use for | Roles (default model) |

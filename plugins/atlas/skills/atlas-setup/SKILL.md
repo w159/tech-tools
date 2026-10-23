@@ -113,7 +113,7 @@ When `docs/` does not exist:
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_curator.py` exists
    - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py` exists
-   - `hooks/memory_capture.py` and `hooks/chronicle_facet.py` are wired in hooks.json
+   - `hooks/memory_capture.py` and `hooks/chronicle_facet.py` exist; both run in-process from `hooks/stop_tail.py` (the single Stop entry in hooks.json), not as separate hook entries
    Run the context optimizer to disable unused skills/agents:
    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py" optimize --dry-run`
    Present the savings estimate to the user and confirm before applying.
