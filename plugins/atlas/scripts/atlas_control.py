@@ -34,6 +34,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 import armada_root  # noqa: E402
+
 CLAUDE_DIR = Path.home() / ".claude"
 SETTINGS_PATH = CLAUDE_DIR / "settings.json"
 CLAUDE_JSON_PATH = Path.home() / ".claude.json"
@@ -697,6 +698,11 @@ _AD = {
     ),
     "ATLAS_DECISION_URL": (
         "Loopback endpoint for the prompt classifier. Blank uses Ollama on 127.0.0.1:11434.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_DECISION_ALLOW_REMOTE": (
+        "`1` lets ATLAS_DECISION_URL name a non-loopback host; otherwise a remote URL is refused and the regex result is kept.",
         "",
         "hooks",
     ),
