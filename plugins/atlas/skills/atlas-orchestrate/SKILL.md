@@ -142,4 +142,4 @@ Run **Orient** (recall + roots + manifests + capabilities). Present orientation 
 
 ## Additional references
 
-- [Operating contract](references/operating-contract.md): the plugin-level operating contract (single copy). Read when you need the verify-before-done loop in full.
+- [Operating contract](${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md): the plugin-level operating contract (single copy). Read when you need the verify-before-done loop in full.
