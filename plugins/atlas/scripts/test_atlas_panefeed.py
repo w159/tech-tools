@@ -324,6 +324,23 @@ class PaneFeedTests(unittest.TestCase):
         self.assertEqual(feed.tools, 4)
         self.assertIn(" 4 tools ", plain(feed._status(120)))
 
+    def test_live_burst_paints_fewer_frames_and_shows_the_last_row(self):
+        buf = io.StringIO()
+        feed = pf.Feed("w1", "explorer", "t", "", "# Task\ngo", out=buf, live=True)
+        for i in range(50):
+            feed.text(f"row-{i}")
+        self.assertLess(buf.getvalue().count("\x1b[1;1H"), 50)
+        feed.finish(0)
+        self.assertIn("row-49", plain(buf.getvalue()))
+
+    def test_non_live_burst_still_writes_every_row(self):
+        buf = io.StringIO()
+        feed = pf.Feed("w1", out=buf, live=False)
+        for i in range(50):
+            feed.text(f"row-{i}")
+        out = plain(buf.getvalue())
+        self.assertTrue(all(f"row-{i}" in out for i in range(50)))
+
     def test_live_feed_spacer_then_status_on_the_last_row(self):
         from unittest import mock
 
