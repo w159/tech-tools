@@ -635,6 +635,13 @@ def install_check() -> dict:
             "why": f"installed herdr {have} is older than the pinned {want}",
             "do": f"upgrade herdr to >= {want} ({url}), then retry",
         }
+    if not shutil.which("rsync"):  # the web-ui source mirror (_prepare) shells out to rsync
+        return {
+            **out,
+            "ok": False,
+            "why": "rsync is not installed (needed to mirror the herdr web-ui source)",
+            "do": "install rsync (e.g. apt install rsync / brew install rsync), then retry",
+        }
     return out
 
 
