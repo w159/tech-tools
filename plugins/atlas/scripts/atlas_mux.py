@@ -1991,7 +1991,10 @@ def cmd_spawn_team(args) -> int:
         return _emit({"ok": False, "error": "mux mode is disabled: ATLAS_MUX=off"}, 2)
     run_id, sid = _lead_run(root, args.session)
     lead = _team_lead(sid, rec["team_id"])
-    chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
+    try:
+        chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
+    except atlas_todo.LockTimeout as exc:  # bounded registry lock: report, don't traceback
+        return _emit({"ok": False, "error": f"channel registry lock busy: {exc}"}, 1)
     os.environ["ATLAS_CHANNEL"] = chan
     os.environ["ATLAS_LEAD_NAME"] = lead
     rec["channel"], rec["transport"], rec["lead"] = chan, transport(), lead

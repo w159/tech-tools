@@ -844,5 +844,23 @@ def tearDownModule():
     _SEAT_ENV.stop()
 
 
+class BodyCapTest(IrcTestBase):
+    def test_post_over_8kb_is_400_body_too_large(self):
+        status, body = self.call(
+            "POST", "/api/v2/irc", body={"to": "all", "body": "x" * (9 * 1024)}
+        )
+        self.assertEqual(status, 400, body)
+        self.assertFalse(body["ok"])
+        self.assertEqual(body["error"], "body_too_large")
+        _, got = self.call("GET", "/api/v2/irc")
+        self.assertEqual(got["messages"], [])
+
+    def test_post_at_cap_is_accepted(self):
+        status, body = self.call(
+            "POST", "/api/v2/irc", body={"to": "all", "body": "x" * 8192}
+        )
+        self.assertEqual(status, 200, body)
+
+
 if __name__ == "__main__":
     unittest.main()

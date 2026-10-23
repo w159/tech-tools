@@ -621,5 +621,60 @@ class OwnerTokens(unittest.TestCase):
         self.assertEqual(todo.register_member(self.root, "W1", chan), chan)
 
 
+class RegistryHardening(unittest.TestCase):
+    """Corrupt channels.json is quarantined, never overwritten; the lead lock is bounded."""
+
+    def setUp(self):
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        for k in ("ATLAS_CHANNEL", "ATLAS_LEAD_NAME", "ATLAS_WORKER_NAME"):
+            os.environ.pop(k, None)
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = os.path.realpath(self._tmp.name)
+        (Path(self.root) / ".atlas" / ".run").mkdir(parents=True)
+
+    def test_truncated_registry_is_quarantined_not_overwritten(self):
+        todo.open_lead_channel(self.root, "lead-a", ["w1"])
+        path = todo._channels_path(self.root)
+        good = path.read_text(encoding="utf-8")
+        torn = good[: len(good) // 2]
+        path.write_text(torn, encoding="utf-8")
+        with self.assertRaises(todo.ChannelRegistryCorrupt):
+            todo.open_lead_channel(self.root, "lead-b", [])
+        self.assertEqual(path.read_text(encoding="utf-8"), torn)
+        copies = list(path.parent.glob("channels.json.corrupt-*"))
+        self.assertEqual(len(copies), 1)
+        self.assertEqual(copies[0].read_text(encoding="utf-8"), torn)
+        with self.assertRaises(todo.ChannelRegistryCorrupt):  # persistent: no copy pile-up
+            todo.open_lead_channel(self.root, "lead-b", [])
+        self.assertEqual(len(list(path.parent.glob("channels.json.corrupt-*"))), 1)
+
+    def test_readers_stay_lenient_on_corrupt_registry(self):
+        todo.open_lead_channel(self.root, "lead-a", [])
+        todo._channels_path(self.root).write_text("{not json", encoding="utf-8")
+        self.assertEqual(todo._reg_read(self.root)["channels"], {})
+
+    def test_cli_channel_open_reports_corruption(self):
+        todo.open_lead_channel(self.root, "lead-a", [])
+        todo._channels_path(self.root).write_text("{not json", encoding="utf-8")
+        rc, out = cli("channel-open", "--root", self.root, "--lead", "lead-b")
+        self.assertEqual(rc, 1)
+        self.assertFalse(out["ok"])
+        self.assertIn("corrupt", out["error"])
+
+    def test_open_lead_channel_lock_is_bounded_by_default(self):
+        import atlas_memory
+
+        todo.open_lead_channel(self.root, "lead-a", [])
+        with atlas_memory._file_lock(todo._channels_path(self.root)):
+            t0 = time.monotonic()
+            with self.assertRaises(atlas_memory.LockTimeout):
+                todo.open_lead_channel(self.root, "lead-b", [])
+            self.assertLess(time.monotonic() - t0, 4.0)
+        todo.open_lead_channel(self.root, "lead-b", [])  # released: works again
+
+
 if __name__ == "__main__":
     unittest.main()
