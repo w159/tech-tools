@@ -1,6 +1,6 @@
 ---
 name: atlas-tui
-description: "Opens the Atlas Command Center, a live terminal UI over the colony's tmux workers (topology, seats, feed, system). Use to watch or attach to running colony workers."
+description: "Opens the Atlas Command Center, a live terminal UI over the colony's tmux workers (topology, seats, feed, system). Use when watching or attaching to running colony workers."
 when_to_use: "atlas tui, command center, colony terminal, watch workers, attach to worker pane"
 allowed-tools: Bash
 disable-model-invocation: true

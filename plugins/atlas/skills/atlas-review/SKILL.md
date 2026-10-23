@@ -1,6 +1,6 @@
 ---
 name: atlas-review
-description: "Risk-selected multi-persona review of a diff, branch or PR; P0/P1 findings verified, report-only verdict (Ready, Ready-with-fixes, Not-ready). Use before merge."
+description: "Risk-selected multi-persona review of a diff, branch or PR; P0/P1 findings verified, report-only verdict (Ready, Ready-with-fixes, Not-ready). Use when a diff, branch or PR needs review before merge."
 when_to_use: "review this PR, code review, pre-merge review, review my diff, is this ready to merge"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[base-ref | PR-number | diff spec] [depth:full|auto] [apply:local]'

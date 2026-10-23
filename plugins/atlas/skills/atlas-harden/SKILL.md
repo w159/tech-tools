@@ -1,6 +1,6 @@
 ---
 name: atlas-harden
-description: "Writes an idempotent endpoint remediation script (CHECK/SET/VERIFY) for RMM or MDM that proves whether it changed state. Use to remediate or enforce an endpoint setting at scale."
+description: "Writes an idempotent endpoint remediation script (CHECK/SET/VERIFY) for RMM or MDM that proves whether it changed state. Use when remediating or enforcing an endpoint setting at scale."
 when_to_use: "remediation script, RMM, MDM, NinjaOne, Intune, registry setting, compliance enforcement, idempotent PowerShell"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[objective] [target OS/devices] [deployment context: RMM run-as, one-shot/scheduled, known GPO/MDM interactions]'

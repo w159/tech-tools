@@ -1,6 +1,6 @@
 ---
 name: atlas-worktree
-description: "Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection. Use to isolate parallel implementer waves, spikes or bakeoffs, or close them at wave end."
+description: "Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection. Use when isolating parallel implementer waves, spikes or bakeoffs, or closing them at wave end."
 when_to_use: "worktree isolation, parallel waves, spike branch, reuse worktree, clean up worktrees"
 allowed-tools: Read, Glob, Grep, Bash, Write, Edit
 ---

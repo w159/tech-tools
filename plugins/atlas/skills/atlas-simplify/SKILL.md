@@ -1,6 +1,6 @@
 ---
 name: atlas-simplify
-description: "Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate. Use after implementing, before review or commit; restructuring is atlas-refactor."
+description: "Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate. Use when code was just implemented, before review or commit; restructuring is atlas-refactor."
 when_to_use: "simplify my changes, tidy the diff, reduce duplication in new code, post-implementation cleanup"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[blank = current branch diff; base:<ref> = diff against base; or named files/dirs]'

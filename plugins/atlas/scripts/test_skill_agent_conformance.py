@@ -535,7 +535,12 @@ class TestToolNameHygiene(unittest.TestCase):
         )
 
     def test_read_only_agents_deny_write_edit(self):
-        writable = {"docs-curator.md", "implementer.md", "runner.md", "test-engineer.md"}
+        writable = {
+            "docs-curator.md",
+            "implementer.md",
+            "runner.md",
+            "test-engineer.md",
+        }
         missing = []
         for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
             if path.name in writable:
@@ -703,6 +708,19 @@ class TestAnthropicSkillChecklist(unittest.TestCase):
             [],
             bad,
             "descriptions with no 'Use when ...' trigger clause: " + ", ".join(bad),
+        )
+
+    def test_description_has_literal_use_when_trigger(self):
+        # Stricter than _WHEN_RE: the router matches on the literal phrase.
+        bad = [
+            n
+            for n, m in self.meta.items()
+            if "Use when" not in str(m.get("description", ""))
+        ]
+        self.assertEqual(
+            [],
+            bad,
+            "descriptions missing the literal 'Use when': " + ", ".join(bad),
         )
 
     def test_description_is_third_person(self):

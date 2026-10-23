@@ -1,6 +1,6 @@
 ---
 name: atlas-test-xcode
-description: "Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs. Use to build or test an iOS or Xcode project; macOS only."
+description: "Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs. Use when building or testing an iOS or Xcode project; macOS only."
 when_to_use: "iOS simulator, xcodebuild, XCTest, simctl, Swift app test, run the app on simulator"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[scheme name or 'current' for default]"
