@@ -280,6 +280,20 @@ class SessionEndLeadTest(unittest.TestCase):
         self.assertEqual([c for c in chans if c.endswith("/" + lead)], [])
 
 
+class SessionEndSeatLivenessTest(unittest.TestCase):
+    def test_session_end_passes_seat_pane_probe_to_reaper(self):
+        import atlas_seats
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp())
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        with mock.patch.object(todo, "reap_channels") as reap:
+            ingest_session._finish_lead(
+                {"hook_event_name": "SessionEnd", "session_id": "s1", "cwd": root}
+            )
+        self.assertIs(reap.call_args.kwargs.get("pane_live"), atlas_seats.pane_live)
+
+
 class StopSweepTest(unittest.TestCase):
     def test_stop_sweeps_todos_and_never_raises(self):
         import atlas_todo as todo

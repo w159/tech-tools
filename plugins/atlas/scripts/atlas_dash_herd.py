@@ -535,11 +535,15 @@ def _capture(ctx):
         n = max(1, min(int(q.get("lines") or PEEK_DEFAULT_LINES), PEEK_MAX_LINES))
     except (TypeError, ValueError):
         return 400, {"ok": False, "error": "lines must be an integer"}
-    out = atlas_seats.capture(pane, n)
-    if out.get("error") == "not_supported":
-        return 501, out
-    if not out.get("ok"):
-        return 502, out
+    if atlas_seats.backend() == "rig":
+        out = atlas_seats.capture(pane, n)
+        if not out.get("ok"):
+            return 502, out
+    else:  # herdr: the pane.read socket call, same path as peek
+        res, fail = _read_pane(pane, n)
+        if fail:
+            return fail
+        out = {"ok": True, "pane_id": pane, "text": (res or {}).get("text")}
     text = _redact(_CTRL_RE.sub("", _ANSI_RE.sub("", str(out.get("text") or ""))))
     if text is None:
         return 503, {"ok": False, "error": "redaction unavailable"}
