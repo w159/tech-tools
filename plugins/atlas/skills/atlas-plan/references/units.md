@@ -1,6 +1,6 @@
 # Phase 2: Structure - question inventory, challenge pass, implementation units
 
-Ported from CE `ce-plan/references/structure.md`, hardened against atlas's execution model: unit fields and evidence strategies align with `atlas-orchestrate/references/implementation-units.md` so the plan is consumable without translation.
+Unit fields and evidence strategies align with `atlas-orchestrate/references/implementation-units.md` so the plan is consumable without translation.
 
 ## 1. Resolved-vs-deferred question inventory
 

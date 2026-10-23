@@ -1,6 +1,6 @@
 # Overlap Check
 
-Ported from CE `ce-compound` (`references/research.md` + `references/assembly.md` in w159/compound-engineering-plugin): a qualifying existing learning that became inaccurate or incomplete is UPDATED, never duplicated.
+A qualifying existing learning that became inaccurate or incomplete is UPDATED, never duplicated.
 
 ## Search roots
 

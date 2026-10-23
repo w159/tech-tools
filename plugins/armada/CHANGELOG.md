@@ -5,6 +5,8 @@
 - Fixed: PAN-OS `panos_commit` with `partial: true` and `panos_commit_all` now
   send `action=partial` / `action=all` on the commit request (node-panos
   `commit()` previously dropped it). The panos bundle was rebuilt.
+- Docs: the microsoft-365 department README now lists the CIPP connector's `cipp_*` userConfig keys instead of `MICROSOFT_*` variables for the removed Softeria server.
+- Connector READMEs and tests were updated for the move, including a regression test for the PAN-OS commit action.
 - The 13 vendor MCP connectors moved here from the atlas plugin: CrowdStrike
   Falcon, Auvik, Blumira, CIPP, ConnectWise Manage, Kaseya Spanning, KnowBe4,
   NinjaOne, PAN-OS, Paylocity, SonicWall, ThreatLocker, and Vanta. The servers

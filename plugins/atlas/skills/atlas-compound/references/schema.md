@@ -1,6 +1,6 @@
 # Learning Frontmatter Schema
 
-Adopted verbatim from CE `ce-compound`'s `references/schema.yaml` + `references/yaml-schema.md` (w159/compound-engineering-plugin), with two atlas adaptations: the target tree is atlas's EXISTING `docs/lessons/<category>/` (never CE's `docs/solutions/`), and new filenames use atlas's date-first convention `<YYYY-MM-DD>-<slug>.md` (enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`), never CE's undated slug-only name.
+The target tree is the EXISTING `docs/lessons/<category>/` (never `docs/solutions/`), and new filenames use the date-first convention `<YYYY-MM-DD>-<slug>.md` (enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`), never an undated slug-only name.
 
 ## Shared required fields (both tracks)
 
@@ -65,4 +65,4 @@ Array-of-string frontmatter items (`symptoms`, `applies_when`, `tags`, `related_
 - `date` matches `YYYY-MM-DD`; `framework_version` only on bug track; `tags` lowercase hyphen-separated; array lengths respected.
 - `title` matches the H1.
 
-Backward compatibility (ported from CE): bug-track fields found on existing knowledge-track docs are harmless legacy - do not strip them unless rewriting the doc for other reasons.
+Backward compatibility: bug-track fields found on existing knowledge-track docs are harmless legacy - do not strip them unless rewriting the doc for other reasons.

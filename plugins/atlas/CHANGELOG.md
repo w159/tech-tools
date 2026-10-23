@@ -20,6 +20,9 @@
 - One shared redactor, with best-effort SSN, routing number, account number, card number and date-of-birth patterns, is applied to stored transcript text and thinking. Existing rows are not rewritten.
 - The dashboard access log redacts token and ticket values.
 - Self-heal only execs a verified sibling install.
+- Hooks have time budgets, and the decision classifier URL must be loopback unless `ATLAS_DECISION_ALLOW_REMOTE=1`.
+- Self-fix verify runs in a clean temp checkout without network where `unshare` is available. Tests run with `ATLAS_SELFFIX=0` so a test dashboard never starts the scheduler.
+- tmux workers: team size is capped at 6 (`ATLAS_MAX_TEAM`), workers cannot dispatch subagents, scrollback is limited and secrets are masked in captured output, and orphan sessions are swept.
 
 ### Fixed
 
@@ -37,6 +40,12 @@
 - The dispatch template now passes the dispatch tripwire, and the docs say never to pass `model`.
 - Broken skill references are fixed.
 - Test suites pass regardless of session environment, user id or checkout path.
+- Serena heal no longer guesses a python interpreter.
+- The Stop hook gives each step its own time slice, so one slow step cannot starve the rest.
+- Rig spec writes take a lock. A live-pane reap guard now protects panes at boot, in the dashboard, in mux and in ingest.
+- herdr pane capture works.
+- The project selector needs a project marker unless the folder is pinned (`ATLAS_PINNED_PROJECTS`). The gateway strips the ticket too, and the health payload is split.
+- The dashboard has one HTML escape helper, and `keys.js` ignores shortcuts while you type in a field.
 
 ### Changed
 
@@ -49,6 +58,11 @@
 - Backend detection is cached for 30 seconds.
 - The install-parity checks are opt-in: set `ATLAS_CHECK_INSTALL_PARITY=1`.
 - Docs: Apache-2.0 `LICENSE` files for the repo root, atlas and armada; rewritten root README (quick start, what it changes on your machine); shorter plugin manifest and marketplace descriptions with shared keywords; changelog entries before 12.5.10 moved to `docs/archive/atlas-changelog-pre-12.5.10.md`; reference pages cleaned of dated logs and workspace data (observed connector logs are in `docs/archive/connector-config-observed-2026.md`).
+- `atlas_mux.py wait` can kill the team on timeout (opt in with `--kill-on-timeout` or `ATLAS_WAIT_KILL=1`). The feed is coalesced, and a team window is added when panes get narrow. tmux and rsync are checked before a spawn.
+- Hooks: one `event_dispatch.py` process per Pre/PostToolUse event replaces up to eight; Read, Bash and Edit hook overhead is about 30-45% lower. 18 hook programs / 22 bindings.
+- Friction events carry metadata. The database has versioned migrations (schema 2). `gate_block_spike` is a new alert-only finding miner. `atlas_doctor.py --redact-history [--apply]` backfills redaction over stored history. `atlas_todo.py notes-archive` archives old notes on demand.
+- New env vars documented in the reference: `ATLAS_MAX_TEAM`, `ATLAS_WAIT_KILL`, `ATLAS_PINNED_PROJECTS`, `ATLAS_DECISION_ALLOW_REMOTE`, `ATLAS_NOTE_MAX_BYTES`, `ATLAS_NOTE_ARCHIVE_BYTES`, `ATLAS_CHECK_INSTALL_PARITY`.
+- Skills: `atlas-ux-test` drives the browser through `atlas:ui-runtime-tester` and cites only files inside the plugin; lineage lines in reference files moved to `skills/PROVENANCE.md`.
 
 ## 15.0.0 - 2026-10-22
 

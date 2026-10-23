@@ -341,15 +341,15 @@ failures from wave 1.
 
 ## Status after implementation (2026-10-23)
 
-Waves 2 and 3 landed on `claude/atlas-audit-fixes`. Self-fix stays on by default; that is an owner decision, so item 1 was hardened rather than switched off. Existing `atlas.db` rows are not backfilled: the redactor applies to text stored from now on.
+Waves 2 to 5 landed on `claude/atlas-audit-fixes`. Self-fix stays on by default; that is an owner decision, so item 1 was hardened rather than switched off. Existing `atlas.db` rows can be redacted with `atlas_doctor.py --redact-history --apply`; the redactor applies to new text automatically.
 
 | # | Finding | What shipped |
 |---|---|---|
-| 1 | Self-fix on by default | Partially: still on by default (owner decision). Finding text is treated as untrusted data and worker changes that touch test or build config are held for human review. Remaining: per-finding launch approval and prompts built from templates. |
-| 2 | Self-fix verify runs worker code | Partially: verify runs with credentials removed from the environment, and changes to test or build config are held. Remaining: verify in a clean checkout of the base branch with the worker's diff applied and no network. |
+| 1 | Self-fix on by default | Partially: still on by default (owner decision). Finding text is treated as untrusted data and worker changes that touch test or build config are held for human review. Remaining: per-finding launch approval and prompts built from templates. Whether self-fix stays on by default is an owner decision and was not changed. |
+| 2 | Self-fix verify runs worker code | Shipped (with one platform limit): verify runs with credentials removed from the environment, changes to test or build config are held, and verify runs in a clean temp checkout without network where `unshare` is available. Where `unshare` is missing, verify still runs in the clean checkout but with network access. |
 | 3 | Notes injected as instructions | Shipped. Board notes reach agents wrapped as untrusted data. |
 | 4 | Dashboard token in URLs and logs | Shipped. `?token=` is rejected on the stream and terminal; browsers use a single-use 30 s ticket; non-browser callers use the header; the access log redacts token and ticket values. |
-| 5 | Unredacted transcripts, two redactors | Partially: one shared redactor with best-effort SSN, routing, account, card and date-of-birth patterns now covers transcript text and thinking. Remaining: existing rows are not rewritten, thinking is still stored (redacted), and `messages` has no retention. |
+| 5 | Unredacted transcripts, two redactors | Partially: one shared redactor with best-effort SSN, routing, account, card and date-of-birth patterns now covers transcript text and thinking. `atlas_doctor.py --redact-history [--apply]` backfills existing rows. Remaining: thinking is still stored (redacted) and `messages` has no retention; the owner declined both for now. |
 | 6 | Live leads reaped without `ps` | Shipped. |
 | 7 | Seat routing on rig error, `off` raises | Shipped. Routing falls back to herdr and never raises when no backend exists. |
 | 8 | Unbounded notes, full rescans | Shipped. Notes are capped at 8 KB (system exit and wrap-up notes are truncated), archived after 14 days once a file passes 2 MB, and the inbox reads only new bytes. Torn lines are repaired, a corrupt `channels.json` is preserved, and the lead-channel lock wait is bounded at 2 s. |
@@ -358,17 +358,12 @@ Waves 2 and 3 landed on `claude/atlas-audit-fixes`. Self-fix stays on by default
 | 11 | Non-hermetic test suites | Shipped. Suites pass regardless of session environment, user id and checkout path; install-parity checks are opt-in with `ATLAS_CHECK_INSTALL_PARITY=1`. |
 | 12 | Gate (a) ignores nested evidence | Shipped. Nested dated folders count, and (c), (d), (e) and (h) apply only to code-shipping runs. |
 
-Also shipped in these waves: self-heal execs only a verified sibling install; backend detection is cached for 30 s; the vendor connectors moved to the armada plugin; programmer ships its six code-review lens agents.
+Also shipped in these waves: self-heal execs only a verified sibling install; backend detection is cached for 30 s; the vendor connectors moved to the armada plugin; programmer ships its six code-review lens agents; hooks run through one `event_dispatch.py` process per event; tmux team cap, opt-in kill on wait timeout, secret masking and `history-limit`, coalesced panefeed, rig spec lock, live-pane reap guard, herdr capture, one skill reference copy, project selector marker, one JS escape helper, friction metadata, versioned DB migrations (schema 2) and the alert-only `gate_block_spike` miner.
+
+Found and fixed while implementing: `panos_commit` with `partial: true` and `panos_commit_all` did not send `action=` on the commit request (the node-panos client dropped it); both now send it, with tests.
 
 ### Endorsed designs not yet implemented
 
-- One hook dispatcher process per event (latency).
-- Exempt config and data extensions from the delegation mandate (m); needs an owner decision.
-- tmux team cap and kill-on-timeout; second team window by width; orphan sweep on spawn; `--disallowedTools Agent,Task` on the worker argv.
-- Secret masking in scrollback and panefeed rows; `history-limit` on atlas sessions.
-- Panefeed repaint coalescing.
-- A lock around `atlas_rig.create_pane` and `_ps` cache invalidation; a `pane_live` callback for the channel reaper.
-- `/herd/capture` through `_read_pane`.
-- One copy per skill reference topic with an identity check in `validate_skills.py`.
-- Selector filtering with `_real_project`; one JS escape helper.
-- Friction metadata side table; alert-only spike detector; a `SCHEMA_VERSION` bump rule with a migration test; retention for the `messages` table.
+- Exempt config and data extensions from the delegation mandate (m); the owner declined this for now.
+- Retention for the `messages` table and not storing thinking text; the owner declined both for now.
+- Per-finding launch approval and template-built prompts for self-fix (item 1 remainder).

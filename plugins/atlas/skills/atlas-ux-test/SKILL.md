@@ -203,14 +203,14 @@ for the chosen tier. The skill invokes it at the start of a run; the script
 does not dispatch agents (the skill does that in one parallel message). The
 script is read-only with respect to the app: it writes only under `RUN_DIR`.
 
-## webapp-testing integration
+## Browser delegation
 
-The browser-walk (phase 3) and fuzz (phase 4) phases delegate the actual
-browser work to `atlas:ui-runtime-tester` agents, which lean on the repo-root
-`webapp-testing` skill (`skills/webapp-testing/SKILL.md`) for Playwright
-primitives. See `references/webapp-testing-integration.md` for the boundary
-and what atlas-ux-test passes down to each delegated agent. webapp-testing is only
-invoked for `standard` and `full` tiers; `smoke` runs no browser walk.
+The browser-walk (phase 3) and fuzz (phase 4) phases delegate all browser work
+to `atlas:ui-runtime-tester` agents, one per persona or route. The agent uses
+the browser surface the harness offers and falls back to headless Playwright
+when none is available. This skill never navigates the app itself. See
+`references/webapp-testing-integration.md` for the boundary, the brief passed
+to each agent and the headless fallback. The `smoke` tier runs no browser walk.
 
 ## References (loaded on demand)
 
@@ -226,8 +226,8 @@ invoked for `standard` and `full` tiers; `smoke` runs no browser walk.
   compare-to-displayed-number rule.
 - `references/reporting.md` - deliverable shapes, completion-rate headline metric,
   count-reconciliation gate, timing rollup format.
-- `references/webapp-testing-integration.md` - how atlas-ux-test relates to the
-  repo-root `webapp-testing` skill, the delegation boundary, and what atlas-ux-test
+- `references/webapp-testing-integration.md` - the browser delegation boundary
+  (headless Playwright fallback included), and what atlas-ux-test
   passes down to each ui-runtime-tester agent.
 - `references/roles/<role>.md` - the six folded agent prompts (see roster above).
 - `scripts/ux-swarm-driver.sh` - run-directory setup and phase-plan emission
