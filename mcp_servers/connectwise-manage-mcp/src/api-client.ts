@@ -68,15 +68,20 @@ interface HttpResponseLike {
 }
 
 const INSECURE_TIMEOUT_MS = 30_000;
+/** Redirect hops followed by the TLS-relaxed transport (global fetch allows 20). */
+const INSECURE_MAX_REDIRECTS = 5;
 
-/**
- * Per-request TLS-relaxed transport (self-signed certs). Uses a throwaway
- * https.Agent with rejectUnauthorized:false scoped to this single request.
- */
-function insecureFetch(
+interface InsecureHop {
+  status: number;
+  location: string | undefined;
+  body: string;
+}
+
+/** One TLS-relaxed request, no redirect handling. */
+function insecureHop(
   url: URL,
   init: { method: string; headers: Record<string, string>; body?: string },
-): Promise<HttpResponseLike> {
+): Promise<InsecureHop> {
   return new Promise((resolve, reject) => {
     const isHttps = url.protocol === "https:";
     const requestFn = isHttps ? https.request : http.request;
@@ -95,13 +100,11 @@ function insecureFetch(
         res.on("data", (chunk: Buffer) => chunks.push(chunk));
         res.on("error", reject);
         res.on("end", () => {
-          const buf = Buffer.concat(chunks).toString("utf8");
-          const status = res.statusCode ?? 0;
+          const location = res.headers?.location;
           resolve({
-            ok: status >= 200 && status < 300,
-            status,
-            text: async () => buf,
-            json: async () => JSON.parse(buf) as unknown,
+            status: res.statusCode ?? 0,
+            location: Array.isArray(location) ? location[0] : location,
+            body: Buffer.concat(chunks).toString("utf8"),
           });
         });
       },
@@ -113,6 +116,63 @@ function insecureFetch(
     if (init.body !== undefined) req.write(init.body);
     req.end();
   });
+}
+
+/**
+ * Per-request TLS-relaxed transport (self-signed certs). Uses a throwaway
+ * https.Agent with rejectUnauthorized:false scoped to this single request.
+ *
+ * Global fetch follows redirects, and a self-hosted Manage server can answer
+ * 301/302 (http -> https, trailing-slash or case normalization), so this path
+ * follows them too, but only within bounds: at most INSECURE_MAX_REDIRECTS hops,
+ * same hostname only (the Authorization header is never sent to another host),
+ * and never https -> http. Any redirect it will not follow is returned as-is,
+ * so the caller sees the 3xx as a non-ok CwHttpError rather than a silent hop.
+ * Method handling mirrors fetch: 303 (and 301/302 on POST) becomes a bodiless
+ * GET; 307/308 keep the method and body.
+ */
+async function insecureFetch(
+  url: URL,
+  init: { method: string; headers: Record<string, string>; body?: string },
+): Promise<HttpResponseLike> {
+  let current = url;
+  let { method, body } = init;
+  for (let hop = 0; ; hop++) {
+    const res = await insecureHop(current, { ...init, method, body });
+    const redirect = [301, 302, 303, 307, 308].includes(res.status);
+    let next: URL | undefined;
+    if (redirect && res.location && hop < INSECURE_MAX_REDIRECTS) {
+      try {
+        next = new URL(res.location, current);
+      } catch {
+        next = undefined;
+      }
+      if (
+        next &&
+        (next.hostname !== current.hostname ||
+          (current.protocol === "https:" && next.protocol !== "https:") ||
+          (next.protocol !== "https:" && next.protocol !== "http:"))
+      ) {
+        next = undefined;
+      }
+    }
+    if (!next) {
+      return {
+        ok: res.status >= 200 && res.status < 300,
+        status: res.status,
+        text: async () => res.body,
+        json: async () => JSON.parse(res.body) as unknown,
+      };
+    }
+    if (
+      res.status === 303 ||
+      ((res.status === 301 || res.status === 302) && method === "POST")
+    ) {
+      method = "GET";
+      body = undefined;
+    }
+    current = next;
+  }
 }
 
 /**
