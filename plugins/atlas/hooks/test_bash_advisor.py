@@ -274,7 +274,18 @@ class MatchSecretsPatternsTest(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 self.assertIsNone(bash_advisor._match_secrets(cmd))
 
-    def test_secret_advisory_carries_compliance_framing(self):
+    def test_piped_secret_output_is_not_flagged(self):
+        for cmd in [
+            'echo "$GH_TOKEN" | gh auth login --with-token',
+            "printenv OPENAI_API_KEY | head -c 3",
+            "printf '%s' $AWS_SECRET_ACCESS_KEY | wc -c",
+        ]:
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(bash_advisor._match_secrets(cmd))
+        # `||` is not a pipe: the secret still prints
+        self.assertIsNotNone(bash_advisor._match_secrets("echo $GH_TOKEN || true"))
+
+    def test_secret_advisory_is_neutral_about_regulations(self):
         code, out = _run_main(
             json.dumps(
                 {
@@ -286,8 +297,10 @@ class MatchSecretsPatternsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("rotate", ctx)
-        self.assertIn("FTC Safeguards", ctx)
-        self.assertIn("SEC Reg S-P", ctx)
+        self.assertIn("transcript and logs", ctx)
+        self.assertNotIn("FTC", ctx)
+        self.assertNotIn("Reg S-P", ctx)
+        self.assertNotIn("GLBA", ctx)
 
     def test_secret_advisory_exit_zero_subprocess(self):
         proc = subprocess.run(
