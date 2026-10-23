@@ -37,6 +37,21 @@ None are used at runtime. `scripts/build-site.ts` (Pages build only) will not wo
 - `public/sw.js` (cache `v4` → `v5` → `v6`): every older cache is deleted at activation (v4 held `/atlas/` as `/`), `/atlas/**` navigations and top-level navigations to exactly `/` (any query) are never handled — the worker's own `fetch(request)` is not a document navigation to `server/atlas-landing.ts`, so the landing 302 was lost once the worker controlled the origin — the offline shell is kept per other path, and a notification click opens `/atlas/#/herdr?pane=…[&machine=…]` and picks a herdr page rather than the Atlas shell — 2026-10-07
 - `src/pwa.test.ts`, `src/pwa-notification.test.ts`: follow the `sw.js` change (v5 poisoned-cache and `/atlas/` test; Atlas notification-target URLs; clients carry `url`/`frameType`) — 2026-10-07
 
+## Upstream CI files that do not run from this repo
+
+The upstream CI and review configuration is vendored unchanged but is inert here. GitHub
+reads workflows only from `.github/workflows/` at the repository root, and CodeRabbit reads
+`.coderabbit.yaml` only from the repository root, so these copies under
+`plugins/atlas/colony/herdr-web-ui/` never run:
+
+- `.github/workflows/ci.yml`, `pages.yml`, `release.yml`, `remote-bundles.yml`, `windows-install.yml`
+- `.coderabbit.yaml`
+
+They are kept so a re-sync stays a clean diff against upstream. This repo's own workflow is the
+root `.github/workflows/release.yml`; the vendored tests run with the commands under "Update procedure". Do not rely on
+the vendored workflows for coverage, and do not edit them here; if one is wanted, copy it to
+the repo root and adjust its paths and triggers.
+
 ## Update procedure
 
 1. `git clone https://github.com/devswha/herdr-web-ui /tmp/herdr-src/herdr-web-ui && git -C /tmp/herdr-src/herdr-web-ui checkout <new-sha>`
