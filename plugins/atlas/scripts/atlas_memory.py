@@ -33,6 +33,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from recalled_memory import wrap_recalled_memory  # noqa: E402
+
 # fcntl is Unix-only; on Windows use msvcrt for file locking
 fcntl = None
 try:
@@ -88,7 +91,7 @@ _SECRET_PATTERNS = [
     (  # key=value / key: value, quoted values may hold spaces
         re.compile(
             r"(?i)\b([\w.-]*(?:password|passwd|pwd|passphrase|secret|token|api[_-]?key|apikey|access[_-]?key"
-            r"|private[_-]?key|credentials?|authorization)[\w-]*[\"']?\s*[:=]\s*)"
+            r"|private[_-]?key|credentials?|authorization|connection[_-]?string)[\w-]*[\"']?\s*[:=]\s*)"
             r"(?:\"[^\"\n]*\"|'[^'\n]*'|[^\s,;\"']+)"
         ),
         r"\1" + _REDACTED,
@@ -103,12 +106,96 @@ _SECRET_PATTERNS = [
 ]
 
 
+_SEP = r"([\s:#=-]*)"
+_MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?"
+_DATE = (
+    r"(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}"
+    + r"|" + _MONTH + r"\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}"
+    + r"|\d{1,2}(?:st|nd|rd|th)?\s+" + _MONTH + r",?\s+\d{4})"
+)
+# Nonpublic personal information. Labeled forms only, except dashed SSNs and
+# Luhn-valid card numbers, so bare order/ticket numbers survive.
+_NPI_PATTERNS = [
+    (re.compile(r"(?<![\w-])\d{3}-\d{2}-\d{4}(?![\w-])"), "[REDACTED:ssn]"),
+    (
+        re.compile(
+            r"(?i)(\b(?:ssn|social(?:\s+security)?(?:\s+(?:number|no\.?|num|#))?)\b)"
+            + _SEP
+            + r"(\d{3}[ -]?\d{2}[ -]?\d{4})(?![\w-])"
+        ),
+        r"\1\2[REDACTED:ssn]",
+    ),
+    (
+        re.compile(
+            r"(?i)(\b(?:routing|aba)\b(?:\s+(?:number|no\.?|num|#))?)"
+            + _SEP
+            + r"(\d{9})(?![\w-])"
+        ),
+        r"\1\2[REDACTED:routing]",
+    ),
+    (
+        re.compile(
+            r"(?i)(\b(?:acct|account)\b(?:\s+(?:number|no\.?|num|#))?)"
+            + _SEP
+            + r"(\d{6,17})(?![\w-])"
+        ),
+        r"\1\2[REDACTED:account]",
+    ),
+    (
+        re.compile(
+            r"(?i)(\b(?:dob|d\.o\.b\.?|date\s+of\s+birth|birth\s?date|born(?:\s+on)?)\b)"
+            + _SEP
+            + "("
+            + _DATE
+            + ")"
+        ),
+        r"\1\2[REDACTED:dob]",
+    ),
+]
+# 13-19 digits, optional single space/dash between digits, first digit 2-6 (card
+# IINs; keeps 13-digit epoch-millisecond timestamps, which start with 1, out).
+_CARD_RE = re.compile(r"(?<![\w-])[2-6](?:[ -]?\d){12,18}(?![\w-])")
+
+
+def _luhn_ok(digits: str) -> bool:
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = int(ch)
+        if i % 2:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
+def _redact_card(match: "re.Match[str]") -> str:
+    digits = re.sub(r"\D", "", match.group(0))
+    if 13 <= len(digits) <= 19 and _luhn_ok(digits):
+        return "[REDACTED:card]"
+    return match.group(0)
+
+
 def redact_secrets(text: str) -> str:
-    """Replace credential-shaped substrings (keys, bearer tokens, JWTs, passwords,
-    key=value secrets, private key blocks, URL credentials) with [REDACTED]."""
+    """The single redactor for everything atlas stores or re-injects.
+
+    Replaces credential-shaped substrings (keys, bearer tokens, JWTs, passwords,
+    key=value secrets, private key blocks, URL credentials) with [REDACTED], and
+    nonpublic personal identifiers with typed placeholders: [REDACTED:ssn],
+    [REDACTED:routing], [REDACTED:account], [REDACTED:card], [REDACTED:dob].
+
+    Best effort, not a guarantee. It is pattern matching, so it misses
+    unlabeled account numbers, free-form dates of birth, names and addresses,
+    and may occasionally redact a harmless string. Do not rely on it as the only
+    control over sensitive data. Falsy input is returned unchanged.
+    """
+    if not text:
+        return text
     for pattern, repl in _SECRET_PATTERNS:
         text = pattern.sub(repl, text)
-    return text
+    for pattern, repl in _NPI_PATTERNS:
+        text = pattern.sub(repl, text)
+    return _CARD_RE.sub(_redact_card, text)
 
 
 def _memory_dir() -> Path:
@@ -361,14 +448,17 @@ def filter_for_recall(entries: List[str]) -> List[str]:
     return kept
 
 
-def load_snapshot(root: Optional[str] = None) -> Dict[str, str]:
+def load_snapshot(root: Optional[str] = None, wrap: bool = True) -> Dict[str, str]:
     """Load memory entries and return a rendered snapshot for injection.
 
     Returns {"memory": "...", "project": "..."} with each value being
     the §-joined entries ready for injection into session boot context.
     With a `root`, "project" is that project's `.atlas/memory/MEMORY.md`
     (read-only: nothing is created); without one it is the legacy global
-    PROJECT.md.
+    PROJECT.md. With wrap=True (default) each non-empty value is framed as
+    untrusted recalled memory (see recalled_memory.wrap_recalled_memory);
+    callers that truncate first pass wrap=False and wrap the final text
+    themselves.
     """
     mem_dir = _memory_dir()
     mem_dir.mkdir(parents=True, exist_ok=True)
@@ -390,10 +480,13 @@ def load_snapshot(root: Optional[str] = None) -> Dict[str, str]:
         for e in filter_for_recall(list(dict.fromkeys(project_entries)))
     ]
 
-    return {
+    snap = {
         "memory": _render_block("MEMORY", memory_entries),
         "project": _render_block("PROJECT CONTEXT", project_entries),
     }
+    if wrap:
+        snap = {k: wrap_recalled_memory(v) for k, v in snap.items()}
+    return snap
 
 
 def _render_block(title: str, entries: List[str]) -> str:
