@@ -347,6 +347,23 @@ def pane_command(env: dict, argv: list) -> str:
     return "exec " + shlex.join(["env", *[f"{k}={v}" for k, v in env.items()], *argv])
 
 
+def with_token_file(root: str, name: str, pane: str) -> str:
+    """Issue `name`'s owner token and rewrite the tmux `pane` command so its shell loads it from a 0600 file and
+    unlinks it. The command text, tmux argv, ps and atlas_mux.log carry only the file path, never the token.
+    Residual exposure: the file exists on disk until the pane shell starts (owner-only, same user), and the token
+    sits in the worker's process env, readable by that user's other processes (the same reach as the secret file)."""
+    token = atlas_todo.issue_owner_token(root, name)
+    tokens = Path(root) / ".atlas" / ".run" / "tokens"
+    tokens.mkdir(parents=True, exist_ok=True)
+    fd, path = tempfile.mkstemp(dir=tokens, prefix=f"{name}-", suffix=".token")  # mkstemp creates 0600
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(token)
+    quoted = shlex.quote(path)
+    assert pane.startswith("exec "), pane
+    # expanded by the pane shell before exec, so the pane stays one `exec ...` command
+    return f'exec env "ATLAS_OWNER_TOKEN=$(cat {quoted}; rm -f {quoted})" {pane[5:]}'
+
+
 def _agents_dir(harness: str, override: str | None) -> Path:
     return Path(override) / harness if override else DEFAULT_AGENT_DIRS[harness]
 
@@ -1027,6 +1044,8 @@ def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> 
     ]
     env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
     env.update({k: os.environ[k] for k in FORWARDED_ENV if os.environ.get(k)})
+    # subprocess env= keeps the token out of argv; it is never in FORWARDED_ENV or the brief
+    env["ATLAS_OWNER_TOKEN"] = atlas_todo.issue_owner_token(root, args.name)
     res = _claude(*argv, env=env, cwd=os.path.abspath(args.cwd) if args.cwd else root)
     found = _BG_ID_RE.search(res.stdout)
     if res.returncode != 0 or not found:
@@ -1154,7 +1173,8 @@ def _spawn_registered(args, root: str, chan) -> int:
             pane_command(pins, worker),
             cwd=os.path.abspath(args.cwd) if args.cwd else root,
             run=args.run,
-            env=pins,
+            # the herdr socket env, not the typed command line, carries the token
+            env={**pins, "ATLAS_OWNER_TOKEN": atlas_todo.issue_owner_token(root, args.name)},
         )
         failure = None if made["ok"] else made["reason"]
         if made["ok"]:
@@ -1166,7 +1186,7 @@ def _spawn_registered(args, root: str, chan) -> int:
         failure = _open_window(
             session,
             args.name,
-            pane,
+            with_token_file(root, args.name, pane),
             {"rec": team, "role": args.agent} if team else None,
         )
     if failure:

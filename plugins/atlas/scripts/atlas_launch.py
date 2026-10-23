@@ -187,7 +187,19 @@ def launch(
         if use == "herdr":
             import atlas_seats
 
-            made = atlas_seats.create_pane(window, pane, cwd=cwd, run=run, env=pane_env)
+            made = atlas_seats.create_pane(
+                window,
+                pane,
+                cwd=cwd,
+                run=run,
+                # the herdr socket env, not the typed command line, carries the token
+                env={
+                    **pane_env,
+                    "ATLAS_OWNER_TOKEN": atlas_mux.atlas_todo.issue_owner_token(
+                        root, window
+                    ),
+                },
+            )
             if not made["ok"]:
                 return _fail(made["reason"], prompt_file=prompt_file)
             pane_id = made["pane_id"]
@@ -195,6 +207,7 @@ def launch(
                 root, window, chan or None, pane_id=pane_id
             )
         else:
+            pane = atlas_mux.with_token_file(root, window, pane)
             res = atlas_mux._tmux(
                 "new-window", "-d", "-t", f"{session}:", "-n", window, "-c", cwd, pane
             )

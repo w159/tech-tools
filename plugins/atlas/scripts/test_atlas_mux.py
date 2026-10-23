@@ -16,6 +16,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import shlex
 import shutil
 import subprocess
@@ -98,9 +99,11 @@ if [ "$1" = "--bg" ]; then
   echo "backgrounded · fakebg42 · $NAME"
   echo "  claude agents             list sessions"
   echo "env: ATLAS_LEAD_AGENT=[$ATLAS_LEAD_AGENT] ATLAS_WORKER_NAME=[$ATLAS_WORKER_NAME] ATLAS_LEAD_NAME=[$ATLAS_LEAD_NAME] ATLAS_CHANNEL=[$ATLAS_CHANNEL] ATLAS_TASKS_MIRROR=[$ATLAS_TASKS_MIRROR]" >>"$L"
+  echo "tok: [$ATLAS_OWNER_TOKEN]" >>"$L"
   exit "${FAKE_BG_EXIT:-0}"
 fi
 echo "env: ATLAS_WORKER_NAME=[$ATLAS_WORKER_NAME] ATLAS_PROJECT_ROOT=[$ATLAS_PROJECT_ROOT]" >>"$L"
+echo "tok: [$ATLAS_OWNER_TOKEN]" >>"$L"
 echo "fake-report-1"
 echo "fake-report-2"
 exit "${FAKE_HARNESS_EXIT:-0}"
@@ -3119,3 +3122,86 @@ class SpawnGhostMemberTests(Base):
             else []
         )
         self.assertNotIn("Ghost", names)
+
+
+class OwnerTokenDeliveryTests(Base):
+    """Each spawned worker gets an HMAC owner token as ATLAS_OWNER_TOKEN in its process env only:
+    never in argv text, FORWARDED_ENV, atlas_mux.log, channels.json or the board."""
+
+    TOK_RE = re.compile(r"tok: \[([0-9a-f]+)\]")
+
+    def spawn_worker(self, env, name="Alpha"):
+        self.make_agent(
+            "claude",
+            "explorer",
+            "---\nname: explorer\nmodel: opus\neffort: high\n---\nbody\n",
+        )
+        return _run(
+            "spawn", "--run", "r1", "--harness", "claude", "--name", name,
+            "--agent", "explorer",
+            "--prompt-file", self.make_prompt("p", "colonize the pane"),
+            "--agents-dir", os.path.join(self.root, "agents"),
+            env=env, cwd=self.root,
+        )  # fmt: skip
+
+    def worker_token(self):
+        log = pathlib.Path(self.state, "log").read_text(encoding="utf-8")
+        found = self.TOK_RE.findall(log)
+        self.assertTrue(found, log)
+        return found[-1]
+
+    def assert_token_stays_out_of_text(self, token):
+        import atlas_mux
+
+        self.assertNotIn("ATLAS_OWNER_TOKEN", atlas_mux.FORWARDED_ENV)
+        for line in _tmux_log_calls(self.state):
+            self.assertNotIn(token, line)
+        for argv_file in pathlib.Path(self.state).glob("argv.*"):
+            self.assertNotIn(token, argv_file.read_text(encoding="utf-8"))
+        for path in (pathlib.Path(self.root) / ".atlas").rglob("*"):
+            if path.is_file():
+                self.assertNotIn(token, path.read_text(errors="replace"), str(path))
+        leftovers = [p.name for p in (pathlib.Path(self.root) / ".atlas").rglob("*.token")
+                     if p.is_file()]  # fmt: skip
+        self.assertEqual([], leftovers)
+
+    def note_cli(self, token, name="Alpha"):
+        env = dict(self.spawn_env())
+        env.pop("ATLAS_OWNER_TOKEN", None)
+        if token:
+            env["ATLAS_OWNER_TOKEN"] = token
+        out = subprocess.run(
+            [sys.executable, str(SCRIPT.parent / "atlas_todo.py"), "note",
+             "--root", self.root, "--owner", name, "--to", "lead", "hello"],
+            capture_output=True, text=True, env=env, cwd=self.root, timeout=60,
+        )  # fmt: skip
+        return out.returncode, out.stdout + out.stderr
+
+    def test_tmux_pane_worker_gets_a_verifying_token_outside_argv_and_logs(self):
+        rc, data, _, err = self.spawn_worker(self.spawn_env())
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Alpha")
+        token = self.worker_token()
+        self.assertTrue(_atlas_todo().verify_owner_token(self.root, "Alpha", token))
+        self.assert_token_stays_out_of_text(token)
+
+    def test_claude_bg_worker_gets_a_verifying_token_outside_argv_and_logs(self):
+        env = self.spawn_env()
+        env["ATLAS_COLONY_TRANSPORT"] = "claude-bg"
+        env["HERDR_SOCKET_PATH"] = os.path.join(self.state, "no-herdr.sock")
+        rc, data, _, err = self.spawn_worker(env)
+        self.assertEqual(0, rc, (data, err))
+        token = self.worker_token()
+        self.assertTrue(_atlas_todo().verify_owner_token(self.root, "Alpha", token))
+        self.assert_token_stays_out_of_text(token)
+
+    def test_worker_note_cli_needs_the_env_token(self):
+        rc, data, _, err = self.spawn_worker(self.spawn_env())
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Alpha")
+        token = self.worker_token()
+        code, out = self.note_cli(token)
+        self.assertEqual(0, code, out)
+        code, out = self.note_cli(None)
+        self.assertNotEqual(0, code, out)
+        self.assertIn("owner_token_required", out)
