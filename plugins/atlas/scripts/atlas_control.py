@@ -685,6 +685,16 @@ _AD = {
         "tmux",
         "shell",
     ),
+    "ATLAS_MAX_TEAM": (
+        "Most workers one spawn-team may start (each is a paid claude session). A larger team is refused with a JSON error.",
+        "6",
+        "shell",
+    ),
+    "ATLAS_WAIT_KILL": (
+        "`1` makes `atlas_mux.py wait` kill the team's panes when its timeout expires, same as --kill-on-timeout.",
+        "off",
+        "shell",
+    ),
     "ATLAS_DECISION": (
         "`off` skips the local-model prompt classifier and keeps the regex result.",
         "on",
