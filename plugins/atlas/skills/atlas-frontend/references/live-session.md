@@ -26,7 +26,7 @@ An occupied port that cannot be attributed to the intended project server remain
 
 Resolve the selected instance's actual URL before handoff. The resolved port seeds `http://localhost:<port>` as the default candidate, but server output or a user correction replaces that candidate when it identifies a different URL. Probe the actual URL for up to 30 seconds and attribute success to the selected instance; a response from another process is not success.
 
-- **Reachable:** hand off with the browser-opening capability available in the active harness (Claude_Preview, webapp-testing/Playwright, or the browser tool). If there is none or the handoff fails, print the URL - browser handoff is a convenience, not a gate.
+- **Reachable:** hand off with the browser-opening capability available in the active harness (Claude_Preview, headless Playwright, or the browser tool). If there is none or the handoff fails, print the URL - browser handoff is a convenience, not a gate.
 - **Not reachable:** show diagnostics derived from the selected instance; include the last 20 log lines only when this run launched it and owns those logs. Ask whether to correct the server URL or start configuration, or stop.
 
 Do not continue into the polish loop unless reachability is attributed to the selected instance. Leave the server running for the whole loop; tear it down only if this run launched it and the user is finished.

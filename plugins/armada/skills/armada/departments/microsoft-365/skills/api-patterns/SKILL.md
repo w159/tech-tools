@@ -15,7 +15,7 @@ Microsoft Graph is the unified REST API surface for all M365 services (users, ma
 
 ### Token Scope for MSP Operations
 
-The Softeria MS-365 MCP server (`--org-mode`) accepts a Bearer token per request via the `Authorization` header. The token must be obtained from Microsoft Entra using the `common` endpoint (multi-tenant) with the following scopes:
+The cipp connector authenticates to CIPP with its own `cipp_*` settings (see the department README) and needs no Graph token from you. For direct Graph calls, send a Bearer token in the `Authorization` header. The token must be obtained from Microsoft Entra using the `common` endpoint (multi-tenant) with the following scopes:
 
 | Scope | Purpose |
 |-------|---------|
@@ -101,7 +101,7 @@ Graph uses server-side pagination. Always check for `@odata.nextLink` in respons
 }
 ```
 
-The Softeria MCP server handles pagination automatically for supported operations.
+Follow `@odata.nextLink` until it is absent.
 
 ## Delta Queries (Incremental Sync)
 
