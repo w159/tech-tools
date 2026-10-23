@@ -89,7 +89,7 @@ async function statusTool(): Promise<SdkCallToolResult> {
   // without this a caller can read "configured" as "working".
   const authCheck = creds ? await liveAuthCheck() : 'SKIPPED (no API key)';
 
-  // Unconfigured is a reduced mode, not an error (see AUDIT_2026-06-12);
+  // Unconfigured is a reduced mode, not an error (see docs/audits/2026-06-12-threatlocker-mcp-audit.md);
   // only a rejected key flips isError.
   return credentialStatusResult({
     vendor: 'ThreatLocker', credStatus, authCheck, domains: DOMAINS, domainsLabel: 'Available domains',

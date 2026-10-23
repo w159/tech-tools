@@ -1,5 +1,9 @@
 # Standalone Skills Audit - 2026-06-12
 
+Note (moved 2026-10-23 from `skills/SKILLS_AUDIT_2026-06-12.md`): this audit counted 13 standalone
+skills. `skills/` now holds 12 (counted by directory and by `SKILL.md` file). The body below is
+left as written on 2026-06-12.
+
 Scope: the 13 standalone skills under `skills/`. Evaluated against
 `plugins/_standards/skill-quality-checklist.md`, with primary focus on the
 `description` field (the field that drives skill triggering).

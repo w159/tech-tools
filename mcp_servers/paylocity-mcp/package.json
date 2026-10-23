@@ -13,7 +13,8 @@
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
     "pack:mcpb": "node scripts/pack-mcpb.js",
-    "bundle:atlas": "tsup --config tsup.bundle.config.ts"
+    "bundle:atlas": "tsup --config tsup.bundle.config.ts",
+    "test": "vitest run"
   },
   "keywords": [
     "paylocity",
@@ -33,7 +34,8 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.12"
   },
   "engines": {
     "node": ">=18.0.0"

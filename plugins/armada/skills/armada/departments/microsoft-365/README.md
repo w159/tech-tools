@@ -56,14 +56,13 @@ MICROSOFT_TENANT_ID=your-tenant-id  # or "common" for multi-tenant
 
 ### 5. Add to Claude Code
 
-The `.mcp.json` configures the Softeria MS-365 MCP server:
-
-```bash
-# Add to your Claude Code project
-cp .mcp.json /path/to/your/project/.mcp.json
-```
-
-Or add to your Claude Code MCP settings with the env vars from step 4.
+This department's `.mcp.json` is a pointer file, not a server launch config. It
+records that the `cipp` connector is provided by the armada plugin itself: the
+server entry ships in `plugins/armada/.mcp.json`, and its credentials come from
+the `userConfig` keys in `plugins/armada/.claude-plugin/plugin.json`. Do not
+copy the pointer file into a project. Installing the armada plugin and
+supplying the CIPP credentials is enough; setup details are in
+`skills/armada/references/connector-provisioning.md`.
 
 ## Commands
 
