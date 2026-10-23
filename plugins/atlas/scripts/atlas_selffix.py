@@ -25,8 +25,10 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -555,6 +557,69 @@ def _scrubbed_env() -> dict:
     return {k: v for k, v in os.environ.items() if not SECRET_ENV.search(k)}
 
 
+def _netns_prefix() -> list | None:
+    """argv prefix that runs a command with no network, or None when this host
+    cannot do it: Linux `unshare -n` (as root) or `unshare -rn` (unprivileged
+    user namespace), each probed once with `true`."""
+    if not sys.platform.startswith("linux"):
+        return None
+    exe = shutil.which("unshare")
+    if not exe:
+        return None
+    for flags in (["-n"], ["-rn"]):
+        try:
+            p = subprocess.run([exe, *flags, "true"], capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if p.returncode == 0:
+            return [exe, *flags]
+    return None
+
+
+def _run_sandboxed(top, branch, argv) -> tuple:
+    """Run the verify `argv` in a throwaway detached worktree of the base commit
+    with the worker's diff applied, never in the worker's own worktree. Returns
+    (ok, output, isolation_note). The temp worktree is always removed."""
+    tmp = tempfile.mkdtemp(prefix="atlas-selffix-verify-")
+    sandbox = os.path.join(tmp, "wt")
+    try:
+        rc, base = _git(["merge-base", "HEAD", branch], top)
+        base = base if rc == 0 and base else "HEAD"
+        rc, o = _git(["worktree", "add", "--detach", sandbox, base], top)
+        if rc:
+            return False, f"sandbox worktree creation failed: {o}", "sandbox not created"
+        patch = os.path.join(tmp, "worker.patch")
+        rc, o = _git(["diff", "--binary", f"--output={patch}", f"{base}...{branch}"], top)
+        if rc:
+            return False, f"could not diff worker branch: {o}", "sandbox not verified"
+        if os.path.isfile(patch) and os.path.getsize(patch):
+            rc, o = _git(["apply", "--binary", patch], sandbox)
+            if rc:
+                return False, f"worker diff did not apply to base {base[:12]}: {o}", "sandbox not verified"
+        prefix = _netns_prefix()
+        note = "network isolated (unshare)" if prefix else "network not isolated"
+        try:
+            p = subprocess.run(
+                [*(prefix or []), *argv],
+                shell=False,
+                cwd=sandbox,
+                env=_scrubbed_env(),
+                capture_output=True,
+                text=True,
+                timeout=VERIFY_TIMEOUT_S,
+            )
+            ok, out = p.returncode == 0, (p.stdout + p.stderr)[-1500:]
+        except subprocess.TimeoutExpired:
+            ok, out = False, f"verify timed out after {VERIFY_TIMEOUT_S}s"
+        except OSError as e:  # runner not installed / not executable
+            ok, out = False, f"verify could not start: {e}"
+        return ok, out, note
+    finally:
+        _git(["worktree", "remove", "--force", sandbox], top)
+        _git(["worktree", "prune"], top)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def _verify(conn, f, top) -> str:
     """running -> verifying -> ready | retry/failed."""
     fid, wt, branch = f["id"], f["fix_worktree"], f["fix_branch"]
@@ -577,23 +642,9 @@ def _verify(conn, f, top) -> str:
         return f"#{fid} held for review: {', '.join(infra[:5])}"
     argv, why = _resolve_verify(f)
     cmd = shlex.join(argv)
-    try:
-        p = subprocess.run(
-            argv,
-            shell=False,
-            cwd=wt,
-            env=_scrubbed_env(),
-            capture_output=True,
-            text=True,
-            timeout=VERIFY_TIMEOUT_S,
-        )
-        ok, out = p.returncode == 0, (p.stdout + p.stderr)[-1500:]
-    except subprocess.TimeoutExpired:
-        ok, out = False, f"verify timed out after {VERIFY_TIMEOUT_S}s"
-    except OSError as e:  # runner not installed / not executable
-        ok, out = False, f"verify could not start: {e}"
-    if why:
-        out = f"{why}\n{out}"
+    ok, out, isolation = _run_sandboxed(top, branch, argv)
+    why = f"{why}\n{isolation}" if why else isolation
+    out = f"{why}\n{out}"
     if not ok:
         return _fail(conn, fid, f"verify failed: `{cmd}`\n{out}")
     base = _baseline(f)
