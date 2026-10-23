@@ -721,15 +721,19 @@ def _is_junk_project(root) -> bool:
     return atlas_control.is_fixture_project(root)
 
 
-def _junk_project_row(root) -> bool:
+def _junk_project_row(root, require_marker=False) -> bool:
     """Rows that are not a project of their own: $HOME, worktrees/caches/scratch, and
-    subdirs of another repo (those belong to the enclosing repo's project)."""
+    subdirs of another repo (those belong to the enclosing repo's project).
+    require_marker (selector only) also drops marker-less dirs such as ~/Downloads;
+    the reaper leaves it off so .atlas-only roots keep being reaped."""
     if not root:
         return True
-    from atlas_dash_work import _junk_root
+    from atlas_dash_work import _junk_root, _real_project
 
     d = os.path.realpath(root)
     if d == os.path.realpath(os.path.expanduser("~")) or _junk_root(d):
+        return True
+    if require_marker and not _real_project(d):
         return True
     p = os.path.dirname(d)
     while p != os.path.dirname(p):
@@ -758,7 +762,7 @@ def _projects(conn, recent_only=True, editable_only=False):
     )
     out = []
     for r in rows:
-        if _junk_project_row(r.get("root_path")) or (
+        if _junk_project_row(r.get("root_path"), require_marker=True) or (
             editable_only and _is_junk_project(r.get("root_path"))
         ):
             continue
