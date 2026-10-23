@@ -147,23 +147,54 @@ function stopPolling() {
   pollTimer = null;
 }
 
-/** Open the single EventSource. Safe to call twice. EventSource retries itself; polling covers the gap. */
-export function startStream() {
-  if (source || typeof EventSource === "undefined") {
-    if (!source) startPolling();
+const RECONNECT_MS = 3000;
+let reconnectTimer = null;
+let streamWanted = false;
+
+/** Mint a single-use stream ticket; the long-lived token never goes into a URL. */
+async function mintStreamTicket() {
+  const res = await post("/api/v2/stream/ticket", {});
+  if (!res || !res.ticket) throw new ApiError("no stream ticket issued");
+  return res.ticket;
+}
+
+function scheduleReconnect() {
+  if (!streamWanted || reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    openSource();
+  }, RECONNECT_MS);
+}
+
+/** One EventSource per ticket: tickets burn on use, so every (re)connect mints a new one. */
+async function openSource() {
+  if (source || !streamWanted) return;
+  let ticket;
+  try {
+    ticket = await mintStreamTicket();
+  } catch (e) {
+    live.set("offline");
+    startPolling();
+    scheduleReconnect();
     return;
   }
-  source = new EventSource(`${BASE}/api/v2/stream${qs({ token: TOKEN })}`);
-  source.onopen = () => {
+  if (source || !streamWanted) return;
+  const es = new EventSource(`${BASE}/api/v2/stream${qs({ ticket })}`);
+  source = es;
+  es.onopen = () => {
     live.set("live");
     stopPolling();
   };
-  source.onerror = () => {
+  es.onerror = () => {
+    // The browser would retry the same (now burnt) URL; drop it and reconnect with a fresh ticket.
+    es.close();
+    if (source === es) source = null;
     live.set("reconnecting");
     startPolling();
+    scheduleReconnect();
   };
   for (const t of TOPICS) {
-    source.addEventListener(t, (ev) => {
+    es.addEventListener(t, (ev) => {
       try {
         topics[t].set(JSON.parse(ev.data));
       } catch (e) {
@@ -171,6 +202,17 @@ export function startStream() {
       }
     });
   }
+}
+
+/** Start the live stream (ticket-authenticated). Safe to call twice; polling covers any gap. */
+export function startStream() {
+  if (typeof EventSource === "undefined") {
+    startPolling();
+    return;
+  }
+  if (streamWanted) return;
+  streamWanted = true;
+  openSource();
 }
 
 let prefsVersion = 0; // bumped by savePrefs so an older GET never overwrites a newer save

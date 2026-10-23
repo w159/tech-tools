@@ -191,15 +191,13 @@ export function createAtlasGateway(options: AtlasGatewayOptions): AtlasGateway {
         body = read;
       }
 
-      const isStream = rest === "/api/v2/stream";
       // abort the dashboard when the browser goes away, so its SSE thread is released
       const controller = new AbortController();
       request.signal.addEventListener("abort", () => controller.abort(), { once: true });
       const send = async (refresh: boolean): Promise<Response> => {
         const atlasToken = await token(refresh);
-        const href = target.href;
-        const to = isStream ? href + (href.includes("?") ? "&" : "?") + `token=${encodeURIComponent(atlasToken)}` : href;
-        return upstreamRequest(request, to, body, atlasToken, controller.signal);
+        // the long-lived token only ever travels in the X-Atlas-Token header, never in a URL
+        return upstreamRequest(request, target.href, body, atlasToken, controller.signal);
       };
 
       try {
