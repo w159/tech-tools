@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { runCaptureSync } from "./proc";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import {
@@ -269,7 +269,10 @@ test("loadBridgedHooks stays turn-only; the session-end family loads through its
  * Process env is restored afterwards, including variables that were originally unset.
  */
 async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
-	const scratch = join(import.meta.dir, "..", "..", "..", ".scratch");
+	let scratch = join(import.meta.dir, "..", "..", "..", ".scratch");
+	// A checkout that itself lives under a system temp root (CI staging in /tmp) would put the fixture back inside the
+	// exempt scratch space; fall back to a dot-dir under the real home for that layout only (read before HOME is pinned).
+	if ([tmpdir(), "/tmp", "/private/tmp"].some(r => scratch.startsWith(`${r}/`))) scratch = join(homedir(), ".atlas-test-scratch");
 	mkdirSync(scratch, { recursive: true });
 	const root = mkdtempSync(join(scratch, "bridge-real-"));
 	const emptyHome = mkdtempSync(join(dir, "home-"));
