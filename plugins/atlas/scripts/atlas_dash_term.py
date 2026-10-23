@@ -410,19 +410,11 @@ def _deny(handler, code: int, error: str) -> None:
 def handle_ws(handler, query: dict, token: str) -> None:
     """Upgrade and bridge one PTY. Host/Origin were already checked by the dashboard
     guard; the token, request shape and target are validated here before any 101."""
-    if query.get("ticket"):
-        params = redeem(query["ticket"])
-        if params is None:
-            return _deny(handler, 403, "bad_ticket")
-        query = (
-            params  # the ticket carries kind/target/cwd/size; nothing else is trusted
-        )
-    elif hmac.compare_digest((query.get("token") or "").encode(), token.encode()):
-        sys.stderr.write(
-            "[atlas-dashboard] term/ws token= query is deprecated, POST /api/v2/term/ticket and use ticket=\n"
-        )
-    else:
-        return _deny(handler, 403, "bad_token")
+    ticket = query.get("ticket")
+    params = redeem(ticket) if ticket else None
+    if params is None:  # no ticket, unknown/used/expired; a ?token= is never accepted
+        return _deny(handler, 403, "bad_ticket" if ticket else "bad_token")
+    query = params  # the ticket carries kind/target/cwd/size; nothing else is trusted
     h = handler.headers
     key = (h.get("Sec-WebSocket-Key") or "").strip()
     try:
