@@ -8,14 +8,19 @@ self-improvement hooks (memory capture, chronicle facet capture, nudge, session
 ingest) make the agent better in a codebase the more it is used. No hook creates a
 skill or a slash command: durable knowledge goes to findings, docs, and memory.
 
+Terms used below: a "colony" is the set of named worker subagents a lead session
+runs together, sharing one todo board. "omp" is the oh-my-pi coding agent CLI
+(`@oh-my-pi/pi-coding-agent`), which atlas also supports through the extension
+package in `omp/`.
+
 Org deployment (11 departments, 156 department skills) lives in the separate
 `armada` plugin in this repo; install it alongside atlas only for org use.
 
 ## The skill fleet (39 skills, plainly named)
 
-One manual skill, 38 auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
+Three manual skills (atlas-setup, atlas-prompt, atlas-tui) and 36 auto-trigger skills. Auto-trigger comes primarily from each skill's `description` (Claude Code
 loads on relevance); `when_to_use` is retained as atlas-local routing metadata.
-The manual skill sets `disable-model-invocation: true`.
+Manual skills set `disable-model-invocation: true`; you run them by name.
 
 Overlapping capabilities are modes of one skill rather than separate skills: atlas-setup (onboard, install, connectors, repair, tour), atlas-dogfood (full, smoke), atlas-frontend (build, component, polish), atlas-run-watch (jobs, PR CI), atlas-bakeoff (bakeoff, verdict), atlas-brainstorm (requirements, strategy), atlas-orchestrate (engine, feature flow), atlas-ship (full, commit-only), atlas-status (status, announce), atlas-audit (code, architecture, self, act), atlas-sweep (sweep, analyze). Each SKILL.md opens with its mode table. atlas keeps its own orchestrator, named agents, docs/.atlas SSOT, findings ledger and explicit-push-consent policy as the execution and safety authority throughout.
 
@@ -39,7 +44,7 @@ Overlapping capabilities are modes of one skill rather than separate skills: atl
 | atlas-optimize | auto | Single-experiment loop: baseline, one hypothesis, one change, identical re-measure, real delta reported. Use when a working system's metric should improve; not for bugs or restructuring. |
 | atlas-orchestrate | auto | Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification. Includes a feature flow that builds one feature across UI, API and data with the squad. Use when a task spans layers or the repo. |
 | atlas-plan | auto | Writes an implementation-ready plan to docs/plans/ from a brainstorm artifact or feature description, with U-numbered units and a verification contract. Use when requirements are settled. |
-| atlas-prompt | auto | Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous. Use when a request is underspecified. |
+| atlas-prompt | MANUAL | Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous. Use when a request is underspecified. |
 | atlas-proof | auto | Human-review workflow for project markdown: publishes a doc for review, records anchored comments in a sidecar file, folds feedback back. Use to share a plan, spec or draft for review; not proofreading. |
 | atlas-prototype | auto | Builds a throwaway prototype in an isolated run directory to answer one visual, interaction or product-shape question, then promotes decisions into a plan or discards it. Use when showing beats arguing. |
 | atlas-pulse | auto | Generates a time-windowed product pulse (usage, performance, errors) from wired telemetry, read-only, into docs/pulses/. Use for a product pulse or usage and error summary. |
@@ -55,7 +60,7 @@ Overlapping capabilities are modes of one skill rather than separate skills: atl
 | atlas-sweep | auto | Turns feedback into triaged findings. Sweep mode ingests new GitHub issues, triages them, verifies claimed fixes and updates a docs/features/ triage doc, never auto-closing or replying. Analyze mode turns a transcript, support thread or notes into findings tied to verbatim quotes. Use when feedback needs triage or analysis. |
 | atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs. Use to build or test an iOS or Xcode project; macOS only. |
 | atlas-testing | auto | Plans, generates, and runs tests in any language: detects the stack and existing tests, maps gaps across every testing type (unit through mutation, fuzz, load, security, accessibility), recommends the highest-value next test, writes it, runs it, and reports evidence. Use to add tests, choose a test strategy, or find what testing is missing. |
-| atlas-tui | auto | Opens the Atlas Colony workspace TUI (SESSIONS, CHANNEL, PEEK, STEER) over live colony tmux workers (omp/claude/codex); read the channel, steer or hold a seat. |
+| atlas-tui | MANUAL | Opens the Atlas Command Center, a live terminal UI over the colony's tmux workers (topology, seats, feed, system). Use to watch or attach to running colony workers. |
 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness. Use for a full UI/UX pass or persona testing. |
 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing. Use when a plugin is believed complete. |
 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify. Use when architecture docs changed, before the completion gate, or when wiki diagrams are stale. |
@@ -65,11 +70,10 @@ Overlapping capabilities are modes of one skill rather than separate skills: atl
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json     # manifest (name: atlas, v12.8.0; 1 userConfig key, atlas_mod_sound)
+|-- .claude-plugin/plugin.json     # manifest (name: atlas; 1 userConfig key, atlas_mod_sound)
 |-- package.json                   # omp.extensions entry ("./omp/index.ts") for marketplace installs
 |-- contracts/                     # shared rules read by the Python hooks AND the omp modules (native-tools, mandates, tool-names, hook-bridge)
 |-- omp/                           # omp extension package (index.ts, hook-bridge, mandates, style, advisor, workers, ...; omp/agents/ is GENERATED by gen-agents.ts)
-|-- mcp/                           # (no connector servers here: the 13 vendor connectors live in plugins/armada/mcp/ and plugins/armada/.mcp.json)
 |-- hooks/                         # 17 hook programs / 22 bindings (16 in hooks/ + atlas_doctor.py in scripts/, SessionStart; hooks.json wires them all)
 |   |-- session_boot.py            #   SessionStart: activate runtime, surface lessons
 |   |-- prompt_optimizer.py        #   UserPromptSubmit: optional rewrite + orchestration arm-early classifier
@@ -92,7 +96,7 @@ atlas/
 |   |-- worker_report_gate.py      #   SubagentStop: block an atlas:* subagent whose final message is not the fixed report container (once per agent_id; fail-open)
 |   |-- docs_drift.py              #   not a hook; shared find_root/docs_drift/git_changed_paths used by completion_gate.py and docs_drift_watch.py
 |   `-- validate-readonly-query.sh #   not auto-loaded; DB-audit subagents wire it during read-only audits
-|-- scripts/                       # 25 non-test tools, each with a test_*.py beside it: atlas_doctor.py (repair + --mine miners; also wired via hooks.json --hook, SessionStart),
+|-- scripts/                       # 70 non-test Python files (including subpackages); the main ones: atlas_doctor.py (repair + --mine miners; also wired via hooks.json --hook, SessionStart),
 |                                  # atlas_db.py (observability), atlas_todo.py (durable todo board + notes), atlas_finding.py (verifier's findings.json write path),
 |                                  # atlas_dashboard.py + atlas_control.py (local dashboard and its control plane), atlas_mux.py (colony workers: herdr panes, tmux fallback), atlas_herdr.py + atlas_launch.py + atlas_remote.py (herdr colony, pinned binary, tailnet access), atlas_wt.py (isolated-worker git worktrees: add/status/merge/prune, branch worker/<agent>, worktree .atlas/wt/<agent>), atlas_packs.py,
 |                                  # atlas_memory.py, atlas_curator.py, atlas_context_optimizer.py, atlas_hook_guard.py, session_ingest.py, sweep_state.py,
@@ -166,11 +170,13 @@ exceptions fail open. `fallow_gate.py` also denies on purpose (`verdict: fail`
 from the fallow CLI on git commit/push) but is fail-open by design when the
 CLI itself is missing (`ATLAS_FALLOW=off`).
 
-`completion_gate.py` conditions (a)-(l) gate sessions flagged `orchestrating`
-in the observability DB. Condition (m), the delegation mandate, also blocks
-once in an unflagged `docs/` project when the main thread shipped non-docs
-code with zero `Task`/`Agent` dispatches; sidechains are exempt and errors
-fail open. The flag is set by two independent writers -
+`completion_gate.py` has 17 conditions, (a) through (q). Conditions (a)-(l) and
+(n)-(p) gate sessions flagged `orchestrating` in the observability DB. Condition
+(m), the delegation mandate, also blocks once in an unflagged `docs/` project
+when the main thread shipped non-docs code with zero `Task`/`Agent` dispatches;
+sidechains are exempt and errors fail open. Condition (q) blocks while a
+`worker/*` branch holds unmerged commits. The authoritative list is the
+docstring of `hooks/completion_gate_core.py`. The flag is set by two independent writers -
 `dispatch_tripwire.py`, when a `Skill` dispatch names an orchestration skill
 (gated by `ATLAS_TRIPWIRE`), and `prompt_optimizer.py`'s `arm_orchestration`,
 when a prompt reads as substantive engineering work (gated by
@@ -181,7 +187,7 @@ default `http://127.0.0.1:11434`, model `nimble`). A confident conversation
 label vetoes a regex arm. A confident `code_change` or `investigation`
 label can arm a regex miss. Timeout, low confidence, a bare defect label,
 and `ATLAS_DECISION=off` leave the regex answer in place. File and sqlite
-gates are not model calls. Either write arms conditions (a)-(l); disabling both
+gates are not model calls. Either write arms the orchestration-scoped conditions; disabling both
 writers prevents new flags but does not disable (m) or clear existing flags.
 `ATLAS_GATE=off` disables the whole completion gate.
 
@@ -200,7 +206,7 @@ writers prevents new flags but does not disable (m) or clear existing flags.
 | `delegation_prewarn.py` | `PostToolUse` (Edit/Write/MultiEdit/NotebookEdit) | Once per session, at the lead's first inline non-docs edit, warns that `completion_gate.py` condition (m) will block at Stop unless an atlas:implementer is dispatched. |
 | `docs_drift_watch.py` | `PostToolUse` (Edit/Write/MultiEdit/NotebookEdit) | Inline backstop for `completion_gate.py` condition (f): warns the moment a non-docs edit ships without a `docs/CHANGELOG.md` entry, instead of waiting for Stop. Debounced per session_id (first drifting edit, then every 5th; resets when the CHANGELOG reappears in the diff or a new/missing session_id arrives); silent with no `docs/`, `ATLAS_GATE=off`, or on a `docs/`/`.atlas/` path. The backing `git diff` is cached for 2s (`time.monotonic`) to keep the common-path cost low |
 | `stop_tail.py` | `Stop` | Runs `ingest_session.py`, `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in one interpreter (one cold start instead of four); each keeps its own logic, throttle and fail-open handling |
-| `completion_gate.py` | `Stop` | Thirteen conditions block a premature "done" until the definition-of-done holds. Condition (m) independently blocks once when a main-thread run in a `docs/` project shipped non-docs code with zero `Task`/`Agent` dispatches, even without an orchestration flag; sidechains are exempt and errors fail open. Conditions (a)-(l) remain orchestration-scoped: evidence artifact and independent verifier (only once this run shipped non-docs code), verifier coverage, a drained todo list, and -- condition (k) -- a todo list that was made at all, since an absent list has zero open items and used to satisfy the drain check trivially. Condition (f) requires `docs/CHANGELOG.md` specifically: any single `docs/` path used to clear it, so an unrelated doc edit kept the gate quiet while the CHANGELOG, ROADMAP and README rotted. Condition (l) requires every dated record the run touched (plan, spec, lesson, decision, audit, finding) to be named `<YYYY-MM-DD>-<slug>`, run-scoped via `scripts/lint_docs_names.py` so historical names never wedge a run. `ATLAS_GATE=off` disables all conditions. Also stays silent, before any condition is evaluated, whenever the Stop payload's `background_tasks` still lists an in-flight `subagent`/`workflow`/`teammate` dispatch -- a wave with implementers still running is not a completion claim yet, so the gate does not re-fire once per Stop of the wave; a long-running `shell` or `monitor` task does not suppress it. Silent on pass -- speaks only when it blocks |
+| `completion_gate.py` | `Stop` | Seventeen conditions, (a)-(q), block a premature "done" until the definition-of-done holds. Condition (m) independently blocks once when a main-thread run in a `docs/` project shipped non-docs code with zero `Task`/`Agent` dispatches, even without an orchestration flag; sidechains are exempt and errors fail open. Conditions (a)-(l) stay orchestration-scoped: evidence artifact and independent verifier (only once this run shipped non-docs code), verifier coverage, a drained todo list, and -- condition (k) -- a todo list that was made at all, since an absent list has zero open items and used to satisfy the drain check trivially. Condition (f) requires `docs/CHANGELOG.md` specifically: any single `docs/` path used to clear it, so an unrelated doc edit kept the gate quiet while the CHANGELOG, ROADMAP and README rotted. Condition (l) requires every dated record the run touched (plan, spec, lesson, decision, audit, finding) to be named `<YYYY-MM-DD>-<slug>`, run-scoped via `scripts/lint_docs_names.py` so historical names never wedge a run. `ATLAS_GATE=off` disables all conditions. Also stays silent, before any condition is evaluated, whenever the Stop payload's `background_tasks` still lists an in-flight `subagent`/`workflow`/`teammate` dispatch -- a wave with implementers still running is not a completion claim yet, so the gate does not re-fire once per Stop of the wave; a long-running `shell` or `monitor` task does not suppress it. Silent on pass -- speaks only when it blocks |
 | `memory_capture.py` | `Stop` | Persist session lessons to `~/.atlas/memory/`, silently. Not bound to `SubagentStop`: per-dispatch capture filed the same lesson once per subagent scope (`agent-<hex>`, `.run`), and the parent `Stop` already resolves subagent sessions. Refuses those scopes outright, never captures tool-error tallies (they live in atlas_db; as recall lines they buried every real lesson), and truncates on a word boundary |
 | `connector_credential_watch.py` | `PostToolUse` (`mcp__plugin_armada_.*`, plus bare `mcp__cipp.*` / `mcp__connectwise.*` / `mcp__falcon-mcp__.*` / `mcp__plaid__.*` / `mcp__gcloud__.*`) | A running MCP server caches credentials at startup, so a rotated secret never reaches it and every endpoint fails identically. On the first 401/403 (or a 400 naming the token) from a matched connector tool, inject one instruction: restart the server, do not retry other endpoints. Once per server per session, advisory only (`ATLAS_CONNECTOR_WATCH=off`). Plugin-scoped tool names look like `mcp__plugin_armada_<server>__<tool>`. |
 | `nudge.py` | `Stop` only | Self-improvement: prompt to capture a lesson and check docs drift (throttled). Silent when memory_capture already wrote this turn -- a success announcement on Stop is additionalContext, which costs a whole extra model turn to say nothing. Not bound to `SubagentStop` -- landing there injected its prompt into a dispatched subagent's context right before it composed its final response, so the subagent answered the nudge instead of returning its deliverable |
@@ -235,15 +241,15 @@ omp tool names, used to render the output style for omp), and
 and why the rest are not bridged). The Python hooks and `omp/` modules each read
 them; tests in both suites run the same shared cases.
 
-**omp parity is broad but not complete.** As of 8.7.0 omp has the output style,
+**omp parity is broad but not complete.** omp has the output style,
 the hook bridge, the claude-mem recall gate, the ponytail-before-commit nudge,
 the exploration-shell deny, lean-ctx shell routing, a delegation gate that counts
 shell-written code, an advisor board gate (`ATLAS_ADVISOR_GATE`), a worker
-output-token cap (`ATLAS_WORKER_MAX_TOKENS`, default 32000), and (new) the
+output-token cap (`ATLAS_WORKER_MAX_TOKENS`, default 32000), and the
 Stop-family bridge: `omp/stop-bridge.ts` converts the omp session to the Claude
 transcript shape (`scripts/omp_transcript.py`), records run state
 (`scripts/omp_runstate.py`, `omp/run-state.ts`), and runs the definition-of-done
-gate (a)-(l), ingest, chronicle, memory capture and the nudge on `session_stop`,
+gate, ingest, chronicle, memory capture and the nudge on `session_stop`,
 `session_shutdown` and `auto_compaction_start`. `dispatch_tripwire.py` runs
 through the bridge (dispatch-spec blocks, one-GOAL rule, production-edit deny,
 inline-op threshold deny, which counts edits, writes and mutating Bash only:
@@ -283,8 +289,8 @@ The plugin ships an in-process mods module (`mod/`, wired by the `modules` entry
 `hooks/hooks.json`; needs Claude Code 2.1.287+) that draws two native-element surfaces
 (no `Client` panes): a one-row band above the prompt (phase + progress bar + up to 3
 named live workers + gate count, collapsing to narrower tiers below 60 columns, idle
-to `⚑ idle` with none running) and an Atlas sidebar with a hotkey tab strip - `r: route
-│ t: team │ c: channel │ g: gates` - over exactly one view at a time. Route shows the
+to `idle` with none running) and an Atlas sidebar with a hotkey tab strip - `r: route
+| t: team | c: channel | g: gates` - over exactly one view at a time. Route shows the
 operating-contract rail and the current phase's tasks; Team is a worker table (failures
 and blocked workers always on top) plus a message field; Channel is an IRC-style log of
 board notes; Gates groups completion conditions, inline-op tripwire, tool routing and
@@ -297,7 +303,7 @@ The contract header (`ATLAS | <phase> | <sentence>`) is restyled onto the reply 
 restyled spinner/tool/turn-receipt sites and a context-discipline module nudge heavy
 inline reads toward subagent delegation and sharpen vague prompts with repo facts. The
 mod reads `.atlas/.run/` and changes state only through the existing CLIs;
-`ATLAS_MOD=off` disables it. Full detail: `docs/atlas-mod.md`.
+`ATLAS_MOD=off` disables it. Full detail: `../../docs/atlas-mod.md`.
 
 Parallel implementer dispatches get git-worktree isolation via `scripts/atlas_wt.py`
 (`add`/`status`/`merge`/`prune`; branch `worker/<agent>`, worktree `.atlas/wt/<agent>`).
@@ -337,7 +343,7 @@ each agent's existing `model:`/`effort:` frontmatter.
 
 Open `http://127.0.0.1:7421/` once. All concurrent terminals share it; switch scope with the project switcher. The Command Center is a static single-page UI (`scripts/dashboard_ui/`) with a band (title row, chevron phase rail, live counts), a seats rail and six routes: Run, Agents, Board, Channels, Health and Settings (design contract: `docs/command-center-redesign.md`). Run shows the channel feed with steer (`POST /api/v2/channels`), needs-you, gates chips (`GET /api/v2/gates`, token required, `?project=` or `?session=`) and a last-7-days table. Agents holds the colony roster with send, stop, pause, resume and a drawer with the terminal, messages and tasks; Board is the durable todo board `<project>/.atlas/.run/todos.json`; Channels are per-branch and per-lead message channels (`docs/atlas-channels.md`), each message with a delivery status of `queued`, `read`, `delivered`, `refused` or `undeliverable`; Settings lists every `ATLAS_*` key with its current value. Old hashes (`#/activity`, `#/improve`, `#/projects`, `#/colony`, `#/terminal`, `#/herd`, `#/work`, `#/irc`) redirect to the owning page. To run from source: `python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7421`. It updates over Server-Sent Events (`/api/v2/stream`, a 5 s tick with hash-gated `herd`/`agents`/`todos`/`irc`/`health`/`improve` events and a 15 s heartbeat) and only falls back to polling every 8 s if the stream drops. Preferences persist in `~/.atlas/dashboard-prefs.json`. Keyboard: `1`, `2`, `3`, `f`, `i`, `m`, `h`, `Escape`, and `/` for the palette. Manual todos never block the completion gate. Product overview: `docs/atlas-workboard.md`.
 
-### Agents, Channels, Settings (14.0.0)
+### Agents, Channels, Settings
 
 - **Agents** (`#/agents`): the Atlas-scoped roster for the selected project, the lead plus Atlas-launched workers, each with a state of `running`, `idle`, `stuck`, `finished` or `dead`. The drawer has Terminal, Messages and Tasks tabs. **Send** and **Kill** act only on the member's recorded herdr pane id or on a recorded pid whose start time (`ps -o lstart=`, stored as `pid_start`) still matches; a recycled or unverifiable pid counts as dead and Kill answers `409 member_dead`. Every composer uses one send path. The drawer terminal streams tmux targets only (herdr pane ids are not streamable); sockets use a single-use ticket (`POST /api/v2/term/ticket`) and a PTY idle for `ATLAS_TERM_IDLE_S` seconds (default 900) is closed.
 - **Board** (`#/board`, alias `#/work`) and **Channels** (`#/channels`, alias `#/irc`): the todo board, and message channels refreshed on the SSE `irc` event.
@@ -384,20 +390,20 @@ fix worked. Transcript excerpts leave the machine (secrets scrubbed);
 
 ## Dependencies
 
-Atlas integrates session companions and code-nav tools, recommended during setup:
+Atlas uses these companions when they are present and runs without them. `atlas-setup` (install mode) offers to install each one, and nothing is installed without your approval:
 - claude-mem - cross-session memory that backs the self-improvement layer.
 - context-mode - large-output sandbox that keeps raw bytes out of the context window.
-- ponytail - optional less-code session posture.
-- **serena** - symbol intelligence (`activate_project` first, then overview/find/edit).
-- **lean-ctx** - shaped compose/search/read; serena fallback; never Bash-grep first.
+- ponytail - optional Claude Code plugin for simplicity discipline (keep changes small, no speculative abstraction). Only referenced by `bash_advisor.py` and the mandates contract, and only when it is enabled.
+- serena - optional MCP server for symbol navigation (`activate_project` first, then overview/find/edit).
+- lean-ctx - optional MCP server for shaped search and file reads; serena is the fallback.
 
 SessionStart injects a compact tool-routing blurb; the full matrix is
-`skills/atlas-orchestrate/references/tool-routing.md`. Dispatch tripwire denies
-`atlas:*` prompts that omit ToolSearch + serena/lean-ctx. On JS/TS trees it also
+`skills/atlas-orchestrate/references/tool-routing.md`. When the dispatch tripwire is on, it denies
+`atlas:*` dispatch prompts whose `TOOLS:` line omits ToolSearch plus a code-nav tool (`ATLAS_TRIPWIRE_HARD=off` disables the deny). On JS/TS trees it also
 recommends [Fallow](https://docs.fallow.tools) (CLI + MCP + skills); `fallow_gate`
 audits agent git commit/push when the CLI is present. Atlas degrades gracefully
 and uses only the tools present in the session.
 
 ## License
 
-Apache-2.0 . (c) w159
+Apache-2.0 (see `LICENSE`). (c) w159

@@ -8,7 +8,7 @@ This repository is the **atlas marketplace** (`.claude-plugin/marketplace.json`)
 
 - **atlas** - source at `plugins/atlas/` (a multi-agent coding architect: skills, agents, hooks, output styles, MCP config, scripts).
 - **armada** - source at `plugins/armada/` (an organizational deployment layer for atlas: department agents and skills).
-- **programmer** - source at `plugins/programmer/` (a Pragmatic Programmer codebase auditor with 2 skills and an 89-concept glossary).
+- **programmer** - source at `plugins/programmer/` (code review and audit based on The Pragmatic Programmer, with 4 skills, 7 agents and an 89-concept glossary).
 
 When the user says "atlas" or "armada" in a prompt in this repository, they mean **the plugin as a software product you are developing** - its code, functionality, skills, agents, hooks, docs, and dependencies. Every request to "add", "fix", "change", "improve", "rename", or "remove" something in atlas or armada is a request to **edit the plugin source under `plugins/atlas/` or `plugins/armada/`** (and the shared dependencies that back them), then verify the change.
 
@@ -29,7 +29,7 @@ Runtime / non-product paths (not edit targets for feature work unless the user e
 
 - Repo-root `.atlas/` only (departments, evidence, nudge, self-improvement, `.run/` scratch)
 - `.fallow/`, `.supermemory/`, `.taskmaster/`, `.scratch/`, `.agents/`
-- **Never** create or use `plugins/**/.atlas/` — that is install-shaped contamination of product source
+- **Never** create or use `plugins/**/.atlas/` - that is install-shaped contamination of product source
 
 ### `docs/` is project SSOT (hard rule)
 
@@ -55,7 +55,7 @@ Also enforced for Claude Code via:
 
 Consumer installs are refreshed by **shipping this repo** (commit/push + marketplace update / plugin reinstall). Hot-copying `plugins/atlas/` into the cache is a process defect.
 
-Verify product behavior from **this tree** (`plugins/atlas/...`, tests under the repo). If the user needs a running install to pick up changes, tell them to update/reinstall from the marketplace source — do not mutate their cache yourself.
+Verify product behavior from **this tree** (`plugins/atlas/...`, tests under the repo). If the user needs a running install to pick up changes, tell them to update/reinstall from the marketplace source - do not mutate their cache yourself.
 
 If a request seems to ask you to operate atlas here rather than change its code, stop and confirm scope before acting. The default interpretation is always: change the plugin source under `plugins/`.
 
@@ -95,7 +95,7 @@ Before declaring a task done that touched any vendor's tooling, verify:
 - [ ] `test-mcp-tools.mjs` probes still target tools that exist
 - [ ] Boot test (`node test-mcp-tools.mjs <svc>`) passes without tool-count regression
 
-Any unchecked box on a vendor change is a partially-shipped feature — treat it as a bug.
+Any unchecked box on a vendor change is a partially-shipped feature - treat it as a bug.
 
 ## 3. Base URL is always optional
 
@@ -103,9 +103,9 @@ Every supported vendor publishes one or more stable default API base URLs in the
 
 Specifically:
 
-- `manifest.json` `user_config.<vendor>_base_url` → `"required": false` + description naming the documented default
-- Server runtime → resolve env var; if empty, fall back to the hardcoded default; never throw on missing base URL
-- `.env.template` → leave the value blank with a comment naming the default
+- `manifest.json` `user_config.<vendor>_base_url` -> `"required": false` + description naming the documented default
+- Server runtime -> resolve env var; if empty, fall back to the hardcoded default; never throw on missing base URL
+- `.env.template` -> leave the value blank with a comment naming the default
 
 ## 4. Quality bar for every tool
 
@@ -149,23 +149,9 @@ wired (`context-tooling` check) and whether it is doing its job (session
 cache-hit ratio, per-tool error rate).
 <!-- /atlas-tooling -->
 
-## Session gates
+## Session gates and completion gate
 
-- Session gates (atlas hooks): the first tool call each session must be one claude-mem search (write JSON args to xd://mcp__claude_mem_mcp_search_search). The inline-op gate prints a STOP nudge after about 4-6 inline ops and DENIES the 7th; separately, an inline Edit of target code is denied outright. Route edits and investigation to atlas:implementer / atlas:explorer. Task dispatches must NOT pass a `model` param (agents pin @atlas-worker; the gate denies the override).
-- Advisor gate: close each item with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py complete --id <id> --evidence "<proof>"` (syntax at plugins/atlas/scripts/atlas_todo.py :1515), then re-run `list` and confirm status=completed; a batch close once failed silently.
-- Dispatch gate (`dispatch_denied:toolkit`): every `atlas:*` Task/`task` prompt needs a line-anchored `TOOLS:` block (runs to the next ALL-CAPS label) whose own text contains BOTH `ToolSearch` AND a code-nav token (serena, lean-ctx, ctx_search, ctx_read, find_symbol). Naming tools elsewhere in the prompt does not count. On omp (`ATLAS_TOOLKIT_LOAD=omp`) the `ToolSearch` requirement is waived. Example: `TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read) + serena (activate_project, find_symbol); context-mode for noisy output.`
-- Dispatch gate (`dispatch_denied:name`): pass a non-empty `name` (`<role>-<slice>`, e.g. `auth-explorer`) as the Agent/`task` tool argument on every `atlas:*` dispatch, each batch entry. Unnamed dispatches are auto-named by the hook unless `ATLAS_AUTONAME=off`, which turns the miss into a deny; re-issuing the same unnamed call just repeats the deny.
-
-## Completion-gate friction (top blockers, last 14d)
-
-Recurring Stop-gate blocks: (m) delegation mandate, (c,d,e) CHANGELOG/ROADMAP/README
-missing, (g) implementer dispatches not covered, (i) open todos. Before done:
-delegate code changes to an atlas:* agent; keep CHANGELOG, ROADMAP and README
-present and updated with any non-docs change; for each implementer dispatch run an
-atlas:verifier or a real test-runner command (pytest, vitest) and stamp a
-`verified` finding via scripts/atlas_finding.py; flip or drop every open todo;
-open the colony IRC channel and message siblings when dispatching a named colony (p);
-open each reply with the `ATLAS | <glyph> <phase> | <state>` status header (n).
+The atlas hook gates (recall gate, dispatch contract, advisor gate, completion gate) are described once, in [`CLAUDE.md`](CLAUDE.md) under "Session gates", "Dispatch contract" and "Completion-gate friction". Each denial message names the exact fix. For the full completion-gate condition list and its off switches, read the docstring of `plugins/atlas/hooks/completion_gate_core.py`; for the scope matrix, run `python3 plugins/atlas/scripts/atlas_resolve.py implement medium`.
 
 <!-- atlas:contract:begin -->
 <!-- Generated by plugins/atlas/scripts/atlas_codex_contract.py --write. Do not edit by hand. -->
