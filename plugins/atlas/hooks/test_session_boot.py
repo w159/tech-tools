@@ -736,6 +736,47 @@ class SubprocessExitCodeTest(unittest.TestCase):
         self.assertEqual(p.returncode, 0)
 
 
+class DaemonBootLineTest(MainInProcessTest):
+    def test_boot_line_says_daemons_started_and_names_off_switches(self):
+        with (
+            mock.patch.object(session_boot, "ensure_dashboard", return_value="dashboard: http://127.0.0.1:7421/ (started)"),
+            mock.patch.object(session_boot, "ensure_colony", return_value="colony: checking"),
+        ):
+            _, out = run_main_inprocess({"session_id": "s1", "cwd": self.tmp}, self.env)
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("dashboard: http://127.0.0.1:7421/ (started)", ctx)
+        self.assertIn("ATLAS_DASHBOARD=off", ctx)
+        self.assertIn("ATLAS_COLONY=off", ctx)
+        self.assertIn("ATLAS_HERDR_AUTOSTART=off", ctx)
+
+
+class HealSerenaProjectTest(unittest.TestCase):
+    def _root(self, files):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        os.makedirs(os.path.join(root, ".serena"))
+        cfg = os.path.join(root, ".serena", "project.yml")
+        with open(cfg, "w", encoding="utf-8") as fh:
+            fh.write("project_name: x\n")
+        for f in files:
+            open(os.path.join(root, f), "w").close()
+        return root, cfg
+
+    def test_no_detected_language_leaves_config_untouched(self):
+        root, cfg = self._root(["README.md", "notes.txt"])
+        self.assertIsNone(session_boot.heal_serena_project(root))
+        with open(cfg, encoding="utf-8") as fh:
+            self.assertEqual(fh.read(), "project_name: x\n")
+
+    def test_detected_language_is_written_without_python_default(self):
+        root, cfg = self._root(["main.go", "util.go"])
+        self.assertIn("go", session_boot.heal_serena_project(root))
+        with open(cfg, encoding="utf-8") as fh:
+            text = fh.read()
+        self.assertIn('languages: ["go"]', text)
+        self.assertNotIn("python", text.split("languages:")[1])
+
+
 class DocsStructureRepairTest(unittest.TestCase):
     """SessionStart repairs the durable docs/ tree instead of blocking on it.
 

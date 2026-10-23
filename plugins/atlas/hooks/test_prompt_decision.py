@@ -78,6 +78,26 @@ class DecisionTests(unittest.TestCase):
         ):
             self.assertEqual(prompt_decision.decision_url(), "http://127.0.0.1:11434")
 
+    def test_remote_url_refused_unless_allowed(self):
+        env = {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": "https://example.com:8443"}
+        with mock.patch.dict(os.environ, env, clear=False):
+            os.environ.pop("ATLAS_DECISION_ALLOW_REMOTE", None)
+            with mock.patch.object(prompt_decision.urllib.request, "urlopen") as op:
+                self.assertIsNone(prompt_decision.local_decision("explain the gate"))
+            op.assert_not_called()
+            self.assertIsNone(prompt_decision.decision_url())
+            os.environ["ATLAS_DECISION_ALLOW_REMOTE"] = "1"
+            self.assertEqual(prompt_decision.decision_url(), "https://example.com:8443")
+
+    def test_loopback_urls_allowed(self):
+        for url in ("http://127.0.0.1:1", "http://127.5.5.5:9", "http://[::1]:2", "http://localhost:3"):
+            with mock.patch.dict(os.environ, {"ATLAS_DECISION_URL": url}, clear=False):
+                os.environ.pop("ATLAS_DECISION_ALLOW_REMOTE", None)
+                self.assertEqual(prompt_decision.decision_url(), url, url)
+        with mock.patch.dict(os.environ, {"ATLAS_DECISION_URL": "http://127.0.0.1.evil.com"}, clear=False):
+            os.environ.pop("ATLAS_DECISION_ALLOW_REMOTE", None)
+            self.assertIsNone(prompt_decision.decision_url())
+
     def test_unreachable_returns_none(self):
         def fake(req, timeout=None):
             raise urllib.error.URLError("refused")

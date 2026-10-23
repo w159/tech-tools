@@ -50,6 +50,38 @@ class StopTailTest(unittest.TestCase):
         )
         self.assertEqual([n for n, _ in log], list(stop_tail.TAIL))
 
+    def test_slow_ingest_is_bounded_and_does_not_starve_later_hooks(self):
+        import time
+
+        log = []
+
+        class Slow:
+            def main(self):
+                time.sleep(5)  # would blow the budget without a slice
+                log.append("ingest_done")
+
+        mods = {n: _Hook(n, log) for n in stop_tail.TAIL}
+        mods["ingest_session"] = Slow()
+        slices = dict(stop_tail.SLICES_S, ingest_session=0.2)
+        t0 = time.monotonic()
+        with (
+            mock.patch("sys.stdin", io.StringIO("{}")),
+            mock.patch.object(stop_tail, "SLICES_S", slices),
+            mock.patch.object(
+                stop_tail, "__import__", create=True, side_effect=mods.__getitem__
+            ),
+        ):
+            stop_tail.main()
+        self.assertLess(time.monotonic() - t0, 3)
+        self.assertNotIn("ingest_done", log)
+        self.assertEqual(
+            [e[0] for e in log if e != "ingest_done"],
+            ["chronicle_facet", "memory_capture", "nudge"],
+        )
+
+    def test_slices_fit_in_hook_timeout(self):
+        self.assertLess(sum(stop_tail.SLICES_S.values()), 60)
+
     def test_stdin_is_restored(self):
         before = sys.stdin
         self._run({})
