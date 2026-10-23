@@ -1,6 +1,6 @@
 ---
 name: atlas-dogfood
-description: "Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route. Use for end-to-end flow checks or a quick render check."
+description: "Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route. Use when checking end-to-end flows or doing a quick render check."
 when_to_use: "dogfood this change, drive the changed flows, find and fix UI breakage, smoke test, check changed routes, does it load, console errors, quick browser check"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[smoke] [PR number, branch name, or 'current'] [--port PORT] [--fix-budget N]"
