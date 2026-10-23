@@ -24,9 +24,9 @@ docs/
 `node test-mcp-tools.mjs` at the repo root is the boot and tool-count gate the "2. Propagation checklist" section of the root `AGENTS.md`
 requires for any connector change; `node test-mcp-tools.mjs <svc>` probes one connector and
 `--list` prints the known names. It launches each connector exactly as
-`plugins/atlas/.mcp.json` declares it - the twelve Node connectors as
-`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon` through its
-`uv run --project plugins/atlas/mcp/falcon ...` entry - with placeholder credentials in a
+`plugins/armada/.mcp.json` declares it - the twelve Node connectors as
+`plugins/armada/mcp/<name>/server.mjs` over MCP stdio, `falcon` through its
+`uv run --project plugins/armada/mcp/falcon ...` entry - with placeholder credentials in a
 from-scratch child environment, so it needs no real credentials and cannot reach a live vendor
 appliance. Four checks per connector: BOOT, FLOOR (no tool-count regression), AGREEMENT
 (`DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` prose must carry `readOnlyHint: false`), SHAPE. The
