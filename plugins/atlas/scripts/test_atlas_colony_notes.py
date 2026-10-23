@@ -31,13 +31,15 @@ class BriefAndArgvTests(unittest.TestCase):
             {"name": n, "role": "explorer"}
             for n in ("explorer-aaaa", "explorer-bbbb", "explorer-cccc")
         ]
-        brief = atlas_mux.team_brief(
-            rec,
-            rec["members"][0],
-            "/Users/jerry/proj",
-            "proj@main/lead-6d0ddb",
-            "lead-6d0ddb",
-        )
+        # fixed short script path: the real one is the checkout/install path, which varies per machine
+        with mock.patch.object(atlas_mux, "_todo_script", return_value="/opt/atlas/scripts/atlas_todo.py"):
+            brief = atlas_mux.team_brief(
+                rec,
+                rec["members"][0],
+                "/Users/jerry/proj",
+                "proj@main/lead-6d0ddb",
+                "lead-6d0ddb",
+            )
         self.assertLessEqual(len(brief.encode()), 800, len(brief.encode()))
         for needle in (
             "check the parser",

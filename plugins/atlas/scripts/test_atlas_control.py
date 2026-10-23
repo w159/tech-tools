@@ -681,7 +681,10 @@ class TestSettingsRegistry(ControlTestCase):
         self.assertEqual(self.mod.read_omp_env()["OTHER"], "1")
 
     def test_shell_path_value_must_be_absolute_and_creatable(self):
-        for bad in ("relative/dir", "/proc-nope-xyz/none/deeper"):
+        # nearest existing ancestor is a regular file: uncreatable even for root (a bare "/x/y" is creatable as root)
+        blocker = Path(self.tmp.name) / "a-file"
+        blocker.write_text("x", encoding="utf-8")
+        for bad in ("relative/dir", str(blocker / "none" / "deeper")):
             res = self.mod.write_behavior_updates({"ATLAS_HOME": bad})
             self.assertEqual(res["error"], "bad_path", bad)
         ok = self.mod.write_behavior_updates({"ATLAS_HOME": str(Path(self.tmp.name) / "new-home")})
