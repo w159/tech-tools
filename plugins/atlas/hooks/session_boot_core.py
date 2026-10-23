@@ -24,7 +24,8 @@ def ensure_dashboard():
     Does NOT open a browser tab (avoids focus-stealing on every SessionStart).
     Returns a short status line with the URL, or None on failure (fail-open).
     """
-    if os.environ.get("ATLAS_DASHBOARD", "on").lower() in ("0", "off", "false", "no"):
+    # Off by default: an idle dashboard still samples and polls; opt in with ATLAS_DASHBOARD=on.
+    if os.environ.get("ATLAS_DASHBOARD", "off").lower() in ("0", "off", "false", "no"):
         return None
     # Scratch state (temp HOME/ATLAS_HOME/DB) must never reach the shared :7421 daemon, which
     # serves the user's real ~/.atlas. Mirrors atlas_dashboard.under_temp_dir; duplicated so boot

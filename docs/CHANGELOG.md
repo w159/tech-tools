@@ -2,6 +2,8 @@
 
 ## 2026-10-23 (unreleased, no version bump)
 
+- Dashboard battery cost: `ATLAS_DASHBOARD` now defaults to `off` (knob in `scripts/atlas_control.py`, hook default in `hooks/session_boot_core.py`), and the UI loops in `terminal.js`, `activity.js`, `api.js` (polling plus the SSE stream) and `agents-store.js` (projects timer) skip work while the tab is hidden and resume on `visibilitychange`. Tests: `scripts/test_dashboard_battery.py`.
+
 Twelve changes from the 2026-10-23 proposal landed on main after `c06754b6`. Per-item evidence: `docs/audits/2026-10-23-atlas-proposal-evidence.md`. This file is the current changelog (its top section is the unreleased 15.1.0 work); `plugins/atlas/CHANGELOG.md` was not edited because its top entry, 15.1.0, is already dated.
 
 ### Added

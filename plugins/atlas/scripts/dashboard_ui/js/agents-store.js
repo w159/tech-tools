@@ -420,7 +420,8 @@ function createAgentsStore() {
       src.herd = src.hstat = src.todos = src.irc = null;
       openStream();
       clearInterval(projectsTimer);
-      projectsTimer = setInterval(() => load("projects").then(() => emit()), 60000);
+      // ponytail: skips while hidden; the visibilitychange handler above refreshes on return.
+      projectsTimer = setInterval(() => { if (document.hidden) return; load("projects").then(() => emit()); }, 60000);
       await Promise.all([refresh(), load("projects")]);
       emit(true);
       tickColony();

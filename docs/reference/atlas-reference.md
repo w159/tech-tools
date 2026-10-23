@@ -306,7 +306,7 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_TRIPWIRE_HARD=off` | tripwire denies: native grep/glob routing, inline-op threshold, spec/name/model denies, omp model-override deny |
 | `ATLAS_TRIPWIRE=off` | tripwire drift tiers (nudges) |
 | `ATLAS_MANDATES=off` | recall gate, "Recall first" boot line, ponytail nudge |
-| `ATLAS_DASHBOARD=off` | SessionStart dashboard auto-start (`0`, `off`, `false`, `no`) |
+| `ATLAS_DASHBOARD=on` | SessionStart dashboard auto-start; default `off`, so the dashboard starts only when you run `atlas_dashboard.py ensure` or `serve` |
 | `ATLAS_FALLOW=off` | fallow commit/push gate |
 | `ATLAS_INGEST=off` | session transcript ingest |
 | `ATLAS_CHRONICLE=off` | chronicle facet capture |
@@ -416,7 +416,7 @@ stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 
 | Program | Event(s) | Effect | Off switch |
 |---|---|---|---|
-| `session_boot.py` | SessionStart | Loads contract, memory, board carry-over, tool routing; claude-mem "Recall first" line; starts the dashboard and prints its URL. | `ATLAS_DASHBOARD=off` (dashboard part) |
+| `session_boot.py` | SessionStart | Loads contract, memory, board carry-over, tool routing; claude-mem "Recall first" line; starts the dashboard and prints its URL only when `ATLAS_DASHBOARD=on`. | `ATLAS_DASHBOARD` (default `off`; dashboard part) |
 | `scripts/atlas_doctor.py --hook` | SessionStart | Rollback guard: warns on downgrade, forked marketplace, or missing hooks/assets. | n/a |
 | `prompt_optimizer.py` | UserPromptSubmit | Optional model-rewritten prompt; arms orchestration on engineering prompts. | `ATLAS_ENGINE_ARM=off`, decision part `ATLAS_DECISION=off` |
 | `recall_gate.py` | PreToolUse (all) | claude-mem recall gate (see message above). | `ATLAS_MANDATES=off` |
@@ -702,8 +702,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_dashboard.py" stop
 
 `serve [--port N] [--host H] [--foreground] [--allow-remote]` runs the server
 directly; a non-loopback `--host` is refused without `--allow-remote`.
-Environment: `ATLAS_DASHBOARD_PORT` (default `7421`), `ATLAS_DASHBOARD=off`
-(skip auto-start), `ATLAS_DASHBOARD_DB` (default `~/.atlas/atlas.db`),
+Environment: `ATLAS_DASHBOARD_PORT` (default `7421`), `ATLAS_DASHBOARD=on`
+(opt in to auto-start at session start; default `off`), `ATLAS_DASHBOARD_DB` (default `~/.atlas/atlas.db`),
 `ATLAS_HOME` (state directory; point it elsewhere for an isolated instance).
 
 **Eight pages**, hash-routed (`#/<page>`), with a project switcher that scopes

@@ -401,7 +401,7 @@ Produced by `behavior_state()` (plugins/atlas/scripts/atlas_control.py). Every e
 
 | Group | Key | Scope | Kind | Default | Doc |
 |---|---|---|---|---|---|
-| Session automation | `ATLAS_DASHBOARD` | hooks | toggle ('on'/'off') | `on` | Each new session launches this dashboard if it is not already running. |
+| Session automation | `ATLAS_DASHBOARD` | hooks | toggle ('on'/'off') | `off` | When on, each new session launches this dashboard if it is not already running. |
 | Session automation | `ATLAS_DASHBOARD_PORT` | hooks | number 1024-65535 | `7421` | Loopback port the dashboard listens on. |
 | Session automation | `ATLAS_INGEST` | hooks | toggle ('on'/'off') | `on` | At session end, read the transcript into the telemetry database that feeds Overview, Activity and Health. |
 | Session automation | `ATLAS_CHRONICLE` | hooks | toggle ('on'/'off') | `on` | Record what kind of work each session was, so atlas-doctor can mine patterns across sessions. |

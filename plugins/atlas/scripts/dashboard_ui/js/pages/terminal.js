@@ -460,7 +460,10 @@ export default {
 
     drawAll();
     refresh();
-    S.snapTimer = setInterval(refresh, SEATS_MS);
+    // Idle while the tab is hidden; one refresh on return (ponytail: fixed SEATS_MS, no knob).
+    S.snapTimer = setInterval(() => { if (!document.hidden) refresh(); }, SEATS_MS);
+    S.visHandler = () => { if (!document.hidden) refresh(); };
+    document.addEventListener("visibilitychange", S.visHandler);
     S.disposers.push(disposeCards);
     return root;
   },
@@ -468,6 +471,8 @@ export default {
     S.timers.forEach(clearInterval);
     S.timers = [];
     clearInterval(S.snapTimer);
+    if (S.visHandler) document.removeEventListener("visibilitychange", S.visHandler);
+    S.visHandler = null;
     S.disposers.forEach((d) => { try { d(); } catch (_e) { /* best effort */ } });
     S.disposers = [];
     if (S.keyHandler) document.removeEventListener("keydown", S.keyHandler);

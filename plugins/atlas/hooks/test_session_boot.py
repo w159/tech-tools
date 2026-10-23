@@ -1119,6 +1119,7 @@ class EnsureDashboardTempEnvTest(unittest.TestCase):
             "ATLAS_DASHBOARD_DB",
         )
         base = {k: v for k, v in os.environ.items() if k not in drop}
+        base["ATLAS_DASHBOARD"] = "on"  # autostart is opt-in; these tests cover the opted-in guards
         base.update(env)
         fake = mock.Mock(
             returncode=0,
@@ -1169,6 +1170,7 @@ class EnsureDashboardTempEnvTest(unittest.TestCase):
                 "ATLAS_DASHBOARD_DB",
             )
         }
+        env["ATLAS_DASHBOARD"] = "on"
         env["HOME"] = "/Users/someone"
         with (
             mock.patch.dict(os.environ, env, clear=True),

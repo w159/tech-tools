@@ -175,12 +175,15 @@ export const api = {
       if (pollTimer || closed) return;
       setMode("poll");
       pollTimer = setInterval(() => {
+        if (document.hidden) return; // hidden tab: no background polling
         if (options.poll) options.poll();
         if (options.onEvent) options.onEvent("tick", { ts: new Date().toISOString(), polled: true });
       }, pollMs);
     };
 
     const open = () => {
+      // hidden: stay closed so the server sampler sees no subscriber; onVisibility reopens
+      if (document.hidden || source) return;
       if (closed || typeof EventSource === "undefined") {
         startPolling();
         return;
@@ -227,11 +230,27 @@ export const api = {
       };
     };
 
+    // ponytail: close the stream while hidden (server sampler exits at zero subscribers), reopen and
+    // poll once on return. Fixed behavior, no knob.
+    const onVisibility = () => {
+      if (closed) return;
+      if (document.hidden) {
+        if (source) source.close();
+        source = null;
+        return;
+      }
+      failures = 0;
+      open();
+      if (options.poll) options.poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     open();
 
     return {
       close() {
         closed = true;
+        document.removeEventListener("visibilitychange", onVisibility);
         stopPolling();
         if (source) source.close();
         source = null;

@@ -195,9 +195,9 @@ _k(
     "ATLAS_DASHBOARD",
     _SA,
     "Start the Command Center automatically",
-    "Each new session launches this dashboard if it is not already running.",
-    default="on",
-    details="Off means nothing starts it; run `atlas_dashboard.py ensure` yourself. Sessions in scratch or temp directories never start the shared dashboard either way.",
+    "When on, each new session launches this dashboard if it is not already running.",
+    default="off",
+    details="Off (the default) means the dashboard starts only when you run it yourself (`atlas_dashboard.py ensure` or `serve`). On launches it at every session start. Sessions in scratch or temp directories never start the shared dashboard either way.",
 )
 _k(
     "ATLAS_INGEST",
