@@ -10,7 +10,7 @@ atlas-setup as:
 
 where <repo-root> defaults to the current working directory.
 
-SSOT contract (see atlas-loop/references/docs-ssot.md, authoritative):
+SSOT contract (see atlas-orchestrate/references/docs-ssot.md, authoritative):
   <root>/      -- README.md, AGENTS.md, CLAUDE.md: human/agent entry points.
   docs/        -- the project wiki. Minimum: CHANGELOG.md, ROADMAP.md,
                   AGENTS.md, plus always-applicable base subfolders

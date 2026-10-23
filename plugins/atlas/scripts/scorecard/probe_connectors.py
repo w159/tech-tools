@@ -19,7 +19,7 @@ async function probe(svc) {
   const isPy = svc === 'falcon';
   let cmd = 'node', args = ['--import', ROOT + '/mcp/_env/load.mjs', ROOT + `/mcp/${svc}/server.mjs`];
   if (isPy) { cmd = 'uv'; args = ['run', '--project', ROOT + '/mcp/falcon', 'python', ROOT + '/mcp/_env/load.py', 'falcon_mcp.server'];
-    Object.assign(env, { UV_NO_SYNC: '1', UV_FROZEN: '1', UV_PROJECT_ENVIRONMENT: '.venv.nosync.noindex' }); }
+    Object.assign(env, { UV_NO_SYNC: '1', UV_FROZEN: '1', UV_PROJECT_ENVIRONMENT: process.env.SC_FALCON_VENV }); }
   const t0 = performance.now();
   const c = spawn(cmd, args, { env, stdio: ['pipe', 'pipe', 'pipe'], cwd: HOME });
   let buf = '', err = ''; const waiters = new Map();
@@ -58,7 +58,7 @@ os.environ["ATLAS_HOME"] = tempfile.mkdtemp()
 sys.path.insert(0, os.environ["SC_SCRIPTS"])
 import atlas_dashboard as d
 import atlas_control
-man = d._plugin_manifest(); uc = man["userConfig"]
+man = d._connector_manifest(); uc = man["userConfig"]  # connectors ship in armada
 sens = [k for k, v in uc.items() if v.get("sensitive")]
 d._env_file_present_keys = lambda: set(); d._env_file_values = lambda: {}; d._load_cred_marks = lambda: {}
 d._connector_usage_map = lambda: {}
@@ -82,14 +82,30 @@ ACTIONABLE = re.compile(
 )
 
 
+def _armada(ctx):
+    """The armada plugin root beside atlas: it owns the vendor connectors."""
+    return ctx.root.parent / "armada"
+
+
 def _services(ctx):
     return sorted(
         p.name
-        for p in (ctx.root / "mcp").iterdir()
+        for p in (_armada(ctx) / "mcp").iterdir()
         if p.is_dir()
         and not p.name.startswith("_")
         and ((p / "server.mjs").exists() or p.name == "falcon")
     )
+
+
+# The user's venv convention first (.venv.nosync.noindex), then a plain uv .venv. The probe runs uv with
+# UV_NO_SYNC, so a missing environment never gets created: uv would fail or hang until the 90 s probe
+# timeout. With neither present the Falcon probe is skipped with that reason instead.
+FALCON_VENVS = (".venv.nosync.noindex", ".venv")
+
+
+def _falcon_venv(ctx):
+    root = _armada(ctx) / "mcp" / "falcon"
+    return next((n for n in FALCON_VENVS if (root / n).is_dir()), None)
 
 
 def probe_nocreds_boot(ctx):
@@ -103,17 +119,24 @@ def probe_nocreds_boot(ctx):
     if not node:
         return [skipped(n, "node not installed", group="connectors") for n in names]
     svcs = _services(ctx)
-    skip_falcon = "falcon" in svcs and not shutil.which("uv")
-    if skip_falcon:
-        svcs.remove("falcon")
+    falcon_venv = _falcon_venv(ctx)
+    skip_falcon = None
+    if "falcon" in svcs:
+        if not shutil.which("uv"):
+            skip_falcon = "uv not installed"
+        elif not falcon_venv:
+            skip_falcon = "no falcon venv (.venv.nosync.noindex or .venv) - run `uv sync` in plugins/armada/mcp/falcon"
+        if skip_falcon:
+            svcs.remove("falcon")
     env, _a, home = core.iso_env(ctx, "connectors", tmux=False)
     script = ctx.sub("connectors") / "probe.mjs"
     script.write_text(PROBE_MJS)
     n = 3 if ctx.quick else 8
     env.update(
-        SC_PLUGIN=str(ctx.root),
+        SC_PLUGIN=str(_armada(ctx)),
         SC_HOME=str(home),
         SC_N=str(n),
+        SC_FALCON_VENV=falcon_venv or FALCON_VENVS[0],
     )
     env["PATH"] = os.environ["PATH"]
     r = run([node, str(script), *svcs], env=env, cwd=str(home), timeout=900)
@@ -213,7 +236,7 @@ def probe_nocreds_boot(ctx):
         out.append(
             skipped(
                 "connector_falcon_ready_p50_ms",
-                "uv not installed",
+                skip_falcon,
                 "ms",
                 cmd=cmd,
                 group="connectors",

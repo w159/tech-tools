@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS friction_events (
   weight REAL, snippet TEXT, ts REAL);
 CREATE INDEX IF NOT EXISTS ix_friction_events_category_ts ON friction_events(category, ts);
 CREATE INDEX IF NOT EXISTS ix_friction_events_session ON friction_events(session_id);
+CREATE TABLE IF NOT EXISTS friction_meta (
+  friction_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT);
+CREATE INDEX IF NOT EXISTS ix_friction_meta_id_key ON friction_meta(friction_id, key);
 CREATE TABLE IF NOT EXISTS findings (
   id INTEGER PRIMARY KEY AUTOINCREMENT, created_at REAL, dimension TEXT,
   severity TEXT, title TEXT, detail TEXT, evidence_json TEXT,
@@ -152,7 +155,9 @@ def db_path():
 # Bump when init() gains DDL or a migration. A DB whose PRAGMA user_version is
 # at least this skips all of it, so the per-tool-call hook pays one pragma read
 # instead of ~30 CREATE IF NOT EXISTS statements and a dozen failing ALTERs.
-SCHEMA_VERSION = 1
+# Every bump needs exactly one MIGRATIONS entry with the same number (a test
+# enforces it); steps run on DBs whose user_version is below their key.
+SCHEMA_VERSION = 2
 
 
 def connect(path=None):
@@ -198,16 +203,10 @@ def _migrate_wave_id_text(conn):
     )
 
 
-def init(conn, backfill=True):
-    """Create/migrate the schema. When PRAGMA user_version already matches, only
-    the run-kind backfill can run (hooks that fire per tool call pass
-    backfill=False: it scans `messages`, and only ingest changes its inputs)."""
-    if _schema_current(conn):
-        if backfill:
-            backfill_run_kinds(conn)
-        return
-    conn.executescript(SCHEMA)
-    conn.commit()
+def _migrate_v1(conn):
+    """Baseline: every additive column and the wave_id rebuild that predate
+    versioning. Each ALTER is idempotent, so a legacy (user_version 0) DB lands
+    on the v1 shape whatever subset it already had."""
     # Idempotent migration: add kind column to pre-existing DBs. Fresh DBs
     # already have it from the SCHEMA; the OperationalError is the success path
     # for any DB initialized before this column was added.
@@ -290,6 +289,40 @@ def init(conn, backfill=True):
         except sqlite3.OperationalError:
             pass  # column already present
     _migrate_wave_id_text(conn)
+
+
+def _migrate_v2(conn):
+    """friction_meta side table (structured per-event key/value pairs). Additive;
+    friction_events is untouched."""
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS friction_meta ("
+        "friction_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS ix_friction_meta_id_key "
+        "ON friction_meta(friction_id, key)"
+    )
+    conn.commit()
+
+
+# version -> step. A step runs once on any DB whose user_version is below its key.
+MIGRATIONS = {1: _migrate_v1, 2: _migrate_v2}
+
+
+def init(conn, backfill=True):
+    """Create/migrate the schema. When PRAGMA user_version already matches, only
+    the run-kind backfill can run (hooks that fire per tool call pass
+    backfill=False: it scans `messages`, and only ingest changes its inputs)."""
+    if _schema_current(conn):
+        if backfill:
+            backfill_run_kinds(conn)
+        return
+    conn.executescript(SCHEMA)
+    conn.commit()
+    stored = conn.execute("PRAGMA user_version").fetchone()[0]
+    for version in sorted(MIGRATIONS):
+        if version > stored:
+            MIGRATIONS[version](conn)
     conn.execute(
         f"PRAGMA user_version={SCHEMA_VERSION}"
     )  # int literal: pragmas take no params
@@ -1108,13 +1141,24 @@ def pending_facets(conn, limit=50):
     )
 
 
-def record_friction(conn, session_id, category, weight=1.0, snippet=None, ts=None):
-    """Log one categorized friction event for a session."""
+def record_friction(
+    conn, session_id, category, weight=1.0, snippet=None, ts=None, meta=None
+):
+    """Log one categorized friction event for a session. `meta` is an optional
+    {key: value} dict stored in the friction_meta side table (values as text)."""
     cur = conn.execute(
         "INSERT INTO friction_events(session_id,category,weight,snippet,ts) "
         "VALUES(?,?,?,?,?)",
         (session_id, category, weight, snippet, ts if ts is not None else time.time()),
     )
+    if meta:
+        conn.executemany(
+            "INSERT INTO friction_meta(friction_id,key,value) VALUES(?,?,?)",
+            [
+                (cur.lastrowid, str(k), None if v is None else str(v))
+                for k, v in meta.items()
+            ],
+        )
     conn.commit()
     return cur.lastrowid
 

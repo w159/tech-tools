@@ -23,7 +23,7 @@ hook that may *deny* a tool call, and only when fallow audit returns `verdict: f
 | `fallow-gate` | `PreToolUse` (Bash) | `hooks/fallow_gate.py` | agent gate: on `git commit`/`git push`, run `fallow audit --format json --quiet --explain --gate-marker agent`; deny on fail; skip if fallow absent (`ATLAS_FALLOW=off`) |
 | `recall-gate` | `PreToolUse` (all tools) | `hooks/recall_gate.py` | claude-mem recall is required once per session: the first main-thread call that is neither a claude-mem call nor `TodoWrite` is denied on every attempt until then (reason from `contracts/mandates.json` `recallGate`, 279 -> 197 B); a claude-mem call satisfies it. ToolSearch name variants are normalized. Armed when the claude-mem plugin is enabled; skips subagent transcripts; fail-open (`ATLAS_MANDATES=off`). omp twin: `omp/mandates.ts` (omp: armed only when a claude-mem route is callable now) |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt); synchronous under the plugin hooks.json (async only when installed via `install_hooks.py`). A formatter failure is a quiet skip, not a hook crash |
-| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | Existing armed-orchestrator drift/spec guards plus two colony dispatch guards (armed sessions, `atlas:*` only): a dispatch with no `name` is denied (named dispatches put the sibling on the roster for SendMessage and board notes; the guard stands down while `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, because teams mode turns a named main-conversation dispatch into a teammate — inherits the lead's effort, runs in the lead's cwd — and atlas workers must stay scoped subagents; the name requirement is also lifted when `TMUX` is set but `TMUX_PANE` is empty), and a per-call `model` that overrides the agent definition's frontmatter tier is denied (`model: inherit` or no model accepts any; an unreadable definition fails open; the omp gate accepts omp's expansion of a frontmatter alias, e.g. sonnet -> anthropic/claude-sonnet-5). Independently, docs/ projects deny native Grep/Glob only when lean-ctx is reachable (binary on PATH AND a lean-ctx MCP server configured in `.mcp.json` / project or `~` Claude settings; the deny names the `ToolSearch("select:mcp__<server>__ctx_search")` load step; the exploration deny text is 126 B, was 343 B), otherwise a one-time allow-nudge, including subagents; an allowed native call still counts toward and is subject to the armed inline-op threshold deny, and allow-nudge Read/Bash once per tool/session (`ctx_read`; `ctx_shell` / context-mode `ctx_execute`). `ATLAS_TRIPWIRE_HARD=off` disables denies, not nudges. It also denies `atlas:*` dispatches lacking GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP CONDITIONS/REPORT (the deny names exactly the missing labels and gives a paste-ready skeleton; REPORT fields STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT), with >1 GOAL, or lacking the batched ToolSearch+nav-tool TOOLS block, a `atlas:runner` dispatch without a numbered `STEPS:` block (cap 7), and any nested Agent/Task from a subagent (not disabled by `ATLAS_TRIPWIRE=off`). Footprint arming: an unflagged run is armed once the main thread has edited 3 distinct code files (`ATLAS_FOOTPRINT_FILES`, 0 disables). Worker exemption (10.4.1): a session with a non-blank `ATLAS_WORKER_NAME` (pinned by `atlas_mux`/`atlas_launch`) is never armed and gets no deny tier or STOP advisories; leads unchanged. |
+| `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | Existing armed-orchestrator drift/spec guards plus two colony dispatch guards (armed sessions, `atlas:*` only): a dispatch with no `name` is denied (named dispatches put the sibling on the roster for SendMessage and board notes; the guard stands down while `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, because teams mode turns a named main-conversation dispatch into a teammate - inherits the lead's effort, runs in the lead's cwd - and atlas workers must stay scoped subagents; the name requirement is also lifted when `TMUX` is set but `TMUX_PANE` is empty), and a per-call `model` that overrides the agent definition's frontmatter tier is denied (`model: inherit` or no model accepts any; an unreadable definition fails open; the omp gate accepts omp's expansion of a frontmatter alias, e.g. sonnet -> anthropic/claude-sonnet-5). Independently, docs/ projects deny native Grep/Glob only when lean-ctx is reachable (binary on PATH AND a lean-ctx MCP server configured in `.mcp.json` / project or `~` Claude settings; the deny names the `ToolSearch("select:mcp__<server>__ctx_search")` load step; the exploration deny text is 126 B, was 343 B), otherwise a one-time allow-nudge, including subagents; an allowed native call still counts toward and is subject to the armed inline-op threshold deny, and allow-nudge Read/Bash once per tool/session (`ctx_read`; `ctx_shell` / context-mode `ctx_execute`). `ATLAS_TRIPWIRE_HARD=off` disables denies, not nudges. It also denies `atlas:*` dispatches lacking GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP CONDITIONS/REPORT (the deny names exactly the missing labels and gives a paste-ready skeleton; REPORT fields STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT), with >1 GOAL, or lacking the batched ToolSearch+nav-tool TOOLS block, a `atlas:runner` dispatch without a numbered `STEPS:` block (cap 7), and any nested Agent/Task from a subagent (not disabled by `ATLAS_TRIPWIRE=off`). Footprint arming: an unflagged run is armed once the main thread has edited 3 distinct code files (`ATLAS_FOOTPRINT_FILES`, 0 disables). Worker exemption (10.4.1): a session with a non-blank `ATLAS_WORKER_NAME` (pinned by `atlas_mux`/`atlas_launch`) is never armed and gets no deny tier or STOP advisories; leads unchanged. |
 | `completion-gate` | `Stop` | `hooks/completion_gate.py` | **opt-out.** conditions (a)-(l) and (n)-(p) remain orchestration-marker scoped; (m) blocks main-thread non-docs code with zero Task/Agent dispatches even without that marker. docs/ scope; disable with `ATLAS_GATE=off`. |
 | `worker-report-gate` | `SubagentStop` | `hooks/worker_report_gate.py` | blocks (once per agent id) an `atlas:*` subagent whose final message is not the fixed `REPORT:` container (`STATUS`, `STEPS`, `FILES_CHANGED`, `EVIDENCE`, `DELIVERABLE`, `NEXT`; contract `contracts/worker-protocol.json`); fail-open; disable with `ATLAS_GATE_REPORT=off` or `ATLAS_GATE=off` |
 | `nudge` | `Stop` | `hooks/nudge.py` | self-improvement: surface a past lesson and prompt to capture new ones; marker-gated, throttled |
@@ -38,7 +38,7 @@ advisory tier: `ATLAS_TRIPWIRE=off` silences drift coaching only (the nested-dis
 policy are unaffected; the latter is switched by `ATLAS_TRIPWIRE_HARD=off`, which disables only
 the deny tier and leaves the advisory nag in place). `hooks/validate-readonly-query.sh` is
 not wired in hooks.json; it is a read-only SQL guard available for the DB-audit
-subagents to invoke during read-only audits. In total 17 hook programs / 22 bindings are wired.
+subagents to invoke during read-only audits. In total 18 hook programs / 22 bindings are wired.
 
 ## Install (gated, idempotent)
 
@@ -127,15 +127,15 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   up to 6 levels). Conditions (a)-(l) and (n)-(p) additionally require an orchestration flag in
   the atlas DB (set by an orchestration skill or `atlas:*` dispatch); condition (m)
   deliberately checks unarmed runs too. Without docs/ every condition is silent.
-- **What satisfies it.** All sixteen conditions (a)-(p) must hold:
-  - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured). Only checked when this run wrote non-docs code; files older than the run start do not count.
+- **What satisfies it.** All seventeen conditions (a)-(q) must hold:
+  - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured), at any depth, so nested dated folders such as `.atlas/evidence/<date>-<slug>/` count. Only checked when this run wrote non-docs code; files older than the run start do not count.
   - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
     (an independent check happened - a deterministic test recorded via
     `scripts/atlas_finding.py`, or an atlas:verifier result). Only checked when this run wrote non-docs
     code; stamps older than the run start (`verified_at`) do not count.
-  - (c) `docs/CHANGELOG.md` exists and is non-empty.
-  - (d) `docs/ROADMAP.md` exists and is non-empty.
-  - (e) `README.md` at the project root exists and is non-empty.
+  - (c) `docs/CHANGELOG.md` exists and is non-empty Only checked when this run wrote non-docs code.
+  - (d) `docs/ROADMAP.md` exists and is non-empty Only checked when this run wrote non-docs code.
+  - (e) `README.md` at the project root exists and is non-empty Only checked when this run wrote non-docs code.
   - (f) No docs drift: if non-docs files changed this run, `docs/CHANGELOG.md` must be
     among them -- the deterministic trigger forcing an `atlas:docs-curator` dispatch
     before "done". Any single `docs/` path used to clear this, so a one-line edit to a
@@ -156,7 +156,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     about the code this run shipped. A stamp earns credit only if the run actually executed a
     test-runner command; a stamp with no executed test earns nothing.
   - (h) ROADMAP reconciliation: a `docs/ROADMAP.md` item marked `done` is a defect -- it
-    belongs in `docs/CHANGELOG.md` with a date and an evidence citation.
+    belongs in `docs/CHANGELOG.md` with a date and an evidence citation. Only checked when this run wrote non-docs code.
   - (i) Todo drain: if this run shipped code and the most recent plan still holds
     non-`completed` items, block. TodoWrite rewrites the whole list every call, so the last
     one is current state. (i) enforces DRAINING a list; (k) is what enforces having one.
@@ -195,9 +195,10 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     or departed member that is not a lead; or IRC/SendMessage traffic). A lead's own note, another
     lead's channel and a non-member's note do not count. `agent://` traffic logged under sibling run
     ids of the same session counts. Kill switch `ATLAS_GATE_COLONY=off`.
+  - (q) Unmerged worker branches: `worker/*` branches that still hold commits not merged into the base, or a dirty worker worktree (`atlas_wt.py status`), must be verified and merged (`atlas_wt.py merge <agent>`) before the run is done. Not limited to code-shipping runs; sidechains are exempt. Kill switch `ATLAS_WT_GATE=off`. Fails open on a read error.
   (n)-(p) ask for a presentation repair, so each blocks at most once per session. All three fail open.
   The block message names exactly which condition(s) are missing and, for (p), the one fix command.
-- **Re-blocks, never a wedge.** Blocks every Stop until (a)-(p) hold, except: a Stop that is already a
+- **Re-blocks, never a wedge.** Blocks every Stop until (a)-(m) and (q) hold, except: a Stop that is already a
   forced continuation (`stop_hook_active`) is allowed, and after >5 Stop events in 120 s the circuit
   breaker silences the gate for the session. On omp the bridge additionally allows at most 3
   consecutive blocks (`MAX_STOP_BLOCKS` in `omp/stop-bridge.ts`). Fail-open on any error. Disable

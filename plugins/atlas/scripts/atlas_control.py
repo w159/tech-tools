@@ -32,6 +32,9 @@ from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS_DIR.parent
+sys.path.insert(0, str(SCRIPTS_DIR))
+import armada_root  # noqa: E402
+
 CLAUDE_DIR = Path.home() / ".claude"
 SETTINGS_PATH = CLAUDE_DIR / "settings.json"
 CLAUDE_JSON_PATH = Path.home() / ".claude.json"
@@ -444,6 +447,15 @@ _k(
     str(Path.home() / ".atlas" / "atlas.db"),
     scope="shell",
 )
+_k(
+    "ATLAS_PINNED_PROJECTS",
+    _ST,
+    "Pinned projects",
+    "Folders that always appear in the Command Center project selector, even without a .git, docs/ or package manifest.",
+    "text",
+    "",
+    details="Separate several folders with the OS path separator (':' on Linux and macOS, ';' on Windows). Without a pin, a folder only shows once it holds a .git, docs/, pyproject.toml or package.json.",
+)
 
 
 # --- knob metadata: kind overrides, finite option sets, ranges, effect, applies ---
@@ -683,6 +695,16 @@ _AD = {
         "tmux",
         "shell",
     ),
+    "ATLAS_MAX_TEAM": (
+        "Most workers one spawn-team may start (each is a paid claude session). A larger team is refused with a JSON error.",
+        "6",
+        "shell",
+    ),
+    "ATLAS_WAIT_KILL": (
+        "`1` makes `atlas_mux.py wait` kill the team's panes when its timeout expires, same as --kill-on-timeout.",
+        "off",
+        "shell",
+    ),
     "ATLAS_DECISION": (
         "`off` skips the local-model prompt classifier and keeps the regex result.",
         "on",
@@ -695,6 +717,11 @@ _AD = {
     ),
     "ATLAS_DECISION_URL": (
         "Loopback endpoint for the prompt classifier. Blank uses Ollama on 127.0.0.1:11434.",
+        "",
+        "hooks",
+    ),
+    "ATLAS_DECISION_ALLOW_REMOTE": (
+        "`1` lets ATLAS_DECISION_URL name a non-loopback host; otherwise a remote URL is refused and the regex result is kept.",
         "",
         "hooks",
     ),
@@ -776,6 +803,16 @@ _AD = {
     "ATLAS_MUX_OMP_EXTENSION": (
         "omp extension path passed to colony workers.",
         "",
+        "shell",
+    ),
+    "ATLAS_NOTE_ARCHIVE_BYTES": (
+        "Size an owner's board note file may reach before notes older than 14 days move to board/archive.",
+        "2097152",
+        "shell",
+    ),
+    "ATLAS_NOTE_MAX_BYTES": (
+        "Largest board note body accepted, in bytes; longer notes are refused with body_too_large.",
+        "8192",
         "shell",
     ),
     "ATLAS_PACKS_CACHE_ROOT": (
@@ -1891,19 +1928,30 @@ def _rpc_line(obj) -> bytes:
     return (json.dumps(obj) + "\n").encode("utf-8")
 
 
+def _connector_root() -> Path:
+    """The plugin root that owns the vendor connectors: armada's, else a nonexistent sibling.
+
+    Connectors moved from atlas to armada. With no armada install every connector
+    lookup resolves under a path that does not exist, so callers see "no bundle"
+    instead of crashing.
+    """
+    root, _reason = armada_root.find_armada_root(PLUGIN_ROOT)
+    return root if root is not None else PLUGIN_ROOT / "_armada_not_installed"
+
+
 def _mcp_server_spec(name: str) -> dict:
-    servers = _read_json(PLUGIN_ROOT / ".mcp.json").get("mcpServers") or {}
+    servers = _read_json(_connector_root() / ".mcp.json").get("mcpServers") or {}
     spec = servers.get(name)
     return spec if isinstance(spec, dict) else {}
 
 
 def _subst_root(value: str) -> str:
-    return value.replace("${CLAUDE_PLUGIN_ROOT}", str(PLUGIN_ROOT))
+    return value.replace("${CLAUDE_PLUGIN_ROOT}", str(_connector_root()))
 
 
 def _mcp_dir(name: str) -> Path:
-    """PLUGIN_ROOT/mcp/<name>, or a nonexistent sibling when name would escape mcp/."""
-    base = os.path.realpath(PLUGIN_ROOT / "mcp")
+    """<armada root>/mcp/<name>, or a nonexistent sibling when name would escape mcp/."""
+    base = os.path.realpath(_connector_root() / "mcp")
     p = os.path.realpath(os.path.join(base, name))
     return Path(p) if p.startswith(base + os.sep) else Path(base) / "_invalid"
 
@@ -1977,7 +2025,7 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=_connector_launch_env(name, env),
-            cwd=str(PLUGIN_ROOT),
+            cwd=str(_connector_root() if _connector_root().is_dir() else PLUGIN_ROOT),
         )
     except FileNotFoundError:
         return {

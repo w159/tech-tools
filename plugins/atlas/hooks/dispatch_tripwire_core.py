@@ -1343,7 +1343,11 @@ def _record_dispatch_deny(
     try:
         who = dict(_dispatch_attribution(tinput or {}, session_model), tool=tool)
         atlas_db.record_friction(
-            conn, session, "dispatch_denied:" + code, snippet=json.dumps(who)
+            conn,
+            session,
+            "dispatch_denied:" + code,
+            snippet=json.dumps(who),
+            meta={"role": who["agent"], "tool": tool, "code": code},
         )
     except Exception as exc:
         _record_fault(exc)
@@ -1991,7 +1995,8 @@ def _native_tool_policy(payload):
                     f"replacement is reachable even from a subagent: if `{replacement}` "
                     f"is not in your tool list yet, load it first with "
                     f'ToolSearch("select:{selector}"), then call `{replacement}` '
-                    "(1:1 replacement)."
+                    "(1:1 replacement). If lean-ctx is unusable here, set "
+                    "ATLAS_TRIPWIRE_HARD=off to disable this deny."
                 )
                 return True, None
             # Not plausibly reachable: no lean-ctx binary on PATH, or no lean-ctx

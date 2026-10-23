@@ -25,7 +25,7 @@ const dashboard: Bun.Server<undefined> = Bun.serve({
     if (url.pathname === "/") {
       return new Response(`<html><head><meta name="atlas-token" content="${token}">${legacyIndex ? "" : `<meta name="atlas-base" content="">`}</head></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
-    const supplied = request.headers.get("x-atlas-token") ?? (url.pathname === "/api/v2/stream" ? url.searchParams.get("token") : null);
+    const supplied = request.headers.get("x-atlas-token"); // header only: the dashboard rejects ?token= on the stream
     if (request.method !== "GET" || url.pathname.startsWith("/api/v2/")) {
       if (supplied !== token) return Response.json({ ok: false, error: "bad_token" }, { status: 401 });
     }
@@ -149,16 +149,17 @@ describe("atlas gateway", () => {
     expect(asset.headers.get("set-cookie")).toBeNull();
   });
 
-  it("streams SSE without buffering, adds ?token=, and aborts the dashboard when the client leaves", async () => {
+  it("streams SSE without buffering, authenticates by header only (no token or ticket in the URL), and aborts the dashboard when the client leaves", async () => {
     const abort = new AbortController();
-    const response = await gateway.handle(new Request("http://127.0.0.1:7317/atlas/api/v2/stream?project=all&token=stale", { signal: abort.signal }), ctx(drive));
+    const response = await gateway.handle(new Request("http://127.0.0.1:7317/atlas/api/v2/stream?project=all&token=stale&ticket=stale", { signal: abort.signal }), ctx(drive));
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/event-stream");
     const reader = response.body!.getReader();
     const first = await reader.read(); // arrives while the upstream stream is still open
     expect(new TextDecoder().decode(first.value)).toContain("event: tick");
     const hit = seen.find((entry) => entry.path.startsWith("/api/v2/stream"))!;
-    expect(hit.path).toBe("/api/v2/stream?project=all&token=tok-1");
+    expect(hit.path).toBe("/api/v2/stream?project=all");
+    expect(hit.headers.get("x-atlas-token")).toBe("tok-1");
     abort.abort();
     await reader.cancel().catch(() => undefined);
     await streamClosed.promise; // bun's test timeout bounds this if the gateway never aborts the upstream

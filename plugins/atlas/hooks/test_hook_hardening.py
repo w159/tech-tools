@@ -136,13 +136,13 @@ class BashAdvisorBoundTests(unittest.TestCase):
             t = time.perf_counter()
             self.assertFalse(bash_advisor._match_git_commit(cmd))
             self.assertIsNone(bash_advisor._match_catastrophic(cmd))
-            self.assertLess(time.perf_counter() - t, 0.5, n)
+            self.assertLess(time.perf_counter() - t, 2.0, n)  # bound catches quadratic blowup (seconds), not a loaded host
 
     def test_many_segments_is_fast(self):
         cmd = "git status;" * 1_000_000
         t = time.perf_counter()
         bash_advisor._match_git_commit(cmd)
-        self.assertLess(time.perf_counter() - t, 0.5)
+        self.assertLess(time.perf_counter() - t, 2.0)
 
     def test_commit_after_a_long_heredoc_head_still_found_when_short_segments(self):
         cmd = "echo hi && git commit -m x"

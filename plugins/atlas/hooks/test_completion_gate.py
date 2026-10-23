@@ -161,6 +161,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertNotIn('"decision": "block"', r.stdout)
 
     def test_orchestration_session_missing_artifacts_is_blocked(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
 
@@ -237,6 +238,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertNotIn('"decision": "block"', r.stdout)
 
     def test_missing_roadmap_blocks_with_condition_d(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         self._satisfy_all_conditions()
         os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
@@ -244,6 +246,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertIn("ROADMAP.md is missing", r.stdout)
 
     def test_missing_readme_blocks_with_condition_e(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         self._satisfy_all_conditions()
         os.remove(os.path.join(self.tmp, "README.md"))
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
@@ -729,7 +732,9 @@ class InProcessMainTest(unittest.TestCase):
         # Observability DB lives outside the project repo in production; exclude it
         # so conn.close() checkpointing WAL into atlas.db does not register as drift.
         with open(os.path.join(self.tmp, ".gitignore"), "w") as f:
-            f.write("atlas.db*\n")
+            # Hook state also lives outside the repo in production; untracked
+            # files now count as changes, so keep the test's hookstate dir out.
+            f.write("atlas.db*\nhookstate/\n")
         subprocess.run(
             ["git", "-C", self.tmp, "add", "-A"], check=True, capture_output=True
         )
@@ -1014,6 +1019,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_missing_changelog_condition_c(self):
         self._satisfy_all()
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         os.remove(os.path.join(self.tmp, "docs", "CHANGELOG.md"))
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
@@ -1021,6 +1027,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_missing_roadmap_condition_d(self):
         self._satisfy_all()
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
@@ -1028,6 +1035,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_missing_readme_condition_e(self):
         self._satisfy_all()
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         os.remove(os.path.join(self.tmp, "README.md"))
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
@@ -1190,7 +1198,7 @@ class HelperUnitTest(unittest.TestCase):
             (root / ".atlas" / "evidence").mkdir(
                 parents=True
             )  # evidence/ exists so is_dir() True
-            with mock.patch.object(Path, "iterdir", side_effect=OSError):
+            with mock.patch("os.walk", side_effect=OSError):
                 # (a) fails open on OSError
                 from completion_gate import _check_evidence
 
@@ -1812,6 +1820,85 @@ class ShellEditDelegationTest(unittest.TestCase):
             self.conn, later, "Edit", "main", 0, str(self.root / "src/extra.py")
         )
         self.assertIn("(m) Delegation mandate", self.gate())
+
+
+
+class NestedEvidenceTest(unittest.TestCase):
+    """(a) counts evidence in the documented nested layout
+    .atlas/evidence/<YYYY-MM-DD>-<slug>/..., not only the top level."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.ev = self.tmp / ".atlas" / "evidence" / "2026-10-23-slug"
+        self.ev.mkdir(parents=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_fresh_nested_file_satisfies(self):
+        (self.ev / "out.txt").write_text("x")
+        self.assertTrue(completion_gate._check_evidence(self.tmp, time.time() - 60))
+
+    def test_stale_nested_file_does_not(self):
+        f = self.ev / "out.txt"
+        f.write_text("x")
+        old = time.time() - 3600
+        os.utime(f, (old, old))
+        self.assertFalse(completion_gate._check_evidence(self.tmp, time.time() - 60))
+
+    def test_nested_file_counts_when_start_unknown(self):
+        (self.ev / "out.txt").write_text("x")
+        self.assertTrue(completion_gate._check_evidence(self.tmp, None))
+
+    def test_symlinked_file_is_ignored(self):
+        target = self.tmp / "outside.txt"
+        target.write_text("x")
+        os.symlink(target, self.ev / "link.txt")
+        self.assertFalse(completion_gate._check_evidence(self.tmp, time.time() - 60))
+
+
+class DocsConditionsScopedToCodeTest(GateOrchestrationTest):
+    """(c)/(d)/(e)/(h) only apply to a run that shipped non-docs code."""
+
+    def _gate(self):
+        env = dict(self.env, ATLAS_GATE_PHASES="off", ATLAS_GATE_COLONY="off")
+        return _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)
+
+    def _assert_cdeh_silent(self, out):
+        for frag in (
+            "CHANGELOG.md is missing",
+            "ROADMAP.md is missing",
+            "README.md at the project root is missing",
+            "ROADMAP reconciliation",
+        ):
+            self.assertNotIn(frag, out)
+
+    def test_read_only_run_passes_cdeh(self):
+        self._log_run_read("src/app.py")
+        with open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w") as f:
+            f.write("- [done] shipped thing\n")
+        r = self._gate()
+        self._assert_cdeh_silent(r.stdout)
+
+    def test_docs_only_run_passes_cdeh(self):
+        self._log_run_write("docs/notes.md")
+        r = self._gate()
+        self._assert_cdeh_silent(r.stdout)
+
+    def test_code_shipped_still_blocks_cde(self):
+        self._log_run_write("src/app.py")
+        r = self._gate()
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("CHANGELOG.md is missing", r.stdout)
+        self.assertIn("ROADMAP.md is missing", r.stdout)
+        self.assertIn("README.md at the project root is missing", r.stdout)
+
+    def test_code_shipped_still_blocks_h(self):
+        self._log_run_write("src/app.py")
+        with open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w") as f:
+            f.write("- [done] shipped thing\n")
+        r = self._gate()
+        self.assertIn("ROADMAP reconciliation", r.stdout)
 
 
 if __name__ == "__main__":
@@ -2667,6 +2754,7 @@ class InFlightDispatchOrchestrationTest(GateOrchestrationTest):
         self.assertEqual(r.stdout.strip(), "", r.stdout)
 
     def test_gate_blocks_once_subagent_completes(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         r = _run_gate(
             {
                 "session_id": "sess-orch",
@@ -3472,6 +3560,22 @@ class BlockLoopCapTest(unittest.TestCase):
             conn.close()
         self.assertEqual(len(rows), 1)
 
+    def test_passing_stop_resets_the_consecutive_count(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        db = os.path.join(tmp, "atlas.db")
+        atlas_db.init(atlas_db.connect(db))
+        with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_HOOKSTATE_DIR": tmp}):
+            lim = completion_gate.BLOCK_LOOP_LIMIT
+            for _ in range(lim):
+                self.assertFalse(completion_gate._block_loop_exhausted("s-reset", ["c"]))
+            completion_gate._block_loop_reset("s-reset")  # a passing Stop
+            got = [
+                completion_gate._block_loop_exhausted("s-reset", ["c"])
+                for _ in range(lim)
+            ]
+            self.assertEqual(got, [False] * lim)
+
     def test_env_override_moves_exhaustion_point(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
@@ -3748,6 +3852,7 @@ class GateDeltaReblockTest(GateOrchestrationTest):
         self.env["ATLAS_GATE_COLONY"] = "off"
 
     def _run(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         return _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
 
     def test_first_stop_full_clause_then_delta(self):

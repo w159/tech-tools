@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { runCaptureSync } from "./proc";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import {
@@ -89,13 +89,13 @@ test("toolResponseText never throws on hostile content", () => {
 // ---- connector name re-splitting ----
 
 test("omp-minted connector names are re-split so the hooks.json matcher and the python hook both work", async () => {
-	const matcher = "mcp__plugin_atlas_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*";
+	const matcher = "mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*";
 	const h = harness([hook("PostToolUse", "connector_credential_watch.py", matcher)]);
 	await h.handlers.tool_result({ toolName: "mcp__falcon-mcp_falcon_search_hosts", input: {}, content: "HTTP 401 Unauthorized", isError: false }, h.ctx());
-	await h.handlers.tool_result({ toolName: "mcp__plugin_atlas_cw_search_tickets", input: {}, content: "x", isError: false }, h.ctx());
+	await h.handlers.tool_result({ toolName: "mcp__plugin_armada_cw_search_tickets", input: {}, content: "x", isError: false }, h.ctx());
 	await h.handlers.tool_result({ toolName: "mcp__cipp_users_get", input: {}, content: "x", isError: false }, h.ctx());
 	await h.handlers.tool_result({ toolName: "mcp__lean_ctx_ctx_read", input: {}, content: "x", isError: false }, h.ctx()); // not a connector
-	expect(h.payloads.map(p => p.payload.tool_name)).toEqual(["mcp__falcon-mcp__falcon_search_hosts", "mcp__plugin_atlas__cw_search_tickets", "mcp__cipp__users_get"]);
+	expect(h.payloads.map(p => p.payload.tool_name)).toEqual(["mcp__falcon-mcp__falcon_search_hosts", "mcp__plugin_armada__cw_search_tickets", "mcp__cipp__users_get"]);
 	expect(h.payloads[0].payload.tool_response).toBe("HTTP 401 Unauthorized");
 });
 
@@ -107,7 +107,7 @@ test("claudeMcpName splits on the longest known server, accepts the xd:// form, 
 	expect(claudeMcpName("mcp__cipp_")).toBe("mcp__cipp_"); // an empty tool is not a split
 	expect(claudeMcpName("mcp__serena_find_symbol")).toBe("mcp__serena_find_symbol");
 	expect(claudeMcpName("bash")).toBe("bash");
-	expect([...CONNECTOR_SERVERS].sort()).toEqual(["cipp", "connectwise", "falcon-mcp", "gcloud", "plaid", "plugin_atlas"]);
+	expect([...CONNECTOR_SERVERS].sort()).toEqual(["cipp", "connectwise", "falcon-mcp", "gcloud", "plaid", "plugin_armada"]);
 });
 
 // ---- contracts/mcp-servers.json is the connector list's source ----
@@ -269,13 +269,17 @@ test("loadBridgedHooks stays turn-only; the session-end family loads through its
  * Process env is restored afterwards, including variables that were originally unset.
  */
 async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
-	const scratch = join(import.meta.dir, "..", "..", "..", ".scratch");
+	let scratch = join(import.meta.dir, "..", "..", "..", ".scratch");
+	// A checkout that itself lives under a system temp root (CI staging in /tmp) would put the fixture back inside the
+	// exempt scratch space; fall back to a dot-dir under the real home for that layout only (read before HOME is pinned).
+	if ([tmpdir(), "/tmp", "/private/tmp"].some(r => scratch.startsWith(`${r}/`))) scratch = join(homedir(), ".atlas-test-scratch");
 	mkdirSync(scratch, { recursive: true });
 	const root = mkdtempSync(join(scratch, "bridge-real-"));
 	const emptyHome = mkdtempSync(join(dir, "home-"));
 	const names = ["ATLAS_DB", "ATLAS_HOOKSTATE_DIR", "ATLAS_HARNESS", "HOME"] as const;
 	const keep: Record<string, string | undefined> = Object.fromEntries(names.map(n => [n, process.env[n]]));
 	try {
+		writeFileSync(join(root, "package.json"), "{}\n"); // project marker: gates only arm inside a project (matters under the home fallback)
 		mkdirSync(join(root, "docs"));
 		mkdirSync(join(root, "src"));
 		writeFileSync(join(root, "docs", "CHANGELOG.md"), "x\n");

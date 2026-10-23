@@ -1,5 +1,28 @@
 # Changelog
 
+## 16.0.0 (2026-10-23)
+
+Audit fixes and the connector move on branch `claude/atlas-audit-fixes`. Details: `plugins/atlas/CHANGELOG.md` and `plugins/armada/CHANGELOG.md`. Audit record: `docs/audits/2026-10-23-atlas-deep-dive.md`.
+
+- Breaking: the vendor connectors moved from atlas to armada. Tool names are now `mcp__plugin_armada_<vendor>__*` and credentials are set in `/plugin` config for armada (same key names, with a fallback to values saved under atlas). Install atlas and armada together.
+- Breaking: the dashboard stream and terminal no longer accept `?token=`. Browsers use a single-use ticket from `POST /api/v2/stream/ticket`; other callers send `X-Atlas-Token`. The access log redacts token and ticket values.
+- Self-fix treats finding text as data, holds test and build config changes for human review, and verifies with credentials removed from the environment. It stays on by default.
+- Board notes and recalled memory reach agents as untrusted data. Stored transcripts go through one shared redactor with best-effort patterns for SSN, routing, account, card and date of birth; existing rows are not rewritten.
+- Colony and channels: live leads survive hosts without `ps`, seat routing falls back to herdr, notes are size-capped and archived, torn lines are repaired and a corrupt `channels.json` is preserved.
+- Completion gate: nested dated evidence folders count, and the CHANGELOG, ROADMAP, README and stale-ROADMAP checks apply only to runs that shipped code. The dispatch template now passes the tripwire.
+- Test suites no longer depend on session environment, user id or checkout path; install-parity checks are opt-in with `ATLAS_CHECK_INSTALL_PARITY=1`.
+- programmer now ships its six code-review lens agents.
+- Public surface: Apache-2.0 `LICENSE` files (repo root, atlas, armada), a rewritten root README, shorter manifests, per-plugin license listing, CONTRIBUTING scope rule, and the atlas changelog before 12.5.10 archived under `docs/archive/`.
+- Hooks: one `event_dispatch.py` process per Pre/PostToolUse event (about 30-45% lower overhead on Read, Bash and Edit); hook time budgets; Stop hook per-step time slices. Counts are now 18 programs / 22 bindings.
+- tmux colony: team cap of 6 (`ATLAS_MAX_TEAM`), opt-in kill on wait timeout (`ATLAS_WAIT_KILL`), scrollback limit and secret masking, coalesced feed, workers cannot dispatch, orphan sweep, rig spec lock, live-pane reap guard.
+- Data: friction metadata, versioned migrations (schema 2), alert-only `gate_block_spike` finding, `atlas_doctor.py --redact-history`, `atlas_todo.py notes-archive`.
+- Self-fix verifies in a clean temp checkout without network where `unshare` exists; tests run with `ATLAS_SELFFIX=0`.
+- Dashboard: one HTML escape helper, typing guard in `keys.js`, project selector needs a marker unless pinned, gateway strips the ticket, health payload split.
+- Skills: `atlas-ux-test` is self-sufficient, one copy per reference, accurate manual-skill and tool lists, ASCII cleanup.
+- PAN-OS: `panos_commit` (partial) and `panos_commit_all` now send `action=`; found by the audit and fixed.
+- programmer: the code-review skill description cites 30 books (verified: 30 book rows in `plugins/programmer/skills/code-review/references/books.md`).
+- New env vars and flags are listed in `docs/reference/atlas-reference.md`.
+
 ## 15.0.0 (2026-10-22, unreleased)
 
 ### Added

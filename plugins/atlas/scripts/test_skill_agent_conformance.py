@@ -427,6 +427,7 @@ _KNOWN_CLAUDE_TOOLS = {
     "NotebookEdit",
     "Read",
     "Skill",
+    "ToolSearch",
     "Task",  # legacy alias still matched by hooks
     "TaskCreate",
     "TaskGet",

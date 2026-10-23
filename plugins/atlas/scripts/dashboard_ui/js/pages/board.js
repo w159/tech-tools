@@ -42,13 +42,13 @@ function openMenu(anchor, entries, onPick) {
   const close = () => {
     menu.remove();
     document.removeEventListener("mousedown", away, true);
-    document.removeEventListener("keydown", esc, true);
+    document.removeEventListener("keydown", onEsc, true);
     document.dispatchEvent(new Event("menu-closed"));
   };
   const away = (ev) => {
     if (!menu.contains(ev.target)) close();
   };
-  const esc = (ev) => {
+  const onEsc = (ev) => {
     if (ev.key === "Escape") {
       ev.stopPropagation();
       close();
@@ -57,7 +57,7 @@ function openMenu(anchor, entries, onPick) {
   };
   anchor.parentElement.append(menu);
   document.addEventListener("mousedown", away, true);
-  document.addEventListener("keydown", esc, true);
+  document.addEventListener("keydown", onEsc, true);
   menu.querySelector("button").focus();
 }
 

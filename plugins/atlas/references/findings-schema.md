@@ -1,97 +1,80 @@
-# findings.json schema — the atlas evidence ledger
+# findings.json schema - the atlas evidence ledger
 
-This document is derived 1:1 from `plugins/atlas/scripts/atlas_finding.py`, the only
-CLI the plugin sanctions for writing verdicts to `.atlas/.run/findings.json`.
-Every field below cites the script line that produces it.
+The findings ledger is an append-only list of verdicts, one entry per checked claim, kept at `.atlas/.run/findings.json`. This document is derived from `plugins/atlas/scripts/atlas_finding.py`, the only CLI the plugin sanctions for writing to it. Names in parentheses are functions or constants in that script; line numbers are left out because they drift.
 
 ## Purpose and writer
 
-`atlas_finding.py` appends one verdict per invocation to `.atlas/.run/findings.json`
-(`atlas_finding.py:2`). It exists because the completion gate's condition (b) requires
-an entry with status `verified` in the ledger, but the `atlas:verifier` agent runs with
-Write/Edit blocked — Bash is its only write path, so this CLI is the ledger's writer
-(`atlas_finding.py:4-10`).
+`atlas_finding.py` appends one verdict per invocation. It exists because the completion gate's condition (b) requires an entry with status `verified` in the ledger, but the `atlas:verifier` agent runs with Write and Edit blocked. Bash is its only write path, so this CLI is the ledger's writer.
 
-Compliance framing (FTC Safeguards / GLBA / SEC Reg S-P contexts): the ledger is an
-evidence artifact. It records verdicts and file:line or command evidence only — never
-connector secrets. If configuration is ever mentioned in a finding, name the
-environment variable (`ATLAS_ENV_FILE`) — never its value.
+The ledger records verdicts and evidence only: file and line references, test ids, and commands. It should never contain secrets. If a finding has to mention configuration, name the environment variable (for example `ATLAS_ENV_FILE`), never its value.
 
 ## Location and root detection
 
-- Fixed relative path: `.atlas/.run/findings.json` (`atlas_finding.py:39`).
-- Project root is the nearest ancestor holding `docs/` or `.atlas/` (`atlas_finding.py:42-47`);
-  `--root` overrides detection (`atlas_finding.py:105`).
+- Fixed relative path: `.atlas/.run/findings.json` (`RELPATH`).
+- The project root is the nearest ancestor holding `docs/` or `.atlas/` (`find_root`); `--root` overrides detection.
 
 ## Entry schema
 
-One JSON object per verified verdict, written by `build_entry()`
-(`atlas_finding.py:73-88`). Fields, types, and defaults (defaults come from the
-argparse definitions at `atlas_finding.py:93-105`):
+One JSON object per verdict, built by `build_entry()`. Defaults come from the argparse definitions in `main()`:
 
-| Field | Type | Default | Script lines |
-|---|---|---|---|
-| `id` | string | required (`--id`) | `:75`, `:93` |
-| `surface` | string | `"backend"` (`--surface`) | `:76`, `:100` |
-| `category` | string | `"correctness"` (`--category`) | `:77`, `:101` |
-| `severity` | string | `"medium"` (`--severity`) | `:78`, `:102` |
-| `title` | string | required (`--title`) | `:79`, `:95` |
-| `evidence` | string[] | `[]` (repeatable `--evidence`: path, test id, log) | `:80`, `:96` |
-| `doc_refs` | string[] | `[]` (repeatable `--doc-ref`) | `:81`, `:99` |
-| `reproduction` | string | `""` (exact command that demonstrates it) | `:82`, `:97` |
-| `proposed_fix` | string | `""` (`--proposed-fix`) | `:83`, `:98` |
-| `blast_radius` | string | `"module"` (`--blast-radius`) | `:84`, `:103` |
-| `status` | enum | required (`--status`) | `:85`, `:94` |
-| `verified_at` | string | UTC ISO-8601, seconds precision, stamped at write time | `:86` |
-| `verified_by` | string | `"atlas:verifier"` (`--by`) | `:87`, `:104` |
+| Field | Type | Default |
+|---|---|---|
+| `id` | string | required (`--id`) |
+| `surface` | string | `"backend"` (`--surface`) |
+| `category` | string | `"correctness"` (`--category`) |
+| `severity` | string | `"medium"` (`--severity`) |
+| `title` | string | required (`--title`) |
+| `evidence` | string[] | `[]` (repeatable `--evidence`: path, test id, log) |
+| `doc_refs` | string[] | `[]` (repeatable `--doc-ref`) |
+| `reproduction` | string | `""` (exact command that demonstrates it) |
+| `proposed_fix` | string | `""` (`--proposed-fix`) |
+| `blast_radius` | string | `"module"` (`--blast-radius`) |
+| `status` | enum | required (`--status`) |
+| `verified_at` | string | UTC ISO-8601, seconds precision, stamped at write time |
+| `verified_by` | string | `"atlas:verifier"` (`--by`) |
 
-The `status` enum is `verified | rejected | needs-evidence | open` (`STATUSES`,
-`atlas_finding.py:38`); only `verified` satisfies the completion gate (module
-docstring, `atlas_finding.py:4-5`).
+The `status` enum is `verified | rejected | needs-evidence | open` (`STATUSES`). Only `verified` satisfies the completion gate.
 
 ## The verified stamp
 
-Every appended entry carries two stamp fields set at write time, not by the caller:
-`verified_at` (UTC timestamp, `atlas_finding.py:86`) and `verified_by` (writer
-identity, default `atlas:verifier`, `atlas_finding.py:87`). An entry with
-`status: "verified"` plus its stamp is the machine-checkable proof the completion
-gate consumes.
+Every appended entry carries two fields set at write time, not by the caller: `verified_at` (UTC timestamp) and `verified_by` (writer identity, default `atlas:verifier`). An entry with `status: "verified"` plus its stamp is the machine-checkable proof the completion gate consumes.
 
 ## Append-only intent
 
-`main()` loads the existing ledger, appends the new entry, and saves
-(`atlas_finding.py:118-120`). Existing rows are never edited or removed; a correction
-is a new entry. The save is atomic — write to a temp file in the same directory, then
-`os.replace` — so a crash mid-append cannot truncate the durable ledger
-(`atlas_finding.py:65-70`). Treat the file as append-only evidence: do not hand-edit,
-reorder, or prune rows.
+`main()` takes a file lock, loads the existing ledger, appends the new entry and saves. Existing rows are never edited or removed; a correction is a new entry. `save()` writes to a temp file in the same directory and then calls `os.replace`, so a crash mid-append cannot truncate the ledger. Treat the file as append-only: do not hand-edit, reorder or prune rows.
 
 ## File shape and tolerance
 
-The ledger is a JSON array. `load()` also unwraps a legacy `{"findings": [...]}`
-wrapper and starts an empty ledger when the file is missing or unreadable
-(`atlas_finding.py:50-63`).
+The ledger is a JSON array. `load()` also unwraps a `{"findings": [...]}` wrapper and starts an empty ledger when the file is missing. A file that exists but is corrupt or not a ledger is moved aside (`_quarantine`) with a warning on stderr instead of being overwritten.
 
-## Real entry from this workspace's ledger
+## Example entry
 
-Verbatim from `.atlas/.run/findings.json` (this repo's own run history). It uses the
-older batch/claim shape that earlier tooling wrote; the schema table above is what
-`atlas_finding.py` writes today, and `load()` round-trips both. No secrets appear in
-ledger entries — evidence is test commands and summaries.
+A synthetic entry in the shape `atlas_finding.py` writes today:
 
 ```json
 {
-  "batch": "batch-1",
-  "claim": "5 HIGH defects fixed: atlas_db is_shipping_agent + _dispatch_coverage_counts for Law 5 (g); atlas_context_optimizer used-set no longer fails-open; auto_skill surfaces skill_factory errors to stderr and exits 0 fail-open (observable on stderr); memory_capture multi-session orbit via _resolve_scope/_in_clause; operating-contract.md promoted to plugin-level with 14 SKILL.md updates.",
+  "id": "S3",
+  "surface": "backend",
+  "category": "correctness",
+  "severity": "medium",
+  "title": "budget read path sums all income rows",
+  "evidence": [
+    "backend/tests/test_budget.py::test_multi_income",
+    "pytest backend/tests/test_budget.py -q -> 14 passed"
+  ],
+  "doc_refs": ["docs/specs/budget.md"],
+  "reproduction": "pytest backend/tests/test_budget.py -q",
+  "proposed_fix": "",
+  "blast_radius": "module",
   "status": "verified",
-  "verifier": "atlas:verifier (fresh)",
-  "evidence": "python3 -m unittest discover -s plugins/atlas/hooks -p \"test_*.py\"  -> Ran 67 tests, OK (0 failures); python3 -m unittest discover -s plugins/atlas/scripts -p \"test_*.py\" -> Ran 129 tests, OK (0 failures); ruff check plugins/atlas/hooks plugins/atlas/scripts -> All checks passed (0 errors)"
+  "verified_at": "2026-01-15T10:42:07+00:00",
+  "verified_by": "atlas:verifier"
 }
 ```
 
-## Writer usage
+Older ledgers may hold a different shape (for example `batch`, `claim`, `verifier`, a single `evidence` string). `load()` round-trips them unchanged; new entries use the table above.
 
-From the module docstring (`atlas_finding.py:17-21`):
+## Writer usage
 
 ```bash
 python3 atlas_finding.py --id S3 --status verified \
@@ -100,6 +83,4 @@ python3 atlas_finding.py --id S3 --status verified \
     --reproduction "pytest backend/tests/test_budget.py -q"
 ```
 
-Exits 0 on success and prints the written entry; exits 1 on a bad status or an
-unwritable path — a silent failure here would recreate the bug this file fixes
-(`atlas_finding.py:22-24`).
+The command exits 0 on success and prints the written entry. It exits 1 on a bad status, a missing project root, or an unwritable path, because a silent failure here would let a run pass the gate without a recorded verdict.

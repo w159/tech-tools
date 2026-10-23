@@ -2,7 +2,7 @@
 name: atlas-readme
 description: "Generates an onboarding-grade README.md by inspecting the repo, tracing every claim to a file. Use when a repo has no README or a stale one."
 when_to_use: "write a README, update the README, onboarding docs, document this repo"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 paths: ["README.md", "**/README.md"]
 argument-hint: '[repo path] [audience: contributors/internal/both]'
 ---

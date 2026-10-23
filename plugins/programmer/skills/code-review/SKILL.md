@@ -1,13 +1,13 @@
 ---
 name: code-review
-description: This skill should be used when the user asks for a code review, PR review, adherence to software principles, or wants to know whether code matches best-practice principles from a curated book corpus. It reviews a target path or diff against 6 lenses derived from 31 books and produces a ranked, evidence-backed report.
+description: This skill should be used when the user asks for a code review, PR review, adherence to software principles, or wants to know whether code matches best-practice principles from a curated book corpus. It reviews a target path or diff against 6 lenses derived from 30 books and produces a ranked, evidence-backed report.
 argument-hint: "[path] [--scope diff|all] [--depth quick|standard] [--report <file>]"
 allowed-tools: Read, Grep, Glob, Bash, Agent, Write
 ---
 
 # Code Review
 
-Run a structured code review against 6 lenses derived from 31 software engineering books. Produce a ranked report of blockers, majors, minors, and notes, each finding cited to a book principle and backed by `file:line` evidence.
+Run a structured code review against 6 lenses derived from 30 software engineering books. Produce a ranked report of blockers, majors, minors, and notes, each finding cited to a book principle and backed by `file:line` evidence.
 
 ## Arguments
 

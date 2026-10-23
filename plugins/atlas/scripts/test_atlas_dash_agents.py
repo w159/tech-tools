@@ -423,9 +423,20 @@ class TestCapture(AgentsBase):
     def test_missing_pane_is_400(self):
         self.assertEqual(self.cap()[0], 400)
 
-    def test_herdr_backend_is_501(self):
-        status, body = self.cap(pane="wA:p1")
-        self.assertEqual((status, body["error"]), (501, "not_supported"))
+    def test_herdr_backend_reads_pane_redacted(self):
+        self.herdr.calls.clear()
+        status, body = self.cap(pane="wA:p1", lines=7)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["pane_id"], "wA:p1")
+        self.assertTrue(body["redacted"])
+        self.assertNotIn(FAKE_TOKEN, json.dumps(body))
+        self.assertIn("[REDACTED]", body["text"])
+        self.assertNotIn("\x1b", body["text"])
+        sent = [p for m, p in self.herdr.calls if m == "pane.read"][0]
+        self.assertEqual((sent["pane_id"], sent["lines"]), ("wA:p1", 7))
+
+    def test_herdr_unknown_pane_is_404(self):
+        self.assertEqual(self.cap(pane="nope")[0], 404)
 
     def test_rig_backend_returns_redacted_text(self):
         text = f"\x1b[31mred\x1b[0m Authorization: Bearer {FAKE_TOKEN}\n"

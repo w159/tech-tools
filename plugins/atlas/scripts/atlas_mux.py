@@ -535,8 +535,11 @@ def harness_argv(
             argv += ["--model", model]
         if level:
             argv += ["--effort", level]
-        # --allowedTools is variadic: another flag must follow it so it cannot swallow the prompt
+        # --disallowedTools and --allowedTools are variadic: another flag must follow each so it cannot swallow
+        # the prompt. A pane worker never dispatches (the lead owns every spawn).
         return argv + [
+            "--disallowedTools",
+            "Agent,Task",
             "--allowedTools",
             ",".join(WORKER_MCP_ALLOW),
             "--permission-mode",
@@ -627,6 +630,7 @@ def _windows(session: str) -> list | None:
 
 
 DEFAULT_PANE_SIZE = "200x50"
+HISTORY_LIMIT = 5000  # scrollback lines per pane of an atlas session (tmux default 2000 per pane, unbounded feeds otherwise)
 
 
 def _lead_size() -> str:
@@ -678,6 +682,7 @@ def _open_window(
             if created.returncode != 0 and "duplicate session" not in created.stderr:
                 return f"tmux new-session failed: {created.stderr.strip()}"
             _tmux("set-option", "-t", session, "remain-on-exit", "off")
+            _tmux("set-option", "-t", session, "history-limit", str(HISTORY_LIMIT))
             _tmux("set-option", "-t", session, "default-size", f"{width}x{height}")
         elif any(w["name"] == name for w in _windows(session) or []):
             return f"name_taken: {name} already runs in {session}"
@@ -851,6 +856,8 @@ def _new_team_session(
         "on",
     )
     if res.returncode == 0:
+        # session-level: panes opened after this inherit it (the first pane was created by new-session above)
+        _tmux("set-option", "-t", session, "history-limit", str(HISTORY_LIMIT))
         for argv in [
             *_team_session_argv(session, rec),
             *_team_window_argv(f"{session}:{session}"),
@@ -859,14 +866,45 @@ def _new_team_session(
     return res
 
 
+def _team_windows(session: str) -> list:
+    """Names of a team session's tiled windows, in order: the first (named like the session), then
+    `<session>-w2`, `-w3`... Falls back to the first window when tmux cannot list them."""
+    names = [
+        w["name"]
+        for w in _windows(session) or []
+        if w["name"] == session or re.fullmatch(re.escape(session) + r"-w\d+", w["name"])
+    ]
+    return names or [session]
+
+
+def _window_widths(session: str, window: str) -> list:
+    res = _tmux("list-panes", "-t", f"{session}:{window}", "-F", "#{window_width}")
+    if res.returncode != 0:
+        return []
+    return [_num(int, w, 1) for w in res.stdout.split() if w.isdigit()]
+
+
 def _split_team_window(
     session: str, name: str, pane: str
 ) -> subprocess.CompletedProcess:
+    wins = _team_windows(session)
+    last = wins[-1]
+    widths = _window_widths(session, last)
+    if len(widths) >= 3 and widths[0] // (len(widths) + 1) < MIN_PANE_COLS:
+        # 4+ workers would leave each under MIN_PANE_COLS: open the next team window instead of tiling tighter
+        wname = f"{session}-w{len(wins) + 1}"
+        res = _tmux(
+            "new-window", "-d", "-t", session, "-n", wname, "-P", "-F", "#{pane_id}", pane
+        )
+        if res.returncode == 0:
+            for argv in _team_window_argv(f"{session}:{wname}"):
+                _tmux(*argv)
+        return res
     res = _tmux(
         "split-window",
         "-d",
         "-t",
-        f"{session}:{session}",
+        f"{session}:{last}",
         "-P",
         "-F",
         "#{pane_id}",
@@ -884,23 +922,26 @@ def _split_team_window(
     return res
 
 
+MIN_PANE_COLS = 70
+
+
 def _team_layout(count: int, width: int) -> str:
     """Side by side while each pane keeps >= 70 cols, else one wide pane over the rest; 4+ tile."""
     if count == 3:
-        return "even-horizontal" if (width - 2) // 3 >= 70 else "main-horizontal"
+        return "even-horizontal" if (width - 2) // 3 >= MIN_PANE_COLS else "main-horizontal"
     return "even-horizontal" if count <= 2 else "tiled"
 
 
 def _relayout_team(session: str) -> None:
-    win = f"{session}:{session}"
-    res = _tmux("list-panes", "-t", win, "-F", "#{window_width}")
-    widths = (
-        [_num(int, w, 1) for w in res.stdout.split() if w.isdigit()]
-        if res.returncode == 0
-        else []
-    )
-    width = widths[0] if widths else _num(int, _lead_size().split("x")[0], 80)
-    _tmux("select-layout", "-t", win, _team_layout(max(1, len(widths)), width))
+    for window in _team_windows(session):
+        widths = _window_widths(session, window)
+        width = widths[0] if widths else _num(int, _lead_size().split("x")[0], 80)
+        _tmux(
+            "select-layout",
+            "-t",
+            f"{session}:{window}",
+            _team_layout(max(1, len(widths)), width),
+        )
 
 
 def _open_team_pane(session: str, name: str, pane: str, team: dict) -> str | None:
@@ -1585,6 +1626,9 @@ def _sha(*parts) -> str:
     return hashlib.sha1("\x1f".join(map(str, parts)).encode()).hexdigest()
 
 
+DEFAULT_MAX_TEAM = 6  # workers per team; ATLAS_MAX_TEAM overrides
+
+
 def build_team(
     task_class: str, effort: str, paths=None, task: str = "", team_id: str | None = None
 ) -> dict:
@@ -1593,6 +1637,13 @@ def build_team(
     cell = atlas_resolve.resolve(task_class, effort, paths)
     scope = cell["file_scope"]
     tid = team_id or "t" + _sha(task_class, effort, *scope, task)[:6]
+    cap = _cfg_int("ATLAS_MAX_TEAM", os.environ.get("ATLAS_MAX_TEAM") or DEFAULT_MAX_TEAM)
+    total = sum(_cfg_int("count", spec["count"]) for spec in cell["team"])
+    if total > cap:
+        raise ValueError(
+            f"team of {total} workers exceeds the cap of {cap} (each worker is a paid claude session); "
+            "split the task, or raise it with ATLAS_MAX_TEAM"
+        )
     members = []
     for spec in cell["team"]:
         for i in range(_cfg_int("count", spec["count"])):
@@ -1796,6 +1847,22 @@ def _team_thinking(harness: str, role: str) -> str | None:
     )
 
 
+def _sweep_orphan_session(team_id: str) -> str | None:
+    """spawn-team found atlas-<team> already there. Every pane dead means a finished or crashed run left it
+    behind (remain-on-exit keeps dead panes): reap it so the spawn starts clean. A live pane is somebody's
+    worker, so refuse and name the reap command. An error string or None."""
+    session = _session(team_id)
+    if _tmux("has-session", "-t", session).returncode != 0:
+        return None
+    if any(not p["dead"] for p in _team_panes(session)):
+        return (
+            f"session {session} still has live worker panes; run "
+            f"`atlas_mux.py reap --team {team_id}` first (or pass a different --team-id)"
+        )
+    _tmux("kill-session", "-t", f"={session}")
+    return None
+
+
 def cmd_spawn_team(args) -> int:
     root = _root(args)
     task = (
@@ -1839,9 +1906,16 @@ def cmd_spawn_team(args) -> int:
     os.environ["ATLAS_MUX"] = (
         "tmux"  # spawn-team is the explicit opt-in cmd_spawn checks for
     )
+    if transport() == "tmux":
+        busy = _sweep_orphan_session(rec["team_id"])
+        if busy:
+            return _emit({"ok": False, "error": busy}, 1)
     run_id, sid = _lead_run(root, args.session)
     lead = _team_lead(sid, rec["team_id"])
-    chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
+    try:
+        chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
+    except atlas_todo.LockTimeout as exc:  # bounded registry lock: report, don't traceback
+        return _emit({"ok": False, "error": f"channel registry lock busy: {exc}"}, 1)
     os.environ["ATLAS_CHANNEL"] = chan
     os.environ["ATLAS_LEAD_NAME"] = lead
     rec["channel"], rec["transport"], rec["lead"] = chan, transport(), lead
@@ -1935,6 +2009,14 @@ def cmd_wait(args) -> int:
             break
         time.sleep(args.poll)
     silent = dead_silent()
+    timed_out = not all(_exited(root, n) or n in silent for n in names)
+    killed_on_timeout = False
+    if timed_out and (args.kill_on_timeout or os.environ.get("ATLAS_WAIT_KILL") == "1"):
+        # opt-in: a worker that outlived --timeout keeps costing; close its panes (reap still archives the team)
+        if rec.get("transport") not in ("claude-bg", "herdr"):
+            killed_on_timeout = (
+                _tmux("kill-session", "-t", f"={_session(rec['team_id'])}").returncode == 0
+            )
     allnotes = atlas_todo.notes(root)
     members, w2w = [], 0
     for n in names:
@@ -1962,6 +2044,7 @@ def cmd_wait(args) -> int:
             "members": members,
             "notes_worker_to_worker": w2w,
             "elapsed_s": round(time.time() - t0, 1),
+            **({"killed_on_timeout": True} if killed_on_timeout else {}),
         },
         0 if finished else 1,
     )
@@ -1976,9 +2059,8 @@ def _recover_team(root: str, team_id: str) -> dict | None:
         for p in _team_dir(root).glob(f"{team_id}-*.prompt")
     }
     windows = _windows(_session(team_id)) or []
-    names |= {
-        w["name"] for w in windows if w["name"] not in ("lead", _session(team_id))
-    }
+    own = set(_team_windows(_session(team_id))) | {"lead", _session(team_id)}
+    names |= {w["name"] for w in windows if w["name"] not in own}
     names |= {p["name"] for p in _team_panes(_session(team_id))}
     if not names and not windows:
         return None
@@ -2088,7 +2170,13 @@ def cmd_reap(args) -> int:
     ):  # an archived or recovered team already got (or never had) a wrap-up
         _post_wrapup(root, rec)
     _release_team_channel(root, rec)
-    reaped = atlas_todo.reap_channels(root)
+    try:
+        import atlas_seats
+
+        _seat_live = atlas_seats.pane_live
+    except Exception:  # fail-open: no seat module means TTL/pid rules only
+        _seat_live = None
+    reaped = atlas_todo.reap_channels(root, pane_live=_seat_live)
     if state == "live":
         arch.mkdir(parents=True, exist_ok=True)
         (_team_dir(root) / f"{rec['team_id']}.json").replace(archived_path)
@@ -2193,6 +2281,12 @@ def _parser() -> argparse.ArgumentParser:
         sp.add_argument("--root")
         sp.add_argument("--timeout", type=float, default=600)
         sp.add_argument("--poll", type=float, default=1.0)
+        if name == "wait":
+            sp.add_argument(
+                "--kill-on-timeout",
+                action="store_true",
+                help="kill the team's panes when the timeout expires (or set ATLAS_WAIT_KILL=1)",
+            )
     for name in ("status", "kill"):
         sp = sub.add_parser(name)
         if name == "status":

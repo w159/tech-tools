@@ -26,7 +26,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-HOOK = os.path.join(os.path.dirname(__file__), "dispatch_tripwire.py")
+HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dispatch_tripwire.py")
+_LEAVE_REAL_CWD = None
+
+
+def setUpModule():
+    # Relative paths like src/app.py resolve against cwd, and the product treats anything under the system temp
+    # dir as scratch, so run from a non-temp project dir regardless of where the checkout lives.
+    global _LEAVE_REAL_CWD
+    _LEAVE_REAL_CWD = _test_isolation.enter_real_project_cwd()
+
+
+def tearDownModule():
+    if _LEAVE_REAL_CWD:
+        _LEAVE_REAL_CWD()
 # Fixtures use throwaway temp dirs as cwd, where the scope check leaves gates unarmed.
 os.environ.setdefault("ATLAS_GATES", "always")
 # Fixtures fire dispatches back to back in one session; only ScopeGateTest wants the burst advisory.
@@ -249,16 +262,20 @@ class TripwireTest(unittest.TestCase):
         blob = json.dumps(data)
         self.assertIn("Agent", blob)
         self.assertIn("Task", blob)
-        # stronger: the tripwire group's matcher must include Agent and Task
+        # stronger: the tripwire binding's matcher must include Agent, Task and Skill. It is run by
+        # event_dispatch.py (one process per event); hooks.json carries that dispatcher.
+        import event_dispatch
+
         ok = False
-        for grp in data.get("hooks", {}).get("PostToolUse", []):
-            hooks = json.dumps(grp.get("hooks", grp))
-            if "dispatch_tripwire.py" in hooks:
-                self.assertIn("Agent", grp.get("matcher", ""))
-                self.assertIn("Task", grp.get("matcher", ""))
-                self.assertIn("Skill", grp.get("matcher", ""))
+        for name, matcher, _ in event_dispatch.BINDINGS["PostToolUse"]:
+            if name == "dispatch_tripwire":
+                self.assertIn("Agent", matcher)
+                self.assertIn("Task", matcher)
+                self.assertIn("Skill", matcher)
                 ok = True
-        self.assertTrue(ok, "dispatch_tripwire entry not found in PostToolUse")
+        self.assertTrue(ok, "dispatch_tripwire binding not found in PostToolUse")
+        for event in ("PreToolUse", "PostToolUse"):
+            self.assertIn(f'event_dispatch.py\\" {event}', entries)
 
     def _fresh_unmarked_session(self, session_id):
         import atlas_db
@@ -523,6 +540,36 @@ class TripwireTest(unittest.TestCase):
             (who["agent"], who["name"], who["model"], who["tool"]),
             ("atlas:implementer", "auth-impl", "sonnet", "Agent"),
         )
+
+    def test_pre_deny_writes_structured_friction_meta(self):
+        run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "name": "auth-impl",
+                    "prompt": TOOLS_BLOCK + "GOAL: fix it.\n",
+                },
+            ),
+            self.env,
+        )
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        meta = dict(
+            conn.execute(
+                "SELECT key, value FROM friction_meta WHERE friction_id IN "
+                "(SELECT id FROM friction_events WHERE category LIKE 'dispatch_denied:%')"
+            )
+        )
+        snippet = conn.execute(
+            "SELECT snippet FROM friction_events WHERE category LIKE 'dispatch_denied:%'"
+        ).fetchone()[0]
+        conn.close()
+        self.assertEqual(meta["role"], "atlas:implementer")
+        self.assertEqual(meta["tool"], "Agent")
+        self.assertEqual(meta["code"], "spec")
+        self.assertIn("auth-impl", snippet)  # the snippet is kept
 
     def test_post_logs_the_dispatch_model(self):
         run_hook(
@@ -921,17 +968,19 @@ class TripwireTest(unittest.TestCase):
         hj = os.path.join(os.path.dirname(__file__), "hooks.json")
         with open(hj) as f:
             data = json.load(f)  # asserts hooks.json parses as JSON
+        import event_dispatch
+
         pre = data["hooks"]["PreToolUse"]
-        # bash_advisor's Bash registration must be untouched.
-        bash_advisor_ok = any(
-            "bash_advisor.py" in json.dumps(g) and g.get("matcher") == "Bash"
-            for g in pre
+        self.assertTrue(
+            any("event_dispatch.py" in json.dumps(g) for g in pre),
+            "PreToolUse must run the event dispatcher",
         )
-        self.assertTrue(bash_advisor_ok, "bash_advisor Bash registration disturbed")
+        bindings = {n: m for n, m, _ in event_dispatch.BINDINGS["PreToolUse"]}
+        # bash_advisor's Bash registration must be untouched.
+        self.assertEqual(bindings.get("bash_advisor"), "Bash")
         # dispatch_tripwire must be registered on PreToolUse with the full matcher.
-        tw = [g for g in pre if "dispatch_tripwire.py" in json.dumps(g)]
-        self.assertTrue(tw, "dispatch_tripwire not registered on PreToolUse")
-        matcher = tw[0].get("matcher", "")
+        self.assertIn("dispatch_tripwire", bindings)
+        matcher = bindings["dispatch_tripwire"]
         for t in ("Edit", "Write", "MultiEdit", "Read", "Grep", "Glob", "Bash"):
             self.assertIn(t, matcher)
 
@@ -1981,6 +2030,12 @@ class NativeToolPolicyTest(unittest.TestCase):
         self.assertFalse(handled)
         self.assertNotIn('"deny"', output)
 
+    def test_grep_glob_deny_names_the_escape_hatch(self):
+        self._mcp_json()
+        for tool in ("Grep", "Glob"):
+            reason = self._deny_output(tool)["permissionDecisionReason"]
+            self.assertIn("ATLAS_TRIPWIRE_HARD=off", reason, tool)
+
     def test_unreadable_contract_allows_silently(self):
         self._mcp_json()
         with patch.object(self.dt, "NATIVE_TOOLS_PATH", str(self.root / "absent.json")):
@@ -2369,11 +2424,18 @@ class ColonyDenyTest(unittest.TestCase):
 
     def _denied(self, r):
         out = r.stdout.strip()
-        return bool(out) and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+        return (
+            bool(out)
+            and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+        )
 
     def test_tier_model_matching_resolver_is_accepted(self):
-        self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/medium", model="haiku")))
-        self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/high", model="sonnet")))
+        self.assertFalse(
+            self._denied(self._tier("atlas:explorer", "audit/medium", model="haiku"))
+        )
+        self.assertFalse(
+            self._denied(self._tier("atlas:explorer", "audit/high", model="sonnet"))
+        )
 
     def test_tier_model_must_equal_resolver_not_just_tier_allow(self):
         # opus is in implementer's tier_allow but the resolver says sonnet for implement/medium.
@@ -2389,11 +2451,19 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertIn("Drop the `model` param", r.stdout)
 
     def test_tier_opus_planner_denied_because_matrix_says_sonnet(self):
-        self.assertTrue(self._denied(self._tier("atlas:planner", "implement/high", model="opus")))
+        self.assertTrue(
+            self._denied(self._tier("atlas:planner", "implement/high", model="opus"))
+        )
 
     def test_tier_effort_matches_resolver(self):
-        self.assertFalse(self._denied(self._tier("atlas:implementer", "implement/medium", effort="medium")))
-        self.assertTrue(self._denied(self._tier("atlas:runner", "implement/medium", effort="high")))
+        self.assertFalse(
+            self._denied(
+                self._tier("atlas:implementer", "implement/medium", effort="medium")
+            )
+        )
+        self.assertTrue(
+            self._denied(self._tier("atlas:runner", "implement/medium", effort="high"))
+        )
 
     def _unnamed(self, env=None, **extra):
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)  # project root
@@ -2799,13 +2869,20 @@ class ColonyGuardUnitTest(unittest.TestCase):
         # sonnet is in explorer's tier_allow but there is no SCOPE line to bind it to.
         self.assertIsNotNone(
             self.dt._model_override(
-                {"subagent_type": "atlas:explorer", "model": "sonnet", "prompt": "no scope"}
+                {
+                    "subagent_type": "atlas:explorer",
+                    "model": "sonnet",
+                    "prompt": "no scope",
+                }
             )
         )
 
     def test_tier_resolver_failure_leaves_only_legacy_accepts(self):
-        tin = {"subagent_type": "atlas:explorer", "model": "sonnet",
-               "prompt": "SCOPE: audit/high\n"}
+        tin = {
+            "subagent_type": "atlas:explorer",
+            "model": "sonnet",
+            "prompt": "SCOPE: audit/high\n",
+        }
         self.assertIsNone(self.dt._model_override(tin))  # resolver healthy: accepted
         with patch.object(self.dt, "_scope_matrix", side_effect=ImportError("boom")):
             self.assertIsNotNone(self.dt._model_override(tin))
@@ -3616,8 +3693,16 @@ class TeamMuxDispatchTest(ReadOnlyInvestigationTest):
         env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
         hooks = os.path.dirname(os.path.abspath(__file__))
         out = subprocess.run(
-            [sys.executable, "-c", "import dispatch_tripwire as d;print(d.RESOLVE_CMD);print(d.SPAWN_TEAM_CMD)"],
-            cwd=hooks, env=env, capture_output=True, text=True, check=True,
+            [
+                sys.executable,
+                "-c",
+                "import dispatch_tripwire as d;print(d.RESOLVE_CMD);print(d.SPAWN_TEAM_CMD)",
+            ],
+            cwd=hooks,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.splitlines()
         scripts = Path(hooks).resolve().parent / "scripts"
         for cmd, script in zip(out, ("atlas_resolve.py", "atlas_mux.py")):

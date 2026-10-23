@@ -19,7 +19,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-MCP_DIR = Path(__file__).parent.parent / "mcp"
+MCP_DIR = Path(__file__).parent.parent.parent / "armada" / "mcp"
 ENV_LOADER = MCP_DIR / "_env" / "load.mjs"
 BUNDLES = sorted(MCP_DIR.glob("*/server.mjs"))
 

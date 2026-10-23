@@ -19,7 +19,7 @@ Regulated context (FTC Safeguards, SEC Reg S-P, GLBA): prioritize Policy/Gate (a
 | static-lint | PHP-CS-Fixer 3.95.x (or PHP_CodeSniffer); Rector 2.7.0 for upgrades | `composer require --dev friendsofphp/php-cs-fixer` | `vendor/bin/php-cs-fixer fix --dry-run --diff` | Rector in CI as `rector process src --dry-run` flags upgrade opportunities without applying them |
 | type-check | PHPStan 2.3.1 (or Psalm 6.x, 7.0-rc published 2026-10) | `composer require --dev phpstan/phpstan` | `vendor/bin/phpstan analyse src --level=max` | One primary; Psalm also does taint analysis (security). Baseline legacy errors, tighten over time |
 | unit | PHPUnit 13.4.2 (PHP >= 8.4; 12.x for PHP 8.3) or Pest 5.3.2 | `composer require --dev phpunit/phpunit` | `vendor/bin/phpunit` | PHPUnit 13: new array assertions, sealed test doubles; Pest 5 is a layer over PHPUnit with a nicer API |
-| integration | PHPUnit/Pest + real DB (docker compose or RefreshDatabase) | none | `vendor/bin/phpunit --group integration` | Laravel `RefreshDatabase` per test; Symfony test kernel; containerized Postgres for non-framework code |
+| integration | PHPUnit/Pest + real DB (docker compose or RefreshDatabase) | none | `vendor/bin/phpunit --group integration` | Laravel `RefreshDatabase` per test; Symfony test kernel; containerized PostgreSQL for non-framework code |
 | api | Laravel HTTP tests (`postJson`) / Symfony WebTestCase | none | `vendor/bin/phpunit tests/Feature` | `$this->postJson('/api/x', $data)->assertStatus(200)`; assert JSON schema, not just status |
 | contract | Pact PHP (pact-foundation/pact-php); schemathesis via CI if OpenAPI exists | `composer require --dev pact-foundation/pact-php` | in PHPUnit | Consumer/provider contracts; schemathesis runs from CI regardless of language |
 | e2e | Laravel Dusk 8.7.2 (Chrome) or Playwright from CI | `composer require --dev laravel/dusk` | `php artisan dusk` | Dusk is Laravel-native but Chromium-only; Playwright (JS runner in CI) for multi-browser; keep selectors data-testid based |
@@ -135,7 +135,7 @@ it('denies non owners from updating a household', function () {
 - **Dusk pins chromedriver versions**: prefer `php artisan dusk:chrome-driver --detect` or move e2e to Playwright from CI to avoid driver drift.
 - **ParaTest and test-order**: parallel runs assume isolated tests; fix shared-state leaks before enabling, and keep one order-random CI job.
 - **composer audit reads composer.lock**: run it on the committed lockfile in CI, and on `--locked` in release pipelines.
-- **Sqlite test DB hides MySQL/Postgres-only SQL errors**: keep an integration group running against a containerized Postgres.
+- **SQLite test DB hides MySQL/Postgres-only SQL errors**: keep an integration group running against a containerized PostgreSQL.
 - **Do not snapshot PII** (household names, account numbers) in golden files; assert schemas or masked values instead (Reg S-P discipline).
 - **Psalm 7.0 is at RC** (2026-10); pin 6.x on stable pipelines until 7.0 final.
 

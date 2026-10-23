@@ -532,9 +532,10 @@ test("real completion_gate.py blocks an orchestrating run with no ROADMAP, throu
 		mkdirSync(join(repo, "docs"), { recursive: true });
 		writeFileSync(join(repo, "docs", "CHANGELOG.md"), "# Changelog\n- seeded\n");
 		writeFileSync(join(repo, "README.md"), "# repo\n");
-		// What omp_runstate.py begin/arm produce: a run row flagged orchestrating (the gate is silent without it).
+		// What omp_runstate.py begin/arm produce: a run row flagged orchestrating (the gate is silent without it),
+		// plus one non-docs write: conditions (c)/(d)/(e)/(h) only apply to a run that shipped code.
 		const seed = Bun.spawnSync(
-			["python3", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import atlas_db as d; c=d.connect(); d.init(c); d.start_run(c, d.register_project(c, sys.argv[2], 'repo'), sys.argv[3]); d.mark_orchestrating(c, sys.argv[3], sys.argv[2])", join(import.meta.dir, "..", "scripts"), repo, sid],
+			["python3", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import atlas_db as d; c=d.connect(); d.init(c); rid=d.start_run(c, d.register_project(c, sys.argv[2], 'repo'), sys.argv[3]); d.mark_orchestrating(c, sys.argv[3], sys.argv[2]); d.log_event(c, rid, 'Write', 'main', 1, 'src/app.py'); c.commit()", join(import.meta.dir, "..", "scripts"), repo, sid],
 			{ env: { ...process.env, ATLAS_DB: join(dir, "atlas.db") }, stdout: "ignore", stderr: "ignore" },
 		);
 		expect(seed.exitCode).toBe(0);
@@ -552,9 +553,12 @@ test("real completion_gate.py blocks an orchestrating run with no ROADMAP, throu
 		expect(result?.decision).toBe("block");
 		expect(result?.reason).toContain("ROADMAP");
 
-		// Same project with the gap closed passes: the gate speaks only when it blocks.
+		// Same project with the ROADMAP gap closed no longer names condition (d). The run shipped code, so
+		// the evidence/findings/docs-drift/plan conditions (a)/(b)/(f)/(k) legitimately still block here.
 		writeFileSync(join(repo, "docs", "ROADMAP.md"), "# Roadmap\n- next\n");
-		expect(await handlers.session_stop[0]({ session_id: sid, session_file: "", stop_hook_active: false }, ctx)).toBeUndefined();
+		const closed = (await handlers.session_stop[0]({ session_id: sid, session_file: "", stop_hook_active: false }, ctx)) as { reason?: string } | undefined;
+		expect(String(closed?.reason ?? "")).not.toContain("ROADMAP");
+		expect(String(closed?.reason ?? "")).not.toContain("(d)");
 	} finally {
 		if (saved.db === undefined) delete process.env.ATLAS_DB;
 		else process.env.ATLAS_DB = saved.db;

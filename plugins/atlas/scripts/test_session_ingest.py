@@ -127,6 +127,105 @@ FIXTURE = [
 ]
 
 
+NPI_KEY = "sk-" + "Zq8" * 8  # fake OpenAI-shaped key
+NPI_SSN = "123-45-6789"
+NPI_CARD = "4111 1111 1111 1111"  # well-known Luhn-valid test number
+NPI_LINES = [
+    _msg(
+        "n1",
+        "user",
+        [
+            {
+                "type": "text",
+                "text": f"key {NPI_KEY} ssn: {NPI_SSN} card {NPI_CARD} "
+                "routing 021000021 account 12345678 order 987654321 shipped",
+            }
+        ],
+    ),
+    _msg(
+        "n2",
+        "assistant",
+        [
+            {
+                "type": "thinking",
+                "thinking": f"user gave SSN: {NPI_SSN} and key {NPI_KEY}; "
+                "routing 021000021 account 12345678",
+            },
+            {"type": "text", "text": f"noted card {NPI_CARD}"},
+            {"type": "tool_use", "id": "tc_n", "name": "Bash", "input": {"command": "ls"}},
+        ],
+    ),
+    _msg(
+        "n3",
+        "user",
+        [
+            {
+                "type": "tool_result",
+                "tool_use_id": "tc_n",
+                "is_error": True,
+                "content": f"Error: bad credentials ssn: {NPI_SSN} key {NPI_KEY}",
+            }
+        ],
+    ),
+]
+
+
+class NpiRedactionTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.tpath = os.path.join(self.tmp, f"{SID}.jsonl")
+        with open(self.tpath, "w") as f:
+            f.write("\n".join(NPI_LINES) + "\n")
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        session_ingest.ingest_transcript(self.tpath, conn=self.conn, session_id=SID)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _blob(self):
+        out = []
+        for q in (
+            "SELECT text, thinking FROM messages",
+            "SELECT text, norm FROM user_prompts",
+            "SELECT snippet FROM signals",
+            "SELECT error_snippet, input_summary FROM tool_calls",
+        ):
+            for row in self.conn.execute(q):
+                out.extend(str(c) for c in row if c)
+        return "\n".join(out)
+
+    def test_no_secret_or_npi_stored(self):
+        blob = self._blob()
+        for needle in (
+            NPI_KEY,
+            NPI_SSN,
+            "4111 1111 1111 1111",
+            "021000021",
+            "12345678 ",
+        ):
+            self.assertNotIn(needle, blob)
+
+    def test_thinking_and_text_redacted_with_typed_placeholders(self):
+        text, thinking = self.conn.execute(
+            "SELECT text, thinking FROM messages WHERE uuid='n2'"
+        ).fetchone()
+        self.assertIn("[REDACTED:card]", text)
+        self.assertIn("[REDACTED:ssn]", thinking)
+        self.assertNotIn(NPI_KEY, thinking)
+
+    def test_unlabeled_nine_digit_order_number_preserved(self):
+        text = self.conn.execute("SELECT text FROM messages WHERE uuid='n1'").fetchone()[0]
+        self.assertIn("987654321", text)
+
+    def test_single_shared_redactor(self):
+        import atlas_memory
+
+        self.assertIs(session_ingest.redact_secrets, atlas_memory.redact_secrets)
+        self.assertFalse(hasattr(session_ingest, "SECRET_VAL"))
+        self.assertFalse(hasattr(session_ingest, "SECRET_KEY"))
+
+
 class SessionIngestTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -176,7 +275,7 @@ class SessionIngestTest(unittest.TestCase):
         ).fetchone()[0]
         self.assertNotIn("supersecretvalue", summary)  # secret-named key
         self.assertNotIn("sk-abcdef0123456789", summary)  # secret-valued token
-        self.assertIn("***", summary)
+        self.assertIn("[REDACTED]", summary)
 
     # --- result join ----------------------------------------------------------
 
@@ -1078,7 +1177,7 @@ class CodexAdapterTest(unittest.TestCase):
             "SELECT input_summary FROM tool_calls WHERE tool_use_id='codex-aaaa-call1'"
         ).fetchone()[0]
         self.assertNotIn("supersecretvalue", summary)  # secret-named key scrubbed
-        self.assertIn("***", summary)
+        self.assertIn("[REDACTED]", summary)
         # the tool result was joined back onto the call row
         rbytes = self.conn.execute(
             "SELECT result_bytes FROM tool_calls WHERE tool_use_id='codex-aaaa-call1'"

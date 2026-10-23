@@ -338,6 +338,31 @@ def make_project(root, with_git=True):
     (root / "src/app.py").write_text("x = 1\n")
     if with_git:
         subprocess.run(["git", "init", "-q", str(root)], capture_output=True)
+        # Baseline commit: hooks treat untracked, non-ignored files as this run's changes
+        # (docs_drift.git_changed_paths), so an uncommitted fixture, or hook state under
+        # .atlas/ (gitignored in real projects), would make every telemetry-less run
+        # look like it shipped code.
+        (root / ".gitignore").write_text(".atlas/\n")
+        subprocess.run(["git", "-C", str(root), "add", "-A"], capture_output=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root),
+                "-c",
+                "user.name=atlas-scorecard",
+                "-c",
+                "user.email=scorecard@invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "-q",
+                "--no-verify",
+                "-m",
+                "fixture baseline",
+            ],
+            capture_output=True,
+        )
     return root
 
 

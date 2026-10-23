@@ -15,7 +15,7 @@ Whether or not an argument was given, open with the real state. Detect it, do
 not ask:
 
 - **Live in this session**: the vendor's MCP tools are present as
-  `mcp__plugin_atlas_<vendor>__*`. If the tools are callable, the connector is
+  `mcp__plugin_armada_<vendor>__*`. If the tools are callable, the connector is
   configured and authenticated enough to load.
 - **Recorded**: `connectors:` entries in `.atlas/departments/*.yaml`.
 - **Available but unprovisioned**: a `.mcp.json` exists under the department dir
@@ -32,12 +32,16 @@ anything not live.
 
 ## Where credentials live
 
-Credentials are declared on the **atlas** plugin, not armada.
-`plugins/armada/.claude-plugin/plugin.json` declares no `userConfig` and no
-`mcpServers` by design. The per-vendor keys and their defaults are in
+Credentials are declared on the **armada** plugin, which also owns the vendor
+connector servers (`plugins/armada/.mcp.json`) and their `userConfig` keys in
+`plugins/armada/.claude-plugin/plugin.json`. The per-vendor keys and their
+defaults are in
 `${CLAUDE_PLUGIN_ROOT}/skills/armada/references/connector-provisioning.md`.
 
-Collect them through `/plugin config` on the atlas plugin. Never accept a
+Collect them through `/plugin config` on the armada plugin. The connector
+loaders also fall back to values already saved under the atlas plugin, and
+`~/.config/atlas/atlas.env` still works. Atlas and armada must be installed
+together for connectors. Never accept a
 credential pasted into chat, never write one into a yaml, never echo one back.
 If a user pastes a secret, tell them to rotate it.
 
@@ -47,7 +51,7 @@ If a user pastes a secret, tell them to rotate it.
    department, in which case handle each of that department's vendors in turn.
 2. Read the required keys for that vendor from
    `references/connector-provisioning.md`. Do not invent key names.
-3. Report the exact steps: which keys, set via `/plugin config` on atlas, then
+3. Report the exact steps: which keys, set via `/plugin config` on armada, then
    restart the session so the MCP server picks them up.
 4. Once the tools are live, verify with the vendor's cheapest authenticated
    call (each connector exposes a `*_status` or `*_ping` tool). One call, not a

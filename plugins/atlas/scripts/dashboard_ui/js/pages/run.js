@@ -7,11 +7,18 @@ import { renderBand } from "../band.js";
 import { roleLetter, spin } from "../glyph-table.js";
 import { renderRegionState } from "../region-state.js";
 import { sendSteer, steerTarget, resolveTarget, holdSeat } from "../steer.js";
-import { bindKeys, isTypingIn } from "../keys.js";
+import { bindKeys } from "../keys.js";
+import { esc } from "../html.js";
 import { projectParam, parseTarget } from "./monitor-model.js";
-import { toBand, toSeats, toFeed, toNeeds, toGates, toMetrics } from "../run-data.js";
+import {
+  toBand,
+  toSeats,
+  toFeed,
+  toNeeds,
+  toGates,
+  toMetrics,
+} from "../run-data.js";
 
-const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const pad = (n) => String(n).padStart(2, "0");
 const stamp = (iso) => {
   const d = new Date(iso);
@@ -19,13 +26,18 @@ const stamp = (iso) => {
 };
 const hms = (iso) => {
   const d = stamp(iso);
-  return d ? `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` : "";
+  return d
+    ? `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    : "";
 };
 const dayOf = (iso) => {
   const d = stamp(iso);
-  return d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : "";
+  return d
+    ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    : "";
 };
-const cells = (on, total) => `<b>${"\u25A0".repeat(on)}</b><i>${"\u25A1".repeat(total - on)}</i>`;
+const cells = (on, total) =>
+  `<b>${"\u25A0".repeat(on)}</b><i>${"\u25A1".repeat(total - on)}</i>`;
 
 // --- Pure region renderers ---
 
@@ -43,12 +55,19 @@ export function renderSeats(seats, selected, meta = {}) {
       `<span class="bar st-${esc(s.state)}">${cells(s.elapsedCells, 8)}</span>${status}</div></div>`
     );
   });
-  const head = meta.group ? `<div class="grp">\u25C6 ${esc(meta.group)}</div>` : "";
+  const head = meta.group
+    ? `<div class="grp">\u25C6 ${esc(meta.group)}</div>`
+    : "";
   return head + rows.join("");
 }
 
 const needsGlyph = "\u25C7";
-const kindCell = (r) => (r.from === "human" ? ">" : r.needs ? needsGlyph : roleLetter(r.fromClass.slice(2)));
+const kindCell = (r) =>
+  r.from === "human"
+    ? ">"
+    : r.needs
+      ? needsGlyph
+      : roleLetter(r.fromClass.slice(2));
 const spans = (text) => esc(text).replace(/`([^`]+)`/g, "<code>$1</code>");
 
 export function renderFeed(rows, seat) {
@@ -57,7 +76,8 @@ export function renderFeed(rows, seat) {
     .filter((r) => !seat || r.from === seat)
     .map((r) => {
       const day = dayOf(r.t);
-      const mark = day && day !== last ? `<div class="daymark">${day}</div>` : "";
+      const mark =
+        day && day !== last ? `<div class="daymark">${day}</div>` : "";
       last = day || last;
       const cls = r.needs ? "ev need" : r.phase ? "ev phase" : "ev";
       return (
@@ -80,7 +100,12 @@ export function renderNeeds(items) {
     const buttons =
       it.state === "waiting"
         ? `<button class="btn" data-action="answer" data-seat="${esc(it.title)}">Answer</button>`
-        : it.actions.map((a) => `<a class="btn" href="${esc(hashFor(a.target))}">${esc(a.label)}</a>`).join("");
+        : it.actions
+            .map(
+              (a) =>
+                `<a class="btn" href="${esc(hashFor(a.target))}">${esc(a.label)}</a>`,
+            )
+            .join("");
     return (
       `<div class="need ${esc(it.state)}"><div class="nb"><div class="nt">${esc(truncate(it.title, 60))}</div>` +
       `<div class="nd">${esc(truncate(it.detail, 100))}</div><div class="ns">${esc(it.stateLine)}</div></div>` +
@@ -88,7 +113,12 @@ export function renderNeeds(items) {
     );
   });
   const more = items.length - NEEDS_SHOWN;
-  return shown.join("") + (more > 0 ? `<a class="more" href="#/health">${more} more in Health</a>` : "");
+  return (
+    shown.join("") +
+    (more > 0
+      ? `<a class="more" href="#/health">${more} more in Health</a>`
+      : "")
+  );
 }
 
 export function renderGates(chips) {
@@ -96,7 +126,8 @@ export function renderGates(chips) {
     .map((c) => {
       const cls = c.ok ? "gate ok" : "gate open";
       const glyph = c.ok ? "\u2713" : "\u25C7";
-      const fix = !c.ok && c.fix ? `<span class="gfix">${esc(c.fix)}</span>` : "";
+      const fix =
+        !c.ok && c.fix ? `<span class="gfix">${esc(c.fix)}</span>` : "";
       return `<div class="grow"><span class="${cls}" title="${esc(c.message)}"><b>${glyph}</b> ${esc(c.letter)} ${esc(c.label)}</span>${fix}</div>`;
     })
     .join("");
@@ -114,7 +145,13 @@ export function renderMetrics(rows) {
 
 // --- Page ---
 
-const LABEL = { seats: "seats", feed: "messages", needs: "needs", gates: "gates", metrics: "metrics" };
+const LABEL = {
+  seats: "seats",
+  feed: "messages",
+  needs: "needs",
+  gates: "gates",
+  metrics: "metrics",
+};
 
 // The server's own message (why / do) from sendSteer, escaped for the inline error under the input.
 export const renderSteerError = (r) => esc(r.message || r.error);
@@ -128,11 +165,14 @@ const SHELL_CENTER =
   '<form class="steer" data-steer><span class="chip" data-target>@lead</span>' +
   '<input data-steer-input name="text" autocomplete="off" aria-label="Message to the selected seat">' +
   '<span class="hint">enter send</span><p class="steer-err" data-steer-err role="alert" hidden></p></form>';
-const section = (title, region) => `<section class="rsec"><h2>${title}</h2><div data-region="${region}"></div></section>`;
+const section = (title, region) =>
+  `<section class="rsec"><h2>${title}</h2><div data-region="${region}"></div></section>`;
 const SHELL_LEFT =
   '<h2 class="rail-h">SEATS</h2><div data-region="seats"></div><div class="machine" data-machine></div>';
 const SHELL_RIGHT =
-  section("NEEDS YOU", "needs") + section("GATES", "gates") + section("LAST 7 DAYS", "metrics");
+  section("NEEDS YOU", "needs") +
+  section("GATES", "gates") +
+  section("LAST 7 DAYS", "metrics");
 
 export function render({ root, project, setParams }) {
   const rootPath = projectParam(project) || null;
@@ -141,12 +181,25 @@ export function render({ root, project, setParams }) {
   const right = document.getElementById("col-right");
   const mq = matchMedia("(max-width: 699px)");
   const st = {
-    overview: null, agents: null, colony: { ok: false }, notes: [], gates: [], projects: [],
-    selected: null, filter: true, frame: 0, stick: true, rs: {},
+    overview: null,
+    agents: null,
+    colony: { ok: false },
+    notes: [],
+    gates: [],
+    projects: [],
+    selected: null,
+    filter: true,
+    frame: 0,
+    stick: true,
+    rs: {},
   };
   const timers = new Map();
   const later = (key, ms, fn) => {
-    if (!timers.has(key)) timers.set(key, setTimeout(() => (timers.delete(key), fn()), ms));
+    if (!timers.has(key))
+      timers.set(
+        key,
+        setTimeout(() => (timers.delete(key), fn()), ms),
+      );
   };
   let spinTimer = null;
   let dead = false;
@@ -159,8 +212,13 @@ export function render({ root, project, setParams }) {
   const input = $("data-steer-input");
   const regionEl = (name) => document.querySelector(`[data-region="${name}"]`);
 
-  const channelName = () => (st.colony.ok && ((st.colony.lead && st.colony.lead.channel) || (st.colony.channel && st.colony.channel.name))) || null;
-  const leadName = () => (st.colony.ok && st.colony.lead && st.colony.lead.name) || "";
+  const channelName = () =>
+    (st.colony.ok &&
+      ((st.colony.lead && st.colony.lead.channel) ||
+        (st.colony.channel && st.colony.channel.name))) ||
+    null;
+  const leadName = () =>
+    (st.colony.ok && st.colony.lead && st.colony.lead.name) || "";
   const seats = () => toSeats(st.agents, st.colony, Date.now());
   const phase = () => toBand(st.overview, st.colony, null).phase;
 
@@ -169,19 +227,31 @@ export function render({ root, project, setParams }) {
     switch (name) {
       case "seats": {
         const list = seats();
-        const group = st.colony.ok ? `${baseName(st.colony.project || "")} / ${leadName()}` : "";
-        return list.length ? renderSeats(list, st.selected, { frame: st.frame, phase: phase(), group }) : "";
+        const group = st.colony.ok
+          ? `${baseName(st.colony.project || "")} / ${leadName()}`
+          : "";
+        return list.length
+          ? renderSeats(list, st.selected, {
+              frame: st.frame,
+              phase: phase(),
+              group,
+            })
+          : "";
       }
       case "feed": {
         const rows = toFeed(st.notes);
-        return rows.length ? renderFeed(rows, st.filter ? st.selected : null) : "";
+        return rows.length
+          ? renderFeed(rows, st.filter ? st.selected : null)
+          : "";
       }
       case "needs": {
         const items = toNeeds(st.overview, st.agents, Date.now());
         return items.length ? renderNeeds(items) : "";
       }
       case "gates":
-        return st.gates.length ? renderGates(toGates({ ok: true, lines: st.gates })) : "";
+        return st.gates.length
+          ? renderGates(toGates({ ok: true, lines: st.gates }))
+          : "";
       default: {
         const rows = st.overview ? toMetrics(st.overview) : [];
         return rows.length ? renderMetrics(rows) : "";
@@ -198,9 +268,11 @@ export function render({ root, project, setParams }) {
     if (feed) st.stick = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     const html = r.status === "ready" ? body(name) : "";
     el.innerHTML =
-      r.status === "error" ? renderRegionState("error", LABEL[name], r.message)
-      : r.status === "loading" ? renderRegionState("loading", LABEL[name])
-      : html || renderRegionState("empty", LABEL[name]);
+      r.status === "error"
+        ? renderRegionState("error", LABEL[name], r.message)
+        : r.status === "loading"
+          ? renderRegionState("loading", LABEL[name])
+          : html || renderRegionState("empty", LABEL[name]);
     if (feed && st.stick) el.scrollTop = el.scrollHeight;
     if (name === "seats") syncSpin();
   }
@@ -210,11 +282,20 @@ export function render({ root, project, setParams }) {
     const b = toBand(st.overview, st.colony, ""); // ponytail: header null, phase stays research; upgrade path is the lead's last ATLAS line from GET /api/sessions/<id>/transcript
     if (!st.colony.ok) {
       const c = countStates(mergeAgents(st.agents, null));
-      b.counts = { working: c.working || 0, needs: c.input || 0, failed: c.fail || 0, parked: c.ready || 0 };
+      b.counts = {
+        working: c.working || 0,
+        needs: c.input || 0,
+        failed: c.fail || 0,
+        parked: c.ready || 0,
+      };
     }
     const sel = rootPath || "all";
-    const opts = [{ value: "all", label: "all projects" }, ...st.projects.map((p) => ({ value: p.root, label: baseName(p.root) }))];
-    if (!opts.some((o) => o.value === sel)) opts.push({ value: sel, label: baseName(sel) });
+    const opts = [
+      { value: "all", label: "all projects" },
+      ...st.projects.map((p) => ({ value: p.root, label: baseName(p.root) })),
+    ];
+    if (!opts.some((o) => o.value === sel))
+      opts.push({ value: sel, label: baseName(sel) });
     band.innerHTML = renderBand({
       ...b,
       project: rootPath ? b.project || baseName(rootPath) : "all projects",
@@ -225,7 +306,8 @@ export function render({ root, project, setParams }) {
       projectOptions: opts.map((o) => ({ ...o, selected: o.value === sel })),
     });
     const machine = $("data-machine");
-    if (machine) machine.textContent = `${location.host} \u00B7 ${seats().length} seats \u00B7 ${live.get()}`;
+    if (machine)
+      machine.textContent = `${location.host} \u00B7 ${seats().length} seats \u00B7 ${live.get()}`;
   }
 
   function paintSteer() {
@@ -233,7 +315,9 @@ export function render({ root, project, setParams }) {
     $("data-target").textContent = steerTarget(sel, leadName());
     $("data-chan").textContent = channelName() ? `#${channelName()}` : "";
     input.disabled = !channelName();
-    input.placeholder = channelName() ? "steer the selected seat, or type @all ..." : "select a project to steer";
+    input.placeholder = channelName()
+      ? "steer the selected seat, or type @all ..."
+      : "select a project to steer";
   }
 
   function syncSpin() {
@@ -241,7 +325,8 @@ export function render({ root, project, setParams }) {
     if (any && !spinTimer) {
       spinTimer = setInterval(() => {
         st.frame++;
-        for (const el of document.querySelectorAll(".spin")) el.textContent = spin(st.frame, phase());
+        for (const el of document.querySelectorAll(".spin"))
+          el.textContent = spin(st.frame, phase());
       }, 250);
     } else if (!any && spinTimer) {
       clearInterval(spinTimer);
@@ -252,7 +337,10 @@ export function render({ root, project, setParams }) {
   // --- load ---
   const loaders = {
     overview: async () => {
-      st.overview = await get("/api/v2/overview", { window: "7d", project: rootPath || undefined });
+      st.overview = await get("/api/v2/overview", {
+        window: "7d",
+        project: rootPath || undefined,
+      });
     },
     agents: async () => {
       st.agents = topics.agents.get() || (await get("/api/v2/agents"));
@@ -272,12 +360,18 @@ export function render({ root, project, setParams }) {
       st.notes = [...st.notes, ...(r.messages || [])].slice(-600); // toFeed dedupes by seq/id/ts+from+text
     },
     gates: async () => {
-      st.gates = rootPath ? (await get("/api/v2/gates", { project: rootPath })).lines || [] : [];
+      st.gates = rootPath
+        ? (await get("/api/v2/gates", { project: rootPath })).lines || []
+        : [];
     },
   };
   // Which regions each loader feeds.
   const FEEDS = {
-    overview: ["metrics", "needs"], agents: ["seats", "needs"], colony: ["seats"], feed: ["feed"], gates: ["gates"],
+    overview: ["metrics", "needs"],
+    agents: ["seats", "needs"],
+    colony: ["seats"],
+    feed: ["feed"],
+    gates: ["gates"],
   };
 
   async function run(names) {
@@ -287,7 +381,8 @@ export function render({ root, project, setParams }) {
           await loaders[n]();
           for (const r of FEEDS[n]) st.rs[r] = { status: "ready" };
         } catch (e) {
-          for (const r of FEEDS[n]) st.rs[r] = { status: "error", message: describeError(e).message };
+          for (const r of FEEDS[n])
+            st.rs[r] = { status: "error", message: describeError(e).message };
         }
       }),
     );
@@ -299,8 +394,11 @@ export function render({ root, project, setParams }) {
 
   // Seats need both agents and colony; needs need overview and agents.
   const retry = {
-    seats: () => run(["agents", "colony"]), feed: () => run(["feed"]), needs: () => run(["overview", "agents"]),
-    gates: () => run(["gates"]), metrics: () => run(["overview"]),
+    seats: () => run(["agents", "colony"]),
+    feed: () => run(["feed"]),
+    needs: () => run(["overview", "agents"]),
+    gates: () => run(["gates"]),
+    metrics: () => run(["overview"]),
   };
 
   // --- events ---
@@ -323,18 +421,25 @@ export function render({ root, project, setParams }) {
     if (answer) input.focus();
   };
   const onKey = (e) => {
-    if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-seat]")) {
+    if (
+      (e.key === "Enter" || e.key === " ") &&
+      e.target.matches("[data-seat]")
+    ) {
       e.preventDefault();
       e.target.click();
     }
   };
   const onBand = (e) => {
-    if (e.target.matches("select[data-proj]")) setParams({ project: e.target.value === "all" ? null : e.target.value });
+    if (e.target.matches("select[data-proj]"))
+      setParams({ project: e.target.value === "all" ? null : e.target.value });
   };
   const onSubmit = async (e) => {
     e.preventDefault();
     const errEl = $("data-steer-err");
-    const { to, text } = resolveTarget(input.value.trim(), $("data-target").textContent);
+    const { to, text } = resolveTarget(
+      input.value.trim(),
+      $("data-target").textContent,
+    );
     const r = await sendSteer({ channel: channelName(), to, text });
     errEl.hidden = r.ok;
     if (!r.ok) return void (errEl.innerHTML = renderSteerError(r)); // typed text stays
@@ -346,7 +451,9 @@ export function render({ root, project, setParams }) {
   // Region focus: the landmark gets tabindex -1 plus a ring class, so Tab continues inside it.
   const focusRegion = (el) => {
     if (!el) return;
-    document.querySelectorAll(".region-focus").forEach((n) => n.classList.remove("region-focus"));
+    document
+      .querySelectorAll(".region-focus")
+      .forEach((n) => n.classList.remove("region-focus"));
     el.tabIndex = -1;
     el.classList.add("region-focus");
     el.focus();
@@ -358,7 +465,8 @@ export function render({ root, project, setParams }) {
     el.hidden = false;
   };
   const hold = async () => {
-    if (!st.selected) return note("Select a seat first, then press h to hold it.");
+    if (!st.selected)
+      return note("Select a seat first, then press h to hold it.");
     const r = await holdSeat(channelName(), st.selected);
     if (r.ok) steerErr().hidden = true;
     else note(r.message || r.error);
@@ -373,9 +481,9 @@ export function render({ root, project, setParams }) {
     h: hold,
     Escape: () => (input.blur(), (steerErr().hidden = true)),
   };
-  const unbindKeys = bindKeys(Object.fromEntries(RUN_KEYMAP_IDS.map((k) => [k, handlers[k]])), {
-    isTyping: () => isTypingIn(document.activeElement) || !!document.activeElement?.closest?.(".xterm"),
-  });
+  const unbindKeys = bindKeys(
+    Object.fromEntries(RUN_KEYMAP_IDS.map((k) => [k, handlers[k]])),
+  );
   window.addEventListener("atlas:hold-selected", hold);
 
   root.addEventListener("click", onClick);
@@ -394,7 +502,9 @@ export function render({ root, project, setParams }) {
     }),
     topics.herd.subscribe(() => later("colony", 2500, () => run(["colony"]))),
     topics.irc.subscribe(() => later("feed", 800, () => run(["feed"]))),
-    topics.health.subscribe(() => later("overview", 8000, () => run(["overview"]))),
+    topics.health.subscribe(() =>
+      later("overview", 8000, () => run(["overview"])),
+    ),
     topics.todos.subscribe(() => later("gates", 4000, () => run(["gates"]))),
     live.subscribe(paintBand),
   ];
@@ -407,7 +517,12 @@ export function render({ root, project, setParams }) {
   // Own the band only after the first paint succeeded: a render exception must not freeze it on other routes.
   if (band) band.dataset.owner = "run";
   get("/api/v2/projects")
-    .then((r) => ((st.projects = (r.projects || []).filter((p) => p.root)), dead || paintBand()))
+    .then(
+      (r) => (
+        (st.projects = (r.projects || []).filter((p) => p.root)),
+        dead || paintBand()
+      ),
+    )
     .catch(() => {}); // the select still lists the current project
   // Colony first (it names the channel), then the channel-dependent loads in one pass.
   (async () => {

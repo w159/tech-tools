@@ -1,6 +1,6 @@
 # Grounding-Claims Check (mechanical)
 
-Ported from CE `ce-compound`'s `references/grounding-validation.md` + `scripts/validate-doc-claims.py` semantics (w159/compound-engineering-plugin). This check runs on the FULL assembled draft (frontmatter + body) in Phase 5, before the docs-curator dispatch. It is mechanical: each step either passes with counted evidence or fails with a named claim. A draft that cannot be grounded is skipped, never written on faith.
+This check runs on the FULL assembled draft (frontmatter + body) in Phase 5, before the docs-curator dispatch. It is mechanical: each step either passes with counted evidence or fails with a named claim. A draft that cannot be grounded is skipped, never written on faith.
 
 ## 1. Re-verify every file:line citation against CURRENT source
 

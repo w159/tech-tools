@@ -1,10 +1,10 @@
 # Phase 4: Mandatory review, verification, handoff
 
-Ported from CE `ce-plan/references/final-review.md` + `plan-handoff.md`, with CE's mandatory `ce-doc-review` replaced by `atlas:completeness-critic` and CE's `ce-work` handoff replaced by `atlas-orchestrate`.
+Final review runs `atlas:completeness-critic`; handoff goes to `atlas-orchestrate`.
 
 ## 1. Mandatory review gate - atlas:completeness-critic
 
-**This dispatch is not skippable.** CE gated every plan behind `ce-doc-review mode:non-interactive <plan-path>`; atlas's equivalent pre-done gap hunter is `atlas:completeness-critic`. A plan handed off without this review is invalid - not "weaker", invalid.
+**This dispatch is not skippable.** The pre-done gap hunter is `atlas:completeness-critic`. A plan handed off without this review is invalid - not "weaker", invalid.
 
 Dispatch (subagent-kit shape, fork per the subagent-kit reference linked from SKILL.md when `CLAUDE_CODE_FORK_SUBAGENT=1` - the critic judges gaps against everything this session established, which is the point):
 
@@ -54,7 +54,7 @@ All of the following, confirmed before any handoff message:
 
 **Interactive - exactly one recommendation, not a menu sprawl:**
 
-- **`atlas-orchestrate`** - it consumes this plan and executes it: stage map over the `U<N>` IDs, implementer dispatches carrying each unit's evidence strategy, independent verification, evidence receipts, docs-current closeout. There is no `atlas-work` skill and never will be - that concept was folded into `atlas-orchestrate/references/implementation-units.md`; never offer or create one.
+- **`atlas-orchestrate`** - it consumes this plan and executes it: stage map over the `U<N>` IDs, implementer dispatches carrying each unit's evidence strategy, independent verification, evidence receipts, docs-current closeout. Unit-level execution is described in `atlas-orchestrate/references/implementation-units.md`.
 - Offer **`atlas-prototype`** explicitly first, when a visual/interaction fork was deferred (`Q-###` with a UI surface) - settle the shape before executing units that depend on it.
 - Offer **`atlas-bakeoff`** explicitly first, when a costly open technical fork was deferred - resolve it before, or as, the first execution step.
 

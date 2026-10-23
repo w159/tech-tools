@@ -1,14 +1,15 @@
-# Personas: generation via datagen.py
+# Personas: generated from the discovered field matrix
 
-Personas are synthesized by the harness script datagen.py, not hand-authored. The
-generator reads the discovered field matrix and contract-snapshot.json produced by
+Personas are synthesized, not hand-authored: the generator (a small script the
+scripted-persona agent writes under `RUN_DIR/harness/datagen.py`, following the contract
+below) reads the discovered field matrix and contract-snapshot.json produced by
 Phase 0 discovery, so it adapts to whatever web app is under test.
 Generation is deterministic: the same seed yields identical rows, so a run is
 repeatable and diffable.
 
 ## Discovery-driven schema
 
-There is no fixed column list baked into this skill. datagen.py reads the field matrix
+There is no fixed column list baked into this skill. The generator reads the field matrix
 handed in by the cartographer (or a contract-snapshot.json written to the run dir) and
 derives persona attributes from it. For each discovered field the generator maps the
 field type to a generation strategy:
@@ -60,7 +61,7 @@ existing run-scoped accounts are reused while the entry DATA regenerates.
 ## User-count presets and the coverage cap
 
 The skill's users option accepts an integer or one of the presets 6 / 12 / 24 (default
-12), mapped to datagen --count via the COUNT env knob. 24 is the full seed-equivalent
+12), mapped to the generator's --count via the COUNT env knob. 24 is the full seed-equivalent
 set; 6 and 12 are lighter passes.
 
 The coverage tier caps user count: coverage=smoke caps users at 2 regardless of the
@@ -68,11 +69,10 @@ requested count. If users and coverage conflict (e.g. users=24 coverage=smoke), 
 coverage cap wins for user count and the conflict is recorded in the run log. standard
 and full honor the requested count.
 
-## Harness contract (what datagen.py must honor)
+## Generator contract
 
-datagen.py is not part of this plugin tree; it lives in the run dir alongside the
-scripted harness. This section defines the contract it must honor so the atlas-ux-test
-skill can drive it correctly:
+The generator is not shipped in this plugin; the agent writes it into the run dir. It
+must honor this contract so the skill can drive it:
 
 - Reads field matrix from: RUN_DIR/field-matrix.json (written by the cartographer phase)
   OR from contract-snapshot.json in the same dir (preferred if present).
@@ -88,7 +88,7 @@ skill can drive it correctly:
 
 ## Standalone use
 
-datagen.py runs standalone for inspection or fixture generation:
-  python3 datagen.py --count 12 --seed 7 --profile mixed --out generated-personas.csv
-  python3 datagen.py --count 6 --profile valid --ids "P01 P02 P03 P04 P05 P06" --out gen.csv
+The generator runs standalone for inspection or fixture generation:
+  python3 RUN_DIR/harness/datagen.py --count 12 --seed 7 --profile mixed --out generated-personas.csv
+  python3 RUN_DIR/harness/datagen.py --count 6 --profile valid --ids "P01 P02 P03 P04 P05 P06" --out gen.csv
 The skill writes generated rows to RUN_DIR/generated-personas.csv before the scripted wave.

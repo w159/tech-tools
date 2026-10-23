@@ -13,7 +13,7 @@
 - [Status words](#status-words)
 
 Canonical contract for `.atlas/.run/sweep-state.json`, enforced by
-`plugins/atlas/scripts/sweep_state.py` — the **only** writer of the file.
+`plugins/atlas/scripts/sweep_state.py` - the **only** writer of the file.
 Every peer (source connectors, cluster analysis, the orchestrator) reads via
 `read` and changes state exclusively through the engine's subcommands, so the
 rules below hold in one place. Never hand-edit the file; the engine refuses
@@ -51,7 +51,7 @@ manual-recovery incident, not a silent clobber.
 
 | key | meaning |
 | --- | --- |
-| `schema_version` | Contract version, currently `1`. A file that parses but lacks it is CORRUPT — the engine refuses to write over it. |
+| `schema_version` | Contract version, currently `1`. A file that parses but lacks it is CORRUPT - the engine refuses to write over it. |
 | `lease` | Single-writer mutex (below). Absent when no writer holds it. |
 | `sources` | Per-source resume cursor + optional flags, keyed by the source's config id. |
 | `items` | Per-item lifecycle record, keyed `<source-id>:<item-id>` so a source-native id (an issue number, a message ts) never collides across sources. |
@@ -68,7 +68,7 @@ dropped. The status enum below is documentation, not a whitelist.
 | status | meaning |
 | --- | --- |
 | `ingested` | Captured from a source; not yet triaged. |
-| `ack_deferred` | Receipt noted, but the source-side ack (or triage) was deferred — unapproved source, no write path, failed ack, or breaker trip. |
+| `ack_deferred` | Receipt noted, but the source-side ack (or triage) was deferred - unapproved source, no write path, failed ack, or breaker trip. |
 | `acknowledged` | Acked at source and accepted into the pipeline. |
 | `needs_analysis` | Content present, awaiting analysis. |
 | `manual_stuck` | Blocked after repeated failed attempts; needs a human. Listed out of the routine nag. |
@@ -107,8 +107,8 @@ closed item missing one back to `fix_pending` and returns the downgraded ids.
 `--outcome` is one of `completed | aborted-locked | partial | failed`;
 `--timestamp` is caller-supplied (the engine never invents it); `--counts` is
 a free-form JSON tally object. run-record and validate are intentionally
-**lease-agnostic** — an `aborted-locked` run must be able to record that fact
-while the holder is mid-sweep — and are kept safe by the OS advisory lock.
+**lease-agnostic** - an `aborted-locked` run must be able to record that fact
+while the holder is mid-sweep - and are kept safe by the OS advisory lock.
 
 ## File lock vs lease
 
@@ -124,7 +124,7 @@ The primary flag is per-item: the orchestrator includes `"sensitive": true`
 in every `upsert-item` for a source whose config entry is sensitive. On any
 upsert where the item or its source entry is sensitive, the engine drops
 `body` and `quote` before writing; titles, urls, ids, and statuses are
-retained. Redaction happens at write time — flipping a source to sensitive
+retained. Redaction happens at write time - flipping a source to sensitive
 protects only items written after; re-ingest to redact prior items.
 
 ## Status words

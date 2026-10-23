@@ -1,6 +1,6 @@
 # Strategy mode
 
-Strategy mode captures *what the product is and why*, the anchor that makes "is this work on-strategy?" answerable. The durable artifact lives under `docs/` per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`, grounding runs through the `atlas:explorer` agent, and verification runs through `atlas:verifier`. Rumelt's kernel (diagnosis / guiding policy / coherent action) structures the interview: Purpose, Positioning, Tracks, plus Users, Key metrics, Stress test and Boundaries. The grilling pattern in `SKILL.md` governs the interview turns.
+Strategy mode captures *what the product is and why*, the anchor that makes "is this work on-strategy?" answerable. The durable artifact lives under `docs/` per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`, grounding runs through the `atlas:explorer` agent, and verification runs through `atlas:verifier`. Rumelt's kernel (diagnosis / guiding policy / coherent action) structures the interview: Purpose, Positioning, Tracks, plus Users, Key metrics, Stress test and Boundaries. The grilling pattern in `SKILL.md` governs the interview turns.
 
 **Boundaries (non-negotiable):**
 

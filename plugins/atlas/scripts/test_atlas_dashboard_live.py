@@ -478,7 +478,7 @@ class PrivateWrites(LiveCase):
                 self.assertEqual(stat.S_IMODE(p.stat().st_mode), 0o600, p)
             self.assertIn("topsecret", env_file.read_text())
             self.assertEqual(
-                json.loads(settings.read_text())["pluginConfigs"]["atlas@tech-tools"][
+                json.loads(settings.read_text())["pluginConfigs"]["armada@tech-tools"][
                     "options"
                 ]["auvik_api_key"],
                 "topsecret",

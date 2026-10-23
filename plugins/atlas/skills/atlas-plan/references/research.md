@@ -1,6 +1,6 @@
 # Phase 1: Research
 
-Ported from CE `ce-plan/references/research.md` and its `learnings-researcher.md` algorithm (see `agent://CECompoundLearning`, section 3), retargeted from CE's `docs/solutions/` corpus to atlas's durable stores (`docs/lessons/`, `.atlas/findings/`) and from CE's pack resolver to `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py`.
+Research reads atlas's durable stores (`docs/lessons/`, `.atlas/findings/`) and resolves packs with `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py`.
 
 ## Research budget and boundary
 
@@ -8,7 +8,7 @@ Planning reads and thinks. It never runs tests, builds, lints, or migrations "to
 
 ## 1. Learnings research (grep-first, always)
 
-CE's institutional retrieval is grep-first, never read-everything; port that shape onto atlas's stores.
+Retrieval is grep-first, never read-everything.
 
 **Search roots:**
 

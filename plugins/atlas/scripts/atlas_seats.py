@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 _NAMES = (
@@ -37,8 +38,32 @@ def _node_ok() -> bool:
         return False
 
 
+_BACKEND_TTL_S = 30.0
+_backend_cache: tuple = (0.0, None)
+
+
+def _reset_backend_cache() -> None:
+    global _backend_cache
+    _backend_cache = (0.0, None)
+
+
 def backend() -> str:
-    """rig | herdr | none. Rig wins when its binary exists or it can be installed silently."""
+    """rig | herdr | none, memoized per process for 30 s (rig ps costs ~1.5 s). Env overrides are never cached."""
+    global _backend_cache
+    env = (os.environ.get("ATLAS_SEAT_BACKEND") or "").strip().lower()
+    if env in ("rig", "herdr", "off"):
+        return _detect_backend()
+    ts, val = _backend_cache
+    now = time.monotonic()
+    if val is not None and now - ts < _BACKEND_TTL_S:
+        return val
+    val = _detect_backend()
+    _backend_cache = (now, val)
+    return val
+
+
+def _detect_backend() -> str:
+    """Rig wins when its binary exists or it can be installed silently."""
     env = (os.environ.get("ATLAS_SEAT_BACKEND") or "").strip().lower()
     if env in ("rig", "herdr"):
         return env
@@ -46,9 +71,9 @@ def backend() -> str:
         return "none"
     rig = importlib.import_module("atlas_rig")
     if rig._bin() or _node_ok():
-        # rig holds no rigs but herdr is up: the live panes are herdr's
+        # rig holds no rigs (or its ps failed) but herdr is up: the live panes are herdr's
         try:
-            if rig._rigs() == [] and importlib.import_module(
+            if not rig._rigs() and importlib.import_module(
                 "atlas_herdr"
             ).status().get("herdr_server"):
                 return "herdr"
@@ -64,10 +89,36 @@ def backend() -> str:
     return "none"
 
 
+_NO_BACKEND = {"ok": False, "reason": "no seat backend"}
+
+
+class _NullBackend:
+    """Contract-shaped no-ops for backend() == 'none': public calls never raise."""
+
+    @staticmethod
+    def status():
+        return {"ok": False, "running": False, "state": "no_backend", "reason": "no seat backend"}
+
+    @staticmethod
+    def list_panes(run=None):
+        return []
+
+    @staticmethod
+    def pane_live(pane_id):
+        return False
+
+    @staticmethod
+    def agents():
+        return {"reachable": False, "reason": "no seat backend", "workspaces": [], "agents": []}
+
+    def __getattr__(self, name):  # ensure, ensure_server, create_pane, close_pane, send_prompt, close_run
+        return lambda *a, **kw: dict(_NO_BACKEND)
+
+
 def _mod():
     b = backend()
     if b == "none":
-        raise RuntimeError("no seat backend (rig and herdr unavailable)")
+        return _NullBackend()
     return importlib.import_module("atlas_rig" if b == "rig" else "atlas_herdr")
 
 
@@ -141,7 +192,10 @@ def close_run(run: str) -> dict:
 def status() -> dict:
     """Backend status plus `backend` and `web_ui` (True only for herdr: the rig url is a health URL, not an iframe)."""
     b = backend()
-    return {**_status(), "backend": b, "web_ui": b == "herdr"}
+    base = _NullBackend.status() if b == "none" else _status()
+    if b == "rig" and not shutil.which("tmux"):  # rig seats are tmux sessions: say so before rig up fails
+        base = {**base, "ok": False, "reason": "tmux is not installed (rig seats run in tmux)"}
+    return {**base, "backend": b, "web_ui": b == "herdr"}
 
 
 def capture(pane_id, lines: int = 40) -> dict:

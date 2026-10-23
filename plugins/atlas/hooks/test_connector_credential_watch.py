@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent / "connector_credential_watch.py"
@@ -58,7 +59,7 @@ class CredentialWatchFalsePositives(unittest.TestCase):
         self._tmp.cleanup()
 
     @staticmethod
-    def _p(resp, tool="mcp__plugin_atlas_connectwise__cw_search_tickets", session="s1"):
+    def _p(resp, tool="mcp__plugin_armada_connectwise__cw_search_tickets", session="s1"):
         return {
             "hook_event_name": "PostToolUse",
             "tool_name": tool,
@@ -77,7 +78,7 @@ class CredentialWatchFalsePositives(unittest.TestCase):
         b = self._blocks
         benign = [
             (
-                "mcp__plugin_atlas_blumira__blumira_findings_list",
+                "mcp__plugin_armada_blumira__blumira_findings_list",
                 b(
                     json.dumps(
                         {
@@ -92,15 +93,15 @@ class CredentialWatchFalsePositives(unittest.TestCase):
                 ),
             ),
             (
-                "mcp__plugin_atlas_vanta__vanta_tests_list",
+                "mcp__plugin_armada_vanta__vanta_tests_list",
                 b(json.dumps({"totalCount": 403, "results": []})),
             ),
             (
-                "mcp__plugin_atlas_falcon__falcon_search_detections",
+                "mcp__plugin_armada_falcon__falcon_search_detections",
                 b("Forbidden process execution blocked by policy"),
             ),
             (
-                "mcp__plugin_atlas_ninjaone__ninjaone_devices_get",
+                "mcp__plugin_armada_ninjaone__ninjaone_devices_get",
                 b(json.dumps({"id": 401, "name": "pc"})),
             ),
             (
@@ -108,11 +109,11 @@ class CredentialWatchFalsePositives(unittest.TestCase):
                 b("Deny Forbidden binary 403 times; token expired for user bob"),
             ),
             (
-                "mcp__plugin_atlas_knowbe4__knowbe4_groups_list",
+                "mcp__plugin_armada_knowbe4__knowbe4_groups_list",
                 {"groups": [{"name": "Invalid token training", "id": 401}]},
             ),
             (
-                "mcp__plugin_atlas_panos__panos_logs_retrieve",
+                "mcp__plugin_armada_panos__panos_logs_retrieve",
                 b(
                     "status: ok\nlog: authentication failed for user x (HTTP 401 seen upstream)"
                 ),
@@ -222,7 +223,7 @@ class ConnectorCredentialWatch(unittest.TestCase):
     def _payload(
         self,
         response,
-        tool="mcp__plugin_atlas_connectwise__cw_search_tickets",
+        tool="mcp__plugin_armada_connectwise__cw_search_tickets",
         session="s1",
     ):
         return {
@@ -231,6 +232,16 @@ class ConnectorCredentialWatch(unittest.TestCase):
             "session_id": session,
             "tool_response": response,
         }
+
+    def test_status_key_in_successful_result_is_data_not_auth_failure(self):
+        for body in (
+            {"status": 403, "items": [{"summary": "ok"}]},
+            {"status_code": 401, "results": []},
+            {"status": "400", "data": {"ticket": 1}},
+            {"status": 401, "message": "ok", "items": [1]},
+        ):
+            r = _run(self._payload(body), home=self.home)
+            self.assertEqual(r.stdout.strip(), "", body)
 
     def test_401_warns(self):
         r = _run(
@@ -280,7 +291,7 @@ class ConnectorCredentialWatch(unittest.TestCase):
     def test_different_server_warns_again(self):
         _run(self._payload({"status": 401}), home=self.home)
         other = _run(
-            self._payload({"status": 401}, tool="mcp__plugin_atlas_ramp__ramp_list"),
+            self._payload({"status": 401}, tool="mcp__plugin_armada_ramp__ramp_list"),
             home=self.home,
         )
         self.assertIn("STALE CREDENTIAL", other.stdout)
@@ -337,6 +348,96 @@ class ConnectorCredentialWatch(unittest.TestCase):
         parsed = json.loads(r.stdout)
         self.assertEqual(parsed["hookSpecificOutput"]["hookEventName"], "PostToolUse")
         self.assertIn("additionalContext", parsed["hookSpecificOutput"])
+
+
+class ServerNameMapping(unittest.TestCase):
+    """Connectors ship in armada; the pre-move atlas names still resolve to the same server."""
+
+    def test_armada_and_legacy_atlas_names_map_to_the_server(self):
+        sys.path.insert(0, str(HOOK.parent))
+        import connector_credential_watch as w
+
+        for name in (
+            "mcp__plugin_armada_connectwise__cw_status",
+            "mcp__armada_connectwise_cw_status",
+            "mcp__plugin_atlas_connectwise__cw_status",  # fallback: pre-move name
+            "mcp__atlas_connectwise_cw_status",  # fallback: pre-move omp name
+        ):
+            self.assertEqual(w._server_of(name), "connectwise", name)
+
+
+class StateWriteLocking(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        sys.path.insert(0, str(HOOK.parent))
+        import connector_credential_watch as w
+
+        self.w = w
+        self.path = Path(self._tmp.name) / "warned.json"
+        patcher = unittest.mock.patch.object(w, "_state_path", lambda: self.path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_state_write_takes_shared_lock_with_short_timeout(self):
+        import atlas_memory
+        from contextlib import contextmanager
+
+        calls = []
+
+        @contextmanager
+        def fake_lock(path, timeout=None):
+            calls.append((path, timeout))
+            yield
+
+        with unittest.mock.patch.object(atlas_memory, "_file_lock", fake_lock):
+            self.assertFalse(self.w._already_warned("s", "srv"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], self.path)
+        self.assertIsNotNone(calls[0][1])
+        self.assertLessEqual(calls[0][1], 2.0)
+
+    def test_busy_lock_fails_open(self):
+        import atlas_memory
+        from contextlib import contextmanager
+
+        @contextmanager
+        def busy(path, timeout=None):
+            raise atlas_memory.LockTimeout("busy")
+            yield
+
+        with unittest.mock.patch.object(atlas_memory, "_file_lock", busy):
+            self.assertFalse(self.w._already_warned("s", "srv"))
+            self.assertTrue(self.w._already_warned("s", "srv"))
+
+    def test_concurrent_writers_lose_no_keys(self):
+        import threading
+
+        real_check = self.w._check_and_mark
+
+        def slow_check(session, server, path):
+            # widen the read-modify-write window so an unlocked write loses keys
+            import time
+
+            try:
+                state = json.loads(path.read_text())
+            except (OSError, ValueError):
+                state = {}
+            time.sleep(0.02)
+            key = "%s|%s" % (session, server)
+            state[key] = True
+            path.write_text(json.dumps(state))
+            return False
+
+        with unittest.mock.patch.object(self.w, "_check_and_mark", slow_check):
+            ts = [
+                threading.Thread(target=self.w._already_warned, args=("s", "srv%d" % i))
+                for i in range(8)
+            ]
+            [t.start() for t in ts]
+            [t.join() for t in ts]
+        self.assertEqual(len(json.loads(self.path.read_text())), 8)
+        self.assertTrue(callable(real_check))
 
 
 if __name__ == "__main__":

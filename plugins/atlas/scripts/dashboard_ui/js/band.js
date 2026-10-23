@@ -1,4 +1,5 @@
 // Terminal band: a pure function of its model (no fetch, no DOM). HTML string out.
+import { esc } from "./html.js";
 
 const NAV = [
   ["run", "Run"],
@@ -16,17 +17,23 @@ const LIVE_WORD = {
   offline: ["fail", "Offline"],
 };
 
-const PHASES = ["research", "theory", "test", "validate", "implement", "verify", "done"];
-
-const esc = (v) =>
-  String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const PHASES = [
+  "research",
+  "theory",
+  "test",
+  "validate",
+  "implement",
+  "verify",
+  "done",
+];
 
 const pillPast = (name) =>
   `<span class="pill past"><span class="g">\u2713</span> ${esc(name)}</span>`;
 const pillFuture = (name) => `<span class="pill future">${esc(name)}</span>`;
 const pillNow = (name, n, m) =>
   `<span class="pill now"><span class="g">\u25C6</span> ${esc(name.toUpperCase())}${fraction(n, m)}</span>`;
-const fraction = (n, m) => (n != null && m != null ? ` ${esc(n)}/${esc(m)}` : "");
+const fraction = (n, m) =>
+  n != null && m != null ? ` ${esc(n)}/${esc(m)}` : "";
 
 function pill(name, i, cur, n, m) {
   if (i < cur) return pillPast(name);
@@ -47,16 +54,36 @@ const MARK =
 
 function projectSelect(options) {
   const opts = options
-    .map((o) => `<option value="${esc(o.value)}"${o.selected ? " selected" : ""}>${esc(o.label)}</option>`)
+    .map(
+      (o) =>
+        `<option value="${esc(o.value)}"${o.selected ? " selected" : ""}>${esc(o.label)}</option>`,
+    )
     .join("");
   return `<select class="proj" aria-label="Project" data-proj>${opts}</select>`;
 }
 
 export function renderBand(model) {
-  const { project, branch, lead, phase, n, m, counts, live, clock, narrow, route, projectOptions } = model;
+  const {
+    project,
+    branch,
+    lead,
+    phase,
+    n,
+    m,
+    counts,
+    live,
+    clock,
+    narrow,
+    route,
+    projectOptions,
+  } = model;
   // With projectOptions the project crumb is a select (run.js owns its change handler).
-  const crumb = projectOptions ? projectSelect(projectOptions) : project && esc(project);
-  const title = [crumb, branch && esc(branch), lead && esc(lead)].filter(Boolean).join(" \u00B7 ");  // middle dot, same separator as terminal band.tsx:72-76
+  const crumb = projectOptions
+    ? projectSelect(projectOptions)
+    : project && esc(project);
+  const title = [crumb, branch && esc(branch), lead && esc(lead)]
+    .filter(Boolean)
+    .join(" \u00B7 "); // middle dot, same separator as terminal band.tsx:72-76
   const cur = Math.max(0, PHASES.indexOf(phase));
   const pills = PHASES.map((p, i) => pill(p, i, cur, n, m)).filter(
     (_, i) => !narrow || i === cur,

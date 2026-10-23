@@ -332,6 +332,34 @@ class RunOptimizerTest(unittest.TestCase):
             self.assertEqual(po.run_optimizer("p"), "cli out")
             self.assertEqual(ra.call_args[0][0][0], "ollama")
 
+    def test_default_budget_is_shared_and_under_the_hook_cap(self):
+        seen = {}
+
+        def api(prompt, model, timeout):
+            seen["api"] = timeout
+            return None
+
+        with (
+            mock.patch("prompt_optimizer.run_via_api", side_effect=api),
+            mock.patch("prompt_optimizer.shutil.which", return_value="/usr/bin/ollama"),
+            mock.patch("prompt_optimizer._run_argv", return_value=None) as ra,
+            mock.patch("prompt_optimizer.time.monotonic", side_effect=[0.0, 20.0]),
+        ):
+            po.run_optimizer("p")
+        self.assertEqual(seen["api"], 25.0)
+        self.assertEqual(ra.call_args[0][1], 5.0)  # the API's 20 s came off the budget
+
+    def test_api_timeout_skips_cli_fallback(self):
+        with (
+            mock.patch(
+                "prompt_optimizer.urllib.request.urlopen", side_effect=TimeoutError()
+            ),
+            mock.patch("prompt_optimizer.shutil.which", return_value="/usr/bin/ollama"),
+            mock.patch("prompt_optimizer._run_argv", return_value="cli out") as ra,
+        ):
+            self.assertIsNone(po.run_optimizer("p"))
+        ra.assert_not_called()
+
     def test_api_fails_no_cli(self):
         with (
             mock.patch("prompt_optimizer.run_via_api", return_value=None),

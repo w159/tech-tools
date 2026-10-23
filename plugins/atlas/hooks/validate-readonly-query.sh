@@ -9,9 +9,22 @@
 #   "hooks": { "PreToolUse": [ { "matcher": "Bash",
 #     "hooks": [ { "type": "command", "command": "<path>/validate-readonly-query.sh" } ] } ] }
 
+# Fail closed: a missing dependency must block, never silently allow.
+for dep in jq perl; do
+  if ! command -v "$dep" > /dev/null 2>&1; then
+    echo "Blocked: read-only guard cannot run because '$dep' is not installed. Install it (fail-closed)." >&2
+    exit 2
+  fi
+done
+
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -z "$COMMAND" ] && exit 0
+
+# Keep the raw command: a `--` or `/*` inside a quoted SQL string is not a comment, so
+# stripping can swallow real statements (psql -c 'SELECT 1 -- x'; DROP TABLE users).
+# Write keywords are checked against BOTH the raw and the comment-stripped text.
+RAW=$(printf '%s' "$COMMAND" | tr '\n' ' ')
 
 # Strip SQL comments before matching so write verbs and object types cannot hide
 # inside /* */ block comments (e.g. UPDATE/**/users/**/SET) or -- line comments.
@@ -27,7 +40,7 @@ COMMAND=$(printf '%s' "$COMMAND" | tr '\n' ' ')
 # "create a file", git update-index, revoke_meeting_access, etc. all pass.
 # Still case-insensitive and still errs toward blocking on genuine SQL.
 SQL_WRITE='(\bDELETE[[:space:]]+FROM\b|\bINSERT[[:space:]]+INTO\b|\bREPLACE[[:space:]]+INTO\b|\bMERGE[[:space:]]+INTO\b|\bUPDATE[[:space:]]+[A-Za-z0-9_."`]+[[:space:]]+SET\b|\bTRUNCATE([[:space:]]+TABLE)?[[:space:]]|\b(DROP|CREATE|ALTER)[[:space:]]+((OR[[:space:]]+REPLACE|TEMP(ORARY)?|UNLOGGED|GLOBAL|LOCAL)[[:space:]]+)*(TABLE|DATABASE|SCHEMA|INDEX|VIEW|MATERIALIZED|SEQUENCE|TRIGGER|FUNCTION|ROLE|USER|EXTENSION|POLICY|PUBLICATION|AGGREGATE)\b|\b(GRANT|REVOKE)[[:space:]]+.+[[:space:]]+ON[[:space:]]+|\bCOPY[[:space:]]+[^;|]+[[:space:]]+(FROM|TO)\b)'
-if echo "$COMMAND" | grep -iE "$SQL_WRITE" > /dev/null; then
+if echo "$COMMAND" | grep -iE "$SQL_WRITE" > /dev/null || echo "$RAW" | grep -iE "$SQL_WRITE" > /dev/null; then
   echo "Blocked: read-only audit. SQL write, DDL, and privilege statements are not allowed." >&2
   exit 2
 fi

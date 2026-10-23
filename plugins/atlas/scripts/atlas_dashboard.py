@@ -38,6 +38,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+import armada_root  # noqa: E402
 import atlas_db  # noqa: E402
 import atlas_control  # noqa: E402
 import atlas_todo  # noqa: E402
@@ -203,9 +204,45 @@ def _plugin_manifest():
     return _MANIFEST
 
 
+def _armada_root():
+    """The armada plugin root that owns the vendor connectors, or None."""
+    return armada_root.find_armada_root(PLUGIN_ROOT)[0]
+
+
+def connectors_unavailable_reason() -> str:
+    """Why the connector list is empty ("" when armada was found)."""
+    return armada_root.find_armada_root(PLUGIN_ROOT)[1]
+
+
+def _connector_manifest() -> dict:
+    """armada's plugin.json: the connectors' userConfig lives there, not in atlas's."""
+    root = _armada_root()
+    if root is None:
+        return {}
+    try:
+        return json.loads(
+            (root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return {}
+
+
+def _all_user_config() -> dict:
+    """Connector userConfig (armada) plus atlas's own keys."""
+    uc = dict(_connector_manifest().get("userConfig") or {})
+    uc.update(_plugin_manifest().get("userConfig") or {})
+    return uc
+
+
+def _connector_env_path() -> Path:
+    """The .env the connector preloaders read (ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env in armada's .mcp.json)."""
+    return (_armada_root() or PLUGIN_ROOT) / ".env"
+
+
 def _mcp_json():
-    path = PLUGIN_ROOT / ".mcp.json"
-    if not path.is_file():
+    root = _armada_root()
+    path = root / ".mcp.json" if root else None
+    if path is None or not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -225,14 +262,17 @@ def _plugin_config_options() -> dict:
     except Exception:
         return {}
     pc = data.get("pluginConfigs") or {}
-    # Prefer marketplace-qualified key; fall back to bare name.
-    for key in ("atlas@tech-tools", "atlas"):
+    # Connectors live in armada; credentials saved under atlas before the move stay readable.
+    # Later keys win, so armada's saved value overrides a legacy atlas one. Marketplace-qualified
+    # key first, then bare name.
+    merged: dict = {}
+    for key in ("atlas", "atlas@tech-tools", "armada", "armada@tech-tools"):
         block = pc.get(key)
         if isinstance(block, dict):
             opts = block.get("options")
             if isinstance(opts, dict):
-                return opts
-    return {}
+                merged.update(opts)
+    return merged
 
 
 def _env_example_keys():
@@ -243,14 +283,18 @@ def _env_example_keys():
     """
     keys: list[str] = []
     seen: set[str] = set()
-    for name in (".env.example", ".env.template"):
-        path = PLUGIN_ROOT / name
-        if not path.is_file():
-            # marketplace root template is one level up from plugins/atlas
-            alt = PLUGIN_ROOT.parent.parent / name
-            path = alt if alt.is_file() else path
-        if not path.is_file():
-            continue
+    roots = [PLUGIN_ROOT] + ([_armada_root()] if _armada_root() else [])
+    candidates = []
+    for root in roots:
+        for name in (".env.example", ".env.template"):
+            path = root / name
+            if not path.is_file():
+                # marketplace root template is one level up from plugins/<name>
+                alt = root.parent.parent / name
+                path = alt if alt.is_file() else path
+            if path.is_file() and path not in candidates:
+                candidates.append(path)
+    for path in candidates:
         for raw in path.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
             if not line or line == "#":
@@ -284,7 +328,7 @@ def _env_candidate_paths() -> list:
     read-only here: mcp/_env/load.* load it first, so a key set only there is
     configured even though the dashboard never writes it.
     """
-    return [Path.home() / ".config" / "atlas" / "atlas.env", PLUGIN_ROOT / ".env"]
+    return [Path.home() / ".config" / "atlas" / "atlas.env", _connector_env_path()]
 
 
 def _parse_env_keys(path: Path) -> set:
@@ -392,8 +436,7 @@ def _key_is_set(
 
 
 def _user_config_schema():
-    manifest = _plugin_manifest()
-    uc = manifest.get("userConfig") or {}
+    uc = _all_user_config()
     out = []
     opts = _plugin_config_options()
     env_present = _env_file_present_keys()
@@ -493,9 +536,8 @@ def _connector_auth_state(name: str, fields: list) -> tuple[bool, list]:
 
 def _connector_status():
     """Group userConfig fields by MCP connector for the Settings UI."""
-    manifest = _plugin_manifest()
+    user_config = _connector_manifest().get("userConfig") or {}
     mcp = _mcp_json()
-    user_config = manifest.get("userConfig") or {}
     servers = mcp.get("mcpServers") or {}
     opts = _plugin_config_options()
     env_present = _env_file_present_keys()
@@ -578,8 +620,9 @@ def _connector_status():
             )
 
         configured, missing = _connector_auth_state(name, fields)
-        server_name = f"plugin:atlas:{name}"
-        enabled = server_name not in disabled
+        server_name = f"plugin:armada:{name}"
+        # pre-move disable entries named the server under atlas; honour them too
+        enabled = server_name not in disabled and f"plugin:atlas:{name}" not in disabled
         u = usage.get(name) or {}
         out.append(
             {
@@ -718,16 +761,40 @@ def _is_junk_project(root) -> bool:
     return atlas_control.is_fixture_project(root)
 
 
-def _junk_project_row(root) -> bool:
-    """Rows that are not a project of their own: $HOME, worktrees/caches/scratch, and
-    subdirs of another repo (those belong to the enclosing repo's project)."""
+def _pinned_projects() -> set:
+    """Realpaths the user pinned in Settings (atlas store env ATLAS_PINNED_PROJECTS,
+    os.pathsep-separated; the process env of the same name is honoured too). A pinned
+    root stays in the selector even without a project marker."""
+    raw = [os.environ.get("ATLAS_PINNED_PROJECTS", "")]
+    try:
+        raw.append(atlas_control.read_store()["env"].get("ATLAS_PINNED_PROJECTS", ""))
+    except Exception:
+        pass
+    return {
+        os.path.realpath(os.path.expanduser(p))
+        for chunk in raw
+        for p in chunk.split(os.pathsep)
+        if p.strip()
+    }
+
+
+def _junk_project_row(root, require_marker: bool = False) -> bool:
+    """Rows that are not a project of their own: $HOME, worktrees/caches/scratch, subdirs of
+    another repo (those belong to the enclosing repo's project). With require_marker (the
+    project selector, not the reaper) markerless dirs (no .git/docs/manifest, see
+    atlas_dash_work._real_project) are dropped too unless pinned in Settings."""
     if not root:
         return True
-    from atlas_dash_work import _junk_root
+    from atlas_dash_work import _junk_root, _real_project
 
     d = os.path.realpath(root)
     if d == os.path.realpath(os.path.expanduser("~")) or _junk_root(d):
         return True
+    if require_marker:
+        if d in _pinned_projects():
+            return False
+        if not _real_project(d):
+            return True
     p = os.path.dirname(d)
     while p != os.path.dirname(p):
         if os.path.exists(os.path.join(p, ".git")):
@@ -755,7 +822,7 @@ def _projects(conn, recent_only=True, editable_only=False):
     )
     out = []
     for r in rows:
-        if _junk_project_row(r.get("root_path")) or (
+        if _junk_project_row(r.get("root_path"), require_marker=True) or (
             editable_only and _is_junk_project(r.get("root_path"))
         ):
             continue
@@ -1118,6 +1185,7 @@ def snapshot(project_id=None):
             "health": _run_health(conn, project_id=project_id),
             "savings": _savings_estimate(conn),
             "connectors": _connector_status(),
+            "connectors_reason": connectors_unavailable_reason(),
             "user_config": _user_config_schema(),
             "settings_path": str(_settings_path()),
             "findings": _findings(conn),
@@ -1134,8 +1202,7 @@ def snapshot(project_id=None):
 
 def _allowlisted_credential_keys() -> tuple[set[str], set[str], dict[str, str]]:
     """Return (user_config_keys, env_keys, env_to_user_config)."""
-    manifest = _plugin_manifest()
-    uc = set((manifest.get("userConfig") or {}).keys())
+    uc = set(_all_user_config().keys())
     env_keys = set(_env_example_keys())
     env_to_uc = {k.upper(): k for k in uc}
     # Every userConfig key has an UPPER env form
@@ -1227,10 +1294,11 @@ def write_settings_updates(updates: dict):
     if not isinstance(data, dict):
         data = {}
     pc = data.setdefault("pluginConfigs", {})
-    block = pc.get("atlas@tech-tools")
+    # Connector credentials belong to armada (the plugin that declares these userConfig keys).
+    block = pc.get("armada@tech-tools")
     if not isinstance(block, dict):
         block = {}
-        pc["atlas@tech-tools"] = block
+        pc["armada@tech-tools"] = block
     opts = block.get("options")
     if not isinstance(opts, dict):
         opts = {}
@@ -1310,7 +1378,7 @@ def _write_env_file(updates: dict):
     if bad:
         return {"ok": False, "error": "keys_not_allowlisted", "keys": bad}
     updates = norm_updates
-    path = PLUGIN_ROOT / ".env"
+    path = _connector_env_path()
     _merge_env_file(path, updates)
     return {
         "ok": True,
@@ -1974,6 +2042,32 @@ _SENSITIVE_GET = re.compile(
 # GETs served straight from do_GET (SSE, websocket upgrade), not through V2_ROUTES.
 V2_RAW_GET = frozenset({"/api/v2/stream", "/api/v2/term/ws"})
 _TOKEN_EXEMPT = ("/api/health", "/health")
+
+# Single-use stream tickets: EventSource cannot set headers, and the long-lived
+# token must never ride in a URL. POST /api/v2/stream/ticket (X-Atlas-Token) mints one.
+STREAM_TICKET_TTL_S = 30
+_stream_tickets: dict = {}  # ticket -> monotonic expiry
+_stream_ticket_lock = threading.Lock()
+
+
+def _mint_stream_ticket() -> str:
+    t = secrets.token_urlsafe(24)
+    now = time.monotonic()
+    with _stream_ticket_lock:
+        for k in [k for k, exp in _stream_tickets.items() if exp <= now]:
+            del _stream_tickets[k]  # expired, never redeemed
+        _stream_tickets[t] = now + STREAM_TICKET_TTL_S
+    return t
+
+
+def _redeem_stream_ticket(ticket: str) -> bool:
+    """Burn a ticket; False when unknown, already used or expired."""
+    with _stream_ticket_lock:
+        exp = _stream_tickets.pop(ticket, None)
+    return exp is not None and exp > time.monotonic()
+
+
+_SECRET_QUERY = re.compile(r"([?&](?:token|ticket)=)[^&\s\"]*", re.IGNORECASE)
 _MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -2394,7 +2488,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._bytes(200, svg, "image/svg+xml; charset=utf-8")
 
     def log_message(self, format, *args):  # noqa: A002 - base-class signature
-        line = format % args
+        line = _SECRET_QUERY.sub(r"\1REDACTED", format % args)
         # Liveness probes fire every few seconds from every session; only failures are worth a line.
         if re.search(r'"GET /(api/(v2/)?)?health[ ?]', line) and line.rstrip().split()[
             -2:-1
@@ -2457,8 +2551,13 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if mutating or _SENSITIVE_GET.match(path):
             supplied = self.headers.get("X-Atlas-Token") or ""
-            if not supplied and path == "/api/v2/stream":
-                supplied = query.get("token", "")
+            if (
+                not supplied
+                and path == "/api/v2/stream"
+                and query.get("ticket")
+                and _redeem_stream_ticket(query["ticket"])
+            ):
+                return True
             if not hmac.compare_digest(supplied.encode(), DASH_TOKEN.encode()):
                 self._deny(
                     401,
@@ -2489,7 +2588,10 @@ class Handler(BaseHTTPRequestHandler):
             body = (
                 target.read_bytes()
                 .replace(TOKEN_PLACEHOLDER.encode(), DASH_TOKEN.encode())
-                .replace(b"__ATLAS_VERSION__", str(_plugin_manifest().get("version") or "").encode())
+                .replace(
+                    b"__ATLAS_VERSION__",
+                    str(_plugin_manifest().get("version") or "").encode(),
+                )
             )
             if DASH_TOKEN.encode() not in body:
                 tag = f'<meta name="atlas-token" content="{DASH_TOKEN}">'.encode()
@@ -2636,10 +2738,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._sse(query)
         if (
             u.path == "/api/v2/term/ws"
-        ):  # token is checked in the handler (browsers cannot set headers)
+        ):  # single-use ticket is checked in the handler (browsers cannot set headers)
             import atlas_dash_term
 
-            return atlas_dash_term.handle_ws(self, query, DASH_TOKEN)
+            return atlas_dash_term.handle_ws(self, query)
         if self._dispatch_v2("GET", u.path, query, {}):
             return
         return self._legacy_get(u)
@@ -2739,7 +2841,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "text": atlas_control.env_export(_connector_status()),
-                    "env_path": str(PLUGIN_ROOT / ".env"),
+                    "env_path": str(_connector_env_path()),
                 },
             )
         if u.path == "/api/findings":
@@ -2819,6 +2921,15 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(data, dict):
             return self._deny(
                 400, "invalid_json", "body must be a JSON object", "wrap it in {}"
+            )
+        if method == "POST" and u.path == "/api/v2/stream/ticket":
+            return self._json(
+                200,
+                {
+                    "ok": True,
+                    "ticket": _mint_stream_ticket(),
+                    "expires_in": STREAM_TICKET_TTL_S,
+                },
             )
         if self._dispatch_v2(method, u.path, query, data):
             return
@@ -3038,7 +3149,13 @@ def reap_tick(
         ):
             continue  # reaping must never create .atlas/.run in a non-project dir
         try:
-            out[root] = atlas_todo.reap_channels(root)
+            try:
+                import atlas_seats
+
+                _seat_live = atlas_seats.pane_live
+            except Exception:  # fail-open: pid/TTL rules only
+                _seat_live = None
+            out[root] = atlas_todo.reap_channels(root, pane_live=_seat_live)
         except Exception as exc:
             _reap_warn(f"reap {root}", exc)
     try:
@@ -3085,11 +3202,36 @@ def _own_install_roots() -> list[Path]:
     return roots
 
 
-def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[int, ...], Path]]:
+def _install_qualifies(d: Path, ver_text: str, parent_real: str) -> bool:
+    """A sibling install we may exec: real atlas manifest, version == dir name,
+    and a realpath that stays inside the install parent (no escaping symlinks)."""
+    try:
+        real = os.path.realpath(d)
+        if (
+            os.path.commonpath([real, parent_real]) != parent_real
+            or real == parent_real
+        ):
+            return False
+        manifest = json.loads(
+            (d / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return False
+    return (
+        isinstance(manifest, dict)
+        and manifest.get("name") == "atlas"
+        and manifest.get("version") == ver_text
+    )
+
+
+def _sibling_installs(
+    own_roots: list[Path] | None = None,
+) -> list[tuple[tuple[int, ...], Path]]:
     """(version, daemon script) of sibling installs of this same plugin.
 
     Layouts: omp .../tech-tools___atlas___<ver>/ and claude .../<mkt>/atlas/<ver>/.
-    Newest last; a dir without scripts/atlas_dashboard.py is ignored.
+    Newest last; a dir without scripts/atlas_dashboard.py, or that fails
+    _install_qualifies (manifest name/version, realpath containment), is ignored.
     """
     if own_roots is None:
         own_roots = _own_install_roots()
@@ -3099,13 +3241,17 @@ def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[i
         fam = m.group(1) if m else ""
         try:
             entries = list(root.parent.iterdir())
+            parent_real = os.path.realpath(root.parent)
         except OSError:
             continue
         for d in entries:
             if fam and not d.name.startswith(fam):
                 continue
-            ver = _version_tuple(d.name[len(fam):]) if fam else _version_tuple(d.name)
+            ver_text = d.name[len(fam) :]
+            ver = _version_tuple(ver_text)
             if not ver or not (d / "scripts" / "atlas_dashboard.py").is_file():
+                continue
+            if not _install_qualifies(d, ver_text, parent_real):
                 continue
             found.setdefault(ver, d / "scripts" / "atlas_dashboard.py")
     return sorted(found.items())

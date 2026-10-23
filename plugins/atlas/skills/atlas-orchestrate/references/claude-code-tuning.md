@@ -39,7 +39,7 @@ than hand-writing handlers. Details: `references/hooks-automation.md`.
 ### Stack-fit plugin candidates (verify names/cost before recommending)
 Match to detected stack; check the plugin's per-turn **context cost** before suggesting (a heavy plugin can cost more than it saves):
 - FE<->BE contract drift -> `drift-guard` (OpenAPI/GraphQL/gRPC schema diffs).
-- Postgres / Cloud SQL -> `whodb`, data-agent-kit.
+- PostgreSQL / Cloud SQL -> `whodb`, data-agent-kit.
 - Test scaffolding -> `memoriant-test-coverage`, `test-generator`; e2e -> `playwright-pro`.
 - API/Python security (auth, IDOR, RLS, OWASP) -> `backend-security-skills`, `vibeguard`.
 - GCP / Firebase infra -> `gcp-devkit`, `firebase-development`.

@@ -1,8 +1,16 @@
 # Contributing
 
-This repo is a monorepo of MCP servers, Node libraries, and Claude plugins for MSP, security/
-compliance, and HR/payroll operations. Read `CLAUDE.md` and `AGENTS.md` before making changes -
-they define the layout and the propagation rules that keep the layers in sync.
+This repo is the `tech-tools` plugin marketplace for Claude Code. It publishes three plugins
+(atlas, armada, programmer) and holds the MCP servers and Node libraries behind armada's 13 vendor
+connectors. Read `CLAUDE.md` and `AGENTS.md` before making changes - they define the layout and
+the propagation rules that keep the layers in sync.
+
+## Scope rule
+
+`atlas` and `armada` are products developed in this repo. A request about them means edit their
+source under `plugins/atlas/` or `plugins/armada/`. Do not install, set up, or run them in this
+workspace to get the work done, and never edit the installed copy under `~/.claude/plugins/`.
+Full rule: `AGENTS.md` Section 0 and `docs/plugin-development-scope.md`.
 
 ## Layout
 
@@ -22,10 +30,11 @@ node library, server domain handler, manifest (version bump), rebuilt `.mcpb`, p
 commands/skills, plugin manifest, and the relevant README and `.env.template` entries. A change
 that touches only one layer is incomplete. See `CLAUDE.md` for the full checklist.
 
-## Building servers (iCloud-safe)
+## Building servers
 
-This repo lives under iCloud Drive. Do not run `npm install` inside the repo - `node_modules`
-syncs continuously and corrupts. Stage builds in `/tmp`:
+Do not install dependencies inside a synced folder (iCloud Drive, Dropbox, OneDrive and similar):
+`node_modules` changes constantly and can corrupt. If the repo lives in one, stage builds in a
+temporary directory outside it:
 
 ```
 cp -r mcp_servers/<svc>-mcp /tmp/<svc>-build
@@ -39,9 +48,9 @@ committed so the test harness runs against a fresh clone without a build step.
 
 - `node test-mcp-tools.mjs` probes every connector; `node test-mcp-tools.mjs <server>` probes
   one; `--list` prints the known names.
-- The harness launches each connector exactly as `plugins/atlas/.mcp.json` declares it - the
-  eleven Node connectors as `plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon`
-  through its `uv run --project plugins/atlas/mcp/falcon ...` entry - with placeholder
+- The harness launches each connector exactly as `plugins/armada/.mcp.json` declares it - the
+  twelve Node connectors as `plugins/armada/mcp/<name>/server.mjs` over MCP stdio, `falcon`
+  through its `uv run --project plugins/armada/mcp/falcon ...` entry (13 servers in all) - with placeholder
   credentials in a from-scratch child environment, so it needs no real
   credentials and cannot reach a live vendor appliance. Per connector it checks BOOT
   (`initialize` + `tools/list` answered), FLOOR (no tool-count regression below the baseline
@@ -55,7 +64,7 @@ committed so the test harness runs against a fresh clone without a build step.
   surface behind a `<vendor>_navigate` step are walked domain by domain and unioned (`blumira`:
   2 cold + 30 across 5 domains), and `falcon`, which registers its domain modules only after an
   OAuth exchange, is probed against a loopback stub answering `POST /oauth2/token` and nothing
-  else. Current run: 523 tools across 12 connectors, all fully enumerated, 0 gated, 0 skipped.
+  else. A clean run enumerates every one of the 13 connectors fully, with 0 gated and 0 skipped.
 - `GATED` and `SKIP` are still real verdicts for a surface that cannot be enumerated (a missing
   `uv` or venv for falcon reports a named SKIP with the fix command). Neither is a clean pass
   and neither is a failure; if you add a connector that cannot be fully enumerated, say why in

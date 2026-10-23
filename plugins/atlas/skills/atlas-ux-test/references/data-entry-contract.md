@@ -8,8 +8,8 @@
 - [Known bug classes -- surface as evidence, do not fix](#known-bug-classes----surface-as-evidence-do-not-fix)
 - [Reference](#reference)
 
-Canonical ordered API contract for the scripted-persona role and `run_persona.py`.
-Both MUST obey this contract exactly. Any deviation is a harness defect, not a
+Canonical ordered API contract for the scripted-persona role.
+It MUST obey this contract exactly. Any deviation is a driver defect, not a
 test finding.
 
 IMPORTANT: The exact endpoints, HTTP methods, and payload field names below come from
@@ -22,7 +22,7 @@ placeholders like `<primary_write_endpoint>` or `<primary_field>`.
 ## Background: why the contract matters
 
 A prior run produced null primary-field readbacks for all personas. Root cause:
-the harness was relying on the backend to derive a value from another field alone.
+the scripted driver was relying on the backend to derive a value from another field alone.
 The backend does not do that. The primary field is only set when it is supplied
 explicitly in the request body, matching the real frontend client's behavior. Phase 0
 discovery captures the real call so this cannot happen again.
@@ -111,5 +111,5 @@ to this file.
 
 - Discovered contract: `RUN_DIR/coverage/contract-snapshot.json` (source of truth for
   this run's endpoints, methods, and payload field names).
-- Harness implementation: `docs/claude_testers/harness/run_persona.py`.
+- Scripted driver: written by the scripted-persona agent under `RUN_DIR/harness/` from this contract.
 - Phase 0 probe: `references/discovery.md`.

@@ -164,7 +164,7 @@ metadataTest:
   workdir: /app
 ```
 
-compose healthcheck as smoke (docker marks unhealthy; CI polls):
+compose healthcheck as smoke (Docker marks unhealthy; CI polls):
 
 ```yaml
 services:

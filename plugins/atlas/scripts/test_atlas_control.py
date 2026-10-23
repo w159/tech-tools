@@ -348,7 +348,7 @@ class TestConnectorTest(ControlTestCase):
         root = Path(self.tmp.name) / "plugin"
         (root / "mcp" / "_env").mkdir(parents=True)
         (root / "mcp" / "fake").mkdir()
-        shutil.copy(SCRIPTS.parent / "mcp" / "_env" / "load.mjs", root / "mcp" / "_env")
+        shutil.copy(SCRIPTS.parent.parent / "armada" / "mcp" / "_env" / "load.mjs", root / "mcp" / "_env")
         (root / "mcp" / "fake" / "server.mjs").write_text(
             """
 import readline from 'node:readline';
@@ -392,7 +392,7 @@ rl.on('line', (l) => {
 
     def test_unconfigured_and_configured_connectors_are_told_apart(self):
         root = self._fake_plugin()
-        with mock.patch.object(self.mod, "PLUGIN_ROOT", root):
+        with mock.patch.object(self.mod, "_connector_root", return_value=root):
             home = Path(self.tmp.name) / "home"
             home.mkdir()
             env = {"HOME": str(home), "ATLAS_ENV_FILE": str(root / "none.env")}
@@ -418,7 +418,7 @@ rl.on('line', (l) => {
             "if(m.method==='tools/list')console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result:{tools:[]}}));});",
             encoding="utf-8",
         )
-        with mock.patch.object(self.mod, "PLUGIN_ROOT", root):
+        with mock.patch.object(self.mod, "_connector_root", return_value=root):
             res = self.mod.test_connector("fake", timeout=3)
         self.assertIsNone(res["configured"])
         self.assertEqual(res["tool_count"], 0)
@@ -681,7 +681,10 @@ class TestSettingsRegistry(ControlTestCase):
         self.assertEqual(self.mod.read_omp_env()["OTHER"], "1")
 
     def test_shell_path_value_must_be_absolute_and_creatable(self):
-        for bad in ("relative/dir", "/proc-nope-xyz/none/deeper"):
+        # nearest existing ancestor is a regular file: uncreatable even for root (a bare "/x/y" is creatable as root)
+        blocker = Path(self.tmp.name) / "a-file"
+        blocker.write_text("x", encoding="utf-8")
+        for bad in ("relative/dir", str(blocker / "none" / "deeper")):
             res = self.mod.write_behavior_updates({"ATLAS_HOME": bad})
             self.assertEqual(res["error"], "bad_path", bad)
         ok = self.mod.write_behavior_updates({"ATLAS_HOME": str(Path(self.tmp.name) / "new-home")})

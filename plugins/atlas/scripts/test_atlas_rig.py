@@ -353,5 +353,72 @@ class RigHangTests(unittest.TestCase):
             self.assertLess(time.monotonic() - t0, 5)
 
 
+class RigSpecLockAndCacheTests(Base):
+    def test_create_pane_holds_spec_lock_and_clears_cache(self):
+        import fcntl
+
+        seen = {}
+
+        def fake(args, timeout=10):
+            if args[:1] == ["ps"]:
+                return 0, [], ""
+            if args[0] == "up":
+                lock = Path(self.tmp.name) / "openrig/home/specs/run1.lock"
+                with open(lock, "a") as fh:
+                    try:
+                        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        seen["locked"] = False
+                        fcntl.flock(fh, fcntl.LOCK_UN)
+                    except OSError:
+                        seen["locked"] = True
+            return 0, {"ok": True}, ""
+
+        with mock.patch.object(r, "_rig", side_effect=fake):
+            out = r.create_pane("w1", "echo", cwd="/tmp", run="run1")
+        self.assertTrue(out["ok"], out)
+        self.assertTrue(seen.get("locked"), "rig up ran without the spec lock held")
+        self.assertEqual(r._ps_cache, {})
+
+    def test_close_pane_uses_rig_remove_and_clears_cache(self):
+        calls = []
+
+        def fake(args, timeout=10):
+            calls.append(args)
+            if args[:1] == ["ps"]:
+                return 0, NODES[:1], ""
+            return 0, {"ok": True}, ""
+
+        with (
+            mock.patch.object(r, "_rig", side_effect=fake),
+            mock.patch.object(r.subprocess, "run") as run,
+        ):
+            out = r.close_pane("w-a@run1")
+        self.assertTrue(out["ok"], out)
+        self.assertIn(["remove", "run1", "w.a", "--json"], calls)
+        run.assert_not_called()
+        self.assertEqual(r._ps_cache, {})
+
+    def test_close_pane_falls_back_to_tmux_when_remove_fails(self):
+        def fake(args, timeout=10):
+            if args[:1] == ["ps"]:
+                return 0, NODES[:1], ""
+            return 1, None, "boom"
+
+        with (
+            mock.patch.object(r, "_rig", side_effect=fake),
+            mock.patch.object(r.subprocess, "run") as run,
+        ):
+            out = r.close_pane("w-a@run1")
+        self.assertTrue(out["ok"])
+        self.assertIn("fallback", out)
+        self.assertEqual(run.call_args[0][0][:2], ["tmux", "kill-session"])
+
+    def test_close_run_clears_cache(self):
+        r._ps_cache[("ps",)] = (0.0, (0, [], ""))
+        with mock.patch.object(r, "_rig", return_value=(0, {"deleted": True}, "")):
+            r.close_run("run1")
+        self.assertEqual(r._ps_cache, {})
+
+
 if __name__ == "__main__":
     unittest.main()

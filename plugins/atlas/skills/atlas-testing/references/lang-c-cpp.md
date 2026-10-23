@@ -106,7 +106,7 @@ mkdir corpus && ./fuzz_parser -max_total_time=600 corpus/
 Mull and coverage:
 
 ```bash
-cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXPORT_COMPILE_COMMANDS=ON .. 
+cmake -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
 clang++ -fclang-ir-frontend ...  # use mull docs for exact plugin flags per LLVM version
 mull-runner-22 --mutation-score-threshold 70 ./parser_test
 # coverage (GCC):

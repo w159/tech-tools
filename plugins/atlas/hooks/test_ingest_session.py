@@ -11,6 +11,7 @@ import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -188,9 +189,16 @@ class TmpLeakGuardTest(_HookTestCase):
         self._run_clear(env)
         self.assertTrue(os.path.exists(os.path.join(self.tmp, "ah", "atlas.db")))
 
+    def _durable_source(self):
+        d = tempfile.mkdtemp(prefix="atlas-test-durable-", dir=_test_isolation.REAL_HOME)
+        self.addCleanup(shutil.rmtree, d, True)
+        src = os.path.join(d, "omp-session.jsonl")
+        open(src, "w").close()
+        return src
+
     def test_omp_conversion_of_a_real_session_ingests_into_the_default_db(self):
         # omp's bridge always converts into the temp dir; the retained source decides.
-        env, default_db = self._env(ATLAS_SOURCE_TRANSCRIPT=os.path.abspath(__file__))
+        env, default_db = self._env(ATLAS_SOURCE_TRANSCRIPT=self._durable_source())
         self._run_clear(env)
         self.assertTrue(os.path.exists(default_db))
 
@@ -278,6 +286,20 @@ class SessionEndLeadTest(unittest.TestCase):
         # lead and its only subagent are finished, so the reaper archived the channel
         chans = todo._reg_read(root)["channels"]
         self.assertEqual([c for c in chans if c.endswith("/" + lead)], [])
+
+
+class SessionEndSeatLivenessTest(unittest.TestCase):
+    def test_session_end_passes_seat_pane_probe_to_reaper(self):
+        import atlas_seats
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp())
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        with mock.patch.object(todo, "reap_channels") as reap:
+            ingest_session._finish_lead(
+                {"hook_event_name": "SessionEnd", "session_id": "s1", "cwd": root}
+            )
+        self.assertIs(reap.call_args.kwargs.get("pane_live"), atlas_seats.pane_live)
 
 
 class StopSweepTest(unittest.TestCase):
@@ -520,8 +542,10 @@ class DurableTranscriptPathTest(_HookTestCase):
         super().setUp()
         import shutil
 
-        # The durable source must live OUTSIDE the OS temp dir, so it sits beside this test.
-        self.durable = tempfile.mkdtemp(dir=os.path.dirname(os.path.abspath(__file__)))
+        # The durable source must live OUTSIDE the OS temp dir (the checkout itself may be under it): use the real home.
+        self.durable = tempfile.mkdtemp(
+            prefix="atlas-test-durable-", dir=_test_isolation.REAL_HOME
+        )
         self.addCleanup(shutil.rmtree, self.durable, True)
         self.src = os.path.join(self.durable, "omp-session.jsonl")
         with open(self.src, "w") as f:

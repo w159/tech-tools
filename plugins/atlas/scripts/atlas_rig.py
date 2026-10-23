@@ -6,6 +6,8 @@ Every public function returns a dict/list and never raises. All subprocess calls
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import re
@@ -283,6 +285,26 @@ def _ps(args: list[str]) -> tuple[int, object, str]:
         return res
 
 
+def _ps_clear() -> None:
+    """Drop cached `rig ps` probes: membership changed, the next read must see it."""
+    with _ps_lock:
+        _ps_cache.clear()
+
+
+@contextlib.contextmanager
+def _spec_lock(rig: str):
+    """Exclusive flock on `<rig_home>/specs/<rig>.lock`: serializes list + spec write + rig up/add
+    across threads and processes so two concurrent creates cannot both write a spec without the other."""
+    d = _rig_home() / "specs"
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / f"{rig}.lock", "a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 def _nodes(rig: str) -> list[dict]:
     rc, data, _ = _ps(["ps", "--nodes", "--rig", rig, "--json"])
     return (
@@ -370,21 +392,23 @@ def create_pane(
     the caller already wraps `command` with `env K=V`. Returns {ok, pane_id, workspace_id, tab_id, name, run}."""
     try:
         rig, member = _safe(run), _safe(name)
-        existing = list_panes(rig)
-        if any(p["label"] == member for p in existing):
-            return _err(f"name_taken: {member} already runs in {rig}")
-        members = [{"id": p["label"], "cwd": p["cwd"] or cwd} for p in existing]
-        members.append({"id": member, "cwd": cwd})
-        spec = _rig_home() / "specs" / f"{rig}.yaml"
-        spec.parent.mkdir(parents=True, exist_ok=True)
-        spec.write_text(_spec(rig, members))
-        if existing:
-            # `rig up` refuses a running rig name (even with --existing); `rig add` grows pod `w` live.
-            frag = spec.with_name(f"{rig}.{member}.member.json")
-            frag.write_text(json.dumps(_member_spec(members[-1])))
-            rc, out, tail = _rig(["add", rig, "w", str(frag), "--json"], 60)
-        else:
-            rc, out, tail = _rig(["up", str(spec), "--yes", "--json"], 60)
+        with _spec_lock(rig):
+            _ps_clear()  # a peer holding the lock before us may have changed membership
+            existing = list_panes(rig)
+            if any(p["label"] == member for p in existing):
+                return _err(f"name_taken: {member} already runs in {rig}")
+            members = [{"id": p["label"], "cwd": p["cwd"] or cwd} for p in existing]
+            members.append({"id": member, "cwd": cwd})
+            spec = _rig_home() / "specs" / f"{rig}.yaml"
+            spec.write_text(_spec(rig, members))
+            if existing:
+                # `rig up` refuses a running rig name (even with --existing); `rig add` grows pod `w` live.
+                frag = spec.with_name(f"{rig}.{member}.member.json")
+                frag.write_text(json.dumps(_member_spec(members[-1])))
+                rc, out, tail = _rig(["add", rig, "w", str(frag), "--json"], 60)
+            else:
+                rc, out, tail = _rig(["up", str(spec), "--yes", "--json"], 60)
+            _ps_clear()
         if rc != 0:
             why = out.get("error", "") if isinstance(out, dict) else ""
             return _err(f"rig up/add failed (rc={rc}): {why or tail}".strip())
@@ -398,18 +422,26 @@ def create_pane(
 
 
 def close_pane(pane_id: str) -> dict:
-    """Kill one seat's tmux session (documented fallback; a `rig` seat-stop ref is [unverified])."""
+    """Stop one seat via `rig remove <rig> <node>` so rig's registry drops the member too; if that
+    fails, kill its tmux session as a fallback (rig then still lists the member until it reconciles)."""
     try:
-        if not any(
-            p["pane_id"] == pane_id for p in list_panes(pane_id.rsplit("@", 1)[-1])
-        ):
+        rig = pane_id.rsplit("@", 1)[-1]
+        row = next((p for p in list_panes(rig) if p["pane_id"] == pane_id), None)
+        if row is None:
             return _err("no such colony pane")
+        rc, _, tail = _rig(["remove", rig, f"w.{row['label']}", "--json"], 30)
+        if rc == 0:
+            with contextlib.suppress(OSError):
+                (_rig_home() / "specs" / f"{rig}.{row['label']}.member.json").unlink()
+            return _ok(pane_id=pane_id)
         subprocess.run(
             ["tmux", "kill-session", "-t", pane_id], capture_output=True, timeout=5
         )
-        return _ok(pane_id=pane_id)
+        return _ok(pane_id=pane_id, fallback=f"tmux kill (rig remove rc={rc}: {tail})".strip())
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
+    finally:
+        _ps_clear()
 
 
 def close_run(run: str) -> dict:
@@ -433,6 +465,8 @@ def close_run(run: str) -> dict:
         )
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
+    finally:
+        _ps_clear()
 
 
 def pane_live(pane_id: str) -> bool:

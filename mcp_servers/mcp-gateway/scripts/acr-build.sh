@@ -9,7 +9,7 @@
 # real `docker build`'s own COPY-time filtering, not az acr build's packer.
 # Measured live on this repo: `az acr build ... .` from the repo root
 # uploaded 726 MiB (including the real secret file `plugins/atlas/.env` and
-# a 47 MB macOS-only stale Python venv under `plugins/atlas/mcp/falcon/`)
+# a 47 MB macOS-only stale Python venv under `plugins/armada/mcp/falcon/`)
 # even with a root `.dockerignore` in place; staging only the files this
 # Dockerfile actually needs into a scratch directory first drops that to
 # 1.88 MiB. For a GLBA/Reg-S-P-regulated deployment, "the build pipeline
@@ -29,14 +29,14 @@ REPO_ROOT="$(cd "$GATEWAY_DIR/../.." && pwd)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
-mkdir -p "$STAGE/mcp_servers/mcp-gateway" "$STAGE/plugins/atlas"
+mkdir -p "$STAGE/mcp_servers/mcp-gateway" "$STAGE/plugins/armada"
 
 cp "$GATEWAY_DIR/Dockerfile" "$GATEWAY_DIR/package.json" "$GATEWAY_DIR/package-lock.json" "$GATEWAY_DIR/tsconfig.json" \
   "$STAGE/mcp_servers/mcp-gateway/"
 cp -R "$GATEWAY_DIR/src" "$STAGE/mcp_servers/mcp-gateway/src"
 
-cp -R "$REPO_ROOT/plugins/atlas/mcp" "$STAGE/plugins/atlas/mcp"
-rm -rf "$STAGE/plugins/atlas/mcp/falcon/.venv" "$STAGE/plugins/atlas/mcp/falcon/.venv.nosync.noindex"
+cp -R "$REPO_ROOT/plugins/armada/mcp" "$STAGE/plugins/armada/mcp"
+rm -rf "$STAGE/plugins/armada/mcp/falcon/.venv" "$STAGE/plugins/armada/mcp/falcon/.venv.nosync.noindex"
 find "$STAGE" -name ".env" -delete
 find "$STAGE" -name "__pycache__" -type d -prune -exec rm -rf {} +
 

@@ -15,6 +15,8 @@
  *   CW_MANAGE_REJECT_UNAUTHORIZED - Set to "false" to allow self-signed certs (default: "true")
  */
 
+import http from "node:http";
+import https from "node:https";
 import { cleanEnv } from "@shared/clean-env.js";
 
 export interface CwManageConfig {
@@ -49,11 +51,128 @@ export function getConfig(): CwManageConfig | null {
     cleanEnv(process.env.CW_MANAGE_URL) ||
     DEFAULT_BASE_URL
   ).replace(/\/+$/, "");
-  const baseUrl = rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
-    ? rawUrl
-    : `https://${rawUrl}`;
+  const baseUrl =
+    rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
+      ? rawUrl
+      : `https://${rawUrl}`;
 
   return { baseUrl, companyId, publicKey, privateKey, clientId };
+}
+
+/** Minimal response shape shared by global fetch and insecureFetch. */
+interface HttpResponseLike {
+  ok: boolean;
+  status: number;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}
+
+const INSECURE_TIMEOUT_MS = 30_000;
+/** Redirect hops followed by the TLS-relaxed transport (global fetch allows 20). */
+const INSECURE_MAX_REDIRECTS = 5;
+
+interface InsecureHop {
+  status: number;
+  location: string | undefined;
+  body: string;
+}
+
+/** One TLS-relaxed request, no redirect handling. */
+function insecureHop(
+  url: URL,
+  init: { method: string; headers: Record<string, string>; body?: string },
+): Promise<InsecureHop> {
+  return new Promise((resolve, reject) => {
+    const isHttps = url.protocol === "https:";
+    const requestFn = isHttps ? https.request : http.request;
+    const req = requestFn(
+      url,
+      {
+        method: init.method,
+        headers: init.headers,
+        timeout: INSECURE_TIMEOUT_MS,
+        ...(isHttps
+          ? { agent: new https.Agent({ rejectUnauthorized: false }) }
+          : {}),
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("error", reject);
+        res.on("end", () => {
+          const location = res.headers?.location;
+          resolve({
+            status: res.statusCode ?? 0,
+            location: Array.isArray(location) ? location[0] : location,
+            body: Buffer.concat(chunks).toString("utf8"),
+          });
+        });
+      },
+    );
+    req.on("timeout", () =>
+      req.destroy(new Error("ConnectWise request timed out")),
+    );
+    req.on("error", reject);
+    if (init.body !== undefined) req.write(init.body);
+    req.end();
+  });
+}
+
+/**
+ * Per-request TLS-relaxed transport (self-signed certs). Uses a throwaway
+ * https.Agent with rejectUnauthorized:false scoped to this single request.
+ *
+ * Global fetch follows redirects, and a self-hosted Manage server can answer
+ * 301/302 (http -> https, trailing-slash or case normalization), so this path
+ * follows them too, but only within bounds: at most INSECURE_MAX_REDIRECTS hops,
+ * same hostname only (the Authorization header is never sent to another host),
+ * and never https -> http. Any redirect it will not follow is returned as-is,
+ * so the caller sees the 3xx as a non-ok CwHttpError rather than a silent hop.
+ * Method handling mirrors fetch: 303 (and 301/302 on POST) becomes a bodiless
+ * GET; 307/308 keep the method and body.
+ */
+async function insecureFetch(
+  url: URL,
+  init: { method: string; headers: Record<string, string>; body?: string },
+): Promise<HttpResponseLike> {
+  let current = url;
+  let { method, body } = init;
+  for (let hop = 0; ; hop++) {
+    const res = await insecureHop(current, { ...init, method, body });
+    const redirect = [301, 302, 303, 307, 308].includes(res.status);
+    let next: URL | undefined;
+    if (redirect && res.location && hop < INSECURE_MAX_REDIRECTS) {
+      try {
+        next = new URL(res.location, current);
+      } catch {
+        next = undefined;
+      }
+      if (
+        next &&
+        (next.hostname !== current.hostname ||
+          (current.protocol === "https:" && next.protocol !== "https:") ||
+          (next.protocol !== "https:" && next.protocol !== "http:"))
+      ) {
+        next = undefined;
+      }
+    }
+    if (!next) {
+      return {
+        ok: res.status >= 200 && res.status < 300,
+        status: res.status,
+        text: async () => res.body,
+        json: async () => JSON.parse(res.body) as unknown,
+      };
+    }
+    if (
+      res.status === 303 ||
+      ((res.status === 301 || res.status === 302) && method === "POST")
+    ) {
+      method = "GET";
+      body = undefined;
+    }
+    current = next;
+  }
 }
 
 /**
@@ -124,50 +243,34 @@ export class CwManageClient {
       }
     }
 
-    // For self-hosted instances with self-signed certificates
-    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
-      method,
-      headers: this.defaultHeaders(),
-    };
+    const headers = this.defaultHeaders();
+    const body =
+      options?.body !== undefined ? JSON.stringify(options.body) : undefined;
 
-    if (options?.body !== undefined) {
-      fetchOptions.body = JSON.stringify(options.body);
+    // Secure requests (default) use global fetch. For self-hosted instances
+    // with self-signed certificates, fall back to a per-request https.Agent so
+    // verification is relaxed for this one connection only. The global fetch
+    // ignores an https.Agent `dispatcher` and undici is not a dependency, so
+    // the process-wide TLS env toggle must never be mutated here (it would
+    // disable verification for every concurrent connection).
+    const response = this.rejectUnauthorized
+      ? await fetch(url.toString(), { method, headers, body })
+      : await insecureFetch(url, { method, headers, body });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new CwHttpError(
+        response.status,
+        `ConnectWise API ${method} ${path} returned ${response.status}: ${errorBody}`,
+      );
     }
 
-    // Node 18+ supports rejecting unauthorized via the global agent or
-    // environment variable NODE_TLS_REJECT_UNAUTHORIZED. We set it here
-    // so callers don't have to worry about it.
-    const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    if (!this.rejectUnauthorized) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    // Some endpoints return 204 No Content
+    if (response.status === 204) {
+      return undefined as T;
     }
 
-    try {
-      const response = await fetch(url.toString(), fetchOptions);
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new CwHttpError(
-          response.status,
-          `ConnectWise API ${method} ${path} returned ${response.status}: ${errorBody}`,
-        );
-      }
-
-      // Some endpoints return 204 No Content
-      if (response.status === 204) {
-        return undefined as T;
-      }
-
-      return (await response.json()) as T;
-    } finally {
-      if (!this.rejectUnauthorized) {
-        if (prevTls === undefined) {
-          delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-        } else {
-          process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTls;
-        }
-      }
-    }
+    return (await response.json()) as T;
   }
 
   /** GET helper */
