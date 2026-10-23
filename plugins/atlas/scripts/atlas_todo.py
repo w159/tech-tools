@@ -38,6 +38,8 @@ Stdlib only. Same fcntl/msvcrt lock pattern as atlas_memory.
 from __future__ import annotations
 
 import contextlib
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -795,6 +797,60 @@ def notes_dir(root: Optional[str] = None) -> Path:
 
 def _sanitize_owner(owner: Any) -> str:
     return _NOTE_NAME_BAD.sub("_", str(owner or "").strip()) or "anon"
+
+
+# Owner tokens: HMAC-SHA256(per-project secret, sanitized owner). Deterministic, so only
+# the secret (0600) and an empty per-owner "issued" marker are stored, never a token.
+# Enforced by the note CLI only; note() itself stays open for in-process callers.
+OWNER_SECRET_FILE = "owner-token.secret"
+OWNER_ISSUED_DIR = "owner-tokens"
+
+
+def _owner_secret(root: Optional[str]) -> bytes:
+    path = Path(_resolve_base(root)) / BOARD_DIR / OWNER_SECRET_FILE
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(os.urandom(32))
+        try:
+            os.link(tmp, path)  # atomic publish; loses cleanly to a concurrent creator
+        except FileExistsError:
+            pass
+        finally:
+            os.unlink(tmp)
+    return path.read_bytes()
+
+
+def _owner_token(root: Optional[str], name: str) -> str:
+    return hmac.new(_owner_secret(root), name.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _issued_marker(root: Optional[str], name: str) -> Path:
+    return Path(_resolve_base(root)) / BOARD_DIR / OWNER_ISSUED_DIR / name
+
+
+def issue_owner_token(root: Optional[str], name: Any) -> str:
+    """Mark `name` token-bearing and return its token (the only place a token leaves)."""
+    name = _sanitize_owner(name)
+    marker = _issued_marker(root, name)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    os.close(os.open(str(marker), os.O_WRONLY | os.O_CREAT, 0o600))
+    return _owner_token(root, name)
+
+
+def owner_token_issued(root: Optional[str], name: Any) -> bool:
+    return _issued_marker(root, _sanitize_owner(name)).exists()
+
+
+def verify_owner_token(root: Optional[str], name: Any, token: Any) -> bool:
+    if not token:
+        return False
+    return hmac.compare_digest(
+        _owner_token(root, _sanitize_owner(name)).encode("utf-8"),
+        str(token).encode("utf-8"),
+    )
 
 
 def _next_seq(root: Optional[str], target: Path) -> int:
@@ -1883,6 +1939,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--keep"
             or a == "--message"
             or a == "--origin"
+            or a == "--owner-token"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
@@ -2022,6 +2079,16 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             ).strip()
             if not owner:
                 out = {"ok": False, "error": "owner_required"}
+            elif owner_token_issued(root, owner) and not verify_owner_token(
+                root,
+                owner,
+                (flags.get("owner-token") or os.environ.get("ATLAS_OWNER_TOKEN") or "").strip(),
+            ):
+                given = flags.get("owner-token") or os.environ.get("ATLAS_OWNER_TOKEN")
+                out = {
+                    "ok": False,
+                    "error": "owner_token_invalid" if given else "owner_token_required",
+                }
             else:
                 out = {
                     "ok": True,
