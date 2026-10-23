@@ -478,6 +478,8 @@ def status_row(state: str, tick: int, elapsed: float, tools: int, tokens: int, w
     return paint([seg(f" {SPIN[tick % len(SPIN)]} working ", GREEN, None, True), *bar, seg("  " + stats, MUT), *tail], width)
 
 
+MIN_PAINT_GAP = 0.1  # seconds between event-driven repaints of the live pane
+
 # ---- the live pane ----------------------------------------------------------------------------------------------------
 class Feed:
     """One worker pane. live=True repaints the terminal in place (sticky header and status, a 4 Hz
@@ -493,6 +495,7 @@ class Feed:
         self.usage: dict = {}
         self.lock = threading.Lock()
         self.painted_size: tuple | None = None
+        self.painted_at = 0.0  # monotonic time of the last _paint, for the event-paint throttle
         self.calls_file = calls_file  # <name>.tool.json: claude workers' call times for the omp widget sparkline
 
     def _size(self) -> tuple:
@@ -544,6 +547,7 @@ class Feed:
             out = ESC + "2J" + out
             self.painted_size = (width, height)
         self._write(out)
+        self.painted_at = time.monotonic()
 
     def _write(self, text: str) -> None:
         self.out.write(text)
@@ -553,7 +557,10 @@ class Feed:
         with self.lock:
             self.rows.extend(rows)
             if self.live:
-                self._paint()
+                # ponytail: event paints are at least MIN_PAINT_GAP apart; the 4 Hz ticker (max ~4 repaints/s
+                # on its own) and finish() flush the trailing row. Ceiling: a row can wait up to 0.25 s.
+                if time.monotonic() - self.painted_at >= MIN_PAINT_GAP:
+                    self._paint()
             else:
                 width = self._size()[0]
                 self._write("".join(paint(r, width) + "\n" for r in rows))
