@@ -1190,13 +1190,45 @@ class HelperUnitTest(unittest.TestCase):
             (root / ".atlas" / "evidence").mkdir(
                 parents=True
             )  # evidence/ exists so is_dir() True
-            with mock.patch.object(Path, "iterdir", side_effect=OSError):
+            with mock.patch.object(Path, "rglob", side_effect=OSError):
                 # (a) fails open on OSError
                 from completion_gate import _check_evidence
 
                 self.assertTrue(_check_evidence(root))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def _nested_evidence_root(self, mtime_offset):
+        """Root whose only evidence file is evidence/run-1/proof.txt, with its
+        mtime `mtime_offset` seconds from a fixed run start. Returns (root, started)."""
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        root = Path(tmp)
+        nested = root / ".atlas" / "evidence" / "run-1"
+        nested.mkdir(parents=True)
+        proof = nested / "proof.txt"
+        proof.write_text("x")
+        started = 1_000_000.0
+        os.utime(proof, (started + mtime_offset, started + mtime_offset))
+        return root, started
+
+    def test_check_evidence_counts_fresh_nested_file(self):
+        from completion_gate import _check_evidence
+
+        root, started = self._nested_evidence_root(5)
+        self.assertTrue(_check_evidence(root, started))
+
+    def test_check_evidence_ignores_stale_nested_file(self):
+        from completion_gate import _check_evidence
+
+        root, started = self._nested_evidence_root(-3600)
+        self.assertFalse(_check_evidence(root, started))
+
+    def test_check_evidence_nested_started_none_failopen(self):
+        from completion_gate import _check_evidence
+
+        root, _ = self._nested_evidence_root(-3600)
+        self.assertTrue(_check_evidence(root, None))
 
     def test_check_nonempty_oserror_failopen(self):
         # is_file() must return True so stat() is reached and raises OSError.

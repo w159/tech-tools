@@ -184,10 +184,12 @@ def _check_evidence(root: Path, started: float | None = None) -> bool:
     try:
         if not evidence.is_dir():
             return False
+        # Recursive: evidence is often written under per-run subdirectories
+        # (evidence/run-1/proof.txt); a one-level scan missed those.
         if started is None:
-            return any(p.is_file() for p in evidence.iterdir())
+            return any(p.is_file() for p in evidence.rglob("*"))
         return any(
-            p.is_file() and p.stat().st_mtime >= started for p in evidence.iterdir()
+            p.is_file() and p.stat().st_mtime >= started for p in evidence.rglob("*")
         )
     except OSError:
         return True  # can't read -> fail open  # can't read -> fail open
