@@ -1646,6 +1646,7 @@ def _block_loop_state(session_id: str, failed: list) -> tuple[int, bool]:
                 "gate_block_loop",
                 weight=float(count),
                 snippet=f"allowed Stop after {count - 1} identical blocks: {_gate_block_snippet(failed)}",
+                gate_letter=sig,
             )
     finally:
         if conn is not None:
@@ -1692,6 +1693,7 @@ def _record_gate_block(session_id: str, failed: list) -> None:
                 "gate_block",
                 weight=float(len(failed)),
                 snippet=_gate_block_snippet(failed),
+                gate_letter=",".join(failed),
             )
     finally:
         if conn is not None:

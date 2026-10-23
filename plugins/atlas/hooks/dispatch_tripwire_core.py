@@ -1343,7 +1343,12 @@ def _record_dispatch_deny(
     try:
         who = dict(_dispatch_attribution(tinput or {}, session_model), tool=tool)
         atlas_db.record_friction(
-            conn, session, "dispatch_denied:" + code, snippet=json.dumps(who)
+            conn,
+            session,
+            "dispatch_denied:" + code,
+            snippet=json.dumps(who),
+            role=who["agent"] or None,
+            tool_name=tool or None,
         )
     except Exception as exc:
         _record_fault(exc)
@@ -1594,6 +1599,7 @@ def _arm_orchestrating(conn, atlas_db, session, cwd):
                 session,
                 "orchestration_flag_arm_failed",
                 snippet="mark_orchestrating raised; run not flagged",
+                role="lead",  # workers returned above
             )
 
 

@@ -520,6 +520,7 @@ def arm_orchestration(data: dict, prompt: str) -> str | None:
                     session,
                     "orchestration_flag_arm_failed",
                     snippet="mark_orchestrating raised; run not flagged",
+                    role="lead",  # workers returned above
                 )
             except Exception:
                 pass
