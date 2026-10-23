@@ -1292,7 +1292,7 @@ def reap_channels(
         if "exit_code" in m:
             return True
         pid = m.get("pid")
-        if pid and pid_start(pid) is None:  # recorded pid is gone
+        if pid and _pid_probe(pid) is _GONE:  # gone; unknown falls to the TTL rule
             return True
         ttl = lead_idle if chan.get("kind") == "lead" else max_idle
         return now - float(chan.get("last_activity") or 0) > ttl
@@ -1490,8 +1490,26 @@ def mark_finished(root: Optional[str], name: str, exit_code: int) -> int:
     return _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
 
 
-def pid_start(pid) -> Optional[str]:
-    """Start-time string of `pid` from `ps -o lstart=`, or None if ps fails."""
+_UNKNOWN = object()  # liveness cannot be determined (no ps, no /proc)
+_GONE = None
+
+
+def _proc_start(pid):
+    """Linux /proc/<pid>/stat field 22 (starttime ticks) as a string; None if the pid is gone;
+    _UNKNOWN when /proc is unusable."""
+    try:
+        with open(f"/proc/{int(pid)}/stat", "rb") as f:
+            raw = f.read().decode("ascii", "replace")
+        # comm may hold spaces/parens: fields resume after the last ')', starting at field 3
+        return "proc:" + raw[raw.rindex(")") + 2 :].split()[19]
+    except (FileNotFoundError, ProcessLookupError):
+        return None if os.path.exists("/proc/self/stat") else _UNKNOWN
+    except (OSError, ValueError, TypeError, IndexError):
+        return _UNKNOWN
+
+
+def _pid_probe(pid):
+    """Start-time string if alive, None if the pid is gone, _UNKNOWN if neither ps nor /proc can say."""
     try:
         r = subprocess.run(
             ["ps", "-o", "lstart=", "-p", str(int(pid))],
@@ -1500,10 +1518,18 @@ def pid_start(pid) -> Optional[str]:
             timeout=5,
             env={**os.environ, "LC_ALL": "C"},
         )
-    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
-        return None
+    except OSError:  # ps missing: not the same as the pid being gone
+        return _proc_start(pid)
+    except (ValueError, TypeError, subprocess.SubprocessError):
+        return _UNKNOWN
     s = " ".join(r.stdout.split())
-    return s if r.returncode == 0 and s else None
+    return s if r.returncode == 0 and s else _GONE
+
+
+def pid_start(pid) -> Optional[str]:
+    """Start-time string of `pid` (ps lstart, else /proc starttime), or None if gone or unknowable."""
+    cur = _pid_probe(pid)
+    return None if cur is _UNKNOWN else cur
 
 
 def pid_matches(pid, recorded_start) -> bool:

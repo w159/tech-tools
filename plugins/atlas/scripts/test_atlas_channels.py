@@ -112,6 +112,43 @@ class ChannelModel(unittest.TestCase):
         )
         self.assertEqual(todo.reap_channels(self.root)["reaped"], 1)
 
+    def _psless(self):
+        """ps binary missing: subprocess.run raises OSError."""
+        p = mock.patch.object(todo.subprocess, "run", side_effect=FileNotFoundError("ps"))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _pin_all(self, name, pid):
+        todo._reg_update(
+            self.root,
+            lambda r: [
+                m.update(pid=pid) for m in r["channels"][f"{self.main}/{name}"]["members"]
+            ],
+        )
+
+    def test_reap_ps_unavailable_live_pid_is_not_reaped(self):
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        self.addCleanup(proc.kill)
+        self._live_lead("alive", 10, pid=proc.pid)
+        self._pin_all("alive", proc.pid)
+        self._psless()
+        self.assertEqual(todo.reap_channels(self.root)["reaped"], 0)
+
+    def test_reap_ps_unavailable_unknown_pid_uses_ttl_only(self):
+        self._live_lead("blind", 10 * 86400, pid=999999)
+        self._pin_all("blind", 999999)
+        self._psless()
+        with mock.patch.object(todo, "_proc_start", return_value=todo._UNKNOWN):
+            self.assertEqual(todo.reap_channels(self.root, max_idle=10**9, lead_idle=10**9)["reaped"], 0)  # unknown pid: TTL only
+
+    def test_reap_ps_unavailable_pid_gone_past_ttl_is_reaped(self):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        self._live_lead("gone", 10 * 86400, pid=proc.pid)
+        self._pin_all("gone", proc.pid)
+        self._psless()
+        self.assertEqual(todo.reap_channels(self.root)["reaped"], 1)
+
     def test_reap_idle_lead_past_two_hours_but_not_current(self):
         todo.open_lead_channel(self.root, "mine", ["w1"])
         todo.open_lead_channel(self.root, "idle", ["w1"])  # opens reap, so age after both exist

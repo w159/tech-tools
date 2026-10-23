@@ -15,6 +15,8 @@ import atlas_seats as s  # noqa: E402
 
 class BackendTests(unittest.TestCase):
     def env(self, **kw):
+        s._reset_backend_cache()
+        self.addCleanup(s._reset_backend_cache)
         p = mock.patch.dict(os.environ, kw)
         p.start()
         self.addCleanup(p.stop)
@@ -43,11 +45,53 @@ class BackendTests(unittest.TestCase):
         ):
             with mock.patch.object(atlas_rig, "_rigs", return_value=[]):
                 self.assertEqual(s.backend(), "herdr")
+            s._reset_backend_cache()  # backend() is memoized for 30 s
             with mock.patch.object(atlas_rig, "_rigs", return_value=["r"]):
                 self.assertEqual(s.backend(), "rig")
             self.env(ATLAS_SEAT_BACKEND="rig")  # explicit override wins
             with mock.patch.object(atlas_rig, "_rigs", return_value=[]):
                 self.assertEqual(s.backend(), "rig")
+
+    def test_herdr_when_rig_ps_failed_and_herdr_up(self):
+        self.env()
+        with (
+            mock.patch.object(atlas_rig, "_bin", return_value="/x/rig"),
+            mock.patch.object(atlas_rig, "_rigs", return_value=None),
+            mock.patch.object(
+                atlas_herdr, "status", return_value={"herdr_server": True}
+            ),
+        ):
+            self.assertEqual(s.backend(), "herdr")
+
+    def test_backend_memoized_for_30s(self):
+        self.env()
+        s._reset_backend_cache()
+        self.addCleanup(s._reset_backend_cache)
+        with (
+            mock.patch.object(atlas_rig, "_bin", return_value="/x/rig"),
+            mock.patch.object(atlas_rig, "_rigs", return_value=["r"]) as rigs,
+        ):
+            self.assertEqual(s.backend(), "rig")
+            self.assertEqual(s.backend(), "rig")
+            self.assertEqual(rigs.call_count, 1)
+            s._reset_backend_cache()
+            s.backend()
+            self.assertEqual(rigs.call_count, 2)
+
+    def test_off_backend_never_raises(self):
+        self.env(ATLAS_SEAT_BACKEND="off")
+        self.assertFalse(s.status()["ok"] if "ok" in s.status() else False)
+        self.assertEqual(s.status()["backend"], "none")
+        self.assertEqual(s.list_panes(), [])
+        self.assertFalse(s.ensure()["ok"])
+        self.assertFalse(s.ensure_server()["ok"])
+        self.assertFalse(s.create_pane("n", "true")["ok"])
+        self.assertFalse(s.close_pane("p")["ok"])
+        self.assertFalse(s.pane_live("p"))
+        self.assertFalse(s.send_prompt("p", "x")["ok"])
+        self.assertFalse(s.agents()["reachable"])
+        self.assertFalse(s.close_run("r")["ok"])
+        self.assertEqual(s.capture("p"), {"ok": False, "error": "not_supported"})
 
     def test_herdr_when_rig_absent(self):
         self.env()
@@ -79,20 +123,32 @@ class BackendTests(unittest.TestCase):
 
     def test_agents_union_rig_and_herdr_deduped(self):
         self.env()
-        rig = {"reachable": True, "reason": None, "workspaces": [{"workspace_id": "r1"}],
-               "agents": [{"pane_id": "a@r1"}, {"pane_id": "dup"}]}
-        hd = {"reachable": True, "reason": None, "workspaces": [{"workspace_id": "w1"}],
-              "agents": [{"pane_id": "dup"}, {"pane_id": "h1"}]}
+        rig = {
+            "reachable": True,
+            "reason": None,
+            "workspaces": [{"workspace_id": "r1"}],
+            "agents": [{"pane_id": "a@r1"}, {"pane_id": "dup"}],
+        }
+        hd = {
+            "reachable": True,
+            "reason": None,
+            "workspaces": [{"workspace_id": "w1"}],
+            "agents": [{"pane_id": "dup"}, {"pane_id": "h1"}],
+        }
         with (
             mock.patch.object(atlas_rig, "agents", return_value=rig),
             mock.patch.object(atlas_herdr, "agents", return_value=hd),
-            mock.patch.object(atlas_herdr, "status", return_value={"herdr_server": True}),
+            mock.patch.object(
+                atlas_herdr, "status", return_value={"herdr_server": True}
+            ),
         ):
             r = s.agents()
             self.assertEqual([a["pane_id"] for a in r["agents"]], ["a@r1", "dup", "h1"])
             self.assertEqual(len(r["workspaces"]), 2)
             os.environ["ATLAS_SEAT_BACKEND"] = "rig"  # override restricts to one source
-            self.assertEqual([a["pane_id"] for a in s.agents()["agents"]], ["a@r1", "dup"])
+            self.assertEqual(
+                [a["pane_id"] for a in s.agents()["agents"]], ["a@r1", "dup"]
+            )
 
     def test_status_adds_backend_and_web_ui(self):
         self.env(ATLAS_SEAT_BACKEND="rig")
