@@ -3,14 +3,15 @@
 command with a representative payload in a scratch git repo, ATLAS_HOME and
 ATLAS_DB pointed at a temp dir, and prints median/p90 per hook and per
 event/tool "call" (sum of every hook bound to it). The wall column is the median
-over runs of the slowest hook in that call: Claude Code runs an event's hooks in
-parallel, so wall is the latency the user waits.
+over runs of the slowest hook in that call (Claude Code runs an event's hooks in
+parallel); block is the serial sum without async hooks (format_after_edit).
 
     python3 scripts/bench_hooks.py [-n 10] [--root PLUGIN_ROOT]
 """
 import argparse
 import json
 import os
+import shlex
 import statistics
 import subprocess
 import sys
@@ -45,9 +46,15 @@ def matches(matcher, tool):
     return tool is not None and re.fullmatch(matcher, tool) is not None
 
 
+def to_argv(cmd, root):
+    """hooks.json command string -> argv (no shell): expand the plugin-root variable, then shlex-split."""
+    return shlex.split(cmd.replace("${CLAUDE_PLUGIN_ROOT}", root))
+
+
 def run(cmd, payload, env, cwd):
+    argv = cmd if isinstance(cmd, list) else shlex.split(cmd)
     t = time.perf_counter()
-    subprocess.run(cmd, shell=True, input=json.dumps(payload), text=True,
+    subprocess.run(argv, input=json.dumps(payload), text=True,
                    capture_output=True, env=env, cwd=cwd, timeout=60)
     return (time.perf_counter() - t) * 1000
 
@@ -72,27 +79,40 @@ def main():
         env = dict(os.environ, CLAUDE_PLUGIN_ROOT=root, ATLAS_HOME=os.path.join(tmp, "home"),
                    ATLAS_DB=os.path.join(tmp, "atlas.db"), CLAUDE_PROJECT_DIR=cwd)
         os.makedirs(env["ATLAS_HOME"])
-        floor = [run("python3 -c pass", {}, env, cwd) for _ in range(a.n)]
+        floor = [run(["python3", "-c", "pass"], {}, env, cwd) for _ in range(a.n)]
         print(f"python3 floor: median {statistics.median(floor):.0f} ms\n")
-        print(f"{'event/tool':<26}{'hooks':>6}{'median':>9}{'p90':>8}{'wall':>8}   per-hook median ms")
+        rows = {}
+        print(f"{'event/tool':<26}{'hooks':>6}{'median':>9}{'p90':>8}{'wall':>8}{'block':>8}   per-hook median ms")
         for ev, tool, pl in payloads(cwd):
-            cmds = [h["command"] for g in hooks.get(ev, []) if matches(g.get("matcher"), tool)
-                    for h in g["hooks"]]
-            per = {c: [] for c in cmds}
+            found = [(h["command"], bool(h.get("async"))) for g in hooks.get(ev, [])
+                     if matches(g.get("matcher"), tool) for h in g["hooks"]]
+            cmds = [to_argv(c, root) for c, _ in found]
+            asyncs = {tuple(to_argv(c, root)): a for c, a in found}
+            per = {tuple(c): [] for c in cmds}
             totals = []
             walls = []
+            blocks = []
             for _ in range(a.n):
                 tot = 0
                 longest = 0
+                block = 0
                 for c in cmds:
                     ms = run(c, pl, env, cwd)
-                    per[c].append(ms)
+                    per[tuple(c)].append(ms)
                     tot += ms
                     longest = max(longest, ms)
+                    if not asyncs[tuple(c)]:
+                        block += ms
                 totals.append(tot)
                 walls.append(longest)
-            detail = " ".join(f"{Path(c.split('\"')[1]).stem}={statistics.median(v):.0f}" for c, v in per.items())
-            print(f"{(ev + ' ' + (tool or '')).strip():<26}{len(cmds):>6}{statistics.median(totals):>9.0f}{p90(totals):>8.0f}{statistics.median(walls):>8.0f}   {detail}")
+                blocks.append(block)
+            detail = " ".join(f"{Path(c[-1]).stem}={statistics.median(v):.0f}" for c, v in per.items())
+            print(f"{(ev + ' ' + (tool or '')).strip():<26}{len(cmds):>6}{statistics.median(totals):>9.0f}{p90(totals):>8.0f}{statistics.median(walls):>8.0f}{statistics.median(blocks):>8.0f}   {detail}")
+            rows[(ev, tool)] = (statistics.median(totals), statistics.median(blocks))
+        print("\nPre+Post serial sum per tool (total = every hook process; block = excluding async hooks)")
+        for tool in ("Read", "Bash", "Edit"):
+            pre, post = rows[("PreToolUse", tool)], rows[("PostToolUse", tool)]
+            print(f"{tool:<8} total {pre[0] + post[0]:>5.0f} ms   block {pre[1] + post[1]:>5.0f} ms")
 
 
 if __name__ == "__main__":
