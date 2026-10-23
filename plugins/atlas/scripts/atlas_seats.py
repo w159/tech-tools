@@ -145,8 +145,21 @@ def status() -> dict:
 
 
 def capture(pane_id, lines: int = 40) -> dict:
-    """Recent terminal text of a seat. herdr has no equivalent here; use rpc("pane.read") behind a herdr check."""
-    if backend() != "rig":
+    """Recent terminal text of a seat: rig via its capture, herdr via the pane.read socket call. Never raises."""
+    b = backend()
+    if b == "herdr":
+        h = _herdr()
+        try:
+            read = h.rpc(
+                "pane.read",
+                {"pane_id": pane_id, "source": "recent", "lines": lines, "format": "text"},
+                timeout=2.0,
+            ).get("read")
+        except h.HerdrSockError as e:
+            return {"ok": False, "error": e.reason}
+        text = read.get("text") if isinstance(read, dict) else None
+        return {"ok": True, "pane_id": pane_id, "text": text if isinstance(text, str) else ""}
+    if b != "rig":
         return {"ok": False, "error": "not_supported"}
     return importlib.import_module("atlas_rig").capture(pane_id, lines)
 
