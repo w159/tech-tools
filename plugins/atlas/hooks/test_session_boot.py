@@ -108,6 +108,17 @@ class MainInProcessTest(unittest.TestCase):
             else:
                 sys.modules.pop(name, None)
 
+    def test_boot_reap_passes_seat_pane_probe(self):
+        import atlas_seats
+        import atlas_todo
+
+        root = os.path.realpath(self.tmp)
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        with mock.patch.object(atlas_todo, "reap_channels") as reap:
+            run_main_inprocess({"session_id": "s-reap", "cwd": root}, self.env)
+        self.assertTrue(reap.called)
+        self.assertIs(reap.call_args.kwargs.get("pane_live"), atlas_seats.pane_live)
+
     # --- additionalContext + systemMessage emission -----------------------
 
     def test_context_carries_absolute_team_flow_commands(self):

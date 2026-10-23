@@ -848,8 +848,15 @@ class InstallCheckTests(unittest.TestCase):
         finally:
             atlas_herdr._herdr_version, atlas_herdr._pin = saved
 
+    def test_missing_rsync_is_only_a_warning_when_web_ui_is_built(self):
+        with mock.patch.object(atlas_herdr, "_build_fresh", return_value=True):
+            r = self.check("0.9.3", rsync=None)
+        self.assertTrue(r["ok"])
+        self.assertIn("rsync", r["warning"])
+
     def test_missing_rsync_fails_with_actionable_message(self):
-        r = self.check("0.9.3", rsync=None)
+        with mock.patch.object(atlas_herdr, "_build_fresh", return_value=False):
+            r = self.check("0.9.3", rsync=None)
         self.assertFalse(r["ok"])
         self.assertIn("rsync", r["why"])
         self.assertIn("install rsync", r["do"])

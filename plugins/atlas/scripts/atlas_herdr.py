@@ -467,6 +467,20 @@ def _run(argv: list[str], cwd: Path, timeout: float) -> tuple[bool, str]:
     return r.returncode == 0, (r.stderr or r.stdout).strip()[-300:]
 
 
+def _build_fresh() -> bool:
+    """True when the mirrored web-ui is built and current: stamp matches the vendored tree and
+    node_modules + dist exist, so neither the rsync mirror nor a rebuild is needed."""
+    mark = PLUGIN_ROOT / ".atlas-build"
+    try:
+        return (
+            mark.read_text().strip() == _stamp()
+            and (PLUGIN_ROOT / "node_modules").is_dir()
+            and (PLUGIN_ROOT / "dist" / "index.html").is_file()
+        )
+    except OSError:
+        return False
+
+
 def _prepare() -> tuple[bool, str]:
     """Mirror the vendored source to PLUGIN_ROOT, then `bun install --frozen-lockfile` + `bun run build`.
 
@@ -477,15 +491,7 @@ def _prepare() -> tuple[bool, str]:
     if not bun:
         return False, "bun is not installed"
     stamp, mark = _stamp(), PLUGIN_ROOT / ".atlas-build"
-    try:
-        fresh = (
-            mark.read_text().strip() == stamp
-            and (PLUGIN_ROOT / "node_modules").is_dir()
-            and (PLUGIN_ROOT / "dist" / "index.html").is_file()
-        )
-    except OSError:
-        fresh = False
-    if fresh:
+    if _build_fresh():
         return True, "built"
     if not (COLONY_SRC / "scripts" / "plugin.ts").is_file():
         return False, f"vendored herdr-web-ui is missing at {COLONY_SRC}"
@@ -636,6 +642,11 @@ def install_check() -> dict:
             "do": f"upgrade herdr to >= {want} ({url}), then retry",
         }
     if not shutil.which("rsync"):  # the web-ui source mirror (_prepare) shells out to rsync
+        if _build_fresh():  # already built and current: no mirror needed, only warn
+            return {
+                **out,
+                "warning": "rsync is not installed; a web-ui rebuild after a plugin update will fail until it is",
+            }
         return {
             **out,
             "ok": False,
