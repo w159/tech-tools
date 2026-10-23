@@ -536,5 +536,53 @@ class ChannelModel(unittest.TestCase):
         self.assertEqual([i["content"] for i in by["A"]["items"]], ["a's item"])
 
 
+class OwnerTokens(unittest.TestCase):
+    setUp = ChannelModel.setUp  # same env isolation and temp git root, none of its tests
+
+    def post(self, owner, *extra):
+        return cli("note", "hi", "--root", self.root, "--owner", owner, *extra)
+
+    def test_token_bearing_owner_needs_the_token(self):
+        tok = todo.issue_owner_token(self.root, "W1")
+        rc, out = self.post("W1")
+        self.assertEqual((rc, out), (1, {"ok": False, "error": "owner_token_required"}))
+        rc, out = self.post("W1", "--owner-token", "0" * len(tok))
+        self.assertEqual((rc, out), (1, {"ok": False, "error": "owner_token_invalid"}))
+        rc, out = self.post("W1", "--owner-token", tok)
+        self.assertEqual(rc, 0)
+        self.assertEqual(out["note"]["owner"], "W1")
+
+    def test_env_token_fallback(self):
+        tok = todo.issue_owner_token(self.root, "W1")
+        os.environ["ATLAS_OWNER_TOKEN"] = tok
+        self.assertEqual(self.post("W1")[0], 0)
+
+    def test_token_is_bound_to_its_owner(self):
+        tok = todo.issue_owner_token(self.root, "W1")
+        todo.issue_owner_token(self.root, "W2")
+        self.assertTrue(todo.verify_owner_token(self.root, "W1", tok))
+        self.assertFalse(todo.verify_owner_token(self.root, "W2", tok))
+        self.assertEqual(todo.issue_owner_token(self.root, "W1"), tok)  # deterministic
+
+    def test_unissued_owner_posts_as_before(self):
+        todo.issue_owner_token(self.root, "W1")
+        self.assertEqual(self.post("other")[0], 0)
+
+    def test_secret_mode_and_no_token_persisted(self):
+        tok = todo.issue_owner_token(self.root, "W1")
+        self.post("W1", "--owner-token", tok)
+        run = Path(self.root) / ".atlas/.run"
+        secrets = [p for p in run.iterdir() if p.is_file() and "secret" in p.name]
+        self.assertEqual(len(secrets), 1)
+        self.assertEqual(secrets[0].stat().st_mode & 0o777, 0o600)
+        for p in run.rglob("*"):
+            if p.is_file():
+                self.assertNotIn(tok.encode(), p.read_bytes(), str(p))
+
+    def test_register_member_still_returns_the_channel(self):
+        chan = todo.open_lead_channel(self.root, "L", ["A"])["name"]
+        self.assertEqual(todo.register_member(self.root, "W1", chan), chan)
+
+
 if __name__ == "__main__":
     unittest.main()
