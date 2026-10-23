@@ -1191,7 +1191,7 @@ def main():
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_memory
 
-        snapshot = atlas_memory.load_snapshot()
+        snapshot = atlas_memory.load_snapshot(wrap=False)
         parts = []
         if snapshot.get("memory"):
             parts.append(snapshot["memory"])
@@ -1207,6 +1207,10 @@ def main():
                 head = memory_block[:450]
                 cut = head.rfind("\n\u00a7\n")
                 memory_block = head[:cut] if cut > 0 else head.rsplit("\n", 1)[0]
+            # Recalled notes are quoted untrusted data, never instructions.
+            from recalled_memory import wrap_recalled_memory
+
+            memory_block = wrap_recalled_memory(memory_block) or None
 
     # Hash already-dirty non-docs paths so the Stop gate's delegation mandate can
     # tell shell-written code from inherited dirt. `git status` + hashing costs 60-90 ms on a big dirty tree,

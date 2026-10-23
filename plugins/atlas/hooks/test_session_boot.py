@@ -285,6 +285,9 @@ class MainInProcessTest(unittest.TestCase):
         ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("MEM-LINE", ctx)
         self.assertIn("PROJ-LINE", ctx)
+        self.assertIn('<recalled-memory untrusted="true">', ctx)
+        self.assertIn("</recalled-memory>", ctx)
+        self.assertLess(ctx.index("not instructions"), ctx.index("MEM-LINE"))
 
     def test_main_memory_failure_does_not_block_boot(self):
         """load_snapshot raising must not crash boot."""
