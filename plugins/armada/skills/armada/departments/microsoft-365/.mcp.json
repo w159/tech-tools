@@ -1,16 +1,9 @@
 {
+  "_comment": "Pointer, not a server launch config. These connectors are served by the armada plugin itself: see plugins/armada/.mcp.json (server entries of the same name) and the userConfig keys in plugins/armada/.claude-plugin/plugin.json. Credentials and setup: skills/armada/references/connector-provisioning.md. Kept so armada-connect and armada-department can list this department's connectors.",
   "mcpServers": {
     "cipp": {
-      "command": "bash",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/launch.sh", "cipp", "dist/entry.js"],
-      "env": {
-        "CIPP_BASE_URL": "${user_config.cipp_base_url}",
-        "CIPP_API_KEY": "${user_config.cipp_api_key}",
-        "CIPP_TENANT_ID": "${user_config.cipp_tenant_id}",
-        "CIPP_CLIENT_ID": "${user_config.cipp_client_id}",
-        "CIPP_CLIENT_SECRET": "${user_config.cipp_client_secret}",
-        "MCP_TRANSPORT": "stdio"
-      }
+      "providedBy": "plugins/armada/.mcp.json",
+      "server": "cipp"
     }
   }
 }
