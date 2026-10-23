@@ -1425,8 +1425,10 @@ def main() -> int:
         # seconds makes should_run() False for the rest of the session, i.e.
         # THIS GATE STOPS ENFORCING. Every such bypass is therefore traced:
         # atlas_hook_guard writes a hook-faults.jsonl row and a one-line stderr
-        # note each time (GATE_HOOKS). No throttle window: the gate is meant to
-        # re-block every Stop until the conditions are actually met.
+        # note each time (GATE_HOOKS). No throttle window, but should_run
+        # returns False while stop_hook_active is set (the standard anti-loop
+        # guard), so a failing gate blocks once per turn and re-blocks on the
+        # next fresh Stop until the conditions are met or the loop cap is hit.
         if not atlas_hook_guard.should_run(data, "completion_gate"):
             return 0
         cwd = Path(data.get("cwd") or os.getcwd())
@@ -1488,6 +1490,7 @@ def main() -> int:
         failed = ev["failed"]
         if not failed:
             # Silence on pass is the contract: the gate speaks only when it blocks.
+            _block_loop_reset(session)  # the cap counts consecutive blocks only
             return 0
         count, loop_exhausted = _block_loop_state(session, failed)
         if loop_exhausted:
@@ -1663,6 +1666,19 @@ def _block_loop_limit() -> int:
         return max(1, min(7, int(raw.strip())))
     except ValueError:
         return BLOCK_LOOP_LIMIT
+
+
+def _block_loop_reset(session_id: str) -> None:
+    """Delete the `gate-loop-<session>` marker after a passing Stop so the cap
+    counts consecutive blocks, not blocks across the whole session. Never raises."""
+    try:
+        path = os.path.join(
+            atlas_hook_guard._state_dir(),
+            "gate-loop-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session_id),
+        )
+        os.remove(path)
+    except Exception:
+        pass
 
 
 def _block_loop_state(session_id: str, failed: list) -> tuple[int, bool]:

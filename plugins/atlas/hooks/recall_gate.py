@@ -117,6 +117,12 @@ def _marker(session: str) -> str:
     )
 
 
+def _unarmed_marker(session: str) -> str:
+    return os.path.join(
+        GATE_MARKER_DIR, "norecall-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session)
+    )
+
+
 def _mark_recalled(session: str) -> None:
     """Record that this session made its claude-mem call (idempotent)."""
     os.makedirs(GATE_MARKER_DIR, exist_ok=True)
@@ -129,9 +135,7 @@ def _trace_unarmed(session: str, cwd: str) -> None:
     os.makedirs(GATE_MARKER_DIR, exist_ok=True)
     try:
         fd = os.open(
-            os.path.join(
-                GATE_MARKER_DIR, "norecall-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session)
-            ),
+            _unarmed_marker(session),
             os.O_CREAT | os.O_EXCL | os.O_WRONLY,
         )
     except FileExistsError:
@@ -265,6 +269,12 @@ def _decide(data: dict) -> str | None:
             return None
         cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
         cwd = cwd or os.getcwd()
+        # Cheap per-session short-circuits first: the mounted scan below walks
+        # ~/.claude/plugins (~16 ms) and must not run on every tool call.
+        if os.path.exists(_marker(session)):
+            return None  # already satisfied this session
+        if os.path.exists(_unarmed_marker(session)):
+            return None  # unmounted verdict cached for this session (traced once)
         if not _gates_armed(cwd):
             return None  # throwaway / non-project directory: gate never arms
         if not _claude_mem_enabled(cwd):
@@ -278,8 +288,6 @@ def _decide(data: dict) -> str | None:
         if _is_recall(tool_name, data.get("tool_input")):
             _mark_recalled(session)  # the recall itself: allow and satisfy the gate
             return None
-        if os.path.exists(_marker(session)):
-            return None  # already satisfied this session
         # Deny on every attempt until the recall. If the marker dir is unusable the recall
         # could never be recorded, so fail open (traced by the caller) instead of deadlocking.
         os.makedirs(GATE_MARKER_DIR, exist_ok=True)

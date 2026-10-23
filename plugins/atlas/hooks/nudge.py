@@ -28,7 +28,9 @@ import atlas_hook_guard  # noqa: E402
 def _check_memory_captured():
     """Check if memory_capture.py wrote anything to memory recently."""
     try:
-        mem_path = os.path.join(os.path.expanduser("~/.atlas"), "memory", "MEMORY.md")
+        import atlas_memory  # same resolver as the writer (honors ATLAS_HOME)
+
+        mem_path = str(atlas_memory._memory_dir() / "MEMORY.md")
         if os.path.exists(mem_path):
             mtime = os.path.getmtime(mem_path)
             # If memory was written in the last 60 seconds, the hook just captured

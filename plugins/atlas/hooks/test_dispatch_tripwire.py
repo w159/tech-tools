@@ -2033,6 +2033,12 @@ class NativeToolPolicyTest(unittest.TestCase):
         self.assertFalse(handled)
         self.assertNotIn('"deny"', output)
 
+    def test_grep_glob_deny_names_the_escape_hatch(self):
+        self._mcp_json()
+        for tool in ("Grep", "Glob"):
+            reason = self._deny_output(tool)["permissionDecisionReason"]
+            self.assertIn("ATLAS_TRIPWIRE_HARD=off", reason, tool)
+
     def test_unreadable_contract_allows_silently(self):
         self._mcp_json()
         with patch.object(self.dt, "NATIVE_TOOLS_PATH", str(self.root / "absent.json")):

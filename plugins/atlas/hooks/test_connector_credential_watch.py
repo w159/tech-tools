@@ -232,6 +232,16 @@ class ConnectorCredentialWatch(unittest.TestCase):
             "tool_response": response,
         }
 
+    def test_status_key_in_successful_result_is_data_not_auth_failure(self):
+        for body in (
+            {"status": 403, "items": [{"summary": "ok"}]},
+            {"status_code": 401, "results": []},
+            {"status": "400", "data": {"ticket": 1}},
+            {"status": 401, "message": "ok", "items": [1]},
+        ):
+            r = _run(self._payload(body), home=self.home)
+            self.assertEqual(r.stdout.strip(), "", body)
+
     def test_401_warns(self):
         r = _run(
             self._payload({"status": 401, "error": "Unauthorized"}), home=self.home

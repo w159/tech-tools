@@ -16,8 +16,8 @@ Catastrophic patterns detected (near-irreversible, high blast radius):
   - Redirect over a disk device  (> /dev/sd...)
   - World-writable chmod on /  (chmod -R 0777 /)
 
-Secret patterns detected (printed into output/transcript; rotate-and-report advice
-with FTC Safeguards Rule/GLBA and SEC Reg S-P framing):
+Secret patterns detected (printed into output/transcript; neutral rotate-if-unintended
+advice; a value piped into another command is not flagged):
   - AWS access key ids  (AKIA...) and secret access keys
   - GitHub tokens  (ghp_/gho_/github_pat_...)
   - Bearer/API tokens  (Authorization: Bearer ..., token=...)
@@ -156,9 +156,8 @@ def _match_catastrophic(command: str) -> str | None:
 
 
 # Secrets printed into command output (transcripts, logs, screenshots). Not
-# destructive like the class above -- but an exposed credential must be treated as
-# compromised and rotated, not just redacted, hence the compliance framing in the
-# warning. Deliberately narrow to avoid nagging on benign reads: a bare `env` is
+# destructive like the class above -- but an exposed credential is best rotated,
+# not just redacted, hence the rotate hint in the warning. Deliberately narrow to avoid nagging on benign reads: a bare `env` is
 # NOT flagged (commonly needed, only sometimes secret-bearing); a secret-bearing
 # variable name on the same line is.
 _SECRET_VAR = (
@@ -185,7 +184,14 @@ _SECRETS = [
         "a bearer/API token",
     ),
     (
-        re.compile(r"\b(?:env|printenv|echo|printf)\b[^\n|;&]*\b" + _SECRET_VAR),
+        # A lone `|` after the variable means the value is piped into another
+        # command (e.g. `echo "$GH_TOKEN" | gh auth login --with-token`), not
+        # printed; `||` is not a pipe.
+        re.compile(
+            r"\b(?:env|printenv|echo|printf)\b[^\n|;&]*\b"
+            + _SECRET_VAR
+            + r"(?![^\n;&|]*\|(?!\|))"
+        ),
         "secret-bearing environment variables",
     ),
 ]
@@ -428,8 +434,8 @@ def main() -> int:
         if secret is not None:
             warning = (
                 f"[atlas advisor] This command would print secrets into its output/transcript "
-                f"({secret}). Treat exposed credentials as compromised: rotate and report per "
-                f"FTC Safeguards Rule/GLBA and SEC Reg S-P; mask or omit them."
+                f"({secret}). Printing a secret puts it in the transcript and logs; rotate it "
+                f"if this was unintended, and mask or omit it."
             )
         else:
             warning = _commit_nudge(data, command)

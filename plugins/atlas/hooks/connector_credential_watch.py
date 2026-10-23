@@ -59,6 +59,9 @@ _BANNER = re.compile(
     r"\s*(?:error\b|http\W{0,3}\d{3}|status\W{0,3}\d{3}|\d{3}\b)", re.I
 )
 _STATUS_KEYS = ("status", "status_code", "statusCode", "http_status")
+_ENVELOPE_KEYS = frozenset(
+    {"message", "detail", "title", "type", "code", "reason", "statusText"}
+)
 
 
 # Servers whose tool_response is file content or command output, not an API
@@ -143,8 +146,13 @@ def error_text(resp) -> str:
     text = _block_text(resp.get("content"))
     if resp.get("isError") is True or resp.get("is_error") is True:
         return (text or json.dumps(resp, default=str))[:2000]
-    status = _status_of(resp)
-    if status in (400, 401, 403) or resp.get("error"):
+    # A top-level status key is data in a successful result. It is an error
+    # signal only inside an error envelope: a non-empty `error` field, or a body
+    # that is nothing but the status (plus message-ish keys) -- no payload keys.
+    if resp.get("error") or (
+        _status_of(resp) in (400, 401, 403)
+        and not (set(resp) - set(_STATUS_KEYS) - _ENVELOPE_KEYS)
+    ):
         return json.dumps(resp, default=str)[:2000]
     if text:
         return error_text(text)  # content blocks without isError: plain-text rules
