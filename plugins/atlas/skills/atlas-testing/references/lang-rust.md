@@ -51,7 +51,7 @@ Language-specific tooling for testing Rust crates and workspaces. For type defin
 | container-scan | cross-ref `infra-iac-containers-ci.md` (trivy for built images) | n/a | n/a | |
 | authz | unit-test policy modules with proptest over role combinations | none | `cargo test` | No dedicated tool; generate (role, resource, action) triples. |
 | data-quality | sqlx::test macros for DB-backed tests `[unverified]` | sqlx dev-dep | `cargo test` | Cross-ref `data-sql-databases.md`. |
-| db-migration | sqlx migrate / refinery tests against testcontainers Postgres | none | `cargo test` | Assert migrations apply forward cleanly; cross-ref `data-sql-databases.md`. |
+| db-migration | sqlx migrate / refinery tests against testcontainers PostgreSQL | none | `cargo test` | Assert migrations apply forward cleanly; cross-ref `data-sql-databases.md`. |
 | docs-examples | doc tests (fenced `rust` blocks in `///` doc comments) | none | `cargo test --doc` | Failing doc test fails build; `# use mycrate as _;` hides imports. |
 | notebook | n/a (Rust kernels rare) | n/a | n/a | see `docs-notebooks-web-assets.md`. |
 | link-check | language-agnostic; rustdoc broken-intra-doc-links via `cargo doc` warnings | none | `cargo doc --no-deps` | `-D rustdoc::broken_intra_doc_links` in CI. |

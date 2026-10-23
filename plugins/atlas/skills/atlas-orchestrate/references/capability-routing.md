@@ -85,7 +85,7 @@ preconditions.
 | Fetch a web page | `ctx_fetch_and_index` (context-mode) | `WebFetch` |
 | Library / SDK behavior | `context7` `resolve-library-id` -> `query-docs` | memory |
 | Azure / .NET / M365 / Entra | `microsoft-docs` `microsoft_docs_search` -> `_fetch` | memory |
-| JS/TS dead code / dupes / health / PR gate | fallow MCP (`audit`, analyze/dead-code tools) or `fallow … --format json` | guessing unused exports from a partial read |
+| JS/TS dead code / dupes / health / PR gate | fallow MCP (`audit`, analyze/dead-code tools) or `fallow ... --format json` | guessing unused exports from a partial read |
 | "Did we hit this before?" | claude-mem `search` -> `timeline` -> `get_observations` | re-deriving it |
 
 context7 arg shape (measured cause of its historical 56% error rate): `resolve_library_id`

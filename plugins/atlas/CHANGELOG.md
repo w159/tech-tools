@@ -40,6 +40,8 @@
 
 ### Changed
 
+- Skills: atlas-ux-test is self-sufficient (ships `templates/`, runs through `scripts/ux-swarm-driver.sh` and atlas agents, no references to an unshipped harness). Duplicated references now have one owner copy (workflow-template, graphify-wiring, self-telemetry, docs-ssot) and `validate_skills.py` fails on byte-identical reference files across skills.
+- Skills: three manual skills (atlas-setup, atlas-prompt, atlas-tui) are described accurately; `allowed-tools` lists match what each body uses; descriptions trimmed; ASCII-only typography; lineage notes moved to `skills/PROVENANCE.md`.
 - The recall gate checks its cached result before scanning the plugin directory, removing about 16 ms from most tool calls.
 - The prompt optimizer has one 25-second budget in total (was up to 220 seconds).
 - The native Grep/Glob deny message names its escape hatch.

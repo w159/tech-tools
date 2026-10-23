@@ -16,15 +16,15 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 Read `${CLAUDE_SKILL_DIR}/references/review-recipes.md` before your first publish, annotation, or collection. It defines the exact annotations-file format, the publish checklist, the collection recipe, and the gated PR-review commands.
 
-## Provenance: what was generalized and why
+## Design: native review surfaces
 
-This skill ports Compound Engineering's `ce-proof`, which publishes and annotates markdown through a hosted third-party collaborative editor (proofeditor.ai) over a bespoke HTTP/agent API. That product has no atlas or host equivalent, and atlas forbids depending on external proprietary services or CLIs. The **concept** survives - publish a doc for human review, annotate it with anchored comments and tracked-change (never silently applied) suggestions, collect the review state back into durable artifacts, keep the local file canonical throughout - while the **surface** is generalized to native mechanisms:
+Atlas forbids depending on external proprietary services or CLIs, so review uses native mechanisms. The concept - publish a doc for human review, annotate it with anchored comments and tracked-change (never silently applied) suggestions, collect the review state back into durable artifacts, keep the local file canonical throughout - with these native surfaces:
 
-- Hosted share links → the docs/ SSOT tree (durable docs) and `.atlas/.run/proof/` (ephemeral review copies), per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`.
+- Hosted share links -> the docs/ SSOT tree (durable docs) and `.atlas/.run/proof/` (ephemeral review copies), per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`.
 - Server-side comment threads → a sidecar annotations file with anchored quotes, stored next to the review copy, format in the reference.
 - Server-side tracked suggestions → fenced diff proposals in the annotations file, applied only on explicit user approval.
 - Presence/identity tokens → no counterpart needed; attribution is a `reviewer:` field per annotation.
-- PR review threads (proof had no analog; added because it is atlas's natural shared-review surface when the work is already on a branch) → `gh pr` commands, gated behind an explicit user request (see Boundaries).
+- PR review threads (atlas's natural shared-review surface when the work is already on a branch) -> `gh pr` commands, gated behind an explicit user request (see Boundaries).
 
 If a future hosted-collaboration MCP connector appears, it MAY be used when the user asks for it, but nothing in this skill requires it.
 
@@ -60,7 +60,7 @@ Read the sidecar (or PR thread when explicitly authorized) and distill it: actio
 
 DONE: every open annotation is `collected` or explicitly deferred with a reason, and the ROADMAP/finding rows carry evidence paths.
 
-## Boundaries (ported from CE's credential and delete rules)
+## Boundaries
 
 - Never put secrets, credentials, API keys, private tokens, or sensitive personal data into a review copy or a PR comment unless the user explicitly approves. A review copy is a second copy of the content; treat its audience as wider than the source file's.
 - Never silently replace a repo-tracked project doc with a review copy or a link. The tracked file stays canonical.

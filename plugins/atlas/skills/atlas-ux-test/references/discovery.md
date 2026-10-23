@@ -2,13 +2,13 @@
 
 Discovery runs FIRST, before any data entry, and has two jobs: regenerate the coverage
 matrices from live frontend source, and probe the REAL client contract so the swarm later
-grades the surface the client actually reads. It is dispatched as a general-purpose subagent
+grades the surface the client actually reads. It is dispatched as an atlas:explorer subagent
 with references/roles/cartographer.md as the prompt prefix.
 
 Why phase 0 exists: the previous run wrote a value to a backend table, read it back, saw
 HTTP 200, and declared COMPLETE - while the value the CLIENT reads on the dashboard was null
 for all personas and the app showed "needs work." Discovery captures the real primary-write
-call so the harness mirrors it instead of guessing.
+call so the scripted driver mirrors it instead of guessing.
 
 ## What discovery does
 
@@ -39,7 +39,7 @@ call so the harness mirrors it instead of guessing.
 
 - route-matrix.csv  - run-local copy, status + evidence_ref columns added.
 - field-matrix.csv  - run-local copy, status + evidence_ref columns added.
-- contract-snapshot.json - the live client contract the scripted harness MUST mirror:
+- contract-snapshot.json - the live client contract the scripted driver MUST mirror:
   {
     "dev_url": "<discovered or user-provided>",
     "api_base": "<discovered or relative path>",
@@ -55,13 +55,13 @@ scan, and COVERAGE-NOTES.md gets the scan date + per-app_area counts.
 
 ## Downstream dependency
 
-contract-snapshot.json is the source of truth for the scripted-persona role and the harness:
+contract-snapshot.json is the source of truth for the scripted-persona role:
 the primary write and the read-back assertion both use the call it names. If the probe could
 not resolve the real call (values are "unknown"), that is a blocker for data entry - the
-harness cannot mirror a call it does not know. Resolve it before running phase 2.
+driver cannot mirror a call it does not know. Resolve it before running phase 2.
 
 ## Caching
 
 Under coverage=smoke the matrices may be reused from a recent run if the frontend has not
-changed since (a docs-only or harness-only diff). The live-contract probe still runs unless a
+changed since (a docs-only diff). The live-contract probe still runs unless a
 current contract-snapshot.json already exists for an unchanged frontend. When in doubt, re-probe.

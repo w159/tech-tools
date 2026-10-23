@@ -2,7 +2,7 @@
 name: atlas-optimize
 description: "Single-experiment loop: baseline, one hypothesis, one change, identical re-measure, real delta reported. Use when a working system's metric should improve; not for bugs or restructuring."
 when_to_use: "performance tuning, reduce latency, bundle size, build time, benchmark, bottleneck, make it faster"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '<target to optimize and the metric that should move>'
 ---
 
@@ -16,17 +16,17 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 Read `${CLAUDE_SKILL_DIR}/references/measurement-protocol.md` before capturing the baseline and again before re-measuring. It defines baseline validity, the identical-method parity checklist, and the rejection conditions. Read `${CLAUDE_SKILL_DIR}/references/verifier-brief.md` before dispatching the parity verifier.
 
-## Provenance: what was ported and why
+## Scope: one measured loop
 
-This skill ports Compound Engineering's `ce-optimize`, a spec-YAML-driven optimization runtime with four phases, parallel experiment worktrees, judge-scored variants, a worktree budget, and a `decide.mjs` accept/revert engine. Atlas runs sessions, not standing infrastructure, so the **measurement-first discipline** survives and the **machinery** is reduced to one loop iteration done honestly:
+Atlas runs sessions, not standing infrastructure, so the **measurement-first discipline** is kept and the machinery is reduced to one loop iteration done honestly:
 
-- Spec YAML + phases 0-4 -> a single measured loop: frame, baseline gate, hypothesis, one experiment, re-measure, verdict. Multi-experiment batching, variant scoring, judge dispatch, ladder/repeat stability modes, worktree budgets, and `decide.mjs` are dropped; if the user wants a scored variant space, run this skill once per variant or say plainly that is beyond one session.
-- CE's clean-tree gate -> kept, scoped to files the experiment may touch.
-- CE's "baseline and final confirmation always use the full configured protocol" -> kept as the parity rule: the re-measurement MUST be byte-for-byte the same method as the baseline (same command, cwd, environment, sample count, aggregation). This is the one invariant the verifier exists to confirm.
-- CE's "a non-improving change is reported as such" -> kept verbatim in spirit: an experiment whose delta does not improve the metric is reported as zero or negative gain, never as success.
-- Codex/CLI delegation backends -> replaced by atlas Task dispatches (`atlas:implementer`, `atlas:explorer`, `atlas:verifier` per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`). No external CLI dependency.
-- CE's experiment log -> `.atlas/evidence/<YYYY-MM-DD>-<slug>/` (baseline + after captures, run log) per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`, with the verdict row in `.atlas/.run/findings.json`.
-- CE's branch/commit mechanics -> the user owns VCS: this skill never pushes, opens a PR, or merges without explicit user confirmation.
+- One measured loop: frame, baseline gate, hypothesis, one experiment, re-measure, verdict. Multi-experiment batching, variant scoring, judge dispatch, ladder/repeat stability modes and worktree budgets are out of scope; if the user wants a scored variant space, run this skill once per variant or say plainly that is beyond one session.
+- Clean-tree gate: scoped to files the experiment may touch.
+- Parity rule: baseline and final confirmation always use the full configured protocol. The re-measurement MUST be byte-for-byte the same method as the baseline (same command, cwd, environment, sample count, aggregation). This is the one invariant the verifier exists to confirm.
+- A non-improving change is reported as such: an experiment whose delta does not improve the metric is reported as zero or negative gain, never as success.
+- Delegation uses atlas Task dispatches (`atlas:implementer`, `atlas:explorer`, `atlas:verifier` per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`). No external CLI dependency.
+- Experiment log: `.atlas/evidence/<YYYY-MM-DD>-<slug>/` (baseline + after captures, run log) per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`, with the verdict row in `.atlas/.run/findings.json`.
+- The user owns VCS: this skill never pushes, opens a PR, or merges without explicit user confirmation.
 
 ## Identity and role
 

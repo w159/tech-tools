@@ -34,6 +34,23 @@ def rules(root, run_help=True):
 
 
 class ValidateSkillsTest(unittest.TestCase):
+    def test_duplicate_reference_across_skills_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(
+                tmp, files=[("skills/atlas-demo/references/x.md", "same\n")]
+            )
+            other = root / "skills" / "atlas-other"
+            other.mkdir()
+            (other / "SKILL.md").write_text(GOOD.replace("atlas-demo", "atlas-other"))
+            (other / "references").mkdir()
+            (other / "references" / "y.md").write_text("same\n")
+            res = dict((n, {r for r, _ in f}) for n, f, _ in v.run(root, False))
+            self.assertEqual(res["atlas-demo"], {"dupref"})
+            self.assertEqual(res["atlas-other"], {"dupref"})
+            (other / "references" / "y.md").write_text("different\n")
+            res = dict((n, {r for r, _ in f}) for n, f, _ in v.run(root, False))
+            self.assertEqual(res["atlas-demo"], set())
+
     def check(self, body=GOOD, **kw):
         with tempfile.TemporaryDirectory() as tmp:
             return rules(make_root(tmp, body, **kw.pop("mk", {})), **kw)

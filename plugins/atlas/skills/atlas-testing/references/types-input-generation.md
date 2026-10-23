@@ -106,7 +106,7 @@ Oracle = a **state machine model** you write that mirrors the real system's rule
 | FsCheck (F#/.NET) | command-based state machine (3.x) | Experimental stateful testing. |
 | PropEr / PropCheck (Erlang) | `statem`/`proper_statem` | One of the oldest and best stateful implementations; supports parallel/race checking. |
 
-Write the model trivially on purpose: a dict/list-based mirror of your invariants (balance = sum of posted transactions, order state machine transitions legal, RLS row visibility rules). If the model gets complicated, you are re-implementing the system; extract only the rules that matter. For Postgres RLS specifically, drive the model against real role connections and compare visible-row sets - coordinate with `references/data-sql-databases.md` for the RLS test setup.
+Write the model trivially on purpose: a dict/list-based mirror of your invariants (balance = sum of posted transactions, order state machine transitions legal, RLS row visibility rules). If the model gets complicated, you are re-implementing the system; extract only the rules that matter. For PostgreSQL RLS specifically, drive the model against real role connections and compare visible-row sets - coordinate with `references/data-sql-databases.md` for the RLS test setup.
 
 ## PR vs nightly strategy
 

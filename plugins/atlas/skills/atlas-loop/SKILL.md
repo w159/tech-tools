@@ -2,7 +2,7 @@
 name: atlas-loop
 description: "Matches a recurring or iterative task to a library loop: interval loops use /loop, fan-out loops run as a parallel verify workflow. Use to repeat, poll, iterate until a condition holds, or sweep."
 when_to_use: "run repeatedly, poll for status, keep going until, sweep a backlog, recurring task, scheduled workflow"
-allowed-tools: Read, Glob, Grep, Bash
+allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion
 ---
 
 

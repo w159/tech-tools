@@ -7,8 +7,8 @@ synthesis-reporter rejects the entry and flags the run.
 ## Evidence capture
 
 - Screenshots live under `RUN_DIR/evidence/ux/<persona_id>/NN-desc.png`, all paths relative
-  to RUN_DIR. The project drives real Chrome via the browser-harness CLI
-  (`capture_screenshot()`, `click_at_xy()`, `new_tab()`, `wait_for_load()`).
+  to RUN_DIR. Browser work is done by `atlas:ui-runtime-tester` agents,
+  which capture the screenshots.
 - Before/after per mutating step is a first-class requirement, not optional. Every step that
   writes data (submit, save, next) produces a pair: `NN-before-<desc>.png` taken immediately
   before the action, `NN-after-<desc>.png` immediately after. The pair is the proof the action
