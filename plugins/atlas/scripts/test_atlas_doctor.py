@@ -2377,5 +2377,69 @@ class ContentDriftTest(unittest.TestCase):
         self.assertIn("hooks/a.py", detail)
 
 
+class GateBlockSpikeTest(unittest.TestCase):
+    NOW = 2_000_000_000.0
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "t.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.addCleanup(self.conn.close)
+
+    def _gate(self, n, age_hours, sid="s", cat="gate_block"):
+        for _ in range(n):
+            self.conn.execute(
+                "INSERT INTO friction_events (session_id, category, ts) VALUES (?,?,?)",
+                (sid, cat, self.NOW - age_hours * 3600),
+            )
+        self.conn.commit()
+
+    def _spike(self):
+        return atlas_doctor.gate_block_spike(self.conn, now=self.NOW)
+
+    def test_spike_true_when_24h_far_above_prior_mean(self):
+        self._gate(14, 48)  # prior 7d: 14 rows -> 2/day mean
+        self._gate(10, 1)
+        r = self._spike()
+        self.assertEqual(r["last_24h"], 10)
+        self.assertAlmostEqual(r["prior_daily_mean"], 2.0)
+        self.assertTrue(r["spike"])
+
+    def test_flat_history_is_not_a_spike(self):
+        self._gate(35, 48)  # 5/day
+        self._gate(6, 1)
+        self.assertFalse(self._spike()["spike"])
+
+    def test_under_five_absolute_is_not_a_spike(self):
+        self._gate(4, 1)  # infinitely above a 0 mean, still < 5
+        self.assertFalse(self._spike()["spike"])
+
+    def test_tmp_fixture_sessions_excluded(self):
+        sid = "fixture"
+        self.conn.execute(
+            "INSERT INTO session_logs (session_id, transcript_path) VALUES (?,?)",
+            (sid, os.path.join(tempfile.gettempdir(), "x", "t.jsonl")),
+        )
+        self._gate(10, 1, sid=sid)
+        r = self._spike()
+        self.assertEqual(r["last_24h"], 0)
+        self.assertFalse(r["spike"])
+
+    def test_other_categories_ignored(self):
+        self._gate(10, 1, cat="user_correction")
+        self.assertEqual(self._spike()["last_24h"], 0)
+
+    def test_read_only(self):
+        self._gate(10, 1)
+        before = self.conn.total_changes
+        findings = self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
+        self._spike()
+        self.assertEqual(self.conn.total_changes, before)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], findings
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
