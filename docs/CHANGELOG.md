@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 16.0.0 (2026-10-23)
 
 Audit fixes and the connector move on branch `claude/atlas-audit-fixes`. Details: `plugins/atlas/CHANGELOG.md` and `plugins/armada/CHANGELOG.md`. Audit record: `docs/audits/2026-10-23-atlas-deep-dive.md`.
 

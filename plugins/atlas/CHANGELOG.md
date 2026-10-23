@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 16.0.0 - 2026-10-23
 
 ### Breaking changes
 
@@ -49,7 +49,7 @@
 
 ### Changed
 
-- Skills: atlas-ux-test is self-sufficient (ships `templates/`, runs through `scripts/ux-swarm-driver.sh` and atlas agents, no references to an unshipped harness). Duplicated references now have one owner copy (workflow-template, graphify-wiring, self-telemetry, docs-ssot) and `validate_skills.py` fails on byte-identical reference files across skills.
+- Skills: atlas-ux-test is self-sufficient (ships `templates/`, drives the browser through `atlas:ui-runtime-tester` and `scripts/ux-swarm-driver.sh`, cites only files inside the plugin, no references to an unshipped harness). Duplicated references now have one owner copy (workflow-template, graphify-wiring, self-telemetry, docs-ssot) and `validate_skills.py` fails on byte-identical reference files across skills.
 - Skills: three manual skills (atlas-setup, atlas-prompt, atlas-tui) are described accurately; `allowed-tools` lists match what each body uses; descriptions trimmed; ASCII-only typography; lineage notes moved to `skills/PROVENANCE.md`.
 - The recall gate checks its cached result before scanning the plugin directory, removing about 16 ms from most tool calls.
 - The prompt optimizer has one 25-second budget in total (was up to 220 seconds).
@@ -62,7 +62,6 @@
 - Hooks: one `event_dispatch.py` process per Pre/PostToolUse event replaces up to eight; Read, Bash and Edit hook overhead is about 30-45% lower. 18 hook programs / 22 bindings.
 - Friction events carry metadata. The database has versioned migrations (schema 2). `gate_block_spike` is a new alert-only finding miner. `atlas_doctor.py --redact-history [--apply]` backfills redaction over stored history. `atlas_todo.py notes-archive` archives old notes on demand.
 - New env vars documented in the reference: `ATLAS_MAX_TEAM`, `ATLAS_WAIT_KILL`, `ATLAS_PINNED_PROJECTS`, `ATLAS_DECISION_ALLOW_REMOTE`, `ATLAS_NOTE_MAX_BYTES`, `ATLAS_NOTE_ARCHIVE_BYTES`, `ATLAS_CHECK_INSTALL_PARITY`.
-- Skills: `atlas-ux-test` drives the browser through `atlas:ui-runtime-tester` and cites only files inside the plugin; lineage lines in reference files moved to `skills/PROVENANCE.md`.
 
 ## 15.0.0 - 2026-10-22
 
