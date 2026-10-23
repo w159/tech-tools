@@ -36,8 +36,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/recall_gate.py\"",
-            "timeout": 10
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/event_dispatch.py\" PreToolUse",
+            "timeout": 35
           }
         ]
       },
@@ -46,45 +46,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/bash_advisor.py\"",
-            "timeout": 10
-          },
-          {
-            "type": "command",
             "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/fallow_gate.py\"",
             "timeout": 300
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/edit_read_nudge.py\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
-            "timeout": 15
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "TodoWrite|Agent|Task|Bash",
+        "matcher": "TodoWrite|Agent|Task|Bash|Edit|Write|MultiEdit|NotebookEdit|Read|read|mcp__.*ctx_read|Grep|Glob|Skill|mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/todo_capture.py\"",
-            "timeout": 10
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/event_dispatch.py\" PostToolUse",
+            "timeout": 45
           }
         ]
       },
@@ -96,46 +71,6 @@
             "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/format_after_edit.py\"",
             "timeout": 60,
             "async": true
-          },
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/docs_drift_watch.py\"",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/delegation_prewarn.py\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Read|read|mcp__.*ctx_read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/edit_read_nudge.py\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|NotebookEdit|Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/dispatch_tripwire.py\"",
-            "timeout": 15
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/connector_credential_watch.py\"",
-            "timeout": 10
           }
         ]
       }

@@ -249,16 +249,20 @@ class TripwireTest(unittest.TestCase):
         blob = json.dumps(data)
         self.assertIn("Agent", blob)
         self.assertIn("Task", blob)
-        # stronger: the tripwire group's matcher must include Agent and Task
+        # stronger: the tripwire binding's matcher must include Agent, Task and Skill. It is run by
+        # event_dispatch.py (one process per event); hooks.json carries that dispatcher.
+        import event_dispatch
+
         ok = False
-        for grp in data.get("hooks", {}).get("PostToolUse", []):
-            hooks = json.dumps(grp.get("hooks", grp))
-            if "dispatch_tripwire.py" in hooks:
-                self.assertIn("Agent", grp.get("matcher", ""))
-                self.assertIn("Task", grp.get("matcher", ""))
-                self.assertIn("Skill", grp.get("matcher", ""))
+        for name, matcher, _ in event_dispatch.BINDINGS["PostToolUse"]:
+            if name == "dispatch_tripwire":
+                self.assertIn("Agent", matcher)
+                self.assertIn("Task", matcher)
+                self.assertIn("Skill", matcher)
                 ok = True
-        self.assertTrue(ok, "dispatch_tripwire entry not found in PostToolUse")
+        self.assertTrue(ok, "dispatch_tripwire binding not found in PostToolUse")
+        for event in ("PreToolUse", "PostToolUse"):
+            self.assertIn(f'event_dispatch.py\\" {event}', entries)
 
     def _fresh_unmarked_session(self, session_id):
         import atlas_db
@@ -943,17 +947,19 @@ class TripwireTest(unittest.TestCase):
         hj = os.path.join(os.path.dirname(__file__), "hooks.json")
         with open(hj) as f:
             data = json.load(f)  # asserts hooks.json parses as JSON
+        import event_dispatch
+
         pre = data["hooks"]["PreToolUse"]
-        # bash_advisor's Bash registration must be untouched.
-        bash_advisor_ok = any(
-            "bash_advisor.py" in json.dumps(g) and g.get("matcher") == "Bash"
-            for g in pre
+        self.assertTrue(
+            any("event_dispatch.py" in json.dumps(g) for g in pre),
+            "PreToolUse must run the event dispatcher",
         )
-        self.assertTrue(bash_advisor_ok, "bash_advisor Bash registration disturbed")
+        bindings = {n: m for n, m, _ in event_dispatch.BINDINGS["PreToolUse"]}
+        # bash_advisor's Bash registration must be untouched.
+        self.assertEqual(bindings.get("bash_advisor"), "Bash")
         # dispatch_tripwire must be registered on PreToolUse with the full matcher.
-        tw = [g for g in pre if "dispatch_tripwire.py" in json.dumps(g)]
-        self.assertTrue(tw, "dispatch_tripwire not registered on PreToolUse")
-        matcher = tw[0].get("matcher", "")
+        self.assertIn("dispatch_tripwire", bindings)
+        matcher = bindings["dispatch_tripwire"]
         for t in ("Edit", "Write", "MultiEdit", "Read", "Grep", "Glob", "Bash"):
             self.assertIn(t, matcher)
 

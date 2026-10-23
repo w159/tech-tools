@@ -108,6 +108,9 @@ export function loadBridgedHooks(hooksPath: string = nodePath.join(pluginRoot(),
 	return loadBridgedHooksFor(TURN_EVENTS, "bridged", hooksPath, contractPath);
 }
 
+/** hooks.json runs this one script per Claude Code tool event; the bridge expands it into the per-script hooks of the contract's `dispatch` table. */
+const DISPATCHER_SCRIPT = "event_dispatch.py";
+
 /**
  * Hook commands for `events` from hooks.json (group order, then hook order, as
  * written), filtered by the contract list named `listKey`. hooks.json stays the
@@ -124,6 +127,7 @@ export function loadBridgedHooksFor(
 		const list = contract && typeof contract === "object" ? contract[listKey] : undefined;
 		if (!Array.isArray(list)) return [];
 		const allowed = new Set(list.filter((s: unknown): s is string => typeof s === "string"));
+		const dispatchTable = ((contract as Record<string, unknown>).dispatch ?? {}) as Record<string, Array<{ script: string; matcher: string; timeout: number }>>;
 		const root = readJson(hooksPath);
 		if (!root || typeof root !== "object" || !("hooks" in root) || !root.hooks || typeof root.hooks !== "object") return [];
 		const out: BridgedHook[] = [];
@@ -136,6 +140,16 @@ export function loadBridgedHooksFor(
 				for (const hook of group.hooks) {
 					if (!hook || typeof hook !== "object" || !("command" in hook) || typeof hook.command !== "string") continue;
 					const script = /([\w.-]+\.py)/.exec(hook.command)?.[1];
+					if (script === DISPATCHER_SCRIPT) {
+						// Claude Code runs one event_dispatch.py per event; omp keeps one run per script, from the
+						// contract's `dispatch` table (the bindings event_dispatch.BINDINGS holds, pinned by a test).
+						for (const inner of dispatchTable[event] ?? []) {
+							if (!allowed.has(inner.script)) continue;
+							const m = inner.matcher && inner.matcher !== "*" ? new RegExp(`^(?:${inner.matcher})$`) : undefined;
+							out.push({ event: event as ClaudeEvent, matcher: m, command: `python3 -S "\${CLAUDE_PLUGIN_ROOT}/hooks/${inner.script}"`, timeoutMs: inner.timeout * 1000 });
+						}
+						continue;
+					}
 					if (!script || !allowed.has(script)) continue;
 					const timeout = "timeout" in hook && typeof hook.timeout === "number" ? hook.timeout : DEFAULT_TIMEOUT_S;
 					out.push({ event: event as ClaudeEvent, matcher, command: hook.command, timeoutMs: timeout * 1000 });
