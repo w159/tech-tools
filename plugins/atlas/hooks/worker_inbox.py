@@ -337,46 +337,39 @@ def _member_for(todo, root, agent):
     return None
 
 
+def _project_root(cwd):
+    """Shared atlas_paths resolver (puts the scripts dir on sys.path first)."""
+    if str(SCRIPTS_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS_DIR))
+    import atlas_paths
+
+    return atlas_paths.project_root(cwd)
+
+
 def _no_registry_possible(cwd):
-    """True only when no channels.json can exist for this cwd: none in cwd or any of
-    the 8 ancestors (atlas_todo.find_root walks at most 7), and no linked-worktree
-    `.git` file that could remap the root elsewhere. Lets identity() skip the
-    ~25ms atlas_todo import on the many sessions that never opened a channel;
-    anything uncertain returns False and takes the full path."""
+    """True only when no channels.json exists at the project root atlas_todo
+    would resolve for this cwd. Lets identity() skip the ~25ms atlas_todo import
+    on the many sessions that never opened a channel; anything uncertain
+    returns False and takes the full path."""
     try:
-        d = os.path.abspath(cwd or os.getcwd())
-        for _ in range(8):
-            if os.path.isfile(os.path.join(d, ".git")):
-                return False
-            if os.path.exists(os.path.join(d, ".atlas", ".run", "channels.json")):
-                return False
-            parent = os.path.dirname(d)
-            if parent == d:
-                break
-            d = parent
-        return True
+        root = _project_root(cwd)
+        return not os.path.exists(os.path.join(root, ".atlas", ".run", "channels.json"))
     except Exception:
         return False
 
 
 def _candidate_roots(cwd, env):
-    """Dirs atlas_todo's root resolution could land on for this cwd (cwd and its 7
-    ancestors, plus ATLAS_PROJECT_ROOT), or None when uncertain (a linked-worktree
-    `.git` file can remap the root elsewhere)."""
-    dirs, d = [], os.path.abspath(cwd or os.getcwd())
-    for _ in range(8):
-        if os.path.isfile(os.path.join(d, ".git")):
-            return None
-        dirs.append(d)
-        parent = os.path.dirname(d)
-        if parent == d:
-            break
-        d = parent
+    """Dirs atlas_todo's root resolution could land on for this cwd: the resolved
+    project root plus a sanitized ATLAS_PROJECT_ROOT, or None when uncertain (a
+    linked-worktree `.git` file on ATLAS_PROJECT_ROOT can remap it elsewhere)."""
+    dirs = [_project_root(cwd)]
     pr = env.get("ATLAS_PROJECT_ROOT")
     if pr:
         if os.path.isfile(os.path.join(pr, ".git")):
             return None
-        dirs.append(pr)
+        import atlas_paths
+
+        dirs.append(atlas_paths.sanitize(pr))
     return dirs
 
 

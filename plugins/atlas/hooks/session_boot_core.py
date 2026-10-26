@@ -797,22 +797,15 @@ _STRUCTURE_PATHS = (
 
 
 def _find_structure_root(start_dir):
-    """Walk up to 6 parent levels from start_dir looking for a directory
-    that already has a .git entry or a docs/ folder, and treat that as the
-    project root for the structure check. Falls back to start_dir itself
-    if nothing is found. Fail-open: any error returns start_dir."""
+    """Project root for the structure check (shared atlas_paths resolver).
+    Fail-open: any error returns start_dir."""
     try:
-        d = os.path.abspath(start_dir)
-        for _ in range(7):  # start_dir plus up to 6 parents
-            if os.path.exists(os.path.join(d, ".git")) or os.path.isdir(
-                os.path.join(d, "docs")
-            ):
-                return d
-            parent = os.path.dirname(d)
-            if parent == d:
-                break
-            d = parent
-        return os.path.abspath(start_dir)
+        sys.path.insert(
+            0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        )
+        import atlas_paths
+
+        return atlas_paths.project_root(start_dir)
     except Exception:
         return start_dir
 
@@ -1035,7 +1028,7 @@ def main():
 
         _conn = atlas_db.connect()
         atlas_db.init(_conn)
-        _root = payload.get("cwd") or os.getcwd()
+        _root = atlas_db.atlas_paths.project_root(payload.get("cwd") or os.getcwd())
         _pid = atlas_db.register_project(_conn, _root, os.path.basename(_root))
         _sid = payload.get("session_id", "")
         # Empty/missing session_id would create a phantom run keyed by "" and

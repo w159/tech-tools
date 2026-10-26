@@ -35,16 +35,19 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import atlas_paths  # noqa: E402
+
 STATUSES = ("verified", "rejected", "needs-evidence", "open")
 RELPATH = (".atlas", ".run", "findings.json")
 
 
 def find_root(start: Path) -> Path | None:
-    """Nearest ancestor holding docs/ or .atlas/ -- same root notion the gate uses."""
-    for candidate in [start, *start.parents]:
-        if (candidate / "docs").is_dir() or (candidate / ".atlas").is_dir():
-            return candidate
-    return None
+    """Project root for start via the shared resolver (atlas_paths), or None
+    when it holds no .git, docs/ or .atlas/ (a bare dir is not a project)."""
+    root = Path(atlas_paths.project_root(str(start)))
+    markers = (".git", "docs", ".atlas")
+    return root if any((root / m).exists() for m in markers) else None
 
 
 def load(path: Path) -> list:
