@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""atlas_mux -- opt-in colony mode (ATLAS_MUX=tmux); workers run as tmux panes/windows.
+"""atlas_mux -- colony mode, on by default; workers run as tmux panes/windows. ATLAS_MUX=off disables it.
 
 Transport: tmux by default whenever it is installed (session `atlas-<run>`, one window per worker; the dashboard
 Terminal page attaches to these live). claude-bg is the fallback without tmux: `claude --bg --name <worker> --agent
@@ -582,8 +582,9 @@ def harness_argv(
 
 
 def _validate(args) -> str | None:
-    if os.environ.get("ATLAS_MUX") != "tmux":
-        return "mux mode is opt-in: set ATLAS_MUX=tmux"
+    # default on: tmux when installed (detached sessions, the lead need not run inside tmux), else claude-bg
+    if os.environ.get("ATLAS_MUX", "").strip().lower() == "off":
+        return "mux mode is disabled: ATLAS_MUX=off (unset it, or set ATLAS_MUX=tmux)"
     for label, value in (("run", args.run), ("name", args.name), ("agent", args.agent)):
         if not NAME_RE.match(value or ""):
             return f"invalid {label} {value!r}: use [A-Za-z0-9_-]"
@@ -1638,6 +1639,39 @@ def build_team(
     }
 
 
+_MEMBER_HEAD = re.compile(r"^##\s+member:\s*([A-Za-z0-9_-]+)\s*$", re.M)
+
+
+def split_member_tasks(text: str, members: list) -> tuple:
+    """(shared_task, {member name: task}) from a task file with `## member: <role>[-N]` sections.
+    The text before the first heading is shared context prefixed to every slice. Sections bind to members of
+    that role in member order (`implementer` = first free implementer, `implementer-2` = the 2nd); a member
+    with no section gets the shared text. No headings: (text, {}). A heading that matches no member raises ValueError."""
+    marks = list(_MEMBER_HEAD.finditer(text))
+    if not marks:
+        return text, {}
+    shared = text[: marks[0].start()].strip()
+    by_role: dict = {}
+    for m in members:
+        by_role.setdefault(m["role"], []).append(m["name"])
+    used: dict = {}
+    out: dict = {}
+    for i, mk in enumerate(marks):
+        body = text[mk.end() : marks[i + 1].start() if i + 1 < len(marks) else len(text)].strip()
+        label = mk.group(1)
+        role, _, n = label.rpartition("-")
+        if role in by_role and n.isdigit():
+            idx = int(n) - 1
+        else:
+            role, idx = label, used.get(label, 0)
+        names = by_role.get(role, [])
+        if not 0 <= idx < len(names):
+            raise ValueError(f"task file section 'member: {label}' matches no team member (roles: {sorted(by_role)})")
+        used[role] = idx + 1
+        out[names[idx]] = f"{shared}\n\n{body}".strip() if shared else body
+    return shared, out
+
+
 def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     """Self-contained worker brief: task, scope, channel, peers, and the note protocol."""
     todo = _todo_script()
@@ -1652,7 +1686,7 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     return (
         f"You are {me} ({member['role']}), 1 of {len(rec['members'])} workers of team {rec['team_id']} "
         f"on {chan}. Lead: {lead}. Peers: {', '.join(peers) or '(none)'}.\n\n"
-        f"# Task\n{rec['task']}\n\n# Scope\n{scope}\n\n"
+        f"# Task\n{rec.get('member_tasks', {}).get(me) or rec['task']}\n\n# Scope\n{scope}\n\n"
         f"# Protocol\nPost (do not read the script): {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
         f"Read: {cmd} notes --to {me} {flags}\n"
         f"1. After a first finding, note {lead}.\n"
@@ -1829,6 +1863,10 @@ def cmd_spawn_team(args) -> int:
     paths = args.paths.split(",") if args.paths else None
     try:
         rec = build_team(args.cls, args.effort, paths, task, args.team_id)
+        shared, rec["member_tasks"] = split_member_tasks(task, rec["members"])
+        if rec["member_tasks"]:
+            # members with no section get the shared text, else an explicit no-op: never a peer's slice
+            rec["task"] = shared or "No slice was assigned to you in the task file. Change nothing and end with STATUS: DONE."
     except ValueError as exc:
         return _emit({"ok": False, "error": str(exc)}, 2)
     if not NAME_RE.match(rec["team_id"]):
@@ -1859,9 +1897,8 @@ def cmd_spawn_team(args) -> int:
             os.environ["ATLAS_COLONY_TRANSPORT"] = "tmux"
         else:
             note = "tmux not on PATH: fell back to claude-bg"
-    os.environ["ATLAS_MUX"] = (
-        "tmux"  # spawn-team is the explicit opt-in cmd_spawn checks for
-    )
+    if os.environ.get("ATLAS_MUX", "").strip().lower() == "off":
+        return _emit({"ok": False, "error": "mux mode is disabled: ATLAS_MUX=off"}, 2)
     run_id, sid = _lead_run(root, args.session)
     lead = _team_lead(sid, rec["team_id"])
     chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
@@ -1873,7 +1910,8 @@ def cmd_spawn_team(args) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
     members = ", ".join(f"{m['name']} ({m['role']})" for m in rec["members"])
-    headline = (rec["task"].strip().splitlines() or [""])[0][:120]
+    first = next(iter(rec.get("member_tasks", {}).values()), rec["task"])
+    headline = (first.strip().splitlines() or [""])[0][:120]
     kickoff = f"kickoff {rec['team_id']}: {headline} | members: {members} | scope: {', '.join(rec['file_scope']) or 'whole project'}"
     atlas_todo.note(root, lead, kickoff, to="all", channel=chan, kind="kickoff")
 
@@ -2200,7 +2238,12 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--effort", required=True)
     st.add_argument("--paths", help="comma-separated file scope")
     st.add_argument("--task")
-    st.add_argument("--task-file")
+    st.add_argument(
+        "--task-file",
+        help="task text; with `## member: <role>[-N]` headings (in member order, e.g. implementer, implementer-2, "
+        "verifier) each member gets its own slice, text before the first heading is shared context; "
+        "without headings every member gets the same task",
+    )
     st.add_argument("--team-id")
     st.add_argument("--name", help="human colony name, [a-z0-9-] up to 32 chars")
     st.add_argument(

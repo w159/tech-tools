@@ -164,5 +164,31 @@ class Resolve(unittest.TestCase):
             ar.resolve("nope", "med")
 
 
+class CliAlwaysJsonTest(unittest.TestCase):
+    """Every CLI outcome is one JSON object on stdout, so `| json.load(sys.stdin)` never hits char 0."""
+
+    def _cli(self, *argv):
+        p = subprocess.run(
+            [sys.executable, str(ATLAS / "scripts" / "atlas_resolve.py"), *argv],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return p.returncode, json.loads(p.stdout), p.stderr
+
+    def test_valid_calls_print_the_cell(self):
+        for cls, eff in (("fix", "low"), ("implement", "low"), ("fix", "medium")):
+            rc, doc, _ = self._cli(cls, eff)
+            self.assertEqual((0, cls), (rc, doc["task_class"]))
+        rc, doc, _ = self._cli("--paths", "b,a", "implement", "medium")
+        self.assertEqual((0, ["a", "b"]), (rc, doc["file_scope"]))
+
+    def test_error_paths_print_json_error_and_exit_2(self):
+        for argv in ((), ("fix",), ("fix", "low", "extra"), ("nope", "low"), ("fix", "nope"), ("fix", "low", "--paths")):
+            rc, doc, err = self._cli(*argv)
+            self.assertEqual((2, False), (rc, doc["ok"]), argv)
+            self.assertTrue(doc["error"] and err.strip(), argv)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -434,6 +434,7 @@ _k("ATLAS_COLONY", _COL, "Start the colony at session start", "Start the herdr c
 _k("ATLAS_CHANNELS", _COL, "Steer dispatches onto a channel", "Steer subagent dispatches onto a colony channel.", default="on", details="Read at hooks/dispatch_tripwire_core.py:2116.")
 _k("ATLAS_GATE_COLONY", _COL, "Gate: colony channel used", "Require a run with two or more workers to have used its colony channel.", default="on", details="Off skips that one completion-gate check. Read at hooks/completion_gate_core.py:2012.")
 _k("ATLAS_COLONY_TRANSPORT", _COL, "Worker transport", "How colony workers are launched. The default is tmux when installed, else claude-bg.", "select", "tmux", scope="shell", options=["herdr", "tmux", "claude-bg"], details="Read at scripts/atlas_mux.py:257.")
+_k("ATLAS_MUX", _COL, "Run teams as tmux panes", "Multi-worker teams run through atlas_mux spawn-team (tmux panes, one task per member) by default; the in-process Agent panel is for one bounded worker. off disables mux and turns the concurrent-dispatch deny into advice.", "select", "on", scope="shell", options=["on", "tmux", "off"], details="Only off is special. Without tmux the workers fall back to claude-bg. Read at scripts/atlas_mux.py:586 and hooks/dispatch_tripwire_core.py (_burst_note).")
 _k("ATLAS_COLONY_LIVE_WINDOW", _COL, "Live window (seconds)", "Seconds an agent counts as live in the colony roster after its last activity.", "number", "1800", details="Read at scripts/atlas_colony_model.py:48.")
 _k("ATLAS_SEAT_BACKEND", _COL, "Seat backend", "Which backend holds worker seats: rig, herdr, or off for none. auto prefers rig when available.", "select", "auto", scope="shell", options=["auto", "rig", "herdr", "off"], details="Any other value behaves as auto. Read at scripts/atlas_seats.py:42.")
 _k("ATLAS_TASKS_MIRROR", _COL, "Mirror board items to TaskCreate", "Tell workers to mirror the board item they claim into the session task list.", default="off", scope="shell", details="Read at scripts/atlas_mux.py:973. The board stays the source of truth.")
@@ -576,7 +577,6 @@ _INTERNAL = {
     "ATLAS_PROJECT_ROOT",
     "ATLAS_CHANNEL",
     "ATLAS_SOURCE_TRANSCRIPT",
-    "ATLAS_MUX",
     "ATLAS_ALLOW_TMP_INGEST",
     "ATLAS_MUX_WORKER_CMD",
     "ATLAS_CONTRACT_GATE_DIR",

@@ -57,19 +57,34 @@ def resolve(task_class, effort, paths=None):
     }
 
 
+USAGE = "usage: atlas_resolve.py <class> <effort> [--paths a,b]"
+
+
+def _fail(msg):
+    """Every error path prints ONE JSON object on stdout (callers pipe it to a JSON parser) plus the text on stderr."""
+    print(json.dumps({"ok": False, "error": msg}))
+    print(msg, file=sys.stderr)
+    return 2
+
+
 def main(argv):
     if argv[:1] in (["-h"], ["--help"]):
-        print("usage: atlas_resolve.py <class> <effort> [--paths a,b]")
+        print(USAGE)
         return 0
-    if len(argv) < 2:
-        print("usage: atlas_resolve.py <class> <effort> [--paths a,b]", file=sys.stderr)
-        return 2
-    paths = argv[argv.index("--paths") + 1].split(",") if "--paths" in argv else None
+    if "--paths" in argv:
+        i = argv.index("--paths")
+        if i + 1 >= len(argv):
+            return _fail(f"--paths needs a value (a,b). {USAGE}")
+        paths = argv[i + 1].split(",")
+        argv = argv[:i] + argv[i + 2 :]
+    else:
+        paths = None
+    if len(argv) != 2:
+        return _fail(USAGE)
     try:
         print(json.dumps(resolve(argv[0], argv[1], paths), sort_keys=True))
     except ValueError as e:
-        print(e, file=sys.stderr)
-        return 2
+        return _fail(str(e))
     return 0
 
 

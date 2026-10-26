@@ -11,6 +11,7 @@ run-worker is not allowed to write the board itself.
 # Real-tmux smoke lives in docs (subagent-kit.md "Colony mux mode"); these
 # tests never touch a real tmux server.
 
+import argparse
 import contextlib
 import io
 import json
@@ -299,7 +300,7 @@ class Base(unittest.TestCase):
 
 
 class SpawnGateTests(Base):
-    def test_spawn_requires_mux_opt_in(self):
+    def test_spawn_refused_when_mux_off(self):
         with open(self.make_prompt("p", "hello"), encoding="utf-8"):
             pass
         rc, data, _, _ = _run(
@@ -314,12 +315,20 @@ class SpawnGateTests(Base):
             "explorer",
             "--prompt-file",
             self.make_prompt("p", "hello"),
-            env=self.spawn_env(mux=0),
+            env=self.spawn_env(mux=0, extra={"ATLAS_MUX": "off"}),
             cwd=self.root,
         )
         self.assertNotIn("tmux ", "\n".join(_tmux_log_calls(self.state)))
         self.assertFalse(data.get("ok"), data)
-        self.assertIn("mux", str(data.get("error", "")))
+        self.assertIn("ATLAS_MUX=off", str(data.get("error", "")))
+
+    def test_spawn_unset_atlas_mux_is_not_refused(self):
+        rc, data, _, _ = _run(
+            "spawn", "--run", "r1", "--harness", "claude", "--name", "Alpha", "--agent", "explorer",
+            "--prompt-file", self.make_prompt("p", "hello"),
+            env=self.spawn_env(mux=0), cwd=self.root,
+        )
+        self.assertNotIn("disabled", str(data.get("error", "")), data)
 
     def test_spawn_rejects_bad_name(self):
         rc, data, _, _ = _run(
@@ -3054,6 +3063,102 @@ class ReapMembersAndStatusArgsTests(unittest.TestCase):
         usage = msg.splitlines()[0]
         self.assertIn("--team", usage)
         self.assertIn("--run", usage)
+
+
+class DefaultTransportAndMemberTaskTests(unittest.TestCase):
+    """Mux is on by default (tmux when installed, claude-bg otherwise); ATLAS_MUX=off disables; task files slice per member."""
+
+    def _validate(self, mux):
+        import atlas_mux
+
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_MUX"}
+        if mux is not None:
+            env["ATLAS_MUX"] = mux
+        args = argparse.Namespace(run="r1", name="A", agent="explorer", harness="claude", effort=None,
+                                  thinking=None, prompt_file=__file__)
+        with mock.patch.dict(os.environ, env, clear=True):
+            return atlas_mux._validate(args)
+
+    def test_unset_and_tmux_pass_off_refuses(self):
+        self.assertIsNone(self._validate(None))
+        self.assertIsNone(self._validate("tmux"))
+        self.assertIn("ATLAS_MUX=off", self._validate("off"))
+        self.assertIn("ATLAS_MUX=off", self._validate(" OFF "))
+
+    def test_default_transport_tmux_present_absent(self):
+        import atlas_mux
+
+        env = {k: v for k, v in os.environ.items() if k not in ("ATLAS_MUX", "ATLAS_COLONY_TRANSPORT")}
+        with mock.patch.dict(os.environ, env, clear=True):
+            with mock.patch("shutil.which", return_value="/usr/bin/tmux"):
+                self.assertEqual("tmux", atlas_mux.transport())
+            with mock.patch("shutil.which", return_value=None):
+                self.assertEqual("claude-bg", atlas_mux.transport())
+
+    def test_spawn_team_refuses_when_off(self):
+        import atlas_mux
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"ATLAS_MUX": "off"}), contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--class", "audit", "--effort", "low", "--task", "t",
+                                   "--root", tempfile.mkdtemp()])
+        self.assertEqual(2, code)
+        self.assertIn("ATLAS_MUX=off", json.loads(buf.getvalue())["error"])
+
+    MEMBERS = [
+        {"name": "implementer-aaaa", "role": "implementer"},
+        {"name": "implementer-bbbb", "role": "implementer"},
+        {"name": "verifier-cccc", "role": "verifier"},
+    ]
+
+    def test_split_member_tasks_in_member_order_with_shared_prefix(self):
+        import atlas_mux
+
+        text = "ctx\n\n## member: implementer\nA\n## member: implementer-2\nB\n## member: verifier\nC\n"
+        shared, per = atlas_mux.split_member_tasks(text, self.MEMBERS)
+        self.assertEqual("ctx", shared)
+        self.assertEqual("ctx\n\nA", per["implementer-aaaa"])
+        self.assertEqual("ctx\n\nB", per["implementer-bbbb"])
+        self.assertEqual("ctx\n\nC", per["verifier-cccc"])
+
+    def test_repeated_role_heading_takes_next_free_member_and_no_heading_is_shared(self):
+        import atlas_mux
+
+        _, per = atlas_mux.split_member_tasks("## member: implementer\nA\n## member: implementer\nB\n", self.MEMBERS)
+        self.assertEqual(("A", "B"), (per["implementer-aaaa"], per["implementer-bbbb"]))
+        self.assertEqual(("one task", {}), atlas_mux.split_member_tasks("one task", self.MEMBERS))
+
+    def test_unmatched_heading_raises(self):
+        import atlas_mux
+
+        with self.assertRaises(ValueError):
+            atlas_mux.split_member_tasks("## member: implementer-3\nX\n", self.MEMBERS)
+        with self.assertRaises(ValueError):
+            atlas_mux.split_member_tasks("## member: docs-curator\nX\n", self.MEMBERS)
+
+    def test_dry_run_gives_members_different_tasks_and_brief_uses_them(self):
+        import atlas_mux
+
+        with tempfile.TemporaryDirectory() as d:
+            tf = os.path.join(d, "t.md")
+            pathlib.Path(tf).write_text("## member: implementer\nSLICE-ONE\n## member: verifier\nSLICE-TWO\n")
+            buf = io.StringIO()
+            env = {k: v for k, v in os.environ.items() if k != "ATLAS_MUX"}
+            with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(buf):
+                code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--paths",
+                                       "plugins/atlas", "--task-file", tf, "--dry-run", "--root", d])
+            self.assertEqual(0, code)
+            rec = json.loads(buf.getvalue())["team"]
+            tasks = rec["member_tasks"]
+            self.assertEqual(2, len(tasks))
+            self.assertEqual({"SLICE-ONE", "SLICE-TWO"}, set(tasks.values()))
+            m0 = rec["members"][0]
+            m1 = next(m for m in rec["members"] if m["role"] == "verifier")
+            b0 = atlas_mux.team_brief(rec, m0, d, "c", "lead")
+            b1 = atlas_mux.team_brief(rec, m1, d, "c", "lead")
+            self.assertIn("SLICE-ONE", b0)
+            self.assertNotIn("SLICE-TWO", b0)
+            self.assertIn("SLICE-TWO", b1)
 
 
 class ColonyNameSourceTests(unittest.TestCase):

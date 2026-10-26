@@ -472,8 +472,10 @@ def _scope_problem(tinput):
 
 
 def _burst_note(root, session):
-    """Advisory for the 2nd+ atlas:* dispatch inside BURST_SECS: that is a team, and teams run as tmux panes.
-    The timestamp rides in the per-session autoname store (already flock-serialised for parallel batches)."""
+    """(concurrent, text) for an atlas:* dispatch inside BURST_SECS of an earlier one: that is a team, and
+    teams run as tmux panes. `concurrent` is True when an earlier in-process dispatch has no PostToolUse yet
+    (a foreground Agent call posts when it returns, so a sequential dispatch finds the list empty).
+    The state rides in the per-session autoname store (already flock-serialised for parallel batches)."""
     import time
 
     try:
@@ -481,25 +483,60 @@ def _burst_note(root, session):
     except ValueError:
         window = BURST_SECS
     if window <= 0:
-        return ""
+        return False, ""
     now = time.time()
     try:
         with _name_state(root, session) as st:
             last, st["last_dispatch"] = st.get("last_dispatch", 0), now
+            live = [t for t in st.get("open", []) if now - float(t) < window]
+            concurrent = bool(live) and not _omp_harness()
+            # a denied dispatch never ran: it must not hold the slot
+            st["open"] = live if concurrent else live + [now]
     except Exception as exc:
         _record_fault(exc)
-        return ""
+        return False, ""
+    if concurrent:
+        mux_off = os.environ.get("ATLAS_MUX", "").lower() == "off"
+        head = (
+            "[atlas] ADVISORY (ATLAS_MUX=off)" if mux_off else "DENY"
+        ) + f" - another in-process atlas:* dispatch of this session is still running. "
+        return not mux_off, (
+            head + "Two or more workers are a team and run as tmux panes, one distinct task per member "
+            "(--task-file with `## member: <role>` sections):\n"
+            f"  {SPAWN_TEAM_CMD}\nthen `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T`. "
+            "One bounded worker may stay in-process: re-dispatch this one after the running worker returns."
+        )
     if now - float(last or 0) >= window:
-        return ""
-    return (
+        return False, ""
+    return False, (
         f"[atlas] ADVISORY - 2nd atlas dispatch within {window:g} s: this is a team. Run it as tmux panes:\n"
         f"  {SPAWN_TEAM_CMD}\nthen `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T` "
         "(omp: the atlas_team tool)."
     )
 
 
+def _omp_harness():
+    return (
+        os.environ.get("ATLAS_HARNESS") == "omp"
+        or os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
+    )
+
+
+def _close_dispatch(payload):
+    """PostToolUse:Agent: the oldest open in-process dispatch of the session has returned. Fail-open."""
+    try:
+        cwd = payload.get("cwd")
+        root = find_root(Path(cwd if isinstance(cwd, str) and cwd else os.getcwd()))
+        with _name_state(root, payload.get("session_id")) as st:
+            if st.get("open"):
+                st["open"].pop(0)
+    except Exception as exc:
+        _record_fault(exc)
+
+
 def _scope_gate(deny, tinput, root, session):
-    """Last dispatch check: SCOPE deny (ATLAS_SCOPE_GATE=off downgrades it to advisory), then the burst advisory."""
+    """Last dispatch check: SCOPE deny (ATLAS_SCOPE_GATE=off downgrades it to advisory), then the concurrent
+    in-process deny / burst advisory (ATLAS_MUX=off downgrades the deny to advisory)."""
     problem = _scope_problem(tinput)
     if problem and os.environ.get("ATLAS_SCOPE_GATE", "on").lower() != "off":
         deny("scope", problem)
@@ -510,7 +547,11 @@ def _scope_gate(deny, tinput, root, session):
         else []
     )
     if str(tinput.get("subagent_type") or "").startswith("atlas:"):
-        notes.append(_burst_note(root, session))
+        blocked, text = _burst_note(root, session)
+        if blocked:
+            deny("mux", text)
+            return
+        notes.append(text)
     note = "\n".join(n for n in notes if n)
     if note:
         _advisory(note)
@@ -2244,6 +2285,7 @@ def main():
     ):
         _reserve_name(payload)
         _record_agent_id(payload)
+        _close_dispatch(payload)
 
     # Worker inbox: an atlas_mux worker's headless pane never reads its tty, so
     # dashboard messages queued for it on the board are delivered here, as
