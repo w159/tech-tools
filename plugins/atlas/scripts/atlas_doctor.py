@@ -2987,6 +2987,14 @@ def layout_checks(root):
         if not bad
         else f"{len(bad)} file(s) need renaming; run atlas_doctor.py --fix",
     )
+    missing, tagged = doctor_layout.project_memory_status(root)
+    add(
+        "project-memory",
+        not (missing or tagged),
+        f"{missing} terminal finding(s) without a .atlas/findings record, "
+        f"{tagged} global memory entr(ies) tagged with this project"
+        + (" (--fix migrates)" if missing or tagged else ""),
+    )
     db = atlas_db.db_path()
     conn = _ro_conn(db) if os.path.exists(db) else None
     if conn is None:
@@ -3022,6 +3030,12 @@ def hook_layout_notes(cwd):
             lines.append(
                 f"docs naming: {n} files need renaming; run atlas_doctor.py --fix"
             )
+        miss, tagged = doctor_layout.project_memory_status(cwd)
+        if miss or tagged:
+            lines.append(
+                f"project memory: {miss} finding(s) unrecorded, {tagged} global "
+                "memory entr(ies) to migrate; run atlas_doctor.py --fix"
+            )
     except Exception as e:  # a hook never breaks the session
         import atlas_faults
 
@@ -3042,6 +3056,11 @@ def fix_layout_all(root):
             print(f"FIX: docs rename: {old} -> {new}")
     except Exception as e:
         print(f"FIX: docs rename failed: {e}")
+    try:
+        for line in doctor_layout.fix_project_memory(root):
+            print(f"FIX: {line}")
+    except Exception as e:
+        print(f"FIX: project memory failed: {e}")
     db = atlas_db.db_path()
     if os.path.exists(db):
         conn = atlas_db.connect()

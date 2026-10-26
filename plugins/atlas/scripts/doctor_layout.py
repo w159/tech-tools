@@ -232,6 +232,56 @@ def hook_layout(cwd):
     return line + (f"; {bad} failed" if bad else "")
 
 
+# --- project memory (findings records, global memory tagged with the project) --
+
+
+def project_memory_status(root):
+    """(findings_without_record, global_entries_tagged_with_project). Read-only."""
+    try:
+        import atlas_finding
+
+        missing = atlas_finding.missing_records(root)
+    except Exception:
+        missing = 0
+    tagged = 0
+    try:
+        import atlas_memory
+
+        name = os.path.basename(os.path.abspath(root))
+        for target in ("memory", "project"):
+            tagged += sum(1 for e in atlas_memory.get_entries(target) if atlas_memory._scope_of(e) == name)
+    except Exception:
+        pass
+    return missing, tagged
+
+
+def fix_project_memory(root):
+    """--fix: backfill findings records, then run the global-to-project memory
+    migration when it exists (current project only). Returns printable lines."""
+    import atlas_finding
+
+    res = atlas_finding.backfill_findings(root, apply=True)
+    out = [f"findings records: {res}"]
+    try:
+        import inspect
+
+        import atlas_memory
+
+        fn = getattr(atlas_memory, "migrate_global_to_projects", None)
+        if fn is None:
+            return out + ["memory migration: not available in this atlas_memory"]
+        params = inspect.signature(fn).parameters
+        kw = {"apply": True} if "apply" in params else {}
+        for name in ("root", "project_root", "cwd", "only_root"):
+            if name in params:
+                kw[name] = root
+                break
+        out.append(f"memory migration: {fn(**kw)}")
+    except Exception as exc:
+        out.append(f"memory migration failed: {exc}")
+    return out
+
+
 # --- docs naming (read-only; renames only under --fix) -----------------------
 
 
