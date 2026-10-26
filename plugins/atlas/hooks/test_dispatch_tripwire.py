@@ -4225,9 +4225,9 @@ class ScopeGateTest(unittest.TestCase):
             self._decision(self._dispatch("atlas:implementer", "fix/low"))[0]
         )
 
-    def test_c_second_dispatch_within_window_gets_spawn_team_advisory(self):
+    def _burst_session(self):
         # The burst clock is per session and may live in the shared temp dir: use a session no other test touches.
-        sess = f"burst-{os.getpid()}-{id(self)}"
+        sess = f"burst-{os.getpid()}-{id(self)}-{self._testMethodName}"
         self.env = dict(self.env, ATLAS_BURST_SECS="10")
         import atlas_db
 
@@ -4235,17 +4235,63 @@ class ScopeGateTest(unittest.TestCase):
         atlas_db.start_run(conn, atlas_db.register_project(conn, "/repo/x"), sess)
         atlas_db.mark_orchestrating(conn, sess)
         conn.close()
+        return sess
+
+    def _returned(self, sess):
+        """PostToolUse:Agent for a foreground dispatch that finished."""
+        run_hook(
+            {
+                "session_id": sess,
+                "cwd": self.tmp,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:implementer", "name": COLONY_NAME},
+                "tool_response": "done",
+            },
+            self.env,
+        )
+
+    def test_c_second_concurrent_in_process_dispatch_is_denied_with_spawn_team(self):
+        sess = self._burst_session()
         self.assertEqual(
-            self._decision(
-                self._dispatch("atlas:implementer", "fix/low", session=sess)
-            ),
+            self._decision(self._dispatch("atlas:implementer", "fix/low", session=sess)),
             (None, ""),
         )
+        decision, reason = self._decision(
+            self._dispatch("atlas:explorer", "fix/medium", session=sess)
+        )
+        self.assertEqual(decision, "deny")
+        self.assertIn("spawn-team", reason)
+        self.assertIn("--task-file", reason)
+        self.assertIn("bounded worker may stay in-process", reason)
+
+    def test_c_sequential_dispatch_after_return_is_only_an_advisory(self):
+        sess = self._burst_session()
+        self._dispatch("atlas:implementer", "fix/low", session=sess)
+        self._returned(sess)
         decision, note = self._decision(
             self._dispatch("atlas:explorer", "fix/medium", session=sess)
         )
         self.assertIsNone(decision)
         self.assertIn("spawn-team", note)
+
+    def test_c_mux_off_and_omp_turn_the_concurrent_deny_into_advice_or_nothing(self):
+        sess = self._burst_session()
+        off = dict(self.env, ATLAS_MUX="off")
+        self._dispatch("atlas:implementer", "fix/low", session=sess, env=off)
+        decision, note = self._decision(
+            self._dispatch("atlas:explorer", "fix/medium", session=sess, env=off)
+        )
+        self.assertIsNone(decision)
+        self.assertIn("ADVISORY (ATLAS_MUX=off)", note)
+        sess = self._burst_session() + "-omp"
+        omp = dict(self.env, ATLAS_TOOLKIT_LOAD="omp")
+        self._dispatch("atlas:implementer", "fix/low", session=sess, env=omp)
+        self.assertIsNone(
+            self._decision(
+                self._dispatch("atlas:explorer", "fix/medium", session=sess, env=omp)
+            )[0]
+        )
 
     def test_d_kill_switch_restores_advisory(self):
         env = dict(self.env, ATLAS_SCOPE_GATE="off")
