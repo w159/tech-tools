@@ -256,6 +256,16 @@ class MigrationTest(_Base):
             atlas_memory._read_file(Path(self.atlas_home) / "memory" / "PROJECT.md"),
         )
 
+    def test_only_root_resolves_duplicate_name_without_db(self):
+        entry = "Assumption to avoid (dup): ambiguous one"
+        plan = atlas_memory.migrate_global_to_projects(
+            self.atlas_home, self.db, only_root=self.d1
+        )
+        self.assertEqual(plan["moves"], {self.d1: [("MEMORY.md", entry)]})
+        plain = atlas_memory.migrate_global_to_projects(self.atlas_home, self.db)
+        self.assertNotIn(self.d1, plain["moves"])
+        self.assertIn((entry, "ambiguous project"), plain["left"])
+
     def test_apply_moves_archives_and_leaves(self):
         plan = atlas_memory.migrate_global_to_projects(
             self.atlas_home, self.db, apply=True

@@ -10023,5 +10023,24 @@
     "status": "verified",
     "verified_at": "2026-10-26T16:55:11+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "P8-project-memory-findings",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Project memories and findings reach <project>/.atlas; migrations via doctor --fix",
+    "evidence": [
+      "plugins/atlas/hooks/test_project_memory.py",
+      "plugins/atlas/scripts/test_atlas_finding_records.py",
+      "scripts suite OK; hooks InstalledParity only"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T17:52:10+00:00",
+    "verified_by": "lead"
   }
 ]

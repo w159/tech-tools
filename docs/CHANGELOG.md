@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased - 2026-10-26
+
+### Changed
+
+- Project memories now live in the project: `memory_capture.py` resolves `atlas_paths.project_root(cwd)` and writes user corrections, assumption admissions and improvements to `<root>/.atlas/memory/MEMORY.md` (`atlas_memory.py` `root=` parameter; same cap, lock and archive rotation under `<root>/.atlas/memory/archive/`). Subagent and worktree sessions now attribute to their main project instead of being dropped. `~/.atlas/memory/MEMORY.md` keeps cross-project lessons only. Session start shows the project store first inside the existing 450-char memory budget (`hooks/session_boot_core.py`).
+- Findings reach `.atlas/findings/` automatically: a verified or rejected stamp through `scripts/atlas_finding.py` writes or updates one record per finding id (`<YYYY-MM-DD>_<id-slug>.md`, history of prior verdicts kept) and rebuilds `.atlas/findings/INDEX.md`. `atlas_finding.py recent` lists the newest records. Open and needs-evidence verdicts get no file; a write error never fails the stamp.
+
+### Added
+
+- `atlas_memory.migrate_global_to_projects(home, db, apply, only_root)` moves tagged global entries into their project (dry run by default; ambiguous names stay put; remeasure stamps go to the archive; with `only_root` the named project is used directly). `atlas_finding.backfill_findings(root, apply)` writes records for existing terminal findings.
+- `atlas_doctor` `project-memory` check: terminal findings without a record and global entries tagged with this project; `--fix` runs both migrations for the current project.
+
+### Verified
+
+- tmux team t4b1d0e (per-member worktrees) built both slices; merged main: scripts suite OK, hooks only `InstalledParityContract` (reinstall); `test_project_memory` 10 OK, doctor/memory/finding modules Ran 220 OK; seeded faults fail the routing, one-file-per-id and only_root tests; real `~/.atlas/memory` unchanged by the suites (md5 before/after).
+- Applied to this repo: 414 finding records written to `.atlas/findings/` (34 id-less rows skipped); 12 `tech-tools` entries moved from `~/.atlas/memory/MEMORY.md` to `.atlas/memory/MEMORY.md` (backup `~/.atlas/backups/MEMORY.md.2026-10-26.bak`).
+
 ## 15.2.0 - 2026-10-26
 
 Audit and testing proof run: the `atlas-audit` and `atlas-testing` skills were exercised on this tree and fixed where they failed. Nothing is committed yet, so there are no commit SHAs. Evidence and defect table: `docs/audits/2026-10-26_atlas-audit-testing-proof.md`.

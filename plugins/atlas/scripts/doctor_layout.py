@@ -249,7 +249,11 @@ def project_memory_status(root):
 
         name = os.path.basename(os.path.abspath(root))
         for target in ("memory", "project"):
-            tagged += sum(1 for e in atlas_memory.get_entries(target) if atlas_memory._scope_of(e) == name)
+            tagged += sum(
+                1
+                for e in atlas_memory.get_entries(target)
+                if atlas_memory.tag_of(e) == name
+            )
     except Exception:
         pass
     return missing, tagged

@@ -613,6 +613,12 @@ _STAMP = re.compile(r"recorded by dashboard remeasure|re-baselined, supersedes #
 _TAG = re.compile(r"^[^(\[\n]{0,60}[(\[]([^)\]\n]{1,80})[)\]]")
 
 
+def tag_of(entry: str) -> str:
+    """Project tag the migration reads from an entry, '' when untagged."""
+    m = _TAG.match(entry)
+    return m.group(1).strip() if m else ""
+
+
 def _project_roots_by_name(db_path: str) -> Dict[str, List[str]]:
     """name -> candidate roots from atlas.db `projects` rows that are git roots
     and still exist. Read-only connection; a missing DB yields {}."""
@@ -656,9 +662,16 @@ def migrate_global_to_projects(
                     continue
                 plan["stamps"].append((fname, entry))
                 continue
-            m = _TAG.match(entry)
-            name = m.group(1).strip() if m else ""
+            name = tag_of(entry)
             cands = roots.get(name, [])
+            # the caller already knows the root: skip the DB, whose same-named
+            # rows (old copies of the repo) would make the tag ambiguous
+            if (
+                only_root
+                and name
+                and name == os.path.basename(os.path.abspath(only_root))
+            ):
+                cands = [os.path.abspath(only_root)]
             if not name or _JUNK_SCOPE.match(name):
                 plan["left"].append((entry, "no project tag"))
             elif len(cands) != 1:

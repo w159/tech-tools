@@ -207,7 +207,8 @@ Source: `docs/audits/2026-10-26_atlas-state-examination.md`.
 - [done 2026-10-26] P5: quiet mode (`ATLAS_QUIET`), and the inline-op counter no longer counts scratchpad and brief writes (`hooks/nudge.py:93`, `hooks/dispatch_tripwire_core.py`; same verification).
 - [planned] Local scoring hits a 2048-token context limit: trim the input.
 - [planned] Global projects table cleanup: 346 non-canonical rows.
-- [planned] Project memories and findings never reach `<project>/.atlas` (examination doc section 5).
+- [done 2026-10-26] Project memories and findings reach `<project>/.atlas` (`atlas_memory.py` root store, `memory_capture.py` routing, `atlas_finding.py` records + INDEX, doctor `project-memory`; `docs/CHANGELOG.md` Unreleased). Other projects migrate with `atlas_doctor.py --fix` run inside each.
+- [planned] 34 global memory entries stay in `~/.atlas/memory/MEMORY.md` because their tag names a non-project folder (hooks, frontend, local) or matches several old project copies; review by hand or drop.
 - [done 2026-10-26] The docs rewriter missed references in `.env.template`: `lint_docs_names.py` now rewrites `.template` and `.example` files and reports failed writes.
 - [planned] `plugins/atlas/mod/contract.ts:4` still cites the old plan path: the file has the macOS immutable flag (uchg), so the rewrite fails; clear the flag, then rewrite.
 - [planned] Parity-round verifier holes deferred: (2) long workers fall out of the 10 s burst window, (5) tripwire tests inherit `ATLAS_*` in worker panes, (6) a member without a section gets only the shared text.

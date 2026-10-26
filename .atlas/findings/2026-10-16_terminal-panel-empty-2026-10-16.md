@@ -1,0 +1,21 @@
+# TERMINAL-PANEL-EMPTY-2026-10-16: re-verified: test_atlas_seats/test_atlas_rig pass
+
+- id: TERMINAL-PANEL-EMPTY-2026-10-16
+- status: verified
+- verified_by: runtimefix-verifier
+- verified_at: 2026-10-16T16:50:06+00:00
+
+## Evidence
+- pytest scripts hooks skills: 10 failed/3464 passed/3 skipped (284s); all 10 fail identically at HEAD or are env artifacts except 2 credential-watch; bun test 450 pass/0 fail
+
+## Reproduction
+cd plugins/atlas && python3.14 -m pytest -q -p no:cacheprovider scripts hooks skills
+
+## Proposed fix
+none recorded
+
+## Doc refs
+- none
+
+## History
+- 2026-10-16T16:37:33+00:00 verified by docs-curator-runtimefix: atlas_seats.agents() unions rig+herdr rows; close_run multi-source; rig keepalive teardown
