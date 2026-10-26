@@ -1185,12 +1185,13 @@ def main():
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_memory
 
-        snapshot = atlas_memory.load_snapshot()
-        parts = []
-        if snapshot.get("memory"):
-            parts.append(snapshot["memory"])
-        if snapshot.get("project"):
-            parts.append(snapshot["project"])
+        import atlas_paths
+
+        snapshot = atlas_memory.load_snapshot(
+            root=atlas_paths.project_root(payload.get("cwd") or os.getcwd())
+        )
+        # Project lessons first: they are the ones this session can act on.
+        parts = [snapshot[k] for k in ("project", "memory") if snapshot.get(k)]
         if parts:
             # Hard cap: the snapshot is a hint, not a briefing. An uncapped dump
             # is the single largest block of boot noise. Cut on the record
@@ -1198,9 +1199,14 @@ def main():
             # as a fact the model half-remembers.
             memory_block = "\n\n".join(parts)
             if len(memory_block) > 450:
-                head = memory_block[:450]
+                total = sum(p.count("\n\u00a7\n") + 1 for p in parts)
+                head = memory_block[:380]
                 cut = head.rfind("\n\u00a7\n")
-                memory_block = head[:cut] if cut > 0 else head.rsplit("\n", 1)[0]
+                head = head[:cut] if cut > 0 else head.rsplit("\n", 1)[0]
+                kept = sum(p.count("\n\u00a7\n") + 1 for p in head.split("\n\n"))
+                memory_block = (
+                    f"{head}\n+{max(total - kept, 1)} more in .atlas/memory/MEMORY.md"
+                )
 
     # Hash already-dirty non-docs paths so the Stop gate's delegation mandate can
     # tell shell-written code from inherited dirt. `git status` + hashing costs 60-90 ms on a big dirty tree,

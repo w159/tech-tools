@@ -124,7 +124,9 @@ class MainInProcessTest(unittest.TestCase):
                 os.environ.pop("CLAUDE_PLUGIN_ROOT", None)
                 _, out = run_main_inprocess({"session_id": "s1", "cwd": self.tmp}, env)
             ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-            self.assertIn(f'python3 "{want}/scripts/atlas_resolve.py" <class> <effort>', ctx)
+            self.assertIn(
+                f'python3 "{want}/scripts/atlas_resolve.py" <class> <effort>', ctx
+            )
             self.assertIn(f'python3 "{want}/scripts/atlas_mux.py" spawn-team', ctx)
             self.assertIn(f'python3 "{want}/scripts/atlas_mux.py" wait --team', ctx)
             self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", ctx)
@@ -285,6 +287,40 @@ class MainInProcessTest(unittest.TestCase):
         ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("MEM-LINE", ctx)
         self.assertIn("PROJ-LINE", ctx)
+
+    def test_main_memory_block_lists_project_first_and_passes_root(self):
+        self._memory.load_snapshot.return_value = {
+            "memory": "GLOBAL-LESSON",
+            "project": "PROJ-LESSON",
+        }
+        with (
+            mock.patch.object(session_boot, "detect_dep", return_value=False),
+            mock.patch.object(session_boot, "has_cmd", return_value=False),
+        ):
+            _, out = run_main_inprocess(
+                {"session_id": "s6b", "cwd": self.tmp}, self.env
+            )
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertLess(ctx.index("PROJ-LESSON"), ctx.index("GLOBAL-LESSON"))
+        self.assertTrue(self._memory.load_snapshot.call_args.kwargs.get("root"))
+
+    def test_main_memory_block_over_budget_keeps_project_and_reports_cut(self):
+        proj = "═══ PROJECT CONTEXT ═══\n" + "\n§\n".join(
+            f"P{i} " + "p" * 150 for i in range(2)
+        )
+        glob = "═══ MEMORY ═══\n" + "\n§\n".join(f"G{i} " + "g" * 150 for i in range(3))
+        self._memory.load_snapshot.return_value = {"memory": glob, "project": proj}
+        with (
+            mock.patch.object(session_boot, "detect_dep", return_value=False),
+            mock.patch.object(session_boot, "has_cmd", return_value=False),
+        ):
+            _, out = run_main_inprocess(
+                {"session_id": "s6c", "cwd": self.tmp}, self.env
+            )
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("P0 ", ctx)
+        self.assertNotIn("G2 ", ctx)
+        self.assertRegex(ctx, r"\+\d+ more in \.atlas/memory/MEMORY\.md")
 
     def test_main_memory_failure_does_not_block_boot(self):
         """load_snapshot raising must not crash boot."""
@@ -1001,10 +1037,14 @@ class EnsureColonyCacheTest(unittest.TestCase):
             with (
                 mock.patch("subprocess.run") as run,
                 mock.patch("subprocess.Popen") as popen,
-                mock.patch.object(__import__("atlas_seats"), "backend", return_value="herdr"),
+                mock.patch.object(
+                    __import__("atlas_seats"), "backend", return_value="herdr"
+                ),
                 # herdr down -> one ensure_server attempt; never start (or probe) the real server
                 mock.patch.object(
-                    __import__("atlas_herdr"), "ensure_server", return_value={"ok": False}
+                    __import__("atlas_herdr"),
+                    "ensure_server",
+                    return_value={"ok": False},
                 ),
             ):
                 run.return_value = mock.Mock(
@@ -1119,7 +1159,9 @@ class EnsureDashboardTempEnvTest(unittest.TestCase):
             "ATLAS_DASHBOARD_DB",
         )
         base = {k: v for k, v in os.environ.items() if k not in drop}
-        base["ATLAS_DASHBOARD"] = "on"  # autostart is opt-in; these tests cover the opted-in guards
+        base["ATLAS_DASHBOARD"] = (
+            "on"  # autostart is opt-in; these tests cover the opted-in guards
+        )
         base.update(env)
         fake = mock.Mock(
             returncode=0,
@@ -1272,7 +1314,9 @@ class EnsureDashboardStaleInstallTest(unittest.TestCase):
         real_isfile = os.path.isfile
 
         def no_dashboard(path):
-            return False if str(path).endswith("atlas_dashboard.py") else real_isfile(path)
+            return (
+                False if str(path).endswith("atlas_dashboard.py") else real_isfile(path)
+            )
 
         guard = mock.MagicMock()
         with (
@@ -1318,7 +1362,9 @@ class LeadChannelOpenTest(unittest.TestCase):
     @staticmethod
     def _project():
         proj = tempfile.mkdtemp()
-        os.makedirs(os.path.join(proj, ".atlas", ".run"))  # an atlas project: its board already exists
+        os.makedirs(
+            os.path.join(proj, ".atlas", ".run")
+        )  # an atlas project: its board already exists
         return proj
 
     @staticmethod
@@ -1345,7 +1391,9 @@ class LeadChannelOpenTest(unittest.TestCase):
             os.path.realpath(proj),
         )
 
-    def _pane_files(self, proj):  # the lead name may come from ATLAS_LEAD_NAME in the env
+    def _pane_files(
+        self, proj
+    ):  # the lead name may come from ATLAS_LEAD_NAME in the env
         return glob.glob(os.path.join(proj, ".atlas", ".run", "lead-pane-*.json"))
 
     def test_records_lead_pane_when_tmux_pane_is_set(self):
@@ -1408,12 +1456,15 @@ class LeadChannelOpenTest(unittest.TestCase):
 
     def test_main_invokes_the_channel_open_fail_open(self):
         proj = self._project()
-        with mock.patch.object(
-            session_boot, "open_lead_channel_once", return_value=None
-        ) as spy, mock.patch.dict(
-            os.environ,
-            dict(self._saved, ATLAS_DASHBOARD="off", ATLAS_COLONY="off"),
-            clear=True,
+        with (
+            mock.patch.object(
+                session_boot, "open_lead_channel_once", return_value=None
+            ) as spy,
+            mock.patch.dict(
+                os.environ,
+                dict(self._saved, ATLAS_DASHBOARD="off", ATLAS_COLONY="off"),
+                clear=True,
+            ),
         ):
             os.environ.pop("ATLAS_WORKER_NAME", None)
             code, _out = run_main_inprocess(
