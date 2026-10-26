@@ -17,6 +17,35 @@ import atlas_doctor
 import atlas_db
 
 
+_MODULE_ENV = None
+_MODULE_CWD = None
+
+
+def setUpModule():
+    # Any test that reaches --fix/--hook resolves its project root from
+    # CLAUDE_PROJECT_DIR or cwd, and its home from HOME. Point all three at a
+    # temp dir for the whole module so no class can reach a real checkout.
+    global _MODULE_ENV, _MODULE_CWD
+    base = tempfile.mkdtemp()
+    os.makedirs(os.path.join(base, "project"))
+    _MODULE_ENV = mock.patch.dict(
+        os.environ,
+        {
+            "CLAUDE_PROJECT_DIR": os.path.join(base, "project"),
+            "HOME": os.path.join(base, "home"),
+        },
+    )
+    _MODULE_ENV.start()
+    _MODULE_CWD = (os.getcwd(), base)
+    os.chdir(os.path.join(base, "project"))
+
+
+def tearDownModule():
+    os.chdir(_MODULE_CWD[0])
+    _MODULE_ENV.stop()
+    shutil.rmtree(_MODULE_CWD[1], True)
+
+
 def write_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
@@ -98,10 +127,21 @@ class AtlasDoctorTest(unittest.TestCase):
         atlas_doctor.STATE_PATH = self.state
         omp_patch = mock.patch.dict(
             os.environ,
-            {"ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins")},
+            {
+                "ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins"),
+                # --fix/--hook repair layout and docs names under the project dir;
+                # never let a test point that at the real checkout.
+                "CLAUDE_PROJECT_DIR": os.path.join(self.tmp, "project"),
+                "HOME": os.path.join(self.tmp, "home"),
+            },
         )
         omp_patch.start()
         self.addCleanup(omp_patch.stop)
+        # cwd is where project roots resolve from when CLAUDE_PROJECT_DIR is unset
+        os.makedirs(os.path.join(self.tmp, "project"), exist_ok=True)
+        prev_cwd = os.getcwd()
+        os.chdir(os.path.join(self.tmp, "project"))
+        self.addCleanup(os.chdir, prev_cwd)
         # Set after the patch.dict snapshot: its cleanup runs after tearDown and would
         # otherwise restore this value, leaking it into later test files.
         os.environ["CLAUDE_PLUGIN_ROOT"] = self.self_root
@@ -845,9 +885,11 @@ class AtlasDoctorTest(unittest.TestCase):
         # lines 593-596: --fix branch applies fixes then re-checks
         buf = io.StringIO()
         # tmp root: --fix may append to AGENTS.md, never the real one
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
-            atlas_doctor, "_repo_root", return_value=tmp
-        ), contextlib.redirect_stdout(buf):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(atlas_doctor, "_repo_root", return_value=tmp),
+            contextlib.redirect_stdout(buf),
+        ):
             rc = atlas_doctor.main(["--fix"])
         self.assertIn("FIX:", buf.getvalue())
         self.assertIn(rc, (0, 1))
