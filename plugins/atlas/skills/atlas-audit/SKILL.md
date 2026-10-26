@@ -100,9 +100,12 @@ skill is available in this session, the orchestrator runs it **scoped per discov
 `GRAPHIFY_NONINTERACTIVE=1` set so a root that still trips the size gate auto-scopes instead of
 blocking), writing a `graphify-out/` under each root. If it is not available, the orchestrator
 builds the hot-spot list without it from git churn
-(`git log --since=180.days --format= --name-only | sort | uniq -c | sort -rn | head -40`), file
-size, and fan-in (serena `find_referencing_symbols` or lean-ctx `ctx_callgraph` on the top churn
-files; fallow `get_hot_paths` for JS/TS when the fallow MCP is present), records the top-N as
+(`git log --since=180.days --format= --name-only -- <root> | sort | uniq -c | sort -rn | head -40`,
+run once per discovered root), file size, and fan-in. N = 20 hot spots per root (fewer if the root
+is small); size = `wc -l` on each candidate file; rank by churn count, then fan-in, then size.
+Fan-in: lean-ctx `ctx_callgraph` tracks call edges only, so for symbol-level fan-in use serena
+`find_referencing_symbols` on the top churn files; fallow `get_hot_paths` stays JS/TS only (when the
+fallow MCP is present). Record the top-N as
 file:line in graph-summary.md, and runs `build_hub.py` with no graph.json (node_id null,
 file-granular hub). The audit never stalls on a missing graphify. It merges each root's hot-spot nodes into a single top-N list and reads docs/ for
 the intended-behavior baseline. This phase completes before any dimension fans out. The orchestrator

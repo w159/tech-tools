@@ -6,8 +6,8 @@ has one failable check.
 
 ## Step 1 - Locate the most recent hub
 
-- Find the newest `docs/audits/*atlas-audit*/hub/manifest.json` by run-dir
-  mtime.
+- Find the newest `docs/audits/*atlas-audit*/hub/manifest.json` by the
+  manifest.json mtime.
 - **Check:** a manifest exists. If not, stop with "No audit hub found.
   Run atlas-audit first."
 

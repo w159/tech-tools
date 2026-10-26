@@ -1,0 +1,7 @@
+[
+  {
+    "tool": "unittest",
+    "type_id": "unit",
+    "command": "python3 -m unittest discover"
+  }
+]

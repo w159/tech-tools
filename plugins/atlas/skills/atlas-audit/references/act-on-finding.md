@@ -18,7 +18,7 @@ launch time is seeded from `templates/launch-artifact.seed.md`.
 
 ## Step 1 - Find the most recent hub
 
-Locate the newest `docs/audits/*atlas-audit*/hub/manifest.json` (newest by directory mtime). If
+Locate the newest `docs/audits/*atlas-audit*/hub/manifest.json` (newest by the manifest.json mtime). If
 none exists, stop and say so: "No audit hub found. Run `atlas-audit` (code mode) first."
 
 ## Step 2a - No finding id given: list the actionable findings

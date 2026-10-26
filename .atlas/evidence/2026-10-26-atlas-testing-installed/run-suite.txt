@@ -1,0 +1,7 @@
+cwd: plugins/atlas/hooks
+$ python3 -m unittest discover
+----------------------------------------------------------------------
+Ran 1589 tests in 97.843s
+
+OK
+exit=0

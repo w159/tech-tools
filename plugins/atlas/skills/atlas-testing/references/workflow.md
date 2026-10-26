@@ -83,7 +83,7 @@ fix. If pre-fix code is gone, a seeded fault on the fixed code is the sensitivit
 
 ## Running
 
-Get exact commands from `testscope commands`. It lists only tools it has evidence for; on `[]` with test files present, report "no detected runner" and use the stdlib runner only if the language reference names one (Python: `lang-python.md`). Order:
+Get exact commands from `testscope commands`. It lists only tools it has evidence for; on `[]` with test files present, report "no detected runner" and use the stdlib runner only if the language reference names one (Python: `lang-python.md`). Run every emitted command from the `--root` directory (`cd <root>` first); testscope does not embed the path. Order:
 
 1. **PR subset** (per change): static-lint, type-check, secrets, unit, plus targeted
    integration/component/api tests for touched surfaces. Fast enough for every push.
