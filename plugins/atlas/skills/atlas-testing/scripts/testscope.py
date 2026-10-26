@@ -348,6 +348,28 @@ def detect_python(root, files, tools, frameworks):
                 frameworks.append(fw)
 
 
+def unittest_dirs(root, files):
+    """{dir: first matching file} for python test files importing stdlib unittest."""
+    found = {}
+    for path in files:
+        base = os.path.basename(path)
+        if not (base.endswith(".py") and (base.startswith("test_") or base.endswith("_test.py"))):
+            continue
+        text = read_text(os.path.join(root, path))
+        if re.search(r"^\s*(import unittest|from unittest\b)", text, re.M):
+            found.setdefault(os.path.dirname(path) or ".", path)
+    return found
+
+
+def detect_unittest(root, files, tools):
+    # pytest already runs unittest files, so only report unittest when it is absent
+    if find_tool(tools, "pytest"):
+        return
+    dirs = unittest_dirs(root, files)
+    if dirs:
+        add_tool(tools, "unittest", ["unit"], dirs[sorted(dirs)[0]])
+
+
 def detect_composer(root, path, tools, frameworks):
     try:
         with open(os.path.join(root, path), encoding="utf-8") as fh:
@@ -579,6 +601,7 @@ def lang_of_file(path):
 # tool -> areas its type ids cover; ALL means every detected area
 TOOL_AREAS = {
     "pytest": ("python",),
+    "unittest": ("python",),
     "coverage-py": ("python",),
     "pytest-cov": ("python",),
     "hypothesis": ("python",),
@@ -731,6 +754,7 @@ def _collect(root):
     detect_terraform(root, files, tools)
     detect_workflows(root, files, tools, ci)
     detect_misc_files(root, files, tools, ci)
+    detect_unittest(root, files, tools)
     # XCTest via Package.swift or xcodeproj
     swift_pkg = next((p for p in files if os.path.basename(p) == "Package.swift"), None)
     xcodeproj = next(
@@ -1023,6 +1047,17 @@ def command_rows(root):
         if "pytest-cov" in names or "coverage-py" in names:
             cmd += " --cov"
         add("pytest", "unit", cmd)
+    if "unittest" in names:
+        for d in sorted(unittest_dirs(root, walk_files(root))):
+            tests_here = [
+                f for f in os.listdir(os.path.join(root, d)) if f.startswith("test_") and f.endswith(".py")
+            ]
+            if d == ".":
+                cmd = "python3 -m unittest discover"
+            else:
+                pat = "test_*.py" if tests_here else "*_test.py"
+                cmd = f"python3 -m unittest discover -s {d} -p '{pat}'"
+            add("unittest", "unit", cmd)
     if "mutmut" in names:
         # mutmut installs a console script; `python -m mutmut` has no __main__
         add(

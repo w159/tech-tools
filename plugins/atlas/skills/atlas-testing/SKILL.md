@@ -40,8 +40,10 @@ the path):
 | `gaps` (default) | Detect stack, inventory existing tests, run `testscope gaps`, present the ranked gap table (priority, reason, closing reference). No authoring. |
 | `plan` | Recommend a test strategy for the path/module: risk signals give type ids with must/should/could priorities and a run order. No authoring. |
 | `write` | Author tests for the target with the chosen type ids per `references/workflow.md`, run them, prove sensitivity: seeded fault fails, revert passes. |
-| `run` | Detect and run the existing suites using `testscope commands` output; report evidence per suite. |
+| `run` | Detect and run the existing suites using `testscope commands` output; report evidence per suite. On `[]` with test files present, say no runner was detected and use only a stdlib runner the language reference names (Python: `python3 -m unittest discover -s <dir> -p 'test_*.py'`). |
 | `mutate` | Mutation pass: pick the mutation runner the language file names, run it, report killed/survived counts and surviving-mutant locations. |
+
+`testscope` scans only under `--root`; pass the smallest directory that holds both the code and its tests. Triage large `mutmut results` output by grouping survivors per function (`mutmut results | sort | uniq -c | sort -rn | head`) and report the top functions, not the full list.
 
 ## Script: testscope
 

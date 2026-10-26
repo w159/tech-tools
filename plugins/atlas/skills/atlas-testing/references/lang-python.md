@@ -19,6 +19,7 @@ Regulated context (FTC Safeguards, SEC Reg S-P, GLBA): prioritize authz tests, f
 | static-lint | ruff 0.17.0 | `uv add --dev ruff` | `uvx ruff check .` / `uvx ruff format .` | Lint plus format in one tool; replaces flake8/isort/black. `S` rules carry bandit-style checks |
 | type-check | mypy 2.4.0; pyright 1.1.414; pyrefly 1.3.2; ty 0.0.87 | `uv add --dev mypy` | `uvx mypy src` / `uvx pyrefly check` / `uvx ty check` | mypy and pyright are production-stable; pyrefly 1.x is stable (Meta, adopted by Google 2026-10); ty is beta (Astral). Pick ONE as the CI gate; run others as editors/second opinions |
 | unit | pytest 9.1.1 (+ pytest-mock 3.16.0, freezegun 1.5.5, time-machine 3.5.1, factory_boy 3.3.3) | `uv add --dev pytest pytest-mock` | `uv run pytest -q` | Ecosystem covers mocking, time control, fixtures; doctests via `pytest --doctest-modules` |
+| unit (stdlib fallback) | unittest (stdlib, no install) | none | `python3 -m unittest discover -s <dir> -p 'test_*.py'` | Use only when the repo has `test_*.py` files built on `unittest` and testscope detects no runner; say so in the report |
 | integration | pytest 9 + testcontainers-python 4.15.0 | `uv add --dev testcontainers` | `uv run pytest -m integration` | Real Postgres/Redis containers; module-scoped fixtures keep xdist workers safe |
 | api | FastAPI 0.143.x TestClient (httpx) + respx 0.23.1 | `uv add --dev httpx respx` | `uv run pytest tests/api` | TestClient is an httpx transport over the ASGI app; respx mocks outbound httpx calls |
 | contract | schemathesis 4.31.1 | `uv add --dev schemathesis` | `uv run st run http://127.0.0.1:8000/openapi.json` | OpenAPI-driven property testing of the live app; nightly in CI |
@@ -34,7 +35,7 @@ Regulated context (FTC Safeguards, SEC Reg S-P, GLBA): prioritize authz tests, f
 | combinatorial | Hypothesis (pattern) | none | custom | `composite` strategies and `st.data()` for pairwise-style sampling; see `types-input-generation.md` |
 | differential | Hypothesis (pattern) | none | custom | One `@given` test comparing old vs new implementation on the same inputs |
 | model-based | hypothesis.stateful | none | `uv run pytest tests/stateful.py` | `RuleBasedStateMachine` for API/session models |
-| mutation | mutmut 3.8.0 or cosmic-ray 8.7.0 | `uv add --dev mutmut` | `uvx mutmut run` | Nightly on money/authz modules only; details in `types-mutation.md` |
+| mutation | mutmut 3.8.0 or cosmic-ray 8.7.0 | `uv add --dev mutmut` | `uvx mutmut run` (needs the `[tool.mutmut]` table in `types-mutation.md`; `uvx` uses its own Python, so mutate a scratch copy) | Nightly on money/authz modules only; details in `types-mutation.md` |
 | coverage | coverage.py 7.16.2 + pytest-cov 7.1.0 | `uv add --dev pytest-cov` | `uv run pytest --cov --cov-branch` | Always `--cov-branch`; set `fail_under` in pyproject |
 | flakiness | pytest-randomly 5.0.0 + pytest-xdist 3.8.0 | `uv add --dev pytest-randomly pytest-xdist` | `uv run pytest -n auto` | Random test order plus recorded seed exposes order coupling; repeat seeds in CI to confirm |
 | benchmark | pytest-benchmark 5.3.0 | `uv add --dev pytest-benchmark` | `uv run pytest --benchmark-only` | Compare against saved baselines; fail PR on big regressions |

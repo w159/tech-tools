@@ -372,6 +372,49 @@ class TestscopeTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
         self.assertIn("## Test tools", proc.stdout)
 
+    def test_commands_md_wraps_command_in_backticks_with_header(self):
+        root = self.register(make_python_repo())
+        script = os.path.join(HERE, "testscope.py")
+        proc = subprocess.run(
+            [sys.executable, script, "commands", "--root", root, "--format", "md"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("| Tool | Type | Command | Note |", proc.stdout)
+        self.assertIn("| pytest | unit | `python -m pytest` |", proc.stdout)
+
+
+    def test_unittest_detected_without_pytest(self):
+        root = tempfile.mkdtemp(prefix="tsc_ut_")
+        self.addCleanup(shutil.rmtree, root, True)
+        write(root, "tests/test_x.py", "import unittest\n\nclass T(unittest.TestCase):\n    pass\n")
+        write(root, "pkg/a_test.py", "from unittest import TestCase\n")
+        det = testscope.detect(root)
+        t = tool(det, "unittest")
+        self.assertEqual(t["type_ids"], ["unit"])
+        self.assertIn("test", t["evidence"])
+        cmds = [r["command"] for r in testscope.command_rows(root) if r["tool"] == "unittest"]
+        self.assertIn("python3 -m unittest discover -s tests -p 'test_*.py'", cmds)
+        self.assertIn("python3 -m unittest discover -s pkg -p '*_test.py'", cmds)
+        self.assertEqual(gap(testscope.gaps(root), "python", "unit")["status"], "present")
+
+    def test_unittest_at_root_uses_bare_discover(self):
+        root = tempfile.mkdtemp(prefix="tsc_ut_")
+        self.addCleanup(shutil.rmtree, root, True)
+        write(root, "test_x.py", "import unittest\n")
+        cmds = [r["command"] for r in testscope.command_rows(root) if r["tool"] == "unittest"]
+        self.assertEqual(cmds, ["python3 -m unittest discover"])
+
+    def test_unittest_skipped_when_pytest_detected(self):
+        root = tempfile.mkdtemp(prefix="tsc_ut_")
+        self.addCleanup(shutil.rmtree, root, True)
+        write(root, "pytest.ini", "[pytest]\n")
+        write(root, "tests/test_x.py", "import unittest\n")
+        names = {t["tool"] for t in testscope.detect(root)["test_tools"]}
+        self.assertIn("pytest", names)
+        self.assertNotIn("unittest", names)
+
 
 if __name__ == "__main__":
     unittest.main()

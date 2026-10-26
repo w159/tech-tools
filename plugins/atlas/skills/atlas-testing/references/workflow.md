@@ -67,12 +67,12 @@ language file named in the plan before writing code.
 A green test proves nothing. Prove sensitivity:
 
 1. Run the test green. Record output.
-2. Seed a fault in the code under test: flip an operator, invert a condition, remove a
+2. Copy the file aside (`cp file file.bak`), then seed a fault in the code under test: flip an operator, invert a condition, remove a
    call, off-by-one a bound, swap `==` for `!=` on a boundary. Record the exact change.
 3. Run again: the test must fail, and the failure message must name the behavior under
    test (not an import error, missing fixture, or compile error; that would be red for
    the wrong reason).
-4. Revert the fault. Run again: green.
+4. Revert the fault: `git checkout -- <file>` (tracked) or `mv file.bak file` (untracked), then assert `git diff --stat <file>` prints nothing (or `cmp file file.bak` for untracked) before reporting. Run again: green.
 5. Record failing-before / passing-after in the evidence: fault, red output line, revert,
    green output line.
 
@@ -83,7 +83,7 @@ fix. If pre-fix code is gone, a seeded fault on the fixed code is the sensitivit
 
 ## Running
 
-Get exact commands from `testscope commands`. Order:
+Get exact commands from `testscope commands`. It lists only tools it has evidence for; on `[]` with test files present, report "no detected runner" and use the stdlib runner only if the language reference names one (Python: `lang-python.md`). Order:
 
 1. **PR subset** (per change): static-lint, type-check, secrets, unit, plus targeted
    integration/component/api tests for touched surfaces. Fast enough for every push.

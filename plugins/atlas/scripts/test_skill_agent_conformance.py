@@ -154,6 +154,66 @@ def _dangling_skill_references(plugin_root: pathlib.Path):
     return dangling
 
 
+# Skills a user may install separately. Every mention must survive their
+# absence (the text states a fallback or says "when installed").
+OPTIONAL_EXTERNAL_SKILLS = (
+    "graphify",
+    "codeql",
+    "security-review",
+    "quality-playbook",
+    "webapp-testing",
+    "smart-explore",
+    "tdd",
+    "to-tickets",
+    "codebase-design",
+    "domain-modeling",
+    "understand-anything",
+    "pytest-coverage",
+)
+
+# A skill name must contain a hyphen (keeps prose like "the single skill" out)
+# unless it is one of the known hyphen-less externals.
+_SKILL_NAME = r"(?:atlas:)?(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)+|graphify|codeql|tdd)"
+_SKILL_MENTION_RES = (
+    re.compile(rf"`/?({_SKILL_NAME})`\s+skill\b"),  # `name` skill
+    re.compile(rf"\bSkill\(\s*[\"']?({_SKILL_NAME})[\"']?"),  # Skill("name")
+    # No bare `/name` form: it also matches built-in commands (/reload-plugins).
+)
+
+
+def _unknown_skill_mentions(text: str, known: set):
+    """Return (line_no, name) for skill names in text that are not in known."""
+    found = []
+    for line_no, line in enumerate(text.splitlines(), 1):
+        for rx in _SKILL_MENTION_RES:
+            for m in rx.finditer(line):
+                name = m.group(1).removeprefix("atlas:")
+                if name not in known:
+                    found.append((line_no, name))
+    return found
+
+
+def _unknown_skill_references(plugin_root: pathlib.Path):
+    """(file_rel, name, line_no) for skill names that neither ship nor are optional."""
+    known = {p.parent.name for p in (plugin_root / "skills").glob("*/SKILL.md")}
+    known.update(OPTIONAL_EXTERNAL_SKILLS)
+    files = [
+        *(plugin_root / "skills").glob("*/SKILL.md"),
+        *(plugin_root / "skills").glob("*/references/*.md"),
+        *(plugin_root / "agents").glob("*.md"),
+        *(plugin_root / "references").glob("*.md"),
+        *(plugin_root / "output-styles").glob("*.md"),
+    ]
+    out = []
+    for f in sorted(files):
+        rel = str(f.relative_to(plugin_root))
+        for line_no, name in _unknown_skill_mentions(
+            f.read_text(encoding="utf-8"), known
+        ):
+            out.append((rel, name, line_no))
+    return out
+
+
 def _wrong_prefix_references(plugin_root: pathlib.Path):
     """Prefixed references/ load directives whose prefix base does not hold the file.
 
@@ -268,6 +328,17 @@ class TestSkillAgentConformance(unittest.TestCase):
             "lives in neither the referencing skill's own references/scripts/ dir "
             "nor the plugin-level references/scripts/ dir): "
             + ", ".join(f"{s} -> {r}" for s, r in dangling),
+        )
+
+    def test_referenced_skills_exist_or_are_optional_externals(self):
+        """Every skill name a skill/agent/reference mentions must ship or be allowlisted."""
+        unknown = _unknown_skill_references(PLUGIN_ROOT)
+        self.assertEqual(
+            [],
+            unknown,
+            "skill names that neither ship in plugins/atlas/skills nor sit in "
+            "OPTIONAL_EXTERNAL_SKILLS: "
+            + ", ".join(f"{f}:{n} -> {name}" for f, name, n in unknown),
         )
 
     def test_skill_reference_prefix_resolves(self):
@@ -428,6 +499,7 @@ _KNOWN_CLAUDE_TOOLS = {
     "Read",
     "Skill",
     "Task",  # legacy alias still matched by hooks
+    "Workflow",
     "TaskCreate",
     "TaskGet",
     "TaskList",
@@ -845,6 +917,15 @@ class TestChecklistDetectors(unittest.TestCase):
             _WHEN_RE.search("Extract PDF text. Use when working with PDF files.")
         )
         self.assertFalse(_WHEN_RE.search("Helps with documents"))
+
+    def test_unknown_skill_detector(self):
+        known = {"atlas-plan", "tdd"}
+        text = (
+            "Run the `atlas-gone` skill.\n"
+            "Use the single skill that fits.\n"
+            "Load the `tdd` skill and `atlas:atlas-plan` skill.\n"
+        )
+        self.assertEqual([(1, "atlas-gone")], _unknown_skill_mentions(text, known))
 
     def test_person_detector_flags_first_and_second_person(self):
         for bad in (

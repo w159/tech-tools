@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-10-26 (unreleased, no version bump)
+
+Audit and testing proof run: the `atlas-audit` and `atlas-testing` skills were exercised on this tree and fixed where they failed. Nothing is committed yet, so there are no commit SHAs. Evidence and defect table: `docs/audits/2026-10-26-atlas-audit-testing-proof.md`.
+
+### Added
+
+- Skill reference check: `OPTIONAL_EXTERNAL_SKILLS` allowlist (12 names), `_unknown_skill_references` and `test_referenced_skills_exist_or_are_optional_externals` in `plugins/atlas/scripts/test_skill_agent_conformance.py:159,333`, plus detector test `:921`; `Workflow` added to `_KNOWN_CLAUDE_TOOLS` (`:502`).
+- `unittest` detection in `plugins/atlas/skills/atlas-testing/scripts/testscope.py` (`detect_unittest`, `TOOL_AREAS` entry `:604`, `command_rows` branch `:1050`): one `python3 -m unittest discover [-s <dir> -p '<pat>']` per test dir, skipped when pytest is detected. Tests: `test_testscope.py:388,402` and `:375` (17 -> 21 tests).
+- Live `atlas-testing` write and mutate run: `.atlas/evidence/2026-10-26-atlas-testing-live/` (`report.md`).
+
+### Changed
+
+- `plugins/atlas/skills/atlas-audit/SKILL.md` and `references/{output-format,act-on-finding,launch-checklist,synthesis-framework}.md`: graphify is conditional with a git-churn/fan-in fallback; security-review, codeql and quality-playbook have "when installed ... else" fallbacks; literal `atlas_finding.py` verified/rejected commands; hub glob is `docs/audits/*atlas-audit*/hub/manifest.json`, newest by mtime; `allowed-tools` gains AskUserQuestion and Workflow; operating-contract fence added.
+- `plugins/atlas/skills/atlas-testing/SKILL.md`, `references/workflow.md`, `types-mutation.md`, `lang-python.md`: unittest stdlib fallback when detection returns `[]`; minimal `[tool.mutmut]` table; uvx interpreter note; subprocess-invisible tests; safe seeded-fault revert; `--root` semantics and mutmut triage.
+- Dead skill name `atlas-work` reworded in `plugins/atlas/skills/atlas-plan/SKILL.md` (3 lines) and `references/handoff.md` (1 line).
+
+### Fixed
+
+- `plugins/atlas/scripts/test_atlas_control.py:67-76` and `test_typesafe_client.py:47`: `setUp` scrubs `ATLAS_*` env, so the three baseline failures (two `TestBehaviorKnobs` precedence tests, `test_retries_429_then_succeeds`) pass under Claude Code settings env (`ATLAS_TRIPWIRE_THRESHOLD=4`, `ATLAS_TYPESAFE_MODEL=tev1:4b`). Finding P6-env-scrub stamped verified.
+
+### Verified
+
+- Baseline before changes: hooks Ran 1589 OK (skipped=3); scripts Ran 2255, FAILED (failures=3, the env leak above); omp `bun test` 486 pass; dashboard_ui `bun test` 154 pass.
+- Final suites after the change (lead-run, same tree): hooks `Ran 1589 tests ... OK (skipped=3)`, exit 0; scripts `Ran 2257 tests`, exit 0, zero FAIL or ERROR lines; `test_skill_agent_conformance` Ran 40 OK; `test_testscope` Ran 21 OK.
+- Findings stamped verified: P1-audit-skill, P2-skill-refs-test, P3-testscope-unittest, P4-testing-live, P5-testing-docs, P6-env-scrub.
+
 ## 2026-10-23 (unreleased, no version bump)
 
 - Dashboard battery cost: `ATLAS_DASHBOARD` now defaults to `off` (knob in `scripts/atlas_control.py`, hook default in `hooks/session_boot_core.py`), and the UI loops in `terminal.js`, `activity.js`, `api.js` (polling plus the SSE stream) and `agents-store.js` (projects timer) skip work while the tab is hidden and resume on `visibilitychange`. Tests: `scripts/test_dashboard_battery.py`.

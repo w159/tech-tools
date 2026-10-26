@@ -44,6 +44,7 @@ class ClientTests(unittest.TestCase):
         self.addCleanup(p.stop)
         os.environ.pop("ATLAS_TYPESAFE_SCORING", None)
         os.environ.pop("ATLAS_TYPESAFE_URL", None)
+        os.environ.pop("ATLAS_TYPESAFE_MODEL", None)
         sl = mock.patch.object(typesafe_client.time, "sleep")
         self.sleep = sl.start()
         self.addCleanup(sl.stop)

@@ -3,9 +3,16 @@ name: atlas-audit
 description: "Audits a codebase: CODE (quality, security, hotspots, dead code, docs drift), ARCHITECTURE (flowcharts, duplication), SELF (atlas run health), or ACT (open a remediation session for one audit finding by id; no id lists them). Use when auditing a repo, mapping architecture or fixing an audit finding."
 when_to_use: "full-codebase quality or security audit, OWASP review, architecture map, find duplication, dead code, coverage gaps, atlas run health, session transcript forensics, fix finding, remediate audit finding, pick a finding, act on audit results, list findings"
 argument-hint: '[act [finding-id]]'
-allowed-tools: Read, Glob, Grep, Bash, Agent, Task
+allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion, Workflow
 ---
 
+Apply the Operating Contract to this entire task. It is injected below.
+
+```!
+cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
+```
+
+If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` (plugin root `references/`, not this skill's `references/`) and apply it before proceeding.
 
 # atlas-audit
 
@@ -26,7 +33,7 @@ Discovery-first, comprehensive audit swarm. You supply no arguments. The survey 
 
 ## Zero-arg discovery
 
-The user invokes this skill with no arguments. Phase 1 first discovers the codebase roots (a single-package repo yields one root; a monorepo yields one per package - MCP server, node lib, plugin), then runs the `graphify` skill **scoped per root** to build the codebase knowledge graph: community structure, god nodes (high in-degree, high coupling), and high-centrality hot spots (bridges between modules). Scoping per root keeps each graphify run under its size gate so the build never stalls on a whole-monorepo scope. In parallel, the orchestrator reads docs/ as the SSOT for intended behavior - these docs become the baseline against which code-vs-docs drift is measured.
+The user invokes this skill with no arguments. Phase 1 first discovers the codebase roots (a single-package repo yields one root; a monorepo yields one per package - MCP server, node lib, plugin), then, if the `graphify` skill is available in this session (it appears in the skills list), runs it **scoped per root** to build the codebase knowledge graph: community structure, god nodes (high in-degree, high coupling), and high-centrality hot spots (bridges between modules). Scoping per root keeps each graphify run under its size gate. When `graphify` is not available, the audit does not stall: it builds the hot-spot list without a graph (see Phase 1). In parallel, the orchestrator reads docs/ as the SSOT for intended behavior - these docs become the baseline against which code-vs-docs drift is measured.
 
 The graph output determines WHERE each dimension reviewer focuses. Reviewers are not pointed at the whole codebase; they are aimed at the nodes and communities the graph flagged as highest risk. This is what makes the survey comprehensive without being shallow.
 
@@ -39,8 +46,8 @@ One reviewer per dimension, dispatched with pipeline() so each dimension verifie
 The seven dimensions:
 
 1. **Correctness / bugs** - logic errors, off-by-one, null/undefined propagation, data races, incorrect assumptions in hot-path code.
-2. **OWASP + security** - injection, broken auth, sensitive data exposure, insecure deserialization, known-vulnerable dependencies, secrets in code. Composes the `security-review` skill and the `codeql` skill/reference for static analysis coverage.
-3. **SOLID / DRY / KISS + best practices** - single-responsibility violations, open/closed violations, leaky abstractions, unnecessary complexity, local code-smell duplication (repeated logic within one module or closely coupled files). Composes the `quality-playbook` skill for structured quality analysis.
+2. **OWASP + security** - injection, broken auth, sensitive data exposure, insecure deserialization, known-vulnerable dependencies, secrets in code. When the `security-review` or `codeql` skill is installed, compose it; when not, the reviewer works from OWASP Top 10 (2021) categories A01-A10 plus any SAST tool the repo already has (ruff, bandit, semgrep, eslint security plugins), run through the atlas-testing testscope `commands` output when that skill is present.
+3. **SOLID / DRY / KISS + best practices** - single-responsibility violations, open/closed violations, leaky abstractions, unnecessary complexity, local code-smell duplication (repeated logic within one module or closely coupled files). When the `quality-playbook` skill is installed, compose it; when not, the reviewer works from the SOLID/DRY/KISS list above.
 4. **Risk hotspots** - files/modules with the highest churn rate, highest coupling, or fewest tests relative to their complexity. The graph's god nodes and bridge nodes are the starting point.
 5. **Dead code** - unreachable branches, unused exports, orphaned modules, commented-out blocks that shipped.
 6. **Test-coverage gaps** - behaviors with no test, critical paths exercised only by integration tests, edge cases not covered, remediation or idempotent scripts missing a post-change verification step.
@@ -86,12 +93,18 @@ The synthesis step (Phase 4), the seven dimensions, severity assignment, and the
 ### Phase 1 - Graph and docs baseline (sequential, orchestrator-gated)
 
 The orchestrator first discovers the codebase roots dynamically - a discovery pass (an
-`atlas:explorer` over the tree plus graphify's own `detect()` for a minimal-context read of where
+`atlas:explorer` over the tree, plus graphify's `detect()` when graphify is available, for a minimal-context read of where
 the real packages are), not a static or config-supplied list. A single-package repo resolves to
-one root; this monorepo resolves to one root per MCP server / node lib / plugin. The orchestrator
-then runs the `graphify` skill **scoped per discovered root** (with `GRAPHIFY_NONINTERACTIVE=1` set
-so a root that still trips the size gate auto-scopes instead of blocking), writing a `graphify-out/`
-under each root. It merges each root's hot-spot nodes into a single top-N list and reads docs/ for
+one root; this monorepo resolves to one root per MCP server / node lib / plugin. If the `graphify`
+skill is available in this session, the orchestrator runs it **scoped per discovered root** (with
+`GRAPHIFY_NONINTERACTIVE=1` set so a root that still trips the size gate auto-scopes instead of
+blocking), writing a `graphify-out/` under each root. If it is not available, the orchestrator
+builds the hot-spot list without it from git churn
+(`git log --since=180.days --format= --name-only | sort | uniq -c | sort -rn | head -40`), file
+size, and fan-in (serena `find_referencing_symbols` or lean-ctx `ctx_callgraph` on the top churn
+files; fallow `get_hot_paths` for JS/TS when the fallow MCP is present), records the top-N as
+file:line in graph-summary.md, and runs `build_hub.py` with no graph.json (node_id null,
+file-granular hub). The audit never stalls on a missing graphify. It merges each root's hot-spot nodes into a single top-N list and reads docs/ for
 the intended-behavior baseline. This phase completes before any dimension fans out. The orchestrator
 records the merged top-N hot spot nodes (file:line) and the docs baseline to disk before dispatching
 Phase 2.
@@ -100,7 +113,7 @@ Phase 2.
 
 Seven dimension reviewers dispatched via pipeline(). Each reviewer receives the hot-spot list and the docs baseline. Reviewers start at the hottest nodes and widen from there. Each reviewer returns structured findings: { dimension, findings: [ { file, line, severity, description } ] }.
 
-The correctness reviewer works independently. The security reviewer composes `security-review` and `codeql`. The quality reviewer composes `quality-playbook`. Structural-duplication findings encountered by any reviewer are noted as out-of-scope and excluded from the return.
+The correctness reviewer works independently. The security reviewer composes `security-review` and `codeql` when installed, else works from the OWASP fallback in dimension 2. The quality reviewer composes `quality-playbook` when installed, else works from the SOLID/DRY/KISS list. Structural-duplication findings encountered by any reviewer are noted as out-of-scope and excluded from the return.
 
 ### Phase 3 - Adversarial verify (pipeline, per finding)
 
@@ -113,7 +126,7 @@ The orchestrator collects all verified findings, assigns final severity ordering
 ## Additional references
 
 - [Lens set](references/lens-set.md): the three self-mode lenses (run health, asset/context audit, session forensics). Read when running `self` mode.
-- [Graph-to-hub pipeline](references/graph-to-hub-pipeline.md): how Phase 4 turns graphify output into the knowledge-graph hub. Read when building the hub or debugging one that came out wrong.
+- [Graph-to-hub pipeline](references/graph-to-hub-pipeline.md): how Phase 4 turns graphify output into the knowledge-graph hub. The hub builds with or without graphify output (`build_hub.py` accepts no graph.json; node_id is then null). Read when building the hub or debugging one that came out wrong.
 - [Findings ledger schema](${CLAUDE_PLUGIN_ROOT}/references/findings-schema.md): the `.atlas/.run/findings.json` entry schema, verified stamp, and append-only intent, derived from `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py`. Read when a gate or reviewer asks about ledger contents.
 
 ## Mode references

@@ -1,0 +1,15 @@
+...F..............
+======================================================================
+FAIL: test_commands_md_wraps_command_in_backticks_with_header (test_testscope.TestscopeTest.test_commands_md_wraps_command_in_backticks_with_header)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/skills/atlas-testing/scripts/test_testscope.py", line 385, in test_commands_md_wraps_command_in_backticks_with_header
+    self.assertIn("| pytest | unit | `python -m pytest` |", proc.stdout)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '| pytest | unit | `python -m pytest` |' not found in '# commands\n\n| Tool | Type | Command | Note |\n|---|---|---|---|\n| pytest | unit | python -m pytest |  |\n| ruff | static-lint | ruff check . |  |\n'
+
+----------------------------------------------------------------------
+Ran 18 tests in 0.488s
+
+FAILED (failures=1)
+exit 1

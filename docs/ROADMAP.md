@@ -213,7 +213,7 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 
 Closed in 12.4.6 in source (see `docs/CHANGELOG.md`): `atlas-testing` skill (taxonomy of 44 testing types, per-language and per-area references, gap selection with regulated-data floors, `testscope.py` detect/gaps/commands with 17 tests), `atlas:test-engineer` agent, and the scope-matrix `test` class. Unreleased: commit, push and plugin reinstall pending.
 
-- [planned] Live-run `atlas-testing` `write` and `mutate` modes on one real repo (gwh-firstrespondersapp backend) to prove the seeded-fault and mutation evidence flow end to end; reference-file tool commands were researched, not executed.
+- [done] Live-run `atlas-testing` `write` and `mutate` modes (2026-10-26): ran on this repo's `testscope.py` instead of gwh-firstrespondersapp; evidence `.atlas/evidence/2026-10-26-atlas-testing-live/`, summary in `docs/audits/2026-10-26-atlas-audit-testing-proof.md`.
 
 ### Follow-ups: atlas 12.4.0 (added 2026-10-14)
 
@@ -524,3 +524,12 @@ dated/durable subfolders). The validator also exits on the first failing check, 
 the structural (pairing) and runtime (`git check-ignore`) checks pass is unverified until
 this Unicode sweep lands. Needs an ASCII sweep of `.gitignore` comment prose (em dash ->
 hyphen/comma/rewrite) followed by a clean validator run.
+
+### Audit and testing proof follow-ups (2026-10-26)
+
+- [planned] Decide whether to vendor graphify into `plugins/atlas/skills` or keep it optional (today optional with a git-churn/fan-in fallback; only an unregistered vendor copy exists at `skills/graphify/`).
+- [planned] `testscope detect --root .` hides unittest suites when a pytest config is present at the root; plugins/atlas suites show only with `--root plugins/atlas/<dir>`.
+- [planned] Raise the `testscope.py` mutation score above 31.0%; survivors concentrate in `command_rows`, `detect_misc_files`, `_collect`, `baseline_rows`, `detect_terraform`, `detect_workflows`.
+- [planned] Decide whether the 10 skills without the operating-contract fence should carry it: atlas-audit (now fenced), atlas-loop, atlas-orchestrate, atlas-prompt, atlas-run-watch, atlas-setup, atlas-status, atlas-tui, atlas-ux-test, atlas-wiki.
+- [planned] Run the full atlas-audit swarm once on a small repo to prove Phases 2-4 live; only Phase 1 fallbacks, `build_hub.py` and the act-mode listing were proven on 2026-10-26.
+- [done] Finding P6-env-scrub (ATLAS_* env scrub in two test files): stamped verified 2026-10-26 after the scripts suite ran 2257 tests with exit 0.

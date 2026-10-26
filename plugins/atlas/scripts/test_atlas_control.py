@@ -64,6 +64,15 @@ class ControlTestCase(unittest.TestCase):
 
 
 class TestBehaviorKnobs(ControlTestCase):
+    def setUp(self):
+        # The Claude Code session env carries ATLAS_* knobs that outrank the store in precedence.
+        p = mock.patch.dict(os.environ)
+        p.start()
+        self.addCleanup(p.stop)
+        for k in [k for k in os.environ if k.startswith("ATLAS_")]:
+            del os.environ[k]
+        super().setUp()
+
     def test_discovery_finds_a_known_var_with_evidence(self):
         found = self.mod.discovered_env_keys()
         self.assertIn("ATLAS_GATE", found)
