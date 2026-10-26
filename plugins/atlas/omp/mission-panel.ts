@@ -14,6 +14,8 @@ import { type PanelTodo, todoLines } from "./todo-panel";
 
 export { visibleWidth };
 
+/** Brand mark: one cell, same as the Claude band. */
+const MARK = "◆";
 const PHASES: Array<[string, Rgb]> = [["research", BLUE], ["theory", VIOLET], ["test", YEL], ["implement", PEACH], ["verify", GREEN], ["done", TEAL]];
 const NICKS = [PINK, PEACH, YEL, GREEN, TEAL, SKY, BLUE, VIOLET];
 const SPARK = "▁▂▃▄▅▆▇█";
@@ -144,8 +146,8 @@ function rail(phase: string, w: number, m: RailLook): string {
 function spark(counts: number[] | undefined, width: number, col: Rgb): string {
 	const vals = (counts ?? []).slice(-width);
 	const padded = [...Array(Math.max(0, width - vals.length)).fill(0), ...vals] as number[];
-	const max = Math.max(1, ...padded);
-	return padded.map(v => (v ? seg(SPARK[Math.max(1, Math.round((v / max) * 7))]!, col) : seg(SPARK[0]!, DIM))).join("");
+	// Absolute steps like the Claude band (mod/paint.ts sparkline): 0 is a dim floor, 1..4+ climb two steps each.
+	return padded.map(v => (v ? seg(SPARK[Math.min(7, v * 2 - 1)]!, col) : seg(SPARK[0]!, DIM))).join("");
 }
 
 interface LaneCols {
@@ -155,18 +157,26 @@ interface LaneCols {
 	bar: number;
 	spark: number;
 }
-const FIXED = 30; // lead 1 + state chip 7 + glyph 3 + tool chip 12 + age 7
+const FIXED = 30; // lead 1 + state chip 7 + glyph 3 + tool chip 12 + target tail 1 + age 6
+const FULL = 120; // the full tier: the geometry of the Claude band (mod/band.tsx lane), so the twins print the same row
 
 /** Column widths for `w`: optional columns join by priority as room allows. */
 function laneCols(w: number): LaneCols {
+	if (w >= FULL) {
+		const c: LaneCols = { name: 25, role: 12, target: 24, bar: 0, spark: 12 };
+		const rest = w - FIXED - c.name - c.role - c.target - 16 - 2; // 16: spark 12 + two 2-cell gaps; 2: target lead + margin
+		c.bar = Math.min(28, rest);
+		c.target += Math.max(0, rest - 28);
+		return c;
+	}
 	const c: LaneCols = { name: 12, role: 0, target: 12, bar: 0, spark: 0 };
 	let rest = w - FIXED - c.name - c.target - 1;
 	const grow = (k: keyof LaneCols, by: number, need = by) => {
 		if (rest >= need) (c[k] += by), (rest -= need);
 	};
-	grow("bar", 10, 12);
+	grow("bar", 10);
 	grow("name", 6);
-	grow("spark", 12, 14);
+	grow("spark", 12, 16);
 	grow("role", 12);
 	grow("target", 12);
 	grow("bar", 18);
@@ -194,16 +204,16 @@ const roleCell = (wk: PanelWorker, c: LaneCols) => (c.role ? seg(`${abbrev(wk.ro
 
 /** Elapsed bar (fills over BAR_FULL_S) and the tool-call sparkline, each only when its column fits. */
 function meterCells(wk: PanelWorker, c: LaneCols, col: Rgb): string {
-	const meter = c.bar ? seg(" ") + bar(wk.secs >= BAR_FULL_S ? 0 : wk.secs / BAR_FULL_S, c.bar, lerp(col, PANEL, 0.1), lerp(col, WHITE, 0.35)) + seg(" ") : "";
-	return meter + (c.spark ? seg(" ") + spark(wk.spark, c.spark, col) + seg(" ") : "");
+	const meter = c.bar ? bar(wk.secs >= BAR_FULL_S ? 0 : wk.secs / BAR_FULL_S, c.bar, lerp(col, PANEL, 0.1), lerp(col, WHITE, 0.35)) : "";
+	return meter + (c.spark ? seg("  ") + spark(wk.spark, c.spark, col) + seg("  ") : "");
 }
 
 function laneRow(wk: PanelWorker, m: PanelModel, c: LaneCols): string {
 	const k = laneLook(wk.tool);
 	const head =
 		seg(" ") + chip(cut(k.label, 5), k.col) + seg(charFrame(wk.role ?? roleOf(wk.name), wk.tool?.active ? "running" : "thinking", m.tick), k.col) + seg(` ${abbrev(wk.name, c.name - 2, 2)} `, TXT, PANEL, true);
-	const tool = seg(` ${cut(k.tool, 10)} `, k.toolInk, PANEL2, true) + seg(` ${cut(k.target, c.target)}`, k.ink);
-	return head + roleCell(wk, c) + tool + meterCells(wk, c, k.col) + seg(age(wk.secs).padStart(7), MUT);
+	const tool = seg(` ${cut(k.tool, 10)} `, k.toolInk, PANEL2, true) + seg(` ${cut(k.target, c.target)} `, k.ink);
+	return head + roleCell(wk, c) + tool + meterCells(wk, c, k.col) + seg(age(wk.secs).padStart(6), MUT);
 }
 
 const nick = (name: string) => seg(name, NICKS[[...name].reduce((n, ch) => n + ch.codePointAt(0)!, 0) % NICKS.length], PANEL, true);
@@ -261,9 +271,17 @@ function gatesBrief(g: GateGroup[] | null): string {
 	return open ? `✖ ${open} gates` : "✔ gates";
 }
 
+/** Spawn clusters (twin: mod/band.tsx waves): workers whose start times sit within 10 s share a wave. ponytail: same gap heuristic as the band. */
+const WAVE_GAP_S = 10;
+function waveCount(ws: PanelWorker[]): number {
+	const starts = ws.map(wk => -wk.secs).sort((a, b) => a - b);
+	return starts.reduce((n, t, i) => (i === 0 || t - starts[i - 1]! > WAVE_GAP_S ? n + 1 : n), 0);
+}
+
 function titleRow(m: PanelModel, w: number): string {
-	const scope = m.channel ? `   ${m.channel.replace(/\/[^/]*$/, "")}` : "";
-	const left = `◢◤ ATLAS  ·  mission control${scope}${m.team ? `  ·  ${m.team}` : ""}`;
+	const scope = m.channel ? `  ·  ${m.channel.replace(/\/[^/]*$/, "")}` : "";
+	const wave = m.workers.length ? `  ·  wave ${waveCount(m.workers)}` : "";
+	const left = `${MARK} ATLAS  ·  mission control${scope}${wave}${m.team ? `  ·  ${m.team}` : ""}`;
 	const right = `◷ ${clock(m.elapsedSecs ?? 0)}   ${m.workers.length} live   ${gatesBrief(m.gates)} `;
 	return gradBar(left, right, w, VIOLET, SKY);
 }
@@ -288,7 +306,7 @@ function middleRows(m: PanelModel, w: number, room: number): string[] {
 /** Claude band idle wording (mod/band.tsx lastWave): `last wave: N workers · 1m10s · ✔ ok`. */
 function idleRows(idle: IdleWave, w: number): string[] {
 	const wave = [`last wave: ${idle.workers} workers`, ...(idle.secs === undefined ? [] : [age(idle.secs)]), idle.failed ? `✖ ${idle.failed} failed` : "✔ ok"];
-	const title = `◆ ATLAS  ·  idle  ·  ${wave.join(" · ")}`;
+	const title = `${MARK} ATLAS  ·  idle  ·  ${wave.join(" · ")}`;
 	return [gradBar(title, "", w, hx("#585b70"), hx("#313244")), rail("done", w, { tick: 0, spin: "◆", idle: true })];
 }
 const withBoard = (m: PanelModel, w: number, rows: string[]) => [...rows.slice(0, 2), ...boardRows(m, w, Math.max(0, m.maxLines - 2)), ...rows.slice(2)];

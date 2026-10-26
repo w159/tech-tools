@@ -63,9 +63,11 @@ const waveOf = (ws: readonly LiveWorker[]): number => waves(ws).length;
 
 /** `<folder>@<branch>` of the board channel; without a board, the project folder. */
 const boardOf = (s: LiveSnapshot): string => (s.channel ? s.channel.split('/')[0]! : (s.root ?? '').replace(/\/+$/, '').split('/').pop() || 'atlas');
+/** `✖ 2 gates` while any gate is open, `✔ gates` when every reported group is clean, nothing before gates report (twin: omp gatesBrief). */
+const gatesBrief = (c: Ctx): string => (!c.gates.some(hasGateData) ? '' : c.open ? `✖ ${c.open} gates` : '✔ gates');
 const statsOf = (c: Ctx, shown: LiveWorker[]): string => {
   const since = Math.min(...shown.map((w) => w.startedAt));
-  const parts = [`◷ ${clock(c.now - since)}`, `${activeCount(shown)} live`, c.s.contextPct > 0 ? `ctx ${c.s.contextPct}%` : ''];
+  const parts = [`◷ ${clock(c.now - since)}`, `${activeCount(shown)} live`, c.s.contextPct > 0 ? `ctx ${c.s.contextPct}%` : '', gatesBrief(c)];
   return `${parts.filter(Boolean).join('   ')} `;
 };
 
@@ -113,6 +115,12 @@ const STATE_CHIP: Record<LiveWorker['state'], [string, string]> = {
   working: ['RUN', M.green], blocked: ['WAIT', M.yellow], failed: ['FAIL', M.red], done: ['DONE', M.teal], parked: ['PARK', M.muted],
 };
 
+/** A working lane reads RUN with a tool in flight, THINK between calls, START before its first tool (twin: omp laneLook). */
+function laneChip(w: LiveWorker): [string, string] {
+  if (w.state !== 'working' || w.tool) return STATE_CHIP[w.state];
+  return w.lastTool ? ['THINK', M.yellow] : ['START', M.sky];
+}
+
 const CHAR_STATE: Partial<Record<LiveWorker['state'], CharState>> = { failed: 'failed', done: 'done' };
 
 /** The lane's three-cell character (roles.ts): running with a tool in flight, thinking between calls. */
@@ -136,9 +144,9 @@ const targetCell = (w: LiveWorker, c: Ctx, width: number): Segment => (c.full ? 
 
 /** Lane head: state chip, role character, name, role, tool chip (dim between calls), target. */
 function laneHead(w: LiveWorker, c: Ctx, color: string, targetWidth = TARGET_W): Segment[] {
-  const [word, hue] = STATE_CHIP[w.state];
+  const [word, hue] = laneChip(w);
   const tool = seg(` ${padTo(laneTool(w), 10)} `, w.tool ? color : M.muted, M.panel2, true);
-  return [seg(' '), chip(word.padEnd(4), hue), seg(laneChar(w, c), color), seg(` ${padTo(w.name, c.full ? 23 : 17)} `, M.text, M.panel, true), ...roleCell(w, c), tool, targetCell(w, c, targetWidth)];
+  return [seg(' '), chip(word.padEnd(5), hue), seg(laneChar(w, c), color), seg(` ${padTo(w.name, c.full ? 23 : 17)} `, M.text, M.panel, true), ...roleCell(w, c), tool, targetCell(w, c, targetWidth)];
 }
 
 const runsWidth = (parts: Segment[]): number => textWidth(parts.map((p) => p.t).join(''));
@@ -146,7 +154,7 @@ const runsWidth = (parts: Segment[]): number => textWidth(parts.map((p) => p.t).
 /** One worker lane: head, elapsed bar sized to the room left (28 cells at most, the target takes the rest),
  * sparkline of its tool calls, age. */
 function lane(w: LiveWorker, c: Ctx): Segment[] {
-  const color = STATE_CHIP[w.state][1];
+  const color = laneChip(w)[1];
   const elapsed = c.now - w.startedAt;
   const tail = [seg('  '), ...sparkline(callBuckets(w.calls, c.now), color), seg(`  ${formatDuration(elapsed).padStart(6)}`, M.muted)];
   let head = laneHead(w, c, color);
