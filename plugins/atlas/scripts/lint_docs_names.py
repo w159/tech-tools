@@ -269,11 +269,14 @@ def violations(paths) -> list:
                     )
                 )
             else:
+                # No dated keyword: a living subsystem doc. Filed undated.
+                found = _name_date(stem)
+                note = " (name date %s not kept)" % found[0] if found else ""
                 out.append(
                     (
                         rel,
-                        "loose file in docs/ root: move into a docs/ "
-                        "subfolder by hand (no keyword says which)",
+                        "loose file in docs/ root: move into docs/architecture/ "
+                        "under its bare name%s" % note,
                     )
                 )
             continue
@@ -469,16 +472,24 @@ def plan_renames(root: Path, viols) -> list:
     The slug keeps everything the old name carried except the date it already
     had, so `atlas-harden-2026-07-07` becomes `2026-07-07_atlas-harden` rather
     than losing its subject. A loose docs/ root file moves into its dated
-    folder; an unclassifiable one is skipped (reported, never auto-moved).
+    folder; an unclassifiable one goes to docs/architecture/ undated.
     """
     plans = []
     taken = set()
     for old_rel, _reason in viols:
         parent, name = old_rel.rsplit("/", 1)
+        if _is_root_file(old_rel) and _root_target_dir(old_rel) is None:
+            # Living doc: bare lowercase-kebab name, no date. A collision is
+            # skipped (reported by the caller), never overwritten.
+            slug = re.sub(r"-{2,}", "-", _slugify(name).replace("_", "-")).strip("-")
+            candidate = "docs/architecture/" + slug
+            if candidate in taken or (Path(root) / candidate).exists():
+                continue
+            taken.add(candidate)
+            plans.append((old_rel, candidate))
+            continue
         if _is_root_file(old_rel):
             parent = _root_target_dir(old_rel)
-            if parent is None:
-                continue
         suffix = ".md" if name.endswith(".md") else ""
         stem = name[: -len(suffix)] if suffix else name
         date = derive_date(root, old_rel)

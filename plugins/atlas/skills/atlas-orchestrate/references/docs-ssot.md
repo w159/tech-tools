@@ -212,7 +212,8 @@ Hard boundaries:
   `lint_docs_names.py` routes a loose record by keyword (plan, spec, audit/review/inventory,
   decision/adr, lesson/retro/postmortem, meeting/notes/transcript, handoff) into the matching
   dated folder, using a date embedded in the name (`9.3.26`, `20260903`) when there is one;
-  anything it cannot classify is moved into a subfolder by hand.
+  anything with no such keyword is a living subsystem doc and moves to `docs/architecture/`
+  under its lowercase-kebab bare name, undated (a name collision there is reported and skipped).
   `scripts/lint_docs_names.py` enforces this, and fixes it. It is the same tool in
   three modes, and it needs no per-project configuration, so it applies to any repo
   atlas is used in:
@@ -241,7 +242,7 @@ Hard boundaries:
   creator cannot diverge; a contract test pins that.
 
   `README.md` in each scaffolded subfolder states the same shape.
-- Root files: all-caps (`README.md`, `CHANGELOG.md`, `ROADMAP.md`, `AGENTS.md`, `CLAUDE.md`, plus `GLOSSARY`, `CONTRIBUTING`, `SECURITY`, `DEVELOPMENT`, `INDEX`). Nothing else lives loose in `docs/`: a dated record goes in its subfolder with the underscore date prefix (`lint_docs_names.py` classifies by keyword: plan, spec, audit/review/inventory, decision/adr, lesson/retro/postmortem, meeting/notes/transcript, handoff); anything unclassifiable is moved into a subfolder by hand.
+- Root files: all-caps (`README.md`, `CHANGELOG.md`, `ROADMAP.md`, `AGENTS.md`, `CLAUDE.md`, plus `GLOSSARY`, `CONTRIBUTING`, `SECURITY`, `DEVELOPMENT`, `INDEX`). Nothing else lives loose in `docs/`: a dated record goes in its subfolder with the underscore date prefix (`lint_docs_names.py` classifies by keyword: plan, spec, audit/review/inventory, decision/adr, lesson/retro/postmortem, meeting/notes/transcript, handoff); anything with no such keyword is a living subsystem doc and moves to `docs/architecture/` under its lowercase-kebab bare name, undated (a name collision there is reported and skipped).
 
 **Every `<slug>`, `<id>`, `<scope>`, and `*-slug` above must be filesystem-safe before it goes into a path.** A path that a model composes from a raw feature, task, or finding name can carry a character Windows forbids, and a single bad name makes the whole repo un-checkout-able on Windows (`git error: invalid path` aborts the entire checkout, not just that file). A colon is the usual offender: `docs/plans/frontend:public-site.md` blocks every Windows clone. Derive the slug this way: lowercase; replace every character outside `a-z 0-9 . _ -` (this removes the Windows-reserved set `< > : " / \ | ? *` plus spaces and control characters) with a single `-`; collapse repeated `-` and trim leading/trailing `-` and `.`; if the result is empty or a Windows reserved device name (`con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`), prefix it with the artifact kind (`plan-`, `feature-`, `run-`). The human-readable name still goes in the file's heading, so nothing is lost.
 

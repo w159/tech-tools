@@ -351,13 +351,34 @@ class UnderscoreFixer(unittest.TestCase):
             self.assertEqual(lint_docs_names._root_target_dir(rel), folder, rel)
         self.assertIsNone(lint_docs_names._root_target_dir("docs/quadrant.md"))
 
-    def test_unclassified_root_file_is_reported_not_moved(self):
-        self._write("docs/TODO_LIST.md", "x")
-        ((_, reason),) = lint_docs_names.violations(["docs/TODO_LIST.md"])
-        self.assertIn("by hand", reason)
-        plans, moved = self._fix(["docs/TODO_LIST.md"])
+    def test_unclassified_root_file_goes_to_architecture_bare_name(self):
+        self._write("docs/Atlas_Channels.md", "x")
+        self._write("docs/wiki/a.md", "[c](../Atlas_Channels.md) docs/Atlas_Channels.md\n")
+        ((_, reason),) = lint_docs_names.violations(["docs/Atlas_Channels.md"])
+        self.assertIn("docs/architecture/", reason)
+        _, moved = self._fix(["docs/Atlas_Channels.md"])
+        self.assertEqual(moved[0][1], "docs/architecture/atlas-channels.md")
+        self.assertFalse((self.root / "docs/Atlas_Channels.md").exists())
+        text = (self.root / "docs/wiki/a.md").read_text(encoding="utf-8")
+        self.assertIn("docs/architecture/atlas-channels.md", text)
+        self.assertNotIn("Atlas_Channels", text)
+
+    def test_embedded_date_without_keyword_is_logged_not_kept(self):
+        ((_, reason),) = lint_docs_names.violations(["docs/design-9.3.26.md"])
+        self.assertIn("2026-09-03", reason)
+        plans, _ = self._fix(["docs/design-9.3.26.md"])
+        self.assertEqual(plans[0][1].rsplit("/", 1)[0], "docs/architecture")
+
+    def test_architecture_name_collision_is_skipped_not_overwritten(self):
+        self._write("docs/Atlas_Mod.md", "new")
+        self._write("docs/architecture/atlas-mod.md", "keep")
+        plans, moved = self._fix(["docs/Atlas_Mod.md"])
         self.assertEqual((plans, moved), ([], []))
-        self.assertTrue((self.root / "docs/TODO_LIST.md").is_file())
+        self.assertTrue((self.root / "docs/Atlas_Mod.md").is_file())
+        self.assertEqual(
+            (self.root / "docs/architecture/atlas-mod.md").read_text(encoding="utf-8"),
+            "keep",
+        )
 
     def test_canonical_root_files_are_exempt(self):
         names = [
