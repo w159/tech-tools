@@ -18,6 +18,7 @@ import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import io
 import json
 import os
+import pathlib
 import subprocess
 import sys
 import tempfile
@@ -388,6 +389,21 @@ class MainInProcessTest(unittest.TestCase):
         b = self._faults_and_rows(None, {}, sid="dedupe")
         c = self._faults_and_rows(None, {}, sid="other")
         self.assertEqual((a, b, c), ((0, 0), (0, 0), (0, 0)))
+
+    def test_missing_formatter_writes_no_friction_and_dedupes_state_per_day(self):
+        home = tempfile.mkdtemp()
+        with mock.patch.dict(os.environ, {"ATLAS_HOME": home}):
+            r1 = self._faults_and_rows(
+                "/x", dict(side_effect=FileNotFoundError("x")), sid="m1"
+            )
+            state = pathlib.Path(home) / "formatter_missing.json"
+            first = state.read_text()
+            r2 = self._faults_and_rows(
+                "/x", dict(side_effect=FileNotFoundError("x")), sid="m2"
+            )
+            self.assertEqual((r1, r2), ((0, 0), (0, 0)))
+            self.assertEqual(len(json.loads(first)), 1)
+            self.assertEqual(state.read_text(), first)
 
     def test_runtime_filenotfound_is_missing_no_fault(self):
         r = self._faults_and_rows(

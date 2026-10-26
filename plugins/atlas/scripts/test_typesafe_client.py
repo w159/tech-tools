@@ -79,6 +79,47 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(json.loads(calls[0].data)["model"], "nimble")
         self.assertTrue(calls[0].full_url.startswith("http://127.0.0.1:11434/"))
 
+    def _urls_for(self, url, model="nimble"):
+        urls = []
+
+        def fake(req, timeout=None, **kw):
+            urls.append(req.full_url)
+            return _Resp({"answers": {}})
+
+        env = {"ATLAS_TYPESAFE_URL": url, "ATLAS_TYPESAFE_MODEL": model}
+        with mock.patch.dict(os.environ, env):
+            with mock.patch.object(typesafe_client.urllib.request, "urlopen", fake):
+                typesafe_client.evaluate({"r": 1}, {})
+        return urls
+
+    def test_base_and_full_url_build_the_same_request_url(self):
+        want = "https://api.typesafe.ai/v1/systemone"
+        for pasted in (
+            "https://api.typesafe.ai",
+            "https://api.typesafe.ai/",
+            "https://api.typesafe.ai/v1/systemone",
+            "https://api.typesafe.ai/V1/SystemOne/",
+        ):
+            self.assertEqual(self._urls_for(pasted), [want], pasted)
+
+    def test_ollama_tag_against_hosted_url_raises_without_network(self):
+        with mock.patch.dict(
+            os.environ,
+            {"ATLAS_TYPESAFE_URL": "https://api.typesafe.ai", "ATLAS_TYPESAFE_MODEL": "tev1:4b"},
+        ), mock.patch.object(typesafe_client.urllib.request, "urlopen") as net:
+            with self.assertRaises(typesafe_client.TypeSafeError) as cm:
+                typesafe_client.evaluate({"a": 1}, [])
+        net.assert_not_called()
+        self.assertEqual(cm.exception.status, 400)
+        self.assertIn("tev1:4b", cm.exception.message)
+        self.assertIn("http://127.0.0.1:11434", cm.exception.message)
+
+    def test_ollama_tag_against_loopback_is_allowed(self):
+        self.assertEqual(
+            self._urls_for("http://127.0.0.1:11434/v1/systemone", "tev1:4b"),
+            ["http://127.0.0.1:11434/v1/systemone"],
+        )
+
     def test_retries_429_then_succeeds(self):
         calls = []
 

@@ -52,7 +52,11 @@ def decision_url() -> str | None:
     """Explicit ATLAS_DECISION_URL, else loopback, else None when disabled."""
     explicit = os.environ.get("ATLAS_DECISION_URL", "").strip()
     if explicit:
-        return explicit.rstrip("/")
+        base = explicit.rstrip("/")
+        # A pasted full endpoint works too: the path is appended once in local_decision().
+        if base.lower().endswith("/v1/systemone"):
+            base = base[: -len("/v1/systemone")].rstrip("/")
+        return base
     if os.environ.get("ATLAS_DECISION", "on").strip().lower() == "off":
         return None
     return DEFAULT_URL

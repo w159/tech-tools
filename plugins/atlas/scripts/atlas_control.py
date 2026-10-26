@@ -456,7 +456,7 @@ _k("ATLAS_DECISION_MODEL", _DM, "Classifier model", "Ollama model the prompt cla
 _k("ATLAS_DECISION_URL", _DM, "Classifier address", "Loopback endpoint for the prompt classifier. Blank uses Ollama on 127.0.0.1:11434.", "url", "", details="Read at hooks/prompt_decision.py:53.")
 
 # Turn scoring
-_k("ATLAS_TYPESAFE_URL", _TS, "Scoring endpoint", "Alternate scoring endpoint. A loopback URL scores locally with no API key.", "url", "https://api.typesafe.ai", details="Read at scripts/typesafe_client.py:58.")
+_k("ATLAS_TYPESAFE_URL", _TS, "Scoring endpoint", "Base URL of the scoring service; atlas appends /v1/systemone, and a pasted full URL also works. A loopback URL (http://127.0.0.1:11434) scores locally with Ollama and sends nothing off this machine. A hosted URL sends prompt excerpts to TypeSafe, a third-party disclosure.", "url", "https://api.typesafe.ai", details="Read at scripts/typesafe_client.py:58.")
 
 
 # --- knob metadata: kind overrides, finite option sets, ranges, effect, applies ---
@@ -525,7 +525,7 @@ _EFFECT = {
     "ATLAS_OPTIMIZE_VERBOSE": "A banner is, or is not, printed when a prompt is rewritten.",
     "ATLAS_OPTIMIZE_LOG": "Each rewrite is appended to this file; blank keeps no log.",
     "ATLAS_TYPESAFE_SCORING": "Replies are, or are not, scored by the typesafe service (needs TYPESAFE_API_KEY).",
-    "ATLAS_TYPESAFE_MODEL": "Scoring requests name this model.",
+    "ATLAS_TYPESAFE_MODEL": "Scoring requests name this model. A local Ollama tag (name:tag) needs a loopback URL; a hosted URL needs a hosted model name such as jev-latest.",
     "ATLAS_TYPESAFE_MAX_CALLS": "A scoring pass makes at most this many requests.",
     "ATLAS_HOOK_BRIDGE": "omp runs, or skips, atlas's bridged Claude hooks.",
     "ATLAS_BRIDGE_HOOK_TIMEOUT_S": "Each bridged hook is cut off after this many seconds.",
