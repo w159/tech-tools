@@ -98,7 +98,12 @@ class AtlasDoctorTest(unittest.TestCase):
         atlas_doctor.STATE_PATH = self.state
         omp_patch = mock.patch.dict(
             os.environ,
-            {"ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins")},
+            {
+                "ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins"),
+                # --fix/--hook repair layout and docs names under the project dir;
+                # never let a test point that at the real checkout.
+                "CLAUDE_PROJECT_DIR": os.path.join(self.tmp, "project"),
+            },
         )
         omp_patch.start()
         self.addCleanup(omp_patch.stop)
@@ -845,9 +850,11 @@ class AtlasDoctorTest(unittest.TestCase):
         # lines 593-596: --fix branch applies fixes then re-checks
         buf = io.StringIO()
         # tmp root: --fix may append to AGENTS.md, never the real one
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
-            atlas_doctor, "_repo_root", return_value=tmp
-        ), contextlib.redirect_stdout(buf):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(atlas_doctor, "_repo_root", return_value=tmp),
+            contextlib.redirect_stdout(buf),
+        ):
             rc = atlas_doctor.main(["--fix"])
         self.assertIn("FIX:", buf.getvalue())
         self.assertIn(rc, (0, 1))

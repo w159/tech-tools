@@ -82,6 +82,8 @@ import subprocess  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 
 import atlas_db  # noqa: E402
+import atlas_paths  # noqa: E402
+import doctor_layout  # noqa: E402
 
 
 def _hook_stamp_write(plugin, ok):
@@ -417,7 +419,7 @@ def check_typesafe_scoring(now=None):
     has_key = bool(os.environ.get("TYPESAFE_API_KEY"))
     off = os.environ.get("ATLAS_TYPESAFE_SCORING") == "off"
     path = atlas_db.db_path()
-    rows, last, errs, last_err = 0, None, 0, None
+    rows, last, errs, last_err, ctx_errs = 0, None, 0, None, 0
     if os.path.exists(path):
         try:
             conn = atlas_db.connect(path)
@@ -430,6 +432,7 @@ def check_typesafe_scoring(now=None):
                 last = conn.execute(
                     "SELECT MAX(scored_at) FROM turn_scores"
                 ).fetchone()[0]
+                ctx_errs = doctor_layout.context_limit_errors(conn, now)
                 if not HOOK_MODE:
                     import turn_scoring  # lazy: pulls in the ingest/client modules
 
@@ -452,7 +455,20 @@ def check_typesafe_scoring(now=None):
         detail += (
             f"; {errs} scoring error(s) in last 7d, latest: {(last_err or '')[:200]}"
         )
-    return (has_key and not off and bool(rows) and not errs), detail
+    if ctx_errs:
+        detail += (
+            f"; {ctx_errs} of them hit the local model's 2048-token context limit "
+            "(prompt too long for the Ollama model; count only, not fixed here)"
+        )
+    hosted = doctor_layout.hosted_scoring_url()
+    if hosted:
+        detail += (
+            f"; ATLAS_TYPESAFE_URL={hosted} is not loopback: hosted scoring sends "
+            "prompt excerpts to a third party (GLBA/Reg S-P disclosure risk); "
+            "use http://127.0.0.1:11434 to score locally"
+        )
+    ok = has_key and not off and bool(rows) and not errs
+    return (ok and not hosted), detail
 
 
 def _repo_root(cwd):
@@ -1222,7 +1238,9 @@ def record_hook_verdict(plugin_name, failed, root_path=None):
     try:
         conn = atlas_db.connect()
         atlas_db.init(conn)
-        project_id = atlas_db.register_project(conn, root_path or os.getcwd())
+        project_id = atlas_db.register_project(
+            conn, atlas_paths.project_root(root_path or os.getcwd())
+        )
         atlas_db.record_asset_verdicts(
             conn,
             project_id,
@@ -2939,6 +2957,99 @@ def remeasure(conn, root=None):
     return updated
 
 
+def _project_dir():
+    # SessionStart runs in the project cwd; CLAUDE_PROJECT_DIR wins when set.
+    return atlas_paths.project_root(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+
+
+def layout_checks(root):
+    """Read-only warn-severity results: misplaced .atlas, docs naming, and the
+    project-identity counts. Never writes."""
+    out = []
+
+    def add(cid, ok, detail):
+        out.append({"check": cid, "ok": ok, "detail": detail, "severity": "warn"})
+
+    found = doctor_layout.check_atlas_layout(root)
+    add(
+        "atlas-layout",
+        not found,
+        "all runtime state is at the project root"
+        if not found
+        else f"{len(found)} misplaced (--fix archives, never deletes):\n      "
+        + "\n      ".join(doctor_layout.layout_summary(found)),
+    )
+    bad = doctor_layout.docs_naming_violations(root)
+    add(
+        "docs-naming",
+        not bad,
+        "docs names conform"
+        if not bad
+        else f"{len(bad)} file(s) need renaming; run atlas_doctor.py --fix",
+    )
+    db = atlas_db.db_path()
+    conn = _ro_conn(db) if os.path.exists(db) else None
+    if conn is None:
+        add("project-identity", True, "no atlas.db to inspect")
+        return out
+    try:
+        counts, _rows = doctor_layout.check_project_identity(conn)
+    except Exception as e:  # missing table on a very old DB
+        add("project-identity", True, f"unreadable: {e}")
+        return out
+    finally:
+        conn.close()
+    add(
+        "project-identity",
+        not (counts["git_subdir"] or counts["inside_atlas"]),
+        f"{counts['git_subdir']} git-subdir, {counts['inside_atlas']} inside-.atlas "
+        f"(--fix re-points runs/facets), {counts['worktree_temp']} worktree/temp, "
+        f"{counts['missing']} missing-on-disk project row(s)",
+    )
+    return out
+
+
+def hook_layout_notes(cwd):
+    """SessionStart: auto-repair .atlas layout, report (never fix) docs naming.
+    Returns printable lines; empty when clean."""
+    lines = []
+    try:
+        line = doctor_layout.hook_layout(cwd)
+        if line:
+            lines.append(line)
+        n = len(doctor_layout.docs_naming_violations(cwd))
+        if n:
+            lines.append(
+                f"docs naming: {n} files need renaming; run atlas_doctor.py --fix"
+            )
+    except Exception as e:  # a hook never breaks the session
+        import atlas_faults
+
+        atlas_faults.record("atlas_doctor", e)
+    return lines
+
+
+def fix_layout_all(root):
+    """--fix: archive stray .atlas, apply docs renames, re-point project rows."""
+    for m in doctor_layout.fix_atlas_layout(doctor_layout.check_atlas_layout(root)):
+        print(
+            f"FIX: layout {m['status']}: {m['src']} -> {m['dest']} {m['reason']}".rstrip()
+        )
+    try:
+        for old, new in doctor_layout.fix_docs_naming(root):
+            print(f"FIX: docs rename: {old} -> {new}")
+    except Exception as e:
+        print(f"FIX: docs rename failed: {e}")
+    db = atlas_db.db_path()
+    if os.path.exists(db):
+        conn = atlas_db.connect()
+        try:
+            for old, new in doctor_layout.fix_project_identity(conn, db):
+                print(f"FIX: project row {old} -> {new}")
+        finally:
+            conn.close()
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="atlas plugin health check")
     ap.add_argument("--fix", action="store_true", help="repair what CHECK finds")
@@ -3224,6 +3335,10 @@ def main(argv=None):
     if args.fix:
         # own branch: the check is severity "warn", so `failed` never holds it
         print(f"FIX: {fix_context_tooling()}")
+        fix_layout_all(_project_dir())
+
+    if not args.hook:
+        results = results + layout_checks(_project_dir())
 
     if (args.hook or args.fix) and ctx.get("new_state"):
         try:
@@ -3234,6 +3349,8 @@ def main(argv=None):
             atlas_faults.record("atlas_doctor", e)
 
     if args.hook:
+        for line in hook_layout_notes(_project_dir()):
+            print(line)
         record_hook_verdict(args.plugin, failed)
         _hook_stamp_write(args.plugin, not failed)
         if failed:
