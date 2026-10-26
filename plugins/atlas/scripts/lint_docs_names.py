@@ -37,6 +37,7 @@ run-scoped use.
 
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import subprocess
@@ -124,6 +125,10 @@ _ROOT_ROUTES = (
 # A date anywhere but the front: the reported failure mode. Named separately
 # because the fix is "move it", not "add one".
 _DATE_ANYWHERE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+# Dates people type into loose file names. YYYYMMDD, then US month-first
+# (M.D.YY, M-D-YYYY, M_D_YYYY). D.M is ambiguous and is read as US M.D.
+_COMPACT_DATE = re.compile(r"(?<!\d)((?:19|20)\d{2})(\d{2})(\d{2})(?!\d)")
+_US_DATE = re.compile(r"(?<!\d)(\d{1,2})[._-](\d{1,2})[._-](\d{4}|\d{2})(?!\d)")
 
 # Text suffixes worth rewriting references inside. A rename that updates only
 # markdown leaves the code and the comments pointing at a path that is gone.
@@ -383,6 +388,33 @@ def all_artifact_paths(root: Path) -> list:
 # --- date derivation -----------------------------------------------------------
 
 
+def _valid_ymd(y: int, m: int, d: int) -> str | None:
+    try:
+        return datetime.date(y, m, d).isoformat()
+    except ValueError:
+        return None
+
+
+def _name_date(stem: str):
+    """(iso, start, end) for the first real date embedded in `stem`, else None.
+    Impossible dates (13.40.26, 20261340) are rejected, not guessed."""
+    for m in _DATE_ANYWHERE.finditer(stem):
+        iso = _valid_ymd(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        if iso:
+            return iso, m.start(), m.end()
+    for m in _COMPACT_DATE.finditer(stem):
+        iso = _valid_ymd(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        if iso:
+            return iso, m.start(), m.end()
+    for m in _US_DATE.finditer(stem):
+        year = int(m.group(3))
+        year += 2000 if year < 100 else 0
+        iso = _valid_ymd(year, int(m.group(1)), int(m.group(2)))
+        if iso:
+            return iso, m.start(), m.end()
+    return None
+
+
 def derive_date(root: Path, rel: str) -> str:
     """A real date for `rel`, never an invented one, in priority order:
 
@@ -396,11 +428,9 @@ def derive_date(root: Path, rel: str) -> str:
     """
     name = rel.rsplit("/", 1)[-1]
     stem = name[:-3] if name.endswith(".md") else name
-    m = _DATE_ANYWHERE.search(stem)
-    if m:
-        month, day = int(m.group(2)), int(m.group(3))
-        if 1 <= month <= 12 and 1 <= day <= 31:
-            return "%s-%s-%s" % (m.group(1), m.group(2), m.group(3))
+    found = _name_date(stem)
+    if found:
+        return found[0]
     repo_root = _repo_root(root)
     if repo_root:
         try:
@@ -454,9 +484,15 @@ def plan_renames(root: Path, viols) -> list:
         date = derive_date(root, old_rel)
         # Strip the date the name already carried, wherever it sat.
         body = _DATE_ANYWHERE.sub("", stem)
+        found = _name_date(body)
+        if found:
+            body = body[: found[1]] + body[found[2] :]
         slug = _slugify(body)
         if _is_root_file(old_rel):
-            slug = slug.replace("_", "-")  # loose names use snake case; slugs are kebab
+            # loose names use snake case; slugs are kebab
+            slug = (
+                re.sub(r"-{2,}", "-", slug.replace("_", "-")).strip("-") or "untitled"
+            )
         candidate = "%s/%s_%s%s" % (parent, date, slug, suffix)
         n = 2
         while candidate in taken or (

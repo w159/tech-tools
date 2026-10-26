@@ -331,9 +331,7 @@ class UnderscoreFixer(unittest.TestCase):
         )
         plans, moved = self._fix(["docs/MEETING_NOTES_9.3.26.md"])
         new = moved[0][1]
-        self.assertRegex(
-            new, r"^docs/meetings/\d{4}-\d{2}-\d{2}_meeting-notes-9.3.26\.md$"
-        )
+        self.assertEqual(new, "docs/meetings/2026-09-03_meeting-notes.md")
         self.assertFalse((self.root / "docs/MEETING_NOTES_9.3.26.md").exists())
         text = (self.root / "docs/wiki/a.md").read_text(encoding="utf-8")
         self.assertIn(new, text)
@@ -399,6 +397,43 @@ class UnderscoreFixer(unittest.TestCase):
             lint_docs_names.all_artifact_paths(self.root),
             ["docs/README.md", "docs/TODO_LIST.md"],
         )
+
+
+class EmbeddedNameDates(unittest.TestCase):
+    """Loose names often carry a US-style date; it is the real date, and it
+    leaves the slug."""
+
+    def test_embedded_date_forms(self):
+        cases = {
+            "MEETING_NOTES_9.3.26.md": "2026-09-03",
+            "notes-9.3.2026.md": "2026-09-03",
+            "notes-9-3-26.md": "2026-09-03",
+            "notes_9_3_2026.md": "2026-09-03",
+            "notes-20260903.md": "2026-09-03",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, want in cases.items():
+                rel = "docs/" + name
+                self.assertEqual(lint_docs_names.derive_date(pathlib.Path(tmp), rel), want, name)
+
+    def test_date_text_leaves_the_slug(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("MEETING_NOTES_9.3.26.md", "meeting-notes-20260903.md", "meeting_notes_9_3_2026.md"):
+                (( _, new),) = lint_docs_names.plan_renames(
+                    pathlib.Path(tmp), [("docs/" + name, "x")]
+                )
+                self.assertEqual(new, "docs/meetings/2026-09-03_meeting-notes.md", name)
+
+    def test_impossible_date_is_not_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "docs").mkdir()
+            (root / "docs" / "notes-13.40.26.md").write_text("x", encoding="utf-8")
+            got = lint_docs_names.derive_date(root, "docs/notes-13.40.26.md")
+            self.assertNotEqual(got, "2026-13-40")
+            self.assertRegex(got, r"^\d{4}-\d{2}-\d{2}$")
+            self.assertIsNone(lint_docs_names._name_date("notes-13.40.26"))
+            self.assertIsNone(lint_docs_names._name_date("notes-20261340"))
 
 
 class Structure(unittest.TestCase):

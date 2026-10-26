@@ -194,6 +194,8 @@ Hard boundaries:
   - Specs (dated): `docs/specs/<YYYY-MM-DD>_<slug>.md`.
   - Lessons (dated): `docs/lessons/<YYYY-MM-DD>_<slug>.md`.
   - Decisions (dated): `docs/decisions/<YYYY-MM-DD>_<slug>.md`.
+  - Meetings (dated): `docs/meetings/<YYYY-MM-DD>_<slug>.md`.
+  - Handoffs (dated): `docs/handoffs/<YYYY-MM-DD>_<slug>.md`.
   - Architecture (living): `docs/architecture/<slug>.md`.
   - Features (living): `docs/features/<slug>.md`.
   - Wiki (living, graphify): `docs/wiki/<slug>.md`.
@@ -202,7 +204,15 @@ Hard boundaries:
   (`atlas-security-2026-06-15/`) or a leading sequence number (`00-master-plan.md`)
   sorts by subject instead of by time, which is what made the order of an existing
   plan set unreadable. A sequence number is still fine *after* the date
-  (`2026-06-23-01-packer-consolidation.md`) when a same-day set has a real order.
+  (`2026-06-23_01-packer-consolidation.md`) when a same-day set has a real order.
+  Only an underscore follows the date; `2026-06-23-packer.md` is a violation the fixer migrates.
+
+  Nothing else lives loose in `docs/` except the canonical root files (`README`, `CHANGELOG`,
+  `ROADMAP`, `AGENTS`, `CLAUDE`, `GLOSSARY`, `CONTRIBUTING`, `SECURITY`, `DEVELOPMENT`, `INDEX`).
+  `lint_docs_names.py` routes a loose record by keyword (plan, spec, audit/review/inventory,
+  decision/adr, lesson/retro/postmortem, meeting/notes/transcript, handoff) into the matching
+  dated folder, using a date embedded in the name (`9.3.26`, `20260903`) when there is one;
+  anything it cannot classify is moved into a subfolder by hand.
   `scripts/lint_docs_names.py` enforces this, and fixes it. It is the same tool in
   three modes, and it needs no per-project configuration, so it applies to any repo
   atlas is used in:
