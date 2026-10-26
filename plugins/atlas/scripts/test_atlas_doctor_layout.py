@@ -3,6 +3,7 @@ import contextlib
 import io
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -38,8 +39,13 @@ class LayoutBase(unittest.TestCase):
                 "HOME": self.home,
                 "ATLAS_HOME": self.atlas_home,
                 "ATLAS_DB": os.path.join(self.atlas_home, "atlas.db"),
+                "CLAUDE_PROJECT_DIR": self.repo,
             },
         )
+        # cwd must never be a real checkout: fix code resolves roots from it
+        prev_cwd = os.getcwd()
+        os.chdir(self.repo)
+        self.addCleanup(os.chdir, prev_cwd)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.addCleanup(shutil.rmtree, self.tmp, True)
@@ -58,7 +64,7 @@ class StrayDetectionTest(LayoutBase):
         )
         self.assertEqual(self.kinds(), [("stray", "frontend/.atlas")])
         moves = doctor_layout.fix_atlas_layout(
-            doctor_layout.check_atlas_layout(self.repo), today=TODAY
+            doctor_layout.check_atlas_layout(self.repo), self.repo, today=TODAY
         )
         self.assertEqual([m["status"] for m in moves], ["moved"])
         dest = os.path.join(
@@ -70,10 +76,14 @@ class StrayDetectionTest(LayoutBase):
 
     def test_fix_is_idempotent(self):
         touch(os.path.join(self.repo, "frontend", ".atlas", "a"))
-        doctor_layout.fix_atlas_layout(doctor_layout.check_atlas_layout(self.repo))
+        doctor_layout.fix_atlas_layout(
+            doctor_layout.check_atlas_layout(self.repo), self.repo
+        )
         self.assertEqual(self.kinds(), [])  # archived copy is not re-flagged
         self.assertEqual(
-            doctor_layout.fix_atlas_layout(doctor_layout.check_atlas_layout(self.repo)),
+            doctor_layout.fix_atlas_layout(
+                doctor_layout.check_atlas_layout(self.repo), self.repo
+            ),
             [],
         )
 
@@ -84,7 +94,7 @@ class StrayDetectionTest(LayoutBase):
         )
         touch(os.path.join(dest, "keep"), "existing")
         moves = doctor_layout.fix_atlas_layout(
-            doctor_layout.check_atlas_layout(self.repo), today=TODAY
+            doctor_layout.check_atlas_layout(self.repo), self.repo, today=TODAY
         )
         self.assertEqual(moves[0]["status"], "skipped")
         self.assertTrue(
@@ -98,7 +108,7 @@ class StrayDetectionTest(LayoutBase):
             doctor_layout.shutil, "move", side_effect=OSError("denied")
         ):
             moves = doctor_layout.fix_atlas_layout(
-                doctor_layout.check_atlas_layout(self.repo)
+                doctor_layout.check_atlas_layout(self.repo), self.repo
             )
         self.assertEqual(moves[0]["status"], "error")
         self.assertIn("denied", moves[0]["reason"])
@@ -119,7 +129,7 @@ class StrayDetectionTest(LayoutBase):
         touch(os.path.join(self.repo, ".atlas", ".run", "atlas-orchestrate.active"))
         self.assertEqual(self.kinds(), [("nested", ".atlas/.run/.atlas")])
         moves = doctor_layout.fix_atlas_layout(
-            doctor_layout.check_atlas_layout(self.repo), today=TODAY
+            doctor_layout.check_atlas_layout(self.repo), self.repo, today=TODAY
         )
         self.assertEqual(moves[0]["status"], "moved")
         self.assertTrue(
@@ -144,7 +154,7 @@ class StrayDetectionTest(LayoutBase):
             ),
             ["board", "channels.json"],
         )
-        doctor_layout.fix_atlas_layout(found, today=TODAY)
+        doctor_layout.fix_atlas_layout(found, self.repo, today=TODAY)
         self.assertTrue(
             os.path.exists(
                 os.path.join(
@@ -165,18 +175,94 @@ class StrayDetectionTest(LayoutBase):
             [(f["kind"], f["path"]) for f in found],
             [("container", os.path.join(box, ".atlas"))],
         )
-        doctor_layout.fix_atlas_layout(found, today=TODAY)
-        self.assertTrue(
-            os.path.isdir(
-                os.path.join(self.atlas_home, "archive", f"{TODAY}_stray-atlas_atlas")
-            )
+        moves = doctor_layout.fix_atlas_layout(
+            found, os.path.join(box, "one"), today=TODAY
         )
+        # an ancestor's .atlas is reported with a manual command, never moved
+        self.assertEqual([m["status"] for m in moves], ["manual"])
+        self.assertIn("mv ", moves[0]["reason"])
+        self.assertTrue(os.path.isdir(os.path.join(box, ".atlas")))
+
+    def test_stray_outside_root_is_never_moved_even_with_apply(self):
+        other = os.path.join(self.tmp, "work", "other")
+        os.makedirs(os.path.join(other, ".git"))
+        touch(os.path.join(other, "pkg", ".atlas", "a"))
+        found = doctor_layout.check_atlas_layout(other)
+        self.assertEqual([f["kind"] for f in found], ["stray"])
+        moves = doctor_layout.fix_atlas_layout(
+            found, self.repo, apply=True, today=TODAY
+        )
+        self.assertEqual(
+            [(m["status"], m["reason"]) for m in moves],
+            [("skipped", "outside project")],
+        )
+        self.assertTrue(os.path.exists(os.path.join(other, "pkg", ".atlas", "a")))
+        self.assertFalse(os.path.exists(os.path.join(other, ".atlas")))
+
+    def test_destination_outside_project_and_home_is_refused(self):
+        touch(os.path.join(self.repo, "pkg", ".atlas", "a"))
+        found = doctor_layout.check_atlas_layout(self.repo)
+        found[0]["archive_base"] = os.path.join(self.tmp, "elsewhere")
+        moves = doctor_layout.fix_atlas_layout(found, self.repo, today=TODAY)
+        self.assertEqual(moves[0]["status"], "skipped")
+        self.assertTrue(os.path.exists(os.path.join(self.repo, "pkg", ".atlas", "a")))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "elsewhere")))
+
+    def test_home_run_outside_given_home_is_refused(self):
+        run = os.path.join(self.tmp, "otherhome", ".atlas", ".run")
+        touch(os.path.join(run, "channels.json"))
+        found = doctor_layout.check_atlas_layout(
+            self.repo, home=os.path.join(self.tmp, "otherhome", ".atlas")
+        )
+        moves = doctor_layout.fix_atlas_layout(
+            found, self.repo, today=TODAY
+        )  # home defaults to temp HOME
+        self.assertEqual(moves[0]["status"], "skipped")
+        self.assertTrue(os.path.exists(os.path.join(run, "channels.json")))
 
     def test_single_repo_parent_atlas_is_not_a_container(self):
         box = os.path.join(self.tmp, "solo")
         os.makedirs(os.path.join(box, "one", ".git"))
         touch(os.path.join(box, ".atlas", "x"))
         self.assertEqual(doctor_layout.check_atlas_layout(os.path.join(box, "one")), [])
+
+
+class SuiteIsolationTest(unittest.TestCase):
+    """Running the doctor suites from inside a project whose ancestor holds a
+    container .atlas must leave that ancestor, and the project, untouched."""
+
+    def test_doctor_suites_leave_ancestor_sentinel_and_project_alone(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for name in ("one", "two"):
+            os.makedirs(os.path.join(tmp, name, ".git"))
+        sentinel = os.path.join(tmp, ".atlas", ".run", "sentinel.json")
+        touch(sentinel, "keep")
+        touch(os.path.join(tmp, "one", "sub", ".atlas", "stray.json"), "keep")
+        env = {k: v for k, v in os.environ.items() if not k.startswith("ATLAS_")}
+        env.pop("CLAUDE_PROJECT_DIR", None)
+        env.pop("_ATLAS_TEST_ISOLATED_ROOT", None)
+        env["PYTHONPATH"] = os.path.dirname(os.path.abspath(__file__))
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "test_atlas_doctor",
+                "test_atlas_doctor_layout.StrayDetectionTest",
+            ],
+            cwd=os.path.join(tmp, "one", "sub"),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr[-1500:])
+        self.assertEqual(open(sentinel).read(), "keep")
+        self.assertTrue(
+            os.path.exists(os.path.join(tmp, "one", "sub", ".atlas", "stray.json"))
+        )
+        self.assertFalse(os.path.exists(os.path.join(tmp, "one", ".atlas")))
 
 
 class HookTest(LayoutBase):

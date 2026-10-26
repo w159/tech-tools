@@ -3031,7 +3031,9 @@ def hook_layout_notes(cwd):
 
 def fix_layout_all(root):
     """--fix: archive stray .atlas, apply docs renames, re-point project rows."""
-    for m in doctor_layout.fix_atlas_layout(doctor_layout.check_atlas_layout(root)):
+    for m in doctor_layout.fix_atlas_layout(
+        doctor_layout.check_atlas_layout(root), root
+    ):
         print(
             f"FIX: layout {m['status']}: {m['src']} -> {m['dest']} {m['reason']}".rstrip()
         )

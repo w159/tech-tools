@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 import sqlite3
 import time
@@ -164,17 +165,43 @@ def check_atlas_layout(root, home=None):
     return found
 
 
-def fix_atlas_layout(findings, apply=True, today=None):
+def _inside(path, base):
+    """True when realpath(path) is base or below it (symlinks resolved)."""
+    path, base = os.path.realpath(path), os.path.realpath(base)
+    return path == base or path.startswith(base.rstrip(os.sep) + os.sep)
+
+
+def fix_atlas_layout(findings, root, apply=True, today=None, home=None):
     """Move each finding into its archive folder. Never deletes. Returns
-    [{"src", "dest", "status": moved|planned|skipped|error, "reason"}]."""
+    [{"src", "dest", "status": moved|planned|skipped|manual|error, "reason"}].
+
+    Hard guards, so a repair can never leave the project it was asked about:
+    a stray/nested source must be inside `root`; only home_run sources may
+    live outside it, and only inside `home`/.run; every destination must be
+    inside `root` or `home`. Containers sit in an ancestor of the project, so
+    they are never moved here: status "manual" carries the command to run."""
     stamp = today or time.strftime("%Y-%m-%d")
+    home = home or atlas_home()
     moves = []
     for f in findings:
         slug = _slug(f["rel"] if f["kind"] != "home_run" else "run-" + f["rel"])
         dest = os.path.join(f["archive_base"], f"{stamp}_stray-atlas_{slug}")
         move = {"src": f["path"], "dest": dest, "status": "planned", "reason": ""}
         moves.append(move)
-        if not os.path.lexists(f["path"]):
+        src_ok = (
+            _inside(f["path"], os.path.join(home, ".run"))
+            if f["kind"] == "home_run"
+            else _inside(f["path"], root)
+        )
+        if f["kind"] == "container":
+            move.update(
+                status="manual",
+                reason=f"ancestor folder, not moved automatically; run: "
+                f"mv {shlex.quote(f['path'])} {shlex.quote(dest)}",
+            )
+        elif not src_ok or not (_inside(dest, root) or _inside(dest, home)):
+            move.update(status="skipped", reason="outside project")
+        elif not os.path.lexists(f["path"]):
             move.update(status="skipped", reason="source already gone")
         elif os.path.lexists(dest):
             move.update(status="skipped", reason="archive destination exists")
@@ -196,7 +223,7 @@ def hook_layout(cwd):
     """SessionStart repair for the payload cwd's project. Returns '' when
     nothing was moved or failed, else one short line."""
     root = atlas_paths.project_root(cwd)
-    moves = fix_atlas_layout(check_atlas_layout(root), apply=True)
+    moves = fix_atlas_layout(check_atlas_layout(root), root)
     moved = sum(m["status"] == "moved" for m in moves)
     bad = sum(m["status"] == "error" for m in moves)
     if not (moved or bad):
