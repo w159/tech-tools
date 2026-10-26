@@ -68,7 +68,7 @@ Read `references/units.md` in full. Three obligations, in order:
 
 ## Phase 3 - Compose and write the plan
 
-Read `references/plan-sections.md` in full. Compose the implementation-ready artifact at `docs/plans/<YYYY-MM-DD>-<slug>-plan.md` (today's date; filesystem-safe slug per docs-ssot; `-2` suffix on a same-slug collision). The section contract is fixed: Goal Capsule + Product Contract carried from upstream, Planning Contract (research + question inventory), Implementation Units (`### U<N>`), Verification Contract, Definition of Done. The write goes through `atlas:docs-curator` per the docs-ssot ownership boundary - you assemble, it writes - unless the host has no subagent dispatch, in which case write directly and say so in the report.
+Read `references/plan-sections.md` in full. Compose the implementation-ready artifact at `docs/plans/<YYYY-MM-DD>_<slug>-plan.md` (today's date; filesystem-safe slug per docs-ssot; `-2` suffix on a same-slug collision). The section contract is fixed: Goal Capsule + Product Contract carried from upstream, Planning Contract (research + question inventory), Implementation Units (`### U<N>`), Verification Contract, Definition of Done. The write goes through `atlas:docs-curator` per the docs-ssot ownership boundary - you assemble, it writes - unless the host has no subagent dispatch, in which case write directly and say so in the report.
 
 ## Phase 4 - Mandatory review, then handoff
 

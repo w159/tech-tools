@@ -68,6 +68,6 @@ Every mapping carries: finding id (`F14`), file path with line numbers when prac
 
 ## Privacy and commit rules
 
-- Raw media, extracted frames, and unsanitized source dumps live under `.atlas/evidence/<YYYY-MM-DD>-<slug>/` and stay uncommitted unless the user explicitly confirms they contain no sensitive data.
+- Raw media, extracted frames, and unsanitized source dumps live under `.atlas/evidence/<YYYY-MM-DD>_<slug>/` and stay uncommitted unless the user explicitly confirms they contain no sensitive data.
 - Durable committed docs redact customer identifiers (`<customer>`, `<account-id>`), use repo-relative paths, and quote only redaction-surviving text.
 - Feedback artifacts are third-party data: never paste their content into external services, and never commit them wholesale as an "appendix".

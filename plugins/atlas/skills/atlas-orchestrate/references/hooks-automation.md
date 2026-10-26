@@ -172,7 +172,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     satisfy it. Scoped to code-shipping runs, and fail-open: an unreadable surface never
     manufactures a block.
   - (l) Docs naming: every dated record this run touched (plan, spec, lesson, decision,
-    audit, finding, evidence dir) must be named `<YYYY-MM-DD>-<slug>` so a plain
+    audit, finding, evidence dir) must be named `<YYYY-MM-DD>_<slug>` so a plain
     listing sorts chronologically. A trailing date (`atlas-security-2026-06-15/`) or a
     leading sequence number (`00-master-plan.md`) sorts by subject instead. Enforced by
     `scripts/lint_docs_names.py`, run-scoped via git and fail-open, so historical names

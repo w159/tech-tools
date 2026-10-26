@@ -88,7 +88,7 @@ state.
   records observed failing evidence until a completed retest replaces it, `SKIP` means no
   completed outcome. Overall is `FAIL` while any failure remains, `PARTIAL` when no failure
   remains but a scoped check was skipped, else `PASS`.
-- Evidence lands in `.atlas/evidence/<YYYY-MM-DD>-<slug>/` (date-first slug, filesystem-safe)
+- Evidence lands in `.atlas/evidence/<YYYY-MM-DD>_<slug>/` (date-first slug, filesystem-safe)
   the moment it is captured - screenshots, `build.log`, `capture.log`, and `summary.md`.
 
 ## Output

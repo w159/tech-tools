@@ -6,7 +6,7 @@ ships.
 
 ## What lives here
 
-- `<YYYY-MM-DD>-<slug>.md` - one spec per feature, date-first so a listing sorts chronologically
+- `<YYYY-MM-DD>_<slug>.md` - one spec per feature, date-first so a listing sorts chronologically
 - `requirements/` - cross-cutting requirements (security, compliance, NFRs)
 
 ## Spec template

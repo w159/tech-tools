@@ -805,7 +805,7 @@ class Gates:
         )  # (m): main-thread code needs a dispatch
         time.sleep(1.1)
         p = Path(self.proj)
-        (p / ".atlas/evidence/2026-10-06-ev.md").write_text("evidence\n")
+        (p / ".atlas/evidence/2026-10-06_ev.md").write_text("evidence\n")
         (p / ".atlas/.run/findings.json").write_text(
             json.dumps(
                 [

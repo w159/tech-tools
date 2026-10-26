@@ -76,7 +76,7 @@ and the summary format.
    GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP CONDITIONS template in the reference.
    Each tester: navigates, checks key elements render, exercises the critical interactions,
    captures console errors and failed network calls, saves evidence to
-   `.atlas/evidence/<YYYY-MM-DD>-<slug>/`, and reports per-route status. The tester NEVER
+   `.atlas/evidence/<YYYY-MM-DD>_<slug>/`, and reports per-route status. The tester NEVER
    edits code - that boundary is in its agent definition; restate it in the dispatch.
 6. **Human verification** where a flow needs external interaction (OAuth, email, payments,
    SMS, third-party APIs): in manual mode, pause and ask the user. **Pipeline mode does not

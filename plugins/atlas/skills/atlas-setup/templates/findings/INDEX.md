@@ -1,7 +1,7 @@
 # Findings index
 
 Durable, dated learning ledger. Each resolved issue, fix, or decision
-gets one `<YYYY-MM-DD>-<slug>.md` file in this folder; this index links
+gets one `<YYYY-MM-DD>_<slug>.md` file in this folder; this index links
 them so an agent can check for prior art before starting non-trivial
 work, without re-reading every finding file.
 

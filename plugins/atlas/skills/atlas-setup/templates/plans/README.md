@@ -6,7 +6,7 @@ before any code is written.
 
 ## What lives here
 
-- `<YYYY-MM-DD>-<slug>.md` - one plan per file
+- `<YYYY-MM-DD>_<slug>.md` - one plan per file
 - `stages/` - per-stage detail files for large plans
 
 ## Plan template

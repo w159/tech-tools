@@ -14,7 +14,7 @@ Exact mechanics for atlas-proof's three modes. Read once before first use.
 One file per review copy, stored beside it:
 
 ```
-.atlas/.run/proof/<YYYY-MM-DD>-<slug>/
+.atlas/.run/proof/<YYYY-MM-DD>_<slug>/
   review.md          # the review copy (verbatim source bytes)
   annotations.md     # the review state
 ```
@@ -25,7 +25,7 @@ One file per review copy, stored beside it:
 # Annotations: <review copy title>
 
 Source: <canonical source path, if any>
-Review surface: .atlas/.run/proof/<YYYY-MM-DD>-<slug>/review.md
+Review surface: .atlas/.run/proof/<YYYY-MM-DD>_<slug>/review.md
 Opened: <YYYY-MM-DD>
 Reviewer: atlas (or the persona/agent name, e.g. atlas:verifier)
 
@@ -51,7 +51,7 @@ Rules:
 
 - **Anchors are visible text.** Quote prose as a human sees it, not markdown syntax (`**bold**` markers, block refs, link targets). Before writing any annotation, verify the quote appears exactly once in `review.md`:
   ```bash
-  grep -cF '<anchor line>' '.atlas/.run/proof/<YYYY-MM-DD>-<slug>/review.md'   # must print 1
+  grep -cF '<anchor line>' '.atlas/.run/proof/<YYYY-MM-DD>_<slug>/review.md'   # must print 1
   ```
   Count 0 → the doc changed since you read it; re-read and re-anchor. Count >1 → lengthen the quote or add the preceding/following line; never annotate on a multiply-matching anchor and never assume first-match.
 - **Ids are stable and monotonic** (`a-001`, `a-002`, ...). Replies and resolutions reference ids; nothing is ever deleted. Superseded threads get `resolved: superseded-by: <id>`.
@@ -62,8 +62,8 @@ Rules:
 
 1. Read the source file in full. If it is HTML or non-markdown, do not publish it — return the local path and say why.
 2. Decide the surface:
-   - Durable (plan/spec/feature/decision) → its docs SSOT path: `docs/plans/<task-slug>.md`, `docs/specs/<YYYY-MM-DD>-<slug>.md`, `docs/features/<slug>.md`, `docs/decisions/<slug>.md`. Date-first naming per `plugins/atlas/scripts/lint_docs_names.py`.
-   - Ephemeral → `.atlas/.run/proof/<YYYY-MM-DD>-<slug>/review.md` (verbatim bytes) plus the scaffolded `annotations.md` header shown above.
+   - Durable (plan/spec/feature/decision) → its docs SSOT path: `docs/plans/<task-slug>.md`, `docs/specs/<YYYY-MM-DD>_<slug>.md`, `docs/features/<slug>.md`, `docs/decisions/<slug>.md`. Date-first naming per `plugins/atlas/scripts/lint_docs_names.py`.
+   - Ephemeral → `.atlas/.run/proof/<YYYY-MM-DD>_<slug>/review.md` (verbatim bytes) plus the scaffolded `annotations.md` header shown above.
 3. For copies, verify byte fidelity:
    ```bash
    diff <src> '<surface path>' && echo IDENTICAL

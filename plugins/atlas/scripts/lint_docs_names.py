@@ -5,11 +5,15 @@ Two checks, one fixer, no project-specific knowledge.
 
 **Naming.** `docs-ssot.md` says an artifact that records an *event* (a plan, an
 audit, a spec, a lesson, a decision, a finding, an evidence capture) is named
-`<YYYY-MM-DD>-<slug>` so a plain directory listing sorts chronologically. An
+`<YYYY-MM-DD>_<slug>` (underscore after the date) so a plain directory listing sorts chronologically. An
 artifact that describes *living state* (architecture, features, wiki) is a bare
 slug, because it is revised in place and a date would lie. Nothing enforced
 this, and the convention itself had drifted: plans were specified both ways in
 two different files, and audits were specified date-LAST.
+
+A loose file directly in `docs/` that is not a canonical root file (README,
+CHANGELOG, ROADMAP, ...) is also a violation: a classifiable one (plan, spec,
+audit, ...) is moved into its dated subfolder; the rest are reported only.
 
 **Structure.** `docs/` is the SSOT, and a project with no `docs/` (or missing a
 base subfolder) has nowhere for the curator to write. The required set is the
@@ -64,6 +68,8 @@ DATED_DIRS = (
     "docs/decisions",
     "docs/audits",
     "docs/pulses",
+    "docs/meetings",
+    "docs/handoffs",
     ".atlas/findings",
     ".atlas/decisions",
     ".atlas/audits",
@@ -81,9 +87,40 @@ LIVING_DIRS = (
 # Index/placeholder files a scaffolder owns; they are not event records.
 EXEMPT_NAMES = frozenset({"README.md", "INDEX.md", ".gitkeep", ".DS_Store"})
 
-# <YYYY-MM-DD>-<slug>. The slug may itself start with a sequence number, which
-# is how a same-day ordered set keeps its order (2026-06-23-01-packer-...).
-_DATED = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-[a-z0-9][a-z0-9._-]*$")
+# <YYYY-MM-DD>_<slug>. The slug may itself start with a sequence number, which
+# is how a same-day ordered set keeps its order (2026-06-23_01-packer-...).
+_DATED = re.compile(r"^(\d{4})-(\d{2})-(\d{2})_[a-z0-9][a-z0-9._-]*$")
+# The retired hyphen form (YYYY-MM-DD-slug): migrated by the fixer, keeping its date.
+_DATED_HYPHEN = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-[A-Za-z0-9]")
+_DATE_PREFIX_UNDERSCORE = re.compile(r"^\d{4}-\d{2}-\d{2}_")
+
+# Root files a project legitimately keeps loose in docs/ (stem, case-insensitive).
+ROOT_CANONICAL = frozenset(
+    {
+        "readme",
+        "changelog",
+        "roadmap",
+        "agents",
+        "claude",
+        "glossary",
+        "contributing",
+        "security",
+        "development",
+        "index",
+    }
+)
+_ROOT_DOC_SUFFIXES = (".md", ".markdown", ".txt", ".rst")
+# (keywords, target folder); first match wins. "adr" is matched as a whole
+# token so "quadrant" does not route to decisions.
+_ROOT_ROUTES = (
+    (("plan",), "docs/plans"),
+    (("spec",), "docs/specs"),
+    (("audit", "review", "inventory"), "docs/audits"),
+    (("decision", "adr"), "docs/decisions"),
+    (("lesson", "retro", "postmortem"), "docs/lessons"),
+    (("meeting", "notes", "transcript"), "docs/meetings"),
+    (("handoff",), "docs/handoffs"),
+)
 # A date anywhere but the front: the reported failure mode. Named separately
 # because the fix is "move it", not "add one".
 _DATE_ANYWHERE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
@@ -127,7 +164,16 @@ _TEXT_SUFFIXES = frozenset(
     }
 )
 _SKIP_DIRS = frozenset(
-    {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build", ".mypy_cache"}
+    {
+        ".git",
+        "node_modules",
+        "__pycache__",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+        ".mypy_cache",
+    }
 )
 # This module and its tests cite example artifact names ("atlas-harden-2026-07-07")
 # as documentation and as fixtures. A tree-wide bare-name rewrite would edit those
@@ -144,7 +190,7 @@ def _norm(path: str) -> str:
 
 def is_dated_name(name: str) -> bool:
     """True when `name` (basename, file suffix already stripped) is
-    `<YYYY-MM-DD>-<slug>` with a calendar-shaped date and a safe slug."""
+    `<YYYY-MM-DD>_<slug>` with a calendar-shaped date and a safe slug."""
     m = _DATED.match(name)
     if not m:
         return False
@@ -160,6 +206,26 @@ def _dated_dir_for(rel: str) -> str | None:
     return None
 
 
+def _is_root_file(rel: str) -> bool:
+    """A doc-like file sitting directly in docs/ (not in a subfolder)."""
+    return (
+        rel.startswith("docs/")
+        and "/" not in rel[5:]
+        and rel.lower().endswith(_ROOT_DOC_SUFFIXES)
+    )
+
+
+def _root_target_dir(rel: str) -> str | None:
+    """The dated folder a loose docs/ root file belongs in, else None."""
+    low = rel[5:].lower()
+    tokens = set(re.split(r"[^a-z0-9]+", low))
+    for words, folder in _ROOT_ROUTES:
+        for w in words:
+            if (w in tokens) if w == "adr" else (w in low):
+                return folder
+    return None
+
+
 def _slugify(text: str) -> str:
     """Filesystem-safe, Windows-safe, lowercase-kebab. Same derivation the
     docs-ssot naming rule specifies: a colon in a composed name makes the whole
@@ -170,7 +236,7 @@ def _slugify(text: str) -> str:
 
 
 def violations(paths) -> list:
-    """[(artifact_path, reason)] for every path breaking the date-first rule.
+    """[(artifact_path, reason)] for every path breaking the dated-name rule.
 
     Pure: takes relative path strings, does no I/O. A living directory, a path
     deeper than the artifact, and an exempt name all pass. One artifact is
@@ -181,6 +247,30 @@ def violations(paths) -> list:
     for raw in paths or []:
         rel = _norm(raw)
         if not rel:
+            continue
+        if _is_root_file(rel):
+            name = rel[5:]
+            stem = name.rsplit(".", 1)[0]
+            if name in EXEMPT_NAMES or stem.lower() in ROOT_CANONICAL or rel in seen:
+                continue
+            seen.add(rel)
+            folder = _root_target_dir(rel)
+            if folder:
+                out.append(
+                    (
+                        rel,
+                        "loose file in docs/ root: move into %s/ as "
+                        "<YYYY-MM-DD>_<slug>" % folder,
+                    )
+                )
+            else:
+                out.append(
+                    (
+                        rel,
+                        "loose file in docs/ root: move into a docs/ "
+                        "subfolder by hand (no keyword says which)",
+                    )
+                )
             continue
         dated_dir = _dated_dir_for(rel)
         if dated_dir is None:
@@ -195,19 +285,29 @@ def violations(paths) -> list:
         stem = artifact[:-3] if artifact.endswith(".md") else artifact
         if is_dated_name(stem):
             continue
-        if _DATE_ANYWHERE.search(stem):
+        if _DATED_HYPHEN.match(stem):
             reason = (
-                "date is not first (%r): rename to <YYYY-MM-DD>-<slug> so a "
+                "date separator must be '_' (%r): rename to <YYYY-MM-DD>_<slug>"
+                % artifact
+            )
+        elif _DATE_PREFIX_UNDERSCORE.match(stem):
+            reason = (
+                "slug must be lowercase kebab-case (%r): rename to <YYYY-MM-DD>_<slug>"
+                % artifact
+            )
+        elif _DATE_ANYWHERE.search(stem):
+            reason = (
+                "date is not first (%r): rename to <YYYY-MM-DD>_<slug> so a "
                 "listing sorts by time, not by subject" % artifact
             )
         elif stem != stem.lower():
             reason = (
-                "not lowercase and not dated (%r): rename to <YYYY-MM-DD>-<slug>"
+                "not lowercase and not dated (%r): rename to <YYYY-MM-DD>_<slug>"
                 % artifact
             )
         else:
             reason = (
-                "missing a leading date (%r): rename to <YYYY-MM-DD>-<slug>" % artifact
+                "missing a leading date (%r): rename to <YYYY-MM-DD>_<slug>" % artifact
             )
         out.append((key, reason))
     return out
@@ -255,7 +355,7 @@ def changed_paths(root: Path) -> list:
 
 
 def all_artifact_paths(root: Path) -> list:
-    """Every immediate child of every dated directory that exists under `root`.
+    """Every immediate child of every dated directory, plus loose docs/ root files.
 
     Whole-tree mode, for a one-off migration rather than the run-scoped gate.
     """
@@ -271,6 +371,12 @@ def all_artifact_paths(root: Path) -> list:
                 out.append("%s/%s" % (d, child.name))
         except OSError:
             continue
+    docs = Path(root) / "docs"
+    if docs.is_dir():
+        try:
+            out.extend("docs/" + c.name for c in sorted(docs.iterdir()) if c.is_file())
+        except OSError:
+            pass
     return out
 
 
@@ -320,7 +426,9 @@ def derive_date(root: Path, rel: str) -> str:
         except Exception:
             pass
     try:
-        return time.strftime("%Y-%m-%d", time.localtime((Path(root) / rel).stat().st_mtime))
+        return time.strftime(
+            "%Y-%m-%d", time.localtime((Path(root) / rel).stat().st_mtime)
+        )
     except OSError:
         return time.strftime("%Y-%m-%d")
 
@@ -329,25 +437,32 @@ def plan_renames(root: Path, viols) -> list:
     """[(old_rel, new_rel)] for each violation, date-first and de-duplicated.
 
     The slug keeps everything the old name carried except the date it already
-    had, so `atlas-harden-2026-07-07` becomes `2026-07-07-atlas-harden` rather
-    than losing its subject.
+    had, so `atlas-harden-2026-07-07` becomes `2026-07-07_atlas-harden` rather
+    than losing its subject. A loose docs/ root file moves into its dated
+    folder; an unclassifiable one is skipped (reported, never auto-moved).
     """
     plans = []
     taken = set()
     for old_rel, _reason in viols:
         parent, name = old_rel.rsplit("/", 1)
+        if _is_root_file(old_rel):
+            parent = _root_target_dir(old_rel)
+            if parent is None:
+                continue
         suffix = ".md" if name.endswith(".md") else ""
         stem = name[: -len(suffix)] if suffix else name
         date = derive_date(root, old_rel)
         # Strip the date the name already carried, wherever it sat.
         body = _DATE_ANYWHERE.sub("", stem)
         slug = _slugify(body)
-        candidate = "%s/%s-%s%s" % (parent, date, slug, suffix)
+        if _is_root_file(old_rel):
+            slug = slug.replace("_", "-")  # loose names use snake case; slugs are kebab
+        candidate = "%s/%s_%s%s" % (parent, date, slug, suffix)
         n = 2
         while candidate in taken or (
             (Path(root) / candidate).exists() and candidate != old_rel
         ):
-            candidate = "%s/%s-%s-%d%s" % (parent, date, slug, n, suffix)
+            candidate = "%s/%s_%s-%d%s" % (parent, date, slug, n, suffix)
             n += 1
         if candidate == old_rel:
             continue
@@ -426,6 +541,12 @@ def rewrite_references(root: Path, moved) -> list:
     # Longest pattern first: the full path must win over the bare name, or the
     # name substitution would corrupt the path before it is matched.
     subs.sort(key=lambda pair: len(pair[0]), reverse=True)
+    # Boundary-aware: a bare name must not match inside a longer one
+    # (PLAN.md inside MASTER_PLAN.md), which a plain str.replace would corrupt.
+    subs = [
+        (re.compile(r"(?<![\w.-])" + re.escape(old) + r"(?![\w-])"), new)
+        for old, new in dict(subs).items()
+    ]
     touched = []
     for path in _text_files(root):
         try:
@@ -434,8 +555,7 @@ def rewrite_references(root: Path, moved) -> list:
             continue
         updated = original
         for old, new in subs:
-            if old in updated:
-                updated = updated.replace(old, new)
+            updated = old.sub(lambda _m, n=new: n, updated)
         if updated != original:
             try:
                 path.write_text(updated, encoding="utf-8")
@@ -550,8 +670,13 @@ def _cli(argv=None) -> int:
             print(
                 "  -> run atlas-setup, or "
                 'python3 "%s" <repo-root> (idempotent)'
-                % (Path(__file__).resolve().parent.parent
-                   / "skills" / "atlas-setup" / "scripts" / "scaffold_docs.py")
+                % (
+                    Path(__file__).resolve().parent.parent
+                    / "skills"
+                    / "atlas-setup"
+                    / "scripts"
+                    / "scaffold_docs.py"
+                )
             )
         else:
             print("docs structure OK")
@@ -563,10 +688,13 @@ def _cli(argv=None) -> int:
 
     if not do_fix:
         print("docs naming violations (%d):" % len(bad))
+        targets = dict(plan_renames(root, bad))  # read-only: nothing is moved
         for path, reason in bad:
             print("  %s -- %s" % (path, reason))
+            if path in targets:
+                print("      -> %s" % targets[path])
         print(
-            "\nDated records are date-first so a listing sorts chronologically. "
+            "\nDated records are <YYYY-MM-DD>_<slug> so a listing sorts chronologically. "
             "See docs-ssot.md 'Naming conventions'. Re-run with --fix to rename "
             "them and rewrite every reference."
         )
@@ -581,7 +709,14 @@ def _cli(argv=None) -> int:
     print("rewrote references in %d file(s)%s" % (len(touched), ":" if touched else ""))
     for path in touched:
         print("  %s" % path)
-    remaining = violations([new for _old, new in moved] or paths)
+    planned = {old for old, _new in plans}
+    by_hand = [(p, r) for p, r in bad if p not in planned]
+    if by_hand:
+        rc = 1
+        print("NEEDS A HUMAN (%d), not auto-moved:" % len(by_hand))
+        for path, reason in by_hand:
+            print("  %s -- %s" % (path, reason))
+    remaining = violations([new for _old, new in moved])
     if remaining:
         print("STILL NON-CONFORMANT (%d):" % len(remaining))
         for path, reason in remaining:

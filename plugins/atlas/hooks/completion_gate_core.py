@@ -78,7 +78,7 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
       exists to avoid, and an unreadable surface never manufactures a block.
   (l) Docs naming: every dated record this run touched (plan, spec, lesson,
       decision, audit, finding, evidence dir) must be named
-      `<YYYY-MM-DD>-<slug>` so a plain listing sorts chronologically. A
+      `<YYYY-MM-DD>_<slug>` so a plain listing sorts chronologically. A
       trailing date or a leading sequence number sorts by subject instead,
       which is what made an existing plan set unreadable. Run-scoped via git
       and fail-open: historical names nobody touched never block, or the gate
@@ -880,7 +880,7 @@ _GISTS: dict[str, str] = {
     "i": "todos still open; finish them or explicitly drop them",
     "j": "worktrees left; merge and remove them",
     "k": "no plan; write the todo list now",
-    "l": "docs artifacts not named date-first; git mv to <YYYY-MM-DD>-<slug>",
+    "l": "docs artifacts not named date-first; git mv to <YYYY-MM-DD>_<slug>",
     "m": "main-thread code writes with no dispatch; dispatch atlas:implementer",
     "n": "status header missing; start the reply with the atlas header",
     "o": "required phases missing; add the phase markers",
@@ -1062,8 +1062,9 @@ def _reason(
             "l",
             f"  (l) {len(name_violations)} docs artifact(s) this run touched are not named date-first: "
             f"{'; '.join(p for p, _ in name_violations[:5])}. A dated record (plan, spec, lesson, decision, audit, finding) is "
-            "<YYYY-MM-DD>-<slug> so a plain listing sorts chronologically; a "
-            "trailing date or a leading sequence number sorts by subject instead. "
+            "<YYYY-MM-DD>_<slug> (underscore after the date) so a plain listing sorts chronologically; a "
+            "trailing date, a hyphen after the date or a leading sequence number sorts by subject instead; "
+            "a loose file in docs/ root belongs in a dated subfolder. "
             "-> Rename with `git mv` (keep the history), then re-check with "
             f'python3 "{SCRIPTS_DIR / "lint_docs_names.py"}".',
         )

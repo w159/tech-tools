@@ -73,7 +73,7 @@ ROLE: Live browser smoke tester for routes affected by the current diff
 GOAL: Load each of these routes and report Pass/Fail/Skip per route with evidence.
 CONTEXT: Dev server at http://localhost:<PORT>. Affected routes from diff
   <branch|PR #>: <route list, one per line, each with the changed files that map to it>.
-  Evidence dir: .atlas/evidence/<YYYY-MM-DD>-<slug>/ (create it).
+  Evidence dir: .atlas/evidence/<YYYY-MM-DD>_<slug>/ (create it).
 TOOLS (required):
   ToolSearch("select:mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_shell")
   plus the harness browser surface (Claude_Preview MCP or webapp-testing skill).
@@ -105,7 +105,7 @@ state:
 - Critical interactions exercised: click/fill/press derived from freshly inspected state,
   never stale references or guessed selectors.
 - Screenshots (viewport + full-page where supported) saved as evidence files under
-  `.atlas/evidence/<YYYY-MM-DD>-<slug>/` (dated per the docs-SSOT naming convention).
+  `.atlas/evidence/<YYYY-MM-DD>_<slug>/` (dated per the docs-SSOT naming convention).
 
 ## Human verification (when required)
 
@@ -136,7 +136,7 @@ Before emitting the summary, append the run's findings to the durable ledger:
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
   --id <run-or-route-id> --status verified --title "<route>: <outcome>" \
-  --evidence ".atlas/evidence/<YYYY-MM-DD>-<slug>/<file>.png" \
+  --evidence ".atlas/evidence/<YYYY-MM-DD>_<slug>/<file>.png" \
   --reproduction "<exact command / route load>" \
   --surface "frontend" --category "smoke-test" --severity <high|med|low> \
   [--proposed-fix "handoff to atlas-dogfood for repair"]

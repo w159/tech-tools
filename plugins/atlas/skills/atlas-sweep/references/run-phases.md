@@ -174,7 +174,7 @@ fix ref and verify it merged to the default branch.
 #### 2g. Triage doc
 
 Follow `references/triage-doc.md`. Target
-`docs/features/<YYYY-MM-DD>-feedback-sweep.md` (today's date). Rotation and
+`docs/features/<YYYY-MM-DD>_feedback-sweep.md` (today's date). Rotation and
 machine-region rules are in that file. Every open item appears inside a
 cluster with its state id and a proposed next action; deferred decisions
 land in Outstanding Questions.

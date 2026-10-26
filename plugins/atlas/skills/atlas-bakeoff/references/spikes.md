@@ -32,7 +32,7 @@ STOP CONDITIONS: the spike needs > the time budget, or requires touching product
 REPORT BACK: verdict + evidence path. SCHEMA: spike-report v1
   claim: <verbatim>
   verdict: confirmed|refuted|inconclusive
-  evidence: <cmd + output or evidence path under .atlas/evidence/<YYYY-MM-DD>-<slug>/>
+  evidence: <cmd + output or evidence path under .atlas/evidence/<YYYY-MM-DD>_<slug>/>
   residue: <exact list of files/branches created, for cleanup>
 ```
 
@@ -40,10 +40,10 @@ All independent spikes go out in one message, in parallel. Spikes for different 
 
 ## Isolation and residue rules
 
-- **Scratch location**: throwaway files under a clearly temporary path (e.g. `/tmp/<slug>-spike/` or a gitignored `spikes/` dir), or a throwaway git branch when the experiment must live inside the repo's build/tooling context. Name branches `spike/<YYYY-MM-DD>-<slug>` so origin is obvious.
+- **Scratch location**: throwaway files under a clearly temporary path (e.g. `/tmp/<slug>-spike/` or a gitignored `spikes/` dir), or a throwaway git branch when the experiment must live inside the repo's build/tooling context. Name branches `spike/<YYYY-MM-DD>_<slug>` so origin is obvious.
 - **Never push, never open a PR, never merge, never touch production source.** A spike that cannot run without mutating production code is by definition not cheap — convert it to an evidence need.
 - **Cleanup is mandatory and verified**: after the bake-off concludes, delete scratch files and throwaway branches (`git branch -D spike/...` is a local-only destructive op on a branch created by this run — that is the one deletion this skill performs without further confirmation). Verify with `git branch --list 'spike/*'` returning empty and the scratch dir gone.
-- **Evidence that matters is preserved before cleanup**: copy the run output the verdict rests on into `.atlas/evidence/<YYYY-MM-DD>-<slug>/` before deleting the scratch. A refuted-then-deleted spike with no retained output proves nothing.
+- **Evidence that matters is preserved before cleanup**: copy the run output the verdict rests on into `.atlas/evidence/<YYYY-MM-DD>_<slug>/` before deleting the scratch. A refuted-then-deleted spike with no retained output proves nothing.
 
 ## Feeding the comparison
 

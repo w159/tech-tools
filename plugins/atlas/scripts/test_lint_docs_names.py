@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for docs conformance: date-first naming, the fixer, and structure."""
+"""Tests for docs conformance: dated-name (underscore) naming, the fixer, and structure."""
 
 from __future__ import annotations
 
@@ -19,11 +19,13 @@ import lint_docs_names  # noqa: E402
 
 class IsDatedName(unittest.TestCase):
     def test_plain_dated_slug(self):
-        self.assertTrue(lint_docs_names.is_dated_name("2026-06-23-packer-consolidation"))
+        self.assertTrue(
+            lint_docs_names.is_dated_name("2026-06-23_packer-consolidation")
+        )
 
     def test_sequence_number_after_the_date_is_allowed(self):
         """A same-day ordered set keeps its order with a number AFTER the date."""
-        self.assertTrue(lint_docs_names.is_dated_name("2026-06-23-01-packer"))
+        self.assertTrue(lint_docs_names.is_dated_name("2026-06-23_01-packer"))
 
     def test_trailing_date_is_not_dated(self):
         self.assertFalse(lint_docs_names.is_dated_name("atlas-harden-2026-07-07"))
@@ -32,11 +34,11 @@ class IsDatedName(unittest.TestCase):
         self.assertFalse(lint_docs_names.is_dated_name("00-master-consolidation"))
 
     def test_uppercase_slug_is_rejected(self):
-        self.assertFalse(lint_docs_names.is_dated_name("2026-06-23-MASTER"))
+        self.assertFalse(lint_docs_names.is_dated_name("2026-06-23_MASTER"))
 
     def test_impossible_month_is_rejected(self):
         """A calendar-shaped check, so 2026-13-01 is not a date."""
-        self.assertFalse(lint_docs_names.is_dated_name("2026-13-01-thing"))
+        self.assertFalse(lint_docs_names.is_dated_name("2026-13-01_thing"))
 
     def test_date_with_no_slug_is_rejected(self):
         self.assertFalse(lint_docs_names.is_dated_name("2026-06-23"))
@@ -47,23 +49,23 @@ class Violations(unittest.TestCase):
         self.assertEqual(
             lint_docs_names.violations(
                 [
-                    "docs/plans/2026-06-23-01-packer.md",
-                    "docs/lessons/2026-07-09-enforcement.md",
-                    ".atlas/findings/2026-08-11-serena.md",
+                    "docs/plans/2026-06-23_01-packer.md",
+                    "docs/lessons/2026-07-09_enforcement.md",
+                    ".atlas/findings/2026-08-11_serena.md",
                 ]
             ),
             [],
         )
 
     def test_trailing_date_is_reported_as_order(self):
-        (path, reason), = lint_docs_names.violations(
+        ((path, reason),) = lint_docs_names.violations(
             ["docs/audits/atlas-harden-2026-07-07/final-report.md"]
         )
         self.assertEqual(path, "docs/audits/atlas-harden-2026-07-07")
         self.assertIn("date is not first", reason)
 
     def test_missing_date_is_reported(self):
-        (_, reason), = lint_docs_names.violations(["docs/plans/bootstrap-kit.md"])
+        ((_, reason),) = lint_docs_names.violations(["docs/plans/bootstrap-kit.md"])
         self.assertIn("missing a leading date", reason)
 
     def test_living_directories_are_never_dated(self):
@@ -91,7 +93,7 @@ class Violations(unittest.TestCase):
         """Inside a compliant audit hub, the hub's own subtree is its business."""
         self.assertEqual(
             lint_docs_names.violations(
-                ["docs/audits/2026-07-07-atlas-harden/plans/ws4-hub-launcher.md"]
+                ["docs/audits/2026-07-07_atlas-harden/plans/ws4-hub-launcher.md"]
             ),
             [],
         )
@@ -112,7 +114,9 @@ class Violations(unittest.TestCase):
 
     def test_paths_outside_the_watched_trees_are_ignored(self):
         self.assertEqual(
-            lint_docs_names.violations(["src/app.py", "README.md", "docs/CHANGELOG.md"]),
+            lint_docs_names.violations(
+                ["src/app.py", "README.md", "docs/CHANGELOG.md"]
+            ),
             [],
         )
 
@@ -125,7 +129,7 @@ class Cli(unittest.TestCase):
         return rc, buf.getvalue()
 
     def test_explicit_clean_path_exits_zero(self):
-        rc, out = self._run("docs/plans/2026-06-23-01-packer.md")
+        rc, out = self._run("docs/plans/2026-06-23_01-packer.md")
         self.assertEqual(rc, 0)
         self.assertIn("docs naming OK", out)
 
@@ -133,7 +137,6 @@ class Cli(unittest.TestCase):
         rc, out = self._run("docs/plans/00-MASTER-consolidation.md")
         self.assertEqual(rc, 1)
         self.assertIn("00-MASTER-consolidation.md", out)
-
 
 
 class Fixer(unittest.TestCase):
@@ -180,7 +183,7 @@ class Fixer(unittest.TestCase):
             [
                 (
                     "docs/audits/atlas-harden-2026-07-07",
-                    "docs/audits/2026-07-07-atlas-harden",
+                    "docs/audits/2026-07-07_atlas-harden",
                 )
             ],
         )
@@ -206,11 +209,10 @@ class Fixer(unittest.TestCase):
         self.assertIn("docs/architecture/map.md", touched)
         self.assertIn("src/app.py", touched)
         self.assertIn(
-            new_rel, (self.root / "docs/architecture/map.md").read_text(encoding="utf-8")
+            new_rel,
+            (self.root / "docs/architecture/map.md").read_text(encoding="utf-8"),
         )
-        self.assertIn(
-            new_name, (self.root / "src/app.py").read_text(encoding="utf-8")
-        )
+        self.assertIn(new_name, (self.root / "src/app.py").read_text(encoding="utf-8"))
         self.assertTrue((self.root / new_rel).is_file())
         self.assertFalse((self.root / "docs/plans/00-MASTER-plan.md").exists())
 
@@ -244,6 +246,159 @@ class Fixer(unittest.TestCase):
                 sentinel,
                 "%s was rewritten" % name,
             )
+
+
+class UnderscoreRule(unittest.TestCase):
+    def test_hyphen_dated_name_is_not_dated(self):
+        self.assertFalse(lint_docs_names.is_dated_name("2026-06-23-packer"))
+
+    def test_hyphen_dated_name_is_a_separator_violation(self):
+        ((path, reason),) = lint_docs_names.violations(
+            ["docs/plans/2026-06-23-packer.md"]
+        )
+        self.assertEqual(path, "docs/plans/2026-06-23-packer.md")
+        self.assertIn("date separator must be '_'", reason)
+
+    def test_meetings_and_handoffs_are_dated_dirs(self):
+        self.assertEqual(
+            len(
+                lint_docs_names.violations(
+                    ["docs/meetings/standup.md", "docs/handoffs/x.md"]
+                )
+            ),
+            2,
+        )
+        self.assertEqual(
+            lint_docs_names.violations(["docs/meetings/2026-01-02_standup.md"]), []
+        )
+
+
+class UnderscoreFixer(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write(self, rel, text=""):
+        p = self.root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+
+    def _fix(self, paths):
+        bad = lint_docs_names.violations(paths)
+        plans = lint_docs_names.plan_renames(self.root, bad)
+        moved = lint_docs_names.apply_renames(self.root, plans)
+        lint_docs_names.rewrite_references(self.root, moved)
+        return plans, moved
+
+    def test_hyphen_migrates_to_underscore_keeping_date_and_rewrites_refs(self):
+        self._write("docs/plans/2026-06-23-packer.md", "x")
+        self._write(
+            "docs/wiki/a.md",
+            "see docs/plans/2026-06-23-packer.md and 2026-06-23-packer\n",
+        )
+        plans, moved = self._fix(["docs/plans/2026-06-23-packer.md"])
+        self.assertEqual(
+            moved,
+            [("docs/plans/2026-06-23-packer.md", "docs/plans/2026-06-23_packer.md")],
+        )
+        self.assertTrue((self.root / "docs/plans/2026-06-23_packer.md").is_file())
+        self.assertEqual(
+            (self.root / "docs/wiki/a.md").read_text(encoding="utf-8"),
+            "see docs/plans/2026-06-23_packer.md and 2026-06-23_packer\n",
+        )
+
+    def test_hyphen_directory_in_dated_dir_migrates(self):
+        self._write("docs/audits/2026-07-07-atlas-harden/report.md", "x")
+        _, moved = self._fix(["docs/audits/2026-07-07-atlas-harden/report.md"])
+        self.assertEqual(moved[0][1], "docs/audits/2026-07-07_atlas-harden")
+        self.assertTrue(
+            (self.root / "docs/audits/2026-07-07_atlas-harden/report.md").is_file()
+        )
+
+    def test_date_last_becomes_underscore_form(self):
+        self._write("docs/audits/atlas-harden-2026-07-07/r.md", "x")
+        plans, _ = self._fix(["docs/audits/atlas-harden-2026-07-07/r.md"])
+        self.assertEqual(plans[0][1], "docs/audits/2026-07-07_atlas-harden")
+
+    def test_classified_root_file_moves_with_reference_rewrite(self):
+        self._write("docs/MEETING_NOTES_9.3.26.md", "n")
+        self._write(
+            "docs/wiki/a.md",
+            "[n](../MEETING_NOTES_9.3.26.md) docs/MEETING_NOTES_9.3.26.md\n",
+        )
+        plans, moved = self._fix(["docs/MEETING_NOTES_9.3.26.md"])
+        new = moved[0][1]
+        self.assertRegex(
+            new, r"^docs/meetings/\d{4}-\d{2}-\d{2}_meeting-notes-9.3.26\.md$"
+        )
+        self.assertFalse((self.root / "docs/MEETING_NOTES_9.3.26.md").exists())
+        text = (self.root / "docs/wiki/a.md").read_text(encoding="utf-8")
+        self.assertIn(new, text)
+        self.assertNotIn("MEETING_NOTES", text)
+
+    def test_root_routing_keywords(self):
+        cases = {
+            "docs/FORMULA-INVENTORY.md": "docs/audits",
+            "docs/MEETING_TRANSCRIPT.md": "docs/meetings",
+            "docs/API_SPEC.md": "docs/specs",
+            "docs/Q3-plan.md": "docs/plans",
+            "docs/adr-5.md": "docs/decisions",
+            "docs/handoff.md": "docs/handoffs",
+            "docs/sprint-retro.md": "docs/lessons",
+        }
+        for rel, folder in cases.items():
+            self.assertEqual(lint_docs_names._root_target_dir(rel), folder, rel)
+        self.assertIsNone(lint_docs_names._root_target_dir("docs/quadrant.md"))
+
+    def test_unclassified_root_file_is_reported_not_moved(self):
+        self._write("docs/TODO_LIST.md", "x")
+        ((_, reason),) = lint_docs_names.violations(["docs/TODO_LIST.md"])
+        self.assertIn("by hand", reason)
+        plans, moved = self._fix(["docs/TODO_LIST.md"])
+        self.assertEqual((plans, moved), ([], []))
+        self.assertTrue((self.root / "docs/TODO_LIST.md").is_file())
+
+    def test_canonical_root_files_are_exempt(self):
+        names = [
+            "README.md",
+            "changelog.md",
+            "ROADMAP.md",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "GLOSSARY.md",
+            "Contributing.md",
+            "SECURITY.md",
+            "DEVELOPMENT.md",
+            "INDEX.md",
+        ]
+        self.assertEqual(lint_docs_names.violations(["docs/" + n for n in names]), [])
+
+    def test_living_dir_and_non_doc_root_files_are_exempt(self):
+        self.assertEqual(
+            lint_docs_names.violations(
+                ["docs/wiki/Anything_Goes.md", "docs/diagram.png"]
+            ),
+            [],
+        )
+
+    def test_bare_name_rewrite_respects_word_boundaries(self):
+        self._write("docs/PLAN.md", "x")
+        self._write("docs/wiki/a.md", "PLAN.md and MASTER_PLAN.md\n")
+        _, moved = self._fix(["docs/PLAN.md"])
+        text = (self.root / "docs/wiki/a.md").read_text(encoding="utf-8")
+        self.assertIn("MASTER_PLAN.md", text)
+        self.assertIn(moved[0][1].rsplit("/", 1)[-1], text)
+
+    def test_all_mode_lists_root_files(self):
+        self._write("docs/TODO_LIST.md", "x")
+        self._write("docs/README.md", "x")
+        self.assertEqual(
+            lint_docs_names.all_artifact_paths(self.root),
+            ["docs/README.md", "docs/TODO_LIST.md"],
+        )
 
 
 class Structure(unittest.TestCase):

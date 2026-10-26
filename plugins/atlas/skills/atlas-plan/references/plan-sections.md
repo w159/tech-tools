@@ -13,7 +13,7 @@ Ported from CE `ce-plan/references/plan-sections.md` (Goal Capsule + Product Con
 
 ## Path and naming
 
-`docs/plans/<YYYY-MM-DD>-<slug>-plan.md`
+`docs/plans/<YYYY-MM-DD>_<slug>-plan.md`
 
 - `<YYYY-MM-DD>` = today's date (atlas date-first convention, enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py` - never CE's HHMM-timestamped or undated names).
 - `<slug>`: lowercase; every character outside `a-z 0-9 . _ -` replaced by `-`; collapsed and trimmed (Windows-safe per docs-ssot).
@@ -26,7 +26,7 @@ Ported from CE `ce-plan/references/plan-sections.md` (Goal Capsule + Product Con
 
 Date: <YYYY-MM-DD>
 Source: atlas-plan
-Upstream: docs/plans/<YYYY-MM-DD>-<slug>-brainstorm.md  (or "inline intake" for bare descriptions)
+Upstream: docs/plans/<YYYY-MM-DD>_<slug>-brainstorm.md  (or "inline intake" for bare descriptions)
 artifact_contract: atlas-plan/v1
 product_contract_source: atlas-brainstorm | atlas-plan (inline intake)
 execution: atlas-orchestrate
@@ -90,7 +90,7 @@ test scenarios, verification, definition of done>
 - The exact command set: the full test/lint/build invocation(s) that must pass on the final tree.
 - Independent verification: atlas:verifier dispatch(es) per orchestrate law 5 - the implementer's
   receipts are self-reports; the contract names what a fresh context must re-run.
-- Evidence destination: `.atlas/evidence/<YYYY-MM-DD>-<unit-id>-receipt.md` per unit, plus any
+- Evidence destination: `.atlas/evidence/<YYYY-MM-DD>_<unit-id>-receipt.md` per unit, plus any
   runtime captures (screenshots, curl output, query results) user-facing units require.
 - Deferred-question resolution: each Q-### names where its answer lands in the evidence.>
 

@@ -4,7 +4,7 @@ Ported from CE `ce-brainstorm` `references/plan-sections.md` (Goal Capsule + Pro
 
 ## Path
 
-`docs/plans/<YYYY-MM-DD>-<slug>-brainstorm.md`
+`docs/plans/<YYYY-MM-DD>_<slug>-brainstorm.md`
 
 - `<YYYY-MM-DD>` = today's date (atlas date-first convention, enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py` - never CE's undated or HHMM names).
 - `<slug>`: lowercase, every character outside `a-z 0-9 . _ -` replaced by `-`, collapsed and trimmed (Windows-safe per docs-ssot).

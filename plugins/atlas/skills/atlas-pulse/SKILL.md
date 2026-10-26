@@ -20,7 +20,7 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 Queries the product's real telemetry sources for a time window and produces a compact, single-page report: usage, system performance, errors, followups. Saved as a dated record under `docs/pulses/`; headlines surfaced in chat. Past pulses browse as a dated, diffable timeline.
 
-**Done:** a 30-40 line report exists at `docs/pulses/<YYYY-MM-DD>-product-pulse.md`, every figure in it traces to captured query output under `.atlas/evidence/`, the verification verdict is stamped in `.atlas/.run/findings.json`, and the headlines are in chat.
+**Done:** a 30-40 line report exists at `docs/pulses/<YYYY-MM-DD>_product-pulse.md`, every figure in it traces to captured query output under `.atlas/evidence/`, the verification verdict is stamped in `.atlas/.run/findings.json`, and the headlines are in chat.
 
 ## Hard rules (non-negotiable)
 
@@ -51,9 +51,9 @@ Dispatch **one** `atlas:explorer` (read-only) per the dispatch shape in `${CLAUD
 
 ### Phase 2 - Run the pulse
 
-Read `references/run.md` before dispatching any query - required. It defines the parallel/serial dispatch order, the read-only database rule, cost guards, the 15-minute buffer arithmetic, quality sampling discipline, evidence capture to `.atlas/evidence/<YYYY-MM-DD>-product-pulse/`, and report assembly from `references/report-template.md`. Sources are queried through whatever read-only path actually exists - the provider's MCP connector if one is connected in this session, otherwise its documented API with credentials from the user's own environment - never by hardcoding a dependency on a specific external CLI binary. A source with no working read-only access this run is reported as `no access this run`, not estimated.
+Read `references/run.md` before dispatching any query - required. It defines the parallel/serial dispatch order, the read-only database rule, cost guards, the 15-minute buffer arithmetic, quality sampling discipline, evidence capture to `.atlas/evidence/<YYYY-MM-DD>_product-pulse/`, and report assembly from `references/report-template.md`. Sources are queried through whatever read-only path actually exists - the provider's MCP connector if one is connected in this session, otherwise its documented API with credentials from the user's own environment - never by hardcoding a dependency on a specific external CLI binary. A source with no working read-only access this run is reported as `no access this run`, not estimated.
 
-Write the report to `docs/pulses/<YYYY-MM-DD>-product-pulse.md` (create the directory if absent; date-first naming is lint-enforced).
+Write the report to `docs/pulses/<YYYY-MM-DD>_product-pulse.md` (create the directory if absent; date-first naming is lint-enforced).
 
 ### Phase 3 - Independent verification
 
@@ -62,8 +62,8 @@ Dispatch `atlas:verifier` in a fresh context (never fork): it re-opens the evide
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id pulse-<YYYY-MM-DD> \
   --status verified --title "product pulse <YYYY-MM-DD> (<lookback>)" \
-  --evidence docs/pulses/<YYYY-MM-DD>-product-pulse.md \
-  --evidence .atlas/evidence/<YYYY-MM-DD>-product-pulse/ --category pulse
+  --evidence docs/pulses/<YYYY-MM-DD>_product-pulse.md \
+  --evidence .atlas/evidence/<YYYY-MM-DD>_product-pulse/ --category pulse
 ```
 
 into `.atlas/.run/findings.json` (finding shape: the pulse run, its report path, its evidence dir, verifier verdict).

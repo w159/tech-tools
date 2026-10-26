@@ -45,7 +45,7 @@ Deliver in chat: outcome (recommended / unresolved / incomplete), the winning me
 
 ### Durable record
 
-Write `docs/decisions/<YYYY-MM-DD>-<slug>-bakeoff.md` when the caller asks for a retained document or the comparison is too substantial for chat. Naming follows the docs SSOT date-first convention (validated by `lint_docs_names.py` — `<YYYY-MM-DD>-<slug>-bakeoff.md` satisfies it). Structure:
+Write `docs/decisions/<YYYY-MM-DD>_<slug>-bakeoff.md` when the caller asks for a retained document or the comparison is too substantial for chat. Naming follows the docs SSOT date-first convention (validated by `lint_docs_names.py` — `<YYYY-MM-DD>_<slug>-bakeoff.md` satisfies it). Structure:
 
 ```markdown
 # Bake-off: <decision>

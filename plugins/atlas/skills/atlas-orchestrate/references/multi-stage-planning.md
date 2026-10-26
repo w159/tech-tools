@@ -67,7 +67,7 @@ This is the Verify step (`SKILL.md` step 3) applied per stage, not only at end-o
       "implementer": "atlas:explorer",
       "verifier": "atlas:verifier",
       "status": "verified",
-      "evidence": ".atlas/evidence/2026-07-11-auth-flow-map.md",
+      "evidence": ".atlas/evidence/2026-07-11_auth-flow-map.md",
       "verifier_verdict": "confirmed",
       "failable_check": "a named entry point exists and is reachable"
     },

@@ -2571,7 +2571,7 @@ class GateDocsNamingTest(GateConditionIJTest):
     def test_date_first_plan_does_not_trip_l(self):
         self._satisfy_everything_else()
         self._git_init()
-        self._write_plan("2026-09-15-packer-consolidation.md")
+        self._write_plan("2026-09-15_packer-consolidation.md")
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertNotIn("(l)", r.stdout)
 
