@@ -16,7 +16,7 @@ share one board, a Stop gate refuses "done" without evidence, and a doctor mines
 the session telemetry so the plugin can tune its own rules. It runs in Claude
 Code and, through its extension package, in omp.
 
-Current version: **15.1.0** (`plugins/atlas/.claude-plugin/plugin.json`). The 14.0.0 rework and the 15.0.0 Command Center were withdrawn on 2026-10-22; the dashboard is the 13.0.0 dashboard with a Settings page rebuilt as five tabs in 15.1.0.
+Current version: **15.2.0** (`plugins/atlas/.claude-plugin/plugin.json`): root resolver, doctor layout and docs naming, local scoring fix, Claude Code and omp parity. The 14.0.0 rework and the 15.0.0 Command Center were withdrawn on 2026-10-22; the dashboard is the 13.0.0 dashboard with a Settings page rebuilt as five tabs in 15.1.0.
 
 Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md)):
 

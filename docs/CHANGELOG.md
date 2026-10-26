@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-10-26 (unreleased, no version bump)
+## 15.2.0 - 2026-10-26
 
 Audit and testing proof run: the `atlas-audit` and `atlas-testing` skills were exercised on this tree and fixed where they failed. Nothing is committed yet, so there are no commit SHAs. Evidence and defect table: `docs/audits/2026-10-26_atlas-audit-testing-proof.md`.
 
@@ -49,7 +49,7 @@ Audit and testing proof run: the `atlas-audit` and `atlas-testing` skills were e
 
 - Shipped-work suites: scripts `Ran 2305 ... OK`; hooks `Ran 1591`, only `InstalledParityContract` fails (clears on reinstall); omp `bun test` 486 pass; mod tests pass under `claude plugin test plugins/atlas` (0 mod failures).
 - Findings stamped verified: S1-root-resolver, S2-doctor-layout, S3-docs-underscore, S5-typesafe-url (`.atlas/.run/findings.json`).
-## 2026-10-23 (unreleased, no version bump)
+## 15.2.0 (part 1) - 2026-10-23
 
 - Dashboard battery cost: `ATLAS_DASHBOARD` now defaults to `off` (knob in `scripts/atlas_control.py`, hook default in `hooks/session_boot_core.py`), and the UI loops in `terminal.js`, `activity.js`, `api.js` (polling plus the SSE stream) and `agents-store.js` (projects timer) skip work while the tab is hidden and resume on `visibilitychange`. Tests: `scripts/test_dashboard_battery.py`.
 

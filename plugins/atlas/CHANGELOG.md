@@ -1,5 +1,16 @@
 # Changelog
 
+## 15.2.0 - 2026-10-26
+
+- Project root resolver: `atlas_paths.project_root()` is git-first, cuts at the first `.atlas` component and never treats `$HOME`'s `.atlas` as a root.
+- Layout doctor: `doctor_layout.py` and `atlas_doctor` checks `atlas-layout`, `docs-naming` and `project-identity`, with `--fix`.
+- Docs naming: dated records are `YYYY-MM-DD_slug`; `--fix` migrates hyphen-dated names and rewrites references.
+- Local TypeSafe scoring fix: base or full `/v1/systemone` URL both work, and a local Ollama tag against a hosted URL is refused before any request.
+- Claude Code and omp parity: phased todo tree, `ATLAS_QUIET` quiet mode, statusline segment, golden-tested mission band, tmux team worktrees per edit role.
+- Mux on by default with tmux when installed (`ATLAS_MUX=off` disables).
+- atlas-audit and atlas-testing fixes: unittest fallback in testscope, conditional graphify, skill reference check.
+- Detail: `docs/CHANGELOG.md`.
+
 ## 15.1.0 - 2026-10-22
 
 The Settings page is rebuilt as five tabs and every knob applies on the next hook run. Design and measurements: `docs/plans/2026-10-22_settings-tabs-plan.md`.

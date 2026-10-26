@@ -1,7 +1,7 @@
 // Shared contract for the Atlas Claude Code mod. EVERY mod file imports types from here.
 // Do not change signatures without telling the lead. Reference API types:
 // plugins/atlas/.claude-plugin/types/claude-code/index.d.ts (generated, gitignored).
-// Plan: docs/plans/2026-10-09-atlas-mod.md
+// Plan: docs/plans/2026-10-09_atlas-mod.md
 
 export type PhaseId = 'research' | 'theory' | 'test' | 'validate' | 'implement' | 'verify' | 'done' | 'blocked';
 
