@@ -1,5 +1,12 @@
 # Changelog
 
+## 15.2.1 - 2026-10-26
+
+- Project memories land in `<project>/.atlas/memory/MEMORY.md`; subagent and worktree sessions attribute to their main project.
+- Verified or rejected findings write one record per id to `.atlas/findings/` and rebuild `INDEX.md`; `atlas_finding.py recent` lists them.
+- `atlas_doctor` `project-memory` check; `--fix` migrates tagged global memory entries and backfills finding records for the current project.
+- Detail: `docs/CHANGELOG.md`.
+
 ## 15.2.0 - 2026-10-26
 
 - Project root resolver: `atlas_paths.project_root()` is git-first, cuts at the first `.atlas` component and never treats `$HOME`'s `.atlas` as a root.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - 2026-10-26
+## 15.2.1 - 2026-10-26
 
 ### Changed
 
