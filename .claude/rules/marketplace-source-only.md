@@ -21,4 +21,4 @@ This repository is the **tech-tools / atlas Claude Code plugin marketplace**.
 
 Edit source → version/CHANGELOG/marketplace when releasing → commit/push → consumer reinstalls from marketplace.
 
-Companion docs: `AGENTS.md`, `CLAUDE.md`, `docs/plugin-development-scope.md`.
+Companion docs: `AGENTS.md`, `CLAUDE.md`, `docs/architecture/plugin-development-scope.md`.

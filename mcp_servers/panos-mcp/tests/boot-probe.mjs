@@ -104,7 +104,7 @@ const cases = [
   ['CFG_ unresolved placeholders', { ...CLEAN, PANOS_HOST: undefined, PANOS_API_KEY: undefined, CFG_PANOS_HOST: '${user_config.panos_host}', CFG_PANOS_API_KEY: '${user_config.panos_api_key}' }],
 ];
 
-// Progressive disclosure, per docs/panos-connector-design.md: the tool list a
+// Progressive disclosure, per docs/architecture/panos-connector-design.md: the tool list a
 // client sees is a function of the credential state, so the count is asserted
 // exactly in each one rather than "at least 50" - a state that quietly gains
 // or drops a tool is a disclosure bug.

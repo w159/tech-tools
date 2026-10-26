@@ -151,11 +151,10 @@ atlas-orchestrate ship the rate limiter across API and cache
 ```
 
 The lead splits the work into named workers that share one board. Watch it in
-the [Workboard](#browser-dashboard-atlas-workboard); add `ATLAS_MUX=tmux` to
-run workers through `atlas_mux.py spawn`. Workers run as managed seats of the
+the [Workboard](#browser-dashboard-atlas-workboard); mux mode is on by default, so workers run through `atlas_mux.py spawn` (`ATLAS_MUX=off` disables it). Workers run as managed seats of the
 agent runtime, which starts itself silently at session start (OpenRig by
 default, herdr as the fallback; `ATLAS_SEAT_BACKEND` picks one, see
-[mux mode](#herdr-colony-mode-mux) and `docs/atlas-colony.md`); with no
+[mux mode](#herdr-colony-mode-mux) and `docs/architecture/atlas-colony.md`); with no
 runtime, claude workers fall back to `claude --bg` background agents.
 
 **Check the changes in a real browser.**
@@ -315,9 +314,9 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_TODO=off` | TodoWrite-to-board mirror |
 | `ATLAS_ENGINE_ARM=off` | prompt-triggered orchestration arming |
 | `ATLAS_DECISION=off` | model-based prompt-arm decision (regex answer stays) |
-| `ATLAS_MUX` | unset = in-process colony (default); `ATLAS_MUX=tmux` unlocks `atlas_mux.py spawn` (claude workers as `claude --bg` background agents; panes via `ATLAS_COLONY_TRANSPORT`) |
+| `ATLAS_MUX` | unset = mux mode on (default); `ATLAS_MUX=off` disables it (claude workers as `claude --bg` background agents; panes via `ATLAS_COLONY_TRANSPORT`) |
 | `ATLAS_COLONY_TRANSPORT` | `herdr` (the pane transport label), `tmux` or `claude-bg` forces that transport; unset = managed seats whenever the seat backend is up, else `claude-bg` for claude workers and tmux for omp workers |
-| `ATLAS_SEAT_BACKEND` | `rig` (OpenRig, default when Node 22/24 is present), `herdr`, or `off`; the agent runtime starts itself at SessionStart, nothing is launched by hand (see `docs/atlas-colony.md`, "Seat backend") |
+| `ATLAS_SEAT_BACKEND` | `rig` (OpenRig, default when Node 22/24 is present), `herdr`, or `off`; the agent runtime starts itself at SessionStart, nothing is launched by hand (see `docs/architecture/atlas-colony.md`, "Seat backend") |
 | `ATLAS_RIG_PORT` | OpenRig daemon port on 127.0.0.1 (default 7437; state under `$ATLAS_HOME/openrig/`) |
 | `ATLAS_HERDR_AUTOSTART=off` | SessionStart autostart of the seat backend (both OpenRig and herdr) |
 | `ATLAS_COLONY=off` | SessionStart colony step entirely (`0`, `off`, `false`, `no`) |
@@ -460,7 +459,7 @@ excluding `test_*.py`); unit tests sit beside them.
 | `atlas_dash_herd.py` | Dashboard v2 routes: herdr agents, prompts, panes, ensure (`/api/v2/herd/*`). |
 | `atlas_dash_insights.py` | Dashboard v2 routes: overview, health, activity, improve, prefs. |
 | `atlas_control.py` | Dashboard control plane: behavior knobs, ecosystem inventory, connector writes (allowlisted keys only). |
-| `atlas_mux.py` | Opt-in colony workers (`ATLAS_MUX=tmux` unlocks `spawn`); claude-bg transport by default, panes via `ATLAS_COLONY_TRANSPORT=herdr|tmux` (see [below](#herdr-colony-mode-mux)). |
+| `atlas_mux.py` | Colony workers, on by default (`ATLAS_MUX=off` disables); claude-bg transport by default, panes via `ATLAS_COLONY_TRANSPORT=herdr|tmux` (see [below](#herdr-colony-mode-mux)). |
 | `atlas_launch.py` | Starts one agent session as a detached herdr pane (tmux window only as the fallback); used by the dashboard and `atlas_mux`. |
 | `atlas_herdr.py` | Colony control: `status`, `ensure`, `reap`, `install-check`, `create-pane`; manages the one vendored herdr-web-ui. |
 | `atlas_remote.py` | Tailnet-only colony access through `tailscale serve`: `status`, `plan`, `apply --yes`, `disable --yes`, `url`. |
@@ -567,8 +566,7 @@ start empty so verification stays independent.
 
 ## Herdr colony mode (mux)
 
-Opt-in: `export ATLAS_MUX=tmux` in the lead's environment (the name is
-historical; it only unlocks `atlas_mux.py spawn`), then ask the lead in chat to
+On by default (`export ATLAS_MUX=off` disables it; `scripts/atlas_mux.py:586`). Ask the lead in chat to
 run the colony. claude-bg is the default transport for claude workers: the
 worker runs as a supervised native background dispatch (`claude --bg --name
 <worker> --agent atlas:<role>`; status via `claude agents --json`, kill via
@@ -585,7 +583,6 @@ pins in the pane command, so a worker honors the lead's kill switches. Spawn
 manually only to debug:
 
 ```bash
-export ATLAS_MUX=tmux
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn \
   --run fix-500 --harness omp --name AlphaFix --agent implementer \
   --prompt-file .atlas/.run/alpha-fix.md --root "$PWD"
@@ -665,7 +662,7 @@ tailnet URL it prints opens the Atlas dashboard (via the `/` redirect). `apply`
 refuses while an anonymous tailnet request would be let in, so set
 `HERDR_WEB_TOKEN` or pair a device first: the colony exposes live terminals, so
 reaching it is code execution as your user. Details and the auth order:
-[docs/atlas-colony.md](../atlas-colony.md) and
+[docs/architecture/atlas-colony.md](../atlas-colony.md) and
 [remote-access.md](../../plugins/atlas/skills/atlas-orchestrate/references/remote-access.md).
 
 ## Browser dashboard (Atlas Workboard)
@@ -759,7 +756,7 @@ note `delivered`); a pane that is busy is refused (`409`, IRC keeps the note
 a headless worker or an agent with no live pane gets a queued board note it
 reads on its next tool call.
 
-Full references: [docs/atlas-workboard.md](../atlas-workboard.md) (product
+Full references: [docs/architecture/atlas-workboard.md](../atlas-workboard.md) (product
 overview, agent states, typing guard, onboarding) and
 [dashboard-api.md](../../plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md)
 (routes, guard, SSE, pages, keyboard shortcuts).
@@ -833,7 +830,7 @@ faking the check.
 Atlas runs on both harnesses through `plugins/atlas/omp/` (load instructions in
 [Install](#install-and-update); contracts shared with the Python hooks live in
 `plugins/atlas/contracts/`). Status detail and verification dates:
-[docs/atlas-harness-parity.md](../atlas-harness-parity.md). Runtime notes:
+[docs/architecture/atlas-harness-parity.md](../atlas-harness-parity.md). Runtime notes:
 `plugins/atlas/omp/README.md`.
 
 **Works in omp** (rules shared with the Claude Code hooks):

@@ -239,7 +239,7 @@ finding 8834 -> applied
 ```
 
 The latest runtime audit, built from these logs, is
-[docs/audits/2026-10-14-atlas-runtime-audit.md](docs/audits/2026-10-14-atlas-runtime-audit.md).
+[docs/audits/2026-10-14_atlas-runtime-audit.md](docs/audits/2026-10-14_atlas-runtime-audit.md).
 
 ## omp support
 
@@ -256,7 +256,7 @@ tripwire. omp has two extras:
 
 ![omp widget during a team run](img/showcase/omp-widget.png)
 
-The parity matrix is in [docs/atlas-harness-parity.md](docs/atlas-harness-parity.md).
+The parity matrix is in [docs/architecture/atlas-harness-parity.md](docs/architecture/atlas-harness-parity.md).
 
 ## Command Center web UI
 
@@ -283,7 +283,7 @@ channels the hooks write.
 ![Improve](img/showcase/dashboard-improve.png)
 
 Every route checks the `Host` header, content type, origin and, for mutations,
-a per-start token. Details: [docs/atlas-workboard.md](docs/atlas-workboard.md).
+a per-start token. Details: [docs/architecture/atlas-workboard.md](docs/architecture/atlas-workboard.md).
 
 ## Configuration
 
@@ -310,9 +310,9 @@ omp tests, tmux (the intended default colony transport; `claude-bg` is the fallb
 | Topic | Where |
 |---|---|
 | Full reference (skills, agents, hooks, scripts, connectors, colony, troubleshooting) | [docs/reference/atlas-reference.md](docs/reference/atlas-reference.md) |
-| Colony and seat backends | [docs/atlas-colony.md](docs/atlas-colony.md) |
-| Dashboard | [docs/atlas-workboard.md](docs/atlas-workboard.md) |
-| omp parity | [docs/atlas-harness-parity.md](docs/atlas-harness-parity.md) |
+| Colony and seat backends | [docs/architecture/atlas-colony.md](docs/architecture/atlas-colony.md) |
+| Dashboard | [docs/architecture/atlas-workboard.md](docs/architecture/atlas-workboard.md) |
+| omp parity | [docs/architecture/atlas-harness-parity.md](docs/architecture/atlas-harness-parity.md) |
 | Changes | [docs/CHANGELOG.md](docs/CHANGELOG.md), [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md) |
 | Plans | [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Audits | [docs/audits/](docs/audits/) |

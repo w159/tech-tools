@@ -115,7 +115,7 @@ Cost: input tokens only, billed at the provider's current rate (see the provider
 pricing page); atlas does not compute this cost. Privacy: transcript excerpts are sent to
 api.typesafe.ai with secrets scrubbed; `ATLAS_TYPESAFE_SCORING=off` disables
 scoring. Thresholds are constants in `atlas_doctor.py` (see
-`docs/atlas-turn-scoring.md`).
+`docs/architecture/atlas-turn-scoring.md`).
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --list-findings --status open --json

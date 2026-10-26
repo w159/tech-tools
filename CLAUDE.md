@@ -4,7 +4,7 @@ Claude Code loads this file every session in this repo. `AGENTS.md` is the
 shared canonical rule set; this file is the **hard gate** for Claude Code so
 the marketplace source is never confused with a live install/cache.
 
-Read `AGENTS.md` and `docs/plugin-development-scope.md` next.
+Read `AGENTS.md` and `docs/architecture/plugin-development-scope.md` next.
 
 ---
 
@@ -66,7 +66,7 @@ the user explicitly asks for dogfood runtime config.
 - Everything under `docs/` is project documentation.
 - Do not delete, "clean", or gitignore docs content as unused junk.
 - Prefer updating `docs/` when behavior or architecture changes.
-- Full explanation: `docs/plugin-development-scope.md`.
+- Full explanation: `docs/architecture/plugin-development-scope.md`.
 
 ### 5. Verify from this tree
 

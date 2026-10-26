@@ -12,7 +12,7 @@ the 25-second sleep had to run in the background because the harness blocked it 
 ❯ Card test 2. Dispatch ONE atlas:explorer named explorer-cardd with run_in_background true. Prompt lines: "SCOPE: audit/low", "GOAL: read 2 files and report   
   their first heading", "TOOLS: ToolSearch lean-ctx (ctx_read, ctx_search); Bash", "DELIVERABLE: 2 lines file: heading", "SUCCESS CRITERIA: two headings        
   reported", "OUT OF SCOPE: edits", "STOP CONDITIONS: after both reads", "REPORT: the standard STATUS/STEPS/FILES_CHANGED/EVIDENCE/DELIVERABLE block". It reads 
-  docs/ROADMAP.md with ctx_read, then runs the Bash command sleep 15; echo half in the foreground, then reads docs/plugin-development-scope.md with ctx_read,   
+  docs/ROADMAP.md with ctx_read, then runs the Bash command sleep 15; echo half in the foreground, then reads docs/architecture/plugin-development-scope.md with ctx_read,   
   then runs sleep 10; echo end in the foreground. Do not read them yourself. Wait for it, then reply in one line.                                               
 ▌ ✓ explorer-cardd  explorer · sonnet·low                                                                                                                     
 ▌ goal  read 2 files and report their first heading                                                                                                           
@@ -30,10 +30,10 @@ in one line once explorer-cardd finishes.
 ▌ EVIDENCE:
 ▌ 1. ctx_read docs/ROADMAP.md lines:1-8 -> "1| # Roadmap" ... "7| ## In Progress"
 ▌ 2. Bash `sleep 15; echo half` (foreground) -> half
-▌ 3. ctx_read docs/plugin-development-scope.md lines:1-8 -> "1| # Plugin development scope: atlas and armada" ... "7| The one rule this document exists to enf…
+▌ 3. ctx_read docs/architecture/plugin-development-scope.md lines:1-8 -> "1| # Plugin development scope: atlas and armada" ... "7| The one rule this document exists to enf…
 ▌ 4. Bash `sleep 10; echo end` (foreground) -> end
  ◆ ATLAS  ⚑ DONE  explorer-cardd finished all 4 steps
-docs/ROADMAP.md starts with "# Roadmap" and docs/plugin-development-scope.md with "# Plugin development scope: atlas and armada"; both sleeps ran in the
+docs/ROADMAP.md starts with "# Roadmap" and docs/architecture/plugin-development-scope.md with "# Plugin development scope: atlas and armada"; both sleeps ran in the
 
 ❯ Deny test. Dispatch ONE atlas:explorer named explorer-noscope (foreground) whose prompt deliberately has NO SCOPE line: "GOAL: count lines in AGENTS.md",     
   "TOOLS: ToolSearch lean-ctx (ctx_read)", "DELIVERABLE: one number", "SUCCESS CRITERIA: number reported", "OUT OF SCOPE: edits", "STOP CONDITIONS: after one   

@@ -2,7 +2,7 @@ import { defineDomain, invalid, run, STAGED_NOTE, unknownEffectTool, toQuery } f
 import { matchPath, nearest, normalizePath } from '../utils/inventory.js';
 
 // Hard-deny regardless of `confirm`: lockout, data-destroying, secret-exporting
-// or session-breaking endpoints (docs/sonicwall-connector-design.md, "The
+// or session-breaking endpoints (docs/architecture/sonicwall-connector-design.md, "The
 // generic tool, grounded"). Segment-aware, so /authors is not caught by /auth.
 const DENY_PREFIXES = [
   '/restart', '/import/', '/cloud-backup-boot', '/local-backup-boot', '/administration/password',

@@ -2602,8 +2602,8 @@ class SeatTransportTests(unittest.TestCase):
             root / "omp/README.md",
             root / "scripts/atlas_control.py",
             root / "scripts/atlas_mux.py",
-            root.parents[1] / "docs/atlas-colony.md",
-            root.parents[1] / "docs/atlas-harness-parity.md",
+            root.parents[1] / "docs/architecture/atlas-colony.md",
+            root.parents[1] / "docs/architecture/atlas-harness-parity.md",
         ]
         bad = re.compile(r"claude-bg (default|is the default)|default is claude-bg|by default[^.\n]{0,40}claude --bg", re.I)
         for f in files:

@@ -246,7 +246,7 @@ class WaveAndChannelTests(unittest.TestCase):
         finally:
             os.environ.pop("ATLAS_SESSION_ID", None)
         levels = {agent: thinking for agent, thinking, _ in seen.values()}
-        # Claude-tier effort per role from the retiered matrix (design 2026-10-20-atlas-tiering-design): critic is medium.
+        # Claude-tier effort per role from the retiered matrix (design 2026-10-20_atlas-tiering-design): critic is medium.
         self.assertEqual({"explorer": "low", "completeness-critic": "medium"}, levels)
         self.assertTrue(all(effort is None for *_, effort in seen.values()))
 

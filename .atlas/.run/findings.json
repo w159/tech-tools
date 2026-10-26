@@ -1029,11 +1029,11 @@
       "mtime comparison: panos-mcp.mcpb 2026-09-17T14:28:09.507Z vs newest src mcp_servers/panos-mcp/src/domains/objects.ts 2026-09-17T14:28:41.487Z - artifact 32s older than source",
       "plugins/atlas/mcp/panos/server.mjs 2026-09-17T14:28:45.318Z (386032 bytes) was fresh; only the .mcpb lagged, so the boot probe passed while the installable bundle was stale",
       "Fix: npm run pack:mcpb, exit 0, 29.5MB / 3022 files, shasum 8532ecee8a876c27927c94e1ad7dd6423f62cae1, mcpb now 2026-09-17T15:11:21.409Z > newest src",
-      "AGENTS.md section 2 checklist line 'npm run build && npm run pack:mcpb re-ran successfully; .mcpb artifact is fresh' was recorded [x] in docs/panos-connector-design.md:269 but was false at read time"
+      "AGENTS.md section 2 checklist line 'npm run build && npm run pack:mcpb re-ran successfully; .mcpb artifact is fresh' was recorded [x] in docs/architecture/panos-connector-design.md:269 but was false at read time"
     ],
     "doc_refs": [
       "AGENTS.md:39",
-      "docs/panos-connector-design.md:262-276"
+      "docs/architecture/panos-connector-design.md:262-276"
     ],
     "reproduction": "node -e \"compare fs.statSync('mcp_servers/panos-mcp/panos-mcp.mcpb').mtimeMs against the max mtime under mcp_servers/panos-mcp/src\"",
     "proposed_fix": "Freshness assertion (artifact mtime > max src mtime) belongs in the pack script or the boot probe, so a stale .mcpb fails loudly instead of being asserted fresh in a checklist",
@@ -1055,7 +1055,7 @@
       "UNVERIFIED: no call has reached a real Panorama or firewall. All evidence is mocked fetch plus stdio ListTools. Blocked on PANOS_HOST plus PANOS_API_KEY or PANOS_USERNAME/PANOS_PASSWORD from the user."
     ],
     "doc_refs": [
-      "docs/panos-connector-design.md:219-248"
+      "docs/architecture/panos-connector-design.md:219-248"
     ],
     "reproduction": "cd mcp_node/node-panos && npm test; cd ../../mcp_servers/panos-mcp && npm run test:boot",
     "proposed_fix": "",
@@ -1126,7 +1126,7 @@
       "Live post-fix: panos_version -> \"serial\": \"023009014025\". node-panos suite 6 -> 9 tests, all green."
     ],
     "doc_refs": [
-      "docs/panos-connector-design.md",
+      "docs/architecture/panos-connector-design.md",
       ".atlas/evidence/2026-09-17-panos-live-validation.md"
     ],
     "reproduction": "set -a; . plugins/atlas/.env; set +a; node .atlas/.run/panos-live.mjs call .atlas/.run/panos-proof.json",
@@ -1173,7 +1173,7 @@
       "Fixed: logs_query routes to panos_logs_retrieve, the three report tools route to panos_report_get, both job tools state they only see job-table jobs; boot-probe asserts the descriptions name their retrieval tool."
     ],
     "doc_refs": [
-      "docs/panos-connector-design.md"
+      "docs/architecture/panos-connector-design.md"
     ],
     "reproduction": "node .atlas/.run/panos-live.mjs call .atlas/.run/panos-jobq.json",
     "proposed_fix": "",
@@ -1203,7 +1203,7 @@
   },
   {
     "id": "S-panos-design-doc-asserted-unverified-state",
-    "surface": "docs/panos-connector-design.md",
+    "surface": "docs/architecture/panos-connector-design.md",
     "category": "process",
     "severity": "medium",
     "title": "A connector contract recorded a fully-ticked propagation checklist while four defects survived in the shipped artifact, because nothing had touched hardware",
@@ -1214,7 +1214,7 @@
       "Lesson: a checklist box may only be ticked by the check it names. 'Built and packed' is not 'works against the appliance', and a green offline suite over mocked fetch cannot see wire-format coercion."
     ],
     "doc_refs": [
-      "docs/panos-connector-design.md",
+      "docs/architecture/panos-connector-design.md",
       ".atlas/evidence/2026-09-17-panos-live-validation.md"
     ],
     "reproduction": "",
@@ -1378,13 +1378,13 @@
     "title": "CLAIM 9 FAIL: the panos connector is entirely UNTRACKED by git, so a fresh atlas install gets a .mcp.json server entry pointing at a bundle that does not exist",
     "evidence": [
       "Wiring itself is correct: plugins/atlas/.mcp.json has a panos entry running node --import /mcp/_env/load.mjs /mcp/panos/server.mjs with ATLAS_ENV_FILE and all seven CFG_PANOS_* vars, and plugins/atlas/.claude-plugin/plugin.json declares exactly the seven keys panos_host, panos_api_key, panos_username, panos_password, panos_target, panos_verify_tls, panos_rest_version. The bundle those point at is the one I verified (60 tools, parser fix present).",
-      "BUT git status shows '?? plugins/atlas/mcp/panos/', '?? mcp_servers/panos-mcp/', '?? mcp_node/node-panos/', '?? docs/panos-connector-design.md'. git ls-files returns 0 files for all three connector paths. None is gitignored (git check-ignore -q fails on each), so they are simply never added.",
+      "BUT git status shows '?? plugins/atlas/mcp/panos/', '?? mcp_servers/panos-mcp/', '?? mcp_node/node-panos/', '?? docs/architecture/panos-connector-design.md'. git ls-files returns 0 files for all three connector paths. None is gitignored (git check-ignore -q fails on each), so they are simply never added.",
       "Every sibling connector IS tracked: git ls-files 'plugins/atlas/mcp/*/server.mjs' returns 10 bundles (auvik, blumira, cipp, connectwise, knowbe4, ninjaone, paylocity, spanning, threatlocker, vanta) and falcon ships its Python tree tracked. panos is the only connector missing. git ls-files mcp_servers lists 11 server dirs, all except panos-mcp. Only .mcpb archives are universally untracked, so the mcpb being untracked is the project norm.",
       "Consequence: the two files that ARE tracked were modified (' M plugins/atlas/.mcp.json', ' M plugins/atlas/.claude-plugin/plugin.json'). Committing only those advertises a panos server and seven config keys while shipping no server.mjs - the panos MCP server fails to spawn on every fresh install."
     ],
     "doc_refs": [],
     "reproduction": "git status --porcelain | grep -i panos; git ls-files plugins/atlas/mcp/panos mcp_servers/panos-mcp mcp_node/node-panos | wc -l; git ls-files 'plugins/atlas/mcp/*/server.mjs' | wc -l",
-    "proposed_fix": "git add plugins/atlas/mcp/panos/server.mjs mcp_servers/panos-mcp/src mcp_servers/panos-mcp/tests mcp_servers/panos-mcp/{package.json,package-lock.json,manifest.json,tsconfig.json,tsup*.ts,vitest.config.ts,.env.example,.gitignore,scripts} mcp_node/node-panos/{src,tests,package.json,package-lock.json,tsconfig.json,tsup.config.ts,vitest.config.ts} docs/panos-connector-design.md - matching exactly what the ten sibling connectors track. Verify with git ls-files 'plugins/atlas/mcp/*/server.mjs' returning 11.",
+    "proposed_fix": "git add plugins/atlas/mcp/panos/server.mjs mcp_servers/panos-mcp/src mcp_servers/panos-mcp/tests mcp_servers/panos-mcp/{package.json,package-lock.json,manifest.json,tsconfig.json,tsup*.ts,vitest.config.ts,.env.example,.gitignore,scripts} mcp_node/node-panos/{src,tests,package.json,package-lock.json,tsconfig.json,tsup.config.ts,vitest.config.ts} docs/architecture/panos-connector-design.md - matching exactly what the ten sibling connectors track. Verify with git ls-files 'plugins/atlas/mcp/*/server.mjs' returning 11.",
     "blast_radius": "Every fresh clone or plugin install of atlas: panos is advertised and non-functional.",
     "status": "rejected",
     "verified_at": "2026-09-17T15:49:57+00:00",
@@ -1437,7 +1437,7 @@
     "evidence": [
       "AGENTS.md:77 lists 'Test harness test-mcp-tools.mjs' as part of the product surface; :94 requires 'test-mcp-tools.mjs probes still target tools that exist'; :95 requires 'Boot test (node test-mcp-tools.mjs <svc>) passes without tool-count regression'.",
       "ls test-mcp-tools.mjs -> No such file or directory. The file is absent from the repo root and from every subdirectory.",
-      "Consequence: every connector shipped with those checklist boxes satisfied by inspection rather than execution. docs/panos-connector-design.md:230-232 records the workaround ('That harness does not exist anywhere in this tree, so its job is done by tests/boot-probe.mjs') - the gap was known and documented per-connector instead of fixed once.",
+      "Consequence: every connector shipped with those checklist boxes satisfied by inspection rather than execution. docs/architecture/panos-connector-design.md:230-232 records the workaround ('That harness does not exist anywhere in this tree, so its job is done by tests/boot-probe.mjs') - the gap was known and documented per-connector instead of fixed once.",
       "This is the same class as S-panos-design-doc-asserted-unverified-state: a checklist box ticked by something other than the check it names."
     ],
     "doc_refs": [
@@ -1543,7 +1543,7 @@
     "surface": "backend",
     "category": "security",
     "severity": "high",
-    "title": "mcp-gateway deploy/harden verified round 2 2026-09-24: corrected exposure paragraph in docs/mcp-gateway-design.md confirmed accurate (MI AcrPull, 3 human Owners, 2 inherited-Reader SPs, adminUserEnabled=false, ABAC disabled)",
+    "title": "mcp-gateway deploy/harden verified round 2 2026-09-24: corrected exposure paragraph in docs/architecture/mcp-gateway-design.md confirmed accurate (MI AcrPull, 3 human Owners, 2 inherited-Reader SPs, adminUserEnabled=false, ABAC disabled)",
     "evidence": [
       "CONFIRMED 2026-09-24 fresh: az containerapp ingress show -g gwh-mcp-gateway-rg -n gwh-mcp-gateway --query ipSecurityRestrictions -> exactly ONE rule: {name: anthropic-outbound, action: Allow, ipAddressRange: 160.79.104.0/21}; no other rules, so all other sources are denied.",
       "CONFIRMED fresh: az containerapp revision list --all -> 5 revisions; ONLY active: gwh-mcp-gateway--cleanctx1790266640, image gwhmcpgateway.azurecr.io/mcp-gateway@sha256:b8eca63de78871639a5efe84e4d551d9e21904c3a76879154ed8e15c07fbaf75, created 2026-09-24T16:17:29Z; inactive: k4w1x3o (:latest), fix1790265356 (@ed6e70cf...), fix1790265725 (@ed6e70cf...), verify1790265793 (@e8794b4e...).",
@@ -1556,7 +1556,7 @@
       "CONFIRMED fresh (key NAMES only, values never printed): plugins/atlas/.env currently defines CW_MANAGE_PUBLIC_KEY, CW_MANAGE_PRIVATE_KEY, KNOWBE4_API_KEY, THREATLOCKER_API_KEY, VANTA_CLIENT_ID, VANTA_CLIENT_SECRET, NINJAONE_CLIENT_ID, NINJAONE_CLIENT_SECRET, PANOS_API_KEY, OPENROUTER_API_KEY - every claimed exposed name present (plus unrelated CW_MANAGE_URL, PANOS_HOST, PANOS_VERIFY_TLS, TYPESAFE_PROVIDER). Rotation still NOT done - remains blocked on vendor admin consoles."
     ],
     "doc_refs": [
-      "docs/mcp-gateway-design.md"
+      "docs/architecture/mcp-gateway-design.md"
     ],
     "reproduction": "az containerapp revision list -g gwh-mcp-gateway-rg -n gwh-mcp-gateway --subscription d10ed4e7-8973-4fb6-aa90-1d31b8be10b3 --all && az role assignment list --scope /subscriptions/d10ed4e7-8973-4fb6-aa90-1d31b8be10b3/resourceGroups/gwh-mcp-gateway-rg/providers/Microsoft.ContainerRegistry/registries/gwhmcpgateway --include-inherited",
     "proposed_fix": "",
@@ -1566,7 +1566,7 @@
     "verified_by": "atlas:verifier (fresh, independent, round 2)",
     "verifier": "atlas:verifier (fresh, independent, round 2)",
     "round2_evidence": [
-      "PASS (round 2, 2026-09-24T16:31:54+00:00): docs/mcp-gateway-design.md corrected exposure paragraph re-verified independently.",
+      "PASS (round 2, 2026-09-24T16:31:54+00:00): docs/architecture/mcp-gateway-design.md corrected exposure paragraph re-verified independently.",
       "CONFIRMED fresh: az role assignment list --scope <gwhmcpgateway id> --include-inherited -o json -> 13 assignments. (a) Managed identity gwh-mcp-gateway-id (ServicePrincipal 27080ee0-e240-4400-bac3-b3fada17fa7d) has AcrPull scoped DIRECTLY to the registry (/subscriptions/d10ed4e7-.../resourceGroups/gwh-mcp-gateway-rg/providers/Microsoft.ContainerRegistry/registries/gwhmcpgateway). (b) Two service principals with inherited Reader: 'Maester DevOps Account' (fa012b8f-8af1-425e-8bfa-f169caf56a0a) Reader at tenant root scope '/'; 'Vanta' (f103e7b9-61d2-4aac-a761-5690093cb056) Reader at root management group /providers/Microsoft.Management/managementGroups/f00db7e5-ade5-49b2-b9cd-8813b81ef30a. Both names and scopes match the doc exactly. (c) All OTHER inherited principals: BreakGlass@hensslerfinancial.com (User Access Administrator, /), the three humans da-jmorgan/da-smendoza/da-evelarde (User Access Administrator, /), da-jmorgan (Foundry User, subscription), da-jmorgan (Security Admin + Owner, root MG f00db7e5) - none grant ACR data-plane pull in this registry's mode; the three named human Owners at subscription scope confirmed as the doc states. No pull-capable principal was missed.",
       "CONFIRMED fresh: az acr show gwhmcpgateway -> adminUserEnabled=false (recheck), anonymousPullEnabled=false, dataEndpointEnabled=false, roleAssignmentMode=LegacyRegistryPermissions (i.e. ABAC repository permissions DISABLED, matching the doc's 'ABAC disabled').",
       "CONFIRMED semantics: Microsoft Learn ACR roles directory reference (updated 2026-08-25) - in 'RBAC Registry Permissions' (non-ABAC) mode the built-in Reader role includes data-plane permissions 'Pull images and artifacts', catalog list, tag read; in ABAC-enabled mode Reader grants NO data plane. So the doc's claim 'ABAC disabled, so built-in Reader includes acrPull' is correct per product docs (doc also conservatively marks it [INFERENCE]; hedge retained, not an overstatement).",
@@ -1641,7 +1641,7 @@
     "doc_refs": [
       "docs/CHANGELOG.md",
       "plugins/atlas/CHANGELOG.md",
-      "docs/lessons/2026-07-09-enforcement-fail-open-fork.md"
+      "docs/lessons/2026-07-09_enforcement-fail-open-fork.md"
     ],
     "reproduction": "cd plugins/atlas && python3 -m pytest scripts/ hooks/ -q; git stash list",
     "proposed_fix": "",
@@ -1704,7 +1704,7 @@
   },
   {
     "batch": "verify-blank-guard-and-doc-corrections-2026-09-28",
-    "claim": "Blank-value guard in loadEnvFile/_load_env_file (blank KEY= never overwrites an already-set env var) in both loaders; doc corrections in docs/mcp-gateway-design.md (exposure-incident paragraph, corrected per-vendor/per-layer credential table, corrected Relationship section) and plugins/atlas/references/connector-config-flow.md (dashboard detection order excludes the per-user default file).",
+    "claim": "Blank-value guard in loadEnvFile/_load_env_file (blank KEY= never overwrites an already-set env var) in both loaders; doc corrections in docs/architecture/mcp-gateway-design.md (exposure-incident paragraph, corrected per-vendor/per-layer credential table, corrected Relationship section) and plugins/atlas/references/connector-config-flow.md (dashboard detection order excludes the per-user default file).",
     "status": "verified",
     "verdict": "PASS",
     "verifier": "VerifyBlankGuardAndDocs (subagent)",
@@ -1713,7 +1713,7 @@
     "files": [
       "plugins/atlas/mcp/_env/load.mjs",
       "plugins/atlas/mcp/_env/load.py",
-      "docs/mcp-gateway-design.md",
+      "docs/architecture/mcp-gateway-design.md",
       "plugins/atlas/references/connector-config-flow.md"
     ]
   },
@@ -2140,24 +2140,24 @@
     "surface": "backend",
     "category": "data-loss",
     "severity": "medium",
-    "title": "final-round verification: env loader placeholder guard + KnowBe4 Azure wiring PASS; one remaining contradiction in docs/mcp-gateway-design.md over KnowBe4's API key in pluginConfigs",
+    "title": "final-round verification: env loader placeholder guard + KnowBe4 Azure wiring PASS; one remaining contradiction in docs/architecture/mcp-gateway-design.md over KnowBe4's API key in pluginConfigs",
     "evidence": [
       "load.mjs and load.py read in full: direct env-file loading lives in ONE shared function per loader (loadEnvFile in load.mjs / _load_env_file in load.py) used for BOTH ~/.config/atlas/atlas.env and ATLAS_ENV_FILE - no drift possible; guard is `if (key && value !== \"\" && !UNEXPANDED.test(value))` with `const UNEXPANDED = /^\\$\\{.*\\}$/` (load.mjs) and `if key and value != \"\" and not _is_unexpanded(value)` with `_is_unexpanded = startswith('${') and endswith('}')` (load.py); both skip empty AND unexpanded-placeholder values",
       "JS regression: `printf 'X=${user_config.x}\\n' > /tmp/atlas-verify-final.env && X=from-shell ATLAS_ENV_FILE=/tmp/atlas-verify-final.env node --import /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/mcp/_env/load.mjs -e 'console.log(process.env.X)'` -> output exactly `from-shell` (not the literal placeholder); note `--import plugins/...` relative spec fails with ERR_MODULE_NOT_FOUND in node 22 regardless of guard - used absolute module path",
       "Python regression: `X=from-shell ATLAS_ENV_FILE=/tmp/atlas-verify-final.env python3 -c \"import os,runpy; runpy.run_path('plugins/atlas/mcp/_env/load.py', run_name='not_main'); print(os.environ.get('X'))\"` -> output exactly `from-shell`",
       "Azure (no secret values shown): `az keyvault secret show --vault-name gwh-mcp-gateway-kv --name knowbe4-api-key --query '{name:name, enabled:attributes.enabled}'` -> `{\\\"enabled\\\": true, \\\"name\\\": \\\"knowbe4-api-key\\\"}`; `az containerapp show -n gwh-mcp-gateway -g gwh-mcp-gateway-rg --query \\\"properties.template.containers[0].env[?name=='KNOWBE4_API_KEY']\\\"` -> `[{\\\"name\\\": \\\"KNOWBE4_API_KEY\\\", \\\"secretRef\\\": \\\"knowbe4-api-key\\\"}]`",
-      "docs/mcp-gateway-design.md (a): line 335 KnowBe4 Key Vault column = `loaded`, matching the other 5 loaded rows (NinjaOne/PAN-OS/ThreatLocker/Vanta lines 331-334) - PASS",
-      "docs/mcp-gateway-design.md (b): table header col 5 (line 327) = `~/.config/atlas/atlas.env (needs plugin reinstall to take effect in this omp session; NOT yet live here)` - no current-session live implication - PASS",
-      "docs/mcp-gateway-design.md (c): incident note lines ~204-228 names all 7 (six by name lines ~204-207, KNOWBE4_API_KEY in the grep sentence ~209-212, 'rotate all seven'), and all 4 storage locations (Key Vault, ~/.config/atlas/atlas.env, plugins/atlas/.env, pluginConfigs) - PASS",
-      "docs/mcp-gateway-design.md (d) FAIL - CONTRADICTION FOUND: incident bullet lines 227-228 says pluginConfigs `it does not hold ThreatLocker's or KnowBe4's API key`, but line 335 table row says KnowBe4 pluginConfigs = `**complete**`, line 77 prose says `KnowBe4 (complete)`, and a presence-only boolean check of ~/.claude/settings.json confirms `knowbe4_api_key` IS present and non-empty in pluginConfigs['atlas@tech-tools'].options; the ThreatLocker half of the sentence is correct (table line 333: partial, missing api key); only the KnowBe4 half is wrong - the bullet should say it does not hold ThreatLocker's API key",
+      "docs/architecture/mcp-gateway-design.md (a): line 335 KnowBe4 Key Vault column = `loaded`, matching the other 5 loaded rows (NinjaOne/PAN-OS/ThreatLocker/Vanta lines 331-334) - PASS",
+      "docs/architecture/mcp-gateway-design.md (b): table header col 5 (line 327) = `~/.config/atlas/atlas.env (needs plugin reinstall to take effect in this omp session; NOT yet live here)` - no current-session live implication - PASS",
+      "docs/architecture/mcp-gateway-design.md (c): incident note lines ~204-228 names all 7 (six by name lines ~204-207, KNOWBE4_API_KEY in the grep sentence ~209-212, 'rotate all seven'), and all 4 storage locations (Key Vault, ~/.config/atlas/atlas.env, plugins/atlas/.env, pluginConfigs) - PASS",
+      "docs/architecture/mcp-gateway-design.md (d) FAIL - CONTRADICTION FOUND: incident bullet lines 227-228 says pluginConfigs `it does not hold ThreatLocker's or KnowBe4's API key`, but line 335 table row says KnowBe4 pluginConfigs = `**complete**`, line 77 prose says `KnowBe4 (complete)`, and a presence-only boolean check of ~/.claude/settings.json confirms `knowbe4_api_key` IS present and non-empty in pluginConfigs['atlas@tech-tools'].options; the ThreatLocker half of the sentence is correct (table line 333: partial, missing api key); only the KnowBe4 half is wrong - the bullet should say it does not hold ThreatLocker's API key",
       "plugins/atlas/references/connector-config-flow.md (e): line 138 `2. copies each CFG_NAME into NAME when the canonical name is unset` - says 'unset' only, no 'unset, empty, or...' wording - PASS"
     ],
     "doc_refs": [
-      "docs/mcp-gateway-design.md",
+      "docs/architecture/mcp-gateway-design.md",
       "plugins/atlas/references/connector-config-flow.md"
     ],
     "reproduction": "python3 -c \"import json,os; opt=json.load(open(os.path.expanduser('~/.claude/settings.json')))['pluginConfigs']['atlas@tech-tools']['options']; print('knowbe4_api_key' in opt and bool(opt['knowbe4_api_key']))\" -> True (presence only, value never read)",
-    "proposed_fix": "docs/mcp-gateway-design.md:227-228 - change to name only ThreatLocker's API key as absent from pluginConfigs (drop `or KnowBe4's API key`), matching table line 335 and the presence check",
+    "proposed_fix": "docs/architecture/mcp-gateway-design.md:227-228 - change to name only ThreatLocker's API key as absent from pluginConfigs (drop `or KnowBe4's API key`), matching table line 335 and the presence check",
     "blast_radius": "docs",
     "status": "verified",
     "verified_at": "2026-09-29T01:13:45+00:00",
@@ -2169,16 +2169,16 @@
     "surface": "backend",
     "category": "data-loss",
     "severity": "low",
-    "title": "follow-up: KnowBe4 pluginConfigs contradiction in docs/mcp-gateway-design.md fixed by main agent; Azure revision healthy - both checks PASS",
+    "title": "follow-up: KnowBe4 pluginConfigs contradiction in docs/architecture/mcp-gateway-design.md fixed by main agent; Azure revision healthy - both checks PASS",
     "evidence": [
-      "grep 'does not hold' docs/mcp-gateway-design.md -> no matches (old contradictory sentence removed); corrected bullet verified at lines 230-234: pluginConfigs bullet now lists cw_manage_public_key, cw_manage_private_key, vanta_client_id, vanta_client_secret, ninjaone_client_id, and knowbe4_api_key (presence confirmed, values never read); it does not hold ThreatLocker's API key - matches ground truth (knowbe4_api_key present/non-empty in ~/.claude/settings.json; table line ~339 ThreatLocker pluginConfigs 'partial (missing api key)'); no longer contradicts the vendor table",
+      "grep 'does not hold' docs/architecture/mcp-gateway-design.md -> no matches (old contradictory sentence removed); corrected bullet verified at lines 230-234: pluginConfigs bullet now lists cw_manage_public_key, cw_manage_private_key, vanta_client_id, vanta_client_secret, ninjaone_client_id, and knowbe4_api_key (presence confirmed, values never read); it does not hold ThreatLocker's API key - matches ground truth (knowbe4_api_key present/non-empty in ~/.claude/settings.json; table line ~339 ThreatLocker pluginConfigs 'partial (missing api key)'); no longer contradicts the vendor table",
       "`az containerapp revision show -n gwh-mcp-gateway -g gwh-mcp-gateway-rg --revision gwh-mcp-gateway--0000002 --query 'properties.{runningState:runningState,healthState:healthState}'` -> {runningState: RunningAtMaxScale, healthState: Healthy}",
       "`az containerapp replica list -n gwh-mcp-gateway -g gwh-mcp-gateway-rg --revision gwh-mcp-gateway--0000002 --query '[0].properties.containers[0].{ready:ready,restartCount:restartCount,runningState:runningState}'` -> {ready: true, restartCount: 0, runningState: Running}"
     ],
     "doc_refs": [
-      "docs/mcp-gateway-design.md:230-234"
+      "docs/architecture/mcp-gateway-design.md:230-234"
     ],
-    "reproduction": "grep -n 'does not hold' docs/mcp-gateway-design.md (expect no matches for the old KnowBe4 phrasing); az revision/replica queries above",
+    "reproduction": "grep -n 'does not hold' docs/architecture/mcp-gateway-design.md (expect no matches for the old KnowBe4 phrasing); az revision/replica queries above",
     "proposed_fix": "",
     "blast_radius": "docs",
     "status": "verified",
@@ -2216,7 +2216,7 @@
       "turn_scoring.py --session aa0fe53d-... --max-calls 3 -> sessions=1 exchanges=6 calls=0 rows=0",
       "turn_scoring.py --status -> rows total: 109, last 7d: 109",
       "atlas_doctor.py --mine -> rc=0, 'turn_quality': 0; MINERS[turn_quality]=mine_turn_quality at atlas_doctor.py:1336, remeasure looks up MINERS.get(name) at :1383",
-      "JUDGMENTS keys (7) each appear in docs/atlas-turn-scoring.md; knobs ATLAS_TYPESAFE_SCORING/MODEL/MAX_CALLS in atlas_control.py:297-323 and README.md:194-195; CLI flags --session/--recent-days/--max-calls/--status/--dry-run/--limit match docs",
+      "JUDGMENTS keys (7) each appear in docs/architecture/atlas-turn-scoring.md; knobs ATLAS_TYPESAFE_SCORING/MODEL/MAX_CALLS in atlas_control.py:297-323 and README.md:194-195; CLI flags --session/--recent-days/--max-calls/--status/--dry-run/--limit match docs",
       "pytest plugins/atlas/hooks plugins/atlas/scripts -q -> 1573 passed, 3 skipped, 81 subtests"
     ],
     "verdict": "PASS",
@@ -2386,7 +2386,7 @@
       "benchmark 2026-10-01 same task both harnesses: Claude 66s / 3.55M tok / 1 dispatch unnamed / native share 1.0 / 2 passed; omp 65s / 1.15M tok / 1 dispatch named / native share 1.0 / 2 passed"
     ],
     "doc_refs": [
-      "docs/atlas-harness-parity.md",
+      "docs/architecture/atlas-harness-parity.md",
       "docs/CHANGELOG.md",
       "plugins/atlas/CHANGELOG.md",
       "plugins/atlas/README.md",
@@ -2424,7 +2424,7 @@
       "omp agent registry on this host points at a removed atlas 8.0.1 install path: reinstall needed"
     ],
     "doc_refs": [
-      "docs/atlas-harness-parity.md",
+      "docs/architecture/atlas-harness-parity.md",
       "docs/CHANGELOG.md",
       "plugins/atlas/CHANGELOG.md"
     ],
@@ -2484,9 +2484,9 @@
       "R3 claim 4 PASS: live `omp -p --no-extensions -e .../omp/index.ts --model haiku` in scratch repo under ~/.atlas-verify-r3live (removed): reply 'ok'; temp atlas-omp-*/atlas-ingest-* count 0 before, 0 immediately after, 0 after 8s. DB: runs=1, messages=4, ingest_files=2, count(*)=4 = count(distinct uuid)=4 (no duplicates).",
       "R3 claim 5 PASS: test 'a main conversion and its discard leave a running subagent's transcript alone (real converter)' passes. Direct hazard reproduced: omp_transcript.py convert into a dir containing subagents/agent-live-sub-1.jsonl deleted it (only agent-VerifierCalcFix.jsonl and agent-advisor.jsonl remained) -> pre-existing converter behavior, avoided by per-conversion directories.",
       "R3 claim 6 PASS: throwaway tsconfig under ~/.atlas-verify-r3ts (removed). --listFiles contains omp/stop-bridge.ts and pi-coding-agent/src/extensibility/extensions/types.ts. 957 errors total all in omp internals plus ONE in transitive import omp/proc.ts(129,4) TS2769 (not one of the three files); zero in stop-bridge.ts/run-state.ts/hook-bridge.ts. Mutation event.stop_hook_activ -> stop-bridge.ts(326,33) TS2551 'Did you mean stop_hook_active'; restored (cmp).",
-      "R3 claim 7 FAIL (minor, documentation precision only; no behavior false): (i) docs/atlas-harness-parity.md row 'Inline-op threshold' cites `count >= DENY_THRESHOLD` at :461, actual line is 465 (:461 is a message string); '448-469' begins inside the production-edit deny, '441-446' is the tail of the dispatch deny plus the `if tool in EDIT_TOOLS` line. (ii) row 'Inline edit of production target code' cites test `test_pre_deny_notebook_edit`, which does not exist (actual `test_ip_pre_deny_notebook_edit` at test_dispatch_tripwire.py:732) and range 397-437 omits `test_pre_deny_prod_edit_allows_docs_edit` (:513). (iii) `DENY_THRESHOLD = 6` while cited test is named `..._ninth_inline_op`. (iv) Root README.md, plugins/atlas/README.md and omp/README.md do NOT mention the env-gated guard/ATLAS_NATIVE_POLICY (only the two CHANGELOGs and the parity doc do). (v) the withSandbox comment claim noted under claim 2. PASSING parts: no doc says 'no tracked Python file was modified' (grep 0; plugins/atlas/CHANGELOG.md:62 says 'No other tracked Python file was modified' after naming the guard); every doc states the threshold/prod-edit/dispatch-spec denies are tested against the real hook but NOT observed in a live omp session; plugin.json version 8.7.0 and CHANGELOG top entry [8.7.0].",
+      "R3 claim 7 FAIL (minor, documentation precision only; no behavior false): (i) docs/architecture/atlas-harness-parity.md row 'Inline-op threshold' cites `count >= DENY_THRESHOLD` at :461, actual line is 465 (:461 is a message string); '448-469' begins inside the production-edit deny, '441-446' is the tail of the dispatch deny plus the `if tool in EDIT_TOOLS` line. (ii) row 'Inline edit of production target code' cites test `test_pre_deny_notebook_edit`, which does not exist (actual `test_ip_pre_deny_notebook_edit` at test_dispatch_tripwire.py:732) and range 397-437 omits `test_pre_deny_prod_edit_allows_docs_edit` (:513). (iii) `DENY_THRESHOLD = 6` while cited test is named `..._ninth_inline_op`. (iv) Root README.md, plugins/atlas/README.md and omp/README.md do NOT mention the env-gated guard/ATLAS_NATIVE_POLICY (only the two CHANGELOGs and the parity doc do). (v) the withSandbox comment claim noted under claim 2. PASSING parts: no doc says 'no tracked Python file was modified' (grep 0; plugins/atlas/CHANGELOG.md:62 says 'No other tracked Python file was modified' after naming the guard); every doc states the threshold/prod-edit/dispatch-spec denies are tested against the real hook but NOT observed in a live omp session; plugin.json version 8.7.0 and CHANGELOG top entry [8.7.0].",
       "R3 claim 8: single omp-parity-87 entry updated in place; evidence kept as JSON array.",
-      "ROUND4 claim1 FAIL: docs/atlas-harness-parity.md row 'Inline-op advisory threshold' cites hooks/dispatch_tripwire.py:810-816 as the PostToolUse STOP nag, but those lines are the subagent-nesting deny comment/condition; the nag is at dispatch_tripwire.py:931-938 (count >= _threshold()). It also cites hooks/hooks.json:79-87 as the PostToolUse wiring, but those lines are format_after_edit/docs_drift_watch; dispatch_tripwire is wired at hooks.json:60 and :93. All other citations in the four rows (46,373,465,287,541,1222,170,95,103,715,720,445,190,397,417,513,529,732,925,49-59,261,226,313,370,428 and test names) match.",
+      "ROUND4 claim1 FAIL: docs/architecture/atlas-harness-parity.md row 'Inline-op advisory threshold' cites hooks/dispatch_tripwire.py:810-816 as the PostToolUse STOP nag, but those lines are the subagent-nesting deny comment/condition; the nag is at dispatch_tripwire.py:931-938 (count >= _threshold()). It also cites hooks/hooks.json:79-87 as the PostToolUse wiring, but those lines are format_after_edit/docs_drift_watch; dispatch_tripwire is wired at hooks.json:60 and :93. All other citations in the four rows (46,373,465,287,541,1222,170,95,103,715,720,445,190,397,417,513,529,732,925,49-59,261,226,313,370,428 and test names) match.",
       "ROUND4 claim2 PASS: ninth row states it does not pin value 6; mutation DENY_THRESHOLD=60 made 2 omp tests fail (16 pass 2 fail); restored, cmp clean; unmutated 18 pass 0 fail.",
       "ROUND4 claim3 PASS: ATLAS_NATIVE_POLICY in all 6 docs with unset/unchanged wording; no stale phrases; one hunk @@ -702 +702,5 @@; only dispatch_tripwire.py modified .py.",
       "ROUND4 claim4 PASS: real HOME -> 'lean-ctx', empty HOME -> None, ~/.claude.json has lean mcpServers key True; comment matches.",
@@ -2512,7 +2512,7 @@
       "Claim4 PASS: hooks 921 OK skipped=3; scripts 908 OK; bun test omp 214 pass 0 fail",
       "Claim5 PASS (in /tmp copy): dropping ATLAS_NATIVE_POLICY from env -> 2 red (hook-bridge-session.test.ts REAL tripwire lean-ctx configured; REAL dispatch_tripwire production-edit); removing DETACHED_SCRIPT trap -> 4 red in stop-bridge.test.ts",
       "Claim6 PASS: _lean_ctx_server_key(Path) real HOME=lean-ctx, empty HOME=None; str -> None; ~/.claude.json has top-level lean-ctx; comment accurate",
-      "Claim7 FAIL docs/atlas-harness-parity.md: Gate (a) row hooks.json:98-104 is connector_credential_watch PostToolUse; Stop block is hooks.json:107-132 (completion_gate :111-114); Gate (a) block text completion_gate.py:774-794 is the (k) plan-mandate text, (a) text is :694-698",
+      "Claim7 FAIL docs/architecture/atlas-harness-parity.md: Gate (a) row hooks.json:98-104 is connector_credential_watch PostToolUse; Stop block is hooks.json:107-132 (completion_gate :111-114); Gate (a) block text completion_gate.py:774-794 is the (k) plan-mandate text, (a) text is :694-698",
       "Claim7 FAIL: memory-capture row hooks.json:114-117 is ingest_session boundary; memory_capture is :123-126. Nudge row hooks.json:118-121 is chronicle_facet; nudge is :127-130. Ingest row hooks.json:106-156 starts 1 early (Stop :107) and ends where PreCompact begins (PreCompact :156-168)",
       "Claim7 FAIL named-dispatch row: _pre_tool_use cited :369, def at dispatch_tripwire.py:373; tests cited test_dispatch_tripwire.py:1631-1704, real tests at :1785 :1794 :1840 (range holds none)",
       "Claim7 FAIL model-override row: _frontmatter_model cited :301-326, def at :305; test cited :1607+, test_model_override_differs_from_definition_is_denied at :1761. Preamble does not list these rows as re-audited but task scope names them; preamble also says named rows were re-checked while Gate(a)/memory/nudge/ingest hooks.json cites are wrong",
@@ -2533,7 +2533,7 @@
     "severity": "medium",
     "title": "Claim 7 FAIL: 1 definite miss (omp/index.test.ts:189-245 starts 24 lines early), 1 minor external (task/index.ts:290)",
     "evidence": [
-      "docs/atlas-harness-parity.md:74",
+      "docs/architecture/atlas-harness-parity.md:74",
       "plugins/atlas/omp/index.test.ts:213-245",
       "/tmp/c2.txt"
     ],
@@ -2552,10 +2552,10 @@
     "severity": "medium",
     "title": "Round6 claim 7: 132 cites parsed, 128 exact; 4 range-end overshoots into unrelated code",
     "evidence": [
-      "docs/atlas-harness-parity.md:87 hooks/completion_gate.py:525-546 (_run_used_worktrees ends 542; 545-546 are _IN_FLIGHT_DISPATCH_TYPES/_TERMINAL_TASK_STATUSES constants)",
-      "docs/atlas-harness-parity.md:84 hooks/completion_gate.py:1321-1346 (_unpaired_implementer_dispatches ends 1342; 1345-1346 is __main__ guard)",
-      "docs/atlas-harness-parity.md:105 hooks/chronicle_facet.py:39-61 (_edit_read_counts 39-50, _gate_block_count 53-58, ends on def line of _compute_facet_fields which spans 61-~134; compute body not covered)",
-      "docs/atlas-harness-parity.md:105 hooks/ingest_session.py:25-52 (_spawn_scoring ends 49; 52 is def main)",
+      "docs/architecture/atlas-harness-parity.md:87 hooks/completion_gate.py:525-546 (_run_used_worktrees ends 542; 545-546 are _IN_FLIGHT_DISPATCH_TYPES/_TERMINAL_TASK_STATUSES constants)",
+      "docs/architecture/atlas-harness-parity.md:84 hooks/completion_gate.py:1321-1346 (_unpaired_implementer_dispatches ends 1342; 1345-1346 is __main__ guard)",
+      "docs/architecture/atlas-harness-parity.md:105 hooks/chronicle_facet.py:39-61 (_edit_read_counts 39-50, _gate_block_count 53-58, ends on def line of _compute_facet_fields which spans 61-~134; compute body not covered)",
+      "docs/architecture/atlas-harness-parity.md:105 hooks/ingest_session.py:25-52 (_spawn_scoring ends 49; 52 is def main)",
       "verified OK: omp/index.test.ts:213-266 (213 and 266 are first/last naming-notice tests); omp task/index.ts:292,315 both effort plumbing"
     ],
     "doc_refs": [],
@@ -2594,9 +2594,9 @@
     "severity": "medium",
     "title": "Round 8: N+ / comma-list citations survive in Gate (c),(d),(e) rows",
     "evidence": [
-      "docs/atlas-harness-parity.md:83 (hooks/test_completion_gate.py:917+)",
-      "docs/atlas-harness-parity.md:84 (:205+,924+)",
-      "docs/atlas-harness-parity.md:85 (:212+,931+)"
+      "docs/architecture/atlas-harness-parity.md:83 (hooks/test_completion_gate.py:917+)",
+      "docs/architecture/atlas-harness-parity.md:84 (:205+,924+)",
+      "docs/architecture/atlas-harness-parity.md:85 (:212+,931+)"
     ],
     "doc_refs": [],
     "reproduction": "python3 /tmp/ex8.py (own extractor; 129 file:N cites parsed, all land on start lines; 3 RANGE hits)",
@@ -2613,7 +2613,7 @@
     "severity": "medium",
     "title": "Round 9: citation rule holds on re-checked rows; preamble scope honest",
     "evidence": [
-      "docs/atlas-harness-parity.md:5-14",
+      "docs/architecture/atlas-harness-parity.md:5-14",
       "/tmp/ex.py: 134 spans parsed in 10 row-prefix families (rows 74-78,80-92,97,98,108; rows 93,107 have no colon-digit spans), 133 exact path:N/:N, 1 parser false positive (~/.bun/.../index.ts:292 is still path:N, regex class excluded ~); 0 ranges/N+/comma lists",
       "start lines: all 134 opened, 0 misses (defs/classes/tests, gate (a)-(m) docstring lines 22-76, hooks.json 93/107/123/127/134/145/156 block openers, omp index.ts 302 const/311 taskNamingHint/456, squad-and-tiers.md:16 haiku row, subagent-kit.md:5 heading)",
       "stale rows confirmed: Board claim/notes (completion_gate.py:367 is docstring not _board_open_todos at 383; omp index.ts:54 is an import not ensureClaudePluginRoot at 85); Todo mirror (index.ts:107 comment not argv, hooks.json:56 matcher, todo_capture.py:35 'return 0'); Colony adherence (mine_colony_adherence at 1367 not 1306; :1708 severity line)"
@@ -2635,7 +2635,7 @@
     "evidence": [
       "git diff a7ba0e8..HEAD (only dispatch_tripwire.py Claude-facing; deny text byte-identical via AST extraction, len 459)",
       "plugins/atlas/omp/README.md:26 (prompt from task - stale vs hook-bridge.ts:341 claudeTaskInputs; ATLAS_TOOLKIT_LOAD behaviour undocumented)",
-      "docs/atlas-harness-parity.md rows 79/81/94/118 (no diff since a7ba0e8; stale cites dispatch_tripwire.py :352/:398/:305/:261 now :377/:330/:286)",
+      "docs/architecture/atlas-harness-parity.md rows 79/81/94/118 (no diff since a7ba0e8; stale cites dispatch_tripwire.py :352/:398/:305/:261 now :377/:330/:286)",
       ".scratch/mux-bench/sessions/{baseline,after} (installed atlas 8.6.0 loaded; base-r2 dispatch items lack agent key)",
       ".scratch/mux-bench/sessions/base-r1 (3 overrides-model DENY, 5 xd:// Write DENY)"
     ],
@@ -2658,7 +2658,7 @@
       "old-tree red: delegation-gate worker test, hook-bridge ENGINE_ARM test, 4 test_atlas_mux pin/forwarding tests fail on 20c1f58, pass on e5b75b7",
       "Claude assets/hooks unchanged; manifests version-only; no non-test hooks/*.py changed",
       "mux2 json scores 10/26,1/26,26/26,26/26; grade.py cur-1 = 26/26; omp sessions: base deny tool results 12 and 12 (CHANGELOG says 11 and 12), cur 0; costs 5.38/3.67/2.32/2.36 reproduce",
-      "docs/atlas-harness-parity.md row 96 cite 'header :46-53' does not describe ensureClaudePluginRoot (doc is at index.ts:78-79); index.test.ts :293-385 ends at 383; row 95 test_atlas_contract.py:1461 is a subagent-kit test, not tripwire tests",
+      "docs/architecture/atlas-harness-parity.md row 96 cite 'header :46-53' does not describe ensureClaudePluginRoot (doc is at index.ts:78-79); index.test.ts :293-385 ends at 383; row 95 test_atlas_contract.py:1461 is a subagent-kit test, not tripwire tests",
       "real tmux pane: ATLAS_DB/ATLAS_GATE with spaces,quotes,$,; round-trip byte-exact; LEAD_ONLY_SECRET not forwarded; ~/.atlas/atlas.db integrity ok, 0 mux-bench projects"
     ],
     "doc_refs": [],
@@ -2677,8 +2677,8 @@
     "title": "b140ae1: counts, golden, no-hook-change, bench numbers hold; 2 imprecise parity cites, '11 to 12' deny count only half-reproducible, ruff F401 in atlas_mux.py",
     "evidence": [
       "suites: hooks 930 (OK, skipped=3), scripts 927 OK, omp 245 pass 0 fail - all match CHANGELOG",
-      "docs/atlas-harness-parity.md Todo mirror row: omp/index.ts:77-83 doc comment closes at line 84 ('*/'), range stops before block closes",
-      "docs/atlas-harness-parity.md Todo mirror row: hooks/todo_capture.py:2-7 stops mid-sentence; docstring spans 2-10",
+      "docs/architecture/atlas-harness-parity.md Todo mirror row: omp/index.ts:77-83 doc comment closes at line 84 ('*/'), range stops before block closes",
+      "docs/architecture/atlas-harness-parity.md Todo mirror row: hooks/todo_capture.py:2-7 stops mid-sentence; docstring spans 2-10",
       "Gate (m) row carries no path:LINE cites; Board claim/notes row all cites exact",
       "golden passes; pinned 469-char string == stdout of a7ba0e8 hook run e2e; released==current stdout; one-word mutation in /tmp copy fails golden",
       "git diff e5b75b7 b140ae1 (non-test hooks .py) empty; git diff a7ba0e8 b140ae1 (output-styles agents skills commands hooks.json) empty",
@@ -3084,7 +3084,7 @@
     "severity": "low",
     "title": "VERDICT partial: docs match observed behaviour except send status code and installed-parity drift",
     "evidence": [
-      "CHANGELOG, dashboard-api.md and docs/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
+      "CHANGELOG, dashboard-api.md and docs/architecture/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
       "inaccuracy: docs say shell panes get 409 pane_not_steerable without noting /api/v2/irc returns 200 ok:false; docs say messages carry status queued|read without noting typed or refused messages stay queued",
       "hooks suite: 267 ran, 1 failure test_installed_hook_files_match_repo (dispatch_tripwire.py differs from install; worker_inbox.py missing from install); installed cache 9.5.1 predates repo edits, reinstall needed, not a code defect"
     ],
@@ -3128,7 +3128,7 @@
     "severity": "low",
     "title": "VERDICT verified: docs match observed behaviour; connector count corrected to twelve (panos) after verifier refutation",
     "evidence": [
-      "CHANGELOG, dashboard-api.md and docs/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
+      "CHANGELOG, dashboard-api.md and docs/architecture/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
       "inaccuracy: docs say shell panes get 409 pane_not_steerable without noting /api/v2/irc returns 200 ok:false; docs say messages carry status queued|read without noting typed or refused messages stay queued",
       "hooks suite: 267 ran, 1 failure test_installed_hook_files_match_repo (dispatch_tripwire.py differs from install; worker_inbox.py missing from install); installed cache 9.5.1 predates repo edits, reinstall needed, not a code defect",
       "REFUTED then FIXED: verifier refuted the docs connector count (eleven/11 vs actual 12: panos is declared in plugins/atlas/.mcp.json mcpServers, which atlas_dashboard.py _connector_status() iterates for GET /api/connectors; panos_status exists in mcp/panos/server.mjs). Fixed in plugins/atlas/skills/atlas-setup/references/connectors.md (count, 'The twelve connectors' list, panos in Node row, uv/Node line) and plugins/atlas/references/connector-config-flow.md (L179 12, L215/L217 twelve, 2026-09-02 matrix and API result labelled historical)",
@@ -3149,8 +3149,8 @@
     "severity": "low",
     "title": "VERDICT verified: docs match observed behaviour (IRC 200 ok:false and status values documented); connector count corrected to twelve (panos) after verifier refutation",
     "evidence": [
-      "CHANGELOG, dashboard-api.md and docs/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
-      "earlier inaccuracy now fixed in docs: plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md:135 states POST /api/v2/irc refusal is HTTP 200 with ok:false (message recorded status:refused) while /api/v2/colony/send returns 409 pane_not_steerable; dashboard-api.md:148 documents status queued|read|delivered|refused with delivered and refused terminal; docs/atlas-workboard.md pane-delivery section says an IRC post reports ok:false when delivery was refused",
+      "CHANGELOG, dashboard-api.md and docs/architecture/atlas-workboard.md accurately describe guard order, token delivery, SSE cadence, enforcement split, credential form, headless queue",
+      "earlier inaccuracy now fixed in docs: plugins/atlas/skills/atlas-orchestrate/references/dashboard-api.md:135 states POST /api/v2/irc refusal is HTTP 200 with ok:false (message recorded status:refused) while /api/v2/colony/send returns 409 pane_not_steerable; dashboard-api.md:148 documents status queued|read|delivered|refused with delivered and refused terminal; docs/architecture/atlas-workboard.md pane-delivery section says an IRC post reports ok:false when delivery was refused",
       "hooks suite: 267 ran, 1 failure test_installed_hook_files_match_repo (dispatch_tripwire.py differs from install; worker_inbox.py missing from install); installed cache 9.5.1 predates repo edits, reinstall needed, not a docs defect and not a code defect",
       "REFUTED then FIXED: verifier refuted the docs connector count (eleven/11 vs actual 12). Ground truth: plugins/atlas/.mcp.json mcpServers has 12 entries (auvik, blumira, cipp, connectwise, falcon, knowbe4, ninjaone, panos, paylocity, spanning, threatlocker, vanta); atlas_dashboard.py _connector_status() iterates exactly that map for GET /api/connectors; panos is a Node server (mcp/panos/server.mjs, panos_status present x4). Fixed in plugins/atlas/skills/atlas-setup/references/connectors.md (twelve, panos in Node row and 'The twelve connectors' list, uv/Node line) and plugins/atlas/references/connector-config-flow.md (L179 12, L215-224 twelve, 2026-09-02 matrix/API result labelled historical)",
       "ctx_search 'eleven|11 connectors|other ten|ten need Node' over plugins/atlas/skills, plugins/atlas/references and docs after the fix: only connector-config-flow.md L190/L221/L231 (labelled historical 2026-09-02), connectors.md:38 'other eleven (including panos) need Node' (12 minus falcon), docs/README.md:27 and docs/standards/connector-safety-signals.md:104 'eleven Node connectors' (11 Node + falcon uv = 12, correct), docs/CHANGELOG.md dated release history, and plugins/atlas/skills/atlas/SKILL.md:49 (eleven hooks, unrelated); no unlabelled stale connector-count claim remains"
@@ -3444,7 +3444,7 @@
       "C6 docs gaps: docs/ lacks atlas_faults module, _test_isolation, --backfill-errors, dispatch-history arming rule; CHANGELOG 'dispatches in unarmed directories are not logged' contradicts code (logged)"
     ],
     "doc_refs": [
-      "docs/atlas-workboard.md",
+      "docs/architecture/atlas-workboard.md",
       "plugins/atlas/CHANGELOG.md"
     ],
     "reproduction": "ATLAS_GATES= bun -e 'import {gatesArmed} from \"./plugins/atlas/omp/scope.ts\"; console.log(gatesArmed(\"/Users/jerry/MEGA/Projects/Agentic/osprey-private\"))'  # false; python3 -c 'import sys;sys.path.insert(0,\"plugins/atlas/scripts\");import atlas_scope;print(atlas_scope.gates_armed(\"/Users/jerry/MEGA/Projects/Agentic/osprey-private\"))'  # True",
@@ -3461,10 +3461,10 @@
     "severity": "medium",
     "title": "Failure attribution, gate scoping, hook fault log, test isolation",
     "evidence": [
-      "FinalVerify rejected on (a) omp scope.ts WAL open and (b) docs gaps; both fixed and re-checked by lead: bun test 315 pass, hooks suite OK, docs/atlas-workboard.md covers all 6 surfaces, gatesArmed(osprey-private)=true on real DB, hook-faults.jsonl 0 lines. Recorded by lead, not an independent re-verification."
+      "FinalVerify rejected on (a) omp scope.ts WAL open and (b) docs gaps; both fixed and re-checked by lead: bun test 315 pass, hooks suite OK, docs/architecture/atlas-workboard.md covers all 6 surfaces, gatesArmed(osprey-private)=true on real DB, hook-faults.jsonl 0 lines. Recorded by lead, not an independent re-verification."
     ],
     "doc_refs": [
-      "docs/atlas-workboard.md",
+      "docs/architecture/atlas-workboard.md",
       "plugins/atlas/CHANGELOG.md"
     ],
     "reproduction": "cd plugins/atlas/omp && bun test; cd ../hooks && python3 -m unittest discover -p 'test_*.py'",
@@ -3484,7 +3484,7 @@
       "unittest test_atlas_herdr 8 OK; live: SIGTERM instance, 8 parallel separate-process ensure -> 1 started + 7 reused, duplicates 0, one listener on 7317, none on 17317/27317/37317/47317; PORT=7317 pinned in plugin config .env; headless Chrome: Herd nav present, iframe loads herdr UI, scrollHeight==innerHeight; no X-Frame-Options/CSP on :7317. Recorded by lead from implementer evidence, not independent re-verification. herdr [[startup]] hook itself is not guarded; PORT pin makes a racing start fail instead of forking."
     ],
     "doc_refs": [
-      "docs/atlas-workboard.md",
+      "docs/architecture/atlas-workboard.md",
       "plugins/atlas/CHANGELOG.md"
     ],
     "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_herdr; python3 atlas_herdr.py status",
@@ -3505,8 +3505,8 @@
     ],
     "doc_refs": [
       "plugins/atlas/CHANGELOG.md",
-      "docs/atlas-workboard.md",
-      "docs/atlas-harness-parity.md"
+      "docs/architecture/atlas-workboard.md",
+      "docs/architecture/atlas-harness-parity.md"
     ],
     "reproduction": "python3 plugins/atlas/scripts/atlas_scorecard.py run --root plugins/atlas --out after.json; python3 plugins/atlas/scripts/atlas_scorecard.py diff baseline.json after.json",
     "proposed_fix": "",
@@ -3544,9 +3544,9 @@
       "Durable evidence in .atlas/.run/evidence/: sweep (60/60 cells + 10/10 deep checks, 15 routes x 2 viewports x 2 themes, 0 console/page errors), scorecard (HEAD baseline 161 metrics vs live 217: improved 40, new 58, regressed 8 of which session_boot latency fixed after: p50 265->65ms cold in harness, scorecard 54ms vs 62 baseline; mux test and probe artifacts fixed), suites (hooks 1156 OK, scripts 1449 pass + 3 attributed fails: 2 test_atlas_remote env/wC-owned, 1 mux fixed after; omp 353 pass, tsc 0, mcp 12 connectors PASS). Gate bug found and fixed: ~ and $HOME not expanded when classifying edit paths (omp resolveTarget + dispatch_tripwire). Earlier frozen pre-fix baseline and /tmp artifacts were lost to a reboot, so earlier 53/6 numbers are conversation-only. Integrations: herdr-projects, captains-deck, tode detected installed; herdr-file-viewer and cmux-browser-mcp not installed (install commands surfaced); cmuxlayer registered in ~/.omp/agent/mcp.json with 120s timeout (needs /mcp reload). Recorded by lead from implementer evidence, not independent verifier."
     ],
     "doc_refs": [
-      "docs/atlas-workboard.md",
-      "docs/atlas-channels.md",
-      "docs/atlas-colony.md",
+      "docs/architecture/atlas-workboard.md",
+      "docs/architecture/atlas-channels.md",
+      "docs/architecture/atlas-colony.md",
       "plugins/atlas/CHANGELOG.md"
     ],
     "reproduction": "python3 plugins/atlas/scripts/atlas_scorecard.py run --root plugins/atlas --out after.json; bun .atlas/.run/evidence/sweep/run.mjs",
@@ -3581,8 +3581,8 @@
     ],
     "doc_refs": [
       "plugins/atlas/scripts/dashboard_ui/design/API.md",
-      "docs/atlas-colony.md",
-      "docs/atlas-channels.md",
+      "docs/architecture/atlas-colony.md",
+      "docs/architecture/atlas-channels.md",
       ".atlas/.run/evidence/sweep/SUMMARY.md"
     ],
     "reproduction": "see evidence[]; key repros: (a) session_boot twice in an isolated ATLAS_HOME with a stub bun on PATH -> stub log 'bun scripts/plugin.ts start PORT=17317'; (b) isolated dashboard + DB copy containing projects.root_path='/' -> POST /api/v2/open-file {root:'/etc',path:'/etc/hosts'} with token = 200 + spawn; (c) cd plugins/atlas/hooks && python3 -m unittest test_session_boot_colony -> 4 failures",
@@ -3767,8 +3767,8 @@
       "playwright #/colony: 1 iframe src http://127.0.0.1:7317/?chrome=full&theme=dark, same_node+same_src after 20s, 0 console/page errors",
       "plugins/**/.atlas: 0 tracked, 0 untracked, gitignored (.gitignore:283)",
       "DRIFT docs/CHANGELOG.md:10 lists SSE topics herd,todos,irc,health,improve but atlas_dashboard.py:1944 SSE_TOPICS also has agents",
-      "DRIFT docs/atlas-colony.md:136 says /atlas/#/herd is 'the alias for the Fleet lens' but app.js:52 ALIASES herd->colony (doc lines 38/108 agree with code)",
-      "RUNTIME GAP installed ~/.omp/plugins/cache/.../atlas___10.0.1 atlas_mux.py has no quote-strip fix and no omp/channels.ts; repo is 10.2.0 -> live omp sessions still dispatch with old code until release+reinstall (disclosed in docs/atlas-colony.md:5)"
+      "DRIFT docs/architecture/atlas-colony.md:136 says /atlas/#/herd is 'the alias for the Fleet lens' but app.js:52 ALIASES herd->colony (doc lines 38/108 agree with code)",
+      "RUNTIME GAP installed ~/.omp/plugins/cache/.../atlas___10.0.1 atlas_mux.py has no quote-strip fix and no omp/channels.ts; repo is 10.2.0 -> live omp sessions still dispatch with old code until release+reinstall (disclosed in docs/architecture/atlas-colony.md:5)"
     ],
     "doc_refs": [],
     "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_mux.ShippedOmpAgentsThinkingTests test_atlas_channels test_atlas_dash_insights; cd ../hooks && python3 -m unittest test_channel_dispatch; curl -H X-Atlas-Token 127.0.0.1:7421/api/v2/health; node playwright #/colony iframe probe; grep gen-agents.ts ~/.omp/plugins/cache/plugins/tech-tools___atlas___10.0.1/scripts/atlas_mux.py",
@@ -4796,7 +4796,7 @@
     "severity": "low",
     "title": "Docs/CHANGELOG mismatches: terminal-yield wording (PV-07); drift smoke count 28 vs 31 now; parity doc says drift hashed against source checkout only (code falls back to marketplace clone); shell-wins omits empty-export case; channel-view.ts header comment stale",
     "evidence": [
-      "CHANGELOG.md:15,17; docs/atlas-harness-parity.md:190; channel-view.ts:10-11"
+      "CHANGELOG.md:15,17; docs/architecture/atlas-harness-parity.md:190; channel-view.ts:10-11"
     ],
     "doc_refs": [],
     "reproduction": "read sections vs code",
@@ -4830,10 +4830,10 @@
     "severity": "medium",
     "title": "PV-09 doc mismatches fixed: TERMINAL yield, 31-files smoke, marketplace-clone fallback, non-empty export qualifier, channel-view header",
     "evidence": [
-      "CHANGELOG.md:17 'Only a TERMINAL yield counts'; :15 '31 files at the time of writing' + 'else the marketplace clone'; :11 'A non-empty exported variable wins; an empty export is replaced'; docs/atlas-harness-parity.md:185 non-empty export qualifier, :190 'fall back to the marketplace clone'; channel-view.ts:12 TERMINAL yield, constants QUIET_POLLS=3 MAX_MS=30min LINGER_MS=15s match :24-26. Parity doc has no yield/drift-count row, so those two phrases are CHANGELOG-only by design"
+      "CHANGELOG.md:17 'Only a TERMINAL yield counts'; :15 '31 files at the time of writing' + 'else the marketplace clone'; :11 'A non-empty exported variable wins; an empty export is replaced'; docs/architecture/atlas-harness-parity.md:185 non-empty export qualifier, :190 'fall back to the marketplace clone'; channel-view.ts:12 TERMINAL yield, constants QUIET_POLLS=3 MAX_MS=30min LINGER_MS=15s match :24-26. Parity doc has no yield/drift-count row, so those two phrases are CHANGELOG-only by design"
     ],
     "doc_refs": [],
-    "reproduction": "rg -n -i 'terminal .?yield|31 files at the time of writing|marketplace.clone|non-empty export' plugins/atlas/CHANGELOG.md docs/atlas-harness-parity.md",
+    "reproduction": "rg -n -i 'terminal .?yield|31 files at the time of writing|marketplace.clone|non-empty export' plugins/atlas/CHANGELOG.md docs/architecture/atlas-harness-parity.md",
     "proposed_fix": "",
     "blast_radius": "module",
     "status": "verified",
@@ -4918,7 +4918,7 @@
       "All 10 rev3 items fixed: D:422,462 21 hooks (hooks.json parse=21); D:108-111,567-568 Svg isInteractive + surface conflict flagged; D:97 BoxHoverProps/TextHoverProps.scope; D:479-481 two pings :335/:857, herdr --version :555-563, probes :794-829; D:67 $.plugin.root; D:148-150 usage fields; D:469-470 prompt.submit matches 6.4; D:114-116,562-563 tick resets loop; D:426 built-in mods/SDK hooks; D:117,566 1024 pairs (T:9251). No stale phrasing found by grep; surrounding sentences coherent."
     ],
     "doc_refs": [],
-    "reproduction": "grep -nE 'hooks|Svg|scope|ping|plugin.root|usage|prompt.submit|setState|disableAllHooks|1,024' docs/plans/2026-10-09-atlas-mod.md",
+    "reproduction": "grep -nE 'hooks|Svg|scope|ping|plugin.root|usage|prompt.submit|setState|disableAllHooks|1,024' docs/plans/2026-10-09_atlas-mod.md",
     "proposed_fix": "",
     "blast_radius": "module",
     "status": "verified",
@@ -5053,7 +5053,7 @@
     "severity": "info",
     "title": "Ledger consistency + S2 receiver-side acceptance closed",
     "evidence": [
-      "LedgerConsistency: ledgers carry verified numbers (206 pass / 0 fail across 16 files; CHANGELOG '16 files'; plugin CHANGELOG Native adoption block; colony/channels/ROADMAP transport statements match atlas_mux.py; zero stale herdr-default phrases repo-wide after HarnessParityLine fixed docs/atlas-harness-parity.md:130). BgInboundAccept: env forwarding verified already-present (ATLAS_WORKER_NAME + FORWARDED_ENV, set-only) and bg workers now spawn with --settings '{\"crossSessionInbound\":\"accept\"}' (red-first, mux 77 passed / 30 subtests, launch 19 passed, live probe 3550d17a accepted + stopped). S2 open half recorded: ATLAS_LEAD_AGENT population is lead-side. Evidence: .atlas/evidence/parity-r3r4-2026-10-10/probes.md. TempDirFix cleared the last pi-lens blocker (S108) leaving 13 pre-existing warnings."
+      "LedgerConsistency: ledgers carry verified numbers (206 pass / 0 fail across 16 files; CHANGELOG '16 files'; plugin CHANGELOG Native adoption block; colony/channels/ROADMAP transport statements match atlas_mux.py; zero stale herdr-default phrases repo-wide after HarnessParityLine fixed docs/architecture/atlas-harness-parity.md:130). BgInboundAccept: env forwarding verified already-present (ATLAS_WORKER_NAME + FORWARDED_ENV, set-only) and bg workers now spawn with --settings '{\"crossSessionInbound\":\"accept\"}' (red-first, mux 77 passed / 30 subtests, launch 19 passed, live probe 3550d17a accepted + stopped). S2 open half recorded: ATLAS_LEAD_AGENT population is lead-side. Evidence: .atlas/evidence/parity-r3r4-2026-10-10/probes.md. TempDirFix cleared the last pi-lens blocker (S108) leaving 13 pre-existing warnings."
     ],
     "doc_refs": [],
     "reproduction": "python3 -m pytest plugins/atlas/scripts/test_atlas_mux.py -q (77 passed); grep -rn 'herdr panes by default|tmux as fallback' docs/ (0 hits); pi-lens mode=full test_atlas_mux.py (0 blocking)",
@@ -5116,12 +5116,12 @@
   },
   {
     "id": "PARITY-S5-1010",
-    "surface": "plugins/atlas/{scripts/atlas_mux.py,hooks/completion_gate.py}, docs/plans/2026-10-10-claude-code-native-parity.md, docs/CHANGELOG.md, .atlas/.run/todos board",
+    "surface": "plugins/atlas/{scripts/atlas_mux.py,hooks/completion_gate.py}, docs/plans/2026-10-10_claude-code-native-parity.md, docs/CHANGELOG.md, .atlas/.run/todos board",
     "category": "feature",
     "severity": "info",
     "title": "S6 sibling S5 task-mirror shipped opt-in; last gate items closed",
     "evidence": [
-      "S5: opt-in ATLAS_TASKS_MIRROR brief paragraph, unset=byte-identical, red-first; mux 79 passed/30 subtests with launch 19 (lead rerun 404 passed/43 subtests across gate+mux after statics); honesty clause ledgered in plan row + changelogs (TaskCreate on plain claude-bg workers not probed). Board drained: 109 open -> 0 with per-category evidence. Plan doc renamed docs/plans/2026-10-10-claude-code-native-parity.md (lint_docs_names OK), refs updated. Statics: completion_gate 302/1217/1258 + atlas_mux 847 behavior-identical restatements, lens 0 blocking, pyright-direct 0."
+      "S5: opt-in ATLAS_TASKS_MIRROR brief paragraph, unset=byte-identical, red-first; mux 79 passed/30 subtests with launch 19 (lead rerun 404 passed/43 subtests across gate+mux after statics); honesty clause ledgered in plan row + changelogs (TaskCreate on plain claude-bg workers not probed). Board drained: 109 open -> 0 with per-category evidence. Plan doc renamed docs/plans/2026-10-10_claude-code-native-parity.md (lint_docs_names OK), refs updated. Statics: completion_gate 302/1217/1258 + atlas_mux 847 behavior-identical restatements, lens 0 blocking, pyright-direct 0."
     ],
     "doc_refs": [],
     "reproduction": "python3 -m pytest plugins/atlas/scripts/test_atlas_mux.py plugins/atlas/hooks/test_completion_gate.py -q; lens_diagnostics mode=full; atlas_todo.py list -> STILL_OPEN 0",
@@ -5133,7 +5133,7 @@
   },
   {
     "id": "PARITY-E2E-1010",
-    "surface": "plugins/atlas/scripts/atlas_mux.py, plugins/atlas/mod, docs/plans/2026-10-10-claude-code-native-parity.md",
+    "surface": "plugins/atlas/scripts/atlas_mux.py, plugins/atlas/mod, docs/plans/2026-10-10_claude-code-native-parity.md",
     "category": "feature",
     "severity": "info",
     "title": "Surface E2E: mux spawn/status/kill live; S5 mirror probed inert on bg workers",
@@ -5267,8 +5267,8 @@
     "title": "mods docs reconciled to measured truth: TESTING.md two-tier state, CHANGELOG/ROADMAP/atlas-mod/parity numbers 208/169, plans header implemented",
     "evidence": [
       "grep '207 pass|170 fail|/ 170' over the five targets = 0 hits after sweep",
-      "props.ts wording de-ambiguated in CHANGELOG + docs/atlas-mod.md; plans doc 'design only' header replaced with implemented+verified",
-      "known remainder: two dated plan docs (2026-10-10-claude-code-native-parity, 2026-10-09-atlas-mod body) keep historical walk phrasing"
+      "props.ts wording de-ambiguated in CHANGELOG + docs/architecture/atlas-mod.md; plans doc 'design only' header replaced with implemented+verified",
+      "known remainder: two dated plan docs (2026-10-10_claude-code-native-parity, 2026-10-09_atlas-mod body) keep historical walk phrasing"
     ],
     "doc_refs": [],
     "reproduction": "grep -rnE '207 pass|170 fail' docs plugins/atlas/mod/TESTING.md plugins/atlas/CHANGELOG.md",
@@ -5370,7 +5370,7 @@
       "atlas_dash_colony.py:667-714 resume/cancel handlers, :690-699 cancel refuses finished, --hard delegates to kill whose lead_not_killable guard at :849 precedes; :544-546 wave path rooted; test_atlas_dash_colony_wave.py 14 tests incl resume-noop-without-hold, lead-not-killable",
       "atlas-status/run-watch/tour frontmatter parse (yaml keys incl allowed-tools), rootrefs resolve, no bare scripts/ refs; skill-finder.md 51 Auto/Manual rows == CHANGELOG claim; findings-schema.md 13 fields == build_entry 1:1 (atlas_finding.py:73-88), atomic os.replace claim true (:65-70)",
       "atlas_status.py:72-73 is_verified=status+evidence, :115-128 verified/assumed split, :20+135+142 atlas_todo.load/counts reuse; no env secret reads",
-      "DOCS GAP: docs/atlas-colony.md:100-101 documents ONLY send+kill; missing pause/resume/cancel route rows, colony_wave.json, roster queued/wave fields; no other docs page covers colony routes",
+      "DOCS GAP: docs/architecture/atlas-colony.md:100-101 documents ONLY send+kill; missing pause/resume/cancel route rows, colony_wave.json, roster queued/wave fields; no other docs page covers colony routes",
       "test_atlas_contract.py:629/635/648 skip reason verified as install-cache version (cache/atlas/<manifest version> absent for 10.5.0), not drift; colony+contract suites 102 pass/3 skip"
     ],
     "doc_refs": [],
@@ -8953,7 +8953,7 @@
       "7 PASS: node 51/51; dashboard+settings unittest 93 OK; contract 110 OK (3 skipped)"
     ],
     "doc_refs": [],
-    "reproduction": "ATLAS_DASHBOARD_PORT=7492 python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7492 --foreground; headless Playwright per docs/command-center-redesign.md section 9",
+    "reproduction": "ATLAS_DASHBOARD_PORT=7492 python3 plugins/atlas/scripts/atlas_dashboard.py serve --port 7492 --foreground; headless Playwright per docs/architecture/command-center-redesign.md section 9",
     "proposed_fix": "",
     "blast_radius": "module",
     "status": "needs-evidence",
@@ -9525,5 +9525,452 @@
     "status": "verified",
     "verified_at": "2026-10-22T23:22:00+00:00",
     "verified_by": "lead-tests"
+  },
+  {
+    "id": "S1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "6.1 completion gate counts nested evidence dirs (728273d5)",
+    "evidence": [
+      "plugins/atlas/hooks/test_completion_gate.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/hooks -p test_completion_gate.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "7.2 friction_events gains role, gate_letter, tool_name (6fd53a03)",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_db.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_db.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "7.2 friction writers record gate letter, tool and role (1693e1cd, 26041b77)",
+    "evidence": [
+      "plugins/atlas/hooks/test_dispatch_tripwire.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/hooks -p test_dispatch_tripwire.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "7.2 live atlas.db migrated: user_version 2, 1873 rows kept, integrity ok",
+    "evidence": [
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/atlas.db.bak",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_db.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "7.3 gate_block spike detector in doctor --mine (e9ad1349)",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_doctor.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_doctor.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "7.1 doctor --fix appends tooling block (d9974d07)",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_doctor.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_doctor.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S7",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "2.1 panefeed repaint throttle (c80c54c6)",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_panefeed.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_panefeed.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S9",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "2.3 tmux layout width gate for 3+ workers (2eed40ef)",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_mux.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_mux.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S10",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "3.2 HMAC owner tokens in note CLI (6412d17f); 4 mutations killed",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_channels.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_channels.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S11",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "3.2 owner token delivered to spawned workers (f4c56642)",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_launch.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_launch.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:03+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S12",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "4.2 dashboard selector drops marker-less dirs (254ab55e)",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_dashboard.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_dashboard.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:04+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S13",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "5.1 19 skill descriptions carry Use when (7ccdfb03)",
+    "evidence": [
+      "plugins/atlas/scripts/test_skill_agent_conformance.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_skill_agent_conformance.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:04+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S14",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "1.2 herdr seats support pane capture (73f4baae)",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_seats.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_hooks.txt",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/f3ec4109-67d9-4496-b4a1-94ff6b0d1050/scratchpad/final_scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_seats.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-23T12:15:04+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "P1-audit-skill",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-audit runs without graphify/security-review/codeql/quality-playbook: conditional composition, fallbacks, literal atlas_finding.py command, hub glob fix, AskUserQuestion+Workflow allowed",
+    "evidence": [
+      "plugins/atlas/skills/atlas-audit/SKILL.md",
+      ".atlas/.run/proof-2026-10-26/audit-deps.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_skill_agent_conformance (Ran 40 tests OK); grep -rn 'atlas-\\*-\\*' plugins/atlas/skills/atlas-audit (no hits)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T11:14:21+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "P2-skill-refs-test",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "conformance test: skill names referenced by atlas skills/agents exist or sit on OPTIONAL_EXTERNAL_SKILLS; dead atlas-work name removed from atlas-plan",
+    "evidence": [
+      "plugins/atlas/scripts/test_skill_agent_conformance.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_skill_agent_conformance (Ran 40 tests OK; red run named atlas-work x3 before the atlas-plan fix)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T11:14:21+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "P3-testscope-unittest",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "testscope detects stdlib unittest suites: commands emits python3 -m unittest discover, gaps marks python/unit present",
+    "evidence": [
+      "plugins/atlas/skills/atlas-testing/scripts/testscope.py",
+      "plugins/atlas/skills/atlas-testing/scripts/test_testscope.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/skills/atlas-testing/scripts && python3 -m unittest test_testscope (Ran 21 tests OK); commands --root plugins/atlas/hooks emits unittest discover; emitted -s scripts command ran 21 OK",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T11:14:21+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "P4-testing-live",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-testing write and mutate live-run on testscope.py: seeded fault fails new test by name, revert passes; mutmut 2948 mutants 804 killed 1787 survived 357 no-tests",
+    "evidence": [
+      ".atlas/evidence/2026-10-26-atlas-testing-live/report.md",
+      ".atlas/evidence/2026-10-26-atlas-testing-live/mutate.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "see report.md: write-green.txt exit 0, write-seeded.txt exit 1, write-reverted.txt exit 0",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T11:14:21+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "P5-testing-docs",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-testing references fixed for the six live-run instruction defects (unittest fallback, mutmut [tool.mutmut] table, uvx interpreter, subprocess-invisible tests, safe fault revert, --root and mutmut triage)",
+    "evidence": [
+      "plugins/atlas/skills/atlas-testing/references/types-mutation.md",
+      "plugins/atlas/skills/atlas-testing/references/workflow.md",
+      "plugins/atlas/skills/atlas-testing/references/lang-python.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_skill_agent_conformance (Ran 40 tests OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T11:14:21+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "P6-env-scrub",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "test_atlas_control TestBehaviorKnobs and test_typesafe_client ClientTests scrub ATLAS_* env so the suite passes under any Claude Code settings env",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_control.py",
+      "plugins/atlas/scripts/test_typesafe_client.py",
+      "/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/36186186-17d1-48d3-ab6b-039109f196d3/scratchpad/final-scripts.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest discover (Ran 2257 tests, exit 0, 0 FAIL/ERROR lines); baseline was FAILED (failures=3) with ATLAS_TRIPWIRE_THRESHOLD=4 ATLAS_TYPESAFE_MODEL=tev1:4b in the env",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T11:17:30+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "P7-installed-validation",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "installed 15.1.0 atlas-testing run/gaps and atlas-audit act/Phase1/build_hub validated live by fresh agents; five wording gaps closed",
+    "evidence": [
+      ".atlas/evidence/2026-10-26-atlas-testing-installed/report.md",
+      "plugins/atlas/skills/atlas-audit/SKILL.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "Skill atlas:atlas-testing 'plugins/atlas/hooks run' -> emitted python3 -m unittest discover -> Ran 1589 OK exit 0; build_hub.py <run_dir> with no graph -> exit 0; conformance Ran 40 OK after polish",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T11:35:42+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S1-root-resolver",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "One project_root resolver replaces six walkers",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_paths.py",
+      "scripts suite Ran 2281 OK on merged main"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_atlas_paths (plugins/atlas/scripts)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T13:45:32+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S3-docs-underscore",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Docs naming: YYYY-MM-DD_slug, hyphen migration, docs-root routing, embedded date parse",
+    "evidence": [
+      "plugins/atlas/scripts/test_lint_docs_names.py",
+      "test_lint_docs_names Ran 42 OK after follow-up merge"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/lint_docs_names.py --all --root <proj>",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T13:45:32+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S5-typesafe-url",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "TypeSafe URL accepts base or full form; local-tag on hosted refused; missing-formatter skips off the fault log",
+    "evidence": [
+      "plugins/atlas/scripts/test_typesafe_client.py",
+      "plugins/atlas/hooks/test_format_after_edit.py",
+      "hooks Ran 1591, only InstalledParity fails (reinstall)"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T13:45:32+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "S2-doctor-layout",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_doctor: .atlas layout repair (project-scoped, never ancestors), docs naming report/--fix, scoring + project-identity checks",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_doctor_layout.py",
+      "scripts Ran 2305 OK; real-path snapshot identical before/after"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T14:05:42+00:00",
+    "verified_by": "lead"
   }
 ]

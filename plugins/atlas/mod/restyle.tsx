@@ -1,4 +1,4 @@
-// Restyled built-in sites for the Atlas mod (plan docs/plans/2026-10-09-atlas-mod.md §3.3).
+// Restyled built-in sites for the Atlas mod (plan docs/plans/2026-10-09_atlas-mod.md §3.3).
 // Spinner, ToolUse (Agent/Task atlas personas), AssistantMessage, TurnDuration, PromptHint.
 // Every site falls back to the engine's own drawing (`next(e)`) when the snapshot is
 // missing, ATLAS_MOD=off, or anything in the draw path throws: restyles decorate, never break.

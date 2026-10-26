@@ -1,4 +1,4 @@
-Part of [tech-tools](https://github.com/w159/tech-tools) — see repo for the matching MCP server (`mcp_servers/panos-mcp`) and the design contract (`docs/panos-connector-design.md`).
+Part of [tech-tools](https://github.com/w159/tech-tools) — see repo for the matching MCP server (`mcp_servers/panos-mcp`) and the design contract (`docs/architecture/panos-connector-design.md`).
 
 # node-panos
 

@@ -1,7 +1,7 @@
 // Native-element sidebar: a hotkey tab strip (r route, t team, c channel, g gates) over exactly one view.
 // Plain column: the host pane draws the one frame.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
-// Plan: docs/plans/2026-10-13-atlas-command-center-redesign.md §3.
+// Plan: docs/plans/2026-10-13_atlas-command-center-redesign.md §3.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { openGateCount } from '../gates';
 import { textWidth } from '../theme';

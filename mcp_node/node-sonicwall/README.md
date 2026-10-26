@@ -2,7 +2,7 @@
 
 Typed Node.js client for the SonicOS 7 REST API (`/api/sonicos`). Zero runtime
 dependencies (global `fetch`, Node 18+). Used by `mcp_servers/sonicwall-mcp`.
-Contract: `docs/sonicwall-connector-design.md`.
+Contract: `docs/architecture/sonicwall-connector-design.md`.
 
 ```ts
 import { SonicwallClient, SonicwallApiError } from 'node-sonicwall';

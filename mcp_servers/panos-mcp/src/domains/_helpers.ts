@@ -47,14 +47,14 @@ export const TARGET_PROP = {
 //
 // These four wrappers are the ONLY place a panos tool's safety signals are
 // set, so the `DESTRUCTIVE: ` description prefix required by
-// docs/panos-connector-design.md and the readOnlyHint / destructiveHint
+// docs/architecture/panos-connector-design.md and the readOnlyHint / destructiveHint
 // annotations an MCP client automates on come from a single decision and
 // cannot drift apart. A tool that goes through none of them is annotated
 // mutating, with a loud stderr complaint, by annotate() - never read-only.
 
 /**
  * Prefix a mutating tool's description with `DESTRUCTIVE: `, per the safety
- * rule in docs/panos-connector-design.md - the marker is mechanical, not
+ * rule in docs/architecture/panos-connector-design.md - the marker is mechanical, not
  * something every domain author has to remember to type - and carry the
  * matching machine-readable annotations.
  */

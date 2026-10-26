@@ -3,7 +3,7 @@
 > **Scope rule (read first):** `atlas` and `armada` are products developed in this
 > repo. A request about them means edit their source under `plugins/atlas/` or
 > `plugins/armada/` - never install, set up, or run them in this workspace. Full
-> rule: `AGENTS.md` Section 0 and `docs/plugin-development-scope.md`.
+> rule: `AGENTS.md` Section 0 and `docs/architecture/plugin-development-scope.md`.
 
 This directory holds the three plugins published from this repo, plus the shared authoring assets they draw on.
 

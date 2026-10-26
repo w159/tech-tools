@@ -49,12 +49,12 @@ Important
 8. Working tree has an uncommitted edit to plugins/atlas/scripts/dashboard_ui/js/ui.js (deletes Panel, KPI and more, outside the reviewed range). Node suite is green with it, but it must be committed or reverted with an owner before release.
 
 Minor
-- Non-U.S.-keyboard characters in UI copy (U+00B7 middle dot): js/pages/channels.js:74, pages/settings-model.js:108,148 (102 is a comment), pages/settings-panels.js:389,401, drawer/messages.js:26,28, drawer/agent-drawer.js:25; band.js:59,72 and run.js:228 use `·` escapes (ruled acceptable, mirrors band.tsx). Docs edits: only docs/plans/2026-10-22-command-center-v15-plan.md (glyph literals inside code spans in the test step); no dashes or curly quotes found.
+- Non-U.S.-keyboard characters in UI copy (U+00B7 middle dot): js/pages/channels.js:74, pages/settings-model.js:108,148 (102 is a comment), pages/settings-panels.js:389,401, drawer/messages.js:26,28, drawer/agent-drawer.js:25; band.js:59,72 and run.js:228 use `·` escapes (ruled acceptable, mirrors band.tsx). Docs edits: only docs/plans/2026-10-22_command-center-v15-plan.md (glyph literals inside code spans in the test step); no dashes or curly quotes found.
 - api.js:156: SSE URL carries `?token=` (EventSource cannot set headers). Unchanged from v14, not a regression; note for the security doc.
 - Weakest test: app-keys.test.js second test (source-regex on app.js and shortcuts.js text). Next: band.test.js near-tautology (:201).
 - steer.js: hold posts a normal note with text "hold"; the server ignores kind, so "hold" is a message, not a state change. Disclosed in-code, not in docs.
 - run.js feed loader appends the full channel on each refresh and relies on toFeed dedupe (run.js:272); correct but wasteful. A feed error replaces all rows (T6 minor 2).
-- docs/command-center-redesign.md still lists deleted pages and Sparkline but carries the superseded banner; fine.
+- docs/architecture/command-center-redesign.md still lists deleted pages and Sparkline but carries the superseded banner; fine.
 
 ### Deferred minors triage
 | Source | Minor | Triage | Reason |

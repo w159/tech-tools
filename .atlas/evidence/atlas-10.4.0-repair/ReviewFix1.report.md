@@ -1,6 +1,6 @@
 STATUS: DONE
 STEPS: 6/6
-FILES_CHANGED: plugins/atlas/scripts/dashboard_ui/js/pages/colony.js; plugins/atlas/scripts/dashboard_ui/js/colony-roster.test.js; plugins/atlas/scripts/atlas_todo.py; plugins/atlas/scripts/atlas_mux.py; plugins/atlas/scripts/atlas_launch.py; plugins/atlas/scripts/atlas_dash_colony.py; plugins/atlas/scripts/test_atlas_dash_colony.py; plugins/atlas/scripts/test_atlas_channels.py; docs/atlas-colony.md; plugins/atlas/CHANGELOG.md
+FILES_CHANGED: plugins/atlas/scripts/dashboard_ui/js/pages/colony.js; plugins/atlas/scripts/dashboard_ui/js/colony-roster.test.js; plugins/atlas/scripts/atlas_todo.py; plugins/atlas/scripts/atlas_mux.py; plugins/atlas/scripts/atlas_launch.py; plugins/atlas/scripts/atlas_dash_colony.py; plugins/atlas/scripts/test_atlas_dash_colony.py; plugins/atlas/scripts/test_atlas_channels.py; docs/architecture/atlas-colony.md; plugins/atlas/CHANGELOG.md
 EVIDENCE:
 1. full suite (env -u ... pytest hooks/ scripts/) -> 2700 passed, 3 skipped, 422 subtests passed in 186.66s (/tmp/atlas-fix/suite4.txt)
 2. dashboard_ui/js bun test -> 23 pass, 0 fail

@@ -2374,7 +2374,7 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
     return out
 
 
-# --- turn quality (TypeSafe-scored replies; see docs/atlas-turn-scoring.md) ---
+# --- turn quality (TypeSafe-scored replies; see docs/architecture/atlas-turn-scoring.md) ---
 # Tunable: fraction of scored turns that must hit a failure before a finding
 # is emitted. Conservative on purpose; raise to quiet a noisy judgment.
 TURN_QUALITY_DEFAULT_THRESHOLD = 0.25

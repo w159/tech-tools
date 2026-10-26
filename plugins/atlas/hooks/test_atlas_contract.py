@@ -1002,7 +1002,7 @@ def _fm_list(path: Path, key: str) -> list:
     return [x.strip() for x in raw.strip("[]").split(",") if x.strip()]
 
 
-# docs/plans/2026-10-20-atlas-tiering-design.md tier table: role -> (model, effort).
+# docs/plans/2026-10-20_atlas-tiering-design.md tier table: role -> (model, effort).
 # "none" effort is thinking-off; Claude Code has no such value so frontmatter says low.
 TIER_TABLE = {
     "runner": ("haiku", "low"),

@@ -231,10 +231,9 @@ effort/model tier and guardrails.
 - The lead alone dispatches and declares done. Siblings report to the lead,
   never to the user, and never dispatch other subagents.
 
-## Colony mux mode (opt-in, tmux default transport)
+## Colony mux mode (on by default, tmux default transport)
 
-`ATLAS_MUX=tmux` only unlocks `atlas_mux.py spawn` (the variable keeps its
-historical name): the lead must run that command per worker to get its own
+Mux mode is on by default (`ATLAS_MUX=off` disables it; `scripts/atlas_mux.py:586`). The lead must run that command per worker to get its own
 headless process in its own window of the tmux session `atlas-<run>` (one
 window per worker). The transport is tmux by default (12.5.0); herdr (workspace
 `atlas-<run>`, one tab per worker, `atlas_herdr.create_pane`) is used only with

@@ -1,6 +1,6 @@
 /**
  * sonicwall-error.ts - the single place this server turns a SonicOS failure
- * into an error a human can act on (docs/sonicwall-connector-design.md,
+ * into an error a human can act on (docs/architecture/sonicwall-connector-design.md,
  * "Error-surface contract").
  *
  * node-sonicwall throws SonicwallApiError for HTTP >= 400, status.success ===

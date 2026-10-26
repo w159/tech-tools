@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js';
 import { TARGET_PROP, destructiveTool, panosToolError, jsonResult, readOnlyTool } from './_helpers.js';
 
 // Grounding sentence required on every xpath-taking write tool by
-// docs/panos-connector-design.md safety rule 3.
+// docs/architecture/panos-connector-design.md safety rule 3.
 const GROUNDING =
   'Ground the xpath with panos_config_show or panos_config_complete before calling this. Do not compose an xpath from memory.';
 // Safety rule 2: writes touch the candidate config only, never the running config.

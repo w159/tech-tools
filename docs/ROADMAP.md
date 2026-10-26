@@ -9,7 +9,7 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 ### Dashboard redesign (withdrawn 2026-10-22)
 
 - [deferred] Dashboard redesign: withdrawn 2026-10-22; any new attempt starts from a user-approved mockup and a real-browser acceptance pass at 1024 and 1440 with the default landing state.
-- [done 15.1.0] Follow-up: the Settings page shipped as five tabs in 15.1.0 from a user-approved layout and a real-browser pass at 1024 and 1440 (`docs/plans/2026-10-22-settings-tabs-plan.md`).
+- [done 15.1.0] Follow-up: the Settings page shipped as five tabs in 15.1.0 from a user-approved layout and a real-browser pass at 1024 and 1440 (`docs/plans/2026-10-22_settings-tabs-plan.md`).
 
 ### Command Center next (added 2026-10-22, after 13.0.0)
 
@@ -70,7 +70,7 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   corpora); atlas
   mapping with file:line (colony/mux/IRC/inbox/gates; mod/types/UI/
   models/personas/worktree/loop/remote equivalents); as-is baseline;
-  independent coverage cross-check; docs/plans/2026-10-10-claude-code-native-parity.md
+  independent coverage cross-check; docs/plans/2026-10-10_claude-code-native-parity.md
   (one row per capability) + composition decision tree and target routing;
   rank gaps impact/effort, then present them for confirmation (DONE this
   run: plan written, critic-checked, and the user confirmed; shipped 2026-10-10:
@@ -108,7 +108,7 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   validated. Gate:
   the implementation phase (implement/verify/record/confirm) starts only
   after ranked gaps are presented to and confirmed by the user via
-  docs/plans/2026-10-10-claude-code-native-parity.md; the mod ships as atlas 11.0.0 only
+  docs/plans/2026-10-10_claude-code-native-parity.md; the mod ships as atlas 11.0.0 only
   after its stage-0 live checks.
 - [planned] Hook friction consolidation (added 2026-10-13, after atlas 12.0.0): the
   dashboard-ensure non-blocking lock, the format_after_edit cwd guard and the
@@ -125,7 +125,7 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
 - [in-progress] Colony rebuild on herdr (2026-10-07, atlas 10.1.2): vendored
   herdr-web-ui + pinned herdr 0.9.3, `/atlas/**` gateway, herdr transport,
   `atlas_remote.py`, `session_boot.ensure_colony` are documented in
-  `docs/atlas-colony.md` and covered by unit and fixture tests (fake herdr
+  `docs/architecture/atlas-colony.md` and covered by unit and fixture tests (fake herdr
   socket, fake tailscale). Not yet observed end to end here: a full
   lead -> `atlas_launch` -> real herdr pane -> dashboard IRC prompt delivery
   round trip on a clean machine, a first-run `bun install` + build via
@@ -186,12 +186,28 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
 
 ### Proposal follow-ups (2026-10-23)
 
-Twelve shipped changes are in `docs/CHANGELOG.md` (2026-10-23) with evidence in `docs/audits/2026-10-23-atlas-proposal-evidence.md`.
+Twelve shipped changes are in `docs/CHANGELOG.md` (2026-10-23) with evidence in `docs/audits/2026-10-23_atlas-proposal-evidence.md`.
 
 - [blocked] 1.1 per-seat env on OpenRig seats: OpenRig is an external runtime reached through `atlas_rig.py`, and `atlas_rig.py:369` documents that `env` and `focus` are ignored, so it cannot be done in this repo. herdr retirement depends on it; nothing destructive was done.
 - [planned] 3.1 worker-side push of board notes: the dashboard side already streams `irc`, `herd` and `todos` topics over SSE (`/api/v2/stream`, `scripts/atlas_dashboard.py:2249`). Worker-side push is a hook design change and was not done.
 - [planned] 4.1 optional fleet capture over SSE: only the fleet text view polls `herd/capture` (`scripts/dashboard_ui/js/fleet.js:16-21`). The terminal page already uses a WebSocket. Adding another hand-rolled WebSocket is ruled out by the project rules, so this stays optional.
 - [planned] Run a UI check of the 4.2 project selector against a dashboard served from this repo. The dashboard on 127.0.0.1:7421 serves the installed plugin cache copy, so it did not reflect these commits.
+
+### State examination follow-ups (2026-10-26)
+
+Source: `docs/audits/2026-10-26_atlas-state-examination.md`.
+
+- [done 2026-10-26] Colony mux was opt-in by `ATLAS_MUX=tmux`; it is now on by default with `ATLAS_MUX=off` to disable, per-member `--task-file` sections and a concurrent in-process dispatch deny (`docs/CHANGELOG.md` 2026-10-26; finding P1 parity). The earlier recall/mux parity notes are covered by this and by S1-root-resolver.
+- [done 2026-10-26] Doctor test run touched real paths (12 stray `.atlas` dirs archived in this repo, `~/MEGA/Projects/.atlas` lost): guards and isolation tests added (finding S2-doctor-layout).
+- [planned] P2: phased todo tree, the `carry_expired` bug, and `todos.json` archive growth.
+- [planned] P3: shared statusline segment.
+- [planned] P4: golden parity tests.
+- [planned] P5: quiet mode (`ATLAS_QUIET`), and the inline-op counter counts scratchpad brief writes.
+- [planned] Local scoring hits a 2048-token context limit: trim the input.
+- [planned] Global projects table cleanup: 346 non-canonical rows.
+- [planned] Project memories and findings never reach `<project>/.atlas` (examination doc section 5).
+- [planned] The docs rewriter missed references in `.env.template` and `plugins/atlas/mod/contract.ts:4`.
+- [planned] `recall_gate` costs 159 ms per tool call: move the marker check ahead of the plugin-dir walk.
 
 ## Backlog
 
@@ -213,7 +229,7 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 
 Closed in 12.4.6 in source (see `docs/CHANGELOG.md`): `atlas-testing` skill (taxonomy of 44 testing types, per-language and per-area references, gap selection with regulated-data floors, `testscope.py` detect/gaps/commands with 17 tests), `atlas:test-engineer` agent, and the scope-matrix `test` class. Unreleased: commit, push and plugin reinstall pending.
 
-- [done] Live-run `atlas-testing` `write` and `mutate` modes (2026-10-26): ran on this repo's `testscope.py` instead of gwh-firstrespondersapp; evidence `.atlas/evidence/2026-10-26-atlas-testing-live/`, summary in `docs/audits/2026-10-26-atlas-audit-testing-proof.md`.
+- [done] Live-run `atlas-testing` `write` and `mutate` modes (2026-10-26): ran on this repo's `testscope.py` instead of gwh-firstrespondersapp; evidence `.atlas/evidence/2026-10-26-atlas-testing-live/`, summary in `docs/audits/2026-10-26_atlas-audit-testing-proof.md`.
 
 ### Follow-ups: atlas 12.4.0 (added 2026-10-14)
 
@@ -247,7 +263,7 @@ Closed in 12.4.0 (see `docs/CHANGELOG.md`): omp lane role and tool, omp worker p
 
 ### OpenRig seat backend (2026-10-14)
 
-Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026-10-14`; evidence `.atlas/evidence/openrig-spike.md`, `.atlas/evidence/openrig-adapter-live.md`; suite at the four documented failures, 3380 passed, omp 443, dashboard 47). Design: `docs/atlas-colony.md`, "Seat backend".
+Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026-10-14`; evidence `.atlas/evidence/openrig-spike.md`, `.atlas/evidence/openrig-adapter-live.md`; suite at the four documented failures, 3380 passed, omp 443, dashboard 47). Design: `docs/architecture/atlas-colony.md`, "Seat backend".
 
 - [in-progress] Reinstall after the 12.4.2 release so the running Claude Code and omp caches pick up the seat backend; until then live sessions still run the 12.4.1 herdr path.
 - [planned] Remove the herdr backend, `colony/herdr-web-ui` and `atlas_herdr.py` after one release of soak on OpenRig; `atlas_integrations.py` herdr-projects and file-viewer stay herdr-specific until then.
@@ -263,7 +279,7 @@ Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026
 - [planned] SonicWall connector follow-ups (shipped 12.7.0 without hardware): live validation against an appliance (`sonicwall_status` under real `SONICWALL_*` credentials, expect `session.loggedIn: true`), TFA/CHAP login, VPN writes.
 - [planned] Live TUI check under tmux if the verifier reports gaps.
 - [planned] herdr transport attach from the TUI.
-- [planned] Re-run one W1 explorer brief on haiku to validate the tier (an ASSUMED item in `docs/plans/2026-10-20-atlas-tiering-design.md`).
+- [planned] Re-run one W1 explorer brief on haiku to validate the tier (an ASSUMED item in `docs/plans/2026-10-20_atlas-tiering-design.md`).
 - [planned] Codex hooks and `.codex/agents` parity (found in stage D3; the contract block shipped in 12.6.0, enforcement did not).
 
 Unreleased, test-verified in source (see `docs/CHANGELOG.md` Unreleased). The herdr autostart, Start button, reap and tmux items below were verified live during the OpenRig work; the rest keep their live check pending.
@@ -308,7 +324,7 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
 
 - Migrate vendor credentials out of `pluginConfigs` into `~/.config/atlas/atlas.env` (chmod 600); regulated credentials under GLBA / FTC Safeguards. The loaders' `pluginConfigs` read is a fallback only.
 - `atlas_doctor.py` `apply_fixes` still copies into the Claude plugin cache on a version mismatch.
-- Claude Code has no equivalent of the omp terminal channel view. The atlas Claude Code mod is implemented in the source tree: `plugins/atlas/mod/`, wired by the `modules` entry in `hooks/hooks.json`, documented in `docs/atlas-mod.md` (Command Center redesign shipped as atlas 12.0.0, see `plugins/atlas/CHANGELOG.md` 12.0.0 and `docs/CHANGELOG.md` 12.0.0 for the current surface).
+- Claude Code has no equivalent of the omp terminal channel view. The atlas Claude Code mod is implemented in the source tree: `plugins/atlas/mod/`, wired by the `modules` entry in `hooks/hooks.json`, documented in `docs/architecture/atlas-mod.md` (Command Center redesign shipped as atlas 12.0.0, see `plugins/atlas/CHANGELOG.md` 12.0.0 and `docs/CHANGELOG.md` 12.0.0 for the current surface).
 - Unaddressed P1s from the review: `atlas_mux` report truncation at 600 chars; herdr spawn lock; transport re-decision; selffix metric verification; `dispatch_tripwire.py` `_CLAUSE_START` ReDoS; `completion_gate.py` test-runner regex.
 - fallow at 10.4.3: the real complexity findings and the introduced duplicate were refactored. The CRAP-only findings (cyclomatic < 12, cognitive <= 15, no coverage data) are accepted in `fallow-baselines/health.json`. Adding dashboard JS coverage would retire them.
 
@@ -330,14 +346,14 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
 - The 9.0.0 omp fixes (`atlas_mux.py` `FORWARDED_ENV` widening (tmux-era;
   as of 2026-10-09 claude workers run native `claude --bg` by default
   (herdr/tmux panes via `ATLAS_COLONY_TRANSPORT` opt-in) and `FORWARDED_ENV` is
-  applied by `pane_env`/`pane_command`, see `docs/atlas-colony.md`), omp
+  applied by `pane_env`/`pane_command`, see `docs/architecture/atlas-colony.md`), omp
   plugin-enablement detection via `omp-plugins.lock.json`, the
   `outputStyle`/`TodoWrite`-gating fixes in `omp/style.ts` and
   `hooks/session_boot.py`) were verified by `bun test` (245 pass, 0 fail) and
   pytest only. Live-omp verification of the 9.0.0 fixes is still needed; omp now
   has atlas 9.5.1 installed (lock + node_modules), so the fixes can be checked in a
   live session. Re-run the paired Claude Code / omp
-  benchmark in `docs/atlas-harness-parity.md` against a live 9.0.0 omp
+  benchmark in `docs/architecture/atlas-harness-parity.md` against a live 9.0.0 omp
   install once upgraded.
 - Evaluate the 47 rewritten SKILL.md descriptions for trigger accuracy against
   Anthropic's testing checklist (https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices):

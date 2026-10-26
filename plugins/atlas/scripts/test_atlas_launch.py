@@ -189,7 +189,7 @@ class LaunchArgvTest(unittest.TestCase):
         self.assertEqual(kw["env"]["ATLAS_MUX"], "tmux")
 
     def test_default_transport_is_tmux_when_installed_and_herdr_stays_opt_in(self):
-        # 12.5.0 contract (docs/atlas-colony.md): tmux whenever installed, else claude-bg;
+        # 12.5.0 contract (docs/architecture/atlas-colony.md): tmux whenever installed, else claude-bg;
         # herdr only when forced, even with its server up.
         with mock.patch.object(atlas_herdr, "_server_up", lambda: True):
             os.environ.pop("ATLAS_COLONY_TRANSPORT", None)

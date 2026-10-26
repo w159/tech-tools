@@ -253,14 +253,14 @@ blocked), and the model-override deny runs on
 it runs, which makes `dispatch_tripwire.py` skip its own native-tool deny/nudge
 (omp's `index.ts` already produces it) and still reach the inline-op threshold;
 Claude Code never sets it, so nothing changes there. Still open, per
-`docs/atlas-harness-parity.md`: memory capture's durable-write path is not yet
+`docs/architecture/atlas-harness-parity.md`: memory capture's durable-write path is not yet
 shown working on a live omp run, and the connector credential watch coverage on
 omp (via the hook-bridge name re-split) has no live-run verification either; the
 omp inline-op, production-edit and dispatch-spec denies are tested against the
 real hook but not observed in a live omp session; and the delegation-policy
 decision (the lead may still edit inline and then dispatch a verifier).
 Row-by-row status and how each surface is created, read, updated, and deleted:
-[docs/atlas-harness-parity.md](../../docs/atlas-harness-parity.md).
+[docs/architecture/atlas-harness-parity.md](../../docs/architecture/atlas-harness-parity.md).
 
 ## Statusline
 
@@ -297,7 +297,7 @@ The contract header (`ATLAS | <phase> | <sentence>`) is restyled onto the reply 
 restyled spinner/tool/turn-receipt sites and a context-discipline module nudge heavy
 inline reads toward subagent delegation and sharpen vague prompts with repo facts. The
 mod reads `.atlas/.run/` and changes state only through the existing CLIs;
-`ATLAS_MOD=off` disables it. Full detail: `docs/atlas-mod.md`.
+`ATLAS_MOD=off` disables it. Full detail: `docs/architecture/atlas-mod.md`.
 
 Parallel implementer dispatches get git-worktree isolation via `scripts/atlas_wt.py`
 (`add`/`status`/`merge`/`prune`; branch `worker/<agent>`, worktree `.atlas/wt/<agent>`).
@@ -335,7 +335,7 @@ each agent's existing `model:`/`effort:` frontmatter.
 
 ## Local dashboard (Atlas Command Center)
 
-Open `http://127.0.0.1:7421/` once. All concurrent terminals share it; switch scope with the project switcher (the selector lists only directories that carry an atlas marker, so a plain folder such as `~/Downloads` no longer appears). The Command Center is a static single-page UI (`scripts/dashboard_ui/`) with a rail of four groups: **Observe** (Overview with an attention feed, Activity, Health with measured/not-measured subsystems), **Operate** (Agents with three lenses: Roster, the Atlas-scoped colony roster described below; Supervise; and Board, the durable todo board `<project>/.atlas/.run/todos.json`. Channels, per-branch and per-lead message channels, see `docs/atlas-channels.md`, each message with a delivery status of `queued`, `read`, `delivered`, `refused` or `undeliverable`. Terminal, a seat grid of real terminals), **Improve** (doctor findings, ledger, remeasure), and **Configure** (Projects; Settings as five tabs for Behavior knobs, Ecosystem toggles, a per-connector credential form with password inputs that never echo saved values plus connector test/enable, and an Agents editor for per-project agent overrides). It updates over Server-Sent Events (`/api/v2/stream`, a 5 s tick with hash-gated `herd`/`agents`/`todos`/`irc`/`health`/`improve` events and a 15 s heartbeat) and only falls back to polling every 8 s if the stream drops. Preferences persist in `~/.atlas/dashboard-prefs.json`. Keyboard: `Ctrl/Cmd+K` palette, `/` search, `g` then a letter to jump, `?` for the list. Manual todos never block the completion gate. Product overview: `docs/atlas-workboard.md`.
+Open `http://127.0.0.1:7421/` once. All concurrent terminals share it; switch scope with the project switcher (the selector lists only directories that carry an atlas marker, so a plain folder such as `~/Downloads` no longer appears). The Command Center is a static single-page UI (`scripts/dashboard_ui/`) with a rail of four groups: **Observe** (Overview with an attention feed, Activity, Health with measured/not-measured subsystems), **Operate** (Agents with three lenses: Roster, the Atlas-scoped colony roster described below; Supervise; and Board, the durable todo board `<project>/.atlas/.run/todos.json`. Channels, per-branch and per-lead message channels, see `docs/architecture/atlas-channels.md`, each message with a delivery status of `queued`, `read`, `delivered`, `refused` or `undeliverable`. Terminal, a seat grid of real terminals), **Improve** (doctor findings, ledger, remeasure), and **Configure** (Projects; Settings as five tabs for Behavior knobs, Ecosystem toggles, a per-connector credential form with password inputs that never echo saved values plus connector test/enable, and an Agents editor for per-project agent overrides). It updates over Server-Sent Events (`/api/v2/stream`, a 5 s tick with hash-gated `herd`/`agents`/`todos`/`irc`/`health`/`improve` events and a 15 s heartbeat) and only falls back to polling every 8 s if the stream drops. Preferences persist in `~/.atlas/dashboard-prefs.json`. Keyboard: `Ctrl/Cmd+K` palette, `/` search, `g` then a letter to jump, `?` for the list. Manual todos never block the completion gate. Product overview: `docs/architecture/atlas-workboard.md`.
 
 ### Agents, Channels, Terminal, Settings (13.0.0)
 
@@ -381,7 +381,7 @@ findings that name the surface to fix, and `--baseline`/`--remeasure` prove the
 fix worked. Transcript excerpts leave the machine (secrets scrubbed);
 `ATLAS_TYPESAFE_SCORING=off` disables it. Knobs: `ATLAS_TYPESAFE_SCORING`,
 `ATLAS_TYPESAFE_MODEL` (default `jev-latest`), `ATLAS_TYPESAFE_MAX_CALLS`
-(default 200). See `docs/atlas-turn-scoring.md`.
+(default 200). See `docs/architecture/atlas-turn-scoring.md`.
 
 ## Dependencies
 
