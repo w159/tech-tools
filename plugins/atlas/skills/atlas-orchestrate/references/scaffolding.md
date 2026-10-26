@@ -29,10 +29,10 @@ Artifacts live in two separate trees at the codebase root: `docs/` (the project 
 `-- api/                  # OpenAPI/Swagger specs + endpoints.md - only if the project has an API
 
 <codebase-root>/.atlas/                # atlas internal state: mostly committed (create if absent)
-|-- evidence/             # COMMITTED permanent execution-evidence; one dir per item: <YYYY-MM-DD>-<slug>/
-|-- findings/             # COMMITTED dated learning ledger: <YYYY-MM-DD>-<slug>.md + INDEX.md
-|-- audits/               # COMMITTED atlas-internal audit records, <YYYY-MM-DD>-<scope>/
-|-- decisions/            # COMMITTED atlas's own operating decisions, <YYYY-MM-DD>-<slug>.md
+|-- evidence/             # COMMITTED permanent execution-evidence; one dir per item: <YYYY-MM-DD>_<slug>/
+|-- findings/             # COMMITTED dated learning ledger: <YYYY-MM-DD>_<slug>.md + INDEX.md
+|-- audits/               # COMMITTED atlas-internal audit records, <YYYY-MM-DD>_<scope>/
+|-- decisions/            # COMMITTED atlas's own operating decisions, <YYYY-MM-DD>_<slug>.md
 |-- archive/              # COMMITTED retired/superseded state: old run logs, deprecated findings, prior structure snapshots
 |-- understand-anything/  # COMMITTED working data for the understand-anything skill
 |-- graphify/             # COMMITTED working data for the graphify skill
@@ -69,7 +69,7 @@ Lives at `.atlas/.run/findings.json`. One object per finding:
   "category": "correctness|security|reliability|performance|maintainability|setup",
   "severity": "critical|high|medium|low",
   "title": "one line",
-  "evidence": ["path/file.py:L42-58", ".atlas/evidence/2026-06-15-test-x/run.log", "screenshot.png"],
+  "evidence": ["path/file.py:L42-58", ".atlas/evidence/2026-06-15_test-x/run.log", "screenshot.png"],
   "doc_refs": ["context7: fastapi 0.115 / security"],
   "reproduction": "exact command or test that demonstrates it",
   "proposed_fix": "concise",
@@ -89,7 +89,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
   --reproduction "pytest backend/tests/test_budget.py -q"
 ```
 
-The `status` enum is `verified | rejected | needs-evidence | open`. A finding starts `open`, becomes `needs-evidence` when it lacks a reproduction or capture, and resolves to `verified` or `rejected` only through a separate verifier context. Bulky evidence referenced from a finding is committed under `.atlas/evidence/`, not inlined. The curator later distills `verified` entries into the dated `.atlas/findings/<YYYY-MM-DD>-<slug>.md` history.
+The `status` enum is `verified | rejected | needs-evidence | open`. A finding starts `open`, becomes `needs-evidence` when it lacks a reproduction or capture, and resolves to `verified` or `rejected` only through a separate verifier context. Bulky evidence referenced from a finding is committed under `.atlas/evidence/`, not inlined. The curator later distills `verified` entries into the dated `.atlas/findings/<YYYY-MM-DD>_<slug>.md` history.
 
 ## Living-docs discipline
 

@@ -5,4 +5,4 @@
 # verdict it proves. atlas-argus and the task skills write here; nothing
 # deletes from here (append-only, like CHANGELOG.md).
 #
-# Naming: <YYYY-MM-DD>-<skill>-<short-slug>.md
+# Naming: <YYYY-MM-DD>_<skill>-<short-slug>.md

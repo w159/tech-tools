@@ -63,7 +63,7 @@ All of the following, confirmed before any handoff message:
 ```json
 {
   "status": "complete" | "blocked",
-  "artifact_path": "docs/plans/<YYYY-MM-DD>-<slug>-plan.md",
+  "artifact_path": "docs/plans/<YYYY-MM-DD>_<slug>-plan.md",
   "unit_count": <N>,
   "requirements_covered": "<all R-### ids or the explicit gap>",
   "question_counts": { "resolved": <N>, "deferred": <N> },

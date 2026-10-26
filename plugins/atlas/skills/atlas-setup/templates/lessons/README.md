@@ -6,7 +6,7 @@ same area, not a one-off event.
 
 ## What lives here
 
-- `<YYYY-MM-DD>-<slug>.md` - one lesson per file
+- `<YYYY-MM-DD>_<slug>.md` - one lesson per file
 - `postmortems/` - incident postmortems (root cause + action items)
 
 ## Lesson template

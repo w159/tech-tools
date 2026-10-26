@@ -35,7 +35,7 @@ If none of these yields a non-empty scope, ask ONE AskUserQuestion (what to simp
 
 ## Step 2 - Dispatch exactly three read-only reviewers in parallel
 
-Create the run evidence directory: `.atlas/evidence/simplify/<YYYY-MM-DD>-<slug>/`.
+Create the run evidence directory: `.atlas/evidence/simplify/<YYYY-MM-DD>_<slug>/`.
 
 Read all three persona prompt assets IN FULL, fill `{{SCOPE}}` in each with the resolved diff or file set, and dispatch each as a Task/Agent call in ONE message so they run concurrently:
 

@@ -58,7 +58,7 @@ Any row that drifted: fix and re-run the re-measurement, or disclose the drift a
 
 ## Evidence layout
 
-All captures live in `.atlas/evidence/<YYYY-MM-DD>-<slug>/` (date-first naming per `atlas-loop/references/docs-ssot.md`):
+All captures live in `.atlas/evidence/<YYYY-MM-DD>_<slug>/` (date-first naming per `atlas-loop/references/docs-ssot.md`):
 
 - `baseline.log` - raw per-sample harness output, baseline.
 - `baseline.json` - command, cwd, environment notes, per-sample values, aggregate, spread, timestamp.

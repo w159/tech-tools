@@ -87,7 +87,7 @@ Every implementer dispatch owes a machine-readable **evidence receipt** per unit
 
 **The implementer writes:**
 
-- A receipt file at `.atlas/evidence/<YYYY-MM-DD>-<unit-id>-receipt.md` containing: `changed_files` (actual paths), `evidence_strategy` (`proof-first | characterization | no-test-exception` + exception reason and replacement verification when applicable), `behavior_changed` (yes/no), `verification` (exact command + observed result + captured output), and - when behavior changed - `tests` (existing tests inspected; tests added/changed/used unchanged; the red failure or characterization baseline observed, when applicable).
+- A receipt file at `.atlas/evidence/<YYYY-MM-DD>_<unit-id>-receipt.md` containing: `changed_files` (actual paths), `evidence_strategy` (`proof-first | characterization | no-test-exception` + exception reason and replacement verification when applicable), `behavior_changed` (yes/no), `verification` (exact command + observed result + captured output), and - when behavior changed - `tests` (existing tests inspected; tests added/changed/used unchanged; the red failure or characterization baseline observed, when applicable).
 - The same fields, condensed, in its final REPORT BACK - they are the orchestrator's reading copy.
 
 **The orchestrator stamps** one findings entry per unit via the existing CLI (the mechanical rule's "you record the outcome"), mapping the receipt onto the standard schema:

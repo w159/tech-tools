@@ -1,7 +1,7 @@
 # Rolling triage doc template
 
 Phase 2g of `atlas-sweep` emits and re-reconciles one triage doc per run at
-`docs/features/<YYYY-MM-DD>-feedback-sweep.md` (today's date — date-first,
+`docs/features/<YYYY-MM-DD>_feedback-sweep.md` (today's date — date-first,
 per the atlas docs SSOT and `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`). This file is the
 contract the reconciler writes to.
 

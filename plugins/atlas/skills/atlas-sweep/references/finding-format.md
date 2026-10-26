@@ -1,6 +1,6 @@
 # Finding format and durable doc template (extensive path)
 
-Output file: `docs/features/<YYYY-MM-DD>-feedback-analysis-<slug>.md`
+Output file: `docs/features/<YYYY-MM-DD>_feedback-analysis-<slug>.md`
 
 The slug is derived from the feedback topic: lowercase, every character outside `a-z 0-9 . _ -` replaced by `-`, repeated `-` collapsed, leading/trailing `-` and `.` trimmed (docs-SSOT filesystem-safe rule - a colon in the filename blocks Windows checkouts).
 
@@ -67,7 +67,7 @@ source: <artifact path or description; atlas-sweep run id if applicable>
 
 <Where the feedback came from, who produced it (role, not name), artifact length,
 how it was routed (quick vs extensive), and what was redacted. Raw/unsanitized
-material lives at .atlas/evidence/<YYYY-MM-DD>-<slug>/ (local-only).>
+material lives at .atlas/evidence/<YYYY-MM-DD>_<slug>/ (local-only).>
 
 ## Summary
 

@@ -137,7 +137,7 @@ Every atlas-testing run reports this fixed block, all fields even when zero or n
   per survivor (needs-test / acceptable-risk)
 - Flakes: <rerun counts, quarantine state, root-cause class> (or "none")
 - Not recommended: <type and reason> (from anti-recommendations, if any)
-- Evidence dir: .atlas/evidence/<YYYY-MM-DD>-<slug>/
+- Evidence dir: .atlas/evidence/<YYYY-MM-DD>_<slug>/
 - Next test: <highest-priority type_id + area + one-line why>
 ```
 

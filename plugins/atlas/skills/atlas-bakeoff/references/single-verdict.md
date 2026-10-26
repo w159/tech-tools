@@ -30,7 +30,7 @@ peer dispatch, and only after Phase 3 is complete.
   training knowledge, or a half-empty dossier is a defect. If the floor cannot be met, the
   honest output is "insufficient evidence" plus exactly what is missing - never a guess.
 - **The atlas verdict exists before the peers.** Phase 3 output is written (chat or
-  `.atlas/evidence/<YYYY-MM-DD>-<slug>/atlas-verdict.md`) before Phase 4 dispatches anything.
+  `.atlas/evidence/<YYYY-MM-DD>_<slug>/atlas-verdict.md`) before Phase 4 dispatches anything.
   A peer prompt must never contain the host's conclusion, a hint toward it, or another
   peer's answer.
 - **Peers are never dispatched by default.** Only an explicit user request for a second
@@ -38,8 +38,8 @@ peer dispatch, and only after Phase 3 is complete.
   same-host substitution statement).
 - **Read-only output.** This skill changes no code, runs no migrations, and performs no git
   operations of any kind - no commit, no push, no PR, ever. The only writes are the optional
-  evidence dossier under `.atlas/evidence/<YYYY-MM-DD>-<slug>/` and an optional durable
-  record at `docs/decisions/<YYYY-MM-DD>-<slug>.md` (date-first, per the docs SSOT).
+  evidence dossier under `.atlas/evidence/<YYYY-MM-DD>_<slug>/` and an optional durable
+  record at `docs/decisions/<YYYY-MM-DD>_<slug>.md` (date-first, per the docs SSOT).
 - **Same-host honesty.** Peer checks are independent in context, not in model. Say so in
   the report; never present peers as cross-model oracle routing.
 

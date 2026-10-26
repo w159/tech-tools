@@ -74,9 +74,9 @@ subdirs present.
 | `docs/architecture/` | Codebase structure, patterns, module boundaries. | yes |
 | `docs/decisions/` | Project ADRs (architecture decision records) for the codebase. | yes |
 | `docs/plans/` | `<task-slug>.md`, one per planned task. | yes |
-| `docs/specs/` | `<YYYY-MM-DD>-<slug>.md` feature specs. | yes |
+| `docs/specs/` | `<YYYY-MM-DD>_<slug>.md` feature specs. | yes |
 | `docs/features/` | Per-feature documentation. | yes |
-| `docs/lessons/` | `<YYYY-MM-DD>-<slug>.md` gotchas and patterns learned. | yes |
+| `docs/lessons/` | `<YYYY-MM-DD>_<slug>.md` gotchas and patterns learned. | yes |
 | `docs/wiki/` | Rendered, human-facing graphify diagrams and the published understand-anything wiki. | yes |
 | `docs/api/` | **Only if the project has an API.** OpenAPI/Swagger specs (`*.json`/`*.yaml`) and `docs/endpoints.md`. Absent for projects with no API. | yes |
 | `docs/standards/`, `docs/glossary.md`, `docs/reference/` | Org/coding standards, business-term-to-code mapping, reference material. Created when the project needs them. | yes |
@@ -92,9 +92,9 @@ adds any other subfolder the moment the project first needs it.
 
 | Path | Holds | Committed? |
 |---|---|---|
-| `.atlas/evidence/` | Permanent execution evidence: red->green captures, command output, screenshots; `<YYYY-MM-DD>-<slug>/` per item. | yes |
-| `.atlas/findings/` | Durable, **dated** learning ledger: `<YYYY-MM-DD>-<slug>.md` per resolved issue/fix/decision, plus `INDEX.md`. The source coding agents read to avoid re-introducing a bug that was already fixed. Curator promotes verified findings here. | yes |
-| `.atlas/audits/` | Atlas-internal audit records, `<YYYY-MM-DD>-<scope>/` (self-audits, structure audits). | yes |
+| `.atlas/evidence/` | Permanent execution evidence: red->green captures, command output, screenshots; `<YYYY-MM-DD>_<slug>/` per item. | yes |
+| `.atlas/findings/` | Durable, **dated** learning ledger: `<YYYY-MM-DD>_<slug>.md` per resolved issue/fix/decision, plus `INDEX.md`. The source coding agents read to avoid re-introducing a bug that was already fixed. Curator promotes verified findings here. | yes |
+| `.atlas/audits/` | Atlas-internal audit records, `<YYYY-MM-DD>_<scope>/` (self-audits, structure audits). | yes |
 | `.atlas/decisions/` | Dated records of atlas's own operating decisions for this project (which tooling was activated, why a structure choice was made). Distinct from project ADRs in `docs/decisions/`. | yes |
 | `.atlas/archive/` | Retired/superseded state: old run logs, deprecated findings, prior structure snapshots. Keeps history without cluttering the live tree. | yes |
 | `.atlas/understand-anything/` | Reserved, optional working area for the understand-anything skill (an external plugin with no code path in this repo) if it retains graph snapshots or intermediate data: not populated by any atlas code today. The current published, human-facing output lives at `docs/wiki/`. | yes |
@@ -115,11 +115,11 @@ verification ledger). Everything else in both trees is committed.
 Durable atlas artifacts are **dated** so a coding agent (or human) can trace what
 changed, when, and why, and so a bug fixed once is not reintroduced:
 
-- Findings: `.atlas/findings/<YYYY-MM-DD>-<slug>.md` (resolved issue + root cause + fix + evidence ref).
-- Evidence: `.atlas/evidence/<YYYY-MM-DD>-<slug>/`.
-- Audits: `.atlas/audits/<YYYY-MM-DD>-<scope>/` and `docs/audits/atlas-<scope>-<YYYY-MM-DD>/`.
-- Decisions: `.atlas/decisions/<YYYY-MM-DD>-<slug>.md` (atlas ops) and `docs/decisions/<slug>.md` (project ADRs).
-- Lessons/specs: `docs/lessons/<YYYY-MM-DD>-<slug>.md`, `docs/specs/<YYYY-MM-DD>-<slug>.md`.
+- Findings: `.atlas/findings/<YYYY-MM-DD>_<slug>.md` (resolved issue + root cause + fix + evidence ref).
+- Evidence: `.atlas/evidence/<YYYY-MM-DD>_<slug>/`.
+- Audits: `.atlas/audits/<YYYY-MM-DD>_<scope>/` and `docs/audits/atlas-<scope>-<YYYY-MM-DD>/`.
+- Decisions: `.atlas/decisions/<YYYY-MM-DD>_<slug>.md` (atlas ops) and `docs/decisions/<slug>.md` (project ADRs).
+- Lessons/specs: `docs/lessons/<YYYY-MM-DD>_<slug>.md`, `docs/specs/<YYYY-MM-DD>_<slug>.md`.
 
 Before starting non-trivial work, agents consult `.atlas/findings/INDEX.md` and
 `docs/lessons/` for prior art on the same area. The understand-anything and graphify
@@ -174,25 +174,26 @@ Hard boundaries:
 ## When to write
 
 - **During a wave:** the orchestrator keeps `.atlas/.run/STATE.md` and `.atlas/.run/work-log.md` current; findings land in `.atlas/.run/findings.json`.
-- **At the moment of proof:** the agent that ran the test or drove the UI writes its capture to `.atlas/evidence/<YYYY-MM-DD>-<slug>/` immediately, then references that path from its finding.
+- **At the moment of proof:** the agent that ran the test or drove the UI writes its capture to `.atlas/evidence/<YYYY-MM-DD>_<slug>/` immediately, then references that path from its finding.
 - **Before any change is called done:** CHANGELOG updated (completed + verified), ROADMAP reconciled (in-flight items still listed), every affected `docs/` subfolder updated, and verified findings distilled into `.atlas/findings/`. This is the completion gate (see "docs-current").
 - **On resume:** re-read `.atlas/.run/work-log.md` first, then `STATE.md`, and check `.atlas/findings/INDEX.md` for prior art, before dispatching anything.
 
 ## Naming conventions
 
-- Evidence dirs: `.atlas/evidence/<YYYY-MM-DD>-<slug>/`. Inside: the raw `run.log`, `before.png`/`after.png`, EXPLAIN output, etc.
-- Durable findings: `.atlas/findings/<YYYY-MM-DD>-<slug>.md` + `.atlas/findings/INDEX.md`.
-- Atlas audits/decisions: `.atlas/audits/<YYYY-MM-DD>-<scope>/`, `.atlas/decisions/<YYYY-MM-DD>-<slug>.md`.
+- Evidence dirs: `.atlas/evidence/<YYYY-MM-DD>_<slug>/`. Inside: the raw `run.log`, `before.png`/`after.png`, EXPLAIN output, etc.
+- Durable findings: `.atlas/findings/<YYYY-MM-DD>_<slug>.md` + `.atlas/findings/INDEX.md`.
+- Atlas audits/decisions: `.atlas/audits/<YYYY-MM-DD>_<scope>/`, `.atlas/decisions/<YYYY-MM-DD>_<slug>.md`.
 - Project wiki subfolders: `docs/<subfolder>/<slug>.md` - lowercase-kebab-case. Examples:
-  - Audits: `docs/audits/atlas-<scope>-<YYYY-MM-DD>/` (e.g. `docs/audits/atlas-security-2026-06-15/`).
-  - Plans: `docs/plans/<task-slug>.md`, one per task.
-  - Specs: `docs/specs/<YYYY-MM-DD>-<slug>.md`.
+  - Audits: `docs/audits/<YYYY-MM-DD>_atlas-<scope>/` (e.g. `docs/audits/2026-06-15_atlas-security/`).
+  - Plans: `docs/plans/<YYYY-MM-DD>_<task-slug>.md`, one per task.
+  - Specs: `docs/specs/<YYYY-MM-DD>_<slug>.md`.
   - Architecture: `docs/architecture/<slug>.md`.
-  - Lessons: `docs/lessons/<YYYY-MM-DD>-<slug>.md`.
+  - Lessons: `docs/lessons/<YYYY-MM-DD>_<slug>.md`.
   - Features: `docs/features/<slug>.md`.
-  - Decisions: `docs/decisions/<slug>.md`.
+  - Decisions: `docs/decisions/<YYYY-MM-DD>_<slug>.md`.
+  - Meetings: `docs/meetings/<YYYY-MM-DD>_<slug>.md`. Handoffs: `docs/handoffs/<YYYY-MM-DD>_<slug>.md`.
   - Wiki (graphify): `docs/wiki/<slug>.md`.
-- Root files: all-caps (`README.md`, `CHANGELOG.md`, `ROADMAP.md`, `AGENTS.md`, `CLAUDE.md`).
+- Root files: all-caps (`README.md`, `CHANGELOG.md`, `ROADMAP.md`, `AGENTS.md`, `CLAUDE.md`, plus `GLOSSARY`, `CONTRIBUTING`, `SECURITY`, `DEVELOPMENT`, `INDEX`). Nothing else lives loose in `docs/`: a dated record goes in its subfolder with the underscore date prefix (`lint_docs_names.py` classifies by keyword: plan, spec, audit/review/inventory, decision/adr, lesson/retro/postmortem, meeting/notes/transcript, handoff); anything unclassifiable is moved into a subfolder by hand.
 
 **Every `<slug>`, `<id>`, `<scope>`, and `*-slug` above must be filesystem-safe before it goes into a path.** A path that a model composes from a raw feature, task, or finding name can carry a character Windows forbids, and a single bad name makes the whole repo un-checkout-able on Windows (`git error: invalid path` aborts the entire checkout, not just that file). A colon is the usual offender: `docs/plans/frontend:public-site.md` blocks every Windows clone. Derive the slug this way: lowercase; replace every character outside `a-z 0-9 . _ -` (this removes the Windows-reserved set `< > : " / \ | ? *` plus spaces and control characters) with a single `-`; collapse repeated `-` and trim leading/trailing `-` and `.`; if the result is empty or a Windows reserved device name (`con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9`), prefix it with the artifact kind (`plan-`, `feature-`, `run-`). The human-readable name still goes in the file's heading, so nothing is lost.
 
@@ -213,7 +214,7 @@ A shipping change is **docs-current** only when all of the following are true:
 2. `docs/ROADMAP.md` is reconciled: completed items moved out, new follow-ups added, in-flight items still listed.
 3. Every affected `docs/` subfolder is updated (a new feature adds `docs/features/`; a design shift adds `docs/architecture/`; a gotcha adds `docs/lessons/` - each created on demand if it does not yet exist).
 4. Evidence for the change is committed under `.atlas/evidence/` and referenced from its finding.
-5. Verified findings are distilled into `.atlas/findings/<YYYY-MM-DD>-<slug>.md` so the fix is discoverable next session.
+5. Verified findings are distilled into `.atlas/findings/<YYYY-MM-DD>_<slug>.md` so the fix is discoverable next session.
 
 Code that ships without docs-current is incomplete. The completion gate refuses to mark the task done until docs-current holds. Drift caught later by `atlas:docs-auditor` is a defect, not a follow-up.
 
@@ -228,8 +229,8 @@ Newest entries go at the top, directly under the heading. Keep the file append-a
 
 ### Fixed
 - Auth redirect dropped the `returnTo` query param on token refresh. Root cause: refresh
-  handler rebuilt the URL without the original search string. (.atlas/evidence/2026-06-15-auth-redirect-fix/,
-  .atlas/findings/2026-06-15-auth-redirect-fix.md)
+  handler rebuilt the URL without the original search string. (.atlas/evidence/2026-06-15_auth-redirect-fix/,
+  .atlas/findings/2026-06-15_auth-redirect-fix.md)
 
 ### Added
 - Cursor-based pagination on `GET /api/v1/users`. See docs/decisions/0007-switch-to-cursor-pagination.md.

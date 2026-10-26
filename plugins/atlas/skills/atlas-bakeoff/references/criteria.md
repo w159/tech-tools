@@ -34,6 +34,6 @@ Add decision-specific criteria when they carry real weight — e.g. operational 
 Keep the working comparison in one place per run:
 
 - Standalone + chat output: hold it in the response; it is the deliverable.
-- Durable output (`docs/decisions/<YYYY-MM-DD>-<slug>-bakeoff.md`): one section per candidate with the full criterion table, then the head-to-head summary.
+- Durable output (`docs/decisions/<YYYY-MM-DD>_<slug>-bakeoff.md`): one section per candidate with the full criterion table, then the head-to-head summary.
 
 Hard-constraint `fail` anywhere eliminates the candidate immediately — record it, do not continue scoring it on softer criteria as if it were still alive.

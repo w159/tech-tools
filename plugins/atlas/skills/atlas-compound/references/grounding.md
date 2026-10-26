@@ -30,7 +30,7 @@ Any relative link or cross-reference in the body (`Related Issues`/`Related` ent
 
 ## 6. Frontmatter validation
 
-Run the full checklist at the end of `references/schema.md`: track determination, required fields, enums exact, date format, YAML-safety quoting, `title` matches H1, slug is filesystem-safe and date-first (`<YYYY-MM-DD>-<slug>.md`).
+Run the full checklist at the end of `references/schema.md`: track determination, required fields, enums exact, date format, YAML-safety quoting, `title` matches H1, slug is filesystem-safe and date-first (`<YYYY-MM-DD>_<slug>.md`).
 
 ## Verdict
 

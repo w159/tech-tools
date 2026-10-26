@@ -12,7 +12,7 @@ Ported from CE `ce-plan/references/intake.md`, adapted to atlas sources: the ups
 
 ## What the brainstorm artifact gives you
 
-`atlas-brainstorm` writes `docs/plans/<YYYY-MM-DD>-<slug>-brainstorm.md` containing:
+`atlas-brainstorm` writes `docs/plans/<YYYY-MM-DD>_<slug>-brainstorm.md` containing:
 
 - **Goal Capsule** - model of success, primary actor, non-goals.
 - **Product Contract** - stable `R-###` requirements (actor-observable, no mechanism), **A-### assumptions**, **D-### settled decisions**, prior-art citations (repo paths and `(pack: <id>, <path>)` pack matches).

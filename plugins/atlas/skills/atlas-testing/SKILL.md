@@ -108,7 +108,7 @@ Every claim carries its exact command, its real exit code, and the decisive outp
   survivor warrants a new test.
 - Runs: suite totals (passed/failed/skipped), quarantine state, rerun counts for flakes.
   Never report "should pass" in place of an actual run.
-- Evidence lands under `.atlas/evidence/<YYYY-MM-DD>-<slug>/` as it is captured, and the
+- Evidence lands under `.atlas/evidence/<YYYY-MM-DD>_<slug>/` as it is captured, and the
   report uses the fixed block in `references/workflow.md`.
 
 ## Hard rules

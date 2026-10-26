@@ -14,7 +14,7 @@ All commands run through `bash`. Everything below is host-portable tooling: `xco
 `xcrun simctl`, and plain file reads - no external AI CLI dependency.
 
 Any failure before the app is visibly launched with log capture running is a **setup
-blocker**: preserve its evidence under `.atlas/evidence/<YYYY-MM-DD>-<slug>/`, report it,
+blocker**: preserve its evidence under `.atlas/evidence/<YYYY-MM-DD>_<slug>/`, report it,
 and stop later stages.
 
 ## 1. Detect the project
@@ -119,7 +119,7 @@ Only after launch is visible and capture is running does phase 2 begin.
 ## Evidence layout
 
 ```
-.atlas/evidence/<YYYY-MM-DD>-<slug>/
+.atlas/evidence/<YYYY-MM-DD>_<slug>/
   build.log        # full xcodebuild output + real exit status
   capture.log      # simulator console stream for the run
   <surface>.png    # one descriptively named screenshot per tested surface

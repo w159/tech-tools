@@ -66,7 +66,7 @@ Announce before dispatching: "**Bake-off** running on <subject> - N candidates, 
 ## Composition
 
 - **Inside `atlas-plan`**: when the plan hits ONE hard implementation-unit decision (an architectural fork the plan cannot resolve by reading code), the plan invokes this skill for exactly that unit. The bake-off output feeds the plan's decision record; the plan retains authority over everything else.
-- **Standalone**: a pre-project technology choice (persistence engine, frontend architecture, state-management shape). Output to chat by default; write `docs/decisions/<YYYY-MM-DD>-<slug>-bakeoff.md` when the caller asks for a durable record or the comparison is too substantial for chat.
+- **Standalone**: a pre-project technology choice (persistence engine, frontend architecture, state-management shape). Output to chat by default; write `docs/decisions/<YYYY-MM-DD>_<slug>-bakeoff.md` when the caller asks for a durable record or the comparison is too substantial for chat.
 - **Boundary with brainstorm**: an open field of ideas/opportunities is `atlas-brainstorm`'s job. Bake-off starts where brainstorm lands - a defined goal with underdeveloped alternatives.
 
 ## VERIFY
