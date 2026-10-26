@@ -278,10 +278,12 @@ function waveCount(ws: PanelWorker[]): number {
 	return starts.reduce((n, t, i) => (i === 0 || t - starts[i - 1]! > WAVE_GAP_S ? n + 1 : n), 0);
 }
 
+const channelScope = (c?: string | null) => (c ? c.replace(/\/[^/]*$/, "") : "");
+const waveLabel = (ws: PanelWorker[]) => (ws.length ? `wave ${waveCount(ws)}` : "");
+
 function titleRow(m: PanelModel, w: number): string {
-	const scope = m.channel ? `  ·  ${m.channel.replace(/\/[^/]*$/, "")}` : "";
-	const wave = m.workers.length ? `  ·  wave ${waveCount(m.workers)}` : "";
-	const left = `${MARK} ATLAS  ·  mission control${scope}${wave}${m.team ? `  ·  ${m.team}` : ""}`;
+	const parts = [channelScope(m.channel), waveLabel(m.workers), m.team ?? ""].filter(Boolean);
+	const left = [`${MARK} ATLAS  ·  mission control`, ...parts].join("  ·  ");
 	const right = `◷ ${clock(m.elapsedSecs ?? 0)}   ${m.workers.length} live   ${gatesBrief(m.gates)} `;
 	return gradBar(left, right, w, VIOLET, SKY);
 }

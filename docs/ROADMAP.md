@@ -201,7 +201,9 @@ Source: `docs/audits/2026-10-26_atlas-state-examination.md`.
 - [done 2026-10-26] Doctor test run touched real paths (12 stray `.atlas` dirs archived in this repo, `~/MEGA/Projects/.atlas` lost): guards and isolation tests added (finding S2-doctor-layout).
 - [done 2026-10-26] P2: phased todo tree, the `carry_expired` bug, and `todos.json` archive growth (`scripts/atlas_todo.py` `rotate_archive`; evidence: tmux team t5c2996, finding P1-verify, `docs/CHANGELOG.md` 2026-10-26).
 - [done 2026-10-26] P3: shared statusline segment (`scripts/atlas_status_segment.py`, `scripts/test_atlas_status_segment.py`; same verification).
-- [planned] P4: golden parity tests for band rows.
+- [done 2026-10-26] P4: golden parity tests for band rows (`contracts/band-golden.ts`, `mod/band-golden.test.ts`, `omp/mission-panel-golden.test.ts`).
+- [planned] Band parity below 120 columns and the START lane text ("working" vs "starting") are not covered by the golden rows.
+- [planned] `format_after_edit` reformatted whole files on a one-line Edit (the P4 worker saw a 1500-line diff and had to re-apply its edits by script): format only the edited range, or skip files whose formatting differs from the repo's.
 - [done 2026-10-26] P5: quiet mode (`ATLAS_QUIET`), and the inline-op counter no longer counts scratchpad and brief writes (`hooks/nudge.py:93`, `hooks/dispatch_tripwire_core.py`; same verification).
 - [planned] Local scoring hits a 2048-token context limit: trim the input.
 - [planned] Global projects table cleanup: 346 non-canonical rows.
