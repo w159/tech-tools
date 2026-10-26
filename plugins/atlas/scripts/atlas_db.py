@@ -8,8 +8,12 @@ import json
 import os
 import re
 import sqlite3
+import sys
 import tempfile
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import atlas_paths  # noqa: E402
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -410,8 +414,8 @@ def mark_orchestrating(conn, session_id, cwd=None):
     Optionally writes an advisory sentinel under <cwd>/.atlas/.run/."""
     rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
     if rid is None:
-        base = cwd or "."
-        pid = register_project(conn, base, os.path.basename(os.path.abspath(base)))
+        base = atlas_paths.project_root(cwd)
+        pid = register_project(conn, base, os.path.basename(base))
         if pid is None:
             return None
         rid = start_run(conn, pid, session_id)
@@ -456,20 +460,9 @@ def is_orchestrating(conn, session_id):
 
 
 def _project_root_for_sentinel(cwd):
-    """Walk up from cwd to the nearest project root (.git, .atlas, or docs
-    marker, same markers find_root uses) so runtime state always lands next to
-    the board and findings the rest of the system reads, never in an arbitrary
-    subdirectory of product source."""
-    d = os.path.abspath(cwd or ".")
-    for _ in range(7):
-        for marker in (".git", ".atlas", "docs"):
-            if os.path.exists(os.path.join(d, marker)):
-                return d
-        parent = os.path.dirname(d)
-        if parent == d:
-            return os.path.abspath(cwd or ".")
-        d = parent
-    return os.path.abspath(cwd or ".")
+    """Project root for runtime state: delegates to atlas_paths so the sentinel
+    lands next to the board and findings, never in a subdirectory."""
+    return atlas_paths.project_root(cwd)
 
 
 def _write_orchestration_sentinel(cwd):

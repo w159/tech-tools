@@ -1168,6 +1168,7 @@ class HelperUnitTest(unittest.TestCase):
     def test_find_root_finds_docs_dir(self):
         tmp = tempfile.mkdtemp()
         try:
+            os.makedirs(os.path.join(tmp, ".git"))  # docs/ alone is no longer a root marker
             os.makedirs(os.path.join(tmp, "docs"))
             nested = Path(tmp) / "a" / "b" / "c"
             nested.mkdir(parents=True)

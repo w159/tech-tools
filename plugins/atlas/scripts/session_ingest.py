@@ -695,8 +695,9 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
         # link project from the cwd seen in the transcript
         if meta["cwd"]:
             try:
+                _root = atlas_db.atlas_paths.project_root(meta["cwd"])
                 meta["project_id"] = atlas_db.register_project(
-                    conn, meta["cwd"], os.path.basename(meta["cwd"].rstrip("/"))
+                    conn, _root, os.path.basename(_root)
                 )
             except Exception:
                 pass
@@ -1097,8 +1098,9 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None, sidechain=Fa
         meta["session_id"] = sid
         if meta["cwd"]:
             try:
+                _root = atlas_db.atlas_paths.project_root(meta["cwd"])
                 meta["project_id"] = atlas_db.register_project(
-                    conn, meta["cwd"], os.path.basename(meta["cwd"].rstrip("/"))
+                    conn, _root, os.path.basename(_root)
                 )
             except Exception:
                 pass

@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import atlas_paths  # noqa: E402
 from atlas_memory import LockTimeout, _file_lock  # noqa: E402
 
 STATUSES = ("pending", "in_progress", "completed", "blocked")
@@ -116,68 +117,22 @@ def _entry_phase(entry: Any) -> Optional[str]:
 
 
 def _worktree_main_root(worktree: str) -> Optional[str]:
-    """Map a linked git worktree dir to the MAIN repo root, stdlib only.
-
-    In a worktree, `.git` is a file (`gitdir: <main>/.git/worktrees/<n>`);
-    that private git dir has a `commondir` file pointing at the main `.git`,
-    whose parent is the main repo root. Returns None on anything unexpected
-    (plain repos, submodule dirs, malformed files) so callers fail open.
-    """
-    try:
-        with open(os.path.join(worktree, ".git"), "r", encoding="utf-8") as fh:
-            content = fh.read()
-    except OSError:
-        return None
-    git_dir = ""
-    for line in content.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("gitdir:"):
-            git_dir = stripped[len("gitdir:") :].strip()
-            break
-    if not git_dir:
-        return None
-    if not os.path.isabs(git_dir):
-        git_dir = os.path.join(worktree, git_dir)
-    try:
-        with open(os.path.join(git_dir, "commondir"), "r", encoding="utf-8") as fh:
-            common = fh.read().strip()
-    except OSError:
-        return None
-    if not common:
-        return None
-    common_dir = os.path.normpath(
-        common if os.path.isabs(common) else os.path.join(git_dir, common)
-    )
-    main_root = os.path.dirname(common_dir)
-    return main_root if os.path.isdir(main_root) else None
+    """Kept for callers/tests; the logic lives in atlas_paths."""
+    return atlas_paths.worktree_main_root(worktree)
 
 
 def find_root(start: Optional[str] = None) -> str:
-    """Walk up from `start` (default cwd) to a project root: the first dir with
-    .git, .atlas, or docs/. A linked git worktree (`.git` is a file) maps to the
-    main repo root, so worktree-isolated workers share the lead's board.
-    Fails open to the start dir."""
-    d = os.path.abspath(start or os.getcwd())
-    for _ in range(7):
-        for marker in (".git", ".atlas", "docs"):
-            if os.path.exists(os.path.join(d, marker)):
-                if marker == ".git" and os.path.isfile(os.path.join(d, ".git")):
-                    main_root = _worktree_main_root(d)
-                    if main_root:
-                        return main_root
-                return d
-        parent = os.path.dirname(d)
-        if parent == d:
-            break
-        d = parent
-    return os.path.abspath(start or os.getcwd())
+    """Project root for `start` (default cwd); see atlas_paths.project_root."""
+    return atlas_paths.project_root(start)
 
 
 def _resolve_base(root: Optional[str] = None) -> str:
-    """Root resolution for board paths: ATLAS_PROJECT_ROOT wins, then an
-    explicit root, then find_root(); a linked-worktree base (`.git` file)
-    maps to the main repo root so workers share the lead's board."""
-    base = root or os.environ.get("ATLAS_PROJECT_ROOT") or find_root()
+    """Root resolution for board paths: an explicit root, then
+    ATLAS_PROJECT_ROOT, then find_root(). Explicit values are sanitized (cut at
+    any `.atlas` component) and a linked-worktree base (`.git` file) maps to the
+    main repo root so workers share the lead's board."""
+    given = root or os.environ.get("ATLAS_PROJECT_ROOT")
+    base = atlas_paths.sanitize(given) if given else find_root()
     if os.path.isfile(os.path.join(base, ".git")):
         main_root = _worktree_main_root(base)
         if main_root:

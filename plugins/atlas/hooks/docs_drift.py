@@ -12,26 +12,24 @@ Stdlib only.
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
+
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+)
+import atlas_paths  # noqa: E402
 
 __all__ = ["find_root", "docs_drift", "git_changed_paths"]
 
 
 def find_root(start: Path) -> Path | None:
-    """Walk from start toward the filesystem root; return the project root
-    holding a `docs/` directory -- the project-documentation SSOT that
-    atlas-setup scaffolds. Stops at the filesystem root or after 6 levels to
-    stay cheap and fail-open.
-    """
-    candidate = start
-    for _ in range(7):
-        if (candidate / "docs").is_dir():
-            return candidate
-        parent = candidate.parent
-        if parent == candidate:
-            break
-        candidate = parent
-    return None
+    """Project root (shared atlas_paths resolver) when it holds a `docs/`
+    directory -- the project-documentation SSOT that atlas-setup scaffolds --
+    else None."""
+    root = Path(atlas_paths.project_root(str(start)))
+    return root if (root / "docs").is_dir() else None
 
 
 def docs_drift(changed_paths: list) -> bool:
