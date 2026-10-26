@@ -1705,7 +1705,7 @@ class TodoBoardContract(unittest.TestCase):
                 "todo_capture.py" in h.get("command", "") for h in e.get("hooks", [])
             )
         ]
-        self.assertEqual(matchers, ["TodoWrite"])
+        self.assertEqual(matchers, ["TodoWrite|Agent|Task|Bash"])
 
     def test_gate_falls_back_to_board_and_ledger(self):
         src = (HOOKS_DIR / "completion_gate_core.py").read_text(encoding="utf-8")

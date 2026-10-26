@@ -11,6 +11,8 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -410,6 +412,33 @@ class UnderscoreFixer(unittest.TestCase):
         text = (self.root / "docs/wiki/a.md").read_text(encoding="utf-8")
         self.assertIn("MASTER_PLAN.md", text)
         self.assertIn(moved[0][1].rsplit("/", 1)[-1], text)
+
+    def test_rewrite_reaches_env_template_and_ts_line_comment(self):
+        self._write("docs/atlas-turn-scoring.md", "x")
+        self._write(".env.template", "# see docs/atlas-turn-scoring.md\nKEY=\n")
+        self._write("mod/contract.ts", "// Plan: docs/atlas-turn-scoring.md\n")
+        _, moved = self._fix(["docs/atlas-turn-scoring.md"])
+        new = moved[0][1]
+        for f in (".env.template", "mod/contract.ts"):
+            text = (self.root / f).read_text(encoding="utf-8")
+            self.assertIn(new, text, f)
+            self.assertNotIn("docs/atlas-turn-scoring.md", text, f)
+
+    def test_unwritable_reference_file_is_reported_not_silent(self):
+        self._write("docs/atlas-turn-scoring.md", "x")
+        self._write("mod/contract.ts", "// Plan: docs/atlas-turn-scoring.md\n")
+        real = Path.write_text
+
+        def deny(self_, *a, **k):
+            if self_.name == "contract.ts":
+                raise PermissionError(1, "Operation not permitted")
+            return real(self_, *a, **k)
+
+        err = io.StringIO()
+        with mock.patch.object(Path, "write_text", deny), contextlib.redirect_stderr(err):
+            self._fix(["docs/atlas-turn-scoring.md"])
+        self.assertIn("could not rewrite", err.getvalue())
+        self.assertIn("contract.ts", err.getvalue())
 
     def test_all_mode_lists_root_files(self):
         self._write("docs/TODO_LIST.md", "x")

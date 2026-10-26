@@ -1574,6 +1574,27 @@ class InProcessTest(unittest.TestCase):
         self.assertNotIn("additionalContext", out)
         self.assertEqual(out.count("hookSpecificOutput"), 1)
 
+    def test_brief_and_scratchpad_writes_pass_the_threshold_and_do_not_count(self):
+        """Past the inline-op limit, a Write to <root>/.atlas/.run/briefs/ or the
+        session scratchpad is not denied for the count, and scratch writes are not logged."""
+        self._docs_project()
+        for _ in range(8):
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
+        scratch = os.path.join(tempfile.gettempdir(), "claude-scratch", "brief.md")
+        brief = os.path.join(self.tmp, ".atlas", ".run", "briefs", "t1.md")
+        for p in (brief, scratch):
+            out = self._run_main(self._pre("Write", {"file_path": p}))
+            self.assertNotIn("inline ops since your last dispatch", out, p)
+            self.assertNotIn('"permissionDecision": "deny"', out, p)
+        self._run_main(self._post("Write", {"file_path": scratch}))
+        conn = self.atlas_db.connect(self.db_path)
+        rid = self.atlas_db.current_run_id(conn, "sess-1")
+        self.assertEqual(self.atlas_db.inline_ops_since_last_dispatch(conn, rid), 8)
+        conn.close()
+        # the threshold itself still bites a counted op
+        out = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
+        self.assertIn('"permissionDecision": "deny"', out)
+
     def test_read_nudge_survives_a_threshold_deny_on_another_tool(self):
         """The once-per-session Read nudge is claimed only when it is actually
         printed: a threshold deny on a counted Bash op does not burn it, and a
@@ -4274,6 +4295,33 @@ class ScopeGateTest(unittest.TestCase):
         )
         self.assertIsNone(decision)
         self.assertIn("spawn-team", note)
+
+    def test_c_background_agent_post_does_not_free_the_slot(self):
+        sess = self._burst_session()
+        self._dispatch("atlas:implementer", "fix/low", session=sess)
+        run_hook(
+            {
+                "session_id": sess,
+                "cwd": self.tmp,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:implementer", "run_in_background": True},
+                "tool_response": "launched",
+            },
+            self.env,
+        )
+        decision, _ = self._decision(self._dispatch("atlas:explorer", "fix/medium", session=sess))
+        self.assertEqual(decision, "deny")
+
+    def test_c_burst_secs_nan_and_inf_fall_back_to_the_default_window(self):
+        for bad in ("nan", "inf"):
+            sess = self._burst_session()
+            self.env = dict(self.env, ATLAS_BURST_SECS=bad)
+            self._dispatch("atlas:implementer", "fix/low", session=sess)
+            decision, _ = self._decision(
+                self._dispatch("atlas:explorer", "fix/medium", session=sess)
+            )
+            self.assertEqual(decision, "deny", bad)
 
     def test_c_mux_off_and_omp_turn_the_concurrent_deny_into_advice_or_nothing(self):
         sess = self._burst_session()

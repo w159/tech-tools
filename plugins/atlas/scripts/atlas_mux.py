@@ -1663,11 +1663,14 @@ def split_member_tasks(text: str, members: list) -> tuple:
         if role in by_role and n.isdigit():
             idx = int(n) - 1
         else:
-            role, idx = label, used.get(label, 0)
+            # bare role: the first member of that role no earlier section claimed
+            role = label
+            pool = by_role.get(role, [])
+            idx = next((i for i in range(len(pool)) if i not in used.get(role, set())), len(pool))
         names = by_role.get(role, [])
         if not 0 <= idx < len(names):
             raise ValueError(f"task file section 'member: {label}' matches no team member (roles: {sorted(by_role)})")
-        used[role] = idx + 1
+        used.setdefault(role, set()).add(idx)
         out[names[idx]] = f"{shared}\n\n{body}".strip() if shared else body
     return shared, out
 
@@ -1694,6 +1697,45 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
         "3. Reply once to any peer note.\n"
         "4. End with STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT.\n"
     )
+
+
+# Roles that edit files; read-only roles (verifier, explorer, ...) stay in the main root.
+_EDIT_ROLES = ("implementer", "test-engineer", "docs-curator")
+
+
+def _is_git_repo(root: str) -> bool:
+    res = subprocess.run(
+        ["git", "-C", root, "rev-parse", "--git-dir"], capture_output=True, text=True
+    )
+    return res.returncode == 0
+
+
+def worktree_plan(rec: dict, root: str) -> dict:
+    """{member name: {path, branch}} for edit-capable members when the resolved team says
+    isolation=worktree and root is a git repo; {} otherwise. Pure: creates nothing."""
+    if rec.get("isolation") != "worktree" or not _is_git_repo(root):
+        return {}
+    team = rec["team_id"]
+    return {
+        m["name"]: {
+            "path": str(Path(root) / ".claude" / "worktrees" / f"atlas-{team}-{m['name']}"),
+            "branch": f"atlas/{team}/{m['name']}",
+        }
+        for m in rec["members"]
+        if m["role"] in _EDIT_ROLES
+    }
+
+
+def add_worktree(root: str, wt: dict) -> str | None:
+    """Create wt's branch+worktree from HEAD; None on success or when it already exists, else the git error."""
+    if Path(wt["path"]).exists():
+        return None
+    res = subprocess.run(
+        ["git", "-C", root, "worktree", "add", "-b", wt["branch"], wt["path"], "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    return None if res.returncode == 0 else (res.stderr or res.stdout).strip()[-300:]
 
 
 def _team_dir(root: str) -> Path:
@@ -1879,6 +1921,7 @@ def cmd_spawn_team(args) -> int:
                 2,
             )
         rec["name"] = team_name
+    rec["worktrees"] = worktree_plan(rec, root)
     if args.dry_run:
         return _emit({"ok": True, "dry_run": True, "team": rec})
     path = _team_dir(root) / f"{rec['team_id']}.json"
@@ -1916,6 +1959,9 @@ def cmd_spawn_team(args) -> int:
     atlas_todo.note(root, lead, kickoff, to="all", channel=chan, kind="kickoff")
 
     def spawn(member: dict) -> dict:
+        wt = rec["worktrees"].get(member["name"])
+        if wt and (err := add_worktree(root, wt)):
+            return {"ok": False, "name": member["name"], "error": f"worktree: {err}"}
         pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
         pf.write_text(team_brief(rec, member, root, chan, lead), encoding="utf-8")
         ns = argparse.Namespace(
@@ -1932,16 +1978,19 @@ def cmd_spawn_team(args) -> int:
             command_override=None,
             omp_extension=None,
             root=root,
-            cwd=None,
+            cwd=wt["path"] if wt else None,  # ATLAS_PROJECT_ROOT stays the main root (shared board)
             team=rec,
         )
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             cmd_spawn(ns)
         try:
-            return json.loads(buf.getvalue().strip().splitlines()[-1])
+            out = json.loads(buf.getvalue().strip().splitlines()[-1])
         except (ValueError, IndexError):
             return {"ok": False, "error": buf.getvalue().strip()[-200:]}
+        if wt and isinstance(out, dict):
+            out["worktree"] = wt
+        return out
 
     results = supervise(rec, spawn, lambda n: _exited(root, n), poll_s=args.poll)
     wave_logged = _log_wave(
@@ -1959,6 +2008,7 @@ def cmd_spawn_team(args) -> int:
             "channel": chan,
             "max_parallel": rec["max_parallel"],
             "members": results,
+            "worktrees": rec["worktrees"],
         }
     )
 
@@ -2171,6 +2221,8 @@ def cmd_reap(args) -> int:
             "session_left": _tmux("has-session", "-t", session).returncode == 0,
             "channels_reaped": reaped.get("reaped"),
             "prompts_removed": removed,
+            # left in place for the lead to merge (atlas_wt.py merge)
+            "worktrees": rec.get("worktrees") or {},
             "archived": str(archived_path) if state != "recovered" else None,
         }
     )

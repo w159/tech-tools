@@ -79,7 +79,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "TodoWrite",
+        "matcher": "TodoWrite|Agent|Task|Bash",
         "hooks": [
           {
             "type": "command",

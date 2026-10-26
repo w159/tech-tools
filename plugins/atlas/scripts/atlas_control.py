@@ -428,6 +428,7 @@ _k("ATLAS_AUTONAME", _GR, "Name unnamed dispatches", "Give a subagent dispatch t
 _k("ATLAS_BUILTIN_AGENT_NUDGE", _GR, "Nudge off built-in agents", "Advise using an atlas:* role when a dispatch picks a built-in agent type.", default="on", details="Read at hooks/dispatch_tripwire_core.py:916.")
 _k("ATLAS_SCOPE_GATE", _GR, "Enforce dispatch SCOPE", "Deny a dispatch whose SCOPE line is missing or wrong. Off downgrades it to advice.", default="on", details="Read at hooks/dispatch_tripwire_core.py:504.")
 _k("ATLAS_BURST_SECS", _GR, "Dispatch burst window (seconds)", "Window in which several dispatches count as one burst for the burst advisory. 0 or less disables the advisory.", "number", "10", details="Read at hooks/dispatch_tripwire_core.py:480; default BURST_SECS = 10.")
+_k("ATLAS_QUIET", _GR, "Quiet Claude Code", "Print only what needs the user: the Stop nudge speaks once and only after non-docs changes, and board acknowledgements and progress pings stay on the board.", default="on", details="Off restores the old chatter. Read at hooks/nudge.py and hooks/worker_inbox.py.")
 
 # Colony
 _k("ATLAS_COLONY", _COL, "Start the colony at session start", "Start the herdr colony when a session begins.", default="on", details="Off, 0, false or no skips it. Read at hooks/session_boot_core.py:221.")

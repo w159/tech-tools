@@ -199,14 +199,16 @@ Source: `docs/audits/2026-10-26_atlas-state-examination.md`.
 
 - [done 2026-10-26] Colony mux was opt-in by `ATLAS_MUX=tmux`; it is now on by default with `ATLAS_MUX=off` to disable, per-member `--task-file` sections and a concurrent in-process dispatch deny (`docs/CHANGELOG.md` 2026-10-26; finding P1 parity). The earlier recall/mux parity notes are covered by this and by S1-root-resolver.
 - [done 2026-10-26] Doctor test run touched real paths (12 stray `.atlas` dirs archived in this repo, `~/MEGA/Projects/.atlas` lost): guards and isolation tests added (finding S2-doctor-layout).
-- [planned] P2: phased todo tree, the `carry_expired` bug, and `todos.json` archive growth.
-- [planned] P3: shared statusline segment.
-- [planned] P4: golden parity tests.
-- [planned] P5: quiet mode (`ATLAS_QUIET`), and the inline-op counter counts scratchpad brief writes.
+- [done 2026-10-26] P2: phased todo tree, the `carry_expired` bug, and `todos.json` archive growth (`scripts/atlas_todo.py` `rotate_archive`; evidence: tmux team t5c2996, finding P1-verify, `docs/CHANGELOG.md` 2026-10-26).
+- [done 2026-10-26] P3: shared statusline segment (`scripts/atlas_status_segment.py`, `scripts/test_atlas_status_segment.py`; same verification).
+- [planned] P4: golden parity tests for band rows.
+- [done 2026-10-26] P5: quiet mode (`ATLAS_QUIET`), and the inline-op counter no longer counts scratchpad and brief writes (`hooks/nudge.py:93`, `hooks/dispatch_tripwire_core.py`; same verification).
 - [planned] Local scoring hits a 2048-token context limit: trim the input.
 - [planned] Global projects table cleanup: 346 non-canonical rows.
 - [planned] Project memories and findings never reach `<project>/.atlas` (examination doc section 5).
-- [planned] The docs rewriter missed references in `.env.template` and `plugins/atlas/mod/contract.ts:4`.
+- [done 2026-10-26] The docs rewriter missed references in `.env.template`: `lint_docs_names.py` now rewrites `.template` and `.example` files and reports failed writes.
+- [planned] `plugins/atlas/mod/contract.ts:4` still cites the old plan path: the file has the macOS immutable flag (uchg), so the rewrite fails; clear the flag, then rewrite.
+- [planned] Parity-round verifier holes deferred: (2) long workers fall out of the 10 s burst window, (5) tripwire tests inherit `ATLAS_*` in worker panes, (6) a member without a section gets only the shared text.
 - [planned] `recall_gate` costs 159 ms per tool call: move the marker check ahead of the plugin-dir walk.
 
 ## Backlog

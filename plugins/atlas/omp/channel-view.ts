@@ -399,11 +399,11 @@ export function todoSummary(root: string, sessionId?: string): { done: number; t
 
 /** The same session slice as rows for the board panel. */
 const todoItems = (root: string, sessionId?: string): PanelTodo[] =>
-	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined }));
+	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined, phase: i.phase ?? undefined }));
 
 /** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */
 const PHASE_WORDS: Array<[string, RegExp]> = [
-	["research", /^(setup|plan|research|discover)/],
+	["research", /^(setup|plan|research|discover|investigate|explor)/],
 	["theory", /^(design|theory)/],
 	["test", /^test/],
 	["implement", /^(audit|build|implement|fix|execute)/],

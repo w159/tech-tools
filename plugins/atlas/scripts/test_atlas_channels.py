@@ -234,8 +234,8 @@ class ChannelModel(unittest.TestCase):
         self.assertIn("all hands", self.drain("L"))
 
         # the lead sees subagent replies addressed to `lead`
-        todo.note(self.root, "B", "done", to="lead")
-        self.assertIn("done", self.drain("L", aliases=("lead",)))
+        todo.note(self.root, "B", "report: slice B finished", to="lead")
+        self.assertIn("slice B finished", self.drain("L", aliases=("lead",)))
 
         # a non-member never sees channel traffic
         self.assertEqual(self.drain("outsider"), "")

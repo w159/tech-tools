@@ -482,6 +482,11 @@ test("omp phase names that are contract phases become the board item phase, lowe
 	]);
 });
 
+test("omp group headings like Investigate map to a contract phase on the board item", () => {
+	const items = boardItemsFromTodoDetails({ phases: [{ name: "Investigate", tasks: [{ content: "read the gate", status: "pending" }] }] });
+	expect(items).toEqual([{ content: "read the gate", status: "pending", phase: "research" }]);
+});
+
 test("unknown omp phase names leave phase absent (no key at all) and legacy items are unchanged", () => {
 	const items = boardItemsFromTodoDetails(TODO_PHASES);
 	expect(items).toEqual([

@@ -352,6 +352,31 @@ class DrainTest(_Root):
         self.assertEqual(len(got), len(set(got)), "duplicated notes")
 
 
+class QuietModeTest(_Root):
+    """ATLAS_QUIET: pings stay on the board; questions, failures and reports still print."""
+
+    def drain(self):
+        return worker_inbox.drain(self.root, "Alpha")
+
+    def test_acknowledgements_and_progress_are_not_injected(self):
+        for text in ("starting", "done", "joined the channel", "ok, on it"):
+            self.note("Beta", "Alpha", text)
+        self.assertEqual(self.drain(), "")
+
+    def test_questions_failures_and_reports_still_print(self):
+        self.note("Beta", "Alpha", "starting")
+        self.note("Beta", "Alpha", "done? tests failed in test_x")
+        self.note("Beta", "Alpha", "done: report with files changed and evidence, " + "x" * 80)
+        out = self.drain()
+        self.assertIn("2 messages", out)
+        self.assertNotIn("from Beta: starting", out)
+
+    def test_quiet_off_restores_every_message(self):
+        self.note("Beta", "Alpha", "starting")
+        with patch.dict(os.environ, {"ATLAS_QUIET": "off"}):
+            self.assertIn("from Beta: starting", self.drain())
+
+
 class TripwireIntegrationTest(_Root):
     def _run_main(self, payload, env=None):
         e = {"ATLAS_DB": os.path.join(self.tmp, "atlas.db"), "ATLAS_TRIPWIRE": "off"}

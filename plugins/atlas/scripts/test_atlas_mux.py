@@ -3161,6 +3161,80 @@ class DefaultTransportAndMemberTaskTests(unittest.TestCase):
             self.assertIn("SLICE-TWO", b1)
 
 
+class WorktreeIsolationTests(unittest.TestCase):
+    """spawn-team honours the resolved isolation=worktree: one worktree per edit-capable member."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo = os.path.join(self.tmp, "repo")
+        os.mkdir(self.repo)
+        git = lambda *a: subprocess.run(["git", "-C", self.repo, *a], check=True, capture_output=True)
+        git("init", "-q")
+        git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "i")
+
+    def _spawn_team(self, *extra):
+        import atlas_mux
+
+        seen, buf = [], io.StringIO()
+
+        def fake_spawn(ns):
+            seen.append(ns)
+            print(json.dumps({"ok": True, "name": ns.name}))
+            return 0
+
+        env = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
+                mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-wt")), \
+                contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--task", "t",
+                                   "--root", self.repo, *extra])
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1]), seen
+
+    def test_dry_run_plans_worktrees_for_implementers_only(self):
+        code, out, _ = self._spawn_team("--dry-run")
+        wts = out["team"]["worktrees"]
+        roles = {m["name"]: m["role"] for m in out["team"]["members"]}
+        self.assertEqual(0, code)
+        self.assertTrue(wts)
+        self.assertEqual({"implementer"}, {roles[n] for n in wts})
+        for n, wt in wts.items():
+            self.assertEqual(os.path.join(self.repo, ".claude", "worktrees", f"atlas-{out['team']['team_id']}-{n}"), wt["path"])
+            self.assertEqual(f"atlas/{out['team']['team_id']}/{n}", wt["branch"])
+            self.assertFalse(os.path.exists(wt["path"]))  # dry run creates nothing
+
+    def test_spawn_creates_worktrees_and_runs_members_there(self):
+        code, out, seen = self._spawn_team()
+        wts = out["worktrees"]
+        self.assertEqual(0, code, out)
+        for ns in seen:
+            if ns.name in wts:
+                self.assertEqual(wts[ns.name]["path"], ns.cwd)
+                self.assertTrue(os.path.isdir(ns.cwd))
+                self.assertEqual(self.repo, ns.root)  # board stays the main root
+            else:
+                self.assertIsNone(ns.cwd)  # verifier stays in the main root
+        listed = subprocess.run(["git", "-C", self.repo, "worktree", "list"], capture_output=True, text=True).stdout
+        self.assertEqual(len(wts), listed.count("atlas-"))
+        self.assertTrue(all("worktree" in m for m in out["members"] if m["name"] in wts))
+
+    def test_non_git_root_gets_no_worktrees(self):
+        import atlas_mux
+
+        plain = os.path.join(self.tmp, "plain")
+        os.mkdir(plain)
+        rec = {"isolation": "worktree", "team_id": "t1", "members": [{"name": "implementer-1", "role": "implementer"}]}
+        self.assertEqual({}, atlas_mux.worktree_plan(rec, plain))
+        self.assertEqual({}, atlas_mux.worktree_plan(dict(rec, isolation="none"), self.repo))
+
+    def test_split_bare_role_takes_first_free_member_after_numbered_label(self):
+        import atlas_mux
+
+        members = [{"name": "implementer-a", "role": "implementer"}, {"name": "implementer-b", "role": "implementer"}]
+        _, per = atlas_mux.split_member_tasks("## member: implementer-2\nB\n## member: implementer\nA\n", members)
+        self.assertEqual(("A", "B"), (per["implementer-a"], per["implementer-b"]))
+
+
 class ColonyNameSourceTests(unittest.TestCase):
     def _dry(self, *extra):
         import atlas_mux

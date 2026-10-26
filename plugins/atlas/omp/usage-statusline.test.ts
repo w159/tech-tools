@@ -1,8 +1,10 @@
+import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { USAGE_STATUSLINE_WIDGET_KEY, registerUsageStatusline, userStatuslineCopyExists } from "./usage-statusline";
+import { USAGE_STATUSLINE_WIDGET_KEY, fetchAtlasSegment, registerUsageStatusline, userStatuslineCopyExists } from "./usage-statusline";
 
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -60,4 +62,45 @@ test("userStatuslineCopyExists checks home and project copies", () => {
 	mkdirSync(join(cwd, ".omp", "extensions"), { recursive: true });
 	writeFileSync(join(cwd, ".omp", "extensions", "usage-statusline.ts"), "");
 	expect(userStatuslineCopyExists(cwd, home2)).toBe(true);
+});
+
+// Parity with scripts/test_atlas_status_segment.py: the same fixture must give the same literal.
+test("atlas segment text matches the Claude Code statusline literal for one fixture", async () => {
+	const NOW = 1_800_000_000;
+	const tmp = mkdtempSync(join(tmpdir(), "seg-"));
+	const root = join(tmp, "proj");
+	const home = join(tmp, "home");
+	mkdirSync(join(root, ".atlas", ".run"), { recursive: true });
+	mkdirSync(join(home, ".atlas"), { recursive: true });
+	const item = (status: string, extra: object = {}, session_id = "s1") => ({ status, session_id, origin: "manual", ...extra });
+	const items = [item("completed"), item("completed"), item("in_progress", { phase: "implement" }), item("pending"), item("pending"), item("pending"), item("pending", {}, "other")];
+	writeFileSync(join(root, ".atlas", ".run", "todos.json"), JSON.stringify({ last_session_id: "s1", items }));
+	const members = [{ name: "lead-x", role: "lead", joined: NOW - 900 }, ...[0, 1, 2].map(i => ({ name: `w${i}`, role: "subagent", joined: NOW - 60 })), { name: "done", role: "subagent", joined: NOW - 60, ended_at: NOW - 5 }];
+	writeFileSync(join(root, ".atlas", ".run", "channels.json"), JSON.stringify({ channels: { c: { members } } }));
+	writeFileSync(join(root, ".atlas", ".run", "findings.json"), JSON.stringify([{ status: "verified", verified_at: new Date((NOW - 240) * 1000).toISOString() }]));
+	const key = createHash("sha1").update(`${realpathSync(root)}|s1`).digest("hex").slice(0, 12);
+	writeFileSync(join(home, ".atlas", `status-gates-${key}.json`), JSON.stringify({ at: NOW, failing: 0 }));
+	const db = new Database(join(home, ".atlas", "atlas.db"));
+	db.run("CREATE TABLE turn_scores (id INTEGER PRIMARY KEY, session_id TEXT, message_uuid TEXT, judgment TEXT, kind TEXT, label TEXT, scored_at REAL)");
+	db.run("INSERT INTO turn_scores (session_id, message_uuid, judgment, kind, scored_at) VALUES ('s1','m','verbosity','score',?)", [NOW - 100]);
+	db.close();
+	const line = await fetchAtlasSegment(root, home, NOW);
+	expect(strip(line)).toBe("atlas  implement 2/6 · 3 live · gates ✔ · verified 4m · scoring ok");
+});
+
+test("atlas segment is empty for a project without .atlas", async () => {
+	expect(await fetchAtlasSegment(mkdtempSync(join(tmpdir(), "noatlas-")), mkdtempSync(join(tmpdir(), "h-")))).toBe("");
+});
+
+test("atlas segment shows red scoring error when the newest row is an error", async () => {
+	const tmp = mkdtempSync(join(tmpdir(), "seg-err-"));
+	mkdirSync(join(tmp, "p", ".atlas"), { recursive: true });
+	mkdirSync(join(tmp, "h", ".atlas"), { recursive: true });
+	const db = new Database(join(tmp, "h", ".atlas", "atlas.db"));
+	db.run("CREATE TABLE turn_scores (id INTEGER PRIMARY KEY, session_id TEXT, message_uuid TEXT, judgment TEXT, kind TEXT, label TEXT, scored_at REAL)");
+	db.run("INSERT INTO turn_scores (session_id, message_uuid, judgment, kind, scored_at) VALUES ('s','m','verbosity','score',100)");
+	db.run("INSERT INTO turn_scores (session_id, message_uuid, judgment, kind, label, scored_at) VALUES ('s','m','scoring_error','error','TypeSafe API error 400: x',200)");
+	db.close();
+	const line = await fetchAtlasSegment(join(tmp, "p"), join(tmp, "h"), 300);
+	expect(line).toContain("\x1b[1;31mscoring error (api 400)");
 });

@@ -198,7 +198,32 @@ def delivery(root, worker, rec, memo=None):
 PRIORITY_LABELS = {"handoff": "HANDOFF", "blocked": "BLOCKED", "conflict": "CONFLICT"}
 
 
+# ATLAS_QUIET: short acknowledgements and progress pings stay on the board (the band shows
+# them) instead of being injected into the model's context. Questions, failures, blockers,
+# collaboration kinds and anything longer than a ping still print.
+_QUIET_PING = re.compile(
+    r"^(starting|started|done|joined|ack(nowledged)?|ok(ay)?|on it|working|claimed|"
+    r"in progress|progress|running)\b",
+    re.I,
+)
+_QUIET_KEEP = re.compile(r"\?|fail|error|block|stuck|cannot|can't|denied|conflict", re.I)
+
+
+def _is_ping(rec):
+    text = str(rec.get("text") or "").strip()
+    return (
+        rec.get("kind") not in PRIORITY_LABELS
+        and len(text) <= 80
+        and bool(_QUIET_PING.match(text))
+        and not _QUIET_KEEP.search(text)
+    )
+
+
 def _format(notes):
+    if os.environ.get("ATLAS_QUIET", "on").lower() != "off":
+        notes = [r for r in notes if not _is_ping(r)]
+        if not notes:
+            return ""
     plural = "" if len(notes) == 1 else "s"
     lines = [
         f"[atlas] {len(notes)} message{plural} for you from the board (answer or "

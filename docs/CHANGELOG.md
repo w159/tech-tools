@@ -24,6 +24,15 @@ Audit and testing proof run: the `atlas-audit` and `atlas-testing` skills were e
 - TypeSafe scoring: a base or full `/v1/systemone` URL both work; a local Ollama tag against a hosted URL is refused before any request; the knob text states hosted scoring is a third-party disclosure; `ATLAS_TYPESAFE_URL` is `http://127.0.0.1:11434` on this machine. Missing-formatter skips no longer write friction or hook faults (once per formatter and project per day to `~/.atlas/formatter_missing.json`). Finding S5-typesafe-url.
 - Mux is on by default: `atlas_mux.py` uses tmux when installed, `ATLAS_MUX=off` disables it (`scripts/atlas_mux.py:586`). Docs that called `ATLAS_MUX=tmux` required were corrected in `plugins/atlas/omp/README.md:29`, `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md:234-236`, `docs/reference/atlas-reference.md`, `docs/architecture/atlas-colony.md` and `atlas-workboard.md`.
 - `atlas_resolve.py` prints one JSON object on every error path.
+- P2 todo board: `atlas_todo` carry-expiry no longer archives live-session items or items updated in the last 2 h (`scripts/atlas_todo.py` `_CARRY_FRESH_S`); `rotate_archive` moves items archived over 7 days (`_ARCHIVE_AGE_S`) to `.atlas/.run/archive/todos-<YYYY-MM>.jsonl`; `list` hides archived items unless `--all`.
+- P2 phase tree: roman-numbered phase headings with done/total and nested items in `plugins/atlas/mod/todo-panel.tsx` and `plugins/atlas/omp/todo-panel.ts`, both tested against one fixture (`plugins/atlas/contracts/todo-tree-fixture.ts`). The omp native todo is copied into the board.
+- P2 empty-board nudge: `hooks/todo_capture.py` `_nudge_if_board_empty` prints one advisory per session when an `atlas:*` worker is dispatched onto a board with no item for the session. `hooks/hooks.json` PostToolUse matcher is now `TodoWrite|Agent|Task|Bash` (measured 36 ms per Bash call).
+- P5 quiet mode: `ATLAS_QUIET` (default on, `ATLAS_QUIET=off` restores old output). `hooks/nudge.py:93` stays silent unless the turn changed non-docs files; `hooks/worker_inbox.py` keeps acknowledgement and progress board notes (`_is_ping`) off the transcript; the inline-op counter in `hooks/dispatch_tripwire_core.py` no longer counts `.atlas/.run/briefs/` or scratchpad writes (`_is_brief_or_scratch`).
+- P3 status segment: `scripts/atlas_status_segment.py`, used by the Claude statusline (`scripts/atlas_statusline.py`) and `omp/usage-statusline.ts`, shows phase n/m, live workers, gates, last verified age and scoring ok/stale/error (cold 0.41 ms, cached 0.04 ms). Tests: `scripts/test_atlas_status_segment.py`, `omp/usage-statusline.test.ts`.
+- `spawn-team` gives each edit-role member (`implementer`, `test-engineer`, `docs-curator`) its own worktree `.claude/worktrees/atlas-<team>-<member>` on branch `atlas/<team>/<member>`; verifier and explorer stay in the main root; `reap` lists the worktrees (`scripts/atlas_mux.py`). `split_member_tasks` now resolves a bare role section to the first unclaimed member of that role.
+- Completion gate condition (m) exempts `atlas_mux` workers (`ATLAS_WORKER_NAME` set, `hooks/completion_gate_core.py`).
+- Dispatch tripwire keeps the slot for background Agent launches (`run_in_background`) and treats nan or inf `ATLAS_BURST_SECS` as the 10 s default (`hooks/dispatch_tripwire_core.py:496-500`).
+- `lint_docs_names.py` also rewrites `.template` and `.example` files and prints a stderr line for each failed write instead of skipping silently. `.env.template` now points at `docs/architecture/atlas-turn-scoring.md` and says scoring is local by default.
 
 ### Fixed
 
@@ -32,6 +41,7 @@ Audit and testing proof run: the `atlas-audit` and `atlas-testing` skills were e
 
 ### Verified
 
+- Parity round: tmux team t5c2996 (2 implementers + verifier, transport tmux) ran P2+P5 and P3; finding P1-verify verified by atlas:verifier. Suites after cleanup: hooks Ran 1610 with only the two InstalledParityContract failures (clear on plugin reinstall); scripts Ran 2337 OK; omp `bun test` 490 pass, 1 fail (bridge tripwire test, also failing on the prior commit).
 - Baseline before changes: hooks Ran 1589 OK (skipped=3); scripts Ran 2255, FAILED (failures=3, the env leak above); omp `bun test` 486 pass; dashboard_ui `bun test` 154 pass.
 - Final suites after the change (lead-run, same tree): hooks `Ran 1589 tests ... OK (skipped=3)`, exit 0; scripts `Ran 2257 tests`, exit 0, zero FAIL or ERROR lines; `test_skill_agent_conformance` Ran 40 OK; `test_testscope` Ran 21 OK.
 - Findings stamped verified: P1-audit-skill, P2-skill-refs-test, P3-testscope-unittest, P4-testing-live, P5-testing-docs, P6-env-scrub.

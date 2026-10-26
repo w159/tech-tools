@@ -21,6 +21,13 @@ import sys
 import time
 import unicodedata
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:  # a copied-out statusline (~/.atlas) has no sibling module: skip the segment
+    import atlas_status_segment
+except ImportError:
+    atlas_status_segment = None
+
 R = "\x1b[0m"
 CYAN = "\x1b[1;36m"
 MAGENTA = "\x1b[1;35m"
@@ -581,6 +588,13 @@ def render(data, width, home):
     fl = fallow_line(str(cwd), home)
     if fl:
         rows.append(clip(fl, row_cols))
+    seg = (
+        atlas_status_segment.line_for(str(cwd), data.get("session_id"), home)
+        if atlas_status_segment
+        else ""
+    )
+    if seg:
+        rows.append(clip(seg, row_cols))
     return rows
 
 

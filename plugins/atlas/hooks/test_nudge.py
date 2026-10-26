@@ -44,6 +44,7 @@ class NudgeTest(unittest.TestCase):
             # Fresh hookstate per test: never touch real ~/.atlas, and never let
             # a shared session_id across test methods trip the breaker/throttle.
             ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_QUIET="off",
         )
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
@@ -91,6 +92,7 @@ class InProcessMainTest(unittest.TestCase):
             os.environ,
             ATLAS_DB=self.db_path,
             ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_QUIET="off",  # the legacy wording; quiet mode has its own tests below
         )
 
     def _run_main(self, payload, env=None, stdin_text=None):
@@ -142,6 +144,38 @@ class InProcessMainTest(unittest.TestCase):
         self.assertIn("additionalContext", first_out)
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
+
+    def test_quiet_is_silent_without_non_docs_changes(self):
+        env = dict(self.env, ATLAS_QUIET="on")
+        with (
+            mock.patch.object(nudge, "_check_memory_captured", return_value=False),
+            mock.patch.object(nudge, "_non_docs_changed", return_value=False),
+        ):
+            code, out, _ = self._run_main({"session_id": "sess-orch"}, env=env)
+        self.assertEqual((code, out), (0, ""))
+
+    def test_quiet_is_one_line_after_non_docs_changes(self):
+        env = dict(self.env, ATLAS_QUIET="on")
+        with (
+            mock.patch.object(nudge, "_check_memory_captured", return_value=False),
+            mock.patch.object(nudge, "_non_docs_changed", return_value=True),
+        ):
+            _, out, _ = self._run_main({"session_id": "sess-orch"}, env=env)
+        msg = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertEqual(len(msg.splitlines()), 1)
+        self.assertNotIn("self-improvement check", msg)
+
+    def test_non_docs_changed_ignores_docs_and_markdown(self):
+        import subprocess as sp
+
+        repo = tempfile.mkdtemp()
+        sp.run(["git", "init", "-q"], cwd=repo, check=True)
+        os.makedirs(os.path.join(repo, "docs"))
+        for rel in ("docs/a.txt", "README.md"):
+            open(os.path.join(repo, rel), "w").write("x")
+        self.assertFalse(nudge._non_docs_changed(repo))
+        open(os.path.join(repo, "app.py"), "w").write("x")
+        self.assertTrue(nudge._non_docs_changed(repo))
 
     def test_db_error_skips_without_spurious_nudge(self):
         # ATLAS_DB pointing at a directory makes atlas_db.connect() raise; the

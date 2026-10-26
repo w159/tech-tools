@@ -1,3 +1,4 @@
+import { fx } from "../contracts/todo-tree-fixture";
 import { expect, test } from "bun:test";
 import { renderPanel, visibleWidth, type PanelModel } from "./mission-panel";
 import { type PanelTodo, todoLines } from "./todo-panel";
@@ -77,4 +78,9 @@ test("renderPanel places the board under the rail within the width and line budg
 		expect(lines.every(l => visibleWidth(l) === 100)).toBe(true);
 		expect(strip(lines[2]!)).toMatch(todosExpanded ? /✔/ : /1\/4/);
 	}
+});
+
+test("phase tree from the shared fixture: same rows as mod", () => {
+	const rows = todoLines(fx.items, { width: 60, tick: 0, spin: "⠋", expanded: true, maxLines: 20 }).map(l => strip(l).trimEnd());
+	expect(rows).toEqual(fx.rows);
 });

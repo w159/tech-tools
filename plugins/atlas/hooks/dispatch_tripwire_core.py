@@ -254,11 +254,25 @@ def _is_orchestration_path(path):
         or "/.atlas/" in norm
     ):
         return True
-    # Session scratch space (e.g. the Claude Code scratchpad under the system
-    # temp dir) is not target code: it is ephemeral workspace outside the
-    # project root, and denying writes there wastes turns for no benefit.
+    return _is_scratch_path(norm)
+
+
+def _is_brief_or_scratch(path):
+    """A dispatch brief under .atlas/.run/briefs/ or a session scratchpad file."""
+    norm = str(path).replace("\\", "/")
+    return (
+        norm.startswith(".atlas/.run/briefs/")
+        or "/.atlas/.run/briefs/" in norm
+        or _is_scratch_path(norm)
+    )
+
+
+def _is_scratch_path(path):
+    """Session scratch space (e.g. the Claude Code scratchpad under the system
+    temp dir) is not target code: it is ephemeral workspace outside the
+    project root, and denying or counting writes there wastes turns for no benefit."""
     try:
-        real = os.path.realpath(norm).replace("\\", "/").rstrip("/")
+        real = os.path.realpath(path).replace("\\", "/").rstrip("/")
     except Exception:
         return False
     return any(
@@ -482,6 +496,8 @@ def _burst_note(root, session):
         window = float(os.environ.get("ATLAS_BURST_SECS", BURST_SECS))
     except ValueError:
         window = BURST_SECS
+    if window != window or window in (float("inf"), float("-inf")):
+        window = BURST_SECS  # nan silently disabled the gate; inf never expired a lost slot
     if window <= 0:
         return False, ""
     now = time.time()
@@ -525,6 +541,11 @@ def _omp_harness():
 def _close_dispatch(payload):
     """PostToolUse:Agent: the oldest open in-process dispatch of the session has returned. Fail-open."""
     try:
+        tin = payload.get("tool_input")
+        # A background Agent posts at launch while its worker keeps running: keep its slot so the
+        # window (not the PostToolUse) bounds it and a 2nd background dispatch is still denied.
+        if isinstance(tin, dict) and tin.get("run_in_background") is True:
+            return
         cwd = payload.get("cwd")
         root = find_root(Path(cwd if isinstance(cwd, str) and cwd else os.getcwd()))
         with _name_state(root, payload.get("session_id")) as st:
@@ -1582,6 +1603,8 @@ def _pre_tool_use(
     # (see _run) nor blocked here: the threshold polices drift into edits, not looking.
     if _is_read_only_call(tool, tinput or {}) or _team_mux_verb(tool, tinput):
         return  # a team launch/wait/reap is the dispatch path itself, never inline drift
+    if tool in EDIT_TOOLS and path and _is_brief_or_scratch(path):
+        return  # briefs and scratchpad writes are never counted, so never denied for the count
     # Fail CLOSED on DB error: an unverified count must never let an inline
     # op past the hard limit mid-orchestration. The broad __main__ fail-open
     # covers garbage stdin / connect failures, not this trust decision.
@@ -2552,6 +2575,8 @@ def _run(payload):
 
         if _in_subagent(payload):
             return  # subagents share the lead's session_id; their ops are not the lead's inline work
+        if tool in EDIT_TOOLS and path and _is_scratch_path(path):
+            return  # scratchpad writes are not inline work (docs/ and .atlas/ are excluded in the count query)
         atlas_db.log_event(conn, run_id, tool, "main", 1, path)
         # Prompt arming is a regex heuristic; an unflagged session that grows
         # into multi-file code work is armed from the footprint it left.

@@ -66,8 +66,8 @@ const ownerCell = (i: TodoItem): Segment[] => (i.owner ? [chip(fitText(i.owner, 
 const cleanEvidence = (i: TodoItem): string => (i.evidence ?? '').replace(/^\s*\d+[.)]\s*/, '').replace(/\s+/g, ' ');
 const evidenceTail = (ev: string, room: number, used: number): Segment[] => (ev ? [seg(`  ${fitText(ev, Math.max(0, room - used - 2))}`, M.muted)] : []);
 
-function itemRow(i: TodoItem, o: TodoPanelOpts): Segment[] {
-  const head = [seg(' '), glyphOf(i.status, o.tick), seg(' '), ...ownerCell(i)];
+function itemRow(i: TodoItem, o: TodoPanelOpts, indent = ''): Segment[] {
+  const head = [seg(` ${indent}`), glyphOf(i.status, o.tick), seg(' '), ...ownerCell(i)];
   const ev = cleanEvidence(i);
   const room = o.cols - runsWidth(head) - 1;
   const content = fitText(i.content, ev ? Math.max(10, Math.floor(room * 0.6)) : room);
@@ -75,10 +75,25 @@ function itemRow(i: TodoItem, o: TodoPanelOpts): Segment[] {
   return padRow(fitRow([...head, seg(content, color), ...evidenceTail(ev, room, textWidth(content))], o.cols), o.cols);
 }
 
+// Phase order of the operating contract (contracts/operating-contract.json); twin of omp/todo-panel.ts.
+const PHASE_ORDER = ['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done'];
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+
+/** One row per heading (`I. Research 1/2`) followed by its items nested; items without a phase go last under Other. */
+function treeRows(items: TodoItem[], o: TodoPanelOpts): Segment[][] {
+  const groups: Array<[string, TodoItem[]]> = [...PHASE_ORDER.map((p): [string, TodoItem[]] => [p, items.filter((i) => i.phase === p)]), ['other', items.filter((i) => !i.phase || !PHASE_ORDER.includes(i.phase))]];
+  return groups.filter(([, g]) => g.length).flatMap(([name, g], n) => {
+    const done = g.filter((i) => i.status === 'completed').length;
+    const title = name[0]!.toUpperCase() + name.slice(1);
+    return [padRow([seg(` ${ROMAN[n] ?? n + 1}. ${title} ${done}/${g.length}`, M.text, undefined, true)], o.cols), ...g.map((i) => itemRow(i, o, '  '))];
+  });
+}
+
 function expandedRows(items: TodoItem[], o: TodoPanelOpts): Segment[][] {
-  if (items.length <= o.maxRows) return items.map((i) => itemRow(i, o));
-  const shown = items.slice(0, Math.max(0, o.maxRows - 1));
-  return [...shown.map((i) => itemRow(i, o)), padRow([seg(`   +${items.length - shown.length} more`, M.muted)], o.cols)];
+  const rows = items.some((i) => i.phase) ? treeRows(items, o) : items.map((i) => itemRow(i, o));
+  if (rows.length <= o.maxRows) return rows;
+  const shown = rows.slice(0, Math.max(0, o.maxRows - 1));
+  return [...shown, padRow([seg(`   +${rows.length - shown.length} more`, M.muted)], o.cols)];
 }
 
 /** Panel rows for the board: [] without items, one row collapsed, else <= `maxRows` item rows. */

@@ -153,7 +153,7 @@ class BoardBasics(unittest.TestCase):
 
     def test_carry_over_archives_items_older_than_24h(self):
         atlas_todo.mirror(self.root, [{"content": "old", "status": "pending"}], "s1")
-        self._age("old", created_at=time.time() - 90000)
+        self._age("old", created_at=time.time() - 90000, updated_at=time.time() - 90000)
         out = atlas_todo.carry_over(self.root, "s2")
         item = atlas_todo.load(self.root)["items"][0]
         self.assertEqual((out["carried"], out["archived"]), (0, 1))
@@ -165,8 +165,49 @@ class BoardBasics(unittest.TestCase):
         atlas_todo.carry_over(self.root, "s2")
         atlas_todo.carry_over(self.root, "s3")
         self.assertFalse(atlas_todo.load(self.root)["items"][0].get("archived"))
+        self._age("x", updated_at=time.time() - 3 * 3600)  # idle: no longer live
         atlas_todo.carry_over(self.root, "s4")
         self.assertTrue(atlas_todo.load(self.root)["items"][0]["archived"])
+
+    def test_recently_updated_items_never_carry_expire(self):
+        # today's case: set, then reap ticks under other session ids, 3 carries
+        atlas_todo.mirror(self.root, [{"content": "live", "status": "pending"}], "s1")
+        for sid in ("d1", "d2", "d3"):
+            atlas_todo.carry_over(self.root, sid)
+        item = atlas_todo.load(self.root)["items"][0]
+        self.assertFalse(item.get("archived"))
+        self.assertGreaterEqual(item["carries"], 3)
+        # once idle past 2 h the expiry applies again
+        self._age("live", updated_at=time.time() - 3 * 3600)
+        atlas_todo.carry_over(self.root, "d4")
+        self.assertTrue(atlas_todo.load(self.root)["items"][0]["archived"])
+
+    def test_rotate_archive_moves_old_archived_items_and_list_hides_them(self):
+        atlas_todo.mirror(
+            self.root,
+            [{"content": "a", "status": "pending"}, {"content": "b", "status": "pending"}],
+            "s1",
+        )
+        atlas_todo.archive_item(
+            self.root, atlas_todo.load(self.root)["items"][0]["id"], "test"
+        )
+        self._age("a", archived_at=time.time() - 8 * 86400)
+        self.assertEqual(atlas_todo.rotate_archive(self.root), 1)
+        self.assertEqual([i["content"] for i in atlas_todo.load(self.root)["items"]], ["b"])
+        files = list((atlas_todo.board_path(self.root).parent / "archive").glob("todos-*.jsonl"))
+        self.assertEqual(len(files), 1)
+        self.assertEqual(json.loads(files[0].read_text().splitlines()[0])["content"], "a")
+        atlas_todo.archive_item(
+            self.root, atlas_todo.load(self.root)["items"][0]["id"], "test"
+        )
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            atlas_todo._cli(["list", "--root", self.root])
+        self.assertEqual(json.loads(buf.getvalue())["items"], [])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            atlas_todo._cli(["list", "--all", "--root", self.root])
+        self.assertEqual(len(json.loads(buf.getvalue())["items"]), 1)
 
     def test_manual_items_survive_carry_over(self):
         atlas_todo.add(self.root, "human note", origin="manual")

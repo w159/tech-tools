@@ -3756,6 +3756,20 @@ class PhantomDropTest(GateOrchestrationTest):
             completion_gate._missing_delegation("sess-orch", "", self.tmp), [real]
         )
 
+    def test_delegation_exempts_mux_worker_env(self):
+        real = os.path.join(self.tmp, "real.py")
+        with open(real, "w") as f:
+            f.write("x = 1\n")
+        self._log_write(real)
+        with mock.patch.dict(os.environ, {"ATLAS_WORKER_NAME": "impl-1"}):
+            self.assertEqual(
+                completion_gate._missing_delegation("sess-orch", "", self.tmp), []
+            )
+        with mock.patch.dict(os.environ, {"ATLAS_WORKER_NAME": "  "}):
+            self.assertEqual(
+                completion_gate._missing_delegation("sess-orch", "", self.tmp), [real]
+            )
+
     def test_target_exists_helper(self):
         self.assertTrue(
             completion_gate._target_exists(

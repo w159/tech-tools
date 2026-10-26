@@ -1,4 +1,5 @@
 // Board panel: collapsed gradient progress bar, expanded item list, +N more, tick-driven frame.
+import { fx } from '../contracts/todo-tree-fixture';
 import { describe, expect, test } from 'claude-code/testing';
 import type { TodoItem } from './contract';
 import { todoRows } from './todo-panel';
@@ -58,5 +59,12 @@ describe('todo panel', () => {
   });
   test('no items: no rows', () => {
     expect(todoRows([], { cols: 100, tick: 0, expanded: true, maxRows: 5 })).toEqual([]);
+  });
+});
+
+describe('phase tree (shared fixture)', () => {
+  test('expanded groups by phase in contract order with roman headings and identical rows to omp', () => {
+    const rows = todoRows(fx.items, { cols: 60, tick: 0, expanded: true, maxRows: 20 }).map((r) => text(r).trimEnd());
+    expect(rows).toEqual(fx.rows);
   });
 });

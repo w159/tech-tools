@@ -127,5 +127,51 @@ class TodoCapture(unittest.TestCase):
         self.assertEqual(atlas_todo.load(self.root)["items"], [])
 
 
+AGENT = {"tool_name": "Agent", "tool_input": {"subagent_type": "atlas:implementer"}}
+MUX = {"tool_name": "Bash", "tool_input": {"command": 'python3 "/x/atlas_mux.py" spawn-team --class fix'}}
+
+
+def run_nudge(payload, env_extra=None):
+    env = dict(os.environ)
+    env.update(env_extra or {})
+    p = subprocess.run([sys.executable, HOOK], input=json.dumps(payload).encode(), capture_output=True, timeout=20, env=env)
+    return p.returncode, p.stdout.decode()
+
+
+class TodoNudge(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+
+    def payload(self, base, sid="s1"):
+        return {**base, "session_id": sid, "cwd": self.root}
+
+    def test_empty_board_nudges_once_with_the_set_command(self):
+        rc, out = run_nudge(self.payload(AGENT))
+        self.assertEqual(rc, 0)
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("atlas_todo.py", ctx)
+        self.assertIn(" set ", ctx)
+        self.assertIn("--session s1", ctx)
+        self.assertEqual(run_nudge(self.payload(MUX)), (0, ""))  # once per session
+
+    def test_mux_spawn_team_counts_as_a_dispatch(self):
+        self.assertIn("--session s2", run_nudge(self.payload(MUX, "s2"))[1])
+
+    def test_silent_when_the_session_has_items_or_tool_is_not_a_dispatch(self):
+        atlas_todo.mirror(self.root, [{"content": "x", "status": "pending"}], "s1")
+        self.assertEqual(run_nudge(self.payload(AGENT)), (0, ""))
+        other = {"tool_name": "Agent", "tool_input": {"subagent_type": "general-purpose"}}
+        self.assertEqual(run_nudge(self.payload(other, "s9")), (0, ""))
+        bash = {"tool_name": "Bash", "tool_input": {"command": "ls"}}
+        self.assertEqual(run_nudge(self.payload(bash, "s9")), (0, ""))
+
+    def test_todo_off_disables(self):
+        self.assertEqual(run_nudge(self.payload(AGENT), {"ATLAS_TODO": "off"}), (0, ""))
+
+
+
+
 if __name__ == "__main__":
     unittest.main()

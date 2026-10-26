@@ -46,6 +46,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { pluginScript } from "./plugin-path";
 
 const WIDGET_KEY = "usage-statusline";
 export const USAGE_STATUSLINE_WIDGET_KEY = WIDGET_KEY;
@@ -918,6 +919,7 @@ function render(ctx: ExtensionContext): void {
  for (let i = 0; i < height; i++) {
   rows.push(rightRows.length > 0 ? `${padEnd(clip(left[i] ?? "", METER_W), METER_W)}${COL_GAP}${rightRows[i] ?? ""}`.trimEnd() : (left[i] ?? "").trimEnd());
  }
+ if (atlasText) rows.push(atlasText);
  // Last resort: hard-clip any row still wider than the real width (row 1 with a
  // very long cwd/model, meter rows from an oversized barCells/detailW) so no row
  // ever wraps. Rows that already fit — every wide-pane row — pass through as-is.
@@ -994,6 +996,35 @@ function refreshFallow(ctx: ExtensionContext, force: boolean): void {
  }
 }
 
+// Atlas run-state segment: the text comes from scripts/atlas_status_segment.py so omp and
+// Claude Code print byte-identical wording (a TS port would drift). Same async execFile +
+// 60 s cache as fallow above; the script keeps its own 60 s cache, so a call is cheap.
+let atlasText: string | undefined;
+let atlasAt = 0;
+let atlasBusy = false;
+const PYTHON_BIN = Bun.which("python3");
+
+/** The segment line for `cwd` ("" when the project has no .atlas or the script fails). */
+export function fetchAtlasSegment(cwd: string, home?: string, now?: number): Promise<string> {
+ return new Promise((resolve) => {
+  if (!PYTHON_BIN) return resolve("");
+  const args = [pluginScript("atlas_status_segment.py"), "--text", cwd];
+  if (home) args.push("--home", home);
+  if (now !== undefined) args.push("--now", String(now));
+  execFile(PYTHON_BIN, args, { timeout: 5_000 }, (err, stdout) => resolve(err ? "" : String(stdout ?? "").trim()));
+ });
+}
+
+function refreshAtlas(ctx: ExtensionContext, force: boolean): void {
+ if (atlasBusy || (!force && Date.now() - atlasAt < 60_000)) return;
+ atlasBusy = true;
+ atlasAt = Date.now();
+ void fetchAtlasSegment(ctx.cwd).then((line) => {
+  atlasBusy = false;
+  atlasText = line || undefined;
+ });
+}
+
 function emitMergedRow(rawSetStatus: SetStatus): void {
  if (!lensSeen) {
   // lens row unknown: nothing to merge into; leave ponytail's row as drawn
@@ -1066,6 +1097,7 @@ export function registerUsageStatusline(pi: ExtensionAPI): void {
   refreshUsage(ctx);
   render(ctx);
   refreshFallow(ctx, true);
+  refreshAtlas(ctx, true);
   if (!bound) {
    bound = true;
    const timer = ctx.setInterval(() => {
@@ -1073,6 +1105,7 @@ export function registerUsageStatusline(pi: ExtensionAPI): void {
     refreshUsage(latest);
     render(latest);
     refreshFallow(latest, false);
+    refreshAtlas(latest, false);
    }, RENDER_MS);
    pi.on("session_shutdown", () => {
     ctx.clearTimer(timer);
@@ -1130,6 +1163,7 @@ export function registerUsageStatusline(pi: ExtensionAPI): void {
   }
   render(ctx);
   refreshFallow(ctx, true);
+  refreshAtlas(ctx, true);
  });
 
  pi.on("message_end", async (_event, ctx) => {

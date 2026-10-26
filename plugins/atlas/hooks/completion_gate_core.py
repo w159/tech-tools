@@ -717,6 +717,11 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
     """
     if "/subagents/" in transcript_path.replace("\\", "/"):
         return []
+    # An atlas_mux tmux worker is itself the dispatched implementer (a
+    # main-thread `claude -p --agent` session); demanding a dispatch from it
+    # only makes it overwrite its report. Same marker as worker_inbox.
+    if (os.environ.get("ATLAS_WORKER_NAME") or "").strip():
+        return []
     conn = None
     try:
         import atlas_db

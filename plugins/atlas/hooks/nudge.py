@@ -13,6 +13,7 @@ Any error exits 0 silently.
 """
 
 import os
+import subprocess
 import sys
 import time
 
@@ -34,6 +35,25 @@ def _check_memory_captured():
                 return True
     except Exception:
         pass
+    return False
+
+
+def _non_docs_changed(cwd):
+    """True when git reports a changed file outside docs/ and not markdown."""
+    try:
+        out = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=cwd or None,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except Exception:
+        return False
+    for line in out.splitlines():
+        path = line[3:].split(" -> ")[-1].strip('"')
+        if path and not path.startswith("docs/") and not path.endswith(".md"):
+            return True
     return False
 
 
@@ -70,6 +90,17 @@ def main():
     if _check_memory_captured():
         sys.exit(0)
 
+    quiet = os.environ.get("ATLAS_QUIET", "on").lower() != "off"
+    if quiet:
+        # ATLAS_QUIET: speak only when the turn changed non-docs files, in one line
+        if not _non_docs_changed(payload.get("cwd")):
+            sys.exit(0)
+        atlas_hook_guard.emit(
+            payload,
+            "nudge",
+            "Atlas: code changed; capture any reusable lesson and keep docs/ in sync.",
+        )
+        sys.exit(0)
     msg = (
         "Atlas self-improvement check: if this turn produced a reusable decision, "
         "fix, or gotcha, capture it (claude-mem observation_add or a note under "

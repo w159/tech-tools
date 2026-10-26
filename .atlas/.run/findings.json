@@ -9972,5 +9972,56 @@
     "status": "verified",
     "verified_at": "2026-10-26T14:05:42+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "P1-no-worktree-isolation",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "spawn-team runs every member in the main checkout although atlas_resolve says isolation: worktree; parallel implementers share one tree",
+    "evidence": [
+      "tmux list-panes -s -t atlas-t5c2996: all panes cwd = repo root; git worktree list shows no team worktrees"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "open",
+    "verified_at": "2026-10-26T16:12:10+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "P1-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "P1: tmux default, per-member task split, concurrent in-process deny verified; 4 holes noted",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_mux.py:254,584,1645; plugins/atlas/hooks/dispatch_tripwire_core.py:474-532; clean-env suites 122+295 OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -i PATH HOME python3 -m unittest test_atlas_mux / test_dispatch_tripwire test_atlas_resolve; spawn-team --dry-run --task-file; /tmp/v0740/probe.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T16:16:51+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "P2P3P5-parity",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Phased todo tree in both harnesses, carry-expiry fix, quiet mode, shared statusline segment, mux worktrees per member, gate (m) worker exemption",
+    "evidence": [
+      "env -i hooks Ran 1610 (2 InstalledParity only), scripts OK, omp 490/1 pre-existing"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-26T16:55:11+00:00",
+    "verified_by": "lead"
   }
 ]

@@ -63,6 +63,8 @@ _KEEP_ORIGINS = (
 _ADVISOR_TTL_S = 2 * 3600
 _CARRY_MAX_AGE_S = 86400  # older than this at boot: archived, not carried
 _CARRY_MAX_CARRIES = 2  # already carried this many times: archived
+_CARRY_FRESH_S = 2 * 3600  # touched this recently: a live session's item, never expired
+_ARCHIVE_AGE_S = 7 * 86400  # archived longer than this: moved out of todos.json
 LEAD_IDLE_TTL_S = 2 * 3600  # idle lead channel without exit_code (crashed session)
 BOARD_DIR = ".atlas/.run"
 BOARD_NAME = "todos.json"
@@ -594,6 +596,10 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
                 item["archived"] = True
                 archived += 1
             elif not (item.get("launch") and _launch_live(item)) and (
+                # a recently updated item is live work (reap ticks pass another
+                # session id): carry it on, never expire it
+                now - float(item.get("updated_at") or 0) >= _CARRY_FRESH_S
+            ) and (
                 now - float(item.get("created_at") or item.get("updated_at") or now)
                 > _CARRY_MAX_AGE_S
                 or int(item.get("carries") or 0) >= _CARRY_MAX_CARRIES
@@ -622,6 +628,31 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
             "archived": archived,
             "counts": counts(board, session_id),
         }
+
+
+def rotate_archive(root: Optional[str], max_age_s: float = _ARCHIVE_AGE_S) -> int:
+    """Move items archived longer than max_age_s into
+    .atlas/.run/archive/todos-<YYYY-MM>.jsonl (by archive month) so todos.json
+    stays small. Returns how many moved."""
+    with _file_lock(board_path(root)):
+        board = _locked_load(root)
+        now = _now()
+        keep, old = [], []
+        for item in board.get("items", []):
+            at = float(item.get("archived_at") or item.get("updated_at") or 0)
+            (old if item.get("archived") and now - at > max_age_s else keep).append(item)
+        if not old:
+            return 0
+        adir = board_path(root).parent / "archive"
+        adir.mkdir(parents=True, exist_ok=True)
+        for item in old:
+            at = float(item.get("archived_at") or item.get("updated_at") or 0)
+            month = time.strftime("%Y-%m", time.localtime(at))
+            with open(adir / f"todos-{month}.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(item) + "\n")
+        board["items"] = keep
+        save(root, board)
+        return len(old)
 
 
 def restore(root: Optional[str], item_id: str) -> dict:
@@ -1898,7 +1929,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
-        elif a in ("--force", "--unique", "--json", "--dry-run", "--only-project"):
+        elif a in ("--force", "--unique", "--json", "--dry-run", "--only-project", "--all"):
             flags[a[2:]] = "1"
             i += 1
         else:
@@ -1913,7 +1944,11 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             board = load(root)
             out = {
                 "ok": True,
-                "items": board.get("items", []),
+                "items": [
+                    i
+                    for i in board.get("items", [])
+                    if flags.get("all") or not i.get("archived")
+                ],
                 "counts": counts(board, flags.get("session")),
             }
         elif cmd == "set":
@@ -1997,6 +2032,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             out = remove(root, flags.get("id", ""))
         elif cmd == "carry":
             out = carry_over(root, flags.get("session") or "")
+            out["rotated"] = rotate_archive(root)
         elif cmd == "claim-paths":
             out = claim_paths(
                 root,

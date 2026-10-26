@@ -11,6 +11,7 @@ export interface PanelTodo {
 	status: string;
 	owner?: string;
 	evidence?: string;
+	phase?: string;
 }
 export interface TodoOpts {
 	width: number;
@@ -53,18 +54,33 @@ const cleanEvidence = (t: PanelTodo) => (t.evidence ?? "").replace(/^\s*\d+[.)]\
 const textColor = (status: string) => (status === "completed" ? C.MUT : C.TXT);
 const evidenceTail = (ev: string, room: number, used: number) => (ev ? seg(`  ${cut(ev, Math.max(0, room - used - 2)).trimEnd()}`, C.MUT) : "");
 
-function itemRow(t: PanelTodo, o: TodoOpts): string {
-	const head = seg(" ") + glyph(t.status, o.spin) + seg(" ") + ownerCell(t);
+function itemRow(t: PanelTodo, o: TodoOpts, indent = ""): string {
+	const head = seg(` ${indent}`) + glyph(t.status, o.spin) + seg(" ") + ownerCell(t);
 	const ev = cleanEvidence(t);
 	const room = o.width - visibleWidth(head) - 1;
 	const text = cut(t.content, ev ? Math.max(10, Math.floor(room * 0.6)) : room).trimEnd();
 	return head + seg(text, textColor(t.status)) + evidenceTail(ev, room, [...text].length);
 }
 
+// Phase order of the operating contract (contracts/operating-contract.json); twin of mod/todo-panel.tsx.
+const PHASE_ORDER = ["research", "theory", "test", "validate", "implement", "verify", "done"];
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+
+/** One row per heading (`I. Research 1/2`) followed by its items nested; items without a phase go last under Other. */
+function treeLines(todos: PanelTodo[], o: TodoOpts): string[] {
+	const groups: Array<[string, PanelTodo[]]> = [...PHASE_ORDER.map((p): [string, PanelTodo[]] => [p, todos.filter(t => t.phase === p)]), ["other", todos.filter(t => !t.phase || !PHASE_ORDER.includes(t.phase))]];
+	return groups.filter(([, g]) => g.length).flatMap(([name, g], n) => {
+		const done = g.filter(t => t.status === "completed").length;
+		const title = name[0]!.toUpperCase() + name.slice(1);
+		return [seg(` ${ROMAN[n] ?? n + 1}. ${title} ${done}/${g.length}`, C.TXT, undefined, true), ...g.map(t => itemRow(t, o, "  "))];
+	});
+}
+
 function expandedLines(todos: PanelTodo[], o: TodoOpts): string[] {
-	if (todos.length <= o.maxLines) return todos.map(t => itemRow(t, o));
-	const shown = todos.slice(0, Math.max(0, o.maxLines - 1));
-	return [...shown.map(t => itemRow(t, o)), seg(`   +${todos.length - shown.length} more`, C.MUT)];
+	const lines = todos.some(t => t.phase) ? treeLines(todos, o) : todos.map(t => itemRow(t, o));
+	if (lines.length <= o.maxLines) return lines;
+	const shown = lines.slice(0, Math.max(0, o.maxLines - 1));
+	return [...shown, seg(`   +${lines.length - shown.length} more`, C.MUT)];
 }
 
 /** [] without todos, one row collapsed, else at most `maxLines` rows. */

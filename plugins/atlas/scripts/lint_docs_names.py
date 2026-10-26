@@ -165,6 +165,9 @@ _TEXT_SUFFIXES = frozenset(
         ".css",
         ".env",
         ".gitignore",
+        # .env.template / .env.example: the dotted name makes the suffix ".template", not ".env"
+        ".template",
+        ".example",
         "",
     }
 )
@@ -606,7 +609,9 @@ def rewrite_references(root: Path, moved) -> list:
         if updated != original:
             try:
                 path.write_text(updated, encoding="utf-8")
-            except OSError:
+            except OSError as exc:
+                # A read-only or immutable file (chflags uchg) kept a dangling reference; say so.
+                print("lint_docs_names: could not rewrite %s: %s" % (path, exc), file=sys.stderr)
                 continue
             try:
                 touched.append(str(path.relative_to(root)))
