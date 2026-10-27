@@ -2,7 +2,7 @@
 // render with a viewport; /atlas-cc opens it on demand with focus and Esc-to-close.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { register, shouldDock } from './register';
+import { dockTick, register, shouldDock } from './register';
 import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
@@ -23,6 +23,18 @@ function captureOn() {
   return { on, pick: (key: string): AnyHandler => handlers.get(key) ?? (() => { throw new Error(`no ${key}`); }) };
 }
 
+/** The engine refuses a $.state write made while ui.render dispatches; `rendering` marks that window. */
+const guard = { rendering: false, deniedWrites: 0 };
+function renderGuard(state: ReturnType<typeof memState>) {
+  return {
+    get: state.get,
+    set: async (...args: Parameters<typeof state.set>) => {
+      if (guard.rendering) { guard.deniedWrites++; throw new Error('atlas: state.set: denied: it was made while ui.render is being dispatched'); }
+      return state.set(...args);
+    },
+  };
+}
+
 function stubEngine() {
   const opens: OpenArgs[] = [];
   const $ = {
@@ -32,7 +44,7 @@ function stubEngine() {
     process: { run: async () => ({ exitCode: 0, stdout: 'main', stderr: '' }) },
     session: { id: async () => 'sess-open' },
     fs: { read: async () => { throw new Error('no fs'); }, stat: async () => { throw new Error('no fs'); }, exists: async () => false, list: async () => [] },
-    state: memState(),
+    state: renderGuard(memState()),
     ui: {
       log: () => {},
       invalidate: () => {},
@@ -65,14 +77,23 @@ describe('sidebar open requests', () => {
     await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
     const e = { surface: 'terminal', viewport, props: { hasSurvey: false, bodyColumns: viewport.columns } };
     // the drawing itself is not under test (no resolve in the stub); only the unasked open is
+    guard.rendering = true;
+    guard.deniedWrites = 0;
     await pick('ui.render|AbovePrompt')(engine, e, noopNext).catch(() => undefined);
     await pick('ui.render|AbovePrompt')(engine, e, noopNext).catch(() => undefined);
-    return { opens, pick, engine };
+    guard.rendering = false;
+    const denied = guard.deniedWrites;
+    await dockTick(engine); // the rebuild tick, where writes are allowed, performs the open
+    return { opens, pick, engine, denied };
   }
 
   test('no auto open at 100 columns non-fullscreen or fullscreen-narrow', async () => {
     expect((await renderBand({ columns: 100, rows: 40, isFullscreen: false })).opens).toEqual([]);
     expect((await renderBand({ columns: 100, rows: 40, isFullscreen: true })).opens).toEqual([]);
+  });
+
+  test('the band render writes no $.state (the engine skips a render hook that does)', async () => {
+    expect((await renderBand({ columns: 160, rows: 40, isFullscreen: true })).denied).toBe(0);
   });
 
   test('opens once docked at 160 fullscreen; /atlas-cc opens 12 rows with focus and Esc-close', async () => {

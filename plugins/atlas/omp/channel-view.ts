@@ -24,6 +24,9 @@ import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
 import { atlasKnob } from "./knobs";
+import { createCoreSource } from "./core-source";
+import { openGateCount } from "../mod/gates";
+import type { CoreModel } from "../mod/data/core";
 
 export const WIDGET_KEY = "atlas-channel";
 const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
@@ -508,6 +511,15 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	const clearTo = deps.clearTimeout ?? ((h: unknown) => clearTimeout(h as Timer));
 
 	const gates = deps.gates ?? createGatesCache(spawnText, now, nodePath.join(pluginRoot(), "scripts", "atlas_gates.py"));
+	const coreSource = createCoreSource();
+	/** Fails soft: a bad scratch file never blocks the panel. */
+	const coreOf = (i: ChannelOpenInfo & { root: string }): CoreModel | null => {
+		try {
+			return coreSource.build(i.root, { sessionId: i.sessionId, openGates: openGateCount(gates.read() ?? []) });
+		} catch {
+			return null;
+		}
+	};
 	let ui: WidgetUi | undefined;
 	let info: (ChannelOpenInfo & { root: string }) | undefined;
 	let poll: unknown;
@@ -584,6 +596,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 			idle: idleWave(info, workers.length),
 			todos: todoItems(info.root, info.sessionId),
 			todosExpanded: env.ATLAS_TODO_EXPANDED === "1",
+			core: coreOf(info),
 		});
 		const key = lines.join("\n");
 		if (key !== painted) ui.setWidget(WIDGET_KEY, lines);
