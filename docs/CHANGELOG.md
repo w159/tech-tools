@@ -1,5 +1,17 @@
 # Changelog
 
+## mcp-gateway 0.2.0, harbor 0.1.0 - 2026-10-27
+
+### Added
+
+- mcp-gateway 0.2.0: broker mode (`GATEWAY_MODE=broker`) with an OAuth 2.1 authorization server (oidc-provider), upstream OIDC sign-in (Entra, Google, generic), dynamic client registration, the jwt-bearer grant for IdP-signed ID-JAG assertions, and in-memory state (one replica). Default-deny `policy.yaml` by connector and effect class, `mcp-gw.audit/1` audit lines, connector catalog (`catalog/`, `scripts/gen-catalog.mjs`), `scripts/gen-jwks.mjs`. See [mcp_servers/mcp-gateway/README.md](../mcp_servers/mcp-gateway/README.md).
+- harbor 0.1.0 (new plugin): `harbor-setup`, `harbor-policy`, `harbor-audit`, `harbor-connect` skills, `harbor-admin` agent, Bicep and Terraform templates, saved audit queries. See [plugins/harbor/README.md](../plugins/harbor/README.md).
+
+### Changed
+
+- mcp-gateway Dockerfile copies `catalog/` and `scripts/gen-jwks.mjs` and pins the uv image to 0.9.0. `scripts/acr-build.sh` has no default registry, resource group or subscription; it requires all three.
+- Direct mode (Entra) keeps working without env changes.
+
 ## 16.0.0 - 2026-10-27
 
 Release: atlas 16.0.0, armada 2.0.0, marketplace 5.0.0. Relative to main 15.2.1 (9c20c37). Consumer migration: [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).

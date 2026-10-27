@@ -1,7 +1,7 @@
 # Enterprise MCP gateway: design
 
-Status: PROPOSED, awaiting owner approval (2026-10-27). Nothing in this
-document is built yet. Prior art it evolves: `mcp_servers/mcp-gateway`
+Status: APPROVED 2026-10-27; a local prototype is built (see
+`docs/plans/enterprise-mcp-gateway-prototype.md`). Prior art it evolves: `mcp_servers/mcp-gateway`
 (0.1.0, Entra-only resource server, 18 passing tests) and its deployment
 record `docs/architecture/mcp-gateway-design.md`.
 
@@ -154,10 +154,10 @@ Group lookup happens once at sign-in, not per request: Entra `roles` claim
 (app roles, assigned to groups, which avoids the 200-group overage limit
 per Microsoft Learn "Configure group claims and app roles in tokens");
 Google via the Cloud Identity Groups API (`searchTransitiveGroups`) with the
-gateway's service account. Roles are stamped into the gateway token.
-Consequence to accept: removing someone from a group takes effect at their
-next token refresh, so access-token lifetime (default 15 minutes) is the
-revocation delay.
+gateway's service account. Roles are resolved at sign-in and stamped into the gateway token; a refresh
+reuses them. Consequence to accept: removing someone from a group takes effect
+at their next sign-in, bounded by `BROKER_REFRESH_TOKEN_TTL` (default 8 hours),
+which caps the refresh chain.
 
 A `harbor` skill prints a who-can-call-what matrix from the policy and the
 live tool catalog before any policy change ships.
