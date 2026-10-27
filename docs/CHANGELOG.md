@@ -1,5 +1,14 @@
 # Changelog
 
+## atlas 16.0.1, armada 2.1.0, programmer 1.0.0, marketplace 5.1.0 - 2026-10-27
+
+Release: one merge onto main that adds what main 16.0.0 (ea78927) did not carry.
+
+- programmer 1.0.0: rebuilt as a tested principles checker (20 detected rules, 2 skills, 1 judge agent). Notes: [plugins/programmer/CHANGELOG.md](../plugins/programmer/CHANGELOG.md).
+- armada 2.1.0: enterprise mode (`armada-enterprise`), with the harbor plugin folded into `plugins/armada/enterprise/`. The `harbor` marketplace entry is removed.
+- atlas 16.0.1: test hermeticity fix for `HOME` under a scratch root. Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md).
+- Marketplace health check audit: [docs/audits/2026-10-27_marketplace-health/](audits/2026-10-27_marketplace-health/README.md). Its two patches are already applied on this tree.
+
 ## mcp-gateway 0.3.0, armada 2.1.0 - 2026-10-27
 
 ### Added

@@ -15,6 +15,12 @@
 - A verdict is matched to the DONE claim whose report names its finding id before falling back to time order, so a verdict on one finding no longer marks an unrelated claim as checked.
 - Core reads are cached by size and mtime and evicted when the file goes away; a missing `findings.json` for one tick no longer re-toasts every verdict.
 
+## 16.0.1 - 2026-10-27
+
+### Fixed
+
+- Six tests that build a project fixture under `$HOME` (`StopGateArmingTest` x3, `TodosTest.test_junk_root_covers_temp_worktrees_and_plugin_cache`, `GatesArmedTest` x2) failed whenever `HOME` sat under `/tmp` or `/var/folders`, for example `HOME=$(mktemp -d)`. atlas treats every path there as scratch by design, so those fixtures could never arm. `_test_isolation` now exposes `HOME_UNDER_SCRATCH` and the six tests skip with that reason. With `HOME` outside the scratch roots they run and pass as before. This was the source of the 28 and 36 failure counts in the 2026-10-27 marketplace health check, which ran with `HOME` under `/tmp`.
+
 ## 16.0.0 - 2026-10-27
 
 ### BREAKING

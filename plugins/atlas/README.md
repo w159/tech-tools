@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.0.0 (`.claude-plugin/plugin.json`)                                                                                |
+| Version    | 16.0.1 (`.claude-plugin/plugin.json`)                                                                                |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 39 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
@@ -525,7 +525,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.0.0
+|-- .claude-plugin/plugin.json   manifest, version 16.0.1
 |-- agents/                      14 agents (atlas:<role>)
 |-- skills/                      39 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
