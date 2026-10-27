@@ -252,6 +252,14 @@ firebase-adminsdk*.json
 **/node_modules.nosync.noindex/
 **/node_modules.nosync.noindex/**
 **/node_modules.nosync.noindex
+# No trailing slash: also matches node_modules symlinks (never tracked; install from lockfile).
+**/node_modules
+
+# ---- Local reference library (731 MB of copyrighted ebooks; never shipped) ----
+plugins/programmer/Books/
+
+# ---- Python build metadata ----
+*.egg-info/
 
 # ---- Atlas ephemeral run state (orchestration scratch; never durable) ----
 # docs/ never carries a .run/ subtree (that lives under .atlas/.run/ only), but
