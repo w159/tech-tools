@@ -67,10 +67,10 @@ beforeAll(async () => {
   fake = new FakeGraph({ token: GRAPH_TOKEN, pageSize: 3 });
   await fake.start();
   tmp = tempDir();
-  const env = { GRAPH_TOKEN, GRAPH_BASE_URL: fake.baseUrl };
+  const env = { GRAPH_TOKEN, GRAPH_BASE_URL: fake.baseUrl, GRAPH_ALLOW_UNSAFE_HOST: "1" };
   const p = (n: string): string => join(tmp.dir, n);
   copyFileSync(fixturePath("answers.yaml"), p("answers.yaml"));
-  expect((await cli(["discover", "--out", p("org-model.json")], env)).code).toBe(0);
+  expect((await cli(["discover", "--out", p("org-model.json"), "--min-cell", "0"], env)).code).toBe(0);
   expect((await cli(["plan", "--org", p("org-model.json"), "--answers", p("answers.yaml"), "--out", p("plan.json"), "--policy", p("policy.yaml")], env)).code).toBe(0);
   const applied = await cli(["provision", "--plan", p("plan.json"), "--apply"], env);
   expect(applied.code).toBe(0);

@@ -17,6 +17,13 @@ Release: one merge onto main that adds what main 16.0.0 (ea78927) did not carry.
 - Entra "Revoke sessions" is honored: the check reads `signInSessionsValidFromDateTime` and treats the grant as revoked when it is later than the time the user authenticated upstream (`authTime` on the code or refresh token). A missing value fails closed.
 - `provision` and `parsePlan` reject a Graph application permission whose id is not the built-in id for its value, an unknown `adminConsent.consentType`, and a non-GUID `resourceAppId`; the dry run prints the permission id; the resource filter is OData-escaped.
 - With `--managed-identity-principal-id` the Graph application permissions go to the managed identity only, not also to the gateway service principal. `Application.Read.All` stays: the role map read needs it.
+- `provision --prune` builds its disable and remove role PATCH bodies from the role set after the update PATCH, so one run no longer reverts role edits it just made.
+- Refresh evaluates `policy.yaml` against the claims captured at sign-in (stored on the account record as `policyClaims`), replacing only `roles` and `groups` with live Graph answers. Groups from the sign-in `groups` claim are re-checked live too. Having no app role is no longer revoked on its own: the policy decides, and zero gateway roles still revokes. Disabled, deleted, "Revoke sessions" and removal from a group or role still revoke.
+- A user's direct app role assignments are read live on every check (`GET /users/{oid}/appRoleAssignments`, filtered to the gateway service principal), so removing one takes effect at the next refresh. Role definitions and group-to-role assignments stay cached for `ENTRA_MEMBERSHIP_CACHE_SECONDS`. Each check makes one more Graph call.
+- The shared in-flight Graph token and role map fetches run on their own timeout; one caller's abort or deadline no longer fails the other waiters.
+- `ENTRA_GRAPH_BASE_URL`, `ENTRA_AUTHORITY_HOST` and the admin CLI's `GRAPH_BASE_URL` accept only Microsoft cloud hosts (global, US Government, China) and fail startup with the allowed list otherwise. `ENTRA_ALLOW_UNSAFE_HOST=1` / `GRAPH_ALLOW_UNSAFE_HOST=1` lift this for local test fakes and log a warning.
+- The gateway logs one startup line for the membership check: off, on fail-closed, or a WARNING when `ENTRA_MEMBERSHIP_FAIL_OPEN=1`.
+- `discover` folds user-count buckets and group names smaller than `--min-cell` (default 5, `0` = off) into "other (suppressed)", so counts of 1 do not identify a person.
 
 ## mcp-gateway 0.3.0, armada 2.1.0 - 2026-10-27
 

@@ -148,6 +148,18 @@ describe("provision --apply", () => {
     expect(fake.nonGet()).toEqual([]);
   });
 
+  it("--prune keeps role edits made by the same run (review finding 1)", async () => {
+    await run(planFrom(), { apply: true });
+    const edited = planFrom((d) => {
+      d.roles[0].description = "Edited in the same run as the prune.";
+      d.roles.splice(1, 1);
+    });
+    await run(edited, { apply: true, prune: true });
+    const roles = fake.applications[0]!.appRoles;
+    expect(roles.map((x) => x.value)).toEqual(["it-ops"]);
+    expect(roles[0]!.description).toBe("Edited in the same run as the prune.");
+  });
+
   it("grants a missing Graph permission only, and never removes one", async () => {
     const plan = planFrom();
     await run(plan, { apply: true });

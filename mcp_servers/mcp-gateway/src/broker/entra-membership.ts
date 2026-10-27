@@ -4,9 +4,11 @@
 //   GET  /servicePrincipals?$filter=appId eq '{appId}'&$select=id,appRoles   Application.Read.All
 //   GET  /servicePrincipals/{id}?$select=id,appRoles                         Application.Read.All
 //   GET  /servicePrincipals/{id}/appRoleAssignedTo                           Application.Read.All
+//   GET  /users/{oid}/appRoleAssignments?$filter=resourceId eq {spId}        User.Read.All (live, every check)
 //   POST /users/{oid}/checkMemberGroups  {groupIds}  (transitive, max 20)    GroupMember.Read.All
 //   GET  /users/{oid}?$select=accountEnabled,signInSessionsValidFromDateTime  User.Read.All
 // Docs: learn.microsoft.com/graph/api/serviceprincipal-list-approleassignedto,
+//       learn.microsoft.com/graph/api/user-list-approleassignments,
 //       learn.microsoft.com/graph/api/directoryobject-checkmembergroups,
 //       learn.microsoft.com/graph/api/user-get.
 //
@@ -42,11 +44,24 @@ interface TokenResponse {
   expires_on?: unknown;
 }
 
+// Resolves with p, or rejects as soon as signal aborts. The shared work behind p
+// keeps running for the other waiters.
+function untilAbort<T>(p: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
 // Wraps a raw token source: caches until 5 minutes before expiry (or half the
-// lifetime for very short tokens) and shares one in-flight request.
+// lifetime for very short tokens) and shares one in-flight request. The shared
+// request has its own timeout, so one caller's deadline cannot fail the others.
 function cachingProvider(
   fetchToken: (signal: AbortSignal) => Promise<{ token: string; expiresAtMs: number }>,
   now: () => number,
+  timeoutMs: number,
 ): GraphTokenProvider {
   let cached: { token: string; refreshAtMs: number } | undefined;
   let inFlight: Promise<string> | undefined;
@@ -56,7 +71,7 @@ function cachingProvider(
       inFlight ??= (async () => {
         try {
           const issuedAt = now();
-          const { token, expiresAtMs } = await fetchToken(signal);
+          const { token, expiresAtMs } = await fetchToken(AbortSignal.timeout(timeoutMs));
           const lifetime = Math.max(0, expiresAtMs - issuedAt);
           const skew = Math.min(TOKEN_REFRESH_SKEW_SECONDS * 1000, lifetime / 2);
           cached = { token, refreshAtMs: expiresAtMs - skew };
@@ -65,7 +80,7 @@ function cachingProvider(
           inFlight = undefined;
         }
       })();
-      return inFlight;
+      return untilAbort(inFlight, signal);
     },
     invalidate() {
       cached = undefined;
@@ -101,6 +116,7 @@ export function managedIdentityTokenProvider(opts: {
   clientId?: string;
   fetch?: FetchLike;
   now?: () => number;
+  timeoutMs?: number;
 }): GraphTokenProvider {
   const doFetch = opts.fetch ?? fetch;
   const now = opts.now ?? (() => Date.now());
@@ -117,7 +133,7 @@ export function managedIdentityTokenProvider(opts: {
     }
     if (!res.ok) throw new MembershipUnavailable(`graph_token_http_${res.status}`);
     return parseTokenResponse(((await readJson(res)) ?? {}) as TokenResponse, now);
-  }, now);
+  }, now, opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 }
 
 // OAuth 2.0 client credentials against the tenant token endpoint.
@@ -128,6 +144,7 @@ export function clientCredentialsTokenProvider(opts: {
   clientSecret: string;
   fetch?: FetchLike;
   now?: () => number;
+  timeoutMs?: number;
 }): GraphTokenProvider {
   const doFetch = opts.fetch ?? fetch;
   const now = opts.now ?? (() => Date.now());
@@ -151,7 +168,7 @@ export function clientCredentialsTokenProvider(opts: {
     }
     if (!res.ok) throw new MembershipUnavailable(`graph_token_http_${res.status}`);
     return parseTokenResponse(((await readJson(res)) ?? {}) as TokenResponse, now);
-  }, now);
+  }, now, opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 }
 
 export type MembershipResult =
@@ -173,10 +190,13 @@ export interface EntraMembershipOptions {
   now?: () => number;
 }
 
+// Cached for cacheSeconds: role definitions and which groups hold which role.
+// A user's own direct assignments are never cached; they are read on each check.
 interface RoleMap {
   expiresAtMs: number;
+  spId: string;
+  roleValueById: Map<string, string>;
   groupRoles: Map<string, string[]>;
-  userRoles: Map<string, string[]>;
 }
 
 type GraphReply = { status: number; json: unknown };
@@ -198,18 +218,27 @@ export class EntraMembership {
   // A signInSessionsValidFromDateTime later than that means "Revoke sessions"
   // ran since, so the grant is revoked. Unknown auth time cannot be proven
   // newer, so it counts as revoked too.
-  async resolve(oid: string, authTimeSeconds?: number): Promise<MembershipResult> {
+  // knownGroupIds: groups the user was in at sign-in (e.g. the "groups" claim).
+  // They are re-checked live along with the groups that hold an app role, so a
+  // policy rule on a group that holds no app role still sees the current answer.
+  // No app role is not "revoked" here: the caller evaluates its policy on the
+  // result and treats zero gateway roles as revoked.
+  async resolve(oid: string, authTimeSeconds?: number, knownGroupIds: readonly string[] = []): Promise<MembershipResult> {
     if (!GUID_RE.test(oid)) return { status: "revoked" };
     const signal = AbortSignal.timeout(this.opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     try {
       const map = await this.getRoleMap(signal);
-      const candidateGroups = [...map.groupRoles.keys()];
-      const [user, memberOf] = await Promise.all([this.userState(oid, signal), this.memberGroups(oid, candidateGroups, signal)]);
-      if (!user.enabled || memberOf === "gone") return { status: "revoked" };
+      const candidates = new Set<string>(map.groupRoles.keys());
+      for (const g of knownGroupIds) if (GUID_RE.test(g)) candidates.add(g.toLowerCase());
+      const [user, memberOf, direct] = await Promise.all([
+        this.userState(oid, signal),
+        this.memberGroups(oid, [...candidates], signal),
+        this.directRoles(oid, map, signal),
+      ]);
+      if (!user.enabled || memberOf === "gone" || direct === "gone") return { status: "revoked" };
       if (authTimeSeconds === undefined || user.sessionsValidFromMs > authTimeSeconds * 1000) return { status: "revoked" };
-      const roles = new Set<string>(map.userRoles.get(oid.toLowerCase()) ?? []);
+      const roles = new Set<string>(direct);
       for (const g of memberOf) for (const r of map.groupRoles.get(g.toLowerCase()) ?? []) roles.add(r);
-      if (roles.size === 0) return { status: "revoked" };
       return { status: "ok", appRoles: [...roles].sort(), groupIds: memberOf };
     } catch (err) {
       if (err instanceof MembershipUnavailable) return { status: "unavailable", detail: err.detail };
@@ -245,9 +274,11 @@ export class EntraMembership {
     return { status: res.status, json };
   }
 
+  // The shared load runs on its own timeout, not the first caller's signal; each
+  // caller only abandons its own wait when its signal aborts.
   private getRoleMap(signal: AbortSignal): Promise<RoleMap> {
     if (this.roleMap && this.now() < this.roleMap.expiresAtMs) return Promise.resolve(this.roleMap);
-    this.roleMapInFlight ??= this.loadRoleMap(signal)
+    this.roleMapInFlight ??= this.loadRoleMap(AbortSignal.timeout(this.opts.timeoutMs ?? DEFAULT_TIMEOUT_MS))
       .then((m) => {
         this.roleMap = m;
         return m;
@@ -255,7 +286,29 @@ export class EntraMembership {
       .finally(() => {
         this.roleMapInFlight = undefined;
       });
-    return this.roleMapInFlight;
+    return untilAbort(this.roleMapInFlight, signal);
+  }
+
+  // Follows @odata.nextLink pages and returns every item. A continuation that
+  // leaves the Graph origin we call is rejected.
+  private async pagedValues(firstUrl: string, signal: AbortSignal): Promise<{ status: number; items: unknown[] }> {
+    const items: unknown[] = [];
+    let url: string | undefined = firstUrl;
+    for (let page = 0; url; page++) {
+      if (page >= MAX_PAGES) throw new MembershipUnavailable("graph_too_many_pages");
+      const reply: GraphReply = await this.graphUrl("GET", url, signal);
+      if (reply.status === 404) return { status: 404, items: [] };
+      if (reply.status !== 200) throw new MembershipUnavailable(`graph_http_${reply.status}`);
+      const doc = reply.json as { value?: unknown; "@odata.nextLink"?: unknown } | undefined;
+      if (!doc || !Array.isArray(doc.value)) throw new MembershipUnavailable("graph_invalid_response");
+      items.push(...doc.value);
+      const next = doc["@odata.nextLink"];
+      if (typeof next === "string") {
+        if (new URL(next).origin !== new URL(this.base).origin) throw new MembershipUnavailable("graph_invalid_response");
+        url = next;
+      } else url = undefined;
+    }
+    return { status: 200, items };
   }
 
   private async loadRoleMap(signal: AbortSignal): Promise<RoleMap> {
@@ -277,31 +330,35 @@ export class EntraMembership {
     }
 
     const groupRoles = new Map<string, string[]>();
-    const userRoles = new Map<string, string[]>();
-    let url: string | undefined = `${this.base}/servicePrincipals/${encodeURIComponent(spId)}/appRoleAssignedTo?$top=999`;
-    for (let page = 0; url; page++) {
-      if (page >= MAX_PAGES) throw new MembershipUnavailable("graph_too_many_pages");
-      const reply: GraphReply = await this.graphUrl("GET", url, signal);
-      if (reply.status !== 200) throw new MembershipUnavailable(`graph_http_${reply.status}`);
-      const doc = reply.json as { value?: unknown; "@odata.nextLink"?: unknown } | undefined;
-      if (!doc || !Array.isArray(doc.value)) throw new MembershipUnavailable("graph_invalid_response");
-      for (const a of doc.value as Array<{ appRoleId?: unknown; principalId?: unknown; principalType?: unknown }>) {
-        if (typeof a.appRoleId !== "string" || typeof a.principalId !== "string") continue;
-        const value = roleValueById.get(a.appRoleId.toLowerCase());
-        if (!value) continue; // default access role or a disabled role
-        const target = a.principalType === "Group" ? groupRoles : a.principalType === "User" ? userRoles : undefined;
-        if (!target) continue;
-        const key = a.principalId.toLowerCase();
-        target.set(key, [...(target.get(key) ?? []), value]);
-      }
-      const next = doc["@odata.nextLink"];
-      if (typeof next === "string") {
-        // Only follow a continuation that stays on the Graph origin we call.
-        if (new URL(next).origin !== new URL(this.base).origin) throw new MembershipUnavailable("graph_invalid_response");
-        url = next;
-      } else url = undefined;
+    const assigned = await this.pagedValues(`${this.base}/servicePrincipals/${encodeURIComponent(spId)}/appRoleAssignedTo?$top=999`, signal);
+    if (assigned.status !== 200) throw new MembershipUnavailable(`graph_http_${assigned.status}`);
+    for (const a of assigned.items as Array<{ appRoleId?: unknown; principalId?: unknown; principalType?: unknown }>) {
+      if (typeof a.appRoleId !== "string" || typeof a.principalId !== "string" || a.principalType !== "Group") continue;
+      const value = roleValueById.get(a.appRoleId.toLowerCase());
+      if (!value) continue; // default access role or a disabled role
+      const key = a.principalId.toLowerCase();
+      groupRoles.set(key, [...(groupRoles.get(key) ?? []), value]);
     }
-    return { expiresAtMs: this.now() + this.opts.cacheSeconds * 1000, groupRoles, userRoles };
+    return { expiresAtMs: this.now() + this.opts.cacheSeconds * 1000, spId, roleValueById, groupRoles };
+  }
+
+  // The user's own direct assignments to this app, read live so removing one
+  // takes effect on the next check. The endpoint also lists assignments the user
+  // inherits through groups; those are principalType Group and are ignored here
+  // (checkMemberGroups covers them).
+  private async directRoles(oid: string, map: RoleMap, signal: AbortSignal): Promise<string[] | "gone"> {
+    const filter = encodeURIComponent(`resourceId eq ${map.spId}`);
+    const { status, items } = await this.pagedValues(`${this.base}/users/${encodeURIComponent(oid)}/appRoleAssignments?$filter=${filter}&$top=999`, signal);
+    if (status === 404) return "gone";
+    const out: string[] = [];
+    for (const a of items as Array<{ appRoleId?: unknown; principalId?: unknown; principalType?: unknown; resourceId?: unknown }>) {
+      if (a.principalType !== "User" || typeof a.appRoleId !== "string") continue;
+      if (typeof a.resourceId !== "string" || a.resourceId.toLowerCase() !== map.spId.toLowerCase()) continue;
+      if (typeof a.principalId !== "string" || a.principalId.toLowerCase() !== oid.toLowerCase()) continue;
+      const value = map.roleValueById.get(a.appRoleId.toLowerCase());
+      if (value) out.push(value);
+    }
+    return out;
   }
 
   // enabled is false also when the user does not exist. sessionsValidFromMs is

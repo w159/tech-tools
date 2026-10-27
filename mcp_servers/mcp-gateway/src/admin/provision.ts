@@ -146,6 +146,8 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
   // role value -> id as it exists (or will exist) in the tenant
   const roleIds = new Map<string, string>();
   const removedRoleIds = new Set<string>();
+  // Role set as it stands after the update PATCH; the prune steps build on this, not on the pre-update read.
+  let rolesAfterUpdate: LiveRole[] = [];
 
   if (!app) {
     const body = {
@@ -238,6 +240,7 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
         rolesChanged = true;
       }
     }
+    rolesAfterUpdate = merged;
     if (rolesChanged) {
       patch.appRoles = merged;
       what.push("app roles");
@@ -312,9 +315,7 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
   // ---- prune: retire app roles that left the plan ------------------------
   // Entra requires a role to be disabled before it can be removed.
   if (opts.prune && app && removedRoleIds.size > 0) {
-    const current = (app.appRoles ?? []).map((r) => ({ ...r }));
-    const afterAdd = want.appRoles.filter((w) => !current.some((c) => c.id === w.id || c.value === w.value)).map((w) => ({ ...w }));
-    const all = [...current.map((r) => (removedRoleIds.has(r.id) ? { ...r, isEnabled: false } : r)), ...afterAdd];
+    const all = rolesAfterUpdate.map((r) => (removedRoleIds.has(r.id) ? { ...r, isEnabled: false } : { ...r }));
     const disableBody = { appRoles: all.map((r) => ({ ...r })) };
     await write(
       { method: "PATCH", path: `/applications/${app.id}`, body: disableBody, description: `disable ${removedRoleIds.size} app role(s) before removal` },

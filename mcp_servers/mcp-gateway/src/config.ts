@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { AUTHORITY_HOSTS, GRAPH_HOSTS, isAllowedCloudHost } from "./cloud-hosts.js";
 
 const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -355,10 +356,28 @@ function loadEntraMembership(
   const cacheSeconds = intVar(env, "ENTRA_MEMBERSHIP_CACHE_SECONDS", 300, errors);
   const failOpen = env.ENTRA_MEMBERSHIP_FAIL_OPEN === "1";
 
-  const graphBaseUrl = env.ENTRA_GRAPH_BASE_URL ? parseHttpUrl(env.ENTRA_GRAPH_BASE_URL) : undefined;
-  if (env.ENTRA_GRAPH_BASE_URL && !graphBaseUrl) errors.push("ENTRA_GRAPH_BASE_URL (not an https URL)");
-  const authorityHost = env.ENTRA_AUTHORITY_HOST ? parseHttpUrl(env.ENTRA_AUTHORITY_HOST) : undefined;
-  if (env.ENTRA_AUTHORITY_HOST && !authorityHost) errors.push("ENTRA_AUTHORITY_HOST (not an https URL)");
+  // The bearer token and client secret go to these hosts, so only Microsoft
+  // cloud hosts are accepted. ENTRA_ALLOW_UNSAFE_HOST=1 lifts that for a local
+  // fake in tests and logs a warning.
+  const allowUnsafe = env.ENTRA_ALLOW_UNSAFE_HOST === "1";
+  const cloudUrl = (name: string, allowed: readonly string[]): URL | undefined => {
+    const raw = env[name];
+    if (!raw) return undefined;
+    const u = parseHttpUrl(raw);
+    if (!u) {
+      errors.push(`${name} (not an https URL)`);
+      return undefined;
+    }
+    if (isAllowedCloudHost(u, allowed)) return u;
+    if (!allowUnsafe) {
+      errors.push(`${name} (host must be one of ${allowed.join(", ")}; ENTRA_ALLOW_UNSAFE_HOST=1 is for test fakes only)`);
+      return undefined;
+    }
+    console.error(`[mcp-gateway] WARNING ${name} host "${u.host}" is not a Microsoft cloud host (ENTRA_ALLOW_UNSAFE_HOST=1); use this for tests only`);
+    return u;
+  };
+  const graphBaseUrl = cloudUrl("ENTRA_GRAPH_BASE_URL", GRAPH_HOSTS);
+  const authorityHost = cloudUrl("ENTRA_AUTHORITY_HOST", AUTHORITY_HOSTS);
 
   let managedIdentity: EntraMembershipConfig["managedIdentity"];
   if (Boolean(env.IDENTITY_ENDPOINT) !== Boolean(env.IDENTITY_HEADER)) {
@@ -385,6 +404,15 @@ function loadEntraMembership(
     authorityHost: stripTrailingSlash(authorityHost?.toString() ?? "https://login.microsoftonline.com"),
     ...(managedIdentity ? { managedIdentity } : {}),
   };
+}
+
+// The startup line for the refresh-time membership check: off, on fail-closed,
+// or on FAIL-OPEN (a warning). Holds no ids or secrets.
+export function describeMembershipMode(config: GatewayConfig): { warn: boolean; line: string } {
+  const m = config.broker?.entraMembership;
+  if (!m) return { warn: false, line: "entra membership check: off" };
+  if (m.failOpen) return { warn: true, line: "entra membership check: on, FAIL-OPEN (ENTRA_MEMBERSHIP_FAIL_OPEN=1): refresh succeeds when Graph is unreachable" };
+  return { warn: false, line: "entra membership check: on, fail-closed" };
 }
 
 // RFC 9728 Protected Resource Metadata for direct mode: the IdP itself is the

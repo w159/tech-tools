@@ -12,6 +12,12 @@ export const UPSTREAM_LOGIN_MODEL = "UpstreamLogin";
 const LOGIN_TTL_SECONDS = 600;
 const UID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
+// Single-use values of the ID token carry nothing the policy needs.
+function snapshotClaims(claims: Record<string, unknown>): Record<string, unknown> {
+  const { nonce: _n, at_hash: _a, c_hash: _c, ...rest } = claims;
+  return rest;
+}
+
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"'`]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
@@ -206,6 +212,7 @@ export function createInteractionHandler(deps: InteractionDeps): (req: IncomingM
       idp: deps.upstreamKind,
       tenant: identity.tenant,
       roles,
+      policyClaims: snapshotClaims(identity.policyClaims),
     });
     await deps.logins.upsert(state, { ...record, status: "done", accountId }, LOGIN_TTL_SECONDS);
     redirect(res, `/interaction/${encodeURIComponent(record.uid)}/continue?s=${encodeURIComponent(state)}`);

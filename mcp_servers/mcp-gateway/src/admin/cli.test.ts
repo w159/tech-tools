@@ -17,7 +17,7 @@ beforeAll(async () => {
   fake = new FakeGraph({ token: TOKEN, pageSize: 3 });
   await fake.start();
   ({ dir, cleanup } = tempDir());
-  env = { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: fake.baseUrl };
+  env = { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: fake.baseUrl, GRAPH_ALLOW_UNSAFE_HOST: "1" };
   copyFileSync(fixturePath("answers.yaml"), join(dir, "answers.yaml"));
 });
 afterAll(async () => {
@@ -32,7 +32,7 @@ describe("admin CLI end to end against the fake Graph", () => {
   const outputs: string[] = [];
 
   it("discover -> plan -> provision (dry run) -> provision --apply -> provision --apply", async () => {
-    const d = await cli(["discover", "--out", p("org-model.json")], env);
+    const d = await cli(["discover", "--out", p("org-model.json"), "--min-cell", "0"], env);
     const pl = await cli(["plan", "--org", p("org-model.json"), "--answers", p("answers.yaml"), "--out", p("plan.json"), "--policy", p("policy.yaml")], env);
     expect([d.code, pl.code]).toEqual([0, 0]);
     expect(pl.stdout).toContain('+ application "Contoso MCP Gateway"');
@@ -79,7 +79,7 @@ describe("admin CLI end to end against the fake Graph", () => {
   });
 
   it("GRAPH_TOKEN never appears in stdout, stderr or any written file", async () => {
-    const failing = await cli(["discover", "--out", p("never.json")], { GRAPH_TOKEN: "SECRET-TOKEN-wrong-0005", GRAPH_BASE_URL: fake.baseUrl });
+    const failing = await cli(["discover", "--out", p("never.json"), "--min-cell", "0"], { GRAPH_TOKEN: "SECRET-TOKEN-wrong-0005", GRAPH_BASE_URL: fake.baseUrl, GRAPH_ALLOW_UNSAFE_HOST: "1" });
     expect(failing.code).toBe(1);
     expect(failing.stderr).toContain("HTTP 401");
     outputs.push(failing.stdout, failing.stderr);
@@ -118,7 +118,7 @@ describe("token from the Azure CLI", () => {
     const old = process.env.PATH;
     process.env.PATH = `${stub}:${old}`;
     try {
-      const r = await cli(["discover", "--out", p("from-az.json")], { GRAPH_BASE_URL: fake.baseUrl });
+      const r = await cli(["discover", "--out", p("from-az.json"), "--min-cell", "0"], { GRAPH_BASE_URL: fake.baseUrl, GRAPH_ALLOW_UNSAFE_HOST: "1" });
       expect(r.code).toBe(0);
       expect(r.stdout + r.stderr).not.toContain("SECRET-TOKEN");
       expect(readFileSync(p("from-az.json"), "utf8")).not.toContain("SECRET-TOKEN");
@@ -139,5 +139,22 @@ describe("built CLI (dist/admin/cli.js)", () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("Wrote");
     expect(JSON.parse(readFileSync(p("built-plan.json"), "utf8")).application.displayName).toBe("Contoso MCP Gateway");
+  });
+});
+
+describe("GRAPH_BASE_URL host allowlist (review finding 4)", () => {
+  it("refuses a non-Microsoft host before any token is read or request sent", async () => {
+    const r = await cli(["discover", "--out", p("evil.json")], { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: "https://graph.evil.example" });
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("GRAPH_BASE_URL host must be one of graph.microsoft.com");
+    expect(r.stderr).not.toContain(TOKEN);
+    expect(existsSync(p("evil.json"))).toBe(false);
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it("refuses a loopback fake without GRAPH_ALLOW_UNSAFE_HOST", async () => {
+    const r = await cli(["discover", "--out", p("lo.json")], { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: fake.baseUrl });
+    expect(r.code).toBe(2);
+    expect(fake.requests).toHaveLength(0);
   });
 });

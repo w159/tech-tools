@@ -136,12 +136,18 @@ export class FakeEntraGraph {
       return send(res, 200, { value: assignments.slice(0, 1), "@odata.nextLink": `${this.graphBaseUrl}/servicePrincipals/${SP_ID}/appRoleAssignedTo?$skiptoken=2` });
     }
 
-    const userMatch = /^\/users\/([^/]+)(\/checkMemberGroups)?$/.exec(path);
+    const userMatch = /^\/users\/([^/]+)(\/checkMemberGroups|\/appRoleAssignments)?$/.exec(path);
     if (userMatch) {
       const user = this.users.get(decodeURIComponent(userMatch[1]!));
       if (!user) return send(res, 404, { error: { code: "Request_ResourceNotFound" } });
+      if (rec.method === "GET" && userMatch[2] === "/appRoleAssignments") {
+        // Direct assignments only, filtered like the real $filter=resourceId eq ...
+        if (url.searchParams.get("$filter") !== `resourceId eq ${SP_ID}`) return send(res, 400, { error: "bad_filter" });
+        const oid = decodeURIComponent(userMatch[1]!);
+        return send(res, 200, { value: user.direct.map((appRoleId) => ({ appRoleId, principalId: oid, principalType: "User", resourceId: SP_ID })) });
+      }
       if (rec.method === "GET" && !userMatch[2]) return send(res, 200, { id: userMatch[1], accountEnabled: user.enabled, ...(user.sessionsValidFrom === "" ? {} : { signInSessionsValidFromDateTime: user.sessionsValidFrom ?? "2020-01-01T00:00:00Z" }) });
-      if (rec.method === "POST" && userMatch[2]) {
+      if (rec.method === "POST" && userMatch[2] === "/checkMemberGroups") {
         const ids = (JSON.parse(body) as { groupIds?: string[] }).groupIds ?? [];
         if (ids.length > 20) return send(res, 400, { error: { code: "Request_BadRequest" } });
         return send(res, 200, { value: ids.filter((g) => user.groups.includes(g)) });

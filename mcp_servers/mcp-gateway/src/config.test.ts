@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { directProtectedResourceMetadata, loadConfig } from "./config.js";
+import { describe, expect, it, vi } from "vitest";
+import { describeMembershipMode, directProtectedResourceMetadata, loadConfig } from "./config.js";
 
 const TID = "11111111-1111-1111-1111-111111111111";
 const CID = "22222222-2222-2222-2222-222222222222";
@@ -133,6 +133,40 @@ describe("loadConfig", () => {
         failOpen: true,
         managedIdentity: { endpoint: "http://127.0.0.1:42356/msi/token", header: "hdr" },
       });
+    });
+
+    it("only accepts Microsoft cloud hosts for Graph and the authority (review finding 4)", () => {
+      const on = { ...broker, ENTRA_MEMBERSHIP_CHECK: "1" };
+      for (const host of ["graph.microsoft.com", "graph.microsoft.us", "dod-graph.microsoft.us", "microsoftgraph.chinacloudapi.cn"]) {
+        expect(loadConfig({ ...on, ENTRA_GRAPH_BASE_URL: `https://${host}/v1.0` }).broker?.entraMembership?.graphBaseUrl).toBe(`https://${host}/v1.0`);
+      }
+      for (const host of ["login.microsoftonline.com", "login.microsoftonline.us", "login.chinacloudapi.cn"]) {
+        expect(loadConfig({ ...on, ENTRA_AUTHORITY_HOST: `https://${host}` }).broker?.entraMembership?.authorityHost).toBe(`https://${host}`);
+      }
+      expect(() => loadConfig({ ...on, ENTRA_GRAPH_BASE_URL: "https://graph.evil.example/v1.0" })).toThrow(/ENTRA_GRAPH_BASE_URL \(host must be one of graph\.microsoft\.com/);
+      expect(() => loadConfig({ ...on, ENTRA_GRAPH_BASE_URL: "https://graph.microsoft.com.evil.example/v1.0" })).toThrow(/ENTRA_GRAPH_BASE_URL/);
+      expect(() => loadConfig({ ...on, ENTRA_AUTHORITY_HOST: "https://login.evil.example" })).toThrow(/ENTRA_AUTHORITY_HOST \(host must be one of login\.microsoftonline\.com/);
+      expect(() => loadConfig({ ...on, ENTRA_AUTHORITY_HOST: "http://127.0.0.1:9" })).toThrow(/ENTRA_AUTHORITY_HOST/);
+    });
+
+    it("ENTRA_ALLOW_UNSAFE_HOST=1 allows a local fake and warns", () => {
+      const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      try {
+        const c = loadConfig({ ...broker, ENTRA_MEMBERSHIP_CHECK: "1", ENTRA_ALLOW_UNSAFE_HOST: "1", ENTRA_GRAPH_BASE_URL: "http://127.0.0.1:9/v1.0" });
+        expect(c.broker?.entraMembership?.graphBaseUrl).toBe("http://127.0.0.1:9/v1.0");
+        expect(warn.mock.calls.flat().join(" ")).toMatch(/WARNING ENTRA_GRAPH_BASE_URL host "127\.0\.0\.1:9"/);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("describes the membership mode for the startup line (review finding 3)", () => {
+      expect(describeMembershipMode(loadConfig(broker))).toEqual({ warn: false, line: "entra membership check: off" });
+      expect(describeMembershipMode(loadConfig({ ...broker, ENTRA_MEMBERSHIP_CHECK: "1" }))).toEqual({ warn: false, line: "entra membership check: on, fail-closed" });
+      const open = describeMembershipMode(loadConfig({ ...broker, ENTRA_MEMBERSHIP_CHECK: "1", ENTRA_MEMBERSHIP_FAIL_OPEN: "1" }));
+      expect(open.warn).toBe(true);
+      expect(open.line).toContain("FAIL-OPEN");
+      expect(open.line).not.toContain(TID);
     });
 
     it("needs BROKER_UPSTREAM_KIND=entra", () => {

@@ -2,17 +2,20 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { GRAPH_HOSTS, isAllowedCloudHost } from "../cloud-hosts.js";
 import { discover, summarize, type OrgModel } from "./discover.js";
 import { DEFAULT_GRAPH_BASE_URL, GraphClient, GraphError, resolveToken } from "./graph.js";
 import { AnswersError, makePlan, parsePlan, renderPlanSummary } from "./plan.js";
 import { followUp, provision, ProvisionError } from "./provision.js";
 
 const USAGE = `Usage:
-  node dist/admin/cli.js discover --out org-model.json
+  node dist/admin/cli.js discover --out org-model.json [--min-cell <n>]
   node dist/admin/cli.js plan --org org-model.json --answers answers.yaml --out plan.json --policy policy.yaml
   node dist/admin/cli.js provision --plan plan.json [--apply] [--prune] [--managed-identity-principal-id <id>]
 
-Environment: GRAPH_TOKEN (else the Azure CLI is used), GRAPH_BASE_URL (default ${DEFAULT_GRAPH_BASE_URL}).`;
+discover folds user-count buckets (and group names) smaller than --min-cell (default 5, 0 = off) into "other (suppressed)".
+Environment: GRAPH_TOKEN (else the Azure CLI is used), GRAPH_BASE_URL (default ${DEFAULT_GRAPH_BASE_URL};
+a Microsoft cloud Graph host only, GRAPH_ALLOW_UNSAFE_HOST=1 lifts that for test fakes).`;
 
 export interface CliIo {
   env: NodeJS.ProcessEnv;
@@ -50,9 +53,29 @@ function writeOut(path: string, text: string): void {
   writeFileSync(full, text, "utf8");
 }
 
+// The bearer token goes to this host, so only Microsoft cloud Graph hosts are
+// accepted unless GRAPH_ALLOW_UNSAFE_HOST=1 (test fakes).
+function graphBaseUrl(io: CliIo): string {
+  const raw = io.env.GRAPH_BASE_URL;
+  if (!raw) return DEFAULT_GRAPH_BASE_URL;
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new UsageError("GRAPH_BASE_URL is not a valid URL");
+  }
+  if (isAllowedCloudHost(u, GRAPH_HOSTS)) return raw;
+  if (io.env.GRAPH_ALLOW_UNSAFE_HOST !== "1") {
+    throw new UsageError(`GRAPH_BASE_URL host must be one of ${GRAPH_HOSTS.join(", ")} (GRAPH_ALLOW_UNSAFE_HOST=1 is for test fakes only)`);
+  }
+  io.stderr(`WARNING GRAPH_BASE_URL host "${u.host}" is not a Microsoft cloud host (GRAPH_ALLOW_UNSAFE_HOST=1); use this for tests only\n`);
+  return raw;
+}
+
 async function makeClient(io: CliIo, readOnly: boolean): Promise<GraphClient> {
+  const baseUrl = graphBaseUrl(io); // before resolveToken so a bad host never triggers a token fetch
   const token = await resolveToken(io.env);
-  return new GraphClient({ baseUrl: io.env.GRAPH_BASE_URL || DEFAULT_GRAPH_BASE_URL, token, readOnly });
+  return new GraphClient({ baseUrl, token, readOnly });
 }
 
 export async function runCli(argv: string[], io: CliIo): Promise<number> {
@@ -60,9 +83,11 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
   try {
     switch (command) {
       case "discover": {
-        const flags = parseFlags(rest, ["out"], []);
+        const flags = parseFlags(rest, ["out", "min-cell"], []);
         const out = required(flags, "out");
-        const model = await discover(await makeClient(io, true));
+        const minRaw = flags["min-cell"];
+        if (typeof minRaw === "string" && !/^\d+$/.test(minRaw)) throw new UsageError("--min-cell must be a non-negative integer");
+        const model = await discover(await makeClient(io, true), typeof minRaw === "string" ? { minCell: Number(minRaw) } : {});
         writeOut(out, `${JSON.stringify(model, null, 2)}\n`);
         io.stdout(`${summarize(model)}\nWrote ${out}\n`);
         return 0;

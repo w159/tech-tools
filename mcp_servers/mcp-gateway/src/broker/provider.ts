@@ -110,7 +110,8 @@ export function createBroker(opts: BrokerOptions): Broker {
         outcome,
       });
     };
-    const result = await membership.resolve(acct.sub, authTimeSeconds);
+    const signedInGroups = Array.isArray(acct.policyClaims?.groups) ? acct.policyClaims.groups.filter((g): g is string => typeof g === "string") : [];
+    const result = await membership.resolve(acct.sub, authTimeSeconds, signedInGroups);
     if (result.status === "unavailable") {
       if (membershipCfg.failOpen) {
         fail("membership_check_unavailable", "ok");
@@ -123,12 +124,17 @@ export function createBroker(opts: BrokerOptions): Broker {
       fail("membership_revoked", "backend_error");
       return false;
     }
+    // Same claims the policy saw at sign-in; only roles and groups are replaced
+    // by the live answers. Accounts stored before the snapshot existed fall back
+    // to the identity fields they hold.
     const roles = resolveRoles(policy, {
+      ...(acct.policyClaims ?? {
+        ...(acct.tenant ? { tid: acct.tenant } : {}),
+        ...(acct.email ? { email: acct.email } : {}),
+      }),
+      oid: acct.sub,
       roles: result.appRoles,
       groups: result.groupIds,
-      oid: acct.sub,
-      ...(acct.tenant ? { tid: acct.tenant } : {}),
-      ...(acct.email ? { email: acct.email } : {}),
     });
     if (roles.length === 0) {
       fail("membership_revoked", "backend_error");

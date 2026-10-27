@@ -66,8 +66,9 @@ matching backend only, by the `envPrefixes` in the catalog. **secret.**
 | `ENTRA_SP_OBJECT_ID` | looked up by app id | Object id of the app's service principal. Skips one Graph lookup |
 | `ENTRA_MEMBERSHIP_CACHE_SECONDS` | `300` | How long a resolved membership is reused |
 | `ENTRA_MEMBERSHIP_FAIL_OPEN` | off | `1` lets a refresh succeed when Graph cannot be reached or answers an error (audited) |
-| `ENTRA_GRAPH_BASE_URL` | `https://graph.microsoft.com/v1.0` | Graph endpoint; change for national clouds or tests |
-| `ENTRA_AUTHORITY_HOST` | `https://login.microsoftonline.com` | Token endpoint host for the client credentials flow |
+| `ENTRA_GRAPH_BASE_URL` | `https://graph.microsoft.com/v1.0` | Graph endpoint for national clouds. Host must be `graph.microsoft.com`, `graph.microsoft.us`, `dod-graph.microsoft.us` or `microsoftgraph.chinacloudapi.cn`; startup fails otherwise |
+| `ENTRA_AUTHORITY_HOST` | `https://login.microsoftonline.com` | Token endpoint host for the client credentials flow. Host must be `login.microsoftonline.com`, `login.microsoftonline.us` or `login.chinacloudapi.cn` |
+| `ENTRA_ALLOW_UNSAFE_HOST` | off | `1` accepts any other host for the two settings above. Test fakes only; logs a warning |
 | `ENTRA_MANAGED_IDENTITY_CLIENT_ID` | system-assigned | Client id of a user-assigned managed identity to use for Graph |
 | `IDENTITY_ENDPOINT`, `IDENTITY_HEADER` | set by Azure | Set both or neither. When present the managed identity gets the Graph token; otherwise the app's client secret does. Container Apps sets them when a managed identity is enabled |
 | `GOOGLE_GROUPS_LOOKUP` | off | `1` resolves Google groups at sign-in; only with `BROKER_UPSTREAM_KIND=google` |
@@ -121,15 +122,20 @@ Graph again who the user is, using application permissions
 `Application.Read.All`, `GroupMember.Read.All` and `User.Read.All`. The admin
 tool grants them (below). The token comes from the managed identity when
 `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` are set, else from the app's client
-credentials. Results are cached for `ENTRA_MEMBERSHIP_CACHE_SECONDS`.
+credentials. Role definitions and group-to-role assignments are cached for
+`ENTRA_MEMBERSHIP_CACHE_SECONDS`; the user's own account state, group membership and
+direct app role assignments are read live on every check. A refresh evaluates
+`policy.yaml` on the claims captured at sign-in, with `roles` and `groups` replaced by the
+live answers. At startup the gateway logs whether the check is off, on fail-closed or
+FAIL-OPEN (a warning).
 
 What revokes access: the user is disabled or deleted, an Entra "Revoke sessions"
 (`signInSessionsValidFromDateTime`) is later than the user's upstream sign-in, or no app role of the
 gateway app reaches the user (directly or through an assigned group) and the
 policy then resolves to no role. A changed set of roles is
 stamped into the new access token. Revocation takes effect at the next refresh,
-at most one access token lifetime later (`BROKER_ACCESS_TOKEN_TTL`), plus the
-cache time.
+at most one access token lifetime later (`BROKER_ACCESS_TOKEN_TTL`). Removing a group
+from an app role takes up to the cache time; removing a direct assignment does not wait.
 
 Fail-closed is the default. If Graph or the token source cannot be reached, or
 Graph answers an error, the refresh fails with `invalid_grant` and the client
@@ -145,10 +151,13 @@ Lines hold no user ids, group ids or tokens beyond the usual actor fields.
 
 `dist/admin/cli.js` (after `npm run build`) turns a directory into the Entra
 state the gateway needs. It reads `GRAPH_TOKEN`, else the Azure CLI. `discover`
-and a `provision` dry run only read.
+and a `provision` dry run only read. `GRAPH_BASE_URL` must be a Microsoft cloud Graph host
+(`GRAPH_ALLOW_UNSAFE_HOST=1` for test fakes). `discover` writes counts only and folds any
+bucket (or group name) with fewer than `--min-cell` users (default 5, `0` turns it off) into
+"other (suppressed)", so a single-person job title or office is not disclosed.
 
 ```bash
-node dist/admin/cli.js discover --out org-model.json
+node dist/admin/cli.js discover --out org-model.json [--min-cell 5]
 node dist/admin/cli.js plan --org org-model.json --answers answers.yaml --out plan.json --policy policy.yaml
 node dist/admin/cli.js provision --plan plan.json
 node dist/admin/cli.js provision --plan plan.json --apply [--prune] [--managed-identity-principal-id <id>]

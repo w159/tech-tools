@@ -43,6 +43,28 @@ export interface OrgModel {
 }
 
 export const UNSET = "(unset)";
+export const SUPPRESSED = "other (suppressed)";
+// Cells smaller than this identify individuals (the only "Chief Compliance
+// Officer", the only person in an office). 0 turns suppression off.
+export const DEFAULT_MIN_CELL = 5;
+
+export interface DiscoverOptions {
+  minCell?: number;
+}
+
+// Folds every bucket with 1..min-1 users into one "other (suppressed)" bucket.
+// ponytail: the folded total can itself be under min; add secondary suppression if that matters.
+function suppressSmall(counts: Counts, min: number): Counts {
+  if (min <= 0) return counts;
+  const out: Counts = {};
+  let folded = 0;
+  for (const [k, n] of Object.entries(counts)) {
+    if (k !== UNSET && n < min) folded += n;
+    else out[k] = n;
+  }
+  if (folded > 0) out[SUPPRESSED] = folded;
+  return out;
+}
 
 interface UserRow {
   department?: string | null;
@@ -77,7 +99,8 @@ async function optional<T>(warnings: string[], what: string, fn: () => Promise<T
   }
 }
 
-export async function discover(client: GraphClient): Promise<OrgModel> {
+export async function discover(client: GraphClient, opts: DiscoverOptions = {}): Promise<OrgModel> {
+  const minCell = opts.minCell ?? DEFAULT_MIN_CELL;
   const orgs = await client.get<{ value: Array<{ id: string }> }>("/organization?$select=id");
   const tenantId = orgs.value[0]?.id;
   if (!tenantId) throw new GraphError("GET /organization returned no tenant");
@@ -103,7 +126,7 @@ export async function discover(client: GraphClient): Promise<OrgModel> {
     bump(u.byOfficeLocation, row.officeLocation);
   }
   for (const k of ["byDepartment", "byCompanyName", "byDivision", "byCostCenter", "byJobTitle", "byOfficeLocation"] as const) {
-    u[k] = sorted(u[k]);
+    u[k] = sorted(suppressSmall(u[k], minCell));
   }
 
   const rawGroups = await client.getAll<{
@@ -119,7 +142,8 @@ export async function discover(client: GraphClient): Promise<OrgModel> {
     const count = Number((await client.getText(`/groups/${encodeURIComponent(g.id)}/transitiveMembers/$count`, EVENTUAL)).trim());
     groups.push({
       id: g.id,
-      displayName: g.displayName,
+      // A small group's name can point at a person; its id still identifies it.
+      displayName: minCell > 0 && Number.isFinite(count) && count < minCell ? `${SUPPRESSED} (group ${g.id.slice(0, 8)})` : g.displayName,
       securityEnabled: g.securityEnabled === true,
       mailEnabled: g.mailEnabled === true,
       groupTypes: [...(g.groupTypes ?? [])].sort(),

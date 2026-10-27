@@ -41,7 +41,7 @@ cd mcp_servers/mcp-gateway
 node dist/admin/cli.js discover --out org-model.json
 ```
 
-Read `org-model.json` and summarize it for the admin from what is actually in the file: departments, companies, and groups, with member counts where present. Do not assume field names; inspect the file. Report what the tool printed if it fails (a 403 means the signed-in account lacks directory read rights).
+Read `org-model.json` and summarize it for the admin from what is actually in the file: departments, companies, and groups, with member counts where present. Do not assume field names; inspect the file. `discover` folds counts and group names under 5 users into "other (suppressed)" so small cells do not identify people; group ids stay in the file, and `--min-cell 0` turns this off if the admin needs every group name and keeps the file private. Report what the tool printed if it fails (a 403 means the signed-in account lacks directory read rights).
 
 ## Step 3: gateway URL
 
