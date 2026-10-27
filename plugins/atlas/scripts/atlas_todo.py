@@ -1894,8 +1894,25 @@ def channel_board(root: Optional[str], channel: str) -> dict:
 # --- CLI -----------------------------------------------------------------------
 
 
+_USAGE = """usage: atlas_todo.py <command> [flags]
+
+commands:
+  list, counts, add, set, scaffold, claim, complete, status, remove, carry
+  member-finish, claim-paths, release-paths, claims, conflicts
+  note, notes, inbox, channels, channel-open, channel-reap, channel-board
+  help
+
+common flags: --root --session --id --owner --status --evidence --to --item
+              --channel --kind --paths
+Output is one JSON object; exit 0 when ok. Run a command with no args for defaults.
+"""
+
+
 def _cli(argv: Optional[List[str]] = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
+    if args and args[0] in ("--help", "-h", "help"):
+        print(_USAGE)
+        return 0
     flags: Dict[str, str] = {}
     positional: List[str] = []
     i = 0
