@@ -11,6 +11,7 @@ Release: atlas 16.0.0, armada 2.0.0, marketplace 5.0.0. Relative to main 15.2.1 
 ### Added
 
 - Worker teams: `atlas_mux` claude workers get `--allowedTools` scoped by `tools_profile` (read, edit, exec; `Bash(cmd *)` rules for test runners and read-only git); `--tools-profile` flag on spawn and run-worker. `atlas_panefeed` tolerates non-dict stream events (`permission_denied`).
+  - `claude-bg` workers (`_spawn_claude_bg`) now get the same scoped rules: `worker_allow(tools_profile)` is merged into the `--settings` `permissions.allow` list, so a `dontAsk` worker can run its verification commands.
 - Shared gate rules in `atlas_scope.py` (`is_target_code`, `is_scratch_path`, `is_verification_command`, ...) used by the tripwire, Stop gate and delegation prewarn.
 - `hooks/event_dispatch.py`: one hook process per PreToolUse/PostToolUse event; deny > ask > allow, additionalContext concatenated in order. Measured Pre+Post blocking time per call: Bash 303 ms -> 167 ms, Edit 261 -> 105, Read 182 -> 107.
 - `atlas_doctor` recognizes `synced` (claude.ai) and `--plugin-dir` loads and tolerates a missing `installed_plugins.json`.
@@ -29,10 +30,6 @@ Release: atlas 16.0.0, armada 2.0.0, marketplace 5.0.0. Relative to main 15.2.1 
 ### Verified
 
 - Hermetic tests: `ATLAS_*`/`CLAUDE_*` scrubbed in `_test_isolation`, root-safe chmod test, fake plugin registry, path-independent fixtures, omp stubs, deterministic hook-bridge clock; `InstalledParityContract` opt-in via `ATLAS_CHECK_INSTALL_PARITY=1`.
-
-### Known gaps
-
-- The `claude-bg` transport (`_spawn_claude_bg`) does not yet pass the tools profile.
 
 ## 15.2.1 - 2026-10-26
 

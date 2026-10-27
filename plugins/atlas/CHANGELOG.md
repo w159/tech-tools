@@ -13,6 +13,7 @@
 ### Added
 
 - Worker teams: claude workers get `--allowedTools` scoped by the member's `tools_profile` (read, edit, exec; `Bash(cmd *)` rules for test runners and read-only git). New `--tools-profile` flag on `atlas_mux` spawn and run-worker.
+  - `claude-bg` workers (`_spawn_claude_bg`) now get the same scoped rules: `worker_allow(tools_profile)` is merged into the `--settings` `permissions.allow` list, so a `dontAsk` worker can run its verification commands.
 - Shared gate rules in `atlas_scope.py` (`is_target_code`, `is_scratch_path`, `is_verification_command` and related predicates), used by the tripwire, the Stop gate and the delegation prewarn.
 - `hooks/event_dispatch.py` runs the PreToolUse and PostToolUse Python hooks in one process per event. Measured Pre+Post blocking time per call: Bash 303 ms -> 167 ms, Edit 261 -> 105, Read 182 -> 107.
 - `atlas_doctor` recognizes `synced` (claude.ai) and `--plugin-dir` loads and tolerates a missing `installed_plugins.json`.
@@ -33,10 +34,6 @@
 - `atlas_panefeed` no longer crashes on non-dict stream events such as `permission_denied`.
 - `types/index.d.ts` declares `atlas.todoExpanded`, so `claude plugin validate plugins/atlas` passes.
 - CLAUDE.md effort-alias claim corrected; connector counts fixed in manifests and docs.
-
-### Known gaps
-
-- The `claude-bg` worker transport (`_spawn_claude_bg`) does not yet pass the tools profile.
 
 - Detail: `docs/CHANGELOG.md`.
 

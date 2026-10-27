@@ -1062,9 +1062,22 @@ def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> 
         # permission-class mismatch (the interactive lead runs the accepting side); the
         # allow rules cover the brief's two mandatory actions (board-note Bash call,
         # claude-mem MCP search) so an unattended worker never prompts on them
+        # plus worker_allow(tools_profile): the same scoped rules a pane worker gets via --allowedTools,
+        # so a dontAsk claude-bg worker can run its verification commands
         "--settings",
-        '{"crossSessionInbound":"accept","permissions":{"allow":'
-        '["Bash(python3 *atlas_todo.py*)","mcp__claude_mem_mcp_search"]}}',
+        json.dumps(
+            {
+                "crossSessionInbound": "accept",
+                "permissions": {
+                    "allow": [
+                        "Bash(python3 *atlas_todo.py*)",
+                        "mcp__claude_mem_mcp_search",
+                        *worker_allow(getattr(args, "tools_profile", None)),
+                    ]
+                },
+            },
+            separators=(",", ":"),
+        ),
     ]
     if model:
         argv += ["--model", model]
