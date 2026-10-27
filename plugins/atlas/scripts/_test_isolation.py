@@ -72,3 +72,17 @@ ISOLATED_ENV = {
     k: os.environ[k]
     for k in ("ATLAS_HOME", "ATLAS_DB", "ATLAS_DASHBOARD_DB", "ATLAS_HOOKSTATE_DIR", "TMUX_TMPDIR")
 }
+
+# Tests that build a "real project" under $HOME need HOME outside the scratch roots: atlas treats every
+# path under /tmp or /var/folders as scratch by design (atlas_scope.SCRATCH_ROOTS), so with HOME there
+# (a CI runner or `HOME=$(mktemp -d)`) those fixtures can never arm and the tests fail for the host,
+# not the code. They skip with this reason instead.
+_SCRATCH_ROOTS = ("/tmp", "/private/tmp", "/var/folders", "/private/var/folders")
+_real_home = os.path.realpath(REAL_HOME)
+HOME_UNDER_SCRATCH = any(
+    h == r or h.startswith(r + os.sep) for h in (REAL_HOME, _real_home) for r in _SCRATCH_ROOTS
+)
+HOME_UNDER_SCRATCH_REASON = (
+    f"HOME ({REAL_HOME}) is under a scratch root; atlas treats paths there as scratch, "
+    "so a project fixture under HOME cannot arm. Run with HOME outside /tmp and /var/folders."
+)

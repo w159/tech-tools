@@ -4009,6 +4009,7 @@ class StopGateArmingTest(unittest.TestCase):
             dict(session_id=self.SESSION, cwd=str(self.root)), self.env
         ).stdout
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_sed_only_edit_in_docless_armed_project_blocks_on_m(self):
         self.repo()
         self.start()
@@ -4033,6 +4034,7 @@ class StopGateArmingTest(unittest.TestCase):
             self.sed_edit()
             self.assertEqual(self.gate(), "")
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_shell_code_edit_demands_no_docs_files_in_docless_project(self):
         self.repo()
         self.start(orchestrating=True)
@@ -4071,6 +4073,7 @@ class StopGateArmingTest(unittest.TestCase):
         for frag in ("CHANGELOG.md is missing", "ROADMAP.md is missing"):
             self.assertNotIn(frag, out)
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_non_git_project_falls_back_to_tool_events(self):
         self.put("package.json", "{}\n")  # an armed marker, but not a repo
         self.put("app.py", "x = 1\n")

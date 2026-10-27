@@ -47,6 +47,7 @@ class GatesArmedTest(unittest.TestCase):
     def test_no_marker_under_home_false(self):
         self.assertFalse(atlas_scope.gates_armed(self._home_dir()))
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_marker_in_ancestor_under_home_true(self):
         d = self._home_dir()
         Path(d, "package.json").write_text("{}")
@@ -76,6 +77,7 @@ class GatesArmedTest(unittest.TestCase):
         conn.commit()
         conn.close()
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_db_history_arms_markerless_dir(self):
         d = os.path.realpath(self._home_dir())
         self.assertFalse(atlas_scope.gates_armed(d))

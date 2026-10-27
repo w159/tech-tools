@@ -277,6 +277,7 @@ class TodosTest(WorkTestBase):
         self.assertEqual(status, 400)
         self.assertFalse(body["ok"])
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_junk_root_covers_temp_worktrees_and_plugin_cache(self):
         home = os.path.expanduser("~")
         for p in (
