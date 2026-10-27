@@ -1,0 +1,713 @@
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-api-patterns/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-api-patterns/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-api-patterns/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-api-patterns/SKILL.md	2026-10-27 08:00:32.600222714 +0000
+@@ -1,6 +1,6 @@
+ ---
+ name: pandadoc-api-patterns
+-description: Work with PandaDoc MCP tools: available tools, API key authentication, the hosted MCP server connection, documentation search, rate limiting, and error handling for the PandaDoc API.
++description: "Work with PandaDoc MCP tools: available tools, API key authentication, the hosted MCP server connection, documentation search, rate limiting, and error handling for the PandaDoc API."
+ when_to_use:
+   - Connecting to the PandaDoc hosted MCP server and authenticating with an API key
+   - Looking up available PandaDoc MCP tools and parameters
+@@ -246,7 +246,7 @@
+ 
+ ## Related Skills
+ 
+-- [PandaDoc Documents](../documents/SKILL.md) - Document management
+-- [PandaDoc Templates](../templates/SKILL.md) - Template library
+-- [PandaDoc Recipients](../recipients/SKILL.md) - Recipient and signature management
+-- [PandaDoc Proposals](../proposals/SKILL.md) - MSP proposal workflows
++- [PandaDoc Documents](../pandadoc-documents/SKILL.md) - Document management
++- [PandaDoc Templates](../pandadoc-templates/SKILL.md) - Template library
++- [PandaDoc Recipients](../pandadoc-recipients/SKILL.md) - Recipient and signature management
++- [PandaDoc Proposals](../pandadoc-proposals/SKILL.md) - MSP proposal workflows
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-documents/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-documents/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-documents/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-documents/SKILL.md	2026-10-27 08:00:32.597788481 +0000
+@@ -324,7 +324,7 @@
+ 
+ ## Related Skills
+ 
+-- [PandaDoc API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [PandaDoc Templates](../templates/SKILL.md) - Template library and management
+-- [PandaDoc Recipients](../recipients/SKILL.md) - Recipient and signature management
+-- [PandaDoc Proposals](../proposals/SKILL.md) - MSP proposal workflows
++- [PandaDoc API Patterns](../pandadoc-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [PandaDoc Templates](../pandadoc-templates/SKILL.md) - Template library and management
++- [PandaDoc Recipients](../pandadoc-recipients/SKILL.md) - Recipient and signature management
++- [PandaDoc Proposals](../pandadoc-proposals/SKILL.md) - MSP proposal workflows
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-proposals/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-proposals/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-proposals/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-proposals/SKILL.md	2026-10-27 08:00:32.589772294 +0000
+@@ -1,6 +1,6 @@
+ ---
+ name: pandadoc-proposals
+-description: Build MSP proposal workflows in PandaDoc: managed service agreements (MSAs), statements of work (SOWs), hardware quotes, and project proposals with content variables, pricing tables, and pipeline tracking.
++description: "Build MSP proposal workflows in PandaDoc: managed service agreements (MSAs), statements of work (SOWs), hardware quotes, and project proposals with content variables, pricing tables, and pipeline tracking."
+ when_to_use:
+   - Creating MSAs, SOWs, hardware quotes, or project proposals in PandaDoc
+   - Configuring content variables and pricing tables for MSP proposals
+@@ -352,7 +352,7 @@
+ 
+ ## Related Skills
+ 
+-- [PandaDoc API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [PandaDoc Documents](../documents/SKILL.md) - Document creation and lifecycle
+-- [PandaDoc Templates](../templates/SKILL.md) - Template library for proposals
+-- [PandaDoc Recipients](../recipients/SKILL.md) - Recipient management for multi-party signing
++- [PandaDoc API Patterns](../pandadoc-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [PandaDoc Documents](../pandadoc-documents/SKILL.md) - Document creation and lifecycle
++- [PandaDoc Templates](../pandadoc-templates/SKILL.md) - Template library for proposals
++- [PandaDoc Recipients](../pandadoc-recipients/SKILL.md) - Recipient management for multi-party signing
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-recipients/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-recipients/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-recipients/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-recipients/SKILL.md	2026-10-27 08:00:32.591240626 +0000
+@@ -1,6 +1,6 @@
+ ---
+ name: pandadoc-recipients
+-description: Manage PandaDoc recipients and signatures: add recipients to documents, set signing order, track who has signed, and handle multi-party and multi-signer agreements.
++description: "Manage PandaDoc recipients and signatures: add recipients to documents, set signing order, track who has signed, and handle multi-party and multi-signer agreements."
+ when_to_use:
+   - Adding recipients to a PandaDoc document and setting signing order
+   - Tracking signature status and who has signed
+@@ -261,7 +261,7 @@
+ 
+ ## Related Skills
+ 
+-- [PandaDoc API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [PandaDoc Documents](../documents/SKILL.md) - Document creation and management
+-- [PandaDoc Templates](../templates/SKILL.md) - Template roles and fields
+-- [PandaDoc Proposals](../proposals/SKILL.md) - MSP proposal workflows with recipients
++- [PandaDoc API Patterns](../pandadoc-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [PandaDoc Documents](../pandadoc-documents/SKILL.md) - Document creation and management
++- [PandaDoc Templates](../pandadoc-templates/SKILL.md) - Template roles and fields
++- [PandaDoc Proposals](../pandadoc-proposals/SKILL.md) - MSP proposal workflows with recipients
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-templates/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-templates/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pandadoc-templates/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pandadoc-templates/SKILL.md	2026-10-27 08:00:32.595099250 +0000
+@@ -229,7 +229,7 @@
+ 
+ ## Related Skills
+ 
+-- [PandaDoc API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [PandaDoc Documents](../documents/SKILL.md) - Creating documents from templates
+-- [PandaDoc Recipients](../recipients/SKILL.md) - Managing recipients in documents
+-- [PandaDoc Proposals](../proposals/SKILL.md) - MSP proposal workflows
++- [PandaDoc API Patterns](../pandadoc-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [PandaDoc Documents](../pandadoc-documents/SKILL.md) - Creating documents from templates
++- [PandaDoc Recipients](../pandadoc-recipients/SKILL.md) - Managing recipients in documents
++- [PandaDoc Proposals](../pandadoc-proposals/SKILL.md) - MSP proposal workflows
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pax8-api-patterns/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pax8-api-patterns/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pax8-api-patterns/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pax8-api-patterns/SKILL.md	2026-10-27 08:00:32.602553206 +0000
+@@ -1,6 +1,6 @@
+ ---
+ name: pax8-api-patterns
+-description: Work with the Pax8 MCP tools: available tools, parameters, pagination, sorting, filtering, rate limiting, error handling, and the hosted MCP server connection covering all 15 Pax8 MCP tools.
++description: "Work with the Pax8 MCP tools: available tools, parameters, pagination, sorting, filtering, rate limiting, error handling, and the hosted MCP server connection covering all 15 Pax8 MCP tools."
+ when_to_use:
+   - Connecting to the Pax8 hosted MCP server and authenticating
+   - Looking up available Pax8 MCP tools, parameters, and best practices
+@@ -284,8 +284,8 @@
+ 
+ ## Related Skills
+ 
+-- [Pax8 Companies](../companies/SKILL.md) - Company management
+-- [Pax8 Products](../products/SKILL.md) - Product catalog
+-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Subscription lifecycle
+-- [Pax8 Orders](../orders/SKILL.md) - Order management
+-- [Pax8 Invoices](../invoices/SKILL.md) - Invoice and billing
++- [Pax8 Companies](../pax8-companies/SKILL.md) - Company management
++- [Pax8 Products](../pax8-products/SKILL.md) - Product catalog
++- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Subscription lifecycle
++- [Pax8 Orders](../pax8-orders/SKILL.md) - Order management
++- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Invoice and billing
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pax8-companies/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pax8-companies/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pax8-companies/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pax8-companies/SKILL.md	2026-10-27 08:00:32.598527209 +0000
+@@ -201,8 +201,8 @@
+ 
+ ## Related Skills
+ 
+-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Subscription management per company
+-- [Pax8 Orders](../orders/SKILL.md) - Ordering products for companies
+-- [Pax8 Invoices](../invoices/SKILL.md) - Company billing and invoices
+-- [Pax8 Products](../products/SKILL.md) - Product catalog
++- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Subscription management per company
++- [Pax8 Orders](../pax8-orders/SKILL.md) - Ordering products for companies
++- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Company billing and invoices
++- [Pax8 Products](../pax8-products/SKILL.md) - Product catalog
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pax8-invoices/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pax8-invoices/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pax8-invoices/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pax8-invoices/SKILL.md	2026-10-27 08:00:32.595814793 +0000
+@@ -217,8 +217,8 @@
+ 
+ ## Related Skills
+ 
+-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Subscription details for invoice items
+-- [Pax8 Companies](../companies/SKILL.md) - Company attribution for billing
+-- [Pax8 Products](../products/SKILL.md) - Product pricing for margin analysis
+-- [Pax8 Orders](../orders/SKILL.md) - Order-to-invoice tracking
++- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Subscription details for invoice items
++- [Pax8 Companies](../pax8-companies/SKILL.md) - Company attribution for billing
++- [Pax8 Products](../pax8-products/SKILL.md) - Product pricing for margin analysis
++- [Pax8 Orders](../pax8-orders/SKILL.md) - Order-to-invoice tracking
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pax8-orders/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pax8-orders/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pax8-orders/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pax8-orders/SKILL.md	2026-10-27 08:00:32.599280330 +0000
+@@ -203,8 +203,8 @@
+ 
+ ## Related Skills
+ 
+-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [Pax8 Products](../products/SKILL.md) - Product catalog and pricing
+-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Managing resulting subscriptions
+-- [Pax8 Companies](../companies/SKILL.md) - Company management
+-- [Pax8 Invoices](../invoices/SKILL.md) - Billing for orders
++- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [Pax8 Products](../pax8-products/SKILL.md) - Product catalog and pricing
++- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Managing resulting subscriptions
++- [Pax8 Companies](../pax8-companies/SKILL.md) - Company management
++- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Billing for orders
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pax8-products/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pax8-products/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pax8-products/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pax8-products/SKILL.md	2026-10-27 08:00:32.592725373 +0000
+@@ -240,8 +240,8 @@
+ 
+ ## Related Skills
+ 
+-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Active product subscriptions
+-- [Pax8 Orders](../orders/SKILL.md) - Ordering products
+-- [Pax8 Companies](../companies/SKILL.md) - Client company management
+-- [Pax8 Invoices](../invoices/SKILL.md) - Billing for products
++- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Active product subscriptions
++- [Pax8 Orders](../pax8-orders/SKILL.md) - Ordering products
++- [Pax8 Companies](../pax8-companies/SKILL.md) - Client company management
++- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Billing for products
+diff -ruN a/plugins/armada/skills/armada/departments/finance/skills/pax8-subscriptions/SKILL.md b/plugins/armada/skills/armada/departments/finance/skills/pax8-subscriptions/SKILL.md
+--- a/plugins/armada/skills/armada/departments/finance/skills/pax8-subscriptions/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/finance/skills/pax8-subscriptions/SKILL.md	2026-10-27 08:00:32.593573861 +0000
+@@ -217,8 +217,8 @@
+ 
+ ## Related Skills
+ 
+-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
+-- [Pax8 Companies](../companies/SKILL.md) - Company management
+-- [Pax8 Products](../products/SKILL.md) - Product catalog and pricing
+-- [Pax8 Orders](../orders/SKILL.md) - Creating new subscriptions via orders
+-- [Pax8 Invoices](../invoices/SKILL.md) - Billing for subscriptions
++- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
++- [Pax8 Companies](../pax8-companies/SKILL.md) - Company management
++- [Pax8 Products](../pax8-products/SKILL.md) - Product catalog and pricing
++- [Pax8 Orders](../pax8-orders/SKILL.md) - Creating new subscriptions via orders
++- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Billing for subscriptions
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/agents/procurement-specialist.md b/plugins/armada/skills/armada/departments/it-operations/agents/procurement-specialist.md
+--- a/plugins/armada/skills/armada/departments/it-operations/agents/procurement-specialist.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/agents/procurement-specialist.md	2026-10-27 08:12:42.900779424 +0000
+@@ -95,5 +95,5 @@
+ 
+ ## Related Skills
+ 
+-- [ConnectWise Manage Product Catalog](../skills/product-catalog/SKILL.md)  -  full field reference, recipes, and patch patterns
+-- [ConnectWise API Patterns](../skills/api-patterns/SKILL.md)  -  CW conditions query syntax and JSON Patch rules
++- [ConnectWise Manage Product Catalog](../skills/psa-product-catalog/SKILL.md)  -  full field reference, recipes, and patch patterns
++- [ConnectWise API Patterns](../skills/psa-api-patterns/SKILL.md)  -  CW conditions query syntax and JSON Patch rules
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/auvik-alerts/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/auvik-alerts/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/auvik-alerts/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/auvik-alerts/SKILL.md	2026-10-27 08:00:32.604267843 +0000
+@@ -102,6 +102,6 @@
+ 
+ ## Related Skills
+ 
+-- [devices](../devices/SKILL.md)
+-- [networks](../networks/SKILL.md)
+-- [api-patterns](../api-patterns/SKILL.md)
++- [devices](../auvik-devices/SKILL.md)
++- [networks](../auvik-networks/SKILL.md)
++- [api-patterns](../auvik-api-patterns/SKILL.md)
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/auvik-api-patterns/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/auvik-api-patterns/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/auvik-api-patterns/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/auvik-api-patterns/SKILL.md	2026-10-27 08:00:32.619820957 +0000
+@@ -134,6 +134,6 @@
+ 
+ ## Related Skills
+ 
+-- [devices](../devices/SKILL.md)
+-- [alerts](../alerts/SKILL.md)
+-- [networks](../networks/SKILL.md)
++- [devices](../auvik-devices/SKILL.md)
++- [alerts](../auvik-alerts/SKILL.md)
++- [networks](../auvik-networks/SKILL.md)
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/auvik-devices/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/auvik-devices/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/auvik-devices/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/auvik-devices/SKILL.md	2026-10-27 08:00:32.605034143 +0000
+@@ -127,6 +127,6 @@
+ 
+ ## Related Skills
+ 
+-- [api-patterns](../api-patterns/SKILL.md)
+-- [networks](../networks/SKILL.md)
+-- [alerts](../alerts/SKILL.md)
++- [api-patterns](../auvik-api-patterns/SKILL.md)
++- [networks](../auvik-networks/SKILL.md)
++- [alerts](../auvik-alerts/SKILL.md)
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/auvik-networks/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/auvik-networks/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/auvik-networks/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/auvik-networks/SKILL.md	2026-10-27 08:00:32.610586483 +0000
+@@ -91,6 +91,6 @@
+ 
+ ## Related Skills
+ 
+-- [devices](../devices/SKILL.md)
+-- [alerts](../alerts/SKILL.md)
+-- [api-patterns](../api-patterns/SKILL.md)
++- [devices](../auvik-devices/SKILL.md)
++- [alerts](../auvik-alerts/SKILL.md)
++- [api-patterns](../auvik-api-patterns/SKILL.md)
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-alerts/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-alerts/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-alerts/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-alerts/SKILL.md	2026-10-27 08:00:32.611723039 +0000
+@@ -220,6 +220,6 @@
+ 
+ ## Related Skills
+ 
+-- [Devices](../devices/SKILL.md) - Device management
+-- [Tickets](../tickets/SKILL.md) - Create tickets from alerts
+-- [API Patterns](../api-patterns/SKILL.md) - Authentication
++- [Devices](../ninjaone-devices/SKILL.md) - Device management
++- [Tickets](../ninjaone-tickets/SKILL.md) - Create tickets from alerts
++- [API Patterns](../ninjaone-api-patterns/SKILL.md) - Authentication
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-api-patterns/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-api-patterns/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-api-patterns/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-api-patterns/SKILL.md	2026-10-27 08:00:32.616127129 +0000
+@@ -285,7 +285,7 @@
+ 
+ ## Related Skills
+ 
+-- [Devices](../devices/SKILL.md) - Device endpoints
+-- [Organizations](../organizations/SKILL.md) - Organization endpoints
+-- [Alerts](../alerts/SKILL.md) - Alert endpoints
+-- [Tickets](../tickets/SKILL.md) - Ticketing endpoints
++- [Devices](../ninjaone-devices/SKILL.md) - Device endpoints
++- [Organizations](../ninjaone-organizations/SKILL.md) - Organization endpoints
++- [Alerts](../ninjaone-alerts/SKILL.md) - Alert endpoints
++- [Tickets](../ninjaone-tickets/SKILL.md) - Ticketing endpoints
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-devices/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-devices/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-devices/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-devices/SKILL.md	2026-10-27 08:00:32.605702850 +0000
+@@ -137,6 +137,6 @@
+ 
+ ## Related Skills
+ 
+-- [Organizations](../organizations/SKILL.md)  -  Organization management
+-- [Alerts](../alerts/SKILL.md)  -  Alert monitoring
+-- [API Patterns](../api-patterns/SKILL.md)  -  Authentication and request patterns
++- [Organizations](../ninjaone-organizations/SKILL.md)  -  Organization management
++- [Alerts](../ninjaone-alerts/SKILL.md)  -  Alert monitoring
++- [API Patterns](../ninjaone-api-patterns/SKILL.md)  -  Authentication and request patterns
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-organizations/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-organizations/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-organizations/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-organizations/SKILL.md	2026-10-27 08:00:32.616722058 +0000
+@@ -207,5 +207,5 @@
+ 
+ ## Related Skills
+ 
+-- [Devices](../devices/SKILL.md) - Device management
+-- [API Patterns](../api-patterns/SKILL.md) - Authentication and pagination
++- [Devices](../ninjaone-devices/SKILL.md) - Device management
++- [API Patterns](../ninjaone-api-patterns/SKILL.md) - Authentication and pagination
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-tickets/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-tickets/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-tickets/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/ninjaone-tickets/SKILL.md	2026-10-27 08:00:32.621714602 +0000
+@@ -222,7 +222,7 @@
+ 
+ ## Related Skills
+ 
+-- [Devices](../devices/SKILL.md) - Device context
+-- [Alerts](../alerts/SKILL.md) - Alert-to-ticket flow
+-- [Organizations](../organizations/SKILL.md) - Client context
+-- [API Patterns](../api-patterns/SKILL.md) - Authentication
++- [Devices](../ninjaone-devices/SKILL.md) - Device context
++- [Alerts](../ninjaone-alerts/SKILL.md) - Alert-to-ticket flow
++- [Organizations](../ninjaone-organizations/SKILL.md) - Client context
++- [API Patterns](../ninjaone-api-patterns/SKILL.md) - Authentication
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/psa-api-patterns/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/psa-api-patterns/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/psa-api-patterns/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/psa-api-patterns/SKILL.md	2026-10-27 08:00:32.615335559 +0000
+@@ -471,8 +471,8 @@
+ 
+ ## Related Skills
+ 
+-- [ConnectWise Tickets](../tickets/SKILL.md) - Ticket management
+-- [ConnectWise Companies](../companies/SKILL.md) - Company management
+-- [ConnectWise Contacts](../contacts/SKILL.md) - Contact management
+-- [ConnectWise Projects](../projects/SKILL.md) - Project management
+-- [ConnectWise Time Entries](../time-entries/SKILL.md) - Time tracking
++- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Ticket management
++- [ConnectWise Companies](../psa-companies/SKILL.md) - Company management
++- [ConnectWise Contacts](../psa-contacts/SKILL.md) - Contact management
++- [ConnectWise Projects](../psa-projects/SKILL.md) - Project management
++- [ConnectWise Time Entries](../psa-time-entries/SKILL.md) - Time tracking
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/psa-companies/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/psa-companies/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/psa-companies/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/psa-companies/SKILL.md	2026-10-27 08:00:32.614618402 +0000
+@@ -345,6 +345,6 @@
+ 
+ ## Related Skills
+ 
+-- [ConnectWise Contacts](../contacts/SKILL.md) - Contact management
+-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
+-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
++- [ConnectWise Contacts](../psa-contacts/SKILL.md) - Contact management
++- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Service tickets
++- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md) - Query syntax and auth
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/psa-contacts/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/psa-contacts/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/psa-contacts/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/psa-contacts/SKILL.md	2026-10-27 08:00:32.609974585 +0000
+@@ -352,6 +352,6 @@
+ 
+ ## Related Skills
+ 
+-- [ConnectWise Companies](../companies/SKILL.md) - Company management
+-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
+-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
++- [ConnectWise Companies](../psa-companies/SKILL.md) - Company management
++- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Service tickets
++- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md) - Query syntax and auth
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/psa-product-catalog/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/psa-product-catalog/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/psa-product-catalog/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/psa-product-catalog/SKILL.md	2026-10-27 08:00:32.617924808 +0000
+@@ -325,6 +325,6 @@
+ 
+ ## Related Skills
+ 
+-- [ConnectWise Tickets](../tickets/SKILL.md)  -  using catalog items as ticket product charges
+-- [ConnectWise Projects](../projects/SKILL.md)  -  phase products and project service items
+-- [ConnectWise API Patterns](../api-patterns/SKILL.md)  -  query syntax, JSON Patch, pagination
++- [ConnectWise Tickets](../psa-tickets/SKILL.md)  -  using catalog items as ticket product charges
++- [ConnectWise Projects](../psa-projects/SKILL.md)  -  phase products and project service items
++- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md)  -  query syntax, JSON Patch, pagination
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/psa-projects/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/psa-projects/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/psa-projects/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/psa-projects/SKILL.md	2026-10-27 08:00:32.607252015 +0000
+@@ -395,7 +395,7 @@
+ 
+ ## Related Skills
+ 
+-- [ConnectWise Tickets](../tickets/SKILL.md) - Project tickets
+-- [ConnectWise Time Entries](../time-entries/SKILL.md) - Project time tracking
+-- [ConnectWise Companies](../companies/SKILL.md) - Company management
+-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
++- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Project tickets
++- [ConnectWise Time Entries](../psa-time-entries/SKILL.md) - Project time tracking
++- [ConnectWise Companies](../psa-companies/SKILL.md) - Company management
++- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md) - Query syntax and auth
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/psa-tickets/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/psa-tickets/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/psa-tickets/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/psa-tickets/SKILL.md	2026-10-27 08:00:32.609335890 +0000
+@@ -116,7 +116,7 @@
+ 
+ ## Related Skills
+ 
+-- [ConnectWise Companies](../companies/SKILL.md)  -  Company management
+-- [ConnectWise Contacts](../contacts/SKILL.md)  -  Contact management
+-- [ConnectWise Time Entries](../time-entries/SKILL.md)  -  Time tracking
+-- [ConnectWise API Patterns](../api-patterns/SKILL.md)  -  Query syntax and auth
++- [ConnectWise Companies](../psa-companies/SKILL.md)  -  Company management
++- [ConnectWise Contacts](../psa-contacts/SKILL.md)  -  Contact management
++- [ConnectWise Time Entries](../psa-time-entries/SKILL.md)  -  Time tracking
++- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md)  -  Query syntax and auth
+diff -ruN a/plugins/armada/skills/armada/departments/it-operations/skills/psa-time-entries/SKILL.md b/plugins/armada/skills/armada/departments/it-operations/skills/psa-time-entries/SKILL.md
+--- a/plugins/armada/skills/armada/departments/it-operations/skills/psa-time-entries/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/it-operations/skills/psa-time-entries/SKILL.md	2026-10-27 08:00:32.612352228 +0000
+@@ -400,6 +400,6 @@
+ 
+ ## Related Skills
+ 
+-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
+-- [ConnectWise Projects](../projects/SKILL.md) - Project management
+-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
++- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Service tickets
++- [ConnectWise Projects](../psa-projects/SKILL.md) - Project management
++- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md) - Query syntax and auth
+diff -ruN a/plugins/armada/skills/armada/departments/productivity/commands/start.md b/plugins/armada/skills/armada/departments/productivity/commands/start.md
+--- a/plugins/armada/skills/armada/departments/productivity/commands/start.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/productivity/commands/start.md	2026-10-27 08:12:42.908945228 +0000
+@@ -22,7 +22,7 @@
+ 
+ **If `TASKS.md` doesn't exist:** Create it with the standard template (see task-management skill). Place it in the current working directory.
+ 
+-**If `dashboard.html` doesn't exist:** Copy it from `${CLAUDE_PLUGIN_ROOT}/skills/dashboard.html` to the current working directory.
++**If `dashboard.html` doesn't exist:** Copy it from `${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/productivity/skills/dashboard.html` to the current working directory.
+ 
+ **If `CLAUDE.md` and `memory/` don't exist:** This is a fresh setup  -  after opening the dashboard, begin the memory bootstrap workflow (see below). Place these in the current working directory.
+ 
+diff -ruN a/plugins/armada/skills/armada/departments/productivity/skills/task-management/SKILL.md b/plugins/armada/skills/armada/departments/productivity/skills/task-management/SKILL.md
+--- a/plugins/armada/skills/armada/departments/productivity/skills/task-management/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/productivity/skills/task-management/SKILL.md	2026-10-27 08:12:42.907876526 +0000
+@@ -24,7 +24,7 @@
+ A visual dashboard is available for managing tasks and memory. **On first interaction with tasks:**
+ 
+ 1. Check if `dashboard.html` exists in the current working directory
+-2. If not, copy it from `${CLAUDE_PLUGIN_ROOT}/skills/dashboard.html` to the current working directory
++2. If not, copy it from `${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/productivity/skills/dashboard.html` to the current working directory
+ 3. Inform the user: "I've added the dashboard. Run `/productivity:start` to set up the full system."
+ 
+ The task board:
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/blumira-agents/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/blumira-agents/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/blumira-agents/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/blumira-agents/SKILL.md	2026-10-27 08:00:32.667742294 +0000
+@@ -105,6 +105,6 @@
+ 
+ ## Related Skills
+ 
+-- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
+-- [MSP](../msp/SKILL.md) - MSP device management across accounts
+-- [Users](../users/SKILL.md) - Correlating devices with users
++- [API Patterns](../blumira-api-patterns/SKILL.md) - Filtering and pagination
++- [MSP](../blumira-msp/SKILL.md) - MSP device management across accounts
++- [Users](../blumira-users/SKILL.md) - Correlating devices with users
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/blumira-api-patterns/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/blumira-api-patterns/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/blumira-api-patterns/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/blumira-api-patterns/SKILL.md	2026-10-27 08:00:32.670451077 +0000
+@@ -151,6 +151,6 @@
+ 
+ ## Related Skills
+ 
+-- [Findings](../findings/SKILL.md) - Finding lifecycle management
+-- [MSP](../msp/SKILL.md) - MSP multi-tenant operations
+-- [Agents](../agents/SKILL.md) - Device and agent management
++- [Findings](../blumira-findings/SKILL.md) - Finding lifecycle management
++- [MSP](../blumira-msp/SKILL.md) - MSP multi-tenant operations
++- [Agents](../blumira-agents/SKILL.md) - Device and agent management
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/blumira-findings/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/blumira-findings/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/blumira-findings/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/blumira-findings/SKILL.md	2026-10-27 08:00:32.668932502 +0000
+@@ -157,7 +157,7 @@
+ 
+ ## Related Skills
+ 
+-- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
+-- [Resolutions](../resolutions/SKILL.md) - Resolution types in depth
+-- [Users](../users/SKILL.md) - Finding user IDs for assignment
+-- [MSP](../msp/SKILL.md) - Cross-account finding management
++- [API Patterns](../blumira-api-patterns/SKILL.md) - Filtering and pagination
++- [Resolutions](../blumira-resolutions/SKILL.md) - Resolution types in depth
++- [Users](../blumira-users/SKILL.md) - Finding user IDs for assignment
++- [MSP](../blumira-msp/SKILL.md) - Cross-account finding management
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/blumira-msp/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/blumira-msp/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/blumira-msp/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/blumira-msp/SKILL.md	2026-10-27 08:00:32.660355378 +0000
+@@ -199,8 +199,8 @@
+ 
+ ## Related Skills
+ 
+-- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
+-- [Findings](../findings/SKILL.md) - Finding lifecycle (org-level)
+-- [Agents](../agents/SKILL.md) - Device management (org-level)
+-- [Resolutions](../resolutions/SKILL.md) - Resolution types
+-- [Users](../users/SKILL.md) - User management
++- [API Patterns](../blumira-api-patterns/SKILL.md) - Filtering and pagination
++- [Findings](../blumira-findings/SKILL.md) - Finding lifecycle (org-level)
++- [Agents](../blumira-agents/SKILL.md) - Device management (org-level)
++- [Resolutions](../blumira-resolutions/SKILL.md) - Resolution types
++- [Users](../blumira-users/SKILL.md) - User management
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/blumira-resolutions/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/blumira-resolutions/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/blumira-resolutions/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/blumira-resolutions/SKILL.md	2026-10-27 08:00:32.658613290 +0000
+@@ -100,5 +100,5 @@
+ 
+ ## Related Skills
+ 
+-- [Findings](../findings/SKILL.md) - Finding lifecycle and resolution workflow
+-- [MSP](../msp/SKILL.md) - Cross-account resolution management
++- [Findings](../blumira-findings/SKILL.md) - Finding lifecycle and resolution workflow
++- [MSP](../blumira-msp/SKILL.md) - Cross-account resolution management
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/blumira-users/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/blumira-users/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/blumira-users/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/blumira-users/SKILL.md	2026-10-27 08:00:32.651602571 +0000
+@@ -72,6 +72,6 @@
+ 
+ ## Related Skills
+ 
+-- [Findings](../findings/SKILL.md) - Assigning findings to users
+-- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
+-- [MSP](../msp/SKILL.md) - Per-account user management
++- [Findings](../blumira-findings/SKILL.md) - Assigning findings to users
++- [API Patterns](../blumira-api-patterns/SKILL.md) - Filtering and pagination
++- [MSP](../blumira-msp/SKILL.md) - Per-account user management
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/knowbe4-api-patterns/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/knowbe4-api-patterns/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/knowbe4-api-patterns/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/knowbe4-api-patterns/SKILL.md	2026-10-27 08:00:32.665952062 +0000
+@@ -388,7 +388,7 @@
+ 
+ ## Related Skills
+ 
+-- [KnowBe4 Phishing](../phishing/SKILL.md) - Phishing simulation campaigns
+-- [KnowBe4 Training](../training/SKILL.md) - Training campaign management
+-- [KnowBe4 Users](../users/SKILL.md) - User management and risk scores
+-- [KnowBe4 Reporting](../reporting/SKILL.md) - Security awareness metrics
++- [KnowBe4 Phishing](../knowbe4-phishing/SKILL.md) - Phishing simulation campaigns
++- [KnowBe4 Training](../knowbe4-training/SKILL.md) - Training campaign management
++- [KnowBe4 Users](../knowbe4-users/SKILL.md) - User management and risk scores
++- [KnowBe4 Reporting](../knowbe4-reporting/SKILL.md) - Security awareness metrics
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/knowbe4-phishing/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/knowbe4-phishing/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/knowbe4-phishing/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/knowbe4-phishing/SKILL.md	2026-10-27 08:00:32.653599730 +0000
+@@ -226,7 +226,7 @@
+ 
+ ## Related Skills
+ 
+-- [KnowBe4 Training](../training/SKILL.md) - Training campaign management and enrollment
+-- [KnowBe4 Users](../users/SKILL.md) - User management and risk scores
+-- [KnowBe4 Reporting](../reporting/SKILL.md) - Security awareness metrics and dashboards
+-- [KnowBe4 API Patterns](../api-patterns/SKILL.md) - Authentication, pagination, and rate limits
++- [KnowBe4 Training](../knowbe4-training/SKILL.md) - Training campaign management and enrollment
++- [KnowBe4 Users](../knowbe4-users/SKILL.md) - User management and risk scores
++- [KnowBe4 Reporting](../knowbe4-reporting/SKILL.md) - Security awareness metrics and dashboards
++- [KnowBe4 API Patterns](../knowbe4-api-patterns/SKILL.md) - Authentication, pagination, and rate limits
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/knowbe4-reporting/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/knowbe4-reporting/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/knowbe4-reporting/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/knowbe4-reporting/SKILL.md	2026-10-27 08:00:32.655760248 +0000
+@@ -258,7 +258,7 @@
+ 
+ ## Related Skills
+ 
+-- [KnowBe4 Phishing](../phishing/SKILL.md) - Phishing simulation campaigns
+-- [KnowBe4 Training](../training/SKILL.md) - Training campaign management
+-- [KnowBe4 Users](../users/SKILL.md) - User management and risk scores
+-- [KnowBe4 API Patterns](../api-patterns/SKILL.md) - Authentication, pagination, and rate limits
++- [KnowBe4 Phishing](../knowbe4-phishing/SKILL.md) - Phishing simulation campaigns
++- [KnowBe4 Training](../knowbe4-training/SKILL.md) - Training campaign management
++- [KnowBe4 Users](../knowbe4-users/SKILL.md) - User management and risk scores
++- [KnowBe4 API Patterns](../knowbe4-api-patterns/SKILL.md) - Authentication, pagination, and rate limits
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/knowbe4-training/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/knowbe4-training/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/knowbe4-training/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/knowbe4-training/SKILL.md	2026-10-27 08:00:32.661529198 +0000
+@@ -208,7 +208,7 @@
+ 
+ ## Related Skills
+ 
+-- [KnowBe4 Phishing](../phishing/SKILL.md) - Phishing simulation campaigns
+-- [KnowBe4 Users](../users/SKILL.md) - User management and groups
+-- [KnowBe4 Reporting](../reporting/SKILL.md) - Training completion metrics
+-- [KnowBe4 API Patterns](../api-patterns/SKILL.md) - Authentication, pagination, and rate limits
++- [KnowBe4 Phishing](../knowbe4-phishing/SKILL.md) - Phishing simulation campaigns
++- [KnowBe4 Users](../knowbe4-users/SKILL.md) - User management and groups
++- [KnowBe4 Reporting](../knowbe4-reporting/SKILL.md) - Training completion metrics
++- [KnowBe4 API Patterns](../knowbe4-api-patterns/SKILL.md) - Authentication, pagination, and rate limits
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/knowbe4-users/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/knowbe4-users/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/knowbe4-users/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/knowbe4-users/SKILL.md	2026-10-27 08:00:32.652644321 +0000
+@@ -218,7 +218,7 @@
+ 
+ ## Related Skills
+ 
+-- [KnowBe4 Phishing](../phishing/SKILL.md) - Phishing simulation campaigns
+-- [KnowBe4 Training](../training/SKILL.md) - Training campaign management
+-- [KnowBe4 Reporting](../reporting/SKILL.md) - Risk metrics and dashboards
+-- [KnowBe4 API Patterns](../api-patterns/SKILL.md) - Authentication, pagination, and rate limits
++- [KnowBe4 Phishing](../knowbe4-phishing/SKILL.md) - Phishing simulation campaigns
++- [KnowBe4 Training](../knowbe4-training/SKILL.md) - Training campaign management
++- [KnowBe4 Reporting](../knowbe4-reporting/SKILL.md) - Risk metrics and dashboards
++- [KnowBe4 API Patterns](../knowbe4-api-patterns/SKILL.md) - Authentication, pagination, and rate limits
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/threatlocker-api-patterns/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/threatlocker-api-patterns/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/threatlocker-api-patterns/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/threatlocker-api-patterns/SKILL.md	2026-10-27 08:00:32.667034010 +0000
+@@ -209,8 +209,8 @@
+ 
+ ## Related Skills
+ 
+-- [computers](../computers/SKILL.md) - Endpoint inventory
+-- [computer-groups](../computer-groups/SKILL.md) - Policy scoping
+-- [approval-requests](../approval-requests/SKILL.md) - Application approvals
+-- [audit-log](../audit-log/SKILL.md) - Action Log investigation
+-- [organizations](../organizations/SKILL.md) - Multi-tenant pivots
++- [computers](../threatlocker-computers/SKILL.md) - Endpoint inventory
++- [computer-groups](../threatlocker-computer-groups/SKILL.md) - Policy scoping
++- [approval-requests](../threatlocker-approval-requests/SKILL.md) - Application approvals
++- [audit-log](../threatlocker-audit-log/SKILL.md) - Action Log investigation
++- [organizations](../threatlocker-organizations/SKILL.md) - Multi-tenant pivots
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/threatlocker-approval-requests/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/threatlocker-approval-requests/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/threatlocker-approval-requests/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/threatlocker-approval-requests/SKILL.md	2026-10-27 08:00:32.669706768 +0000
+@@ -157,9 +157,9 @@
+ 
+ ## Related Skills
+ 
+-- [api-patterns](../api-patterns/SKILL.md) - Auth and pagination
+-- [audit-log](../audit-log/SKILL.md) - Behavior of binaries before
++- [api-patterns](../threatlocker-api-patterns/SKILL.md) - Auth and pagination
++- [audit-log](../threatlocker-audit-log/SKILL.md) - Behavior of binaries before
+   approval decisions
+-- [computers](../computers/SKILL.md) - Endpoint context for requests
+-- [computer-groups](../computer-groups/SKILL.md) - Policy scope of
++- [computers](../threatlocker-computers/SKILL.md) - Endpoint context for requests
++- [computer-groups](../threatlocker-computer-groups/SKILL.md) - Policy scope of
+   the resulting permit
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/threatlocker-audit-log/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/threatlocker-audit-log/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/threatlocker-audit-log/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/threatlocker-audit-log/SKILL.md	2026-10-27 08:00:32.662658403 +0000
+@@ -159,8 +159,8 @@
+ 
+ ## Related Skills
+ 
+-- [api-patterns](../api-patterns/SKILL.md) - Auth and pagination
+-- [computers](../computers/SKILL.md) - Endpoint policy mode context
+-- [approval-requests](../approval-requests/SKILL.md) - Decisions that
++- [api-patterns](../threatlocker-api-patterns/SKILL.md) - Auth and pagination
++- [computers](../threatlocker-computers/SKILL.md) - Endpoint policy mode context
++- [approval-requests](../threatlocker-approval-requests/SKILL.md) - Decisions that
+   produce Permit actions
+-- [organizations](../organizations/SKILL.md) - Multi-tenant pivot
++- [organizations](../threatlocker-organizations/SKILL.md) - Multi-tenant pivot
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/threatlocker-computer-groups/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/threatlocker-computer-groups/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/threatlocker-computer-groups/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/threatlocker-computer-groups/SKILL.md	2026-10-27 08:00:32.657701843 +0000
+@@ -129,6 +129,6 @@
+ 
+ ## Related Skills
+ 
+-- [api-patterns](../api-patterns/SKILL.md) - Auth and pagination
+-- [computers](../computers/SKILL.md) - Computers within groups
+-- [organizations](../organizations/SKILL.md) - Org scope for groups
++- [api-patterns](../threatlocker-api-patterns/SKILL.md) - Auth and pagination
++- [computers](../threatlocker-computers/SKILL.md) - Computers within groups
++- [organizations](../threatlocker-organizations/SKILL.md) - Org scope for groups
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/threatlocker-computers/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/threatlocker-computers/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/threatlocker-computers/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/threatlocker-computers/SKILL.md	2026-10-27 08:00:32.665227227 +0000
+@@ -126,7 +126,7 @@
+ 
+ ## Related Skills
+ 
+-- [api-patterns](../api-patterns/SKILL.md) - Pagination and auth
+-- [computer-groups](../computer-groups/SKILL.md) - Policy scoping
+-- [audit-log](../audit-log/SKILL.md) - Per-computer event timeline
+-- [organizations](../organizations/SKILL.md) - Multi-tenant pivot
++- [api-patterns](../threatlocker-api-patterns/SKILL.md) - Pagination and auth
++- [computer-groups](../threatlocker-computer-groups/SKILL.md) - Policy scoping
++- [audit-log](../threatlocker-audit-log/SKILL.md) - Per-computer event timeline
++- [organizations](../threatlocker-organizations/SKILL.md) - Multi-tenant pivot
+diff -ruN a/plugins/armada/skills/armada/departments/security/skills/threatlocker-organizations/SKILL.md b/plugins/armada/skills/armada/departments/security/skills/threatlocker-organizations/SKILL.md
+--- a/plugins/armada/skills/armada/departments/security/skills/threatlocker-organizations/SKILL.md	2026-10-27 07:09:30.000000000 +0000
++++ b/plugins/armada/skills/armada/departments/security/skills/threatlocker-organizations/SKILL.md	2026-10-27 08:00:32.654278205 +0000
+@@ -145,8 +145,8 @@
+ 
+ ## Related Skills
+ 
+-- [api-patterns](../api-patterns/SKILL.md) - `organizationId` header
++- [api-patterns](../threatlocker-api-patterns/SKILL.md) - `organizationId` header
+   and `childOrganizations` body flag
+-- [computers](../computers/SKILL.md) - Computers within an org
+-- [approval-requests](../approval-requests/SKILL.md) - Per-tenant queue
+-- [audit-log](../audit-log/SKILL.md) - Per-tenant Action Log
++- [computers](../threatlocker-computers/SKILL.md) - Computers within an org
++- [approval-requests](../threatlocker-approval-requests/SKILL.md) - Per-tenant queue
++- [audit-log](../threatlocker-audit-log/SKILL.md) - Per-tenant Action Log
