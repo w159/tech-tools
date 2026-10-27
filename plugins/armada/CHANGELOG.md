@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.0 - 2026-10-27
+
+### Fixed
+
+- PAN-OS connector sends the `action` parameter on partial and commit-all commits.
+- ConnectWise connector: per-request TLS relaxation, bounded redirects and redacted token-exchange errors.
+- NinjaOne connector bundle refreshed; Falcon connector tests are hermetic.
+
+### Changed
+
+- Connector audits moved to `docs/audits/`; READMEs and unit tests added for four connectors.
+
 ## 2.1.0 - 2026-10-27
 
 ### Added
