@@ -518,8 +518,12 @@ class ParityTest(unittest.TestCase):
     def _env(self, tag):
         home = os.path.join(self.tmp.name, "home-" + tag)
         os.makedirs(home, exist_ok=True)
+        # delegation_prewarn keeps its once-per-session marker under TMPDIR: isolate it per mode.
+        tmpdir = os.path.join(self.tmp.name, "tmp-" + tag)
+        os.makedirs(tmpdir, exist_ok=True)
         env = dict(
             os.environ,
+            TMPDIR=tmpdir,
             CLAUDE_PLUGIN_ROOT=PLUGIN,
             ATLAS_HOME=home,
             ATLAS_DB=os.path.join(home, "atlas.db"),
