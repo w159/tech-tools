@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased - security alerts
+
+### Fixed
+
+- Dependabot: vitest moves to ^4.1.12 (vite 8.3.5, @vitest/mocker 4.1.12, esbuild >= 0.28.1) in `mcp_node/node-sonicwall`, `mcp_node/node-panos`, `mcp_node/node-ninjaone` and `mcp_servers/panos-mcp`; `npm audit` reports 0 in all four. node-sonicwall gets the `esbuild` override the panos packages already carry.
+- CodeQL: `atlas_status_segment.py` hashes its cache keys with SHA-256 instead of SHA-1 (old `status-*-<hash>.json` cache files are ignored and rebuild once); node-sonicwall builds its HTTP error message without the `/ +:/` regex; the mcp-gateway test fixture bounds its `\w` match and the broker test's tag check is case-insensitive.
+
 ## atlas 16.0.1, armada 2.1.0, programmer 1.0.0, marketplace 5.1.0 - 2026-10-27
 
 Release: one merge onto main that adds what main 16.0.0 (ea78927) did not carry.

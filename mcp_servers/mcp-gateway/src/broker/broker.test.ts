@@ -349,7 +349,7 @@ describe("acceptance 6: broker round trip", () => {
       redirectHost: "evil.example.com\"><i>",
       scopes: ["<mcp>"],
     });
-    expect(html).not.toMatch(/<script|<x>|<i>|<mcp>/);
+    expect(html).not.toMatch(/<script|<x>|<i>|<mcp>/i);
     expect(escapeHtml(`<>&"'`)).toBe("&#60;&#62;&#38;&#34;&#39;");
   });
 });

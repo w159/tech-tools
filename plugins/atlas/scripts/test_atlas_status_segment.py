@@ -38,7 +38,7 @@ def build(tmp, scores=(("score", "verbosity", None, NOW - 100),), gates=0):
     (run / "channels.json").write_text(json.dumps({"channels": {"c": {"members": members}}}))
     ts = datetime.fromtimestamp(NOW - 240, timezone.utc).isoformat()
     (run / "findings.json").write_text(json.dumps([dict(status="verified", verified_at=ts)]))
-    key = hashlib.sha1(("%s|s1" % root).encode()).hexdigest()[:12]
+    key = hashlib.sha256(("%s|s1" % root).encode()).hexdigest()[:12]
     (home / ".atlas" / ("status-gates-%s.json" % key)).write_text(json.dumps(dict(at=NOW, failing=gates)))
     db = sqlite3.connect(str(home / ".atlas" / "atlas.db"))
     db.execute(
