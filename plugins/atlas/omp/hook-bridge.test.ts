@@ -286,11 +286,14 @@ test("real docs_drift_watch flags the first non-docs edit in a docs/ repo", asyn
 test("per-hook timeout is min(hooks.json timeout, ATLAS_BRIDGE_HOOK_TIMEOUT_S default 25)", async () => {
 	const script = hookScript("cap_boot.py", context("SessionStart", "boot"));
 	const config = () => writeConfig({ SessionStart: [{ hooks: [{ command: `python3 "${script}"`, timeout: 120 }] }] }, ["cap_boot.py"]);
-	const lowered = harness(config(), { ATLAS_BRIDGE_HOOK_TIMEOUT_S: "2" });
+	// Pinned clock: the slot is min(cap, deadline - now()). With the real clock a 1 ms gap between computing the
+	// deadline and starting the hook makes it 24_999, which is what made the 25_000 assertion below flaky.
+	const now = () => 1_700_000_000_000;
+	const lowered = harness(config(), { ATLAS_BRIDGE_HOOK_TIMEOUT_S: "2" }, recordingRunner, { now });
 	await lowered.handlers.before_agent_start({ prompt: "x", systemPrompt: [] }, lowered.ctx());
 	expect(times["cap_boot.py"]).toEqual([2_000]);
 	hookScript("cap_boot.py", context("SessionStart", "boot"));
-	const defaulted = harness(config());
+	const defaulted = harness(config(), {}, recordingRunner, { now });
 	await defaulted.handlers.before_agent_start({ prompt: "x", systemPrompt: [] }, defaulted.ctx());
 	expect(times["cap_boot.py"]).toEqual([25_000]);
 });

@@ -5,7 +5,8 @@ Import it FIRST in every test module (before any atlas module is imported):
 
     import _test_isolation  # noqa: F401  (hooks tests: add scripts/ to sys.path first)
 
-It points ATLAS_HOME, ATLAS_DB, ATLAS_DASHBOARD_DB and ATLAS_HOOKSTATE_DIR at the tempdir (HOME is
+It first removes every ATLAS_* / CLAUDE_* / CLAUDECODE variable inherited from the calling session
+(first import only), then points ATLAS_HOME, ATLAS_DB, ATLAS_DASHBOARD_DB and ATLAS_HOOKSTATE_DIR at the tempdir (HOME is
 left alone: tests rely on the real one). The tempdir is removed at interpreter exit. Idempotent:
 a second import (or a second test module in the same process) reuses it.
 """
@@ -26,6 +27,12 @@ _marker = os.environ.get("_ATLAS_TEST_ISOLATED_ROOT")
 if _marker and os.path.isdir(_marker):
     ROOT = _marker  # inherited by a child process; owner cleans up
 else:
+    # First (non-inherited) import: the caller's session must not leak into the tests. A live Claude Code
+    # session exports ATLAS_LEAD_NAME, CLAUDE_CODE_*, CLAUDE_SESSION_ID ... which change gate and colony behaviour.
+    # A test that wants one sets it itself; child processes inherit the marker below and are not scrubbed again.
+    # ATLAS_CHECK_* are explicit opt-ins for host-dependent checks and survive the scrub.
+    for _k in [k for k in os.environ if k.startswith(("ATLAS_", "CLAUDE_", "CLAUDECODE")) and not k.startswith("ATLAS_CHECK_")]:
+        del os.environ[_k]
     ROOT = tempfile.mkdtemp(prefix="atlas-test-home-")
     os.environ["_ATLAS_TEST_ISOLATED_ROOT"] = ROOT
     atexit.register(shutil.rmtree, ROOT, ignore_errors=True)

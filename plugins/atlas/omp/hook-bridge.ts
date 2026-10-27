@@ -571,6 +571,8 @@ export interface BridgeDeps {
 	onToolResult?(info: ToolEventInfo): void;
 	/** Whole-call hook budget in ms for tool_call / tool_result; default TOOL_CALL_BUDGET_MS. Tests shrink it. */
 	budgetMs?: number;
+	/** Clock seam: the shared handler deadline and per-hook slot are computed from it (tests pin it so the arithmetic is exact). */
+	now?: () => number;
 	/** Runner for the SessionStart lead-channel open (tests inject a recorder); default channels.ts defaultRun. */
 	channelRun?(argv: string[], cwd: string): string | undefined;
 	/** Called once the SessionStart lead channel is open (the live channel view subscribes). */
@@ -581,6 +583,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	let hooks: BridgedHook[] | undefined = deps.hooks;
 	const all = () => (hooks ??= loadBridgedHooks());
 	const run = deps.run ?? runHook;
+	const now = deps.now ?? Date.now;
 	const off = () => atlasKnob("ATLAS_HOOK_BRIDGE", deps.env ?? process.env) === "off";
 	let sessionContext: Promise<string> | undefined;
 	let channelOpened = false;
@@ -615,21 +618,21 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	 * A hook that outlives its slot is abandoned even if the runner ignores its timeout, and every skip or abandon
 	 * leaves a hook-faults.jsonl row: fail open, never silently.
 	 */
-	const runAllRuns = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>, deadline: number = Date.now() + HANDLER_BUDGET_MS): Promise<HookRun[]> => {
+	const runAllRuns = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>, deadline: number = now() + HANDLER_BUDGET_MS): Promise<HookRun[]> => {
 		const matchNames = toolNames && matcherNames(toolNames);
 		const selected = all().filter(h => h.event === event && (!h.matcher || !matchNames || matchNames.some(n => h.matcher?.test(n))));
 		const cwd = typeof payload.cwd === "string" ? payload.cwd : undefined;
 		const runOne = async (hook: BridgedHook): Promise<HookRun | undefined> => {
 			const script = scriptOf(hook.command);
-			const remaining = deadline - Date.now();
+			const remaining = deadline - now();
 			if (remaining <= 0) {
 				recordFault(script || hook.command, `${event} skipped: bridge budget exhausted`, "BridgeBudget", cwd);
 				return undefined; // out of budget: fail open
 			}
 			const timeoutMs = Math.min(hookTimeoutMs(hook.timeoutMs, deps.env ?? process.env), remaining);
-			const started = Date.now();
+			const started = now();
 			const stdout = await withDeadline(run(hook.command, payload, timeoutMs), timeoutMs + HOOK_KILL_GRACE_MS);
-			if (stdout === undefined || Date.now() - started >= timeoutMs) recordFault(script || hook.command, `${event} hook hit its ${timeoutMs} ms slot`, "BridgeTimeout", cwd);
+			if (stdout === undefined || now() - started >= timeoutMs) recordFault(script || hook.command, `${event} hook hit its ${timeoutMs} ms slot`, "BridgeTimeout", cwd);
 			return { script, out: parseHookOutput(stdout ?? "") };
 		};
 		return (await Promise.all(selected.map(runOne))).filter((r): r is HookRun => r !== undefined);
@@ -652,7 +655,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			if (ctx.agent.kind !== "main" || off()) return undefined;
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			const common = { session_id: sessionIdOf(ctx), cwd: ctx.cwd };
-			const deadline = Date.now() + HANDLER_BUDGET_MS;
+			const deadline = now() + HANDLER_BUDGET_MS;
 			sessionContext ??= runAll("SessionStart", undefined, { ...common, hook_event_name: "SessionStart", source: "startup" }, deadline).then(join);
 			const startText = await sessionContext;
 			const promptText = join(await runAll("UserPromptSubmit", undefined, { ...common, hook_event_name: "UserPromptSubmit", prompt: event.prompt ?? "" }, deadline));

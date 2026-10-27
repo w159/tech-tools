@@ -40,6 +40,14 @@ class ControlTestCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name)
+        # Fake plugin registry: the host's ~/.claude/plugins is never read. atlas@tech-tools resolves to
+        # this checkout, so the plugin/MCP assertions see the repo source on any machine.
+        plugins_dir = root / "plugins"
+        plugins_dir.mkdir()
+        (plugins_dir / "installed_plugins.json").write_text(
+            json.dumps({"version": 2, "plugins": {"atlas@tech-tools": [{"installPath": str(SCRIPTS.parent)}]}}),
+            encoding="utf-8",
+        )
         self.settings = root / "settings.json"
         self.claude_json = root / ".claude.json"
         self.settings.write_text("{}", encoding="utf-8")
@@ -50,6 +58,7 @@ class ControlTestCase(unittest.TestCase):
         patches = [
             mock.patch.object(self.mod, "SETTINGS_PATH", self.settings),
             mock.patch.object(self.mod, "CLAUDE_JSON_PATH", self.claude_json),
+            mock.patch.object(self.mod, "PLUGINS_DIR", plugins_dir),
             # Shell-scope layers live outside ~/.claude; redirect all three so no test touches the real files.
             mock.patch.object(self.mod, "OMP_CONFIG_PATH", root / "omp" / "config.yml"),
             mock.patch.object(self.mod, "env_sh_path", lambda: root / "home" / ".atlas" / "env.sh"),

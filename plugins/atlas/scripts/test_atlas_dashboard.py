@@ -1276,8 +1276,9 @@ class SettingsDataTest(unittest.TestCase):
 
     def test_fixture_projects_are_filtered(self):
         f = self.ctl.is_fixture_project
-        # The checkout itself is a real, non-scratch directory (the OS temp dir is scratch).
-        real = SCRIPTS.parent
+        # /usr is a real, non-scratch directory on every host (the OS temp dir is scratch, and the checkout
+        # itself may sit under a "worktrees" path, which is junk by design).
+        real = Path("/usr")
         with tempfile.TemporaryDirectory() as tmp:
             wt = Path(tmp) / "proj" / ".claude" / "worktrees" / "x"
             wt.mkdir(parents=True)
