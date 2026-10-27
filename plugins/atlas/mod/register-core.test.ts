@@ -1,5 +1,5 @@
 // coreTick: toasts once per new verdict (the first read is a baseline), the refutation sound, a finished worker,
-// the status line, logs re-read when size or mtime changes, /atlas-core, and the header tally.
+// no status-line entry, logs re-read when size or mtime changes, /atlas-core, and the header tally.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { coreMatrix } from '../contracts/core-fixture';
@@ -74,14 +74,14 @@ describe('coreTick', () => {
     const s = await session(false);
     await coreTick(s.$);
     expect(s.rec.toasts).toEqual([]);
-    expect(s.rec.status.at(-1)).toMatch(/^atlas ✔1 ✖0 ⚠0/);
+    expect(s.rec.status).toEqual([]); // the core never sets a status-line entry
     s.files[`${RUN}/findings.json`] = JSON.stringify([verdict('a', 'verified', '2026-10-27T08:00:00+00:00'), verdict('b', 'rejected', '2026-10-27T08:05:00+00:00'), verdict('c', 'needs-evidence', '2026-10-27T08:06:00+00:00'), verdict('d', 'verified', '2026-10-27T08:07:00+00:00')]);
     await coreTick(s.$);
     expect(s.rec.toasts).toEqual(['✖ REFUTED b: title b', '? c needs evidence', '✔ verified d: title d']);
     await coreTick(s.$);
     await coreTick(s.$);
     expect(s.rec.toasts).toHaveLength(3);
-    expect(s.rec.status.at(-1)).toMatch(/^atlas ✔2 ✖1 ⚠0/);
+    expect(s.rec.status).toEqual([]);
   });
 
   test('sound plays fail.wav on a refutation only when the option is on', async () => {
@@ -175,7 +175,7 @@ describe('coreTick', () => {
     expect((await s.state.get({ plugin: 'atlas', key: 'core' })).value).toMatchObject({ ledger: { verified: 1 } });
   });
 
-  test('no board root: no status, no state', async () => {
+  test('no board root: no state', async () => {
     const s = await session(false);
     await s.state.set({ plugin: 'atlas', key: 'snapshot' }, { root: '', todos: [] });
     await coreTick(s.$);

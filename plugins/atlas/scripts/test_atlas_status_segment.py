@@ -116,13 +116,14 @@ class StatusSegment(unittest.TestCase):
         seg_mod.segment(root, NOW, home=home)
         self.assertEqual(os.stat(db).st_mtime_ns, before)
 
-    def test_claude_statusline_row_matches_literal(self):
-        # parity half: omp/usage-statusline.test.ts asserts the same EXPECTED string
+    def test_claude_statusline_has_no_segment_row(self):
+        # the segment text still feeds omp (omp/usage-statusline.test.ts asserts the same EXPECTED string);
+        # the Claude Code statusline no longer prints it
         root, home = build(self.tmp)
         self.assertEqual(seg_mod.render_text(seg_mod.segment(root, NOW, home=home), color=False), EXPECTED)
         with mock.patch.object(seg_mod.subprocess, "Popen"):  # real clock: gates cache is stale
             rows = atlas_statusline.render({"cwd": root, "session_id": "s1"}, 160, home)
-        self.assertTrue(atlas_statusline.ANSI_RE.sub("", rows[-1]).startswith("atlas  "))
+        self.assertFalse(any(atlas_statusline.ANSI_RE.sub("", r).startswith("atlas  ") for r in rows))
 
     def test_statusline_has_no_segment_row_without_atlas_dir(self):
         rows = atlas_statusline.render({"cwd": self.tmp}, 160, self.tmp)

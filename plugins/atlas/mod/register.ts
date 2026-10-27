@@ -15,7 +15,7 @@ import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
-import { coreReport, coreStatus } from './core-row';
+import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { registerDiscipline } from './discipline';
 import { PHASE_RE, registerRestyle } from './restyle';
@@ -665,7 +665,7 @@ function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null):
 	for (const w of m.offload.workers) if (w.finished && !coreFinished[w.name]) $.ui.toast(`⇆ ${w.name} done: ${tok(w.kept)} kept in tmux, ${tok(w.returned)} back`);
 }
 
-/** MUX_MS tick (interactive sessions, never from a render): rebuild the core, toast what moved, keep the status line, store it when it changed. */
+/** MUX_MS tick (interactive sessions, never from a render): rebuild the core, toast what moved, store it when it changed. */
 export async function coreTick($: EngineInterface): Promise<void> {
 	try {
 		if (!(await read($, isModOn)) || !(await read($, isInteractive))) return;
@@ -678,7 +678,6 @@ export async function coreTick($: EngineInterface): Promise<void> {
 		const model = hasCore(built) ? built : null;
 		if (JSON.stringify(model) === JSON.stringify(await read($, coreState)) && !first) return;
 		await update($, coreState, () => model);
-		$.ui.status(coreStatus(model));
 	} catch (err) {
 		$.ui.log(`atlas: core tick failed: ${String(err)}`, { to: 'debug' });
 	}

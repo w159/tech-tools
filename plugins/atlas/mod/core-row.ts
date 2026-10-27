@@ -191,11 +191,3 @@ export function coreReport(m: CoreModel | null): string {
   if (!m.routes.length) out.push("  no team yet");
   return out.join("\n");
 }
-
-/** The status-line entry: `atlas ✔1 ✖1 ⚠0 ⇆4.3x`, the ratio dropped when none. Undefined when there is no core data. */
-export function coreStatus(m: CoreModel | null): string | undefined {
-  if (!hasCore(m)) return undefined;
-  const { verified, refuted, unchecked } = m.ledger;
-  const ratio = ratioText(m.offload.ratio);
-  return `atlas ✔${verified} ✖${refuted} ⚠${unchecked}${ratio ? ` ⇆${ratio}` : ""}`;
-}
