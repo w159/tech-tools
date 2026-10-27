@@ -1360,7 +1360,17 @@ def main():
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import tool_routing
 
-        for line in tool_routing.boot_lines(root=payload.get("cwd") or os.getcwd()):
+        present = {
+            tool
+            for tool, found in (
+                ("serena", has_cmd("serena") or tool_routing.mcp_configured("serena", boot_root)),
+                ("lean-ctx", has_cmd("lean-ctx") or tool_routing.mcp_configured("lean-ctx", boot_root)),
+                ("context-mode", bool(ctx)),
+                ("claude-mem", bool(mem)),
+            )
+            if found
+        }
+        for line in tool_routing.boot_lines(root=boot_root, present=present):
             if line and line not in lines:
                 lines.append(line)
 

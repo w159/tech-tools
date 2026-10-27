@@ -375,10 +375,16 @@ def should_run(payload, hook_name, window_seconds=None, kind="emit"):
 
 
 def emit(payload, hook_name, message):
-    """Write the additionalContext envelope, but only the first time this
+    """Write the advisory envelope, but only the first time this
     (session, hook, message) combination is seen this session. Returns True
     if it wrote, False if it was a repeat or writing failed -- fail-open means
-    never raising into the caller, not necessarily always emitting."""
+    never raising into the caller, not necessarily always emitting.
+
+    On Stop and SubagentStop, hookSpecificOutput.additionalContext continues the
+    conversation (Claude Code hooks docs, "Stop decision control"), forcing an extra
+    model turn to read an advisory. Those events get `systemMessage` instead, which
+    shows the user the line without continuing the turn. Only decision "block" with
+    a reason should ever force a Stop turn. Other events keep additionalContext."""
     try:
         session_id = payload.get("session_id")
         if session_id:
@@ -401,16 +407,17 @@ def emit(payload, hook_name, message):
                 emitted.append(key)
                 state["emitted"] = emitted[-MAX_EMITTED_HASHES:]
                 _save_state(session_id, state)
-        sys.stdout.write(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": payload.get("hook_event_name", "Stop"),
-                        "additionalContext": message,
-                    }
+        event = payload.get("hook_event_name", "Stop")
+        if event in ("Stop", "SubagentStop"):
+            out = {"systemMessage": message}
+        else:
+            out = {
+                "hookSpecificOutput": {
+                    "hookEventName": event,
+                    "additionalContext": message,
                 }
-            )
-        )
+            }
+        sys.stdout.write(json.dumps(out))
         return True
     except Exception:
         return False

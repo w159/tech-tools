@@ -63,7 +63,8 @@ class NudgeTest(unittest.TestCase):
 
     def test_fires_for_orchestration(self):
         r = run_hook({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
-        self.assertIn("additionalContext", r.stdout)
+        self.assertIn("systemMessage", r.stdout)
+        self.assertNotIn("additionalContext", r.stdout)
 
     def test_db_error_does_not_nudge_nonorchestration(self):
         # Point ATLAS_DB at a directory so atlas_db.connect() raises; the
@@ -129,7 +130,7 @@ class InProcessMainTest(unittest.TestCase):
         ):
             code, out, err = self._run_main({"session_id": "sess-orch"})
         self.assertEqual(code, 0)
-        self.assertIn("additionalContext", out)
+        self.assertIn("systemMessage", out)
         self.assertIn("self-improvement check", out)
         self.assertIn("capture it", out)
 
@@ -141,7 +142,7 @@ class InProcessMainTest(unittest.TestCase):
         ):
             first_code, first_out, _ = self._run_main({"session_id": "sess-orch"})
             code, out, err = self._run_main({"session_id": "sess-orch"})
-        self.assertIn("additionalContext", first_out)
+        self.assertIn("systemMessage", first_out)
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
 
@@ -161,7 +162,7 @@ class InProcessMainTest(unittest.TestCase):
             mock.patch.object(nudge, "_non_docs_changed", return_value=True),
         ):
             _, out, _ = self._run_main({"session_id": "sess-orch"}, env=env)
-        msg = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        msg = json.loads(out)["systemMessage"]
         self.assertEqual(len(msg.splitlines()), 1)
         self.assertNotIn("self-improvement check", msg)
 
