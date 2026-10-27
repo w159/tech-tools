@@ -548,7 +548,11 @@ def write_dirty_snapshot(cwd, session_id):
 
         from docs_drift import find_root as _find_docs_root
 
-        root = _find_docs_root(Path(cwd)) or Path(cwd)
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+        import atlas_scope
+
+        # Same root rule as completion_gate_core.main(): docs root, else git top.
+        root = _find_docs_root(Path(cwd)) or Path(atlas_scope.project_root(str(cwd)))
         target = snapshot_path(root, session_id)
         if os.path.exists(target):
             return None

@@ -73,6 +73,14 @@ class AtlasGatesTest(unittest.TestCase):
         return self.conn.execute("SELECT COUNT(*) FROM friction_events").fetchone()[0]
 
     def test_shape_and_fix_text(self):
+        # (c) is scoped to code-shipping runs: record a non-docs write.
+        import atlas_db
+
+        rid = atlas_db.current_run_id(self.conn, SESSION) or atlas_db.latest_run_id(
+            self.conn, SESSION
+        )
+        atlas_db.log_event(self.conn, rid, "Write", "main", 1, "src/app.py")
+        self.conn.commit()
         p, doc = _run(self.db, self.root)
         self.assertEqual(p.returncode, 0)
         self.assertEqual(
@@ -85,7 +93,7 @@ class AtlasGatesTest(unittest.TestCase):
         self.assertIn("CHANGELOG", by_id["c"]["fix"])
         trip = {ln["id"]: ln for ln in doc["groups"][1]["lines"]}
         self.assertTrue(trip["armed"]["ok"])
-        self.assertEqual(trip["inline"]["detail"], "0 of 4")
+        self.assertEqual(trip["inline"]["detail"], "1 of 4")  # the logged code write
         self.assertEqual(trip["deny0"]["label"], "Denied: toolkit")
 
     def test_no_side_effects(self):
@@ -111,7 +119,8 @@ class AtlasGatesTest(unittest.TestCase):
 
     def _native_bash_ok(self, agent):
         self.conn.execute(
-            "INSERT INTO session_logs (session_id, agent) VALUES (?,?)", (SESSION, agent)
+            "INSERT INTO session_logs (session_id, agent) VALUES (?,?)",
+            (SESSION, agent),
         )
         self.conn.execute(
             "INSERT INTO tool_calls (session_id, tool_use_id, tool_name, kind) "

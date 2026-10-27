@@ -657,6 +657,46 @@ def _has_in_flight_dispatch(data: dict) -> bool:
     return False
 
 
+_SHELL_MEMO: dict | None = None  # set by main(): one `git status` per Stop
+
+
+def _shell_changed_code(root, session_id: str) -> list:
+    """Target-code paths (absolute) a shell command changed this session, minus
+    files another session's agents wrote in this shared worktree. The union
+    partner of the Write/Edit tool events for (a)-(l). Fail open ([])."""
+    try:
+        import atlas_scope
+
+        rels = _shell_dirty_edits(root, session_id)
+        if not rels:
+            return []
+        paths = [
+            p
+            for p in (_abs_path(r, root) for r in rels)
+            if atlas_scope.is_target_code(p, str(root)) and _target_exists(p, root)
+        ]
+        if not paths:
+            return []
+        import atlas_db
+
+        conn = atlas_db.connect()
+        try:
+            rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+                conn, session_id
+            )
+            started = atlas_db.run_started_at(conn, rid) if rid is not None else None
+            theirs = (
+                _other_session_writes(conn, session_id, started, root)
+                if started is not None
+                else set()
+            )
+        finally:
+            conn.close()
+        return [p for p in paths if p not in theirs]
+    except Exception:
+        return []
+
+
 def _shell_dirty_edits(root, session_id: str) -> list:
     """Non-docs paths that are dirty now but absent from, or changed since, the
     SessionStart snapshot (hooks/session_boot.py write_dirty_snapshot): code a
@@ -665,6 +705,16 @@ def _shell_dirty_edits(root, session_id: str) -> list:
     Fail open ([]) on no root, no/corrupt snapshot, git error."""
     if root is None or not session_id:
         return []
+    key = (str(root), session_id)
+    if _SHELL_MEMO is not None and key in _SHELL_MEMO:
+        return _SHELL_MEMO[key]
+    out = _shell_dirty_edits_uncached(root, session_id)
+    if _SHELL_MEMO is not None:
+        _SHELL_MEMO[key] = out
+    return out
+
+
+def _shell_dirty_edits_uncached(root, session_id: str) -> list:
     try:
         import session_boot
 
@@ -1162,7 +1212,15 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     solo = _solo_mode()
     session = str(data.get("session_id") or "")
     run_paths = _run_written_paths(data.get("session_id", ""), root)
+    # Files a shell command changed (sed -i, cat >, git apply ...) leave no
+    # Write/Edit event: union them in from the SessionStart dirty snapshot.
+    run_paths = run_paths + [
+        p for p in _shell_changed_code(root, session) if p not in run_paths
+    ]
     code_changed = _nondocs_changed(run_paths)
+    # (c)-(f) and (h) are docs-currency checks: they need a docs/ SSOT to
+    # check against, so a project without one is never blocked on them.
+    docs_exist = (root / "docs").is_dir()
     # (a)/(b) only apply once this run has shipped non-docs code. A
     # research-only or docs-only run has no evidence/verification to
     # produce, so manufacturing a findings.json entry to satisfy an
@@ -1172,16 +1230,17 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     started = _run_started_at(str(data.get("session_id") or ""))
     ok_a = _check_evidence(root, started) if code_changed else True
     ok_b = _check_findings(root, started) if code_changed else True
-    ok_c = _check_changelog(root)
-    ok_d = _check_roadmap(root)
-    ok_e = _check_readme(root)
-    ok_h = _check_roadmap_reconciled(root)
+    docs_check = code_changed and docs_exist
+    ok_c = _check_changelog(root) if docs_check else True
+    ok_d = _check_roadmap(root) if docs_check else True
+    ok_e = _check_readme(root) if docs_check else True
+    ok_h = _check_roadmap_reconciled(root) if docs_check else True
     # (f) Docs drift BLOCKS: THIS RUN's own writes shipped code and
     # docs/CHANGELOG.md was not among them. The primary signal is
     # tool-call-scoped and therefore blind to docs written by a
     # Bash-invoked script. Cross-check
     # git before blocking so a run whose docs ARE current is not stopped.
-    drift = _docs_drift(run_paths) if code_changed else False
+    drift = _docs_drift(run_paths) if docs_check else False
     if drift and _docs_moved_in_git(root):
         drift = False
     # (g) Law 5 -- verifier coverage. Only when THIS RUN's own writes
@@ -1371,9 +1430,22 @@ def main() -> int:
         if not atlas_hook_guard.should_run(data, "completion_gate"):
             return 0
         cwd = Path(data.get("cwd") or os.getcwd())
-        root = _find_root(cwd)
-        if root is None:
-            return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
+        # Armed like the dispatch tripwire (atlas_scope.gates_armed: a git /
+        # .claude / .atlas / package.json project outside scratch roots), or by
+        # a docs/ SSOT. A project with neither stays a silent no-op. Without a
+        # docs/ root the docs-currency conditions (c-f, h) are skipped in
+        # evaluate(); (m) and the rest still apply.
+        docs_root = _find_root(cwd)
+        if docs_root is None:
+            import atlas_scope
+
+            if not atlas_scope.gates_armed(str(cwd)):
+                return 0
+            root = Path(atlas_scope.project_root(str(cwd)))
+        else:
+            root = docs_root
+        global _SHELL_MEMO
+        _SHELL_MEMO = {}
         session = str(data.get("session_id") or "")
         missing_delegation, delegation_paths, solo_delegation_note = _delegation_state(
             data, root
