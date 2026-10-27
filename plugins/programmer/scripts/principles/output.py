@@ -69,6 +69,13 @@ def to_sarif(r: ScanResult) -> str:
                                 "rules": rules}},
             "originalUriBaseIds": {"SRCROOT": {"uri": Path(r.root).as_uri().rstrip("/") + "/"}},
             "results": results,
+            "invocations": [{
+                "executionSuccessful": not r.errors,
+                "toolExecutionNotifications": [
+                    {"level": "error", "message": {"text": f"parse error: {e['error']}"},
+                     "locations": [{"physicalLocation": {"artifactLocation": {"uri": e["path"], "uriBaseId": "SRCROOT"}}}]}
+                    for e in r.errors],
+            }],
         }],
     }
     return json.dumps(log, indent=2)

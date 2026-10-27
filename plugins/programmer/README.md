@@ -89,7 +89,7 @@ python3 plugins/programmer/scripts/principles explain SEC001
 | `--fail-on error\|warning\|note\|never` | Exit 1 at or above this severity. Default `error`. |
 | `--baseline FILE` / `--write-baseline FILE` | Adopt on a legacy repo: record current findings, report only new ones. |
 
-Exit codes: 0 clean, 1 findings at or above `--fail-on`, 2 usage or git error.
+Exit codes: 0 clean, 1 findings at or above `--fail-on`, 2 usage, git or baseline error, or any file that failed to parse.
 
 ## Configuration
 

@@ -22,8 +22,9 @@ DEFAULT_EXCLUDES = [
 DEFAULT_TEST_GLOBS = ["test_*.py", "*_test.py", "conftest.py", "tests/*", "*/tests/*", "testing/*", "*/testing/*"]
 CONFIG_FILE_STEMS = {"settings", "config", "conf", "configuration", "setup", "noxfile", "conftest"}
 
-SUPPRESS_RE = re.compile(r"#\s*principles:\s*ignore(?:\[(?P<rules>[A-Z0-9_, ]+)\])?")
-SUPPRESS_FILE_RE = re.compile(r"#\s*principles:\s*ignore-file(?:\[(?P<rules>[A-Z0-9_, ]+)\])?")
+# a bracket that is not a plain rule list (e.g. ignore[a-b]) matches neither branch, so suppresses nothing
+SUPPRESS_RE = re.compile(r"#\s*principles:\s*ignore(?:\[(?P<rules>[A-Za-z0-9_, ]+)\]|(?![\w\[-]))")
+SUPPRESS_FILE_RE = re.compile(r"#\s*principles:\s*ignore-file(?:\[(?P<rules>[A-Za-z0-9_, ]+)\]|(?![\w\[]))")
 
 
 @dataclass
@@ -38,11 +39,13 @@ class Finding:
     source: str = ""
     snippet: str = ""
     related: list = field(default_factory=list)  # [{"path":..., "line":...}]
+    occurrence: int = 0  # index among same-rule/path/snippet findings; 0 keeps the original fingerprint
 
     def fingerprint(self) -> str:
-        """Stable across line moves: rule + path + normalized source line."""
+        """Stable across line moves: rule + path + normalized source line (+ occurrence index for repeats)."""
         norm = " ".join(self.snippet.split())
-        return hashlib.sha256(f"{self.rule}|{self.path}|{norm}".encode()).hexdigest()[:16]
+        tail = f"|{self.occurrence}" if self.occurrence else ""
+        return hashlib.sha256(f"{self.rule}|{self.path}|{norm}{tail}".encode()).hexdigest()[:16]
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -212,7 +215,7 @@ def discover(root: Path, config: dict) -> list[Path]:
 def _parse_rule_list(raw: str | None) -> set[str] | None:
     if raw is None:
         return None  # all rules
-    return {r.strip() for r in raw.split(",") if r.strip()}
+    return {r.strip().upper() for r in raw.split(",") if r.strip()}
 
 
 def suppressed(mod: Module, f: Finding) -> bool:
@@ -223,8 +226,8 @@ def suppressed(mod: Module, f: Finding) -> bool:
             if rules is None or f.rule in rules:
                 return True
     for line_no, text in mod.comments:
-        if line_no not in (f.line, f.line - 1):
-            continue
+        if line_no != f.line and not (line_no == f.line - 1 and mod.line_text(line_no).startswith("#")):
+            continue  # line above counts only when the comment stands alone on its line
         m = SUPPRESS_RE.search(text)
         if m and not SUPPRESS_FILE_RE.search(text):
             rules = _parse_rule_list(m.group("rules"))

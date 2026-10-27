@@ -96,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(rendered)
 
+    if result.errors:  # files that could not be parsed were not scanned: never report a clean run
+        return 2
     if args.fail_on == "never":
         return 0
     threshold = SEVERITY_ORDER[args.fail_on]
