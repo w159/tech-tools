@@ -9,7 +9,6 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 ### Dashboard redesign (withdrawn 2026-10-22)
 
 - [deferred] Dashboard redesign: withdrawn 2026-10-22; any new attempt starts from a user-approved mockup and a real-browser acceptance pass at 1024 and 1440 with the default landing state.
-- [done 15.1.0] Follow-up: the Settings page shipped as five tabs in 15.1.0 from a user-approved layout and a real-browser pass at 1024 and 1440 (`docs/plans/2026-10-22_settings-tabs-plan.md`).
 
 ### Command Center next (added 2026-10-22, after 13.0.0)
 
@@ -197,19 +196,11 @@ Twelve shipped changes are in `docs/CHANGELOG.md` (2026-10-23) with evidence in 
 
 Source: `docs/audits/2026-10-26_atlas-state-examination.md`.
 
-- [done 2026-10-26] Colony mux was opt-in by `ATLAS_MUX=tmux`; it is now on by default with `ATLAS_MUX=off` to disable, per-member `--task-file` sections and a concurrent in-process dispatch deny (`docs/CHANGELOG.md` 2026-10-26; finding P1 parity). The earlier recall/mux parity notes are covered by this and by S1-root-resolver.
-- [done 2026-10-26] Doctor test run touched real paths (12 stray `.atlas` dirs archived in this repo, `~/MEGA/Projects/.atlas` lost): guards and isolation tests added (finding S2-doctor-layout).
-- [done 2026-10-26] P2: phased todo tree, the `carry_expired` bug, and `todos.json` archive growth (`scripts/atlas_todo.py` `rotate_archive`; evidence: tmux team t5c2996, finding P1-verify, `docs/CHANGELOG.md` 2026-10-26).
-- [done 2026-10-26] P3: shared statusline segment (`scripts/atlas_status_segment.py`, `scripts/test_atlas_status_segment.py`; same verification).
-- [done 2026-10-26] P4: golden parity tests for band rows (`contracts/band-golden.ts`, `mod/band-golden.test.ts`, `omp/mission-panel-golden.test.ts`).
 - [planned] Band parity below 120 columns and the START lane text ("working" vs "starting") are not covered by the golden rows.
 - [planned] `format_after_edit` reformatted whole files on a one-line Edit (the P4 worker saw a 1500-line diff and had to re-apply its edits by script): format only the edited range, or skip files whose formatting differs from the repo's.
-- [done 2026-10-26] P5: quiet mode (`ATLAS_QUIET`), and the inline-op counter no longer counts scratchpad and brief writes (`hooks/nudge.py:93`, `hooks/dispatch_tripwire_core.py`; same verification).
 - [planned] Local scoring hits a 2048-token context limit: trim the input.
 - [planned] Global projects table cleanup: 346 non-canonical rows.
-- [done 2026-10-26] Project memories and findings reach `<project>/.atlas` (`atlas_memory.py` root store, `memory_capture.py` routing, `atlas_finding.py` records + INDEX, doctor `project-memory`; `docs/CHANGELOG.md` Unreleased). Other projects migrate with `atlas_doctor.py --fix` run inside each.
 - [planned] 34 global memory entries stay in `~/.atlas/memory/MEMORY.md` because their tag names a non-project folder (hooks, frontend, local) or matches several old project copies; review by hand or drop.
-- [done 2026-10-26] The docs rewriter missed references in `.env.template`: `lint_docs_names.py` now rewrites `.template` and `.example` files and reports failed writes.
 - [planned] `plugins/atlas/mod/contract.ts:4` still cites the old plan path: the file has the macOS immutable flag (uchg), so the rewrite fails; clear the flag, then rewrite.
 - [planned] Parity-round verifier holes deferred: (2) long workers fall out of the 10 s burst window, (5) tripwire tests inherit `ATLAS_*` in worker panes, (6) a member without a section gets only the shared text.
 - [planned] `recall_gate` costs 159 ms per tool call: move the marker check ahead of the plugin-dir walk.
@@ -234,7 +225,6 @@ Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (
 
 Closed in 12.4.6 in source (see `docs/CHANGELOG.md`): `atlas-testing` skill (taxonomy of 44 testing types, per-language and per-area references, gap selection with regulated-data floors, `testscope.py` detect/gaps/commands with 17 tests), `atlas:test-engineer` agent, and the scope-matrix `test` class. Unreleased: commit, push and plugin reinstall pending.
 
-- [done] Live-run `atlas-testing` `write` and `mutate` modes (2026-10-26): ran on this repo's `testscope.py` instead of gwh-firstrespondersapp; evidence `.atlas/evidence/2026-10-26-atlas-testing-live/`, summary in `docs/audits/2026-10-26_atlas-audit-testing-proof.md`.
 
 ### Follow-ups: atlas 12.4.0 (added 2026-10-14)
 
@@ -277,7 +267,6 @@ Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026
 - [planned] OpenRig pin policy: `RIG_VERSION` in `atlas_rig.py` pins 0.6.10; bumps need the spike rerun (install, `--no-kernel` daemon, terminal seat, `rig send --raw`, `rig add`) because the project is pre-1.0 with weekly releases and its docs lag the release.
 - [planned] `claude-code` seats (OpenRig-managed Claude sessions with `permission_policy: builtin:yolo`, activity telemetry) once OpenRig supports per-seat env vars; today `ATLAS_*` pins require terminal seats.
 - [planned] `rig capture` of a seat whose process has exited returns only the shell; `agents()` reports terminal seats as `unknown` activity. Map exit status from the board notes instead.
-- [done 2026-10-23] `atlas_seats.capture` on the herdr backend now reads the pane via `pane.read` (`73f4baae`, `scripts/test_atlas_seats.py:117`); moved to `docs/CHANGELOG.md`.
 
 ### Command Center and colony repair (2026-10-14)
 
@@ -553,4 +542,3 @@ hyphen/comma/rewrite) followed by a clean validator run.
 - [planned] Raise the `testscope.py` mutation score above 31.0%; survivors concentrate in `command_rows`, `detect_misc_files`, `_collect`, `baseline_rows`, `detect_terraform`, `detect_workflows`.
 - [planned] Decide whether the 10 skills without the operating-contract fence should carry it: atlas-audit (now fenced), atlas-loop, atlas-orchestrate, atlas-prompt, atlas-run-watch, atlas-setup, atlas-status, atlas-tui, atlas-ux-test, atlas-wiki.
 - [planned] Run the full atlas-audit swarm once on a small repo to prove Phases 2-4 live; only Phase 1 fallbacks, `build_hub.py` and the act-mode listing were proven on 2026-10-26.
-- [done] Finding P6-env-scrub (ATLAS_* env scrub in two test files): stamped verified 2026-10-26 after the scripts suite ran 2257 tests with exit 0.
