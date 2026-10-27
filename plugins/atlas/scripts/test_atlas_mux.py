@@ -3386,3 +3386,102 @@ class OwnerTokenDeliveryTests(Base):
         code, out = self.note_cli(None)
         self.assertNotEqual(0, code, out)
         self.assertIn("owner_token_required", out)
+
+
+class WorkerToolsProfileAllowTests(unittest.TestCase):
+    """The claude worker argv carries a scoped --allowedTools list keyed on the member's tools_profile."""
+
+    def allow(self, profile):
+        import atlas_mux
+
+        argv = atlas_mux.harness_argv(
+            "claude",
+            "verifier",
+            "do it",
+            "haiku",
+            "low",
+            "",
+            "dontAsk",
+            tools_profile=profile,
+        )
+        self.assertEqual("do it", argv[-1])
+        self.assertEqual(["--permission-mode", "dontAsk"], argv[-3:-1])
+        return argv[argv.index("--allowedTools") + 1].split(",")
+
+    def test_read_gets_mcp_navigation_plus_read_tools_and_no_bash_or_edit(self):
+        allow = self.allow("read")
+        for tool in ("mcp__lean-ctx__*", "Read", "Grep", "Glob"):
+            self.assertIn(tool, allow)
+        self.assertFalse([t for t in allow if t.startswith("Bash")], allow)
+        for tool in ("Edit", "Write", "MultiEdit"):
+            self.assertNotIn(tool, allow)
+
+    def test_exec_gets_scoped_verification_commands_but_no_edit_tools(self):
+        allow = self.allow("exec")
+        for rule in (
+            "Bash(python3 *)",
+            "Bash(pytest *)",
+            "Bash(uv run *)",
+            "Bash(npm test *)",
+            "Bash(npm run *)",
+            "Bash(go test *)",
+            "Bash(cargo test *)",
+            "Bash(make *)",
+            "Bash(git status *)",
+            "Bash(git diff *)",
+            "Bash(echo *)",
+            "Bash(sed -n *)",
+            "Bash(rg *)",
+            "Read",
+        ):
+            self.assertIn(rule, allow)
+        for tool in ("Edit", "Write", "MultiEdit"):
+            self.assertNotIn(tool, allow)
+
+    def test_edit_adds_the_edit_tools_on_top_of_exec(self):
+        allow = self.allow("edit")
+        self.assertTrue(set(self.allow("exec")) <= set(allow))
+        for tool in ("Edit", "Write", "MultiEdit"):
+            self.assertIn(tool, allow)
+
+    def test_no_profile_allows_a_blanket_bash_or_a_writing_vcs_command(self):
+        for profile in ("read", "edit", "exec", None):
+            allow = self.allow(profile)
+            for bad in (
+                "Bash",
+                "Bash(*)",
+                "Bash(git *)",
+                "Bash(git push *)",
+                "Bash(git commit *)",
+            ):
+                self.assertNotIn(bad, allow, (profile, bad))
+            self.assertFalse(any("," in t for t in allow))
+
+    def test_unset_profile_keeps_the_mcp_navigation_list_only(self):
+        import atlas_mux
+
+        self.assertEqual(list(atlas_mux.WORKER_MCP_ALLOW), self.allow(None))
+
+    def test_run_worker_and_spawn_accept_a_tools_profile_flag(self):
+        import atlas_mux
+
+        p = atlas_mux._parser()
+        common = [
+            "--run",
+            "r",
+            "--name",
+            "n",
+            "--harness",
+            "claude",
+            "--agent",
+            "verifier",
+            "--prompt-file",
+            "f",
+            "--root",
+            "/r",
+        ]
+        for cmd in ("run-worker", "spawn"):
+            ns = p.parse_args([cmd, *common, "--tools-profile", "exec"])
+            self.assertEqual("exec", ns.tools_profile)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            p.parse_args(["spawn", *common, "--tools-profile", "bogus"])
