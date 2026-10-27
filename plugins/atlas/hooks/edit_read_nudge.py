@@ -31,8 +31,17 @@ def _norm(data):
     fp = ti.get("file_path") or ti.get("path")
     if not isinstance(fp, str) or not fp or "://" in fp:
         return None
-    fp = re.sub(r":[\d,+\-]+$", "", fp)
-    return os.path.normpath(os.path.join(data.get("cwd") or os.getcwd(), fp))
+    base = data.get("cwd") or os.getcwd()
+    full = os.path.normpath(os.path.join(base, fp))
+    # Strip a read selector only when the path as given is not itself a file and
+    # the stripped path is; "notes:2024" or "a:1" files keep their real names.
+    if not os.path.exists(full):
+        stripped = re.sub(r":[\d,+\-]+$", "", fp)
+        if stripped != fp:
+            cand = os.path.normpath(os.path.join(base, stripped))
+            if os.path.exists(cand):
+                return cand
+    return full
 
 
 def main() -> int:

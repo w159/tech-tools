@@ -2,7 +2,7 @@
 name: atlas-plan
 description: "Writes an implementation-ready plan to docs/plans/ from a brainstorm artifact or feature description, with U-numbered units and a verification contract. Use when requirements are settled."
 when_to_use: "plan this, implementation plan, break into units, how should we build, technical plan, ready for execution"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Task
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Task, Agent, ToolSearch
 argument-hint: '<requirements artifact path or feature description>'
 ---
 
@@ -20,7 +20,7 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 ## Why this skill exists
 
-Atlas executes well (`atlas-orchestrate`) and elicits requirements well (`atlas-brainstorm`), but the step between them - turning a settled WHAT into a contract an implementer can execute without guessing - was ad hoc: every run re-derived unit decomposition, verification strategy, and done-ness from scratch. This skill is the HOW stage: it consumes the requirements-only brainstorm artifact and produces the implementation-ready plan that `atlas-orchestrate` consumes next. It is a port of CE's `ce-plan` (see `agent://CELoopSkillsDetail`, section 4) with atlas's control plane: grep-first learnings research over `docs/lessons/` and `.atlas/findings/` instead of CE's solutions corpus, Compound Packs via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py` instead of CE's pack resolver, `atlas:completeness-critic` as the mandatory pre-write review instead of `ce-doc-review`, and date-first docs naming per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`.
+Atlas executes well (`atlas-orchestrate`) and elicits requirements well (`atlas-brainstorm`), but the step between them - turning a settled WHAT into a contract an implementer can execute without guessing - was ad hoc: every run re-derived unit decomposition, verification strategy, and done-ness from scratch. This skill is the HOW stage: it consumes the requirements-only brainstorm artifact and produces the implementation-ready plan that `atlas-orchestrate` consumes next. Its control plane: grep-first learnings research over `docs/lessons/` and `.atlas/findings/`, Compound Packs via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py`, `atlas:completeness-critic` as the mandatory pre-write review, and date-first docs naming per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`.
 
 **What this skill is NOT - read this before planning anything:**
 
@@ -74,7 +74,7 @@ Read `references/plan-sections.md` in full. Compose the implementation-ready art
 
 Read `references/handoff.md` in full.
 
-- **Mandatory review gate:** dispatch `atlas:completeness-critic` (subagent-kit shape) against the written plan - this is the port of CE's mandatory `ce-doc-review`, and it is not skippable. Blocking gaps route back into the plan; re-check only the changed sections.
+- **Mandatory review gate:** dispatch `atlas:completeness-critic` (subagent-kit shape) against the written plan - mandatory and not skippable. Blocking gaps route back into the plan; re-check only the changed sections.
 - **Verification:** dispatch `atlas:verifier` (read-only) to adversarially check the artifact against repo facts: grounded claims trace to real files, unit file lists exist, verification commands are plausible for this repo. It stamps its verdict into `.atlas/.run/findings.json`. Lightweight tiers with zero external claims may run the Ready checks as verification instead, stating so.
 - **Handoff (interactive):** exactly one recommendation: **`atlas-orchestrate`** consumes this plan and executes it through the implementer/verifier squad. There is no execution step inside atlas-plan and no separate work skill - never offer one. Offer `atlas-prototype` when a visual/interaction fork was deferred, `atlas-bakeoff` when an open technical fork was deferred.
 - **Handoff (noninteractive / return-to-caller):** return the contract in `references/handoff.md` verbatim: `status`, `artifact_path`, `unit_count`, `requirements_covered`, `question_counts`, `deferred_questions`, `review_verdict`, `recommended_next`.

@@ -248,12 +248,24 @@ class CheckMemoryCapturedTest(unittest.TestCase):
         with open(mpath, "w") as f:
             f.write("fact")
         os.utime(mpath, (time.time(), time.time()))
-        with mock.patch.dict(os.environ, {"HOME": home}, clear=False):
+        with mock.patch.dict(os.environ, {"HOME": home, "ATLAS_HOME": os.path.join(home, ".atlas")}, clear=False):
+            self.assertTrue(nudge._check_memory_captured())
+
+    def test_honors_atlas_home(self):
+        home = tempfile.mkdtemp()
+        ah = tempfile.mkdtemp()
+        mpath = os.path.join(ah, "memory", "MEMORY.md")
+        os.makedirs(os.path.dirname(mpath), exist_ok=True)
+        with open(mpath, "w") as f:
+            f.write("fact")
+        with mock.patch.dict(
+            os.environ, {"HOME": home, "ATLAS_HOME": ah}, clear=False
+        ):
             self.assertTrue(nudge._check_memory_captured())
 
     def test_missing_memory_returns_false(self):
         home = tempfile.mkdtemp()
-        with mock.patch.dict(os.environ, {"HOME": home}, clear=False):
+        with mock.patch.dict(os.environ, {"HOME": home, "ATLAS_HOME": os.path.join(home, ".atlas")}, clear=False):
             self.assertFalse(nudge._check_memory_captured())
 
     def test_stale_memory_returns_false(self):
@@ -264,7 +276,7 @@ class CheckMemoryCapturedTest(unittest.TestCase):
             f.write("fact")
         old = time.time() - 120  # > 60s window
         os.utime(mpath, (old, old))
-        with mock.patch.dict(os.environ, {"HOME": home}, clear=False):
+        with mock.patch.dict(os.environ, {"HOME": home, "ATLAS_HOME": os.path.join(home, ".atlas")}, clear=False):
             self.assertFalse(nudge._check_memory_captured())
 
     def test_getmtime_error_returns_false(self):
@@ -276,7 +288,7 @@ class CheckMemoryCapturedTest(unittest.TestCase):
         with open(mpath, "w") as f:
             f.write("fact")
         with (
-            mock.patch.dict(os.environ, {"HOME": home}, clear=False),
+            mock.patch.dict(os.environ, {"HOME": home, "ATLAS_HOME": os.path.join(home, ".atlas")}, clear=False),
             mock.patch.object(os.path, "getmtime", side_effect=OSError("boom")),
         ):
             self.assertFalse(nudge._check_memory_captured())

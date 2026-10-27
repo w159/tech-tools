@@ -65,4 +65,4 @@ Array-of-string frontmatter items (`symptoms`, `applies_when`, `tags`, `related_
 - `date` matches `YYYY-MM-DD`; `framework_version` only on bug track; `tags` lowercase hyphen-separated; array lengths respected.
 - `title` matches the H1.
 
-Backward compatibility (ported from CE): bug-track fields found on existing knowledge-track docs are harmless legacy - do not strip them unless rewriting the doc for other reasons.
+Backward compatibility: bug-track fields found on existing knowledge-track docs are harmless legacy - do not strip them unless rewriting the doc for other reasons.

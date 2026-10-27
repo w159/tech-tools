@@ -39,7 +39,7 @@ plugins/atlas/
 ```
 
 Do **not** author new connectors under department folders (`mcp/hr/`,
-`mcp/security/`, …) or as loose `.mcpb` files in those folders — that layout is
+`mcp/security/`, ...) or as loose `.mcpb` files in those folders - that layout is
 obsolete.
 
 ## Inert-by-default mechanism
@@ -59,9 +59,9 @@ For each connector, `vendors.md` carries these columns. The connectors mode read
 them directly, never from memory:
 
 1. **owning plugin** - always `armada` for the bundled connectors.
-2. **required_to_enable** — the `userConfig` keys that must be non-empty.
-3. **optional** — keys that may stay blank (typically `*_base_url` / region).
-4. **entry point** — `mcp/<name>/server.mjs` or `mcp/falcon/` for Python.
+2. **required_to_enable** - the `userConfig` keys that must be non-empty.
+3. **optional** - keys that may stay blank (typically `*_base_url` / region).
+4. **entry point** - `mcp/<name>/server.mjs` or `mcp/falcon/` for Python.
 
 ## Status detection (no-args scan)
 

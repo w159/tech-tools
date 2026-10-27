@@ -26,7 +26,7 @@ The orchestrator may accept as-is, merge closely related boundaries, or split a 
 
 ## Workflow shape
 
-This skill runs as a Workflow following the skeleton in atlas-orchestrate/references/workflow-template.md. The four phases are:
+This skill runs as a Workflow following the skeleton in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/workflow-template.md`. The four phases are:
 
 ### Phase 0 - Boundary discovery (sequential, orchestrator-gated)
 

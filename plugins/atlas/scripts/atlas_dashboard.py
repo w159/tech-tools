@@ -220,7 +220,9 @@ def _connector_manifest() -> dict:
     if root is None:
         return {}
     try:
-        return json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        return json.loads(
+            (root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
     except (OSError, ValueError):
         return {}
 
@@ -2023,6 +2025,32 @@ _SENSITIVE_GET = re.compile(
 # GETs served straight from do_GET (SSE, websocket upgrade), not through V2_ROUTES.
 V2_RAW_GET = frozenset({"/api/v2/stream", "/api/v2/term/ws"})
 _TOKEN_EXEMPT = ("/api/health", "/health")
+
+# Single-use stream tickets: EventSource cannot set headers, and the long-lived
+# token must never ride in a URL. POST /api/v2/stream/ticket (X-Atlas-Token) mints one.
+STREAM_TICKET_TTL_S = 30
+_stream_tickets: dict = {}  # ticket -> monotonic expiry
+_stream_ticket_lock = threading.Lock()
+
+
+def _mint_stream_ticket() -> str:
+    t = secrets.token_urlsafe(24)
+    now = time.monotonic()
+    with _stream_ticket_lock:
+        for k in [k for k, exp in _stream_tickets.items() if exp <= now]:
+            del _stream_tickets[k]  # expired, never redeemed
+        _stream_tickets[t] = now + STREAM_TICKET_TTL_S
+    return t
+
+
+def _redeem_stream_ticket(ticket: str) -> bool:
+    """Burn a ticket; False when unknown, already used or expired."""
+    with _stream_ticket_lock:
+        exp = _stream_tickets.pop(ticket, None)
+    return exp is not None and exp > time.monotonic()
+
+
+_SECRET_QUERY = re.compile(r"([?&](?:token|ticket)=)[^&\s\"]*", re.IGNORECASE)
 _MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -2442,7 +2470,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._bytes(200, svg, "image/svg+xml; charset=utf-8")
 
     def log_message(self, format, *args):  # noqa: A002 - base-class signature
-        line = format % args
+        line = _SECRET_QUERY.sub(r"\1REDACTED", format % args)
         # Liveness probes fire every few seconds from every session; only failures are worth a line.
         if re.search(r'"GET /(api/(v2/)?)?health[ ?]', line) and line.rstrip().split()[
             -2:-1
@@ -2505,8 +2533,13 @@ class Handler(BaseHTTPRequestHandler):
             return True
         if mutating or _SENSITIVE_GET.match(path):
             supplied = self.headers.get("X-Atlas-Token") or ""
-            if not supplied and path == "/api/v2/stream":
-                supplied = query.get("token", "")
+            if (
+                not supplied
+                and path == "/api/v2/stream"
+                and query.get("ticket")
+                and _redeem_stream_ticket(query["ticket"])
+            ):
+                return True
             if not hmac.compare_digest(supplied.encode(), DASH_TOKEN.encode()):
                 self._deny(
                     401,
@@ -2537,7 +2570,10 @@ class Handler(BaseHTTPRequestHandler):
             body = (
                 target.read_bytes()
                 .replace(TOKEN_PLACEHOLDER.encode(), DASH_TOKEN.encode())
-                .replace(b"__ATLAS_VERSION__", str(_plugin_manifest().get("version") or "").encode())
+                .replace(
+                    b"__ATLAS_VERSION__",
+                    str(_plugin_manifest().get("version") or "").encode(),
+                )
             )
             if DASH_TOKEN.encode() not in body:
                 tag = f'<meta name="atlas-token" content="{DASH_TOKEN}">'.encode()
@@ -2684,10 +2720,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._sse(query)
         if (
             u.path == "/api/v2/term/ws"
-        ):  # token is checked in the handler (browsers cannot set headers)
+        ):  # single-use ticket is checked in the handler (browsers cannot set headers)
             import atlas_dash_term
 
-            return atlas_dash_term.handle_ws(self, query, DASH_TOKEN)
+            return atlas_dash_term.handle_ws(self, query)
         if self._dispatch_v2("GET", u.path, query, {}):
             return
         return self._legacy_get(u)
@@ -2867,6 +2903,15 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(data, dict):
             return self._deny(
                 400, "invalid_json", "body must be a JSON object", "wrap it in {}"
+            )
+        if method == "POST" and u.path == "/api/v2/stream/ticket":
+            return self._json(
+                200,
+                {
+                    "ok": True,
+                    "ticket": _mint_stream_ticket(),
+                    "expires_in": STREAM_TICKET_TTL_S,
+                },
             )
         if self._dispatch_v2(method, u.path, query, data):
             return
@@ -3086,7 +3131,13 @@ def reap_tick(
         ):
             continue  # reaping must never create .atlas/.run in a non-project dir
         try:
-            out[root] = atlas_todo.reap_channels(root)
+            try:
+                import atlas_seats
+
+                _seat_live = atlas_seats.pane_live
+            except Exception:  # fail-open: pid/TTL rules only
+                _seat_live = None
+            out[root] = atlas_todo.reap_channels(root, pane_live=_seat_live)
         except Exception as exc:
             _reap_warn(f"reap {root}", exc)
     try:
@@ -3133,11 +3184,36 @@ def _own_install_roots() -> list[Path]:
     return roots
 
 
-def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[int, ...], Path]]:
+def _install_qualifies(d: Path, ver_text: str, parent_real: str) -> bool:
+    """A sibling install we may exec: real atlas manifest, version == dir name,
+    and a realpath that stays inside the install parent (no escaping symlinks)."""
+    try:
+        real = os.path.realpath(d)
+        if (
+            os.path.commonpath([real, parent_real]) != parent_real
+            or real == parent_real
+        ):
+            return False
+        manifest = json.loads(
+            (d / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return False
+    return (
+        isinstance(manifest, dict)
+        and manifest.get("name") == "atlas"
+        and manifest.get("version") == ver_text
+    )
+
+
+def _sibling_installs(
+    own_roots: list[Path] | None = None,
+) -> list[tuple[tuple[int, ...], Path]]:
     """(version, daemon script) of sibling installs of this same plugin.
 
     Layouts: omp .../tech-tools___atlas___<ver>/ and claude .../<mkt>/atlas/<ver>/.
-    Newest last; a dir without scripts/atlas_dashboard.py is ignored.
+    Newest last; a dir without scripts/atlas_dashboard.py, or that fails
+    _install_qualifies (manifest name/version, realpath containment), is ignored.
     """
     if own_roots is None:
         own_roots = _own_install_roots()
@@ -3147,13 +3223,17 @@ def _sibling_installs(own_roots: list[Path] | None = None) -> list[tuple[tuple[i
         fam = m.group(1) if m else ""
         try:
             entries = list(root.parent.iterdir())
+            parent_real = os.path.realpath(root.parent)
         except OSError:
             continue
         for d in entries:
             if fam and not d.name.startswith(fam):
                 continue
-            ver = _version_tuple(d.name[len(fam):]) if fam else _version_tuple(d.name)
+            ver_text = d.name[len(fam) :]
+            ver = _version_tuple(ver_text)
             if not ver or not (d / "scripts" / "atlas_dashboard.py").is_file():
+                continue
+            if not _install_qualifies(d, ver_text, parent_real):
                 continue
             found.setdefault(ver, d / "scripts" / "atlas_dashboard.py")
     return sorted(found.items())

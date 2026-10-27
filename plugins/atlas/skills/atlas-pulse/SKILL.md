@@ -2,7 +2,7 @@
 name: atlas-pulse
 description: "Generates a time-windowed product pulse (usage, performance, errors) from wired telemetry, read-only, into docs/pulses/. Use when a product pulse or usage and error summary is needed."
 when_to_use: "product pulse, how is the product doing, usage report, error rate, PostHog, Sentry, Mixpanel, Stripe metrics"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[lookback window, e.g. 24h, 7d, 30d; default 24h]'
 ---
 

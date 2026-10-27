@@ -34,6 +34,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 import armada_root  # noqa: E402
+
 CLAUDE_DIR = Path.home() / ".claude"
 SETTINGS_PATH = CLAUDE_DIR / "settings.json"
 CLAUDE_JSON_PATH = Path.home() / ".claude.json"

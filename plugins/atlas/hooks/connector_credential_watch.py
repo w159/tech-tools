@@ -31,6 +31,9 @@ import atlas_env  # noqa: E402
 atlas_env.apply_store_env()
 
 
+LOCK_TIMEOUT_S = 1.0
+
+
 def _state_path() -> Path:
     base = os.environ.get("ATLAS_HOME") or str(Path.home() / ".atlas")
     return Path(base) / "connector_auth_warned.json"
@@ -59,6 +62,9 @@ _BANNER = re.compile(
     r"\s*(?:error\b|http\W{0,3}\d{3}|status\W{0,3}\d{3}|\d{3}\b)", re.I
 )
 _STATUS_KEYS = ("status", "status_code", "statusCode", "http_status")
+_ENVELOPE_KEYS = frozenset(
+    {"message", "detail", "title", "type", "code", "reason", "statusText"}
+)
 
 
 # Servers whose tool_response is file content or command output, not an API
@@ -143,8 +149,13 @@ def error_text(resp) -> str:
     text = _block_text(resp.get("content"))
     if resp.get("isError") is True or resp.get("is_error") is True:
         return (text or json.dumps(resp, default=str))[:2000]
-    status = _status_of(resp)
-    if status in (400, 401, 403) or resp.get("error"):
+    # A top-level status key is data in a successful result. It is an error
+    # signal only inside an error envelope: a non-empty `error` field, or a body
+    # that is nothing but the status (plus message-ish keys) -- no payload keys.
+    if resp.get("error") or (
+        _status_of(resp) in (400, 401, 403)
+        and not (set(resp) - set(_STATUS_KEYS) - _ENVELOPE_KEYS)
+    ):
         return json.dumps(resp, default=str)[:2000]
     if text:
         return error_text(text)  # content blocks without isError: plain-text rules
@@ -175,10 +186,38 @@ def _record(exc: BaseException) -> None:
         pass
 
 
+def _locked_state(path: Path):
+    """Shared lock helper (atlas_memory._file_lock) with a short timeout. Fail open:
+    if the helper cannot be imported or the lock stays busy, run unlocked, as
+    before, rather than block a PostToolUse hook."""
+    from contextlib import nullcontext
+
+    try:
+        sys.path.insert(
+            0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        )
+        import atlas_memory
+
+        return atlas_memory._file_lock(path, timeout=LOCK_TIMEOUT_S), atlas_memory.LockTimeout
+    except Exception as exc:  # noqa: BLE001 -- the lock must never become the fault
+        _record(exc)
+        return nullcontext(), OSError
+
+
 def _already_warned(session: str, server: str) -> bool:
     """One warning per server per session. Fail-open to 'not warned'."""
-    key = "%s|%s" % (session, server)
     path = _state_path()
+    lock, busy = _locked_state(path)
+    try:
+        with lock:
+            return _check_and_mark(session, server, path)
+    except busy as exc:  # lock busy past the timeout: proceed unlocked
+        _record(exc)
+        return _check_and_mark(session, server, path)
+
+
+def _check_and_mark(session: str, server: str, path: Path) -> bool:
+    key = "%s|%s" % (session, server)
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(state, dict):

@@ -15,6 +15,46 @@
 - A verdict is matched to the DONE claim whose report names its finding id before falling back to time order, so a verdict on one finding no longer marks an unrelated claim as checked.
 - Core reads are cached by size and mtime and evicted when the file goes away; a missing `findings.json` for one tick no longer re-toasts every verdict.
 
+## 16.1.0 - 2026-10-27
+
+Port of the remaining hardening from the parallel audit line (PR #48) onto 16.0.1. Where 16.0.1 already shipped an equivalent (the one-process-per-event dispatcher, the shlex git gate, untrusted board-note framing, hermetic tests, project-local memory), 16.0.1 behavior is kept.
+
+### BREAKING
+
+- The dashboard no longer accepts the long-lived token in a URL. `GET /api/v2/stream?token=...` and `/api/v2/term/ws?token=...` are refused (`bad_token`). Clients mint a single-use ticket with `POST /api/v2/stream/ticket` (header `X-Atlas-Token`, 30 s lifetime) and open `/api/v2/stream?ticket=...`; terminals use the existing `POST /api/v2/term/ticket`. The bundled dashboard UI and the herdr web gateway do this already. Any external script that opened the stream with `?token=` must switch to tickets.
+
+### Security
+
+- Dashboard access log redacts `token=` and `ticket=` query values. The herdr web gateway strips both from browser requests before proxying.
+- Self-heal only execs a sibling install whose `plugin.json` names atlas, whose version equals its directory name and whose realpath stays inside the install parent.
+- Self-fix verify runs the allowlisted command in a scrubbed environment from a temporary checkout, and without network where `unshare -n` is available.
+- `atlas_doctor.py --redact-history [--apply]` runs the shared redactor over text already stored in atlas.db and the memory files (dry run unless `--apply`).
+- ConnectWise connector: a TLS-relaxed setting applies to one request only, bounded redirects (never https to http), redacted token-exchange errors.
+- `ATLAS_DECISION_URL` must be a loopback address unless `ATLAS_DECISION_ALLOW_REMOTE=1`.
+
+### Added
+
+- `ATLAS_MAX_TEAM` (default 6) caps a spawn-team; larger teams are refused with a JSON error. `atlas_mux.py wait --kill-on-timeout` (or `ATLAS_WAIT_KILL=1`) kills the team's panes when the timeout expires. Claude pane workers run with `--disallowedTools Agent,Task`. Team tmux sessions get a 5000-line scrollback limit. `spawn-team` reaps an orphaned all-dead `atlas-<team>` session and refuses when it still has live panes.
+- Board notes: `ATLAS_NOTE_MAX_BYTES` (default 8192) refuses oversized notes with `body_too_large`; `ATLAS_NOTE_ARCHIVE_BYTES` (default 2 MiB) moves notes older than 14 days to `board/archive`; torn lines are repaired; a corrupt `channels.json` is quarantined, not overwritten; the lead lock is bounded.
+- Rig spec writes are locked, live panes are never reaped, and `pane.read` capture works for herdr seats. Seat status reports a missing tmux for the rig backend. Colony code survives hosts without `ps`.
+- `atlas_doctor` gate-block spike alert (`mine_gate_block_spike`).
+- Hook time budgets, safer edit/read nudges, and no guessed serena language.
+- Docs: public-surface and license cleanup (Apache-2.0 files for atlas and armada), concise plugin manifests, `docs/archive/` for pre-12.5.10 changelog history and observed connector configs, connector audits moved to `docs/audits/`, self-sufficient `atlas-ux-test` with a headless-only browser rule.
+
+### Fixed
+
+- PAN-OS `commit` sends `action=` for partial and commit-all (armada 2.2.0).
+- `herdr install_check` requires `rsync` only when the web UI needs a rebuild.
+- Test hermeticity: root-safe, opt-in install parity, FakeHerdr listener join, seat backend pinned in launch tests.
+
+### Not ported
+
+- Friction metadata side table (`friction_meta`), kept 16.0.1 `role`/`gate_letter`/`tool_name` columns instead.
+- Multi-window team tmux layout, kept the single tiled window.
+- Coalesced pane-feed repaint, kept 16.0.1's event-paint throttle.
+- Bounded, symlink-safe `.atlas/evidence` walk in the completion gate, kept the recursive scan.
+- `ATLAS_PINNED_PROJECTS` selector pin, kept the marker-based selector.
+
 ## 16.0.1 - 2026-10-27
 
 ### Fixed

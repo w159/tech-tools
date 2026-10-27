@@ -1,4 +1,4 @@
-# Atlas self-telemetry (atlas-audit mode)
+# Atlas self-telemetry
 
 ## Contents
 
@@ -32,7 +32,7 @@ below -- never parse raw files or rely on memory alone.
 The three lenses (run health, asset/context audit, session forensics) each own
 distinct sources, drivers, and outputs. The per-lens `atlas_db.py` functions,
 the transcript-mirror tables, the four forensic questions, and the nudge
-capture format are documented in `references/lens-set.md`. Read it before
+capture format are documented in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-audit/references/lens-set.md`. Read it before
 choosing a lens and when wiring a new read against the mirror.
 
 Files are NOT the SSOT for run metrics. claude-mem is the narrative layer only:

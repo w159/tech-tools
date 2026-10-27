@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import base64
+import json
 import os
 import re
 import shutil
@@ -255,7 +256,17 @@ class InProcessDashboard(unittest.TestCase):
         shutil.rmtree(cls.tmpdir, ignore_errors=True)
 
     def ws_path(self, **q):
-        q = {"token": self.D.DASH_TOKEN, **q}
+        """WS path. An explicit token= is sent as-is (legacy, must be refused);
+        otherwise a ticket is planted directly so request-shape validation still
+        runs inside handle_ws (the ticket route itself would pre-validate)."""
+        if "token" not in q:
+            t = "test-" + os.urandom(8).hex()
+            with T._ticket_lock:
+                T._tickets[t] = (
+                    time.monotonic() + T.TICKET_TTL_S,
+                    {k: v for k, v in q.items() if v is not None},
+                )
+            return f"/api/v2/term/ws?ticket={t}"
         return "/api/v2/term/ws?" + "&".join(
             f"{k}={v}" for k, v in q.items() if v is not None
         )
@@ -529,24 +540,8 @@ class InProcessDashboard(unittest.TestCase):
         T._tickets[t] = (time.monotonic() - 1, T._tickets[t][1])
         self.assert_denied(path, code=403)
 
-    def test_legacy_token_still_works_and_logs_deprecation(self):
-        import contextlib
-        import io
-
-        os.environ["ATLAS_TERM_TUI_CMD"] = "sh -c 'echo legacy-ok; exec cat'"
-        buf = io.StringIO()
-        try:
-            with contextlib.redirect_stderr(buf):
-                c = WsClient(self.port, self.ws_path(kind="tui"))
-                try:
-                    self.assertEqual(c.status, 101, c.head)
-                    c.read_until(b"legacy-ok")
-                finally:
-                    c.close()
-        finally:
-            os.environ.pop("ATLAS_TERM_TUI_CMD", None)
-        self.assertEqual(buf.getvalue().count("deprecated"), 1, buf.getvalue())
-        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+    def test_legacy_query_token_is_rejected(self):
+        self.assert_denied(self.ws_path(kind="tui", token=self.D.DASH_TOKEN))
 
     def test_shell_pty_roundtrip_cwd_and_term(self):
         d = os.path.realpath(tempfile.mkdtemp(prefix="atlsh", dir="/tmp"))
@@ -841,7 +836,21 @@ class RealServeTests(unittest.TestCase):
             m = re.search(r'name="atlas-token" content="([^"]+)"', html)
             assert m is not None
             token = m.group(1)
-            c = WsClient(port, f"/api/v2/term/ws?kind=tui&token={token}")
+            legacy = WsClient(port, f"/api/v2/term/ws?kind=tui&token={token}")
+            self.assertEqual(legacy.status, 403, "query token must be rejected")
+            legacy.close()
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/v2/term/ticket",
+                data=json.dumps({"kind": "tui"}).encode(),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Atlas-Token": token,
+                    "Host": f"127.0.0.1:{port}",
+                },
+                method="POST",
+            )
+            ticket = json.load(urllib.request.urlopen(req, timeout=5))["ticket"]
+            c = WsClient(port, f"/api/v2/term/ws?ticket={ticket}")
             try:
                 self.assertEqual(c.status, 101, c.head)
                 c.read_until(b"serve-ready")

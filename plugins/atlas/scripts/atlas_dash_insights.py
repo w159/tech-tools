@@ -1176,76 +1176,85 @@ def _unlogged_transcripts(db: _Db, now: float, since: float) -> dict:
     return out
 
 
-def _health_payload(ctx):
-    warnings = hc.start()
-    db = _open(ctx)
-    now = time.time()
-    win = _window_seconds(_q(ctx, "window", "7d"))
-    since = now - win
-    root = _project_filter(ctx, db)
-    silent, enforcement_items, scan, tool_error_items = _collect_events(
-        db, since, root, now
-    )
-    tool_errors = _tool_error_summary(tool_error_items)
-    enforcement = _enforcement_summary(enforcement_items)
-    by_kind: dict[str, int] = {}
-    for s in silent:
-        by_kind[s["kind"]] = by_kind.get(s["kind"], 0) + s["count"]
+class _Health:
+    """Per-request inputs shared by the health cards: window, db, event scan, silent failures."""
 
-    def last_of(kind):
-        ls = [s["last"] for s in silent if s["kind"] == kind and s["last"]]
+    def __init__(self, ctx):
+        self.db = db = _open(ctx)
+        self.now = time.time()
+        self.win = _window_seconds(_q(ctx, "window", "7d"))
+        self.since = self.now - self.win
+        self.root = _project_filter(ctx, db)
+        (
+            self.silent,
+            enforcement_items,
+            self.scan,
+            tool_error_items,
+        ) = _collect_events(db, self.since, self.root, self.now)
+        self.tool_errors = _tool_error_summary(tool_error_items)
+        self.enforcement = _enforcement_summary(enforcement_items)
+        self.by_kind: dict[str, int] = {}
+        for s in self.silent:
+            self.by_kind[s["kind"]] = self.by_kind.get(s["kind"], 0) + s["count"]
+        self.has_denied = "denied" in db.cols("tool_calls")
+
+    def last_of(self, kind):
+        ls = [s["last"] for s in self.silent if s["kind"] == kind and s["last"]]
         return max(ls) if ls else None
 
-    def active_of(kind):
-        return any(s["kind"] == kind and s["state"] == "active" for s in silent)
+    def active_of(self, kind):
+        return any(s["kind"] == kind and s["state"] == "active" for s in self.silent)
 
-    def ages_of(kind):
-        ls = [s["ages_out"] for s in silent if s["kind"] == kind and s["ages_out"]]
+    def ages_of(self, kind):
+        ls = [s["ages_out"] for s in self.silent if s["kind"] == kind and s["ages_out"]]
         return max(ls) if ls else None
 
-    def sub(
-        id_,
-        label,
-        status,
-        detail,
-        last_ok=None,
-        last_fail=None,
-        evidence=(),
-        *,
-        reason=None,
-        history=None,
-        history_reason=None,
-        history_source=None,
-    ):
-        """`reason` set = the source does not exist yet: status unknown, measured false.
-        `last_ok` is an ISO time the subsystem was last seen working (never invented);
-        `history` is None when no timestamped source exists, with `history_reason` saying why."""
-        measured = reason is None
-        info = _SUB_INFO.get(id_, {})
-        return {
-            "id": id_,
-            "label": label,
-            "status": status if measured else "unknown",
-            "measured": measured,
-            "reason": reason,
-            "detail": detail if measured else reason,
-            "what": info.get("what"),
-            "warn_means": info.get("warn_means"),
-            "next": info.get("next"),
-            "ok_label": info.get("ok_label", "Last OK"),
-            "fail_label": info.get("fail_label", "Last failure"),
-            "last_ok": last_ok if measured else None,
-            "last_fail": last_fail if measured else None,
-            "evidence": [e for e in evidence if e],
-            "history": history if measured else None,
-            "history_source": history_source if measured and history else None,
-            "history_reason": None
-            if history is not None or not measured
-            else (history_reason or "no timestamped source"),
-        }
 
-    subs = []
-    # hooks: hookstate last_run + stop events, hook-faults.jsonl, burst breaker
+def _sub(
+    id_,
+    label,
+    status,
+    detail,
+    last_ok=None,
+    last_fail=None,
+    evidence=(),
+    *,
+    reason=None,
+    history=None,
+    history_reason=None,
+    history_source=None,
+):
+    """`reason` set = the source does not exist yet: status unknown, measured false.
+    `last_ok` is an ISO time the subsystem was last seen working (never invented);
+    `history` is None when no timestamped source exists, with `history_reason` saying why."""
+    measured = reason is None
+    info = _SUB_INFO.get(id_, {})
+    return {
+        "id": id_,
+        "label": label,
+        "status": status if measured else "unknown",
+        "measured": measured,
+        "reason": reason,
+        "detail": detail if measured else reason,
+        "what": info.get("what"),
+        "warn_means": info.get("warn_means"),
+        "next": info.get("next"),
+        "ok_label": info.get("ok_label", "Last OK"),
+        "fail_label": info.get("fail_label", "Last failure"),
+        "last_ok": last_ok if measured else None,
+        "last_fail": last_fail if measured else None,
+        "evidence": [e for e in evidence if e],
+        "history": history if measured else None,
+        "history_source": history_source if measured and history else None,
+        "history_reason": None
+        if history is not None or not measured
+        else (history_reason or "no timestamped source"),
+    }
+
+
+def _hooks_card(h):
+    """hooks: hookstate last_run + stop events, hook-faults.jsonl, burst breaker"""
+    now, win, since, silent, scan, by_kind, last_of, active_of = h.now, h.win, h.since, h.silent, h.scan, h.by_kind, h.last_of, h.active_of
     bursts = by_kind.get("hook_burst_tripped", 0)
     crashes = by_kind.get("hook_crash", 0)
     newest_hook = max(scan["last_run"].values()) if scan["last_run"] else None
@@ -1286,8 +1295,8 @@ def _health_payload(ctx):
             f"stale plugin install {stale['version']} is producing faults: run "
             f"python3 {SCRIPTS_DIR}/atlas_doctor.py --fix, then /reload-plugins"
         )
-    subs.append(
-        sub(
+    return (
+        _sub(
             "hooks",
             "Hooks",
             hooks_status,
@@ -1331,11 +1340,13 @@ def _health_payload(ctx):
             history_source="hookstate.stop_events (ok) vs hook-faults.jsonl + breaker trips (fail)",
         )
     )
-    # gate: enforcement is the system working, so this is informational ("ok"),
-    # never warn/fail; the counts live in the separate enforcement stream.
+
+
+def _gate_card(h):
+    """gate: enforcement is the system working, so this is informational"""
+    db, win, since, enforcement, has_denied = h.db, h.win, h.since, h.enforcement, h.has_denied
     gate_deny_n = enforcement["counts"].get("gate_deny", 0)
     gate_block_n = enforcement["counts"].get("gate_block", 0)
-    has_denied = "denied" in db.cols("tool_calls")
     allowed = "COALESCE(denied,0)=0" if has_denied else "1"
     gate_reason = gate_ok = gate_hist = None
     allowed_n = 0
@@ -1362,8 +1373,8 @@ def _health_payload(ctx):
             since,
             win,
         )
-    subs.append(
-        sub(
+    return (
+        _sub(
             "gate",
             "Gates & denies",
             "ok",
@@ -1380,7 +1391,11 @@ def _health_payload(ctx):
             history_source="tool_calls: allowed (ok) vs denied by a gate (fail = enforcement, not a fault)",
         )
     )
-    # dispatch
+
+
+def _dispatch_card(h):
+    """dispatch: typed vs unclassified dispatches"""
+    db, win, since, by_kind, last_of, active_of, ages_of = h.db, h.win, h.since, h.by_kind, h.last_of, h.active_of, h.ages_of
     disp_n = by_kind.get("dispatch_unclassified", 0)
     disp_reason = disp_ok = disp_hist = None
     disp_win = 0
@@ -1412,8 +1427,8 @@ def _health_payload(ctx):
                 (since,),
             )
         ]
-    subs.append(
-        sub(
+    return (
+        _sub(
             "dispatch",
             "Dispatch",
             "warn" if active_of("dispatch_unclassified") else "ok",
@@ -1440,7 +1455,11 @@ def _health_payload(ctx):
             history_source="dispatches: typed (ok) vs empty agent_type (fail)",
         )
     )
-    # mux: worker runs (colony); stuck = started over an hour ago and never ended
+
+
+def _mux_card(h):
+    """mux: worker runs (colony); stuck = started over an hour ago and never ended"""
+    db, now, win, since, silent, by_kind, last_of = h.db, h.now, h.win, h.since, h.silent, h.by_kind, h.last_of
     stuck = by_kind.get("agent_stuck", 0)
     mux_reason = mux_ok = mux_hist = None
     mux_win = 0
@@ -1473,8 +1492,8 @@ def _health_payload(ctx):
                 "WHERE kind='worker' ORDER BY started_at DESC LIMIT 3"
             )
         ]
-    subs.append(
-        sub(
+    return (
+        _sub(
             "mux",
             "Colony / mux",
             "warn" if stuck else "ok" if mux_win else "info",
@@ -1493,15 +1512,18 @@ def _health_payload(ctx):
             history_source="runs kind=worker: closed (ok) vs never closed after 1h (fail)",
         )
     )
-    # dashboard: this response is the live check, so the daemon is OK now. The log
-    # only feeds the error count (and has no per-line timestamps, hence no history).
+
+
+def _dashboard_card(h):
+    """dashboard: this response is the live check, so the daemon is OK now"""
+    now, silent, by_kind, last_of = h.now, h.silent, h.by_kind, h.last_of
     dash_n = by_kind.get("dashboard_error", 0)
     try:
         dash_st = DASHBOARD_LOG.stat()
     except OSError:
         dash_st = None
-    subs.append(
-        sub(
+    return (
+        _sub(
             "dashboard",
             "Dashboard daemon",
             "warn" if dash_n else "ok",
@@ -1521,9 +1543,14 @@ def _health_payload(ctx):
             history_reason="dashboard.log lines carry no timestamps",
         )
     )
+
+
+def _reaper_card(h):
+    """reaper: in-memory reap failures since the dashboard started"""
+    now = h.now
     reap_fails = list(REAP_FAILURES)
-    subs.append(
-        sub(
+    return (
+        _sub(
             "reaper",
             "Reaper",
             "warn" if reap_fails else "ok",
@@ -1539,7 +1566,11 @@ def _health_payload(ctx):
             history_reason="failures are kept in memory only",
         )
     )
-    # db
+
+
+def _db_card(h):
+    """db: telemetry database size and table counts"""
+    db, now, win, since = h.db, h.now, h.win, h.since
     size = None
     try:
         size = db.rows("PRAGMA page_count")[0][0] * db.rows("PRAGMA page_size")[0][0]
@@ -1557,8 +1588,8 @@ def _health_payload(ctx):
         )
         if db.has(t)
     ]
-    subs.append(
-        sub(
+    return (
+        _sub(
             "db",
             "Telemetry DB",
             "ok" if db.tables else "fail",
@@ -1575,8 +1606,11 @@ def _health_payload(ctx):
             history_reason="no tool_calls table",
         )
     )
-    # connectors: same definition Settings shows (credentials on file + tool_calls
-    # usage/error rate), supplied by the dashboard; no live test is run here.
+
+
+def _connectors_card(h):
+    """connectors: credentials on file + tool_calls usage/error rate; no live test"""
+    db, win, since, has_denied = h.db, h.win, h.since, h.has_denied
     rows = []
     if CONNECTOR_STATUS_PROVIDER is not None:
         try:
@@ -1616,8 +1650,8 @@ def _health_payload(ctx):
             scope,
             servers,
         )
-    subs.append(
-        sub(
+    return (
+        _sub(
             "connectors",
             "Connectors",
             "warn" if flagged else "ok",
@@ -1645,15 +1679,19 @@ def _health_payload(ctx):
             history_reason="no tool_calls with server names",
         )
     )
-    # memory: MEMORY.md plus the memory_capture hook's own last run
+
+
+def _memory_card(h):
+    """memory: MEMORY.md plus the memory_capture hook's own last run"""
+    scan = h.scan
     mem = _state_dir() / "memory" / "MEMORY.md"
     try:
         mem_st = mem.stat()
     except OSError:
         mem_st = None
     cap = scan["last_run"].get("memory_capture")
-    subs.append(
-        sub(
+    return (
+        _sub(
             "memory",
             "Memory capture",
             "ok" if mem_st else "warn",
@@ -1674,7 +1712,11 @@ def _health_payload(ctx):
             history_reason="MEMORY.md keeps only its latest modification time",
         )
     )
-    # nudge: stamp file plus the nudge hook's own last run
+
+
+def _nudge_card(h):
+    """nudge: stamp file plus the nudge hook's own last run"""
+    scan = h.scan
     nudge_ts = None
     try:
         nudge_ts = float(NUDGE_STAMP.read_text().strip())
@@ -1682,8 +1724,8 @@ def _health_payload(ctx):
         pass
     nudge_run = scan["last_run"].get("nudge")
     nudge_last = _newest(_iso(nudge_ts), _iso(nudge_run))
-    subs.append(
-        sub(
+    return (
+        _sub(
             "nudge",
             "Nudge",
             "ok",
@@ -1704,7 +1746,11 @@ def _health_payload(ctx):
             history_reason="the hook records only its latest run time",
         )
     )
-    # doctor: findings activity (the miner persists findings, not runs)
+
+
+def _doctor_card(h):
+    """doctor: findings activity (the miner persists findings, not runs)"""
+    db, win, since, by_kind, last_of, active_of = h.db, h.win, h.since, h.by_kind, h.last_of, h.active_of
     open_f = 0
     miner_err = by_kind.get("doctor_miner_error", 0)
     doc_reason = doc_ok = doc_hist = None
@@ -1733,8 +1779,8 @@ def _health_payload(ctx):
                 f"ORDER BY {act} DESC LIMIT 3"
             )
         ]
-    subs.append(
-        sub(
+    return (
+        _sub(
             "doctor",
             "Doctor",
             "warn" if miner_err or active_of("doctor_regression") else "ok",
@@ -1748,7 +1794,11 @@ def _health_payload(ctx):
             history_source="findings activity per bucket (fail = regressed)",
         )
     )
-    # chronicle: transcript ingest cursors
+
+
+def _chronicle_card(h):
+    """chronicle: transcript ingest cursors"""
+    db, now, win, since, by_kind, last_of = h.db, h.now, h.win, h.since, h.by_kind, h.last_of
     ing = by_kind.get("ingest_stalled", 0)
     chr_reason = chr_ok = chr_hist = None
     ing_n = behind = 0
@@ -1800,7 +1850,7 @@ def _health_payload(ctx):
             else f"{behind} older transcript files behind (outside the window); {ing_n} tracked"
         )
     )
-    chr_card = sub(
+    chr_card = _sub(
         "chronicle",
         "Chronicle ingest",
         "warn" if ing or unl_n else "ok",
@@ -1832,21 +1882,42 @@ def _health_payload(ctx):
         )
         or "Nothing to do."
     )
-    subs.append(chr_card)
+    return chr_card
 
-    successes = _successes(db, since, root)
+_HEALTH_CARDS = (
+    _hooks_card,
+    _gate_card,
+    _dispatch_card,
+    _mux_card,
+    _dashboard_card,
+    _reaper_card,
+    _db_card,
+    _connectors_card,
+    _memory_card,
+    _nudge_card,
+    _doctor_card,
+    _chronicle_card,
+)
+
+
+def _health_payload(ctx):
+    warnings = hc.start()
+    h = _Health(ctx)
+    subs = [card(h) for card in _HEALTH_CARDS]
+    successes = _successes(h.db, h.since, h.root)
     hc.apply_to_subsystems(subs, warnings)
     return {
         "data_warnings": warnings,
-        "checked_at": _iso(now),
-        "window_seconds": int(win),
+        "checked_at": _iso(h.now),
+        "window_seconds": int(h.win),
         "active_seconds": ACTIVE_SECS,
         "subsystems": subs,
-        "silent_failures": silent,
+        "silent_failures": h.silent,
         "successes": successes,
-        "enforcement": enforcement,
-        "tool_errors": tool_errors,
+        "enforcement": h.enforcement,
+        "tool_errors": h.tool_errors,
     }
+
 
 
 def _successes(db: _Db, since: float, root: str | None) -> list[dict]:

@@ -87,9 +87,9 @@ profile only; named profiles have their own config) and restart omp.
 ## Use it in chat
 
 Atlas is driven from the chat prompt of Claude Code or omp. Type a skill name
-followed by what you want, or just describe the work: 37 of the 38 skills
-auto-trigger from their description. The one manual skill, `/atlas-setup`,
-you invoke yourself. The output blocks below are illustrative
+followed by what you want, or just describe the work: 36 of the 39 skills
+auto-trigger from their description. The three manual skills, `/atlas-setup`,
+`/atlas-prompt` and `/atlas-tui`, you invoke yourself. The output blocks below are illustrative
 sketches, not captured runs; real answers are longer, but open with the
 `ATLAS | <glyph> <phase> | <state>` status line the output style requires.
 
@@ -259,12 +259,12 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
 `ATLAS_TRIPWIRE=off` disables the drift tiers (nudges); `ATLAS_TRIPWIRE_THRESHOLD`
 (default 4) sets the nudge tier.
 
-**Completion gate** (`hooks/completion_gate.py`, Stop). Sixteen conditions,
-(a) to (p). It engages only in a project with a `docs/` directory, stays silent
+**Completion gate** (`hooks/completion_gate.py`, Stop). Seventeen conditions,
+(a) to (q). It engages only in a project with a `docs/` directory, stays silent
 while a dispatch is in flight, and prints one block message listing exactly
 which conditions are unmet:
 
-- (a) evidence saved under `.atlas/evidence/` during this run
+- (a) evidence saved under `.atlas/evidence/` during this run; nested dated folders (`.atlas/evidence/<date>-<slug>/...`) count
 - (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run
 - (c) `docs/CHANGELOG.md` exists and is non-empty
 - (d) `docs/ROADMAP.md` exists and is non-empty
@@ -281,10 +281,11 @@ which conditions are unmet:
 - (n) status header: an orchestrating session's final reply starts with `ATLAS | <glyph> <phase> | <state>`
 - (o) phased todo: when code shipped, the session's board items cover the `implement` and `verify` phases
 - (p) colony channel: with two or more atlas workers dispatched, the board notes or IRC show use: a board note on this run's lead channel authored by a registered (or departed) member that is not a lead, or IRC/`SendMessage` traffic recorded for the run
+- (q) unmerged worker branches: no `worker/*` branch holding commits that are not merged into the base, and no dirty worker worktree (`atlas_wt.py status`); merge with `atlas_wt.py merge <agent>`. Not limited to code-shipping runs; sidechains are exempt
 
-(a), (b), (f) and (g) apply only when the run shipped non-docs code. (n), (o)
+(a) to (i), (k) and (o) apply only when the run shipped non-docs code, so (c), (d), (e) and (h) (CHANGELOG, ROADMAP, README and stale ROADMAP items) are skipped on a run that shipped no code. (n), (o)
 and (p) ask for presentation repairs, so each blocks at most once per session;
-(a) to (m) re-block on every Stop until they hold. Fix the listed condition
+(a) to (m) and (q) re-block on every Stop until they hold. Fix the listed condition
 (paste the test output, write the finding with
 `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py"`, dispatch the
 verifier), then stop again.
@@ -323,7 +324,21 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_REMOTE_PORT` | HTTPS port `atlas_remote.py` maps with `tailscale serve` (default 8443, never 443) |
 | `ATLAS_DASHBOARD_URL` | where the herdr web UI's `/atlas/**` gateway proxies the dashboard (loopback only; default `http://127.0.0.1:7421`) |
 | `ATLAS_LANDING=off` | the herdr web UI's redirect of a browser visit of `/` to the dashboard (`/atlas/#/herd`); the herdr app is then served at `/` |
+| `ATLAS_MAX_TEAM` | most workers one `atlas_mux.py spawn` team may start (default 6); a larger team is refused with a JSON error |
+| `ATLAS_WAIT_KILL=1` | `atlas_mux.py wait` kills the team's tmux session when its timeout expires, same as `wait --kill-on-timeout` (default off; not applied to claude-bg or herdr teams) |
+| `ATLAS_PINNED_PROJECTS` | folders (separated by the OS path separator) that always appear in the Command Center project selector even without a `.git`, `docs/` or package manifest; also set from Settings |
+| `ATLAS_DECISION_ALLOW_REMOTE=1` | lets `ATLAS_DECISION_URL` name a non-loopback host; otherwise a remote URL is refused and the regex result is kept (default off) |
+| `ATLAS_NOTE_MAX_BYTES` | largest board note body accepted (default 8192 bytes); longer notes are refused with `body_too_large` |
+| `ATLAS_NOTE_ARCHIVE_BYTES` | size an owner's note file may reach before notes older than 14 days move to `board/archive` (default 2097152 bytes) |
+| `ATLAS_CHECK_INSTALL_PARITY=1` | opt in to the two contract tests that compare the repo with the installed plugin cache (default off, so a suite run never depends on the install) |
 | omp only: `ATLAS_HOOK_BRIDGE`, `ATLAS_STOP_BRIDGE`, `ATLAS_LEAN_SHELL`, `ATLAS_ADVISOR_GATE`, `ATLAS_STYLE`, `ATLAS_NATIVE_POLICY` | see [omp parity](#omp-parity) |
+
+**Related flags and miners.**
+
+- `atlas_mux.py wait --kill-on-timeout` closes the team's tmux session when the wait times out (`ATLAS_WAIT_KILL=1` sets it for every wait).
+- `atlas_todo.py notes-archive [--days N]` moves every owner's board notes older than N days (default 14) to `board/archive`; it also runs when a note file passes `ATLAS_NOTE_ARCHIVE_BYTES`.
+- `atlas_doctor.py --redact-history [--apply]` runs the secret and NPI redactor over stored messages, prompts, tool calls, session logs and memory files. Without `--apply` it is a dry run that prints counts.
+- The `gate_block_spike` miner in `atlas_doctor.py --mine` is alert only: when a gate's blocks in the last 24 hours exceed 1.5 times its daily average over the previous 14 days and reach 5, it records a finding for human review. It never edits gate configuration.
 
 ## Skills
 
@@ -407,9 +422,9 @@ edit code; fresh agents start without the leader's assumptions. Source:
 
 ## Hooks
 
-Wired in `plugins/atlas/hooks/hooks.json`: 17 programs across 21 command
-bindings, fired by 8 lifecycle events (SessionStart, UserPromptSubmit,
-PreToolUse, PostToolUse, Stop, SubagentStop, SessionEnd, PreCompact). All are
+Wired in `plugins/atlas/hooks/hooks.json`: 18 programs across 22 command
+bindings (ten of them run through `event_dispatch.py`), fired by 9 lifecycle events (SessionStart, UserPromptSubmit,
+PreToolUse, PostToolUse, Stop, SubagentStart, SubagentStop, SessionEnd, PreCompact). All are
 stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 `completion_gate.py`, and `fallow_gate.py` deny on purpose.
 
@@ -418,6 +433,7 @@ stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 | `session_boot.py` | SessionStart | Loads contract, memory, board carry-over, tool routing; claude-mem "Recall first" line; starts the dashboard and prints its URL only when `ATLAS_DASHBOARD=on`. | `ATLAS_DASHBOARD` (default `off`; dashboard part) |
 | `scripts/atlas_doctor.py --hook` | SessionStart | Rollback guard: warns on downgrade, forked marketplace, or missing hooks/assets. | n/a |
 | `prompt_optimizer.py` | UserPromptSubmit | Optional model-rewritten prompt; arms orchestration on engineering prompts. | `ATLAS_ENGINE_ARM=off`, decision part `ATLAS_DECISION=off` |
+| `event_dispatch.py` | PreToolUse, PostToolUse | One process per tool event: runs recall_gate, bash_advisor, edit_read_nudge and dispatch_tripwire (Pre), and todo_capture, docs_drift_watch, delegation_prewarn, edit_read_nudge, dispatch_tripwire and the connector watch (Post) in-process, each under its own time slice; a failing hook never stops the next. `fallow_gate.py` and `format_after_edit.py` stay separate. | n/a (each hosted hook keeps its own switch) |
 | `recall_gate.py` | PreToolUse (all) | claude-mem recall gate (see message above). | `ATLAS_MANDATES=off` |
 | `bash_advisor.py` | PreToolUse (Bash) | Warns on catastrophic commands; one ponytail-before-commit nudge per session. Advisory only. | n/a |
 | `fallow_gate.py` | PreToolUse (Bash) | On `git commit`/`git push`, runs `fallow audit`; denies on `verdict: fail`. Fail-open when the CLI is absent. | `ATLAS_FALLOW=off` |
@@ -897,13 +913,12 @@ tech-tools/
 |  |  |- .claude-plugin/     # plugin.json + userConfig (51 keys)
 |  |  |- (no .mcp.json or mcp/: the 13 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
-|  |  |- skills/             # 47 skills
-|  |  |- agents/             # 13 role agents
-|  |  |- hooks/              # 16 bound hook programs (atlas_doctor.py, the 17th, is in scripts/), helpers, hooks.json, tests
+|  |  |- skills/             # 39 skills
+|  |  |- agents/             # 14 agents
+|  |  |- hooks/              # 18 hook programs / 22 bindings (17 in hooks/, atlas_doctor.py, the 18th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
 |  |  |- scripts/            # 27 scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
-|  |  |- mcp/                # bundled connector servers (11 Node + falcon) and the shared _env loader
 |  |  |- output-styles/      # atlas-orchestrator
 |  |  |- references/         # supporting reference docs
 |  |  \- CHANGELOG.md

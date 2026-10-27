@@ -89,14 +89,49 @@ class CandidatesTest(unittest.TestCase):
         finally:
             os.chmod(local, 0o644)
 
-    def test_prettier_global_when_no_local(self):
+    def test_prettier_global_skipped_without_project_config(self):
         with mock.patch.object(
             format_after_edit.shutil, "which", side_effect=lambda c: c == "prettier"
         ):
             out = format_after_edit.candidates_for("a.ts", self.cwd)
+        self.assertEqual(out, [])
+
+    def test_prettier_global_used_with_config_file(self):
+        with open(os.path.join(self.cwd, ".prettierrc"), "w") as f:
+            f.write("{}")
+        with mock.patch.object(
+            format_after_edit.shutil, "which", side_effect=lambda c: c == "prettier"
+        ):
+            out = format_after_edit.candidates_for(
+                os.path.join(self.cwd, "a.ts"), self.cwd
+            )
         self.assertEqual(out, [["prettier", "--write", "--log-level", "warn"]])
 
+    def test_prettier_global_used_with_package_json_key(self):
+        with open(os.path.join(self.cwd, "package.json"), "w") as f:
+            json.dump({"name": "x", "prettier": {"semi": False}}, f)
+        with mock.patch.object(
+            format_after_edit.shutil, "which", side_effect=lambda c: c == "prettier"
+        ):
+            out = format_after_edit.candidates_for(
+                os.path.join(self.cwd, "a.ts"), self.cwd
+            )
+        self.assertEqual(len(out), 1)
+
+    def test_prettier_global_skipped_package_json_without_key(self):
+        with open(os.path.join(self.cwd, "package.json"), "w") as f:
+            json.dump({"name": "x"}, f)
+        with mock.patch.object(
+            format_after_edit.shutil, "which", side_effect=lambda c: c == "prettier"
+        ):
+            out = format_after_edit.candidates_for(
+                os.path.join(self.cwd, "a.ts"), self.cwd
+            )
+        self.assertEqual(out, [])
+
     def test_prettier_both_local_and_global(self):
+        with open(os.path.join(self.cwd, ".prettierrc"), "w") as f:
+            f.write("{}")
         local = os.path.join(self.cwd, "node_modules", ".bin", "prettier")
         os.makedirs(os.path.dirname(local), exist_ok=True)
         with open(local, "w") as f:
@@ -435,6 +470,31 @@ class MainInProcessTest(unittest.TestCase):
                 os.path.join(sub, "a.ts"), elsewhere
             )
         self.assertEqual(cands[0][0], prettier)
+
+    def test_shared_deadline_bounds_total_candidate_time(self):
+        """Two candidates must share one budget, not 55 s each."""
+        target = os.path.join(self.tmp, "t.py")
+        with open(target, "w") as f:
+            f.write("x = 1\n")
+        timeouts = []
+        clock = [1000.0]
+
+        def fake_run(cmd, **kw):
+            timeouts.append(kw["timeout"])
+            clock[0] += kw["timeout"]  # first candidate burns its whole slice
+            raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+        with (
+            mock.patch.object(
+                format_after_edit.shutil, "which", side_effect=lambda c: c in ("ruff", "black")
+            ),
+            mock.patch.object(format_after_edit.subprocess, "run", side_effect=fake_run),
+            mock.patch.object(format_after_edit.time, "monotonic", side_effect=lambda: clock[0]),
+            mock.patch.object(format_after_edit, "_record_skip"),
+        ):
+            self._run_main(_payload("Edit", target, cwd=self.tmp))
+        self.assertEqual(len(timeouts), 1)
+        self.assertLessEqual(sum(timeouts), 50.0)
 
     def test_skip_with_db_unavailable_still_exits_zero(self):
         import atlas_db

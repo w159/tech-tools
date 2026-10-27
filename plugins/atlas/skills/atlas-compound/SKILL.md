@@ -2,7 +2,7 @@
 name: atlas-compound
 description: "Captures one durable, verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use when a problem is solved and verified and a future engineer would repeat it."
 when_to_use: "record this lesson, capture what we learned, write up the root cause, post-mortem note, institutional knowledge"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, ToolSearch
 argument-hint: '<optional context: what was solved and why it was non-obvious>'
 ---
 
@@ -20,7 +20,7 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 ## Why this skill exists
 
-Atlas already has learning stores, but none of them is a typed, retrievable, overlap-checked lesson corpus: `.atlas/.run/findings.json` is a per-run verification ledger, `.atlas/findings/` is the curator-distilled dated ledger of resolved fixes, and the hook pipeline (`hooks/memory_capture.py` + `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_memory.py`) captures only a compact boot-snapshot of corrections and notes into `~/.atlas/memory/` with a hard 8-entry/1200-character injection cap - nothing queryable by problem type, module, or symptom. `docs/lessons/` exists in the docs SSOT (`${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`) but has no enforced schema, no overlap discipline, and no grounding check. CE's `ce-compound` corpus is a genuine, meaningful improvement over that ad hoc capture: typed frontmatter, two-track body structure, overlap-checked updates instead of duplicates, and mechanical claim validation. This skill adopts CE's schema wholesale and grafts it onto atlas's EXISTING trees - `docs/lessons/<category>/` and `.atlas/findings/` - never a parallel `docs/solutions/` tree, never a separate run-state format. CE's per-run `review.json`/`metadata.json` state is NOT ported; atlas's `.atlas/.run/findings.json` and docs-curator pipeline remain the source of truth.
+Atlas already has learning stores, but none of them is a typed, retrievable, overlap-checked lesson corpus: `.atlas/.run/findings.json` is a per-run verification ledger, `.atlas/findings/` is the curator-distilled dated ledger of resolved fixes, and the hook pipeline (`hooks/memory_capture.py` + `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_memory.py`) captures only a compact boot-snapshot of corrections and notes into `~/.atlas/memory/` with a hard 8-entry/1200-character injection cap - nothing queryable by problem type, module, or symptom. `docs/lessons/` exists in the docs SSOT (`${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`) but has no enforced schema, no overlap discipline, and no grounding check. This skill adds typed frontmatter, a two-track body structure, overlap-checked updates instead of duplicates, and mechanical claim validation, grafted onto atlas's EXISTING trees - `docs/lessons/<category>/` and `.atlas/findings/` - never a parallel `docs/solutions/` tree, never a separate run-state format. atlas's `.atlas/.run/findings.json` and docs-curator pipeline remain the source of truth.
 
 **Write-ownership note:** the capture workflow below (eligibility, research, overlap, assembly, grounding) is yours; the WRITE belongs to `atlas:docs-curator`, atlas's sole durable-doc writer (`plugins/atlas/agents/docs-curator.md`). You never write under `docs/` yourself. A sibling task is separately enhancing `docs-curator.md` itself with this same lesson-schema awareness, so the agent will recognize the artifact shape; your job is to hand it a fully assembled, overlap-resolved, grounding-checked artifact, not to own the write. A related sibling is enhancing `memory_capture.py`; you do not touch hooks either.
 
@@ -31,7 +31,7 @@ Reference map (read each when its phase says so):
 | `references/eligibility.md` | Phase 1 - the hard gate, Full vs Lightweight, one-learning rule |
 | `references/overlap.md` | Phase 3 - overlap check against docs/lessons + .atlas/findings |
 | `references/schema.md` | Phase 4 - frontmatter contract, tracks, enums, corpus-first vocabulary, naming |
-| `references/templates.md` | Phase 4 - the two body templates (verbatim from CE) |
+| `references/templates.md` | Phase 4 - the two body templates |
 | `references/grounding.md` | Phase 5 - mechanical grounding-claims check |
 
 Read the arguments as: $ARGUMENTS - optional context naming what was solved. Whatever the argument says, the gate in Phase 1 still decides whether anything gets written.

@@ -35,13 +35,13 @@ The framing packet has five fields, written to `<run-dir>/pov-scope.md`:
 - **What would change the answer**: the specific facts that, if true or false, flip the
   verdict. This list drives the scout and makes the verdict falsifiable.
 - **Repo-state digest** (immutable once written): branch, HEAD SHA, `git status --porcelain`
-  summary (dirty files + untracked count). CE requires the panel to receive an immutable
-  scope including dirty/untracked state; atlas requires the same for its own verdict, so the
+  summary (dirty files + untracked count). The panel receives an immutable
+  scope including dirty/untracked state, so the
   recommendation is anchored to a named revision.
 
 ## 2. Grounding scout (Phase 1)
 
-Dispatch `atlas:explorer` as the scout. It replaces CE's bespoke scout script with atlas's
+Dispatch `atlas:explorer` as the scout. It is atlas's
 existing read-only structural agent; the dossier it returns has three sections, and the
 orchestrator persists it to `<run-dir>/grounding-dossier.md` (explorer is read-only and
 returns its dossier as its final report).
@@ -102,7 +102,7 @@ be averaged later - the finished position. Write it to `<run-dir>/atlas-verdict.
 it in chat if the run is staying ephemeral). Shape:
 
 - **Position**: the choice, stated plainly.
-- **Confidence**: one of the 0/25/50/75/100 anchors (same anchors as CE findings): 0/25 =
+- **Confidence**: one of the 0/25/50/75/100 anchors: 0/25 =
   would not act, 50 = lean, 75 = would act, 100 = proven in this repo.
 - **Evidence**: each item a `file:line` or URL from the dossier, and what it supports.
 - **What would flip it**: restated from the framing, now answered - which of those facts
@@ -131,12 +131,12 @@ Peers are evidence, not votes. For each peer answer (schema in `peer-dispatch.md
   verdict; it transfers the burden - the report must answer every substantive peer argument
   or move.
 - A peer that fails, times out, or returns unusable output is recorded as unavailable and
-  never silently retried or replaced with an invented voice (CE rule: peer failure produces
+  never silently retried or replaced with an invented voice (peer failure produces
   a solo verdict plus an availability note).
 
 ## 6. Grade (Phase 6)
 
-Grade the final recommendation on the CE scale, adapted to atlas's evidence floor:
+Grade the final recommendation on the Adopt/Trial/Hold/Reject scale, adapted to atlas's evidence floor:
 
 | Grade | Meaning | Bar |
 |---|---|---|

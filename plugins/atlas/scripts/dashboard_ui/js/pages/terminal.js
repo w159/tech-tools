@@ -83,7 +83,7 @@ function makeTerm(el, extra) {
 }
 
 // PTY over WebSocket with reconnect: binary frames in, {t:"in"|"resize"} JSON out. onStatus("live"|"connecting"|"closed"|"error", text).
-// fetchTicket(body) -> Promise<ticket> opens every (re)connect with a fresh single-use ticket; without it the legacy token= URL is used.
+// fetchTicket(body) -> Promise<ticket> opens every (re)connect with a fresh single-use ticket; the server no longer accepts a token= URL.
 // noFrameMs/onNoFrame: no byte within that long after the socket opens -> onNoFrame (the card shows Retry); onFrame fires on the first byte.
 export function connectPty({ term, kind, target, project, cwd, onStatus, probe, placeholder, fetchTicket, noFrameMs, onNoFrame, onFrame }) {
   let ws = null;
@@ -104,7 +104,7 @@ export function connectPty({ term, kind, target, project, cwd, onStatus, probe, 
   const url = (ticket) => {
     const { cols, rows } = size();
     const q = new URLSearchParams({ kind, cols: String(cols), rows: String(rows) });
-    if (ticket) q.set("ticket", ticket); else q.set("token", tokenOf());
+    if (ticket) q.set("ticket", ticket); // the server accepts tickets only, never ?token=
     if (target) q.set("target", target);
     if (project && project !== "all") q.set("project", project);
     if (cwd) q.set("cwd", cwd);

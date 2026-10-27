@@ -11,11 +11,14 @@ Rules (each failure names the skill and rule):
   names        every mentioned atlas-* skill/agent name exists
   chars        no U+2013 U+2014 U+2018 U+2019 U+201C U+201D U+2026
   steps        every numbered step section has a completion line
+  dupref       no two skills hold byte-identical reference files (keep one owner,
+               link from the other via ${CLAUDE_PLUGIN_ROOT}/skills/<owner>/references/)
 
 Usage: validate_skills.py [--no-run] [--root PLUGIN_ROOT]   exit 1 on any failure.
 """
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -127,14 +130,32 @@ def check_skill(skill_md, root, names, run_help, help_cache):
     return fails, len(text)
 
 
+def duplicate_references(root):
+    """Map skill name -> [(rule, msg)] for byte-identical reference files across skills."""
+    by_hash = {}
+    for f in sorted((root / "skills").glob("*/references/**/*")):
+        if f.is_file():
+            digest = hashlib.sha256(f.read_bytes()).hexdigest()
+            by_hash.setdefault(digest, []).append(f)
+    out = {}
+    for files in by_hash.values():
+        skills = {f.relative_to(root / "skills").parts[0] for f in files}
+        if len(skills) < 2:
+            continue
+        rels = ", ".join(str(f.relative_to(root / "skills")) for f in files)
+        for s in skills:
+            out.setdefault(s, []).append(("dupref", f"identical reference files: {rels}"))
+    return out
+
+
 def run(root, run_help=True):
     names = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
     names |= {p.stem for p in (root / "agents").glob("*.md")}
     results, cache = [], {}
+    dups = duplicate_references(root)
     for md in sorted((root / "skills").glob("*/SKILL.md")):
-        results.append(
-            (md.parent.name,) + check_skill(md, root, names, run_help, cache)
-        )
+        name, fails, size = (md.parent.name,) + check_skill(md, root, names, run_help, cache)
+        results.append((name, fails + dups.get(name, []), size))
     return results
 
 

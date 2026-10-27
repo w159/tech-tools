@@ -1,15 +1,15 @@
-# Phase 4 — Selection, independent judgment, output
+# Phase 4 - Selection, independent judgment, output
 
 ## Select
 
 Read every completed candidate brief in full before selecting. Then:
 
-1. **Eliminate on hard constraints.** Any `fail` on a pass/fail criterion eliminates the candidate — subjective strength cannot outweigh it.
-2. **Score against the shared criteria.** Head-to-head on the discriminating criteria (the ones that actually differ between candidates). Weight by what the decision is FOR — a data-model choice should weigh reversibility and blast radius more heavily than ramp time on a team that owns it for years.
+1. **Eliminate on hard constraints.** Any `fail` on a pass/fail criterion eliminates the candidate - subjective strength cannot outweigh it.
+2. **Score against the shared criteria.** Head-to-head on the discriminating criteria (the ones that actually differ between candidates). Weight by what the decision is FOR - a data-model choice should weigh reversibility and blast radius more heavily than ramp time on a team that owns it for years.
 3. **Select the strongest viable base** and state the decisive reasons in one paragraph. Reasons must be criterion-anchored ("B because reversibility: A locks the data into a shape a later vendor change cannot unwind, evidenced by X"), never vibes ("B feels more robust").
-4. **Synthesize, carefully.** Incorporate a useful mechanism from a losing candidate only where the result stays coherent — a hybrid that quietly re-imports the loser's costs is worse than a clean win. Record what was incorporated and its origin; keep the material rejection reasons.
+4. **Synthesize, carefully.** Incorporate a useful mechanism from a losing candidate only where the result stays coherent - a hybrid that quietly re-imports the loser's costs is worse than a clean win. Record what was incorporated and its origin; keep the material rejection reasons.
 
-Agreement between candidates is not proof; difference alone is not a reason to restart. Convergence on a mechanism is evidence the field found the natural answer — record it as such.
+Agreement between candidates is not proof; difference alone is not a reason to restart. Convergence on a mechanism is evidence the field found the natural answer - record it as such.
 
 ## Independent judgment (required before declaring a winner)
 
@@ -33,7 +33,7 @@ REPORT BACK: verdict + objections. SCHEMA: bakeoff-verify v1
   evidence_gaps: [ ... ]
 ```
 
-While the verifier runs, perform your own comparison (do not idle). Reconcile material disagreements against evidence, not vote counts. If the verifier returns `refuted`, address the objection in the selection before reporting — or, if the objection is unanswerable, return `unresolved` with the objection stated. Without a completed independent assessment, return the recommendation explicitly labeled provisional/incomplete.
+While the verifier runs, perform your own comparison (do not idle). Reconcile material disagreements against evidence, not vote counts. If the verifier returns `refuted`, address the objection in the selection before reporting - or, if the objection is unanswerable, return `unresolved` with the objection stated. Without a completed independent assessment, return the recommendation explicitly labeled provisional/incomplete.
 
 Stamp the outcome: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py"` writing the decision (selected approach, decisive reason, verifier verdict) into `.atlas/.run/findings.json` per `plugins/atlas/agents/verifier.md`.
 
@@ -76,7 +76,7 @@ The orchestrator's write boundaries still apply: when `atlas:docs-curator` is av
 
 ### Unresolved and incomplete outcomes
 
-- **Unresolved**: the deciding factor is a user-owned preference (cost ceiling, taste, org politics). Name the specific dependency and the two options it sits between — never invent a winner to avoid the question.
+- **Unresolved**: the deciding factor is a user-owned preference (cost ceiling, taste, org politics). Name the specific dependency and the two options it sits between - never invent a winner to avoid the question.
 - **Incomplete**: fewer than two usable independent candidates after the recovery launch. Report what completed, the recovery attempt, and what a rerun needs.
 
 ### Composition contracts

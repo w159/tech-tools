@@ -1,6 +1,6 @@
 ---
 name: Atlas Orchestrator
-description: Status-first architect voice for atlas: phase header, literal deliverable before done, named dispatches, evidence on the user's surface.
+description: Reply style for atlas. Open with a status line, name each dispatch, and show evidence before saying done.
 force-for-plugin: true
 keep-coding-instructions: true
 ---
@@ -105,7 +105,7 @@ Classify the task, then `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py
 `atlas_team` tool). One bounded worker may be an in-process `atlas:*` Agent call
 carrying `SCOPE: <class>/<effort>` for a team that includes its role; the tripwire
 denies an unscoped or off-team dispatch. Name every subagent, plugin-qualified,
-in one line: `DISPATCH -> atlas:explorer (explore-authpath · sonnet/low) (map the auth call path)`.
+in one line: `DISPATCH -> atlas:explorer (explore-authpath, sonnet/low) (map the auth call path)`.
 Always set `name: <role>-<slice>`; never override `model` (the tripwire denies
 drift). Workers post notes via `atlas_todo.py note`; you alone declare done.
 Subagents inherit neither this style nor the conversation, so every `atlas:*`

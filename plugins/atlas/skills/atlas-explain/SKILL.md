@@ -2,7 +2,7 @@
 name: atlas-explain
 description: "Explains how or why existing code behaves, in chat, with file:line evidence from an atlas:explorer trace; read-only. Use when asked how something works or what code means."
 when_to_use: "how does X work, why does Y happen, explain this code, wtf does this do, what is this, walk me through"
-allowed-tools: Read, Glob, Grep, Bash
+allowed-tools: Read, Glob, Grep, Bash, Agent, Task
 argument-hint: '[question, concept, file, diff ref, or work window; blank = your last message]'
 ---
 
@@ -20,7 +20,7 @@ Read `${CLAUDE_SKILL_DIR}/references/intake-and-grounding.md` before classifying
 
 ## What this skill is
 
-Port of CE `ce-explain` and CE `wtf`, merged into one atlas skill on purpose: both answer questions about things that already exist, both are read-only, and CE's split between them is a naming convention, not a mechanism difference. A "how does the retry queue work" question and a "wtf does this file do" question take the same path here - intake, evidence trace, chat answer. Explaining a historical choice is not endorsing it today.
+One skill covers both "how does X work" and "wtf does this do" questions: both answer questions about things that already exist and both are read-only. A "how does the retry queue work" question and a "wtf does this file do" question take the same path here - intake, evidence trace, chat answer. Explaining a historical choice is not endorsing it today.
 
 **Done:** the question is answered in chat, with every factual claim carrying `file:line` evidence and every unresolvable point listed as an open question - or the specific blocker is returned. No artifacts are written; publication, fixes, and judgment calls are separate actions, not conditions of having explained the subject.
 

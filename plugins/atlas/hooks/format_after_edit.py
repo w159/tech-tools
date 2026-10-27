@@ -38,6 +38,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import time
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
@@ -89,6 +90,57 @@ def _local_prettier(path: str, cwd: str) -> str | None:
     return None
 
 
+# One shared budget across all formatter candidates; hooks.json allows 60 s.
+TOTAL_BUDGET_S = 50.0
+
+PRETTIER_CONFIGS = (
+    ".prettierrc",
+    ".prettierrc.json",
+    ".prettierrc.yaml",
+    ".prettierrc.yml",
+    ".prettierrc.json5",
+    ".prettierrc.js",
+    ".prettierrc.cjs",
+    ".prettierrc.mjs",
+    ".prettierrc.ts",
+    ".prettierrc.cts",
+    ".prettierrc.mts",
+    ".prettierrc.toml",
+    "prettier.config.js",
+    "prettier.config.cjs",
+    "prettier.config.mjs",
+    "prettier.config.ts",
+    "prettier.config.cts",
+    "prettier.config.mts",
+)
+
+
+def _has_prettier_config(path: str, cwd: str) -> bool:
+    """True when a standard prettier config file, or a "prettier" key in
+    package.json, exists in an ancestor of the edited file or of cwd. A global
+    prettier must not reformat a repo that never opted in."""
+    seen: set[str] = set()
+    for start in (os.path.dirname(os.path.abspath(path)), os.path.abspath(cwd)):
+        d = start
+        while d not in seen:
+            seen.add(d)
+            if any(os.path.isfile(os.path.join(d, n)) for n in PRETTIER_CONFIGS):
+                return True
+            pkg = os.path.join(d, "package.json")
+            if os.path.isfile(pkg):
+                try:
+                    with open(pkg, encoding="utf-8") as f:
+                        if "prettier" in (json.load(f) or {}):
+                            return True
+                except (OSError, ValueError, TypeError):
+                    pass
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+    return False
+
+
 def candidates_for(path: str, cwd: str) -> list[list[str]]:
     """Ordered formatter argv candidates for this file (path appended by caller)."""
     ext = os.path.splitext(path)[1].lower()
@@ -104,7 +156,7 @@ def candidates_for(path: str, cwd: str) -> list[list[str]]:
         local = _local_prettier(path, cwd)
         if local:
             out.append([local, "--write", "--log-level", "warn"])
-        if shutil.which("prettier"):
+        if shutil.which("prettier") and _has_prettier_config(path, cwd):
             out.append(["prettier", "--write", "--log-level", "warn"])
         return out
     if ext == ".go" and shutil.which("gofmt"):
@@ -213,14 +265,19 @@ def main() -> int:
     cands = candidates_for(fp, cwd)
     if not cands:
         return 0  # no formatter applies/installed for this ext: not a skip, no friction row
+    deadline = time.monotonic() + TOTAL_BUDGET_S
     for base in cands:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            reasons.add("timeout")
+            break
         try:
             proc = subprocess.run(
                 base + [fp],
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
-                timeout=55,
+                timeout=remaining,
             )
         except subprocess.TimeoutExpired:
             reasons.add("timeout")

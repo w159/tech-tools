@@ -732,7 +732,9 @@ class InProcessMainTest(unittest.TestCase):
         # Observability DB lives outside the project repo in production; exclude it
         # so conn.close() checkpointing WAL into atlas.db does not register as drift.
         with open(os.path.join(self.tmp, ".gitignore"), "w") as f:
-            f.write("atlas.db*\n")
+            # Hook state also lives outside the repo in production; untracked
+            # files now count as changes, so keep the test's hookstate dir out.
+            f.write("atlas.db*\nhookstate/\n")
         subprocess.run(
             ["git", "-C", self.tmp, "add", "-A"], check=True, capture_output=True
         )
@@ -3557,6 +3559,22 @@ class BlockLoopCapTest(unittest.TestCase):
             ).fetchall()
             conn.close()
         self.assertEqual(len(rows), 1)
+
+    def test_passing_stop_resets_the_consecutive_count(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        db = os.path.join(tmp, "atlas.db")
+        atlas_db.init(atlas_db.connect(db))
+        with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_HOOKSTATE_DIR": tmp}):
+            lim = completion_gate.BLOCK_LOOP_LIMIT
+            for _ in range(lim):
+                self.assertFalse(completion_gate._block_loop_exhausted("s-reset", ["c"]))
+            completion_gate._block_loop_reset("s-reset")  # a passing Stop
+            got = [
+                completion_gate._block_loop_exhausted("s-reset", ["c"])
+                for _ in range(lim)
+            ]
+            self.assertEqual(got, [False] * lim)
 
     def test_env_override_moves_exhaustion_point(self):
         tmp = tempfile.mkdtemp()

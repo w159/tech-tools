@@ -1,6 +1,8 @@
 # Connector tool disclosure
 
-## Current behavior (do not break) — measured 2026-10-07
+## Current behavior (do not break)
+
+Tool counts below were last measured on 2026-10-07; re-measure with `node test-mcp-tools.mjs` after a connector change.
 
 Every connector is credential-gated: with no credentials it lists only its meta
 tools, and `<vendor>_status` names the exact env vars to set. After credentials
@@ -56,15 +58,15 @@ requires source edits under `mcp_servers/*` **and** a rebuild/copy into
 
 ## Falcon behavior (atlas contract)
 
-1. Missing `FALCON_CLIENT_ID` / `FALCON_CLIENT_SECRET` → inert boot (no crash).
-2. Present but invalid credentials → inert boot with `falcon_status.state=AUTH_FAILED`.
-3. Successful auth → full tool registration including `falcon_status` (`state=OK`).
+1. Missing `FALCON_CLIENT_ID` / `FALCON_CLIENT_SECRET` -> inert boot (no crash).
+2. Present but invalid credentials -> inert boot with `falcon_status.state=AUTH_FAILED`.
+3. Successful auth -> full tool registration including `falcon_status` (`state=OK`).
 4. Prefer `falcon_status` before any domain Falcon call. Do not treat
    `falcon_check_rtr_command_status` as a configuration probe.
 
 ## Known gap: status envelope
 
-The 12 `*_status` tools return three different shapes (JSON with `ok`, JSON with
+The 13 `*_status` tools return three different shapes (JSON with `ok`, JSON with
 `configured`, prose). `auvik_status` returns `ok: true` with no credentials. A
 shared `{connector, state, verified, missing[]}` envelope needs source changes
 under `mcp_servers/_shared` and a bundle rebuild; until then the dashboard and

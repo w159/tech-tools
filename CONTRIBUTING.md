@@ -1,8 +1,16 @@
 # Contributing
 
-This repo is a monorepo of MCP servers, Node libraries, and Claude plugins for MSP, security/
-compliance, and HR/payroll operations. Read `CLAUDE.md` and `AGENTS.md` before making changes -
-they define the layout and the propagation rules that keep the layers in sync.
+This repo is the `tech-tools` plugin marketplace for Claude Code. It publishes three plugins
+(atlas, armada, programmer) and holds the MCP servers and Node libraries behind armada's 13 vendor
+connectors. Read `CLAUDE.md` and `AGENTS.md` before making changes - they define the layout and
+the propagation rules that keep the layers in sync.
+
+## Scope rule
+
+`atlas` and `armada` are products developed in this repo. A request about them means edit their
+source under `plugins/atlas/` or `plugins/armada/`. Do not install, set up, or run them in this
+workspace to get the work done, and never edit the installed copy under `~/.claude/plugins/`.
+Full rule: `AGENTS.md` Section 0 and `docs/plugin-development-scope.md`.
 
 ## Layout
 
@@ -22,10 +30,11 @@ node library, server domain handler, manifest (version bump), rebuilt `.mcpb`, p
 commands/skills, plugin manifest, and the relevant README and `.env.template` entries. A change
 that touches only one layer is incomplete. See `CLAUDE.md` for the full checklist.
 
-## Building servers (iCloud-safe)
+## Building servers
 
-This repo lives under iCloud Drive. Do not run `npm install` inside the repo - `node_modules`
-syncs continuously and corrupts. Stage builds in `/tmp`:
+Do not install dependencies inside a synced folder (iCloud Drive, Dropbox, OneDrive and similar):
+`node_modules` changes constantly and can corrupt. If the repo lives in one, stage builds in a
+temporary directory outside it:
 
 ```
 cp -r mcp_servers/<svc>-mcp /tmp/<svc>-build

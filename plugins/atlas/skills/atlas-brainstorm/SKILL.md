@@ -40,7 +40,7 @@ Each step is done when the question carries a recommendation and the answer has 
 
 ## What this skill is
 
-Atlas plans well (`atlas-plan`) and executes well (`atlas-orchestrate`); this skill is the WHAT stage in front of them. It interrogates the idea against repo reality, resolves actor, outcome, scope and success gaps through dialogue, and leaves a requirements-only artifact stable enough for planning. Grounding runs through the `atlas:explorer` agent, Compound Packs supply team conventions, and docs naming follows `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`.
+Atlas plans well (`atlas-plan`) and executes well (`atlas-orchestrate`); this skill is the WHAT stage in front of them. It interrogates the idea against repo reality, resolves actor, outcome, scope and success gaps through dialogue, and leaves a requirements-only artifact stable enough for planning. Grounding runs through the `atlas:explorer` agent, Compound Packs supply team conventions, and docs naming follows `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`.
 
 The output is **requirements-only**. It contains NO implementation units, NO file lists, NO test plans. Those belong to `atlas-plan`. If you find yourself writing "U-01: edit `src/foo.ts`", stop - that is a HOW.
 
@@ -68,7 +68,7 @@ Read `references/dialogue.md` sections "Resume" and "Classify and scope" first. 
 
 Read `references/dialogue.md` sections "Grounding" and "Dialogue rules" in full before asking anything.
 
-Grounding replaces CE's bespoke scout script with atlas machinery:
+Grounding uses atlas machinery:
 
 - **Software requests:** dispatch `atlas:explorer` (per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`, ToolSearch-first, read-only) to collect the relevant code surface: existing patterns for this feature area, conventions that constrain the design, adjacent error paths, and any prior art in `docs/`, `.atlas/findings/INDEX.md`, or `docs/lessons/`. Lightweight tiers may substitute a direct targeted read of 1-2 known files.
 - **Compound Packs, conditional:** if `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py` exists, run it (discover its actual CLI first via `--help`; do not guess flags) to pull any matched rules for this topic, and cite matched rules in dialogue and in the artifact as `(pack: <id>, <path>)`. If the script is absent, skip silently - never mention the absence to the user, never fabricate pack citations.

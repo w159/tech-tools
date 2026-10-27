@@ -101,7 +101,13 @@ def _finish_lead(payload):
         atlas_todo.mark_finished(
             root, atlas_todo.lead_name(payload.get("session_id")), 0
         )
-        atlas_todo.reap_channels(root)
+        try:
+            import atlas_seats
+
+            seat_live = atlas_seats.pane_live
+        except Exception:  # seat probe is optional: fall back to pid/TTL rules
+            seat_live = None
+        atlas_todo.reap_channels(root, pane_live=seat_live)
     except Exception as exc:
         atlas_faults.record("ingest_session._finish_lead", exc)
 

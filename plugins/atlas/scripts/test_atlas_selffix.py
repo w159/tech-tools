@@ -15,6 +15,8 @@ import atlas_db  # noqa: E402
 import atlas_doctor  # noqa: E402
 import atlas_selffix as sf  # noqa: E402
 
+_REAL_NETNS = sf._netns_prefix
+
 
 # Allowlisted test-runner commands that exit 0 / non-zero without needing a project.
 PASS_CMD = "python3 -m unittest -h"
@@ -41,6 +43,7 @@ class SelffixTest(unittest.TestCase):
             mock.patch.object(sf, "prefs", lambda: dict(sf.DEFAULT_PREFS)),
             mock.patch.object(sf, "_home", lambda: Path(self.tmp)),
             mock.patch.object(sf, "resolve_target", self.fake_resolve),
+            mock.patch.object(sf, "_netns_prefix", lambda: None),
         ]
         for m in p:
             m.start()
@@ -54,7 +57,7 @@ class SelffixTest(unittest.TestCase):
     def fake_git(self, args, cwd, timeout=120):
         self.git_calls.append(args)
         if args[:2] == ["worktree", "add"]:
-            os.makedirs(args[2])
+            os.makedirs(args[3] if args[2] == "--detach" else args[2])
         if args[:2] == ["worktree", "remove"]:
             shutil.rmtree(args[3], ignore_errors=True)
         if args[:2] == ["rev-list", "--count"]:
@@ -340,6 +343,129 @@ class SelffixHardeningTest(SelffixTest):
         self.assertEqual(seen.get("KEEPME"), "1")
         self.assertIn("PATH", seen)
 
+    def _verify_run(self, prefix=None, rc=0):
+        """Drive one verify with subprocess.run captured; return (calls, fid)."""
+        fid = self._ready_candidate("src/a.py")
+        calls = []
+
+        def run(argv, **kw):
+            calls.append((list(argv), kw))
+            return mock.Mock(returncode=rc, stdout="", stderr="boom")
+
+        with mock.patch.object(sf, "_netns_prefix", lambda: prefix), mock.patch.object(
+            sf.subprocess, "run", run
+        ):
+            sf.tick(self.conn)
+        return calls, fid
+
+    def test_verify_runs_in_a_detached_sandbox_worktree_not_the_workers(self):
+        calls, fid = self._verify_run()
+        wt = atlas_db.get_finding(self.conn, fid)["fix_worktree"]
+        adds = [a for a in self.git_calls if a[:3] == ["worktree", "add", "--detach"]]
+        self.assertEqual(len(adds), 1)
+        sandbox = adds[0][3]
+        self.assertNotEqual(sandbox, wt)
+        self.assertEqual(calls[0][1]["cwd"], sandbox)
+        self.assertFalse(calls[0][1].get("shell"))
+        applied = [a for a in self.git_calls if a[:1] == ["apply"]]
+        self.assertEqual(len(applied), 0)  # empty fake patch: nothing to apply
+        diffs = [a for a in self.git_calls if a[:2] == ["diff", "--binary"]]
+        self.assertTrue(diffs and diffs[0][-1].endswith("..." + f"atlas/selffix-{fid}"))
+
+    def _assert_sandbox_removed(self):
+        sandbox = next(
+            a for a in self.git_calls if a[:3] == ["worktree", "add", "--detach"]
+        )[3]
+        self.assertIn(["worktree", "remove", "--force", sandbox], self.git_calls)
+        self.assertFalse(os.path.exists(os.path.dirname(sandbox)))
+
+    def test_sandbox_worktree_is_removed_on_success(self):
+        self._verify_run(rc=0)
+        self._assert_sandbox_removed()
+
+    def test_sandbox_worktree_is_removed_when_verify_fails(self):
+        self._verify_run(rc=1)
+        self._assert_sandbox_removed()
+
+    def test_worker_diff_is_applied_to_the_sandbox(self):
+        orig = self.fake_git
+
+        def git(args, cwd, timeout=120):
+            if args[:2] == ["diff", "--binary"]:
+                out = next(a for a in args if a.startswith("--output="))
+                with open(out[len("--output=") :], "w") as fh:
+                    fh.write("diff --git a/x b/x\n")
+            return orig(args, cwd, timeout)
+
+        fid = self._ready_candidate("src/a.py")
+        with mock.patch.object(sf, "_git", git), mock.patch.object(
+            sf.subprocess,
+            "run",
+            lambda *a, **k: mock.Mock(returncode=0, stdout="", stderr=""),
+        ):
+            sf.tick(self.conn)
+        applied = [a for a in self.git_calls if a[:1] == ["apply"]]
+        self.assertEqual(len(applied), 1)
+        self.assertEqual(self.state(fid), "ready")
+
+    def test_unapplicable_diff_fails_verify_and_cleans_up(self):
+        orig = self.fake_git
+
+        def git(args, cwd, timeout=120):
+            if args[:2] == ["diff", "--binary"]:
+                out = next(a for a in args if a.startswith("--output="))
+                with open(out[len("--output=") :], "w") as fh:
+                    fh.write("junk\n")
+            if args[:1] == ["apply"]:
+                self.git_calls.append(args)
+                return 1, "error: patch failed"
+            return orig(args, cwd, timeout)
+
+        fid = self._ready_candidate("src/a.py")
+        with mock.patch.object(sf, "_git", git), mock.patch.object(
+            sf.subprocess, "run"
+        ) as run, mock.patch.object(sf, "_fail", wraps=sf._fail) as fail:
+            sf.tick(self.conn)
+        run.assert_not_called()
+        self.assertNotEqual(self.state(fid), "ready")
+        self.assertIn("did not apply", fail.call_args_list[0].args[2])
+        self.assertTrue(any(a[:3] == ["worktree", "remove", "--force"] for a in self.git_calls))
+
+    def test_network_is_isolated_with_unshare_when_available(self):
+        calls, fid = self._verify_run(prefix=["unshare", "-n"])
+        self.assertEqual(calls[0][0][:2], ["unshare", "-n"])
+        self.assertEqual(calls[0][0][2:], sf.shlex.split(PASS_CMD))
+        log = atlas_db.get_finding(self.conn, fid)["fix_log"]
+        self.assertIn("network isolated", log)
+        self.assertNotIn("network not isolated", log)
+        self.assertEqual(self.state(fid), "ready")
+
+    def test_missing_unshare_runs_normally_and_records_it(self):
+        calls, fid = self._verify_run(prefix=None)
+        self.assertEqual(calls[0][0], sf.shlex.split(PASS_CMD))
+        self.assertIn(
+            "network not isolated", atlas_db.get_finding(self.conn, fid)["fix_log"]
+        )
+
+    def test_netns_prefix_probe(self):
+        with mock.patch.object(sf.sys, "platform", "darwin"):
+            self.assertIsNone(_REAL_NETNS())
+        with mock.patch.object(sf.sys, "platform", "linux"), mock.patch.object(
+            sf.shutil, "which", return_value=None
+        ):
+            self.assertIsNone(_REAL_NETNS())
+        ok = mock.Mock(returncode=0)
+        bad = mock.Mock(returncode=1)
+        with mock.patch.object(sf.sys, "platform", "linux"), mock.patch.object(
+            sf.shutil, "which", return_value="/usr/bin/unshare"
+        ):
+            with mock.patch.object(sf.subprocess, "run", side_effect=[ok]):
+                self.assertEqual(_REAL_NETNS(), ["/usr/bin/unshare", "-n"])
+            with mock.patch.object(sf.subprocess, "run", side_effect=[bad, ok]):
+                self.assertEqual(_REAL_NETNS(), ["/usr/bin/unshare", "-rn"])
+            with mock.patch.object(sf.subprocess, "run", side_effect=[bad, bad]):
+                self.assertIsNone(_REAL_NETNS())
+
     def test_launch_is_recorded_for_the_dashboard(self):
         fid = self.add(1)
         sf.tick(self.conn)
@@ -493,7 +619,7 @@ class VerifyCommandSandbox(unittest.TestCase):
 
         with mock.patch.object(sf, "_git", fake_git), mock.patch.object(
             sf.subprocess, "run", fake_run
-        ):
+        ), mock.patch.object(sf, "_netns_prefix", lambda: None):
             sf._verify(conn, f, tmp)
         self.assertFalse(os.path.exists(marker))
         self.assertEqual(seen[0][0], sf.shlex.split(sf.CONTRACT_TEST))

@@ -1077,6 +1077,97 @@ class CliHelp(unittest.TestCase):
         self.assertIn("unknown_command", r.stdout)
 
 
+class NoteLimits(unittest.TestCase):
+    """Body cap, archive rotation and torn-line repair for the board notes."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        for k in ("ATLAS_CHANNEL", "ATLAS_LEAD_NAME", "ATLAS_WORKER_NAME"):
+            os.environ.pop(k, None)
+
+    def test_oversize_body_refused_by_api_and_cli(self):
+        big = "x" * (9 * 1024)
+        with self.assertRaises(atlas_todo.NoteTooLarge):
+            atlas_todo.note(self.root, "a", big)
+        rc, out = cli("note", "--root", self.root, "--owner", "a", big)
+        self.assertEqual(rc, 1)
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["error"], "body_too_large")
+        self.assertEqual(out["max_bytes"], 8192)
+        self.assertEqual(atlas_todo.notes(self.root), [])
+        atlas_todo.note(self.root, "a", "y" * 8192)  # exactly at the cap is fine
+
+    def test_cap_counts_bytes_and_report_notes_keep_their_tail(self):
+        with self.assertRaises(atlas_todo.NoteTooLarge):
+            atlas_todo.note(self.root, "a", "\u00e9" * 5000)  # 5000 chars, 10000 bytes
+        rec = atlas_todo.note(
+            self.root, "w", "log\n" * 5000 + "exit 0", kind="report"
+        )
+        self.assertLessEqual(len(rec["text"].encode()), 8192)
+        self.assertTrue(rec["text"].startswith("[truncated"))
+        self.assertTrue(rec["text"].endswith("exit 0"))
+
+    def test_cap_is_env_overridable(self):
+        os.environ["ATLAS_NOTE_MAX_BYTES"] = "16"
+        with self.assertRaises(atlas_todo.NoteTooLarge):
+            atlas_todo.note(self.root, "a", "z" * 17)
+        atlas_todo.note(self.root, "a", "z" * 16)
+
+    def test_torn_line_does_not_swallow_next_note(self):
+        atlas_todo.note(self.root, "a", "first")
+        path = atlas_todo.notes_dir(self.root) / "a.jsonl"
+        with open(path, "ab") as fh:
+            fh.write(b'{"ts":1,"seq":99,"owner":"a","text":"torn')  # crash mid-append
+        atlas_todo.note(self.root, "a", "after the crash")
+        texts = [n["text"] for n in atlas_todo.notes(self.root)]
+        self.assertEqual(texts, ["first", "after the crash"])
+
+    def test_rotation_moves_old_notes_and_readers_ignore_archive(self):
+        atlas_todo.note(self.root, "a", "fresh")
+        path = atlas_todo.notes_dir(self.root) / "a.jsonl"
+        old_ts = time.time() - 30 * 86400
+        old = {"ts": old_ts, "seq": 0, "owner": "a", "to": "all", "text": "ancient"}
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(old) + "\n")
+        rc, out = cli("notes-archive", "--root", self.root, "--days", "14")
+        self.assertEqual((rc, out["ok"], out["total"]), (0, True, 1))
+        self.assertEqual([n["text"] for n in atlas_todo.notes(self.root)], ["fresh"])
+        archived = list((atlas_todo.notes_dir(self.root) / "archive").glob("a-*.jsonl"))
+        self.assertEqual(len(archived), 1)
+        self.assertIn("ancient", archived[0].read_text(encoding="utf-8"))
+        self.assertEqual(
+            [n["text"] for n in atlas_todo.notes(self.root, consistent=True)],
+            ["fresh"],
+        )
+
+    def test_size_threshold_rotates_on_append(self):
+        os.environ["ATLAS_NOTE_ARCHIVE_BYTES"] = "2000"
+        path = atlas_todo.notes_dir(self.root) / "a.jsonl"
+        atlas_todo.note(self.root, "a", "seed")
+        old_ts = time.time() - 40 * 86400
+        with open(path, "a", encoding="utf-8") as fh:
+            for i in range(30):
+                rec = {"ts": old_ts + i, "seq": 0, "owner": "a", "text": "o" * 100}
+                fh.write(json.dumps(rec) + "\n")
+        atlas_todo.note(self.root, "a", "newest")
+        self.assertEqual(
+            [n["text"] for n in atlas_todo.notes(self.root)], ["seed", "newest"]
+        )
+        self.assertTrue((atlas_todo.notes_dir(self.root) / "archive").is_dir())
+        self.assertLess(path.stat().st_size, 2000)
+
+    def test_notes_archive_default_days_keeps_recent(self):
+        atlas_todo.note(self.root, "a", "recent")
+        rc, out = cli("notes-archive", "--root", self.root)
+        self.assertEqual((rc, out["total"], out["days"]), (0, 0, 14))
+        self.assertEqual(len(atlas_todo.notes(self.root)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -207,6 +207,15 @@ Source: `docs/audits/2026-10-26_atlas-state-examination.md`.
 
 ## Backlog
 
+### Follow-ups: audit fixes (added 2026-10-23)
+
+Source: `docs/audits/2026-10-23-atlas-deep-dive.md`, section "Status after implementation". Shipped items moved to `plugins/atlas/CHANGELOG.md`, `plugins/armada/CHANGELOG.md` and `docs/CHANGELOG.md` (Unreleased). What remains:
+
+- [planned] Config and data extensions exempt from the delegation mandate (m), so a single `package.json` edit needs no dispatch. The owner declined this for now.
+- [planned] Retention for the `messages` table (scheduled purge with a row cap or TTL) and not storing thinking text. The owner declined both for now.
+- [planned] Review the plugin names (from the first audit).
+- [planned] Review the licensing of the book content that programmer ships.
+
 ### Follow-ups: atlas 12.1.0 and 12.2.0 (added 2026-10-13)
 
 Shipped in 12.1.0 and no longer open: channel reaper and `SubagentStop` finish (the old "nothing prunes the registry" limit), scope resolver, branded band, omp widget header. Shipped in 12.2.0: SCOPE deny on `atlas:*` dispatches, real gate status in the omp widget (replaces the todo-based proxy). See `docs/CHANGELOG.md`.

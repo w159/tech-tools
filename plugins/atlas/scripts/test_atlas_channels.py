@@ -112,6 +112,43 @@ class ChannelModel(unittest.TestCase):
         )
         self.assertEqual(todo.reap_channels(self.root)["reaped"], 1)
 
+    def _psless(self):
+        """ps binary missing: subprocess.run raises OSError."""
+        p = mock.patch.object(todo.subprocess, "run", side_effect=FileNotFoundError("ps"))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _pin_all(self, name, pid):
+        todo._reg_update(
+            self.root,
+            lambda r: [
+                m.update(pid=pid) for m in r["channels"][f"{self.main}/{name}"]["members"]
+            ],
+        )
+
+    def test_reap_ps_unavailable_live_pid_is_not_reaped(self):
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        self.addCleanup(proc.kill)
+        self._live_lead("alive", 10, pid=proc.pid)
+        self._pin_all("alive", proc.pid)
+        self._psless()
+        self.assertEqual(todo.reap_channels(self.root)["reaped"], 0)
+
+    def test_reap_ps_unavailable_unknown_pid_uses_ttl_only(self):
+        self._live_lead("blind", 10 * 86400, pid=999999)
+        self._pin_all("blind", 999999)
+        self._psless()
+        with mock.patch.object(todo, "_proc_start", return_value=todo._UNKNOWN):
+            self.assertEqual(todo.reap_channels(self.root, max_idle=10**9, lead_idle=10**9)["reaped"], 0)  # unknown pid: TTL only
+
+    def test_reap_ps_unavailable_pid_gone_past_ttl_is_reaped(self):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        self._live_lead("gone", 10 * 86400, pid=proc.pid)
+        self._pin_all("gone", proc.pid)
+        self._psless()
+        self.assertEqual(todo.reap_channels(self.root)["reaped"], 1)
+
     def test_reap_idle_lead_past_two_hours_but_not_current(self):
         todo.open_lead_channel(self.root, "mine", ["w1"])
         todo.open_lead_channel(self.root, "idle", ["w1"])  # opens reap, so age after both exist
@@ -128,6 +165,37 @@ class ChannelModel(unittest.TestCase):
     def test_reap_keeps_recently_active_lead(self):
         self._live_lead("fresh", 600)
         self.assertEqual(todo.reap_channels(self.root)["reaped"], 0)
+
+    def _seat_lead(self, name, idle_s):
+        """A lead channel whose only member is a seat (pane_id, no pid), idle past every TTL."""
+        todo.open_lead_channel(self.root, name, ["w1"])
+        todo.set_member_handles(self.root, "w1", f"{self.main}/{name}", pane_id="w-w1@run")
+        todo._reg_update(
+            self.root,
+            lambda r: r["channels"][f"{self.main}/{name}"].update(last_activity=time.time() - idle_s),
+        )
+
+    def test_reap_keeps_idle_seat_member_with_live_pane(self):
+        self._seat_lead("seat", 10 * 86400)
+        seen = []
+        out = todo.reap_channels(self.root, pane_live=lambda p: seen.append(p) or True)
+        self.assertEqual(out["reaped"], 0)
+        self.assertEqual(seen, ["w-w1@run"])
+        self.assertIn(f"{self.main}/seat", list(todo._reg_read(self.root)["channels"]))
+
+    def test_reap_seat_member_with_dead_pane_or_no_probe_is_reaped(self):
+        self._seat_lead("seat", 10 * 86400)
+        self.assertEqual(todo.reap_channels(self.root, pane_live=lambda p: False)["reaped"], 1)
+        self._seat_lead("seat2", 10 * 86400)
+        self.assertEqual(todo.reap_channels(self.root)["reaped"], 1)
+
+    def test_reap_pane_probe_error_falls_back_to_ttl(self):
+        self._seat_lead("seat", 10 * 86400)
+
+        def boom(_):
+            raise RuntimeError("probe down")
+
+        self.assertEqual(todo.reap_channels(self.root, pane_live=boom)["reaped"], 1)
 
     def test_reap_lead_idle_env_override(self):
         self._live_lead("env", 600)
@@ -582,6 +650,61 @@ class OwnerTokens(unittest.TestCase):
     def test_register_member_still_returns_the_channel(self):
         chan = todo.open_lead_channel(self.root, "L", ["A"])["name"]
         self.assertEqual(todo.register_member(self.root, "W1", chan), chan)
+
+
+class RegistryHardening(unittest.TestCase):
+    """Corrupt channels.json is quarantined, never overwritten; the lead lock is bounded."""
+
+    def setUp(self):
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        for k in ("ATLAS_CHANNEL", "ATLAS_LEAD_NAME", "ATLAS_WORKER_NAME"):
+            os.environ.pop(k, None)
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = os.path.realpath(self._tmp.name)
+        (Path(self.root) / ".atlas" / ".run").mkdir(parents=True)
+
+    def test_truncated_registry_is_quarantined_not_overwritten(self):
+        todo.open_lead_channel(self.root, "lead-a", ["w1"])
+        path = todo._channels_path(self.root)
+        good = path.read_text(encoding="utf-8")
+        torn = good[: len(good) // 2]
+        path.write_text(torn, encoding="utf-8")
+        with self.assertRaises(todo.ChannelRegistryCorrupt):
+            todo.open_lead_channel(self.root, "lead-b", [])
+        self.assertEqual(path.read_text(encoding="utf-8"), torn)
+        copies = list(path.parent.glob("channels.json.corrupt-*"))
+        self.assertEqual(len(copies), 1)
+        self.assertEqual(copies[0].read_text(encoding="utf-8"), torn)
+        with self.assertRaises(todo.ChannelRegistryCorrupt):  # persistent: no copy pile-up
+            todo.open_lead_channel(self.root, "lead-b", [])
+        self.assertEqual(len(list(path.parent.glob("channels.json.corrupt-*"))), 1)
+
+    def test_readers_stay_lenient_on_corrupt_registry(self):
+        todo.open_lead_channel(self.root, "lead-a", [])
+        todo._channels_path(self.root).write_text("{not json", encoding="utf-8")
+        self.assertEqual(todo._reg_read(self.root)["channels"], {})
+
+    def test_cli_channel_open_reports_corruption(self):
+        todo.open_lead_channel(self.root, "lead-a", [])
+        todo._channels_path(self.root).write_text("{not json", encoding="utf-8")
+        rc, out = cli("channel-open", "--root", self.root, "--lead", "lead-b")
+        self.assertEqual(rc, 1)
+        self.assertFalse(out["ok"])
+        self.assertIn("corrupt", out["error"])
+
+    def test_open_lead_channel_lock_is_bounded_by_default(self):
+        import atlas_memory
+
+        todo.open_lead_channel(self.root, "lead-a", [])
+        with atlas_memory._file_lock(todo._channels_path(self.root)):
+            t0 = time.monotonic()
+            with self.assertRaises(atlas_memory.LockTimeout):
+                todo.open_lead_channel(self.root, "lead-b", [])
+            self.assertLess(time.monotonic() - t0, 4.0)
+        todo.open_lead_channel(self.root, "lead-b", [])  # released: works again
 
 
 if __name__ == "__main__":

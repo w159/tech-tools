@@ -9,8 +9,8 @@ Model/effort tiers and squad
 **Opus is the orchestrator's tier.** A subagent works from a spec you already wrote, so it runs on
 the cheapest tier that can do the job. The tier table is `agents/<role>.md` frontmatter
 (`model`, `effort`, `tier_allow`, `effort_allow`), mirrored per seat in `contracts/scope-matrix.json`.
-**Never guess a model: copy the model the resolver emits** (`atlas_resolve.py <class> <effort>`, one
-`model` per seat) into the Agent call. Opus is allowed only for roles whose `tier_allow` lists it and
+**Never pass `model` in the Agent call; agents pin their own model.** The resolver
+(`atlas_resolve.py <class> <effort>`, one `model` per seat) tells you the team and tier: do not copy the model the resolver emits into the Agent call; the dispatch carries only `SCOPE:`. Opus is allowed only for roles whose `tier_allow` lists it and
 only where the matrix cell says so; the lead stays opus.
 
 | Tier | Use for | Roles (default model) |
@@ -68,7 +68,7 @@ Dispatch constantly. Three complementary sets:
 
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 
-This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; 17 hook programs / 22 bindings ship (16 under `hooks/`, plus `atlas_doctor.py` physically under `scripts/`) and all auto-load via `hooks/hooks.json` on install (no manual step).
+This skill ships as part of the **atlas plugin**: the `atlas:*` companions live in the plugin's top-level `agents/` directory (`plugins/atlas/agents/`) and are auto-discovered by Claude Code; 18 hook programs / 22 bindings ship (17 under `hooks/`, plus `atlas_doctor.py` physically under `scripts/`) and all auto-load via `hooks/hooks.json` on install (no manual step).
 
 
 

@@ -11,6 +11,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -372,6 +373,9 @@ class FakeHerdr:
                 c, _ = self.srv.accept()
             except OSError:
                 return
+            if self.stop:  # the wake-up connection from close()
+                c.close()
+                return
             threading.Thread(target=self._serve, args=(c,), daemon=True).start()
 
     def _serve(self, c):
@@ -391,7 +395,17 @@ class FakeHerdr:
                 time.sleep(1.0)  # hang past the client's timeout
 
     def close(self):
+        # Closing the listener does not wake a thread blocked in accept(), and the kernel keeps that
+        # listener alive: a stale fake kept answering on its old path and, with fd reuse, cross-served the
+        # next test's connections (flaky pane-name/liveness asserts). Wake it with a connection, then join.
         self.stop = True
+        try:
+            with socket.socket(socket.AF_UNIX) as k:
+                k.settimeout(1.0)
+                k.connect(self.path)
+        except OSError:
+            pass
+        self.t.join(timeout=2.0)
         self.srv.close()
 
 
@@ -822,16 +836,30 @@ class PaneTests(SockBase):
 
 
 class InstallCheckTests(unittest.TestCase):
-    def check(self, installed, pin=None):
+    def check(self, installed, pin=None, rsync="/usr/bin/rsync"):
         saved = atlas_herdr._herdr_version, atlas_herdr._pin
         atlas_herdr._herdr_version = lambda: installed
         atlas_herdr._pin = lambda: (
             pin or {"version": "0.9.3", "install_url": "https://h"}
         )
         try:
-            return atlas_herdr.install_check()
+            with mock.patch.object(atlas_herdr.shutil, "which", return_value=rsync):
+                return atlas_herdr.install_check()
         finally:
             atlas_herdr._herdr_version, atlas_herdr._pin = saved
+
+    def test_missing_rsync_is_only_a_warning_when_web_ui_is_built(self):
+        with mock.patch.object(atlas_herdr, "_build_fresh", return_value=True):
+            r = self.check("0.9.3", rsync=None)
+        self.assertTrue(r["ok"])
+        self.assertIn("rsync", r["warning"])
+
+    def test_missing_rsync_fails_with_actionable_message(self):
+        with mock.patch.object(atlas_herdr, "_build_fresh", return_value=False):
+            r = self.check("0.9.3", rsync=None)
+        self.assertFalse(r["ok"])
+        self.assertIn("rsync", r["why"])
+        self.assertIn("install rsync", r["do"])
 
     def test_older_than_pin_fails_with_actionable_message(self):
         r = self.check("0.9.2")

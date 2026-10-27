@@ -1,4 +1,4 @@
-# Body Templates (verbatim from CE)
+# Body Templates
 
 Ported verbatim from `skills/ce-compound/assets/resolution-template.md` (w159/compound-engineering-plugin). Only two things differ from CE's originals: `category` now names a `docs/lessons/` subdirectory, and new files are named `docs/lessons/<category>/<YYYY-MM-DD>_<slug>.md` (atlas date-first) instead of CE's undated slug-only name. Bracketed parts are filled; every section is required for its track - a missing section fails schema validation in `references/schema.md`.
 

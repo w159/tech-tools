@@ -17,6 +17,14 @@ import sys
 import time
 
 
+# Boot starts these background daemons every SessionStart (default on); say so and name the switches.
+DASHBOARD_OFF_HINT = " - background daemon, started at SessionStart; disable: ATLAS_DASHBOARD=off"
+COLONY_OFF_HINT = (
+    " - background herdr stack, started at SessionStart; disable: ATLAS_COLONY=off"
+    " (ATLAS_HERDR_AUTOSTART=off keeps the herdr server from starting)"
+)
+
+
 def ensure_dashboard():
     """Start the shared multi-session dashboard daemon if needed.
 
@@ -637,6 +645,7 @@ def heal_serena_project(root):
     """Append the `languages:` key serena >= 1.6 requires. Returns a status line or None.
 
     Idempotent: a config that already declares `languages:` at top level is left alone.
+    Writes only when detection found at least one language; there is no default.
     Absent configs are NOT created -- serena's own onboarding owns that.
     """
     cfg = os.path.join(root, ".serena", "project.yml")
@@ -651,7 +660,9 @@ def heal_serena_project(root):
     for line in text.splitlines():
         if line.startswith("languages:"):
             return None
-    langs = _detect_languages(root) or ["python"]
+    langs = _detect_languages(root)
+    if not langs:
+        return None  # never guess a language: a wrong one is worse than serena's own onboarding
     block = (
         "\n# required by serena >= 1.6 (ProjectConfig.FIELDS_WITHOUT_DEFAULTS); without it the\n"
         "# project fails to load with KeyError: 'languages' and every symbol tool goes dark\n"
@@ -1117,7 +1128,13 @@ def main():
                 with contextlib.suppress(
                     Exception
                 ):  # fail-open: dead lead channels must never block boot
-                    atlas_todo.reap_channels(_todo_root)
+                    try:
+                        import atlas_seats
+
+                        _seat_live = atlas_seats.pane_live
+                    except Exception:  # fail-open: pid/TTL rules only
+                        _seat_live = None
+                    atlas_todo.reap_channels(_todo_root, pane_live=_seat_live)
             c = carry.get("counts") or {}
             if c.get("needed") or carry.get("carried"):
                 todo_line = (
@@ -1385,11 +1402,11 @@ def main():
     with contextlib.suppress(Exception):  # dashboard is best-effort; never block boot
         dash = ensure_dashboard()
         if dash:
-            lines.append(dash)
+            lines.append(dash + DASHBOARD_OFF_HINT)
     with contextlib.suppress(Exception):  # colony is best-effort; never block boot
         colony = ensure_colony()
         if colony:
-            lines.append(colony)
+            lines.append(colony + COLONY_OFF_HINT)
     sys_msg = "Atlas ready"
     if not (mem and ctx):
         sys_msg += " (run the `atlas-setup` skill to complete setup)"

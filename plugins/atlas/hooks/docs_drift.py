@@ -89,6 +89,8 @@ def git_changed_paths(root: Path) -> list:
     for args in (
         ["git", "-C", repo_root, "diff", "--name-only", "HEAD"],
         ["git", "-C", repo_root, "diff", "--name-only", "--cached"],
+        # Untracked, non-ignored files are changes too (a brand-new source file).
+        ["git", "-C", repo_root, "ls-files", "--others", "--exclude-standard"],
     ):
         try:
             out = subprocess.check_output(args, stderr=subprocess.DEVNULL, timeout=5)

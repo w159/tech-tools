@@ -1,9 +1,8 @@
-# Connector configuration flow (verified)
+# Connector configuration flow
 
 This is the authoritative path for enabling the vendor MCP connectors (shipped
-in the armada plugin; install atlas and armada together) after
-dashboard 5.17.1 credential UX fixes. It replaces tribal knowledge about
-"where secrets live" and documents what end-to-end tests actually proved.
+in the armada plugin; install atlas and armada together). It describes where
+secrets live and in what order each layer is read.
 
 ## Mental model
 
@@ -12,7 +11,7 @@ tools stay gated until required credentials resolve.
 
 Four layers participate:
 
-1. **Claude plugin `userConfig`** — declared in
+1. **Claude plugin `userConfig`** - declared in
    `plugins/armada/.claude-plugin/plugin.json`, values under
    `~/.claude/settings.json` -> `pluginConfigs["armada@tech-tools"].options`
    (the loaders also fall back to values saved under `atlas@tech-tools`).
@@ -20,33 +19,26 @@ Four layers participate:
    plaintext. Sensitive fields may be moved by Claude Code into OS secure
    storage and then disappear from `settings.json`. **This layer only takes
    effect in harnesses that resolve plugin `userConfig`/`${user_config.*}`
-   substitution before spawning the server.** **[INFERENCE, not directly
-   observed 2026-09-28]:** at least one harness likely does not, which
-   would leave every `CFG_*` var as a literal unexpanded
-   `${user_config.*}` string for the loader's own unexpanded-value guard
-   to correctly refuse to promote - this is consistent with, but not
-   proven by, an observed `MISSING_CREDENTIALS` result for every vendor
-   except shell-exported Falcon in that harness (no command actually read
-   the env a spawned server received).
+   substitution before spawning the server.** A harness that does not resolve it would leave every `CFG_*` variable as a literal unexpanded `${user_config.*}` string, which the loader's guard refuses to promote. One harness is suspected of doing this; that is an inference, not a proven cause (see "Observed" below).
 2. **Plugin `.env` files** - read by `plugins/armada/mcp/_env/load.mjs` via
    `ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env`, with `CFG_*` passthrough into
    canonical env names. Dashboard dual-writes here so stdio servers and the UI
    can detect "set" even when Claude strips secrets from settings. **For a
    cache-installed plugin this file does not exist until something writes
    it** - a fresh install has no `${CLAUDE_PLUGIN_ROOT}/.env`.
-3. **Per-user default file** (added 2026-09-28) — both loaders also check
+3. **Per-user default file** - both loaders also check
    `~/.config/atlas/atlas.env` (KEY=VALUE, recommended `chmod 600`) as a
    baseline loaded *before* `ATLAS_ENV_FILE`, so credentials are available
    even when layers 1 and 2 don't apply (harness doesn't resolve
    `userConfig`, and/or the plugin-root `.env` doesn't exist). `ATLAS_ENV_FILE`
    still loads second and overrides matching keys when explicitly set and
    present.
-4. **Dashboard set-markers** — `~/.atlas/credential_marks.json` stores only
+4. **Dashboard set-markers** - `~/.atlas/credential_marks.json` stores only
    key names + timestamps after a successful dashboard save (never secret
    values). Used so the UI can keep showing **set** after secure-storage moves.
 
 Detection order for "is this key set?" **as shown by the dashboard UI**:
-`pluginConfigs options` → any plugin `.env` candidate path → dashboard marks.
+`pluginConfigs options` -> any plugin `.env` candidate path -> dashboard marks.
 The per-user default file (layer 3) is read by the server-side loaders at
 process start; it is not one of the paths the dashboard UI itself probes,
 so a key can be live for a running server via that file while the
@@ -87,14 +79,14 @@ POST /api/connectors/env
 Content-Type: application/json
 X-Atlas-Token: <value of <meta name="atlas-token"> in the served page>
 
-{"updates":{"auvik_api_key":"…","auvik_username":"…"}}
+{"updates":{"auvik_api_key":"...","auvik_username":"..."}}
 ```
 
 Effects:
 
 - merges into `pluginConfigs["armada@tech-tools"].options`
-- dual-writes `AUVIK_API_KEY=…` style keys into **this plugin root's** `.env`
-  (`${CLAUDE_PLUGIN_ROOT}/.env` / `plugins/atlas/.env` in source)
+- dual-writes `AUVIK_API_KEY=...` style keys into **the armada plugin root's** `.env`
+  (`${CLAUDE_PLUGIN_ROOT}/.env` of the armada plugin, `plugins/armada/.env` in source; atlas's own root when armada is absent)
 - writes set-markers under `~/.atlas/credential_marks.json`
 - never returns secret values on subsequent GETs
 
@@ -109,11 +101,11 @@ you prefer Claude's native form. After changing config there:
 
 ### C. Manual `.env`
 
-Create `${CLAUDE_PLUGIN_ROOT}/.env` (in this marketplace repo: `plugins/atlas/.env`):
+Create `${CLAUDE_PLUGIN_ROOT}/.env` (in this marketplace repo: `plugins/armada/.env`):
 
 ```bash
-AUVIK_USERNAME=…
-AUVIK_API_KEY=…
+AUVIK_USERNAME=...
+AUVIK_API_KEY=...
 AUVIK_REGION=us6
 ```
 
@@ -151,7 +143,7 @@ Env template example (Auvik):
 
 `load.mjs` (and its Python twin `load.py`):
 
-1. loads `~/.config/atlas/atlas.env` (per-user default, added 2026-09-28) as a
+1. loads `~/.config/atlas/atlas.env` (per-user default) as a
    baseline, then `ATLAS_ENV_FILE` on top, overriding matching keys - a blank
    `KEY=` line in either file never overwrites an already-set value
 2. copies each `CFG_NAME` into `NAME` when the canonical name is unset
@@ -165,72 +157,30 @@ Env template example (Auvik):
 For each connector:
 
 1. **Initialize** over stdio JSON-RPC (`initialize` + `notifications/initialized`).
-2. **List tools** (`tools/list`) — expect at least a `*_status` tool. Some
+2. **List tools** (`tools/list`) - expect at least a `*_status` tool. Some
    connectors expand tool count only after credentials resolve (ConnectWise /
    Blumira progressive disclosure). Unconfigured **Falcon** stays inert with a
    4-tool diagnostic surface including `falcon_status`.
 3. **Call status** (`tools/call` on `*_status`) with no arguments.
 4. Interpret status honestly:
-   - missing credentials → actionable `MISSING_CREDENTIALS` / NOT CONFIGURED
-   - credentials present but vendor rejects → HTTP/auth error (e.g. 401)
-   - credentials present and vendor accepts → ok/verified
+   - missing credentials -> actionable `MISSING_CREDENTIALS` / NOT CONFIGURED
+   - credentials present but vendor rejects -> HTTP/auth error (e.g. 401)
+   - credentials present and vendor accepts -> ok/verified
 
 Dashboard-side checks:
 
-- `GET /api/health` → canonical `~/.atlas/atlas.db`
-- `GET /api/connectors` or `/api/status` → **12** connectors (one per `mcpServers`
-  entry in `.mcp.json`, including panos), set/missing only
+- `GET /api/health` -> canonical `~/.atlas/atlas.db`
+- `GET /api/connectors` or `/api/status` -> **13** connectors (one per `mcpServers`
+  entry in `.mcp.json`, including panos and sonicwall), set/missing only
 - `POST /api/connectors/env` rejects unknown keys
 - `GET /api/v2/prefs` and `GET /api/v2/projects` answer, and `GET /` serves the
   Workboard shell with `<meta name="atlas-token">` filled in
 
-## End-to-end results (this workspace)
+## Observed
 
-Test harness: stdio MCP client with `CLAUDE_PLUGIN_ROOT=plugins/atlas`, env from
-plugin `.env` + CFG passthrough (no secret logging).
-Dates: 2026-08-28 (ten Node connectors) and **2026-09-02** (re-verify including Falcon).
-**Historical record:** the matrix below is the 2026-09-02 run (11 connectors,
-before panos was added); it is not the current count. Current count: thirteen (the twelve below plus sonicwall).
+Dated test logs (per-connector tool counts, harness runs, the unexpanded-placeholder case) are kept in [docs/archive/connector-config-observed-2026.md](../../../docs/archive/connector-config-observed-2026.md). They are historical records, not the current contract. The current floors are in `connector-tool-disclosure.md`.
 
-Wiring unit tests (`plugins/atlas/scripts/test_connectors_wiring.py`): **9/9 OK**.
-
-| Connector | Init | Tools listed | Status tool | Status / notes (no secret values) |
-| --- | --- | --- | --- | --- |
-| auvik | ok | 39 | `auvik_status` | reports when username/api key missing; otherwise vendor call may 401 |
-| blumira | ok | 2 | `blumira_status` | progressive shell; MISSING_CREDENTIALS without jwt or oauth pair |
-| cipp | ok | 43 | `cipp_status` | MISSING_CREDENTIALS without base URL + token or oauth trio |
-| connectwise | ok | 2 | `cw_status` | gated shell until company/public/private/client id set |
-| spanning | ok | 14 | `spanning_status` | MISSING_CREDENTIALS without admin email + token |
-| falcon | ok | **4** inert / **144+** when authenticated | `falcon_status` | inert without creds (`MISSING_CREDENTIALS`); full catalog only after auth |
-| knowbe4 | ok | 30 | `knowbe4_status` | status tool present |
-| ninjaone | ok | 45 | `ninjaone_status` | status tool present |
-| paylocity | ok | 16 | `paylocity_status` | NOT CONFIGURED without client id/secret |
-| threatlocker | ok | 19 | `threatlocker_status` | status tool present |
-| vanta | ok | 28 | `vanta_status` | status tool present |
-
-Dashboard API (2026-09-02, historical, before panos was added):
-
-- `GET /api/connectors` → **11** connectors (includes falcon) [historical; now 12 with panos]
-- health ok, DB `~/.atlas/atlas.db`
-- After `python3 plugins/atlas/scripts/atlas_dashboard.py ensure`, health `script`
-  must be this repo's `plugins/atlas/scripts/atlas_dashboard.py` (not a cache path).
-
-### Interpretation
-
-- **Transport + packaging are healthy** for all **thirteen** connectors declared in
-  `plugins/armada/.mcp.json` (auvik, blumira, cipp, connectwise, falcon, knowbe4,
-  ninjaone, panos, paylocity, sonicwall, spanning, threatlocker, vanta). The 2026-09-02 matrix above
-  exercised eleven of them (init + tool list from repo source); panos is
-  declared in `.mcp.json` and listed by `GET /api/connectors` but is not in
-  that dated matrix.
-- **Status standard met for all thirteen:** each exposes `*_status` or `cw_status`.
-  Falcon boots **inert** without credentials (4 diagnostic tools including
-  `falcon_status` → `MISSING_CREDENTIALS`) and expands only after auth succeeds.
-- **Progressive disclosure works** for Blumira/ConnectWise; other Node connectors
-  list broader catalogs while status reports missing creds.
-- **Dashboard:** run `python3 plugins/atlas/scripts/atlas_dashboard.py ensure` from
-  this repo so health `script` points at source, not an install/cache copy.
-  Verified 2026-09-02 (historical): 11 connectors; source script path.
+Current state of the wiring: all 13 connectors declared in `plugins/armada/.mcp.json` (auvik, blumira, cipp, connectwise, falcon, knowbe4, ninjaone, panos, paylocity, sonicwall, spanning, threatlocker, vanta) expose a `*_status` tool (`cw_status` for connectwise). Falcon boots inert without credentials, with 4 diagnostic tools including `falcon_status`, and registers its full catalog only after auth succeeds. Blumira and ConnectWise disclose tools progressively. Run `python3 plugins/atlas/scripts/atlas_dashboard.py ensure` from this repo so the dashboard's health `script` points at source, not an install or cache copy.
 
 ## Troubleshooting
 

@@ -1,7 +1,7 @@
 ---
 name: atlas-status
-description: "Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed. Announce mode drafts plain-language release notes, Slack updates and changelog entries for shipped work. Use when asked how a feature is going or to announce it."
-when_to_use: "status report, how is it going, progress rollup, stakeholder update, feature status, plan status, announce, release notes, changelog entry, write-up of the shipped feature, tell the team"
+description: "Builds a stakeholder status rollup for a plan or feature from plans, findings, the todo board and commits, claims labeled verified or assumed; announce mode drafts release notes. Use when asked for feature status or to announce shipped work."
+when_to_use: "status report, how is it going, progress rollup, release notes, announce"
 allowed-tools: Read, Glob, Grep, Bash, Write, Task
 argument-hint: '[announce] <plan-or-feature-name, or what shipped and the channels>'
 ---

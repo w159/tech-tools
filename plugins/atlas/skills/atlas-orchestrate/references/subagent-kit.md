@@ -29,19 +29,20 @@ This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` d
 - `GOAL:`, `DELIVERABLE:`/`DELIVERABLES:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (code `spec`, `REQUIRED_SPEC_BLOCKS` `:69`): `DENY - this <tool> dispatch to <agent> is unbounded: missing <labels>.` A missing `REPORT:` alone is injected, not denied; the first spec offense per session is an advisory.
 - A single `GOAL:` (code `multi_goal`): `DENY - this <tool> dispatch carries N GOAL: blocks.` (`:1342`).
 - `atlas:runner` only: numbered `STEPS:` (`:644`): `DENY - an atlas:runner dispatch must carry numbered STEPS:`.
-- `model`/`effort` param only when in the role's `tier_allow`/`effort_allow` AND equal to what `atlas_resolve.py` emits for the prompt's `SCOPE:` line (or the definition's own pin); else `DENY - this <tool> dispatch to <agent> overrides model with '<m>'.` (code `model_override`; `effort_override` for effort), which names the accepted values.
+- Never pass `model` (or `effort`); agents pin their own model in frontmatter. Passing one is denied: `DENY - this <tool> dispatch to <agent> overrides model with '<m>'.` (code `model_override`; `effort_override` for effort).
 - No built-in agent types (code `builtin_agent`): `DENY - this <tool> dispatch uses the built-in agent '<type>'` (`:1281`); `ATLAS_BUILTIN_AGENT_NUDGE=off` disables.
 - A subagent never dispatches: `DENY - a subagent must never dispatch another subagent.` (`:197`).
 
 ```
 ROLE: <one line, which specialist this is>
 GOAL: <one sentence, measurable>
+SCOPE: <class>/<effort>
 CONTEXT: <only what it cannot derive itself: key paths, the inventory line, prior finding ids>
-TOOLS (required - name them, do not say "use the right tools"):
-  ToolSearch first, ONE batched call, before any Read/Grep/Bash - paste it verbatim
+TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read) + serena (activate_project, find_symbol); context-mode for noisy output.
+  Load step: ToolSearch first, ONE batched call, before any Read/Grep/Bash - paste it verbatim
   (also exported as scripts/tool_routing.py TOOLSEARCH_BATCH):
     ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__serena__replace_symbol_body,mcp__serena__insert_after_symbol,mcp__serena__get_diagnostics_for_file,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
-  FIRST: activate_project(serena) on the project cwd before any serena symbol call
+  Activate: activate_project(serena) on the project cwd before any serena symbol call
   Orient:  ctx_compose (lean-ctx)
   Symbols: get_symbols_overview / find_symbol / find_referencing_symbols (serena)
   Edits:   replace_symbol_body / insert_after_symbol (serena) for implementers
@@ -51,7 +52,9 @@ TOOLS (required - name them, do not say "use the right tools"):
   JS/TS:   fallow --format json / fallow-mcp when cleaning or before commit
   (add job-specific tools; never drop the batched ToolSearch line)
   Matrix:  references/tool-routing.md
-  IF SERENA FAILS (`No active project`, `KeyError: 'languages'`, `No such tool available`):
+  Allowed:   <explicit>
+  Forbidden: package installs - migrations - .env edits - git push  (+ Write/Edit for read-only roles)
+  If serena fails (`No active project`, `KeyError: 'languages'`, `No such tool available`):
     say so in one line, do NOT retry the rest of serena, and use ctx_search / ctx_read /
     ctx_compose. Dropping to `Bash grep`/`cat`/`sed` instead is the defect this line exists
     to prevent.
@@ -64,8 +67,6 @@ NON-INTERACTIVE (required, verbatim): "You cannot reach the user. Serena's defau
   changed per dispatch - the counter-instruction in the brief is the only lever.)
 DISCOVER FIRST: confirm the best-fit capability for this exact job,
   check live skills/MCP/LSP; augment the TOOLS list for nuances the spec missed.
-TOOLS ALLOWED: <explicit>
-TOOLS FORBIDDEN: package installs - migrations - .env edits - git push  (+ Write/Edit for read-only roles)
 DELIVERABLE: <exact artifact: a report, a diff, a findings entry path>
 SUCCESS CRITERIA: <bullets, each independently checkable, each with required evidence>
 OUT OF SCOPE: <bullets, what NOT to touch>
@@ -186,9 +187,9 @@ before starting, so two agents never build the same thing:
 - One item per agent. `claimed_by_other` means someone else holds it: claim a
   different open item or stop and report.
 - Optional native mirror (env-gated): when the lead exports `ATLAS_TASKS_MIRROR`,
-  mirror your claim with the TaskCreate tool (subject `[<phase>] <content>`) at
+  mirror your claim with a TodoWrite item (content `[<phase>] <content>`) at
   claim time and mark it completed when you post your completion. The atlas board
-  stays the source of truth — don't duplicate status updates beyond the one
+  stays the source of truth - don't duplicate status updates beyond the one
   completion; skip entirely when the var is unset or off.
 - `--force` steals a stale claim (30 min idle). Never force-steal a live agent's item.
 - Done: `complete --id <id> --evidence "<command + output, or file:line>"`.
@@ -210,7 +211,7 @@ Dispatches into the colony are named, and the name is load-bearing. A dispatch
 without `name: <role>-<slice>` (e.g. `auth-explorer`) is denied by the dispatch
 tripwire: only a named sibling appears on the sibling roster, and the roster is
 what makes the channel below work. One exception: with
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` the name requirement is lifted — in
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` the name requirement is lifted - in
 teams mode a named dispatch from the main conversation launches as a teammate
 (inherits the lead's effort, runs in the lead's cwd) instead of a scoped
 subagent, so atlas workers must stay nameless to keep their definition's
@@ -271,7 +272,7 @@ SessionStart.
   credit / auth patterns is recorded as `exit 1`.
   Workers post their own notes with `atlas_todo.py note --owner <Name>`.
 - claude-bg workers have no run-worker wrapper: the brief itself carries the note command,
-  and — only when the lead exports `ATLAS_LEAD_AGENT` (its lead session name) — a best-effort
+  and - only when the lead exports `ATLAS_LEAD_AGENT` (its lead session name) - a best-effort
   native wake: send the same report text via `SendMessage` to that session right after
   posting the note (no retries; skip when unset or the session is not listed). The board
   note is the transport of record.

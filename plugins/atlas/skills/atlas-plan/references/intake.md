@@ -1,6 +1,6 @@
 # Phase 0: Intake
 
-Ported from CE `ce-plan/references/intake.md`, adapted to atlas sources: the upstream artifact is the `atlas-brainstorm` requirements plan (date-first, `docs/plans/`), not CE's unified-plan contract, and bug routing goes to `atlas-debug`.
+The upstream artifact is the `atlas-brainstorm` requirements plan (date-first, `docs/plans/`), and bug routing goes to `atlas-debug`.
 
 ## Source precedence
 

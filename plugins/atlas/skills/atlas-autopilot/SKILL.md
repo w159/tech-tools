@@ -8,7 +8,7 @@ argument-hint: '[plan-path | debug finding | task description] [budget:3]'
 
 # atlas-autopilot
 
-**This skill is atlas's safer, consent-gated equivalent of Compound Engineering's `lfg`: it diverges from `lfg` in one load-bearing way - after a local commit it STOPS and requires your explicit confirmation before any push, pull request, or merge; `lfg` auto-pushes and auto-opens PRs, and atlas-autopilot never does, no exceptions.** Everything else about the pipeline preserves `lfg`'s machine gates in spirit: only a genuinely complete, independently verified implementation return advances the pipeline; a divergent or ambiguous product-shape question routes to `atlas-brainstorm` for a human decision instead of being silently guessed; and bounded repair budgets (default 3 rounds) mean a loop that exhausts its budget states so plainly and stops rather than spinning forever or silently declaring success.
+**This skill is consent-gated: after a local commit it STOPS and requires your explicit confirmation before any push, pull request, or merge; atlas-autopilot never pushes or opens a PR on its own, no exceptions.** The pipeline's machine gates: only a genuinely complete, independently verified implementation return advances the pipeline; a divergent or ambiguous product-shape question routes to `atlas-brainstorm` for a human decision instead of being silently guessed; and bounded repair budgets (default 3 rounds) mean a loop that exhausts its budget states so plainly and stops rather than spinning forever or silently declaring success.
 
 ## What this is
 

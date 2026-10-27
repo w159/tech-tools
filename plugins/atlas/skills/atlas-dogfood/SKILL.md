@@ -2,7 +2,7 @@
 name: atlas-dogfood
 description: "Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route. Use when checking end-to-end flows or doing a quick render check."
 when_to_use: "dogfood this change, drive the changed flows, find and fix UI breakage, smoke test, check changed routes, does it load, console errors, quick browser check"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: "[smoke] [PR number, branch name, or 'current'] [--port PORT] [--fix-budget N]"
 ---
 
@@ -53,7 +53,7 @@ Read `${CLAUDE_SKILL_DIR}/references/phases.md` before starting Phase 0 (Scope) 
 
 ## Boundaries
 
-- **Browser via the atlas agent only.** All live driving is dispatched to `atlas:ui-runtime-tester` (one tester owns one navigation session), which uses the harness's own browser surface (Claude_Preview MCP / `webapp-testing`). Never shell out to an external browser CLI or a third browser stack; if the harness exposes no browser surface at all, report that as a preflight blocker rather than faking the drive.
+- **Browser via the atlas agent only.** All live driving is dispatched to `atlas:ui-runtime-tester` (one tester owns one navigation session), which uses the harness's own browser surface (Claude_Preview MCP, else headless Playwright; see `${CLAUDE_PLUGIN_ROOT}/skills/atlas-ux-test/references/webapp-testing-integration.md`). Never shell out to an external browser CLI or a third browser stack; if the harness exposes no browser surface at all, report that as a preflight blocker rather than faking the drive.
 - **Repairs only via the fix loop.** The orchestrator never edits app source. Auto-fix only what is small, well-understood, and low-risk (policy in `references/fix-loop.md`); anything architectural, schema-level, behavior-defining, or with plausible competing solutions is escalated to the report's **Decisions for a human** section and the scenario ends `Blocked (human decision)`.
 - **Never auto-commit or auto-push.** Fixes land in the working tree. Committing, pushing, or opening a PR happens only on explicit user confirmation. Regressions tests the implementer writes are part of the fix and stay in the working tree with it.
 - **Never switch the primary checkout out from under the user.** A PR/branch target differing from the current checkout: confirm with the user before checking it out in place; offer an isolated worktree instead when uncommitted changes would be disturbed.

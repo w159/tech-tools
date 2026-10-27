@@ -9,6 +9,11 @@ error, or a low-confidence answer returns None so the caller keeps the regex
 result. This module never calls https://api.typesafe.ai. Session scoring uses
 typesafe_client for that host, and only when TYPESAFE_API_KEY is set.
 
+ATLAS_DECISION_URL must name a loopback host (127.0.0.0/8, ::1, localhost); the
+prompt text (first 4000 chars) is sent there, so any other host is refused and
+the regex result is kept. Set ATLAS_DECISION_ALLOW_REMOTE=1 to opt in to a
+non-loopback endpoint.
+
 Criteria values are strings. Local nimble rejects the object form
 ({definition, includes}) that the hosted API accepts.
 """
@@ -19,7 +24,9 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
+import ipaddress
 
 CONFIDENCE_MIN = 0.7
 PROMOTE_CONFIDENCE = 0.9
@@ -48,10 +55,31 @@ PROMPT_CLASS = {
 }
 
 
+def _is_loopback(url: str) -> bool:
+    try:
+        host = urllib.parse.urlsplit(url).hostname
+    except ValueError:
+        return False
+    if not host:
+        return False
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def decision_url() -> str | None:
-    """Explicit ATLAS_DECISION_URL, else loopback, else None when disabled."""
+    """Explicit ATLAS_DECISION_URL (loopback only unless ATLAS_DECISION_ALLOW_REMOTE=1),
+    else loopback default, else None when disabled."""
     explicit = os.environ.get("ATLAS_DECISION_URL", "").strip()
     if explicit:
+        if (
+            not _is_loopback(explicit)
+            and os.environ.get("ATLAS_DECISION_ALLOW_REMOTE", "").strip() != "1"
+        ):
+            return None
         base = explicit.rstrip("/")
         # A pasted full endpoint works too: the path is appended once in local_decision().
         if base.lower().endswith("/v1/systemone"):

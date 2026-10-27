@@ -8,7 +8,7 @@ must be installed together; `plugins/armada/` paths below):
 | Node ESM bundles | `mcp/<name>/server.mjs` | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta, sonicwall |
 | Python (uv project) | `mcp/falcon/` | falcon |
 
-There is **no** department subdirectory layout (`mcp/hr/`, `mcp/security/`, …) in
+There is **no** department subdirectory layout (`mcp/hr/`, `mcp/security/`, ...) in
 current source. Do not tell operators to look there.
 
 The armada plugin declares all connector `userConfig` keys in
@@ -18,10 +18,10 @@ via `uv run --project mcp/falcon`.
 
 **Where to enter credentials (pick one):**
 
-1. **Atlas dashboard** (preferred) — Command Center → **Credentials**.
+1. **Atlas dashboard** (preferred) - Command Center -> **Credentials**.
 2. **Claude `/plugin config`** on **armada@tech-tools** (values saved under atlas
    and `~/.config/atlas/atlas.env` are still read as a fallback).
-3. **Manual plugin `.env`** — loaded by the env preloaders.
+3. **Manual plugin `.env`** - loaded by the env preloaders.
 
 After any of the above: **reload Claude Code**. Full verified flow + E2E matrix:
 `../../references/connector-config-flow.md`.

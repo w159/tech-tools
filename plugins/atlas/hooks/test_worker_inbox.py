@@ -618,6 +618,9 @@ class RealCollisionTest(_Root):
         atlas_db.start_run(conn, pid, "sess-1")
         atlas_db.mark_orchestrating(conn, "sess-1")
         conn.close()
+        # The relative path below resolves against cwd: run from a non-temp project dir so the result does not
+        # depend on whether the checkout itself lives under the system temp dir.
+        self.addCleanup(_test_isolation.enter_real_project_cwd())
 
     def _call(self, env):
         # A relative path: the tripwire exempts anything under the system temp dir

@@ -2756,5 +2756,158 @@ class NonMarketplaceLoadTest(unittest.TestCase):
         )
 
 
+class _DbFixture(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.db = os.path.join(self.tmp, "atlas.db")
+        self._orig = {k: os.environ.get(k) for k in ("ATLAS_DB", "ATLAS_HOME")}
+        os.environ["ATLAS_DB"] = self.db
+        os.environ["ATLAS_HOME"] = os.path.join(self.tmp, "home")
+        self.conn = atlas_db.connect(self.db)
+        atlas_db.init(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+        for k, v in self._orig.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+class MineGateBlockSpikeTest(_DbFixture):
+    def _rows(self, category, n, age_hours):
+        ts = time.time() - age_hours * 3600
+        for i in range(n):
+            self.conn.execute(
+                "INSERT INTO friction_events(session_id,category,weight,snippet,ts) "
+                "VALUES(?,?,?,?,?)",
+                (f"s{i}", category, 1.0, None, ts),
+            )
+        self.conn.commit()
+
+    def test_spike_over_one_and_a_half_x_average_files_a_human_review_finding(self):
+        self._rows("gate_block", 28, age_hours=24 * 7)  # 2/day over the 14d window
+        self._rows("gate_block", 9, age_hours=2)  # 9 in the last 24h
+        found = atlas_doctor.mine_gate_block_spike(self.conn, self.tmp)
+        self.assertEqual([f["key"] for f in found], ["gate_block"])
+        self.assertEqual(found[0]["proposed_action"], "human review")
+        self.assertEqual(found[0]["metric_value"], 9)
+
+    def test_below_ratio_or_minimum_count_is_silent(self):
+        self._rows("gate_block", 28, age_hours=24 * 7)
+        self._rows("gate_block", 3, age_hours=2)  # 3 <= 1.5 * 2 and under minimum
+        self._rows("gate_block_loop", 4, age_hours=2)  # no history, under minimum
+        self.assertEqual(atlas_doctor.mine_gate_block_spike(self.conn, self.tmp), [])
+
+    def test_mine_upserts_finding_and_never_touches_gate_config(self):
+        self._rows("gate_block", 28, age_hours=24 * 7)
+        self._rows("gate_block", 9, age_hours=2)
+        hooks = os.path.join(os.path.dirname(__file__), "..", "hooks")
+        guarded = [
+            os.path.join(hooks, n)
+            for n in ("completion_gate_core.py", "dispatch_tripwire_core.py")
+        ] + [os.path.join(os.path.dirname(__file__), "atlas_gates.py")]
+        import hashlib
+
+        def digest():
+            return [hashlib.sha256(open(p, "rb").read()).hexdigest() for p in guarded]
+
+        before = digest()
+        atlas_doctor.mine(self.conn, self.tmp)
+        self.assertEqual(digest(), before)
+        rows = [
+            r
+            for r in atlas_db.list_findings(self.conn)
+            if r["fingerprint"] == "gate_block_spike:gate_block"
+        ]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["proposed_action"], "human review")
+
+
+class RedactHistoryTest(_DbFixture):
+    SECRET = "password=hunter2secret99"
+    SSN = "123-45-6789"
+
+    def _seed(self):
+        c = self.conn
+        c.execute(
+            "INSERT INTO messages(session_id,uuid,role,text,thinking) VALUES(?,?,?,?,?)",
+            ("s1", "u1", "user", f"my {self.SECRET} here", f"ssn {self.SSN}"),
+        )
+        c.execute(
+            "INSERT INTO messages(session_id,uuid,role,text,thinking) VALUES(?,?,?,?,?)",
+            ("s1", "u2", "assistant", "clean text", None),
+        )
+        c.execute(
+            "INSERT INTO tool_calls(session_id,tool_use_id,tool_name,input_summary,error_snippet) "
+            "VALUES(?,?,?,?,?)",
+            ("s1", "t1", "Bash", f"curl {self.SECRET}", f"bad {self.SECRET}"),
+        )
+        c.execute(
+            "INSERT INTO session_logs(session_id,transcript_path,cwd,git_branch) "
+            "VALUES(?,?,?,?)",
+            ("s1", "/x/t.jsonl", f"/w?{self.SECRET}", "main"),
+        )
+        c.commit()
+        mem = os.path.join(os.environ["ATLAS_HOME"], "memory")
+        os.makedirs(mem)
+        self.mem_file = os.path.join(mem, "MEMORY.md")
+        with open(self.mem_file, "w") as f:
+            f.write(f"note one {self.SECRET}\n§\nclean note")
+
+    def _all_text(self):
+        parts = []
+        for sql in (
+            "SELECT text||thinking FROM messages WHERE uuid='u1'",
+            "SELECT input_summary||error_snippet FROM tool_calls",
+            "SELECT cwd FROM session_logs",
+        ):
+            parts += [r[0] for r in self.conn.execute(sql)]
+        with open(self.mem_file) as f:
+            parts.append(f.read())
+        return "\n".join(parts)
+
+    def test_dry_run_counts_and_changes_nothing(self):
+        self._seed()
+        before = self._all_text()
+        counts = atlas_doctor.redact_history(self.conn, apply=False)
+        self.assertEqual(self._all_text(), before)
+        self.assertEqual(counts["messages.text"], 1)
+        self.assertEqual(counts["messages.thinking"], 1)
+        self.assertEqual(counts["tool_calls.input_summary"], 1)
+        self.assertEqual(counts["tool_calls.error_snippet"], 1)
+        self.assertEqual(counts["session_logs.cwd"], 1)
+        self.assertEqual(counts["memory.entries"], 1)
+
+    def test_apply_rewrites_everything_and_is_idempotent(self):
+        self._seed()
+        atlas_doctor.redact_history(self.conn, apply=True, batch=1)
+        text = self._all_text()
+        self.assertNotIn("hunter2secret99", text)
+        self.assertNotIn(self.SSN, text)
+        self.assertIn("clean note", text)  # untouched entries survive
+        self.assertEqual(
+            self.conn.execute("SELECT transcript_path FROM session_logs").fetchone()[0],
+            "/x/t.jsonl",
+        )
+        again = atlas_doctor.redact_history(self.conn, apply=True)
+        self.assertTrue(all(v == 0 for v in again.values()), again)
+
+    def test_cli_defaults_to_dry_run(self):
+        self._seed()
+        before = self._all_text()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = atlas_doctor.main(["--redact-history"])
+        self.assertEqual(rc, 0)
+        self.assertIn("dry run", buf.getvalue())
+        self.assertEqual(self._all_text(), before)
+        with contextlib.redirect_stdout(io.StringIO()):
+            atlas_doctor.main(["--redact-history", "--apply"])
+        self.assertNotIn("hunter2secret99", self._all_text())
+
+
 if __name__ == "__main__":
     unittest.main()

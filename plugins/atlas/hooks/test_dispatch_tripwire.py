@@ -26,7 +26,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-HOOK = os.path.join(os.path.dirname(__file__), "dispatch_tripwire.py")
+HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dispatch_tripwire.py")
+_LEAVE_REAL_CWD = None
+
+
+def setUpModule():
+    # Relative paths like src/app.py resolve against cwd, and the product treats anything under the system temp
+    # dir as scratch, so run from a non-temp project dir regardless of where the checkout lives.
+    global _LEAVE_REAL_CWD
+    _LEAVE_REAL_CWD = _test_isolation.enter_real_project_cwd()
+
+
+def tearDownModule():
+    if _LEAVE_REAL_CWD:
+        _LEAVE_REAL_CWD()
 # Fixtures use throwaway temp dirs as cwd, where the scope check leaves gates unarmed.
 os.environ.setdefault("ATLAS_GATES", "always")
 # Fixtures fire dispatches back to back in one session; only ScopeGateTest wants the burst advisory.
@@ -2032,6 +2045,12 @@ class NativeToolPolicyTest(unittest.TestCase):
             handled, output = self.call("Grep")
         self.assertFalse(handled)
         self.assertNotIn('"deny"', output)
+
+    def test_grep_glob_deny_names_the_escape_hatch(self):
+        self._mcp_json()
+        for tool in ("Grep", "Glob"):
+            reason = self._deny_output(tool)["permissionDecisionReason"]
+            self.assertIn("ATLAS_TRIPWIRE_HARD=off", reason, tool)
 
     def test_unreadable_contract_allows_silently(self):
         self._mcp_json()

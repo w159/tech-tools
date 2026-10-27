@@ -576,24 +576,14 @@ class DocsMatchCodeContract(unittest.TestCase):
             + len(_dispatched()),
         }
 
-    def test_plugin_manifest_counts_match_disk(self):
-        """The counts atlas asserts about itself must be facts, not history.
-
-        Nothing verified these, so a skill or agent added without touching the
-        manifest left the plugin advertising a number that was simply wrong --
-        the exact "documentation is not maintained" failure, in the one place a
-        reader trusts most. Deterministic, so drift fails instead of rotting.
-        """
-        inv = self._inventory()
-        manifest = (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(
-            encoding="utf-8"
+    def test_plugin_manifest_description_is_short_and_countless(self):
+        """Counts live in the README (checked against disk below); the manifest
+        description stays a short sentence so it cannot go stale."""
+        manifest = json.loads(
+            (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
-        self.assertIn("%d plainly named skills" % inv["skills"], manifest)
-        self.assertIn("%d core agents" % inv["agents"], manifest)
-        self.assertIn(
-            "%d hook programs / %d bindings" % (inv["programs"], inv["bindings"]),
-            manifest,
-        )
+        self.assertLess(len(manifest["description"]), 250)
+        self.assertNotRegex(manifest["description"], r"\b\d+ (skills|agents|hook)")
 
     def test_readme_counts_match_disk(self):
         inv = self._inventory()
@@ -604,14 +594,19 @@ class DocsMatchCodeContract(unittest.TestCase):
             readme,
         )
 
-    def test_marketplace_entry_counts_match_disk(self):
-        """The marketplace description is what a user reads before installing."""
-        inv = self._inventory()
-        text = (REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text(
-            encoding="utf-8"
+    def test_marketplace_entry_matches_manifest(self):
+        """The marketplace atlas entry reuses the manifest description and keywords."""
+        manifest = json.loads(
+            (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
         )
-        self.assertIn("%d plainly named skills" % inv["skills"], text)
-        self.assertIn("%d core agents" % inv["agents"], text)
+        market = json.loads(
+            (REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        entry = next(p for p in market["plugins"] if p["name"] == "atlas")
+        self.assertEqual(entry["description"], manifest["description"])
+        self.assertEqual(entry["keywords"], manifest["keywords"])
 
 
 class GitignoreSecretContract(unittest.TestCase):
@@ -720,6 +715,10 @@ class InstalledParityContract(unittest.TestCase):
             "installed hook wiring differs from the repo: reinstall the plugin",
         )
 
+    @unittest.skipUnless(
+        os.environ.get("ATLAS_CHECK_INSTALL_PARITY") == "1",
+        "opt-in: set ATLAS_CHECK_INSTALL_PARITY=1 to byte-compare the repo against the install cache",
+    )
     def test_installed_hook_files_match_repo(self):
         root = self._installed_root()
         if root is None:

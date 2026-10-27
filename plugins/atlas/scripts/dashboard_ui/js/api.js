@@ -181,18 +181,37 @@ export const api = {
       }, pollMs);
     };
 
+    let opening = false;
     const open = () => {
       // hidden: stay closed so the server sampler sees no subscriber; onVisibility reopens
-      if (document.hidden || source) return;
+      if (document.hidden || source || opening) return;
       if (closed || typeof EventSource === "undefined") {
         startPolling();
         return;
       }
+      // EventSource cannot set headers and the long-lived token must not ride in a URL: mint a
+      // single-use ticket per (re)connect.
+      opening = true;
+      api
+        .post("/api/v2/stream/ticket", {})
+        .then((res) => {
+          opening = false;
+          if (closed || source || document.hidden) return;
+          if (!res || !res.ticket) throw new Error("no stream ticket issued");
+          connect(res.ticket);
+        })
+        .catch(() => {
+          opening = false;
+          startPolling();
+          if (!closed) setTimeout(open, reopenMs);
+        });
+    };
+
+    const connect = (ticket) => {
       const qs = new URLSearchParams();
       if (options.project && options.project !== "all") qs.set("project", options.project);
-      if (TOKEN) qs.set("token", TOKEN);
-      const text = qs.toString();
-      source = new EventSource(BASE + "stream" + (text ? "?" + text : ""));
+      qs.set("ticket", ticket);
+      source = new EventSource(BASE + "stream?" + qs.toString());
       source.onopen = () => {
         failures = 0;
         reopenMs = 2500;
@@ -214,18 +233,14 @@ export const api = {
       }
       source.onerror = () => {
         failures += 1;
-        // EventSource retries itself (server sends retry: 3000). After repeated failures,
-        // poll so the UI keeps updating while it keeps trying to reconnect.
         if (failures === 1) setMode("reconnecting");
         if (failures >= 2) startPolling();
-        if (source && source.readyState === 2) {
-          source.close();
-          source = null;
-          if (!closed) {
-            // a closed stream is usually a stale token (401): re-scrape it, then back off up to 60s
-            reopenMs = Math.min(reopenMs * 2, AUTH_BACKOFF_MS);
-            refreshToken().finally(() => setTimeout(open, reopenMs));
-          }
+        // A native retry would replay the burnt ticket URL: always drop it and reconnect with a new ticket.
+        if (source) source.close();
+        source = null;
+        if (!closed) {
+          reopenMs = Math.min(reopenMs * 2, AUTH_BACKOFF_MS);
+          refreshToken().finally(() => setTimeout(open, reopenMs));
         }
       };
     };

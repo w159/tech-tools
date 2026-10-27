@@ -182,7 +182,9 @@ export function createAtlasGateway(options: AtlasGatewayOptions): AtlasGateway {
       if (decoded.includes("//") || decoded.includes("\\") || decoded.split("/").some((part) => part === ".." || part === ".")) return jsonResponse({ ok: false, error: "bad_path" }, 400);
       const target = new URL(rest, upstream.url);
       target.search = url.search;
-      target.searchParams.delete("token"); // the gateway owns the dashboard token; a stale page token must not win
+      // the gateway authenticates with the X-Atlas-Token header; a browser-supplied token or ticket must not win
+      target.searchParams.delete("token");
+      target.searchParams.delete("ticket");
 
       let body: Blob | null = null;
       if (mutating) {
@@ -191,15 +193,13 @@ export function createAtlasGateway(options: AtlasGatewayOptions): AtlasGateway {
         body = read;
       }
 
-      const isStream = rest === "/api/v2/stream";
       // abort the dashboard when the browser goes away, so its SSE thread is released
       const controller = new AbortController();
       request.signal.addEventListener("abort", () => controller.abort(), { once: true });
       const send = async (refresh: boolean): Promise<Response> => {
         const atlasToken = await token(refresh);
-        const href = target.href;
-        const to = isStream ? href + (href.includes("?") ? "&" : "?") + `token=${encodeURIComponent(atlasToken)}` : href;
-        return upstreamRequest(request, to, body, atlasToken, controller.signal);
+        // the long-lived token only ever travels in the X-Atlas-Token header, never in a URL
+        return upstreamRequest(request, target.href, body, atlasToken, controller.signal);
       };
 
       try {

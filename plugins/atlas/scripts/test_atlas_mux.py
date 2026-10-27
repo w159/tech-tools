@@ -486,6 +486,8 @@ class SpawnClaudeTests(Base):
                 "opus",
                 "--effort",
                 "high",
+                "--disallowedTools",
+                "Agent,Task",
                 "--allowedTools",
                 ",".join(atlas_mux.WORKER_MCP_ALLOW),
                 "--permission-mode",
@@ -2651,6 +2653,130 @@ class SeatTransportTests(unittest.TestCase):
             self.assertFalse(atlas_mux._seats_up())
 
 
+class TeamCapTests(unittest.TestCase):
+    CELL = {"file_scope": [], "max_parallel": 2, "isolation": "none"}
+
+    def build(self, count, env=None):
+        import atlas_mux
+
+        cell = dict(self.CELL, team=[{"role": "explorer", "count": count}])
+        with mock.patch.object(atlas_mux.atlas_resolve, "resolve", return_value=cell):
+            with mock.patch.dict(os.environ, env or {}):
+                if not env or "ATLAS_MAX_TEAM" not in env:
+                    os.environ.pop("ATLAS_MAX_TEAM", None)
+                return atlas_mux.build_team("audit", "low")
+
+    def test_default_cap_is_six(self):
+        self.assertEqual(6, len(self.build(6)["members"]))
+        with self.assertRaisesRegex(ValueError, r"7 workers.*ATLAS_MAX_TEAM"):
+            self.build(7)
+
+    def test_env_override_raises_or_lowers_the_cap(self):
+        self.assertEqual(8, len(self.build(8, {"ATLAS_MAX_TEAM": "8"})["members"]))
+        with self.assertRaisesRegex(ValueError, "ATLAS_MAX_TEAM"):
+            self.build(3, {"ATLAS_MAX_TEAM": "2"})
+        with self.assertRaisesRegex(ValueError, "ATLAS_MAX_TEAM"):
+            self.build(1, {"ATLAS_MAX_TEAM": "lots"})
+
+    def test_spawn_team_refuses_with_json_error(self):
+        import atlas_mux
+
+        cell = dict(self.CELL, team=[{"role": "explorer", "count": 9}])
+        buf = io.StringIO()
+        with mock.patch.object(atlas_mux.atlas_resolve, "resolve", return_value=cell), contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--class", "audit", "--effort", "low", "--dry-run", "--root", tempfile.mkdtemp()])
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertEqual(2, code)
+        self.assertFalse(out["ok"])
+        self.assertIn("ATLAS_MAX_TEAM", out["error"])
+
+
+class WaitKillOnTimeoutTests(unittest.TestCase):
+    def run_wait(self, extra=(), env=None):
+        import atlas_mux
+
+        calls = []
+
+        def fake(*argv):
+            calls.append(list(argv))
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}], "created": time.time(), "transport": "tmux"}
+        env = dict(env or {})
+        buf = io.StringIO()
+        with mock.patch.object(atlas_mux, "_tmux", fake), \
+                mock.patch.object(atlas_mux, "_load_team", return_value=rec), \
+                mock.patch.object(atlas_mux, "_team_panes", return_value=[{"name": "a", "dead": 0, "pid": "1"}]), \
+                mock.patch.object(atlas_mux, "_exited", return_value=False), \
+                mock.patch.object(atlas_mux.atlas_todo, "notes", return_value=[]), \
+                mock.patch.dict(os.environ, env), \
+                contextlib.redirect_stdout(buf):
+            if "ATLAS_WAIT_KILL" not in env:
+                os.environ.pop("ATLAS_WAIT_KILL", None)
+            code = atlas_mux.main(["wait", "--team", "kw", "--root", tempfile.mkdtemp(), "--timeout", "0.2", "--poll", "0.05", *extra])
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1]), calls
+
+    def test_default_leaves_the_panes_running(self):
+        code, out, calls = self.run_wait()
+        self.assertEqual(1, code)
+        self.assertFalse([c for c in calls if c[0] == "kill-session"])
+        self.assertNotIn("killed_on_timeout", out)
+
+    def test_flag_kills_the_team_session_on_timeout(self):
+        code, out, calls = self.run_wait(["--kill-on-timeout"])
+        self.assertEqual(1, code)
+        self.assertIn(["kill-session", "-t", "=atlas-kw"], calls)
+        self.assertTrue(out["killed_on_timeout"])
+
+    def test_env_enables_it(self):
+        _, out, calls = self.run_wait(env={"ATLAS_WAIT_KILL": "1"})
+        self.assertIn(["kill-session", "-t", "=atlas-kw"], calls)
+        self.assertTrue(out["killed_on_timeout"])
+
+
+class WorkerArgvNoDispatchTests(unittest.TestCase):
+    def test_claude_worker_cannot_dispatch(self):
+        import atlas_mux
+
+        argv = atlas_mux.harness_argv("claude", "explorer", "do it", None, None, "", "acceptEdits")
+        i = argv.index("--disallowedTools")
+        self.assertEqual("Agent,Task", argv[i + 1])
+        # variadic flag: another flag must follow it so the prompt is not swallowed
+        self.assertTrue(argv[i + 2].startswith("--"))
+        self.assertEqual("do it", argv[-1])
+
+
+class OrphanSweepTests(unittest.TestCase):
+    def sweep(self, panes, has_session=True):
+        import atlas_mux
+
+        calls = []
+
+        def fake(*argv):
+            calls.append(list(argv))
+            if argv[0] == "has-session":
+                return subprocess.CompletedProcess(argv, 0 if has_session else 1, "", "")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        with mock.patch.object(atlas_mux, "_tmux", fake), mock.patch.object(atlas_mux, "_team_panes", return_value=panes):
+            return atlas_mux._sweep_orphan_session("t9"), calls
+
+    def test_no_session_is_a_no_op(self):
+        err, calls = self.sweep([], has_session=False)
+        self.assertIsNone(err)
+        self.assertFalse([c for c in calls if c[0] == "kill-session"])
+
+    def test_all_dead_panes_are_reaped_before_spawn(self):
+        err, calls = self.sweep([{"name": "a", "dead": 1, "pid": "1"}, {"name": "b", "dead": 1, "pid": "2"}])
+        self.assertIsNone(err)
+        self.assertIn(["kill-session", "-t", "=atlas-t9"], calls)
+
+    def test_a_live_pane_refuses_and_names_reap(self):
+        err, calls = self.sweep([{"name": "a", "dead": 1, "pid": "1"}, {"name": "b", "dead": 0, "pid": "2"}])
+        self.assertIn("atlas_mux.py reap --team t9", err)
+        self.assertFalse([c for c in calls if c[0] == "kill-session"])
+
+
 class TeamWindowTests(unittest.TestCase):
     """spawn-team: every worker a pane of ONE tiled, styled window; no idle `lead` shell."""
 
@@ -2782,6 +2908,16 @@ class TeamWindowTests(unittest.TestCase):
         )  # no shell job: a detached session never runs one
         self.assertEqual("1", by["status-interval"])
         self.assertEqual("on", by["remain-on-exit"])
+
+    def test_session_gets_a_history_limit(self):
+        import atlas_mux
+
+        _, calls = self.drive(["a", "b"])
+        self.assertIn(
+            ["set-option", "-t", "atlas-t9", "history-limit", str(atlas_mux.HISTORY_LIMIT)],
+            calls,
+        )
+        self.assertEqual(5000, atlas_mux.HISTORY_LIMIT)
 
     def test_name_taken_is_read_from_pane_tags(self):
         results, _ = self.drive(["a", "a"])

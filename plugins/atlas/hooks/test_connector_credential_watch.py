@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 HOOK = Path(__file__).resolve().parent / "connector_credential_watch.py"
@@ -232,6 +233,16 @@ class ConnectorCredentialWatch(unittest.TestCase):
             "tool_response": response,
         }
 
+    def test_status_key_in_successful_result_is_data_not_auth_failure(self):
+        for body in (
+            {"status": 403, "items": [{"summary": "ok"}]},
+            {"status_code": 401, "results": []},
+            {"status": "400", "data": {"ticket": 1}},
+            {"status": 401, "message": "ok", "items": [1]},
+        ):
+            r = _run(self._payload(body), home=self.home)
+            self.assertEqual(r.stdout.strip(), "", body)
+
     def test_401_warns(self):
         r = _run(
             self._payload({"status": 401, "error": "Unauthorized"}), home=self.home
@@ -353,6 +364,80 @@ class ServerNameMapping(unittest.TestCase):
             "mcp__atlas_connectwise_cw_status",  # fallback: pre-move omp name
         ):
             self.assertEqual(w._server_of(name), "connectwise", name)
+
+
+class StateWriteLocking(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        sys.path.insert(0, str(HOOK.parent))
+        import connector_credential_watch as w
+
+        self.w = w
+        self.path = Path(self._tmp.name) / "warned.json"
+        patcher = unittest.mock.patch.object(w, "_state_path", lambda: self.path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_state_write_takes_shared_lock_with_short_timeout(self):
+        import atlas_memory
+        from contextlib import contextmanager
+
+        calls = []
+
+        @contextmanager
+        def fake_lock(path, timeout=None):
+            calls.append((path, timeout))
+            yield
+
+        with unittest.mock.patch.object(atlas_memory, "_file_lock", fake_lock):
+            self.assertFalse(self.w._already_warned("s", "srv"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], self.path)
+        self.assertIsNotNone(calls[0][1])
+        self.assertLessEqual(calls[0][1], 2.0)
+
+    def test_busy_lock_fails_open(self):
+        import atlas_memory
+        from contextlib import contextmanager
+
+        @contextmanager
+        def busy(path, timeout=None):
+            raise atlas_memory.LockTimeout("busy")
+            yield
+
+        with unittest.mock.patch.object(atlas_memory, "_file_lock", busy):
+            self.assertFalse(self.w._already_warned("s", "srv"))
+            self.assertTrue(self.w._already_warned("s", "srv"))
+
+    def test_concurrent_writers_lose_no_keys(self):
+        import threading
+
+        real_check = self.w._check_and_mark
+
+        def slow_check(session, server, path):
+            # widen the read-modify-write window so an unlocked write loses keys
+            import time
+
+            try:
+                state = json.loads(path.read_text())
+            except (OSError, ValueError):
+                state = {}
+            time.sleep(0.02)
+            key = "%s|%s" % (session, server)
+            state[key] = True
+            path.write_text(json.dumps(state))
+            return False
+
+        with unittest.mock.patch.object(self.w, "_check_and_mark", slow_check):
+            ts = [
+                threading.Thread(target=self.w._already_warned, args=("s", "srv%d" % i))
+                for i in range(8)
+            ]
+            [t.start() for t in ts]
+            [t.join() for t in ts]
+        self.assertEqual(len(json.loads(self.path.read_text())), 8)
+        self.assertTrue(callable(real_check))
 
 
 if __name__ == "__main__":

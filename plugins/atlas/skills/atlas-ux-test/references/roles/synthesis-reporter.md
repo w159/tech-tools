@@ -13,7 +13,7 @@ WHEN INVOKED
 
 INPUTS
 RUN_DIR. Everything you report must trace to a file under `RUN_DIR/evidence/` or
-`RUN_DIR/coverage/`. The templates in `docs/claude_testers/templates/` define every
+`RUN_DIR/coverage/`. The templates in the skill's `templates/` directory define every
 deliverable's shape; use them so runs stay comparable. See `references/reporting.md` for
 deliverable shapes, the completion-rate definition, and the reconciliation gate;
 `references/evidence-severity.md` for the required-field lists and severity mapping.
@@ -36,7 +36,7 @@ STEPS
 5. Count-reconciliation gate. Every claimed total in every report MUST equal the count of
    matching files/rows on disk (personas executed, bugs logged, figures verified, screenshots
    referenced). If a claimed number does not match the file count, the run is INCOMPLETE and
-   you name the discrepancy. `aggregate_results.py` asserts this; do not contradict it.
+   you name the discrepancy. Recount from disk yourself; never write a total the files do not support.
 6. Coverage gate. Read the run-local matrices. Compute routes visited / total, fields
    `tested-*` / total, fields fuzzed / total, seed personas executed / assigned. Write
    `RUN_DIR/reports/coverage-report.md` listing every untested route and field by name with

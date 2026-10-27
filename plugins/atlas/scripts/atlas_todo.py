@@ -43,12 +43,13 @@ import hmac
 import json
 import os
 import re
+import shutil
 import sys
 import subprocess
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atlas_paths  # noqa: E402
@@ -775,6 +776,48 @@ def sweep(root: Optional[str], ttl_s: int = 86400) -> int:
 NOTES_SUBDIR = "board"
 NOTE_FILE_SUFFIX = ".jsonl"
 _NOTE_NAME_BAD = re.compile(r"[^A-Za-z0-9_.-]")
+NOTES_ARCHIVE_SUBDIR = "archive"  # sibling of the owner files; readers glob *.jsonl non-recursively
+NOTE_ARCHIVE_DEFAULT_DAYS = 14
+# Cutoffs are read per call so an operator (or a test) can override them via env.
+NOTE_MAX_BYTES = 8192
+NOTE_ARCHIVE_BYTES = 2 * 1024 * 1024
+# Machine-written notes whose tail carries the signal (`exit <n>` line): truncated, never refused.
+_NOTE_TRUNCATE_KINDS = frozenset({"report", "wrapup", "kickoff"})
+
+
+class NoteTooLarge(ValueError):
+    """A note body exceeded the byte cap; `error` is the stable machine code."""
+
+    error = "body_too_large"
+
+    def __init__(self, size: int, limit: int):
+        super().__init__(f"body_too_large: {size} bytes exceeds the {limit} byte limit")
+        self.size, self.limit = size, limit
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        v = int(os.environ.get(name) or default)
+    except ValueError:
+        return default
+    return v if v > 0 else default
+
+
+def note_max_bytes() -> int:
+    return _env_int("ATLAS_NOTE_MAX_BYTES", NOTE_MAX_BYTES)
+
+
+def _fit_note_text(text: str, kind: str) -> str:
+    """Enforce the body cap: refuse human/agent notes, keep the tail of machine reports."""
+    limit = note_max_bytes()
+    raw = text.encode("utf-8")
+    if len(raw) <= limit:
+        return text
+    if kind not in _NOTE_TRUNCATE_KINDS:
+        raise NoteTooLarge(len(raw), limit)
+    marker = f"[truncated {len(raw) - limit} bytes]\n"
+    keep = raw[-(limit - len(marker.encode())):]
+    return marker + keep.decode("utf-8", errors="ignore")
 
 
 def notes_dir(root: Optional[str] = None) -> Path:
@@ -874,6 +917,7 @@ def note(
     records the dashboard's own send outcome on the line; it is omitted when unset.
     Returns the record as written."""
     name = _sanitize_owner(owner)
+    text = _fit_note_text(str(text or ""), kind)
     chan = (channel or "").strip()
     # A launched worker (env ATLAS_WORKER_NAME == owner) is a member only if its lead
     # registered it; a channel it merely inherited from a lead's env is dropped.
@@ -889,7 +933,7 @@ def note(
         "owner": name,
         "to": to,
         "item": item,
-        "text": str(text or ""),
+        "text": text,
         "channel": chan or default_channel(root, name),
     }
     if kind and kind != "note":
@@ -902,16 +946,82 @@ def note(
         record["seq"] = _next_seq(root, target)
         record["ts"] = time.time()
         line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
-        fd = os.open(
-            str(target / f"{name}{NOTE_FILE_SUFFIX}"),
-            os.O_WRONLY | os.O_APPEND | os.O_CREAT,
-            0o644,
-        )
+        path = target / f"{name}{NOTE_FILE_SUFFIX}"
+        if _ends_mid_line(path):  # a crash mid-append: don't glue this note onto the torn tail
+            line = b"\n" + line
+        fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         try:
             os.write(fd, line)
         finally:
             os.close(fd)
+        with contextlib.suppress(OSError):
+            if path.stat().st_size > _env_int("ATLAS_NOTE_ARCHIVE_BYTES", NOTE_ARCHIVE_BYTES):
+                _archive_owner_file(target, path, NOTE_ARCHIVE_DEFAULT_DAYS * 86400)
     return record
+
+
+def _ends_mid_line(path: Path) -> bool:
+    """True when the file is non-empty and its last byte is not a newline."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            if fh.tell() == 0:
+                return False
+            fh.seek(-1, os.SEEK_END)
+            return fh.read(1) != b"\n"
+    except OSError:
+        return False
+
+
+def _archive_owner_file(target: Path, path: Path, max_age_s: float, now: Optional[float] = None) -> int:
+    """Move notes older than `max_age_s` from one owner file into
+    `archive/<owner>-<YYYYMMDD>.jsonl`. The caller holds the notes lock. The owner file
+    is rewritten via tmp + os.replace, so it shrinks and gets a new inode: the worker
+    inbox's incremental index sees that and rescans. Returns the notes moved."""
+    now = time.time() if now is None else now
+    cutoff = now - max_age_s
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return 0
+    keep: List[bytes] = []
+    old: List[bytes] = []
+    for raw in data.split(b"\n"):
+        if not raw.strip():
+            continue
+        try:
+            rec = json.loads(raw)
+            ts = _note_ts_key(rec) if isinstance(rec, dict) else 0.0
+        except (ValueError, UnicodeDecodeError):
+            old.append(raw)  # unparseable lines are dead weight the reader skips anyway
+            continue
+        (old if 0 < ts < cutoff else keep).append(raw)
+    if not old:
+        return 0
+    adir = target / NOTES_ARCHIVE_SUBDIR
+    adir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d", time.gmtime(now))
+    with open(adir / f"{path.stem}-{stamp}{NOTE_FILE_SUFFIX}", "ab") as fh:
+        fh.write(b"\n".join(old) + b"\n")  # archive first: a crash here duplicates, never loses
+        fh.flush()
+        os.fsync(fh.fileno())
+    tmp = path.with_suffix(".jsonl.tmp")
+    tmp.write_bytes(b"\n".join(keep) + b"\n" if keep else b"")
+    os.replace(tmp, path)
+    return len(old)
+
+
+def archive_notes(root: Optional[str], days: float = NOTE_ARCHIVE_DEFAULT_DAYS) -> dict:
+    """Archive every owner's notes older than `days` (the `notes-archive` command)."""
+    target = notes_dir(root)
+    moved: Dict[str, int] = {}
+    if target.is_dir():
+        with _file_lock(target / ".seq"):
+            for path in sorted(target.glob(f"*{NOTE_FILE_SUFFIX}")):
+                n = _archive_owner_file(target, path, float(days) * 86400)
+                if n:
+                    moved[path.stem] = n
+    return {"days": days, "moved": moved, "total": sum(moved.values())}
 
 
 def notes(
@@ -1163,14 +1273,56 @@ def _channels_path(root: Optional[str]) -> Path:
     return Path(_resolve_base(root)) / BOARD_DIR / CHANNELS_NAME
 
 
-def _reg_read(root: Optional[str]) -> dict:
+class ChannelRegistryCorrupt(RuntimeError):
+    """channels.json exists but does not parse; a copy was kept and nothing was overwritten."""
+
+
+def _reg_read(root: Optional[str], strict: bool = False) -> dict:
+    """Read the registry. Readers get an empty registry for a missing or unreadable file;
+    `strict` (the read-modify-write path) instead quarantines a corrupt file and raises,
+    so an update can never overwrite other leads' channels with a fresh empty registry."""
+    path = _channels_path(root)
     try:
-        data = json.loads(_channels_path(root).read_text(encoding="utf-8"))
+        raw = path.read_text(encoding="utf-8")
+    except OSError:
+        return {"version": 1, "channels": {}}
+    if not raw.strip():
+        return {"version": 1, "channels": {}}
+    try:
+        data = json.loads(raw)
         if isinstance(data, dict) and isinstance(data.get("channels"), dict):
             return data
-    except (OSError, ValueError):
-        pass
+        reason: BaseException = ValueError("registry is not an object with a channels map")
+    except ValueError as exc:
+        reason = exc
+    if strict:
+        raise _quarantine_registry(root, path, raw, reason)
     return {"version": 1, "channels": {}}
+
+
+def _quarantine_registry(root: Optional[str], path: Path, raw: str, reason: BaseException) -> ChannelRegistryCorrupt:
+    """Keep a copy as channels.json.corrupt-<epoch ms> (skipped when the newest copy is
+    identical, so a persistent fault does not pile up copies), record a fault, and
+    return the error for the caller to raise."""
+    copy = None
+    try:
+        prior = sorted(path.parent.glob(f"{path.name}.corrupt-*"))
+        if not (prior and prior[-1].read_text(encoding="utf-8") == raw):
+            copy = path.parent / f"{path.name}.corrupt-{int(time.time() * 1000)}"
+            shutil.copyfile(path, copy)
+    except OSError:
+        pass
+    err = ChannelRegistryCorrupt(
+        f"{path} is corrupt ({reason}); copy kept at {copy or 'an earlier .corrupt-* file'}; "
+        "registry not overwritten (repair or remove the file)"
+    )
+    try:
+        import atlas_faults
+
+        atlas_faults.record("atlas_todo.registry_corrupt", err, str(root or ""))
+    except Exception:
+        print(f"atlas_todo: {err}", file=sys.stderr)
+    return err
 
 
 CHANNEL_LOCK_TIMEOUT_S = 2.0  # hook/note paths must never hang on a stuck registry lock
@@ -1197,7 +1349,7 @@ def _reg_update(root: Optional[str], fn, timeout: Optional[float] = None) -> Any
     The file is only written when fn changed the registry."""
     path = _channels_path(root)
     with _file_lock(path, timeout):
-        reg = _reg_read(root)
+        reg = _reg_read(root, strict=True)
         before = json.dumps(reg, sort_keys=True)
         out = fn(reg)
         if json.dumps(reg, sort_keys=True) == before:
@@ -1272,11 +1424,14 @@ def reap_channels(
     keep: Optional[str] = None,
     dry_run: bool = False,
     lead_idle: Optional[float] = None,
+    pane_live: Optional[Callable[[str], bool]] = None,
 ) -> dict:
     """Archive then delete dead lead channels; prune dead main-channel members.
     A lead channel is dead when every member has exit_code or no activity for max_idle
     and no member holds a live pid (pid_matches). `keep` names a lead whose channel is
-    never reaped. Archive line goes to .atlas/.run/archive/channels-YYYYMM.jsonl first.
+    never reaped. `pane_live(pane_id)` (optional, supplied by callers that know seats, e.g.
+    atlas_seats.pane_live) marks a seat member with a live pane as live even without a pid;
+    a probe error counts as not live. Archive line goes to .atlas/.run/archive/channels-YYYYMM.jsonl first.
     Returns {reaped, archived_path, kept}."""
     if not is_project(root):  # never create .atlas/.run in a non-project dir
         return {"reaped": 0, "would_reap": 0, "archived_path": None, "kept": 0}
@@ -1292,13 +1447,20 @@ def reap_channels(
         if "exit_code" in m:
             return True
         pid = m.get("pid")
-        if pid and pid_start(pid) is None:  # recorded pid is gone
+        if pid and _pid_probe(pid) is _GONE:  # gone; unknown falls to the TTL rule
             return True
         ttl = lead_idle if chan.get("kind") == "lead" else max_idle
         return now - float(chan.get("last_activity") or 0) > ttl
 
     def live(m: dict) -> bool:
-        return bool(m.get("pid")) and pid_matches(m.get("pid"), m.get("pid_start"))
+        if m.get("pid") and pid_matches(m.get("pid"), m.get("pid_start")):
+            return True
+        if pane_live and m.get("pane_id"):
+            try:
+                return bool(pane_live(str(m["pane_id"])))
+            except Exception:
+                return False
+        return False
 
     arch_dir = Path(_resolve_base(root)) / BOARD_DIR / "archive"
     arch = arch_dir / f"channels-{time.strftime('%Y%m', time.gmtime(now))}.jsonl"
@@ -1385,12 +1547,12 @@ def open_lead_channel(
     root: Optional[str],
     lead_name: str,
     subagents: Any = (),
-    timeout: Optional[float] = None,
+    timeout: Optional[float] = CHANNEL_LOCK_TIMEOUT_S,
     revive: bool = False,
 ) -> dict:
     """Open (idempotent) `<main>/<lead>`; the lead joins it and main, each subagent
     joins it with parent=lead. Returns the subchannel record. `timeout` bounds the
-    registry lock wait (LockTimeout)."""
+    registry lock wait (LockTimeout; default CHANNEL_LOCK_TIMEOUT_S, None waits forever)."""
     base = _resolve_base(root)
     main, branch = _main_parts(base)
     lead = _sanitize_owner(lead_name)
@@ -1490,8 +1652,26 @@ def mark_finished(root: Optional[str], name: str, exit_code: int) -> int:
     return _reg_update(root, fn, CHANNEL_LOCK_TIMEOUT_S)
 
 
-def pid_start(pid) -> Optional[str]:
-    """Start-time string of `pid` from `ps -o lstart=`, or None if ps fails."""
+_UNKNOWN = object()  # liveness cannot be determined (no ps, no /proc)
+_GONE = None
+
+
+def _proc_start(pid):
+    """Linux /proc/<pid>/stat field 22 (starttime ticks) as a string; None if the pid is gone;
+    _UNKNOWN when /proc is unusable."""
+    try:
+        with open(f"/proc/{int(pid)}/stat", "rb") as f:
+            raw = f.read().decode("ascii", "replace")
+        # comm may hold spaces/parens: fields resume after the last ')', starting at field 3
+        return "proc:" + raw[raw.rindex(")") + 2 :].split()[19]
+    except (FileNotFoundError, ProcessLookupError):
+        return None if os.path.exists("/proc/self/stat") else _UNKNOWN
+    except (OSError, ValueError, TypeError, IndexError):
+        return _UNKNOWN
+
+
+def _pid_probe(pid):
+    """Start-time string if alive, None if the pid is gone, _UNKNOWN if neither ps nor /proc can say."""
     try:
         r = subprocess.run(
             ["ps", "-o", "lstart=", "-p", str(int(pid))],
@@ -1500,10 +1680,18 @@ def pid_start(pid) -> Optional[str]:
             timeout=5,
             env={**os.environ, "LC_ALL": "C"},
         )
-    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
-        return None
+    except OSError:  # ps missing: not the same as the pid being gone
+        return _proc_start(pid)
+    except (ValueError, TypeError, subprocess.SubprocessError):
+        return _UNKNOWN
     s = " ".join(r.stdout.split())
-    return s if r.returncode == 0 and s else None
+    return s if r.returncode == 0 and s else _GONE
+
+
+def pid_start(pid) -> Optional[str]:
+    """Start-time string of `pid` (ps lstart, else /proc starttime), or None if gone or unknowable."""
+    cur = _pid_probe(pid)
+    return None if cur is _UNKNOWN else cur
 
 
 def pid_matches(pid, recorded_start) -> bool:
@@ -1940,6 +2128,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--paths"
             or a == "--max-idle"
             or a == "--keep"
+            or a == "--days"
             or a == "--message"
             or a == "--origin"
             or a == "--owner-token"
@@ -2111,6 +2300,13 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                         paths=_claim_paths_arg(flags.get("paths")) or None,
                     ),
                 }
+        elif cmd == "notes-archive":
+            out = {
+                "ok": True,
+                **archive_notes(
+                    root, float(flags.get("days") or NOTE_ARCHIVE_DEFAULT_DAYS)
+                ),
+            }
         elif cmd == "notes":
             since_raw = flags.get("since")
             out = {
@@ -2192,6 +2388,16 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 }
         else:
             out = {"ok": False, "error": "unknown_command", "command": cmd}
+    except NoteTooLarge as exc:
+        out = {
+            "ok": False,
+            "error": exc.error,
+            "bytes": exc.size,
+            "max_bytes": exc.limit,
+            "message": str(exc),
+        }
+    except LockTimeout as exc:
+        out = {"ok": False, "error": "channel_lock_timeout", "message": str(exc)}
     except Exception as exc:  # fail-open for hooks: report, never traceback
         out = {"ok": False, "error": str(exc)}
     print(json.dumps(out))

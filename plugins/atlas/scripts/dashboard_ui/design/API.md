@@ -4,7 +4,8 @@ Every route the Command Center UI calls. JSON bodies below are trimmed copies of
 
 Conventions
 - `GET` routes accept `?project=<root|all>` unless noted. Mutations (`POST`, `PUT`) need `X-Atlas-Token` (the `<meta name="atlas-token">` value) and `Content-Type: application/json`. Failures return `{ok:false, error, why, do}`.
-- Token is also required for GETs that expose terminal output or message text: `/api/v2/stream` (`?token=` allowed), `/api/v2/irc`, `/api/v2/channels[/<name>]`, `/api/v2/agents/<id>/peek`, `/api/v2/herd/agents/<pane>/peek`.
+- Token is also required for GETs that expose terminal output or message text: `/api/v2/stream` (header, or a single-use `?ticket=`; see below), `/api/v2/irc`, `/api/v2/channels[/<name>]`, `/api/v2/agents/<id>/peek`, `/api/v2/herd/agents/<pane>/peek`.
+- Stream auth: send `X-Atlas-Token`, or for `EventSource` (no custom headers) call `POST /api/v2/stream/ticket` with the token header and open `/api/v2/stream?ticket=<ticket>`. A ticket works once and expires after 30 seconds. `?token=` is rejected on the stream and on the terminal websocket. The terminal websocket takes only a ticket from `POST /api/v2/term/ticket`. The dashboard access log replaces `token` and `ticket` query values with a placeholder.
 - `agents`, `herd`, `todos`, `irc`, `health`, `improve` are SSE topics on `GET /api/v2/stream` (event name = topic, data = the same body as the GET). A topic is re-sent only when its body changes, ignoring volatile fields (`fetched_ms`, `updated`, `last_ok`, `last_ts`, `now`, `generated_at`, `age_seconds`, `idle_seconds`, `preview`).
 - Timestamps are ISO-8601 UTC strings.
 
@@ -362,7 +363,7 @@ Storage lives in `atlas_todo` (registry, members, board-by-owner); `atlas_dash_i
 
 `GET /api/v2/term/seats?project=<root>|all` returns `{ok, machine, clock, spaces:[{id, name, kind:"colony"|"host", seats:[{address, name, role, runtime:"claude"|"omp"|"codex"|"shell", state, pane, target, kind:"pane"|"shell"|"tui", project, cwd, started_at, last_activity}]}]}`. Colony seats come from `atlas_colony_model.snapshot`, lead first. Each colony space ends with `shell@<space>` (`kind:"shell"`, cwd = project root); the host space carries `shell@host` and `tui@host` (`kind:"tui"`). A seat whose pane is gone keeps its row with `state:"ended"` and `target:null`.
 
-`POST /api/v2/term/ticket {kind, target?, project?, cols, rows}` (needs `X-Atlas-Token`) returns `{ticket, expires_in: 30}`. `GET /api/v2/term/ws?ticket=<t>` accepts a ticket once and burns it; the server sends a first frame within 1 s of upgrade. `kind=shell` forks `$SHELL -l` (fallback `/bin/zsh`, then `/bin/sh`) with `TERM=xterm-256color`. The old `token=` query form is deprecated, still works for one release and logs a deprecation line. A PTY with no client frames for `ATLAS_TERM_IDLE_S` (default 900) closes with code 1000 reason `idle`.
+`POST /api/v2/term/ticket {kind, target?, project?, cols, rows}` (needs `X-Atlas-Token`) returns `{ticket, expires_in: 30}`. `GET /api/v2/term/ws?ticket=<t>` accepts a ticket once and burns it; the server sends a first frame within 1 s of upgrade. `kind=shell` forks `$SHELL -l` (fallback `/bin/zsh`, then `/bin/sh`) with `TERM=xterm-256color`. The old `token=` query form is rejected (`bad_token`); only tickets are accepted. A PTY with no client frames for `ATLAS_TERM_IDLE_S` (default 900) closes with code 1000 reason `idle`.
 
 ## Behavior knobs and verified writes (13.0.0)
 

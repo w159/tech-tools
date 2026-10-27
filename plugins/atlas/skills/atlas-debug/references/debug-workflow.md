@@ -7,7 +7,7 @@
 - [Stage 3: Fix the cause in place](#stage-3-fix-the-cause-in-place)
 - [Stage 4: Verify (GREEN)](#stage-4-verify-green)
 - [Stage 5: Negative case](#stage-5-negative-case)
-- [Optional: Defense-in-depth pass (conditional — NOT applied by default)](#optional-defense-in-depth-pass-conditional--not-applied-by-default)
+- [Optional: Defense-in-depth pass (conditional - NOT applied by default)](#optional-defense-in-depth-pass-conditional--not-applied-by-default)
 - [What this workflow is not](#what-this-workflow-is-not)
 - [Report shape](#report-shape)
 
@@ -72,7 +72,7 @@ cheapest moment to catch that. Each hypothesis states:
   against a working comparison case, or a specific code reference.
   "X seems off" is not evidence; "X is null at line 42 because Y was
   never initialized in the constructor path that runs under condition
-  Z" is. An ungrounded hypothesis is theorizing — go back and
+  Z" is. An ungrounded hypothesis is theorizing - go back and
   instrument.
 - The causal chain from trigger to symptom, step by step, with no
   gaps.
@@ -87,7 +87,7 @@ review what has already been ruled out and why.
 
 After 2-3 hypotheses are exhausted without confirmation, stop guessing.
 Diagnose why they failed and present that diagnosis to the user before
-proceeding — a fourth blind hypothesis costs more than the pause:
+proceeding - a fourth blind hypothesis costs more than the pause:
 
 | Pattern | Diagnosis | Next move |
 |---------|-----------|-----------|
@@ -123,8 +123,8 @@ for why this change fixes the cause.
 Before trusting any fix, confirm the RED instrument is red for the
 targeted defect, not for an unrelated setup error. If a regression
 test exists or was written for this bug, run it now and read the
-failure message: it must point at the root cause — the missing init,
-the wrong branch, the bad coercion — not at a missing fixture, a stale
+failure message: it must point at the root cause - the missing init,
+the wrong branch, the bad coercion - not at a missing fixture, a stale
 build artifact, a wrong interpreter, or an import error. A test that
 is red for the wrong reason proves nothing when it turns green. With
 no regression test, the stage 1 reproduction command is the
@@ -171,7 +171,7 @@ Goal: confirm the fix did not break an adjacent error path.
 Gate: captured output from the adjacent path showing correct error
 behavior.
 
-## Optional: Defense-in-depth pass (conditional — NOT applied by default)
+## Optional: Defense-in-depth pass (conditional - NOT applied by default)
 
 This pass is optional and conditional. It applies ONLY when one of
 these triggers fires:
@@ -203,7 +203,7 @@ Rules:
 
 - Trace the bad value's origin through every function that passed it
   along, then map where validation could have rejected it earlier.
-- Each guard is as narrow as possible — validating exactly what that
+- Each guard is as narrow as possible - validating exactly what that
   layer owns, not duplicating checks from other layers. If layer 2
   just repeats layer 1, the second one is noise.
 - Test each guard independently: construct a case that bypasses

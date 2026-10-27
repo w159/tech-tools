@@ -20,6 +20,27 @@ import shutil
 import subprocess
 import tempfile
 
+# Hermetic env: a suite run from inside a live atlas/Claude session inherits that session's identity
+# (lead/worker/channel/team/session id) and the user's settings.json env block. Tests must never depend on
+# them, so drop them for the whole process (and every child it spawns) and restore nothing. Every hook and
+# script test module imports this file, so this is the one choke point for both suites.
+SCRUBBED_ENV_NAMES = (
+    "ATLAS_LEAD_NAME",
+    "ATLAS_CHANNEL",
+    "ATLAS_WORKER_NAME",
+    "CLAUDE_CODE_SESSION_ID",
+    # user settings.json env block (mirrors hooks/testenv.USER_INJECTED)
+    "ATLAS_DASHBOARD_PORT",
+    "ATLAS_OPTIMIZER_MODEL",
+    "ATLAS_OPTIMIZE_LOG",
+    "ATLAS_OPTIMIZE_VERBOSE",
+    "ATLAS_TYPESAFE_SCORING",
+    "ATLAS_MEMORY_CAPTURE",
+    "ATLAS_DOCS_REPAIR",
+)
+for _name in [k for k in os.environ if k in SCRUBBED_ENV_NAMES or k.startswith("ATLAS_TEAM")]:
+    os.environ.pop(_name, None)
+
 REAL_HOME = os.environ.get("_ATLAS_TEST_REAL_HOME") or os.path.expanduser("~")
 os.environ["_ATLAS_TEST_REAL_HOME"] = REAL_HOME
 
@@ -64,6 +85,9 @@ os.environ.pop("TMUX_PANE", None)
 # does anyway, it gets a spare port instead of the live 7421.
 os.environ["ATLAS_DASHBOARD"] = "off"
 os.environ["ATLAS_COLONY"] = "off"
+# A real dashboard started by a test (or a child it spawns) must not run the self-fix scheduler: that
+# thread creates git worktrees and atlas/selffix-* branches in whatever repo the test points at.
+os.environ["ATLAS_SELFFIX"] = "0"
 os.environ["ATLAS_DASHBOARD_PORT"] = "17969"
 
 # The values this helper set, so tests can assert against them even if another test
@@ -86,3 +110,33 @@ HOME_UNDER_SCRATCH_REASON = (
     f"HOME ({REAL_HOME}) is under a scratch root; atlas treats paths there as scratch, "
     "so a project fixture under HOME cannot arm. Run with HOME outside /tmp and /var/folders."
 )
+
+
+def make_real_project_dir(testcase) -> str:
+    """A directory the project-picker heuristics accept as a real project (outside every temp dir, so not
+    under /tmp or /var/folders; has a .git marker), independent of where the checkout lives. Created under the
+    real home with a unique name and removed on cleanup; skips the test when home is not writable."""
+    try:
+        d = tempfile.mkdtemp(prefix="atlas-test-realproj-", dir=REAL_HOME)
+    except OSError as e:
+        testcase.skipTest(f"cannot create a non-temp project dir under {REAL_HOME}: {e}")
+    testcase.addCleanup(shutil.rmtree, d, True)
+    os.makedirs(os.path.join(d, ".git"))
+    return os.path.realpath(d)
+
+
+def enter_real_project_cwd():
+    """chdir into a fresh non-temp project dir (see make_real_project_dir) and return a callable that restores the
+    previous cwd and removes it. For setUpModule/tearDownModule of tests that pass cwd-relative paths such as
+    ``src/app.py`` which the product resolves against cwd and treats as junk when the checkout lives under /tmp."""
+    prev = os.getcwd()
+    d = tempfile.mkdtemp(prefix="atlas-test-realproj-", dir=REAL_HOME)
+    os.makedirs(os.path.join(d, ".git"))
+    os.chdir(d)
+
+    def _leave():
+        with contextlib.suppress(OSError):
+            os.chdir(prev)
+        shutil.rmtree(d, ignore_errors=True)
+
+    return _leave

@@ -1,8 +1,7 @@
 ## The docs/ SSOT (plus .atlas/ internal state)
 
 The full canonical structure is defined once, authoritatively, in the
-docs-ssot.md single source of truth (maintained in the atlas-orchestrate and
-atlas-loop skills). Onboarding scaffolds root entry files
+docs-ssot.md single source of truth (owned by the atlas-orchestrate skill). Onboarding scaffolds root entry files
 plus two trees at the project root: project documentation lives under
 `docs/`; atlas's own self-improvement state lives under `.atlas/` directly.
 `.atlas/` never contains a `docs/` subdirectory or project-wiki content

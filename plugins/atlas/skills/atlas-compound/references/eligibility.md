@@ -1,6 +1,6 @@
 # Eligibility, Modes, and the One-Learning Rule
 
-The ported contract from CE's `ce-compound` (`skills/ce-compound/SKILL.md` + `docs/guides/ce-compound.md` in w159/compound-engineering-plugin), adapted to atlas's trigger and consent model.
+The eligibility contract, written for atlas's trigger and consent model.
 
 ## The hard gate
 
@@ -21,7 +21,7 @@ Phrases like "that worked", "it's fixed", "working now", "problem solved", "test
 
 ## One learning per invocation
 
-Mandatory, ported from CE: each invocation captures exactly ONE lesson. If the session produced several distinct lessons, capture the most valuable one and tell the user (or the loop) to invoke `atlas-compound` again for each additional lesson. Batching breaks the grounding check (claims from two different fixes get conflated), the overlap check (a two-lesson draft matches nothing cleanly), and retrieval later (one file, two causes, unfindable by either).
+Mandatory: each invocation captures exactly ONE lesson. If the session produced several distinct lessons, capture the most valuable one and tell the user (or the loop) to invoke `atlas-compound` again for each additional lesson. Batching breaks the grounding check (claims from two different fixes get conflated), the overlap check (a two-lesson draft matches nothing cleanly), and retrieval later (one file, two causes, unfindable by either).
 
 ## Full vs Lightweight
 
@@ -32,7 +32,7 @@ Mandatory, ported from CE: each invocation captures exactly ONE lesson. If the s
 | Grounding | full mechanical claims check (`references/grounding.md`) | same - grounding is NEVER reduced; ungrounded claims are the failure mode this skill exists to prevent |
 | Schema validation | full frontmatter + enum + YAML-safety validation | same |
 | Session-history probe | optional: probe claude-mem for a prior session that already hit this problem (7-day window, current branch or >=2 topic-keyword hits) to enrich "What Didn't Work" | skipped |
-| Enhancement reviewers | none in atlas (CE's optional doc-review personas have no atlas equivalent; a second opinion may be requested via a bounded Task dispatch to a generic read-only subagent - optional, never required) | skipped |
+| Enhancement reviewers | none in atlas (a second opinion may be requested via a bounded Task dispatch to a generic read-only subagent - optional, never required) | skipped |
 | Output | `Learning captured` / `Learning skipped` signal | same |
 
 Unknown, multiple, or invalid `depth:`/`mode:` tokens fail closed: emit `Learning skipped` with reason `invalid mode token`. Fail-closed means no documentation, never a guess.

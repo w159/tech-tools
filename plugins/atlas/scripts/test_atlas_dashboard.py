@@ -30,8 +30,12 @@ class TestAtlasDashboard(unittest.TestCase):
     def test_version_survives_manifest_removal(self):
         ver = self.mod._plugin_manifest()["version"]
         manifest = self.mod.PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
-        with mock.patch.object(self.mod, "PLUGIN_ROOT", Path(tempfile.mkdtemp())):  # manifest now missing
-            self.assertFalse((self.mod.PLUGIN_ROOT / ".claude-plugin" / "plugin.json").exists())
+        with mock.patch.object(
+            self.mod, "PLUGIN_ROOT", Path(tempfile.mkdtemp())
+        ):  # manifest now missing
+            self.assertFalse(
+                (self.mod.PLUGIN_ROOT / ".claude-plugin" / "plugin.json").exists()
+            )
             self.assertEqual(self.mod._plugin_manifest()["version"], ver)
         self.assertTrue(manifest.exists())
 
@@ -1082,9 +1086,75 @@ class SecurityGuardTest(unittest.TestCase):
         self.assertNotIn(self._req("GET", "/api/v2/colony", None, tok)[0], (401, 404))
         self.assertEqual(self._req("GET", "/api/health")[0], 200)
 
-    def test_query_token_only_honoured_on_stream(self):
+    def test_query_token_is_never_honoured(self):
         tok = self.mod.DASH_TOKEN
         self.assertEqual(self._req("GET", "/api/v2/irc?token=" + tok)[0], 401)
+        self.assertEqual(self._stream_status("/api/v2/stream?token=" + tok), 401)
+
+    def _stream_status(self, path, headers=None):
+        import http.client
+
+        conn = http.client.HTTPConnection(self.mod.LOOPBACK, self.port, timeout=10)
+        hdrs = {"Host": "%s:%d" % (self.mod.LOOPBACK, self.port)}
+        hdrs.update(headers or {})
+        conn.request("GET", path, headers=hdrs)
+        status = conn.getresponse().status
+        conn.close()
+        return status
+
+    def _mint_stream_ticket(self):
+        status, raw = self._req("POST", "/api/v2/stream/ticket", {}, self._tok())
+        self.assertEqual(status, 200, raw)
+        return json.loads(raw)["ticket"]
+
+    def test_stream_header_token_works(self):
+        self.assertEqual(
+            self._stream_status(
+                "/api/v2/stream", {"X-Atlas-Token": self.mod.DASH_TOKEN}
+            ),
+            200,
+        )
+
+    def test_stream_ticket_mint_needs_token(self):
+        status, _ = self._req(
+            "POST", "/api/v2/stream/ticket", {}, {"Content-Type": "application/json"}
+        )
+        self.assertEqual(status, 401)
+
+    def test_stream_ticket_is_single_use(self):
+        t = self._mint_stream_ticket()
+        self.assertEqual(self._stream_status("/api/v2/stream?ticket=" + t), 200)
+        self.assertIn(self._stream_status("/api/v2/stream?ticket=" + t), (401, 403))
+
+    def test_stream_ticket_expires(self):
+        with mock.patch.object(self.mod, "STREAM_TICKET_TTL_S", 0):
+            t = self._mint_stream_ticket()
+        self.assertIn(self._stream_status("/api/v2/stream?ticket=" + t), (401, 403))
+
+    def test_unknown_stream_ticket_is_refused(self):
+        self.assertIn(self._stream_status("/api/v2/stream?ticket=nope"), (401, 403))
+
+    def test_ticket_does_not_authorise_other_routes(self):
+        t = self._mint_stream_ticket()
+        self.assertEqual(self._req("GET", "/api/v2/irc?ticket=" + t)[0], 401)
+
+    def test_access_log_redacts_token_and_ticket(self):
+        import io
+
+        buf = io.StringIO()
+        with mock.patch.object(self.mod.sys, "stderr", buf):
+            for q in (
+                "token=abc123secret&project=all",
+                "project=all&ticket=tkt456secret",
+            ):
+                self.mod.Handler.log_message(
+                    None, '"%s" %s %s', f"GET /api/v2/stream?{q} HTTP/1.1", "401", "-"
+                )
+        out = buf.getvalue()
+        self.assertIn("/api/v2/stream", out)
+        self.assertIn("project=all", out)
+        self.assertNotIn("abc123secret", out)
+        self.assertNotIn("tkt456secret", out)
 
     def test_non_sensitive_gets_need_no_token(self):
         self.assertEqual(self._req("GET", "/api/behavior")[0], 200)
@@ -1113,12 +1183,17 @@ class SecurityGuardTest(unittest.TestCase):
 
     def test_behavior_post_returns_the_verified_write_shape(self):
         status, body = self._req(
-            "POST", "/api/behavior", {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "8"}}, self._tok()
+            "POST",
+            "/api/behavior",
+            {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "8"}},
+            self._tok(),
         )
         self.assertEqual(status, 200)
         body = json.loads(body)
         self.assertTrue(body["ok"], body)
-        self.assertEqual((body["key"], body["wanted"]), ("ATLAS_TRIPWIRE_THRESHOLD", "8"))
+        self.assertEqual(
+            (body["key"], body["wanted"]), ("ATLAS_TRIPWIRE_THRESHOLD", "8")
+        )
         self.assertTrue(all(x["ok"] for x in body["layers"]))
 
     def test_behavior_post_status_codes_for_confirm_and_range(self):
@@ -1126,7 +1201,10 @@ class SecurityGuardTest(unittest.TestCase):
         status, body = self._req("POST", "/api/behavior", cmd, self._tok())
         self.assertEqual((status, json.loads(body)["error"]), (409, "needs_confirm"))
         status, body = self._req(
-            "POST", "/api/behavior", {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "999"}}, self._tok()
+            "POST",
+            "/api/behavior",
+            {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "999"}},
+            self._tok(),
         )
         self.assertEqual((status, json.loads(body)["error"]), (400, "out_of_range"))
 
@@ -1134,9 +1212,17 @@ class SecurityGuardTest(unittest.TestCase):
         self.assertEqual(self._req("GET", "/api/v2/ollama/status")[0], 200)
         json_only = {"Content-Type": "application/json"}
         self.assertEqual(
-            self._req("DELETE", "/api/v2/ollama/models/ghost%3A1b", {"confirm": True}, json_only)[0], 401
+            self._req(
+                "DELETE",
+                "/api/v2/ollama/models/ghost%3A1b",
+                {"confirm": True},
+                json_only,
+            )[0],
+            401,
         )
-        status, body = self._req("DELETE", "/api/v2/ollama/models/ghost%3A1b", {}, self._tok())
+        status, body = self._req(
+            "DELETE", "/api/v2/ollama/models/ghost%3A1b", {}, self._tok()
+        )
         self.assertEqual((status, json.loads(body)["error"]), (409, "needs_confirm"))
 
     def test_behavior_post_writes_only_the_override_file(self):
@@ -1503,10 +1589,23 @@ class TestSelfHeal(unittest.TestCase):
         cls.d = d
 
     @staticmethod
-    def _install(root: Path, rel: str, with_ui: bool = True) -> Path:
+    def _install(
+        root: Path,
+        rel: str,
+        with_ui: bool = True,
+        manifest: bool = True,
+        version: str | None = None,
+    ) -> Path:
         scripts = root / rel / "scripts"
         scripts.mkdir(parents=True, exist_ok=True)
         (scripts / "atlas_dashboard.py").write_text("# fake install\n")
+        if manifest:
+            (scripts.parent / ".claude-plugin").mkdir(exist_ok=True)
+            (scripts.parent / ".claude-plugin" / "plugin.json").write_text(
+                json.dumps(
+                    {"name": "atlas", "version": version or rel.split("___")[-1]}
+                )
+            )
         if with_ui:
             ui = scripts / "dashboard_ui"
             ui.mkdir(exist_ok=True)
@@ -1525,7 +1624,9 @@ class TestSelfHeal(unittest.TestCase):
             cache = Path(t) / "cache" / "plugins"
             s19 = self._install(cache, "tech-tools___atlas___1.9.0", with_ui=False)
             s110 = self._install(cache, "tech-tools___atlas___1.10.0", with_ui=False)
-            self._install(cache, "tech-tools___other___9.9.9", with_ui=False)  # decoy family
+            self._install(
+                cache, "tech-tools___other___9.9.9", with_ui=False
+            )  # decoy family
             (cache / "tech-tools___atlas___broken").mkdir(parents=True, exist_ok=True)
             own_root = cache / "tech-tools___atlas___1.9.0"
             self.assertEqual(d._sibling_installs([own_root])[-1][1], s110)
@@ -1542,7 +1643,9 @@ class TestSelfHeal(unittest.TestCase):
             self._install(plugin, "not-a-version", with_ui=False)  # ignored
             own_root = plugin / "1.9.0"
             self.assertEqual(d._sibling_installs([own_root])[-1][1], s110)
-            self.assertEqual(d._self_heal_target([own_root], {os.path.realpath(s19)}), s110)
+            self.assertEqual(
+                d._self_heal_target([own_root], {os.path.realpath(s19)}), s110
+            )
 
     def test_symlinked_file_still_heals_via_raw_root(self):
         d = self.d
@@ -1563,11 +1666,49 @@ class TestSelfHeal(unittest.TestCase):
                 os.path.realpath(got), os.path.realpath(s110)
             )  # same file; spelled via the resolved root when only it has siblings
 
+    def test_unqualified_siblings_are_never_chosen(self):
+        d = self.d
+        with tempfile.TemporaryDirectory() as t:
+            plugin = Path(t) / "cache" / "mkt" / "atlas"
+            s19 = self._install(plugin, "1.9.0", with_ui=False)
+            self._install(
+                plugin, "2.0.0", with_ui=False, manifest=False
+            )  # no plugin.json
+            self._install(
+                plugin, "2.1.0", with_ui=False, version="9.9.9"
+            )  # version != dir
+            bad_name = self._install(plugin, "2.2.0", with_ui=False)
+            (bad_name.parent.parent / ".claude-plugin" / "plugin.json").write_text(
+                json.dumps({"name": "evil", "version": "2.2.0"})
+            )
+            corrupt = self._install(plugin, "2.3.0", with_ui=False)
+            (corrupt.parent.parent / ".claude-plugin" / "plugin.json").write_text(
+                "{nope"
+            )
+            own_root = plugin / "1.9.0"
+            self.assertEqual([p for _v, p in d._sibling_installs([own_root])], [s19])
+            self.assertIsNone(d._self_heal_target([own_root], {os.path.realpath(s19)}))
+
+    def test_escaping_symlink_sibling_is_never_chosen(self):
+        d = self.d
+        with tempfile.TemporaryDirectory() as t:
+            plugin = Path(t) / "cache" / "mkt" / "atlas"
+            s19 = self._install(plugin, "1.9.0", with_ui=False)
+            elsewhere = Path(t) / "attacker"
+            self._install(elsewhere, "3.0.0", with_ui=False)
+            (plugin / "3.0.0").symlink_to(elsewhere / "3.0.0")
+            own_root = plugin / "1.9.0"
+            got = [p.parent.parent.name for _v, p in d._sibling_installs([own_root])]
+            self.assertNotIn("3.0.0", got)
+            self.assertIsNone(d._self_heal_target([own_root], {os.path.realpath(s19)}))
+
     def test_no_sibling_means_no_replacement(self):
         d = self.d
         with tempfile.TemporaryDirectory() as t:
             own_root = Path(t) / "tech-tools___atlas___1.9.0"
-            s19 = self._install(own_root.parent, "tech-tools___atlas___1.9.0", with_ui=False)
+            s19 = self._install(
+                own_root.parent, "tech-tools___atlas___1.9.0", with_ui=False
+            )
             self.assertIsNone(d._self_heal_target([own_root], {os.path.realpath(s19)}))
 
     def test_exec_replaces_process_on_same_argv_tail(self):
@@ -1580,15 +1721,25 @@ class TestSelfHeal(unittest.TestCase):
             target = self._install(Path(t), "tech-tools___atlas___2.0.0", with_ui=False)
             fake = type("S", (), {"server_close": lambda self: closed.append(True)})()
             with (
-                mock.patch.object(d, "_EXEC", lambda exe, argv: calls.append((exe, argv))),
+                mock.patch.object(
+                    d, "_EXEC", lambda exe, argv: calls.append((exe, argv))
+                ),
                 mock.patch.object(d, "_HTTPD", fake),
                 mock.patch.object(
-                    sys, "argv", ["/old/scripts/atlas_dashboard.py", "serve", "--port", "7439"]
+                    sys,
+                    "argv",
+                    ["/old/scripts/atlas_dashboard.py", "serve", "--port", "7439"],
                 ),
             ):
                 d._self_heal_exec(target)
         self.assertEqual(
-            calls, [(sys.executable, [sys.executable, str(target), "serve", "--port", "7439"])]
+            calls,
+            [
+                (
+                    sys.executable,
+                    [sys.executable, str(target), "serve", "--port", "7439"],
+                )
+            ],
         )
         self.assertEqual(closed, [True])
 
@@ -1604,6 +1755,38 @@ class TestSelfHeal(unittest.TestCase):
             hint = d._ui_missing_hint()
         self.assertTrue(hint.startswith("python3 "))
         self.assertTrue(hint.endswith("atlas_dashboard.py ensure"))
+
+
+class TestReapTickSeatProbe(unittest.TestCase):
+    def test_reap_tick_passes_seat_pane_probe(self):
+        import sqlite3
+        import tempfile
+
+        import atlas_dashboard as d
+        import atlas_seats
+
+        with tempfile.TemporaryDirectory() as t:
+            real = os.path.join(os.path.realpath(t), "real")
+            os.makedirs(os.path.join(real, ".atlas", ".run"))
+            db = os.path.join(t, "x.db")
+            c = sqlite3.connect(db)
+            c.execute("CREATE TABLE projects(root_path TEXT)")
+            c.execute("INSERT INTO projects VALUES(?)", (real,))
+            c.commit()
+            c.close()
+            orig, d._REAP_LAST = d.dashboard_db_path, 0.0
+            d.dashboard_db_path = lambda: db
+            try:
+                with (
+                    mock.patch("atlas_dash_work._junk_root", lambda _p: False),
+                    mock.patch("atlas_todo.is_project", return_value=True),
+                    mock.patch("atlas_todo.reap_channels", return_value={}) as reap,
+                ):
+                    d.reap_tick(now=1000.0, interval=0)
+            finally:
+                d.dashboard_db_path = orig
+        self.assertTrue(reap.called)
+        self.assertIs(reap.call_args.kwargs.get("pane_live"), atlas_seats.pane_live)
 
 
 class TestReapTickHealth(unittest.TestCase):
@@ -1647,5 +1830,7 @@ class TestReapTickHealth(unittest.TestCase):
         r = card["reaper"]
         self.assertEqual(r["status"], "warn")
         self.assertIn("recent failures", r["detail"])
-        self.assertTrue(any(real in e and "PermissionError" in e for e in r["evidence"]))
+        self.assertTrue(
+            any(real in e and "PermissionError" in e for e in r["evidence"])
+        )
         self.assertIn(f"reap {real}", [f["path"] for f in ins.REAP_FAILURES])

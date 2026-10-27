@@ -133,7 +133,7 @@ export class PanosClient {
   async commit(opts?: { cmd?: string; action?: 'partial' | 'all'; target?: string }): Promise<{ jobId?: string }> {
     const cmd = opts?.cmd ?? (opts?.action === 'all' ? '<commit-all></commit-all>' : '<commit></commit>');
     const response = (await this.request(
-      { type: 'commit', cmd, target: opts?.target ?? this.target },
+      { type: 'commit', action: opts?.action, cmd, target: opts?.target ?? this.target },
       { method: 'POST' },
     )) as Record<string, any>;
     const jobId = response?.result?.job as string | undefined;

@@ -2076,6 +2076,65 @@ def mine_recurring_friction(conn, root, min_count=3):
     return out
 
 
+# Gate blocks: completion-gate and dispatch-tripwire friction categories.
+GATE_SPIKE_RATIO = 1.5  # last-24h count must exceed this x the 14-day daily average
+GATE_SPIKE_MIN_COUNT = 5  # ...and reach this many blocks, so a quiet gate is not noise
+GATE_SPIKE_HISTORY_DAYS = 14
+
+
+def mine_gate_block_spike(
+    conn, root, ratio=GATE_SPIKE_RATIO, min_count=GATE_SPIKE_MIN_COUNT
+):
+    """ALERT ONLY. A gate (friction category gate_block, gate_block_loop or
+    dispatch_denied:<code>) whose blocks in the last 24 h exceed `ratio` x its
+    daily average over the preceding 14 days (and reach `min_count`) gets a
+    finding whose proposed action is human review. This miner reads
+    friction_events and writes nothing else: it never edits gate config."""
+    tmp_sql, tmp_args = atlas_db.tmp_sessions_sql()
+    rows = conn.execute(
+        "SELECT category, "
+        "SUM(ts > strftime('%s','now','-1 day')) AS recent, "
+        "SUM(ts <= strftime('%s','now','-1 day')) AS history "
+        "FROM friction_events "
+        "WHERE (category IN ('gate_block','gate_block_loop') "
+        "OR category LIKE 'dispatch_denied:%') "
+        "AND ts > strftime('%s','now', ?) "
+        f"AND COALESCE(session_id,'') NOT IN ({tmp_sql}) "
+        "GROUP BY category",
+        (f"-{GATE_SPIKE_HISTORY_DAYS + 1} days", *tmp_args),
+    ).fetchall()
+    out = MinerResult()
+    out.absent_is_zero = True
+    for category, recent, history in rows:
+        recent, history = recent or 0, history or 0
+        avg = history / float(GATE_SPIKE_HISTORY_DAYS)
+        out.evaluated.add(category)
+        out.values[category] = recent
+        if recent < min_count or recent <= ratio * avg:
+            continue
+        out.append(
+            _finding(
+                dimension="gate friction",
+                severity="MED",
+                title=f"{category} blocks spiked ({recent} in 24h vs {avg:.1f}/day avg)",
+                detail=(
+                    f"{recent} '{category}' friction row(s) in the last 24 hours "
+                    f"against a {GATE_SPIKE_HISTORY_DAYS}-day daily average of "
+                    f"{avg:.1f} (threshold {ratio}x, minimum {min_count}). "
+                    "Alert only: no gate configuration was changed."
+                ),
+                proposed_action="human review",
+                target_path="plugins/atlas/hooks",
+                key=category,
+                metric_value=recent,
+                recent_24h=recent,
+                daily_average=round(avg, 2),
+            )
+        )
+    return out
+
+
+
 # --- colony adherence (lean-ctx/context-mode usage + dispatch discipline) ---
 # Thresholds: native_reader_share is measured where LOWER is better (the
 # lean-ctx/CLAUDE.md contract wants native Grep/Glob/Read/Bash routed through
@@ -2792,6 +2851,7 @@ MINERS = {
     "tool_error_rate_high": mine_tool_error_rate,
     "cache_hit_ratio_low": mine_low_cache_hit,
     "recurring_friction": mine_recurring_friction,
+    "gate_block_spike": mine_gate_block_spike,
     "colony_adherence": mine_colony_adherence,
     "turn_quality": mine_turn_quality,
 }
@@ -3171,6 +3231,80 @@ def fix_layout_all(root):
             conn.close()
 
 
+# (table, column) pairs holding free text that may carry a secret or NPI. Paths
+# that act as identity (session_logs.transcript_path) are deliberately absent.
+REDACT_COLUMNS = (
+    ("messages", "text"),
+    ("messages", "thinking"),
+    ("user_prompts", "text"),
+    ("user_prompts", "norm"),
+    ("tool_calls", "input_summary"),
+    ("tool_calls", "error_snippet"),
+    ("tool_calls", "target"),
+    ("session_logs", "cwd"),
+    ("session_logs", "git_branch"),
+)
+REDACT_MEMORY_TARGETS = ("memory", "project")  # MEMORY.md and PROJECT.md
+
+
+def redact_history(conn, apply=False, batch=500):
+    """Run atlas_memory.redact_secrets over text already stored in atlas.db and
+    the memory files. Dry run unless apply=True. Each batch is one transaction
+    (rolled back on error); rows are only written when redaction changes them,
+    so a second run is a no-op. Returns {"table.column": rows_changed,
+    "memory.entries": entries_changed}."""
+    import atlas_memory
+
+    counts = {}
+    for table, column in REDACT_COLUMNS:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            continue
+        changed, last = 0, 0
+        while True:
+            rows = conn.execute(
+                f"SELECT rowid, {column} FROM {table} "
+                f"WHERE rowid > ? AND {column} IS NOT NULL ORDER BY rowid LIMIT ?",
+                (last, batch),
+            ).fetchall()
+            if not rows:
+                break
+            last = rows[-1][0]
+            updates = [
+                (new, rid)
+                for rid, old in rows
+                if isinstance(old, str)
+                and (new := atlas_memory.redact_secrets(old)) != old
+            ]
+            changed += len(updates)
+            if apply and updates:
+                try:
+                    conn.execute("BEGIN")
+                    conn.executemany(
+                        f"UPDATE {table} SET {column}=? WHERE rowid=?", updates
+                    )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+        counts[f"{table}.{column}"] = changed
+
+    entries_changed = 0
+    for target in REDACT_MEMORY_TARGETS:
+        path = atlas_memory._path_for(target)
+        if not path.is_file():
+            continue
+        with atlas_memory._file_lock(path):
+            entries = atlas_memory._read_file(path)
+            fixed = [atlas_memory.redact_secrets(e) for e in entries]
+            n = sum(1 for a, b in zip(entries, fixed) if a != b)
+            entries_changed += n
+            if apply and n:
+                atlas_memory._write_file(path, fixed)
+    counts["memory.entries"] = entries_changed
+    return counts
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="atlas plugin health check")
     ap.add_argument("--fix", action="store_true", help="repair what CHECK finds")
@@ -3197,7 +3331,15 @@ def main(argv=None):
         "temp dir (dry run unless --apply)",
     )
     ap.add_argument(
-        "--apply", action="store_true", help="make --purge-tmp-sessions delete"
+        "--apply",
+        action="store_true",
+        help="make --purge-tmp-sessions delete / --redact-history rewrite",
+    )
+    ap.add_argument(
+        "--redact-history",
+        action="store_true",
+        help="run the secret/NPI redactor over messages, prompts, tool_calls, "
+        "session_logs and memory files (dry run with counts unless --apply)",
     )
     ap.add_argument("--plugin", default="atlas")
 
@@ -3290,6 +3432,15 @@ def main(argv=None):
         atlas_db.upsert_facet(conn, session_id, **fields)
         conn.close()
         print(json.dumps({"session_id": session_id, "written": sorted(fields)}))
+        return 0
+
+    if args.redact_history:
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        counts = redact_history(conn, apply=args.apply)
+        conn.close()
+        verb = "REDACTED" if args.apply else "WOULD REDACT (dry run; pass --apply)"
+        print(f"{verb}: {json.dumps(counts)}")
         return 0
 
     if args.mine:

@@ -236,7 +236,13 @@ class HerdrLaunchTest(unittest.TestCase):
         self.handler = PaneHandler()
         self.fake = FakeHerdr(self.handler)
         self.addCleanup(self.fake.close)
-        env = {"HERDR_SOCKET_PATH": self.fake.path, "ATLAS_DB": "/lead/db.sqlite"}
+        # ATLAS_SEAT_BACKEND=herdr: unforced, the seat facade probes for an OpenRig binary/node and a live herdr
+        # server (ps + a 2s status cache), so these tests flipped between pass and fail by host and timing.
+        env = {
+            "HERDR_SOCKET_PATH": self.fake.path,
+            "ATLAS_DB": "/lead/db.sqlite",
+            "ATLAS_SEAT_BACKEND": "herdr",
+        }
         p = mock.patch.dict(os.environ, env)
         p.start()
         self.addCleanup(p.stop)

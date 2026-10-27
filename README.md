@@ -4,48 +4,83 @@
 
 # Atlas
 
-**A Claude Code and omp plugin that makes a coding agent plan, delegate, verify, and prove its work before it says done.**
+**Atlas makes Claude Code verify its own work: it delegates to named subagents and blocks "done" until there is evidence.**
 
 ![Atlas README hero banner](img/readme-hero-banner.png)
 
 </div>
 
-Atlas sits between you and the coding agent. Hooks enforce a fixed
-research-to-verify loop, a lead session hands work to named role subagents that
-share one board, a Stop gate refuses "done" without evidence, and a doctor mines
-the session telemetry so the plugin can tune its own rules. It runs in Claude
-Code and, through its extension package, in omp.
+Version 15.0.0 (`plugins/atlas/.claude-plugin/plugin.json`). Release history is in the [CHANGELOG](plugins/atlas/CHANGELOG.md).
 
 Current version: **16.0.1** (`plugins/atlas/.claude-plugin/plugin.json`), a test hermeticity fix on top of 16.0.0. Breaking in 16.0.0: the 13 vendor MCP connectors now ship in the armada plugin (2.0.0); install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada). Also in 16.0.0: scoped worker tool profiles, a Stop gate that sees shell-changed files, shared gate rules, one hook process per tool event, and hermetic tests.
 
-Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md)):
-
-- **12.8.0**: omp usage statusline ships with atlas and Claude Code gets a `statusLine` equivalent (`scripts/atlas_statusline.py`); tmux is the intended default colony worker transport when installed, with `claude-bg` as the fallback.
-- **12.7.0**: new `sonicwall` connector (SonicOS 7.x REST API, 41 tools, writes staged until a separate commit call).
-- **12.6.0**: cost tiering for agents, the Atlas Colony workspace TUI, a single-sourced status header and the codex contract block.
-- **12.5.x**: `atlas_herdr ensure` starts the headless herdr server itself; atlas no longer writes `.atlas` into `~` or `~/Downloads`.
+- **A fixed work loop.** Hooks enforce research, test, implement, verify. A lead session hands work to named role subagents (explorer, implementer, verifier and others) that share one todo board.
+- **A gate on "done".** A Stop hook refuses to let a session finish until there is evidence, a verified finding, current docs and no open todos. Each of its 17 conditions has an off switch.
+- **Memory and self-tuning.** Each session starts with a claude-mem recall, a local dashboard shows runs and gates, and a doctor mines session telemetry into rule changes that you approve.
 
 | What | Count | Source |
 |---|---|---|
-| Skills | 39 | `plugins/atlas/skills/` |
+| Skills | 39 (3 manual) | `plugins/atlas/skills/` |
 | Role agents (`atlas:*`) | 14 | `plugins/atlas/agents/` |
-| Hooks | 17 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
-| Scripts | 55 non-test Python scripts | `plugins/atlas/scripts/` |
-| MCP connectors | 13 (including `panos` and `sonicwall`), each off until credentials exist | `plugins/armada/.mcp.json` (servers in `plugins/armada/mcp/`; shipped by the armada plugin, install atlas and armada together) |
+| Hooks | 18 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
+| Scripts | 70 non-test Python files | `plugins/atlas/scripts/` |
+| MCP connectors | 13, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
 | omp agents | 14, generated | `plugins/atlas/omp/agents/` |
 
-## Contents
+The marketplace also carries `armada` (an optional organization layer: department agents and the vendor connectors) and `programmer` (code review based on The Pragmatic Programmer). Their licenses and contents are listed in [plugins/README.md](plugins/README.md).
 
-1. [What it looks like](#what-it-looks-like)
-2. [Quick start](#quick-start)
-3. [How it works](#how-it-works)
-4. [omp support](#omp-support)
-5. [Command Center web UI](#command-center-web-ui)
-6. [Configuration](#configuration)
-7. [Documentation](#documentation)
-8. [Releases](#releases)
-9. [Developing atlas](#developing-atlas)
-10. [License](#license)
+## Quick start
+
+**Prerequisites**
+
+- Claude Code.
+- Python 3 (standard library only) for the hooks and scripts.
+- Node.js, only if you use armada's vendor connectors.
+- uv, only for the CrowdStrike Falcon connector.
+- Recommended: the claude-mem and context-mode plugins. `/atlas-setup` checks for them and offers to install them. Atlas runs without them, but the recall gate and the output-size protection depend on them.
+- Optional: tmux (to show worker panes), Bun (to run the omp tests).
+
+**Install** (Claude Code):
+
+```bash
+claude plugin marketplace add w159/tech-tools    # first time only: register the catalog
+claude plugin install atlas@tech-tools           # first time only: install the plugin
+claude plugin install armada@tech-tools          # optional: department agents and vendor connectors
+```
+
+To update later, refresh the catalog and update the plugin:
+
+```bash
+claude plugin marketplace update tech-tools
+claude plugin update atlas@tech-tools
+```
+
+Restart the session afterwards: hooks resolve at session start.
+
+**omp** (the oh-my-pi coding agent CLI, which atlas also supports):
+
+```bash
+omp plugin install atlas@tech-tools    # first time (tech-tools is already a configured marketplace if you added it)
+omp plugin upgrade atlas               # update
+```
+
+**Onboard a project once:**
+
+```text
+/atlas-setup
+```
+
+`/atlas-setup` checks the companion plugins, scaffolds `docs/` and `.atlas/` in the project, wires hooks, and walks through connectors. It asks before it installs or changes anything.
+
+**Then describe the work.** Skills trigger from plain language, or name one:
+
+```text
+atlas-orchestrate add CSV export to the reports page
+atlas-debug login returns 500
+atlas-audit
+```
+
+Terms used below: a "colony" is the set of named worker subagents a lead session runs together. By default they run inside the lead session; the opt-in `ATLAS_MUX=tmux` mode runs each as a visible terminal pane.
 
 ## What it looks like
 
@@ -74,47 +109,15 @@ command that fixes it. A worker's card updates in place when it reports.
 ![Scope deny card](img/showcase/cc-scope-deny.png)
 ![Worker card done](img/showcase/cc-card-done.png)
 
-## Quick start
+## What it changes on your machine
 
-**Install** (Claude Code):
-
-```bash
-claude plugin marketplace add w159/tech-tools    # first time only: register the catalog
-claude plugin install atlas@tech-tools           # first time only: install the plugin
-```
-
-To update later, refresh the catalog and update the plugin:
-
-```bash
-claude plugin marketplace update tech-tools
-claude plugin update atlas@tech-tools
-```
-
-Restart the session afterwards: hooks resolve at session start.
-
-**omp:**
-
-```bash
-omp plugin install atlas@tech-tools    # first time (tech-tools is already a configured marketplace if you added it)
-omp plugin upgrade atlas               # update
-```
-
-**Onboard a project once:**
-
-```text
-/atlas-setup
-```
-
-`/atlas-setup` checks the companion plugins (claude-mem, context-mode),
-scaffolds `docs/` and `.atlas/`, wires hooks, and walks through connectors.
-
-**Then describe the work.** Skills trigger from plain language, or name one:
-
-```text
-atlas-orchestrate add CSV export to the reports page
-atlas-debug login returns 500
-atlas-audit
-```
+- **Hooks.** The plugin registers 22 hook bindings (18 programs) from `plugins/atlas/hooks/hooks.json` for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas-setup` step you approve.
+- **Project files.** `/atlas-setup` creates `docs/` and `.atlas/` in the project it onboards (evidence, the todo board at `.atlas/.run/`, findings). Worktrees for isolated parallel implementers go under `.atlas/wt/`.
+- **State in `~/.atlas/`.** `atlas.db` (SQLite telemetry), `memory/` (lessons saved at Stop and reloaded at boot), `dashboard-prefs.json`, and self-fix worktrees.
+- **Transcript storage.** At Stop, `ingest_session.py` copies the session transcript into `~/.atlas/atlas.db`. Text passes through one shared redactor first: credential-shaped strings and a few personal-identifier patterns (SSN, routing and account numbers, card numbers, dates of birth) are replaced with `[REDACTED]` placeholders. The redactor is pattern matching and best effort; it misses unlabeled values, names and addresses. `ATLAS_INGEST=off` turns ingest off.
+- **Local dashboard.** A daemon starts at session start on `http://127.0.0.1:7421/` (loopback only, shared by every open terminal, a per-start token guards writes). `ATLAS_DASHBOARD=off` stops it from starting.
+- **Self-fix scheduler (on by default).** While the dashboard runs, a scheduler checks every 30 minutes for actionable doctor findings and runs up to 2 worker sessions, each in its own git worktree under `~/.atlas/worktrees/` on a branch named `atlas/selffix-<id>`. It never pushes; a passing fix waits as a local branch for you to merge. Set `ATLAS_SELFFIX=0` in your shell to turn it off, or set `selffix.enabled` to `false` in `~/.atlas/dashboard-prefs.json`.
+- **Outbound traffic.** Atlas sends no transcript data off the machine by default. Optional exceptions: turn scoring sends redacted transcript excerpts to api.typesafe.ai only when `TYPESAFE_API_KEY` is set (`ATLAS_TYPESAFE_SCORING=off` disables it), and the prompt classifier can call a local Ollama server. Connectors talk to their vendors once you give them credentials.
 
 ## How it works
 
@@ -128,7 +131,7 @@ Every reply opens with a status line that names the phase. This is a real one
 from a session that fixed the omp advisor gate:
 
 ```text
-ATLAS | 🏁 done 1/1 | omp advisor gate fixed and its tests pass, not yet run in a live omp session
+ATLAS | <glyph> done 1/1 | omp advisor gate fixed and its tests pass, not yet run in a live omp session
 ```
 
 `done` is terminal. It is allowed only when every deliverable exists, nothing
@@ -197,7 +200,7 @@ The lead sees each note on its next tool call:
 ### 4. The Stop gate
 
 When the agent tries to finish, `completion_gate.py` checks the definition of
-done (conditions a to p: evidence under `.atlas/evidence/`, a verified finding,
+done (17 conditions, (a)-(q): evidence under `.atlas/evidence/`, a verified finding,
 current docs, drained todos, a dispatch for any shipped code, and more). If
 something is missing it blocks the stop and says what to do:
 
@@ -302,8 +305,7 @@ Every guard has an off switch. Set it in your shell or in
 The full table, connector setup, colony transport, remote access and
 troubleshooting are in the [reference](docs/reference/atlas-reference.md).
 
-Requirements: Python 3 (stdlib only) for hooks and scripts. Optional: Bun for
-omp tests, tmux (the intended default colony transport; `claude-bg` is the fallback, herdr is selectable) for pane workers, uv for the Falcon connector.
+Worker pane transport: tmux when installed, else background `claude --bg` processes (`claude-bg`); herdr (a terminal multiplexer atlas can also drive) is selectable with `ATLAS_COLONY_TRANSPORT`.
 
 ## Documentation
 
@@ -339,10 +341,18 @@ bun test plugins/atlas/omp                                 # omp extension tests
 ```
 
 The marketplace also carries two optional plugins: `armada` (org deployment)
-and `programmer` (Pragmatic Programmer auditor). Contributor rules are in
+and `programmer` (code review based on The Pragmatic Programmer). Contributor rules are in
 [AGENTS.md](AGENTS.md).
 
 ## License
 
-Apache-2.0. Author: [w159](https://github.com/w159). Repository:
+Per plugin:
+
+| Plugin | License |
+|---|---|
+| atlas | Apache-2.0 (`plugins/atlas/LICENSE`) |
+| armada | Apache-2.0 (`plugins/armada/LICENSE`) |
+| programmer | MIT for plugin code, with a notice on the book-summary files (`plugins/programmer/LICENSE`) |
+
+The repo-root `LICENSE` is the Apache-2.0 text. Author: [w159](https://github.com/w159). Repository:
 [github.com/w159/tech-tools](https://github.com/w159/tech-tools).
