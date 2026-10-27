@@ -179,6 +179,10 @@ Twelve changes from the 2026-10-23 proposal landed on main after `c06754b6`. Per
 
 - Integrations inventory panel and the Advanced category.
 
+### Verified
+
+- Settings tabs layout was user-approved and checked in a real browser at 1024 and 1440 columns (`docs/plans/2026-10-22_settings-tabs-plan.md`); moved from ROADMAP 2026-10-27.
+
 ## 15.0.1 (2026-10-22, unreleased)
 
 ### Removed
