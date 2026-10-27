@@ -1,6 +1,6 @@
 ---
 name: pax8-api-patterns
-description: Work with the Pax8 MCP tools: available tools, parameters, pagination, sorting, filtering, rate limiting, error handling, and the hosted MCP server connection covering all 15 Pax8 MCP tools.
+description: "Work with the Pax8 MCP tools: available tools, parameters, pagination, sorting, filtering, rate limiting, error handling, and the hosted MCP server connection covering all 15 Pax8 MCP tools."
 when_to_use:
   - Connecting to the Pax8 hosted MCP server and authenticating
   - Looking up available Pax8 MCP tools, parameters, and best practices
@@ -284,8 +284,8 @@ When rate limited, the MCP tool will return an error. Wait before retrying. The 
 
 ## Related Skills
 
-- [Pax8 Companies](../companies/SKILL.md) - Company management
-- [Pax8 Products](../products/SKILL.md) - Product catalog
-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Subscription lifecycle
-- [Pax8 Orders](../orders/SKILL.md) - Order management
-- [Pax8 Invoices](../invoices/SKILL.md) - Invoice and billing
+- [Pax8 Companies](../pax8-companies/SKILL.md) - Company management
+- [Pax8 Products](../pax8-products/SKILL.md) - Product catalog
+- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Subscription lifecycle
+- [Pax8 Orders](../pax8-orders/SKILL.md) - Order management
+- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Invoice and billing

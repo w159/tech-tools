@@ -102,6 +102,6 @@ Critical alerts on `manageStatus = unmanaged` devices are almost always discover
 
 ## Related Skills
 
-- [devices](../devices/SKILL.md)
-- [networks](../networks/SKILL.md)
-- [api-patterns](../api-patterns/SKILL.md)
+- [devices](../auvik-devices/SKILL.md)
+- [networks](../auvik-networks/SKILL.md)
+- [api-patterns](../auvik-api-patterns/SKILL.md)

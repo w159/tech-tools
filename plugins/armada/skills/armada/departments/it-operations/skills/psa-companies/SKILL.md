@@ -345,6 +345,6 @@ GET /company/companies/{id}/managedDevicesIntegrations
 
 ## Related Skills
 
-- [ConnectWise Contacts](../contacts/SKILL.md) - Contact management
-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
+- [ConnectWise Contacts](../psa-contacts/SKILL.md) - Contact management
+- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Service tickets
+- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md) - Query syntax and auth

@@ -209,8 +209,8 @@ sweet spot.
 
 ## Related Skills
 
-- [computers](../computers/SKILL.md) - Endpoint inventory
-- [computer-groups](../computer-groups/SKILL.md) - Policy scoping
-- [approval-requests](../approval-requests/SKILL.md) - Application approvals
-- [audit-log](../audit-log/SKILL.md) - Action Log investigation
-- [organizations](../organizations/SKILL.md) - Multi-tenant pivots
+- [computers](../threatlocker-computers/SKILL.md) - Endpoint inventory
+- [computer-groups](../threatlocker-computer-groups/SKILL.md) - Policy scoping
+- [approval-requests](../threatlocker-approval-requests/SKILL.md) - Application approvals
+- [audit-log](../threatlocker-audit-log/SKILL.md) - Action Log investigation
+- [organizations](../threatlocker-organizations/SKILL.md) - Multi-tenant pivots

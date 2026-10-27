@@ -151,6 +151,6 @@ These help maintain context when drilling into findings, devices, or accounts.
 
 ## Related Skills
 
-- [Findings](../findings/SKILL.md) - Finding lifecycle management
-- [MSP](../msp/SKILL.md) - MSP multi-tenant operations
-- [Agents](../agents/SKILL.md) - Device and agent management
+- [Findings](../blumira-findings/SKILL.md) - Finding lifecycle management
+- [MSP](../blumira-msp/SKILL.md) - MSP multi-tenant operations
+- [Agents](../blumira-agents/SKILL.md) - Device and agent management

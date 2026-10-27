@@ -72,6 +72,6 @@ blumira_users_list
 
 ## Related Skills
 
-- [Findings](../findings/SKILL.md) - Assigning findings to users
-- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
-- [MSP](../msp/SKILL.md) - Per-account user management
+- [Findings](../blumira-findings/SKILL.md) - Assigning findings to users
+- [API Patterns](../blumira-api-patterns/SKILL.md) - Filtering and pagination
+- [MSP](../blumira-msp/SKILL.md) - Per-account user management

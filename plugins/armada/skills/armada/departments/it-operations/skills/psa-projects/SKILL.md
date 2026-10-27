@@ -395,7 +395,7 @@ conditions=type/id=2
 
 ## Related Skills
 
-- [ConnectWise Tickets](../tickets/SKILL.md) - Project tickets
-- [ConnectWise Time Entries](../time-entries/SKILL.md) - Project time tracking
-- [ConnectWise Companies](../companies/SKILL.md) - Company management
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
+- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Project tickets
+- [ConnectWise Time Entries](../psa-time-entries/SKILL.md) - Project time tracking
+- [ConnectWise Companies](../psa-companies/SKILL.md) - Company management
+- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md) - Query syntax and auth

@@ -208,7 +208,7 @@ Note: the connected KnowBe4 Reporting API does not expose a training module cata
 
 ## Related Skills
 
-- [KnowBe4 Phishing](../phishing/SKILL.md) - Phishing simulation campaigns
-- [KnowBe4 Users](../users/SKILL.md) - User management and groups
-- [KnowBe4 Reporting](../reporting/SKILL.md) - Training completion metrics
-- [KnowBe4 API Patterns](../api-patterns/SKILL.md) - Authentication, pagination, and rate limits
+- [KnowBe4 Phishing](../knowbe4-phishing/SKILL.md) - Phishing simulation campaigns
+- [KnowBe4 Users](../knowbe4-users/SKILL.md) - User management and groups
+- [KnowBe4 Reporting](../knowbe4-reporting/SKILL.md) - Training completion metrics
+- [KnowBe4 API Patterns](../knowbe4-api-patterns/SKILL.md) - Authentication, pagination, and rate limits

@@ -324,7 +324,7 @@ Pricing tables contain line items for services and products:
 
 ## Related Skills
 
-- [PandaDoc API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
-- [PandaDoc Templates](../templates/SKILL.md) - Template library and management
-- [PandaDoc Recipients](../recipients/SKILL.md) - Recipient and signature management
-- [PandaDoc Proposals](../proposals/SKILL.md) - MSP proposal workflows
+- [PandaDoc API Patterns](../pandadoc-api-patterns/SKILL.md) - MCP tools reference and connection info
+- [PandaDoc Templates](../pandadoc-templates/SKILL.md) - Template library and management
+- [PandaDoc Recipients](../pandadoc-recipients/SKILL.md) - Recipient and signature management
+- [PandaDoc Proposals](../pandadoc-proposals/SKILL.md) - MSP proposal workflows

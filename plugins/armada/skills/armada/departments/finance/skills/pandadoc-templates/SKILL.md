@@ -229,7 +229,7 @@ Use tags to organize templates by category:
 
 ## Related Skills
 
-- [PandaDoc API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
-- [PandaDoc Documents](../documents/SKILL.md) - Creating documents from templates
-- [PandaDoc Recipients](../recipients/SKILL.md) - Managing recipients in documents
-- [PandaDoc Proposals](../proposals/SKILL.md) - MSP proposal workflows
+- [PandaDoc API Patterns](../pandadoc-api-patterns/SKILL.md) - MCP tools reference and connection info
+- [PandaDoc Documents](../pandadoc-documents/SKILL.md) - Creating documents from templates
+- [PandaDoc Recipients](../pandadoc-recipients/SKILL.md) - Managing recipients in documents
+- [PandaDoc Proposals](../pandadoc-proposals/SKILL.md) - MSP proposal workflows

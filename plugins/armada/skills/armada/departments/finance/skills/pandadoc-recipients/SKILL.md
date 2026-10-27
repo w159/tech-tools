@@ -1,6 +1,6 @@
 ---
 name: pandadoc-recipients
-description: Manage PandaDoc recipients and signatures: add recipients to documents, set signing order, track who has signed, and handle multi-party and multi-signer agreements.
+description: "Manage PandaDoc recipients and signatures: add recipients to documents, set signing order, track who has signed, and handle multi-party and multi-signer agreements."
 when_to_use:
   - Adding recipients to a PandaDoc document and setting signing order
   - Tracking signature status and who has signed
@@ -261,7 +261,7 @@ Track the progress of document signing across all recipients:
 
 ## Related Skills
 
-- [PandaDoc API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
-- [PandaDoc Documents](../documents/SKILL.md) - Document creation and management
-- [PandaDoc Templates](../templates/SKILL.md) - Template roles and fields
-- [PandaDoc Proposals](../proposals/SKILL.md) - MSP proposal workflows with recipients
+- [PandaDoc API Patterns](../pandadoc-api-patterns/SKILL.md) - MCP tools reference and connection info
+- [PandaDoc Documents](../pandadoc-documents/SKILL.md) - Document creation and management
+- [PandaDoc Templates](../pandadoc-templates/SKILL.md) - Template roles and fields
+- [PandaDoc Proposals](../pandadoc-proposals/SKILL.md) - MSP proposal workflows with recipients

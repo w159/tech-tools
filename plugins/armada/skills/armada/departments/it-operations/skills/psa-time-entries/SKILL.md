@@ -400,6 +400,6 @@ GET /time/chargeCodes
 
 ## Related Skills
 
-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
-- [ConnectWise Projects](../projects/SKILL.md) - Project management
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
+- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Service tickets
+- [ConnectWise Projects](../psa-projects/SKILL.md) - Project management
+- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md) - Query syntax and auth

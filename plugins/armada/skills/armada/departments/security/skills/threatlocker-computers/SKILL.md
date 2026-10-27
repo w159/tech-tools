@@ -126,7 +126,7 @@ strings like `"Windows 11"` work.
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) - Pagination and auth
-- [computer-groups](../computer-groups/SKILL.md) - Policy scoping
-- [audit-log](../audit-log/SKILL.md) - Per-computer event timeline
-- [organizations](../organizations/SKILL.md) - Multi-tenant pivot
+- [api-patterns](../threatlocker-api-patterns/SKILL.md) - Pagination and auth
+- [computer-groups](../threatlocker-computer-groups/SKILL.md) - Policy scoping
+- [audit-log](../threatlocker-audit-log/SKILL.md) - Per-computer event timeline
+- [organizations](../threatlocker-organizations/SKILL.md) - Multi-tenant pivot

@@ -203,8 +203,8 @@ When onboarding a new client, verify the typical stack was ordered:
 
 ## Related Skills
 
-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
-- [Pax8 Products](../products/SKILL.md) - Product catalog and pricing
-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Managing resulting subscriptions
-- [Pax8 Companies](../companies/SKILL.md) - Company management
-- [Pax8 Invoices](../invoices/SKILL.md) - Billing for orders
+- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
+- [Pax8 Products](../pax8-products/SKILL.md) - Product catalog and pricing
+- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Managing resulting subscriptions
+- [Pax8 Companies](../pax8-companies/SKILL.md) - Company management
+- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Billing for orders
