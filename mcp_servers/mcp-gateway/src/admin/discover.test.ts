@@ -23,7 +23,7 @@ const client = (): GraphClient => new GraphClient({ baseUrl: fake.baseUrl, token
 
 describe("discover", () => {
   it("pages through nextLink for users", async () => {
-    const m = await discover(client());
+    const m = await discover(client(), { minCell: 0 });
     expect(m.users.total).toBe(8);
     const userPages = fake.requests.filter((r) => r.path.startsWith("/v1.0/users"));
     expect(userPages).toHaveLength(3);
@@ -32,20 +32,20 @@ describe("discover", () => {
 
   it("retries a 429 and still produces the model", async () => {
     fake.throttle("/v1.0/groups", 1, "0");
-    const m = await discover(client());
+    const m = await discover(client(), { minCell: 0 });
     expect(m.groups).toHaveLength(3);
     expect(fake.requests.filter((r) => r.path.startsWith("/v1.0/groups?"))).toHaveLength(2);
   });
 
   it("uses only GET requests", async () => {
-    await discover(client());
+    await discover(client(), { minCell: 0 });
     expect(fake.requests.length).toBeGreaterThan(5);
     expect(fake.requests.every((r) => r.method === "GET")).toBe(true);
     expect(fake.requests.every((r) => r.authorized)).toBe(true);
   });
 
   it("summarizes users, groups, roles and administrative units as counts", async () => {
-    const m = await discover(client());
+    const m = await discover(client(), { minCell: 0 });
     expect(m.tenantId).toBe(FAKE_TENANT_ID);
     expect(m.users.byDepartment).toEqual({ Finance: 2, IT: 3, Operations: 1, Support: 2 });
     expect(m.users.byDivision).toEqual({ "(unset)": 1, Corporate: 7 });
@@ -61,9 +61,35 @@ describe("discover", () => {
     expect(summarize(m)).toContain("Users: 8");
   });
 
+  it("folds buckets smaller than the threshold into other (suppressed) (review finding 6)", async () => {
+    const m = await discover(client()); // default threshold 5
+    for (const counts of Object.values({ ...m.users, total: undefined }).filter((v): v is Record<string, number> => typeof v === "object")) {
+      for (const [k, n] of Object.entries(counts)) if (k !== "(unset)" && k !== "other (suppressed)") expect(n).toBeGreaterThanOrEqual(5);
+    }
+    // Fixture: Finance 2, IT 3, Operations 1, Support 2 are all under 5.
+    expect(m.users.byDepartment).toEqual({ "other (suppressed)": 8 });
+    expect(m.users.byDivision).toEqual({ "(unset)": 1, Corporate: 7 });
+    // A group under the threshold loses its display name but keeps its id and count.
+    const itOps = m.groups.find((g) => g.transitiveMemberCount === 3)!;
+    expect(itOps.displayName).toMatch(/^other \(suppressed\) \(group [0-9a-f]{8}\)$/);
+    expect(JSON.stringify(m)).not.toContain("IT Operations");
+  });
+
+  it("--min-cell is validated and 0 turns suppression off", async () => {
+    const { dir, cleanup } = tempDir();
+    try {
+      const bad = await cli(["discover", "--out", join(dir, "x.json"), "--min-cell", "-1"], { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: fake.baseUrl, GRAPH_ALLOW_UNSAFE_HOST: "1" });
+      expect(bad.code).toBe(2);
+      expect(bad.stderr).toContain("--min-cell must be a non-negative integer");
+    } finally {
+      cleanup();
+    }
+    expect((await discover(client(), { minCell: 0 })).users.byDepartment).toEqual({ Finance: 2, IT: 3, Operations: 1, Support: 2 });
+  });
+
   it("turns a 403 on an optional section into a warning", async () => {
     fake.forbid("/v1.0/directoryRoles");
-    const m = await discover(client());
+    const m = await discover(client(), { minCell: 0 });
     expect(m.directoryRoles).toEqual([]);
     expect(m.warnings).toEqual(["directoryRoles: access denied (403); section left empty"]);
     fake.clearForbidden();
@@ -75,7 +101,7 @@ describe("discover CLI", () => {
     const { dir, cleanup } = tempDir();
     try {
       const out = join(dir, "org-model.json");
-      const r = await cli(["discover", "--out", out], { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: fake.baseUrl });
+      const r = await cli(["discover", "--out", out, "--min-cell", "0"], { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: fake.baseUrl, GRAPH_ALLOW_UNSAFE_HOST: "1" });
       expect(r.code).toBe(0);
       const text = readFileSync(out, "utf8");
       expect(text).not.toMatch(/contoso\.example/);
@@ -95,7 +121,7 @@ describe("discover CLI", () => {
     const { dir, cleanup } = tempDir();
     try {
       const out = join(dir, "org-model.json");
-      await cli(["discover", "--out", out], { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: fake.baseUrl });
+      await cli(["discover", "--out", out, "--min-cell", "0"], { GRAPH_TOKEN: TOKEN, GRAPH_BASE_URL: fake.baseUrl, GRAPH_ALLOW_UNSAFE_HOST: "1" });
       expect(readFileSync(out, "utf8")).toBe(readFileSync(fixturePath("org-model.json"), "utf8"));
     } finally {
       cleanup();

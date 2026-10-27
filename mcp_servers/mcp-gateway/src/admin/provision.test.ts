@@ -46,9 +46,9 @@ describe("provision dry run", () => {
       "POST /servicePrincipals/{x}/appRoleAssignedTo",
     ]);
     expect(r.steps.slice(-3).map((x) => x.description)).toEqual([
-      "grant Graph application permission Application.Read.All to the gateway service principal",
-      "grant Graph application permission GroupMember.Read.All to the gateway service principal",
-      "grant Graph application permission User.Read.All to the gateway service principal",
+      `grant Graph application permission Application.Read.All (${FAKE_GRAPH_APP_ROLES[0]!.id}) to the gateway service principal`,
+      `grant Graph application permission GroupMember.Read.All (${FAKE_GRAPH_APP_ROLES[1]!.id}) to the gateway service principal`,
+      `grant Graph application permission User.Read.All (${FAKE_GRAPH_APP_ROLES[2]!.id}) to the gateway service principal`,
     ]);
     expect(fake.applications).toHaveLength(0);
     expect(fake.servicePrincipals).toHaveLength(1);
@@ -148,6 +148,18 @@ describe("provision --apply", () => {
     expect(fake.nonGet()).toEqual([]);
   });
 
+  it("--prune keeps role edits made by the same run (review finding 1)", async () => {
+    await run(planFrom(), { apply: true });
+    const edited = planFrom((d) => {
+      d.roles[0].description = "Edited in the same run as the prune.";
+      d.roles.splice(1, 1);
+    });
+    await run(edited, { apply: true, prune: true });
+    const roles = fake.applications[0]!.appRoles;
+    expect(roles.map((x) => x.value)).toEqual(["it-ops"]);
+    expect(roles[0]!.description).toBe("Edited in the same run as the prune.");
+  });
+
   it("grants a missing Graph permission only, and never removes one", async () => {
     const plan = planFrom();
     await run(plan, { apply: true });
@@ -158,14 +170,18 @@ describe("provision --apply", () => {
     expect(fake.nonGet().map((r) => (r.body as { appRoleId: string }).appRoleId)).toEqual([FAKE_GRAPH_APP_ROLES[1]!.id]);
   });
 
-  it("with a managed identity grants the same three to it, once", async () => {
+  it("with a managed identity grants the three to it only, once", async () => {
     const plan = planFrom();
     const mi = fake.addManagedIdentity();
     const dry = await run(plan, { apply: false, managedIdentityPrincipalId: mi });
     expect(dry.steps.filter((s) => s.description.endsWith("to the managed identity"))).toHaveLength(3);
+    expect(dry.steps.filter((s) => s.description.endsWith("to the gateway service principal"))).toHaveLength(0);
     expect(fake.nonGet()).toEqual([]);
     await run(plan, { apply: true, managedIdentityPrincipalId: mi });
     expect(fake.assignments.filter((a) => a.principalId === mi).map((a) => a.appRoleId)).toEqual(FAKE_GRAPH_APP_ROLES.slice(0, 3).map((x) => x.id));
+    // The gateway's own service principal holds no tenant-wide Graph permission.
+    const sp = fake.servicePrincipals.find((s) => s.appId === fake.applications[0]!.appId)!;
+    expect(fake.assignments.filter((a) => a.principalId === sp.id && a.resourceId === FAKE_GRAPH_SP_ID)).toEqual([]);
     fake.clearRequests();
     const again = await run(plan, { apply: true, managedIdentityPrincipalId: mi });
     expect(again.steps).toEqual([]);
@@ -177,6 +193,24 @@ describe("provision --apply", () => {
     plan.graphAppPermissions.permissions = [];
     await run(plan, { apply: true });
     expect(fake.assignments.filter((a) => a.resourceId === FAKE_GRAPH_SP_ID)).toEqual([]);
+  });
+
+  it("refuses a plan whose Graph permission id is not the known id for its value, before any request", async () => {
+    const plan = planFrom();
+    // Names a read-only permission, carries the id of a different (real) Graph role.
+    plan.graphAppPermissions.permissions[0] = { value: "Application.Read.All", id: "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9" };
+    await expect(run(plan, { apply: true })).rejects.toThrow(/Application\.Read\.All \(1bfefb4e-.*not a permission this tool grants/);
+    expect(fake.requests).toEqual([]);
+  });
+
+  it("refuses an unknown consentType or a non-GUID resourceAppId, before any request", async () => {
+    const bad = planFrom();
+    bad.adminConsent.consentType = "Principal" as never;
+    await expect(run(bad, { apply: false })).rejects.toThrow(/consentType must be one of: AllPrincipals/);
+    const inject = planFrom();
+    inject.adminConsent.resourceAppId = "x' or appId ne '";
+    await expect(run(inject, { apply: false })).rejects.toThrow(/adminConsent\.resourceAppId must be a GUID/);
+    expect(fake.requests).toEqual([]);
   });
 
   it("stops at the first failure and says where", async () => {

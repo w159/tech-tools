@@ -19,13 +19,16 @@
  */
 import { AuditLogger } from "./audit.js";
 import { Backend, BackendPool, isInstalled, loadCatalog } from "./backends.js";
-import { loadConfig } from "./config.js";
+import { describeMembershipMode, loadConfig } from "./config.js";
 import { Gateway } from "./gateway.js";
 import { createHttpServer } from "./http.js";
 import { buildAuthRuntime, buildPolicy } from "./runtime.js";
 
 async function main(): Promise<void> {
   const config = loadConfig(process.env);
+
+  const mode = describeMembershipMode(config);
+  console.error(`[mcp-gateway] ${mode.warn ? "WARNING " : ""}${mode.line}`);
 
   const catalog = loadCatalog(config.catalogFile, config.backendsRoot);
   const enabled = config.enabledBackends ? new Set(config.enabledBackends) : undefined;

@@ -92,6 +92,26 @@ describe("plan: plan.json", () => {
     expect(parsePlan(JSON.stringify(plan))).toEqual(plan);
     expect(() => parsePlan("{}")).toThrow(/plan\.json: version must be 1/);
   });
+
+  it("parsePlan rejects a Graph permission id that is not the known id for its value", () => {
+    const { plan } = makePlan(org, answers, connectors);
+    const edited = structuredClone(plan);
+    edited.graphAppPermissions.permissions[1] = { value: "GroupMember.Read.All", id: "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9" };
+    expect(() => parsePlan(JSON.stringify(edited))).toThrow(/GroupMember\.Read\.All \(1bfefb4e-.*not a permission this tool grants/);
+    const unknown = structuredClone(plan);
+    unknown.graphAppPermissions.permissions.push({ value: "Directory.ReadWrite.All", id: "19dbc75e-c2e2-444c-a770-ec69d8559fc7" });
+    expect(() => parsePlan(JSON.stringify(unknown))).toThrow(/Directory\.ReadWrite\.All/);
+  });
+
+  it("parsePlan rejects an unknown consentType and a non-GUID resourceAppId", () => {
+    const { plan } = makePlan(org, answers, connectors);
+    const a = structuredClone(plan) as Record<string, any>;
+    a.adminConsent.consentType = "Principal";
+    expect(() => parsePlan(JSON.stringify(a))).toThrow(/consentType must be one of: AllPrincipals/);
+    const b = structuredClone(plan) as Record<string, any>;
+    b.adminConsent.resourceAppId = "x' or appId ne '";
+    expect(() => parsePlan(JSON.stringify(b))).toThrow(/adminConsent\.resourceAppId must be a GUID/);
+  });
 });
 
 describe("plan: strict validation of answers.yaml", () => {

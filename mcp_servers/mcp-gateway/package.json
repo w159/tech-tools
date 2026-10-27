@@ -1,6 +1,6 @@
 {
   "name": "mcp-gateway",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Remote MCP gateway - OAuth resource server that aggregates vendor MCP stdio backends over Streamable HTTP with per-connector policy and audit",
   "type": "module",
   "private": true,

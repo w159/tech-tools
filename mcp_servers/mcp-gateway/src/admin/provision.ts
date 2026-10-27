@@ -1,5 +1,5 @@
 import { GraphClient, GraphError, odataString } from "./graph.js";
-import type { AppRoleDef, Plan } from "./plan.js";
+import { planGrantProblems, type AppRoleDef, type Plan } from "./plan.js";
 
 // Reads current Entra state with GETs, computes the minimal writes to reach the
 // plan, and (with apply) performs them in order, stopping at the first failure.
@@ -40,7 +40,8 @@ export interface Step {
 export interface ProvisionOptions {
   apply: boolean;
   prune: boolean;
-  // Object id of a managed identity's service principal; gets the same Graph application permissions.
+  // Object id of a managed identity's service principal. When set it receives the
+  // Graph application permissions INSTEAD of the gateway's own service principal.
   managedIdentityPrincipalId?: string;
   onStep?: (step: Step) => void;
 }
@@ -116,6 +117,10 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
     }
   }
 
+  // Before any request: a hand-edited plan must not widen what gets granted.
+  const unsafe = planGrantProblems(plan);
+  if (unsafe.length > 0) throw new ProvisionError(`plan is not safe to apply: ${unsafe.join("; ")}`, []);
+
   // A plan is for one tenant; refuse to apply it to whichever tenant the token happens to be for.
   const orgs = await client.get<{ value: Array<{ id: string }> }>("/organization?$select=id");
   const tenant = orgs.value[0]?.id;
@@ -141,6 +146,8 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
   // role value -> id as it exists (or will exist) in the tenant
   const roleIds = new Map<string, string>();
   const removedRoleIds = new Set<string>();
+  // Role set as it stands after the update PATCH; the prune steps build on this, not on the pre-update read.
+  let rolesAfterUpdate: LiveRole[] = [];
 
   if (!app) {
     const body = {
@@ -233,6 +240,7 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
         rolesChanged = true;
       }
     }
+    rolesAfterUpdate = merged;
     if (rolesChanged) {
       patch.appRoles = merged;
       what.push("app roles");
@@ -307,9 +315,7 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
   // ---- prune: retire app roles that left the plan ------------------------
   // Entra requires a role to be disabled before it can be removed.
   if (opts.prune && app && removedRoleIds.size > 0) {
-    const current = (app.appRoles ?? []).map((r) => ({ ...r }));
-    const afterAdd = want.appRoles.filter((w) => !current.some((c) => c.id === w.id || c.value === w.value)).map((w) => ({ ...w }));
-    const all = [...current.map((r) => (removedRoleIds.has(r.id) ? { ...r, isEnabled: false } : r)), ...afterAdd];
+    const all = rolesAfterUpdate.map((r) => (removedRoleIds.has(r.id) ? { ...r, isEnabled: false } : { ...r }));
     const disableBody = { appRoles: all.map((r) => ({ ...r })) };
     await write(
       { method: "PATCH", path: `/applications/${app.id}`, body: disableBody, description: `disable ${removedRoleIds.size} app role(s) before removal` },
@@ -326,7 +332,7 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
 
   // ---- tenant-wide delegated consent ------------------------------------
   const resourceSps = await client.getAll<{ id: string }>(
-    `/servicePrincipals?$filter=${encodeURIComponent(`appId eq '${plan.adminConsent.resourceAppId}'`)}&$select=id`,
+    `/servicePrincipals?$filter=${encodeURIComponent(`appId eq '${odataString(plan.adminConsent.resourceAppId)}'`)}&$select=id`,
   );
   const resourceSp = resourceSps[0];
   if (!resourceSp) throw new GraphError(`resource service principal ${plan.adminConsent.resourceAppId} (Microsoft Graph) not found in the tenant`);
@@ -361,13 +367,16 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
   // ---- Graph application permissions -------------------------------------
   // The membership check calls Graph as the app (client credentials) or as a managed
   // identity, so the permissions are app role assignments of the Graph service
-  // principal. Existing assignments are read from each principal, which keeps the
-  // read small; nothing is ever removed.
+  // principal. With a managed identity the permissions go only to it: the
+  // gateway's own service principal (which holds the client secret) stays free
+  // of tenant-wide read access. Existing assignments are read from the target,
+  // which keeps the read small; nothing is ever removed.
   const appPerms = plan.graphAppPermissions.permissions;
   if (appPerms.length > 0) {
-    const targets: Array<{ id: string; label: string; known: boolean }> = [{ id: spId, label: "gateway service principal", known: spExists }];
     const mi = opts.managedIdentityPrincipalId;
-    if (mi) targets.push({ id: mi, label: "managed identity", known: true });
+    const targets: Array<{ id: string; label: string; known: boolean }> = mi
+      ? [{ id: mi, label: "managed identity", known: true }]
+      : [{ id: spId, label: "gateway service principal", known: spExists }];
     for (const t of targets) {
       const held = t.known ? await client.getAll<Assignment & { resourceId: string }>(`/servicePrincipals/${t.id}/appRoleAssignments`) : [];
       const heldKeys = new Set(held.filter((a) => a.resourceId === resourceSp.id).map((a) => a.appRoleId.toLowerCase()));
@@ -375,7 +384,7 @@ export async function provision(client: GraphClient, plan: Plan, opts: Provision
         if (heldKeys.has(perm.id.toLowerCase())) continue;
         const body = { principalId: t.id, resourceId: resourceSp.id, appRoleId: perm.id };
         await write(
-          { method: "POST", path: `/servicePrincipals/${resourceSp.id}/appRoleAssignedTo`, body, description: `grant Graph application permission ${perm.value} to the ${t.label}` },
+          { method: "POST", path: `/servicePrincipals/${resourceSp.id}/appRoleAssignedTo`, body, description: `grant Graph application permission ${perm.value} (${perm.id}) to the ${t.label}` },
           () => client.send("POST", `/servicePrincipals/${resourceSp.id}/appRoleAssignedTo`, body),
           undefined,
         );
@@ -392,7 +401,7 @@ export function followUp(plan: Plan, appId: string | undefined, spId?: string): 
     `Application (client) id: ${id}`,
     "Client secret was NOT created. Create it straight into Key Vault (the value never prints):",
     `  az keyvault secret set --vault-name <vault> --name broker-upstream-client-secret --value "$(az ad app credential reset --id ${id} --append --display-name mcp-gateway --years 1 --query password -o tsv)"`,
-    "Membership check credentials: the managed identity when IDENTITY_ENDPOINT and IDENTITY_HEADER are set (Container Apps sets them), otherwise the application's client secret. Grant a managed identity with --managed-identity-principal-id <id>.",
+    "Membership check credentials: the managed identity when IDENTITY_ENDPOINT and IDENTITY_HEADER are set (Container Apps sets them), otherwise the application's client secret. With --managed-identity-principal-id <id> the Graph application permissions go to that identity only, so run the gateway with the managed identity; without the flag they go to the application's service principal.",
     `Gateway env: BROKER_UPSTREAM_CLIENT_ID=${id}, BROKER_UPSTREAM_CLIENT_SECRET from Key Vault, ENTRA_SP_OBJECT_ID=${spId ?? "<service principal object id>"}, plus:`,
     ...Object.entries(plan.gatewayEnv).map(([k, v]) => `  ${k}=${v}`),
   ];

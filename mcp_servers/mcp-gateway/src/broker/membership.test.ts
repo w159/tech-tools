@@ -23,7 +23,7 @@ import { CookieJar } from "../test-fixtures/cookie-jar.js";
 import { FakeEntraGraph, G_READERS, G_WRITERS, GRAPH_TOKEN, MI_HEADER, MI_TOKEN, ROLE_DIRECT, TENANT_ID } from "../test-fixtures/fake-entra-graph.js";
 import { spec } from "../test-fixtures/helpers.js";
 import { IDP_CLIENT_ID, IDP_CLIENT_SECRET, MockIdp, TEST_USER } from "../test-fixtures/mock-idp.js";
-import { clientCredentialsTokenProvider } from "./entra-membership.js";
+import { clientCredentialsTokenProvider, EntraMembership, MembershipUnavailable } from "./entra-membership.js";
 
 // Sign-in sees "groups" from the upstream ID token; a refresh sees "groups"
 // (matched group ids) and "roles" (app role values) resolved from Graph.
@@ -68,7 +68,7 @@ interface Stack {
   close: () => Promise<void>;
 }
 
-async function startStack(env: Record<string, string>, graph?: FakeEntraGraph): Promise<Stack> {
+async function startStack(env: Record<string, string>, graph?: FakeEntraGraph, policyYaml = POLICY_YAML): Promise<Stack> {
   const idp = new MockIdp();
   await idp.start();
   const fake = graph ?? new FakeEntraGraph();
@@ -96,6 +96,7 @@ async function startStack(env: Record<string, string>, graph?: FakeEntraGraph): 
     BROKER_REFRESH_TOKEN_TTL: "3600",
     ENTRA_MEMBERSHIP_CHECK: "1",
     ENTRA_TENANT_ID: TENANT_ID,
+    ENTRA_ALLOW_UNSAFE_HOST: "1",
     ENTRA_GRAPH_BASE_URL: fake.graphBaseUrl,
     ENTRA_AUTHORITY_HOST: fake.base,
     ...env,
@@ -105,7 +106,7 @@ async function startStack(env: Record<string, string>, graph?: FakeEntraGraph): 
     command: process.execPath,
     args: [fileURLToPath(new URL("../test-fixtures/fixture-server.mjs", import.meta.url))],
   };
-  const policy = parsePolicy(POLICY_YAML, ["fixture"]);
+  const policy = parsePolicy(policyYaml, ["fixture"]);
   const pool = new BackendPool([fixtureSpec], (s) => new Backend(s), { idleMs: 60_000, maxPerUserChildren: 5 });
   const auditLines: string[] = [];
   const audit = new AuditLogger({ hmacKey: "k", sink: (line) => auditLines.push(line) });
@@ -336,7 +337,7 @@ describe("entra membership check on refresh (fail closed)", () => {
     expect(r.status).toBe(200);
     expect(decodeJwt(r.body.access_token as string).roles).toEqual(["fixture-reader"]);
     expect(await listToolsWith(s, r.body.access_token as string)).toEqual(["fx_read"]);
-    expect(s.graph.count((q) => q.path.endsWith("/checkMemberGroups"))).toBe(1);
+    expect(s.graph.count((q) => q.path.endsWith("/checkMemberGroups"))).toBe(2); // sign-in code exchange + refresh
     expect(auditReasons(s).filter((l) => l.event === "auth_failed")).toEqual([]);
   });
 
@@ -405,15 +406,59 @@ describe("entra membership check on refresh (fail closed)", () => {
     expect(auditReasons(s).filter((l) => l.event === "auth_failed").map((l) => l.reason)).toEqual(["membership_revoked", "membership_revoked"]);
   });
 
+  it("(d2) authorization_code exchange: a user disabled after the browser redirect gets no tokens", async () => {
+    fakeDate();
+    enter(s, { groups: [G_READERS] });
+    s.idp.user = { ...TEST_USER, sub: USER_OID, groups: [G_READERS] };
+    const redirect = "http://127.0.0.1:43341/callback";
+    const provider = new MemoryOAuthProvider(redirect);
+    expect(await auth(provider, { serverUrl: s.resource })).toBe("REDIRECT");
+    const final = await drive(provider.authUrl!, redirect);
+    enter(s, { enabled: false, groups: [G_READERS] });
+    await expect(auth(provider, { serverUrl: s.resource, authorizationCode: final.searchParams.get("code")! })).rejects.toThrow(/grant/i);
+    expect(provider.tok).toBeUndefined();
+    expect(auditReasons(s).filter((l) => l.event === "auth_failed").map((l) => l.reason)).toEqual(["membership_revoked"]);
+  });
+
+  it("(d3) Revoke sessions after sign-in: refresh is invalid_grant; a fresh sign-in works again", async () => {
+    fakeDate();
+    enter(s, { groups: [G_READERS] });
+    const p = await signedIn(s, 43342, [G_READERS]);
+    jump(2);
+    // Entra sets signInSessionsValidFromDateTime to the moment of revocation.
+    s.graph.users.get(USER_OID)!.sessionsValidFrom = new Date().toISOString();
+    const r = await refreshed(s, p);
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe("invalid_grant");
+
+    // Authenticating upstream after the revocation is accepted.
+    jump(2);
+    const again = await signedIn(s, 43343, [G_READERS]);
+    expect(again.tok!.access_token).toBeTruthy();
+    jump(ACCESS_TTL + TOLERANCE + 1);
+    expect((await refreshed(s, again)).status).toBe(200);
+  });
+
+  it("(d4) a user record without signInSessionsValidFromDateTime cannot be proven valid: fails closed", async () => {
+    fakeDate();
+    enter(s, { groups: [G_READERS] });
+    const p = await signedIn(s, 43344, [G_READERS]);
+    s.graph.users.get(USER_OID)!.sessionsValidFrom = "";
+    const r = await refreshed(s, p);
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe("invalid_grant");
+  });
+
   it("(e) Graph 503 or 429: invalid_grant by default, with an audit reason and no inline retry", async () => {
     fakeDate();
     enter(s, { groups: [G_READERS] });
     const p = await signedIn(s, 43305, [G_READERS]);
+    s.graph.requests = []; // count only the refresh attempts below
     s.graph.failStatus = 503;
     const down = await refreshed(s, p);
     expect(down.status).toBe(400);
     expect(down.body.error).toBe("invalid_grant");
-    expect(s.graph.count((q) => q.path.startsWith("/v1.0/users/"))).toBe(2); // one GET, one POST: no retry
+    expect(s.graph.count((q) => q.path.startsWith("/v1.0/users/"))).toBe(3); // user GET, checkMemberGroups POST, direct assignments GET: no retry
 
     s.graph.failStatus = 429;
     s.graph.failHeaders = { "Retry-After": "120" };
@@ -423,7 +468,7 @@ describe("entra membership check on refresh (fail closed)", () => {
     expect(throttled.status).toBe(400);
     expect(throttled.body.error).toBe("invalid_grant");
     expect(Date.now() - t0).toBeLessThan(5_000); // Retry-After is not waited on
-    expect(s.graph.count((q) => q.path.startsWith("/v1.0/users/"))).toBe(2);
+    expect(s.graph.count((q) => q.path.startsWith("/v1.0/users/"))).toBe(3);
 
     const failed = auditReasons(s).filter((l) => l.event === "auth_failed");
     expect(failed.map((l) => [l.reason, l.outcome])).toEqual([
@@ -440,11 +485,8 @@ describe("entra membership check on refresh (fail closed)", () => {
   it("(e2) a malformed object id cannot be checked and fails closed as revoked", async () => {
     fakeDate();
     s.idp.user = { ...TEST_USER, sub: "not-a-guid", groups: [G_READERS] };
-    const p = await signIn(s, 43306);
-    remember(s, p.tok!.access_token, p.tok!.refresh_token);
-    const r = await refreshed(s, p);
-    expect(r.status).toBe(400);
-    expect(r.body.error).toBe("invalid_grant");
+    // The authorization_code exchange runs the same check, so no tokens are issued at all.
+    await expect(signIn(s, 43306)).rejects.toThrow(/grant/i);
     expect(s.graph.count((q) => q.path.startsWith("/v1.0/users/"))).toBe(0);
   });
 
@@ -467,6 +509,7 @@ describe("entra membership check on refresh (fail closed)", () => {
     fakeDate();
     enter(s, { groups: [G_READERS] });
     const p = await signedIn(s, 43308, [G_READERS]);
+    s.graph.requests = [];
     const a = await refreshed(s, p);
     const b = await refreshed(s, p, a.body.refresh_token as string);
     expect([a.status, b.status]).toEqual([200, 200]);
@@ -549,7 +592,7 @@ describe("graph token: client credentials", () => {
     fakeDate();
     enter(s, { groups: [G_READERS] });
     const p = await signedIn(s, 43331, [G_READERS]);
-    expect(s.graph.tokenRequests).toHaveLength(0); // sign-in does not touch Graph
+    expect(s.graph.tokenRequests).toHaveLength(1); // the sign-in code exchange already checks membership
 
     const a = await refreshed(s, p);
     const b = await refreshed(s, p, a.body.refresh_token as string);
@@ -683,5 +726,124 @@ describe("TOKEN_CLOCK_TOLERANCE_SECONDS", () => {
     } finally {
       await idp.stop();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Review findings 2, 5 and 7.
+// ---------------------------------------------------------------------------
+const SIGNIN_CLAIM_POLICY_YAML = `version: 1
+subjects:
+  - role: fixture-reader
+    when: { claim: name, equals: ${TEST_USER.name} }
+grants:
+  - role: fixture-reader
+    connectors: [fixture]
+    effects: [read]
+`;
+
+describe("refresh evaluates the policy on the sign-in claims (review finding 2)", () => {
+  let s: Stack;
+  beforeAll(async () => {
+    s = await startStack({}, undefined, SIGNIN_CLAIM_POLICY_YAML);
+  }, 60_000);
+  afterAll(async () => {
+    expectCleanAudit(s);
+    await s?.close();
+  });
+  beforeEach(() => {
+    s.graph.reset();
+    s.auditLines.length = 0;
+  });
+
+  it("a rule on the name claim (not roles, groups, email or tid) still matches at refresh although the user holds no app role or group", async () => {
+    fakeDate();
+    enter(s, { groups: [] });
+    const p = await signedIn(s, 43401, []);
+    const r = await refreshed(s, p);
+    expect(r.status).toBe(200);
+    expect(await listToolsWith(s, r.body.access_token as string)).toEqual(["fx_read"]);
+    expect(auditReasons(s).filter((l) => l.event === "auth_failed")).toEqual([]);
+  });
+
+  it("a disabled account is still revoked", async () => {
+    fakeDate();
+    enter(s, { groups: [] });
+    const p = await signedIn(s, 43402, []);
+    enter(s, { enabled: false, groups: [] });
+    const r = await refreshed(s, p);
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe("invalid_grant");
+  });
+});
+
+describe("direct app role assignments are checked live (review finding 5)", () => {
+  let s: Stack;
+  beforeAll(async () => {
+    s = await startStack({});
+  }, 60_000);
+  afterAll(async () => {
+    expectCleanAudit(s);
+    await s?.close();
+  });
+
+  it("removing a direct assignment revokes on the next refresh, inside the role map cache window", async () => {
+    fakeDate();
+    enter(s, { groups: [G_READERS], direct: [ROLE_DIRECT] });
+    const p = await signedIn(s, 43411, [G_READERS]); // loads the role map, user holds mcp-direct
+    enter(s, { groups: [], direct: [ROLE_DIRECT] });
+    const ok = await refreshed(s, p);
+    expect(ok.status).toBe(200); // still entitled through the direct role alone
+    enter(s, { groups: [], direct: [] });
+    const gone = await refreshed(s, p, ok.body.refresh_token as string);
+    expect(gone.status).toBe(400);
+    expect(gone.body.error).toBe("invalid_grant");
+    expect(s.graph.count((q) => q.path === "/v1.0/servicePrincipals")).toBe(1); // role definitions stayed cached
+  });
+});
+
+describe("shared in-flight fetches (review finding 7)", () => {
+  it("one caller's abort does not fail another caller waiting on the same token fetch", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const fetchFn = async (_url: string, init?: RequestInit): Promise<Response> => {
+      await new Promise<void>((resolve, reject) => {
+        void gate.then(resolve);
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+      });
+      return new Response(JSON.stringify({ access_token: "t", expires_in: 3600 }), { status: 200 });
+    };
+    const provider = clientCredentialsTokenProvider({ authorityHost: "http://127.0.0.1:1", tenantId: TENANT_ID, clientId: "c", clientSecret: "x", fetch: fetchFn });
+    const first = new AbortController();
+    const a = provider.getToken(first.signal);
+    const b = provider.getToken(new AbortController().signal);
+    first.abort(new Error("caller A gave up"));
+    await expect(a).rejects.toThrow("caller A gave up");
+    release();
+    await expect(b).resolves.toBe("t");
+  });
+
+  it("the shared fetch times out on its own and every waiter then fails", async () => {
+    const hang = (_url: string, init?: RequestInit): Promise<Response> =>
+      new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+    const provider = clientCredentialsTokenProvider({ authorityHost: "http://127.0.0.1:1", tenantId: TENANT_ID, clientId: "c", clientSecret: "x", fetch: hang, timeoutMs: 20 });
+    const results = await Promise.allSettled([provider.getToken(new AbortController().signal), provider.getToken(new AbortController().signal)]);
+    expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"]);
+    expect(((results[0] as PromiseRejectedResult).reason as MembershipUnavailable).detail).toBe("graph_token_unreachable");
+  });
+
+  it("an unreachable role map load reports unavailable for each concurrent resolve", async () => {
+    const hang = (_url: string, init?: RequestInit): Promise<Response> =>
+      new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal!.reason)));
+    const m = new EntraMembership({
+      appId: IDP_CLIENT_ID,
+      cacheSeconds: 300,
+      graphBaseUrl: "http://127.0.0.1:1/v1.0",
+      tokenProvider: { getToken: async () => "t", invalidate: () => undefined },
+      fetch: hang,
+      timeoutMs: 20,
+    });
+    const r = await Promise.all([m.resolve(USER_OID, 1), m.resolve(USER_OID, 1)]);
+    expect(r.map((x) => x.status)).toEqual(["unavailable", "unavailable"]);
   });
 });

@@ -17,6 +17,10 @@ export interface AccountRecord {
   tenant?: string;
   // Gateway roles resolved at the last sign-in.
   roles: string[];
+  // Claims the policy was evaluated against at sign-in. A refresh re-evaluates
+  // the policy on these with only the live-checked parts (roles, groups)
+  // replaced, so it sees the same email, tenant and other claims as sign-in.
+  policyClaims?: Record<string, unknown>;
 }
 
 // Stable and opaque: the same upstream (issuer, sub) always maps to the same

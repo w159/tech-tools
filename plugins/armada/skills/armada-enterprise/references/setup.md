@@ -41,7 +41,7 @@ cd mcp_servers/mcp-gateway
 node dist/admin/cli.js discover --out org-model.json
 ```
 
-Read `org-model.json` and summarize it for the admin from what is actually in the file: departments, companies, and groups, with member counts where present. Do not assume field names; inspect the file. Report what the tool printed if it fails (a 403 means the signed-in account lacks directory read rights).
+Read `org-model.json` and summarize it for the admin from what is actually in the file: departments, companies, and groups, with member counts where present. Do not assume field names; inspect the file. `discover` folds counts and group names under 5 users into "other (suppressed)" so small cells do not identify people; group ids stay in the file, and `--min-cell 0` turns this off if the admin needs every group name and keeps the file private. Report what the tool printed if it fails (a 403 means the signed-in account lacks directory read rights).
 
 ## Step 3: gateway URL
 
@@ -96,7 +96,7 @@ Show the plan: the app, each role and its groups, each connector grant. Validate
 node dist/admin/cli.js provision --plan plan.json
 ```
 
-Show the output verbatim: these are the Graph writes it would make. Besides the app, roles, group assignments and delegated consent (`openid profile offline_access User.Read`), it lists three Graph application permissions, `Application.Read.All`, `GroupMember.Read.All` and `User.Read.All`, granted to the gateway service principal. The refresh-time membership check (`ENTRA_MEMBERSHIP_CHECK=1`) needs them to re-resolve roles on every refresh, so disabling a user or removing a group stops access at the next refresh. They are read-only directory permissions across the tenant; say so when asking for the yes. Ask: "Apply these changes? Reply yes." Only after a clear yes:
+Show the output verbatim: these are the Graph writes it would make. Besides the app, roles, group assignments and delegated consent (`openid profile offline_access User.Read`), it lists three Graph application permissions, `Application.Read.All`, `GroupMember.Read.All` and `User.Read.All`, granted to the gateway service principal (or only to the managed identity when `--managed-identity-principal-id` is given; each line shows the permission id). The membership check (`ENTRA_MEMBERSHIP_CHECK=1`) needs them to re-resolve roles on every sign-in code exchange and refresh, so disabling a user, revoking their sessions in Entra, or removing a group stops access at the next one. `Application.Read.All` is there because the check reads the gateway's own app role map and assignments (`appRoleAssignedTo`), which no lesser permission covers. They are read-only directory permissions across the tenant; say so when asking for the yes. `provision` refuses a plan whose permission ids differ from the ones this tool knows. Ask: "Apply these changes? Reply yes." Only after a clear yes:
 
 ```bash
 node dist/admin/cli.js provision --plan plan.json --apply
@@ -104,7 +104,7 @@ node dist/admin/cli.js provision --plan plan.json --apply
 
 Report what the tool printed. Rerun the same `--apply` after a few minutes if a write fails right after the service principal or app role was created (directory replication lag); it is idempotent and resumes where it stopped, and a clean rerun prints "nothing to do".
 
-Managed identity option: the membership check can authenticate as the Container App's managed identity instead of the app's client secret. After pass 2 of Step 9 the deployment output `gatewayPrincipalId` holds its object id; grant the same three permissions to it:
+Managed identity option: the membership check can authenticate as the Container App's managed identity instead of the app's client secret. After pass 2 of Step 9 the deployment output `gatewayPrincipalId` holds its object id; grant the three permissions to it. They go to the managed identity only, not to the gateway's service principal, so run the gateway with the managed identity (without it the check falls back to the client secret, which then holds no Graph permission):
 
 ```bash
 node dist/admin/cli.js provision --plan plan.json --apply --managed-identity-principal-id <gatewayPrincipalId>

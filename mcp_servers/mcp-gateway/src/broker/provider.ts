@@ -65,7 +65,8 @@ export function createBroker(opts: BrokerOptions): Broker {
   const sweeper = setInterval(() => memory.sweep(), 60_000);
   sweeper.unref();
 
-  // Entra only: re-resolve roles from Graph on every refresh_token grant.
+  // Entra only: re-resolve roles from Graph on every token-endpoint grant
+  // (authorization_code and refresh_token) that issues tokens for an account.
   const membershipCfg = broker.entraMembership;
   const membership = membershipCfg
     ? new EntraMembership({
@@ -89,7 +90,14 @@ export function createBroker(opts: BrokerOptions): Broker {
   // Returns false when the refresh must fail with invalid_grant. On success the
   // account record carries the fresh roles, so extraTokenClaims and the audit
   // event read them. Audit lines hold reasons only, never ids or tokens.
-  async function refreshStillEntitled(ctx: { oidc?: { client?: { clientId?: string } } }, acct: AccountRecord): Promise<boolean> {
+  // authTimeSeconds is when the user authenticated upstream (oidc-provider's
+  // authTime on the code or refresh token, carried through rotation); Entra
+  // "Revoke sessions" after that moment ends the entitlement.
+  async function refreshStillEntitled(
+    ctx: { oidc?: { client?: { clientId?: string } } },
+    acct: AccountRecord,
+    authTimeSeconds: number | undefined,
+  ): Promise<boolean> {
     if (!membership || !membershipCfg) return true;
     const clientId = ctx.oidc?.client?.clientId;
     const fail = (reason: string, outcome: "ok" | "backend_error"): void => {
@@ -102,7 +110,8 @@ export function createBroker(opts: BrokerOptions): Broker {
         outcome,
       });
     };
-    const result = await membership.resolve(acct.sub);
+    const signedInGroups = Array.isArray(acct.policyClaims?.groups) ? acct.policyClaims.groups.filter((g): g is string => typeof g === "string") : [];
+    const result = await membership.resolve(acct.sub, authTimeSeconds, signedInGroups);
     if (result.status === "unavailable") {
       if (membershipCfg.failOpen) {
         fail("membership_check_unavailable", "ok");
@@ -115,12 +124,17 @@ export function createBroker(opts: BrokerOptions): Broker {
       fail("membership_revoked", "backend_error");
       return false;
     }
+    // Same claims the policy saw at sign-in; only roles and groups are replaced
+    // by the live answers. Accounts stored before the snapshot existed fall back
+    // to the identity fields they hold.
     const roles = resolveRoles(policy, {
+      ...(acct.policyClaims ?? {
+        ...(acct.tenant ? { tid: acct.tenant } : {}),
+        ...(acct.email ? { email: acct.email } : {}),
+      }),
+      oid: acct.sub,
       roles: result.appRoles,
       groups: result.groupIds,
-      oid: acct.sub,
-      ...(acct.tenant ? { tid: acct.tenant } : {}),
-      ...(acct.email ? { email: acct.email } : {}),
     });
     if (roles.length === 0) {
       fail("membership_revoked", "backend_error");
@@ -178,14 +192,22 @@ export function createBroker(opts: BrokerOptions): Broker {
     // Rotation on for every client; a replayed refresh token revokes the grant.
     rotateRefreshToken: true,
     issueRefreshToken: async (_ctx: unknown, client: { grantTypeAllowed(t: string): boolean }) => client.grantTypeAllowed("refresh_token"),
-    // oidc-provider turns an undefined account into invalid_grant on a refresh
-    // (grant_common.validateAccount). That runs before the refresh token is
-    // rotated, so a failed check consumes nothing.
-    findAccount: async (ctx: { oidc?: { params?: Record<string, unknown>; client?: { clientId?: string } } }, id: string) => {
+    // oidc-provider turns an undefined account into invalid_grant at the token
+    // endpoint (grant_common.validateAccount). That runs before tokens are
+    // issued or a refresh token is rotated, so a failed check consumes nothing.
+    // Every token-endpoint grant carries params.grant_type (authorization
+    // endpoint, userinfo and introspection do not); the third argument is the
+    // authorization code or refresh token being redeemed.
+    findAccount: async (
+      ctx: { oidc?: { params?: Record<string, unknown>; client?: { clientId?: string } } },
+      id: string,
+      source?: { authTime?: unknown },
+    ) => {
       const acct = await accounts.find(id);
       if (!acct) return undefined;
-      if (membership && ctx?.oidc?.params?.grant_type === "refresh_token" && acct.idp === "entra") {
-        if (!(await refreshStillEntitled(ctx, acct))) return undefined;
+      if (membership && typeof ctx?.oidc?.params?.grant_type === "string" && acct.idp === "entra") {
+        const authTime = typeof source?.authTime === "number" ? source.authTime : undefined;
+        if (!(await refreshStillEntitled(ctx, acct, authTime))) return undefined;
       }
       return {
         accountId: id,
