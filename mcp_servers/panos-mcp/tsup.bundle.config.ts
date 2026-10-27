@@ -1,5 +1,5 @@
 // Builds the self-contained ESM bundle that ships inside the atlas plugin
-// (plugins/atlas/mcp/panos/server.mjs). Everything is inlined (noExternal)
+// (plugins/armada/mcp/panos/server.mjs). Everything is inlined (noExternal)
 // so the plugin runs with no node_modules next to it.
 //   npx tsup --config tsup.bundle.config.ts
 import { defineConfig } from 'tsup';
@@ -22,7 +22,7 @@ export default defineConfig({
     js: "import { createRequire as __atlasCreateRequire } from 'module'; const require = __atlasCreateRequire(import.meta.url);",
   },
   noExternal: [/.*/],
-  outDir: resolve(here, '../../plugins/atlas/mcp/panos'),
+  outDir: resolve(here, '../../plugins/armada/mcp/panos'),
   outExtension: () => ({ js: '.mjs' }),
   esbuildOptions(options) {
     options.alias = { ...(options.alias ?? {}), '@shared': resolve(here, '../_shared') };

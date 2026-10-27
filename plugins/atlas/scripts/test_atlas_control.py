@@ -292,9 +292,9 @@ class TestMcpServers(ControlTestCase):
         self.assertFalse(res["ok"])
         self.assertEqual(res["error"], "unknown_server")
 
-    def test_atlas_connectors_are_discovered_under_their_qualified_names(self):
+    def test_armada_connectors_are_discovered_under_their_qualified_names(self):
         names = {s["name"] for s in self.mod.mcp_inventory()["servers"]}
-        self.assertIn("plugin:atlas:cipp", names)
+        self.assertIn("plugin:armada:cipp", names)
 
     def test_add_then_remove_a_user_server(self):
         res = self.mod.add_mcp_server(
@@ -387,7 +387,7 @@ class TestConnectorTest(ControlTestCase):
         root = Path(self.tmp.name) / "plugin"
         (root / "mcp" / "_env").mkdir(parents=True)
         (root / "mcp" / "fake").mkdir()
-        shutil.copy(SCRIPTS.parent / "mcp" / "_env" / "load.mjs", root / "mcp" / "_env")
+        shutil.copy(SCRIPTS.parent.parent / "armada" / "mcp" / "_env" / "load.mjs", root / "mcp" / "_env")
         (root / "mcp" / "fake" / "server.mjs").write_text(
             """
 import readline from 'node:readline';
@@ -431,7 +431,7 @@ rl.on('line', (l) => {
 
     def test_unconfigured_and_configured_connectors_are_told_apart(self):
         root = self._fake_plugin()
-        with mock.patch.object(self.mod, "PLUGIN_ROOT", root):
+        with mock.patch.object(self.mod, "_connector_root", return_value=root):
             home = Path(self.tmp.name) / "home"
             home.mkdir()
             env = {"HOME": str(home), "ATLAS_ENV_FILE": str(root / "none.env")}
@@ -457,7 +457,7 @@ rl.on('line', (l) => {
             "if(m.method==='tools/list')console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result:{tools:[]}}));});",
             encoding="utf-8",
         )
-        with mock.patch.object(self.mod, "PLUGIN_ROOT", root):
+        with mock.patch.object(self.mod, "_connector_root", return_value=root):
             res = self.mod.test_connector("fake", timeout=3)
         self.assertIsNone(res["configured"])
         self.assertEqual(res["tool_count"], 0)

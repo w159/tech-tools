@@ -253,7 +253,7 @@ export function claudeLifecyclePayload(
 }
 
 /** Built-in connectorWatch list: the fail-open fallback when contracts/mcp-servers.json is unreadable. */
-const CONNECTOR_SERVERS_FALLBACK: readonly string[] = ["plugin_atlas", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"];
+const CONNECTOR_SERVERS_FALLBACK: readonly string[] = ["plugin_armada", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"];
 
 /** `connectorWatch` from the MCP server contract; the built-in list when the file is unreadable or malformed. */
 export function loadConnectorServers(path: string = nodePath.join(pluginRoot(), "contracts", "mcp-servers.json"), fallback: readonly string[] = CONNECTOR_SERVERS_FALLBACK): readonly string[] {
@@ -268,7 +268,7 @@ export function loadConnectorServers(path: string = nodePath.join(pluginRoot(), 
 }
 
 /**
- * MCP servers hooks.json's connector matcher names (`mcp__plugin_atlas_.*|mcp__falcon-mcp__.*|
+ * MCP servers hooks.json's connector matcher names (`mcp__plugin_armada_.*|mcp__falcon-mcp__.*|
  * mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*`). omp mints
  * `mcp__<server>_<tool>` with ONE underscore, so the server/tool boundary is lost;
  * this table (longest prefix first) recovers it for the servers hooks.json cares about.
@@ -294,7 +294,7 @@ export function claudeMcpName(name: string): string {
 /** Built-in underscoredServers list: the fail-open fallback when contracts/mcp-servers.json is unreadable (twin of omp_transcript._KNOWN_MCP_SERVERS_FALLBACK). */
 const UNDERSCORED_SERVERS_FALLBACK: readonly string[] = [
 	"lean_ctx", "context_mode_context_mode", "context_mode", "claude_mem", "browser_use", "azure", "serena", "context7", "microsoft_docs", "plaid", "mobbin", "clippy",
-	"atlas_connectwise", "mcp_search", "cmux_browser",
+	"armada_connectwise", "atlas_connectwise", "mcp_search", "cmux_browser",
 ];
 
 /** `underscoredServers` from the MCP server contract, longest first; the built-in list when the file is unreadable or malformed. */
@@ -344,12 +344,18 @@ function mcpClaudeName(bare: string): string {
 }
 
 /**
- * Names a hooks.json matcher is tested against. omp mints atlas connectors as `mcp__atlas_<srv>_<tool>` (split:
- * `mcp__atlas_<srv>__<tool>`); Claude Code names them `mcp__plugin_atlas_<srv>__<tool>`, which is what the
- * connector_credential_watch matcher (`mcp__plugin_atlas_.*`) names. Without the alias that watcher never fires on omp.
+ * Names a hooks.json matcher is tested against. omp mints armada connectors as `mcp__armada_<srv>_<tool>` (split:
+ * `mcp__armada_<srv>__<tool>`); Claude Code names them `mcp__plugin_armada_<srv>__<tool>`, which is what the
+ * connector_credential_watch matcher (`mcp__plugin_armada_.*`) names. Without the alias that watcher never fires on omp.
+ * The `atlas` prefix is the pre-move name (connectors shipped in atlas), aliased the same way as a fallback.
  */
 export function matcherNames(names: string[]): string[] {
-	return names.flatMap(n => (n.startsWith("mcp__atlas_") ? [n, n.replace("mcp__atlas_", "mcp__plugin_atlas_")] : [n]));
+	return names.flatMap(n => {
+		for (const plugin of ["armada", "atlas"]) {
+			if (n.startsWith(`mcp__${plugin}_`)) return [n, n.replace(`mcp__${plugin}_`, `mcp__plugin_${plugin}_`)];
+		}
+		return [n];
+	});
 }
 
 /**

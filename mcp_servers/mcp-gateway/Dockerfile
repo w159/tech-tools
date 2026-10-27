@@ -20,7 +20,7 @@ RUN apt-get update \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Vendor MCP server bundles, spawned as stdio children by the gateway.
-COPY plugins/atlas/mcp/ /app/mcp/
+COPY plugins/armada/mcp/ /app/mcp/
 RUN cd /app/mcp/falcon && uv sync --frozen --no-dev
 
 # The gateway itself.

@@ -31,7 +31,7 @@ Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELO
 | Role agents (`atlas:*`) | 14 | `plugins/atlas/agents/` |
 | Hooks | 17 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 55 non-test Python scripts | `plugins/atlas/scripts/` |
-| MCP connectors | 13 (including `panos` and `sonicwall`), each off until credentials exist | `plugins/atlas/.mcp.json` |
+| MCP connectors | 13 (including `panos` and `sonicwall`), each off until credentials exist | `plugins/armada/.mcp.json` (servers in `plugins/armada/mcp/`; shipped by the armada plugin, install atlas and armada together) |
 | omp agents | 14, generated | `plugins/atlas/omp/agents/` |
 
 ## Contents

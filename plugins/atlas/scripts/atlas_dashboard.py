@@ -38,6 +38,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+import armada_root  # noqa: E402
 import atlas_db  # noqa: E402
 import atlas_control  # noqa: E402
 import atlas_todo  # noqa: E402
@@ -203,9 +204,43 @@ def _plugin_manifest():
     return _MANIFEST
 
 
+def _armada_root():
+    """The armada plugin root that owns the vendor connectors, or None."""
+    return armada_root.find_armada_root(PLUGIN_ROOT)[0]
+
+
+def connectors_unavailable_reason() -> str:
+    """Why the connector list is empty ("" when armada was found)."""
+    return armada_root.find_armada_root(PLUGIN_ROOT)[1]
+
+
+def _connector_manifest() -> dict:
+    """armada's plugin.json: the connectors' userConfig lives there, not in atlas's."""
+    root = _armada_root()
+    if root is None:
+        return {}
+    try:
+        return json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _all_user_config() -> dict:
+    """Connector userConfig (armada) plus atlas's own keys."""
+    uc = dict(_connector_manifest().get("userConfig") or {})
+    uc.update(_plugin_manifest().get("userConfig") or {})
+    return uc
+
+
+def _connector_env_path() -> Path:
+    """The .env the connector preloaders read (ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env in armada's .mcp.json)."""
+    return (_armada_root() or PLUGIN_ROOT) / ".env"
+
+
 def _mcp_json():
-    path = PLUGIN_ROOT / ".mcp.json"
-    if not path.is_file():
+    root = _armada_root()
+    path = root / ".mcp.json" if root else None
+    if path is None or not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -225,14 +260,17 @@ def _plugin_config_options() -> dict:
     except Exception:
         return {}
     pc = data.get("pluginConfigs") or {}
-    # Prefer marketplace-qualified key; fall back to bare name.
-    for key in ("atlas@tech-tools", "atlas"):
+    # Connectors live in armada; credentials saved under atlas before the move stay readable.
+    # Later keys win, so armada's saved value overrides a legacy atlas one. Marketplace-qualified
+    # key first, then bare name.
+    merged: dict = {}
+    for key in ("atlas", "atlas@tech-tools", "armada", "armada@tech-tools"):
         block = pc.get(key)
         if isinstance(block, dict):
             opts = block.get("options")
             if isinstance(opts, dict):
-                return opts
-    return {}
+                merged.update(opts)
+    return merged
 
 
 def _env_example_keys():
@@ -243,14 +281,18 @@ def _env_example_keys():
     """
     keys: list[str] = []
     seen: set[str] = set()
-    for name in (".env.example", ".env.template"):
-        path = PLUGIN_ROOT / name
-        if not path.is_file():
-            # marketplace root template is one level up from plugins/atlas
-            alt = PLUGIN_ROOT.parent.parent / name
-            path = alt if alt.is_file() else path
-        if not path.is_file():
-            continue
+    roots = [PLUGIN_ROOT] + ([_armada_root()] if _armada_root() else [])
+    candidates = []
+    for root in roots:
+        for name in (".env.example", ".env.template"):
+            path = root / name
+            if not path.is_file():
+                # marketplace root template is one level up from plugins/<name>
+                alt = root.parent.parent / name
+                path = alt if alt.is_file() else path
+            if path.is_file() and path not in candidates:
+                candidates.append(path)
+    for path in candidates:
         for raw in path.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
             if not line or line == "#":
@@ -284,7 +326,7 @@ def _env_candidate_paths() -> list:
     read-only here: mcp/_env/load.* load it first, so a key set only there is
     configured even though the dashboard never writes it.
     """
-    return [Path.home() / ".config" / "atlas" / "atlas.env", PLUGIN_ROOT / ".env"]
+    return [Path.home() / ".config" / "atlas" / "atlas.env", _connector_env_path()]
 
 
 def _parse_env_keys(path: Path) -> set:
@@ -392,8 +434,7 @@ def _key_is_set(
 
 
 def _user_config_schema():
-    manifest = _plugin_manifest()
-    uc = manifest.get("userConfig") or {}
+    uc = _all_user_config()
     out = []
     opts = _plugin_config_options()
     env_present = _env_file_present_keys()
@@ -493,9 +534,8 @@ def _connector_auth_state(name: str, fields: list) -> tuple[bool, list]:
 
 def _connector_status():
     """Group userConfig fields by MCP connector for the Settings UI."""
-    manifest = _plugin_manifest()
+    user_config = _connector_manifest().get("userConfig") or {}
     mcp = _mcp_json()
-    user_config = manifest.get("userConfig") or {}
     servers = mcp.get("mcpServers") or {}
     opts = _plugin_config_options()
     env_present = _env_file_present_keys()
@@ -581,8 +621,9 @@ def _connector_status():
             )
 
         configured, missing = _connector_auth_state(name, fields)
-        server_name = f"plugin:atlas:{name}"
-        enabled = server_name not in disabled
+        server_name = f"plugin:armada:{name}"
+        # pre-move disable entries named the server under atlas; honour them too
+        enabled = server_name not in disabled and f"plugin:atlas:{name}" not in disabled
         u = usage.get(name) or {}
         out.append(
             {
@@ -1125,6 +1166,7 @@ def snapshot(project_id=None):
             "health": _run_health(conn, project_id=project_id),
             "savings": _savings_estimate(conn),
             "connectors": _connector_status(),
+            "connectors_reason": connectors_unavailable_reason(),
             "user_config": _user_config_schema(),
             "settings_path": str(_settings_path()),
             "findings": _findings(conn),
@@ -1141,8 +1183,7 @@ def snapshot(project_id=None):
 
 def _allowlisted_credential_keys() -> tuple[set[str], set[str], dict[str, str]]:
     """Return (user_config_keys, env_keys, env_to_user_config)."""
-    manifest = _plugin_manifest()
-    uc = set((manifest.get("userConfig") or {}).keys())
+    uc = set(_all_user_config().keys())
     env_keys = set(_env_example_keys())
     env_to_uc = {k.upper(): k for k in uc}
     # Every userConfig key has an UPPER env form
@@ -1234,10 +1275,11 @@ def write_settings_updates(updates: dict):
     if not isinstance(data, dict):
         data = {}
     pc = data.setdefault("pluginConfigs", {})
-    block = pc.get("atlas@tech-tools")
+    # Connector credentials belong to armada (the plugin that declares these userConfig keys).
+    block = pc.get("armada@tech-tools")
     if not isinstance(block, dict):
         block = {}
-        pc["atlas@tech-tools"] = block
+        pc["armada@tech-tools"] = block
     opts = block.get("options")
     if not isinstance(opts, dict):
         opts = {}
@@ -1317,7 +1359,7 @@ def _write_env_file(updates: dict):
     if bad:
         return {"ok": False, "error": "keys_not_allowlisted", "keys": bad}
     updates = norm_updates
-    path = PLUGIN_ROOT / ".env"
+    path = _connector_env_path()
     _merge_env_file(path, updates)
     return {
         "ok": True,
@@ -2745,7 +2787,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "text": atlas_control.env_export(_connector_status()),
-                    "env_path": str(PLUGIN_ROOT / ".env"),
+                    "env_path": str(_connector_env_path()),
                 },
             )
         if u.path == "/api/findings":

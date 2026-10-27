@@ -1,6 +1,6 @@
 // Boot probe for the bundled sonicwall server (proof-first: written before server.ts).
-// Drives plugins/atlas/mcp/sonicwall/server.mjs over MCP stdio exactly the way
-// plugins/atlas/.mcp.json launches it: `node --import _env/load.mjs server.mjs`,
+// Drives plugins/armada/mcp/sonicwall/server.mjs over MCP stdio exactly the way
+// plugins/armada/.mcp.json launches it: `node --import _env/load.mjs server.mjs`,
 // so CFG_SONICWALL_* translation is exercised, not bypassed.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PLUGIN_MCP = resolvePath(HERE, '../../../plugins/atlas/mcp');
+const PLUGIN_MCP = resolvePath(HERE, '../../../plugins/armada/mcp');
 const SERVER = resolvePath(PLUGIN_MCP, 'sonicwall/server.mjs');
 const ENV_LOADER = resolvePath(PLUGIN_MCP, '_env/load.mjs');
 

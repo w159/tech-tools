@@ -65,7 +65,7 @@ UNVERIFIED still have not been exercised end to end.
 ## Relationship to the atlas plugin / Claude Code (read this first if that's why you're here)
 
 This gateway is a **separate system** from the atlas plugin's MCP servers as
-used in Claude Code (this repo's `plugins/atlas/.mcp.json`). Confirmed live
+used in Claude Code (this repo's `plugins/armada/.mcp.json`). Confirmed live
 on 2026-09-28: this omp session runs each vendor server as a **local stdio
 child process**. Three separate credential sources exist, and at the time
 of this check only one resolved in this specific session:
@@ -98,7 +98,7 @@ of this check only one resolved in this specific session:
 None of the Key Vault/Container App work above changes any of this - a
 Claude Code or omp session never talks to the gateway. If what you
 actually want is these vendors working **in Claude Code/omp**, the real
-fix shipped this session: `plugins/atlas/mcp/_env/load.mjs` and `load.py`
+fix shipped this session: `plugins/armada/mcp/_env/load.mjs` and `load.py`
 now also load `~/.config/atlas/atlas.env` (a per-user KEY=VALUE file,
 `chmod 600`) as a baseline before `ATLAS_ENV_FILE`, so credentials resolve
 even when a harness doesn't handle `userConfig` substitution. That file
@@ -372,7 +372,7 @@ vendor console alone does not update any of them:
   `VANTA_CLIENT_ID`/`VANTA_CLIENT_SECRET`,
   `NINJAONE_CLIENT_ID`/`NINJAONE_CLIENT_SECRET`, `PANOS_API_KEY`,
   `OPENROUTER_API_KEY`). The Dockerfile's own `COPY` instructions only take
-  `plugins/atlas/mcp/`, not the repo-root-relative `.env` path, so `.env`
+  `plugins/armada/mcp/`, not the repo-root-relative `.env` path, so `.env`
   was not copied into any image layer by the Dockerfile itself; what is
   confirmed is that the file left this machine inside the build-context
   tarball uploaded to the ACR Tasks build service

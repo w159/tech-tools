@@ -122,7 +122,7 @@ the plugins are built on:
 - **Vendor connectors that armada department agents call:**
   - `mcp_servers/<svc>-mcp/` - the MCP server per vendor (Auvik, Blumira, CIPP,
     ConnectWise Manage, KnowBe4, NinjaOne, PAN-OS, Paylocity, Spanning, ThreatLocker, Vanta;
-    CrowdStrike Falcon is a Python connector under `plugins/atlas/mcp/falcon`).
+    CrowdStrike Falcon is a Python connector under `plugins/armada/mcp/falcon`).
   - `.mcpb` archives some of those servers pack into (currently threatlocker and panos).
   - `mcp_node/node-<svc>/` - the Node client libraries those servers depend on.
 
