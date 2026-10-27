@@ -64,8 +64,21 @@ def _commands_for(event: str) -> list:
     return out
 
 
+def _dispatched() -> list:
+    """(event, hook name, matcher) for every hook event_dispatch.py runs in-process."""
+    sys.path.insert(0, str(HOOKS_DIR))
+    import event_dispatch
+
+    return [
+        (event, name, matcher)
+        for event, bindings in event_dispatch.BINDINGS.items()
+        for name, matcher, _ in bindings
+    ]
+
+
 def _script_paths() -> list:
-    """Resolve every ${CLAUDE_PLUGIN_ROOT}-relative script hooks.json references."""
+    """Resolve every ${CLAUDE_PLUGIN_ROOT}-relative script hooks.json references, plus the hook
+    programs event_dispatch.py runs in-process (wired through it, not by hooks.json itself)."""
     paths = []
     for event in _hooks_config():
         for cmd in _commands_for(event):
@@ -75,6 +88,7 @@ def _script_paths() -> list:
                     paths.append(
                         Path(token.replace("${CLAUDE_PLUGIN_ROOT}", str(PLUGIN_ROOT)))
                     )
+    paths.extend(HOOKS_DIR / (name + ".py") for _, name, _ in _dispatched())
     return paths
 
 
@@ -167,7 +181,7 @@ class WiringContract(unittest.TestCase):
         """Saved dashboard knobs must reach already-running sessions: each entry applies
         the Atlas store before it imports any atlas module (core modules read knobs)."""
         entries = sorted({p for p in _script_paths() if p.suffix == ".py"})
-        self.assertEqual(len(entries), 17, [p.name for p in entries])
+        self.assertEqual(len(entries), 18, [p.name for p in entries])
         call = "atlas_env.apply_store_env()"
         bad = []
         for path in entries:
@@ -550,13 +564,16 @@ class DocsMatchCodeContract(unittest.TestCase):
             ),
             "agents": len(_agent_files()),
             "programs": len(self._distinct_scripts()),
+            # A binding is one hook program on one event+matcher. The two event_dispatch.py
+            # commands are transport: the hooks they run are counted instead, one each.
             "bindings": sum(
                 1
                 for entries in _hooks_config().values()
                 for entry in entries
                 for hook in entry.get("hooks", [])
-                if hook.get("command")
-            ),
+                if hook.get("command") and "event_dispatch.py" not in hook["command"]
+            )
+            + len(_dispatched()),
         }
 
     def test_plugin_manifest_counts_match_disk(self):
@@ -1432,20 +1449,14 @@ class InsightRemediationContract(unittest.TestCase):
         self.assertLess(smallest, dispatch_only)
 
     def test_connector_credential_watch_is_wired_on_mcp_responses(self):
-        cmds = _commands_for("PostToolUse")
-        self.assertTrue(
-            any("connector_credential_watch.py" in c for c in cmds),
-            "connector_credential_watch.py must be bound to PostToolUse",
-        )
+        # Wired through event_dispatch.py (see DispatcherWiringContract for the hooks.json side).
         matchers = [
-            m.get("matcher", "")
-            for m in _hooks_config()["PostToolUse"]
-            if any(
-                "connector_credential_watch.py" in h.get("command", "")
-                for h in m.get("hooks", [])
-            )
+            m
+            for ev, name, m in _dispatched()
+            if ev == "PostToolUse" and name == "connector_credential_watch"
         ]
         self.assertEqual(len(matchers), 1)
+        self.assertTrue(matchers[0].startswith("mcp__"))
         matcher = matchers[0]
         # Must NOT be a blanket mcp__ sweep: lean-ctx/context-mode/serena return
         # file content, and this repo's own sources contain "Invalid Token".
@@ -1727,14 +1738,10 @@ class TodoBoardContract(unittest.TestCase):
     surfaces that make remaining work visible."""
 
     def test_todo_capture_is_wired_to_todowrite(self):
-        bound = [c for c in _commands_for("PostToolUse") if "todo_capture.py" in c]
-        self.assertTrue(bound, "hooks.json must run todo_capture.py on PostToolUse")
         matchers = [
-            e.get("matcher")
-            for e in _hooks_config()["PostToolUse"]
-            if any(
-                "todo_capture.py" in h.get("command", "") for h in e.get("hooks", [])
-            )
+            m
+            for ev, name, m in _dispatched()
+            if ev == "PostToolUse" and name == "todo_capture"
         ]
         self.assertEqual(matchers, ["TodoWrite|Agent|Task|Bash"])
 
