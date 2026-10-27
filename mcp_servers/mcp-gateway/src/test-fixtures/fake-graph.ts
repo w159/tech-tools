@@ -201,7 +201,7 @@ export class FakeGraph {
 
   private filterEq(url: URL): Array<[string, string]> {
     const f = url.searchParams.get("$filter") ?? "";
-    return [...f.matchAll(/(\w+) eq '((?:[^']|'')*)'/g)].map((m) => [m[1]!, m[2]!.replaceAll("''", "'")]);
+    return [...f.matchAll(/(\w{1,64}) eq '((?:[^']|'')*)'/g)].map((m) => [m[1]!, m[2]!.replaceAll("''", "'")]);
   }
 
   private async readBody(req: IncomingMessage): Promise<unknown> {

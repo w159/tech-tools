@@ -199,8 +199,8 @@ export class SonicwallClient {
     const errInfo = info.find((i) => i.level === 'error');
     const code = errInfo?.code ?? info[0]?.code;
     const detail = (errInfo ?? info[0])?.message;
-    const msg = `SonicOS ${method} ${path} failed: HTTP ${res.status} ${code ?? ''}${detail ? `: ${detail}` : ''}`;
-    return new SonicwallApiError(msg.replace(/ +:/, ':').trim(), {
+    const msg = `SonicOS ${method} ${path} failed: HTTP ${res.status}${code ? ` ${code}` : ''}${detail ? `: ${detail}` : ''}`;
+    return new SonicwallApiError(msg.trim(), {
       httpStatus: res.status,
       code,
       info,

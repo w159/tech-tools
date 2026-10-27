@@ -99,7 +99,7 @@ def _scoring(home, now):
 
 
 def _gates_path(home, root, session):
-    key = hashlib.sha1(("%s|%s" % (root, session)).encode()).hexdigest()[:12]
+    key = hashlib.sha256(("%s|%s" % (root, session)).encode()).hexdigest()[:12]
     return os.path.join(home, ".atlas", "status-gates-%s.json" % key)
 
 
@@ -172,7 +172,7 @@ def segment(root, now=None, session=None, home=None):
         return None
     todos = _json(os.path.join(run, "todos.json"), {})
     session = session or todos.get("last_session_id")
-    key = hashlib.sha1(("%s|%s" % (root, session)).encode()).hexdigest()[:12]
+    key = hashlib.sha256(("%s|%s" % (root, session)).encode()).hexdigest()[:12]
     cache = os.path.join(home, ".atlas", "status-segment-%s.json" % key)
     c = _json(cache, {})
     if now - float(c.get("at", 0)) < CACHE_S and isinstance(c.get("seg"), dict):
