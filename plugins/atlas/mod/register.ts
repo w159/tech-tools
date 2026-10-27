@@ -1,4 +1,4 @@
-// register.ts — the Atlas mod entrypoint (plan docs/plans/2026-10-09-atlas-mod.md §3).
+// register.ts — the Atlas mod entrypoint (plan docs/plans/2026-10-09_atlas-mod.md §3).
 // Declared by hooks/hooks.json "modules": ["./mod/register.ts"]. Kill switch:
 // ATLAS_MOD=off turns every wired handler into a pass-through (register itself
 // has no `$`: the flag is read at the first event, session.start). Harness

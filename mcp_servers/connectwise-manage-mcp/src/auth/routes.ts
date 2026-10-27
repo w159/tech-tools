@@ -199,7 +199,6 @@ export async function handleToken(
 
     const azureBody = await azureRes.text();
     if (azureRes.status !== 200) {
-      console.error(`[token] Azure rejected token exchange — status: ${azureRes.status}, body: ${azureBody}`);
       let sanitized: { error: string; error_description?: string };
       try {
         const parsed = JSON.parse(azureBody) as { error?: string; error_description?: string };
@@ -210,6 +209,8 @@ export async function handleToken(
       } catch {
         sanitized = { error: "invalid_request" };
       }
+      // Log status and OAuth error code only: never the body or error_description.
+      console.error(`[token] Azure rejected token exchange — status: ${azureRes.status}, error: ${sanitized.error}`);
       res.writeHead(azureRes.status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(sanitized));
       return;

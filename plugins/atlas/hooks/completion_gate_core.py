@@ -78,7 +78,7 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
       exists to avoid, and an unreadable surface never manufactures a block.
   (l) Docs naming: every dated record this run touched (plan, spec, lesson,
       decision, audit, finding, evidence dir) must be named
-      `<YYYY-MM-DD>-<slug>` so a plain listing sorts chronologically. A
+      `<YYYY-MM-DD>_<slug>` so a plain listing sorts chronologically. A
       trailing date or a leading sequence number sorts by subject instead,
       which is what made an existing plan set unreadable. Run-scoped via git
       and fail-open: historical names nobody touched never block, or the gate
@@ -184,10 +184,12 @@ def _check_evidence(root: Path, started: float | None = None) -> bool:
     try:
         if not evidence.is_dir():
             return False
+        # Recursive: evidence is often written under per-run subdirectories
+        # (evidence/run-1/proof.txt); a one-level scan missed those.
         if started is None:
-            return any(p.is_file() for p in evidence.iterdir())
+            return any(p.is_file() for p in evidence.rglob("*"))
         return any(
-            p.is_file() and p.stat().st_mtime >= started for p in evidence.iterdir()
+            p.is_file() and p.stat().st_mtime >= started for p in evidence.rglob("*")
         )
     except OSError:
         return True  # can't read -> fail open  # can't read -> fail open
@@ -339,14 +341,14 @@ def _delegation_exempt():
         return None
 
 
-def _is_delegation_code(path: str, dirs: tuple, exts: tuple) -> bool:
-    """True when `path` is code that counts toward the (m) delegation mandate
-    (not under an exempt dir, no exempt extension). Shared with
-    delegation_prewarn.py so the warning and the gate use one predicate."""
-    return not (
-        path.endswith(exts)
-        or any(path.startswith(d + "/") or f"/{d}/" in path for d in dirs)
-    )
+def _is_delegation_code(path: str, dirs: tuple, exts: tuple, cwd=None) -> bool:
+    """True when `path` is code that counts toward the (m) delegation mandate: inside
+    the project root, not docs/.atlas/.md, not scratch. One predicate,
+    atlas_scope.is_target_code, shared with the dispatch tripwire and
+    delegation_prewarn so the warning, the deny and the gate agree."""
+    import atlas_scope
+
+    return atlas_scope.is_target_code(path, cwd, dirs, exts)
 
 
 def _nondocs_changed(changed_paths: list) -> bool:
@@ -655,6 +657,46 @@ def _has_in_flight_dispatch(data: dict) -> bool:
     return False
 
 
+_SHELL_MEMO: dict | None = None  # set by main(): one `git status` per Stop
+
+
+def _shell_changed_code(root, session_id: str) -> list:
+    """Target-code paths (absolute) a shell command changed this session, minus
+    files another session's agents wrote in this shared worktree. The union
+    partner of the Write/Edit tool events for (a)-(l). Fail open ([])."""
+    try:
+        import atlas_scope
+
+        rels = _shell_dirty_edits(root, session_id)
+        if not rels:
+            return []
+        paths = [
+            p
+            for p in (_abs_path(r, root) for r in rels)
+            if atlas_scope.is_target_code(p, str(root)) and _target_exists(p, root)
+        ]
+        if not paths:
+            return []
+        import atlas_db
+
+        conn = atlas_db.connect()
+        try:
+            rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+                conn, session_id
+            )
+            started = atlas_db.run_started_at(conn, rid) if rid is not None else None
+            theirs = (
+                _other_session_writes(conn, session_id, started, root)
+                if started is not None
+                else set()
+            )
+        finally:
+            conn.close()
+        return [p for p in paths if p not in theirs]
+    except Exception:
+        return []
+
+
 def _shell_dirty_edits(root, session_id: str) -> list:
     """Non-docs paths that are dirty now but absent from, or changed since, the
     SessionStart snapshot (hooks/session_boot.py write_dirty_snapshot): code a
@@ -663,6 +705,16 @@ def _shell_dirty_edits(root, session_id: str) -> list:
     Fail open ([]) on no root, no/corrupt snapshot, git error."""
     if root is None or not session_id:
         return []
+    key = (str(root), session_id)
+    if _SHELL_MEMO is not None and key in _SHELL_MEMO:
+        return _SHELL_MEMO[key]
+    out = _shell_dirty_edits_uncached(root, session_id)
+    if _SHELL_MEMO is not None:
+        _SHELL_MEMO[key] = out
+    return out
+
+
+def _shell_dirty_edits_uncached(root, session_id: str) -> list:
     try:
         import session_boot
 
@@ -715,6 +767,11 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
     """
     if "/subagents/" in transcript_path.replace("\\", "/"):
         return []
+    # An atlas_mux tmux worker is itself the dispatched implementer (a
+    # main-thread `claude -p --agent` session); demanding a dispatch from it
+    # only makes it overwrite its report. Same marker as worker_inbox.
+    if (os.environ.get("ATLAS_WORKER_NAME") or "").strip():
+        return []
     conn = None
     try:
         import atlas_db
@@ -746,7 +803,7 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
         if exempt is None:
             return []  # contract unreadable: fail open, never block
         dirs, exts = exempt
-        run_code = [p for p in paths if p and _is_delegation_code(p, dirs, exts)]
+        run_code = [p for p in paths if p and _is_delegation_code(p, dirs, exts, root)]
         shell_code = _shell_dirty_edits(root, session_id)
         if shell_code:
             # Dirt another session's agents wrote in this shared worktree is not ours.
@@ -878,7 +935,7 @@ _GISTS: dict[str, str] = {
     "i": "todos still open; finish them or explicitly drop them",
     "j": "worktrees left; merge and remove them",
     "k": "no plan; write the todo list now",
-    "l": "docs artifacts not named date-first; git mv to <YYYY-MM-DD>-<slug>",
+    "l": "docs artifacts not named date-first; git mv to <YYYY-MM-DD>_<slug>",
     "m": "main-thread code writes with no dispatch; dispatch atlas:implementer",
     "n": "status header missing; start the reply with the atlas header",
     "o": "required phases missing; add the phase markers",
@@ -1060,8 +1117,9 @@ def _reason(
             "l",
             f"  (l) {len(name_violations)} docs artifact(s) this run touched are not named date-first: "
             f"{'; '.join(p for p, _ in name_violations[:5])}. A dated record (plan, spec, lesson, decision, audit, finding) is "
-            "<YYYY-MM-DD>-<slug> so a plain listing sorts chronologically; a "
-            "trailing date or a leading sequence number sorts by subject instead. "
+            "<YYYY-MM-DD>_<slug> (underscore after the date) so a plain listing sorts chronologically; a "
+            "trailing date, a hyphen after the date or a leading sequence number sorts by subject instead; "
+            "a loose file in docs/ root belongs in a dated subfolder. "
             "-> Rename with `git mv` (keep the history), then re-check with "
             f'python3 "{SCRIPTS_DIR / "lint_docs_names.py"}".',
         )
@@ -1154,7 +1212,15 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     solo = _solo_mode()
     session = str(data.get("session_id") or "")
     run_paths = _run_written_paths(data.get("session_id", ""), root)
+    # Files a shell command changed (sed -i, cat >, git apply ...) leave no
+    # Write/Edit event: union them in from the SessionStart dirty snapshot.
+    run_paths = run_paths + [
+        p for p in _shell_changed_code(root, session) if p not in run_paths
+    ]
     code_changed = _nondocs_changed(run_paths)
+    # (c)-(f) and (h) are docs-currency checks: they need a docs/ SSOT to
+    # check against, so a project without one is never blocked on them.
+    docs_exist = (root / "docs").is_dir()
     # (a)/(b) only apply once this run has shipped non-docs code. A
     # research-only or docs-only run has no evidence/verification to
     # produce, so manufacturing a findings.json entry to satisfy an
@@ -1164,16 +1230,17 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     started = _run_started_at(str(data.get("session_id") or ""))
     ok_a = _check_evidence(root, started) if code_changed else True
     ok_b = _check_findings(root, started) if code_changed else True
-    ok_c = _check_changelog(root)
-    ok_d = _check_roadmap(root)
-    ok_e = _check_readme(root)
-    ok_h = _check_roadmap_reconciled(root)
+    docs_check = code_changed and docs_exist
+    ok_c = _check_changelog(root) if docs_check else True
+    ok_d = _check_roadmap(root) if docs_check else True
+    ok_e = _check_readme(root) if docs_check else True
+    ok_h = _check_roadmap_reconciled(root) if docs_check else True
     # (f) Docs drift BLOCKS: THIS RUN's own writes shipped code and
     # docs/CHANGELOG.md was not among them. The primary signal is
     # tool-call-scoped and therefore blind to docs written by a
     # Bash-invoked script. Cross-check
     # git before blocking so a run whose docs ARE current is not stopped.
-    drift = _docs_drift(run_paths) if code_changed else False
+    drift = _docs_drift(run_paths) if docs_check else False
     if drift and _docs_moved_in_git(root):
         drift = False
     # (g) Law 5 -- verifier coverage. Only when THIS RUN's own writes
@@ -1363,9 +1430,22 @@ def main() -> int:
         if not atlas_hook_guard.should_run(data, "completion_gate"):
             return 0
         cwd = Path(data.get("cwd") or os.getcwd())
-        root = _find_root(cwd)
-        if root is None:
-            return 0  # no docs/ SSOT -> not an atlas run -> silent no-op
+        # Armed like the dispatch tripwire (atlas_scope.gates_armed: a git /
+        # .claude / .atlas / package.json project outside scratch roots), or by
+        # a docs/ SSOT. A project with neither stays a silent no-op. Without a
+        # docs/ root the docs-currency conditions (c-f, h) are skipped in
+        # evaluate(); (m) and the rest still apply.
+        docs_root = _find_root(cwd)
+        if docs_root is None:
+            import atlas_scope
+
+            if not atlas_scope.gates_armed(str(cwd)):
+                return 0
+            root = Path(atlas_scope.project_root(str(cwd)))
+        else:
+            root = docs_root
+        global _SHELL_MEMO
+        _SHELL_MEMO = {}
         session = str(data.get("session_id") or "")
         missing_delegation, delegation_paths, solo_delegation_note = _delegation_state(
             data, root
@@ -1644,6 +1724,7 @@ def _block_loop_state(session_id: str, failed: list) -> tuple[int, bool]:
                 "gate_block_loop",
                 weight=float(count),
                 snippet=f"allowed Stop after {count - 1} identical blocks: {_gate_block_snippet(failed)}",
+                gate_letter=sig,
             )
     finally:
         if conn is not None:
@@ -1690,6 +1771,7 @@ def _record_gate_block(session_id: str, failed: list) -> None:
                 "gate_block",
                 weight=float(len(failed)),
                 snippet=_gate_block_snippet(failed),
+                gate_letter=",".join(failed),
             )
     finally:
         if conn is not None:
@@ -2129,6 +2211,10 @@ def _status_header_would_block(data: dict, contract: dict | None) -> bool:
 
 
 def _header_reason_part(contract: dict | None) -> str:
+    # Contract is the single source; literal only as the unreadable-contract fallback.
+    template = (
+        (contract or {}).get("headerTemplate") or "ATLAS | <glyph> <phase> | <state>"
+    ).replace("<state>", "<one-line state>")
     phases = ", ".join(
         f"{p.get('id')} {p.get('glyph')}"
         for p in ((contract or {}).get("phases") or [])
@@ -2137,10 +2223,11 @@ def _header_reason_part(contract: dict | None) -> str:
     return (
         "  (n) Status header: your final reply does not start with the atlas status "
         "header, so the user's terminal shows no phase or state line. The first "
-        "non-empty line must be `ATLAS | <glyph> <phase> | <one-line state>`. "
+        "non-empty line must be `%s`. "
         "Phases and glyphs: %s. -> Re-send your final reply with that header as its "
         "first line and nothing else changed, then retry Stop. (This check blocks "
-        "once per session.)" % (phases or "see contracts/operating-contract.json")
+        "once per session.)"
+        % (template, phases or "see contracts/operating-contract.json")
     )
 
 

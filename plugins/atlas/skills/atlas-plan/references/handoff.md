@@ -54,7 +54,7 @@ All of the following, confirmed before any handoff message:
 
 **Interactive - exactly one recommendation, not a menu sprawl:**
 
-- **`atlas-orchestrate`** - it consumes this plan and executes it: stage map over the `U<N>` IDs, implementer dispatches carrying each unit's evidence strategy, independent verification, evidence receipts, docs-current closeout. There is no `atlas-work` skill and never will be - that concept was folded into `atlas-orchestrate/references/implementation-units.md`; never offer or create one.
+- **`atlas-orchestrate`** - it consumes this plan and executes it: stage map over the `U<N>` IDs, implementer dispatches carrying each unit's evidence strategy, independent verification, evidence receipts, docs-current closeout. There is no separate work skill and never will be - that concept was folded into `atlas-orchestrate/references/implementation-units.md`; never offer or create one.
 - Offer **`atlas-prototype`** explicitly first, when a visual/interaction fork was deferred (`Q-###` with a UI surface) - settle the shape before executing units that depend on it.
 - Offer **`atlas-bakeoff`** explicitly first, when a costly open technical fork was deferred - resolve it before, or as, the first execution step.
 
@@ -63,7 +63,7 @@ All of the following, confirmed before any handoff message:
 ```json
 {
   "status": "complete" | "blocked",
-  "artifact_path": "docs/plans/<YYYY-MM-DD>-<slug>-plan.md",
+  "artifact_path": "docs/plans/<YYYY-MM-DD>_<slug>-plan.md",
   "unit_count": <N>,
   "requirements_covered": "<all R-### ids or the explicit gap>",
   "question_counts": { "resolved": <N>, "deferred": <N> },

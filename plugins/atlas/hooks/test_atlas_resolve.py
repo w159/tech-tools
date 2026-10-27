@@ -26,11 +26,11 @@ def _fm_effort(role):
 
 ROWS = [
     # (class, effort) -> [(role, count, effort, tools_profile)], isolation
-    ("implement", "low", [("implementer", 1, "low", "edit")], "shared"),
+    ("implement", "low", [("implementer", 1, "medium", "edit")], "shared"),
     (
         "implement",
         "medium",
-        [("implementer", 2, "low", "edit"), ("verifier", 1, "low", "exec")],
+        [("implementer", 2, "medium", "edit"), ("verifier", 1, "medium", "exec")],
         "worktree",
     ),
     (
@@ -38,8 +38,8 @@ ROWS = [
         "high",
         [
             ("explorer", 2, "low", "read"),
-            ("implementer", 1, "low", "edit"),
-            ("verifier", 1, "low", "exec"),
+            ("implementer", 1, "medium", "edit"),
+            ("verifier", 1, "medium", "exec"),
         ],
         "worktree",
     ),
@@ -47,8 +47,8 @@ ROWS = [
         "verify",
         "high",
         [
-            ("verifier", 2, "low", "exec"),
-            ("completeness-critic", 1, "low", "read"),
+            ("verifier", 2, "medium", "exec"),
+            ("completeness-critic", 1, "medium", "read"),
         ],
         "shared",
     ),
@@ -105,7 +105,7 @@ class Resolve(unittest.TestCase):
         )
 
     def test_omp_thinking_parity(self):
-        """Every matrix role's omp thinking level equals its effort; omp 'off' is allowed only for a Claude 'low'."""
+        """Every matrix role's omp thinking level follows the tiering mapping (none/low -> off, medium/high -> low)."""
         src = (ATLAS / "omp" / "atlas-agents.ts").read_text()
         block = re.search(r"ATLAS_THINKING_LEVELS[^{]*\{(.*?)\n\};", src, re.S).group(1)
         omp = dict(re.findall(r'"?([\w-]+)"?:\s*"(\w+)"', block))
@@ -113,11 +113,10 @@ class Resolve(unittest.TestCase):
             for cell in levels.values():
                 for t in cell["team"]:
                     lvl = omp[t["role"]]
-                    self.assertTrue(
-                        lvl == t["effort"] or (lvl == "off" and t["effort"] == "low"),
-                        (t["role"], lvl),
+                    # design mapping: none/low -> off, medium/high -> low
+                    self.assertEqual(
+                        lvl, "low" if t["effort"] in ("medium", "high") else "off", t["role"]
                     )
-        self.assertEqual(omp["implementer"], _fm_effort("implementer"))
 
     def test_tripwire_advisory(self):
         sys.path.insert(0, str(ATLAS / "hooks"))
@@ -163,6 +162,32 @@ class Resolve(unittest.TestCase):
         self.assertEqual(ar.resolve("research", "lo")["task_class"], "audit")
         with self.assertRaises(ValueError):
             ar.resolve("nope", "med")
+
+
+class CliAlwaysJsonTest(unittest.TestCase):
+    """Every CLI outcome is one JSON object on stdout, so `| json.load(sys.stdin)` never hits char 0."""
+
+    def _cli(self, *argv):
+        p = subprocess.run(
+            [sys.executable, str(ATLAS / "scripts" / "atlas_resolve.py"), *argv],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return p.returncode, json.loads(p.stdout), p.stderr
+
+    def test_valid_calls_print_the_cell(self):
+        for cls, eff in (("fix", "low"), ("implement", "low"), ("fix", "medium")):
+            rc, doc, _ = self._cli(cls, eff)
+            self.assertEqual((0, cls), (rc, doc["task_class"]))
+        rc, doc, _ = self._cli("--paths", "b,a", "implement", "medium")
+        self.assertEqual((0, ["a", "b"]), (rc, doc["file_scope"]))
+
+    def test_error_paths_print_json_error_and_exit_2(self):
+        for argv in ((), ("fix",), ("fix", "low", "extra"), ("nope", "low"), ("fix", "nope"), ("fix", "low", "--paths")):
+            rc, doc, err = self._cli(*argv)
+            self.assertEqual((2, False), (rc, doc["ok"]), argv)
+            self.assertTrue(doc["error"] and err.strip(), argv)
 
 
 if __name__ == "__main__":

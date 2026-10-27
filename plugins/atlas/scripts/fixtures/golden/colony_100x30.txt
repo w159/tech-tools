@@ -1,0 +1,30 @@
+cmd ▸ ▊  Tab region · ? help · last <TS>
+━ { SESSIONS } ━━━━━━━━━━━━━━━━━━━╋━ ATLAS COLONY . macbook-pro . 6 colonies 16 seats ━━━━━━━━━━━━━━
+> lead-01 tmux 3s attn            ┃ ━ CHANNEL lead-01 (all) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ● ex-1 working                ┃ NEEDS 1: impl-1 blocked
+    ! impl-1 blocked              ┃ 20:03 lead (lead) > all  ch1 msg 0 [note]
+    · impl-2 idle                 ┃ 20:03 w1 > lead  ch1 msg 1 [status]
+  ops tmux 0s empty               ┃ 20:03 lead (lead) > w1  ch1 msg 2 [note]
+  tm-02 tmux 4s attn              ┃ 20:03 w2 > lead  ch1 msg 3 [blocked]
+    ● tm-lead working             ┃ 20:03 lead (lead) > w2  ch1 msg 4 [note]
+    ● tm-w1 working               ┃ 20:03 w1 > all  ch1 msg 5 [handoff]
+    ! tm-w2 blocked               ┃ 20:03 tui (you) > w1  ch1 msg 6 [steer]
+    · tm-w3 idle held             ┃ ━ PEEK - (t attach . v view) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  hd-03 herdr 2s work             ┃ (no capture yet)
+    ● hd-1 working                ┃ ━ STEER -> lead ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    · hd-2 idle                   ┃ say to lead >
+  bg-04 claude-bg 1s work         ┃ [ msg all ] [ @all ] [ @lead ]
+    ● bg-1 working                ┃
+  lead-ip in-proc 6s attn         ┃
+    ● lead-ip working             ┃
+    ● ip-w1 working               ┃
+    · ip-w2 idle                  ┃
+    ! ip-w3 blocked               ┃
+    ✓ ip-w4 finished              ┃
+    · ip-w5 idle                  ┃
+  term atlas-orphan-9 1win        ┃
+                                  ┃
+                                  ┃
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↑↓ move · ⏎ pick · tab region · [ ? help ]  [ q quit ]
+[macbook-pro] colony

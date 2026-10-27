@@ -20,7 +20,7 @@ Resolve `PROTO_DIR` once, at the start of the run, and reuse the same absolute p
 
 Before handing the URL to the human, look at the rendered screen - a screenshot where the platform has one, otherwise measure the laid-out result in the DOM. A 200 on every asset is not that check: an image that loads correctly at the wrong size passes it, as does a script that leaves the page inert. Check each variant at rest, not just the page - one bug in shared scaffolding reads as several bad designs. Drive an interaction only when its behavior is invisible at rest. Measurement lies by default - computed styles read mid-transition, scroll events coalesce - so read after things settle, and suspect the instrument before you conclude the page is broken.
 
-For a UI-shaped prototype this check is an `atlas:ui-runtime-tester` dispatch with a bounded brief: start/open the URL, capture per-variant screenshots plus console and network errors into `.atlas/evidence/<YYYY-MM-DD>-<prototype-slug>/`, and report anything broken. The tester never judges the design - it proves the render is honest so the human judges the design.
+For a UI-shaped prototype this check is an `atlas:ui-runtime-tester` dispatch with a bounded brief: start/open the URL, capture per-variant screenshots plus console and network errors into `.atlas/evidence/<YYYY-MM-DD>_<prototype-slug>/`, and report anything broken. The tester never judges the design - it proves the render is honest so the human judges the design.
 
 If no local server or browser path is available on this host, stop and report that. Do not settle the question in chat instead - a question that needs a real artifact to be decided is not answered by talking about it.
 

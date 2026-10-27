@@ -16,6 +16,11 @@ import json
 import os
 import sys
 import time
+import atlas_env
+
+# The hook entry (--hook) overlays saved knobs onto the environment; importers must not.
+if __name__ == "__main__":
+    atlas_env.apply_store_env()
 
 # --- environment (overridable so tests never touch the real install) ---
 PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.expanduser(
@@ -70,6 +75,7 @@ if __name__ == "__main__" and sys.argv[1:] == ["--hook"] and _hook_stamp_fresh("
     sys.exit(0)
 
 import argparse  # noqa: E402 -- after the stamp fast path on purpose
+import ast  # noqa: E402
 import hashlib  # noqa: E402
 import re  # noqa: E402
 import shutil  # noqa: E402
@@ -77,6 +83,8 @@ import subprocess  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 
 import atlas_db  # noqa: E402
+import atlas_paths  # noqa: E402
+import doctor_layout  # noqa: E402
 
 
 def _hook_stamp_write(plugin, ok):
@@ -173,6 +181,30 @@ def self_manifest():
         if manifest.get("name") == "atlas":
             return env, manifest
     return own, _load_json(os.path.join(own, ".claude-plugin", "plugin.json"))
+
+
+def detect_load_source(plugin_name="atlas"):
+    """How this plugin was loaded when it has no installed_plugins.json entry.
+
+    Returns ("synced", root) for a claude.ai synced plugin
+    (<plugins>/synced/<id>/<name> with a sibling <name>.meta.json), or
+    ("plugin-dir", root) for a --plugin-dir load of a marketplace source
+    checkout (<repo>/plugins/<name>); else
+    (None, root). Root comes from self_manifest(), never guessed paths."""
+    root = os.path.realpath(self_manifest()[0])
+    parent = os.path.dirname(root)
+    if os.path.basename(os.path.dirname(parent)) == "synced" and os.path.exists(
+        os.path.join(parent, f"{plugin_name}.meta.json")
+    ):
+        return "synced", root
+    # --plugin-dir at a marketplace source checkout: <repo>/plugins/<name>
+    # with <repo>/.claude-plugin/marketplace.json. Never the consumer cache.
+    repo = os.path.dirname(parent)
+    if os.path.basename(parent) == "plugins" and os.path.exists(
+        os.path.join(repo, ".claude-plugin", "marketplace.json")
+    ):
+        return "plugin-dir", root
+    return None, root
 
 
 def find_registration(installed, plugin_name):
@@ -276,6 +308,38 @@ def find_stale_assets(ip, clone, plugin_name, user_skills=None, user_agents=None
     return stale
 
 
+def _matcher_covers(matcher, tool):
+    """hooks.json matcher semantics: empty or * matches every tool, else fullmatch."""
+    if matcher in (None, "", "*"):
+        return True
+    try:
+        return re.fullmatch(matcher, tool) is not None
+    except re.error:
+        return False
+
+
+def _dispatcher_tripwire_matcher(ip, event):
+    """The matcher event_dispatch.BINDINGS gives dispatch_tripwire for `event`.
+
+    Parsed from the dispatcher source (no import, so no hook side effects).
+    Returns None when the file or the binding is absent or unparseable.
+    """
+    try:
+        with open(os.path.join(ip, "hooks", "event_dispatch.py"), encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "BINDINGS" for t in node.targets
+            ):
+                bindings = ast.literal_eval(node.value)
+                for name, matcher, _slice in bindings.get(event, ()):
+                    if name == "dispatch_tripwire":
+                        return matcher
+    except (OSError, SyntaxError, ValueError):
+        pass
+    return None
+
+
 def check_orchestration_wiring(ip):
     """Verify the wiring that makes subagent discipline actually engage:
     the tripwire must see Skill/Agent/Task events and auto-set the
@@ -284,13 +348,25 @@ def check_orchestration_wiring(ip):
     hooks_file = os.path.join(ip, "hooks", "hooks.json")
     try:
         blob = _load_json(hooks_file)
-        matcher = ""
+        direct = ""
+        dispatched = []  # (outer matcher, tripwire's inner matcher) pairs
         for grp in blob.get("hooks", {}).get("PostToolUse", []):
-            if "dispatch_tripwire.py" in json.dumps(grp):
-                matcher = grp.get("matcher", "")
+            text = json.dumps(grp)
+            if "dispatch_tripwire.py" in text:
+                direct = grp.get("matcher", "")
+            if "event_dispatch.py" in text:
+                inner = _dispatcher_tripwire_matcher(ip, "PostToolUse")
+                if inner is not None:
+                    dispatched.append((grp.get("matcher", ""), inner))
         for tool in ("Agent", "Task", "Skill"):
-            if tool not in matcher:
-                problems.append(f"PostToolUse matcher missing {tool}")
+            if tool in direct:
+                continue
+            if any(
+                _matcher_covers(outer, tool) and _matcher_covers(inner, tool)
+                for outer, inner in dispatched
+            ):
+                continue
+            problems.append(f"PostToolUse matcher missing {tool}")
     except Exception as e:
         problems.append(f"hooks.json unreadable: {e}")
     tripwire = os.path.join(ip, "hooks", "dispatch_tripwire.py")
@@ -298,14 +374,18 @@ def check_orchestration_wiring(ip):
         # Since 12.4.1 the tripwire is a shim; the markers live in the core
         # module, which older installs lack. Scan whichever exist.
         src = ""
+        scanned = []
         for path in (tripwire, os.path.join(ip, "hooks", "dispatch_tripwire_core.py")):
             if path == tripwire or os.path.exists(path):
+                scanned.append(os.path.basename(path))
                 with open(path, encoding="utf-8") as f:
                     src += f.read() + "\n"
+        # Name the file that holds the logic (core when present), not the shim.
+        where = scanned[-1]
         if "ORCH_SKILLS" not in src:
-            problems.append("dispatch_tripwire.py lacks ORCH_SKILLS auto-marking")
+            problems.append(f"{where} lacks ORCH_SKILLS auto-marking")
         if "mark_orchestrating" not in src:
-            problems.append("dispatch_tripwire.py never calls mark_orchestrating")
+            problems.append(f"{where} never calls mark_orchestrating")
     except Exception as e:
         problems.append(f"dispatch_tripwire.py unreadable: {e}")
     return problems
@@ -408,7 +488,7 @@ def check_typesafe_scoring(now=None):
     has_key = bool(os.environ.get("TYPESAFE_API_KEY"))
     off = os.environ.get("ATLAS_TYPESAFE_SCORING") == "off"
     path = atlas_db.db_path()
-    rows, last, errs, last_err = 0, None, 0, None
+    rows, last, errs, last_err, ctx_errs = 0, None, 0, None, 0
     if os.path.exists(path):
         try:
             conn = atlas_db.connect(path)
@@ -421,6 +501,7 @@ def check_typesafe_scoring(now=None):
                 last = conn.execute(
                     "SELECT MAX(scored_at) FROM turn_scores"
                 ).fetchone()[0]
+                ctx_errs = doctor_layout.context_limit_errors(conn, now)
                 if not HOOK_MODE:
                     import turn_scoring  # lazy: pulls in the ingest/client modules
 
@@ -443,7 +524,20 @@ def check_typesafe_scoring(now=None):
         detail += (
             f"; {errs} scoring error(s) in last 7d, latest: {(last_err or '')[:200]}"
         )
-    return (has_key and not off and bool(rows) and not errs), detail
+    if ctx_errs:
+        detail += (
+            f"; {ctx_errs} of them hit the local model's 2048-token context limit "
+            "(prompt too long for the Ollama model; count only, not fixed here)"
+        )
+    hosted = doctor_layout.hosted_scoring_url()
+    if hosted:
+        detail += (
+            f"; ATLAS_TYPESAFE_URL={hosted} is not loopback: hosted scoring sends "
+            "prompt excerpts to a third party (GLBA/Reg S-P disclosure risk); "
+            "use http://127.0.0.1:11434 to score locally"
+        )
+    ok = has_key and not off and bool(rows) and not errs
+    return (ok and not hosted), detail
 
 
 def _repo_root(cwd):
@@ -482,6 +576,40 @@ def check_context_tooling(root_path=None):
         "AGENTS.md lacks the atlas-tooling routing block; re-run atlas-setup's "
         "scaffold_docs.py to insert it",
     )
+
+
+def fix_context_tooling(root_path=None):
+    """--fix only: append the atlas-tooling block to an EXISTING AGENTS.md that
+    lacks the marker. Never creates the file, never touches a file that already
+    has any marker (ensure_tooling_block would rewrite it), never runs in a
+    non-project root. Returns one line saying what was done or why skipped."""
+    root = root_path or _repo_root(os.getcwd())
+    path = os.path.join(root, "AGENTS.md")
+    if atlas_db.not_a_project_root(root):
+        return f"SKIP tooling block: {root} is not a project root"
+    if not os.path.isfile(path):
+        return f"SKIP tooling block: {path} does not exist (run atlas-setup)"
+    try:
+        with open(path, encoding="utf-8") as f:
+            has_marker = "atlas-tooling" in f.read()
+    except OSError as e:
+        return f"SKIP tooling block: {path} unreadable: {e}"
+    if has_marker:
+        return f"tooling block already present: {path}"
+    import importlib.util
+    from pathlib import Path
+
+    src = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "skills",
+        "atlas-setup",
+        "scripts",
+        "scaffold_docs.py",
+    )
+    spec = importlib.util.spec_from_file_location("atlas_scaffold_docs", src)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.ensure_tooling_block(Path(path), mod.AGENTS_TOOLING_BLOCK)
 
 
 def _omp_plugins_dir():
@@ -892,6 +1020,80 @@ def run_checks(plugin_name="atlas"):
     return results, ctx
 
 
+def _content_checks(add, ctx, ip, clone, plugin_name):
+    """C6-C13: checks on the plugin tree at `ip` that need no marketplace."""
+    # C6: every hook the plugin declares must exist in the installed copy
+    hooks_file = os.path.join(ip, "hooks", "hooks.json")
+    if os.path.exists(hooks_file):
+        missing = []
+        blob = json.dumps(_load_json(hooks_file))
+        for rel in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\\ ]+)", blob):
+            if not os.path.exists(os.path.join(ip, rel)):
+                missing.append(rel)
+        add(
+            "hooks-wired",
+            not missing,
+            f"missing: {missing}" if missing else "all hook files present",
+        )
+    else:
+        add("hooks-wired", False, "hooks/hooks.json absent from installed copy")
+
+    # C7: the engine's moving parts are actually there. The plugin ships no
+    # commands/ since 5.0.0 (skills replaced the launchers), so only agents
+    # and skills are required.
+    counts = count_assets(ip)
+    add(
+        "assets",
+        counts["agents"] > 0 and counts["skills"] > 0,
+        json.dumps(counts),
+    )
+
+    # C8: no deprecated/renamed asset may shadow the live set anywhere
+    stale = find_stale_assets(ip, clone, plugin_name)
+    ctx["stale_assets"] = stale
+    add(
+        "stale-assets",
+        not stale,
+        f"{len(stale)} deprecated asset(s): {stale[:4]}" if stale else "none found",
+    )
+
+    # C9: the subagent-discipline wiring must be able to engage
+    wiring = check_orchestration_wiring(ip)
+    add(
+        "orchestration-wiring",
+        not wiring,
+        "; ".join(wiring)
+        if wiring
+        else "tripwire sees Skill/Agent/Task and auto-marks",
+    )
+
+    # C10: explicit user outputStyle must not hide Atlas Orchestrator headers
+    style_ok, style_detail = check_output_style()
+    add("output-style", style_ok, style_detail)
+
+    # C11: the project this doctor runs in should carry the atlas-tooling
+    # routing block. WARN-severity: it does not count toward `failed`/exit
+    # code or --hook's SessionStart warning, because it is a property of the
+    # *consuming project*, not the plugin install, and would otherwise fire
+    # on every unscaffolded repo a user opens.
+    tooling_ok, tooling_detail = check_context_tooling()
+    add("context-tooling", tooling_ok, tooling_detail, severity="warn")
+
+    # C11b: omp cheap-tier roles; WARN-severity (omp-only, user config).
+    mr_ok, mr_detail = check_omp_model_roles()
+    add("omp-model-roles", mr_ok, mr_detail, severity="warn")
+
+    # C12: TypeSafe turn scoring is optional; WARN-severity, never a failure.
+    ts_ok, ts_detail = check_typesafe_scoring()
+    add("typesafe-scoring", ts_ok, ts_detail, severity="warn")
+
+    # C13: cmux browser toolkit is optional (macOS + cmux); WARN-severity.
+    cs_ok, cs_detail = check_cmux_socket()
+    add("cmux-socket", cs_ok, cs_detail, severity="warn")
+    cb_ok, cb_detail = check_cmux_browser_mcp()
+    add("cmux-browser", cb_ok, cb_detail, severity="warn")
+
+
 def install_checks(plugin_name="atlas"):
     results = []
     ctx = {}
@@ -909,16 +1111,36 @@ def install_checks(plugin_name="atlas"):
 
     installed_path = os.path.join(PLUGINS_DIR, "installed_plugins.json")
     markets_path = os.path.join(PLUGINS_DIR, "known_marketplaces.json")
+    # Missing config is not an error by itself: synced / --plugin-dir loads have none.
+    installed, markets, config_err = {}, {}, None
     try:
         installed = _load_json(installed_path)
         markets = _load_json(markets_path)
     except Exception as e:
-        add("config-readable", False, f"cannot read plugin config: {e}")
-        return results, ctx
-
+        config_err = e
     key, reg = find_registration(installed, plugin_name)
     if not reg or not key:
-        add("registered", False, f"{plugin_name} not found in installed_plugins.json")
+        source, root = detect_load_source(plugin_name)
+        if source:
+            ctx["load_source"] = source
+            add("registered", True, f"{plugin_name} loaded from {source} ({root})")
+            for cid in (
+                "marketplace-source",
+                "clone-remote",
+                "version-sync",
+                "rollback",
+                "install-path",
+            ):
+                add(cid, True, f"skipped: {source} load has no marketplace install")
+            _content_checks(add, ctx, root, "", plugin_name)
+            return results, ctx
+        if config_err:
+            add("config-readable", False, f"cannot read plugin config: {config_err}")
+        else:
+            add("registered", False, f"{plugin_name} not found in installed_plugins.json")
+        return results, ctx
+    if config_err:
+        add("config-readable", False, f"cannot read plugin config: {config_err}")
         return results, ctx
     add("registered", True, f"{key} at {reg['version']}")
     mkt_name = key.split("@", 1)[1]
@@ -1019,76 +1241,7 @@ def install_checks(plugin_name="atlas"):
     ok, detail = check_content_drift("claude-code", ip, plugin_name)
     add("install-content", ok, detail, severity="warn")
 
-    # C6: every hook the plugin declares must exist in the installed copy
-    hooks_file = os.path.join(ip, "hooks", "hooks.json")
-    if os.path.exists(hooks_file):
-        missing = []
-        blob = json.dumps(_load_json(hooks_file))
-        for rel in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\\ ]+)", blob):
-            if not os.path.exists(os.path.join(ip, rel)):
-                missing.append(rel)
-        add(
-            "hooks-wired",
-            not missing,
-            f"missing: {missing}" if missing else "all hook files present",
-        )
-    else:
-        add("hooks-wired", False, "hooks/hooks.json absent from installed copy")
-
-    # C7: the engine's moving parts are actually there. The plugin ships no
-    # commands/ since 5.0.0 (skills replaced the launchers), so only agents
-    # and skills are required.
-    counts = count_assets(ip)
-    add(
-        "assets",
-        counts["agents"] > 0 and counts["skills"] > 0,
-        json.dumps(counts),
-    )
-
-    # C8: no deprecated/renamed asset may shadow the live set anywhere
-    stale = find_stale_assets(ip, clone, plugin_name)
-    ctx["stale_assets"] = stale
-    add(
-        "stale-assets",
-        not stale,
-        f"{len(stale)} deprecated asset(s): {stale[:4]}" if stale else "none found",
-    )
-
-    # C9: the subagent-discipline wiring must be able to engage
-    wiring = check_orchestration_wiring(ip)
-    add(
-        "orchestration-wiring",
-        not wiring,
-        "; ".join(wiring)
-        if wiring
-        else "tripwire sees Skill/Agent/Task and auto-marks",
-    )
-
-    # C10: explicit user outputStyle must not hide Atlas Orchestrator headers
-    style_ok, style_detail = check_output_style()
-    add("output-style", style_ok, style_detail)
-
-    # C11: the project this doctor runs in should carry the atlas-tooling
-    # routing block. WARN-severity: it does not count toward `failed`/exit
-    # code or --hook's SessionStart warning, because it is a property of the
-    # *consuming project*, not the plugin install, and would otherwise fire
-    # on every unscaffolded repo a user opens.
-    tooling_ok, tooling_detail = check_context_tooling()
-    add("context-tooling", tooling_ok, tooling_detail, severity="warn")
-
-    # C11b: omp cheap-tier roles; WARN-severity (omp-only, user config).
-    mr_ok, mr_detail = check_omp_model_roles()
-    add("omp-model-roles", mr_ok, mr_detail, severity="warn")
-
-    # C12: TypeSafe turn scoring is optional; WARN-severity, never a failure.
-    ts_ok, ts_detail = check_typesafe_scoring()
-    add("typesafe-scoring", ts_ok, ts_detail, severity="warn")
-
-    # C13: cmux browser toolkit is optional (macOS + cmux); WARN-severity.
-    cs_ok, cs_detail = check_cmux_socket()
-    add("cmux-socket", cs_ok, cs_detail, severity="warn")
-    cb_ok, cb_detail = check_cmux_browser_mcp()
-    add("cmux-browser", cb_ok, cb_detail, severity="warn")
+    _content_checks(add, ctx, ip, clone, plugin_name)
 
     return results, ctx
 
@@ -1179,7 +1332,9 @@ def record_hook_verdict(plugin_name, failed, root_path=None):
     try:
         conn = atlas_db.connect()
         atlas_db.init(conn)
-        project_id = atlas_db.register_project(conn, root_path or os.getcwd())
+        project_id = atlas_db.register_project(
+            conn, atlas_paths.project_root(root_path or os.getcwd())
+        )
         atlas_db.record_asset_verdicts(
             conn,
             project_id,
@@ -1215,6 +1370,8 @@ def record_maintenance(action, details=None):
 
 def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
     actions = []
+    if ctx.get("load_source"):  # synced / --plugin-dir: nothing of ours to repair
+        return [f"no-op: atlas loaded from {ctx['load_source']}, not a marketplace install"]
     expected = ctx.get("expected_repo")
     mkt_name, key, reg = ctx.get("mkt_name"), ctx.get("key"), ctx.get("reg")
     if not (expected and key):
@@ -1827,6 +1984,31 @@ def mine_low_cache_hit(conn, root):
     ]
 
 
+def gate_block_spike(conn, now=None):
+    """Read-only: gate_block friction in the last 24h vs the prior 7-day daily
+    mean. Spike = at least 2x that mean AND at least 5 rows. Printed by --mine
+    only; never part of mine() findings or counts. SELECTs only."""
+    # ponytail: fixed 2x/5 thresholds and one 24h window for gate_block only,
+    # no per-category windows or auto-tuning; add them if a second category needs it
+    now = time.time() if now is None else now
+    tmp_sql, tmp_args = atlas_db.tmp_sessions_sql()
+
+    def count(lo, hi):
+        return conn.execute(
+            "SELECT COUNT(*) FROM friction_events WHERE category='gate_block' "
+            f"AND ts > ? AND ts <= ? AND COALESCE(session_id,'') NOT IN ({tmp_sql})",
+            (lo, hi, *tmp_args),
+        ).fetchone()[0]
+
+    last = count(now - 86400, now)
+    mean = count(now - 8 * 86400, now - 86400) / 7.0
+    return {
+        "last_24h": last,
+        "prior_daily_mean": mean,
+        "spike": last >= 5 and last >= 2 * mean,
+    }
+
+
 def mine_recurring_friction(conn, root, min_count=3):
     """Behavioral check: friction_events categories (user_correction,
     assumption_admission, error_report, ...) recurring often enough to be a
@@ -2288,7 +2470,7 @@ def mine_colony_adherence(conn, root, window_days=None, min_sessions=None):
     return out
 
 
-# --- turn quality (TypeSafe-scored replies; see docs/atlas-turn-scoring.md) ---
+# --- turn quality (TypeSafe-scored replies; see docs/architecture/atlas-turn-scoring.md) ---
 # Tunable: fraction of scored turns that must hit a failure before a finding
 # is emitted. Conservative on purpose; raise to quiet a noisy judgment.
 TURN_QUALITY_DEFAULT_THRESHOLD = 0.25
@@ -2871,6 +3053,120 @@ def remeasure(conn, root=None):
     return updated
 
 
+def _project_dir():
+    # SessionStart runs in the project cwd; CLAUDE_PROJECT_DIR wins when set.
+    return atlas_paths.project_root(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+
+
+def layout_checks(root):
+    """Read-only warn-severity results: misplaced .atlas, docs naming, and the
+    project-identity counts. Never writes."""
+    out = []
+
+    def add(cid, ok, detail):
+        out.append({"check": cid, "ok": ok, "detail": detail, "severity": "warn"})
+
+    found = doctor_layout.check_atlas_layout(root)
+    add(
+        "atlas-layout",
+        not found,
+        "all runtime state is at the project root"
+        if not found
+        else f"{len(found)} misplaced (--fix archives, never deletes):\n      "
+        + "\n      ".join(doctor_layout.layout_summary(found)),
+    )
+    bad = doctor_layout.docs_naming_violations(root)
+    add(
+        "docs-naming",
+        not bad,
+        "docs names conform"
+        if not bad
+        else f"{len(bad)} file(s) need renaming; run atlas_doctor.py --fix",
+    )
+    missing, tagged = doctor_layout.project_memory_status(root)
+    add(
+        "project-memory",
+        not (missing or tagged),
+        f"{missing} terminal finding(s) without a .atlas/findings record, "
+        f"{tagged} global memory entr(ies) tagged with this project"
+        + (" (--fix migrates)" if missing or tagged else ""),
+    )
+    db = atlas_db.db_path()
+    conn = _ro_conn(db) if os.path.exists(db) else None
+    if conn is None:
+        add("project-identity", True, "no atlas.db to inspect")
+        return out
+    try:
+        counts, _rows = doctor_layout.check_project_identity(conn)
+    except Exception as e:  # missing table on a very old DB
+        add("project-identity", True, f"unreadable: {e}")
+        return out
+    finally:
+        conn.close()
+    add(
+        "project-identity",
+        not (counts["git_subdir"] or counts["inside_atlas"]),
+        f"{counts['git_subdir']} git-subdir, {counts['inside_atlas']} inside-.atlas "
+        f"(--fix re-points runs/facets), {counts['worktree_temp']} worktree/temp, "
+        f"{counts['missing']} missing-on-disk project row(s)",
+    )
+    return out
+
+
+def hook_layout_notes(cwd):
+    """SessionStart: auto-repair .atlas layout, report (never fix) docs naming.
+    Returns printable lines; empty when clean."""
+    lines = []
+    try:
+        line = doctor_layout.hook_layout(cwd)
+        if line:
+            lines.append(line)
+        n = len(doctor_layout.docs_naming_violations(cwd))
+        if n:
+            lines.append(
+                f"docs naming: {n} files need renaming; run atlas_doctor.py --fix"
+            )
+        miss, tagged = doctor_layout.project_memory_status(cwd)
+        if miss or tagged:
+            lines.append(
+                f"project memory: {miss} finding(s) unrecorded, {tagged} global "
+                "memory entr(ies) to migrate; run atlas_doctor.py --fix"
+            )
+    except Exception as e:  # a hook never breaks the session
+        import atlas_faults
+
+        atlas_faults.record("atlas_doctor", e)
+    return lines
+
+
+def fix_layout_all(root):
+    """--fix: archive stray .atlas, apply docs renames, re-point project rows."""
+    for m in doctor_layout.fix_atlas_layout(
+        doctor_layout.check_atlas_layout(root), root
+    ):
+        print(
+            f"FIX: layout {m['status']}: {m['src']} -> {m['dest']} {m['reason']}".rstrip()
+        )
+    try:
+        for old, new in doctor_layout.fix_docs_naming(root):
+            print(f"FIX: docs rename: {old} -> {new}")
+    except Exception as e:
+        print(f"FIX: docs rename failed: {e}")
+    try:
+        for line in doctor_layout.fix_project_memory(root):
+            print(f"FIX: {line}")
+    except Exception as e:
+        print(f"FIX: project memory failed: {e}")
+    db = atlas_db.db_path()
+    if os.path.exists(db):
+        conn = atlas_db.connect()
+        try:
+            for old, new in doctor_layout.fix_project_identity(conn, db):
+                print(f"FIX: project row {old} -> {new}")
+        finally:
+            conn.close()
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="atlas plugin health check")
     ap.add_argument("--fix", action="store_true", help="repair what CHECK finds")
@@ -2996,8 +3292,14 @@ def main(argv=None):
         conn = atlas_db.connect()
         atlas_db.init(conn)
         counts = mine(conn, self_manifest()[0])
+        spike = gate_block_spike(conn)
         conn.close()
         print(json.dumps(counts, indent=2) if args.json else counts)
+        # stderr under --json keeps stdout a single parseable document
+        print(
+            "gate_block spike: " + json.dumps(spike),
+            file=sys.stderr if args.json else sys.stdout,
+        )
         return 0
 
     if args.list_findings:
@@ -3147,6 +3449,14 @@ def main(argv=None):
         results, ctx = run_checks(args.plugin)  # VERIFY
         failed = [r for r in results if not r["ok"] and r.get("severity") != "warn"]
 
+    if args.fix:
+        # own branch: the check is severity "warn", so `failed` never holds it
+        print(f"FIX: {fix_context_tooling()}")
+        fix_layout_all(_project_dir())
+
+    if not args.hook:
+        results = results + layout_checks(_project_dir())
+
     if (args.hook or args.fix) and ctx.get("new_state"):
         try:
             _save_json(STATE_PATH, ctx["new_state"])
@@ -3156,6 +3466,8 @@ def main(argv=None):
             atlas_faults.record("atlas_doctor", e)
 
     if args.hook:
+        for line in hook_layout_notes(_project_dir()):
+            print(line)
         record_hook_verdict(args.plugin, failed)
         _hook_stamp_write(args.plugin, not failed)
         if failed:

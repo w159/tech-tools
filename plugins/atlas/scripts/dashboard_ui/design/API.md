@@ -358,6 +358,30 @@ Storage lives in `atlas_todo` (registry, members, board-by-owner); `atlas_dash_i
 
 `POST /api/v2/channels {channel, to, body, from?, project?}` (`from` defaults to `human`; a subagent can post to main, a human to any channel) returns `{ok, delivered, message, next}`. `to` is `all` or an agent name; a named idle claude/omp pane is typed into with the same guards as `/api/v2/irc`, otherwise the note is queued on the board. 404 `no_such_channel`, 400 `channel_required`.
 
+## Terminal (`atlas_dash_term.py`, 13.0.0)
+
+`GET /api/v2/term/seats?project=<root>|all` returns `{ok, machine, clock, spaces:[{id, name, kind:"colony"|"host", seats:[{address, name, role, runtime:"claude"|"omp"|"codex"|"shell", state, pane, target, kind:"pane"|"shell"|"tui", project, cwd, started_at, last_activity}]}]}`. Colony seats come from `atlas_colony_model.snapshot`, lead first. Each colony space ends with `shell@<space>` (`kind:"shell"`, cwd = project root); the host space carries `shell@host` and `tui@host` (`kind:"tui"`). A seat whose pane is gone keeps its row with `state:"ended"` and `target:null`.
+
+`POST /api/v2/term/ticket {kind, target?, project?, cols, rows}` (needs `X-Atlas-Token`) returns `{ticket, expires_in: 30}`. `GET /api/v2/term/ws?ticket=<t>` accepts a ticket once and burns it; the server sends a first frame within 1 s of upgrade. `kind=shell` forks `$SHELL -l` (fallback `/bin/zsh`, then `/bin/sh`) with `TERM=xterm-256color`. The old `token=` query form is deprecated, still works for one release and logs a deprecation line. A PTY with no client frames for `ATLAS_TERM_IDLE_S` (default 900) closes with code 1000 reason `idle`.
+
+## Behavior knobs and verified writes (13.0.0)
+
+Every knob in `GET /api/behavior` carries `kind` (`toggle|select|number|text|model|url|command`), `options` (`[{value,label,hint}]` for `select`), `range` (`{min,max,step}` for numbers, enforced on write), `effect` (one sentence), `applies` (`now|next-session|dashboard-restart`), `scope` and `layers` (`{live_env, store, claude_settings, omp_config, shell_rc}`, each `{supported, value}`).
+
+`POST /api/behavior {updates:{KEY:value}}` returns `{ok, key, wanted, layers:[{layer, wrote, got, ok}], applies}`; `ok` is false when a written layer does not read back equal. An out-of-range number returns HTTP 400 `{ok:false, error:"out_of_range", key, range:{min,max,step}}`. `ATLAS_OPTIMIZE_CMD` needs `confirm:true` (409 `needs_confirm`, command echoed). Model-kind knobs are checked against the local model list (400 `unknown_model` with the closest matches). Shell-scope knobs write `claude_settings` (`~/.claude/settings.json` `env`), `omp_config` (`~/.omp/agent/config.yml` `env`) and `shell_rc` (`~/.atlas/env.sh` between `# >>> atlas managed >>>` and `# <<< atlas managed <<<`, plus one guarded `[ -f ~/.atlas/env.sh ] && . ~/.atlas/env.sh` line in `~/.zshenv`).
+
+## Ollama (`atlas_ollama.py`, 13.0.0)
+
+Uses `OLLAMA_HOST` or `ATLAS_OLLAMA_URL`. Mutations need the token and `Content-Type: application/json`.
+
+| Route | Result |
+|---|---|
+| `GET /api/v2/ollama/models?scope=local\|cloud\|all&sort=latest\|size\|name\|popular&q=` | `[{name, tag, family, params, size_bytes, modified_at, cloud, running, context, quant, popularity_rank?}]`; `cloud` = tag ends `:cloud` or size unknown; `popular` ranks come from a library fetch cached 10 min in `~/.atlas/ollama-library.json` (rank null on failure) |
+| `GET /api/v2/ollama/status` | `{reachable, version, ps}` |
+| `POST /api/v2/ollama/pull {name}` | starts a background job, returns its id |
+| `GET /api/v2/ollama/jobs/<id>` | progress lines and state of a pull job |
+| `DELETE /api/v2/ollama/models/<name>` | removes a model; needs `confirm:true` |
+
 ## Not in scope here / known limits
 
 - `state_changed_at` restarts when the daemon restarts (herdr exposes no timestamp).

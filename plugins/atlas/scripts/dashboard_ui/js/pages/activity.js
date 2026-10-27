@@ -187,7 +187,14 @@ async function tailOnce() {
 function setLive(on) {
   S.live = on;
   if (S.liveTimer) { clearInterval(S.liveTimer); S.liveTimer = null; }
-  if (on) S.liveTimer = setInterval(tailOnce, LIVE_MS);
+  if (S.visHandler) document.removeEventListener('visibilitychange', S.visHandler);
+  S.visHandler = null;
+  if (on) {
+    // ponytail: hidden tabs skip the tail; one catch-up tail on return, fixed LIVE_MS.
+    S.liveTimer = setInterval(() => { if (!document.hidden) tailOnce(); }, LIVE_MS);
+    S.visHandler = () => { if (!document.hidden) tailOnce(); };
+    document.addEventListener('visibilitychange', S.visHandler);
+  }
   draw();
 }
 
@@ -510,6 +517,8 @@ export default {
     if (!S) return;
     S.destroyed = true;
     clearInterval(S.liveTimer);
+    if (S.visHandler) document.removeEventListener('visibilitychange', S.visHandler);
+    S.visHandler = null;
     clearTimeout(S.searchTimer);
     S = null;
   },

@@ -1,0 +1,18 @@
+cmd ▸ ▊  Tab region · ? help · last <TS>
+━ ATLAS COLONY . 6 col 16 seats ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━ { SESSIONS 1/23 } ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+> lead-01 tmux 3s attn
+    ● ex-1 working
+    ! impl-1 blocked
+    · impl-2 idle
+  ops tmux 0s empty
+  tm-02 tmux 4s attn
+━ CHANNEL lead-01 (all) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEEDS 1: impl-1 blocked
+20:03 w1 > all  ch1 msg 5 [handoff]
+20:03 tui (you) > w1  ch1 msg 6 [steer]
+━ STEER -> lead ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+say to lead >
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↑↓ move · ⏎ pick · tab region · [ ? help ]  [ q quit ]
+[macbook-pro] colony

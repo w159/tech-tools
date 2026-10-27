@@ -16,6 +16,8 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 
 TAIL = ("ingest_session", "chronicle_facet", "memory_capture", "nudge")
 

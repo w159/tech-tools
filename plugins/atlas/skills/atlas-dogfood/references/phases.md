@@ -50,7 +50,7 @@ Resolve the dev server exactly as atlas-dogfood smoke does (manual mode: user-ru
 
 Work **one scenario at a time**. Dispatch `atlas:ui-runtime-tester` per scenario batch (one tester owns one navigation session; batch scenarios sharing a journey - e.g. login - into one dispatch).
 
-Dispatch shape: the subagent-kit template with `atlas:ui-runtime-tester` as the role. Give it: the scenario steps verbatim from the matrix, the base URL, the evidence directory (`.atlas/evidence/<YYYY-MM-DD>-dogfood-<branch-slug>/`), and this requirement: drive as a real user - navigate, click, fill, submit, including the edge inputs - and capture for every step a screenshot, the console log, and the network calls fired. The tester never edits code; restate that boundary in the dispatch.
+Dispatch shape: the subagent-kit template with `atlas:ui-runtime-tester` as the role. Give it: the scenario steps verbatim from the matrix, the base URL, the evidence directory (`.atlas/evidence/<YYYY-MM-DD>_dogfood-<branch-slug>/`), and this requirement: drive as a real user - navigate, click, fill, submit, including the edge inputs - and capture for every step a screenshot, the console log, and the network calls fired. The tester never edits code; restate that boundary in the dispatch.
 
 Accept the tester's per-scenario report only when each claim has a resolvable evidence path. Then judge the scenario:
 

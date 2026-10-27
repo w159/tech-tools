@@ -1,14 +1,17 @@
 {
   "$schema": "https://fallow.dev/schema.json",
   "ignorePatterns": [
-    "plugins/atlas/mcp/*/server.mjs",
-    "plugins/atlas/mcp/*/http.mjs",
+    "plugins/armada/mcp/*/server.mjs",
+    "plugins/armada/mcp/*/http.mjs",
     "plugins/atlas/scripts/dashboard_ui/vendor/xterm/*",
-    "plugins/atlas/scripts/dashboard_ui/css/*.css"
+    "plugins/atlas/scripts/dashboard_ui/css/*.css",
+    "plugins/atlas/colony/**",
+    "plugins/atlas/skills/*/templates/**",
+    "skills/*/assets/**"
   ],
   "entry": [
     "mcp_servers/_shared/__tests__/*.test.ts",
-    "plugins/atlas/mcp/_env/load.mjs",
+    "plugins/armada/mcp/_env/load.mjs",
     "plugins/atlas/mod/register.ts",
     "plugins/atlas/mod/band.tsx",
     "plugins/atlas/mod/pane/*.tsx",
@@ -17,14 +20,161 @@
     "plugins/atlas/scripts/sprite_review.ts",
     "plugins/atlas/scripts/dashboard_ui/js/*.test.js",
     "plugins/atlas/scripts/dashboard_ui/js/pages/*.js",
+    "plugins/atlas/scripts/dashboard_ui/js/theme-boot.js",
     "plugins/atlas/omp/*.test.ts",
     "plugins/atlas/omp/index.ts",
     "plugins/atlas/omp/test-env-preload.ts",
-    "test-mcp-tools.mjs"
+    "test-mcp-tools.mjs",
+    "mcp_servers/_shared/annotate-tool.ts",
+    "mcp_servers/_shared/pack-mcpb.js",
+    "mcp_servers/*/scripts/*",
+    "plugins/atlas/omp/test-isolation.ts",
+    "mcp_servers/ninjaone-mcp/src/worker.ts"
   ],
   "audit": {
     "deadCodeBaseline": "fallow-baselines/dead-code.json",
     "healthBaseline": "fallow-baselines/health.json",
     "dupesBaseline": "fallow-baselines/dupes.json"
-  }
+  },
+  "ignoreExports": [
+    {
+      "file": "mcp_servers/_shared/response-shaper.ts",
+      "exports": ["makeShapeZodFields"]
+    },
+    {
+      "file": "mcp_servers/sonicwall-mcp/src/domains/*.ts",
+      "exports": [
+        "sessionHandler",
+        "systemHandler",
+        "configHandler",
+        "objectsHandler",
+        "policiesHandler",
+        "interfacesHandler",
+        "vpnHandler",
+        "logsHandler",
+        "genericHandler",
+        "credentialIssuingTool"
+      ]
+    },
+    {
+      "file": "mcp_servers/panos-mcp/src/domains/*.ts",
+      "exports": [
+        "configHandler",
+        "commitsHandler",
+        "operationsHandler",
+        "logsHandler",
+        "reportsHandler",
+        "filesHandler",
+        "objectsHandler",
+        "policiesHandler",
+        "updatesHandler",
+        "certificatesHandler"
+      ]
+    },
+    {
+      "file": "mcp_servers/blumira-mcp/src/domains/*.ts",
+      "exports": [
+        "findingsHandler",
+        "agentsHandler",
+        "usersHandler",
+        "mspHandler",
+        "resolutionsHandler"
+      ]
+    },
+    {
+      "file": "mcp_servers/kaseya-spanning-backup-mcp/src/domains/*.ts",
+      "exports": [
+        "usersHandler",
+        "servicesHandler",
+        "backupsHandler",
+        "restoresHandler",
+        "auditHandler",
+        "licenseHandler"
+      ]
+    },
+    {
+      "file": "mcp_servers/knowbe4-mcp/src/domains/*.ts",
+      "exports": [
+        "accountHandler",
+        "usersHandler",
+        "groupsHandler",
+        "phishingHandler",
+        "trainingHandler",
+        "reportingHandler"
+      ]
+    },
+    {
+      "file": "mcp_servers/ninjaone-mcp/src/domains/*.ts",
+      "exports": [
+        "devicesHandler",
+        "organizationsHandler",
+        "alertsHandler",
+        "ticketsHandler",
+        "queriesHandler",
+        "automationHandler",
+        "directoryHandler"
+      ]
+    },
+    {
+      "file": "mcp_servers/paylocity-mcp/src/domains/*.ts",
+      "exports": [
+        "employeesHandler",
+        "legacyEmployeesHandler",
+        "earningsHandler",
+        "deductionsHandler",
+        "taxesHandler",
+        "directDepositHandler",
+        "costCentersHandler",
+        "payGradesHandler",
+        "jobCodesHandler",
+        "payStatementsHandler",
+        "lookupCodesHandler"
+      ]
+    },
+    {
+      "file": "mcp_servers/threatlocker-mcp/src/domains/*.ts",
+      "exports": [
+        "computersHandler",
+        "computerGroupsHandler",
+        "approvalRequestsHandler",
+        "auditLogHandler",
+        "organizationsHandler",
+        "policiesHandler",
+        "applicationsHandler",
+        "configManagerHandler",
+        "dacHandler",
+        "systemAuditHandler",
+        "tagsHandler"
+      ]
+    },
+    {
+      "file": "mcp_servers/vanta-mcp/src/domains/*.ts",
+      "exports": [
+        "frameworksHandler",
+        "controlsHandler",
+        "testsHandler",
+        "documentsHandler",
+        "integrationsHandler",
+        "peopleHandler",
+        "vendorsHandler",
+        "riskScenariosHandler",
+        "vulnerabilitiesHandler",
+        "policiesHandler",
+        "monitoredComputersHandler"
+      ]
+    }
+  ],
+  "ignoreUnresolvedImports": [
+    "@oh-my-pi/pi-coding-agent"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "mcp_node/*/src/**"
+      ],
+      "rules": {
+        "unused-class-member": "off"
+      }
+    }
+  ]
 }

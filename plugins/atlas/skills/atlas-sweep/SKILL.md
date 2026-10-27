@@ -77,7 +77,7 @@ Any claim that a fix "merged" or that close-out happened routes through an indep
 
 ## Triage doc
 
-The run's output is a rolling triage doc at `docs/features/<YYYY-MM-DD>-feedback-sweep.md` (date-first per the docs SSOT), grouped into clusters with proposed next actions, plus Outstanding Questions for everything a decision deferred. Template and reconciliation rules: `references/triage-doc.md`.
+The run's output is a rolling triage doc at `docs/features/<YYYY-MM-DD>_feedback-sweep.md` (date-first per the docs SSOT), grouped into clusters with proposed next actions, plus Outstanding Questions for everything a decision deferred. Template and reconciliation rules: `references/triage-doc.md`.
 
 ## Mode references
 

@@ -106,15 +106,32 @@ class BackendTests(unittest.TestCase):
                 s.status(), {"url": "y", "backend": "herdr", "web_ui": True}
             )
 
-    def test_capture_rig_delegates_herdr_not_supported(self):
+    def test_capture_rig_delegates(self):
         self.env(ATLAS_SEAT_BACKEND="rig")
         with mock.patch.object(
             atlas_rig, "capture", return_value={"ok": True, "text": "t"}
         ) as c:
             self.assertEqual(s.capture("p", 5)["text"], "t")
         c.assert_called_once_with("p", 5)
-        os.environ["ATLAS_SEAT_BACKEND"] = "herdr"
-        self.assertEqual(s.capture("p"), {"ok": False, "error": "not_supported"})
+
+    def test_capture_herdr_reads_pane_via_rpc(self):
+        self.env(ATLAS_SEAT_BACKEND="herdr")
+        with mock.patch.object(
+            atlas_herdr, "rpc", return_value={"read": {"text": "hi"}}
+        ) as r:
+            self.assertEqual(
+                s.capture("p", 7), {"ok": True, "pane_id": "p", "text": "hi"}
+            )
+        self.assertEqual(
+            r.call_args.args,
+            ("pane.read", {"pane_id": "p", "source": "recent", "lines": 7, "format": "text"}),
+        )
+
+    def test_capture_herdr_sock_error_is_not_ok(self):
+        self.env(ATLAS_SEAT_BACKEND="herdr")
+        err = atlas_herdr.HerdrSockError("socket_missing", "x")
+        with mock.patch.object(atlas_herdr, "rpc", side_effect=err):
+            self.assertEqual(s.capture("p"), {"ok": False, "error": "socket_missing"})
 
 
 if __name__ == "__main__":

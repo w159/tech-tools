@@ -60,10 +60,12 @@ order of completion does not matter).
 1. Correctness / bugs - logic, off-by-one, null propagation, data races.
 2. OWASP + security - injection, broken auth, sensitive data exposure,
    vulnerable dependencies, secrets in code. Composes `security-review`
-   and `codeql`.
+   and `codeql` when installed; when not, the reviewer works from OWASP
+   Top 10 (2021) A01-A10 plus the repo's own SAST tools.
 3. SOLID / DRY / KISS + best practices - single-responsibility, open/
    closed, leaky abstractions, local code-smell duplication. Composes
-   `quality-playbook`.
+   `quality-playbook` when installed; when not, the reviewer works from
+   the SOLID/DRY/KISS list.
    The adversarial `atlas:verifier` pass in Phase 3 still governs whether
    any resulting finding survives.
 4. Risk hotspots - churn rate, coupling, coverage density from the

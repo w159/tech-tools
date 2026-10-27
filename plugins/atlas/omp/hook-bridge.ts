@@ -30,23 +30,25 @@
  */
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as nodePath from "node:path";
 import { resolveTarget } from "./contracts";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
 import { pluginRoot } from "./plugin-path";
 import { openLeadChannel } from "./channels";
+import { recordFault, taskItems } from "./fault-log";
 import type { WidgetUi } from "./channel-view";
 import { runCapture } from "./proc";
+
+// Still reachable from here for run-state, stop-bridge, worker-report and tests; defined in fault-log (breaks the channels cycle).
+export { recordFault, taskItems };
 
 const PLUGIN_ROOT = nodePath.resolve(import.meta.dir, "..");
 export const HOOKS_JSON = nodePath.join(PLUGIN_ROOT, "hooks", "hooks.json");
 export const BRIDGE_CONTRACT = nodePath.join(PLUGIN_ROOT, "contracts", "hook-bridge.json");
-export const TOOL_NAMES = nodePath.join(PLUGIN_ROOT, "contracts", "tool-names.json");
 export const MCP_SERVERS = nodePath.join(PLUGIN_ROOT, "contracts", "mcp-servers.json");
 const DEFAULT_TIMEOUT_S = 60;
 /** Default per-hook hard cap (s); ATLAS_BRIDGE_HOOK_TIMEOUT_S overrides. omp cuts a handler at 30 s. */
-export const DEFAULT_HOOK_CAP_S = 25;
+const DEFAULT_HOOK_CAP_S = 25;
 /**
  * Budget shared by every hook of one before_agent_start or session_stop handler. omp cuts those handlers at 30 s
  * (extensions/runner.ts EXTENSION_HANDLER_TIMEOUT_MS) and then delivers NOTHING, so the bridge stays 5 s under it.
@@ -58,7 +60,7 @@ export const HANDLER_BUDGET_MS = 25_000;
  */
 export const TOOL_CALL_BUDGET_MS = 20_000;
 /** A runner that ignores its timeoutMs is abandoned this long after the slot ends. */
-export const HOOK_KILL_GRACE_MS = 250;
+const HOOK_KILL_GRACE_MS = 250;
 export const SESSION_MARKER = "<!-- atlas-session-start -->";
 
 export type ClaudeEvent =
@@ -71,7 +73,7 @@ export type ClaudeEvent =
 	| "SubagentStop"
 	| "PreCompact";
 /** Events driven per turn / tool call by registerHookBridge. */
-export const TURN_EVENTS: readonly ClaudeEvent[] = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse"];
+const TURN_EVENTS: readonly ClaudeEvent[] = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse"];
 /** Events driven at session end by omp/stop-bridge.ts. */
 export const SESSION_END_EVENTS: readonly ClaudeEvent[] = ["Stop", "SessionEnd", "SubagentStop", "PreCompact"];
 export interface BridgedHook {
@@ -106,6 +108,9 @@ export function loadBridgedHooks(hooksPath: string = nodePath.join(pluginRoot(),
 	return loadBridgedHooksFor(TURN_EVENTS, "bridged", hooksPath, contractPath);
 }
 
+/** hooks.json runs this one script per Claude Code tool event; the bridge expands it into the per-script hooks of the contract's `dispatch` table. */
+const DISPATCHER_SCRIPT = "event_dispatch.py";
+
 /**
  * Hook commands for `events` from hooks.json (group order, then hook order, as
  * written), filtered by the contract list named `listKey`. hooks.json stays the
@@ -122,6 +127,7 @@ export function loadBridgedHooksFor(
 		const list = contract && typeof contract === "object" ? contract[listKey] : undefined;
 		if (!Array.isArray(list)) return [];
 		const allowed = new Set(list.filter((s: unknown): s is string => typeof s === "string"));
+		const dispatchTable = ((contract as Record<string, unknown>).dispatch ?? {}) as Record<string, Array<{ script: string; matcher: string; timeout: number }>>;
 		const root = readJson(hooksPath);
 		if (!root || typeof root !== "object" || !("hooks" in root) || !root.hooks || typeof root.hooks !== "object") return [];
 		const out: BridgedHook[] = [];
@@ -134,6 +140,16 @@ export function loadBridgedHooksFor(
 				for (const hook of group.hooks) {
 					if (!hook || typeof hook !== "object" || !("command" in hook) || typeof hook.command !== "string") continue;
 					const script = /([\w.-]+\.py)/.exec(hook.command)?.[1];
+					if (script === DISPATCHER_SCRIPT) {
+						// Claude Code runs one event_dispatch.py per event; omp keeps one run per script, from the
+						// contract's `dispatch` table (the bindings event_dispatch.BINDINGS holds, pinned by a test).
+						for (const inner of dispatchTable[event] ?? []) {
+							if (!allowed.has(inner.script)) continue;
+							const m = inner.matcher && inner.matcher !== "*" ? new RegExp(`^(?:${inner.matcher})$`) : undefined;
+							out.push({ event: event as ClaudeEvent, matcher: m, command: `python3 -S "\${CLAUDE_PLUGIN_ROOT}/hooks/${inner.script}"`, timeoutMs: inner.timeout * 1000 });
+						}
+						continue;
+					}
 					if (!script || !allowed.has(script)) continue;
 					const timeout = "timeout" in hook && typeof hook.timeout === "number" ? hook.timeout : DEFAULT_TIMEOUT_S;
 					out.push({ event: event as ClaudeEvent, matcher, command: hook.command, timeoutMs: timeout * 1000 });
@@ -251,7 +267,7 @@ export function claudeLifecyclePayload(
 }
 
 /** Built-in connectorWatch list: the fail-open fallback when contracts/mcp-servers.json is unreadable. */
-const CONNECTOR_SERVERS_FALLBACK: readonly string[] = ["plugin_atlas", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"];
+const CONNECTOR_SERVERS_FALLBACK: readonly string[] = ["plugin_armada", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"];
 
 /** `connectorWatch` from the MCP server contract; the built-in list when the file is unreadable or malformed. */
 export function loadConnectorServers(path: string = nodePath.join(pluginRoot(), "contracts", "mcp-servers.json"), fallback: readonly string[] = CONNECTOR_SERVERS_FALLBACK): readonly string[] {
@@ -266,7 +282,7 @@ export function loadConnectorServers(path: string = nodePath.join(pluginRoot(), 
 }
 
 /**
- * MCP servers hooks.json's connector matcher names (`mcp__plugin_atlas_.*|mcp__falcon-mcp__.*|
+ * MCP servers hooks.json's connector matcher names (`mcp__plugin_armada_.*|mcp__falcon-mcp__.*|
  * mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*`). omp mints
  * `mcp__<server>_<tool>` with ONE underscore, so the server/tool boundary is lost;
  * this table (longest prefix first) recovers it for the servers hooks.json cares about.
@@ -292,11 +308,11 @@ export function claudeMcpName(name: string): string {
 /** Built-in underscoredServers list: the fail-open fallback when contracts/mcp-servers.json is unreadable (twin of omp_transcript._KNOWN_MCP_SERVERS_FALLBACK). */
 const UNDERSCORED_SERVERS_FALLBACK: readonly string[] = [
 	"lean_ctx", "context_mode_context_mode", "context_mode", "claude_mem", "browser_use", "azure", "serena", "context7", "microsoft_docs", "plaid", "mobbin", "clippy",
-	"atlas_connectwise", "mcp_search", "cmux_browser",
+	"armada_connectwise", "atlas_connectwise", "mcp_search", "cmux_browser",
 ];
 
 /** `underscoredServers` from the MCP server contract, longest first; the built-in list when the file is unreadable or malformed. */
-export function loadUnderscoredServers(path: string = nodePath.join(pluginRoot(), "contracts", "mcp-servers.json"), fallback: readonly string[] = UNDERSCORED_SERVERS_FALLBACK): readonly string[] {
+function loadUnderscoredServers(path: string = nodePath.join(pluginRoot(), "contracts", "mcp-servers.json"), fallback: readonly string[] = UNDERSCORED_SERVERS_FALLBACK): readonly string[] {
 	let list: readonly string[] = fallback;
 	try {
 		const doc = readJson(path);
@@ -342,12 +358,18 @@ function mcpClaudeName(bare: string): string {
 }
 
 /**
- * Names a hooks.json matcher is tested against. omp mints atlas connectors as `mcp__atlas_<srv>_<tool>` (split:
- * `mcp__atlas_<srv>__<tool>`); Claude Code names them `mcp__plugin_atlas_<srv>__<tool>`, which is what the
- * connector_credential_watch matcher (`mcp__plugin_atlas_.*`) names. Without the alias that watcher never fires on omp.
+ * Names a hooks.json matcher is tested against. omp mints armada connectors as `mcp__armada_<srv>_<tool>` (split:
+ * `mcp__armada_<srv>__<tool>`); Claude Code names them `mcp__plugin_armada_<srv>__<tool>`, which is what the
+ * connector_credential_watch matcher (`mcp__plugin_armada_.*`) names. Without the alias that watcher never fires on omp.
+ * The `atlas` prefix is the pre-move name (connectors shipped in atlas), aliased the same way as a fallback.
  */
 export function matcherNames(names: string[]): string[] {
-	return names.flatMap(n => (n.startsWith("mcp__atlas_") ? [n, n.replace("mcp__atlas_", "mcp__plugin_atlas_")] : [n]));
+	return names.flatMap(n => {
+		for (const plugin of ["armada", "atlas"]) {
+			if (n.startsWith(`mcp__${plugin}_`)) return [n, n.replace(`mcp__${plugin}_`, `mcp__plugin_${plugin}_`)];
+		}
+		return [n];
+	});
 }
 
 /**
@@ -361,14 +383,6 @@ export function claudeNamesForCall(tool: string, input: unknown, namesPath?: str
 	}
 	if (/^mcp__[A-Za-z0-9_]+$/.test(tool) && !tool.slice("mcp__".length).includes("__")) return [mcpClaudeName(tool)];
 	return claudeNamesFor(tool, namesPath).map(claudeMcpName);
-}
-
-/** The omp `task` tool's dispatch items: `tasks[]` entries, else the single top-level dispatch. */
-export function taskItems(input: unknown): Record<string, unknown>[] {
-	if (!input || typeof input !== "object") return [];
-	const tasks = (input as Record<string, unknown>).tasks;
-	if (Array.isArray(tasks)) return tasks.filter((t): t is Record<string, unknown> => t !== null && typeof t === "object" && !Array.isArray(t));
-	return [input as Record<string, unknown>];
 }
 
 /**
@@ -418,35 +432,16 @@ export function toolResponseText(content: unknown): string {
 
 /** Hard per-hook cap in ms: min(the hooks.json timeout, ATLAS_BRIDGE_HOOK_TIMEOUT_S or the 25 s default). */
 export function hookTimeoutMs(configuredMs: number, env: Record<string, string | undefined> = process.env): number {
-	const requested = Number(env.ATLAS_BRIDGE_HOOK_TIMEOUT_S);
-	const capS = env.ATLAS_BRIDGE_HOOK_TIMEOUT_S && Number.isFinite(requested) && requested > 0 ? requested : DEFAULT_HOOK_CAP_S;
+	const raw = atlasKnob("ATLAS_BRIDGE_HOOK_TIMEOUT_S", env);
+	const requested = Number(raw);
+	const capS = raw && Number.isFinite(requested) && requested > 0 ? requested : DEFAULT_HOOK_CAP_S;
 	return Math.min(configuredMs, capS * 1000);
 }
 
 export type HookRunner = (command: string, payload: Record<string, unknown>, timeoutMs: number) => Promise<string>;
 
-/**
- * Knob values saved by the Command Center: `<ATLAS_HOME or ~/.atlas>/settings.json` `env` (scripts/atlas_control.py
- * owns the file; Claude Code gets the same values through its own settings.json env). Only ATLAS_* string values;
- * an unreadable or malformed file exports nothing. A variable already set in the real environment is not overridden.
- */
-function readStoredEnv(file: string): Record<string, unknown> {
-	try {
-		const stored = JSON.parse(fs.readFileSync(file, "utf8"))?.env;
-		return stored && typeof stored === "object" ? stored : {};
-	} catch {
-		return {};
-	}
-}
-
-export function atlasStoreEnv(env: Record<string, string | undefined> = process.env): Record<string, string> {
-	const file = nodePath.join(env.ATLAS_HOME || nodePath.join(os.homedir(), ".atlas"), "settings.json");
-	const out: Record<string, string> = {};
-	for (const [k, v] of Object.entries(readStoredEnv(file))) {
-		if (/^ATLAS_[A-Z0-9_]+$/.test(k) && typeof v === "string" && v !== "" && (env[k] ?? "") === "") out[k] = v;
-	}
-	return out;
-}
+export { atlasKnob, atlasStoreEnv } from "./knobs";
+import { atlasKnob, atlasStoreEnv } from "./knobs";
 
 /**
  * Env layered over process.env for every bridged hook.
@@ -509,24 +504,6 @@ async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | und
 		return await Promise.race([promise.catch(() => undefined), expired.promise]);
 	} finally {
 		clearTimeout(timer);
-	}
-}
-
-const FAULT_LOG_MAX_BYTES = 1 << 20;
-
-/**
- * One row in `<ATLAS_HOME or ~/.atlas>/hook-faults.jsonl`, the same file and row shape scripts/atlas_faults.py writes,
- * so the doctor sees bridge fail-opens beside python hook crashes. Best effort, never throws.
- * ponytail: skipped once the file passes 1 MiB (atlas_faults.py owns truncation), so a flood cannot grow it.
- */
-export function recordFault(hook: string, error: string, type: string, cwd: string | undefined): void {
-	try {
-		const file = nodePath.join(process.env.ATLAS_HOME || nodePath.join(os.homedir(), ".atlas"), "hook-faults.jsonl");
-		fs.mkdirSync(nodePath.dirname(file), { recursive: true });
-		if (fs.existsSync(file) && fs.statSync(file).size > FAULT_LOG_MAX_BYTES) return;
-		fs.appendFileSync(file, `${JSON.stringify({ ts: Date.now() / 1000, hook, error: error.slice(0, 500), type, cwd: cwd ?? process.cwd() })}\n`);
-	} catch {
-		// the fault log must never be the thing that fails
 	}
 }
 
@@ -608,6 +585,8 @@ export interface BridgeDeps {
 	onToolResult?(info: ToolEventInfo): void;
 	/** Whole-call hook budget in ms for tool_call / tool_result; default TOOL_CALL_BUDGET_MS. Tests shrink it. */
 	budgetMs?: number;
+	/** Clock seam: the shared handler deadline and per-hook slot are computed from it (tests pin it so the arithmetic is exact). */
+	now?: () => number;
 	/** Runner for the SessionStart lead-channel open (tests inject a recorder); default channels.ts defaultRun. */
 	channelRun?(argv: string[], cwd: string): string | undefined;
 	/** Called once the SessionStart lead channel is open (the live channel view subscribes). */
@@ -618,7 +597,8 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	let hooks: BridgedHook[] | undefined = deps.hooks;
 	const all = () => (hooks ??= loadBridgedHooks());
 	const run = deps.run ?? runHook;
-	const off = () => (deps.env ?? process.env).ATLAS_HOOK_BRIDGE === "off";
+	const now = deps.now ?? Date.now;
+	const off = () => atlasKnob("ATLAS_HOOK_BRIDGE", deps.env ?? process.env) === "off";
 	let sessionContext: Promise<string> | undefined;
 	let channelOpened = false;
 	const reset = () => {
@@ -652,21 +632,21 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	 * A hook that outlives its slot is abandoned even if the runner ignores its timeout, and every skip or abandon
 	 * leaves a hook-faults.jsonl row: fail open, never silently.
 	 */
-	const runAllRuns = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>, deadline: number = Date.now() + HANDLER_BUDGET_MS): Promise<HookRun[]> => {
+	const runAllRuns = async (event: ClaudeEvent, toolNames: string[] | undefined, payload: Record<string, unknown>, deadline: number = now() + HANDLER_BUDGET_MS): Promise<HookRun[]> => {
 		const matchNames = toolNames && matcherNames(toolNames);
 		const selected = all().filter(h => h.event === event && (!h.matcher || !matchNames || matchNames.some(n => h.matcher?.test(n))));
 		const cwd = typeof payload.cwd === "string" ? payload.cwd : undefined;
 		const runOne = async (hook: BridgedHook): Promise<HookRun | undefined> => {
 			const script = scriptOf(hook.command);
-			const remaining = deadline - Date.now();
+			const remaining = deadline - now();
 			if (remaining <= 0) {
 				recordFault(script || hook.command, `${event} skipped: bridge budget exhausted`, "BridgeBudget", cwd);
 				return undefined; // out of budget: fail open
 			}
 			const timeoutMs = Math.min(hookTimeoutMs(hook.timeoutMs, deps.env ?? process.env), remaining);
-			const started = Date.now();
+			const started = now();
 			const stdout = await withDeadline(run(hook.command, payload, timeoutMs), timeoutMs + HOOK_KILL_GRACE_MS);
-			if (stdout === undefined || Date.now() - started >= timeoutMs) recordFault(script || hook.command, `${event} hook hit its ${timeoutMs} ms slot`, "BridgeTimeout", cwd);
+			if (stdout === undefined || now() - started >= timeoutMs) recordFault(script || hook.command, `${event} hook hit its ${timeoutMs} ms slot`, "BridgeTimeout", cwd);
 			return { script, out: parseHookOutput(stdout ?? "") };
 		};
 		return (await Promise.all(selected.map(runOne))).filter((r): r is HookRun => r !== undefined);
@@ -689,7 +669,7 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			if (ctx.agent.kind !== "main" || off()) return undefined;
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			const common = { session_id: sessionIdOf(ctx), cwd: ctx.cwd };
-			const deadline = Date.now() + HANDLER_BUDGET_MS;
+			const deadline = now() + HANDLER_BUDGET_MS;
 			sessionContext ??= runAll("SessionStart", undefined, { ...common, hook_event_name: "SessionStart", source: "startup" }, deadline).then(join);
 			const startText = await sessionContext;
 			const promptText = join(await runAll("UserPromptSubmit", undefined, { ...common, hook_event_name: "UserPromptSubmit", prompt: event.prompt ?? "" }, deadline));

@@ -8,6 +8,9 @@ before any code is written.
 
 - `<YYYY-MM-DD>-<slug>.md` - one plan per file
 - `stages/` - per-stage detail files for large plans
+- `2026-10-20_atlas-feature-audit.md` - audit findings and wave A-D improvement plan across atlas features and harnesses
+- `2026-10-20_atlas-tiering-design.md` - per-agent model and effort tiers, `tier_allow` and resolver design
+- `2026-10-20_atlas-colony-tui.md` - Atlas Colony workspace TUI spec (stages S1-S7)
 
 ## Plan template
 

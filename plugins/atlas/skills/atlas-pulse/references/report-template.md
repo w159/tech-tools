@@ -34,7 +34,7 @@ and anything anomalous. No adjectives doing measurement's job.>
 
 ## Assembly rules
 
-- Every `<N>` traces to a file in `.atlas/evidence/<YYYY-MM-DD>-product-pulse/`; the verifier removes what it cannot trace.
+- Every `<N>` traces to a file in `.atlas/evidence/<YYYY-MM-DD>_product-pulse/`; the verifier removes what it cannot trace.
 - A source with no working read-only access renders `no access this run` in its slot - never an estimate, never a carry-forward from an earlier pulse.
 - A source configured but returning zero events in-window says `0 in window` - an honest zero is data.
 - Deltas are computed, not eyeballed; if the prior window was not queried, say `no prior-window comparison this run` instead of inventing a trend.

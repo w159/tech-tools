@@ -55,7 +55,11 @@ def _key():
 
 
 def _base():
-    return os.environ.get("ATLAS_TYPESAFE_URL", DEFAULT_URL).rstrip("/")
+    # Accept a base URL or a pasted full endpoint; the path is appended once in evaluate().
+    url = os.environ.get("ATLAS_TYPESAFE_URL", DEFAULT_URL).strip().rstrip("/")
+    if url.lower().endswith("/v1/systemone"):
+        url = url[: -len("/v1/systemone")].rstrip("/")
+    return url
 
 
 def _loopback(url):
@@ -93,12 +97,17 @@ def evaluate(state, questions, *, model=None, timeout=30.0):
     local = _loopback(base)
     if not key and not local:
         raise TypeSafeError(401, "TYPESAFE_API_KEY is not set in the environment")
+    model_name = model or os.environ.get("ATLAS_TYPESAFE_MODEL", DEFAULT_MODEL)
+    if not local and ":" in model_name:
+        # Ollama tags look like name:tag; the hosted API rejects them with a bare "Unknown model".
+        raise TypeSafeError(
+            400,
+            f"model '{model_name}' is a local Ollama tag but ATLAS_TYPESAFE_URL points at a "
+            f"hosted endpoint ({base}). Set ATLAS_TYPESAFE_URL=http://127.0.0.1:11434 to score "
+            "locally, or set ATLAS_TYPESAFE_MODEL to a hosted model such as jev-latest.",
+        )
     body = json.dumps(
-        {
-            "state": state,
-            "model": model or os.environ.get("ATLAS_TYPESAFE_MODEL", DEFAULT_MODEL),
-            "questions": questions,
-        }
+        {"state": state, "model": model_name, "questions": questions}
     ).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if key:

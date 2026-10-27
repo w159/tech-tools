@@ -24,12 +24,17 @@ from __future__ import annotations
 import json
 import os
 import re
+import sqlite3
+import sys
 import tempfile
 import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from recalled_memory import wrap_recalled_memory  # noqa: E402
 
 # fcntl is Unix-only; on Windows use msvcrt for file locking
 fcntl = None
@@ -86,7 +91,7 @@ _SECRET_PATTERNS = [
     (  # key=value / key: value, quoted values may hold spaces
         re.compile(
             r"(?i)\b([\w.-]*(?:password|passwd|pwd|passphrase|secret|token|api[_-]?key|apikey|access[_-]?key"
-            r"|private[_-]?key|credentials?|authorization)[\w-]*[\"']?\s*[:=]\s*)"
+            r"|private[_-]?key|credentials?|authorization|connection[_-]?string)[\w-]*[\"']?\s*[:=]\s*)"
             r"(?:\"[^\"\n]*\"|'[^'\n]*'|[^\s,;\"']+)"
         ),
         r"\1" + _REDACTED,
@@ -101,12 +106,96 @@ _SECRET_PATTERNS = [
 ]
 
 
+_SEP = r"([\s:#=-]*)"
+_MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?"
+_DATE = (
+    r"(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}"
+    + r"|" + _MONTH + r"\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}"
+    + r"|\d{1,2}(?:st|nd|rd|th)?\s+" + _MONTH + r",?\s+\d{4})"
+)
+# Nonpublic personal information. Labeled forms only, except dashed SSNs and
+# Luhn-valid card numbers, so bare order/ticket numbers survive.
+_NPI_PATTERNS = [
+    (re.compile(r"(?<![\w-])\d{3}-\d{2}-\d{4}(?![\w-])"), "[REDACTED:ssn]"),
+    (
+        re.compile(
+            r"(?i)(\b(?:ssn|social(?:\s+security)?(?:\s+(?:number|no\.?|num|#))?)\b)"
+            + _SEP
+            + r"(\d{3}[ -]?\d{2}[ -]?\d{4})(?![\w-])"
+        ),
+        r"\1\2[REDACTED:ssn]",
+    ),
+    (
+        re.compile(
+            r"(?i)(\b(?:routing|aba)\b(?:\s+(?:number|no\.?|num|#))?)"
+            + _SEP
+            + r"(\d{9})(?![\w-])"
+        ),
+        r"\1\2[REDACTED:routing]",
+    ),
+    (
+        re.compile(
+            r"(?i)(\b(?:acct|account)\b(?:\s+(?:number|no\.?|num|#))?)"
+            + _SEP
+            + r"(\d{6,17})(?![\w-])"
+        ),
+        r"\1\2[REDACTED:account]",
+    ),
+    (
+        re.compile(
+            r"(?i)(\b(?:dob|d\.o\.b\.?|date\s+of\s+birth|birth\s?date|born(?:\s+on)?)\b)"
+            + _SEP
+            + "("
+            + _DATE
+            + ")"
+        ),
+        r"\1\2[REDACTED:dob]",
+    ),
+]
+# 13-19 digits, optional single space/dash between digits, first digit 2-6 (card
+# IINs; keeps 13-digit epoch-millisecond timestamps, which start with 1, out).
+_CARD_RE = re.compile(r"(?<![\w-])[2-6](?:[ -]?\d){12,18}(?![\w-])")
+
+
+def _luhn_ok(digits: str) -> bool:
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = int(ch)
+        if i % 2:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
+def _redact_card(match: "re.Match[str]") -> str:
+    digits = re.sub(r"\D", "", match.group(0))
+    if 13 <= len(digits) <= 19 and _luhn_ok(digits):
+        return "[REDACTED:card]"
+    return match.group(0)
+
+
 def redact_secrets(text: str) -> str:
-    """Replace credential-shaped substrings (keys, bearer tokens, JWTs, passwords,
-    key=value secrets, private key blocks, URL credentials) with [REDACTED]."""
+    """The single redactor for everything atlas stores or re-injects.
+
+    Replaces credential-shaped substrings (keys, bearer tokens, JWTs, passwords,
+    key=value secrets, private key blocks, URL credentials) with [REDACTED], and
+    nonpublic personal identifiers with typed placeholders: [REDACTED:ssn],
+    [REDACTED:routing], [REDACTED:account], [REDACTED:card], [REDACTED:dob].
+
+    Best effort, not a guarantee. It is pattern matching, so it misses
+    unlabeled account numbers, free-form dates of birth, names and addresses,
+    and may occasionally redact a harmless string. Do not rely on it as the only
+    control over sensitive data. Falsy input is returned unchanged.
+    """
+    if not text:
+        return text
     for pattern, repl in _SECRET_PATTERNS:
         text = pattern.sub(repl, text)
-    return text
+    for pattern, repl in _NPI_PATTERNS:
+        text = pattern.sub(repl, text)
+    return _CARD_RE.sub(_redact_card, text)
 
 
 def _memory_dir() -> Path:
@@ -115,7 +204,29 @@ def _memory_dir() -> Path:
     return Path(base) / "memory"
 
 
-def _path_for(target: str) -> Path:
+def _project_memory_dir(root: str) -> Path:
+    """`<root>/.atlas/memory`. Refuses a root that is HOME, a bare temp root, or
+    lives inside a .atlas folder: those are not projects, and writing there
+    recreates the nested-state contamination atlas_paths exists to prevent."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import atlas_paths
+
+    raw = os.path.abspath(str(root))
+    if atlas_paths.sanitize(raw) != raw:
+        raise ValueError(f"root is inside a .atlas folder: {raw}")
+    if atlas_paths._is_non_project(raw):
+        raise ValueError(f"root is HOME or a temp root, not a project: {raw}")
+    return Path(raw) / ".atlas" / "memory"
+
+
+def _path_for(target: str, root: Optional[str] = None) -> Path:
+    """target "project" + root -> <root>/.atlas/memory/MEMORY.md. "project"
+    without a root keeps the legacy global PROJECT.md so old callers work.
+    "memory" is always the global cross-project file."""
+    if target == "project" and root:
+        return _project_memory_dir(root) / "MEMORY.md"
     d = _memory_dir()
     if target == "project":
         return d / "PROJECT.md"
@@ -126,17 +237,17 @@ def _char_limit(target: str) -> int:
     return WORKING_CAP_CHARS
 
 
-def _archive_dir() -> Path:
-    d = _memory_dir() / "archive"
+def _archive_dir(root: Optional[str] = None) -> Path:
+    d = (_project_memory_dir(root) if root else _memory_dir()) / "archive"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def _archive_path(target: str) -> Path:
+def _archive_path(target: str, root: Optional[str] = None) -> Path:
     """Dated archive file for entries rotated out of the live file this month."""
-    name = "PROJECT" if target == "project" else "MEMORY"
+    name = "PROJECT" if target == "project" and not root else "MEMORY"
     stamp = datetime.now().strftime("%Y-%m")
-    return _archive_dir() / f"{name}-{stamp}.md"
+    return _archive_dir(root) / f"{name}-{stamp}.md"
 
 
 class LockTimeout(OSError):
@@ -225,7 +336,9 @@ def _write_file(path: Path, entries: List[str]) -> None:
         raise
 
 
-def _archive_entries(target: str, entries_to_archive: List[str]) -> None:
+def _archive_entries(
+    target: str, entries_to_archive: List[str], root: Optional[str] = None
+) -> None:
     """Append rotated-out entries to this month's dated archive file.
 
     Read-then-append (never overwrite) so multiple rotations within the same
@@ -235,13 +348,15 @@ def _archive_entries(target: str, entries_to_archive: List[str]) -> None:
     """
     if not entries_to_archive:
         return
-    archive = _archive_path(target)
+    archive = _archive_path(target, root)
     with _file_lock(archive):
         existing = _read_file(archive)
         _write_file(archive, existing + entries_to_archive)
 
 
-def _rotate_to_fit(target: str, entries: List[str]) -> Dict[str, Any]:
+def _rotate_to_fit(
+    target: str, entries: List[str], root: Optional[str] = None
+) -> Dict[str, Any]:
     """Trim `entries` from the oldest end until they fit the working cap,
     archiving anything rotated out (PROBLEM 2: rotate, never silently reject).
 
@@ -261,7 +376,7 @@ def _rotate_to_fit(target: str, entries: List[str]) -> Dict[str, Any]:
         return {"entries": entries, "rotated": [], "dropped": True}
 
     if rotated:
-        _archive_entries(target, rotated)
+        _archive_entries(target, rotated, root)
 
     return {"entries": working, "rotated": rotated, "dropped": False}
 
@@ -333,17 +448,26 @@ def filter_for_recall(entries: List[str]) -> List[str]:
     return kept
 
 
-def load_snapshot() -> Dict[str, str]:
+def load_snapshot(root: Optional[str] = None, wrap: bool = True) -> Dict[str, str]:
     """Load memory entries and return a rendered snapshot for injection.
 
     Returns {"memory": "...", "project": "..."} with each value being
     the §-joined entries ready for injection into session boot context.
+    With a `root`, "project" is that project's `.atlas/memory/MEMORY.md`
+    (read-only: nothing is created); without one it is the legacy global
+    PROJECT.md. With wrap=True (default) each non-empty value is framed as
+    untrusted recalled memory (see recalled_memory.wrap_recalled_memory);
+    callers that truncate first pass wrap=False and wrap the final text
+    themselves.
     """
     mem_dir = _memory_dir()
     mem_dir.mkdir(parents=True, exist_ok=True)
 
     memory_entries = _read_file(mem_dir / "MEMORY.md")
-    project_entries = _read_file(mem_dir / "PROJECT.md")
+    try:
+        project_entries = _read_file(_path_for("project", root))
+    except ValueError:
+        project_entries = []
 
     # Exact dedupe first, then the recall filter (junk scopes, telemetry lines,
     # near-duplicates, hard cap). The files on disk are untouched.
@@ -356,10 +480,13 @@ def load_snapshot() -> Dict[str, str]:
         for e in filter_for_recall(list(dict.fromkeys(project_entries)))
     ]
 
-    return {
+    snap = {
         "memory": _render_block("MEMORY", memory_entries),
         "project": _render_block("PROJECT CONTEXT", project_entries),
     }
+    if wrap:
+        snap = {k: wrap_recalled_memory(v) for k, v in snap.items()}
+    return snap
 
 
 def _render_block(title: str, entries: List[str]) -> str:
@@ -370,7 +497,7 @@ def _render_block(title: str, entries: List[str]) -> str:
     return header + "\n" + ENTRY_DELIMITER.join(entries)
 
 
-def add(target: str, content: str) -> Dict[str, Any]:
+def add(target: str, content: str, root: Optional[str] = None) -> Dict[str, Any]:
     """Append a new entry. Rotates oldest entries to the archive rather than
     rejecting when the working cap would be exceeded (see _rotate_to_fit).
     Only fails if this single entry alone cannot fit even in an empty file."""
@@ -378,7 +505,10 @@ def add(target: str, content: str) -> Dict[str, Any]:
     if not content:
         return {"success": False, "error": "Content cannot be empty."}
 
-    path = _path_for(target)
+    try:
+        path = _path_for(target, root)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
     with _file_lock(path):
         entries = _read_file(path)
         entries = list(dict.fromkeys(entries))  # dedupe
@@ -389,7 +519,7 @@ def add(target: str, content: str) -> Dict[str, Any]:
                 "message": "Entry already exists (no duplicate added).",
             }
 
-        fit = _rotate_to_fit(target, entries + [content])
+        fit = _rotate_to_fit(target, entries + [content], root)
         if fit["dropped"]:
             limit = _char_limit(target)
             return {
@@ -407,7 +537,9 @@ def add(target: str, content: str) -> Dict[str, Any]:
     return {"success": True, "message": message}
 
 
-def replace(target: str, old_text: str, new_content: str) -> Dict[str, Any]:
+def replace(
+    target: str, old_text: str, new_content: str, root: Optional[str] = None
+) -> Dict[str, Any]:
     """Find entry containing old_text substring, replace it with new_content."""
     old_text = old_text.strip()
     new_content = redact_secrets(new_content.strip())
@@ -419,7 +551,10 @@ def replace(target: str, old_text: str, new_content: str) -> Dict[str, Any]:
             "error": "new_content cannot be empty. Use 'remove' to delete entries.",
         }
 
-    path = _path_for(target)
+    try:
+        path = _path_for(target, root)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
     with _file_lock(path):
         entries = _read_file(path)
         entries = list(dict.fromkeys(entries))
@@ -459,13 +594,16 @@ def replace(target: str, old_text: str, new_content: str) -> Dict[str, Any]:
     return {"success": True, "message": "Entry replaced."}
 
 
-def remove(target: str, old_text: str) -> Dict[str, Any]:
+def remove(target: str, old_text: str, root: Optional[str] = None) -> Dict[str, Any]:
     """Remove the entry containing old_text substring."""
     old_text = old_text.strip()
     if not old_text:
         return {"success": False, "error": "old_text cannot be empty."}
 
-    path = _path_for(target)
+    try:
+        path = _path_for(target, root)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
     with _file_lock(path):
         entries = _read_file(path)
         entries = list(dict.fromkeys(entries))
@@ -493,13 +631,18 @@ def remove(target: str, old_text: str) -> Dict[str, Any]:
     return {"success": True, "message": "Entry removed."}
 
 
-def apply_batch(target: str, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
+def apply_batch(
+    target: str, operations: List[Dict[str, Any]], root: Optional[str] = None
+) -> Dict[str, Any]:
     """Apply a sequence of add/replace/remove ops to one target atomically.
 
     All operations are validated and applied against the FINAL budget.
     One failed op aborts the entire batch (atomic).
     """
-    path = _path_for(target)
+    try:
+        path = _path_for(target, root)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
     with _file_lock(path):
         entries = _read_file(path)
         entries = list(dict.fromkeys(entries))
@@ -541,17 +684,120 @@ def apply_batch(target: str, operations: List[Dict[str, Any]]) -> Dict[str, Any]
     return {"success": True, "message": f"Applied {len(operations)} operations."}
 
 
-def get_entries(target: str) -> List[str]:
+def get_entries(target: str, root: Optional[str] = None) -> List[str]:
     """Return current entries for a target (read-only, no lock)."""
-    return _read_file(_path_for(target))
+    return _read_file(_path_for(target, root))
 
 
-def usage(target: str) -> Dict[str, Any]:
+def usage(target: str, root: Optional[str] = None) -> Dict[str, Any]:
     """Return current char usage for a target."""
-    entries = _read_file(_path_for(target))
+    entries = _read_file(_path_for(target, root))
     total = len(ENTRY_DELIMITER.join(entries)) if entries else 0
     limit = _char_limit(target)
     return {"target": target, "used": total, "limit": limit, "entries": len(entries)}
+
+
+# --- One-shot migration: global files -> per-project stores ------------------
+# Entries filed under ~/.atlas/memory/ before project stores existed carry a
+# `(name)` or `[name]` project tag. Move each to that project's own store.
+
+# Pure remeasure telemetry: archived globally, never moved into a project.
+_STAMP = re.compile(r"recorded by dashboard remeasure|re-baselined, supersedes #\d+")
+_TAG = re.compile(r"^[^(\[\n]{0,60}[(\[]([^)\]\n]{1,80})[)\]]")
+
+
+def tag_of(entry: str) -> str:
+    """Project tag the migration reads from an entry, '' when untagged."""
+    m = _TAG.match(entry)
+    return m.group(1).strip() if m else ""
+
+
+def _project_roots_by_name(db_path: str) -> Dict[str, List[str]]:
+    """name -> candidate roots from atlas.db `projects` rows that are git roots
+    and still exist. Read-only connection; a missing DB yields {}."""
+    out: Dict[str, List[str]] = {}
+    if not db_path or not os.path.exists(db_path):
+        return out
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        for root_path, name in conn.execute("SELECT root_path, name FROM projects"):
+            if not root_path or not os.path.exists(os.path.join(root_path, ".git")):
+                continue
+            label = name or os.path.basename(root_path.rstrip(os.sep))
+            for key in {label, os.path.basename(root_path.rstrip(os.sep))}:
+                if root_path not in out.setdefault(key, []):
+                    out[key].append(root_path)
+    finally:
+        conn.close()
+    return out
+
+
+def migrate_global_to_projects(
+    home: str, db_path: str, apply: bool = False, only_root: Optional[str] = None
+) -> Dict[str, Any]:
+    """Split tagged entries of `<home>/memory/{MEMORY,PROJECT}.md` into project stores.
+
+    Dry-run unless apply=True. Never deletes: an entry leaves the global file
+    only after its project write succeeded; remeasure stamps move to the global
+    archive; ambiguous or unknown tags stay put and are reported. `only_root`
+    limits the run to entries for that one project (stamps and the rest stay).
+    Returns {"moves": {root: [entries]}, "stamps": [...], "left": [(entry, why)],
+    "applied": bool}.
+    """
+    mem_dir = Path(home) / "memory"
+    roots = _project_roots_by_name(db_path)
+    plan: Dict[str, Any] = {"moves": {}, "stamps": [], "left": [], "applied": apply}
+    sources = {n: _read_file(mem_dir / n) for n in ("MEMORY.md", "PROJECT.md")}
+    for fname, entries in sources.items():
+        for entry in entries:
+            if _STAMP.search(entry):
+                if only_root:
+                    continue
+                plan["stamps"].append((fname, entry))
+                continue
+            name = tag_of(entry)
+            cands = roots.get(name, [])
+            # the caller already knows the root: skip the DB, whose same-named
+            # rows (old copies of the repo) would make the tag ambiguous
+            if (
+                only_root
+                and name
+                and name == os.path.basename(os.path.abspath(only_root))
+            ):
+                cands = [os.path.abspath(only_root)]
+            if not name or _JUNK_SCOPE.match(name):
+                plan["left"].append((entry, "no project tag"))
+            elif len(cands) != 1:
+                plan["left"].append(
+                    (entry, "ambiguous project" if cands else f"unknown project {name}")
+                )
+            elif only_root and os.path.abspath(only_root) != cands[0]:
+                continue
+            else:
+                plan["moves"].setdefault(cands[0], []).append((fname, entry))
+    if not apply:
+        return plan
+
+    done: Dict[str, List[str]] = {n: [] for n in sources}  # safe to drop from global
+    for root, items in plan["moves"].items():
+        for fname, entry in items:
+            if add("project", entry, root=root).get("success"):
+                done[fname].append(entry)
+            else:
+                plan["left"].append((entry, "project write failed"))
+    stamp_names = {n: [e for f, e in plan["stamps"] if f == n] for n in sources}
+    for fname in sources:
+        if stamp_names[fname]:
+            # archive first, then drop: a crash between the two duplicates, never loses
+            arch = mem_dir / "archive" / f"{fname[:-3]}-{datetime.now():%Y-%m}.md"
+            with _file_lock(arch):
+                _write_file(arch, _read_file(arch) + stamp_names[fname])
+        gone = set(done[fname]) | set(stamp_names[fname])
+        if gone:
+            path = mem_dir / fname
+            with _file_lock(path):
+                _write_file(path, [e for e in _read_file(path) if e not in gone])
+    return plan
 
 
 # --- CLI for manual inspection/management ---

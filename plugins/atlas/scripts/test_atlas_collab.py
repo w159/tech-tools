@@ -194,11 +194,11 @@ class TestInboxSurfacing(CollabBase):
         self.post("Bob", "need the API spec", kind="blocked")
         self.post("Carol", "src/mod/x.py overlaps your claim", kind="conflict")
         text = worker_inbox.drain(self.root, "Worker")
-        for label in ("[HANDOFF]", "[BLOCKED]", "[CONFLICT]"):
-            self.assertIn(label, text)
-        self.assertIn("from Bob: fyi status update", text)  # plain notes unchanged
+        for kind in ("handoff", "blocked", "conflict"):
+            self.assertIn(f'kind="{kind}"', text)
+        self.assertIn("fyi status update", text)  # plain notes unchanged
         # collaboration kinds come before the ordinary note that arrived earlier
-        self.assertLess(text.index("[HANDOFF]"), text.index("fyi status update"))
+        self.assertLess(text.index('kind="handoff"'), text.index("fyi status update"))
 
     def test_note_cli_accepts_handoff_kind(self):
         out = self.cli_json(

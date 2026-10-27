@@ -5,7 +5,7 @@ launch(root, name, prompt, ...) -> {"ok", "session", "window", "target", "attach
 is_live(target)                 -> `herdr:<pane>` exists in herdr, or a tmux window exists and its pane is not dead
 
 Transport (atlas_mux.transport / _pane_transport): panes only — herdr when its server is up, else tmux; the mux's
-claude-bg default never reaches this module (a launch always needs a pane target). Never attaches, focuses or opens a UI.
+claude-bg fallback never reaches this module (a launch always needs a pane target). Never attaches, focuses or opens a UI.
 Interactive: `omp --cwd <cwd> @<prompt_file>` in a pane that carries ATLAS_PROJECT_ROOT, ATLAS_WORKER_NAME and the
 FORWARDED_ENV lead env. Headless: atlas_mux `spawn` (omp -p, agent role, exits when done).
 Both force ATLAS_MUX=tmux (the mux opt-in gate) in the CHILD env only and strip every CMUX_* var / cmux shim.
@@ -187,7 +187,19 @@ def launch(
         if use == "herdr":
             import atlas_seats
 
-            made = atlas_seats.create_pane(window, pane, cwd=cwd, run=run, env=pane_env)
+            made = atlas_seats.create_pane(
+                window,
+                pane,
+                cwd=cwd,
+                run=run,
+                # the herdr socket env, not the typed command line, carries the token
+                env={
+                    **pane_env,
+                    "ATLAS_OWNER_TOKEN": atlas_mux.atlas_todo.issue_owner_token(
+                        root, window
+                    ),
+                },
+            )
             if not made["ok"]:
                 return _fail(made["reason"], prompt_file=prompt_file)
             pane_id = made["pane_id"]
@@ -195,6 +207,7 @@ def launch(
                 root, window, chan or None, pane_id=pane_id
             )
         else:
+            pane = atlas_mux.with_token_file(root, window, pane)
             res = atlas_mux._tmux(
                 "new-window", "-d", "-t", f"{session}:", "-n", window, "-c", cwd, pane
             )

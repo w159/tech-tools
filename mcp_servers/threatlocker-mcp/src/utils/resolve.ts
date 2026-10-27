@@ -6,7 +6,7 @@
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Plain boolean on purpose: a type predicate would narrow a string needle to
 // `never` on the non-GUID branch.
-export const isGuid = (value: unknown): boolean => typeof value === 'string' && GUID.test(value);
+const isGuid = (value: unknown): boolean => typeof value === 'string' && GUID.test(value);
 
 export class ResolutionError extends Error {
  constructor(message: string, public readonly candidates: string[] = []) {

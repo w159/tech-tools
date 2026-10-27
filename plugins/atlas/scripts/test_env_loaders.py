@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ENV_DIR = Path(__file__).resolve().parent.parent / "mcp" / "_env"
+ENV_DIR = Path(__file__).resolve().parent.parent.parent / "armada" / "mcp" / "_env"
 PROBE = "import json,os;print(json.dumps({k:os.environ.get(k) for k in ('AUVIK_API_KEY','AUVIK_REGION','FOO')}))"
 PROBE_JS = "console.log(JSON.stringify({AUVIK_API_KEY:process.env.AUVIK_API_KEY??null,AUVIK_REGION:process.env.AUVIK_REGION??null,FOO:process.env.FOO??null}))"
 
@@ -90,7 +90,7 @@ class LoaderCase:
         self.assertIn("AUVIK_API_KEY: env file value wins over saved userConfig", err)
         self.assertNotIn("stale", err.replace("env file value", ""))
 
-    def settings(self, options, key="atlas@tech-tools"):
+    def settings(self, options, key="armada@tech-tools"):
         d = self.home / ".claude"
         d.mkdir(exist_ok=True)
         (d / "settings.json").write_text(
@@ -125,11 +125,33 @@ class LoaderCase:
         self.assertIsNone(vals["FOO"])
         self.assertNotIn("other-foo", err)
 
+    def test_legacy_atlas_entry_is_the_fallback(self):
+        """Credentials saved under atlas before the connectors moved to armada keep working."""
+        self.settings({"foo": "legacy-foo"}, key="atlas@tech-tools")
+        vals, err = self.run_loader(self.base(CFG_FOO="${user_config.foo}"))
+        self.assertEqual(vals["FOO"], "legacy-foo")
+        self.assertNotIn("legacy-foo", err)
+
+    def test_armada_entry_beats_legacy_atlas_entry_per_key(self):
+        self.settings({"foo": "legacy-foo", "auvik_region": "eu1"}, key="atlas@tech-tools")
+        p = self.home / ".claude" / "settings.json"
+        cfg = json.loads(p.read_text())
+        cfg["pluginConfigs"]["armada@tech-tools"] = {"options": {"foo": "armada-foo"}}
+        p.write_text(json.dumps(cfg))
+        vals, _ = self.run_loader(
+            self.base(
+                CFG_FOO="${user_config.foo}",
+                CFG_AUVIK_REGION="${user_config.auvik_region}",
+            )
+        )
+        self.assertEqual(vals["FOO"], "armada-foo")
+        self.assertEqual(vals["AUVIK_REGION"], "eu1")  # only saved under atlas: still found
+
     def test_exact_key_used_among_others(self):
         self.settings({"foo": "other-foo"}, key="atlas@other")
         p = self.home / ".claude" / "settings.json"
         cfg = json.loads(p.read_text())
-        cfg["pluginConfigs"]["atlas@tech-tools"] = {"options": {"foo": "exact-foo"}}
+        cfg["pluginConfigs"]["armada@tech-tools"] = {"options": {"foo": "exact-foo"}}
         p.write_text(json.dumps(cfg))
         vals, _ = self.run_loader(self.base(CFG_FOO="${user_config.foo}"))
         self.assertEqual(vals["FOO"], "exact-foo")

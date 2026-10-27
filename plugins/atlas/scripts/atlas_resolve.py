@@ -11,6 +11,19 @@ import sys
 from pathlib import Path
 
 MATRIX = Path(__file__).resolve().parents[1] / "contracts" / "scope-matrix.json"
+AGENTS = MATRIX.parents[1] / "agents"
+
+
+def default_model(role):
+    """The `model:` pin in agents/<role>.md frontmatter ("" when unreadable)."""
+    try:
+        head = (AGENTS / f"{role}.md").read_text().split("\n---", 1)[0]
+    except OSError:
+        return ""
+    for line in head.splitlines():
+        if line.startswith("model:"):
+            return line.partition(":")[2].strip().strip("\"'")
+    return ""
 
 
 def normalize_paths(paths):
@@ -32,27 +45,46 @@ def resolve(task_class, effort, paths=None):
         raise ValueError(
             f"unknown effort {effort!r}; known: {sorted(classes[task_class])}"
         )
+    # The orchestrator copies each seat's model into its Agent call; a cell
+    # value wins, else the role's frontmatter default.
+    team = [{**s, "model": s.get("model") or default_model(s["role"])} for s in cell["team"]]
     return {
         "task_class": task_class,
         "effort": effort,
         **cell,
+        "team": team,
         "file_scope": normalize_paths(paths),
     }
 
 
+USAGE = "usage: atlas_resolve.py <class> <effort> [--paths a,b]"
+
+
+def _fail(msg):
+    """Every error path prints ONE JSON object on stdout (callers pipe it to a JSON parser) plus the text on stderr."""
+    print(json.dumps({"ok": False, "error": msg}))
+    print(msg, file=sys.stderr)
+    return 2
+
+
 def main(argv):
     if argv[:1] in (["-h"], ["--help"]):
-        print("usage: atlas_resolve.py <class> <effort> [--paths a,b]")
+        print(USAGE)
         return 0
-    if len(argv) < 2:
-        print("usage: atlas_resolve.py <class> <effort> [--paths a,b]", file=sys.stderr)
-        return 2
-    paths = argv[argv.index("--paths") + 1].split(",") if "--paths" in argv else None
+    if "--paths" in argv:
+        i = argv.index("--paths")
+        if i + 1 >= len(argv):
+            return _fail(f"--paths needs a value (a,b). {USAGE}")
+        paths = argv[i + 1].split(",")
+        argv = argv[:i] + argv[i + 2 :]
+    else:
+        paths = None
+    if len(argv) != 2:
+        return _fail(USAGE)
     try:
         print(json.dumps(resolve(argv[0], argv[1], paths), sort_keys=True))
     except ValueError as e:
-        print(e, file=sys.stderr)
-        return 2
+        return _fail(str(e))
     return 0
 
 

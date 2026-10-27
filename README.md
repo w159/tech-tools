@@ -16,23 +16,23 @@ share one board, a Stop gate refuses "done" without evidence, and a doctor mines
 the session telemetry so the plugin can tune its own rules. It runs in Claude
 Code and, through its extension package, in omp.
 
-Current version: **12.4.5** (`plugins/atlas/.claude-plugin/plugin.json`).
+Current version: **16.0.0** (`plugins/atlas/.claude-plugin/plugin.json`). Breaking: the 13 vendor MCP connectors now ship in the armada plugin (2.0.0); install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada). Also in 16.0.0: scoped worker tool profiles, a Stop gate that sees shell-changed files, shared gate rules, one hook process per tool event, and hermetic tests.
 
 Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md)):
 
-- **12.4.5**: `atlas_herdr ensure` starts the headless herdr server itself before reporting unavailable.
-- **12.4.4**: atlas no longer writes `.atlas` into `~` or `~/Downloads`; the omp write-tool misuse guard covers every agent role; dashboard data fixes (Projects, Overview, Channels, Activity, Improve), better error classification and honest "Doctor findings" / "attention items" labels; a dispatch `thinkingLevel` quoting fix.
-- **12.4.3**: dashboard fallow cleanup, no behavior change.
-- **12.4.2**: OpenRig seat backend for colony worker panes (herdr stays a fallback behind one facade); backend-neutral dashboard wording.
+- **12.8.0**: omp usage statusline ships with atlas and Claude Code gets a `statusLine` equivalent (`scripts/atlas_statusline.py`); tmux is the intended default colony worker transport when installed, with `claude-bg` as the fallback.
+- **12.7.0**: new `sonicwall` connector (SonicOS 7.x REST API, 41 tools, writes staged until a separate commit call).
+- **12.6.0**: cost tiering for agents, the Atlas Colony workspace TUI, a single-sourced status header and the codex contract block.
+- **12.5.x**: `atlas_herdr ensure` starts the headless herdr server itself; atlas no longer writes `.atlas` into `~` or `~/Downloads`.
 
 | What | Count | Source |
 |---|---|---|
-| Skills | 37 | `plugins/atlas/skills/` |
-| Role agents (`atlas:*`) | 13 | `plugins/atlas/agents/` |
+| Skills | 39 | `plugins/atlas/skills/` |
+| Role agents (`atlas:*`) | 14 | `plugins/atlas/agents/` |
 | Hooks | 17 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
-| Scripts | 49 non-test Python scripts | `plugins/atlas/scripts/` |
-| MCP connectors | 12, each off until credentials exist | `plugins/atlas/.mcp.json` |
-| omp agents | 13, generated | `plugins/atlas/omp/agents/` |
+| Scripts | 55 non-test Python scripts | `plugins/atlas/scripts/` |
+| MCP connectors | 13 (including `panos` and `sonicwall`), each off until credentials exist | `plugins/armada/.mcp.json` (servers in `plugins/armada/mcp/`; shipped by the armada plugin, install atlas and armada together) |
+| omp agents | 14, generated | `plugins/atlas/omp/agents/` |
 
 ## Contents
 
@@ -43,8 +43,9 @@ Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELO
 5. [Command Center web UI](#command-center-web-ui)
 6. [Configuration](#configuration)
 7. [Documentation](#documentation)
-8. [Developing atlas](#developing-atlas)
-9. [License](#license)
+8. [Releases](#releases)
+9. [Developing atlas](#developing-atlas)
+10. [License](#license)
 
 ## What it looks like
 
@@ -78,9 +79,15 @@ command that fixes it. A worker's card updates in place when it reports.
 **Install** (Claude Code):
 
 ```bash
-claude plugin marketplace add w159/tech-tools    # first time only
-claude plugin marketplace update tech-tools      # refresh the catalog
-claude plugin update atlas@tech-tools            # install or update
+claude plugin marketplace add w159/tech-tools    # first time only: register the catalog
+claude plugin install atlas@tech-tools           # first time only: install the plugin
+```
+
+To update later, refresh the catalog and update the plugin:
+
+```bash
+claude plugin marketplace update tech-tools
+claude plugin update atlas@tech-tools
 ```
 
 Restart the session afterwards: hooks resolve at session start.
@@ -88,8 +95,8 @@ Restart the session afterwards: hooks resolve at session start.
 **omp:**
 
 ```bash
-omp plugin marketplace update tech-tools
-omp plugin upgrade atlas
+omp plugin install atlas@tech-tools    # first time (tech-tools is already a configured marketplace if you added it)
+omp plugin upgrade atlas               # update
 ```
 
 **Onboard a project once:**
@@ -232,7 +239,7 @@ finding 8834 -> applied
 ```
 
 The latest runtime audit, built from these logs, is
-[docs/audits/2026-10-14-atlas-runtime-audit.md](docs/audits/2026-10-14-atlas-runtime-audit.md).
+[docs/audits/2026-10-14_atlas-runtime-audit.md](docs/audits/2026-10-14_atlas-runtime-audit.md).
 
 ## omp support
 
@@ -249,7 +256,7 @@ tripwire. omp has two extras:
 
 ![omp widget during a team run](img/showcase/omp-widget.png)
 
-The parity matrix is in [docs/atlas-harness-parity.md](docs/atlas-harness-parity.md).
+The parity matrix is in [docs/architecture/atlas-harness-parity.md](docs/architecture/atlas-harness-parity.md).
 
 ## Command Center web UI
 
@@ -264,17 +271,19 @@ channels the hooks write.
 | Overview | KPIs, the needs-attention inbox, recent runs |
 | Activity | Events by group, filter and live tail |
 | Health | Hooks, gates, dispatch, colony, daemon, DB, connectors, memory, doctor |
-| Agents | Live workers, the board, and the channel |
-| Colony | The herdr web UI with live terminals |
+| Agents | Three lenses: Roster (colony members with send, stop, pause, resume), Supervise, and Board. `#/colony`, `#/board` and `#/supervise` are aliases for them |
+| Colony | The roster of the lead and its workers (the Roster lens) |
+| Terminal | A seat grid of real terminals, one per colony worker |
 | Channels | What agents and you said to each other |
 | Improve | Doctor findings: mark fixed, dismiss, remeasure |
-| Projects, Settings | Pin or hide projects; theme, knobs, connector credentials |
+| Projects | Pin, mute or hide projects |
+| Settings | Five tabs: Dashboard, Behavior, Models, Integrations, Agents. A saved knob applies on the next hook run |
 
 ![Health](img/showcase/dashboard-health.png)
 ![Improve](img/showcase/dashboard-improve.png)
 
 Every route checks the `Host` header, content type, origin and, for mutations,
-a per-start token. Details: [docs/atlas-workboard.md](docs/atlas-workboard.md).
+a per-start token. Details: [docs/architecture/atlas-workboard.md](docs/architecture/atlas-workboard.md).
 
 ## Configuration
 
@@ -294,19 +303,27 @@ The full table, connector setup, colony transport, remote access and
 troubleshooting are in the [reference](docs/reference/atlas-reference.md).
 
 Requirements: Python 3 (stdlib only) for hooks and scripts. Optional: Bun for
-omp tests, tmux or herdr for pane workers, uv for the Falcon connector.
+omp tests, tmux (the intended default colony transport; `claude-bg` is the fallback, herdr is selectable) for pane workers, uv for the Falcon connector.
 
 ## Documentation
 
 | Topic | Where |
 |---|---|
 | Full reference (skills, agents, hooks, scripts, connectors, colony, troubleshooting) | [docs/reference/atlas-reference.md](docs/reference/atlas-reference.md) |
-| Colony and seat backends | [docs/atlas-colony.md](docs/atlas-colony.md) |
-| Dashboard | [docs/atlas-workboard.md](docs/atlas-workboard.md) |
-| omp parity | [docs/atlas-harness-parity.md](docs/atlas-harness-parity.md) |
+| Colony and seat backends | [docs/architecture/atlas-colony.md](docs/architecture/atlas-colony.md) |
+| Dashboard | [docs/architecture/atlas-workboard.md](docs/architecture/atlas-workboard.md) |
+| omp parity | [docs/architecture/atlas-harness-parity.md](docs/architecture/atlas-harness-parity.md) |
 | Changes | [docs/CHANGELOG.md](docs/CHANGELOG.md), [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md) |
 | Plans | [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Audits | [docs/audits/](docs/audits/) |
+
+## Releases
+
+Release notes are in the [CHANGELOG](plugins/atlas/CHANGELOG.md) and on
+[GitHub Releases](https://github.com/w159/tech-tools/releases). A release
+workflow (`.github/workflows/release.yml`) tags each release
+`atlas-v<version>` and takes the release body from the matching CHANGELOG
+section.
 
 ## Developing atlas
 

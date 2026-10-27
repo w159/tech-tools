@@ -49,11 +49,25 @@ or describe the task and let `references/role-routing.md` pick the agent.
 
 ## Credentials
 
-Armada declares no `userConfig` and no `mcpServers`. Every vendor credential
-lives on the `atlas` plugin, set through `/plugin config` on atlas. The
-per-vendor key list is in
+Armada owns the 13 vendor connectors (`plugins/armada/.mcp.json`, servers under
+`plugins/armada/mcp/`) and their `userConfig` keys. Set credentials through
+`/plugin config` on armada. The connector loaders also fall back to values
+saved under the atlas plugin, and `~/.config/atlas/atlas.env` still works.
+Install atlas and armada together. MCP tools are named
+`mcp__plugin_armada_<vendor>__*`. The per-vendor key list is in
 `skills/armada/references/connector-provisioning.md`. Armada never accepts a
 credential typed into chat and never writes one into `.atlas/`.
+
+## Upgrading: connectors moved from atlas to armada
+
+atlas 16.0.0 and armada 2.0.0 move the 13 vendor MCP connectors out of atlas. A plain atlas install no longer starts any connector process.
+
+1. Install armada: `/plugin install armada@tech-tools`.
+2. Restart Claude Code.
+3. Update permission allow and deny rules (settings.json, `.claude/settings.json`) from `mcp__plugin_atlas_` to `mcp__plugin_armada_`.
+4. Credentials: values saved under `atlas@tech-tools` keep working through a fallback read. New saves from `/plugin config` go under armada. `~/.config/atlas/atlas.env` still works unchanged.
+
+`connector_credential_watch` stays an atlas hook and fires only when both plugins are installed. Release notes: [CHANGELOG.md](CHANGELOG.md), `plugins/atlas/CHANGELOG.md`, `docs/CHANGELOG.md`.
 
 ## Layout
 

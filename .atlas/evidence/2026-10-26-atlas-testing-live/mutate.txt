@@ -1,0 +1,49 @@
+MUTATE (mutmut 3.8.0 via uvx, ephemeral env python3.12; uvx picked 3.12, not system 3.15)
+Scratch copy: scratchpad/testing-live (testscope.py + test_testscope.py). No mutants/ in repo.
+
+Attempt 1: `uvx mutmut run` (no config) -> exit 1
+  FileNotFoundError: Could not figure out where the code to mutate is. Please specify it by adding "source_paths=code_dir" in setup.cfg to the [mutmut] section.
+Attempt 2: added pyproject.toml in the copy (config the reference did not mention for flat layout):
+  [tool.mutmut]
+  source_paths = ["testscope.py"]
+  pytest_add_cli_args_test_selection = ["test_testscope.py"]
+  `uvx mutmut run` -> exit 0 (7.9s generate, ~57s total, 51.98 mutations/s)
+  Final counter line: 2948/2948  killed=804  no-tests=357  timeout=0  suspicious=0  survived=1787  skipped=0
+  Score killed/(killed+survived) = 804/2591 = 31.0%; incl. no-tests in denominator 804/2948 = 27.3%
+  `uvx mutmut results` -> exit 0; full list in mutate-results-full.txt (2144 lines)
+
+Per-function non-killed mutants (survived / no tests):
+  command_rows: {'survived': 808}
+  detect_misc_files: {'survived': 321}
+  _collect: {'survived': 195}
+  baseline_rows: {'survived': 107}
+  detect_terraform: {'survived': 106}
+  detect_workflows: {'survived': 86}
+  main: {'no tests': 84}
+  md_detect: {'no tests': 72}
+  detect_composer: {'no tests': 40}
+  detect_cargo: {'no tests': 38}
+  detect_csproj: {'no tests': 30}
+  detect_go: {'survived': 29}
+  has_migrations: {'no tests': 28}
+  md_commands: {'no tests': 26}
+  md_gaps: {'no tests': 25}
+  lang_rows: {'survived': 24}
+  detect_test_files: {'survived': 19}
+  walk_files: {'survived': 16}
+  gaps: {'survived': 15}
+  bats_dir: {'no tests': 14}
+  _prune_dir: {'survived': 12}
+  detect_package_json: {'survived': 11}
+  read_text: {'survived': 10}
+  count_languages: {'survived': 10}
+  detect_python: {'survived': 7}
+  tool_areas: {'survived': 6}
+  pytest_cmd: {'survived': 5}
+
+Verdict: command_rows (808 survived, testscope.py:967) and detect_misc_files (321, :488), _collect (195, :700),
+baseline_rows (107, :857), detect_terraform (106, :430), detect_workflows (86, :468) are needs-test:
+existing tests assert presence of a few rows, not exact commands/notes/evidence strings.
+md_* and main show 'no tests' because their tests run testscope.py through subprocess; mutmut's
+coverage stats do not follow subprocess, so the new test (and the 3 existing CLI tests) do not count.
+Equivalent-mutant triage not done per mutant (2144 lines); per-function verdict above.

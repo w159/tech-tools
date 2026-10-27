@@ -32,7 +32,7 @@ All credentials handling: read what the environment already exposes; never print
 
 ## Evidence capture (at the moment of query)
 
-Every raw query and its raw response go to `.atlas/evidence/<YYYY-MM-DD>-product-pulse/` as the query runs: one file per source, e.g. `analytics-raw.md`, `tracing-raw.md`, `payments-raw.md`, each headed with the exact query issued, the window, and the verbatim response. Summaries in evidence files must contain no PII (raw provider payloads stay out of evidence too - capture the counts/aggregates the API returned, not user records). The Phase 3 verifier traces every report figure to these files; a figure with no evidence file is removed.
+Every raw query and its raw response go to `.atlas/evidence/<YYYY-MM-DD>_product-pulse/` as the query runs: one file per source, e.g. `analytics-raw.md`, `tracing-raw.md`, `payments-raw.md`, each headed with the exact query issued, the window, and the verbatim response. Summaries in evidence files must contain no PII (raw provider payloads stay out of evidence too - capture the counts/aggregates the API returned, not user records). The Phase 3 verifier traces every report figure to these files; a figure with no evidence file is removed.
 
 ## Quality sampling (only when config opts in)
 
@@ -44,7 +44,7 @@ Read `references/report-template.md` and fill it from query results. Four sectio
 
 ## Write, verify, surface
 
-1. Write `docs/pulses/<YYYY-MM-DD>-product-pulse.md` (create `docs/pulses/` if absent).
+1. Write `docs/pulses/<YYYY-MM-DD>_product-pulse.md` (create `docs/pulses/` if absent).
 2. Phase 3 verification per SKILL.md - verifier traces figures to evidence, stamps `.atlas/.run/findings.json`.
 3. Surface Headlines + top Followup + full path in chat.
 

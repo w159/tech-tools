@@ -20,23 +20,33 @@ export interface Contract {
 export interface TodoItem {
   id: string;
   content: string;
-  status: 'pending' | 'in_progress' | 'completed' | string;
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked' | string;
   owner?: string;
   session_id?: string;
   phase?: PhaseId;
   archived?: boolean;
   evidence?: string;
+  claimed_at?: number | null;   // epoch seconds
+  origin?: 'session' | 'carried' | 'manual' | 'advisor' | string;
+  channel?: string;
+  role?: string;
+  carries?: number;
+  carried_at?: number;          // epoch seconds
+  completed_at?: number | null; // epoch seconds
+  updated_at?: number;          // epoch seconds
 }
 
 export interface ChannelNote {
-  ts: string;
+  ts: number; // epoch seconds (float)
   seq: number;
   owner: string;
   to?: string;
   item?: string;
   text: string;
   channel: string;
-  kind?: string; // 'exit' | 'note' | ...
+  kind?: string; // omitted = plain note; 'exit' | 'claim' | 'release' | 'conflict' | 'report' | 'handoff' | 'blocked' | ...
+  paths?: string[];
+  delivery?: 'delivered' | 'refused';
 }
 
 export interface ChannelMember {
@@ -145,6 +155,7 @@ declare module 'claude-code' {
 			atlasView: 'team' | 'channel' | 'route' | 'gates';
 			gates: { id: 'completion' | 'tripwire' | 'routing' | 'header'; title: string; lines: { id: string; label: string; ok: boolean; detail?: string; fix?: string }[]; error?: string }[];
 			lastHeader: { matched: boolean; phase: string | null } | null;
+			todoExpanded: boolean | null;
 		};
 	}
 }

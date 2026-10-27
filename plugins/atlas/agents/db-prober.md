@@ -3,6 +3,8 @@ name: db-prober
 description: "Read-only database prober that inspects SQL/Postgres schema, RLS policies, runtime-role GRANTs, indexes, constraints, and EXPLAIN plans, and returns findings with evidence. Read-only: no writes or migrations, only proposals. Use when a task needs facts about database structure, privileges, or query plans."
 model: sonnet
 effort: low
+tier_allow: [haiku, sonnet]
+effort_allow: [low, medium]
 color: yellow
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch]
 ---

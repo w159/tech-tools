@@ -2,7 +2,7 @@
     "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
     "name": "tech-tools",
     "description": "The atlas marketplace: a multi-agent coding architect (atlas) with 39 plainly named skills, 14 core agents, self-improvement hooks, and the atlas-orchestrate methodology (evidence before any done claim), plus an optional organizational deployment plugin (armada) with 4 invocable setup skills, 11 department agents, and 156 department skills, and a book-derived code-review engine (programmer) with 4 skills and 7 specialized reviewer agents.",
-    "version": "4.6.2",
+    "version": "5.0.0",
     "owner": {
         "name": "w159",
         "url": "https://github.com/w159"
@@ -47,12 +47,12 @@
                 "learning-capture",
                 "compound-packs"
             ],
-            "version": "12.5.13"
+            "version": "16.0.0"
         },
         {
             "name": "armada",
             "source": "./plugins/armada",
-            "description": "Organizational deployment layer split out of atlas. Four invocable setup skills in run order: armada (deployment status and router), armada-brand (org name, voice, colors, commit style - run first), armada-department (activate one of 11 departments and its agent), armada-connect (vendor MCP connectors). Behind them: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use.",
+            "description": "Organizational deployment layer split out of atlas. Four invocable setup skills in run order: armada (deployment status and router), armada-brand (org name, voice, colors, commit style - run first), armada-department (activate one of 11 departments and its agent), armada-connect (the 13 vendor MCP connectors armada ships). Behind them: 11 department agents (data, design, engineering, finance, HR, IT ops, M365, product, productivity, security, support) and 156 department skills carrying org branding, policies, and compliance context. Install alongside atlas only for org use.",
             "category": "developer-tools",
             "keywords": [
                 "armada",
@@ -76,6 +76,21 @@
                 "principles",
                 "best-practices",
                 "book"
+            ]
+        },
+        {
+            "name": "harbor",
+            "source": "./plugins/harbor",
+            "description": "Admin tools for the enterprise MCP gateway: 4 skills (harbor-setup deploys the gateway into your Azure or Google Cloud account, harbor-policy manages who can call which tools, harbor-audit summarizes the audit log, harbor-connect adds it to Claude as a custom connector), a read-only-by-default harbor-admin agent, and Bicep and Terraform templates.",
+            "category": "developer-tools",
+            "keywords": [
+                "harbor",
+                "mcp",
+                "gateway",
+                "azure",
+                "gcp",
+                "audit",
+                "access-policy"
             ]
         }
     ]

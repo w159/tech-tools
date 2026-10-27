@@ -173,6 +173,7 @@ test("a named-agent dispatch todo is origin=dispatch and its id is injected as B
 
 test("openLeadChannel: SessionStart opens the lead's channel with zero members, reusing the dispatch lead name", () => {
 	const cwd = repo();
+	mkdirSync(join(cwd, ".atlas", ".run"), { recursive: true }); // 12.5.12+: session-start channel needs an existing board
 	const opened: Array<{ channel: string; members: string[]; cwd: string }> = [];
 	const chan = openLeadChannel({ cwd, sessionId: "sess123456", env: {}, onOpen: i => opened.push({ channel: i.channel, members: i.members, cwd: i.cwd }) });
 	const want = `${basename(cwd)}@feature/x/lead-sess12`;

@@ -1,7 +1,7 @@
 // Bridges the on-disk refresh token to the NinjaOne SDK's tokenSupplier hook.
 // Handles refresh-on-demand and persists rotated refresh tokens.
 
-import { loadTokens, saveTokens, clearTokens, type StoredTokens } from "./token-store.js";
+import { loadTokens, saveTokens, type StoredTokens } from "./token-store.js";
 import { refreshAccessToken } from "./user-flow.js";
 
 const EXPIRY_BUFFER_MS = 60 * 1000;
@@ -21,21 +21,8 @@ export class UserTokenManager {
     return tokens.accessToken;
   }
 
-  async hasTokens(): Promise<boolean> {
-    if (this.cache) return true;
-    const t = await loadTokens();
-    if (!t) return false;
-    if (t.region !== this.region) return false;
-    this.cache = t;
-    return true;
-  }
-
-  async invalidate(): Promise<void> {
-    this.cache = null;
-    await clearTokens();
-  }
-
   /** Caller invokes this after a fresh sign-in to update the cached pair. */
+  // fallow-ignore-next-line unused-class-member -- called via ensureUserTokenManager() in index.ts
   setTokens(t: StoredTokens): void {
     this.cache = t;
   }

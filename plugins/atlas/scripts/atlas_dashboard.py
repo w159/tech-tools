@@ -38,6 +38,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 
+import armada_root  # noqa: E402
 import atlas_db  # noqa: E402
 import atlas_control  # noqa: E402
 import atlas_todo  # noqa: E402
@@ -203,9 +204,43 @@ def _plugin_manifest():
     return _MANIFEST
 
 
+def _armada_root():
+    """The armada plugin root that owns the vendor connectors, or None."""
+    return armada_root.find_armada_root(PLUGIN_ROOT)[0]
+
+
+def connectors_unavailable_reason() -> str:
+    """Why the connector list is empty ("" when armada was found)."""
+    return armada_root.find_armada_root(PLUGIN_ROOT)[1]
+
+
+def _connector_manifest() -> dict:
+    """armada's plugin.json: the connectors' userConfig lives there, not in atlas's."""
+    root = _armada_root()
+    if root is None:
+        return {}
+    try:
+        return json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _all_user_config() -> dict:
+    """Connector userConfig (armada) plus atlas's own keys."""
+    uc = dict(_connector_manifest().get("userConfig") or {})
+    uc.update(_plugin_manifest().get("userConfig") or {})
+    return uc
+
+
+def _connector_env_path() -> Path:
+    """The .env the connector preloaders read (ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env in armada's .mcp.json)."""
+    return (_armada_root() or PLUGIN_ROOT) / ".env"
+
+
 def _mcp_json():
-    path = PLUGIN_ROOT / ".mcp.json"
-    if not path.is_file():
+    root = _armada_root()
+    path = root / ".mcp.json" if root else None
+    if path is None or not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -225,14 +260,17 @@ def _plugin_config_options() -> dict:
     except Exception:
         return {}
     pc = data.get("pluginConfigs") or {}
-    # Prefer marketplace-qualified key; fall back to bare name.
-    for key in ("atlas@tech-tools", "atlas"):
+    # Connectors live in armada; credentials saved under atlas before the move stay readable.
+    # Later keys win, so armada's saved value overrides a legacy atlas one. Marketplace-qualified
+    # key first, then bare name.
+    merged: dict = {}
+    for key in ("atlas", "atlas@tech-tools", "armada", "armada@tech-tools"):
         block = pc.get(key)
         if isinstance(block, dict):
             opts = block.get("options")
             if isinstance(opts, dict):
-                return opts
-    return {}
+                merged.update(opts)
+    return merged
 
 
 def _env_example_keys():
@@ -243,14 +281,18 @@ def _env_example_keys():
     """
     keys: list[str] = []
     seen: set[str] = set()
-    for name in (".env.example", ".env.template"):
-        path = PLUGIN_ROOT / name
-        if not path.is_file():
-            # marketplace root template is one level up from plugins/atlas
-            alt = PLUGIN_ROOT.parent.parent / name
-            path = alt if alt.is_file() else path
-        if not path.is_file():
-            continue
+    roots = [PLUGIN_ROOT] + ([_armada_root()] if _armada_root() else [])
+    candidates = []
+    for root in roots:
+        for name in (".env.example", ".env.template"):
+            path = root / name
+            if not path.is_file():
+                # marketplace root template is one level up from plugins/<name>
+                alt = root.parent.parent / name
+                path = alt if alt.is_file() else path
+            if path.is_file() and path not in candidates:
+                candidates.append(path)
+    for path in candidates:
         for raw in path.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
             if not line or line == "#":
@@ -284,7 +326,7 @@ def _env_candidate_paths() -> list:
     read-only here: mcp/_env/load.* load it first, so a key set only there is
     configured even though the dashboard never writes it.
     """
-    return [Path.home() / ".config" / "atlas" / "atlas.env", PLUGIN_ROOT / ".env"]
+    return [Path.home() / ".config" / "atlas" / "atlas.env", _connector_env_path()]
 
 
 def _parse_env_keys(path: Path) -> set:
@@ -392,8 +434,7 @@ def _key_is_set(
 
 
 def _user_config_schema():
-    manifest = _plugin_manifest()
-    uc = manifest.get("userConfig") or {}
+    uc = _all_user_config()
     out = []
     opts = _plugin_config_options()
     env_present = _env_file_present_keys()
@@ -462,6 +503,7 @@ CONNECTOR_AUTH = {
     "threatlocker": [["THREATLOCKER_API_KEY"]],
     "vanta": [["VANTA_CLIENT_ID", "VANTA_CLIENT_SECRET"]],
     "panos": [["PANOS_HOST", "PANOS_API_KEY"]],
+    "sonicwall": [["SONICWALL_HOST", "SONICWALL_USERNAME", "SONICWALL_PASSWORD"]],
 }
 
 
@@ -492,9 +534,8 @@ def _connector_auth_state(name: str, fields: list) -> tuple[bool, list]:
 
 def _connector_status():
     """Group userConfig fields by MCP connector for the Settings UI."""
-    manifest = _plugin_manifest()
+    user_config = _connector_manifest().get("userConfig") or {}
     mcp = _mcp_json()
-    user_config = manifest.get("userConfig") or {}
     servers = mcp.get("mcpServers") or {}
     opts = _plugin_config_options()
     env_present = _env_file_present_keys()
@@ -545,6 +586,9 @@ def _connector_status():
                     )
                     or "",
                     "sensitive": sensitive,
+                    # plugin.json declares every userConfig as a string, so the UI
+                    # needs this hint to render true/false switches.
+                    "type": "bool" if uk.endswith("_verify_tls") else "text",
                     "is_set": is_set,
                     "source": source,
                 }
@@ -577,8 +621,9 @@ def _connector_status():
             )
 
         configured, missing = _connector_auth_state(name, fields)
-        server_name = f"plugin:atlas:{name}"
-        enabled = server_name not in disabled
+        server_name = f"plugin:armada:{name}"
+        # pre-move disable entries named the server under atlas; honour them too
+        enabled = server_name not in disabled and f"plugin:atlas:{name}" not in disabled
         u = usage.get(name) or {}
         out.append(
             {
@@ -717,15 +762,19 @@ def _is_junk_project(root) -> bool:
     return atlas_control.is_fixture_project(root)
 
 
-def _junk_project_row(root) -> bool:
+def _junk_project_row(root, require_marker=False) -> bool:
     """Rows that are not a project of their own: $HOME, worktrees/caches/scratch, and
-    subdirs of another repo (those belong to the enclosing repo's project)."""
+    subdirs of another repo (those belong to the enclosing repo's project).
+    require_marker (selector only) also drops marker-less dirs such as ~/Downloads;
+    the reaper leaves it off so .atlas-only roots keep being reaped."""
     if not root:
         return True
-    from atlas_dash_work import _junk_root
+    from atlas_dash_work import _junk_root, _real_project
 
     d = os.path.realpath(root)
     if d == os.path.realpath(os.path.expanduser("~")) or _junk_root(d):
+        return True
+    if require_marker and not _real_project(d):
         return True
     p = os.path.dirname(d)
     while p != os.path.dirname(p):
@@ -754,7 +803,7 @@ def _projects(conn, recent_only=True, editable_only=False):
     )
     out = []
     for r in rows:
-        if _junk_project_row(r.get("root_path")) or (
+        if _junk_project_row(r.get("root_path"), require_marker=True) or (
             editable_only and _is_junk_project(r.get("root_path"))
         ):
             continue
@@ -1117,6 +1166,7 @@ def snapshot(project_id=None):
             "health": _run_health(conn, project_id=project_id),
             "savings": _savings_estimate(conn),
             "connectors": _connector_status(),
+            "connectors_reason": connectors_unavailable_reason(),
             "user_config": _user_config_schema(),
             "settings_path": str(_settings_path()),
             "findings": _findings(conn),
@@ -1133,8 +1183,7 @@ def snapshot(project_id=None):
 
 def _allowlisted_credential_keys() -> tuple[set[str], set[str], dict[str, str]]:
     """Return (user_config_keys, env_keys, env_to_user_config)."""
-    manifest = _plugin_manifest()
-    uc = set((manifest.get("userConfig") or {}).keys())
+    uc = set(_all_user_config().keys())
     env_keys = set(_env_example_keys())
     env_to_uc = {k.upper(): k for k in uc}
     # Every userConfig key has an UPPER env form
@@ -1226,10 +1275,11 @@ def write_settings_updates(updates: dict):
     if not isinstance(data, dict):
         data = {}
     pc = data.setdefault("pluginConfigs", {})
-    block = pc.get("atlas@tech-tools")
+    # Connector credentials belong to armada (the plugin that declares these userConfig keys).
+    block = pc.get("armada@tech-tools")
     if not isinstance(block, dict):
         block = {}
-        pc["atlas@tech-tools"] = block
+        pc["armada@tech-tools"] = block
     opts = block.get("options")
     if not isinstance(opts, dict):
         opts = {}
@@ -1309,7 +1359,7 @@ def _write_env_file(updates: dict):
     if bad:
         return {"ok": False, "error": "keys_not_allowlisted", "keys": bad}
     updates = norm_updates
-    path = PLUGIN_ROOT / ".env"
+    path = _connector_env_path()
     _merge_env_file(path, updates)
     return {
         "ok": True,
@@ -1968,8 +2018,10 @@ TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
 # GETs that expose transcripts/agent output or live streams: token required.
 _SENSITIVE_GET = re.compile(
     r"^/api/v2/(stream|irc|colony|channels(/[^/]+)?|[^/]+/transcript)$|^/api/sessions/[^/]+/transcript$"
-    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/herd/capture$|^/api/v2/term/(snapshot|capture)$"
+    r"|^/api/v2/(herd/)?agents/[^/]+/peek$|^/api/v2/herd/capture$|^/api/v2/term/(snapshot|capture|seats)$"
 )
+# GETs served straight from do_GET (SSE, websocket upgrade), not through V2_ROUTES.
+V2_RAW_GET = frozenset({"/api/v2/stream", "/api/v2/term/ws"})
 _TOKEN_EXEMPT = ("/api/health", "/health")
 _MIME = {
     ".html": "text/html; charset=utf-8",
@@ -2004,6 +2056,7 @@ def _mount_v2_routes() -> None:
         "atlas_dash_herd",
         "atlas_dash_integrations",
         "atlas_dash_term",
+        "atlas_ollama",
     ):
         try:
             mod = importlib.import_module(name)
@@ -2611,7 +2664,7 @@ class Handler(BaseHTTPRequestHandler):
         # No CORS preflight is honoured: the UI is same-origin, so cross-origin
         # pages get no Allow-* headers and the browser blocks them.
         self.send_response(204)
-        self.send_header("Allow", "GET, HEAD, POST, PUT")
+        self.send_header("Allow", "GET, HEAD, POST, PUT, DELETE")
         self.end_headers()
 
     def do_HEAD(self):
@@ -2734,7 +2787,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "text": atlas_control.env_export(_connector_status()),
-                    "env_path": str(PLUGIN_ROOT / ".env"),
+                    "env_path": str(_connector_env_path()),
                 },
             )
         if u.path == "/api/findings":
@@ -2827,6 +2880,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         return self._mutate("PUT")
 
+    def do_DELETE(self):
+        return self._mutate("DELETE")
+
     def _legacy_post(self, u, data):
         if u.path == "/api/connectors/env":
             updates = data.get("updates") or {}
@@ -2856,9 +2912,11 @@ class Handler(BaseHTTPRequestHandler):
             # atlas_control binds SETTINGS_PATH at import; re-point it so the
             # ATLAS_CLAUDE_SETTINGS override (tests) is honoured.
             atlas_control.SETTINGS_PATH = _settings_path()
-            return self._json(
-                200, atlas_control.write_behavior_updates(data.get("updates") or {})
+            result = atlas_control.write_behavior_updates(
+                data.get("updates") or {}, confirm=data.get("confirm") is True
             )
+            # needs_confirm 409, unknown_model/out_of_range/bad_* 400; legacy errors stay 200
+            return self._json(result.pop("status", 200), result)
         if u.path == "/api/mcp/toggle":
             return self._json(
                 200,
@@ -2970,6 +3028,19 @@ _REAP_WARNED: set[str] = set()
 def _reap_warn(what: str, exc: Exception) -> None:
     """Log a swallowed reaper error once per distinct message per process (the tick repeats every 5 min)."""
     msg = f"reap_tick {what}: {exc!r}"
+    try:  # every failure (not just the first) feeds /api/v2/health "reaper"
+        import atlas_dash_insights as ins
+
+        ins.REAP_FAILURES.append(
+            {
+                "ts": time.time(),
+                "path": what,
+                "error": type(exc).__name__,
+                "message": str(exc),
+            }
+        )
+    except Exception:  # ponytail: health surfacing must never break the reaper
+        pass
     if msg not in _REAP_WARNED:
         _REAP_WARNED.add(msg)
         log.warning(msg)

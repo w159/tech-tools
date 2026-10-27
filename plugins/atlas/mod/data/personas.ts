@@ -130,7 +130,7 @@ export interface RoutingRow {
   effort: string;
 }
 
-/** Task-type routing, copied verbatim from the plan (docs/plans/2026-10-09-atlas-mod.md section 5). Claude-side values. */
+/** Task-type routing, copied verbatim from the plan (docs/plans/2026-10-09_atlas-mod.md section 5). Claude-side values. */
 export const ROUTING_MATRIX: RoutingRow[] = [
   { task: 'Mechanical edit, exact <=7 STEPS on <=5 files', persona: 'atlas:runner', model: 'haiku', effort: 'low' },
   { task: 'One bounded implementation', persona: 'atlas:implementer', model: 'sonnet', effort: 'low' },

@@ -114,7 +114,7 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    path, docs/ state, self-improvement status, context optimization results,
    and the next recommended command. Persist the same activation record - what
    tooling was detected as fitting the stack, what was activated, what was
-   declined, and why - to `.atlas/decisions/<YYYY-MM-DD>-tooling-activation.md`
+   declined, and why - to `.atlas/decisions/<YYYY-MM-DD>_tooling-activation.md`
    so a later session (or `atlas:docs-auditor`) can see the reasoning without
    re-deriving it.
 

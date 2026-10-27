@@ -1,6 +1,6 @@
 ---
 name: atlas-compound
-description: "Captures one durable, verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use after solving and verifying a problem a future engineer would repeat."
+description: "Captures one durable, verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use when a problem is solved and verified and a future engineer would repeat it."
 when_to_use: "record this lesson, capture what we learned, write up the root cause, post-mortem note, institutional knowledge"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<optional context: what was solved and why it was non-obvious>'
@@ -52,7 +52,7 @@ Failing the gate is a normal, expected outcome: emit the terminal signal `Learni
 
 Ground the lesson in what actually happened, not in memory:
 
-- Read the changed files/diff, the verifier verdict row in `.atlas/.run/findings.json`, and any evidence under `.atlas/evidence/<YYYY-MM-DD>-<slug>/` for this work.
+- Read the changed files/diff, the verifier verdict row in `.atlas/.run/findings.json`, and any evidence under `.atlas/evidence/<YYYY-MM-DD>_<slug>/` for this work.
 - Collect: the observable symptoms (errors, broken behavior), the attempts that failed, the fix that worked, the root-cause explanation, and the prevention practice.
 - Corpus sample: list `docs/lessons/**` (and `.atlas/findings/**`) directory names and frontmatter to learn the corpus's existing category vocabulary - this feeds Phase 3 and 4. Grep frontmatter fields (`title`, `tags`, `module`, `problem_type`, `applies_when`) for candidates on this topic; fully read only the strongest matches.
 
@@ -69,7 +69,7 @@ Read `references/overlap.md` and run the five-dimension overlap check (problem s
 ## Phase 4 - Assemble
 
 - Pick the track from `problem_type` (bug vs knowledge) and the exact frontmatter + body from `references/schema.md` and `references/templates.md`. The two body templates are CE's, verbatim.
-- Target path is atlas's date-first convention, enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`: `docs/lessons/<category>/<YYYY-MM-DD>-<slug>.md`. Never CE's undated slug-only filename, never a timestamped hour-suffix name. The category subdirectory is corpus-first (reuse an existing `docs/lessons/` subdirectory name; only an empty corpus falls back to the schema mapping). Slug is filesystem-safe per the docs-ssot rule (lowercase, every character outside `a-z 0-9 . _ -` replaced by `-`, trimmed; no Windows-reserved characters).
+- Target path is atlas's date-first convention, enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`: `docs/lessons/<category>/<YYYY-MM-DD>_<slug>.md`. Never CE's undated slug-only filename, never a timestamped hour-suffix name. The category subdirectory is corpus-first (reuse an existing `docs/lessons/` subdirectory name; only an empty corpus falls back to the schema mapping). Slug is filesystem-safe per the docs-ssot rule (lowercase, every character outside `a-z 0-9 . _ -` replaced by `-`, trimmed; no Windows-reserved characters).
 - On a high-overlap update, the target is the existing file; bump its `last_updated` field and update only the sections the new learning genuinely improves.
 
 ## Phase 5 - Grounding-claims check (mechanical)

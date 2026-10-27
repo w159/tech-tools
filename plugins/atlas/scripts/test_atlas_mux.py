@@ -11,11 +11,13 @@ run-worker is not allowed to write the board itself.
 # Real-tmux smoke lives in docs (subagent-kit.md "Colony mux mode"); these
 # tests never touch a real tmux server.
 
+import argparse
 import contextlib
 import io
 import json
 import os
 import pathlib
+import re
 import shlex
 import shutil
 import subprocess
@@ -98,9 +100,11 @@ if [ "$1" = "--bg" ]; then
   echo "backgrounded · fakebg42 · $NAME"
   echo "  claude agents             list sessions"
   echo "env: ATLAS_LEAD_AGENT=[$ATLAS_LEAD_AGENT] ATLAS_WORKER_NAME=[$ATLAS_WORKER_NAME] ATLAS_LEAD_NAME=[$ATLAS_LEAD_NAME] ATLAS_CHANNEL=[$ATLAS_CHANNEL] ATLAS_TASKS_MIRROR=[$ATLAS_TASKS_MIRROR]" >>"$L"
+  echo "tok: [$ATLAS_OWNER_TOKEN]" >>"$L"
   exit "${FAKE_BG_EXIT:-0}"
 fi
 echo "env: ATLAS_WORKER_NAME=[$ATLAS_WORKER_NAME] ATLAS_PROJECT_ROOT=[$ATLAS_PROJECT_ROOT]" >>"$L"
+echo "tok: [$ATLAS_OWNER_TOKEN]" >>"$L"
 echo "fake-report-1"
 echo "fake-report-2"
 exit "${FAKE_HARNESS_EXIT:-0}"
@@ -210,10 +214,12 @@ def _pairs(argv):
 
 # claude-bg --settings payload: cross-session inbound accept plus the two allow rules the
 # brief's mandatory actions need (the atlas_todo board-note Bash call, claude-mem MCP search)
-_BG_SETTINGS_JSON = (
-    '{"crossSessionInbound":"accept","permissions":{"allow":'
-    '["Bash(python3 *atlas_todo.py*)","mcp__claude_mem_mcp_search"]}}'
-)
+# and the MCP navigation list every claude worker gets (worker_allow with no tools_profile)
+def _bg_settings_json():
+    import atlas_mux
+
+    allow = ["Bash(python3 *atlas_todo.py*)", "mcp__claude_mem_mcp_search", *atlas_mux.worker_allow(None)]
+    return json.dumps({"crossSessionInbound": "accept", "permissions": {"allow": allow}}, separators=(",", ":"))
 
 
 class Base(unittest.TestCase):
@@ -296,7 +302,7 @@ class Base(unittest.TestCase):
 
 
 class SpawnGateTests(Base):
-    def test_spawn_requires_mux_opt_in(self):
+    def test_spawn_refused_when_mux_off(self):
         with open(self.make_prompt("p", "hello"), encoding="utf-8"):
             pass
         rc, data, _, _ = _run(
@@ -311,12 +317,20 @@ class SpawnGateTests(Base):
             "explorer",
             "--prompt-file",
             self.make_prompt("p", "hello"),
-            env=self.spawn_env(mux=0),
+            env=self.spawn_env(mux=0, extra={"ATLAS_MUX": "off"}),
             cwd=self.root,
         )
         self.assertNotIn("tmux ", "\n".join(_tmux_log_calls(self.state)))
         self.assertFalse(data.get("ok"), data)
-        self.assertIn("mux", str(data.get("error", "")))
+        self.assertIn("ATLAS_MUX=off", str(data.get("error", "")))
+
+    def test_spawn_unset_atlas_mux_is_not_refused(self):
+        rc, data, _, _ = _run(
+            "spawn", "--run", "r1", "--harness", "claude", "--name", "Alpha", "--agent", "explorer",
+            "--prompt-file", self.make_prompt("p", "hello"),
+            env=self.spawn_env(mux=0), cwd=self.root,
+        )
+        self.assertNotIn("disabled", str(data.get("error", "")), data)
 
     def test_spawn_rejects_bad_name(self):
         rc, data, _, _ = _run(
@@ -1786,7 +1800,7 @@ class HerdrTransportTests(Base):
         self.fake = th.FakeHerdr(self.handler)
         self.addCleanup(self.fake.close)
         self.env["ATLAS_COLONY_TRANSPORT"] = (
-            "herdr"  # herdr is opt-in under the claude-bg default
+            "herdr"  # herdr is opt-in; tmux is the default
         )
         self.env["HERDR_SOCKET_PATH"] = self.fake.path
         self.env["ATLAS_SEAT_BACKEND"] = "herdr"
@@ -1889,7 +1903,7 @@ class HerdrTransportTests(Base):
         )
         env.pop(
             "ATLAS_COLONY_TRANSPORT"
-        )  # the claude-bg default: omp falls back to panes
+        )  # omp always runs as panes
         prompt = self.make_prompt("p", "x")
         rc, data, _, err = _run(
             "spawn", "--run", "r1", "--name", "Alpha", "--harness", "omp",
@@ -1918,7 +1932,7 @@ class HerdrTransportTests(Base):
 
 
 class ClaudeBgTests(Base):
-    """claude-bg transport (the default for claude workers): `claude --bg` runs the harness as a
+    """claude-bg transport (the fallback when tmux is missing): `claude --bg` runs the harness as a
     supervised background agent, status reads `claude agents --json`, kill is `claude stop`. The
     fake claude on PATH answers all three from the fake-state dir."""
 
@@ -1932,7 +1946,7 @@ class ClaudeBgTests(Base):
     def set_agents(self, rows):
         (pathlib.Path(self.state) / "agents.json").write_text(json.dumps(rows))
 
-    def spawn(self, name="Alpha", env_extra=None):
+    def spawn(self, name="Alpha", env_extra=None, extra_args=()):
         self.make_agent(
             "claude",
             "explorer",
@@ -1948,6 +1962,7 @@ class ClaudeBgTests(Base):
             name,
             "--agent",
             "explorer",
+            *extra_args,
             "--prompt-file",
             self.make_prompt("p", "colonize the pane"),
             "--agents-dir",
@@ -1980,7 +1995,7 @@ class ClaudeBgTests(Base):
                 "--agent",
                 "atlas:explorer",
                 "--settings",
-                _BG_SETTINGS_JSON,
+                _bg_settings_json(),
                 "--model",
                 "opus",
                 "--effort",
@@ -2093,7 +2108,28 @@ class ClaudeBgTests(Base):
         self.assertEqual(0, rc, (data, err))
         self.assertTrue(data.get("ok"), data)
         _, argv = _fake_harness_argv(self.state)
-        self.assertIn(["--settings", _BG_SETTINGS_JSON], _pairs(argv), argv)
+        self.assertIn(["--settings", _bg_settings_json()], _pairs(argv), argv)
+
+    def _bg_allow(self, *extra_args):
+        rc, data, _, err = self.spawn(extra_args=extra_args)
+        self.assertEqual(0, rc, (data, err))
+        _, argv = _fake_harness_argv(self.state)
+        return json.loads(dict(_pairs(argv))["--settings"])["permissions"]["allow"]
+
+    def test_spawn_claude_bg_settings_carry_tools_profile_allow_rules(self):
+        """A claude-bg worker gets the same tools_profile-scoped allow rules as a pane worker
+        (worker_allow), so dontAsk does not auto-deny its verification commands."""
+        base = ["Bash(python3 *atlas_todo.py*)", "mcp__claude_mem_mcp_search"]
+        allow = self._bg_allow("--tools-profile", "exec")
+        for rule in base + ["Bash(pytest *)", "Read", "mcp__serena__find_symbol"]:
+            self.assertIn(rule, allow)
+        self.assertNotIn("Edit", allow)
+        # no profile: MCP navigation list plus the two base rules, nothing that runs commands
+        allow = self._bg_allow()
+        for rule in base + ["mcp__serena__find_symbol"]:
+            self.assertIn(rule, allow)
+        self.assertFalse([r for r in allow if r.startswith("Bash(") and r not in base], allow)
+        self.assertNotIn("Read", allow)
 
     def test_spawn_claude_bg_is_unattended_safe_by_default(self):
         """Unattended bg workers must not hang on permission prompts: with no caller
@@ -2107,8 +2143,8 @@ class ClaudeBgTests(Base):
         parsed = json.loads(dict(_pairs(argv))["--settings"])
         self.assertEqual("accept", parsed["crossSessionInbound"])
         self.assertEqual(
-            ["Bash(python3 *atlas_todo.py*)", "mcp__claude_mem_mcp_search"],
-            sorted(parsed["permissions"]["allow"]),
+            json.loads(_bg_settings_json())["permissions"]["allow"],
+            parsed["permissions"]["allow"],
         )
         # caller passthrough: an explicit --permission-mode wins over the dontAsk default
         rc2, data2, _, err2 = _run(
@@ -2580,6 +2616,24 @@ class SeatTransportTests(unittest.TestCase):
         with mock.patch.object(atlas_mux.shutil, "which", return_value=None):
             self.assertEqual(("claude-bg", "tmux"), self._t(False))
 
+    def test_no_shipped_text_claims_claude_bg_default(self):
+        # contract: tmux is the default transport; claude-bg is only the fallback
+        import pathlib
+        import re
+
+        root = pathlib.Path(__file__).resolve().parents[1]
+        files = [
+            root / "omp/README.md",
+            root / "scripts/atlas_control.py",
+            root / "scripts/atlas_mux.py",
+            root.parents[1] / "docs/architecture/atlas-colony.md",
+            root.parents[1] / "docs/architecture/atlas-harness-parity.md",
+        ]
+        bad = re.compile(r"claude-bg (default|is the default)|default is claude-bg|by default[^.\n]{0,40}claude --bg", re.I)
+        for f in files:
+            for n, line in enumerate(f.read_text().splitlines(), 1):
+                self.assertIsNone(bad.search(line), f"{f}:{n}: {line[:120]}")
+
     def test_env_force_herdr(self):
         self.assertEqual(("herdr", "herdr"), self._t(True, "herdr"))
 
@@ -2691,8 +2745,10 @@ class TeamWindowTests(unittest.TestCase):
         self.assertEqual("even-horizontal", pick(2, 120))
         self.assertEqual("even-horizontal", pick(3, 212))
         self.assertEqual("main-horizontal", pick(3, 200))
-        self.assertEqual("tiled", pick(4, 400))
-        self.assertEqual("tiled", pick(6, 400))
+        self.assertEqual("even-horizontal", pick(4, 400))  # (400-2)//4 = 99
+        self.assertEqual("tiled", pick(4, 200))  # 49 per pane
+        self.assertEqual("even-horizontal", pick(5, 400))  # 79 per pane
+        self.assertEqual("tiled", pick(6, 400))  # 66 per pane
         _, calls = self.drive(["a", "b", "c"], width=240)
         self.assertEqual(
             "even-horizontal", [c for c in calls if c[0] == "select-layout"][-1][-1]
@@ -3033,6 +3089,176 @@ class ReapMembersAndStatusArgsTests(unittest.TestCase):
         self.assertIn("--run", usage)
 
 
+class DefaultTransportAndMemberTaskTests(unittest.TestCase):
+    """Mux is on by default (tmux when installed, claude-bg otherwise); ATLAS_MUX=off disables; task files slice per member."""
+
+    def _validate(self, mux):
+        import atlas_mux
+
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_MUX"}
+        if mux is not None:
+            env["ATLAS_MUX"] = mux
+        args = argparse.Namespace(run="r1", name="A", agent="explorer", harness="claude", effort=None,
+                                  thinking=None, prompt_file=__file__)
+        with mock.patch.dict(os.environ, env, clear=True):
+            return atlas_mux._validate(args)
+
+    def test_unset_and_tmux_pass_off_refuses(self):
+        self.assertIsNone(self._validate(None))
+        self.assertIsNone(self._validate("tmux"))
+        self.assertIn("ATLAS_MUX=off", self._validate("off"))
+        self.assertIn("ATLAS_MUX=off", self._validate(" OFF "))
+
+    def test_default_transport_tmux_present_absent(self):
+        import atlas_mux
+
+        env = {k: v for k, v in os.environ.items() if k not in ("ATLAS_MUX", "ATLAS_COLONY_TRANSPORT")}
+        with mock.patch.dict(os.environ, env, clear=True):
+            with mock.patch("shutil.which", return_value="/usr/bin/tmux"):
+                self.assertEqual("tmux", atlas_mux.transport())
+            with mock.patch("shutil.which", return_value=None):
+                self.assertEqual("claude-bg", atlas_mux.transport())
+
+    def test_spawn_team_refuses_when_off(self):
+        import atlas_mux
+
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"ATLAS_MUX": "off"}), contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--class", "audit", "--effort", "low", "--task", "t",
+                                   "--root", tempfile.mkdtemp()])
+        self.assertEqual(2, code)
+        self.assertIn("ATLAS_MUX=off", json.loads(buf.getvalue())["error"])
+
+    MEMBERS = [
+        {"name": "implementer-aaaa", "role": "implementer"},
+        {"name": "implementer-bbbb", "role": "implementer"},
+        {"name": "verifier-cccc", "role": "verifier"},
+    ]
+
+    def test_split_member_tasks_in_member_order_with_shared_prefix(self):
+        import atlas_mux
+
+        text = "ctx\n\n## member: implementer\nA\n## member: implementer-2\nB\n## member: verifier\nC\n"
+        shared, per = atlas_mux.split_member_tasks(text, self.MEMBERS)
+        self.assertEqual("ctx", shared)
+        self.assertEqual("ctx\n\nA", per["implementer-aaaa"])
+        self.assertEqual("ctx\n\nB", per["implementer-bbbb"])
+        self.assertEqual("ctx\n\nC", per["verifier-cccc"])
+
+    def test_repeated_role_heading_takes_next_free_member_and_no_heading_is_shared(self):
+        import atlas_mux
+
+        _, per = atlas_mux.split_member_tasks("## member: implementer\nA\n## member: implementer\nB\n", self.MEMBERS)
+        self.assertEqual(("A", "B"), (per["implementer-aaaa"], per["implementer-bbbb"]))
+        self.assertEqual(("one task", {}), atlas_mux.split_member_tasks("one task", self.MEMBERS))
+
+    def test_unmatched_heading_raises(self):
+        import atlas_mux
+
+        with self.assertRaises(ValueError):
+            atlas_mux.split_member_tasks("## member: implementer-3\nX\n", self.MEMBERS)
+        with self.assertRaises(ValueError):
+            atlas_mux.split_member_tasks("## member: docs-curator\nX\n", self.MEMBERS)
+
+    def test_dry_run_gives_members_different_tasks_and_brief_uses_them(self):
+        import atlas_mux
+
+        with tempfile.TemporaryDirectory() as d:
+            tf = os.path.join(d, "t.md")
+            pathlib.Path(tf).write_text("## member: implementer\nSLICE-ONE\n## member: verifier\nSLICE-TWO\n")
+            buf = io.StringIO()
+            env = {k: v for k, v in os.environ.items() if k != "ATLAS_MUX"}
+            with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(buf):
+                code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--paths",
+                                       "plugins/atlas", "--task-file", tf, "--dry-run", "--root", d])
+            self.assertEqual(0, code)
+            rec = json.loads(buf.getvalue())["team"]
+            tasks = rec["member_tasks"]
+            self.assertEqual(2, len(tasks))
+            self.assertEqual({"SLICE-ONE", "SLICE-TWO"}, set(tasks.values()))
+            m0 = rec["members"][0]
+            m1 = next(m for m in rec["members"] if m["role"] == "verifier")
+            b0 = atlas_mux.team_brief(rec, m0, d, "c", "lead")
+            b1 = atlas_mux.team_brief(rec, m1, d, "c", "lead")
+            self.assertIn("SLICE-ONE", b0)
+            self.assertNotIn("SLICE-TWO", b0)
+            self.assertIn("SLICE-TWO", b1)
+
+
+class WorktreeIsolationTests(unittest.TestCase):
+    """spawn-team honours the resolved isolation=worktree: one worktree per edit-capable member."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo = os.path.join(self.tmp, "repo")
+        os.mkdir(self.repo)
+        git = lambda *a: subprocess.run(["git", "-C", self.repo, *a], check=True, capture_output=True)
+        git("init", "-q")
+        git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "i")
+
+    def _spawn_team(self, *extra):
+        import atlas_mux
+
+        seen, buf = [], io.StringIO()
+
+        def fake_spawn(ns):
+            seen.append(ns)
+            print(json.dumps({"ok": True, "name": ns.name}))
+            return 0
+
+        env = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
+                mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-wt")), \
+                contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--task", "t",
+                                   "--root", self.repo, *extra])
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1]), seen
+
+    def test_dry_run_plans_worktrees_for_implementers_only(self):
+        code, out, _ = self._spawn_team("--dry-run")
+        wts = out["team"]["worktrees"]
+        roles = {m["name"]: m["role"] for m in out["team"]["members"]}
+        self.assertEqual(0, code)
+        self.assertTrue(wts)
+        self.assertEqual({"implementer"}, {roles[n] for n in wts})
+        for n, wt in wts.items():
+            self.assertEqual(os.path.join(self.repo, ".claude", "worktrees", f"atlas-{out['team']['team_id']}-{n}"), wt["path"])
+            self.assertEqual(f"atlas/{out['team']['team_id']}/{n}", wt["branch"])
+            self.assertFalse(os.path.exists(wt["path"]))  # dry run creates nothing
+
+    def test_spawn_creates_worktrees_and_runs_members_there(self):
+        code, out, seen = self._spawn_team()
+        wts = out["worktrees"]
+        self.assertEqual(0, code, out)
+        for ns in seen:
+            if ns.name in wts:
+                self.assertEqual(wts[ns.name]["path"], ns.cwd)
+                self.assertTrue(os.path.isdir(ns.cwd))
+                self.assertEqual(self.repo, ns.root)  # board stays the main root
+            else:
+                self.assertIsNone(ns.cwd)  # verifier stays in the main root
+        listed = subprocess.run(["git", "-C", self.repo, "worktree", "list"], capture_output=True, text=True).stdout
+        self.assertEqual(len(wts), listed.count("atlas-"))
+        self.assertTrue(all("worktree" in m for m in out["members"] if m["name"] in wts))
+
+    def test_non_git_root_gets_no_worktrees(self):
+        import atlas_mux
+
+        plain = os.path.join(self.tmp, "plain")
+        os.mkdir(plain)
+        rec = {"isolation": "worktree", "team_id": "t1", "members": [{"name": "implementer-1", "role": "implementer"}]}
+        self.assertEqual({}, atlas_mux.worktree_plan(rec, plain))
+        self.assertEqual({}, atlas_mux.worktree_plan(dict(rec, isolation="none"), self.repo))
+
+    def test_split_bare_role_takes_first_free_member_after_numbered_label(self):
+        import atlas_mux
+
+        members = [{"name": "implementer-a", "role": "implementer"}, {"name": "implementer-b", "role": "implementer"}]
+        _, per = atlas_mux.split_member_tasks("## member: implementer-2\nB\n## member: implementer\nA\n", members)
+        self.assertEqual(("A", "B"), (per["implementer-a"], per["implementer-b"]))
+
+
 class ColonyNameSourceTests(unittest.TestCase):
     def _dry(self, *extra):
         import atlas_mux
@@ -3073,3 +3299,213 @@ class ColonyNameSourceTests(unittest.TestCase):
             atlas_mux._lead_source("/a/proj", "lead-ab", None, env),
         )
         self.assertEqual("sid-1", atlas_mux._lead_source("/a/proj", "l", "sid-1", env)["session"])
+
+
+class SpawnGhostMemberTests(Base):
+    def test_window_open_exception_leaves_no_registered_member(self):
+        import atlas_mux
+
+        prompt = self.make_prompt("p-ghost", "x")
+        argv = [
+            "spawn", "--run", "r1", "--name", "Ghost", "--harness", "omp",
+            "--agent", "implementer", "--prompt-file", prompt, "--model", "x/y",
+            "--thinking", "low", "--root", self.root,
+        ]  # fmt: skip
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, self.spawn_env(), clear=True), mock.patch.object(
+            atlas_mux, "_open_window", side_effect=RuntimeError("boom")
+        ), contextlib.redirect_stdout(buf):
+            rc = atlas_mux.main(argv)
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertNotEqual(0, rc)
+        self.assertFalse(out["ok"])
+        self.assertIn("boom", out["error"])
+        reg = pathlib.Path(self.root) / ".atlas/.run/channels.json"
+        names = (
+            [m["name"] for c in json.loads(reg.read_text())["channels"].values() for m in c["members"]]
+            if reg.exists()
+            else []
+        )
+        self.assertNotIn("Ghost", names)
+
+
+class OwnerTokenDeliveryTests(Base):
+    """Each spawned worker gets an HMAC owner token as ATLAS_OWNER_TOKEN in its process env only:
+    never in argv text, FORWARDED_ENV, atlas_mux.log, channels.json or the board."""
+
+    TOK_RE = re.compile(r"tok: \[([0-9a-f]+)\]")
+
+    def spawn_worker(self, env, name="Alpha"):
+        self.make_agent(
+            "claude",
+            "explorer",
+            "---\nname: explorer\nmodel: opus\neffort: high\n---\nbody\n",
+        )
+        return _run(
+            "spawn", "--run", "r1", "--harness", "claude", "--name", name,
+            "--agent", "explorer",
+            "--prompt-file", self.make_prompt("p", "colonize the pane"),
+            "--agents-dir", os.path.join(self.root, "agents"),
+            env=env, cwd=self.root,
+        )  # fmt: skip
+
+    def worker_token(self):
+        log = pathlib.Path(self.state, "log").read_text(encoding="utf-8")
+        found = self.TOK_RE.findall(log)
+        self.assertTrue(found, log)
+        return found[-1]
+
+    def assert_token_stays_out_of_text(self, token):
+        import atlas_mux
+
+        self.assertNotIn("ATLAS_OWNER_TOKEN", atlas_mux.FORWARDED_ENV)
+        for line in _tmux_log_calls(self.state):
+            self.assertNotIn(token, line)
+        for argv_file in pathlib.Path(self.state).glob("argv.*"):
+            self.assertNotIn(token, argv_file.read_text(encoding="utf-8"))
+        for path in (pathlib.Path(self.root) / ".atlas").rglob("*"):
+            if path.is_file():
+                self.assertNotIn(token, path.read_text(errors="replace"), str(path))
+        leftovers = [p.name for p in (pathlib.Path(self.root) / ".atlas").rglob("*.token")
+                     if p.is_file()]  # fmt: skip
+        self.assertEqual([], leftovers)
+
+    def note_cli(self, token, name="Alpha"):
+        env = dict(self.spawn_env())
+        env.pop("ATLAS_OWNER_TOKEN", None)
+        if token:
+            env["ATLAS_OWNER_TOKEN"] = token
+        out = subprocess.run(
+            [sys.executable, str(SCRIPT.parent / "atlas_todo.py"), "note",
+             "--root", self.root, "--owner", name, "--to", "lead", "hello"],
+            capture_output=True, text=True, env=env, cwd=self.root, timeout=60,
+        )  # fmt: skip
+        return out.returncode, out.stdout + out.stderr
+
+    def test_tmux_pane_worker_gets_a_verifying_token_outside_argv_and_logs(self):
+        rc, data, _, err = self.spawn_worker(self.spawn_env())
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Alpha")
+        token = self.worker_token()
+        self.assertTrue(_atlas_todo().verify_owner_token(self.root, "Alpha", token))
+        self.assert_token_stays_out_of_text(token)
+
+    def test_claude_bg_worker_gets_a_verifying_token_outside_argv_and_logs(self):
+        env = self.spawn_env()
+        env["ATLAS_COLONY_TRANSPORT"] = "claude-bg"
+        env["HERDR_SOCKET_PATH"] = os.path.join(self.state, "no-herdr.sock")
+        rc, data, _, err = self.spawn_worker(env)
+        self.assertEqual(0, rc, (data, err))
+        token = self.worker_token()
+        self.assertTrue(_atlas_todo().verify_owner_token(self.root, "Alpha", token))
+        self.assert_token_stays_out_of_text(token)
+
+    def test_worker_note_cli_needs_the_env_token(self):
+        rc, data, _, err = self.spawn_worker(self.spawn_env())
+        self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Alpha")
+        token = self.worker_token()
+        code, out = self.note_cli(token)
+        self.assertEqual(0, code, out)
+        code, out = self.note_cli(None)
+        self.assertNotEqual(0, code, out)
+        self.assertIn("owner_token_required", out)
+
+
+class WorkerToolsProfileAllowTests(unittest.TestCase):
+    """The claude worker argv carries a scoped --allowedTools list keyed on the member's tools_profile."""
+
+    def allow(self, profile):
+        import atlas_mux
+
+        argv = atlas_mux.harness_argv(
+            "claude",
+            "verifier",
+            "do it",
+            "haiku",
+            "low",
+            "",
+            "dontAsk",
+            tools_profile=profile,
+        )
+        self.assertEqual("do it", argv[-1])
+        self.assertEqual(["--permission-mode", "dontAsk"], argv[-3:-1])
+        return argv[argv.index("--allowedTools") + 1].split(",")
+
+    def test_read_gets_mcp_navigation_plus_read_tools_and_no_bash_or_edit(self):
+        allow = self.allow("read")
+        for tool in ("mcp__lean-ctx__*", "Read", "Grep", "Glob"):
+            self.assertIn(tool, allow)
+        self.assertFalse([t for t in allow if t.startswith("Bash")], allow)
+        for tool in ("Edit", "Write", "MultiEdit"):
+            self.assertNotIn(tool, allow)
+
+    def test_exec_gets_scoped_verification_commands_but_no_edit_tools(self):
+        allow = self.allow("exec")
+        for rule in (
+            "Bash(python3 *)",
+            "Bash(pytest *)",
+            "Bash(uv run *)",
+            "Bash(npm test *)",
+            "Bash(npm run *)",
+            "Bash(go test *)",
+            "Bash(cargo test *)",
+            "Bash(make *)",
+            "Bash(git status *)",
+            "Bash(git diff *)",
+            "Bash(echo *)",
+            "Bash(sed -n *)",
+            "Bash(rg *)",
+            "Read",
+        ):
+            self.assertIn(rule, allow)
+        for tool in ("Edit", "Write", "MultiEdit"):
+            self.assertNotIn(tool, allow)
+
+    def test_edit_adds_the_edit_tools_on_top_of_exec(self):
+        allow = self.allow("edit")
+        self.assertTrue(set(self.allow("exec")) <= set(allow))
+        for tool in ("Edit", "Write", "MultiEdit"):
+            self.assertIn(tool, allow)
+
+    def test_no_profile_allows_a_blanket_bash_or_a_writing_vcs_command(self):
+        for profile in ("read", "edit", "exec", None):
+            allow = self.allow(profile)
+            for bad in (
+                "Bash",
+                "Bash(*)",
+                "Bash(git *)",
+                "Bash(git push *)",
+                "Bash(git commit *)",
+            ):
+                self.assertNotIn(bad, allow, (profile, bad))
+            self.assertFalse(any("," in t for t in allow))
+
+    def test_unset_profile_keeps_the_mcp_navigation_list_only(self):
+        import atlas_mux
+
+        self.assertEqual(list(atlas_mux.WORKER_MCP_ALLOW), self.allow(None))
+
+    def test_run_worker_and_spawn_accept_a_tools_profile_flag(self):
+        import atlas_mux
+
+        p = atlas_mux._parser()
+        common = [
+            "--run",
+            "r",
+            "--name",
+            "n",
+            "--harness",
+            "claude",
+            "--agent",
+            "verifier",
+            "--prompt-file",
+            "f",
+            "--root",
+            "/r",
+        ]
+        for cmd in ("run-worker", "spawn"):
+            ns = p.parse_args([cmd, *common, "--tools-profile", "exec"])
+            self.assertEqual("exec", ns.tools_profile)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            p.parse_args(["spawn", *common, "--tools-profile", "bogus"])

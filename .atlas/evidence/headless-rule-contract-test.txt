@@ -1,0 +1,12 @@
+Ran 110 tests in 6.785s
+
+OK
+20	0	.atlas/.run/findings.json
+1	0	.gitignore
+1	0	CLAUDE.md
+1	0	plugins/atlas/CHANGELOG.md
+2	2	plugins/atlas/agents/ui-runtime-tester.md
+2	0	plugins/atlas/skills/atlas-orchestrate/references/tool-routing.md
+Checking formatting...
+All matched files use Prettier code style!
+PLAYWRIGHT_MCP_HEADLESS= 1

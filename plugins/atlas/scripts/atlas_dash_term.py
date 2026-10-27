@@ -17,6 +17,7 @@ import json
 import os
 import pty
 import re
+import secrets
 import select
 import shlex
 import signal
@@ -168,7 +169,11 @@ def _snapshot(ctx):
     except ImportError as e:
         return 501, {"ok": False, "error": "model_unavailable", "why": str(e)}
     proj = q.get("project") or None
-    all_projects = proj == "all" or str(q.get("all") or "").lower() in ("1", "true", "yes")
+    all_projects = proj == "all" or str(q.get("all") or "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     key = (None if proj == "all" else proj, all_projects)
     # Single-flight: concurrent callers queue on the lock, then reuse the fresh build.
     # shortcut: whole-cache lock serialises distinct keys, upgrade if many projects poll.
@@ -209,9 +214,135 @@ def _capture(ctx):
     return 200, {"ok": True, "target": target, "text": text}
 
 
+def _runtime(raw) -> str:
+    r = str(raw or "").lower()
+    return "omp" if "omp" in r else "codex" if "codex" in r else "claude"
+
+
+LEAD_ATTACH_HINT = "start claude inside tmux or herdr to stream this seat"
+
+
+def _seats(ctx):
+    """Seat directory for the Terminal grid: colony seats (lead first), one synthetic
+    shell seat per colony, then the host space (shell + TUI)."""
+    status, snap = _snapshot(ctx)
+    if status != 200:
+        return status, snap
+    spaces = []
+    for c in snap.get("colonies") or []:
+        mine = [s for s in snap.get("seats") or [] if s.get("colony") == c.get("id")]
+        mine.sort(
+            key=lambda s: not s.get("lead")
+        )  # stable: lead first, snapshot order after
+        root = c.get("project") or snap.get("project") or ""
+        seats = []
+        for s in mine:
+            ended = s.get("state") in ("dead", "finished")
+            target = None if ended or not s.get("target") else s["target"]
+            seats.append(
+                {
+                    "address": s.get("address") or s.get("name"),
+                    "name": s.get("name"),
+                    "role": s.get("role"),
+                    "runtime": _runtime(s.get("runtime")),
+                    "state": "ended" if ended else s.get("state"),
+                    "pane": target,
+                    "target": target,
+                    "kind": "pane",
+                    "project": s.get("project") or root,
+                    "cwd": s.get("project") or root,
+                    "started_at": c.get("created"),
+                    "last_activity": s.get("last_active"),
+                }
+            )
+            if s.get("lead") and not ended and not target:
+                seats[-1]["attach_hint"] = LEAD_ATTACH_HINT
+        name = c.get("name") or c.get("label") or c.get("id")
+        seats.append(_shell_seat(f"shell@{name}", root, "shell", root))
+        spaces.append(
+            {"id": c.get("id"), "name": name, "kind": "colony", "seats": seats}
+        )
+    home = os.path.expanduser("~")
+    spaces.append(
+        {
+            "id": "host",
+            "name": snap.get("host") or "host",
+            "kind": "host",
+            "seats": [
+                _shell_seat("shell@host", "", "shell", home),
+                _shell_seat("tui@host", "", "tui", home),
+            ],
+        }
+    )
+    return 200, {
+        "ok": True,
+        "machine": snap.get("host"),
+        "clock": snap.get("clock"),
+        "spaces": spaces,
+    }
+
+
+def _shell_seat(address: str, project: str, kind: str, cwd: str) -> dict:
+    return {
+        "address": address,
+        "name": address.split("@")[0],
+        "role": kind,
+        "runtime": "shell",
+        "state": "ready",
+        "pane": None,
+        "target": None,
+        "kind": kind,
+        "project": project,
+        "cwd": cwd,
+        "started_at": None,
+        "last_activity": None,
+    }
+
+
+# --- single-use websocket tickets (browsers cannot set headers on a WS upgrade) --
+
+TICKET_TTL_S = 30
+_tickets: dict = {}  # ticket -> (monotonic expiry, params)
+_ticket_lock = threading.Lock()
+
+
+def redeem(ticket: str) -> dict | None:
+    """Burn a ticket; its params, or None when unknown, used or expired."""
+    with _ticket_lock:
+        hit = _tickets.pop(ticket, None)
+    return hit[1] if hit and hit[0] > time.monotonic() else None
+
+
+def _ticket(ctx):
+    b = ctx.json() or {}
+    kind = b.get("kind")
+    if kind not in ("pane", "shell", "tui"):
+        return 400, {"ok": False, "error": "bad_kind"}
+    params: dict = {"kind": kind, "cols": b.get("cols"), "rows": b.get("rows")}
+    if kind == "pane":
+        if not TARGET_RE.match(str(b.get("target") or "")):
+            return 400, {"ok": False, "error": "bad_target"}
+        params["target"] = b["target"]
+    for key in ("project", "cwd"):
+        if b.get(key) not in (None, "", "all"):
+            path = os.path.realpath(str(b[key]))
+            if not os.path.isdir(path):
+                return 400, {"ok": False, "error": f"bad_{key}"}
+            params[key] = path
+    t = secrets.token_urlsafe(24)
+    now = time.monotonic()
+    with _ticket_lock:
+        for k in [k for k, v in _tickets.items() if v[0] <= now]:
+            del _tickets[k]  # expired, never redeemed
+        _tickets[t] = (now + TICKET_TTL_S, params)
+    return 200, {"ok": True, "ticket": t, "expires_in": TICKET_TTL_S}
+
+
 ROUTES = [
     ("GET", r"/api/v2/term/snapshot", _snapshot),
     ("GET", r"/api/v2/term/capture", _capture),
+    ("GET", r"/api/v2/term/seats", _seats),
+    ("POST", r"/api/v2/term/ticket", _ticket),
 ]
 
 
@@ -224,6 +355,14 @@ def _tui_argv(root: str | None) -> list[str]:
         return shlex.split(override)
     tail = ["--all"] if root is None else ["--project", root]
     return [sys.executable, str(SCRIPTS_DIR / "atlas_tui.py"), *tail]
+
+
+def _shell_argv() -> list[str]:
+    """$SHELL -l, else /bin/zsh, else /bin/sh."""
+    for sh in (os.environ.get("SHELL"), "/bin/zsh", "/bin/sh"):
+        if sh and os.access(sh, os.X_OK):
+            return [sh, "-l"]
+    return ["/bin/sh", "-l"]
 
 
 def _run_setup(cmds) -> None:
@@ -271,7 +410,18 @@ def _deny(handler, code: int, error: str) -> None:
 def handle_ws(handler, query: dict, token: str) -> None:
     """Upgrade and bridge one PTY. Host/Origin were already checked by the dashboard
     guard; the token, request shape and target are validated here before any 101."""
-    if not hmac.compare_digest((query.get("token") or "").encode(), token.encode()):
+    if query.get("ticket"):
+        params = redeem(query["ticket"])
+        if params is None:
+            return _deny(handler, 403, "bad_ticket")
+        query = (
+            params  # the ticket carries kind/target/cwd/size; nothing else is trusted
+        )
+    elif hmac.compare_digest((query.get("token") or "").encode(), token.encode()):
+        sys.stderr.write(
+            "[atlas-dashboard] term/ws token= query is deprecated, POST /api/v2/term/ticket and use ticket=\n"
+        )
+    else:
         return _deny(handler, 403, "bad_token")
     h = handler.headers
     key = (h.get("Sec-WebSocket-Key") or "").strip()
@@ -305,6 +455,11 @@ def handle_ws(handler, query: dict, token: str) -> None:
             setup, argv = _model().attach_argv(target, view_id)
         except ImportError:
             return _deny(handler, 501, "model_unavailable")
+    elif kind == "shell":
+        cwd = os.path.realpath(query.get("cwd") or os.path.expanduser("~"))
+        if not os.path.isdir(cwd):
+            return _deny(handler, 400, "bad_cwd")
+        argv = _shell_argv()
     else:
         return _deny(handler, 400, "bad_kind")
     if not _slots.acquire(blocking=False):
@@ -318,15 +473,26 @@ def handle_ws(handler, query: dict, token: str) -> None:
         # No LINES/COLUMNS: ncurses lets them override the tty size, so the TUI never followed a resize.
         # ncurses' xterm-256color `rep` (CSI Nb) emits a stray \x01 for multibyte glyphs (every ━ rule run),
         # so the curses TUI gets a terminfo without rep; screen-256color is otherwise xterm.js-compatible.
-        env = {**os.environ, "TERM": "screen-256color" if kind == "tui" else "xterm-256color"}
+        env = {
+            **os.environ,
+            "TERM": "screen-256color" if kind == "tui" else "xterm-256color",
+        }
         if kind == "tui":
-            env["ATLAS_TUI_BRIDGE"] = "1"  # atlas_tui emits the OSC 7717 open bridge only inside the dashboard
+            env["ATLAS_TUI_BRIDGE"] = (
+                "1"  # atlas_tui emits the OSC 7717 open bridge only inside the dashboard
+            )
         env.pop("LINES", None)
         env.pop("COLUMNS", None)
+        if kind == "shell":  # a login shell has no ncurses to fight; hand it the size
+            env["COLUMNS"], env["LINES"] = str(cols), str(rows)
         pid, master = pty.fork()
         if pid == 0:  # child: only exec, never return into the server
             try:
-                _winsize(0, cols, rows)  # before exec, so first paint already sees the real size
+                if kind == "shell":
+                    os.chdir(cwd)
+                _winsize(
+                    0, cols, rows
+                )  # before exec, so first paint already sees the real size
                 os.execvpe(argv[0], argv, env)
             finally:
                 os._exit(127)
@@ -339,6 +505,8 @@ def handle_ws(handler, query: dict, token: str) -> None:
                 f"Connection: Upgrade\r\nSec-WebSocket-Accept: {accept_key(key)}\r\n\r\n"
             ).encode()
         )
+        # Hide-cursor is a harmless first frame: the client can tell "connected, quiet" from "dead".
+        sock.sendall(encode_frame(OP_BIN, b"\x1b[?25l"))
         _pump(sock, master)
     finally:
         if pid > 0:
@@ -356,9 +524,19 @@ def handle_ws(handler, query: dict, token: str) -> None:
 def _pump(sock, master: int) -> None:
     dec = Decoder()
     sock.settimeout(10)
+    last_client = time.monotonic()
     try:
         while True:
             r, _, _ = select.select([sock, master], [], [], 1.0)
+            try:  # read each loop so a changed env applies to new frames, and tests can shrink it
+                idle_s = float(os.environ.get("ATLAS_TERM_IDLE_S") or 900)
+            except ValueError:
+                idle_s = 900.0
+            if sock not in r and time.monotonic() - last_client > idle_s:
+                sock.sendall(encode_frame(OP_CLOSE, struct.pack(">H", 1000) + b"idle"))
+                return
+            if sock in r:
+                last_client = time.monotonic()
             if master in r:
                 try:
                     data = os.read(master, 65536)
@@ -397,7 +575,9 @@ def _client_msg(master: int, payload: bytes) -> None:
         return  # ignore malformed client text
     if kind == "in" and isinstance(msg.get("d"), str):
         os.write(master, msg["d"].encode("utf-8"))
-    elif kind == "bin" and isinstance(msg.get("d"), str):  # xterm onBinary: one byte per char
+    elif kind == "bin" and isinstance(
+        msg.get("d"), str
+    ):  # xterm onBinary: one byte per char
         try:
             os.write(master, msg["d"].encode("latin-1"))
         except UnicodeEncodeError:

@@ -249,16 +249,20 @@ class TripwireTest(unittest.TestCase):
         blob = json.dumps(data)
         self.assertIn("Agent", blob)
         self.assertIn("Task", blob)
-        # stronger: the tripwire group's matcher must include Agent and Task
+        # stronger: the tripwire binding's matcher must include Agent, Task and Skill. It is run by
+        # event_dispatch.py (one process per event); hooks.json carries that dispatcher.
+        import event_dispatch
+
         ok = False
-        for grp in data.get("hooks", {}).get("PostToolUse", []):
-            hooks = json.dumps(grp.get("hooks", grp))
-            if "dispatch_tripwire.py" in hooks:
-                self.assertIn("Agent", grp.get("matcher", ""))
-                self.assertIn("Task", grp.get("matcher", ""))
-                self.assertIn("Skill", grp.get("matcher", ""))
+        for name, matcher, _ in event_dispatch.BINDINGS["PostToolUse"]:
+            if name == "dispatch_tripwire":
+                self.assertIn("Agent", matcher)
+                self.assertIn("Task", matcher)
+                self.assertIn("Skill", matcher)
                 ok = True
-        self.assertTrue(ok, "dispatch_tripwire entry not found in PostToolUse")
+        self.assertTrue(ok, "dispatch_tripwire binding not found in PostToolUse")
+        for event in ("PreToolUse", "PostToolUse"):
+            self.assertIn(f'event_dispatch.py\\" {event}', entries)
 
     def _fresh_unmarked_session(self, session_id):
         import atlas_db
@@ -523,6 +527,28 @@ class TripwireTest(unittest.TestCase):
             (who["agent"], who["name"], who["model"], who["tool"]),
             ("atlas:implementer", "auth-impl", "sonnet", "Agent"),
         )
+
+    def test_pre_deny_row_carries_tool_name_and_role(self):
+        run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "name": "auth-impl",
+                    "prompt": TOOLS_BLOCK + "GOAL: fix it.\n",
+                },
+            ),
+            self.env,
+        )
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        row = conn.execute(
+            "SELECT tool_name, role, gate_letter FROM friction_events "
+            "WHERE category LIKE 'dispatch_denied:%'"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(row, ("Agent", "atlas:implementer", None))
 
     def test_post_logs_the_dispatch_model(self):
         run_hook(
@@ -921,17 +947,19 @@ class TripwireTest(unittest.TestCase):
         hj = os.path.join(os.path.dirname(__file__), "hooks.json")
         with open(hj) as f:
             data = json.load(f)  # asserts hooks.json parses as JSON
+        import event_dispatch
+
         pre = data["hooks"]["PreToolUse"]
-        # bash_advisor's Bash registration must be untouched.
-        bash_advisor_ok = any(
-            "bash_advisor.py" in json.dumps(g) and g.get("matcher") == "Bash"
-            for g in pre
+        self.assertTrue(
+            any("event_dispatch.py" in json.dumps(g) for g in pre),
+            "PreToolUse must run the event dispatcher",
         )
-        self.assertTrue(bash_advisor_ok, "bash_advisor Bash registration disturbed")
+        bindings = {n: m for n, m, _ in event_dispatch.BINDINGS["PreToolUse"]}
+        # bash_advisor's Bash registration must be untouched.
+        self.assertEqual(bindings.get("bash_advisor"), "Bash")
         # dispatch_tripwire must be registered on PreToolUse with the full matcher.
-        tw = [g for g in pre if "dispatch_tripwire.py" in json.dumps(g)]
-        self.assertTrue(tw, "dispatch_tripwire not registered on PreToolUse")
-        matcher = tw[0].get("matcher", "")
+        self.assertIn("dispatch_tripwire", bindings)
+        matcher = bindings["dispatch_tripwire"]
         for t in ("Edit", "Write", "MultiEdit", "Read", "Grep", "Glob", "Bash"):
             self.assertIn(t, matcher)
 
@@ -1254,10 +1282,13 @@ class InProcessTest(unittest.TestCase):
             )
         conn = self.atlas_db.connect(self.db_path)
         row = conn.execute(
-            "SELECT session_id, category FROM friction_events"
+            "SELECT session_id, category, role FROM friction_events"
         ).fetchone()
         conn.close()
-        self.assertEqual(row, ("sess-atlas-fail", "orchestration_flag_arm_failed"))
+        # _arm_orchestrating returns early for workers, so a row means a lead.
+        self.assertEqual(
+            row, ("sess-atlas-fail", "orchestration_flag_arm_failed", "lead")
+        )
 
     def test_ip_friction_write_failure_still_fail_open(self):
         # Doubly failing DB: the friction write itself must not raise out of
@@ -1548,6 +1579,27 @@ class InProcessTest(unittest.TestCase):
         self.assertIn('"permissionDecision": "deny"', out)
         self.assertNotIn("additionalContext", out)
         self.assertEqual(out.count("hookSpecificOutput"), 1)
+
+    def test_brief_and_scratchpad_writes_pass_the_threshold_and_do_not_count(self):
+        """Past the inline-op limit, a Write to <root>/.atlas/.run/briefs/ or the
+        session scratchpad is not denied for the count, and scratch writes are not logged."""
+        self._docs_project()
+        for _ in range(8):
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
+        scratch = os.path.join(tempfile.gettempdir(), "claude-scratch", "brief.md")
+        brief = os.path.join(self.tmp, ".atlas", ".run", "briefs", "t1.md")
+        for p in (brief, scratch):
+            out = self._run_main(self._pre("Write", {"file_path": p}))
+            self.assertNotIn("inline ops since your last dispatch", out, p)
+            self.assertNotIn('"permissionDecision": "deny"', out, p)
+        self._run_main(self._post("Write", {"file_path": scratch}))
+        conn = self.atlas_db.connect(self.db_path)
+        rid = self.atlas_db.current_run_id(conn, "sess-1")
+        self.assertEqual(self.atlas_db.inline_ops_since_last_dispatch(conn, rid), 8)
+        conn.close()
+        # the threshold itself still bites a counted op
+        out = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
+        self.assertIn('"permissionDecision": "deny"', out)
 
     def test_read_nudge_survives_a_threshold_deny_on_another_tool(self):
         """The once-per-session Read nudge is claimed only when it is actually
@@ -2355,6 +2407,46 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")
 
+    # C3: a model/effort arg passes only when it is in the role's tier_allow/effort_allow AND equals
+    # what the resolver emits for the prompt's SCOPE line. Matrix (C2): audit/medium explorer=haiku,
+    # audit/high explorer=sonnet, implement/high planner=sonnet (NOT opus), implement/medium implementer=sonnet.
+    def _tier(self, agent, scope, **extra):
+        tinput = {
+            "subagent_type": agent,
+            "name": "tier-slice",
+            "prompt": self.SPEC + (f"\nSCOPE: {scope}\n" if scope else ""),
+            **extra,
+        }
+        return self._pre(tinput)
+
+    def _denied(self, r):
+        out = r.stdout.strip()
+        return bool(out) and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_tier_model_matching_resolver_is_accepted(self):
+        self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/medium", model="haiku")))
+        self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/high", model="sonnet")))
+
+    def test_tier_model_must_equal_resolver_not_just_tier_allow(self):
+        # opus is in implementer's tier_allow but the resolver says sonnet for implement/medium.
+        # (explorer+haiku is the definition's own pin, a legacy accept, so it cannot be the deny case.)
+        r = self._tier("atlas:implementer", "implement/medium", model="opus")
+        self.assertTrue(self._denied(r))
+        self.assertIn("tier_allow", r.stdout)
+        self.assertIn("resolver", r.stdout)
+
+    def test_tier_model_outside_tier_allow_keeps_existing_deny(self):
+        r = self._tier("atlas:explorer", "audit/medium", model="opus")
+        self.assertTrue(self._denied(r))
+        self.assertIn("Drop the `model` param", r.stdout)
+
+    def test_tier_opus_planner_denied_because_matrix_says_sonnet(self):
+        self.assertTrue(self._denied(self._tier("atlas:planner", "implement/high", model="opus")))
+
+    def test_tier_effort_matches_resolver(self):
+        self.assertFalse(self._denied(self._tier("atlas:implementer", "implement/medium", effort="medium")))
+        self.assertTrue(self._denied(self._tier("atlas:runner", "implement/medium", effort="high")))
+
     def _unnamed(self, env=None, **extra):
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)  # project root
         env = dict(self.env if env is None else env)
@@ -2755,6 +2847,23 @@ class ColonyGuardUnitTest(unittest.TestCase):
                 )
             )
 
+    def test_tier_no_scope_line_denies_model_arg(self):
+        # sonnet is in explorer's tier_allow but there is no SCOPE line to bind it to.
+        self.assertIsNotNone(
+            self.dt._model_override(
+                {"subagent_type": "atlas:explorer", "model": "sonnet", "prompt": "no scope"}
+            )
+        )
+
+    def test_tier_resolver_failure_leaves_only_legacy_accepts(self):
+        tin = {"subagent_type": "atlas:explorer", "model": "sonnet",
+               "prompt": "SCOPE: audit/high\n"}
+        self.assertIsNone(self.dt._model_override(tin))  # resolver healthy: accepted
+        with patch.object(self.dt, "_scope_matrix", side_effect=ImportError("boom")):
+            self.assertIsNotNone(self.dt._model_override(tin))
+            # legacy accepts survive: exact pin (haiku)
+            self.assertIsNone(self.dt._model_override({**tin, "model": "haiku"}))
+
     def test_guards_ignore_non_atlas_agents(self):
         self.assertIsNone(self.dt._name_missing({"subagent_type": "Explore"}))
         self.assertIsNone(
@@ -2936,10 +3045,10 @@ class FootprintArmingTest(unittest.TestCase):
         ]
 
     def test_arms_at_third_distinct_code_file_and_advises_once(self):
-        self.assertEqual(self._edit("/repo/x/a.py").stdout.strip(), "")
-        self.assertEqual(self._edit("/repo/x/b.py", tool="Edit").stdout.strip(), "")
+        self.assertEqual(self._edit("x/a.py").stdout.strip(), "")
+        self.assertEqual(self._edit("x/b.py", tool="Edit").stdout.strip(), "")
         self.assertFalse(self._orchestrating())
-        third = self._edit("/repo/x/c.py", tool="MultiEdit")
+        third = self._edit("x/c.py", tool="MultiEdit")
         self.assertTrue(self._orchestrating())
         notes = self._advisories(third.stdout)
         self.assertEqual(len(notes), 1, third.stdout)
@@ -2950,29 +3059,29 @@ class FootprintArmingTest(unittest.TestCase):
         self.assertIn("PostToolUse", third.stdout)
 
     def test_notebook_edit_counts_toward_the_footprint(self):
-        self._edit("/repo/x/a.py")
-        self._edit("/repo/x/b.py")
-        self._edit("/repo/x/n.ipynb", tool="NotebookEdit")
+        self._edit("x/a.py")
+        self._edit("x/b.py")
+        self._edit("x/n.ipynb", tool="NotebookEdit")
         self.assertTrue(self._orchestrating())
 
     def test_does_not_arm_at_two_distinct_files(self):
-        self._edit("/repo/x/a.py")
-        r = self._edit("/repo/x/b.py")
+        self._edit("x/a.py")
+        r = self._edit("x/b.py")
         self.assertEqual(r.stdout.strip(), "")
         self.assertFalse(self._orchestrating())
 
     def test_repeated_edits_to_one_file_do_not_arm(self):
         for _ in range(6):
-            r = self._edit("/repo/x/a.py", tool="Edit")
+            r = self._edit("x/a.py", tool="Edit")
             self.assertEqual(r.stdout.strip(), "")
         self.assertFalse(self._orchestrating())
 
     def test_docs_and_atlas_paths_do_not_count(self):
         for p in (
             "docs/a.md",
-            "/repo/x/docs/b.md",
+            "x/docs/b.md",
             ".atlas/findings.json",
-            "/repo/x/.atlas/.run/todos.json",
+            "x/.atlas/.run/todos.json",
             "docs/c.md",
         ):
             r = self._edit(p)
@@ -2980,12 +3089,12 @@ class FootprintArmingTest(unittest.TestCase):
         self.assertFalse(self._orchestrating())
 
     def test_docs_do_not_pad_the_count_of_real_code_files(self):
-        self._edit("/repo/x/a.py")
+        self._edit("x/a.py")
         self._edit("docs/a.md")
-        self._edit("/repo/x/b.py")
+        self._edit("x/b.py")
         self._edit(".atlas/notes.md")
         self.assertFalse(self._orchestrating())
-        self._edit("/repo/x/c.py")
+        self._edit("x/c.py")
         self.assertTrue(self._orchestrating())
 
     def test_uri_writes_do_not_count(self):
@@ -3004,31 +3113,31 @@ class FootprintArmingTest(unittest.TestCase):
     def test_sidechain_edits_never_arm(self):
         sub = os.path.join(self.tmp, "proj", self.SESSION, "subagents", "agent-1.jsonl")
         for name in ("a.py", "b.py", "c.py", "d.py"):
-            r = self._edit("/repo/x/" + name, transcript=sub)
+            r = self._edit("x/" + name, transcript=sub)
             self.assertEqual(r.stdout.strip(), "")
         self.assertFalse(self._orchestrating())
 
     def test_env_zero_disables(self):
         env = dict(self.env, ATLAS_FOOTPRINT_FILES="0")
         for name in ("a.py", "b.py", "c.py", "d.py"):
-            r = self._edit("/repo/x/" + name, env=env)
+            r = self._edit("x/" + name, env=env)
             self.assertEqual(r.stdout.strip(), "")
         self.assertFalse(self._orchestrating())
 
     def test_env_overrides_the_threshold(self):
         env = dict(self.env, ATLAS_FOOTPRINT_FILES="2")
-        self._edit("/repo/x/a.py", env=env)
+        self._edit("x/a.py", env=env)
         self.assertFalse(self._orchestrating())
-        r = self._edit("/repo/x/b.py", env=env)
+        r = self._edit("x/b.py", env=env)
         self.assertTrue(self._orchestrating())
         self.assertEqual(len(self._advisories(r.stdout)), 1)
 
     def test_invalid_env_falls_back_to_default_three(self):
         env = dict(self.env, ATLAS_FOOTPRINT_FILES="lots")
-        self._edit("/repo/x/a.py", env=env)
-        self._edit("/repo/x/b.py", env=env)
+        self._edit("x/a.py", env=env)
+        self._edit("x/b.py", env=env)
         self.assertFalse(self._orchestrating())
-        self._edit("/repo/x/c.py", env=env)
+        self._edit("x/c.py", env=env)
         self.assertTrue(self._orchestrating())
 
     def test_already_flagged_run_gets_no_footprint_advisory(self):
@@ -3036,15 +3145,15 @@ class FootprintArmingTest(unittest.TestCase):
         self.atlas_db.mark_orchestrating(conn, self.SESSION)
         conn.close()
         for name in ("a.py", "b.py", "c.py"):
-            r = self._edit("/repo/x/" + name)
+            r = self._edit("x/" + name)
             self.assertNotIn("multi-file", r.stdout)
 
     def test_advisory_is_not_repeated_after_arming(self):
         for name in ("a.py", "b.py"):
-            self._edit("/repo/x/" + name)
-        arming = self._edit("/repo/x/c.py")
+            self._edit("x/" + name)
+        arming = self._edit("x/c.py")
         self.assertEqual(len(self._advisories(arming.stdout)), 1)
-        later = self._edit("/repo/x/d.py")
+        later = self._edit("x/d.py")
         self.assertNotIn("multi-file", later.stdout)
         self.assertNotIn("tripwires are now armed", later.stdout)
 
@@ -3062,7 +3171,7 @@ class FootprintArmingTest(unittest.TestCase):
                     "Write",
                     "main",
                     1,
-                    "/repo/x/" + name,
+                    "x/" + name,
                 )
             with patch.object(
                 self.atlas_db, "mark_orchestrating", side_effect=RuntimeError("db")
@@ -3250,6 +3359,7 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         ("Bash", {"command": "ls -la src"}),
         ("Bash", {"command": "rg 'def main' ."}),
         ("Bash", {"command": "cat a.txt | grep err | wc -l"}),
+        ("Bash", {"command": "pytest -q"}),
         ("Bash", {"command": "find . -name '*.py' 2>/dev/null"}),
     )
     COUNTED = (
@@ -3260,7 +3370,7 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         ("Bash", {"command": "git status && touch a.txt"}),
         ("Bash", {"command": "git log | tee out.txt"}),
         ("Bash", {"command": "rm -rf build"}),
-        ("Bash", {"command": "npm test"}),
+        ("Bash", {"command": "npm install"}),
         ("Write", {"file_path": "docs/x.md"}),
         ("Edit", {"file_path": "docs/x.md"}),
     )
@@ -3889,12 +3999,9 @@ class PinTierDefaultsTwinTest(unittest.TestCase):
             "@atlas-mechanic": "mechanic",
         }
         expected = (
-            ("explorer", "@atlas-worker"),
+            ("explorer", "@atlas-mechanic"),  # haiku in the tiering table
             ("verifier", "@atlas-verifier"),
-            (
-                "runner",
-                "@atlas-worker",
-            ),  # every worker is sonnet now; mechanic tier is unused
+            ("runner", "@atlas-mechanic"),  # haiku -> omp mechanic alias (roleFor)
             ("docs-curator", "@atlas-worker"),  # the DOCSCUR case
         )
         for agent, alias in expected:
@@ -4146,9 +4253,9 @@ class ScopeGateTest(unittest.TestCase):
             self._decision(self._dispatch("atlas:implementer", "fix/low"))[0]
         )
 
-    def test_c_second_dispatch_within_window_gets_spawn_team_advisory(self):
+    def _burst_session(self):
         # The burst clock is per session and may live in the shared temp dir: use a session no other test touches.
-        sess = f"burst-{os.getpid()}-{id(self)}"
+        sess = f"burst-{os.getpid()}-{id(self)}-{self._testMethodName}"
         self.env = dict(self.env, ATLAS_BURST_SECS="10")
         import atlas_db
 
@@ -4156,17 +4263,90 @@ class ScopeGateTest(unittest.TestCase):
         atlas_db.start_run(conn, atlas_db.register_project(conn, "/repo/x"), sess)
         atlas_db.mark_orchestrating(conn, sess)
         conn.close()
+        return sess
+
+    def _returned(self, sess):
+        """PostToolUse:Agent for a foreground dispatch that finished."""
+        run_hook(
+            {
+                "session_id": sess,
+                "cwd": self.tmp,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:implementer", "name": COLONY_NAME},
+                "tool_response": "done",
+            },
+            self.env,
+        )
+
+    def test_c_second_concurrent_in_process_dispatch_is_denied_with_spawn_team(self):
+        sess = self._burst_session()
         self.assertEqual(
-            self._decision(
-                self._dispatch("atlas:implementer", "fix/low", session=sess)
-            ),
+            self._decision(self._dispatch("atlas:implementer", "fix/low", session=sess)),
             (None, ""),
         )
+        decision, reason = self._decision(
+            self._dispatch("atlas:explorer", "fix/medium", session=sess)
+        )
+        self.assertEqual(decision, "deny")
+        self.assertIn("spawn-team", reason)
+        self.assertIn("--task-file", reason)
+        self.assertIn("bounded worker may stay in-process", reason)
+
+    def test_c_sequential_dispatch_after_return_is_only_an_advisory(self):
+        sess = self._burst_session()
+        self._dispatch("atlas:implementer", "fix/low", session=sess)
+        self._returned(sess)
         decision, note = self._decision(
             self._dispatch("atlas:explorer", "fix/medium", session=sess)
         )
         self.assertIsNone(decision)
         self.assertIn("spawn-team", note)
+
+    def test_c_background_agent_post_does_not_free_the_slot(self):
+        sess = self._burst_session()
+        self._dispatch("atlas:implementer", "fix/low", session=sess)
+        run_hook(
+            {
+                "session_id": sess,
+                "cwd": self.tmp,
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Agent",
+                "tool_input": {"subagent_type": "atlas:implementer", "run_in_background": True},
+                "tool_response": "launched",
+            },
+            self.env,
+        )
+        decision, _ = self._decision(self._dispatch("atlas:explorer", "fix/medium", session=sess))
+        self.assertEqual(decision, "deny")
+
+    def test_c_burst_secs_nan_and_inf_fall_back_to_the_default_window(self):
+        for bad in ("nan", "inf"):
+            sess = self._burst_session()
+            self.env = dict(self.env, ATLAS_BURST_SECS=bad)
+            self._dispatch("atlas:implementer", "fix/low", session=sess)
+            decision, _ = self._decision(
+                self._dispatch("atlas:explorer", "fix/medium", session=sess)
+            )
+            self.assertEqual(decision, "deny", bad)
+
+    def test_c_mux_off_and_omp_turn_the_concurrent_deny_into_advice_or_nothing(self):
+        sess = self._burst_session()
+        off = dict(self.env, ATLAS_MUX="off")
+        self._dispatch("atlas:implementer", "fix/low", session=sess, env=off)
+        decision, note = self._decision(
+            self._dispatch("atlas:explorer", "fix/medium", session=sess, env=off)
+        )
+        self.assertIsNone(decision)
+        self.assertIn("ADVISORY (ATLAS_MUX=off)", note)
+        sess = self._burst_session() + "-omp"
+        omp = dict(self.env, ATLAS_TOOLKIT_LOAD="omp")
+        self._dispatch("atlas:implementer", "fix/low", session=sess, env=omp)
+        self.assertIsNone(
+            self._decision(
+                self._dispatch("atlas:explorer", "fix/medium", session=sess, env=omp)
+            )[0]
+        )
 
     def test_d_kill_switch_restores_advisory(self):
         env = dict(self.env, ATLAS_SCOPE_GATE="off")

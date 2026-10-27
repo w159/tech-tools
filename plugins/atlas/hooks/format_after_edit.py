@@ -31,6 +31,8 @@ Stdlib only.
 
 from __future__ import annotations
 
+import datetime
+import json
 import os
 import pathlib
 import shutil
@@ -40,6 +42,8 @@ import sys
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 )
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 import atlas_hook_guard  # noqa: E402
 
 # extension -> ordered list of candidate commands; the file path is appended as the last arg.
@@ -133,19 +137,42 @@ def file_path_from(data: dict) -> str | None:
     return fp
 
 
-# Reasons that are environment/input state, not hook failures: friction row only.
-# "missing" = no formatter installed; "parse" (mid-edit syntax error) is not recorded at all.
-# Real crashes ("crash") and timeouts also write a fault row.
-QUIET_REASONS = {"missing", "parse"}
+# "missing" (no formatter installed) and "parse" (mid-edit syntax error) are environment/input
+# state: no fault, no friction. Only crashes and timeouts record a friction row and a fault.
 PARSE_MARKERS = ("parse", "syntax", "unexpected token")
 
 
-def _record_skip(data: dict, fp: str, reason: str) -> None:
-    """Friction row (`formatter_skipped:<reason>`, ext in snippet) so skips stay
-    measurable. "missing" is recorded once per session+extension. Only real
-    failures (crash, timeout) also write a fault row. Never raises; exit stays 0."""
+def _note_missing(formatter: str, cwd: str) -> None:
+    """A missing formatter is a configuration fact, not a fault or friction. Keep one
+    info record per (formatter, project root) per day in ATLAS_HOME so the doctor can
+    still report "formatter X not installed". Never raises."""
+    try:
+        base = os.environ.get("ATLAS_HOME") or str(pathlib.Path.home() / ".atlas")
+        path = pathlib.Path(base) / "formatter_missing.json"
+        key = "%s|%s" % (formatter, os.path.realpath(cwd))
+        today = datetime.date.today().isoformat()
+        try:
+            state = json.loads(path.read_text())
+        except (OSError, ValueError):
+            state = {}
+        if state.get(key) == today:
+            return
+        state[key] = today
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, indent=1))
+    except Exception:
+        pass
+
+
+def _record_skip(data: dict, fp: str, reason: str, formatter: str = "") -> None:
+    """Friction row (`formatter_skipped:<reason>`, ext in snippet) for real skips
+    (crash, timeout), which also write a fault row. "parse" is not recorded and
+    "missing" goes to _note_missing only. Never raises; exit stays 0."""
     if reason == "parse":
         return  # mid-edit syntax errors are expected input state, not friction
+    if reason == "missing":
+        _note_missing(formatter, data.get("cwd") or os.getcwd())
+        return
     ext = os.path.splitext(fp)[1].lower() or "(none)"
     try:
         import atlas_db  # noqa: E402  (lazy: only on the skip path)
@@ -154,19 +181,17 @@ def _record_skip(data: dict, fp: str, reason: str) -> None:
         try:
             category = "formatter_skipped:" + reason
             sid = data.get("session_id") or ""
-            seen = reason == "missing" and conn.execute(
-                "SELECT 1 FROM friction_events WHERE session_id=? AND category=? "
-                "AND snippet=? LIMIT 1",
-                (sid, category, ext),
-            ).fetchone()
-            if not seen:
-                atlas_db.record_friction(conn, sid, category, snippet=ext)
+            atlas_db.record_friction(
+                conn,
+                sid,
+                category,
+                snippet=ext,
+                tool_name=data.get("tool_name") or None,
+            )
         finally:
             conn.close()
     except Exception:
         pass  # DB unavailable: the skip stays quiet, exit stays 0
-    if reason in QUIET_REASONS:
-        return
     atlas_hook_guard.fault(
         "format_after_edit",
         "formatter skipped: %s for %s (no candidate succeeded)" % (reason, fp),
@@ -215,7 +240,7 @@ def main() -> int:
     reason = next(
         (r for r in ("timeout", "crash", "parse", "missing") if r in reasons), "missing"
     )
-    _record_skip(data, fp, reason)
+    _record_skip(data, fp, reason, os.path.basename(cands[0][0]))
     return 0
 
 

@@ -14,7 +14,7 @@ The spine of atlas-bakeoff verdict: framing, grounding, the evidence floor, the 
 and grading. Peer dispatch is deliberately NOT here - it lives in `peer-dispatch.md` and only
 runs on explicit request after the verdict exists.
 
-Throughout: `<run-dir>` is `.atlas/evidence/<YYYY-MM-DD>-<slug>/` (docs-SSOT naming; slug is
+Throughout: `<run-dir>` is `.atlas/evidence/<YYYY-MM-DD>_<slug>/` (docs-SSOT naming; slug is
 filesystem-safe kebab-case). Create it at Phase 0 and keep every artifact referenced from the
 final report.
 
@@ -154,7 +154,7 @@ one-line takeaway; the citation is what makes it trustworthy.
 - **Default**: report in chat - framing, dossier summary, verdict, (optional) peer
   reconciliation, grade. Read-only; nothing else.
 - **Durable record** (when the decision is worth keeping): write
-  `docs/decisions/<YYYY-MM-DD>-<slug>.md` - date-first per the docs SSOT naming rules
+  `docs/decisions/<YYYY-MM-DD>_<slug>.md` - date-first per the docs SSOT naming rules
   (`lint_docs_names.py` enforces this). Contents: framing packet, verdict, evidence list,
   peer reconciliation with movement records, grade with citations. Dispatch
   `atlas:docs-curator` for the write when available; otherwise write it directly

@@ -1,6 +1,6 @@
 ---
 name: atlas-simplify
-description: "Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate. Use after implementing, before review or commit; restructuring is atlas-refactor."
+description: "Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate. Use when code was just implemented, before review or commit; restructuring is atlas-refactor."
 when_to_use: "simplify my changes, tidy the diff, reduce duplication in new code, post-implementation cleanup"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[blank = current branch diff; base:<ref> = diff against base; or named files/dirs]'
@@ -35,7 +35,7 @@ If none of these yields a non-empty scope, ask ONE AskUserQuestion (what to simp
 
 ## Step 2 - Dispatch exactly three read-only reviewers in parallel
 
-Create the run evidence directory: `.atlas/evidence/simplify/<YYYY-MM-DD>-<slug>/`.
+Create the run evidence directory: `.atlas/evidence/simplify/<YYYY-MM-DD>_<slug>/`.
 
 Read all three persona prompt assets IN FULL, fill `{{SCOPE}}` in each with the resolved diff or file set, and dispatch each as a Task/Agent call in ONE message so they run concurrently:
 

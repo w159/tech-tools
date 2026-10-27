@@ -1,6 +1,7 @@
 # Connector configuration flow (verified)
 
-This is the authoritative path for enabling atlas vendor MCP connectors after
+This is the authoritative path for enabling the vendor MCP connectors (shipped
+in the armada plugin; install atlas and armada together) after
 dashboard 5.17.1 credential UX fixes. It replaces tribal knowledge about
 "where secrets live" and documents what end-to-end tests actually proved.
 
@@ -12,8 +13,9 @@ tools stay gated until required credentials resolve.
 Four layers participate:
 
 1. **Claude plugin `userConfig`** — declared in
-   `plugins/atlas/.claude-plugin/plugin.json`, values under
-   `~/.claude/settings.json` → `pluginConfigs["atlas@tech-tools"].options`.
+   `plugins/armada/.claude-plugin/plugin.json`, values under
+   `~/.claude/settings.json` -> `pluginConfigs["armada@tech-tools"].options`
+   (the loaders also fall back to values saved under `atlas@tech-tools`).
    Non-sensitive fields (usernames, regions, base URLs) usually remain here in
    plaintext. Sensitive fields may be moved by Claude Code into OS secure
    storage and then disappear from `settings.json`. **This layer only takes
@@ -26,7 +28,7 @@ Four layers participate:
    proven by, an observed `MISSING_CREDENTIALS` result for every vendor
    except shell-exported Falcon in that harness (no command actually read
    the env a spawned server received).
-2. **Plugin `.env` files** — read by `plugins/atlas/mcp/_env/load.mjs` via
+2. **Plugin `.env` files** - read by `plugins/armada/mcp/_env/load.mjs` via
    `ATLAS_ENV_FILE=${CLAUDE_PLUGIN_ROOT}/.env`, with `CFG_*` passthrough into
    canonical env names. Dashboard dual-writes here so stdio servers and the UI
    can detect "set" even when Claude strips secrets from settings. **For a
@@ -90,7 +92,7 @@ X-Atlas-Token: <value of <meta name="atlas-token"> in the served page>
 
 Effects:
 
-- merges into `pluginConfigs["atlas@tech-tools"].options`
+- merges into `pluginConfigs["armada@tech-tools"].options`
 - dual-writes `AUVIK_API_KEY=…` style keys into **this plugin root's** `.env`
   (`${CLAUDE_PLUGIN_ROOT}/.env` / `plugins/atlas/.env` in source)
 - writes set-markers under `~/.atlas/credential_marks.json`
@@ -98,7 +100,7 @@ Effects:
 
 ### B. Claude `/plugin config` (still valid)
 
-`/plugin config` on **atlas@tech-tools** remains a first-class path. Use it when
+`/plugin config` on **armada@tech-tools** remains a first-class path. Use it when
 you prefer Claude's native form. After changing config there:
 
 1. Optionally re-save once via `POST /api/connectors/env` (or write `.env`) if you
@@ -188,7 +190,7 @@ Test harness: stdio MCP client with `CLAUDE_PLUGIN_ROOT=plugins/atlas`, env from
 plugin `.env` + CFG passthrough (no secret logging).
 Dates: 2026-08-28 (ten Node connectors) and **2026-09-02** (re-verify including Falcon).
 **Historical record:** the matrix below is the 2026-09-02 run (11 connectors,
-before panos was added); it is not the current count. Current count: twelve.
+before panos was added); it is not the current count. Current count: thirteen (the twelve below plus sonicwall).
 
 Wiring unit tests (`plugins/atlas/scripts/test_connectors_wiring.py`): **9/9 OK**.
 
@@ -215,13 +217,13 @@ Dashboard API (2026-09-02, historical, before panos was added):
 
 ### Interpretation
 
-- **Transport + packaging are healthy** for all **twelve** connectors declared in
-  `.mcp.json` (auvik, blumira, cipp, connectwise, falcon, knowbe4, ninjaone,
-  panos, paylocity, spanning, threatlocker, vanta). The 2026-09-02 matrix above
+- **Transport + packaging are healthy** for all **thirteen** connectors declared in
+  `plugins/armada/.mcp.json` (auvik, blumira, cipp, connectwise, falcon, knowbe4,
+  ninjaone, panos, paylocity, sonicwall, spanning, threatlocker, vanta). The 2026-09-02 matrix above
   exercised eleven of them (init + tool list from repo source); panos is
   declared in `.mcp.json` and listed by `GET /api/connectors` but is not in
   that dated matrix.
-- **Status standard met for all twelve:** each exposes `*_status` or `cw_status`.
+- **Status standard met for all thirteen:** each exposes `*_status` or `cw_status`.
   Falcon boots **inert** without credentials (4 diagnostic tools including
   `falcon_status` → `MISSING_CREDENTIALS`) and expands only after auth succeeds.
 - **Progressive disclosure works** for Blumira/ConnectWise; other Node connectors
@@ -254,9 +256,9 @@ Dashboard API (2026-09-02, historical, before panos was added):
 ## Related files
 
 - UI/daemon: `plugins/atlas/scripts/atlas_dashboard.py`
-- Env preloader: `plugins/atlas/mcp/_env/load.mjs`
-- MCP launch map: `plugins/atlas/.mcp.json`
-- userConfig schema: `plugins/atlas/.claude-plugin/plugin.json`
+- Env preloader: `plugins/armada/mcp/_env/load.mjs`
+- MCP launch map: `plugins/armada/.mcp.json`
+- userConfig schema: `plugins/armada/.claude-plugin/plugin.json`
 - Setup skill guide: `skills/atlas-setup/references/connectors.md`
 - Per-vendor key table: `skills/atlas-setup/references/vendors.md`
 - Dashboard API notes: `skills/atlas-orchestrate/references/dashboard-api.md`

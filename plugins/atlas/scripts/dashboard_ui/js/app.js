@@ -7,12 +7,12 @@ import { toast, toastError, Modal, openModal, closeModal, hasOpenModal, closeDra
 import { FleetStrip, openAgentInspector, closeAgentInspector } from "./fleet.js";
 import { MachineColonies } from "./machine-colonies.js";
 import { watchVersion } from "./version-banner.js";
+import { reportFetchFail } from "./fetch-fail.js";
 import { agentsStore, STATE_WORD } from "./agents-store.js";
 import overview from "./pages/overview.js";
-import work from "./pages/work.js";
 import { openEditor } from "./integrations.js";
 import { openNewThread } from "./hp.js";
-import { normalizeNav, orderGroups, MOBILE_TABS, LENS_ROUTES } from "./nav-order.js";
+import { normalizeNav, orderGroups, MOBILE_TABS, LENS_ROUTES, bootHash } from "./nav-order.js";
 
 // ---- store ----------------------------------------------------------------
 
@@ -70,14 +70,12 @@ const changed = (key, value) => {
 };
 const LABELS = { overview: "Overview", agents: "Agents", activity: "Activity", health: "Health", improve: "Improve", projects: "Projects", settings: "Settings", colony: "Colony", channels: "Channels", terminal: "Terminal" };
 const ICON_FOR = { overview: "overview", agents: "agents", activity: "activity", health: "heart-pulse", improve: "sparkles", projects: "folder", settings: "settings", colony: "herd", channels: "irc", terminal: "terminal" };
-const CHORDS = { o: "overview", a: "agents", l: "activity", h: "health", i: "improve", p: "projects", ",": "settings", d: "agents", s: "improve", w: "agents?lens=board", c: "colony", n: "channels", u: "agents?lens=supervision" };
+const CHORDS = { o: "overview", a: "agents", l: "activity", h: "health", i: "improve", p: "projects", ",": "settings", d: "agents", s: "improve", w: "agents?lens=board", c: "agents?lens=roster", n: "channels", u: "agents?lens=supervise" };
 // Old ids keep working: redirect to the canonical page with a lens, keeping the query.
-const ALIASES = { herd: "terminal", work: "agents?lens=board", irc: "channels", channel: "channels", console: "terminal", herdr: "terminal" };
+const ALIASES = { herd: "terminal", work: "agents?lens=board", board: "agents?lens=board", supervise: "agents?lens=supervise", colony: "agents?lens=roster", irc: "channels", channel: "channels", console: "terminal", herdr: "terminal" };
 
 const pages = new Map();
 for (const p of [overview]) pages.set(p.id, p);
-// The legacy pages stay mounted as lens content until their rebuilds land (js/pages/agents.js reads them from here).
-export const legacyPages = { work };
 
 async function loadExternalPage(id) {
   try {
@@ -91,7 +89,7 @@ async function loadExternalPage(id) {
 
 const importErrors = new Map();
 async function loadExternalPages() {
-  const ids = ["agents", "activity", "health", "colony", "channels", "terminal", "improve", "projects", "settings"];
+  const ids = ["agents", "activity", "health", "channels", "terminal", "improve", "projects", "settings"];
   const errs = await Promise.all(ids.map((id) => loadExternalPage(id)));
   ids.forEach((id, i) => errs[i] && importErrors.set(id, errs[i]));
 }
@@ -135,7 +133,7 @@ function hashFor(id, params, anchor) {
   return "#/" + id + (anchor ? "#" + anchor : "") + (text ? "?" + text : "");
 }
 
-export function navigate(target, params) {
+function navigate(target, params) {
   let id = String(target);
   let anchor = "";
   let inline = {};
@@ -283,7 +281,7 @@ function syncInspector(params) {
 const hasOpenAgentInspector = () => hasOpenDrawer();
 
 // Open an agent in the inspector (and optionally its Terminal tab): the one entry point for rows, cards, strip, palette.
-export function openAgent(ref, opts) {
+function openAgent(ref, opts) {
   const rec = typeof ref === "string" ? agentsStore.find(ref) : ref;
   if (!rec) return;
   const tab = (opts && opts.tab) || undefined;
@@ -298,7 +296,7 @@ export function openAgent(ref, opts) {
 
 function markNav(activeId, lens) {
   document.querySelectorAll("#nav .nav-link, #tabbar a").forEach((a) => {
-    const on = a.dataset.page === activeId && (!a.dataset.lens || a.dataset.lens === (lens || "fleet"));
+    const on = a.dataset.page === activeId && (!a.dataset.lens || a.dataset.lens === (lens || "roster"));
     if (on) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
@@ -363,7 +361,7 @@ function flyoutIfCollapsed(e) {
   const a = e.currentTarget;
   const tree = MachineColonies({ getProject: () => store.get("project"), poll: false });
   tree.addEventListener("click", () => closePopover());
-  openPopover(a, h("div", { class: "flyout" }, h("a", { href: "#/agents?lens=fleet", class: "menu-item", onClick: () => closePopover() }, icon("agents"), "Open Agents"), tree), { label: "Agents", placement: "start" });
+  openPopover(a, h("div", { class: "flyout" }, h("a", { href: "#/agents?lens=roster", class: "menu-item", onClick: () => closePopover() }, icon("agents"), "Open Agents"), tree), { label: "Agents", placement: "start" });
 }
 
 // ---- project switcher ---------------------------------------------------------------------
@@ -691,11 +689,11 @@ function paletteEntries() {
   }
   const go = (id, label, target, keys, ic) => entries.push({ id: "go:" + id, group: "Go to", label, icon: ic, keys, run: () => { remember("go:" + id); navigate(target); } });
   go("overview", "Overview", "overview", "g o", "overview");
-  go("agents", "Agents: Fleet", "agents?lens=fleet", "g a", "agents");
+  go("agents", "Agents: Roster", "agents?lens=roster", "g a", "agents");
   go("board", "Agents: Board", "agents?lens=board", "g w", "work");
   go("channel", "Channels", "channels", "g n", "irc");
-  go("supervision", "Go to Supervision", "agents?lens=supervision", "g u", "agents");
-  go("colony", "Colony", "colony", "g c", "herd");
+  go("supervise", "Go to Supervise", "agents?lens=supervise", "g u", "agents");
+  go("colony", "Colony", "agents?lens=roster", "g c", "herd");
   go("activity", "Activity", "activity", "g l", "activity");
   go("health", "Health", "health", "g h", "heart-pulse");
   go("improve", "Improve", "improve", "g i", "sparkles");
@@ -821,8 +819,11 @@ function setTab(tab) {
 // ---- boot --------------------------------------------------------------------------------------------------------------
 
 async function boot() {
+  // Seed the default route before any await so the end of boot never writes "#/overview" over a deep link; replaceState fires no hashchange.
+  const seed = bootHash(location.hash);
+  if (seed) history.replaceState(null, "", seed);
   // First thing: the terminal's xterm assets must beat the API burst to the browser's 6-connection pool.
-  if (location.hash.startsWith("#/terminal")) import("./pages/terminal.js").then((m) => m.loadXterm()).catch(() => {});
+  if (location.hash.startsWith("#/terminal")) import("./pages/terminal.js").then((m) => m.loadXterm()).catch((e) => reportFetchFail("app", "xterm assets", e));
   const local = loadLocalPrefs();
   store.set("prefs", Object.assign({ theme: "dark", density: "comfortable" }, local));
   store.set("project", local.default_project || "all");
@@ -897,8 +898,7 @@ async function boot() {
     }
   });
   agentsStore.start({ project: store.get("project"), pollMs: refreshMs() });
-  if (!location.hash) location.hash = "#/overview";
-  else route();
+  route();
   refreshAttention();
 }
 

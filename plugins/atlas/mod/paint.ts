@@ -18,12 +18,6 @@ export const padRow = (parts: Segment[], cols: number, bg: string = M.panel): Se
   return gap > 0 ? [...parts, { t: ' '.repeat(gap), bg }] : parts;
 };
 
-/** Left parts, then right parts flush to the far edge; the right side drops when it does not fit. */
-export function spread(left: Segment[], right: Segment[], cols: number, bg: string = M.panel): Segment[] {
-  const gap = cols - widthOf(left) - widthOf(right);
-  return gap >= 1 ? [...left, { t: ' '.repeat(gap), bg }, ...right] : padRow(left, cols, bg);
-}
-
 /** Adjacent runs with the same style fold into one, so a per-cell gradient costs a few Text nodes. */
 export function merge(cells: readonly Segment[]): Segment[] {
   const out: Segment[] = [];

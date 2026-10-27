@@ -12,6 +12,16 @@ function normalizePaths(paths: string[] = []): string[] {
 	return [...set].sort();
 }
 
+/** The `model:` pin in agents/<role>.md frontmatter ("" when unreadable); twin of atlas_resolve.py default_model. */
+function defaultModel(role: string): string {
+	try {
+		const head = readFileSync(nodePath.join(pluginRoot(), "agents", `${role}.md`), "utf8").split("\n---")[0];
+		return head.split("\n").find(l => l.startsWith("model:"))?.slice(6).trim().replace(/^["']|["']$/g, "") ?? "";
+	} catch {
+		return "";
+	}
+}
+
 export function resolve(taskClass: string, effort: string, paths?: string[]): Record<string, unknown> {
 	const matrix = JSON.parse(readFileSync(nodePath.join(pluginRoot(), "contracts", "scope-matrix.json"), "utf8"));
 	const classes = matrix.classes as Record<string, Record<string, object>>;
@@ -20,5 +30,6 @@ export function resolve(taskClass: string, effort: string, paths?: string[]): Re
 	if (!Object.hasOwn(classes, taskClass)) throw new Error(`unknown task_class '${taskClass}'`);
 	const cell = classes[taskClass][effort];
 	if (!cell) throw new Error(`unknown effort '${effort}'`);
-	return { task_class: taskClass, effort, ...cell, file_scope: normalizePaths(paths) };
+	const team = ((cell as { team: { role: string; model?: string }[] }).team).map(s => ({ ...s, model: s.model || defaultModel(s.role) }));
+	return { task_class: taskClass, effort, ...cell, team, file_scope: normalizePaths(paths) };
 }

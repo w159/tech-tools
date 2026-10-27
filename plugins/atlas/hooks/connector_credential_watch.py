@@ -26,6 +26,9 @@ import os
 import re
 import sys
 from pathlib import Path
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 
 
 def _state_path() -> Path:
@@ -81,11 +84,12 @@ def _is_content_server(tool_name: str) -> bool:
     return any(name in norm for name in CONTENT_SERVERS)
 
 
-_ATLAS_SERVER = re.compile(r"^mcp__(?:plugin_)?atlas_([a-z0-9]+)", re.I)
+# `atlas` is the pre-move prefix (connectors shipped in atlas before moving to armada); kept so old names still map.
+_ATLAS_SERVER = re.compile(r"^mcp__(?:plugin_)?(?:armada|atlas)_([a-z0-9]+)", re.I)
 
 
 def _server_of(tool_name: str) -> str:
-    """`mcp__plugin_atlas_connectwise__cw_x` and omp `mcp__atlas_connectwise_cw_x` -> `connectwise`."""
+    """`mcp__plugin_armada_connectwise__cw_x` and omp `mcp__armada_connectwise_cw_x` -> `connectwise`."""
     m = _ATLAS_SERVER.match(tool_name)
     if m:
         return m.group(1).lower()

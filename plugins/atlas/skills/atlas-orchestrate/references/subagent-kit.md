@@ -21,6 +21,18 @@ Pass paths and goals, not file contents. The subagent's prompt is its entire sys
 
 This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` dispatch whose prompt omits `GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:` or `REPORT:`, and denies one that carries more than a single `GOAL:`. A dispatch with no finish line is the one that runs for an hour; two GOALs in one prompt is a wave crammed into one context instead of delegated. The mechanical agent `atlas:runner` additionally requires a numbered `STEPS:` block (see "Mechanical tier" below).
 
+**Dispatch contract (enforced by `hooks/dispatch_tripwire_core.py`; every denial is friction row `dispatch_denied:<code>`).** One line per requirement:
+
+- `name` (a tool argument): `DENY - this <tool> dispatch to <agent> carries no `name`.` Auto-named unless `ATLAS_AUTONAME=off` (`:1303`).
+- `TOOLS:` block naming `ToolSearch` and a code-nav token (code `toolkit`, `_toolkit_gap`); shared rule: name the code-navigation tools the harness provides.
+- `SCOPE: <class>/<effort>` line (code `scope`): `DENY - this dispatch to <agent> has no `SCOPE: <class>/<effort>` line.` (`:445`).
+- `GOAL:`, `DELIVERABLE:`/`DELIVERABLES:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (code `spec`, `REQUIRED_SPEC_BLOCKS` `:69`): `DENY - this <tool> dispatch to <agent> is unbounded: missing <labels>.` A missing `REPORT:` alone is injected, not denied; the first spec offense per session is an advisory.
+- A single `GOAL:` (code `multi_goal`): `DENY - this <tool> dispatch carries N GOAL: blocks.` (`:1342`).
+- `atlas:runner` only: numbered `STEPS:` (`:644`): `DENY - an atlas:runner dispatch must carry numbered STEPS:`.
+- `model`/`effort` param only when in the role's `tier_allow`/`effort_allow` AND equal to what `atlas_resolve.py` emits for the prompt's `SCOPE:` line (or the definition's own pin); else `DENY - this <tool> dispatch to <agent> overrides model with '<m>'.` (code `model_override`; `effort_override` for effort), which names the accepted values.
+- No built-in agent types (code `builtin_agent`): `DENY - this <tool> dispatch uses the built-in agent '<type>'` (`:1281`); `ATLAS_BUILTIN_AGENT_NUDGE=off` disables.
+- A subagent never dispatches: `DENY - a subagent must never dispatch another subagent.` (`:197`).
+
 ```
 ROLE: <one line, which specialist this is>
 GOAL: <one sentence, measurable>
@@ -219,15 +231,13 @@ effort/model tier and guardrails.
 - The lead alone dispatches and declares done. Siblings report to the lead,
   never to the user, and never dispatch other subagents.
 
-## Colony mux mode (opt-in, herdr transport)
+## Colony mux mode (on by default, tmux default transport)
 
-`ATLAS_MUX=tmux` only unlocks `atlas_mux.py spawn` (the variable keeps its
-historical name): the lead must run that command per worker to get its own
-headless process in a pane of the herdr workspace `atlas-<run>` (one tab per
-worker, opened over the herdr socket by `atlas_herdr.create_pane`). The
-transport is herdr by default; tmux (session `atlas-<run>`, one window per
-worker) is used only with `ATLAS_COLONY_TRANSPORT=tmux` or when the herdr
-socket does not answer. Dispatches via Agent/task are never rerouted to mux.
+Mux mode is on by default (`ATLAS_MUX=off` disables it; `scripts/atlas_mux.py:586`). The lead must run that command per worker to get its own
+headless process in its own window of the tmux session `atlas-<run>` (one
+window per worker). The transport is tmux by default (12.5.0); herdr (workspace
+`atlas-<run>`, one tab per worker, `atlas_herdr.create_pane`) is used only with
+`ATLAS_COLONY_TRANSPORT=herdr`. Dispatches via Agent/task are never rerouted to mux.
 This per-worker `spawn` is the manual path; the default for 2+ workers is
 `atlas_mux.py spawn-team` (Parallelism & integration), which sizes the team
 from the resolver. In-process named dispatch + board remains for a single

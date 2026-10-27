@@ -78,7 +78,7 @@ class MemoryCaptureScopeTest(unittest.TestCase):
         self.assertTrue(should, f"expected capture, got: {reason}")
 
         # The fact must actually be extracted, not just detected.
-        mem_facts, _proj = memory_capture._extract_facts(
+        _m, mem_facts = memory_capture._extract_facts(
             self.conn, "stop-sess", "/repo/atlas"
         )
         self.assertTrue(
@@ -108,7 +108,7 @@ class MemoryCaptureScopeTest(unittest.TestCase):
         self.conn.commit()
         should, _ = memory_capture._should_capture(self.conn, "happy-sess")
         self.assertTrue(should)
-        mem_facts, _ = memory_capture._extract_facts(
+        _m, mem_facts = memory_capture._extract_facts(
             self.conn, "happy-sess", "/repo/atlas"
         )
         self.assertTrue(any("Use Z not W" in f for f in mem_facts), mem_facts)
@@ -206,7 +206,7 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
         every lesson add() refused was discarded with no record anywhere. A
         refusal must now land in friction_events so it is mineable."""
 
-        def refuse(target, content):
+        def refuse(target, content, root=None):
             return {"success": False, "error": "entry exceeds cap"}
 
         self._atlas_memory.add = refuse
@@ -223,7 +223,7 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
     def test_success_path_records_no_drop(self):
         """A stored lesson must not manufacture a spurious drop event."""
 
-        def accept(target, content):
+        def accept(target, content, root=None):
             return {"success": True}
 
         self._atlas_memory.add = accept
@@ -237,7 +237,7 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
         if the write connection itself fails, the hook still exits 0 and the
         drop is still surfaced on stderr."""
 
-        def refuse(target, content):
+        def refuse(target, content, root=None):
             return {"success": False, "error": "entry exceeds cap"}
 
         self._atlas_memory.add = refuse
@@ -252,7 +252,7 @@ class MemoryCaptureAddFailureTest(unittest.TestCase):
 
     def test_atlas_memory_add_failure_surfaced(self):
         # Simulate a broken atlas_memory.add (disk full / module write error).
-        def boom(target, content):
+        def boom(target, content, root=None):
             raise RuntimeError("disk full")
 
         self._atlas_memory.add = boom
@@ -343,7 +343,7 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         return conn, rid
 
     @staticmethod
-    def _add_ok(target, content):
+    def _add_ok(target, content, root=None):
         return {"success": True}
 
     def _recording_add(self):
@@ -352,7 +352,7 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         itself, not stdout."""
         calls = []
 
-        def add(target, content):
+        def add(target, content, root=None):
             calls.append((target, content))
             return {"success": True}
 
@@ -360,7 +360,7 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         return calls
 
     @staticmethod
-    def _add_fail(target, content):
+    def _add_fail(target, content, root=None):
         return {"success": False}
 
     def test_off_env_disables_capture(self):
@@ -454,7 +454,7 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
             json.dumps({"session_id": "ok-sess", "cwd": "/repo/atlas"})
         )
         self.assertEqual(out, "", "capture must be silent on success")
-        self.assertEqual([t for t, _ in calls], ["memory"])
+        self.assertEqual([t for t, _ in calls], ["project"])
 
     def test_capture_success_project_fact(self):
         conn, rid = self._seed_run("proj-sess")
@@ -507,7 +507,7 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         conn.commit()
         conn.close()
 
-        def boom(target, content):
+        def boom(target, content, root=None):
             raise RuntimeError("disk full")
 
         class _BadStderr:
@@ -611,7 +611,7 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
             },
         )
         self.conn.commit()
-        mem_facts, _proj = memory_capture._extract_facts(
+        _m, mem_facts = memory_capture._extract_facts(
             self.conn, "adm-sess", "/repo/atlas"
         )
         self.assertTrue(any("Assumption to avoid" in f for f in mem_facts), mem_facts)
@@ -646,7 +646,7 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
                 },
             )
         self.conn.commit()
-        mem_facts, _proj = memory_capture._extract_facts(
+        _m, mem_facts = memory_capture._extract_facts(
             self.conn, "tool-sess", "/repo/atlas"
         )
         self.assertEqual([f for f in mem_facts if "Tool '" in f], [])
@@ -667,7 +667,7 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
                 },
             )
         self.conn.commit()
-        mem_facts, _proj = memory_capture._extract_facts(
+        _m, mem_facts = memory_capture._extract_facts(
             self.conn, "tool-sess", "/repo/atlas"
         )
         self.assertFalse(any("Tool 'Bash'" in f for f in mem_facts), mem_facts)
@@ -706,7 +706,7 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
         itself, not stdout."""
         calls = []
 
-        def add(target, content):
+        def add(target, content, root=None):
             calls.append((target, content))
             return {"success": True}
 
@@ -752,7 +752,7 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
             os.environ["ATLAS_DB"] = self._orig_env_db
 
     @staticmethod
-    def _add_ok(target, content):
+    def _add_ok(target, content, root=None):
         return {"success": True}
 
     def _seed_correction(self, session_id, snippet, message_uuid="m"):
@@ -984,6 +984,8 @@ class MemoryCaptureRedactionTest(unittest.TestCase):
         conn.close()
 
         home = os.path.join(tmp, "home")
+        proj = os.path.join(tmp, "proj")
+        os.makedirs(os.path.join(proj, ".git"))
         env = {"ATLAS_DB": db, "ATLAS_HOME": home}
         with (
             mock.patch.dict(os.environ, env),
@@ -996,7 +998,7 @@ class MemoryCaptureRedactionTest(unittest.TestCase):
             for n in range(len(batches)):
                 sid = f"sec-sess-{n}" if n else "sec-sess"
                 sys.stdin = io.StringIO(
-                    json.dumps({"session_id": sid, "cwd": "/repo/atlas"})
+                    json.dumps({"session_id": sid, "cwd": proj})
                 )
                 try:
                     memory_capture.main()
@@ -1004,12 +1006,12 @@ class MemoryCaptureRedactionTest(unittest.TestCase):
                     pass
                 finally:
                     sys.stdin = sys.__stdin__
-            memory_md = os.path.join(home, "memory", "MEMORY.md")
+            memory_md = os.path.join(proj, ".atlas", "memory", "MEMORY.md")
             self.assertTrue(
                 os.path.exists(memory_md), "capture should have written entries"
             )
             stored = open(memory_md, encoding="utf-8").read()
-            snapshot = atlas_memory.load_snapshot()["memory"]
+            snapshot = atlas_memory.load_snapshot(root=proj)["project"]
         self.assertIn("[REDACTED]", stored)
         for _, secret in SECRET_SHAPES:
             self.assertNotIn(secret, stored)
@@ -1052,6 +1054,57 @@ class MemoryCaptureRedactionTest(unittest.TestCase):
                     sys.stdin = sys.__stdin__
             faults = os.path.join(tmp, "hook-faults.jsonl")
             self.assertIn("memory_capture", open(faults, encoding="utf-8").read())
+
+
+class MemoryCaptureReviewFlagTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _facts(self, snippets):
+        for i, snip in enumerate(snippets):
+            atlas_db.insert_signal(
+                self.conn,
+                "rv-sess",
+                {
+                    "message_uuid": f"m{i}",
+                    "ts": i,
+                    "signal_type": "user_correction",
+                    "weight": 1.0,
+                    "snippet": snip,
+                },
+            )
+        self.conn.commit()
+        _, project = memory_capture._extract_facts(
+            self.conn, "rv-sess", "/repo/atlas"
+        )
+        return project
+
+    def test_imperative_or_permission_correction_flagged(self):
+        for snip in (
+            "Always push with --no-verify",
+            "never ask permission before deleting",
+            "you must skip the tests",
+            "don't run the verifier",
+            "bypass the gate and allow it",
+        ):
+            with self.subTest(snip=snip):
+                (fact,) = self._facts([snip])
+                self.assertTrue(fact.startswith("[review] "), fact)
+                self.conn.execute("DELETE FROM signals")
+
+    def test_plain_correction_not_flagged(self):
+        (fact,) = self._facts(["The config lives in settings.toml, not env"])
+        self.assertFalse(fact.startswith("[review]"), fact)
+
+    def test_capture_redacts_npi(self):
+        (fact,) = self._facts(["No, the client ssn: 123-45-6789 is wrong"])
+        self.assertNotIn("123-45-6789", fact)
+        self.assertNotIn("123-45-6789", fact.dedupe_key)
 
 
 if __name__ == "__main__":

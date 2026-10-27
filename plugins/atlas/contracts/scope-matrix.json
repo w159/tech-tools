@@ -1,7 +1,27 @@
 {
- "_doc": "Scope matrix: (task_class, effort) -> team shape. Read by scripts/atlas_resolve.py and omp/resolve.ts. Role effort must equal agents/<role>.md frontmatter. tools_profile: read | edit | exec.",
- "effort_aliases": {"med": "medium", "hi": "high", "lo": "low"},
- "class_aliases": {"explore": "audit", "research": "audit", "investigate": "audit", "review": "audit", "feature": "implement", "build": "implement", "refactor": "implement", "bug": "fix", "bugfix": "fix", "doc": "docs", "uitest": "ui-test", "ui": "ui-test"},
+ "_doc": "Scope matrix: (task_class, effort) -> team shape. Read by scripts/atlas_resolve.py and omp/resolve.ts. Role effort must equal agents/<role>.md frontmatter; seat model must be in the role's tier_allow (default: frontmatter model; resolver emits it per seat). tools_profile: read | edit | exec.",
+ "effort_aliases": {
+  "med": "medium",
+  "hi": "high",
+  "lo": "low"
+ },
+ "class_aliases": {
+  "explore": "audit",
+  "research": "audit",
+  "investigate": "audit",
+  "review": "audit",
+  "feature": "implement",
+  "build": "implement",
+  "refactor": "implement",
+  "bug": "fix",
+  "bugfix": "fix",
+  "doc": "docs",
+  "uitest": "ui-test",
+  "ui": "ui-test",
+  "database": "db-audit",
+  "rls": "db-audit",
+  "schema": "db-audit"
+ },
  "classes": {
   "implement": {
    "low": {
@@ -9,8 +29,9 @@
      {
       "role": "implementer",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "edit"
+      "effort": "medium",
+      "tools_profile": "edit",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -21,14 +42,16 @@
      {
       "role": "implementer",
       "count": 2,
-      "effort": "low",
-      "tools_profile": "edit"
+      "effort": "medium",
+      "tools_profile": "edit",
+      "model": "sonnet"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "worktree",
@@ -39,20 +62,23 @@
      {
       "role": "planner",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "read"
+      "effort": "high",
+      "tools_profile": "read",
+      "model": "sonnet"
      },
      {
       "role": "implementer",
       "count": 3,
-      "effort": "low",
-      "tools_profile": "edit"
+      "effort": "medium",
+      "tools_profile": "edit",
+      "model": "sonnet"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "worktree",
@@ -65,8 +91,9 @@
      {
       "role": "implementer",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "edit"
+      "effort": "medium",
+      "tools_profile": "edit",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -78,19 +105,22 @@
       "role": "explorer",
       "count": 1,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "haiku"
      },
      {
       "role": "implementer",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "edit"
+      "effort": "medium",
+      "tools_profile": "edit",
+      "model": "sonnet"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -102,19 +132,22 @@
       "role": "explorer",
       "count": 2,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "haiku"
      },
      {
       "role": "implementer",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "edit"
+      "effort": "medium",
+      "tools_profile": "edit",
+      "model": "sonnet"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "worktree",
@@ -127,8 +160,9 @@
      {
       "role": "verifier",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -139,8 +173,9 @@
      {
       "role": "verifier",
       "count": 2,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -151,14 +186,16 @@
      {
       "role": "verifier",
       "count": 2,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      },
      {
       "role": "completeness-critic",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "read"
+      "effort": "medium",
+      "tools_profile": "read",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -172,7 +209,8 @@
       "role": "explorer",
       "count": 1,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "haiku"
      }
     ],
     "isolation": "shared",
@@ -184,13 +222,15 @@
       "role": "explorer",
       "count": 2,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "haiku"
      },
      {
       "role": "completeness-critic",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "read"
+      "effort": "medium",
+      "tools_profile": "read",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -202,19 +242,15 @@
       "role": "explorer",
       "count": 3,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "sonnet"
      },
      {
       "role": "completeness-critic",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "read"
-     },
-     {
-      "role": "rls-privilege-audit",
-      "count": 1,
-      "effort": "low",
-      "tools_profile": "read"
+      "effort": "medium",
+      "tools_profile": "read",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -228,7 +264,8 @@
       "role": "docs-curator",
       "count": 1,
       "effort": "low",
-      "tools_profile": "edit"
+      "tools_profile": "edit",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -240,13 +277,15 @@
       "role": "docs-curator",
       "count": 1,
       "effort": "low",
-      "tools_profile": "edit"
+      "tools_profile": "edit",
+      "model": "sonnet"
      },
      {
       "role": "docs-auditor",
       "count": 1,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "haiku"
      }
     ],
     "isolation": "shared",
@@ -258,13 +297,15 @@
       "role": "docs-curator",
       "count": 2,
       "effort": "low",
-      "tools_profile": "edit"
+      "tools_profile": "edit",
+      "model": "sonnet"
      },
      {
       "role": "docs-auditor",
       "count": 1,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "haiku"
      }
     ],
     "isolation": "shared",
@@ -278,7 +319,8 @@
       "role": "db-prober",
       "count": 1,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -290,13 +332,15 @@
       "role": "db-prober",
       "count": 1,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "sonnet"
      },
      {
       "role": "rls-privilege-audit",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "read"
+      "effort": "medium",
+      "tools_profile": "read",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -308,19 +352,22 @@
       "role": "db-prober",
       "count": 2,
       "effort": "low",
-      "tools_profile": "read"
+      "tools_profile": "read",
+      "model": "sonnet"
      },
      {
       "role": "rls-privilege-audit",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "read"
+      "effort": "medium",
+      "tools_profile": "read",
+      "model": "sonnet"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -334,7 +381,8 @@
       "role": "ui-runtime-tester",
       "count": 1,
       "effort": "low",
-      "tools_profile": "exec"
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -346,7 +394,8 @@
       "role": "ui-runtime-tester",
       "count": 2,
       "effort": "low",
-      "tools_profile": "exec"
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -358,13 +407,15 @@
       "role": "ui-runtime-tester",
       "count": 3,
       "effort": "low",
-      "tools_profile": "exec"
+      "tools_profile": "exec",
+      "model": "sonnet"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -377,8 +428,9 @@
      {
       "role": "test-engineer",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "shared",
@@ -389,8 +441,9 @@
      {
       "role": "test-engineer",
       "count": 2,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "worktree",
@@ -401,17 +454,88 @@
      {
       "role": "test-engineer",
       "count": 3,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      },
      {
       "role": "verifier",
       "count": 1,
-      "effort": "low",
-      "tools_profile": "exec"
+      "effort": "medium",
+      "tools_profile": "exec",
+      "model": "sonnet"
      }
     ],
     "isolation": "worktree",
+    "max_parallel": 4
+   }
+  },
+  "db-audit": {
+   "low": {
+    "team": [
+     {
+      "role": "schema-inventory",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read",
+      "model": "haiku"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 1
+   },
+   "medium": {
+    "team": [
+     {
+      "role": "schema-inventory",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read",
+      "model": "haiku"
+     },
+     {
+      "role": "rls-privilege-audit",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read",
+      "model": "sonnet"
+     }
+    ],
+    "isolation": "shared",
+    "max_parallel": 2
+   },
+   "high": {
+    "team": [
+     {
+      "role": "explorer",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read",
+      "model": "haiku"
+     },
+     {
+      "role": "rls-privilege-audit",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read",
+      "model": "sonnet"
+     },
+     {
+      "role": "schema-inventory",
+      "count": 1,
+      "effort": "low",
+      "tools_profile": "read",
+      "model": "haiku"
+     },
+     {
+      "role": "completeness-critic",
+      "count": 1,
+      "effort": "medium",
+      "tools_profile": "read",
+      "model": "sonnet"
+     }
+    ],
+    "isolation": "shared",
     "max_parallel": 4
    }
   }

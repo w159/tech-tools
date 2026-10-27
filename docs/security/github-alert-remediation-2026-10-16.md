@@ -60,7 +60,7 @@ Per-package versions are recorded in `docs/CHANGELOG.md` under Unreleased, Secur
 | 30, 31 | js/shell-command-injection-from-environment | `plugins/atlas/omp/proc.ts` | false positive | `/bin/sh -c` runs a constant script; arguments are passed as positional `"$@"`, never interpolated. |
 | 34 | js/incomplete-url-substring-sanitization | `mcp_servers/cipp-mcp/tests/cipp.service.domain-health.test.ts` | used in tests | A test assertion, not production sanitization. |
 | 38 | js/incomplete-multi-character-sanitization | `plugins/atlas/colony/herdr-web-ui/scripts/build-site.ts` | false positive | A build-time script that reads the repo's own `site/index.html`; it outputs JSON-LD, not HTML. |
-| 39 | py/clear-text-logging-sensitive-data | `plugins/atlas/mcp/falcon/falcon_mcp/modules/base.py` | false positive | Logs `sorted(prepared_params)`: parameter key names only. |
+| 39 | py/clear-text-logging-sensitive-data | `plugins/armada/mcp/falcon/falcon_mcp/modules/base.py` | false positive | Logs `sorted(prepared_params)`: parameter key names only. |
 
 Residual risk: the three "won't fix" items let an operator turn off TLS verification for the ConnectWise and PAN-OS connectors. That is acceptable only on a management network the firm controls. Prefer adding the appliance's CA to the Node trust store with `NODE_EXTRA_CA_CERTS` over turning verification off.
 

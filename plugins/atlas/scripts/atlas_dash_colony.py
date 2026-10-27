@@ -671,6 +671,20 @@ def _wave_target(ctx):
     return hit, None
 
 
+def _hold(root: str, name: str) -> None:
+    wave = _wave_read(root)
+    wave["members"].setdefault(name, {})["paused"] = True
+    _wave_write(root, wave)
+
+
+def _release(root: str, name: str) -> dict:
+    """Clear a member's wave flags; returns what was recorded (carries resume_state)."""
+    wave = _wave_read(root)
+    wm = wave["members"].pop(name, {})
+    _wave_write(root, wave)
+    return wm
+
+
 def h_colony_pause(ctx):
     hit, err = _wave_target(ctx)
     if hit is None:
@@ -678,9 +692,7 @@ def h_colony_pause(ctx):
     root, m = hit
     if guard := _lead_only_guard(m):
         return guard
-    wave = _wave_read(root)
-    wave["members"].setdefault(m["name"], {})["paused"] = True
-    _wave_write(root, wave)
+    _hold(root, m["name"])
     return 200, {
         "ok": True,
         "paused": m["name"],
@@ -695,9 +707,7 @@ def h_colony_resume(ctx):
     root, m = hit
     if guard := _lead_only_guard(m):
         return guard
-    wave = _wave_read(root)
-    wm = wave["members"].pop(m["name"], {})
-    _wave_write(root, wave)
+    wm = _release(root, m["name"])
     return 200, {
         "ok": True,
         "resumed": m["name"],
@@ -943,6 +953,33 @@ def kill_member(root: str, name: str) -> tuple[int, dict]:
             "GET /api/v2/colony",
         )
     return _kill_member(root, m)
+
+
+def _hold_target(root: str, name: str):
+    """(realpath root, None) for a holdable member, else (None, (status, error body))."""
+    root = os.path.realpath(root)
+    m = next((m for m in build_colony(root)["members"] if m["name"] == name), None)
+    if not m:
+        return None, _err(404, "no_such_member", f"{name!r} is not on the colony roster", "GET /api/v2/colony")
+    return (root, None) if not (g := _lead_only_guard(m)) else (None, g)
+
+
+def hold_member(root: str, colony: str, seat: str) -> tuple[int, dict]:
+    """Hold one seat (stop queueing to it), for the TUI; same flag as POST /colony/<name>/pause."""
+    r, err = _hold_target(root, seat)
+    if r is None:
+        return err
+    _hold(r, seat)
+    return 200, {"ok": True, "held": seat, "colony": colony}
+
+
+def release_member(root: str, colony: str, seat: str) -> tuple[int, dict]:
+    """Release a held seat; same flag as POST /colony/<name>/resume."""
+    r, err = _hold_target(root, seat)
+    if r is None:
+        return err
+    wm = _release(r, seat)
+    return 200, {"ok": True, "released": seat, "colony": colony, "resume_state": wm.get("resume_state")}
 
 
 def _entry(root: str, name: str):

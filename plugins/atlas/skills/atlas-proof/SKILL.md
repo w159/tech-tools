@@ -1,6 +1,6 @@
 ---
 name: atlas-proof
-description: "Human-review workflow for project markdown: publishes a doc for review, records anchored comments in a sidecar file, folds feedback back. Use to share a plan, spec or draft for review; not proofreading."
+description: "Human-review workflow for project markdown: publishes a doc for review, records anchored comments in a sidecar file, folds feedback back. Use when sharing a plan, spec or draft for review; not proofreading."
 when_to_use: "share for review, put this up for review, comment on this doc, review round-trip, publish handoff"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '<file or PR to publish/review/collect, and what to do>'
@@ -40,8 +40,8 @@ Pick the narrowest mode that satisfies the request. Act as `atlas-proof` on $ARG
 
 Read the source markdown in full, place it at its review surface, and hand the user the path. The local source file stays canonical; publishing syncs nothing back into it.
 
-- Durable doc (plan, spec, feature doc, decision record): place or confirm it at the path the docs SSOT assigns (`docs/plans/<task-slug>.md`, `docs/specs/<YYYY-MM-DD>-<slug>.md`, ...) - date-first naming is enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`, so never use CE's un-dated or HHMM-timestamped style.
-- Ephemeral review copy (draft, scratch, pre-plan exploration): copy the source bytes verbatim to `.atlas/.run/proof/<YYYY-MM-DD>-<slug>/review.md` and scaffold the sidecar `annotations.md` there.
+- Durable doc (plan, spec, feature doc, decision record): place or confirm it at the path the docs SSOT assigns (`docs/plans/<task-slug>.md`, `docs/specs/<YYYY-MM-DD>_<slug>.md`, ...) - date-first naming is enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`, so never use CE's un-dated or HHMM-timestamped style.
+- Ephemeral review copy (draft, scratch, pre-plan exploration): copy the source bytes verbatim to `.atlas/.run/proof/<YYYY-MM-DD>_<slug>/review.md` and scaffold the sidecar `annotations.md` there.
 - Publish the source file's actual bytes, never hand-written or placeholder content. If the user asks for a link rather than a file, say plainly that atlas publishes to repo paths, and offer the PR surface instead if one exists.
 
 DONE: the file exists at the stated path with the source's content (verify by diff against the source for copies), the sidecar exists for ephemeral copies, and the user holds the path.

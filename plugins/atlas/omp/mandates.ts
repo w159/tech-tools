@@ -23,8 +23,7 @@ import * as nodePath from "node:path";
 
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
-
-export const MANDATES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "mandates.json");
+import { atlasKnob } from "./knobs";
 
 /** The shared mandate contract (also read by the Python hooks). */
 export interface Mandates {
@@ -73,7 +72,7 @@ const RECALL_EXEMPT: Record<string, true> = { todo: true, todowrite: true };
  * True when a tool call IS the claude-mem recall: a bare claude-mem tool, or a `write`
  * to an `xd://mcp__` claude-mem device (`path`, or `file_path` as Claude Code names it).
  */
-export function satisfiesRecall(toolName: string, input: unknown): boolean {
+function satisfiesRecall(toolName: string, input: unknown): boolean {
 	if (CLAUDE_MEM_SERVER.test(toolName)) return true;
 	if (toolName.toLowerCase() !== "write" || !input || typeof input !== "object") return false;
 	const { path, file_path: filePath } = input as { path?: unknown; file_path?: unknown };
@@ -159,7 +158,7 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 	let recalled = false; // true only once a real claude-mem call happened; a denial never sets it
 	/** The recall line once rendered, re-served byte for byte so the provider's prompt cache is not rewritten when a route changes mid-session. Absence is never stored. */
 	let recallLine: string | undefined;
-	const off = () => (deps.env ?? process.env).ATLAS_MANDATES === "off";
+	const off = () => atlasKnob("ATLAS_MANDATES", deps.env ?? process.env) === "off";
 	const reset = () => {
 		ponytailListed = false;
 		commitNudged = false;

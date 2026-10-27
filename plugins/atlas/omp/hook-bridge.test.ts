@@ -18,6 +18,7 @@ import {
 	claudeNamesForCall,
 	loadBridgedHooks,
 	loadBridgedHooksFor,
+	atlasKnob,
 	atlasStoreEnv,
 	hookEnv,
 	matcherNames,
@@ -285,11 +286,14 @@ test("real docs_drift_watch flags the first non-docs edit in a docs/ repo", asyn
 test("per-hook timeout is min(hooks.json timeout, ATLAS_BRIDGE_HOOK_TIMEOUT_S default 25)", async () => {
 	const script = hookScript("cap_boot.py", context("SessionStart", "boot"));
 	const config = () => writeConfig({ SessionStart: [{ hooks: [{ command: `python3 "${script}"`, timeout: 120 }] }] }, ["cap_boot.py"]);
-	const lowered = harness(config(), { ATLAS_BRIDGE_HOOK_TIMEOUT_S: "2" });
+	// Pinned clock: the slot is min(cap, deadline - now()). With the real clock a 1 ms gap between computing the
+	// deadline and starting the hook makes it 24_999, which is what made the 25_000 assertion below flaky.
+	const now = () => 1_700_000_000_000;
+	const lowered = harness(config(), { ATLAS_BRIDGE_HOOK_TIMEOUT_S: "2" }, recordingRunner, { now });
 	await lowered.handlers.before_agent_start({ prompt: "x", systemPrompt: [] }, lowered.ctx());
 	expect(times["cap_boot.py"]).toEqual([2_000]);
 	hookScript("cap_boot.py", context("SessionStart", "boot"));
-	const defaulted = harness(config());
+	const defaulted = harness(config(), {}, recordingRunner, { now });
 	await defaulted.handlers.before_agent_start({ prompt: "x", systemPrompt: [] }, defaulted.ctx());
 	expect(times["cap_boot.py"]).toEqual([25_000]);
 });
@@ -483,23 +487,25 @@ test("an unrecognised xd://mcp__ device fails closed to an MCP name, a file writ
 	expect(claudeNamesForCall("write", { path: "xd://report_issue", content: "x" })).toEqual(["Write"]); // not an MCP device
 });
 
-test("atlas connector calls reach hooks.json's connector_credential_watch matcher (mcp__plugin_atlas_.*)", () => {
+test("armada connector calls reach hooks.json's connector_credential_watch matcher (mcp__plugin_armada_.*)", () => {
 	const watch = loadBridgedHooks().find(h => h.command.includes("connector_credential_watch.py"));
 	if (!watch?.matcher) throw new Error("connector_credential_watch is not bridged with a matcher");
 	const matcher = watch.matcher;
-	for (const device of ["mcp__atlas_falcon_falcon_status", "mcp__atlas_connectwise_cw_status", "mcp__atlas_ninjaone_ninjaone_devices_list", "mcp__atlas_vanta_vanta_status", "mcp__atlas_cipp_cipp_status"]) {
+	for (const device of ["mcp__armada_falcon_falcon_status", "mcp__armada_connectwise_cw_status", "mcp__armada_ninjaone_ninjaone_devices_list", "mcp__armada_vanta_vanta_status", "mcp__armada_cipp_cipp_status"]) {
 		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(true);
 	}
 	for (const device of ["mcp__lean_ctx_ctx_read", "mcp__serena_find_symbol", "mcp__mcp_search_search"]) {
 		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(false);
 	}
-	expect(matcherNames(["Edit", "mcp__atlas_falcon__x"])).toEqual(["Edit", "mcp__atlas_falcon__x", "mcp__plugin_atlas_falcon__x"]);
+	expect(matcherNames(["Edit", "mcp__armada_falcon__x"])).toEqual(["Edit", "mcp__armada_falcon__x", "mcp__plugin_armada_falcon__x"]);
+	// pre-move `atlas` prefix is still aliased (fallback), though the matcher no longer names it
+	expect(matcherNames(["mcp__atlas_falcon__x"])).toEqual(["mcp__atlas_falcon__x", "mcp__plugin_atlas_falcon__x"]);
 });
 
 test("a connectwise MCP call is not seen as an Edit/Write by the file hooks", async () => {
 	const script = hookScript("edit_only.py", {});
 	const { handlers, ctx } = harness(writeConfig({ PreToolUse: [{ matcher: "Edit|Write", hooks: [{ command: `python3 "${script}"` }] }] }, ["edit_only.py"]));
-	await handlers.tool_call({ toolName: "write", input: { path: "xd://mcp__atlas_connectwise_cw_status", content: "{}" } }, ctx());
+	await handlers.tool_call({ toolName: "write", input: { path: "xd://mcp__armada_connectwise_cw_status", content: "{}" } }, ctx());
 	await handlers.tool_call({ toolName: "write", input: { path: "xd://mcp__mcp_search_search", content: "{}" } }, ctx());
 	expect(logOf("edit_only.py").length).toBe(0);
 	await handlers.tool_call({ toolName: "write", input: { path: "src/real.ts", content: "x" } }, ctx());
@@ -538,19 +544,35 @@ test("ast_edit is an Edit for the hooks, with every path it names", async () => 
 	expect(logOf("ast_pre.py")[0].tool_name).toBe("Edit");
 });
 
-test("hookEnv exports the atlas settings store; the real env wins; fixed omp vars win over the store", () => {
+test("hookEnv exports the atlas settings store; the store wins over the real env; fixed omp vars win over the store", () => {
 	const home = mkdtempSync(join(tmpdir(), "atlas-store-"));
 	try {
 		writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_GATE: "off", ATLAS_DEPTH: "3", ATLAS_HARNESS: "claude", NOT_ATLAS: "x", ATLAS_NUM: 5 } }));
 		const env = hookEnv({ ATLAS_HOME: home, ATLAS_DEPTH: "9" });
 		expect(env.ATLAS_GATE).toBe("off");
-		expect(env.ATLAS_DEPTH).toBeUndefined(); // already in process env: not re-exported, not overridden
+		expect(env.ATLAS_DEPTH).toBe("3"); // the inherited value is the stale session-start copy: the store wins
 		expect(env.ATLAS_HARNESS).toBe("omp");
 		expect(env.NOT_ATLAS).toBeUndefined();
 		expect(env.ATLAS_NUM).toBeUndefined();
 		expect(hookEnv({ ATLAS_HOME: join(home, "missing") }).ATLAS_HARNESS).toBe("omp"); // no store: unchanged behaviour
 		writeFileSync(join(home, "settings.json"), "{not json");
 		expect(atlasStoreEnv({ ATLAS_HOME: home })).toEqual({});
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test("atlasKnob reads the saved store per call, else the process env, else undefined", () => {
+	const home = mkdtempSync(join(tmpdir(), "atlas-knob-"));
+	try {
+		const env = { ATLAS_HOME: home, ATLAS_HOOK_BRIDGE: "on", ATLAS_WORKER_MAX_TOKENS: "1024" };
+		expect(atlasKnob("ATLAS_HOOK_BRIDGE", env)).toBe("on"); // no store file: env value
+		writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_HOOK_BRIDGE: "off" } }));
+		expect(atlasKnob("ATLAS_HOOK_BRIDGE", env)).toBe("off"); // saved after the env was captured: store wins
+		expect(atlasKnob("ATLAS_WORKER_MAX_TOKENS", env)).toBe("1024"); // not in the store: env value
+		writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_HOOK_BRIDGE: "on" } }));
+		expect(atlasKnob("ATLAS_HOOK_BRIDGE", env)).toBe("on"); // re-read on every call
+		expect(atlasKnob("ATLAS_NOPE", env)).toBeUndefined();
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}

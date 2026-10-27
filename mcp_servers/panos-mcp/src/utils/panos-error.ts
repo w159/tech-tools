@@ -26,7 +26,7 @@ import { toolError, toolErrorFromCatch } from '@shared/error-envelope.js';
 import type { ErrorCode, ToolResult } from '@shared/error-envelope.js';
 
 /** What kind of failure a PAN-OS code represents, which is what picks the hint. */
-export type PanosFailureClass =
+type PanosFailureClass =
   | 'auth-credential'
   | 'auth-role'
   | 'session'
@@ -51,7 +51,7 @@ interface PanosCodeEntry {
  * documented as success and are listed only so an unexpected throw carrying
  * one still reports the vendor's own wording.
  */
-export const PANOS_ERROR_CODES: Record<string, PanosCodeEntry> = {
+const PANOS_ERROR_CODES: Record<string, PanosCodeEntry> = {
   '1': { meaning: 'Unknown command', failure: 'unsupported-command', code: 'UNSUPPORTED_COMMAND' },
   '2': { meaning: 'Internal error', failure: 'appliance-internal', code: 'VENDOR_ERROR' },
   '3': { meaning: 'Internal error', failure: 'appliance-internal', code: 'VENDOR_ERROR' },
@@ -246,7 +246,7 @@ function jsonMessage(responseText: string): string | undefined {
  * `<line>` elements, then whatever text the envelope carries. Always returned
  * as one collapsed, length-capped line - never raw XML.
  */
-export function extractApplianceMessage(responseText: string): string | undefined {
+function extractApplianceMessage(responseText: string): string | undefined {
   if (!responseText) return undefined;
 
   const fromJson = jsonMessage(responseText);

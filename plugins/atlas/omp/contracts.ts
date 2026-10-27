@@ -17,8 +17,6 @@ export function resolveTarget(cwd: string, p: string): string {
 	return nodePath.resolve(cwd, expanded);
 }
 
-export const NATIVE_TOOLS_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "native-tools.json");
-
 export type LeanKind = "search" | "glob" | "read" | "shell";
 const KINDS: LeanKind[] = ["search", "glob", "read", "shell"];
 

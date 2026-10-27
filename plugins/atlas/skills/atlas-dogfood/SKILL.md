@@ -1,6 +1,6 @@
 ---
 name: atlas-dogfood
-description: "Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route. Use for end-to-end flow checks or a quick render check."
+description: "Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route. Use when checking end-to-end flows or doing a quick render check."
 when_to_use: "dogfood this change, drive the changed flows, find and fix UI breakage, smoke test, check changed routes, does it load, console errors, quick browser check"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[smoke] [PR number, branch name, or 'current'] [--port PORT] [--fix-budget N]"
@@ -57,7 +57,7 @@ Read `${CLAUDE_SKILL_DIR}/references/phases.md` before starting Phase 0 (Scope) 
 - **Repairs only via the fix loop.** The orchestrator never edits app source. Auto-fix only what is small, well-understood, and low-risk (policy in `references/fix-loop.md`); anything architectural, schema-level, behavior-defining, or with plausible competing solutions is escalated to the report's **Decisions for a human** section and the scenario ends `Blocked (human decision)`.
 - **Never auto-commit or auto-push.** Fixes land in the working tree. Committing, pushing, or opening a PR happens only on explicit user confirmation. Regressions tests the implementer writes are part of the fix and stay in the working tree with it.
 - **Never switch the primary checkout out from under the user.** A PR/branch target differing from the current checkout: confirm with the user before checking it out in place; offer an isolated worktree instead when uncommitted changes would be disturbed.
-- **Screenshots and transient artifacts go to `.atlas/evidence/<YYYY-MM-DD>-<slug>/`** at the moment of capture (per the docs SSOT), never to the repo root; the report references those paths.
+- **Screenshots and transient artifacts go to `.atlas/evidence/<YYYY-MM-DD>_<slug>/`** at the moment of capture (per the docs SSOT), never to the repo root; the report references those paths.
 - **A fix is not done until a regression test fails before it and passes after**, or the report records why no automated regression test was meaningful for that fix.
 - **Terminal states end the scenario, not the run.** `Blocked (needs human verify)` (a step needing outside interaction: OAuth, real email, payments, SMS, third-party approvals) and `Blocked (human decision)` (a fix too big to make autonomously) each end that scenario; continue the rest of the matrix and never silently re-queue a blocked scenario on resume.
 

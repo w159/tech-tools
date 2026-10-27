@@ -72,6 +72,12 @@ class DecisionTests(unittest.TestCase):
         criteria = body["questions"]["prompt_class"]["criteria"]
         self.assertIsInstance(criteria["conversation"], str)
 
+    def test_full_endpoint_url_is_normalized_to_base(self):
+        with mock.patch.dict(
+            os.environ, {"ATLAS_DECISION_URL": "http://127.0.0.1:11434/v1/systemone/"}
+        ):
+            self.assertEqual(prompt_decision.decision_url(), "http://127.0.0.1:11434")
+
     def test_unreachable_returns_none(self):
         def fake(req, timeout=None):
             raise urllib.error.URLError("refused")

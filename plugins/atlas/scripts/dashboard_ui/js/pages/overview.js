@@ -2,6 +2,7 @@
 
 import { h, debounce, fmtRelative, patchInto } from "../dom.js";
 import { stableJson } from "../api.js";
+import { reportFetchFail, clearFetchFail } from "../fetch-fail.js";
 import { Kpi, Card, Badge, StatusDot, Table, LineChart, EmptyState, toastError } from "../components.js";
 import { IntegrationsRow } from "../integrations.js";
 import { actionButton, dismissButton } from "../health-actions.js";
@@ -51,7 +52,7 @@ function runsTable(rows) {
 async function fetchAll(ctx) {
   const [ov, health] = await Promise.all([
     ctx.api.get("overview", { project: ctx.project, window: "7d" }),
-    ctx.api.get("/api/v2/health", { window: "7d", ...(ctx.project && ctx.project !== "all" ? { project: ctx.project } : {}) }).catch(() => null),
+    ctx.api.get("/api/v2/health", { window: "7d", ...(ctx.project && ctx.project !== "all" ? { project: ctx.project } : {}) }).then((r) => { clearFetchFail("/api/v2/health"); return r; }, (e) => { reportFetchFail("overview", "/api/v2/health", e); return null; }),
   ]);
   return { ...ov, health, counts: { ...ctx.agents.getState().counts } };
 }

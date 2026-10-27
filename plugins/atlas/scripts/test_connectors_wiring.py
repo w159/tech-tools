@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Verify atlas connector wiring: .mcp.json, plugin.json userConfig, and bundles.
+"""Verify the vendor connector wiring (shipped by armada): .mcp.json, plugin.json userConfig, and bundles.
 
 This test is intentionally data-driven from the filesystem so it stays current
-as connectors are added or removed inside plugins/atlas/mcp/.
+as connectors are added or removed inside plugins/armada/mcp/.
 """
 
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
@@ -12,9 +12,11 @@ import unittest
 from pathlib import Path
 
 PLUGINS_ATLAS = Path(__file__).parent.parent
-MCP_DIR = PLUGINS_ATLAS / "mcp"
-PLUGIN_JSON = PLUGINS_ATLAS / ".claude-plugin" / "plugin.json"
-MCP_JSON = PLUGINS_ATLAS / ".mcp.json"
+# The vendor connectors moved from atlas to armada; their wiring is asserted there.
+PLUGINS_ARMADA = PLUGINS_ATLAS.parent / "armada"
+MCP_DIR = PLUGINS_ARMADA / "mcp"
+PLUGIN_JSON = PLUGINS_ARMADA / ".claude-plugin" / "plugin.json"
+MCP_JSON = PLUGINS_ARMADA / ".mcp.json"
 
 # userConfig interpolation pattern used in this repo's .mcp.json files.
 _INTERPOLATION_RE = re.compile(r"\$\{user_config\.([a-z_][a-z0-9_]*)\}")
@@ -169,6 +171,19 @@ class TestConnectorsWiring(unittest.TestCase):
                 )
 
 
+class TestAtlasDeclaresNoConnectors(unittest.TestCase):
+    """Clean break: atlas ships no vendor servers, bundles or credential keys."""
+
+    def test_atlas_has_no_mcp_servers_bundles_or_connector_keys(self) -> None:
+        manifest = json.loads(
+            (PLUGINS_ATLAS / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn("mcpServers", manifest)
+        self.assertFalse((PLUGINS_ATLAS / ".mcp.json").exists())
+        self.assertFalse((PLUGINS_ATLAS / "mcp").exists())
+        self.assertEqual(sorted(manifest.get("userConfig", {})), ["atlas_mod_sound"])
+
+
 class TestDisclosureDocMatchesHarness(unittest.TestCase):
     """references/connector-tool-disclosure.md must state what test-mcp-tools.mjs asserts."""
 
@@ -197,7 +212,7 @@ class TestDisclosureDocMatchesHarness(unittest.TestCase):
 
     def test_table_matches_harness_for_every_connector(self) -> None:
         harness = self._harness()
-        self.assertEqual(len(harness), 12)
+        self.assertEqual(len(harness), 13)
         self.assertEqual(self._doc(), harness)
 
 

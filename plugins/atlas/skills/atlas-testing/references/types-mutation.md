@@ -59,6 +59,16 @@ do_not_mutate_patterns = ['logger\.\w+']
 type_check_command = ["mypy", "backend", "--output", "json", "--disable-error-code", "unused-ignore"]
 ```
 
+mutmut 3 refuses to run without this table: with no `source_paths` it exits 1 ("Could not figure out where the code to mutate is"). A flat single-file module needs the minimal table below (the live run used it):
+
+```toml
+[tool.mutmut]
+source_paths = ["<module>.py"]
+pytest_add_cli_args_test_selection = ["tests/"]
+```
+
+`uvx mutmut` runs under its own interpreter (3.12 in the live run, the repo ran 3.15), so mutate in a scratch copy of the repo and record both Python versions in the evidence. Tests that drive the code through a subprocess (CLI tests) are invisible to the mutation runner and show up as "no tests"; prefer in-process calls for the functions under mutation.
+
 Verified mutmut 3 facts:
 - The keys above are real mutmut 3 keys; equivalent setup.cfg style uses `[mutmut]` with `source_paths=`, `also_copy=`, `do_not_mutate=`, `max_stack_depth=`, `mutate_only_covered_lines=`.
 - `type_check_command` supports **mypy or pyrefly only** (pyright/ty cannot match type errors to mutants). mypy form must include `--output json`; pyrefly form is `['pyrefly', 'check', '--output-format=json']`.

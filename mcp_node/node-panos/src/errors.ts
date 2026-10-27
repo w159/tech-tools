@@ -1,7 +1,7 @@
 /**
  * Thrown whenever a parsed PAN-OS XML `<response>` envelope carries
  * status="error", including when the transport-level HTTP status is 200.
- * See docs/panos-connector-design.md: "The failure mode the client must not have".
+ * See docs/architecture/panos-connector-design.md: "The failure mode the client must not have".
  */
 export class PanosApiError extends Error {
   readonly code: string | undefined;

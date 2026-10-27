@@ -532,9 +532,10 @@ test("real completion_gate.py blocks an orchestrating run with no ROADMAP, throu
 		mkdirSync(join(repo, "docs"), { recursive: true });
 		writeFileSync(join(repo, "docs", "CHANGELOG.md"), "# Changelog\n- seeded\n");
 		writeFileSync(join(repo, "README.md"), "# repo\n");
-		// What omp_runstate.py begin/arm produce: a run row flagged orchestrating (the gate is silent without it).
+		// What omp_runstate.py begin/arm produce: a run row flagged orchestrating (the gate is silent without it), plus a main-thread
+		// Write of non-docs code: the docs-currency letters (c/d/e) only apply to a run that shipped code in a project with docs/.
 		const seed = Bun.spawnSync(
-			["python3", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import atlas_db as d; c=d.connect(); d.init(c); d.start_run(c, d.register_project(c, sys.argv[2], 'repo'), sys.argv[3]); d.mark_orchestrating(c, sys.argv[3], sys.argv[2])", join(import.meta.dir, "..", "scripts"), repo, sid],
+			["python3", "-c", "import sys; sys.path.insert(0, sys.argv[1]); import atlas_db as d; c=d.connect(); d.init(c); d.start_run(c, d.register_project(c, sys.argv[2], 'repo'), sys.argv[3]); d.mark_orchestrating(c, sys.argv[3], sys.argv[2]); d.log_event(c, d.current_run_id(c, sys.argv[3]), 'Write', 'main', 0, sys.argv[2] + '/src/app.py')", join(import.meta.dir, "..", "scripts"), repo, sid],
 			{ env: { ...process.env, ATLAS_DB: join(dir, "atlas.db") }, stdout: "ignore", stderr: "ignore" },
 		);
 		expect(seed.exitCode).toBe(0);
@@ -552,9 +553,12 @@ test("real completion_gate.py blocks an orchestrating run with no ROADMAP, throu
 		expect(result?.decision).toBe("block");
 		expect(result?.reason).toContain("ROADMAP");
 
-		// Same project with the gap closed passes: the gate speaks only when it blocks.
+		// Same project with the ROADMAP gap closed: the shipped-code run still owes evidence/findings/plan, but (d) is gone.
 		writeFileSync(join(repo, "docs", "ROADMAP.md"), "# Roadmap\n- next\n");
-		expect(await handlers.session_stop[0]({ session_id: sid, session_file: "", stop_hook_active: false }, ctx)).toBeUndefined();
+		const again = (await handlers.session_stop[0]({ session_id: sid, session_file: "", stop_hook_active: false }, ctx)) as { decision?: string; reason?: string } | undefined;
+		expect(again?.decision).toBe("block");
+		expect(again?.reason).not.toContain("ROADMAP");
+		expect(again?.reason).not.toContain("(d)");
 	} finally {
 		if (saved.db === undefined) delete process.env.ATLAS_DB;
 		else process.env.ATLAS_DB = saved.db;
@@ -828,4 +832,20 @@ test("finalReportOf falls back past empty assistant text to the last yield data,
 	expect(finalReportOf([{ role: "toolResult", ...YIELD_RESULT }, { role: "assistant", content: "" }])).toStartWith("STATUS: DONE");
 	expect(finalReportOf([{ role: "assistant", content: "hi" }, { role: "assistant", content: [] }])).toBe("hi");
 	expect(finalReportOf([{ role: "toolResult", content: "Result submitted." }, { role: "assistant", content: "" }])).toBe("");
+});
+
+test("a store save of ATLAS_STOP_BRIDGE=off applies on the next Stop without reloading the extension", async () => {
+	const home = process.env.ATLAS_HOME as string;
+	const h = harness();
+	await h.stop();
+	expect(h.log).toContain("hook:completion_gate.py");
+	h.log.length = 0;
+	mkdirSync(home, { recursive: true });
+	writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_STOP_BRIDGE: "off" } }));
+	try {
+		await h.stop();
+		expect(h.log.some(l => l.startsWith("hook:"))).toBe(false);
+	} finally {
+		rmSync(join(home, "settings.json"), { force: true });
+	}
 });

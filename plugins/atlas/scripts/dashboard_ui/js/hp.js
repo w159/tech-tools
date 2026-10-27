@@ -9,7 +9,7 @@ import { Modal, openModal, closeModal, toast } from "./ui-overlays.js";
 import { getHp, explain, installModal, openEditor } from "./integrations.js";
 import { focusPane } from "./herdr-actions.js";
 
-export const CONFIGURE_CMD = "herdr-projects configure --dry-run";
+const CONFIGURE_CMD = "herdr-projects configure --dry-run";
 const KINDS = [["worktree", "Worktree (own branch, own workspace)"], ["tab", "Tab (no repo needed)"], ["checkout", "Checkout (existing repo directory)"]];
 const STATUS_TONE = { active: "working", open: "working", working: "working", blocked: "input", needs_you: "input", done: "done", merged: "done", failed: "fail", paused: "idle", idle: "idle", archived: "idle" };
 

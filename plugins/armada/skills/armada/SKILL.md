@@ -45,7 +45,7 @@ Report, compactly:
 2. **Departments** - a row per active department: name, owning agent, count of
    skills and commands it carries, connector state. Then one line naming how
    many of the 11 are available but not activated.
-3. **Connectors** - live in session (`mcp__plugin_atlas_<vendor>__*` tools
+3. **Connectors** - live in session (`mcp__plugin_armada_<vendor>__*` tools
    present) versus recorded but not loaded versus not provisioned.
 4. **Next** - exactly one recommended command, chosen by the first gap in the
    order above.
@@ -63,7 +63,7 @@ identity. Full schema:
   documentation standards, approval workflows
 - **departments.active**: which of the 11 departments this org runs
 - **connectors.provisioned**: which vendors are set up, and for which department.
-  Credentials are never stored here; they live on the atlas plugin's userConfig.
+  Credentials are never stored here; they live in the armada plugin's userConfig.
 
 ## The 11 departments
 

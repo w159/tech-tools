@@ -18,7 +18,7 @@ A free-form description in the arguments is the source of truth. Otherwise deriv
 - **The diff** - `git diff main...HEAD --stat` (or against the release base), skimming notable changes so the claim is grounded in what actually changed
 - **Changelog** - the newest entry in `docs/CHANGELOG.md`
 - **Plan artifact** - the matching `docs/plans/<task-slug>.md`, including its verification/evidence sections
-- **Lesson** - the matching `docs/lessons/<YYYY-MM-DD>-<slug>.md`
+- **Lesson** - the matching `docs/lessons/<YYYY-MM-DD>_<slug>.md`
 - **Recent commits** - `git log --oneline -15` for the arc of the change
 
 Then write a 1-3 sentence summary of the **user-facing value**: what a user can now do that they couldn't before, and why they'd care. Outcome, not implementation - "Exports any report to CSV in one click", not "Added a CsvSerializer and an export endpoint."

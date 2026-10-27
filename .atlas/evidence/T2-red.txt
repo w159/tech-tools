@@ -1,0 +1,5 @@
+FAILS:
+   ('Dark', 'brand-ink on brand (primary button)', 2.36, 4.5)
+   ('Dark', 'rule-2 on canvas (control edge, UI 3:1)', 2.15, 3.0)
+   ('Dark', 'rule-2 on well (control edge, UI 3:1)', 2.0, 3.0)
+   ('Dark', 'rule-2 on chrome (control edge, UI 3:1)', 2.2, 3.0)

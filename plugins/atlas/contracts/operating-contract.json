@@ -10,6 +10,7 @@
     { "id": "done", "glyph": "🏁" },
     { "id": "blocked", "glyph": "⛔" }
   ],
+  "headerTemplate": "ATLAS | <glyph> <phase> | <state>",
   "headerFirstLinePattern": "^ATLAS \\| \\S+ (research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)? \\| \\S",
   "todoPhases": ["research", "theory", "test", "validate", "implement", "verify"],
   "requiredTodoPhasesWhenCodeShipped": ["implement", "verify"],

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""atlas_mux -- opt-in colony mode (ATLAS_MUX=tmux); workers run as tmux panes/windows.
+"""atlas_mux -- colony mode, on by default; workers run as tmux panes/windows. ATLAS_MUX=off disables it.
 
 Transport: tmux by default whenever it is installed (session `atlas-<run>`, one window per worker; the dashboard
 Terminal page attaches to these live). claude-bg is the fallback without tmux: `claude --bg --name <worker> --agent
@@ -124,6 +124,36 @@ WORKER_MCP_ALLOW = (
     "mcp__serena__find_implementations",
     "mcp__serena__get_diagnostics_for_file",
 )
+# Scoped per-profile allow rules for claude workers (scope-matrix tools_profile: read | edit | exec). Rule syntax is
+# https://code.claude.com/docs/en/permissions : `Bash(prefix *)` matches the prefix and the bare command, and a compound
+# command is split on && || ; | & newlines with EACH part matched on its own, so `python3 -c '..'; echo "exit=$?"`
+# needs both a python3 rule and an echo rule. No blanket Bash, no writing git subcommands.
+WORKER_READ_ALLOW = ("Read", "Grep", "Glob")
+WORKER_EXEC_ALLOW = tuple(
+    f"Bash({cmd} *)"
+    for cmd in (
+        "python3", "python", "pytest", "uv run", "npm test", "npm run", "yarn test", "yarn run", "pnpm test",
+        "pnpm run", "bun test", "bun run", "node", "go test", "cargo test", "make",
+        "git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files", "git blame",
+        "ls", "cat", "grep", "rg", "sed -n", "echo", "head", "tail", "wc",
+    )
+)
+WORKER_EDIT_ALLOW = ("Edit", "Write", "MultiEdit")
+
+
+def worker_allow(tools_profile=None) -> tuple:
+    """--allowedTools entries for a claude worker: MCP navigation always; read tools, run commands and edit tools
+    widen with the member's tools_profile. An unknown or unset profile keeps the MCP navigation list only."""
+    allow = WORKER_MCP_ALLOW
+    if tools_profile in ("read", "edit", "exec"):
+        allow += WORKER_READ_ALLOW
+    if tools_profile in ("edit", "exec"):
+        allow += WORKER_EXEC_ALLOW
+    if tools_profile == "edit":
+        allow += WORKER_EDIT_ALLOW
+    return allow
+
+
 # omp prints one of these per unreachable MCP server; the run itself is fine.
 NOISE_RE = re.compile(
     r"^(Warning: MCP server .* its tools are unavailable|Extension error\b)"
@@ -347,6 +377,23 @@ def pane_command(env: dict, argv: list) -> str:
     return "exec " + shlex.join(["env", *[f"{k}={v}" for k, v in env.items()], *argv])
 
 
+def with_token_file(root: str, name: str, pane: str) -> str:
+    """Issue `name`'s owner token and rewrite the tmux `pane` command so its shell loads it from a 0600 file and
+    unlinks it. The command text, tmux argv, ps and atlas_mux.log carry only the file path, never the token.
+    Residual exposure: the file exists on disk until the pane shell starts (owner-only, same user), and the token
+    sits in the worker's process env, readable by that user's other processes (the same reach as the secret file)."""
+    token = atlas_todo.issue_owner_token(root, name)
+    tokens = Path(root) / ".atlas" / ".run" / "tokens"
+    tokens.mkdir(parents=True, exist_ok=True)
+    fd, path = tempfile.mkstemp(dir=tokens, prefix=f"{name}-", suffix=".token")  # mkstemp creates 0600
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(token)
+    quoted = shlex.quote(path)
+    assert pane.startswith("exec "), pane
+    # expanded by the pane shell before exec, so the pane stays one `exec ...` command
+    return f'exec env "ATLAS_OWNER_TOKEN=$(cat {quoted}; rm -f {quoted})" {pane[5:]}'
+
+
 def _agents_dir(harness: str, override: str | None) -> Path:
     return Path(override) / harness if override else DEFAULT_AGENT_DIRS[harness]
 
@@ -497,6 +544,7 @@ def harness_argv(
     permission_mode: str,
     omp_extension: str | None = None,
     cwd: str | None = None,
+    tools_profile: str | None = None,
 ) -> list:
     if harness == "codex":
         # exec --json: one JSON event per line (atlas_panefeed renders them); workspace-write lets the worker edit
@@ -538,7 +586,7 @@ def harness_argv(
         # --allowedTools is variadic: another flag must follow it so it cannot swallow the prompt
         return argv + [
             "--allowedTools",
-            ",".join(WORKER_MCP_ALLOW),
+            ",".join(worker_allow(tools_profile)),
             "--permission-mode",
             permission_mode,
             prompt,
@@ -565,8 +613,9 @@ def harness_argv(
 
 
 def _validate(args) -> str | None:
-    if os.environ.get("ATLAS_MUX") != "tmux":
-        return "mux mode is opt-in: set ATLAS_MUX=tmux"
+    # default on: tmux when installed (detached sessions, the lead need not run inside tmux), else claude-bg
+    if os.environ.get("ATLAS_MUX", "").strip().lower() == "off":
+        return "mux mode is disabled: ATLAS_MUX=off (unset it, or set ATLAS_MUX=tmux)"
     for label, value in (("run", args.run), ("name", args.name), ("agent", args.agent)):
         if not NAME_RE.match(value or ""):
             return f"invalid {label} {value!r}: use [A-Za-z0-9_-]"
@@ -885,10 +934,13 @@ def _split_team_window(
 
 
 def _team_layout(count: int, width: int) -> str:
-    """Side by side while each pane keeps >= 70 cols, else one wide pane over the rest; 4+ tile."""
-    if count == 3:
-        return "even-horizontal" if (width - 2) // 3 >= 70 else "main-horizontal"
-    return "even-horizontal" if count <= 2 else "tiled"
+    """Side by side while each pane keeps >= 70 cols, else one wide pane over the rest (3) or tiled (4+)."""
+    if count < 3:
+        return "even-horizontal"
+    if (width - 2) // count >= 70:
+        return "even-horizontal"
+    # ponytail: no tabbed windows; very narrow terminals with 4+ workers still get tiled.
+    return "main-horizontal" if count == 3 else "tiled"
 
 
 def _relayout_team(session: str) -> None:
@@ -1010,9 +1062,22 @@ def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> 
         # permission-class mismatch (the interactive lead runs the accepting side); the
         # allow rules cover the brief's two mandatory actions (board-note Bash call,
         # claude-mem MCP search) so an unattended worker never prompts on them
+        # plus worker_allow(tools_profile): the same scoped rules a pane worker gets via --allowedTools,
+        # so a dontAsk claude-bg worker can run its verification commands
         "--settings",
-        '{"crossSessionInbound":"accept","permissions":{"allow":'
-        '["Bash(python3 *atlas_todo.py*)","mcp__claude_mem_mcp_search"]}}',
+        json.dumps(
+            {
+                "crossSessionInbound": "accept",
+                "permissions": {
+                    "allow": [
+                        "Bash(python3 *atlas_todo.py*)",
+                        "mcp__claude_mem_mcp_search",
+                        *worker_allow(getattr(args, "tools_profile", None)),
+                    ]
+                },
+            },
+            separators=(",", ":"),
+        ),
     ]
     if model:
         argv += ["--model", model]
@@ -1027,6 +1092,8 @@ def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> 
     ]
     env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
     env.update({k: os.environ[k] for k in FORWARDED_ENV if os.environ.get(k)})
+    # subprocess env= keeps the token out of argv; it is never in FORWARDED_ENV or the brief
+    env["ATLAS_OWNER_TOKEN"] = atlas_todo.issue_owner_token(root, args.name)
     res = _claude(*argv, env=env, cwd=os.path.abspath(args.cwd) if args.cwd else root)
     found = _BG_ID_RE.search(res.stdout)
     if res.returncode != 0 or not found:
@@ -1071,6 +1138,15 @@ def cmd_spawn(args) -> int:
     # Lead side: this process runs in the lead's env, so the worker joins the lead's channel
     # here; a worker never registers itself (an inherited env grants no membership).
     chan = atlas_todo.register_member(root, args.name)
+    try:
+        return _spawn_registered(args, root, chan)
+    except BaseException:
+        # Any raise between register and a live pane (_open_window, atlas_seats, ...) would strand a pane-less member.
+        atlas_todo.leave(root, chan, args.name)
+        raise
+
+
+def _spawn_registered(args, root: str, chan) -> int:
     session = _session(args.run)
     model, level, _, tier_error = _tier(
         args.harness,
@@ -1113,6 +1189,8 @@ def cmd_spawn(args) -> int:
     ]
     if args.agents_dir:
         worker += ["--agents-dir", args.agents_dir]
+    if getattr(args, "tools_profile", None):
+        worker += ["--tools-profile", args.tools_profile]
     if model:
         worker += ["--model", model]
     if level:
@@ -1145,7 +1223,8 @@ def cmd_spawn(args) -> int:
             pane_command(pins, worker),
             cwd=os.path.abspath(args.cwd) if args.cwd else root,
             run=args.run,
-            env=pins,
+            # the herdr socket env, not the typed command line, carries the token
+            env={**pins, "ATLAS_OWNER_TOKEN": atlas_todo.issue_owner_token(root, args.name)},
         )
         failure = None if made["ok"] else made["reason"]
         if made["ok"]:
@@ -1157,7 +1236,7 @@ def cmd_spawn(args) -> int:
         failure = _open_window(
             session,
             args.name,
-            pane,
+            with_token_file(root, args.name, pane),
             {"rec": team, "role": args.agent} if team else None,
         )
     if failure:
@@ -1213,6 +1292,7 @@ def cmd_run_worker(args) -> int:
             args.permission_mode,
             args.omp_extension,
             os.path.abspath(args.cwd or root),
+            getattr(args, "tools_profile", None),
         )
     env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
     channel = (os.environ.get("ATLAS_CHANNEL") or "").strip()
@@ -1606,6 +1686,42 @@ def build_team(
     }
 
 
+_MEMBER_HEAD = re.compile(r"^##\s+member:\s*([A-Za-z0-9_-]+)\s*$", re.M)
+
+
+def split_member_tasks(text: str, members: list) -> tuple:
+    """(shared_task, {member name: task}) from a task file with `## member: <role>[-N]` sections.
+    The text before the first heading is shared context prefixed to every slice. Sections bind to members of
+    that role in member order (`implementer` = first free implementer, `implementer-2` = the 2nd); a member
+    with no section gets the shared text. No headings: (text, {}). A heading that matches no member raises ValueError."""
+    marks = list(_MEMBER_HEAD.finditer(text))
+    if not marks:
+        return text, {}
+    shared = text[: marks[0].start()].strip()
+    by_role: dict = {}
+    for m in members:
+        by_role.setdefault(m["role"], []).append(m["name"])
+    used: dict = {}
+    out: dict = {}
+    for i, mk in enumerate(marks):
+        body = text[mk.end() : marks[i + 1].start() if i + 1 < len(marks) else len(text)].strip()
+        label = mk.group(1)
+        role, _, n = label.rpartition("-")
+        if role in by_role and n.isdigit():
+            idx = int(n) - 1
+        else:
+            # bare role: the first member of that role no earlier section claimed
+            role = label
+            pool = by_role.get(role, [])
+            idx = next((i for i in range(len(pool)) if i not in used.get(role, set())), len(pool))
+        names = by_role.get(role, [])
+        if not 0 <= idx < len(names):
+            raise ValueError(f"task file section 'member: {label}' matches no team member (roles: {sorted(by_role)})")
+        used.setdefault(role, set()).add(idx)
+        out[names[idx]] = f"{shared}\n\n{body}".strip() if shared else body
+    return shared, out
+
+
 def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     """Self-contained worker brief: task, scope, channel, peers, and the note protocol."""
     todo = _todo_script()
@@ -1620,7 +1736,7 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     return (
         f"You are {me} ({member['role']}), 1 of {len(rec['members'])} workers of team {rec['team_id']} "
         f"on {chan}. Lead: {lead}. Peers: {', '.join(peers) or '(none)'}.\n\n"
-        f"# Task\n{rec['task']}\n\n# Scope\n{scope}\n\n"
+        f"# Task\n{rec.get('member_tasks', {}).get(me) or rec['task']}\n\n# Scope\n{scope}\n\n"
         f"# Protocol\nPost (do not read the script): {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
         f"Read: {cmd} notes --to {me} {flags}\n"
         f"1. After a first finding, note {lead}.\n"
@@ -1628,6 +1744,45 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
         "3. Reply once to any peer note.\n"
         "4. End with STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT.\n"
     )
+
+
+# Roles that edit files; read-only roles (verifier, explorer, ...) stay in the main root.
+_EDIT_ROLES = ("implementer", "test-engineer", "docs-curator")
+
+
+def _is_git_repo(root: str) -> bool:
+    res = subprocess.run(
+        ["git", "-C", root, "rev-parse", "--git-dir"], capture_output=True, text=True
+    )
+    return res.returncode == 0
+
+
+def worktree_plan(rec: dict, root: str) -> dict:
+    """{member name: {path, branch}} for edit-capable members when the resolved team says
+    isolation=worktree and root is a git repo; {} otherwise. Pure: creates nothing."""
+    if rec.get("isolation") != "worktree" or not _is_git_repo(root):
+        return {}
+    team = rec["team_id"]
+    return {
+        m["name"]: {
+            "path": str(Path(root) / ".claude" / "worktrees" / f"atlas-{team}-{m['name']}"),
+            "branch": f"atlas/{team}/{m['name']}",
+        }
+        for m in rec["members"]
+        if m["role"] in _EDIT_ROLES
+    }
+
+
+def add_worktree(root: str, wt: dict) -> str | None:
+    """Create wt's branch+worktree from HEAD; None on success or when it already exists, else the git error."""
+    if Path(wt["path"]).exists():
+        return None
+    res = subprocess.run(
+        ["git", "-C", root, "worktree", "add", "-b", wt["branch"], wt["path"], "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    return None if res.returncode == 0 else (res.stderr or res.stdout).strip()[-300:]
 
 
 def _team_dir(root: str) -> Path:
@@ -1797,6 +1952,10 @@ def cmd_spawn_team(args) -> int:
     paths = args.paths.split(",") if args.paths else None
     try:
         rec = build_team(args.cls, args.effort, paths, task, args.team_id)
+        shared, rec["member_tasks"] = split_member_tasks(task, rec["members"])
+        if rec["member_tasks"]:
+            # members with no section get the shared text, else an explicit no-op: never a peer's slice
+            rec["task"] = shared or "No slice was assigned to you in the task file. Change nothing and end with STATUS: DONE."
     except ValueError as exc:
         return _emit({"ok": False, "error": str(exc)}, 2)
     if not NAME_RE.match(rec["team_id"]):
@@ -1809,6 +1968,7 @@ def cmd_spawn_team(args) -> int:
                 2,
             )
         rec["name"] = team_name
+    rec["worktrees"] = worktree_plan(rec, root)
     if args.dry_run:
         return _emit({"ok": True, "dry_run": True, "team": rec})
     path = _team_dir(root) / f"{rec['team_id']}.json"
@@ -1827,9 +1987,8 @@ def cmd_spawn_team(args) -> int:
             os.environ["ATLAS_COLONY_TRANSPORT"] = "tmux"
         else:
             note = "tmux not on PATH: fell back to claude-bg"
-    os.environ["ATLAS_MUX"] = (
-        "tmux"  # spawn-team is the explicit opt-in cmd_spawn checks for
-    )
+    if os.environ.get("ATLAS_MUX", "").strip().lower() == "off":
+        return _emit({"ok": False, "error": "mux mode is disabled: ATLAS_MUX=off"}, 2)
     run_id, sid = _lead_run(root, args.session)
     lead = _team_lead(sid, rec["team_id"])
     chan = atlas_todo.open_lead_channel(root, lead, [])["name"]
@@ -1841,11 +2000,15 @@ def cmd_spawn_team(args) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
     members = ", ".join(f"{m['name']} ({m['role']})" for m in rec["members"])
-    headline = (rec["task"].strip().splitlines() or [""])[0][:120]
+    first = next(iter(rec.get("member_tasks", {}).values()), rec["task"])
+    headline = (first.strip().splitlines() or [""])[0][:120]
     kickoff = f"kickoff {rec['team_id']}: {headline} | members: {members} | scope: {', '.join(rec['file_scope']) or 'whole project'}"
     atlas_todo.note(root, lead, kickoff, to="all", channel=chan, kind="kickoff")
 
     def spawn(member: dict) -> dict:
+        wt = rec["worktrees"].get(member["name"])
+        if wt and (err := add_worktree(root, wt)):
+            return {"ok": False, "name": member["name"], "error": f"worktree: {err}"}
         pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
         pf.write_text(team_brief(rec, member, root, chan, lead), encoding="utf-8")
         ns = argparse.Namespace(
@@ -1859,19 +2022,23 @@ def cmd_spawn_team(args) -> int:
             thinking=_team_thinking(args.harness, member["role"]),
             agents_dir=None,
             permission_mode=None,
+            tools_profile=member.get("tools_profile"),
             command_override=None,
             omp_extension=None,
             root=root,
-            cwd=None,
+            cwd=wt["path"] if wt else None,  # ATLAS_PROJECT_ROOT stays the main root (shared board)
             team=rec,
         )
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             cmd_spawn(ns)
         try:
-            return json.loads(buf.getvalue().strip().splitlines()[-1])
+            out = json.loads(buf.getvalue().strip().splitlines()[-1])
         except (ValueError, IndexError):
             return {"ok": False, "error": buf.getvalue().strip()[-200:]}
+        if wt and isinstance(out, dict):
+            out["worktree"] = wt
+        return out
 
     results = supervise(rec, spawn, lambda n: _exited(root, n), poll_s=args.poll)
     wave_logged = _log_wave(
@@ -1889,6 +2056,7 @@ def cmd_spawn_team(args) -> int:
             "channel": chan,
             "max_parallel": rec["max_parallel"],
             "members": results,
+            "worktrees": rec["worktrees"],
         }
     )
 
@@ -2101,6 +2269,8 @@ def cmd_reap(args) -> int:
             "session_left": _tmux("has-session", "-t", session).returncode == 0,
             "channels_reaped": reaped.get("reaped"),
             "prompts_removed": removed,
+            # left in place for the lead to merge (atlas_wt.py merge)
+            "worktrees": rec.get("worktrees") or {},
             "archived": str(archived_path) if state != "recovered" else None,
         }
     )
@@ -2138,6 +2308,11 @@ def _parser() -> argparse.ArgumentParser:
             help="claude --permission-mode (default acceptEdits; claude-bg spawns default dontAsk)",
         )
         sp.add_argument(
+            "--tools-profile",
+            choices=("read", "edit", "exec"),
+            help="claude only: scope-matrix tools_profile; widens the worker's scoped --allowedTools rules",
+        )
+        sp.add_argument(
             "--command-override", help="test-only: shell command replacing the harness"
         )
         sp.add_argument(
@@ -2168,7 +2343,12 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--effort", required=True)
     st.add_argument("--paths", help="comma-separated file scope")
     st.add_argument("--task")
-    st.add_argument("--task-file")
+    st.add_argument(
+        "--task-file",
+        help="task text; with `## member: <role>[-N]` headings (in member order, e.g. implementer, implementer-2, "
+        "verifier) each member gets its own slice, text before the first heading is shared context; "
+        "without headings every member gets the same task",
+    )
     st.add_argument("--team-id")
     st.add_argument("--name", help="human colony name, [a-z0-9-] up to 32 chars")
     st.add_argument(

@@ -318,7 +318,7 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: gradient title, chevron rail, state + tool chips, eighth-block bars, sparkline, ticker, gate chips", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toContain("◢◤ ATLAS  ·  mission control   tech-tools@main  ·  audit/medium");
+	expect(p[0]).toContain("◆ ATLAS  ·  mission control  ·  tech-tools@main  ·  wave 3  ·  audit/medium");
 	expect(p[0]).toContain("◷ 02:41   3 live   ✖ 1 gates");
 	expect(new Set(lines[0]!.match(/48;2;\d+;\d+;\d+/g)).size).toBeGreaterThan(20); // per-cell gradient
 	expect(p[1]).toContain(" ✓ research ▶ ✓ theory ▶ ✓ test ▶ ⣾ IMPLEMENT ▶ verify ▶ done");
@@ -584,7 +584,7 @@ test("team lanes take class/effort and roles from the live team record; channels
 	const { calls, ui, view } = harness({ ATLAS_PROJECT_ROOT: root });
 	view.open(ui, { channel: CHAN, members: ["explorer-127a"], cwd: root });
 	const out = plain(calls.at(-1));
-	expect(out).toContain("repo@main  ·  audit/medium");
+	expect(out).toMatch(/repo@main {2}· {2}wave \d+ {2}· {2}audit\/medium/);
 	expect(out).toMatch(/explorer-127a +scout /);
 	expect(out).not.toContain("subagent");
 	view.stop();

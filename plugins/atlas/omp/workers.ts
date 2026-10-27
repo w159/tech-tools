@@ -17,6 +17,7 @@
  * added, or created. Unknown payloads pass through untouched. Fail open.
  */
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { atlasKnob } from "./knobs";
 
 export const ATLAS_WORKER_MAX_TOKENS_DEFAULT = 32000;
 
@@ -28,7 +29,7 @@ const TOP_LEVEL_FIELDS = ["max_tokens", "max_completion_tokens", "max_output_tok
 
 /** Positive integer from ATLAS_WORKER_MAX_TOKENS; anything else falls back to the default. */
 function workerCap(env: Record<string, string | undefined>): number {
-	const raw = env.ATLAS_WORKER_MAX_TOKENS?.trim() ?? "";
+	const raw = atlasKnob("ATLAS_WORKER_MAX_TOKENS", env)?.trim() ?? "";
 	if (!/^\d+$/.test(raw)) return ATLAS_WORKER_MAX_TOKENS_DEFAULT;
 	const parsed = Number(raw);
 	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : ATLAS_WORKER_MAX_TOKENS_DEFAULT;

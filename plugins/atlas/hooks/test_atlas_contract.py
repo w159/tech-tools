@@ -32,6 +32,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HOOKS_DIR = Path(__file__).resolve().parent
@@ -63,8 +64,21 @@ def _commands_for(event: str) -> list:
     return out
 
 
+def _dispatched() -> list:
+    """(event, hook name, matcher) for every hook event_dispatch.py runs in-process."""
+    sys.path.insert(0, str(HOOKS_DIR))
+    import event_dispatch
+
+    return [
+        (event, name, matcher)
+        for event, bindings in event_dispatch.BINDINGS.items()
+        for name, matcher, _ in bindings
+    ]
+
+
 def _script_paths() -> list:
-    """Resolve every ${CLAUDE_PLUGIN_ROOT}-relative script hooks.json references."""
+    """Resolve every ${CLAUDE_PLUGIN_ROOT}-relative script hooks.json references, plus the hook
+    programs event_dispatch.py runs in-process (wired through it, not by hooks.json itself)."""
     paths = []
     for event in _hooks_config():
         for cmd in _commands_for(event):
@@ -74,6 +88,7 @@ def _script_paths() -> list:
                     paths.append(
                         Path(token.replace("${CLAUDE_PLUGIN_ROOT}", str(PLUGIN_ROOT)))
                     )
+    paths.extend(HOOKS_DIR / (name + ".py") for _, name, _ in _dispatched())
     return paths
 
 
@@ -161,6 +176,31 @@ class WiringContract(unittest.TestCase):
     def test_every_referenced_script_exists(self):
         missing = [str(p) for p in _script_paths() if not p.is_file()]
         self.assertEqual(missing, [], "hooks.json references missing scripts")
+
+    def test_every_hook_entry_applies_store_knobs_before_local_imports(self):
+        """Saved dashboard knobs must reach already-running sessions: each entry applies
+        the Atlas store before it imports any atlas module (core modules read knobs)."""
+        entries = sorted({p for p in _script_paths() if p.suffix == ".py"})
+        self.assertEqual(len(entries), 18, [p.name for p in entries])
+        call = "atlas_env.apply_store_env()"
+        bad = []
+        for path in entries:
+            lines = path.read_text("utf-8").splitlines()
+            at = next((i for i, ln in enumerate(lines) if ln.strip() == call), None)
+            first_local = next(
+                (
+                    i
+                    for i, ln in enumerate(lines)
+                    for m in [re.match(r"(?:import|from)\s+(\w+)", ln)]
+                    if m
+                    and m.group(1) not in sys.stdlib_module_names
+                    and m.group(1) not in ("atlas_env", "__future__")
+                ),
+                None,
+            )
+            if at is None or (first_local is not None and at > first_local):
+                bad.append(path.name)
+        self.assertEqual(bad, [], "entries must call atlas_env.apply_store_env() first")
 
     def test_no_hook_creates_skills_or_commands(self):
         """Auto-generated skills were removed; nothing may recreate them.
@@ -301,6 +341,29 @@ class CompletionGateContract(unittest.TestCase):
         conn.close()
         self.assertEqual([r[0] for r in rows], ["gate_block"])
         self.assertIn("conditions:", rows[0][1])
+
+    def test_a_block_row_carries_the_failed_condition_letters(self):
+        import sqlite3
+
+        repo, db = _mkorchestrating_repo(session_id="s-letter", with_telemetry=False)
+        Path(repo, "app.py").write_text("1\n", encoding="utf-8")
+        _run_hook(
+            "completion_gate.py",
+            {"cwd": repo, "session_id": "s-letter"},
+            cwd=repo,
+            db=db,
+        )
+        conn = sqlite3.connect(db)
+        row = conn.execute(
+            "SELECT snippet, gate_letter, tool_name, role FROM friction_events "
+            "WHERE session_id=? AND category='gate_block'",
+            ("s-letter",),
+        ).fetchone()
+        conn.close()
+        letters = row[0].split()[1]  # "conditions: <letters> (<names>)"
+        self.assertTrue(letters)
+        self.assertEqual(row[1], letters)
+        self.assertEqual((row[2], row[3]), (None, None))
 
     def test_no_docs_tree_is_a_noop(self):
         repo = _mkrepo(with_docs=False)
@@ -501,13 +564,16 @@ class DocsMatchCodeContract(unittest.TestCase):
             ),
             "agents": len(_agent_files()),
             "programs": len(self._distinct_scripts()),
+            # A binding is one hook program on one event+matcher. The two event_dispatch.py
+            # commands are transport: the hooks they run are counted instead, one each.
             "bindings": sum(
                 1
                 for entries in _hooks_config().values()
                 for entry in entries
                 for hook in entry.get("hooks", [])
-                if hook.get("command")
-            ),
+                if hook.get("command") and "event_dispatch.py" not in hook["command"]
+            )
+            + len(_dispatched()),
         }
 
     def test_plugin_manifest_counts_match_disk(self):
@@ -607,6 +673,10 @@ class GitignoreSecretContract(unittest.TestCase):
             )
 
 
+@unittest.skipUnless(
+    os.environ.get("ATLAS_CHECK_INSTALL_PARITY") == "1",
+    "opt-in: set ATLAS_CHECK_INSTALL_PARITY=1 to compare the repo against the host's plugin install cache",
+)
 class InstalledParityContract(unittest.TestCase):
     """The repo is not what runs. The installed plugin cache is.
 
@@ -632,6 +702,11 @@ class InstalledParityContract(unittest.TestCase):
             self.skipTest("atlas not installed at the manifest version")
         self.assertTrue(root.is_dir())
 
+    @unittest.skipUnless(
+        os.environ.get("ATLAS_CHECK_INSTALL_PARITY") == "1",
+        "opt-in: set ATLAS_CHECK_INSTALL_PARITY=1 to compare hooks.json against the install cache "
+        "(a source change to the wiring is expected to differ until the plugin is reinstalled)",
+    )
     def test_installed_hook_bindings_match_repo(self):
         root = self._installed_root()
         if root is None:
@@ -670,11 +745,21 @@ VALID_EFFORT = {"low", "medium", "high", "xhigh"}
 
 # Subagents execute a spec the orchestrator already wrote. Opus is the orchestrator's
 # tier; a subagent that needs it is a symptom of an underspecified prompt.
-MAX_MODEL = {"sonnet"}  # workers are sonnet only: deterministic task + test, then report
+MAX_MODEL = {
+    "haiku",
+    "sonnet",
+}  # frontmatter defaults; opus only via tier_allow + a matrix cell (tripwire, stage C3)
 
 # Every worker runs sonnet at low effort. Claude Code has no per-subagent thinking
 # switch and Sonnet 5.5 cannot turn thinking off, so effort is the only lever.
-MEDIUM_EFFORT_ROLES = set()  # nothing defaults above low; the lead escalates, workers do not
+MEDIUM_EFFORT_ROLES = {
+    "implementer",
+    "test-engineer",
+    "verifier",
+    "completeness-critic",
+    "rls-privilege-audit",
+}
+HIGH_EFFORT_ROLES = {"planner"}  # TierTableContract pins the full table
 
 # Claude Code's agent palette, confirmed against the shipped CLI binary: the
 # frontmatter value is a KEY into
@@ -731,7 +816,13 @@ class AgentTierContract(unittest.TestCase):
         bad = []
         for path in _agent_files():
             fm = _frontmatter(path)
-            expected = "medium" if fm.get("name") in MEDIUM_EFFORT_ROLES else "low"
+            expected = (
+                "high"
+                if fm.get("name") in HIGH_EFFORT_ROLES
+                else "medium"
+                if fm.get("name") in MEDIUM_EFFORT_ROLES
+                else "low"
+            )
             if fm.get("effort") != expected:
                 bad.append("%s: %s (want %s)" % (path.name, fm.get("effort"), expected))
         self.assertEqual(bad, [], "effort tier drift: %s" % bad)
@@ -932,6 +1023,132 @@ class AgentTierContract(unittest.TestCase):
         )
 
 
+def _fm_list(path: Path, key: str) -> list:
+    """A flow-style frontmatter list (`[a, b]`) as a python list; [] when absent."""
+    raw = _frontmatter(path).get(key, "")
+    return [x.strip() for x in raw.strip("[]").split(",") if x.strip()]
+
+
+# docs/plans/2026-10-20_atlas-tiering-design.md tier table: role -> (model, effort).
+# "none" effort is thinking-off; Claude Code has no such value so frontmatter says low.
+TIER_TABLE = {
+    "runner": ("haiku", "low"),
+    "schema-inventory": ("haiku", "low"),
+    "naming-glossary-audit": ("haiku", "low"),
+    "docs-auditor": ("haiku", "low"),
+    "explorer": ("haiku", "low"),
+    "db-prober": ("sonnet", "low"),
+    "ui-runtime-tester": ("sonnet", "low"),
+    "docs-curator": ("sonnet", "low"),
+    "implementer": ("sonnet", "medium"),
+    "test-engineer": ("sonnet", "medium"),
+    "verifier": ("sonnet", "medium"),
+    "completeness-critic": ("sonnet", "medium"),
+    "rls-privilege-audit": ("sonnet", "medium"),
+    "planner": ("sonnet", "high"),
+}
+
+
+class TierTableContract(unittest.TestCase):
+    """Frontmatter, scope matrix, resolver and squad doc all carry one tier table."""
+
+    def test_every_agent_declares_allow_lists_consistent_with_its_default(self):
+        bad = []
+        for p in _agent_files():
+            fm = _frontmatter(p)
+            tiers, efforts = _fm_list(p, "tier_allow"), _fm_list(p, "effort_allow")
+            if not tiers or not efforts:
+                bad.append("%s: missing tier_allow/effort_allow" % p.name)
+                continue
+            if fm.get("model") not in tiers:
+                bad.append("%s: model %s not in %s" % (p.name, fm.get("model"), tiers))
+            if fm.get("effort") not in efforts:
+                bad.append(
+                    "%s: effort %s not in %s" % (p.name, fm.get("effort"), efforts)
+                )
+        self.assertEqual(bad, [])
+
+    def test_frontmatter_matches_the_design_tier_table(self):
+        got = {
+            p.stem: (_frontmatter(p).get("model"), _frontmatter(p).get("effort"))
+            for p in _agent_files()
+        }
+        self.assertEqual(got, TIER_TABLE)
+
+    def test_matrix_seats_stay_inside_their_role_allow_lists(self):
+        matrix = json.loads(
+            (PLUGIN_ROOT / "contracts" / "scope-matrix.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        bad = []
+        for cls, levels in matrix["classes"].items():
+            for eff, cell in levels.items():
+                for seat in cell["team"]:
+                    p = AGENTS_DIR / ("%s.md" % seat["role"])
+                    where = "%s/%s %s" % (cls, eff, seat["role"])
+                    model = seat.get("model", _frontmatter(p).get("model"))
+                    if model not in _fm_list(p, "tier_allow"):
+                        bad.append("%s: model %s not allowed" % (where, model))
+                    if seat["effort"] != _frontmatter(p).get("effort"):
+                        bad.append(
+                            "%s: effort %s != frontmatter" % (where, seat["effort"])
+                        )
+        self.assertEqual(bad, [])
+
+    def _resolve(self, *args):
+        out = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "atlas_resolve.py"), *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        return json.loads(out)
+
+    def test_resolver_emits_a_model_per_seat(self):
+        for cls in ("audit", "implement", "db-audit"):
+            for seat in self._resolve(cls, "high")["team"]:
+                self.assertIn(
+                    seat["model"],
+                    _fm_list(AGENTS_DIR / ("%s.md" % seat["role"]), "tier_allow"),
+                )
+        audit = {s["role"]: s["model"] for s in self._resolve("audit", "high")["team"]}
+        self.assertEqual(audit["explorer"], "sonnet")
+        self.assertEqual(
+            {s["role"]: s["model"] for s in self._resolve("audit", "low")["team"]},
+            {"explorer": "haiku"},
+        )
+
+    def test_rls_audit_moved_out_of_plain_audit_into_db_audit(self):
+        roles = [s["role"] for s in self._resolve("audit", "high")["team"]]
+        self.assertNotIn("rls-privilege-audit", roles)
+        db = [s["role"] for s in self._resolve("db-audit", "high")["team"]]
+        self.assertEqual(
+            sorted(db),
+            [
+                "completeness-critic",
+                "explorer",
+                "rls-privilege-audit",
+                "schema-inventory",
+            ],
+        )
+        self.assertEqual(self._resolve("database", "high")["task_class"], "db-audit")
+
+    def test_squad_doc_matches_the_tier_table(self):
+        doc = (
+            PLUGIN_ROOT
+            / "skills"
+            / "atlas-orchestrate"
+            / "references"
+            / "squad-and-tiers.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn('Agent(model:"haiku")', doc)
+        self.assertIn("copy the model the resolver emits", doc)
+        haiku_row = next(l for l in doc.splitlines() if l.startswith("| **haiku**"))
+        for role, (model, _) in TIER_TABLE.items():
+            self.assertEqual(role in haiku_row, model == "haiku", role)
+
+
 class SerenaHealContract(unittest.TestCase):
     """A `.serena/project.yml` without `languages:` takes every symbol tool down.
 
@@ -993,6 +1210,27 @@ class SerenaHealContract(unittest.TestCase):
             self.assertIsNone(boot.heal_serena_project(tmp))
             self.assertFalse((Path(tmp) / ".serena").exists())
 
+    def test_unreadable_config_fails_open_when_open_raises(self):
+        """Root-independent: chmod 000 is ignored for euid 0, so force the OSError."""
+        boot = self._boot()
+        real_open = open
+
+        def deny_cfg(path, *a, **kw):
+            if str(path).endswith("project.yml"):
+                raise PermissionError(13, "denied", str(path))
+            return real_open(path, *a, **kw)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".serena").mkdir()
+            (root / ".serena" / "project.yml").write_text("x", encoding="utf-8")
+            with mock.patch("builtins.open", side_effect=deny_cfg):
+                self.assertIsNone(boot.heal_serena_project(str(root)))
+
+    @unittest.skipIf(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        "chmod 000 does not block reads for root; covered by the mocked variant",
+    )
     def test_unreadable_config_fails_open(self):
         boot = self._boot()
         with tempfile.TemporaryDirectory() as tmp:
@@ -1119,6 +1357,36 @@ class OrchestrationContract(unittest.TestCase):
         self.assertIn("only on verified work", body)
 
 
+class ContextBudget(unittest.TestCase):
+    """Per-turn and per-invocation context stays bounded; one shared TOOLS rule."""
+
+    TOOLS_PHRASE = "name the code-navigation tools the harness provides"
+
+    def test_style_under_budget(self):
+        n = len(OUTPUT_STYLE.read_text(encoding="utf-8"))
+        self.assertLess(n, 7000, "output style is %d chars" % n)
+
+    def test_skill_unconditional_load_under_budget(self):
+        skill = PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"
+        body = skill.read_text(encoding="utf-8")
+        total = len(body)
+        for line in body.splitlines():
+            if re.search(r"\b(when|if|on)\b", line, re.I):
+                continue
+            for ref in re.findall(r"load `(references/[\w.-]+\.md)`", line, re.I):
+                total += len((skill.parent / ref).read_text(encoding="utf-8"))
+        self.assertLess(total, 20000, "unconditional skill load is %d chars" % total)
+
+    def test_one_tools_rule_everywhere(self):
+        for rel in (
+            "output-styles/atlas-orchestrator.md",
+            "omp/lead-addendum.md",
+            "skills/atlas-orchestrate/references/subagent-kit.md",
+        ):
+            body = (PLUGIN_ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn(self.TOOLS_PHRASE, body, rel)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -1181,25 +1449,19 @@ class InsightRemediationContract(unittest.TestCase):
         self.assertLess(smallest, dispatch_only)
 
     def test_connector_credential_watch_is_wired_on_mcp_responses(self):
-        cmds = _commands_for("PostToolUse")
-        self.assertTrue(
-            any("connector_credential_watch.py" in c for c in cmds),
-            "connector_credential_watch.py must be bound to PostToolUse",
-        )
+        # Wired through event_dispatch.py (see DispatcherWiringContract for the hooks.json side).
         matchers = [
-            m.get("matcher", "")
-            for m in _hooks_config()["PostToolUse"]
-            if any(
-                "connector_credential_watch.py" in h.get("command", "")
-                for h in m.get("hooks", [])
-            )
+            m
+            for ev, name, m in _dispatched()
+            if ev == "PostToolUse" and name == "connector_credential_watch"
         ]
         self.assertEqual(len(matchers), 1)
+        self.assertTrue(matchers[0].startswith("mcp__"))
         matcher = matchers[0]
         # Must NOT be a blanket mcp__ sweep: lean-ctx/context-mode/serena return
         # file content, and this repo's own sources contain "Invalid Token".
         self.assertNotEqual(matcher, "mcp__.*")
-        self.assertIn("mcp__plugin_atlas_", matcher)
+        self.assertIn("mcp__plugin_armada_", matcher)
         for content_server in ("lean-ctx", "context-mode", "serena", "context7"):
             self.assertNotIn(content_server, matcher)
 
@@ -1476,16 +1738,12 @@ class TodoBoardContract(unittest.TestCase):
     surfaces that make remaining work visible."""
 
     def test_todo_capture_is_wired_to_todowrite(self):
-        bound = [c for c in _commands_for("PostToolUse") if "todo_capture.py" in c]
-        self.assertTrue(bound, "hooks.json must run todo_capture.py on PostToolUse")
         matchers = [
-            e.get("matcher")
-            for e in _hooks_config()["PostToolUse"]
-            if any(
-                "todo_capture.py" in h.get("command", "") for h in e.get("hooks", [])
-            )
+            m
+            for ev, name, m in _dispatched()
+            if ev == "PostToolUse" and name == "todo_capture"
         ]
-        self.assertEqual(matchers, ["TodoWrite"])
+        self.assertEqual(matchers, ["TodoWrite|Agent|Task|Bash"])
 
     def test_gate_falls_back_to_board_and_ledger(self):
         src = (HOOKS_DIR / "completion_gate_core.py").read_text(encoding="utf-8")
@@ -1646,3 +1904,84 @@ class TestIsolationContract(unittest.TestCase):
             lines = Path(home, "hook-faults.jsonl").read_text().splitlines()
             self.assertEqual(len(lines), 1)
             self.assertEqual(json.loads(lines[0])["hook"], "contract-test")
+
+
+class HeaderSsotTests(unittest.TestCase):
+    """B5: the status-header template lives only in operating-contract.json."""
+
+    ROOT = Path(__file__).resolve().parent.parent
+    # Files allowed to carry the literal template (loaders' fail-open fallback,
+    # or a docstring naming it). Anything else must read the contract.
+    ALLOWED = {
+        "hooks/session_boot_core.py",
+        "hooks/completion_gate_core.py",
+        "omp/style.ts",
+        # Prose only (toast text, doc comment); neither builds or checks the header.
+        "mod/discipline.ts",
+        "mod/register.ts",
+    }
+
+    def _doc(self):
+        return json.loads(
+            (self.ROOT / "contracts" / "operating-contract.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+    def test_contract_has_header_fields(self):
+        doc = self._doc()
+        self.assertEqual(doc["headerTemplate"], "ATLAS | <glyph> <phase> | <state>")
+        self.assertEqual(len(doc["phases"]), 8)
+        rx = re.compile(doc["headerFirstLinePattern"])
+        self.assertTrue(rx.match("ATLAS | \U0001f50d research 2/5 | hello"))
+        self.assertIsNone(rx.match("ATLAS | research | x"))
+
+    def test_no_stray_literal_template(self):
+        stray = []
+        for p in list(self.ROOT.rglob("*.py")) + list(self.ROOT.rglob("*.ts")):
+            rel = p.relative_to(self.ROOT).as_posix()
+            if "node_modules" in rel or "test_" in p.name or ".test." in p.name:
+                continue
+            if (
+                "ATLAS | <" in p.read_text(encoding="utf-8", errors="ignore")
+                and rel not in self.ALLOWED
+            ):
+                stray.append(rel)
+        self.assertEqual(stray, [])
+
+    def test_boot_and_gate_use_contract_template(self):
+        import completion_gate_core as cg
+        import session_boot_core as sb
+
+        doc = self._doc()
+        self.assertEqual(sb.header_template(), doc["headerTemplate"])
+        self.assertIn(
+            "`" + doc["headerTemplate"].replace("<state>", "<one-line state>") + "`",
+            cg._header_reason_part(doc),
+        )
+
+
+class ReleaseVersionContractTests(unittest.TestCase):
+    """A bump must land in plugin.json, marketplace.json and CHANGELOG together
+    (.github/workflows/release.yml publishes from them)."""
+
+    @staticmethod
+    def _vt(v):
+        return tuple(int(x) for x in v.split("."))
+
+    def _plugin_version(self):
+        return json.loads(
+            (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text("utf-8")
+        )["version"]
+
+    def test_marketplace_matches_plugin_json(self):
+        mk = json.loads(
+            (REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text("utf-8")
+        )
+        got = [p["version"] for p in mk["plugins"] if p["name"] == "atlas"]
+        self.assertEqual(got, [self._plugin_version()])
+
+    def test_changelog_top_version_not_behind_plugin_json(self):
+        text = (PLUGIN_ROOT / "CHANGELOG.md").read_text("utf-8")
+        top = re.search(r"^##\s+(\d+\.\d+\.\d+)", text, re.M).group(1)
+        self.assertGreaterEqual(self._vt(top), self._vt(self._plugin_version()))

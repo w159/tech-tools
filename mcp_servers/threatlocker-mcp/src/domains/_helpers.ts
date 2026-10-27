@@ -1,4 +1,4 @@
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+// fallow-ignore-file duplicate-export
 import type { CallToolResult } from '../utils/types.js';
 
 // Re-export the shared response-quality modules so every domain handler
@@ -16,7 +16,6 @@ export {
 
 export {
   toolError,
-  missingCredsError,
 } from '@shared/error-envelope.js';
 import { toolErrorFromCatch as sharedToolErrorFromCatch } from '@shared/error-envelope.js';
 
@@ -26,7 +25,7 @@ import { toolErrorFromCatch as sharedToolErrorFromCatch } from '@shared/error-en
  * does not mean the key was revoked. The per-call-site "verify env vars are set"
  * hint is wrong here: the vars are set, the value is not a live API User token.
  */
-export const TOKEN_NOT_RECOGNIZED_HINT =
+const TOKEN_NOT_RECOGNIZED_HINT =
   'HTTP 440 TOKEN_REVOKED: the ThreatLocker instance at THREATLOCKER_BASE_URL does not recognize this token. ' +
   'It returns this for any unknown value, so it means one of: the token belongs to a different instance ' +
   '(the letter in your portal URL, e.g. portal.h.threatlocker.com; the default base URL assumes "g"), ' +
@@ -37,6 +36,7 @@ export const TOKEN_NOT_RECOGNIZED_HINT =
   'Claude Code reads this plugin\'s sensitive settings (the plugin configure prompt; for the atlas plugin that is ' +
   'Keychain-backed, not settings.json or a repo .env), restart Claude Code, then call threatlocker_status again.';
 
+// Intentional wrapper: adds the HTTP 440 hint around the shared envelope; domain files import this one.
 export function toolErrorFromCatch(
   operation: string,
   err: unknown,
@@ -57,7 +57,7 @@ export {
 // ---------------------------------------------------------------------------
 
 /** statusId values from threatlocker.kb.help/portalapiapprovalrequest/. */
-export const APPROVAL_STATUS_BY_NAME: Record<string, number> = {
+const APPROVAL_STATUS_BY_NAME: Record<string, number> = {
   pending: 1,
   approved: 4,
   'not learned': 6,
@@ -100,26 +100,4 @@ export function withSummary(result: CallToolResult, summary: Record<string, unkn
   const [first, ...rest] = result.content;
   const text = `${JSON.stringify(summary)}\n${first?.type === 'text' ? first.text : ''}`;
   return { ...result, content: [{ type: 'text', text }, ...rest] };
-}
-
-/** Thin wrapper kept for navigate/status inline responses in server.ts. */
-export function jsonResult(data: unknown): CallToolResult {
-  return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-}
-
-/** Common pagination args shared by list tools. */
-export const paginationProps = {
-  pageNumber: { type: 'number', description: 'Page number for pagination (default: 1).' },
-  pageSize:   { type: 'number', description: 'Records per page (default: 50).' },
-};
-
-export function listTool(name: string, description: string, extraProps: Record<string, unknown> = {}): Tool {
-  return {
-    name,
-    description,
-    inputSchema: {
-      type: 'object' as const,
-      properties: { ...paginationProps, ...extraProps },
-    },
-  };
 }

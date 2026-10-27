@@ -223,3 +223,15 @@ test.skipIf(!realBin)("real lean-ctx host check: `lean-ctx -c 'echo routed-ok'` 
 	expect(r.code).toBe(0);
 	expect(r.stdout).toContain("routed-ok");
 });
+test("a store save of ATLAS_LEAN_SHELL=off applies on the next call without reloading the extension", () => {
+	const home = process.env.ATLAS_HOME as string;
+	const h = harness({ env: {} });
+	expect(h.tool_call(call("echo hi"), MAIN)).toBeDefined();
+	mkdirSync(home, { recursive: true });
+	writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_LEAN_SHELL: "off" } }));
+	try {
+		expect(h.tool_call(call("echo hi"), MAIN)).toBeUndefined();
+	} finally {
+		rmSync(join(home, "settings.json"), { force: true });
+	}
+});

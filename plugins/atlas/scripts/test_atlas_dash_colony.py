@@ -508,3 +508,15 @@ class KillMember(unittest.TestCase):
         # found the member through the alias (409 dead: w1 has no live pid), not 404
         self.assertEqual(status, 409)
         self.assertEqual(body.get("error"), "member_dead")
+
+    def test_hold_and_release_flip_the_flag_seen_as_seat_held(self):
+        import atlas_colony_model as model
+        status, body = colony.hold_member(self.root, "c", "w1")
+        self.assertEqual((status, body["held"]), (200, "w1"))
+        self.assertIn("w1", model._held(self.root))
+        status, _ = colony.release_member(self.root, "c", "w1")
+        self.assertEqual(status, 200)
+        self.assertNotIn("w1", model._held(self.root))
+
+    def test_hold_unknown_member_is_404(self):
+        self.assertEqual(colony.hold_member(self.root, "c", "nope")[0], 404)

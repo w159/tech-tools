@@ -3,6 +3,8 @@ name: ui-runtime-tester
 description: "Live frontend runtime tester that starts a web app and validates OBSERVED behavior in a real browser (cmux browser, Claude_Preview or Playwright): render, console, network shapes, and loading/empty/error/success states. Never edits code. Use when a UI change needs confirming in a running app rather than by reading code."
 model: sonnet
 effort: low
+tier_allow: [sonnet]
+effort_allow: [low, medium]
 color: pink
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch, mcp__cmux-browser__browser_is_webview_focused, mcp__cmux-browser__browser_open_split, mcp__cmux-browser__browser_highlight, mcp__cmux-browser__browser_frame, mcp__cmux-browser__browser_tab, mcp__cmux-browser__browser_dialog, mcp__cmux-browser__browser_viewport, mcp__cmux-browser__browser_geolocation, mcp__cmux-browser__browser_offline, mcp__cmux-browser__browser_focus_webview, mcp__cmux-browser__browser_eval, mcp__cmux-browser__browser_cookies, mcp__cmux-browser__browser_storage, mcp__cmux-browser__browser_state, mcp__cmux-browser__browser_network, mcp__cmux-browser__browser_add_script, mcp__cmux-browser__browser_add_init_script, mcp__cmux-browser__browser_add_style, mcp__cmux-browser__browser_download, mcp__cmux-browser__browser_trace, mcp__cmux-browser__browser_screencast]
 ---

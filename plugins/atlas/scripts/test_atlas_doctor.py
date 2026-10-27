@@ -16,6 +16,42 @@ sys.path.insert(0, os.path.dirname(__file__))
 import atlas_doctor
 import atlas_db
 
+HERE_ATLAS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_real_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+_MODULE_ENV = None
+_MODULE_CWD = None
+
+
+def setUpModule():
+    # Any test that reaches --fix/--hook resolves its project root from
+    # CLAUDE_PROJECT_DIR or cwd, and its home from HOME. Point all three at a
+    # temp dir for the whole module so no class can reach a real checkout.
+    global _MODULE_ENV, _MODULE_CWD
+    base = tempfile.mkdtemp()
+    os.makedirs(os.path.join(base, "project"))
+    _MODULE_ENV = mock.patch.dict(
+        os.environ,
+        {
+            "CLAUDE_PROJECT_DIR": os.path.join(base, "project"),
+            "HOME": os.path.join(base, "home"),
+        },
+    )
+    _MODULE_ENV.start()
+    _MODULE_CWD = (os.getcwd(), base)
+    os.chdir(os.path.join(base, "project"))
+
+
+def tearDownModule():
+    os.chdir(_MODULE_CWD[0])
+    _MODULE_ENV.stop()
+    shutil.rmtree(_MODULE_CWD[1], True)
+
 
 def write_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -98,10 +134,21 @@ class AtlasDoctorTest(unittest.TestCase):
         atlas_doctor.STATE_PATH = self.state
         omp_patch = mock.patch.dict(
             os.environ,
-            {"ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins")},
+            {
+                "ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins"),
+                # --fix/--hook repair layout and docs names under the project dir;
+                # never let a test point that at the real checkout.
+                "CLAUDE_PROJECT_DIR": os.path.join(self.tmp, "project"),
+                "HOME": os.path.join(self.tmp, "home"),
+            },
         )
         omp_patch.start()
         self.addCleanup(omp_patch.stop)
+        # cwd is where project roots resolve from when CLAUDE_PROJECT_DIR is unset
+        os.makedirs(os.path.join(self.tmp, "project"), exist_ok=True)
+        prev_cwd = os.getcwd()
+        os.chdir(os.path.join(self.tmp, "project"))
+        self.addCleanup(os.chdir, prev_cwd)
         # Set after the patch.dict snapshot: its cleanup runs after tearDown and would
         # otherwise restore this value, leaking it into later test files.
         os.environ["CLAUDE_PLUGIN_ROOT"] = self.self_root
@@ -273,6 +320,48 @@ class AtlasDoctorTest(unittest.TestCase):
         problems = atlas_doctor.check_orchestration_wiring(ip)
         self.assertTrue(any("ORCH_SKILLS" in p for p in problems))
         self.assertTrue(any("mark_orchestrating" in p for p in problems))
+        # The message must name the core file the check actually scanned.
+        self.assertTrue(any("dispatch_tripwire_core.py" in p for p in problems))
+
+    def _dispatcher_ip(self, outer_matcher=None, drop_tripwire=False):
+        """Copy the real dispatcher layout into the sandbox install."""
+        src = os.path.join(HERE_ATLAS, "hooks")
+        ip = self.install_101
+        os.makedirs(os.path.join(ip, "hooks"), exist_ok=True)
+        hooks = _load_real_json(os.path.join(src, "hooks.json"))
+        if outer_matcher is not None:
+            for grp in hooks["hooks"]["PostToolUse"]:
+                if "event_dispatch.py" in json.dumps(grp):
+                    grp["matcher"] = outer_matcher
+        write_json(os.path.join(ip, "hooks", "hooks.json"), hooks)
+        with open(os.path.join(src, "event_dispatch.py"), encoding="utf-8") as f:
+            text = f.read()
+        if drop_tripwire:
+            text = text.replace('"dispatch_tripwire"', '"dispatch_tripwire_off"')
+        with open(os.path.join(ip, "hooks", "event_dispatch.py"), "w") as f:
+            f.write(text)
+        with open(os.path.join(ip, "hooks", "dispatch_tripwire.py"), "w") as f:
+            f.write("ORCH_SKILLS = {'x'}\nmark_orchestrating = None\n")
+        return ip
+
+    def test_orchestration_wiring_passes_on_real_dev_tree(self):
+        self.assertEqual(atlas_doctor.check_orchestration_wiring(HERE_ATLAS), [])
+
+    def test_orchestration_wiring_accepts_event_dispatcher_layout(self):
+        ip = self._dispatcher_ip()
+        self.assertEqual(atlas_doctor.check_orchestration_wiring(ip), [])
+
+    def test_orchestration_wiring_flags_dispatcher_without_tripwire_binding(self):
+        ip = self._dispatcher_ip(drop_tripwire=True)
+        problems = atlas_doctor.check_orchestration_wiring(ip)
+        for tool in ("Agent", "Task", "Skill"):
+            self.assertIn(f"PostToolUse matcher missing {tool}", problems)
+
+    def test_orchestration_wiring_flags_dispatcher_outer_matcher_missing_agent(self):
+        ip = self._dispatcher_ip(outer_matcher="Read|Task|Skill")
+        problems = atlas_doctor.check_orchestration_wiring(ip)
+        self.assertIn("PostToolUse matcher missing Agent", problems)
+        self.assertNotIn("PostToolUse matcher missing Task", problems)
 
     def test_norm_repo_treats_url_variants_as_equal(self):
         for u in (
@@ -842,7 +931,12 @@ class AtlasDoctorTest(unittest.TestCase):
     def test_main_fix_runs_fix_and_rechecks(self):
         # lines 593-596: --fix branch applies fixes then re-checks
         buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
+        # tmp root: --fix may append to AGENTS.md, never the real one
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(atlas_doctor, "_repo_root", return_value=tmp),
+            contextlib.redirect_stdout(buf),
+        ):
             rc = atlas_doctor.main(["--fix"])
         self.assertIn("FIX:", buf.getvalue())
         self.assertIn(rc, (0, 1))
@@ -2274,6 +2368,76 @@ class TestContextToolingRoot(unittest.TestCase):
             self.assertEqual(os.path.realpath(got), os.path.realpath(d))
 
 
+class FixContextToolingTest(unittest.TestCase):
+    """--fix appends the AGENTS.md tool-routing block; tmp repos only."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root)
+        self.agents = os.path.join(self.root, "AGENTS.md")
+        healthy = ([{"check": "x", "ok": True, "detail": ""}], {})
+        for p in (
+            mock.patch.object(atlas_doctor, "_repo_root", return_value=self.root),
+            mock.patch.object(atlas_doctor, "run_checks", return_value=healthy),
+            mock.patch.dict(os.environ, {"ATLAS_DOCTOR_HOOK_TTL_MIN": "0"}),
+        ):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _write(self, text):
+        with open(self.agents, "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def _read(self):
+        with open(self.agents, encoding="utf-8") as f:
+            return f.read()
+
+    def _main(self, *argv):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            atlas_doctor.main(list(argv))
+        return out.getvalue()
+
+    def test_fix_appends_block_once_and_is_idempotent(self):
+        self._write("# AGENTS.md\n\nNo tooling block here.\n")
+        out = self._main("--fix")
+        body = self._read()
+        self.assertEqual(body.count(atlas_doctor.ATLAS_TOOLING_MARKER), 1)
+        self.assertTrue(body.startswith("# AGENTS.md\n\nNo tooling block here.\n"))
+        self.assertIn("inserted", out)
+        self._main("--fix")
+        self.assertEqual(self._read(), body)
+
+    def test_check_and_hook_alone_never_write(self):
+        original = "# AGENTS.md\n\nNo tooling block here.\n"
+        self._write(original)
+        self._main()
+        self._main("--hook")
+        self.assertEqual(self._read(), original)
+
+    def test_missing_agents_md_is_not_created(self):
+        out = self._main("--fix")
+        self.assertFalse(os.path.exists(self.agents))
+        self.assertIn("does not exist", out)
+
+    def test_malformed_marker_leaves_file_untouched(self):
+        original = f"# A\n{atlas_doctor.ATLAS_TOOLING_MARKER}\nunpaired start\n"
+        self._write(original)
+        self._main("--fix")
+        self.assertEqual(self._read(), original)
+
+    def test_home_dir_root_refused(self):
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home)
+        original = "# AGENTS.md\n"
+        with open(os.path.join(home, "AGENTS.md"), "w") as f:
+            f.write(original)
+        with mock.patch.dict(os.environ, {"HOME": home}):
+            line = atlas_doctor.fix_context_tooling(root_path=home)
+        self.assertIn("not a project root", line)
+        with open(os.path.join(home, "AGENTS.md")) as f:
+            self.assertEqual(f.read(), original)
+
+
 class ContentDriftTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -2373,6 +2537,223 @@ class ContentDriftTest(unittest.TestCase):
             ok, detail = atlas_doctor.check_content_drift("omp", self.inst, "atlas")
         self.assertFalse(ok)
         self.assertIn("hooks/a.py", detail)
+
+
+class GateBlockSpikeTest(unittest.TestCase):
+    NOW = 2_000_000_000.0
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "t.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.addCleanup(self.conn.close)
+
+    def _gate(self, n, age_hours, sid="s", cat="gate_block"):
+        for _ in range(n):
+            self.conn.execute(
+                "INSERT INTO friction_events (session_id, category, ts) VALUES (?,?,?)",
+                (sid, cat, self.NOW - age_hours * 3600),
+            )
+        self.conn.commit()
+
+    def _spike(self):
+        return atlas_doctor.gate_block_spike(self.conn, now=self.NOW)
+
+    def test_spike_true_when_24h_far_above_prior_mean(self):
+        self._gate(14, 48)  # prior 7d: 14 rows -> 2/day mean
+        self._gate(10, 1)
+        r = self._spike()
+        self.assertEqual(r["last_24h"], 10)
+        self.assertAlmostEqual(r["prior_daily_mean"], 2.0)
+        self.assertTrue(r["spike"])
+
+    def test_flat_history_is_not_a_spike(self):
+        self._gate(35, 48)  # 5/day
+        self._gate(6, 1)
+        self.assertFalse(self._spike()["spike"])
+
+    def test_under_five_absolute_is_not_a_spike(self):
+        self._gate(4, 1)  # infinitely above a 0 mean, still < 5
+        self.assertFalse(self._spike()["spike"])
+
+    def test_tmp_fixture_sessions_excluded(self):
+        sid = "fixture"
+        self.conn.execute(
+            "INSERT INTO session_logs (session_id, transcript_path) VALUES (?,?)",
+            (sid, os.path.join(tempfile.gettempdir(), "x", "t.jsonl")),
+        )
+        self._gate(10, 1, sid=sid)
+        r = self._spike()
+        self.assertEqual(r["last_24h"], 0)
+        self.assertFalse(r["spike"])
+
+    def test_other_categories_ignored(self):
+        self._gate(10, 1, cat="user_correction")
+        self.assertEqual(self._spike()["last_24h"], 0)
+
+    def test_read_only(self):
+        self._gate(10, 1)
+        before = self.conn.total_changes
+        findings = self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
+        self._spike()
+        self.assertEqual(self.conn.total_changes, before)
+        self.assertEqual(
+            self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], findings
+        )
+
+
+class NonMarketplaceLoadTest(unittest.TestCase):
+    """atlas loaded from a claude.ai synced plugin dir or via --plugin-dir is
+    not in installed_plugins.json; the doctor must not report that as unhealthy."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.plugins = os.path.join(self.tmp, "home", ".claude", "plugins")
+        os.makedirs(self.plugins)
+        self.synced_id = "abc_def"
+        self.synced_root = os.path.join(self.plugins, "synced", self.synced_id, "atlas")
+        self.pdir_root = os.path.join(self.tmp, "src", "plugins", "atlas")
+        for root in (self.synced_root, self.pdir_root):
+            self._make_plugin(root)
+        write_json(
+            os.path.join(self.tmp, "src", ".claude-plugin", "marketplace.json"), {}
+        )
+        write_json(
+            os.path.join(self.plugins, "synced", self.synced_id, "atlas.meta.json"),
+            {"marketplace_name": "tech-tools", "installation_preference": "available"},
+        )
+        patches = [
+            mock.patch.object(atlas_doctor, "PLUGINS_DIR", self.plugins),
+            mock.patch.object(
+                atlas_doctor, "STATE_PATH", os.path.join(self.tmp, "state.json")
+            ),
+            # wiring needs the full hooks tree; covered by its own tests
+            mock.patch.object(atlas_doctor, "check_orchestration_wiring", return_value=[]),
+            mock.patch.object(atlas_doctor, "_cmux_bin", return_value=None),
+            mock.patch.dict(
+                os.environ,
+                {
+                    "ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins"),
+                    "CLAUDE_PROJECT_DIR": os.path.join(self.tmp, "project"),
+                    "HOME": os.path.join(self.tmp, "home"),
+                    "ATLAS_DOCTOR_HOOK_TTL_MIN": "0",
+                },
+            ),
+        ]
+        for pt in patches:
+            pt.start()
+            self.addCleanup(pt.stop)
+        os.makedirs(os.path.join(self.tmp, "project"), exist_ok=True)
+
+    @staticmethod
+    def _make_plugin(root):
+        write_json(
+            os.path.join(root, ".claude-plugin", "plugin.json"),
+            {
+                "name": "atlas",
+                "version": "9.9.9",
+                "repository": "https://github.com/w159/tech-tools",
+            },
+        )
+        write_json(
+            os.path.join(root, "hooks", "hooks.json"),
+            {"hooks": {"SessionStart": [{"hooks": [{"command": "x ${CLAUDE_PLUGIN_ROOT}/scripts/a.py"}]}]}},
+        )
+        for rel, body in (
+            ("scripts/a.py", ""),
+            ("agents/x.md", "---\nname: x\n---\n"),
+            ("skills/s/SKILL.md", "---\nname: s\n---\n"),
+        ):
+            fp = os.path.join(root, *rel.split("/"))
+            os.makedirs(os.path.dirname(fp), exist_ok=True)
+            with open(fp, "w") as f:
+                f.write(body)
+
+    def _run(self, root, installed=None):
+        ipath = os.path.join(self.plugins, "installed_plugins.json")
+        if installed is not None:
+            write_json(ipath, installed)
+            write_json(os.path.join(self.plugins, "known_marketplaces.json"), {})
+        with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": root}):
+            results, _ = atlas_doctor.install_checks("atlas")
+        return {r["check"]: r for r in results}
+
+    def _assert_registered(self, by, source):
+        self.assertTrue(by["registered"]["ok"], by["registered"])
+        self.assertIn(source, by["registered"]["detail"])
+        self.assertNotIn("config-readable", by)
+        for cid in ("marketplace-source", "clone-remote", "version-sync", "rollback"):
+            self.assertTrue(by[cid]["ok"], by[cid])
+            self.assertIn("skipped", by[cid]["detail"])
+        bad = [r for r in by.values() if not r["ok"] and r["severity"] != "warn"]
+        self.assertEqual(bad, [])
+
+    def _hook_output(self, root):
+        buf = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": root}),
+            mock.patch.object(atlas_doctor, "behaviour_checks"),
+            contextlib.redirect_stdout(buf),
+        ):
+            self.assertEqual(atlas_doctor.main(["--hook"]), 0)
+        return buf.getvalue()
+
+    def test_synced_layout_without_installed_entry(self):
+        by = self._run(
+            self.synced_root,
+            {"version": 2, "plugins": {"other@mkt": [{"version": "1"}]}},
+        )
+        self._assert_registered(by, "synced")
+        self.assertEqual(self._hook_output(self.synced_root), "")
+
+    def test_plugin_dir_load_not_in_installed_plugins(self):
+        by = self._run(self.pdir_root, {"version": 2, "plugins": {}})
+        self._assert_registered(by, "plugin-dir")
+        self.assertEqual(self._hook_output(self.pdir_root), "")
+
+    def test_installed_plugins_json_missing(self):
+        self.assertFalse(
+            os.path.exists(os.path.join(self.plugins, "installed_plugins.json"))
+        )
+        by = self._run(self.synced_root)
+        self._assert_registered(by, "synced")
+        self.assertEqual(self._hook_output(self.synced_root), "")
+        by = self._run(self.pdir_root)
+        self._assert_registered(by, "plugin-dir")
+
+    def test_missing_config_without_any_load_source_still_fails(self):
+        # cache-shaped root, nothing registered: genuinely unhealthy
+        root = os.path.join(self.plugins, "cache", "m", "atlas", "1.0.0")
+        self._make_plugin(root)
+        by = self._run(root, {"version": 2, "plugins": {}})
+        self.assertFalse(by["registered"]["ok"])
+
+    def test_fix_never_writes_into_synced_install_or_plugins_dir(self):
+        def snapshot():
+            out = {}
+            for base, _, files in os.walk(self.plugins):
+                for f in files:
+                    fp = os.path.join(base, f)
+                    out[fp] = (os.path.getmtime(fp), os.path.getsize(fp))
+            return out
+
+        before = snapshot()
+        buf = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": self.synced_root}),
+            mock.patch.object(atlas_doctor, "behaviour_checks"),
+            contextlib.redirect_stdout(buf),
+        ):
+            atlas_doctor.main(["--fix"])
+        self.assertEqual(snapshot(), before)
+        self.assertFalse(
+            [d for d in os.listdir(self.plugins) if d.startswith(atlas_doctor.TRASH_PREFIX)]
+        )
+        self.assertEqual(
+            sorted(os.listdir(self.plugins)), ["synced"], os.listdir(self.plugins)
+        )
 
 
 if __name__ == "__main__":

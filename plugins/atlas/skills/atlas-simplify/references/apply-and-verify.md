@@ -96,7 +96,7 @@ a fork; independence law) to adversarially confirm the pass:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
-  --id simplify-<YYYY-MM-DD>-<slug> \
+  --id simplify-<YYYY-MM-DD>_<slug> \
   --status verified|rejected|needs-evidence \
   --title "<one line: what was simplified and the gate result>" \
   --evidence "<gate command + output path or file:line>" \
@@ -108,7 +108,7 @@ implementer (fix) or reverts it; then re-verify. Re-read findings.json after the
 verifier returns and re-dispatch if the verdict row is absent or truncated.
 
 Persist the merged findings ledger (accepted + skipped, with reasons) to
-`.atlas/evidence/simplify/<YYYY-MM-DD>-<slug>/findings.json` — evidence, not source of
+`.atlas/evidence/simplify/<YYYY-MM-DD>_<slug>/findings.json` — evidence, not source of
 truth; `.atlas/.run/findings.json` stays the verification ledger.
 
 ## Report format

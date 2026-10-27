@@ -4,7 +4,7 @@ Claude Code loads this file every session in this repo. `AGENTS.md` is the
 shared canonical rule set; this file is the **hard gate** for Claude Code so
 the marketplace source is never confused with a live install/cache.
 
-Read `AGENTS.md` and `docs/plugin-development-scope.md` next.
+Read `AGENTS.md` and `docs/architecture/plugin-development-scope.md` next.
 
 ---
 
@@ -66,7 +66,7 @@ the user explicitly asks for dogfood runtime config.
 - Everything under `docs/` is project documentation.
 - Do not delete, "clean", or gitignore docs content as unused junk.
 - Prefer updating `docs/` when behavior or architecture changes.
-- Full explanation: `docs/plugin-development-scope.md`.
+- Full explanation: `docs/architecture/plugin-development-scope.md`.
 
 ### 5. Verify from this tree
 
@@ -112,7 +112,12 @@ here; do not duplicate it.
 - Advisor gate: close each item with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py complete --id <id> --evidence "<proof>"` (syntax at plugins/atlas/scripts/atlas_todo.py :1515), then re-run `list` and confirm status=completed; a batch close once failed silently.
 - Dispatch gate (`dispatch_denied:toolkit`): every `atlas:*` Task/`task` prompt needs a line-anchored `TOOLS:` block (runs to the next ALL-CAPS label) whose own text contains BOTH `ToolSearch` AND a code-nav token (serena, lean-ctx, ctx_search, ctx_read, find_symbol). Naming tools elsewhere in the prompt does not count. On omp (`ATLAS_TOOLKIT_LOAD=omp`) the `ToolSearch` requirement is waived. Example: `TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read) + serena (activate_project, find_symbol); context-mode for noisy output.`
 - Dispatch gate (`dispatch_denied:name`): pass a non-empty `name` (`<role>-<slice>`, e.g. `auth-explorer`) as the Agent/`task` tool argument on every `atlas:*` dispatch, each batch entry. Unnamed dispatches are auto-named by the hook unless `ATLAS_AUTONAME=off`, which turns the miss into a deny; re-issuing the same unnamed call just repeats the deny.
-- Dispatch gate (`dispatch_denied:scope`): every `atlas:*` Agent/Task/`task` prompt needs a line-anchored `SCOPE: <class>/<effort>` line (regex `^SCOPE:\s*([\w-]+)/(\w+)\s*$`, plugins/atlas/hooks/dispatch_tripwire_core.py:370). Classes: implement, fix, verify, audit, docs, db, ui-test. Efforts are exactly `low`, `medium`, `high`; abbreviations like `med` or `lo` do not resolve and are denied. The resolved team must include the dispatched role: check with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort>` first. Example: `SCOPE: audit/medium` for an atlas:explorer.
+- Dispatch gate (`dispatch_denied:scope`): every `atlas:*` Agent/Task/`task` prompt needs a line-anchored `SCOPE: <class>/<effort>` line (regex `^SCOPE:\s*([\w-]+)/(\w+)\s*$`, plugins/atlas/hooks/dispatch_tripwire_core.py:363). Classes: implement, fix, verify, audit, docs, db, ui-test. Efforts are `low`, `medium`, `high`; the gate also normalizes the aliases `lo`, `med` and `hi` (`effort_aliases` in plugins/atlas/contracts/scope-matrix.json, applied at dispatch_tripwire_core.py:446), and any other spelling is denied. Class aliases resolve too (e.g. `explore`/`research`/`review` -> audit, `build`/`feature`/`refactor` -> implement, `bug` -> fix, `doc` -> docs, `ui` -> ui-test); the matrix also holds `test` and `db-audit` classes. The resolved team must include the dispatched role: check with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort>` first. Example: `SCOPE: audit/medium` for an atlas:explorer.
+
+## Dispatch contract (all denials: `dispatch_denied:<code>`; canonical list in `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md`)
+
+Beyond name, TOOLS and SCOPE above, `hooks/dispatch_tripwire_core.py` also requires: `GOAL:`, `DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (`REQUIRED_SPEC_BLOCKS` :69, deny `... is unbounded: missing <labels>`; REPORT alone is auto-injected; first offense per session is an advisory); exactly one `GOAL:` (:1342, `carries N GOAL: blocks`); numbered `STEPS:` for `atlas:runner` (:644, `must carry numbered STEPS:`); no `model` param (:1317, `overrides model with`); no built-in agent types (:1281, `uses the built-in agent`). Subagents may not dispatch (:197).
+One `GOAL:` per dispatch, written as a single sentence: `GOAL: map the auth call path from login to token refresh.` Two concerns means two dispatches, not two `GOAL:` lines; sub-steps go under `STEPS:` or the body, never as a second `GOAL:` (deny `dispatch_denied:multi_goal`).
 
 ## Completion-gate friction (top blockers, last 14d)
 

@@ -6,13 +6,15 @@ already run. Instead of just saying "please capture a lesson," it reports
 what was actually captured by the hooks above, and only nudges if nothing
 was captured but the session was orchestrating.
 
-Rate-limited and non-blocking: returns additionalContext only, never exit 2.
+Rate-limited and non-blocking: advisory goes out as systemMessage (additionalContext on
+Stop forces an extra model turn), never exit 2.
 Throttling, the stop_hook_active loop guard, and the circuit breaker all
 live in atlas_hook_guard now (see that module for the shared invariant).
 Any error exits 0 silently.
 """
 
 import os
+import subprocess
 import sys
 import time
 
@@ -34,6 +36,25 @@ def _check_memory_captured():
                 return True
     except Exception:
         pass
+    return False
+
+
+def _non_docs_changed(cwd):
+    """True when git reports a changed file outside docs/ and not markdown."""
+    try:
+        out = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=cwd or None,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except Exception:
+        return False
+    for line in out.splitlines():
+        path = line[3:].split(" -> ")[-1].strip('"')
+        if path and not path.startswith("docs/") and not path.endswith(".md"):
+            return True
     return False
 
 
@@ -65,11 +86,22 @@ def main():
             conn.close()
 
     # Silence on success. memory_capture.py already wrote the facts; announcing
-    # that on Stop is additionalContext, which prompts another model turn to say
+    # that on Stop would be additionalContext, which prompts another model turn to say
     # nothing. A Stop hook speaks only when it needs something done.
     if _check_memory_captured():
         sys.exit(0)
 
+    quiet = os.environ.get("ATLAS_QUIET", "on").lower() != "off"
+    if quiet:
+        # ATLAS_QUIET: speak only when the turn changed non-docs files, in one line
+        if not _non_docs_changed(payload.get("cwd")):
+            sys.exit(0)
+        atlas_hook_guard.emit(
+            payload,
+            "nudge",
+            "Atlas: code changed; capture any reusable lesson and keep docs/ in sync.",
+        )
+        sys.exit(0)
     msg = (
         "Atlas self-improvement check: if this turn produced a reusable decision, "
         "fix, or gotcha, capture it (claude-mem observation_add or a note under "

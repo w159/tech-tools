@@ -38,6 +38,8 @@ Stdlib only. Same fcntl/msvcrt lock pattern as atlas_memory.
 from __future__ import annotations
 
 import contextlib
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -49,6 +51,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import atlas_paths  # noqa: E402
 from atlas_memory import LockTimeout, _file_lock  # noqa: E402
 
 STATUSES = ("pending", "in_progress", "completed", "blocked")
@@ -60,6 +63,8 @@ _KEEP_ORIGINS = (
 _ADVISOR_TTL_S = 2 * 3600
 _CARRY_MAX_AGE_S = 86400  # older than this at boot: archived, not carried
 _CARRY_MAX_CARRIES = 2  # already carried this many times: archived
+_CARRY_FRESH_S = 2 * 3600  # touched this recently: a live session's item, never expired
+_ARCHIVE_AGE_S = 7 * 86400  # archived longer than this: moved out of todos.json
 LEAD_IDLE_TTL_S = 2 * 3600  # idle lead channel without exit_code (crashed session)
 BOARD_DIR = ".atlas/.run"
 BOARD_NAME = "todos.json"
@@ -114,68 +119,22 @@ def _entry_phase(entry: Any) -> Optional[str]:
 
 
 def _worktree_main_root(worktree: str) -> Optional[str]:
-    """Map a linked git worktree dir to the MAIN repo root, stdlib only.
-
-    In a worktree, `.git` is a file (`gitdir: <main>/.git/worktrees/<n>`);
-    that private git dir has a `commondir` file pointing at the main `.git`,
-    whose parent is the main repo root. Returns None on anything unexpected
-    (plain repos, submodule dirs, malformed files) so callers fail open.
-    """
-    try:
-        with open(os.path.join(worktree, ".git"), "r", encoding="utf-8") as fh:
-            content = fh.read()
-    except OSError:
-        return None
-    git_dir = ""
-    for line in content.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("gitdir:"):
-            git_dir = stripped[len("gitdir:") :].strip()
-            break
-    if not git_dir:
-        return None
-    if not os.path.isabs(git_dir):
-        git_dir = os.path.join(worktree, git_dir)
-    try:
-        with open(os.path.join(git_dir, "commondir"), "r", encoding="utf-8") as fh:
-            common = fh.read().strip()
-    except OSError:
-        return None
-    if not common:
-        return None
-    common_dir = os.path.normpath(
-        common if os.path.isabs(common) else os.path.join(git_dir, common)
-    )
-    main_root = os.path.dirname(common_dir)
-    return main_root if os.path.isdir(main_root) else None
+    """Kept for callers/tests; the logic lives in atlas_paths."""
+    return atlas_paths.worktree_main_root(worktree)
 
 
 def find_root(start: Optional[str] = None) -> str:
-    """Walk up from `start` (default cwd) to a project root: the first dir with
-    .git, .atlas, or docs/. A linked git worktree (`.git` is a file) maps to the
-    main repo root, so worktree-isolated workers share the lead's board.
-    Fails open to the start dir."""
-    d = os.path.abspath(start or os.getcwd())
-    for _ in range(7):
-        for marker in (".git", ".atlas", "docs"):
-            if os.path.exists(os.path.join(d, marker)):
-                if marker == ".git" and os.path.isfile(os.path.join(d, ".git")):
-                    main_root = _worktree_main_root(d)
-                    if main_root:
-                        return main_root
-                return d
-        parent = os.path.dirname(d)
-        if parent == d:
-            break
-        d = parent
-    return os.path.abspath(start or os.getcwd())
+    """Project root for `start` (default cwd); see atlas_paths.project_root."""
+    return atlas_paths.project_root(start)
 
 
 def _resolve_base(root: Optional[str] = None) -> str:
-    """Root resolution for board paths: ATLAS_PROJECT_ROOT wins, then an
-    explicit root, then find_root(); a linked-worktree base (`.git` file)
-    maps to the main repo root so workers share the lead's board."""
-    base = root or os.environ.get("ATLAS_PROJECT_ROOT") or find_root()
+    """Root resolution for board paths: an explicit root, then
+    ATLAS_PROJECT_ROOT, then find_root(). Explicit values are sanitized (cut at
+    any `.atlas` component) and a linked-worktree base (`.git` file) maps to the
+    main repo root so workers share the lead's board."""
+    given = root or os.environ.get("ATLAS_PROJECT_ROOT")
+    base = atlas_paths.sanitize(given) if given else find_root()
     if os.path.isfile(os.path.join(base, ".git")):
         main_root = _worktree_main_root(base)
         if main_root:
@@ -637,6 +596,10 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
                 item["archived"] = True
                 archived += 1
             elif not (item.get("launch") and _launch_live(item)) and (
+                # a recently updated item is live work (reap ticks pass another
+                # session id): carry it on, never expire it
+                now - float(item.get("updated_at") or 0) >= _CARRY_FRESH_S
+            ) and (
                 now - float(item.get("created_at") or item.get("updated_at") or now)
                 > _CARRY_MAX_AGE_S
                 or int(item.get("carries") or 0) >= _CARRY_MAX_CARRIES
@@ -665,6 +628,31 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
             "archived": archived,
             "counts": counts(board, session_id),
         }
+
+
+def rotate_archive(root: Optional[str], max_age_s: float = _ARCHIVE_AGE_S) -> int:
+    """Move items archived longer than max_age_s into
+    .atlas/.run/archive/todos-<YYYY-MM>.jsonl (by archive month) so todos.json
+    stays small. Returns how many moved."""
+    with _file_lock(board_path(root)):
+        board = _locked_load(root)
+        now = _now()
+        keep, old = [], []
+        for item in board.get("items", []):
+            at = float(item.get("archived_at") or item.get("updated_at") or 0)
+            (old if item.get("archived") and now - at > max_age_s else keep).append(item)
+        if not old:
+            return 0
+        adir = board_path(root).parent / "archive"
+        adir.mkdir(parents=True, exist_ok=True)
+        for item in old:
+            at = float(item.get("archived_at") or item.get("updated_at") or 0)
+            month = time.strftime("%Y-%m", time.localtime(at))
+            with open(adir / f"todos-{month}.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(item) + "\n")
+        board["items"] = keep
+        save(root, board)
+        return len(old)
 
 
 def restore(root: Optional[str], item_id: str) -> dict:
@@ -795,6 +783,60 @@ def notes_dir(root: Optional[str] = None) -> Path:
 
 def _sanitize_owner(owner: Any) -> str:
     return _NOTE_NAME_BAD.sub("_", str(owner or "").strip()) or "anon"
+
+
+# Owner tokens: HMAC-SHA256(per-project secret, sanitized owner). Deterministic, so only
+# the secret (0600) and an empty per-owner "issued" marker are stored, never a token.
+# Enforced by the note CLI only; note() itself stays open for in-process callers.
+OWNER_SECRET_FILE = "owner-token.secret"
+OWNER_ISSUED_DIR = "owner-tokens"
+
+
+def _owner_secret(root: Optional[str]) -> bytes:
+    path = Path(_resolve_base(root)) / BOARD_DIR / OWNER_SECRET_FILE
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(os.urandom(32))
+        try:
+            os.link(tmp, path)  # atomic publish; loses cleanly to a concurrent creator
+        except FileExistsError:
+            pass
+        finally:
+            os.unlink(tmp)
+    return path.read_bytes()
+
+
+def _owner_token(root: Optional[str], name: str) -> str:
+    return hmac.new(_owner_secret(root), name.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _issued_marker(root: Optional[str], name: str) -> Path:
+    return Path(_resolve_base(root)) / BOARD_DIR / OWNER_ISSUED_DIR / name
+
+
+def issue_owner_token(root: Optional[str], name: Any) -> str:
+    """Mark `name` token-bearing and return its token (the only place a token leaves)."""
+    name = _sanitize_owner(name)
+    marker = _issued_marker(root, name)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    os.close(os.open(str(marker), os.O_WRONLY | os.O_CREAT, 0o600))
+    return _owner_token(root, name)
+
+
+def owner_token_issued(root: Optional[str], name: Any) -> bool:
+    return _issued_marker(root, _sanitize_owner(name)).exists()
+
+
+def verify_owner_token(root: Optional[str], name: Any, token: Any) -> bool:
+    if not token:
+        return False
+    return hmac.compare_digest(
+        _owner_token(root, _sanitize_owner(name)).encode("utf-8"),
+        str(token).encode("utf-8"),
+    )
 
 
 def _next_seq(root: Optional[str], target: Path) -> int:
@@ -1852,8 +1894,25 @@ def channel_board(root: Optional[str], channel: str) -> dict:
 # --- CLI -----------------------------------------------------------------------
 
 
+_USAGE = """usage: atlas_todo.py <command> [flags]
+
+commands:
+  list, counts, add, set, scaffold, claim, complete, status, remove, carry
+  member-finish, claim-paths, release-paths, claims, conflicts
+  note, notes, inbox, channels, channel-open, channel-reap, channel-board
+  help
+
+common flags: --root --session --id --owner --status --evidence --to --item
+              --channel --kind --paths
+Output is one JSON object; exit 0 when ok. Run a command with no args for defaults.
+"""
+
+
 def _cli(argv: Optional[List[str]] = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
+    if args and args[0] in ("--help", "-h", "help"):
+        print(_USAGE)
+        return 0
     flags: Dict[str, str] = {}
     positional: List[str] = []
     i = 0
@@ -1883,10 +1942,11 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--keep"
             or a == "--message"
             or a == "--origin"
+            or a == "--owner-token"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
-        elif a in ("--force", "--unique", "--json", "--dry-run", "--only-project"):
+        elif a in ("--force", "--unique", "--json", "--dry-run", "--only-project", "--all"):
             flags[a[2:]] = "1"
             i += 1
         else:
@@ -1901,7 +1961,11 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             board = load(root)
             out = {
                 "ok": True,
-                "items": board.get("items", []),
+                "items": [
+                    i
+                    for i in board.get("items", [])
+                    if flags.get("all") or not i.get("archived")
+                ],
                 "counts": counts(board, flags.get("session")),
             }
         elif cmd == "set":
@@ -1985,6 +2049,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             out = remove(root, flags.get("id", ""))
         elif cmd == "carry":
             out = carry_over(root, flags.get("session") or "")
+            out["rotated"] = rotate_archive(root)
         elif cmd == "claim-paths":
             out = claim_paths(
                 root,
@@ -2022,6 +2087,16 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             ).strip()
             if not owner:
                 out = {"ok": False, "error": "owner_required"}
+            elif owner_token_issued(root, owner) and not verify_owner_token(
+                root,
+                owner,
+                (flags.get("owner-token") or os.environ.get("ATLAS_OWNER_TOKEN") or "").strip(),
+            ):
+                given = flags.get("owner-token") or os.environ.get("ATLAS_OWNER_TOKEN")
+                out = {
+                    "ok": False,
+                    "error": "owner_token_invalid" if given else "owner_token_required",
+                }
             else:
                 out = {
                     "ok": True,

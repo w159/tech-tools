@@ -1,5 +1,5 @@
 {
-	"connectorWatch": ["plugin_atlas", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"],
+	"connectorWatch": ["plugin_armada", "falcon-mcp", "connectwise", "gcloud", "plaid", "cipp"],
 	"underscoredServers": [
 		"lean_ctx",
 		"context_mode_context_mode",
@@ -13,6 +13,7 @@
 		"plaid",
 		"mobbin",
 		"clippy",
+		"armada_connectwise",
 		"atlas_connectwise",
 		"mcp_search",
 		"cmux_browser"

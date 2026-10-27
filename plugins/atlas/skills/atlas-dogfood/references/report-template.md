@@ -1,6 +1,6 @@
 # Report template
 
-Create the report at Phase 3 (matrix exists, everything `Pending`) and update it after every scenario and every fix - checkpoint, not a final write. Path: `docs/audits/atlas-dogfood-<branch-slug>-<YYYY-MM-DD>/report.md`. Directory created on demand; the docs-curator reconciles it on its next pass. Evidence lives in `.atlas/evidence/<YYYY-MM-DD>-dogfood-<branch-slug>/` (suffix `-refix-<n>` per re-drive).
+Create the report at Phase 3 (matrix exists, everything `Pending`) and update it after every scenario and every fix - checkpoint, not a final write. Path: `docs/audits/atlas-dogfood-<branch-slug>-<YYYY-MM-DD>/report.md`. Directory created on demand; the docs-curator reconciles it on its next pass. Evidence lives in `.atlas/evidence/<YYYY-MM-DD>_dogfood-<branch-slug>/` (suffix `-refix-<n>` per re-drive).
 
 ```markdown
 # Dogfood report - <branch/PR identifier> - <YYYY-MM-DD>

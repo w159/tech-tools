@@ -1,0 +1,18 @@
+cmd ▸ ▊  Tab region · ? help · last 2026-10-20T11:06:08Z
+━ ATLAS COLONY . 2 col 2 seats ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━ SESSIONS 1/5 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+> lead-contra subagent 1s work
+━ CHANNEL lead-contra (all) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11:06 tui (you) > lead-contra  verifier ping [steer]
+━ { STEER -> lead-contra } ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+say to lead-contra >
+[ msg all ] [ @all ] [ @lead ]
+
+
+
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↑↓ move · ⏎ pick · tab region · [ ? help ]  [ q quit ]
+lead reads the board at its next turn

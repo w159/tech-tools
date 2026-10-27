@@ -72,6 +72,7 @@ export class TokenProvider {
    * Return a valid access token, acquiring or refreshing as needed.
    * Concurrent callers share a single in-flight request.
    */
+  // fallow-ignore-next-line unused-class-member -- called as this.tokenProvider!.getAccessToken() in cipp.service.ts
   async getAccessToken(): Promise<string> {
     const now = Date.now();
     if (this.cache && now < this.cache.expiresAt - TOKEN_REFRESH_SKEW_MS) {

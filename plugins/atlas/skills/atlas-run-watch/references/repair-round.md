@@ -32,7 +32,7 @@ GOAL: Make failing check(s) <list> pass with the minimal change in the PR worktr
 CONTEXT: explorer finding: <paste the root-cause finding verbatim>. PR <N>, head <sha>, round <k>/<budget>.
 TOOLS (required): ToolSearch first, ONE batched call, then serena edits (replace_symbol_body / insert_after_symbol) + ctx_* reads + Bash for the local gate.
 TOOLS ALLOWED: Edit, Write, Bash, read/search. TOOLS FORBIDDEN: git push, force-push, rebase, merge, package installs beyond what the failing check itself needs.
-DELIVERABLE: local commit(s) in the PR worktree + proof the failing check passes locally (exact command + output captured to .atlas/evidence/<YYYY-MM-DD>-pr<N>-round<k>/).
+DELIVERABLE: local commit(s) in the PR worktree + proof the failing check passes locally (exact command + output captured to .atlas/evidence/<YYYY-MM-DD>_pr<N>-round<k>/).
 SUCCESS CRITERIA: the exact failed CI step now passes when run locally; the diff touches only files implicated by the root cause; a conventional commit message exists ("fix: <what> (PR <N> round <k>)"); nothing is pushed.
 OUT OF SCOPE: pushing, resolving review threads, refactoring beyond the fix, editing CI workflow files to skip the check.
 STOP CONDITIONS: the fix requires weakening test assertions, reverting a reviewer-approved change, or touching files outside the root cause — STOP, write a DECISION NEEDED line, return.

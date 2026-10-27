@@ -212,19 +212,6 @@ def _threshold():
         return 4
 
 
-def _system_temp_roots():
-    """Realpaths of the system temp dir plus the common macOS/Linux aliases
-    (/tmp, /private/tmp), since /tmp is a symlink to /private/tmp on macOS and
-    tempfile.gettempdir() can report either form."""
-    import tempfile
-
-    roots = set()
-    for candidate in (tempfile.gettempdir(), "/tmp", "/private/tmp"):
-        with contextlib.suppress(Exception):
-            roots.add(os.path.realpath(candidate).replace("\\", "/").rstrip("/"))
-    return roots
-
-
 def _is_uri_path(path):
     """URI-scheme path (`agent://`, `xd://`, ...): one shared definition lives in
     atlas_db.is_uri_path, which the inline-op counter and completion gate also use."""
@@ -233,7 +220,10 @@ def _is_uri_path(path):
     return is_uri_path(path)
 
 
-def _is_orchestration_path(path):
+def _is_orchestration_path(path, cwd=None):
+    """True when `path` is not target code: unknown, a URI, docs/.atlas/.md, scratch, or
+    outside the project root. One definition, atlas_scope.is_target_code, shared with the
+    completion gate's (m) predicate and delegation_prewarn."""
     if not path:
         return True  # unknown path -> do not punish
     # IRC messages and xd:// device calls arrive as a Write whose "path" is a
@@ -246,24 +236,27 @@ def _is_orchestration_path(path):
         lambda _m: os.path.expanduser("~"),
         os.path.expanduser(path),
     )
-    norm = path.replace("\\", "/")
-    if (
-        norm.startswith("docs/")
-        or "/docs/" in norm
-        or norm.startswith(".atlas/")
-        or "/.atlas/" in norm
-    ):
-        return True
-    # Session scratch space (e.g. the Claude Code scratchpad under the system
-    # temp dir) is not target code: it is ephemeral workspace outside the
-    # project root, and denying writes there wastes turns for no benefit.
-    try:
-        real = os.path.realpath(norm).replace("\\", "/").rstrip("/")
-    except Exception:
-        return False
-    return any(
-        real == root or real.startswith(root + "/") for root in _system_temp_roots()
+    import atlas_scope
+
+    return not atlas_scope.is_target_code(path, cwd)
+
+
+def _is_brief_or_scratch(path):
+    """A dispatch brief under .atlas/.run/briefs/ or a session scratchpad file."""
+    norm = str(path).replace("\\", "/")
+    return (
+        norm.startswith(".atlas/.run/briefs/")
+        or "/.atlas/.run/briefs/" in norm
+        or _is_scratch_path(norm)
     )
+
+
+def _is_scratch_path(path):
+    """Session scratch space (the Claude Code scratchpad, /tmp, TMPDIR) is not target code;
+    denying or counting writes there wastes turns. Shared: atlas_scope.is_scratch_path."""
+    import atlas_scope
+
+    return atlas_scope.is_scratch_path(path)
 
 
 def _deny(reason):
@@ -472,34 +465,78 @@ def _scope_problem(tinput):
 
 
 def _burst_note(root, session):
-    """Advisory for the 2nd+ atlas:* dispatch inside BURST_SECS: that is a team, and teams run as tmux panes.
-    The timestamp rides in the per-session autoname store (already flock-serialised for parallel batches)."""
+    """(concurrent, text) for an atlas:* dispatch inside BURST_SECS of an earlier one: that is a team, and
+    teams run as tmux panes. `concurrent` is True when an earlier in-process dispatch has no PostToolUse yet
+    (a foreground Agent call posts when it returns, so a sequential dispatch finds the list empty).
+    The state rides in the per-session autoname store (already flock-serialised for parallel batches)."""
     import time
 
     try:
         window = float(os.environ.get("ATLAS_BURST_SECS", BURST_SECS))
     except ValueError:
         window = BURST_SECS
+    if window != window or window in (float("inf"), float("-inf")):
+        window = BURST_SECS  # nan silently disabled the gate; inf never expired a lost slot
     if window <= 0:
-        return ""
+        return False, ""
     now = time.time()
     try:
         with _name_state(root, session) as st:
             last, st["last_dispatch"] = st.get("last_dispatch", 0), now
+            live = [t for t in st.get("open", []) if now - float(t) < window]
+            concurrent = bool(live) and not _omp_harness()
+            # a denied dispatch never ran: it must not hold the slot
+            st["open"] = live if concurrent else live + [now]
     except Exception as exc:
         _record_fault(exc)
-        return ""
+        return False, ""
+    if concurrent:
+        mux_off = os.environ.get("ATLAS_MUX", "").lower() == "off"
+        head = (
+            "[atlas] ADVISORY (ATLAS_MUX=off)" if mux_off else "DENY"
+        ) + f" - another in-process atlas:* dispatch of this session is still running. "
+        return not mux_off, (
+            head + "Two or more workers are a team and run as tmux panes, one distinct task per member "
+            "(--task-file with `## member: <role>` sections):\n"
+            f"  {SPAWN_TEAM_CMD}\nthen `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T`. "
+            "One bounded worker may stay in-process: re-dispatch this one after the running worker returns."
+        )
     if now - float(last or 0) >= window:
-        return ""
-    return (
+        return False, ""
+    return False, (
         f"[atlas] ADVISORY - 2nd atlas dispatch within {window:g} s: this is a team. Run it as tmux panes:\n"
         f"  {SPAWN_TEAM_CMD}\nthen `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T` "
         "(omp: the atlas_team tool)."
     )
 
 
+def _omp_harness():
+    return (
+        os.environ.get("ATLAS_HARNESS") == "omp"
+        or os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
+    )
+
+
+def _close_dispatch(payload):
+    """PostToolUse:Agent: the oldest open in-process dispatch of the session has returned. Fail-open."""
+    try:
+        tin = payload.get("tool_input")
+        # A background Agent posts at launch while its worker keeps running: keep its slot so the
+        # window (not the PostToolUse) bounds it and a 2nd background dispatch is still denied.
+        if isinstance(tin, dict) and tin.get("run_in_background") is True:
+            return
+        cwd = payload.get("cwd")
+        root = find_root(Path(cwd if isinstance(cwd, str) and cwd else os.getcwd()))
+        with _name_state(root, payload.get("session_id")) as st:
+            if st.get("open"):
+                st["open"].pop(0)
+    except Exception as exc:
+        _record_fault(exc)
+
+
 def _scope_gate(deny, tinput, root, session):
-    """Last dispatch check: SCOPE deny (ATLAS_SCOPE_GATE=off downgrades it to advisory), then the burst advisory."""
+    """Last dispatch check: SCOPE deny (ATLAS_SCOPE_GATE=off downgrades it to advisory), then the concurrent
+    in-process deny / burst advisory (ATLAS_MUX=off downgrades the deny to advisory)."""
     problem = _scope_problem(tinput)
     if problem and os.environ.get("ATLAS_SCOPE_GATE", "on").lower() != "off":
         deny("scope", problem)
@@ -510,7 +547,11 @@ def _scope_gate(deny, tinput, root, session):
         else []
     )
     if str(tinput.get("subagent_type") or "").startswith("atlas:"):
-        notes.append(_burst_note(root, session))
+        blocked, text = _burst_note(root, session)
+        if blocked:
+            deny("mux", text)
+            return
+        notes.append(text)
     note = "\n".join(n for n in notes if n)
     if note:
         _advisory(note)
@@ -1044,6 +1085,105 @@ def _inherited_selector(selector, live):
     return with_level(a, b) or with_level(b, a)
 
 
+def _frontmatter_list(agent, key):
+    """Lowercased items of a one-line frontmatter list (`tier_allow: [haiku, sonnet]`); [] when the
+    definition is unreadable or lacks the key (callers fail closed on an empty allow-list)."""
+    if not _SAFE_AGENT_NAME.match(agent or ""):
+        return []
+    try:
+        text = (AGENTS_DIR / f"{agent}.md").read_text(encoding="utf-8")
+    except Exception:
+        return []
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return []
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped.startswith(key + ":"):
+            body = stripped[len(key) + 1 :].strip().strip("[]")
+            return [i.strip().strip("'\"").lower() for i in body.split(",") if i.strip()]
+    return []
+
+
+def _resolver_values(tinput, role, field):
+    """What atlas_resolve emits for `field` ("model" or "effort") on `role`'s seats, across every
+    SCOPE line in the prompt. Empty set when there is no SCOPE line, none resolves, or the
+    resolver cannot be loaded: callers then accept nothing new (fail closed)."""
+    try:
+        resolve, _classes, _known, (class_alias, effort_alias) = _scope_matrix()
+    except Exception as exc:
+        _record_fault(exc)
+        return set()
+    out = set()
+    for cls, effort in _SCOPE_LINE.findall(str(tinput.get("prompt") or "")):
+        try:
+            team = resolve(class_alias.get(cls.lower(), cls), effort_alias.get(effort.lower(), effort))["team"]
+        except ValueError:
+            continue
+        out.update(str(t.get(field) or "").lower() for t in team if t["role"] == role)
+    out.discard("")
+    return out
+
+
+def _tier_accepted(tinput, role, given, field):
+    """True when `given` is in the role's tier_allow/effort_allow AND is what the resolver emits for the
+    prompt's SCOPE line. Both halves are required: the allow-list alone would reopen the drop-the-model hole."""
+    key = "tier_allow" if field == "model" else "effort_allow"
+    given = given.lower()
+    allowed = _frontmatter_list(role, key)
+    emitted = _resolver_values(tinput, role, field)
+    if given not in allowed:
+        return False
+    return given in emitted or (
+        field == "model" and any(_expands_pin(given, e) for e in emitted)
+    )
+
+
+def _tier_hint(tinput, role):
+    """Deny-text tail naming the accepted values for this role and SCOPE."""
+    return (
+        f" For {role} (SCOPE-bound): tier_allow={_frontmatter_list(role, 'tier_allow')}, "
+        f"resolver model={sorted(_resolver_values(tinput, role, 'model')) or 'none (add a SCOPE line)'}; "
+        f"effort_allow={_frontmatter_list(role, 'effort_allow')}, "
+        f"resolver effort={sorted(_resolver_values(tinput, role, 'effort')) or 'none'}."
+    )
+
+
+def _effort_override(tinput):
+    """An atlas:* dispatch whose `effort` is not the definition's and not tier-accepted. Returns
+    (agent, declared, given) or None (no effort arg, unreadable definition, or accepted)."""
+    agent = str(tinput.get("subagent_type") or "")
+    if not agent.startswith("atlas:"):
+        return None
+    given = str(tinput.get("effort") or "").strip()
+    role = agent[len("atlas:") :]
+    declared = _frontmatter_value(role, "effort")
+    if not given or declared is None:
+        return None
+    if given.lower() == declared.lower() or _tier_accepted(tinput, role, given, "effort"):
+        return None
+    return agent, declared, given
+
+
+def _frontmatter_value(agent, key):
+    """Raw frontmatter `key:` value; None when the definition is unreadable."""
+    if not _SAFE_AGENT_NAME.match(agent or ""):
+        return None
+    try:
+        lines = (AGENTS_DIR / f"{agent}.md").read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return None
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped.startswith(key + ":"):
+            return stripped[len(key) + 1 :].strip().strip("'\"")
+    return ""
+
+
 def _model_override(tinput, session_model=""):
     """An atlas:* dispatch whose per-call `model` is NOT the definition's pin.
     Per-role tiers are set once per colony; a per-call override drifts them
@@ -1071,6 +1211,8 @@ def _model_override(tinput, session_model=""):
         if given.lower() == sel or _expands_pin(given, sel):
             return None
     if _inherited_selector(given, session_model):
+        return None
+    if _tier_accepted(tinput, agent[len("atlas:") :], given, "model"):
         return None
     return agent, declared, given
 
@@ -1154,7 +1296,16 @@ def _is_read_only_call(tool, tinput):
     mutating Bash still are."""
     if tool in _READ_ONLY_TOOLS:
         return True
-    return tool == "Bash" and _is_read_only_bash((tinput or {}).get("command"))
+    if tool != "Bash":
+        return False
+    command = (tinput or {}).get("command")
+    if _is_read_only_bash(command):
+        return True
+    # Test runners, linters and type checks: the completion gate demands them, so they
+    # are never inline drift (atlas_scope.is_verification_command).
+    import atlas_scope
+
+    return atlas_scope.is_verification_command(_unwrap_lean_ctx(command) if isinstance(command, str) else command)
 
 
 _MUX_TEAM_VERBS = ("spawn-team", "wait", "reap")
@@ -1242,7 +1393,12 @@ def _record_dispatch_deny(
     try:
         who = dict(_dispatch_attribution(tinput or {}, session_model), tool=tool)
         atlas_db.record_friction(
-            conn, session, "dispatch_denied:" + code, snippet=json.dumps(who)
+            conn,
+            session,
+            "dispatch_denied:" + code,
+            snippet=json.dumps(who),
+            role=who["agent"] or None,
+            tool_name=tool or None,
         )
     except Exception as exc:
         _record_fault(exc)
@@ -1319,7 +1475,19 @@ def _pre_tool_use(
                 f"definition pins model: {declared}; per-role models are the colony's "
                 "cost/runtime contract and a per-call override drifts it quietly. "
                 "Drop the `model` param and re-dispatch. Wrong tier for the job? "
-                "Fix the definition, not the dispatch.",
+                "Fix the definition, not the dispatch."
+                + _tier_hint(tinput or {}, over_agent[len("atlas:") :]),
+            )
+            return
+        eff = _effort_override(tinput or {})
+        if eff:
+            e_agent, e_declared, e_given = eff
+            deny(
+                "effort_override",
+                f"DENY - this {tool} dispatch to {e_agent} sets effort '{e_given}'; the definition pins "
+                f"effort: {e_declared}. Drop the `effort` param, or pass the value the resolver emits "
+                "for your SCOPE line if it is in the role's effort_allow."
+                + _tier_hint(tinput or {}, e_agent[len("atlas:") :]),
             )
             return
         # (c) A dispatch that never names the toolset gets a subagent that greps.
@@ -1423,6 +1591,8 @@ def _pre_tool_use(
     # (see _run) nor blocked here: the threshold polices drift into edits, not looking.
     if _is_read_only_call(tool, tinput or {}) or _team_mux_verb(tool, tinput):
         return  # a team launch/wait/reap is the dispatch path itself, never inline drift
+    if tool in EDIT_TOOLS and path and _is_brief_or_scratch(path):
+        return  # briefs and scratchpad writes are never counted, so never denied for the count
     # Fail CLOSED on DB error: an unverified count must never let an inline
     # op past the hard limit mid-orchestration. The broad __main__ fail-open
     # covers garbage stdin / connect failures, not this trust decision.
@@ -1481,6 +1651,7 @@ def _arm_orchestrating(conn, atlas_db, session, cwd):
                 session,
                 "orchestration_flag_arm_failed",
                 snippet="mark_orchestrating raised; run not flagged",
+                role="lead",  # workers returned above
             )
 
 
@@ -2125,6 +2296,7 @@ def main():
     ):
         _reserve_name(payload)
         _record_agent_id(payload)
+        _close_dispatch(payload)
 
     # Worker inbox: an atlas_mux worker's headless pane never reads its tty, so
     # dashboard messages queued for it on the board are delivered here, as
@@ -2391,6 +2563,8 @@ def _run(payload):
 
         if _in_subagent(payload):
             return  # subagents share the lead's session_id; their ops are not the lead's inline work
+        if tool in EDIT_TOOLS and path and _is_scratch_path(path):
+            return  # scratchpad writes are not inline work (docs/ and .atlas/ are excluded in the count query)
         atlas_db.log_event(conn, run_id, tool, "main", 1, path)
         # Prompt arming is a regex heuristic; an unflagged session that grows
         # into multi-file code work is armed from the footprint it left.

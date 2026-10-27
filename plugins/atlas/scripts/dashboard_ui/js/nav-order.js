@@ -4,7 +4,7 @@ export const DEFAULT_NAV = ["overview", "activity", "health", "agents", "colony"
 // Mobile bottom bar / More popover entries: [page id, label].
 export const MOBILE_TABS = [["overview", "Overview"], ["agents", "Agents"], ["activity", "Activity"], ["health", "Health"], ["colony", "Colony"], ["terminal", "Terminal"], ["channels", "Channels"], ["improve", "Improve"], ["projects", "Projects"], ["settings", "Settings"]];
 // Ids saved by older versions map onto canonical pages.
-export const NAV_ALIASES = { herd: "terminal", work: "agents", irc: "channels", console: "terminal", herdr: "terminal" };
+const NAV_ALIASES = { herd: "terminal", work: "agents", irc: "channels", console: "terminal", herdr: "terminal" };
 
 export function normalizeNav(order) {
   const seen = [];
@@ -28,5 +28,9 @@ export function orderGroups(groups, order) {
     .map((x) => x[0]);
 }
 
-// Old Agents lenses that became their own routes (lens=colony opens the Colony page, same as chord c).
-export const LENS_ROUTES = { console: "terminal", colony: "colony", channel: "channels" };
+// Old Agents lenses that became their own routes. Colony is not one: #/colony is an alias for #/agents?lens=roster (app.js ALIASES).
+export const LENS_ROUTES = { console: "terminal", channel: "channels" };
+
+// Hash to seed before boot awaits anything: only an empty hash gets the default. The final route() then reads the LIVE hash,
+// so a deep link (#/terminal) set or kept during boot is never overwritten by a late "#/overview" write.
+export const bootHash = (hash) => (hash ? null : "#/overview");

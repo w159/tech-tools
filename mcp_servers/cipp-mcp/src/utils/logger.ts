@@ -81,8 +81,4 @@ export class Logger {
   debug(message: string, meta?: any): void {
     this.winston.debug(message, meta);
   }
-
-  setLevel(level: LogLevel): void {
-    this.winston.level = level;
-  }
 }

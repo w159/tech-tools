@@ -114,5 +114,5 @@ this run; the contract suite now covers each fixed path (`atlas_seats`,
   refusal and removes `.atlas/nudge/`).
 
 See `plugins/atlas/CHANGELOG.md` Unreleased and `docs/CHANGELOG.md`
-Unreleased for the changelog entries; `docs/atlas-colony.md` and
-`docs/atlas-workboard.md` for the updated behavior descriptions.
+Unreleased for the changelog entries; `docs/architecture/atlas-colony.md` and
+`docs/architecture/atlas-workboard.md` for the updated behavior descriptions.

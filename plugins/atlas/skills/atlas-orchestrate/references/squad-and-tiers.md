@@ -6,25 +6,28 @@ Model/effort tiers and squad
 
 ## Model and effort tiers (cost-tiered routing)
 
-**Opus is the orchestrator's tier, not a subagent's.** A subagent works from a spec you already
-wrote: the decomposition, the success criteria, and the evidence bar are decided here, before
-dispatch. Sonnet is the ceiling for every `atlas:*` companion. If a subagent needs opus to do its
-job, the real defect is an underspecified prompt - fix the prompt, not the model.
+**Opus is the orchestrator's tier.** A subagent works from a spec you already wrote, so it runs on
+the cheapest tier that can do the job. The tier table is `agents/<role>.md` frontmatter
+(`model`, `effort`, `tier_allow`, `effort_allow`), mirrored per seat in `contracts/scope-matrix.json`.
+**Never guess a model: copy the model the resolver emits** (`atlas_resolve.py <class> <effort>`, one
+`model` per seat) into the Agent call. Opus is allowed only for roles whose `tier_allow` lists it and
+only where the matrix cell says so; the lead stays opus.
 
-| Tier | Use for | Set via |
+| Tier | Use for | Roles (default model) |
 |---|---|---|
-| **haiku** | read-only discovery, symbol sweeps, catalog dumps, drift and naming audits, running lint/format, mechanical edits | `atlas:runner` (mechanical edits from exact steps), `atlas:schema-inventory`, `atlas:docs-auditor`, `atlas:naming-glossary-audit`, `Agent(model:"haiku")` |
-| **sonnet** | implementation, verification, planning, DB probing, docs curation - every other subagent | default and ceiling for `atlas:*`; drop a role to haiku the moment its job is read-and-report |
-| **opus** | you, the orchestrator: hard architecture, cross-cutting judgment, final synthesis | the main thread only |
+| **haiku** | scan, list, read, count, run a fixed command, catalog dumps, drift and naming audits, read-and-map | `runner`, `schema-inventory`, `naming-glossary-audit`, `docs-auditor`, `explorer` |
+| **sonnet** | judgment: implementation, verification, planning, DB probing, docs curation, tests | `db-prober`, `ui-runtime-tester`, `docs-curator`, `implementer`, `test-engineer`, `verifier`, `completeness-critic`, `rls-privilege-audit`, `planner` |
+| **opus** | you, the orchestrator; a subagent only where `tier_allow` lists it (`implementer`, `verifier`, `completeness-critic`, `rls-privilege-audit`, `planner`) and the matrix says so | the main thread, or a matrix cell |
 
-Effort follows the same logic. `effort` is agent frontmatter (`low` \| `medium` \| `high` \| `xhigh`,
-or an integer); it is the only reasoning-depth lever for a subagent (there is no `thinking`
-frontmatter key).
+Effort is agent frontmatter (`low` \| `medium` \| `high`); the matrix seat effort must equal it. The
+design's "none" (thinking off) is `low` in Claude Code and `off` on omp (omp maps none/low to `off`,
+medium/high to `low`).
 
 | Effort | Use for | Agents |
 |---|---|---|
-| **low** | executing a clear spec: mapping, cataloguing, curating, running a gate, running exact steps | `runner`, `explorer`, `planner`, `docs-auditor`, `docs-curator`, `db-prober`, `ui-runtime-tester`, `schema-inventory`, `naming-glossary-audit` |
-| **medium** | rendering an independent verdict against evidence you did not hand them | `verifier`, `completeness-critic`, `rls-privilege-audit` |
+| **low** | executing a clear spec: mapping, cataloguing, curating, running exact steps | `runner`, `explorer`, `docs-auditor`, `docs-curator`, `db-prober`, `ui-runtime-tester`, `schema-inventory`, `naming-glossary-audit` |
+| **medium** | writing code or rendering an independent verdict against evidence you did not hand them | `implementer`, `test-engineer`, `verifier`, `completeness-critic`, `rls-privilege-audit` |
+| **high** | whole-codebase or cross-harness design | `planner` |
 
 Raising a subagent's effort is a last resort after the prompt has been tightened and still fails.
 
@@ -44,7 +47,7 @@ off-palette value.
 
 `atlas:runner` is the cheap mechanical executor (13 `atlas:*` agents ship in total). It does not design, investigate or decide: it runs numbered steps exactly as written, records each command and its real output, and stops on anything unexpected.
 
-- **Model/effort:** Claude Code `model: haiku`, `effort: low`. On omp the roles are `[@atlas-mechanic, @smol]` with thinking off.
+- **Model/effort:** Claude Code `model: haiku`, `effort: low` (`tier_allow: [haiku, sonnet]`). On omp the roles are `[@atlas-mechanic, @smol]` with thinking off.
 - **Fit:** at most 7 steps on at most 5 named files. Anything larger or needing a judgment call goes to `implementer` (standard tier) or `verifier`/audit agents (judgment tier).
 - **Dispatch:** besides the five required spec blocks, a runner dispatch MUST carry a `STEPS:` block (required and capped by `dispatch_tripwire.py`).
 - **Report:** like every atlas worker it returns the `REPORT:` container (`STATUS`, `STEPS`, `FILES_CHANGED`, `EVIDENCE`, `DELIVERABLE`, `NEXT`; `STATUS` is DONE, FAILED or BLOCKED). See `references/subagent-kit.md`.
@@ -73,4 +76,4 @@ This skill ships as part of the **atlas plugin**: the `atlas:*` companions live 
 
 `contracts/scope-matrix.json` maps `(task_class, effort)` to team (role, count, effort, tools profile), isolation and max_parallel. `scripts/atlas_resolve.py <class> <effort> [--paths a,b]` and `omp/resolve.ts` read it identically. Every `atlas:*` dispatch prompt carries `SCOPE: <class>/<effort>`; the tripwire denies one without it and one whose role is outside the resolved team (roles the matrix never names, e.g. `runner`, need only the line). `ATLAS_SCOPE_GATE=off` downgrades both to advisories. `atlas_mux.py spawn-team` sizes a tmux team from the same matrix.
 
-Tier source of truth: role effort in the matrix equals `agents/<role>.md` frontmatter. Drift resolved: `implementer` is **medium** in both frontmatter and omp `ATLAS_THINKING_LEVELS` (it writes code; low was the only code-writing agent below medium). omp may render a Claude `low` as `off`.
+Tier source of truth: role effort in the matrix equals `agents/<role>.md` frontmatter. The seat `model` must be in the role's `tier_allow`; `test_atlas_contract.py` (`TierTableContract`) fails on drift between frontmatter, matrix and this doc. `rls-privilege-audit` is in the `db-audit` class, not plain `audit`.

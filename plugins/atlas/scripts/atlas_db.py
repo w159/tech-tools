@@ -8,8 +8,12 @@ import json
 import os
 import re
 import sqlite3
+import sys
 import tempfile
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import atlas_paths  # noqa: E402
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -59,7 +63,7 @@ CREATE INDEX IF NOT EXISTS ix_facets_enriched_at ON facets(enriched_at);
 CREATE INDEX IF NOT EXISTS ix_facets_created_at ON facets(created_at);
 CREATE TABLE IF NOT EXISTS friction_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, category TEXT,
-  weight REAL, snippet TEXT, ts REAL);
+  weight REAL, snippet TEXT, ts REAL, role TEXT, gate_letter TEXT, tool_name TEXT);
 CREATE INDEX IF NOT EXISTS ix_friction_events_category_ts ON friction_events(category, ts);
 CREATE INDEX IF NOT EXISTS ix_friction_events_session ON friction_events(session_id);
 CREATE TABLE IF NOT EXISTS findings (
@@ -152,7 +156,7 @@ def db_path():
 # Bump when init() gains DDL or a migration. A DB whose PRAGMA user_version is
 # at least this skips all of it, so the per-tool-call hook pays one pragma read
 # instead of ~30 CREATE IF NOT EXISTS statements and a dozen failing ALTERs.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def connect(path=None):
@@ -289,6 +293,14 @@ def init(conn, backfill=True):
             conn.commit()
         except sqlite3.OperationalError:
             pass  # column already present
+    # Idempotent migration (v2): who/which gate/which tool a friction event
+    # belongs to. No DEFAULT, so pre-existing rows stay NULL.
+    for _col in ("role", "gate_letter", "tool_name"):
+        try:
+            conn.execute(f"ALTER TABLE friction_events ADD COLUMN {_col} TEXT")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already present
     _migrate_wave_id_text(conn)
     conn.execute(
         f"PRAGMA user_version={SCHEMA_VERSION}"
@@ -402,8 +414,8 @@ def mark_orchestrating(conn, session_id, cwd=None):
     Optionally writes an advisory sentinel under <cwd>/.atlas/.run/."""
     rid = current_run_id(conn, session_id) or latest_run_id(conn, session_id)
     if rid is None:
-        base = cwd or "."
-        pid = register_project(conn, base, os.path.basename(os.path.abspath(base)))
+        base = atlas_paths.project_root(cwd)
+        pid = register_project(conn, base, os.path.basename(base))
         if pid is None:
             return None
         rid = start_run(conn, pid, session_id)
@@ -448,20 +460,9 @@ def is_orchestrating(conn, session_id):
 
 
 def _project_root_for_sentinel(cwd):
-    """Walk up from cwd to the nearest project root (.git, .atlas, or docs
-    marker, same markers find_root uses) so runtime state always lands next to
-    the board and findings the rest of the system reads, never in an arbitrary
-    subdirectory of product source."""
-    d = os.path.abspath(cwd or ".")
-    for _ in range(7):
-        for marker in (".git", ".atlas", "docs"):
-            if os.path.exists(os.path.join(d, marker)):
-                return d
-        parent = os.path.dirname(d)
-        if parent == d:
-            return os.path.abspath(cwd or ".")
-        d = parent
-    return os.path.abspath(cwd or ".")
+    """Project root for runtime state: delegates to atlas_paths so the sentinel
+    lands next to the board and findings, never in a subdirectory."""
+    return atlas_paths.project_root(cwd)
 
 
 def _write_orchestration_sentinel(cwd):
@@ -1108,12 +1109,16 @@ def pending_facets(conn, limit=50):
     )
 
 
-def record_friction(conn, session_id, category, weight=1.0, snippet=None, ts=None):
+def record_friction(
+    conn, session_id, category, weight=1.0, snippet=None, ts=None,
+    *, role=None, gate_letter=None, tool_name=None,
+):
     """Log one categorized friction event for a session."""
     cur = conn.execute(
-        "INSERT INTO friction_events(session_id,category,weight,snippet,ts) "
-        "VALUES(?,?,?,?,?)",
-        (session_id, category, weight, snippet, ts if ts is not None else time.time()),
+        "INSERT INTO friction_events(session_id,category,weight,snippet,ts,"
+        "role,gate_letter,tool_name) VALUES(?,?,?,?,?,?,?,?)",
+        (session_id, category, weight, snippet,
+         ts if ts is not None else time.time(), role, gate_letter, tool_name),
     )
     conn.commit()
     return cur.lastrowid

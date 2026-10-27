@@ -11,6 +11,7 @@ import { Database } from "bun:sqlite";
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import * as nodePath from "node:path";
+import { atlasKnob } from "./knobs";
 
 export const SCRATCH_ROOTS = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders"];
 export const PROJECT_MARKERS = [".git", ".claude", ".atlas", "package.json", "pyproject.toml", "Cargo.toml", "go.mod", "CLAUDE.md", "AGENTS.md"];
@@ -37,7 +38,7 @@ function hasDispatchHistory(paths: [string, string], env: Record<string, string 
 
 export function gatesArmed(cwd: unknown, env: Record<string, string | undefined> = process.env): boolean {
 	try {
-		const mode = (env.ATLAS_GATES ?? "").trim().toLowerCase();
+		const mode = (atlasKnob("ATLAS_GATES", env) ?? "").trim().toLowerCase();
 		if (mode === "always") return true;
 		if (mode === "off") return false;
 		if (typeof cwd !== "string" || cwd === "") return true;

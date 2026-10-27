@@ -3,7 +3,7 @@
 | # | Gate claim | Read/scan evidence | Verdict |
 |---|---|---|---|
 | 1 | gitleaks: `.env.template:55` generic-api-key | line 55 = `KNOWBE4_API_KEY=` — EMPTY template declaration, no value | false positive |
-| 2 | gitleaks: `docs/audits/2026-07-07-atlas-harden/implement-result.json:351` curl-auth-header | content at :351 testifies the value is a **synthetic** redaction-test fixture (`sk-abcdef0123456789abcdef`, `supersecretvalue`) per the audit's own G5 claim; also plain `docs/audits/...:348-354` read confirms | false positive |
+| 2 | gitleaks: `docs/audits/2026-07-07_atlas-harden/implement-result.json:351` curl-auth-header | content at :351 testifies the value is a **synthetic** redaction-test fixture (`sk-abcdef0123456789abcdef`, `supersecretvalue`) per the audit's own G5 claim; also plain `docs/audits/...:348-354` read confirms | false positive |
 | 3 | gitleaks: `docs/standards/security/security-and-owasp.md:412` stripe-access-token | :406-418 = documentation example of the BAD pattern using fake `sk_live_abc123def456`; followed by the GOOD pattern | false positive |
 | 4 | 5 lint warnings across `completion_gate.py`, `atlas_mux.py`, `test_atlas_mux.py`, `test_atlas_launch.py`, … | targeted lens mode=full over ALL gate-named files: **0 warnings, 0 blockers** (only 5 typos hints inside two DATED Jul-2026 audit/history docs — out-of-scope historical prose, deliberately not rewritten to preserve the record) | refuted / cleared |
 | 5 | `test_atlas_gates.py` / `test_atlas_health.py` in memory-filename warning | files do not exist anywhere (ctx_glob 0/3,186 walked; ls confirms) — phantom paths | refuted |

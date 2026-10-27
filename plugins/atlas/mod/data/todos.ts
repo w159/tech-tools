@@ -1,7 +1,7 @@
 // TODO board reader for the Atlas mod. Pure over FsLike (see ../contract);
 // register.ts adapts $.fs onto it. Source: <root>/.atlas/.run/todos.json
 // {version, items[]}, replaced atomically by scripts/atlas_todo.py, so the
-// poll key is stat mtimeMs (plan §2, docs/plans/2026-10-09-atlas-mod.md).
+// poll key is stat mtimeMs (plan §2, docs/plans/2026-10-09_atlas-mod.md).
 import type { AtlasSnapshot, Contract, FsLike, PhaseCount, PhaseId, TodoItem } from '../contract';
 import type { TodoGroup } from '../orchestra-types';
 

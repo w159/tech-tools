@@ -5,6 +5,8 @@ name: "verifier"
 description: "Adversarial verifier that independently confirms or REFUTES a claimed finding or fix in a fresh context: re-opens cited lines, re-runs tests, re-queries data, re-reads the diff. Never fixes; returns an evidence-backed verdict. Use when a finding or fix must be checked before it is recorded as verified."
 thinkingLevel: "low"
 model: ["@atlas-verifier","@default","sonnet","@smol"]
+tier_allow: ["sonnet","opus"]
+effort_allow: ["low","medium","high"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

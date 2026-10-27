@@ -1,6 +1,6 @@
 # Learning Frontmatter Schema
 
-Adopted verbatim from CE `ce-compound`'s `references/schema.yaml` + `references/yaml-schema.md` (w159/compound-engineering-plugin), with two atlas adaptations: the target tree is atlas's EXISTING `docs/lessons/<category>/` (never CE's `docs/solutions/`), and new filenames use atlas's date-first convention `<YYYY-MM-DD>-<slug>.md` (enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`), never CE's undated slug-only name.
+Adopted verbatim from CE `ce-compound`'s `references/schema.yaml` + `references/yaml-schema.md` (w159/compound-engineering-plugin), with two atlas adaptations: the target tree is atlas's EXISTING `docs/lessons/<category>/` (never CE's `docs/solutions/`), and new filenames use atlas's date-first convention `<YYYY-MM-DD>_<slug>.md` (enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/lint_docs_names.py`), never CE's undated slug-only name.
 
 ## Shared required fields (both tracks)
 
@@ -47,7 +47,7 @@ Do not coin vocabulary the corpus already uses:
 
 ## Filename (new lessons only)
 
-`docs/lessons/<category>/<YYYY-MM-DD>-<slug>.md`
+`docs/lessons/<category>/<YYYY-MM-DD>_<slug>.md`
 
 - `<date>` = today (the canonical creation date).
 - `<slug>` = sanitized problem slug: lowercase; replace every character outside `a-z 0-9 . _ -` (removing the Windows-reserved set `< > : " / \ | ? *`, spaces, control chars) with a single `-`; collapse repeats; trim leading/trailing `-` and `.`; never empty or Windows-reserved (`con`, `nul`, ...).

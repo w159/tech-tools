@@ -306,6 +306,11 @@ def _result_row(event: dict, now) -> list:
     return [_stamp(now), chip(label, color), seg(f" {secs:.1f}s · exit {1 if bad else 0}", color, None, True)]
 
 
+def _dict(value) -> dict:
+    """A stream-json field that is a dict, else {} (claude's system events carry a string `message`)."""
+    return value if isinstance(value, dict) else {}
+
+
 def _omp_tool_block(event: dict) -> dict:
     """The claude-shaped tool_use block for an omp `tool_execution_start` event."""
     return {"type": "tool_use", "name": event.get("toolName"), "input": event.get("args")}
@@ -345,8 +350,8 @@ def _codex_rows(event: dict, now) -> list:
 def event_rows(event: dict, now: float | None = None) -> list:
     """Segment rows for one event: claude stream-json, or omp `--mode json` (paint() them at the pane width)."""
     kind = event.get("type")
-    if kind == "assistant" or (kind == "message_end" and (event.get("message") or {}).get("role") == "assistant"):
-        content = (event.get("message") or {}).get("content") or []
+    if kind == "assistant" or (kind == "message_end" and _dict(event.get("message")).get("role") == "assistant"):
+        content = _dict(event.get("message")).get("content") or []
         return [r for b in content if isinstance(b, dict) for r in _block_rows(b, now)]
     if kind == "result":
         return [_result_row(event, now)]
@@ -478,6 +483,8 @@ def status_row(state: str, tick: int, elapsed: float, tools: int, tokens: int, w
     return paint([seg(f" {SPIN[tick % len(SPIN)]} working ", GREEN, None, True), *bar, seg("  " + stats, MUT), *tail], width)
 
 
+MIN_PAINT_GAP = 0.1  # seconds between event-driven repaints of the live pane
+
 # ---- the live pane ----------------------------------------------------------------------------------------------------
 class Feed:
     """One worker pane. live=True repaints the terminal in place (sticky header and status, a 4 Hz
@@ -493,6 +500,7 @@ class Feed:
         self.usage: dict = {}
         self.lock = threading.Lock()
         self.painted_size: tuple | None = None
+        self.painted_at = 0.0  # monotonic time of the last _paint, for the event-paint throttle
         self.calls_file = calls_file  # <name>.tool.json: claude workers' call times for the omp widget sparkline
 
     def _size(self) -> tuple:
@@ -544,6 +552,7 @@ class Feed:
             out = ESC + "2J" + out
             self.painted_size = (width, height)
         self._write(out)
+        self.painted_at = time.monotonic()
 
     def _write(self, text: str) -> None:
         self.out.write(text)
@@ -553,17 +562,20 @@ class Feed:
         with self.lock:
             self.rows.extend(rows)
             if self.live:
-                self._paint()
+                # ponytail: event paints are at least MIN_PAINT_GAP apart; the 4 Hz ticker (max ~4 repaints/s
+                # on its own) and finish() flush the trailing row. Ceiling: a row can wait up to 0.25 s.
+                if time.monotonic() - self.painted_at >= MIN_PAINT_GAP:
+                    self._paint()
             else:
                 width = self._size()[0]
                 self._write("".join(paint(r, width) + "\n" for r in rows))
 
     def _count(self, event: dict) -> None:
-        msg = event.get("message") or {}
+        msg = _dict(event.get("message"))
         blocks = msg.get("content") or []
         # one per tool_use row plus one per peer-note row, so the count matches the rows shown
         self.tools += sum(len(_tool_rows(b, None)) for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use")
-        usage = msg.get("usage") or {}
+        usage = _dict(msg.get("usage"))
         new = sum(v for k, v in usage.items() if k in _NEW_KEYS and isinstance(v, int))
         cached = usage.get("cache_read_input_tokens")
         cached = cached if isinstance(cached, int) else 0
@@ -574,7 +586,7 @@ class Feed:
     def _record_calls(self, event: dict) -> None:
         """Append one timestamp per claude tool_use to calls_file, keeping its other keys (the omp recorder's).
         Best effort: a lane without a sparkline is better than a feed that dies."""
-        blocks = (event.get("message") or {}).get("content") or []
+        blocks = _dict(event.get("message")).get("content") or []
         n = sum(1 for b in blocks if isinstance(b, dict) and b.get("type") == "tool_use")
         if not (n and self.calls_file):
             return
@@ -596,11 +608,12 @@ class Feed:
         """omp `--mode json`: one tool per tool_execution_start; usage rides each assistant message_end."""
         if event.get("type") == "tool_execution_start":
             self.tools += len(_tool_rows(_omp_tool_block(event), None))
-        msg = event.get("message") or {}
-        usage = msg.get("usage") or {}
+        msg = _dict(event.get("message"))
+        usage = _dict(msg.get("usage"))
         if event.get("type") == "message_end" and msg.get("role") == "assistant" and usage:
-            new = sum(usage.get(k) or 0 for k in ("input", "output", "cacheWrite"))
-            self.usage[len(self.usage)] = (new, usage.get("cacheRead") or 0)
+            new = sum(v for k in ("input", "output", "cacheWrite") if isinstance(v := usage.get(k), (int, float)))
+            cached = usage.get("cacheRead")
+            self.usage[len(self.usage)] = (new, cached if isinstance(cached, (int, float)) else 0)
 
     def _count_codex(self, event: dict) -> None:
         """codex: one tool per command/mcp item.started; turn.completed usage (input includes the cached part)."""

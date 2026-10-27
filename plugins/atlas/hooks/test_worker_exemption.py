@@ -87,7 +87,7 @@ class WorkerExemptionTest(unittest.TestCase):
 
     def test_worker_edit_of_target_code_not_denied_lead_is(self):
         self._flag()
-        edit = {"file_path": "/repo/x/app.py", "old_string": "a", "new_string": "b"}
+        edit = {"file_path": "x/app.py", "old_string": "a", "new_string": "b"}
         lead = self._hook("PreToolUse", "Edit", edit, self.env)
         self.assertIn("never edit target code inline", lead.stdout)
         worker = self._hook(
@@ -108,7 +108,7 @@ class WorkerExemptionTest(unittest.TestCase):
 
     def test_blank_worker_name_is_not_a_worker(self):
         self._flag()
-        edit = {"file_path": "/repo/x/app.py", "old_string": "a", "new_string": "b"}
+        edit = {"file_path": "x/app.py", "old_string": "a", "new_string": "b"}
         for blank in ("", "   "):
             r = self._hook(
                 "PreToolUse", "Edit", edit, dict(self.env, ATLAS_WORKER_NAME=blank)
@@ -119,7 +119,7 @@ class WorkerExemptionTest(unittest.TestCase):
         env = dict(self.env, ATLAS_WORKER_NAME="W")
         for name in ("a.py", "b.py", "c.py", "d.py"):
             r = self._hook(
-                "PostToolUse", "Write", {"file_path": "/repo/x/" + name}, env
+                "PostToolUse", "Write", {"file_path": "x/" + name}, env
             )
             self.assertNotIn("tripwires are now armed", r.stdout)
         self.assertFalse(self._orchestrating())
@@ -132,7 +132,7 @@ class WorkerExemptionTest(unittest.TestCase):
     def test_lead_is_still_armed_by_footprint(self):
         for name in ("a.py", "b.py", "c.py"):
             self._hook(
-                "PostToolUse", "Write", {"file_path": "/repo/x/" + name}, self.env
+                "PostToolUse", "Write", {"file_path": "x/" + name}, self.env
             )
         self.assertTrue(self._orchestrating())
 
@@ -142,7 +142,7 @@ class WorkerExemptionTest(unittest.TestCase):
         out = ""
         for i in range(10):
             out += self._hook(
-                "PostToolUse", "Edit", {"file_path": "/repo/x/f%d.py" % i}, env
+                "PostToolUse", "Edit", {"file_path": "x/f%d.py" % i}, env
             ).stdout
         self.assertNotIn("STOP", out)
 

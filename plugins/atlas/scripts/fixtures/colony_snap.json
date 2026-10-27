@@ -1,0 +1,634 @@
+{
+  "chat": {
+    "ch1": [
+      {
+        "from": "lead",
+        "kind": "note",
+        "lead": true,
+        "seq": 1,
+        "text": "ch1 msg 0",
+        "to": "all",
+        "ts": 1792181010
+      },
+      {
+        "from": "w1",
+        "kind": "status",
+        "lead": false,
+        "seq": 2,
+        "text": "ch1 msg 1",
+        "to": "lead",
+        "ts": 1792181011
+      },
+      {
+        "from": "lead",
+        "kind": "note",
+        "lead": true,
+        "seq": 3,
+        "text": "ch1 msg 2",
+        "to": "w1",
+        "ts": 1792181012
+      },
+      {
+        "from": "w2",
+        "kind": "blocked",
+        "lead": false,
+        "seq": 4,
+        "text": "ch1 msg 3",
+        "to": "lead",
+        "ts": 1792181013
+      },
+      {
+        "from": "lead",
+        "kind": "note",
+        "lead": true,
+        "seq": 5,
+        "text": "ch1 msg 4",
+        "to": "w2",
+        "ts": 1792181014
+      },
+      {
+        "from": "w1",
+        "kind": "handoff",
+        "lead": false,
+        "seq": 6,
+        "text": "ch1 msg 5",
+        "to": "all",
+        "ts": 1792181015
+      },
+      {
+        "from": "tui",
+        "kind": "steer",
+        "lead": false,
+        "seq": 8,
+        "text": "ch1 msg 6",
+        "to": "w1",
+        "ts": 1792181016
+      }
+    ],
+    "ch3": [
+      {
+        "from": "lead",
+        "kind": "note",
+        "lead": true,
+        "seq": 20,
+        "text": "ch3 msg 0",
+        "to": "all",
+        "ts": 1792181200
+      },
+      {
+        "from": "w1",
+        "kind": "status",
+        "lead": false,
+        "seq": 21,
+        "text": "ch3 msg 1",
+        "to": "lead",
+        "ts": 1792181201
+      },
+      {
+        "from": "lead",
+        "kind": "note",
+        "lead": true,
+        "seq": 22,
+        "text": "ch3 msg 2",
+        "to": "w1",
+        "ts": 1792181202
+      },
+      {
+        "from": "w2",
+        "kind": "blocked",
+        "lead": false,
+        "seq": 23,
+        "text": "ch3 msg 3",
+        "to": "lead",
+        "ts": 1792181203
+      },
+      {
+        "from": "lead",
+        "kind": "note",
+        "lead": true,
+        "seq": 24,
+        "text": "ch3 msg 4",
+        "to": "w2",
+        "ts": 1792181204
+      },
+      {
+        "from": "w1",
+        "kind": "handoff",
+        "lead": false,
+        "seq": 25,
+        "text": "ch3 msg 5",
+        "to": "all",
+        "ts": 1792181205
+      }
+    ],
+    "ch5": [
+      {
+        "from": "ip-w1",
+        "kind": "note",
+        "lead": false,
+        "seq": 1,
+        "text": "ch5 msg 0",
+        "to": "all",
+        "ts": 1792181020
+      }
+    ]
+  },
+  "clock": "2026-09-02 11:00:00 UTC",
+  "colonies": [
+    {
+      "channel": "ch1",
+      "created": 1,
+      "id": "lead-01",
+      "label": "lead-01 \u00b7 implement/high",
+      "pods": [
+        {
+          "id": "explorer",
+          "seats": [
+            "ex-1"
+          ]
+        },
+        {
+          "id": "implementer",
+          "seats": [
+            "impl-1",
+            "impl-2"
+          ]
+        }
+      ],
+      "session": "atlas-lead-01",
+      "task": "Make colony real",
+      "transport": "tmux"
+    },
+    {
+      "channel": "ch2",
+      "created": 2,
+      "id": "ops",
+      "label": "ops",
+      "pods": [],
+      "session": "atlas-ops",
+      "task": "t",
+      "transport": "tmux"
+    },
+    {
+      "channel": "ch3",
+      "created": 3,
+      "id": "tm-02",
+      "label": "tm-02 \u00b7 implement/medium",
+      "pods": [
+        {
+          "id": "implementer",
+          "seats": [
+            "tm-lead",
+            "tm-w1",
+            "tm-w2",
+            "tm-w3"
+          ]
+        }
+      ],
+      "session": "atlas-tm-02",
+      "task": "Golden harness",
+      "transport": "tmux"
+    },
+    {
+      "channel": "ch4",
+      "created": 4,
+      "id": "hd-03",
+      "label": "hd-03 \u00b7 herdr",
+      "pods": [
+        {
+          "id": "explorer",
+          "seats": [
+            "hd-1",
+            "hd-2"
+          ]
+        }
+      ],
+      "session": "atlas-hd-03",
+      "task": "herdr run",
+      "transport": "herdr"
+    },
+    {
+      "channel": "ch5",
+      "created": 5,
+      "id": "bg-04",
+      "label": "bg-04 \u00b7 claude-bg",
+      "pods": [
+        {
+          "id": "verifier",
+          "seats": [
+            "bg-1"
+          ]
+        }
+      ],
+      "session": "atlas-bg-04",
+      "task": "bg run",
+      "transport": "claude-bg"
+    },
+    {
+      "age_s": null,
+      "channel": "ch5",
+      "created": 5,
+      "finished": false,
+      "id": "lead-ip",
+      "label": "lead-ip",
+      "pods": [
+        {
+          "id": "lead",
+          "seats": [
+            "lead-ip"
+          ]
+        },
+        {
+          "id": "implementer",
+          "seats": [
+            "ip-w1",
+            "ip-w2",
+            "ip-w3",
+            "ip-w4",
+            "ip-w5"
+          ]
+        }
+      ],
+      "seat_count": 6,
+      "session": "",
+      "task": "",
+      "transport": "in-process"
+    }
+  ],
+  "feed": [
+    {
+      "channel": "ch1",
+      "from": "impl-1",
+      "kind": "blocked",
+      "seq": 7,
+      "text": "need contract",
+      "to": "lead",
+      "ts": 1792181090
+    },
+    {
+      "channel": "ch1",
+      "from": "lead",
+      "kind": "note",
+      "seq": 7,
+      "text": "go",
+      "to": "all",
+      "ts": 1792181090
+    }
+  ],
+  "host": "macbook-pro",
+  "needs": [
+    {
+      "channel": "ch1",
+      "from": "impl-1",
+      "kind": "blocked",
+      "seq": 7,
+      "text": "need contract",
+      "to": "lead",
+      "ts": 1792181090
+    }
+  ],
+  "ok": true,
+  "project": "/p",
+  "projects": [
+    {
+      "channels": 2,
+      "name": "p",
+      "root": "/p"
+    }
+  ],
+  "seats": [
+    {
+      "colony": "lead-01",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-claude",
+      "name": "ex-1",
+      "now": "doing ex-1",
+      "pid": 1,
+      "pod": "explorer",
+      "queue": 1,
+      "role": "explorer",
+      "runtime": "claude",
+      "state": "working",
+      "target": "%1",
+      "work": "t1"
+    },
+    {
+      "colony": "lead-01",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-omp",
+      "name": "impl-1",
+      "now": "doing impl-1",
+      "pid": 1,
+      "pod": "implementer",
+      "queue": 1,
+      "role": "implementer",
+      "runtime": "omp",
+      "state": "blocked",
+      "target": "%2",
+      "work": "t1"
+    },
+    {
+      "colony": "lead-01",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-codex",
+      "name": "impl-2",
+      "now": "doing impl-2",
+      "pid": 1,
+      "pod": "implementer",
+      "queue": 1,
+      "role": "implementer",
+      "runtime": "codex",
+      "state": "idle",
+      "target": "",
+      "work": "t1"
+    },
+    {
+      "colony": "tm-02",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": true,
+      "log_path": "/l",
+      "model": "m-claude",
+      "name": "tm-lead",
+      "now": "doing tm-lead",
+      "pid": 1,
+      "pod": "implementer",
+      "queue": 1,
+      "role": "implementer",
+      "runtime": "claude",
+      "state": "working",
+      "target": "%10",
+      "work": "t1"
+    },
+    {
+      "colony": "tm-02",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-omp",
+      "name": "tm-w1",
+      "now": "doing tm-w1",
+      "pid": 1,
+      "pod": "implementer",
+      "queue": 1,
+      "role": "implementer",
+      "runtime": "omp",
+      "state": "working",
+      "target": "%11",
+      "work": "t1"
+    },
+    {
+      "colony": "tm-02",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-codex",
+      "name": "tm-w2",
+      "now": "doing tm-w2",
+      "pid": 1,
+      "pod": "implementer",
+      "queue": 1,
+      "role": "implementer",
+      "runtime": "codex",
+      "state": "blocked",
+      "target": "%12",
+      "work": "t1"
+    },
+    {
+      "colony": "tm-02",
+      "exit_code": null,
+      "held": true,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-omp",
+      "name": "tm-w3",
+      "now": "doing tm-w3",
+      "pid": 1,
+      "pod": "implementer",
+      "queue": 1,
+      "role": "implementer",
+      "runtime": "omp",
+      "state": "idle",
+      "target": "%13",
+      "work": "t1"
+    },
+    {
+      "colony": "hd-03",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-claude",
+      "name": "hd-1",
+      "now": "doing hd-1",
+      "pid": 1,
+      "pod": "explorer",
+      "queue": 1,
+      "role": "explorer",
+      "runtime": "claude",
+      "state": "working",
+      "target": "h1",
+      "work": "t1"
+    },
+    {
+      "colony": "hd-03",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-omp",
+      "name": "hd-2",
+      "now": "doing hd-2",
+      "pid": 1,
+      "pod": "explorer",
+      "queue": 1,
+      "role": "explorer",
+      "runtime": "omp",
+      "state": "idle",
+      "target": "h2",
+      "work": "t1"
+    },
+    {
+      "colony": "bg-04",
+      "exit_code": null,
+      "last_active": 1,
+      "lead": false,
+      "log_path": "/l",
+      "model": "m-claude",
+      "name": "bg-1",
+      "now": "doing bg-1",
+      "pid": 1,
+      "pod": "verifier",
+      "queue": 1,
+      "role": "verifier",
+      "runtime": "claude",
+      "state": "working",
+      "target": "",
+      "work": "t1"
+    },
+    {
+      "colony": "lead-ip",
+      "exit_code": null,
+      "last_active": 99,
+      "lead": true,
+      "log_path": "",
+      "model": "",
+      "name": "lead-ip",
+      "now": "steering",
+      "pid": 0,
+      "pod": "lead",
+      "queue": 0,
+      "role": "lead",
+      "runtime": "claude",
+      "state": "working",
+      "target": ""
+    },
+    {
+      "colony": "lead-ip",
+      "exit_code": null,
+      "last_active": 90,
+      "lead": false,
+      "log_path": "",
+      "model": "",
+      "name": "ip-w1",
+      "now": "in-process work 0",
+      "pid": 0,
+      "pod": "implementer",
+      "queue": 0,
+      "role": "implementer",
+      "runtime": "claude",
+      "state": "working",
+      "target": ""
+    },
+    {
+      "colony": "lead-ip",
+      "exit_code": null,
+      "last_active": 89,
+      "lead": false,
+      "log_path": "",
+      "model": "",
+      "name": "ip-w2",
+      "now": "in-process work 1",
+      "pid": 0,
+      "pod": "implementer",
+      "queue": 0,
+      "role": "implementer",
+      "runtime": "claude",
+      "state": "idle",
+      "target": ""
+    },
+    {
+      "colony": "lead-ip",
+      "exit_code": null,
+      "last_active": 88,
+      "lead": false,
+      "log_path": "",
+      "model": "",
+      "name": "ip-w3",
+      "now": "in-process work 2",
+      "pid": 0,
+      "pod": "implementer",
+      "queue": 0,
+      "role": "implementer",
+      "runtime": "claude",
+      "state": "blocked",
+      "target": ""
+    },
+    {
+      "colony": "lead-ip",
+      "exit_code": 0,
+      "last_active": 87,
+      "lead": false,
+      "log_path": "",
+      "model": "",
+      "name": "ip-w4",
+      "now": "in-process work 3",
+      "pid": 0,
+      "pod": "implementer",
+      "queue": 0,
+      "role": "implementer",
+      "runtime": "claude",
+      "state": "finished",
+      "target": ""
+    },
+    {
+      "colony": "lead-ip",
+      "exit_code": null,
+      "last_active": 86,
+      "lead": false,
+      "log_path": "",
+      "model": "",
+      "name": "ip-w5",
+      "now": "in-process work 4",
+      "pid": 0,
+      "pod": "implementer",
+      "queue": 0,
+      "role": "implementer",
+      "runtime": "claude",
+      "state": "idle",
+      "target": ""
+    }
+  ],
+  "specs": [
+    {
+      "description": "maps code",
+      "kind": "agent",
+      "name": "explorer"
+    },
+    {
+      "efforts": [
+        "low",
+        "high"
+      ],
+      "kind": "team",
+      "name": "implement"
+    }
+  ],
+  "system": {
+    "dashboard": {
+      "ok": true,
+      "url": "http://x"
+    },
+    "harnesses": {
+      "claude": true,
+      "codex": false,
+      "omp": true
+    },
+    "herdr": {
+      "ok": false
+    },
+    "rig": {
+      "ok": false
+    },
+    "tmux": {
+      "ok": true,
+      "version": "3.5"
+    }
+  },
+  "terminals": [
+    {
+      "attached": 1,
+      "panes": 3,
+      "session": "atlas-lead-01",
+      "windows": 3
+    },
+    {
+      "attached": 0,
+      "panes": 1,
+      "session": "atlas-orphan-9",
+      "windows": 1
+    }
+  ]
+}

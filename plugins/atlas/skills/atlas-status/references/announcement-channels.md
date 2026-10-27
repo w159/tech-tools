@@ -7,7 +7,7 @@ never hardcodes an external-CLI dependency, and direct drafting fully covers the
 ## Grounding rules (apply before any channel)
 
 1. **Every claim traces to evidence** - the merged PR, the diff, the plan artifact at
-   `docs/plans/<task-slug>.md`, the lesson at `docs/lessons/<YYYY-MM-DD>-<slug>.md`, or
+   `docs/plans/<task-slug>.md`, the lesson at `docs/lessons/<YYYY-MM-DD>_<slug>.md`, or
    the newest `docs/CHANGELOG.md` entry. If a sentence cannot be traced, delete it.
 2. **Shipped means shipped.** In-progress, planned, or partially verified work is never
    announced as done. A plan with unverified stages is not announcement material.

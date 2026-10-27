@@ -25,7 +25,7 @@ This skill ports Compound Engineering's `ce-optimize`, a spec-YAML-driven optimi
 - CE's "baseline and final confirmation always use the full configured protocol" -> kept as the parity rule: the re-measurement MUST be byte-for-byte the same method as the baseline (same command, cwd, environment, sample count, aggregation). This is the one invariant the verifier exists to confirm.
 - CE's "a non-improving change is reported as such" -> kept verbatim in spirit: an experiment whose delta does not improve the metric is reported as zero or negative gain, never as success.
 - Codex/CLI delegation backends -> replaced by atlas Task dispatches (`atlas:implementer`, `atlas:explorer`, `atlas:verifier` per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`). No external CLI dependency.
-- CE's experiment log -> `.atlas/evidence/<YYYY-MM-DD>-<slug>/` (baseline + after captures, run log) per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`, with the verdict row in `.atlas/.run/findings.json`.
+- CE's experiment log -> `.atlas/evidence/<YYYY-MM-DD>_<slug>/` (baseline + after captures, run log) per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`, with the verdict row in `.atlas/.run/findings.json`.
 - CE's branch/commit mechanics -> the user owns VCS: this skill never pushes, opens a PR, or merges without explicit user confirmation.
 
 ## Identity and role
@@ -55,7 +55,7 @@ Four hard rules. Violating any of them invalidates the run:
 
 **Validity check (reject here, not later).** The baseline is invalid, and the exercise stops, if any of: the harness errors or exits non-zero; the output has no extractable metric value; the spread exceeds the improvement you are trying to detect (noise floor above signal - say so and offer a more stable method, but do not proceed on the noisy baseline); or the samples cannot be reproduced on a second pass.
 
-**Persist.** Write `.atlas/evidence/<YYYY-MM-DD>-<slug>/baseline.log` (per-sample raw output), `baseline.json` (command, cwd, environment notes, per-sample values, median, spread, timestamp), and a `run.log` narrating the run. Verify by reading the files back. The baseline now exists; Phase 2 may start.
+**Persist.** Write `.atlas/evidence/<YYYY-MM-DD>_<slug>/baseline.log` (per-sample raw output), `baseline.json` (command, cwd, environment notes, per-sample values, median, spread, timestamp), and a `run.log` narrating the run. Verify by reading the files back. The baseline now exists; Phase 2 may start.
 
 ## Phase 2: Hypothesis (evidence-grounded or rejected)
 

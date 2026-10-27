@@ -62,9 +62,8 @@ def cmd_begin(args) -> dict:
         return {"ok": False, "error": "empty session id"}
     atlas_db, conn = _connect()
     try:
-        pid = atlas_db.register_project(
-            conn, args.cwd, os.path.basename(os.path.abspath(args.cwd))
-        )
+        root = atlas_db.atlas_paths.project_root(args.cwd)
+        pid = atlas_db.register_project(conn, root, os.path.basename(root))
         if pid is None:
             return {"ok": False, "error": "non-project cwd"}
         rid = atlas_db.current_run_id(conn, args.session_id)

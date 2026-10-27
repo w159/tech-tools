@@ -15,6 +15,7 @@
  */
 import { accessSync, constants, statSync } from "node:fs";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { atlasKnob } from "./knobs";
 
 type Env = Record<string, string | undefined>;
 
@@ -91,7 +92,7 @@ export function registerShellRoute(pi: Pick<ExtensionAPI, "on">, deps: ShellRout
 			if (input === undefined || typeof command !== "string" || command.trim() === "") return undefined;
 			if (input.pty === true) return undefined;
 			const env = deps.env ?? process.env;
-			if (env.LEAN_CTX_DISABLED || env.ATLAS_LEAN_SHELL === "off") return undefined;
+			if (env.LEAN_CTX_DISABLED || atlasKnob("ATLAS_LEAN_SHELL", env) === "off") return undefined;
 			const bin = deps.leanCtxBin();
 			if (!bin || startsWithLeanCtx(command, bin)) return undefined;
 			if (!leanRouteActive(deps.activeTools())) return undefined;

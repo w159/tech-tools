@@ -2,7 +2,9 @@
 name: test-engineer
 description: "Test engineer: authors and runs tests for ONE bounded slice per the atlas-testing skill - reads the skill's language/type references, writes the tests, proves each new test fails against a seeded fault (or mutation) and passes on real code, runs the suite, and reports exact commands, outputs, pass/fail counts, and mutation killed/survived where applicable. Never weakens assertions or deletes failing tests to go green; never edits production code unless the brief says so. Use when adding tests to a specified module, running mutation/property/fuzz passes, or proving a test suite actually catches faults."
 model: sonnet
-effort: low
+effort: medium
+tier_allow: [sonnet]
+effort_allow: [low, medium, high]
 color: cyan
 disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, NotebookEdit]
 ---

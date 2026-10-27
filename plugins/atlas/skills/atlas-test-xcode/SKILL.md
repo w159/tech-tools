@@ -1,6 +1,6 @@
 ---
 name: atlas-test-xcode
-description: "Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs. Use to build or test an iOS or Xcode project; macOS only."
+description: "Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs. Use when building or testing an iOS or Xcode project; macOS only."
 when_to_use: "iOS simulator, xcodebuild, XCTest, simctl, Swift app test, run the app on simulator"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[scheme name or 'current' for default]"
@@ -88,7 +88,7 @@ state.
   records observed failing evidence until a completed retest replaces it, `SKIP` means no
   completed outcome. Overall is `FAIL` while any failure remains, `PARTIAL` when no failure
   remains but a scoped check was skipped, else `PASS`.
-- Evidence lands in `.atlas/evidence/<YYYY-MM-DD>-<slug>/` (date-first slug, filesystem-safe)
+- Evidence lands in `.atlas/evidence/<YYYY-MM-DD>_<slug>/` (date-first slug, filesystem-safe)
   the moment it is captured - screenshots, `build.log`, `capture.log`, and `summary.md`.
 
 ## Output

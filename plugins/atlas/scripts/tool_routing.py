@@ -207,27 +207,71 @@ def scan_stack(root: str | Path, budget: int = 4000) -> dict:
     return out
 
 
-def boot_lines(stack: dict | None = None, root: str | None = None) -> list[str]:
-    """3-6 compact lines for SessionStart additionalContext. No essay."""
+def mcp_configured(name: str, root: str | None = None) -> bool:
+    """True when an MCP server (or plugin) called `name` is configured for this project.
+
+    Looks at ~/.claude.json (user and per-project `mcpServers`), the project's
+    .mcp.json, then enabled plugins; any read error counts as absent."""
+    sources = [Path.home() / ".claude.json"]
+    if root:
+        sources.append(Path(root) / ".mcp.json")
+    for path in sources:
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        scopes = [data]
+        projects = data.get("projects")
+        if root and isinstance(projects, dict) and isinstance(projects.get(root), dict):
+            scopes.append(projects[root])
+        for scope in scopes:
+            servers = scope.get("mcpServers")
+            if isinstance(servers, dict) and name in servers:
+                return True
+    return plugin_enabled(name, root)
+
+
+def boot_lines(
+    stack: dict | None = None,
+    root: str | None = None,
+    present: set[str] | None = None,
+) -> list[str]:
+    """Compact lines for SessionStart additionalContext. No essay.
+
+    `present` names the tools that exist (serena, lean-ctx, context-mode, claude-mem);
+    only those are routed to. None means all are assumed present. Absent tools are
+    reported once, by the caller's setup-gap line, not here."""
     if stack is None:
         stack = scan_stack(root or os.getcwd())
-    lines = [
-        "Tool routing: symbols/edits -> serena (activate_project first); "
-        "orient/search -> lean-ctx ctx_compose/ctx_search/ctx_read; "
-        "output >~20 lines -> context-mode ctx_batch_execute; "
-        "prior lessons -> claude-mem search/timeline/get_observations."
+
+    def has(tool: str) -> bool:
+        return present is None or tool in present
+
+    routes = [
+        text
+        for tool, text in (
+            ("serena", "symbols/edits -> serena (activate_project first)"),
+            ("lean-ctx", "orient/search -> lean-ctx ctx_compose/ctx_search/ctx_read"),
+            ("context-mode", "output >~20 lines -> context-mode ctx_batch_execute"),
+            ("claude-mem", "prior lessons -> claude-mem search/timeline/get_observations"),
+        )
+        if has(tool)
     ]
-    if stack.get("has_code"):
+    lines = ["Tool routing: " + "; ".join(routes) + "."] if routes else []
+    if stack.get("has_code") and (has("serena") or has("lean-ctx")):
         langs = ",".join(stack.get("languages") or []) or "code"
         note = ""
-        if not stack.get("serena_yml"):
-            note = "; no .serena/project.yml yet (atlas-setup covers it)"
-        elif not stack.get("serena_languages_ok"):
-            note = "; project.yml lacks languages: (boot heals it)"
+        if has("serena"):
+            if not stack.get("serena_yml"):
+                note = "; no .serena/project.yml yet (atlas-setup covers it)"
+            elif not stack.get("serena_languages_ok"):
+                note = "; project.yml lacks languages: (boot heals it)"
+        fallback = "; serena down -> lean-ctx only" if has("serena") and has("lean-ctx") else ""
         lines.append(
-            "Code stack (%s): ToolSearch-load the batch first; serena down -> "
-            "lean-ctx only%s. See atlas-orchestrate/references/tool-routing.md"
-            % (langs, note)
+            "Code stack (%s): ToolSearch-load the batch first%s%s. See atlas-orchestrate/references/tool-routing.md"
+            % (langs, fallback, note)
         )
     if stack.get("js_ts"):
         lines.append("JS/TS: fallow for dead-code/dupes/audit (CLI or fallow-mcp).")

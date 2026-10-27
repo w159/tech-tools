@@ -1,0 +1,30 @@
+cmd ▸ ▊  Tab region · ? help · last 2026-10-20T11:05:59Z
+━ SESSIONS ━━━━━━━━━━━━━━━━━━━━━━━╋━ ATLAS COLONY . Mac . 2 colonies 2 seats ━━━━━━━━━━━━━━━━━━━━━━━
+> lead-contra subagent 1s work    ┃ ━ { CHANNEL lead-contra (all) } ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ● lead working                ┃ ━ PEEK - (t attach . v view) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  lead-d1prob subagent 1s work    ┃ (no capture yet)
+    ● lead working                ┃ ━ STEER -> lead-contra ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  term atlas-verify 1win          ┃ say to lead-contra >
+                                  ┃ [ msg all ] [ @all ] [ @lead ]
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+                                  ┃
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↑↓ move · ⏎ pick · tab region · [ ? help ]  [ q quit ]
+[Mac] colony

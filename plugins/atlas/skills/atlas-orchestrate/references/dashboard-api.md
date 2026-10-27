@@ -17,7 +17,7 @@
 
 Atlas ships a **single shared loopback dashboard** ("Atlas Workboard") for all concurrent coding-agent terminals. One daemon serves one static single-page UI (`scripts/dashboard_ui/`) and one JSON API. Source of truth for every fact below: `scripts/atlas_dashboard.py` (HTTP layer, guard, SSE, legacy routes), `scripts/atlas_dash_work.py`, `scripts/atlas_dash_irc.py`, `scripts/atlas_dash_herd.py` and `scripts/atlas_dash_insights.py` (v2 `ROUTES` tables), `scripts/dashboard_ui/js/` (client). Remote access never opens this port: the vendored herdr web UI proxies it same-origin at `/atlas/**` (see [Same-origin gateway](#same-origin-gateway-atlas-on-the-herdr-web-ui)).
 
-The old single-file inline-HTML page (`UI_HTML`) no longer exists. The UI is the static bundle under `scripts/dashboard_ui/`, served from `/` and `/ui/*`. See `docs/atlas-workboard.md` in the repository for the product overview.
+The old single-file inline-HTML page (`UI_HTML`) no longer exists. The UI is the static bundle under `scripts/dashboard_ui/`, served from `/` and `/ui/*`. See `docs/architecture/atlas-workboard.md` in the repository for the product overview.
 
 ## Access
 
@@ -86,7 +86,7 @@ These live in `Handler._legacy_get` / `Handler._legacy_post`, are dispatched **a
 | `/api/sessions/{id}` | session detail (tools, prompts, dispatches) | `ok, session, ...` ; `404 session_not_found` |
 | `/api/connectors` | connector env coverage, no secrets | `ok, connectors, user_config, settings_path` |
 | `/api/connectors/export` | `.env` template, secrets blanked | `ok, text, env_path` |
-| `/api/behavior` | `ATLAS_*` knob groups + advanced list; each knob and `ATLAS_*` var shows value, source (process > store > claude settings > default), reached harnesses, default, `file:line` ref and last-changed | `ok, ...behavior_state()` |
+| `/api/behavior` | `ATLAS_*` knobs as `{groups, advanced, paths, hidden, note}` (`advanced` is always `[]`; 66 typed knobs in seven groups, 7 plumbing keys in `hidden`); each knob and `ATLAS_*` var shows value, source (process > store > claude settings > default), reached harnesses, default, `file:line` ref and last-changed | `ok, ...behavior_state()` |
 | `/api/ecosystem` | installed plugins, MCP servers, atlas hook wiring, skills/agents/output styles | `ok, ...ecosystem_inventory()` |
 | `/api/findings` | doctor findings | `ok, findings` |
 | `/api/runs[?limit=&project_id=]` | recent runs / run health (default limit 20) | `ok, health` |
@@ -103,7 +103,7 @@ These live in `Handler._legacy_get` / `Handler._legacy_post`, are dispatched **a
 | `/api/connectors/env` | `{"updates": {key: value}}` | allowlisted credential writes (userConfig keys or UPPER env keys); `400 updates_required` |
 | `/api/connectors/import` | `{"text": "KEY=VALUE\n..."}` | bulk `.env` paste, same allowlist; `400 no_assignments_found` |
 | `/api/connectors/test` | `{"name": "<connector>"}` | start the connector bundle and complete an MCP handshake |
-| `/api/behavior` | `{"updates": {ATLAS_KEY: value}}` | allowlisted writes to the atlas settings store `<ATLAS_HOME or ~/.atlas>/settings.json` (`{env, changed}`, atomic, 0600) and Claude `settings.json` `env`; the omp hook bridge exports the store into hook env; empty value removes the override; one bad key rejects the batch; advanced vars are editable; survives a daemon restart |
+| `/api/behavior` | `{"updates": {ATLAS_KEY: value}}` | allowlisted writes to the atlas settings store `<ATLAS_HOME or ~/.atlas>/settings.json` (`{env, changed}`, atomic, 0600) and Claude `settings.json` `env`; the omp hook bridge exports the store into hook env; empty value removes the override; one bad key rejects the batch; `ATLAS_HOME`, `ATLAS_DB` and `ATLAS_DASHBOARD_PORT` return 400 `read_only`; survives a daemon restart; every knob applies on the next hook run (see "How a saved knob reaches a running session") |
 | `/api/mcp/toggle` | `{"name", "enabled"}` | enable/disable one server via `disabledMcpServers` |
 | `/api/mcp/add` | server config object | user-scope server in `~/.claude.json` |
 | `/api/mcp/remove` | `{"name"}` | remove a user-scope server |
@@ -141,7 +141,7 @@ Shapes:
 
 ### Herd / Colony (`atlas_dash_herd.py`, anchored regexes)
 
-The colony is herdr: the installed `herdr` binary plus the one vendored `herdr-web-ui` build (`colony/herdr-web-ui`; `http://127.0.0.1:7317` when that port is free, otherwise a fallback port, reported as `colony_url` and `url` in the status). These routes read herdr over its unix socket (`HERDR_SOCKET_PATH`) and never spawn herdr itself. GETs carry no token and never expose agent session paths, except the peek routes (terminal output), which need `X-Atlas-Token`; every POST needs `X-Atlas-Token` through the central guard.
+The colony transport is tmux by default (session `atlas-<run>`, one window per worker; `docs/architecture/atlas-colony.md` "Terminal workspace and Command Center TUI"); herdr is a forceable transport (`ATLAS_COLONY_TRANSPORT=herdr`). The live card grid and interactive attach live on the Command Center Terminal page (`#/terminal`, `js/pages/terminal.js`); the Colony page (`#/colony`) still frames herdr-web-ui. The `herd` routes below apply to the herdr transport: the installed `herdr` binary plus the one vendored `herdr-web-ui` build (`colony/herdr-web-ui`; `http://127.0.0.1:7317` when that port is free, otherwise a fallback port, reported as `colony_url` and `url` in the status). These routes read herdr over its unix socket (`HERDR_SOCKET_PATH`) and never spawn herdr itself. GETs carry no token and never expose agent session paths, except the peek routes (terminal output), which need `X-Atlas-Token`; every POST needs `X-Atlas-Token` through the central guard.
 
 | Method | Path | Request | Response |
 |---|---|---|---|
@@ -173,7 +173,7 @@ There are no herd or irc page modules. The **Colony** page (`js/pages/herdr.js`,
 |---|---|---|---|
 | GET | `/api/v2/projects` | none | `{projects:[{root, name, last_active, runs_7d, agents_active, todos:{open,done}, health: ok\|warn\|fail\|idle, failures_7d, findings_open}], findings_open}`. Only projects with runs in 7 days; max 500 |
 | GET | `/api/v2/overview` | `?project=&window=7d` (`<n>h\|d\|w`) | `{kpis:[{id,label,value,delta,status,hint}], attention:[{id,severity,project,title,detail,count,first,last,action:{label,target}}], recent_runs[], trend}`. KPI ids: `runs, dispatches, silent_failures, findings_open`, plus `todos_blocked` when a project is selected |
-| GET | `/api/v2/health` | `?project=&window=7d` | `{subsystems:[{id,label,status,detail,last_ok,last_fail,evidence[]}], silent_failures[], successes[]}`. Subsystem ids: `hooks, mux, dashboard, db, connectors, doctor, chronicle` |
+| GET | `/api/v2/health` | `?project=&window=7d` | `{subsystems:[{id,label,status,detail,last_ok,last_fail,evidence[]}], silent_failures[], successes[]}`. Subsystem ids: `hooks, mux, dashboard, reaper, db, connectors, doctor, chronicle`. The `reaper` row is `ok` with detail `no reaper failures since the dashboard started`, or `warn` with detail `<n> recent failures, newest: <ExcClass>: <message>`, `last_fail` the newest failure time and `evidence[]` one line per failure, newest first: `<iso time> reap <project root>: PermissionError: [Errno 1] Operation not permitted`. In-memory ring of the last 20 (`atlas_dash_insights.REAP_FAILURES`, entries `{ts,path,error,message}`), filled by `atlas_dashboard._reap_warn` on every reaper exception; cleared on dashboard restart |
 | GET | `/api/v2/activity` | `?project=&since=<epoch\|ISO>&kind=&group=project\|kind\|agent&q=&limit=200` | `{groups:[{key,label,count,last,items:[{id,ts,kind,project,agent,title,detail,status,count,ref:{table,id}}]}]}`. Duplicates collapse unless `noise.collapse_duplicates` is false. `400 bad group` |
 | GET | `/api/v2/improve` | `?project=` | `{loop:{stages:[observe,mine,propose,apply,remeasure]}, findings[], ledger[], nudges, lessons, scores:{labels,series}, by_rule[]}`. Finding ids are `doctor:<n>` or `ledger:<id>` |
 | POST | `/api/v2/improve/finding` | `{id: "doctor:<n>", status: open\|accepted\|fixed\|dismissed\|wontfix, note?}` | `{ok, state:{id,status,db_status,note}, next}`. Only doctor findings are settable; ledger entries are append-only (`400 unsupported finding`). `404 no such finding`, `503 findings store unavailable` |
@@ -317,3 +317,7 @@ The credential and agent-override APIs below are unchanged and still enforced by
 - `ensure` restarts the daemon if health or status reports a different `db_path`.
 - It does **not** re-ingest transcripts on every request (avoids locking hooks out of the DB).
 - v2 insight routes never run `atlas_db.init` per request; missing tables degrade to empty data.
+
+## How a saved knob reaches a running session
+
+A Settings save writes `<ATLAS_HOME or ~/.atlas>/settings.json` `env`. Each of the 17 hook entry points in `hooks/hooks.json` calls `apply_store_env()` (`scripts/atlas_env.py`) before its other imports, which overlays that `env` onto the process environment; the saved value wins over the value exported at session start, so the next hook run in a live Claude Code session sees it. The omp bridge (`omp/hook-bridge.ts`) prefers the store over the exported variable and reads its knobs per call through `atlasKnob()` (`omp/knobs.ts`, re-exported by `hook-bridge.ts`), which re-reads the store on every call: `ATLAS_HOOK_BRIDGE`, `ATLAS_BRIDGE_HOOK_TIMEOUT_S`, `ATLAS_WORKER_MAX_TOKENS`, `ATLAS_ADVISOR_GATE`, `ATLAS_STOP_BRIDGE`, `ATLAS_INGEST`, `ATLAS_STYLE`, `ATLAS_LEAN_SHELL`, `ATLAS_MANDATES`, `ATLAS_GATES`, `ATLAS_CHANNELS`, `ATLAS_TRIPWIRE_HARD` and `ATLAS_GATE`. The store path prefers the injected env's `ATLAS_HOME`, then `process.env`, then `~/.atlas`. Not routed: `ATLAS_STATUSLINE` (registered once at omp load), `ATLAS_WORKER_SCHEMA` and `ATLAS_TODO_EXPANDED` (no catalog entry). The rendered output style block is frozen per session, so an `ATLAS_STYLE` change shows at the next session start or switch. Plugin and MCP switches edit Claude Code's `settings.json`, which Claude Code reads at start. The page has five tabs (Dashboard, Behavior, Models, Integrations, Agents); see `docs/plans/2026-10-22_settings-tabs-plan.md`.

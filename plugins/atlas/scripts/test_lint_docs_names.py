@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for docs conformance: date-first naming, the fixer, and structure."""
+"""Tests for docs conformance: dated-name (underscore) naming, the fixer, and structure."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -19,11 +21,13 @@ import lint_docs_names  # noqa: E402
 
 class IsDatedName(unittest.TestCase):
     def test_plain_dated_slug(self):
-        self.assertTrue(lint_docs_names.is_dated_name("2026-06-23-packer-consolidation"))
+        self.assertTrue(
+            lint_docs_names.is_dated_name("2026-06-23_packer-consolidation")
+        )
 
     def test_sequence_number_after_the_date_is_allowed(self):
         """A same-day ordered set keeps its order with a number AFTER the date."""
-        self.assertTrue(lint_docs_names.is_dated_name("2026-06-23-01-packer"))
+        self.assertTrue(lint_docs_names.is_dated_name("2026-06-23_01-packer"))
 
     def test_trailing_date_is_not_dated(self):
         self.assertFalse(lint_docs_names.is_dated_name("atlas-harden-2026-07-07"))
@@ -32,11 +36,11 @@ class IsDatedName(unittest.TestCase):
         self.assertFalse(lint_docs_names.is_dated_name("00-master-consolidation"))
 
     def test_uppercase_slug_is_rejected(self):
-        self.assertFalse(lint_docs_names.is_dated_name("2026-06-23-MASTER"))
+        self.assertFalse(lint_docs_names.is_dated_name("2026-06-23_MASTER"))
 
     def test_impossible_month_is_rejected(self):
         """A calendar-shaped check, so 2026-13-01 is not a date."""
-        self.assertFalse(lint_docs_names.is_dated_name("2026-13-01-thing"))
+        self.assertFalse(lint_docs_names.is_dated_name("2026-13-01_thing"))
 
     def test_date_with_no_slug_is_rejected(self):
         self.assertFalse(lint_docs_names.is_dated_name("2026-06-23"))
@@ -47,23 +51,23 @@ class Violations(unittest.TestCase):
         self.assertEqual(
             lint_docs_names.violations(
                 [
-                    "docs/plans/2026-06-23-01-packer.md",
-                    "docs/lessons/2026-07-09-enforcement.md",
-                    ".atlas/findings/2026-08-11-serena.md",
+                    "docs/plans/2026-06-23_01-packer.md",
+                    "docs/lessons/2026-07-09_enforcement.md",
+                    ".atlas/findings/2026-08-11_serena.md",
                 ]
             ),
             [],
         )
 
     def test_trailing_date_is_reported_as_order(self):
-        (path, reason), = lint_docs_names.violations(
+        ((path, reason),) = lint_docs_names.violations(
             ["docs/audits/atlas-harden-2026-07-07/final-report.md"]
         )
         self.assertEqual(path, "docs/audits/atlas-harden-2026-07-07")
         self.assertIn("date is not first", reason)
 
     def test_missing_date_is_reported(self):
-        (_, reason), = lint_docs_names.violations(["docs/plans/bootstrap-kit.md"])
+        ((_, reason),) = lint_docs_names.violations(["docs/plans/bootstrap-kit.md"])
         self.assertIn("missing a leading date", reason)
 
     def test_living_directories_are_never_dated(self):
@@ -91,7 +95,7 @@ class Violations(unittest.TestCase):
         """Inside a compliant audit hub, the hub's own subtree is its business."""
         self.assertEqual(
             lint_docs_names.violations(
-                ["docs/audits/2026-07-07-atlas-harden/plans/ws4-hub-launcher.md"]
+                ["docs/audits/2026-07-07_atlas-harden/plans/ws4-hub-launcher.md"]
             ),
             [],
         )
@@ -112,7 +116,9 @@ class Violations(unittest.TestCase):
 
     def test_paths_outside_the_watched_trees_are_ignored(self):
         self.assertEqual(
-            lint_docs_names.violations(["src/app.py", "README.md", "docs/CHANGELOG.md"]),
+            lint_docs_names.violations(
+                ["src/app.py", "README.md", "docs/CHANGELOG.md"]
+            ),
             [],
         )
 
@@ -125,7 +131,7 @@ class Cli(unittest.TestCase):
         return rc, buf.getvalue()
 
     def test_explicit_clean_path_exits_zero(self):
-        rc, out = self._run("docs/plans/2026-06-23-01-packer.md")
+        rc, out = self._run("docs/plans/2026-06-23_01-packer.md")
         self.assertEqual(rc, 0)
         self.assertIn("docs naming OK", out)
 
@@ -133,7 +139,6 @@ class Cli(unittest.TestCase):
         rc, out = self._run("docs/plans/00-MASTER-consolidation.md")
         self.assertEqual(rc, 1)
         self.assertIn("00-MASTER-consolidation.md", out)
-
 
 
 class Fixer(unittest.TestCase):
@@ -180,7 +185,7 @@ class Fixer(unittest.TestCase):
             [
                 (
                     "docs/audits/atlas-harden-2026-07-07",
-                    "docs/audits/2026-07-07-atlas-harden",
+                    "docs/audits/2026-07-07_atlas-harden",
                 )
             ],
         )
@@ -206,11 +211,10 @@ class Fixer(unittest.TestCase):
         self.assertIn("docs/architecture/map.md", touched)
         self.assertIn("src/app.py", touched)
         self.assertIn(
-            new_rel, (self.root / "docs/architecture/map.md").read_text(encoding="utf-8")
+            new_rel,
+            (self.root / "docs/architecture/map.md").read_text(encoding="utf-8"),
         )
-        self.assertIn(
-            new_name, (self.root / "src/app.py").read_text(encoding="utf-8")
-        )
+        self.assertIn(new_name, (self.root / "src/app.py").read_text(encoding="utf-8"))
         self.assertTrue((self.root / new_rel).is_file())
         self.assertFalse((self.root / "docs/plans/00-MASTER-plan.md").exists())
 
@@ -244,6 +248,242 @@ class Fixer(unittest.TestCase):
                 sentinel,
                 "%s was rewritten" % name,
             )
+
+
+class UnderscoreRule(unittest.TestCase):
+    def test_hyphen_dated_name_is_not_dated(self):
+        self.assertFalse(lint_docs_names.is_dated_name("2026-06-23-packer"))
+
+    def test_hyphen_dated_name_is_a_separator_violation(self):
+        ((path, reason),) = lint_docs_names.violations(
+            ["docs/plans/2026-06-23-packer.md"]
+        )
+        self.assertEqual(path, "docs/plans/2026-06-23-packer.md")
+        self.assertIn("date separator must be '_'", reason)
+
+    def test_meetings_and_handoffs_are_dated_dirs(self):
+        self.assertEqual(
+            len(
+                lint_docs_names.violations(
+                    ["docs/meetings/standup.md", "docs/handoffs/x.md"]
+                )
+            ),
+            2,
+        )
+        self.assertEqual(
+            lint_docs_names.violations(["docs/meetings/2026-01-02_standup.md"]), []
+        )
+
+
+class UnderscoreFixer(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write(self, rel, text=""):
+        p = self.root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+
+    def _fix(self, paths):
+        bad = lint_docs_names.violations(paths)
+        plans = lint_docs_names.plan_renames(self.root, bad)
+        moved = lint_docs_names.apply_renames(self.root, plans)
+        lint_docs_names.rewrite_references(self.root, moved)
+        return plans, moved
+
+    def test_hyphen_migrates_to_underscore_keeping_date_and_rewrites_refs(self):
+        self._write("docs/plans/2026-06-23-packer.md", "x")
+        self._write(
+            "docs/wiki/a.md",
+            "see docs/plans/2026-06-23-packer.md and 2026-06-23-packer\n",
+        )
+        plans, moved = self._fix(["docs/plans/2026-06-23-packer.md"])
+        self.assertEqual(
+            moved,
+            [("docs/plans/2026-06-23-packer.md", "docs/plans/2026-06-23_packer.md")],
+        )
+        self.assertTrue((self.root / "docs/plans/2026-06-23_packer.md").is_file())
+        self.assertEqual(
+            (self.root / "docs/wiki/a.md").read_text(encoding="utf-8"),
+            "see docs/plans/2026-06-23_packer.md and 2026-06-23_packer\n",
+        )
+
+    def test_hyphen_directory_in_dated_dir_migrates(self):
+        self._write("docs/audits/2026-07-07-atlas-harden/report.md", "x")
+        _, moved = self._fix(["docs/audits/2026-07-07-atlas-harden/report.md"])
+        self.assertEqual(moved[0][1], "docs/audits/2026-07-07_atlas-harden")
+        self.assertTrue(
+            (self.root / "docs/audits/2026-07-07_atlas-harden/report.md").is_file()
+        )
+
+    def test_date_last_becomes_underscore_form(self):
+        self._write("docs/audits/atlas-harden-2026-07-07/r.md", "x")
+        plans, _ = self._fix(["docs/audits/atlas-harden-2026-07-07/r.md"])
+        self.assertEqual(plans[0][1], "docs/audits/2026-07-07_atlas-harden")
+
+    def test_classified_root_file_moves_with_reference_rewrite(self):
+        self._write("docs/MEETING_NOTES_9.3.26.md", "n")
+        self._write(
+            "docs/wiki/a.md",
+            "[n](../MEETING_NOTES_9.3.26.md) docs/MEETING_NOTES_9.3.26.md\n",
+        )
+        plans, moved = self._fix(["docs/MEETING_NOTES_9.3.26.md"])
+        new = moved[0][1]
+        self.assertEqual(new, "docs/meetings/2026-09-03_meeting-notes.md")
+        self.assertFalse((self.root / "docs/MEETING_NOTES_9.3.26.md").exists())
+        text = (self.root / "docs/wiki/a.md").read_text(encoding="utf-8")
+        self.assertIn(new, text)
+        self.assertNotIn("MEETING_NOTES", text)
+
+    def test_root_routing_keywords(self):
+        cases = {
+            "docs/FORMULA-INVENTORY.md": "docs/audits",
+            "docs/MEETING_TRANSCRIPT.md": "docs/meetings",
+            "docs/API_SPEC.md": "docs/specs",
+            "docs/Q3-plan.md": "docs/plans",
+            "docs/adr-5.md": "docs/decisions",
+            "docs/handoff.md": "docs/handoffs",
+            "docs/sprint-retro.md": "docs/lessons",
+        }
+        for rel, folder in cases.items():
+            self.assertEqual(lint_docs_names._root_target_dir(rel), folder, rel)
+        self.assertIsNone(lint_docs_names._root_target_dir("docs/quadrant.md"))
+
+    def test_unclassified_root_file_goes_to_architecture_bare_name(self):
+        self._write("docs/Atlas_Channels.md", "x")
+        self._write("docs/wiki/a.md", "[c](../Atlas_Channels.md) docs/Atlas_Channels.md\n")
+        ((_, reason),) = lint_docs_names.violations(["docs/Atlas_Channels.md"])
+        self.assertIn("docs/architecture/", reason)
+        _, moved = self._fix(["docs/Atlas_Channels.md"])
+        self.assertEqual(moved[0][1], "docs/architecture/atlas-channels.md")
+        self.assertFalse((self.root / "docs/Atlas_Channels.md").exists())
+        text = (self.root / "docs/wiki/a.md").read_text(encoding="utf-8")
+        self.assertIn("docs/architecture/atlas-channels.md", text)
+        self.assertNotIn("Atlas_Channels", text)
+
+    def test_embedded_date_without_keyword_is_logged_not_kept(self):
+        ((_, reason),) = lint_docs_names.violations(["docs/design-9.3.26.md"])
+        self.assertIn("2026-09-03", reason)
+        plans, _ = self._fix(["docs/design-9.3.26.md"])
+        self.assertEqual(plans[0][1].rsplit("/", 1)[0], "docs/architecture")
+
+    def test_architecture_name_collision_is_skipped_not_overwritten(self):
+        self._write("docs/Atlas_Mod.md", "new")
+        self._write("docs/architecture/atlas-mod.md", "keep")
+        plans, moved = self._fix(["docs/Atlas_Mod.md"])
+        self.assertEqual((plans, moved), ([], []))
+        self.assertTrue((self.root / "docs/Atlas_Mod.md").is_file())
+        self.assertEqual(
+            (self.root / "docs/architecture/atlas-mod.md").read_text(encoding="utf-8"),
+            "keep",
+        )
+
+    def test_canonical_root_files_are_exempt(self):
+        names = [
+            "README.md",
+            "changelog.md",
+            "ROADMAP.md",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "GLOSSARY.md",
+            "Contributing.md",
+            "SECURITY.md",
+            "DEVELOPMENT.md",
+            "INDEX.md",
+        ]
+        self.assertEqual(lint_docs_names.violations(["docs/" + n for n in names]), [])
+
+    def test_living_dir_and_non_doc_root_files_are_exempt(self):
+        self.assertEqual(
+            lint_docs_names.violations(
+                ["docs/wiki/Anything_Goes.md", "docs/diagram.png"]
+            ),
+            [],
+        )
+
+    def test_bare_name_rewrite_respects_word_boundaries(self):
+        self._write("docs/PLAN.md", "x")
+        self._write("docs/wiki/a.md", "PLAN.md and MASTER_PLAN.md\n")
+        _, moved = self._fix(["docs/PLAN.md"])
+        text = (self.root / "docs/wiki/a.md").read_text(encoding="utf-8")
+        self.assertIn("MASTER_PLAN.md", text)
+        self.assertIn(moved[0][1].rsplit("/", 1)[-1], text)
+
+    def test_rewrite_reaches_env_template_and_ts_line_comment(self):
+        self._write("docs/atlas-turn-scoring.md", "x")
+        self._write(".env.template", "# see docs/atlas-turn-scoring.md\nKEY=\n")
+        self._write("mod/contract.ts", "// Plan: docs/atlas-turn-scoring.md\n")
+        _, moved = self._fix(["docs/atlas-turn-scoring.md"])
+        new = moved[0][1]
+        for f in (".env.template", "mod/contract.ts"):
+            text = (self.root / f).read_text(encoding="utf-8")
+            self.assertIn(new, text, f)
+            self.assertNotIn("docs/atlas-turn-scoring.md", text, f)
+
+    def test_unwritable_reference_file_is_reported_not_silent(self):
+        self._write("docs/atlas-turn-scoring.md", "x")
+        self._write("mod/contract.ts", "// Plan: docs/atlas-turn-scoring.md\n")
+        real = Path.write_text
+
+        def deny(self_, *a, **k):
+            if self_.name == "contract.ts":
+                raise PermissionError(1, "Operation not permitted")
+            return real(self_, *a, **k)
+
+        err = io.StringIO()
+        with mock.patch.object(Path, "write_text", deny), contextlib.redirect_stderr(err):
+            self._fix(["docs/atlas-turn-scoring.md"])
+        self.assertIn("could not rewrite", err.getvalue())
+        self.assertIn("contract.ts", err.getvalue())
+
+    def test_all_mode_lists_root_files(self):
+        self._write("docs/TODO_LIST.md", "x")
+        self._write("docs/README.md", "x")
+        self.assertEqual(
+            lint_docs_names.all_artifact_paths(self.root),
+            ["docs/README.md", "docs/TODO_LIST.md"],
+        )
+
+
+class EmbeddedNameDates(unittest.TestCase):
+    """Loose names often carry a US-style date; it is the real date, and it
+    leaves the slug."""
+
+    def test_embedded_date_forms(self):
+        cases = {
+            "MEETING_NOTES_9.3.26.md": "2026-09-03",
+            "notes-9.3.2026.md": "2026-09-03",
+            "notes-9-3-26.md": "2026-09-03",
+            "notes_9_3_2026.md": "2026-09-03",
+            "notes-20260903.md": "2026-09-03",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, want in cases.items():
+                rel = "docs/" + name
+                self.assertEqual(lint_docs_names.derive_date(pathlib.Path(tmp), rel), want, name)
+
+    def test_date_text_leaves_the_slug(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("MEETING_NOTES_9.3.26.md", "meeting-notes-20260903.md", "meeting_notes_9_3_2026.md"):
+                (( _, new),) = lint_docs_names.plan_renames(
+                    pathlib.Path(tmp), [("docs/" + name, "x")]
+                )
+                self.assertEqual(new, "docs/meetings/2026-09-03_meeting-notes.md", name)
+
+    def test_impossible_date_is_not_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "docs").mkdir()
+            (root / "docs" / "notes-13.40.26.md").write_text("x", encoding="utf-8")
+            got = lint_docs_names.derive_date(root, "docs/notes-13.40.26.md")
+            self.assertNotEqual(got, "2026-13-40")
+            self.assertRegex(got, r"^\d{4}-\d{2}-\d{2}$")
+            self.assertIsNone(lint_docs_names._name_date("notes-13.40.26"))
+            self.assertIsNone(lint_docs_names._name_date("notes-20261340"))
 
 
 class Structure(unittest.TestCase):

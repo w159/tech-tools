@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
@@ -11,6 +11,7 @@ import {
 	STYLE_END,
 	STYLE_PATH,
 	adaptTodoGatingForOmp,
+	headerTemplate,
 	loadStyleBody,
 	loadToolNames,
 	mcpDevice,
@@ -301,4 +302,22 @@ test("a render that failed (unreadable sources) is not frozen: the next turn ret
 	writeFileSync(bad, "---\nname: x\n---\nbody\n");
 	expect(turn()?.systemPrompt?.[1]).toContain("Atlas output style");
 	expect(turn()?.systemPrompt?.length).toBe(2); // now readable: rendered, not stuck on the earlier failure
+});
+
+test("headerTemplate returns the operating-contract template", () => {
+	const doc = JSON.parse(readFileSync(join(import.meta.dir, "..", "contracts", "operating-contract.json"), "utf8"));
+	expect(headerTemplate()).toBe(doc.headerTemplate);
+	expect(headerTemplate("/nonexistent.json")).toContain("<glyph> <phase>");
+});
+
+test("a store save of ATLAS_STYLE=off applies on the next call without reloading the extension", () => {
+	const home = process.env.ATLAS_HOME as string;
+	const run = harness(); // registered before the save: load-time capture would miss it
+	mkdirSync(home, { recursive: true });
+	writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_STYLE: "off" } }));
+	try {
+		expect(run(["base"])?.systemPrompt?.[1]).not.toContain("Atlas output style");
+	} finally {
+		rmSync(join(home, "settings.json"), { force: true });
+	}
 });

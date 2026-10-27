@@ -24,15 +24,15 @@ docs/
 `node test-mcp-tools.mjs` at the repo root is the boot and tool-count gate the "2. Propagation checklist" section of the root `AGENTS.md`
 requires for any connector change; `node test-mcp-tools.mjs <svc>` probes one connector and
 `--list` prints the known names. It launches each connector exactly as
-`plugins/atlas/.mcp.json` declares it - the eleven Node connectors as
-`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon` through its
-`uv run --project plugins/atlas/mcp/falcon ...` entry - with placeholder credentials in a
+`plugins/armada/.mcp.json` declares it - the twelve Node connectors as
+`plugins/armada/mcp/<name>/server.mjs` over MCP stdio, `falcon` through its
+`uv run --project plugins/armada/mcp/falcon ...` entry - with placeholder credentials in a
 from-scratch child environment, so it needs no real credentials and cannot reach a live vendor
 appliance. Four checks per connector: BOOT, FLOOR (no tool-count regression), AGREEMENT
 (`DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` prose must carry `readOnlyHint: false`), SHAPE. The
 contract it enforces is `standards/connector-safety-signals.md`.
 
-Last run: exit 0, PASS - 534 tools across 12 connectors (re-run `node test-mcp-tools.mjs` and quote the printed total), 0 safety-signal mismatches, and every
+Last run: exit 0, PASS - 575 tools across 13 connectors (re-run `node test-mcp-tools.mjs` and quote the printed total), 0 safety-signal mismatches, and every
 connector fully enumerated (0 gated, 0 skipped). "Fully enumerated" is the point: a tool the
 harness never lists is a tool whose safety signals were never checked, so connectors that hide
 tools behind a `<vendor>_navigate` step are walked domain by domain and unioned, and falcon -
@@ -50,6 +50,7 @@ stub that answers `POST /oauth2/token` and nothing else.
 | ninjaone | PASS | 45 (45) | 9 marked mutating, 14 annotated mutating |
 | panos | PASS | 60 (60) | 32 marked mutating, 34 annotated mutating |
 | paylocity | PASS | 16 (16) | no prose effect markers, so AGREEMENT is vacuous here |
+| sonicwall | PASS | 41 (41) | 11 `DESTRUCTIVE:` marked, 1 unprefixed mutating (`sonicwall_request`); 29 read; live hardware validation not performed |
 | spanning | PASS | 14 (14) | 1 marked, 1 annotated |
 | threatlocker | PASS | 30 (30) | 1 marked, 1 annotated |
 | vanta | PASS | 28 (28) | no prose effect markers, so AGREEMENT is vacuous here |
@@ -57,6 +58,10 @@ stub that answers `POST /oauth2/token` and nothing else.
 A vacuous AGREEMENT row is a known limitation, not a clean bill of health: the check compares
 prose against annotations, so a connector that marks nothing as mutating passes by agreeing with
 itself. `.atlas/.run/vacuous-check.mjs` is the heuristic used to probe that blind spot.
+
+## Releases
+
+Atlas releases are automatic. Bump `version` in `plugins/atlas/.claude-plugin/plugin.json` and the atlas entry in `.claude-plugin/marketplace.json`, add a released `## <version> - <date>` section to `plugins/atlas/CHANGELOG.md` (no `(unreleased)` marker; check with `python3 plugins/atlas/scripts/release_notes.py <version>`), and push to main. `.github/workflows/release.yml` tags `atlas-v<version>` and publishes the release `atlas <version>` with that section as notes, plus a zip of `plugins/atlas` when it is under 100 MB. It skips versions whose tag exists and fails if the two version files disagree. The docs-curator role keeps the CHANGELOG release-ready.
 
 ## Known gaps
 

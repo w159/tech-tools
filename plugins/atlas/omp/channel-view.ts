@@ -23,6 +23,7 @@ import { type GatesCache,type IdleWave, type LaneTool, type PanelNote, type Pane
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
+import { atlasKnob } from "./knobs";
 
 export const WIDGET_KEY = "atlas-channel";
 const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
@@ -348,7 +349,7 @@ function recorderName(ctx: RecorderCtx, env: Record<string, string | undefined>)
 
 /** <root>/.atlas/.run/logs for a session that has a lane and an armed (.atlas) tree; undefined otherwise. */
 function recorderDir(ctx: RecorderCtx, env: Record<string, string | undefined>): string | undefined {
-	if (env.ATLAS_CHANNELS === "off" || !ctx.cwd) return undefined;
+	if (atlasKnob("ATLAS_CHANNELS", env) === "off" || !ctx.cwd) return undefined;
 	const root = boardRoot(ctx.cwd, env);
 	return existsSync(nodePath.join(root, ".atlas")) ? logsDir(root) : undefined;
 }
@@ -398,11 +399,11 @@ export function todoSummary(root: string, sessionId?: string): { done: number; t
 
 /** The same session slice as rows for the board panel. */
 const todoItems = (root: string, sessionId?: string): PanelTodo[] =>
-	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined }));
+	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined, phase: i.phase ?? undefined }));
 
 /** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */
 const PHASE_WORDS: Array<[string, RegExp]> = [
-	["research", /^(setup|plan|research|discover)/],
+	["research", /^(setup|plan|research|discover|investigate|explor)/],
 	["theory", /^(design|theory)/],
 	["test", /^test/],
 	["implement", /^(audit|build|implement|fix|execute)/],
@@ -625,7 +626,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	return {
 		open(u, i) {
 			try {
-				if (env.ATLAS_CHANNELS === "off" || !i.channel) return;
+				if (atlasKnob("ATLAS_CHANNELS", env) === "off" || !i.channel) return;
 				if (linger !== undefined) clearTo(linger);
 				linger = undefined;
 				const same = info?.channel === i.channel;

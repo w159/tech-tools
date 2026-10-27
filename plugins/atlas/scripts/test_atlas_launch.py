@@ -56,6 +56,25 @@ class LaunchArgvTest(unittest.TestCase):
             res = atlas_launch.launch(self.root, name, "do it", cwd=cwd, **kw)
         return res, calls
 
+    def test_interactive_token_travels_in_a_0600_file_not_in_the_pane_text(self):
+        res, calls = self.run_launch()
+        self.assertTrue(res["ok"], res)
+        token = atlas_todo.issue_owner_token(self.root, res["window"])
+        self.assertTrue(atlas_todo.verify_owner_token(self.root, res["window"], token))
+        pane = next(c for c in calls if c[0] == "new-window")[-1]
+        self.assertNotIn(token, pane)
+        self.assertNotIn("ATLAS_OWNER_TOKEN", atlas_mux.FORWARDED_ENV)
+        self.assertTrue(pane.startswith('exec env "ATLAS_OWNER_TOKEN=$(cat '), pane)
+        staged = [
+            p
+            for p in (Path(self.root) / ".atlas" / ".run").rglob("*.token")
+            if p.is_file()
+        ]
+        self.assertEqual(1, len(staged), staged)
+        self.assertEqual(token, staged[0].read_text(encoding="utf-8"))
+        self.assertEqual(0o600, staged[0].stat().st_mode & 0o777)
+        self.assertIn(str(staged[0]), pane)
+
     def test_interactive_is_detached_and_quoted(self):
         cwd = os.path.join(self.root, "dir with 'quote")
         os.makedirs(cwd)
@@ -170,7 +189,7 @@ class LaunchArgvTest(unittest.TestCase):
         self.assertEqual(kw["env"]["ATLAS_MUX"], "tmux")
 
     def test_default_transport_is_tmux_when_installed_and_herdr_stays_opt_in(self):
-        # 12.5.0 contract (docs/atlas-colony.md): tmux whenever installed, else claude-bg;
+        # 12.5.0 contract (docs/architecture/atlas-colony.md): tmux whenever installed, else claude-bg;
         # herdr only when forced, even with its server up.
         with mock.patch.object(atlas_herdr, "_server_up", lambda: True):
             os.environ.pop("ATLAS_COLONY_TRANSPORT", None)
@@ -271,6 +290,15 @@ class HerdrLaunchTest(unittest.TestCase):
         ws = next(p for m, p in self.fake.calls if m == "workspace.create")
         self.assertEqual((ws["label"], ws["focus"]), ("atlas-work", False))
         self.assertEqual(ws["env"]["ATLAS_WORKER_NAME"], "my_worker")
+
+    def test_interactive_token_reaches_the_pane_env_not_the_typed_command(self):
+        res = atlas_launch.launch(self.root, "my worker", "do it", run="work")
+        self.assertTrue(res["ok"], res)
+        token = atlas_todo.issue_owner_token(self.root, "my_worker")
+        ws = next(p for m, p in self.fake.calls if m == "workspace.create")
+        self.assertEqual(token, ws["env"]["ATLAS_OWNER_TOKEN"])
+        self.assertNotIn(token, self.sent()[0]["text"])
+        self.assertNotIn("ATLAS_OWNER_TOKEN", self.sent()[0]["text"])
 
     def test_second_launch_with_same_name_gets_a_unique_suffix(self):
         a = atlas_launch.launch(self.root, "dup", "p")

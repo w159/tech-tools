@@ -109,7 +109,7 @@ export async function createMcpServer(): Promise<McpServer> {
   };
   registerNavigationTools(register, getNavigationTools(), 'panos_navigate', navigateTool, statusTool);
 
-  // Progressive disclosure, per docs/panos-connector-design.md "Credential
+  // Progressive disclosure, per docs/architecture/panos-connector-design.md "Credential
   // bootstrap": three states rather than the usual on/off gate, because
   // panos_keygen must be reachable with only a username/password so an
   // operator without an API key yet can mint one.

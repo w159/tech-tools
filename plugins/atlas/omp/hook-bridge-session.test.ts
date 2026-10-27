@@ -89,13 +89,13 @@ test("toolResponseText never throws on hostile content", () => {
 // ---- connector name re-splitting ----
 
 test("omp-minted connector names are re-split so the hooks.json matcher and the python hook both work", async () => {
-	const matcher = "mcp__plugin_atlas_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*";
+	const matcher = "mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*";
 	const h = harness([hook("PostToolUse", "connector_credential_watch.py", matcher)]);
 	await h.handlers.tool_result({ toolName: "mcp__falcon-mcp_falcon_search_hosts", input: {}, content: "HTTP 401 Unauthorized", isError: false }, h.ctx());
-	await h.handlers.tool_result({ toolName: "mcp__plugin_atlas_cw_search_tickets", input: {}, content: "x", isError: false }, h.ctx());
+	await h.handlers.tool_result({ toolName: "mcp__plugin_armada_cw_search_tickets", input: {}, content: "x", isError: false }, h.ctx());
 	await h.handlers.tool_result({ toolName: "mcp__cipp_users_get", input: {}, content: "x", isError: false }, h.ctx());
 	await h.handlers.tool_result({ toolName: "mcp__lean_ctx_ctx_read", input: {}, content: "x", isError: false }, h.ctx()); // not a connector
-	expect(h.payloads.map(p => p.payload.tool_name)).toEqual(["mcp__falcon-mcp__falcon_search_hosts", "mcp__plugin_atlas__cw_search_tickets", "mcp__cipp__users_get"]);
+	expect(h.payloads.map(p => p.payload.tool_name)).toEqual(["mcp__falcon-mcp__falcon_search_hosts", "mcp__plugin_armada__cw_search_tickets", "mcp__cipp__users_get"]);
 	expect(h.payloads[0].payload.tool_response).toBe("HTTP 401 Unauthorized");
 });
 
@@ -107,7 +107,7 @@ test("claudeMcpName splits on the longest known server, accepts the xd:// form, 
 	expect(claudeMcpName("mcp__cipp_")).toBe("mcp__cipp_"); // an empty tool is not a split
 	expect(claudeMcpName("mcp__serena_find_symbol")).toBe("mcp__serena_find_symbol");
 	expect(claudeMcpName("bash")).toBe("bash");
-	expect([...CONNECTOR_SERVERS].sort()).toEqual(["cipp", "connectwise", "falcon-mcp", "gcloud", "plaid", "plugin_atlas"]);
+	expect([...CONNECTOR_SERVERS].sort()).toEqual(["cipp", "connectwise", "falcon-mcp", "gcloud", "plaid", "plugin_armada"]);
 });
 
 // ---- contracts/mcp-servers.json is the connector list's source ----
@@ -276,6 +276,11 @@ async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
 	const names = ["ATLAS_DB", "ATLAS_HOOKSTATE_DIR", "ATLAS_HARNESS", "HOME"] as const;
 	const keep: Record<string, string | undefined> = Object.fromEntries(names.map(n => [n, process.env[n]]));
 	try {
+		// An empty .git makes the sandbox its own project root. Without it atlas_paths.project_root() walks up from
+		// `.scratch` into the enclosing checkout and, in a linked worktree, maps to the MAIN worktree: the tripwire's
+		// one-shot spec-advisory marker (.atlas/.run/spec_denies/<session>) then lands in that real repo and survives,
+		// so the first-offense advisory fires on the first run only and every later run denies.
+		mkdirSync(join(root, ".git"));
 		mkdirSync(join(root, "docs"));
 		mkdirSync(join(root, "src"));
 		writeFileSync(join(root, "docs", "CHANGELOG.md"), "x\n");

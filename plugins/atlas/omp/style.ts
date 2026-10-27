@@ -18,9 +18,9 @@ import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import { loadNativeTools } from "./contracts";
 import { pluginRoot } from "./plugin-path";
+import { atlasKnob } from "./knobs";
 
 export const STYLE_PATH = nodePath.resolve(import.meta.dir, "..", "output-styles", "atlas-orchestrator.md");
-export const TOOL_NAMES_PATH = nodePath.resolve(import.meta.dir, "..", "contracts", "tool-names.json");
 
 export const STYLE_BEGIN = "<!-- atlas-orchestrator-style:begin -->";
 export const STYLE_END = "<!-- atlas-orchestrator-style:end -->";
@@ -186,6 +186,19 @@ export function renderOmpStyle(
  * header rule under ATLAS_HARNESS=omp, so without this omp sessions would have none. Glyphs come from the operating
  * contract (single source); an unreadable contract still yields the bare rule.
  */
+/** Status-header template from the operating contract; the literal is only the unreadable-contract fallback. */
+export function headerTemplate(path: string = nodePath.join(pluginRoot(), "contracts", "operating-contract.json")): string {
+	try {
+		const doc: unknown = JSON.parse(fs.readFileSync(path, "utf8"));
+		if (doc && typeof doc === "object" && "headerTemplate" in doc && typeof doc.headerTemplate === "string" && doc.headerTemplate) {
+			return doc.headerTemplate;
+		}
+	} catch {
+		/* fall through */
+	}
+	return "ATLAS | <glyph> <phase> | <state>";
+}
+
 function renderHeaderFallback(path: string = nodePath.join(pluginRoot(), "contracts", "operating-contract.json")): string {
 	let phases = "";
 	try {
@@ -198,7 +211,7 @@ function renderHeaderFallback(path: string = nodePath.join(pluginRoot(), "contra
 	} catch {
 		/* bare rule */
 	}
-	const rule = "Open every reply with the header line `ATLAS | <glyph> <phase> | <state>`" + (phases ? `, phase and glyph one of: ${phases}.` : ".");
+	const rule = "Open every reply with the header line `" + headerTemplate(path) + "`" + (phases ? `, phase and glyph one of: ${phases}.` : ".");
 	return `${STYLE_BEGIN}\n${rule}\n${STYLE_END}`;
 }
 
@@ -229,7 +242,7 @@ export interface StyleDeps {
  * (measured: one gated stop cost a 55k-token cache write). `undefined` means "not rendered yet or failed", so
  * a failed render is retried on the next turn instead of being frozen.
  */
-export interface FrozenBlocks {
+interface FrozenBlocks {
 	style?: string;
 	addendum?: string;
 }
@@ -244,7 +257,7 @@ export function registerStyle(pi: Pick<ExtensionAPI, "on">, deps: StyleDeps = {}
 	pi.on("before_agent_start", (event, ctx) => {
 		try {
 			if (ctx.agent.kind !== "main") return undefined;
-			const styleOff = (deps.env ?? process.env).ATLAS_STYLE === "off";
+			const styleOff = atlasKnob("ATLAS_STYLE", deps.env ?? process.env) === "off";
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			const has = (marker: string) => base.some(entry => typeof entry === "string" && entry.includes(marker));
 			const additions: string[] = [];

@@ -91,7 +91,7 @@ export interface GatewayCredentials {
  * - `X-Api-Key` header  →  `X_API_KEY` env var  (falls back to `CIPP_API_KEY`)
  * - `X-Base-Url` header →  `X_BASE_URL` env var (falls back to `CIPP_BASE_URL`)
  */
-export function getCredentialsFromGateway(): GatewayCredentials {
+function getCredentialsFromGateway(): GatewayCredentials {
   return {
     apiKey: cleanEnv(process.env.X_API_KEY) || cleanEnv(process.env.CIPP_API_KEY) || undefined,
     baseUrl: cleanEnv(process.env.X_BASE_URL) || cleanEnv(process.env.CIPP_BASE_URL) || undefined,

@@ -3,8 +3,10 @@
 # Re-generate with: bun plugins/atlas/omp/gen-agents.ts (idempotent; commit the output).
 name: "db-prober"
 description: "Read-only database prober that inspects SQL/Postgres schema, RLS policies, runtime-role GRANTs, indexes, constraints, and EXPLAIN plans, and returns findings with evidence. Read-only: no writes or migrations, only proposals. Use when a task needs facts about database structure, privileges, or query plans."
-thinkingLevel: "low"
+thinkingLevel: "off"
 model: ["@atlas-worker","sonnet","@smol"]
+tier_allow: ["haiku","sonnet"]
+effort_allow: ["low","medium"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---

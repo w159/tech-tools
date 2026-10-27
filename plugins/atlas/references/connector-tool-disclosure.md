@@ -21,6 +21,7 @@ first two columns, the placeholder pass checks the floor) and by
 | ninjaone | 5 | 45 | `ninjaone_status`, `ninjaone_navigate`, `ninjaone_auth_status`, `ninjaone_sign_in`, `ninjaone_sign_out` |
 | panos | 2 | 60 | `panos_navigate`, `panos_status` |
 | paylocity | 2 | 16 | `paylocity_navigate`, `paylocity_status` |
+| sonicwall | 2 | 41 | `sonicwall_navigate`, `sonicwall_status` |
 | spanning | 2 | 14 | `spanning_navigate`, `spanning_status` |
 | threatlocker | 2 | 30 | `threatlocker_navigate`, `threatlocker_status` |
 | vanta | 2 | 28 | `vanta_navigate`, `vanta_status` |
@@ -51,7 +52,7 @@ reported on stderr by name (never by value).
 
 Bundled `mcp/<name>/server.mjs` files are vendored ESM builds. Changing disclosure
 requires source edits under `mcp_servers/*` **and** a rebuild/copy into
-`plugins/atlas/mcp/`. Mass rebuilds are deliberate, not casual.
+`plugins/armada/mcp/`. Mass rebuilds are deliberate, not casual.
 
 ## Falcon behavior (atlas contract)
 

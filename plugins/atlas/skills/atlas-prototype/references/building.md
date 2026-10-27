@@ -18,7 +18,7 @@ On the web path the artifact is whatever a browser can display and you can autho
 
 ## Run root and containment
 
-The run root is `.atlas/.run/prototypes/<YYYY-MM-DD>-<slug>/`. `.atlas/.run/` is already gitignored in an atlas-scaffolded repo; verify with `git -C <repo root> check-ignore -q .atlas/.run/`. If it is not covered, tell the user and get their agreement before appending the one ignore line (or before proceeding at all) - never modify `.gitignore` silently. Fallback root when the user declines, asks that nothing be left in the repo, the run is not in a git repository, or the path fails the checks: `/tmp/atlas-prototypes-<uid>/<YYYY-MM-DD>-<slug>/`, where survival is best-effort - do not promise it a lifetime.
+The run root is `.atlas/.run/prototypes/<YYYY-MM-DD>_<slug>/`. `.atlas/.run/` is already gitignored in an atlas-scaffolded repo; verify with `git -C <repo root> check-ignore -q .atlas/.run/`. If it is not covered, tell the user and get their agreement before appending the one ignore line (or before proceeding at all) - never modify `.gitignore` silently. Fallback root when the user declines, asks that nothing be left in the repo, the run is not in a git repository, or the path fails the checks: `/tmp/atlas-prototypes-<uid>/<YYYY-MM-DD>_<slug>/`, where survival is best-effort - do not promise it a lifetime.
 
 Real-app runtime questions (density or chrome on an existing page, nav feel in the actual app) use the scratch-worktree mode from the containment boundary: a sibling worktree on `prototype/<slug>`. In-place overlay in the user's working tree only on their explicit ask, and overlay edits are written through an `atlas:implementer` dispatch so the product tree is touched only by an agent whose brief says exactly which files it may touch and that everything is reverted at the end.
 
@@ -31,7 +31,7 @@ Recreate what this question needs from the current product. Do not stand up the 
 ## Layout of the run directory
 
 ```text
-.atlas/.run/prototypes/<YYYY-MM-DD>-<slug>/
+.atlas/.run/prototypes/<YYYY-MM-DD>_<slug>/
   decisions.md               # run capsule; not a plan (SKILL.md owns its content)
   01-<question-slug>/
     screens/

@@ -1,0 +1,5 @@
+# Markdown is not prettier-managed here: agent frontmatter must stay single-line
+# (test_atlas_contract parses `disallowedTools: [...]` on one line) and CHANGELOG
+# tables are hand-aligned. The atlas format_after_edit hook honours this file.
+*.md
+*.mdx

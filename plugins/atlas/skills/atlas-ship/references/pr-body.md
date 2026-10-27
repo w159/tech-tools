@@ -54,7 +54,7 @@ Prefer the shortest description that still lets a reviewer decide. A project PR-
 
 ## Step D - Related work references
 
-Gather candidate work-item references from the user prompt, the caller handoff, branch name, full commit messages, an existing PR body, the PR template, and linked plan/finding paths in hand (`docs/plans/<slug>.md`, `.atlas/findings/<YYYY-MM-DD>-<slug>.md`). Preserve existing related references when rewriting a PR unless asked to remove them. Classify each:
+Gather candidate work-item references from the user prompt, the caller handoff, branch name, full commit messages, an existing PR body, the PR template, and linked plan/finding paths in hand (`docs/plans/<slug>.md`, `.atlas/findings/<YYYY-MM-DD>_<slug>.md`). Preserve existing related references when rewriting a PR unless asked to remove them. Classify each:
 
 - **closing reference** - the PR fully resolves the item and the tracker's closing syntax is known (`Fixes #123` for GitHub Issues; `Fixes ENG-123` for Linear). Use closing only when the PR targets the default branch and truly resolves the item.
 - **non-closing reference** - related, partial, follow-up, validation-only, or tracker semantics unknown: `Related: #123`, or the full URL / artifact path. It gets its own sentence or `## Related` block; never place it next to close/fix/resolve wording in prose.

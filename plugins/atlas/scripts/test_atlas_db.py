@@ -1217,6 +1217,59 @@ class ChronicleInsightsTest(unittest.TestCase):
         ).fetchone()
         self.assertEqual(row, ("sess-fr", "gate_block", 2.0, "blocked at gate"))
 
+    def test_friction_events_has_attribution_columns(self):
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(friction_events)")]
+        for c in ("role", "gate_letter", "tool_name"):
+            self.assertIn(c, cols)
+
+    def test_record_friction_positional_leaves_attribution_null(self):
+        fid = atlas_db.record_friction(self.conn, "s-pos", "cat", 1.5, "snip", 123.0)
+        row = self.conn.execute(
+            "SELECT weight, snippet, ts, role, gate_letter, tool_name "
+            "FROM friction_events WHERE id=?",
+            (fid,),
+        ).fetchone()
+        self.assertEqual(row, (1.5, "snip", 123.0, None, None, None))
+
+    def test_record_friction_attribution_roundtrip(self):
+        fid = atlas_db.record_friction(
+            self.conn, "s-kw", "gate_block", role="implementer", gate_letter="m", tool_name="Edit"
+        )
+        row = self.conn.execute(
+            "SELECT role, gate_letter, tool_name FROM friction_events WHERE id=?", (fid,)
+        ).fetchone()
+        self.assertEqual(row, ("implementer", "m", "Edit"))
+
+    def test_init_migrates_v1_friction_events_idempotently(self):
+        import sqlite3
+        import tempfile
+
+        path = os.path.join(tempfile.mkdtemp(), "old.db")
+        old = sqlite3.connect(path)
+        old.executescript(
+            "CREATE TABLE friction_events (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " session_id TEXT, category TEXT, weight REAL, snippet TEXT, ts REAL);"
+            "INSERT INTO friction_events(session_id,category,weight,snippet,ts)"
+            " VALUES('old','c',1.0,'s',1.0);"
+            "PRAGMA user_version=1;"
+        )
+        old.commit()
+        old.close()
+        conn = atlas_db.connect(path)
+        atlas_db.init(conn)
+        self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], 2)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(friction_events)")]
+        self.assertEqual(cols[-3:], ["role", "gate_letter", "tool_name"])
+        self.assertEqual(
+            conn.execute(
+                "SELECT role, gate_letter, tool_name FROM friction_events"
+            ).fetchall(),
+            [(None, None, None)],
+        )
+        atlas_db.init(conn)  # second run is a no-op
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM friction_events").fetchone()[0], 1)
+        conn.close()
+
     def test_upsert_finding_fingerprint_dedupes(self):
         fid1 = atlas_db.upsert_finding(
             self.conn,
@@ -1968,13 +2021,16 @@ class RegisterProjectRefusals(unittest.TestCase):
 
     def test_refuses_non_project_roots(self):
         d = os.path.join(self.home, "Downloads")
-        for p in (
+        roots = [
             self.home,
             d,
             "/tmp",  # noqa: S108  # asserts the literal /tmp prefix
-            "/private/tmp",
             tempfile.gettempdir(),
-        ):
+        ]
+        # /private/tmp is macOS's real path for /tmp; on Linux it is just an unrelated, nonexistent path.
+        if os.path.realpath("/private/tmp") == os.path.realpath("/tmp"):
+            roots.append("/private/tmp")
+        for p in roots:
             self.assertIsNone(atlas_db.register_project(self.conn, p), p)
         self.assertEqual(self._rows(), [])
 

@@ -5,6 +5,8 @@ name: "docs-curator"
 description: "Post-ship maintainer of the canonical atlas project structure (docs-ssot.md). Writes only docs/**, durable .atlas/ subfolders, root entry files (README.md, AGENTS.md, CLAUDE.md), and .gitignore; never edits source code. Moves verified ROADMAP items to CHANGELOG, distills findings into the .atlas/findings/ ledger, maintains docs/wiki/. Use when a shipped change needs docs updated or the structure repaired."
 thinkingLevel: "off"
 model: ["@atlas-worker","sonnet","@smol"]
+tier_allow: ["haiku","sonnet"]
+effort_allow: ["low","medium"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---
@@ -66,13 +68,20 @@ claude-mem: `search` returns IDs; `timeline` takes `anchor` (int) or `query`, no
      - Other items: update status (planned -> in-progress, in-progress -> blocked with reason). Add newly discovered follow-ups (bugs, tech debt, missing tests) as `planned`.
   3. Root entry files: `README.md` and `AGENTS.md` only if the change affects onboarding, setup, run/build/test commands, or agent orientation; `CLAUDE.md` only if Claude-Code-specific rules changed (it keeps pointing at `AGENTS.md` as canonical).
   4. Affected `docs/` subfolders you were told are in scope (`architecture/`, `features/`, `lessons/`, `audits/`, `specs/`, `decisions/`, `reference_files/`): touch only files relevant to the change.
-  5. **Findings ledger.** Read `.atlas/.run/findings.json` and distill every VERIFIED entry into `.atlas/findings/<YYYY-MM-DD>-<slug>-<status>.md` (status token: `verified`, `fixed`, `wontfix`, `superseded`; example `2026-09-04-auth-redirect-verified.md`). Body: resolved issue, root cause, fix, evidence reference. Keep `.atlas/findings/INDEX.md` current. Do not distill unverified or in-progress entries.
+  5. **Findings ledger.** Read `.atlas/.run/findings.json` and distill every VERIFIED entry into `.atlas/findings/<YYYY-MM-DD>_<slug>-<status>.md` (status token: `verified`, `fixed`, `wontfix`, `superseded`; example `2026-09-04-auth-redirect-verified.md`). Body: resolved issue, root cause, fix, evidence reference. Keep `.atlas/findings/INDEX.md` current. Do not distill unverified or in-progress entries.
   6. **Project wiki.** Maintain `docs/wiki/`: graphify writes raw output to ephemeral `graphify-out/` at the repo root (no `--output` flag; gitignored); atlas-wiki moves it into `docs/wiki/` and deletes `graphify-out/`. `understand-anything` output is published the same way. `.atlas/graphify/` and `.atlas/understand-anything/` are optional working areas, not the output path and not yours to write; only the published `docs/wiki/` copy is.
   7. **`.gitignore` hygiene.** Keep the zero-trust `.gitignore` current: allowlist new durable `docs/` and `.atlas/` subfolders, keep `.atlas/.run/` and secrets excluded. If it is missing or has drifted from the deny-by-default / allowlist / re-exclude-last contract in docs-ssot.md, flag it and fix it per the `atlas-gitignore` skill, not ad hoc.
   8. **Structure completeness.** If part of the canonical structure is missing (a root file, a base `docs/` subfolder, a durable `.atlas/` subfolder), do not create it from scratch. Note the gap and recommend (or, if trivial and clearly in scope, run) `atlas-setup`.
-  9. **Archive (no live noise).** Move retired, superseded or fixed one-off notes to `.atlas/archive/<YYYY-MM-DD>-<slug>-<status>.md` instead of deleting them. Live `docs/` and `.atlas/findings/` hold current truth only: no "fixed" or "done" duplicate narratives next to the canonical CHANGELOG entry.
+  9. **Archive (no live noise).** Move retired, superseded or fixed one-off notes to `.atlas/archive/<YYYY-MM-DD>_<slug>-<status>.md` instead of deleting them. Live `docs/` and `.atlas/findings/` hold current truth only: no "fixed" or "done" duplicate narratives next to the canonical CHANGELOG entry.
   10. **Knowledge graph refresh.** If a published graph exists (`docs/wiki/graph.json`) and the change touched source files, regenerate it with the `graphify` skill (or the command in `docs/AGENTS.md`), then republish per step 6; never treat `graphify-out/` as a source of truth. If graphify is not installed, note the stale graph in your report; do not install anything.
 - Route noisy reads through `context-mode`.
+
+## Release notes
+
+`.github/workflows/release.yml` publishes a GitHub release from `plugins/atlas/CHANGELOG.md` on every `plugin.json` version bump. On each shipped change:
+- Add or update the top `## <version> - <date> (unreleased)` section of `plugins/atlas/CHANGELOG.md` for the `plugin.json` version, with Added / Changed / Fixed / Verified.
+- When the lead says the version ships, remove `(unreleased)` and set the date.
+- Check `python3 plugins/atlas/scripts/release_notes.py <version>` exits 0.
 
 ## Boundaries
 - Never edit source code, tests, or config outside your writable scope; if a code or config change is needed to make the docs accurate (e.g. a referenced command does not exist), stop and report it. Do not rewrite docs for style; update only sections the change touched.
@@ -80,7 +89,7 @@ claude-mem: `search` returns IDs; `timeline` takes `anchor` (int) or `query`, no
 
 ## Durable learnings: atlas-compound handoffs (docs/lessons/)
 
-The `atlas-compound` skill hands you capture-ready learnings from a solved, verified run to write or update under `docs/lessons/`. It does not write `docs/` itself; you are the single writer of durable docs prose. Path: `docs/lessons/<category>/<YYYY-MM-DD>-<slug>.md` (enforced by `plugins/atlas/scripts/lint_docs_names.py`); the `date:` frontmatter must match the filename date.
+The `atlas-compound` skill hands you capture-ready learnings from a solved, verified run to write or update under `docs/lessons/`. It does not write `docs/` itself; you are the single writer of durable docs prose. Path: `docs/lessons/<category>/<YYYY-MM-DD>_<slug>.md` (enforced by `plugins/atlas/scripts/lint_docs_names.py`); the `date:` frontmatter must match the filename date.
 
 ### Frontmatter contract (write and validate)
 

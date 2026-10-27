@@ -58,7 +58,7 @@ export function teamsOf(records: readonly { name: string; text: string }[], chan
   });
 }
 
-/** The mux rows this session owns, first row per name: `status` under the default claude-bg transport also lists
+/** The mux rows this session owns, first row per name: `status` under the claude-bg transport also lists
  * every background claude agent of the root, other sessions' included. */
 export function ownRows(rows: readonly SquadAgent[], own: ReadonlySet<string>): SquadAgent[] {
   const seen = new Set<string>();

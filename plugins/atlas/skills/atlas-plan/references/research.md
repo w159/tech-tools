@@ -12,8 +12,8 @@ CE's institutional retrieval is grep-first, never read-everything; port that sha
 
 **Search roots:**
 
-- `docs/lessons/` - dated learning files (`<YYYY-MM-DD>-<slug>.md`); the primary retrospective corpus.
-- `.atlas/findings/INDEX.md` - the durable findings ledger index; follow into the individual `YYYY-MM-DD-<slug>.md` findings it links. (docs-ssot requires consulting both before non-trivial work; this is that consult, applied to planning.)
+- `docs/lessons/` - dated learning files (`<YYYY-MM-DD>_<slug>.md`); the primary retrospective corpus.
+- `.atlas/findings/INDEX.md` - the durable findings ledger index; follow into the individual `YYYY-MM-DD_<slug>.md` findings it links. (docs-ssot requires consulting both before non-trivial work; this is that consult, applied to planning.)
 
 **Algorithm:**
 

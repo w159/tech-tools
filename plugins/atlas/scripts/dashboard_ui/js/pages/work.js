@@ -2,7 +2,7 @@
 // Every change is one POST /api/v2/todos; the server's fresh `state` replaces ours.
 
 import { h, icon, debounce, fmtRelative, statusLabel } from "../dom.js";
-import { Badge, StatusDot, EmptyState, confirm, toast, toastError } from "../components.js";
+import { Badge, StatusDot, EmptyState, State, confirm, toast, toastError } from "../components.js";
 
 const STATUSES = ["open", "in_progress", "blocked", "done"];
 
@@ -15,6 +15,9 @@ let archivedView = false; // Archived toggle: GET ?archived=1, read-only list wi
 let tokenBad = false; // a 401 / bad_token answer: mutations stay disabled until a reload
 let lastHash = "";
 let stale = false; // a refresh arrived while the user was busy; repaint once they are done
+let loadError = null; // the first load failed: the lens shows an error State with Retry instead of throwing to the router
+let refreshError = null; // a later refresh failed: the board keeps its last good rows under a stale banner
+let lastGoodAt = 0; // ms timestamp of the last successful GET /todos
 const launchInfo = {}; // todo id -> last start/assign result (or failure) shown inline on the card
 const launching = new Set();
 const VOLATILE = new Set(["updated", "age_seconds", "generated_at", "now", "idle_seconds", "last_ok"]);
@@ -120,6 +123,7 @@ async function reload(ctx) {
   const params = { project: isMerged(ctx) ? "all" : workProject(ctx) };
   if (archivedView) params.archived = 1;
   state = await ctx.api.get("todos", params);
+  lastGoodAt = Date.now();
 }
 
 function paint(ctx) {
@@ -427,7 +431,19 @@ function archivedCard(ctx, t) {
   );
 }
 
+function retryRefresh(ctx) {
+  reload(ctx).then(() => { refreshError = null; }, (e) => { refreshError = e; }).finally(() => paint(ctx));
+}
+
+function retryLoad(ctx) {
+  loadError = null;
+  reload(ctx).catch((e) => { loadError = e; }).finally(() => paint(ctx));
+}
+
+const clockOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
 function build(ctx) {
+  if (!state) return h("div", { class: "page", id: "work-root" }, State({ variant: "error", error: loadError || { error: "Board not loaded" }, onRetry: () => retryLoad(ctx) }));
   const root = h("div", { class: "page", id: "work-root", onPointerdown: onPointerDown, onFocusout: () => setTimeout(() => stale && !busy() && paint(ctx), 0) });
   const counts = state.counts || {};
   root.appendChild(
@@ -462,6 +478,9 @@ function build(ctx) {
       )
     )
   );
+  if (refreshError) {
+    root.appendChild(h("div", { class: "work-banner work-stale", role: "status" }, h("span", null, "Could not refresh the board. Showing the last good state from " + clockOf(lastGoodAt) + "."), h("button", { class: "btn btn-sm", type: "button", onClick: () => retryRefresh(ctx) }, "Retry")));
+  }
   if (locked(ctx)) {
     root.appendChild(
       h(
@@ -530,7 +549,13 @@ export default {
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("pointercancel", onPointerUp);
-    await reload(ctx);
+    loadError = null;
+    refreshError = null;
+    try {
+      await reload(ctx);
+    } catch (e) {
+      loadError = e;
+    }
     lastHash = hashOf();
     return state;
   },
@@ -546,11 +571,16 @@ export default {
       refresher = debounce(async () => {
         try {
           await reload(ctx);
-          if (hashOf() === lastHash) return; // nothing real changed: keep the DOM (and the user's clicks)
+          const recovered = refreshError !== null;
+          refreshError = null;
+          if (!recovered && hashOf() === lastHash) return; // nothing real changed: keep the DOM (and the user's clicks)
           if (busy()) stale = true;
           else paint(ctx);
-        } catch {
-          // the next event retries; the board keeps showing the last good state
+        } catch (e) {
+          // the next event retries; the board keeps its last good rows and says so
+          refreshError = e;
+          if (busy()) stale = true;
+          else paint(ctx);
         }
       }, 700);
       window.addEventListener("work-repaint", () => { if (stale && !busy()) paint(ctx); });
@@ -568,5 +598,7 @@ export default {
     dragId = null;
     pointerDown = false;
     state = null;
+    loadError = null;
+    refreshError = null;
   },
 };

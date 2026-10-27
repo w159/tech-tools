@@ -11,6 +11,7 @@ import unittest
 
 import _test_isolation  # noqa: F401
 import atlas_mux
+import atlas_resolve
 
 
 class TeamTests(unittest.TestCase):
@@ -18,9 +19,11 @@ class TeamTests(unittest.TestCase):
         a = atlas_mux.build_team("audit", "high", ["b", "a"], "do it")
         b = atlas_mux.build_team("audit", "high", ["a", "b"], "do it")
         self.assertEqual(json.dumps(a, sort_keys=True), json.dumps(b, sort_keys=True))
-        self.assertEqual(len(a["members"]), 5)
-        self.assertEqual(len({m["name"] for m in a["members"]}), 5)
-        self.assertEqual(a["max_parallel"], 5)
+        cell = atlas_resolve.resolve("audit", "high", None)
+        n = sum(t["count"] for t in cell["team"])  # matrix-driven, not hardcoded
+        self.assertEqual(len(a["members"]), n)
+        self.assertEqual(len({m["name"] for m in a["members"]}), n)
+        self.assertEqual(a["max_parallel"], cell["max_parallel"])
 
     def test_semaphore_never_exceeds_max_parallel(self):
         rec = atlas_mux.build_team("audit", "high", None, "x")
@@ -38,7 +41,7 @@ class TeamTests(unittest.TestCase):
                 done.add(running[0])
 
         res = atlas_mux.supervise(rec, spawn, lambda n: n in done, sleep, 0)
-        self.assertEqual(len(res), 5)
+        self.assertEqual(len(res), len(rec["members"]))
         self.assertLessEqual(peak[0], 2)
 
     def test_wait_and_reap(self):
@@ -243,7 +246,8 @@ class WaveAndChannelTests(unittest.TestCase):
         finally:
             os.environ.pop("ATLAS_SESSION_ID", None)
         levels = {agent: thinking for agent, thinking, _ in seen.values()}
-        self.assertEqual({"explorer": "low", "completeness-critic": "low"}, levels)
+        # Claude-tier effort per role from the retiered matrix (design 2026-10-20_atlas-tiering-design): critic is medium.
+        self.assertEqual({"explorer": "low", "completeness-critic": "medium"}, levels)
         self.assertTrue(all(effort is None for *_, effort in seen.values()))
 
     def test_reap_closes_the_team_channel_while_its_lead_session_lives(self):

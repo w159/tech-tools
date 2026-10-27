@@ -35,6 +35,8 @@ import sys
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 )
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 
 
 # Per-session "recall satisfied" markers (tests point this at a temp dir).

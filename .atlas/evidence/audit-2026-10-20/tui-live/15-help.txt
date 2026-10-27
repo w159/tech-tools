@@ -1,0 +1,30 @@
+help ▸ ▊  · type to find a command
+HELP · Atlas Colony workspace, command bar & CLI
+At cmd ▸ type then Enter; Tab completes. <arg> required, [arg] optional.
+CLI in your terminal: atlas_tui.py --once · --view <section> · --seat <name> · --launch
+Colony workspace: 1/2/3 focus SESSIONS/CHANNEL/STEER | Tab cycle the three regions
+   Up/Down/PgUp/PgDn move the SESSIONS row, scroll CHANNEL | Enter open the selected SESSIONS row
+   Home/End jump CHANNEL to the oldest/newest row | i or m type a message to the selected seat (or …
+   b type a broadcast (@all) | l type a message to the lead (@lead) | h hold or release the selecte…
+   f filter CHANNEL to the selected seat (again clears) | v open the selected seat's view
+   Left/Right unused in the workspace
+STEER typing: Enter send (an @seat, @all or @lead prefix retargets) | Esc leave STEER and drop the …
+   Backspace erase one character
+Everywhere: W return to the colony workspace | t attach the selected seat's pane
+   x stop the selected seat (y/n confirm) | r re-read the snapshot | a toggle all projects | q quit…
+   : command bar | / filter the current view | Esc go back one level
+Other sections: Up/Down/PgUp/PgDn move in the focused pane | Left/Right switch pane focus | Enter o…
+   Tab next right-pane tab | m message the selected seat | v open the selected seat's view
+
+› colony <id>                                  open a colony
+  seat <name>                                  live view of a seat's tmux pane
+  term <seat>                                  attach the seat's tmux pane (C-b d returns)
+  send <seat> <text>                           post a board note to a seat
+  msg <seat>                                   prefill the command line with a note to a seat
+  view <seat>                                  open a seat's view (pane, transcript, log or notes)
+  stop <seat>                                  stop a pane seat after a y/n confirm
+  broadcast <text>                             post a board note to the colony's channel (to all)
+  : <section>                                  colony|topology|specs|projects|terminals|feed|system
+  / <text>                                     filter the current view
+↑↓ move · ⏎ pick · tab region · [ ? help ]  [ q quit ]
+lead reads the board at its next turn

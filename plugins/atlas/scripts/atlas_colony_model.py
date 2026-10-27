@@ -36,9 +36,17 @@ import atlas_todo  # noqa: E402
 PLUGIN_DIR = SCRIPTS_DIR.parent
 FEED_MAX = 200
 NOW_MAX = 120
-FINISHED_GRACE_S = 300  # a colony whose seats all exited stays listed (finished) this long
-TEAM_GRACE_S = 180  # a just-spawned team record is listed this long while its panes come up
+FINISHED_GRACE_S = (
+    300  # a colony whose seats all exited stays listed (finished) this long
+)
+TEAM_GRACE_S = (
+    180  # a just-spawned team record is listed this long while its panes come up
+)
 OPEN = ("pending", "in_progress")
+# A lead channel with no lead_pid (in-process Claude Code subagents) is live while its registry
+# last_activity is this fresh.
+LIVE_WINDOW_S = int(os.environ.get("ATLAS_COLONY_LIVE_WINDOW") or 1800)
+WORKING_S = 120  # a board note this fresh marks a pane-less seat working
 TMUX_TIMEOUT = 5
 HARNESSES = ("claude", "omp", "codex")
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
@@ -238,16 +246,23 @@ def _pid_gone(pid) -> bool:
 _DEAD_SEEN: dict = {}  # pane_id -> first time a snapshot saw it dead (when tmux has no dead time)
 
 
-def _ended_fallback(seat: dict, pane: dict | None, team: dict | None, now: float) -> float:
+def _ended_fallback(
+    seat: dict, pane: dict | None, team: dict | None, now: float
+) -> float:
     """End time of a seat whose channel entry has no ended_at (crash, kill --run, claude-bg exit):
     the latest of the pane's dead time, the worker log mtime and the team record mtime."""
     cands = [_f((team or {}).get("_mtime"))]
     try:
-        cands.append(Path(seat["log_path"]).stat().st_mtime if seat["log_path"] else 0.0)
+        cands.append(
+            Path(seat["log_path"]).stat().st_mtime if seat["log_path"] else 0.0
+        )
     except OSError:
         pass
     if pane and pane["pane_dead"] == "1":
-        cands.append(_f(pane.get("pane_dead_time")) or _DEAD_SEEN.setdefault(pane["pane_id"], now))
+        cands.append(
+            _f(pane.get("pane_dead_time"))
+            or _DEAD_SEEN.setdefault(pane["pane_id"], now)
+        )
     return max(cands)
 
 
@@ -332,11 +347,16 @@ def _omp_sessions_root() -> Path:
     d = os.environ.get("PI_CODING_AGENT_DIR")
     if d:
         return Path(d).expanduser() / "sessions"
-    return Path.home() / (os.environ.get("PI_CONFIG_DIR") or ".omp") / "agent" / "sessions"
+    return (
+        Path.home() / (os.environ.get("PI_CONFIG_DIR") or ".omp") / "agent" / "sessions"
+    )
 
 
 def _claude_projects_root() -> Path:
-    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude").expanduser() / "projects"
+    return (
+        Path(os.environ.get("CLAUDE_CONFIG_DIR") or "~/.claude").expanduser()
+        / "projects"
+    )
 
 
 def _cwd_slug(path: str) -> str:
@@ -394,7 +414,9 @@ def _lead_transcript(root: str, name: str, chan: dict | None) -> str:
     """The lead's own session transcript: the omp main session file (sibling FILE of its
     subagent dirs) or the Claude project session file; '' when unknown."""
     m = re.search(r"lead-([0-9a-fA-F]{6})", name)
-    if not m:  # a named lead (ATLAS_LEAD_NAME/ATLAS_WORKER_NAME) has no session id to find
+    if (
+        not m
+    ):  # a named lead (ATLAS_LEAD_NAME/ATLAS_WORKER_NAME) has no session id to find
         return ""
     sid6 = m.group(1).lower()
     key = ("lead", sid6, str((chan or {}).get("harness") or ""))
@@ -413,7 +435,9 @@ def _lead_transcript(root: str, name: str, chan: dict | None) -> str:
         else:
             cands = []
         if cands:
-            path = str(max(cands, key=lambda f: (f.parent.name == slug, f.stat().st_mtime)))
+            path = str(
+                max(cands, key=lambda f: (f.parent.name == slug, f.stat().st_mtime))
+            )
     except OSError:
         path = ""
     _TRANSCRIPTS[key] = (time.time() + _TRANSCRIPT_TTL_S, path)
@@ -484,7 +508,9 @@ def _result_text(content) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return "\n".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)
+        return "\n".join(
+            p.get("text", "") if isinstance(p, dict) else str(p) for p in content
+        )
     return str(content or "")
 
 
@@ -507,9 +533,13 @@ def _tail_record(rec: dict) -> list[str]:
                 if pt in ("text", "output_text"):
                     out += _prompt_lines(part.get("text"), False)
                 elif pt == "toolCall":
-                    out.append(f"→ {part.get('name', '?')} {_short_args(part.get('arguments'))}".rstrip())
+                    out.append(
+                        f"→ {part.get('name', '?')} {_short_args(part.get('arguments'))}".rstrip()
+                    )
                 elif pt == "toolResult":
-                    out += _result_line(_result_text(part.get("content") or part.get("text")))
+                    out += _result_line(
+                        _result_text(part.get("content") or part.get("text"))
+                    )
         return out
     if t in ("assistant", "user"):  # Claude Code: {message: {content: str | [blocks]}}
         msg = rec.get("message") or {}
@@ -525,7 +555,9 @@ def _tail_record(rec: dict) -> list[str]:
                 if pt == "text":
                     out += _prompt_lines(part.get("text"), t == "user")
                 elif pt == "tool_use":
-                    out.append(f"→ {part.get('name', '?')} {_short_args(part.get('input'))}".rstrip())
+                    out.append(
+                        f"→ {part.get('name', '?')} {_short_args(part.get('input'))}".rstrip()
+                    )
                 elif pt == "tool_result":
                     out += _result_line(_result_text(part.get("content")))
         return out
@@ -667,7 +699,9 @@ def _terminals(panes_all: list[dict]) -> list[dict]:
 
 
 _NOTES: dict = {}  # board file path -> ((mtime_ns, size), tail records)
-NOTE_TAIL_LINES = 200  # the feed shows FEED_MAX; the per-seat "now" needs only each file's last note
+NOTE_TAIL_LINES = (
+    200  # the feed shows FEED_MAX; the per-seat "now" needs only each file's last note
+)
 NOTE_TAIL_BYTES = 256 * 1024
 
 
@@ -700,9 +734,33 @@ def _tail_notes(path: Path) -> list[dict]:
     return recs
 
 
+CHAT_MAX = 100  # notes kept per channel in snapshot["chat"]
+_WAVE: dict = {}  # wave file path -> ((mtime_ns, size), held member names)
+
+
+def _held(root: str) -> set:
+    """Members with a hold (the `paused` flag in colony_wave.json, same file atlas_dash_colony writes)."""
+    p = Path(root) / ".atlas" / ".run" / "colony_wave.json"
+    try:
+        st = p.stat()
+        key = (st.st_mtime_ns, st.st_size)
+        if (hit := _WAVE.get(p)) and hit[0] == key:
+            return hit[1]
+        members = json.loads(p.read_text()).get("members") or {}
+        names = {
+            n for n, v in members.items() if isinstance(v, dict) and v.get("paused")
+        }
+    except (OSError, ValueError, AttributeError):
+        return set()
+    _WAVE[p] = (key, names)
+    return names
+
+
 def _board_files(root: str) -> list[tuple[int, Path]]:
     d = atlas_todo.notes_dir(root)
-    return [(p.stat().st_mtime_ns, p) for p in d.glob(f"*{atlas_todo.NOTE_FILE_SUFFIX}")]
+    return [
+        (p.stat().st_mtime_ns, p) for p in d.glob(f"*{atlas_todo.NOTE_FILE_SUFFIX}")
+    ]
 
 
 def _recent_notes(files: list[tuple[int, Path]]) -> list[dict]:
@@ -735,8 +793,9 @@ def _active(root: str, panes_all: list[dict]) -> bool:
     )
 
 
-
-_STOP = frozenset("a an and the of to in on for with from by only is are be as at it this that into over then please".split())
+_STOP = frozenset(
+    "a an and the of to in on for with from by only is are be as at it this that into over then please".split()
+)
 _EXT = re.compile(r"\.(?:py|ts|tsx|js|jsx|md|json|sh|yml|yaml)\b")
 
 
@@ -752,19 +811,32 @@ def _slug(text: str, fallback: str = "") -> str:
 
 
 def _role_label(role: str) -> str:
-    return re.sub(r"[^a-z0-9-]+", "-", str(role or "").lower().removeprefix("atlas:")).strip("-") or "worker"
+    return (
+        re.sub(
+            r"[^a-z0-9-]+", "-", str(role or "").lower().removeprefix("atlas:")
+        ).strip("-")
+        or "worker"
+    )
 
 
 def _role_title(role: str, specs: list[dict]) -> str:
     """One-line role description from agents/<role>.md, at most 40 chars."""
-    desc = next((s["description"] for s in specs if s["kind"] == "agent" and s["name"] == _role_label(role)), "")
+    desc = next(
+        (
+            s["description"]
+            for s in specs
+            if s["kind"] == "agent" and s["name"] == _role_label(role)
+        ),
+        "",
+    )
     return desc if len(desc) <= 40 else desc[:39].rstrip() + "…"
 
 
 def _source_label(src: dict, channel: str) -> str:
     """`from <harness> session <session> · lead <lead> · <project>`, empty parts omitted, else `channel <channel>`."""
     parts = [
-        f"from {src['harness']}" + (f" session {src['session']}" if src["session"] else "")
+        f"from {src['harness']}"
+        + (f" session {src['session']}" if src["session"] else "")
         if src["harness"]
         else (f"from session {src['session']}" if src["session"] else ""),
         f"lead {src['lead']}" if src["lead"] else "",
@@ -774,14 +846,18 @@ def _source_label(src: dict, channel: str) -> str:
     return " · ".join(parts) if parts else (f"channel {channel}" if channel else "")
 
 
-def _name_colonies(colonies: dict, teams: list[dict], chan_recs: dict | None = None) -> None:
+def _name_colonies(
+    colonies: dict, teams: list[dict], chan_recs: dict | None = None
+) -> None:
     """Give every colony a unique human `name`, a `title` and a `source`, in place. Oldest first so a name
     never changes when a later colony shares its slug (the later one gets the -2 suffix)."""
     rec = {t["team_id"]: t for t in teams}
     taken: set[str] = set()
     for c in sorted(colonies.values(), key=lambda c: (_f(c.get("created")), c["id"])):
         t = rec.get(c["id"]) or {}
-        base = t.get("name") or _slug(c.get("task") or "", _slug(c["id"].replace("_", "-")) or "colony")
+        base = t.get("name") or _slug(
+            c.get("task") or "", _slug(c["id"].replace("_", "-")) or "colony"
+        )
         name, n = base, 2
         while name in taken:
             name, n = f"{base}-{n}", n + 1
@@ -794,7 +870,9 @@ def _name_colonies(colonies: dict, teams: list[dict], chan_recs: dict | None = N
         c["title"] = (c.get("task") or "")[:60]
         c["source"] = {
             "project": src.get("project") or Path(c.get("project") or "").name,
-            "lead": src.get("lead") or t.get("lead") or (chan.rsplit("/", 1)[-1] if "/" in chan else ""),
+            "lead": src.get("lead")
+            or t.get("lead")
+            or (chan.rsplit("/", 1)[-1] if "/" in chan else ""),
             "harness": src.get("harness")
             or str(((chan_recs or {}).get(chan) or {}).get("harness") or ""),
             "session": src.get("session") or "",
@@ -802,7 +880,9 @@ def _name_colonies(colonies: dict, teams: list[dict], chan_recs: dict | None = N
         c["source"]["label"] = _source_label(c["source"], chan)
 
 
-def _address_seats(seats: list[dict], colonies: dict, teams: list[dict], specs: list[dict]) -> None:
+def _address_seats(
+    seats: list[dict], colonies: dict, teams: list[dict], specs: list[dict]
+) -> None:
     """Set each seat's `address` (<role>[-<n>]@<colony name>; n only when the role repeats, in spawn order
     then name; generic `subagent` seats use the member name, since <n> would hide who is who) and
     `role_title`, in place."""
@@ -815,17 +895,37 @@ def _address_seats(seats: list[dict], colonies: dict, teams: list[dict], specs: 
             if role == "subagent":
                 s["address"] = f"{s['name']}@{colonies[cid]['name']}"
             else:
-                s["address"] = f"{role}{'-' + str(i) if len(group) > 1 else ''}@{colonies[cid]['name']}"
+                s["address"] = (
+                    f"{role}{'-' + str(i) if len(group) > 1 else ''}@{colonies[cid]['name']}"
+                )
             s["role_title"] = _role_title(role, specs)
 
 
 # --- snapshot -------------------------------------------------------------------------------------
+def _lead_pane(root: str, lead: str, live: dict) -> str:
+    """The lead's tmux pane id recorded by session_boot (`lead-pane-<lead>.json`); '' when it
+    was not started in tmux or the pane is gone. The lead may live in any tmux session (not only
+    `atlas-*`), so liveness is a direct display-message; `live` caches it per snapshot."""
+    try:
+        f = Path(root) / ".atlas" / ".run" / f"lead-pane-{lead}.json"
+        pane = str(json.loads(f.read_text()).get("pane") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+    if not re.fullmatch(r"%\d+", pane):  # never let a recorded value reach tmux argv
+        return ""
+    if pane not in live:
+        rc, out = _tmux("display-message", "-p", "-t", pane, "#{pane_id} #{pane_dead}")
+        live[pane] = rc == 0 and out.split() == [pane, "0"]
+    return pane if live[pane] else ""
+
+
 def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     root = os.path.realpath(root or os.getcwd())
     now = time.time()
     projects = _projects(root, all_projects)
     roots = [root] + [p["root"] for p in projects if p["root"] != root]
     panes_all = _panes()
+    lead_live: dict = {}  # pane id -> alive, per snapshot
 
     members: dict = {}  # name -> {role, channel, entry}
     team_of: dict = {}
@@ -842,7 +942,11 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
             chan_recs.setdefault(str(c.get("name") or ""), c)
             chan_root.setdefault(str(c.get("name") or ""), r)
             for m in c.get("members") or []:
-                if m.get("name") and m.get("role") != "lead" and m["name"] not in members:
+                if (
+                    m.get("name")
+                    and m.get("role") != "lead"
+                    and m["name"] not in members
+                ):
                     members[m["name"]] = {
                         "role": m.get("role") or "worker",
                         "entry": m,
@@ -863,7 +967,9 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                     },
                 )
                 members[m["name"]]["role"] = m.get("role") or members[m["name"]]["role"]
-        items += [i for i in atlas_todo.load(r).get("items", []) if not i.get("archived")]
+        items += [
+            i for i in atlas_todo.load(r).get("items", []) if not i.get("archived")
+        ]
         with contextlib.suppress(OSError):
             board += _board_files(r)
     notes = _recent_notes(board)
@@ -886,10 +992,22 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     for name, m in members.items():
         seats.setdefault(name, {"pane": None, "role": m["role"]})
 
+    reg_live = {  # registry-backed colonies: a lead channel with no lead_pid and recent activity
+        cn
+        for cn, c in chan_recs.items()
+        if c.get("kind") == "lead"
+        and _i(c.get("lead_pid")) <= 0
+        and now - _f(c.get("last_activity")) < LIVE_WINDOW_S
+    }
     last_note = {str(n.get("owner")): n for n in notes}
-    for name in seats:  # a live seat's last note may sit in a file older than the feed window
+    for (
+        name
+    ) in seats:  # a live seat's last note may sit in a file older than the feed window
         if name not in last_note:
-            f = atlas_todo.notes_dir(proj_of.get(name) or root) / f"{name}{atlas_todo.NOTE_FILE_SUFFIX}"
+            f = (
+                atlas_todo.notes_dir(proj_of.get(name) or root)
+                / f"{name}{atlas_todo.NOTE_FILE_SUFFIX}"
+            )
             if tail := _tail_notes(f):
                 last_note[name] = tail[-1]
 
@@ -925,22 +1043,34 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "id": cid,
                 "label": cid,
                 "session": p["session_name"] if p else "",
-                "project": proj_of.get(name) or _owner((p or {}).get("pane_current_path") or root, roots),
+                "project": proj_of.get(name)
+                or _owner((p or {}).get("pane_current_path") or root, roots),
                 "transport": "tmux" if p else "subagent",
                 "task": "",
                 "channel": str(m.get("channel") or ""),
                 "created": None,
                 "pods": [],
             }
-        log = Path(proj_of.get(name) or root) / ".atlas" / ".run" / "logs" / f"{name}.log"
+        log = (
+            Path(proj_of.get(name) or root) / ".atlas" / ".run" / "logs" / f"{name}.log"
+        )
         runtime, model = _log_info(log)
         if runtime == "unknown" and p and p["pane_current_command"] in HARNESSES:
             runtime = p["pane_current_command"]
-        if runtime == "unknown" and not p:  # in-process subagent: its channel knows the harness
-            runtime = str((chan_recs.get(str(m.get("channel") or "")) or {}).get("harness") or "unknown")
+        if (
+            runtime == "unknown" and not p
+        ):  # in-process subagent: its channel knows the harness
+            runtime = str(
+                (chan_recs.get(str(m.get("channel") or "")) or {}).get("harness")
+                or "unknown"
+            )
         target = p["pane_id"] if p else ""
         transcript = (
-            "" if p else _seat_transcript(root, name, entry, chan_recs.get(str(m.get("channel") or "")))
+            ""
+            if p
+            else _seat_transcript(
+                root, name, entry, chan_recs.get(str(m.get("channel") or ""))
+            )
         )
         text = capture(target, 60, ansi=False) if p and p["pane_dead"] != "1" else ""
         exit_code = entry.get("exit_code")
@@ -964,11 +1094,29 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 session_ended[name] = _transcript_scan(transcript)[1]
             else:
                 lp = (
-                    _i((chan_recs.get(str(m.get("channel") or "")) or {}).get("lead_pid"))
+                    _i(
+                        (chan_recs.get(str(m.get("channel") or "")) or {}).get(
+                            "lead_pid"
+                        )
+                    )
                     if exit_code is None and not _i(entry.get("pid"))
                     else 0
                 )
-                if lp > 0:  # in-process subagent: its lead's liveness is the seat's liveness
+                if str(m.get("channel") or "") in reg_live and not _i(entry.get("pid")):
+                    # in-process subagent of a registry-live colony: state comes from its last board note
+                    kind = str((note or {}).get("kind") or "")
+                    if kind in ("done", "handback"):
+                        state, exit_code = "finished", 0
+                    elif kind == "blocked":
+                        state = "blocked"
+                    elif note and now - _f(note.get("ts")) < WORKING_S:
+                        state = "working"
+                    else:
+                        state = "idle"
+                    leadpid_live = True
+                elif (
+                    lp > 0
+                ):  # in-process subagent: its lead's liveness is the seat's liveness
                     leadpid_live = _pid_alive(lp)
                     state = "working" if leadpid_live else "dead"
                 else:
@@ -988,9 +1136,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
             mtime = log.stat().st_mtime
         except OSError:
             mtime = 0.0
-        active = max(
-            mtime, _f(note["ts"]) if note else 0.0, _f(entry.get("joined"))
-        )
+        active = max(mtime, _f(note["ts"]) if note else 0.0, _f(entry.get("joined")))
         pid = _i(p["pane_pid"]) if p and p["pane_pid"].isdigit() else entry.get("pid")
         out_seats.append(
             {
@@ -1043,10 +1189,21 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
     for cname, c in chan_recs.items():
         lname = str(c.get("lead") or "")
         lp = _i(c.get("lead_pid"))
-        if not lname or lp <= 0 or not _pid_alive(lp) or lname in seats:
+        if (
+            not lname
+            or lname in seats
+            or not (cname in reg_live or (lp > 0 and _pid_alive(lp)))
+        ):
             continue
-        seats[lname] = {"pane": None, "role": "lead"}  # _ended_fallback looks seats up by name
-        cid = str(cname or "colony").rsplit("/", 1)[-1]
+        seats[lname] = {
+            "pane": None,
+            "role": "lead",
+        }  # _ended_fallback looks seats up by name
+        # merge with a team colony that already carries this channel
+        cid = (
+            next((k for k, v in colonies.items() if v.get("channel") == cname), None)
+            or str(cname or "colony").rsplit("/", 1)[-1]
+        )
         if cid not in colonies:
             colonies[cid] = {
                 "id": cid,
@@ -1070,7 +1227,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
                 "model": "",
                 "state": "working",
                 "exit_code": None,
-                "target": "",
+                "target": _lead_pane(chan_root.get(cname) or root, lname, lead_live),
                 "pid": lp,
                 "queue": 0,
                 "open_items": [],
@@ -1083,6 +1240,10 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
             }
         )
         leadpid_live_names.add(lname)
+    for c in colonies.values():
+        if c.get("channel") in reg_live and c["transport"] == "subagent":
+            c["transport"] = "in-process"
+            c["created"] = c.get("created") or chan_recs[c["channel"]].get("created")
     _name_colonies(colonies, teams, chan_recs)
     _address_seats(out_seats, colonies, teams, _static("specs", _specs))
     # Only colonies with work in progress: a live pane that is working/idle/blocked, a team
@@ -1109,7 +1270,9 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
             (members.get(s_["name"]) or {"entry": {}})["entry"].get("ended_at")
         )
         if not e and s_["state"] in ("finished", "dead"):
-            e = _ended_fallback(s_, seats[s_["name"]]["pane"], team_by_id.get(s_["colony"]), now)
+            e = _ended_fallback(
+                s_, seats[s_["name"]]["pane"], team_by_id.get(s_["colony"]), now
+            )
         ended[s_["colony"]] = max(ended.get(s_["colony"], 0.0), e)
     done = {
         cid
@@ -1117,7 +1280,11 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         if cid not in live
         and cid not in reaped
         and 0 < now - ended.get(cid, 0.0) < FINISHED_GRACE_S
-        and all(s_["state"] in ("finished", "dead") for s_ in out_seats if s_["colony"] == cid)
+        and all(
+            s_["state"] in ("finished", "dead")
+            for s_ in out_seats
+            if s_["colony"] == cid
+        )
     }
     keep = live | fresh | done
     for cid, c in colonies.items():
@@ -1143,6 +1310,35 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         }
         for n in notes[-FEED_MAX:]
     ]
+    # per-channel chat slices from the notes already tailed above (no extra reads)
+    lead_names = {str(c.get("lead") or "") for c in chan_recs.values()} - {""}
+    chat: dict = {}
+    for n in notes:
+        chat.setdefault(str(n.get("channel") or ""), []).append(n)
+    chat = {
+        ch: [
+            {
+                "seq": n.get("seq"),
+                "ts": n.get("ts"),
+                "from": n.get("owner"),
+                "to": n.get("to") or "all",
+                "kind": n.get("kind") or "note",
+                "text": str(n.get("text") or ""),
+                "lead": str(n.get("owner") or "") in lead_names
+                or atlas_todo.is_lead_name(str(n.get("owner") or "")),
+            }
+            for n in sorted(
+                ns, key=lambda n: (_f(n.get("seq")), atlas_todo._note_ts_key(n))
+            )[-CHAT_MAX:]
+        ]
+        for ch, ns in chat.items()
+    }
+    for c in colonies.values():
+        c["seat_count"] = sum(1 for s in out_seats if s["colony"] == c["id"])
+        c["age_s"] = max(0.0, now - _f(c.get("created"))) if c.get("created") else None
+    held = {r: _held(r) for r in {s["project"] for s in out_seats}}
+    for s in out_seats:
+        s["held"] = s["name"] in held[s["project"]]
     return {
         "ok": True,
         "host": socket.gethostname().split(".")[0],
@@ -1150,6 +1346,7 @@ def snapshot(root: str | None = None, all_projects: bool = False) -> dict:
         "project": root,
         "colonies": list(colonies.values()),
         "seats": out_seats,
+        "chat": chat,
         "feed": feed,
         "needs": [f for f in feed if f["kind"] == "blocked" or f["to"] == "human"],
         "specs": _static("specs", _specs),

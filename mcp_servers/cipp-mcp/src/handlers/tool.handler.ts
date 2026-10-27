@@ -1,7 +1,6 @@
 // CIPP Tool Handler
 // Dispatches MCP tool calls to the correct CippService method.
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { CippService } from '../services/cipp.service.js';
 import { Logger } from '../utils/logger.js';
@@ -12,9 +11,8 @@ import {
  shapeRaw,
  extractShapeArgs,
  type SummaryFn,
- type ToolResult,
 } from '@shared/response-shaper.js';
-import { toolErrorFromCatch } from '@shared/error-envelope.js';
+import { toolErrorFromCatch, type ToolResult } from '@shared/error-envelope.js';
 import { TOOL_CATEGORIES } from '../mcp/tool.definitions.js';
 
 // ---------------------------------------------------------------------------
@@ -183,19 +181,10 @@ export interface McpToolResult {
 export class CippToolHandler {
  private cippService: CippService;
  private logger: Logger;
- private mcpServer: Server | null = null;
 
  constructor(cippService: CippService, logger: Logger) {
   this.cippService = cippService;
   this.logger = logger;
- }
-
- setServer(server: Server): void {
-  this.mcpServer = server;
- }
-
- getServer(): Server | null {
-  return this.mcpServer;
  }
 
  getToolDefinitions() {

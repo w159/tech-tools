@@ -1,0 +1,30 @@
+cmd ▸ ▊  Tab region · ? help · last 2026-10-20T11:14:16Z
+━ { SESSIONS } ━━━━━━━━━━━━━━━━━━━╋━ ATLAS COLONY . Mac . 3 colonies 44 seats ━━━━━━━━━━━━━━━━━━━━━━
+  lead-edc720 in-proc 42s 1h work ┃ ━ CHANNEL lead-contra (all) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ● lead working                ┃ 11:06 tui (you) > lead-contra  verifier ping [steer]
+    · general-purpose-efa6 idle   ┃ ━ PEEK lead-contra (t attach . v view) ━━━━━━━━━━━━━━━━━━━━━━━━━
+    · implementer-a1-baseline idle┃ no pane (in-process subagent)
+    · implementer-a2-tui-tests id…┃ ━ STEER -> lead-contra ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    · curator-a5-docs-reconcile i…┃ say to lead-contra >
+    · implementer-b3-reaper-healt…┃ [ view ] [ @all ] [ @lead ]
+    · implementer-b6-spawn-ghost …┃
+    · planner-colony-tui idle     ┃
+    · implementer-c2-retier idle  ┃
+>   · implementer-b1-tui-defects …┃
+    · implementer-s2-snapshot-dat…┃
+    · implementer-b5-header-ssot …┃
+    · implementer-omp-lead-channe…┃
+    · implementer-s1-golden-harne…┃
+    · implementer-c3-tripwire-tie…┃
+    · implementer-s3-sessions-reg…┃
+    · implementer-d1-context-cuts…┃
+    · implementer-d3-codex-contra…┃
+    · implementer-s4-channel-regi…┃
+    · implementer-s5-steer idle   ┃
+    · implementer-s6-keymap-mouse…┃
+    · implementer-cleanup-tests i…┃
+    · curator-s7-colony-docs idle ┃
+    · implementer-c2b-team-tests …┃
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↑↓ move · ⏎ pick · tab region · [ ? help ]  [ q quit ]
+[Mac] colony

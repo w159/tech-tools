@@ -40,7 +40,7 @@ orchestrate already verified - it checks that the return is genuinely complete:
 
 - Every plan U-ID (or the defect's owning-layer fix) attempted, with receipts.
 - Independent verification: verifier verdicts stamped in `.atlas/.run/findings.json`,
-  runtime/red-green proof under `.atlas/evidence/<YYYY-MM-DD>-<slug>/`.
+  runtime/red-green proof under `.atlas/evidence/<YYYY-MM-DD>_<slug>/`.
 - No `DECISION NEEDED` items left uncollected. If orchestrate's waves surfaced
   user-owned decisions (product forks, destructive scope), collect them, and route
   any genuine product-shape question to `atlas-brainstorm` (hard line 3). Collect
@@ -116,7 +116,7 @@ carried by the code, the tests, the plan artifact, or the defect diagnosis:
 - Not qualifying: what was built (the plan and CHANGELOG carry it), how it was
   verified (evidence carries it), routine fixes (findings.json carries them).
 
-Durable captures land in `docs/lessons/<YYYY-MM-DD>-<slug>.md` per the docs SSOT.
+Durable captures land in `docs/lessons/<YYYY-MM-DD>_<slug>.md` per the docs SSOT.
 Record an explicit skip with one line of reasoning when nothing qualifies - a skip
 is a decision, not an omission.
 

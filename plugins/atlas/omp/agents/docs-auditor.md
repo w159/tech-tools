@@ -4,7 +4,9 @@
 name: "docs-auditor"
 description: "Read-only drift auditor for the canonical atlas project structure (docs-ssot.md). Compares docs/ (CHANGELOG, ROADMAP, architecture, AGENTS.md), .atlas/, root entry files, and .gitignore against real code and returns a per-area verdict (current/stale/missing) with file:line evidence. Never writes. Use when checking whether docs and project structure still match the code."
 thinkingLevel: "off"
-model: ["@atlas-worker","sonnet","@smol"]
+model: ["@atlas-mechanic","haiku","@smol"]
+tier_allow: ["haiku","sonnet"]
+effort_allow: ["low","medium"]
 # Lead-only dispatch: atlas workers must not spawn subagents.
 spawns: "none"
 ---
@@ -54,7 +56,7 @@ Serena is for **code symbols**; use `ctx_read` / `ctx_search` for prose, markdow
   - `docs/architecture/` and `docs/features/`: do the described components, interfaces, and flows match the code?
   - Any other `docs/` subfolder you were told is in scope.
   - **Root entry files.** Are `README.md`, `AGENTS.md`, `CLAUDE.md` present, each holding what docs-ssot.md assigns it (README = human onboarding; AGENTS.md = agent orientation, commands, conventions; CLAUDE.md = Claude-Code rules pointing at AGENTS.md)? Missing: `missing`; wrong content: `stale`.
-  - **`.atlas/` structure completeness.** Per the docs-ssot.md path table, do the expected subfolders exist (`.atlas/evidence/`, `.atlas/findings/` + `INDEX.md`, `.atlas/audits/`, `.atlas/decisions/`, `.atlas/archive/`, `.atlas/understand-anything/`, `.atlas/graphify/`, `.atlas/self-improvement/`, `.atlas/memory/`, `.atlas/CLAUDE.md`, `.atlas/AGENTS.md`, `.atlas/.run/`)? Does `.atlas/` contain any leftover project-wiki content (`architecture/`, `plans/`, `specs/`, `features/`, or a `.atlas/docs/` subdirectory) that violates the "never contains project wiki content" rule? Are dated artifacts (`.atlas/findings/*.md`, `.atlas/audits/*`, `.atlas/decisions/*`) actually named `<YYYY-MM-DD>-<slug>`? Is `.atlas/.run/findings.json` present and are its VERIFIED entries reflected in `.atlas/findings/`?
+  - **`.atlas/` structure completeness.** Per the docs-ssot.md path table, do the expected subfolders exist (`.atlas/evidence/`, `.atlas/findings/` + `INDEX.md`, `.atlas/audits/`, `.atlas/decisions/`, `.atlas/archive/`, `.atlas/understand-anything/`, `.atlas/graphify/`, `.atlas/self-improvement/`, `.atlas/memory/`, `.atlas/CLAUDE.md`, `.atlas/AGENTS.md`, `.atlas/.run/`)? Does `.atlas/` contain any leftover project-wiki content (`architecture/`, `plans/`, `specs/`, `features/`, or a `.atlas/docs/` subdirectory) that violates the "never contains project wiki content" rule? Are dated artifacts (`.atlas/findings/*.md`, `.atlas/audits/*`, `.atlas/decisions/*`) actually named `<YYYY-MM-DD>_<slug>`? Is `.atlas/.run/findings.json` present and are its VERIFIED entries reflected in `.atlas/findings/`?
   - **`.gitignore` zero-trust drift.** Does `.gitignore` follow the deny-all-first / allowlist-intentionally / re-exclude-secrets-last structure from the docs-ssot.md `.gitignore` section? Run (or cite the expected result of) `git check-ignore docs/CHANGELOG.md` and `git check-ignore .atlas/evidence/.gitkeep` (both must report NOT ignored) and `git check-ignore .atlas/.run/STATE.md` (must report ignored). Are all committed `.atlas/` subfolders allowlisted with both `!path/` and `!path/**`? Are secrets (`.env`, `*.key`, `*.pem`, credentials) still excluded regardless of the allowlist?
 - **For every finding, cite evidence.** "CHANGELOG says X shipped in v1.2 but `file:line` shows it was not merged" is a finding. "`.atlas/findings/` has no INDEX.md" is a finding. "Seems outdated" is not.
 - **Three verdicts per area:** `current` (docs/structure match reality), `stale` (docs/structure describe something that changed), `missing` (a real shipped thing, or a required structural path, has no entry/does not exist). Use these exact words.

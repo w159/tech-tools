@@ -30,10 +30,6 @@ export interface NinjaOneCredentials {
 
 let _userTokenManager: UserTokenManager | null = null;
 
-export function getUserTokenManager(): UserTokenManager | null {
-  return _userTokenManager;
-}
-
 export function ensureUserTokenManager(creds: NinjaOneCredentials): UserTokenManager {
   if (!_userTokenManager) {
     _userTokenManager = new UserTokenManager(creds.baseUrl, creds.clientId, creds.region);

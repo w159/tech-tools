@@ -11,7 +11,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { pluginScript } from "./plugin-path";
 
 /** Resolved at call time so an `omp plugin upgrade atlas` mid-session is picked up (plugin-path). */
-export const tuiScript = (): string => pluginScript("atlas_tui.py");
+const tuiScript = (): string => pluginScript("atlas_tui.py");
 
 /** The outcome of one TUI run: exit code, or the spawn error itself. */
 export type TuiSpawnResult = { exitCode: number | null; error?: Error };
@@ -20,7 +20,7 @@ export type TuiSpawnResult = { exitCode: number | null; error?: Error };
 export type TuiSpawner = (bin: string, args: string[], opts: { cwd: string }) => Promise<TuiSpawnResult>;
 
 /** Default spawner: the child inherits the terminal while omp's renderer is stopped. */
-export const defaultTuiSpawner: TuiSpawner = async (bin, args, opts) => {
+const defaultTuiSpawner: TuiSpawner = async (bin, args, opts) => {
 	try {
 		const child = Bun.spawn([bin, ...args], { cwd: opts.cwd, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
 		await child.exited;

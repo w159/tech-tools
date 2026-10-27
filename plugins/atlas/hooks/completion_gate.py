@@ -3,6 +3,10 @@
 bytecode (a script run as __main__ is recompiled on every call). Importing this
 module yields the core module itself, so `import completion_gate` / mock.patch keep working."""
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+import atlas_env  # noqa: E402
+atlas_env.apply_store_env()
 
 import completion_gate_core as _core
 

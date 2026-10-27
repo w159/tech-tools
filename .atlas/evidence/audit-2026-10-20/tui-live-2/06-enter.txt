@@ -1,0 +1,30 @@
+cmd ▸ ▊  Tab region · ? help · last 2026-10-20T11:14:05Z
+━ { SESSIONS } ━━━━━━━━━━━━━━━━━━━╋━ ATLAS COLONY . Mac . 3 colonies 44 seats ━━━━━━━━━━━━━━━━━━━━━━
+    · implementer-c2-retier idle  ┃ ━ CHANNEL lead-contra (all) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    · implementer-b1-tui-defects …┃ 11:06 tui (you) > lead-contra  verifier ping [steer]
+    · implementer-s2-snapshot-dat…┃ ━ PEEK lead-contra (t attach . v view) ━━━━━━━━━━━━━━━━━━━━━━━━━
+    · implementer-b5-header-ssot …┃ no pane (in-process subagent)
+    · implementer-omp-lead-channe…┃ ━ STEER -> lead-contra ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    · implementer-s1-golden-harne…┃ say to lead-contra >
+    · implementer-c3-tripwire-tie…┃ [ view ] [ @all ] [ @lead ]
+    · implementer-s3-sessions-reg…┃
+    · implementer-d1-context-cuts…┃
+    · implementer-d3-codex-contra…┃
+    · implementer-s4-channel-regi…┃
+    · implementer-s5-steer idle   ┃
+    · implementer-s6-keymap-mouse…┃
+    · implementer-cleanup-tests i…┃
+    · curator-s7-colony-docs idle ┃
+    · implementer-c2b-team-tests …┃
+    · curator-release-notes idle  ┃
+    · implementer-release-bump id…┃
+    · verifier-tui-live idle      ┃
+    ● implementer-s8-registry-col…┃
+    ● verifier-tui-live-2 working ┃
+    · curator-s8-docs idle        ┃
+    +12 more                      ┃
+  lead-contra subagent 1s work    ┃
+>   ● lead working                ┃
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+↑↓ move · ⏎ pick · tab region · [ ? help ]  [ q quit ]
+[Mac] colony

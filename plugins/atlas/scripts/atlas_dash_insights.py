@@ -38,6 +38,11 @@ if str(SCRIPTS_DIR) not in sys.path:
 import atlas_faults  # noqa: E402 (needs SCRIPTS_DIR on sys.path)
 import atlas_health_collect as hc  # noqa: E402
 
+import collections  # noqa: E402
+
+# Last 20 reaper failures (atlas_dashboard.reap_tick), shown by the health "reaper" card.
+REAP_FAILURES: collections.deque = collections.deque(maxlen=20)
+
 try:  # optional collaborators; every use is guarded
     import atlas_db  # type: ignore
 except Exception:  # pragma: no cover
@@ -1073,6 +1078,13 @@ _SUB_INFO = {
         "ok_label": "Serving as of",
         "fail_label": "Last logged error",
     },
+    "reaper": {
+        "what": "The dashboard's 5-minute colony channel and worker run reaper; keeps the last 20 failures.",
+        "warn_means": "The reaper raised for a project path (for example PermissionError) and skipped it.",
+        "next": "Fix the permission or path named in the evidence; the reaper retries every 5 minutes.",
+        "ok_label": "Checked as of",
+        "fail_label": "Last reaper failure",
+    },
     "db": {
         "what": "The telemetry database opens and has its tables.",
         "warn_means": "The database has no tables or could not be opened; everything else on this page is blind.",
@@ -1507,6 +1519,24 @@ def _health_payload(ctx):
                 else []
             ),
             history_reason="dashboard.log lines carry no timestamps",
+        )
+    )
+    reap_fails = list(REAP_FAILURES)
+    subs.append(
+        sub(
+            "reaper",
+            "Reaper",
+            "warn" if reap_fails else "ok",
+            f"{len(reap_fails)} recent failures, newest: {reap_fails[-1]['error']}: {reap_fails[-1]['message']}"
+            if reap_fails
+            else "no reaper failures since the dashboard started",
+            _iso(now),
+            _iso(reap_fails[-1]["ts"]) if reap_fails else None,
+            [
+                f"{_iso(f['ts'])} {f['path']}: {f['error']}: {f['message']}"
+                for f in reversed(reap_fails)
+            ],
+            history_reason="failures are kept in memory only",
         )
     )
     # db

@@ -1,0 +1,19 @@
+// Gateway audit events from Container Apps console logs.
+// Table ContainerAppConsoleLogs_CL, line in column Log_s (Microsoft Learn: Monitor logs in Azure Container Apps).
+// If the environment sends logs to Azure Monitor resource-specific tables instead, use ContainerAppConsoleLogs and column Log.
+// Edit the two lets below, or let the harbor-audit skill substitute them.
+let lookback = 7d;
+let appName = "example-gateway";
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(lookback)
+| where ContainerAppName_s == appName
+| where Log_s startswith "{"
+| extend e = parse_json(Log_s)
+| where tostring(e.schema) == "mcp-gw.audit/1"
+// Client ids whose first event in the window is recent. Widen lookback to 30d or more
+// so "first seen" is meaningful, then read first_seen against the date you care about.
+| where isnotempty(tostring(e.client_id))
+| summarize first_seen = min(TimeGenerated), last_seen = max(TimeGenerated), events = count(),
+    people = dcount(coalesce(tostring(e.actor.email), tostring(e.actor.sub)))
+    by client_id = tostring(e.client_id)
+| order by first_seen desc

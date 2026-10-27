@@ -2,17 +2,19 @@
 // AGENTS.md:95 names test-mcp-tools.mjs for this; that harness is absent from the
 // tree, so this does the same job directly against the bundle.
 import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve as resolvePath } from 'node:path';
+import { dirname, join, resolve as resolvePath } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PLUGIN_MCP = resolvePath(HERE, '../../../plugins/atlas/mcp');
+const PLUGIN_MCP = resolvePath(HERE, '../../../plugins/armada/mcp');
 const SERVER = resolvePath(PLUGIN_MCP, 'panos/server.mjs');
 const ENV_LOADER = resolvePath(PLUGIN_MCP, '_env/load.mjs');
 
 /**
- * Spawn exactly the way plugins/atlas/.mcp.json does: `node --import
+ * Spawn exactly the way plugins/armada/.mcp.json does: `node --import
  * <_env/load.mjs> <server.mjs>`. The loader is what turns the `CFG_PANOS_*`
  * values the MCP host injects into the bare `PANOS_*` names the server reads,
  * so probing the server directly would skip the step most likely to be wrong.
@@ -75,7 +77,12 @@ function probe(label, env) {
 
 // ATLAS_ENV_FILE is pointed at a path that does not exist so the loader falls
 // through to the CFG_ translation instead of reading a developer's real .env.
+// The loader reads ~/.config/atlas/atlas.env and ~/.claude/settings.json through homedir(),
+// so a throwaway HOME keeps a developer's real credentials out of every case.
+const PROBE_HOME = mkdtempSync(join(tmpdir(), 'probe-home-'));
+process.on('exit', () => rmSync(PROBE_HOME, { recursive: true, force: true }));
 const CLEAN = {
+  HOME: PROBE_HOME,
   ATLAS_ENV_FILE: resolvePath(HERE, 'no-such-env-file'),
   PANOS_HOST: '', PANOS_API_KEY: '', PANOS_USERNAME: '', PANOS_PASSWORD: '',
   PANOS_TARGET: '', PANOS_VERIFY_TLS: '', PANOS_REST_VERSION: '',
@@ -97,7 +104,7 @@ const cases = [
   ['CFG_ unresolved placeholders', { ...CLEAN, PANOS_HOST: undefined, PANOS_API_KEY: undefined, CFG_PANOS_HOST: '${user_config.panos_host}', CFG_PANOS_API_KEY: '${user_config.panos_api_key}' }],
 ];
 
-// Progressive disclosure, per docs/panos-connector-design.md: the tool list a
+// Progressive disclosure, per docs/architecture/panos-connector-design.md: the tool list a
 // client sees is a function of the credential state, so the count is asserted
 // exactly in each one rather than "at least 50" - a state that quietly gains
 // or drops a tool is a disclosure bug.

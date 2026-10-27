@@ -3,7 +3,7 @@
 > **Scope rule (read first):** `atlas` and `armada` are products developed in this
 > repo. A request about them means edit their source under `plugins/atlas/` or
 > `plugins/armada/` - never install, set up, or run them in this workspace. Full
-> rule: `AGENTS.md` Section 0 and `docs/plugin-development-scope.md`.
+> rule: `AGENTS.md` Section 0 and `docs/architecture/plugin-development-scope.md`.
 
 This directory holds the three plugins published from this repo, plus the shared authoring assets they draw on.
 
@@ -26,4 +26,4 @@ All three plugins are published from the `w159/tech-tools` repository through th
 
 ## Credentials
 
-All connector credentials live on `atlas`, not `armada`: `atlas`'s manifest (`plugins/atlas/.claude-plugin/plugin.json`) declares the `mcpServers` entry (`plugins/atlas/.mcp.json`) and the full `userConfig` block of per-vendor credential keys (Auvik, Blumira, CIPP, ConnectWise Manage, Kaseya Spanning, KnowBe4, NinjaOne, Paylocity, ThreatLocker, Vanta). `armada`'s own manifest (`plugins/armada/.claude-plugin/plugin.json`) declares neither `userConfig` nor `mcpServers` - see `plugins/armada/skills/armada/references/connector-provisioning.md` for which `userConfig` keys each department connector needs and how they're set via `/plugin config` on `atlas`.
+All 13 vendor connectors live in `armada`, not `atlas`: `armada`'s manifest (`plugins/armada/.claude-plugin/plugin.json`) declares the 57 per-vendor `userConfig` credential keys, and `plugins/armada/.mcp.json` launches the servers bundled under `plugins/armada/mcp/`. The vendors are CrowdStrike Falcon, Auvik, Blumira, CIPP, ConnectWise Manage, Kaseya Spanning, KnowBe4, NinjaOne, PAN-OS, Paylocity, SonicWall, ThreatLocker, and Vanta. MCP tools are named `mcp__plugin_armada_<vendor>__*`. Set credentials with `/plugin config` on `armada` (same key names as before). The loaders also fall back to values saved under `atlas`, and `~/.config/atlas/atlas.env` still works. `atlas` keeps only the `atlas_mod_sound` key, and its dashboard reads connector state from the armada plugin installed beside it, so install atlas and armada together. See `plugins/armada/skills/armada/references/connector-provisioning.md` for which keys each department connector needs.

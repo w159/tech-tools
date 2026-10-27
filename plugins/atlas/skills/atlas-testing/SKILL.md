@@ -1,6 +1,6 @@
 ---
 name: atlas-testing
-description: "Plans, generates, and runs tests in any language: detects the stack and existing tests, maps gaps across every testing type (unit through mutation, fuzz, load, security, accessibility), recommends the highest-value next test, writes it, runs it, and reports evidence. Use to add tests, choose a test strategy, or find what testing is missing."
+description: "Plans, generates, and runs tests in any language: detects the stack and existing tests, maps gaps across every testing type (unit through mutation, fuzz, load, security, accessibility), recommends the highest-value next test, writes it, runs it, and reports evidence. Use when adding tests, choosing a test strategy, or finding what testing is missing."
 when_to_use: "write tests, add tests, test strategy, what tests am I missing, test gaps, mutation testing, property-based, fuzz, load test, coverage, flaky tests, contract test, e2e test, benchmark"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[path or module] [gaps|plan|write|run|mutate]"
@@ -40,8 +40,10 @@ the path):
 | `gaps` (default) | Detect stack, inventory existing tests, run `testscope gaps`, present the ranked gap table (priority, reason, closing reference). No authoring. |
 | `plan` | Recommend a test strategy for the path/module: risk signals give type ids with must/should/could priorities and a run order. No authoring. |
 | `write` | Author tests for the target with the chosen type ids per `references/workflow.md`, run them, prove sensitivity: seeded fault fails, revert passes. |
-| `run` | Detect and run the existing suites using `testscope commands` output; report evidence per suite. |
+| `run` | Detect and run the existing suites using `testscope commands` output; report evidence per suite. On `[]` with test files present, say no runner was detected and use only a stdlib runner the language reference names (Python: `python3 -m unittest discover -s <dir> -p 'test_*.py'`). Run every emitted command from the `--root` directory (`cd <root>` first); testscope does not embed the path. |
 | `mutate` | Mutation pass: pick the mutation runner the language file names, run it, report killed/survived counts and surviving-mutant locations. |
+
+`testscope` scans only under `--root`; pass the smallest directory that holds both the code and its tests. Triage large `mutmut results` output by grouping survivors per function (`mutmut results | sort | uniq -c | sort -rn | head`) and report the top functions, not the full list.
 
 ## Script: testscope
 
@@ -106,7 +108,7 @@ Every claim carries its exact command, its real exit code, and the decisive outp
   survivor warrants a new test.
 - Runs: suite totals (passed/failed/skipped), quarantine state, rerun counts for flakes.
   Never report "should pass" in place of an actual run.
-- Evidence lands under `.atlas/evidence/<YYYY-MM-DD>-<slug>/` as it is captured, and the
+- Evidence lands under `.atlas/evidence/<YYYY-MM-DD>_<slug>/` as it is captured, and the
   report uses the fixed block in `references/workflow.md`.
 
 ## Hard rules

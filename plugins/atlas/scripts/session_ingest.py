@@ -38,6 +38,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 import atlas_db  # noqa: E402
+from atlas_memory import redact_secrets  # noqa: E402  (the one shared redactor)
 
 # --- tool classification ------------------------------------------------------
 
@@ -70,26 +71,17 @@ def classify(tool_name, tinput):
 
 # --- secret-safe input summary ------------------------------------------------
 
-SECRET_KEY = re.compile(
-    r"(pass|pwd|secret|token|api[_-]?key|authorization|bearer|credential"
-    r"|client_secret|connection[_-]?string|private[_-]?key)",
-    re.I,
-)
-SECRET_VAL = re.compile(
-    r"(eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]+"  # JWT
-    r"|sk-[A-Za-z0-9]{16,}"  # OpenAI-style
-    r"|AKIA[0-9A-Z]{16}"  # AWS access key
-    r"|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"  # GitHub
-    r"|xox[baprs]-[A-Za-z0-9-]{10,}"  # Slack
-    r"|Bearer\s+[\w.\-]{10,})",  # bearer header
-)
-
-
 # Dispatch identity survives the 500-char cap: these keys go first, and a
 # batched omp `task` call's per-item names are lifted into `names`, so the
 # colony_adherence miner can measure named dispatch instead of reading a
 # truncated prompt.
 _IDENTITY_KEYS = ("name", "names", "subagent_type", "agent", "model", "isolation")
+
+
+def _secret_named(key):
+    """True when the shared redactor treats `key` as a secret-bearing name."""
+    probe = f"{key}=x1y2z3w4"
+    return redact_secrets(probe) != probe
 
 
 def summarize_input(tinput):
@@ -108,12 +100,12 @@ def summarize_input(tinput):
     parts = {}
     for k in ordered:
         v = items[k]
-        if SECRET_KEY.search(str(k)):
-            parts[k] = "***"
+        if _secret_named(k):
+            parts[k] = "[REDACTED]"
             continue
         sv = v if isinstance(v, str) else json.dumps(v, default=str)
-        parts[k] = SECRET_VAL.sub("***", sv)[:200]
-    return SECRET_VAL.sub("***", json.dumps(parts, default=str))[:500], len(raw)
+        parts[k] = redact_secrets(sv)[:200]
+    return json.dumps(parts, default=str)[:500], len(raw)
 
 
 # --- behavioral signal taggers ------------------------------------------------
@@ -695,8 +687,9 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
         # link project from the cwd seen in the transcript
         if meta["cwd"]:
             try:
+                _root = atlas_db.atlas_paths.project_root(meta["cwd"])
                 meta["project_id"] = atlas_db.register_project(
-                    conn, meta["cwd"], os.path.basename(meta["cwd"].rstrip("/"))
+                    conn, _root, os.path.basename(_root)
                 )
             except Exception:
                 pass
@@ -792,8 +785,8 @@ def _ingest_line(conn, session_id, obj, meta, stats, keys):
             _ingest_tool_use(conn, session_id, obj, b, ts, stats, keys)
         elif bt == "tool_result":
             _ingest_tool_result(conn, b, stats)
-    text = "\n".join(t for t in texts if t).strip()
-    think = "\n".join(t for t in thinking if t).strip()
+    text = redact_secrets("\n".join(t for t in texts if t).strip())
+    think = redact_secrets("\n".join(t for t in thinking if t).strip())
     usage = msg.get("usage") or {}
     if msg.get("model"):
         meta["model"] = msg["model"]
@@ -894,7 +887,9 @@ def _ingest_tool_result(conn, block, stats):
         else len(json.dumps(content, default=str))
     )
     is_err = 1 if block.get("is_error") in (True, "true", "True") else 0
-    atlas_db.update_tool_result(conn, tuid, is_err, rbytes, _result_text(content))
+    atlas_db.update_tool_result(
+        conn, tuid, is_err, rbytes, redact_secrets(_result_text(content))
+    )
     stats["results"] += 1
 
 
@@ -949,8 +944,8 @@ def _persist_agent_message(conn, meta, rec, stats):
             meta["ended_at"] = ts
     uuid = rec.get("uuid")
     role = rec.get("role")
-    text = (rec.get("text") or "").strip()
-    think = (rec.get("thinking") or "").strip()
+    text = redact_secrets((rec.get("text") or "").strip())
+    think = redact_secrets((rec.get("thinking") or "").strip())
     if uuid:
         atlas_db.insert_message(
             conn,
@@ -1090,15 +1085,16 @@ def ingest_agent_session(path, adapter, conn=None, session_id=None, sidechain=Fa
                         tuid,
                         rec.get("is_error"),
                         rec.get("result_bytes"),
-                        rec.get("text"),
+                        redact_secrets(rec.get("text")),
                     )
                     stats["results"] += 1
         sid = meta["session_id"] or os.path.splitext(os.path.basename(path))[0]
         meta["session_id"] = sid
         if meta["cwd"]:
             try:
+                _root = atlas_db.atlas_paths.project_root(meta["cwd"])
                 meta["project_id"] = atlas_db.register_project(
-                    conn, meta["cwd"], os.path.basename(meta["cwd"].rstrip("/"))
+                    conn, _root, os.path.basename(_root)
                 )
             except Exception:
                 pass
@@ -1632,7 +1628,9 @@ def backfill_errors(roots=None, conn=None, batch=500):
                                 continue
                             for full in hits:
                                 targets.discard(full)
-                                atlas_db.update_tool_result(conn, full, 1, rbytes, text)
+                                atlas_db.update_tool_result(
+                                    conn, full, 1, rbytes, redact_secrets(text)
+                                )
                                 out["updated"] += 1
                                 out["denied"] += atlas_db.is_denied_result(text)
                             pending += 1

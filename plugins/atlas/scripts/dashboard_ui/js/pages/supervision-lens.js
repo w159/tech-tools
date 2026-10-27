@@ -4,6 +4,7 @@
 // Data: GET /api/v2/channels (lead subchannels), GET /api/v2/channels/<lead>?limit=1 (board.owners per lead). Mounted by agents.js.
 
 import { h, replace } from "../dom.js";
+import { reportFetchFail, clearFetchFail } from "../fetch-fail.js";
 import { chanInfo, leadChannels, memberBoard, todoSummary } from "../chan-names.js";
 import { Button, State } from "../components.js";
 import { MemberBoard } from "./channel-lens.js";
@@ -46,7 +47,7 @@ export function mountSupervisionLens(ctx, body) {
       S.chans = (d && d.channels) || [];
       S.error = null;
       await Promise.all(leadChannels(S.chans).map(async (c) => {
-        try { S.boards.set(c.name, await ctx.api.get("channels/" + encodeURIComponent(c.name), { limit: 1, project: proj() })); } catch (_e) { S.boards.delete(c.name); } // board missing: the lead renders with zero todos
+        try { S.boards.set(c.name, await ctx.api.get("channels/" + encodeURIComponent(c.name), { limit: 1, project: proj() })); clearFetchFail("channels/" + c.name); } catch (_e) { reportFetchFail("supervision", "channels/" + c.name, _e); S.boards.delete(c.name); } // board missing: the lead renders with zero todos
       }));
     } catch (e) {
       S.error = e;

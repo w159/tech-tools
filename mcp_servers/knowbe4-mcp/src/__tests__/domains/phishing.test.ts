@@ -13,8 +13,6 @@ vi.mock("../../utils/client.js", () => ({
 // Mock elicitation (always return null = unsupported)
 vi.mock("../../utils/elicitation.js", () => ({
   elicitSelection: vi.fn().mockResolvedValue(null),
-  elicitText: vi.fn().mockResolvedValue(null),
-  elicitConfirmation: vi.fn().mockResolvedValue(null),
 }));
 
 import { phishingHandler } from "../../domains/phishing.js";

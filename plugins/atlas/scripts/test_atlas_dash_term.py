@@ -116,7 +116,9 @@ class ClientMsgTests(unittest.TestCase):
         r, w = os.pipe()
         try:
             T._client_msg(w, '{"t":"bin","d":"\\u001b[M \\u00e9!"}'.encode())
-            T._client_msg(w, '{"t":"bin","d":"\\u20ac"}'.encode())  # not a byte: dropped, no crash
+            T._client_msg(
+                w, '{"t":"bin","d":"\\u20ac"}'.encode()
+            )  # not a byte: dropped, no crash
             self.assertEqual(os.read(r, 64), b"\x1b[M \xe9!")
         finally:
             os.close(r)
@@ -317,7 +319,9 @@ class InProcessDashboard(unittest.TestCase):
         self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
 
     def test_tui_child_sees_requested_size_at_first_paint_and_no_rep_term(self):
-        os.environ["ATLAS_TERM_TUI_CMD"] = "sh -c 'echo size-$(stty size)-$TERM-${LINES:-x}; exec cat'"
+        os.environ["ATLAS_TERM_TUI_CMD"] = (
+            "sh -c 'echo size-$(stty size)-$TERM-${LINES:-x}; exec cat'"
+        )
         c = WsClient(self.port, self.ws_path(kind="tui", cols=100, rows=30))
         try:
             c.read_until(b"size-30 100-screen-256color-x")
@@ -330,7 +334,10 @@ class InProcessDashboard(unittest.TestCase):
         os.environ.pop("ATLAS_TERM_TUI_CMD", None)
         seen = []
         real = T._tui_argv
-        T._tui_argv = lambda root: (seen.append(root), ["sh", "-c", "echo up; exec cat"])[1]
+        T._tui_argv = lambda root: (
+            seen.append(root),
+            ["sh", "-c", "echo up; exec cat"],
+        )[1]
         try:
             for proj in (None, "", "all"):
                 c = WsClient(self.port, self.ws_path(kind="tui", project=proj))
@@ -349,16 +356,23 @@ class InProcessDashboard(unittest.TestCase):
         self.assertEqual(real("/x")[-2:], ["--project", "/x"])
 
     def test_tui_unknown_project_is_400(self):
-        self.assert_denied(self.ws_path(kind="tui", project="/no/such/dir-xyz"), code=400)
+        self.assert_denied(
+            self.ws_path(kind="tui", project="/no/such/dir-xyz"), code=400
+        )
         self.assert_denied(self.ws_path(kind="tui", project="nope"), code=400)
 
     def test_pane_ignores_project(self):
-        self.assert_denied(self.ws_path(kind="pane", target="x;y", project="all"), code=400)
+        self.assert_denied(
+            self.ws_path(kind="pane", target="x;y", project="all"), code=400
+        )
 
     def test_snapshot_all_projects(self):
         calls = []
         m: Any = sys.modules["atlas_colony_model"]
-        m.snapshot = lambda root=None, all_projects=False: (calls.append((root, all_projects)), {"ok": True})[1]
+        m.snapshot = lambda root=None, all_projects=False: (
+            calls.append((root, all_projects)),
+            {"ok": True},
+        )[1]
         T._snap_cache.clear()
         for q in ({"project": "all"}, {"all": "1"}, {"project": "/p"}):
             T._snapshot(types.SimpleNamespace(query=q, groups=()))
@@ -452,6 +466,320 @@ class InProcessDashboard(unittest.TestCase):
                 c.close()
             os.environ.pop("ATLAS_TERM_TUI_CMD", None)
         self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+
+    # --- W1-U1: tickets, shell seats, idle, first frame, seats, route table -------
+
+    def post(self, path, body, token=True):
+        import json
+
+        h = {"Content-Type": "application/json"}
+        if token:
+            h["X-Atlas-Token"] = self.D.DASH_TOKEN
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}{path}",
+            data=json.dumps(body).encode(),
+            headers=h,
+            method="POST",
+        )
+        try:
+            return 200, json.load(urllib.request.urlopen(req))
+        except urllib.error.HTTPError as e:
+            return e.code, json.load(e)
+
+    def ticket_path(self, **body):
+        code, out = self.post("/api/v2/term/ticket", body)
+        self.assertEqual(code, 200, out)
+        self.assertEqual(out["expires_in"], 30)
+        return f"/api/v2/term/ws?ticket={out['ticket']}"
+
+    def test_ticket_requires_token_and_valid_kind(self):
+        self.assertEqual(
+            self.post("/api/v2/term/ticket", {"kind": "tui"}, token=False)[0], 401
+        )
+        self.assertEqual(self.post("/api/v2/term/ticket", {"kind": "bogus"})[0], 400)
+        self.assertEqual(
+            self.post("/api/v2/term/ticket", {"kind": "pane", "target": "x;y"})[0], 400
+        )
+        self.assertEqual(
+            self.post(
+                "/api/v2/term/ticket", {"kind": "shell", "cwd": "/no/such/dir-xyz"}
+            )[0],
+            400,
+        )
+
+    def test_ticket_is_single_use(self):
+        os.environ["ATLAS_TERM_TUI_CMD"] = "sh -c 'echo tkt-ready; exec cat'"
+        try:
+            path = self.ticket_path(kind="tui", cols=100, rows=30)
+            c = WsClient(self.port, path)  # no token= at all
+            try:
+                self.assertEqual(c.status, 101, c.head)
+                c.read_until(b"tkt-ready")
+                c.send(T.OP_CLOSE, struct.pack(">H", 1000))
+            finally:
+                c.close()
+            self.assert_denied(path, code=403)  # burned
+        finally:
+            os.environ.pop("ATLAS_TERM_TUI_CMD", None)
+        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+
+    def test_expired_ticket_is_denied(self):
+        path = self.ticket_path(kind="tui")
+        t = path.split("ticket=")[1]
+        T._tickets[t] = (time.monotonic() - 1, T._tickets[t][1])
+        self.assert_denied(path, code=403)
+
+    def test_legacy_token_still_works_and_logs_deprecation(self):
+        import contextlib
+        import io
+
+        os.environ["ATLAS_TERM_TUI_CMD"] = "sh -c 'echo legacy-ok; exec cat'"
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(buf):
+                c = WsClient(self.port, self.ws_path(kind="tui"))
+                try:
+                    self.assertEqual(c.status, 101, c.head)
+                    c.read_until(b"legacy-ok")
+                finally:
+                    c.close()
+        finally:
+            os.environ.pop("ATLAS_TERM_TUI_CMD", None)
+        self.assertEqual(buf.getvalue().count("deprecated"), 1, buf.getvalue())
+        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+
+    def test_shell_pty_roundtrip_cwd_and_term(self):
+        d = os.path.realpath(tempfile.mkdtemp(prefix="atlsh", dir="/tmp"))
+        saved = os.environ.get("SHELL")
+        os.environ["SHELL"] = "/bin/sh"
+        try:
+            c = WsClient(
+                self.port, self.ticket_path(kind="shell", cwd=d, cols=100, rows=30)
+            )
+            try:
+                self.assertEqual(c.status, 101, c.head)
+                c.send(
+                    T.OP_TEXT,
+                    b'{"t":"in","d":"echo ok-$((20+1)) $TERM $COLUMNS; pwd\\r"}',
+                )
+                got = c.read_until(d.encode())
+                self.assertIn(b"ok-21 xterm-256color 100", got)
+                c.send(T.OP_CLOSE, struct.pack(">H", 1000))
+            finally:
+                c.close()
+        finally:
+            os.environ.pop("SHELL", None) if saved is None else os.environ.__setitem__(
+                "SHELL", saved
+            )
+            shutil.rmtree(d, ignore_errors=True)
+        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+
+    def test_shell_argv_fallback(self):
+        saved = os.environ.get("SHELL")
+        try:
+            os.environ["SHELL"] = "/no/such/shell"
+            self.assertEqual(
+                T._shell_argv(),
+                ["/bin/zsh" if os.access("/bin/zsh", os.X_OK) else "/bin/sh", "-l"],
+            )
+            os.environ.pop("SHELL")
+            self.assertEqual(T._shell_argv()[1], "-l")
+        finally:
+            os.environ.pop("SHELL", None) if saved is None else os.environ.__setitem__(
+                "SHELL", saved
+            )
+
+    def test_idle_timeout_closes_with_reason_and_frees_slot(self):
+        os.environ["ATLAS_TERM_TUI_CMD"] = "cat"
+        os.environ["ATLAS_TERM_IDLE_S"] = "1"
+        c = WsClient(self.port, self.ws_path(kind="tui"))
+        try:
+            self.assertEqual(c.status, 101)
+            closes, end = [], time.monotonic() + 10
+            while not closes and time.monotonic() < end:
+                try:
+                    chunk = c.sock.recv(65536)
+                except socket.timeout:
+                    continue
+                if not chunk:
+                    break
+                closes = [p for op, p in c.dec.feed(chunk) if op == T.OP_CLOSE]
+            self.assertEqual(closes, [struct.pack(">H", 1000) + b"idle"])
+        finally:
+            c.close()
+            os.environ.pop("ATLAS_TERM_TUI_CMD", None)
+            os.environ.pop("ATLAS_TERM_IDLE_S", None)
+        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+
+    def test_first_frame_within_one_second_of_upgrade(self):
+        os.environ["ATLAS_TERM_TUI_CMD"] = (
+            "sleep 5"  # silent child: only the server can speak
+        )
+        c = WsClient(self.port, self.ws_path(kind="tui"))
+        try:
+            self.assertEqual(c.status, 101)
+            c.read_until(b"\x1b[?25l", timeout=1.0)
+        finally:
+            c.close()
+            os.environ.pop("ATLAS_TERM_TUI_CMD", None)
+        self.assertTrue(wait_for(lambda: T._slots._value == T.MAX_SESSIONS))
+
+    def fake_snapshot(self):
+        m: Any = sys.modules["atlas_colony_model"]
+        base = {
+            "colony": "c1",
+            "project": "/p",
+            "pod": "x",
+            "target": "",
+            "last_active": None,
+        }
+        m.snapshot = lambda root=None, all_projects=False: {
+            "ok": True,
+            "host": "mac",
+            "clock": {"iso": "now"},
+            "colonies": [
+                {
+                    "id": "c1",
+                    "name": "alpha",
+                    "label": "c1",
+                    "project": "/p",
+                    "created": 100.0,
+                }
+            ],
+            "seats": [  # worker listed before the lead on purpose
+                {
+                    **base,
+                    "name": "impl",
+                    "address": "implementer@alpha",
+                    "role": "implementer",
+                    "runtime": "omp",
+                    "state": "working",
+                    "target": "%3",
+                    "last_active": 5.0,
+                },
+                {
+                    **base,
+                    "name": "lead-1",
+                    "address": "lead@alpha",
+                    "role": "lead",
+                    "runtime": "claude",
+                    "state": "working",
+                    "lead": True,
+                },
+                {
+                    **base,
+                    "name": "ver",
+                    "address": "verifier@alpha",
+                    "role": "verifier",
+                    "runtime": "codex",
+                    "state": "dead",
+                    "target": "%9",
+                },
+            ],
+        }
+        T._snap_cache.clear()
+
+    def test_seats_shape_order_ended_and_shell_seats(self):
+        self.fake_snapshot()
+        status, out = T._seats(
+            types.SimpleNamespace(query={"project": "/p"}, groups=())
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(out["ok"])
+        self.assertEqual((out["machine"], out["clock"]), ("mac", {"iso": "now"}))
+        colony, host = out["spaces"][0], out["spaces"][-1]
+        self.assertEqual(
+            (colony["id"], colony["name"], colony["kind"]), ("c1", "alpha", "colony")
+        )
+        self.assertEqual(
+            [s["address"] for s in colony["seats"]],
+            ["lead@alpha", "implementer@alpha", "verifier@alpha", "shell@alpha"],
+        )
+        lead, impl, ended, sh = colony["seats"]
+        self.assertEqual(
+            (lead["runtime"], lead["kind"], lead["target"]), ("claude", "pane", None)
+        )
+        self.assertEqual(
+            lead["attach_hint"], "start claude inside tmux or herdr to stream this seat"
+        )
+        self.assertNotIn("attach_hint", impl)
+        self.assertEqual(
+            (impl["runtime"], impl["target"], impl["pane"], impl["state"]),
+            ("omp", "%3", "%3", "working"),
+        )
+        self.assertEqual(
+            (impl["project"], impl["last_activity"], impl["started_at"]),
+            ("/p", 5.0, 100.0),
+        )
+        self.assertEqual(
+            (ended["runtime"], ended["state"], ended["target"]),
+            ("codex", "ended", None),
+        )
+        self.assertEqual(
+            (sh["runtime"], sh["kind"], sh["cwd"], sh["name"]),
+            ("shell", "shell", "/p", "shell"),
+        )
+        self.assertEqual(host["kind"], "host")
+        self.assertEqual(
+            [(s["address"], s["kind"]) for s in host["seats"]],
+            [("shell@host", "shell"), ("tui@host", "tui")],
+        )
+        self.assertEqual(host["seats"][0]["cwd"], os.path.expanduser("~"))
+        for s in colony["seats"] + host["seats"]:
+            for k in (
+                "address",
+                "name",
+                "role",
+                "runtime",
+                "state",
+                "pane",
+                "target",
+                "kind",
+                "project",
+                "cwd",
+                "started_at",
+                "last_activity",
+            ):
+                self.assertIn(k, s)
+
+    def test_seats_http_route_needs_token(self):
+        import json
+
+        self.fake_snapshot()
+        base = f"http://127.0.0.1:{self.port}/api/v2/term/seats?project=%2Fp"
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(base)
+        self.assertEqual(e.exception.code, 401)
+        req = urllib.request.Request(base, headers={"X-Atlas-Token": self.D.DASH_TOKEN})
+        body = json.load(urllib.request.urlopen(req))
+        self.assertEqual(body["spaces"][0]["seats"][0]["address"], "lead@alpha")
+
+    def test_every_do_get_v2_literal_is_in_the_route_table(self):
+        import inspect
+
+        D = self.D
+        if not D.V2_ROUTES:
+            D._mount_v2_routes()
+        literals = set(
+            re.findall(r'"(/api/v2/[^"]+)"', inspect.getsource(D.Handler.do_GET))
+        )
+        self.assertIn("/api/v2/term/ws", literals)
+        missing = [
+            p
+            for p in literals
+            if p not in D.V2_RAW_GET
+            and not any(m == "GET" and rx.fullmatch(p) for m, rx, _ in D.V2_ROUTES)
+        ]
+        self.assertEqual(missing, [])
+        self.assertTrue(
+            any(rx.fullmatch("/api/v2/term/seats") for _, rx, _ in D.V2_ROUTES)
+        )
+        self.assertTrue(
+            any(
+                m == "POST" and rx.fullmatch("/api/v2/term/ticket")
+                for m, rx, _ in D.V2_ROUTES
+            )
+        )
 
 
 class RealServeTests(unittest.TestCase):

@@ -1,0 +1,14 @@
+-- Cloud Logging query language. Cloud Run writes each JSON stdout line to jsonPayload
+-- on resource.type="cloud_run_revision" (Google Cloud docs: Cloud Run logging).
+-- Replace SERVICE_NAME. Set the time range in the Logs Explorer, or pass --freshness to gcloud.
+-- Cloud Logging filters do not aggregate. Run the filter with gcloud and group the output:
+--   gcloud logging read "$(grep -v "^--" FILE.txt)" --project PROJECT --freshness 7d --format json > events.json
+-- The group-by hint at the end of each file says how to summarize events.json.
+
+resource.type="cloud_run_revision"
+resource.labels.service_name="SERVICE_NAME"
+jsonPayload.schema="mcp-gw.audit/1"
+jsonPayload.client_id:*
+
+-- Group by: jsonPayload.client_id; first_seen = minimum timestamp. Use a long --freshness (30d or more).
+-- A client id whose first_seen falls inside the review window is new.

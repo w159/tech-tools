@@ -15,7 +15,7 @@ const PREFIX = ((document.querySelector('meta[name="atlas-base"]') || {}).conten
 /** true when same-origin host routes are reachable (Atlas served under the gateway). */
 export const hostReachable = () => Boolean(PREFIX);
 
-export async function hostPost(path, body) {
+async function hostPost(path, body) {
   if (!PREFIX) throw new ApiError(0, "Needs the agent runtime host address", "Atlas is open on its own port, so the runtime host's workspace routes are on another origin.", "Open Atlas through the runtime web UI address (/atlas/) or use Colony.");
   let res;
   try {
@@ -72,28 +72,6 @@ export function newWorkspace(defaultCwd) {
     extra: [cwd],
     onSubmit: (label) => run("Workspace created", "/api/workspace/create", { ...(label ? { label } : {}), ...(cwd.querySelector("input").value.trim() ? { cwd: cwd.querySelector("input").value.trim() } : {}) }),
   });
-}
-
-export const newTab = (workspaceId) => run("Tab created", "/api/tab/create", { workspace_id: workspaceId });
-
-export function renameWorkspace(id, current) {
-  prompt({ title: "Rename workspace", label: "Name", value: current, action: "Rename", onSubmit: (label) => (label ? run("Workspace renamed", "/api/workspace/rename", { workspace_id: id, label }) : null) });
-}
-export function renameTab(id, current) {
-  prompt({ title: "Rename tab", label: "Name", value: current, action: "Rename", onSubmit: (label) => (label ? run("Tab renamed", "/api/tab/rename", { tab_id: id, label }) : null) });
-}
-export function renamePane(id, current) {
-  prompt({ title: "Rename pane", label: "Name", value: current, action: "Rename", onSubmit: (label) => run("Pane renamed", "/api/pane/rename", { pane_id: id, label }) });
-}
-
-export function closeWorkspace(id, name) {
-  confirm({ title: "Close workspace " + name + "?", body: "Every tab and pane in it closes, and any agent running there stops.", action: "Close workspace", onYes: () => run("Workspace closed", "/api/workspace/close", { workspace_id: id }) });
-}
-export function closeTab(id, name) {
-  confirm({ title: "Close tab " + name + "?", body: "Every pane in this tab closes, and any agent running there stops.", action: "Close tab", onYes: () => run("Tab closed", "/api/tab/close", { tab_id: id }) });
-}
-export function closePane(id, name) {
-  confirm({ title: "Close pane " + name + "?", body: "The pane closes and any agent running in it stops.", action: "Close pane", onYes: () => run("Pane closed", "/api/pane/close", { pane_id: id }) });
 }
 
 // Named keys for the inspector's keys row: the names herdr-web-ui's own key bar sends.

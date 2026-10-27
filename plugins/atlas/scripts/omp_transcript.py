@@ -156,6 +156,7 @@ _KNOWN_MCP_SERVERS_FALLBACK = (
     "plaid",
     "mobbin",
     "clippy",
+    "armada_connectwise",
     "atlas_connectwise",
     "mcp_search",
     "cmux_browser",

@@ -10,7 +10,9 @@ observability DB and extracts durable facts worth remembering:
 
 Unlike the old nudge.py which said "please capture a lesson," this hook
 DOES the capture — no agent action required. It writes to
-~/.atlas/memory/MEMORY.md and ~/.atlas/memory/PROJECT.md via atlas_memory.
+<project root>/.atlas/memory/MEMORY.md via atlas_memory (root = atlas_paths.project_root(cwd),
+so subagent and worktree sessions attribute to their main project). The global
+~/.atlas/memory/MEMORY.md is for explicitly cross-project lessons only.
 
 The Stop-hook loop guard (stop_hook_active, the throttle window, and the
 session circuit breaker) lives in atlas_hook_guard now. The seen-hash dedupe
@@ -31,6 +33,7 @@ SEEN_MAX_LINES = 500  # cap the seen-hash file so it cannot grow unbounded
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import atlas_faults  # noqa: E402
+import atlas_paths  # noqa: E402
 import atlas_hook_guard  # noqa: E402
 
 
@@ -80,6 +83,13 @@ def _append_seen_hashes(path, new_hashes):
             f.write("\n".join(existing) + "\n")
     except Exception:
         pass
+
+
+_REVIEW_RE = re.compile(
+    r"\b(?:always|never|must|do not|don't|skip|disable|bypass|permission|allow)\b"
+    r"|--no-verify",
+    re.IGNORECASE,
+)
 
 
 class _Fact(str):
@@ -193,26 +203,41 @@ def _should_capture(conn, session_id):
         return False, "DB error"
 
 
+def _project_root_of(cwd):
+    """Main project root for a hook cwd, or None when cwd is not a project
+    (empty, HOME, bare temp root, or an unusable scope name)."""
+    if not cwd:
+        return None
+    root = atlas_paths.project_root(cwd)
+    if atlas_paths._is_non_project(root) or _JUNK_SCOPE.match(os.path.basename(root)):
+        return None
+    return root
+
+
 def _extract_facts(conn, session_id, cwd):
-    """Extract durable facts from the session. Returns (memory_facts, project_facts)."""
+    """Extract durable facts from the session. Returns (memory_facts, project_facts).
+
+    Everything captured today (corrections, assumption admissions, improvements)
+    is project-scoped and lands in project_facts; memory_facts stays for a fact
+    that is explicitly cross-project (no automatic source yet)."""
     import atlas_memory  # lazy: ~16 ms, only reached once a capture is attempted
 
     memory_facts = []  # general agent notes
     project_facts = []  # project-specific
 
-    project_name = os.path.basename(cwd) if cwd else "unknown"
-    # A subagent's cwd basename becomes agent-<hex> or .run, which is not a
-    # project. Lessons filed under those scopes are unfindable and duplicate the
-    # same lesson once per dispatched agent.
-    if _JUNK_SCOPE.match(project_name):
+    # Resolve to the main project root: a subagent in agent-<hex> or a linked
+    # worktree attributes to its repo instead of being dropped or mis-filed.
+    root = _project_root_of(cwd)
+    if not root:
         return [], []
+    project_name = os.path.basename(root)
 
     try:
         session_ids, run_ids = _resolve_scope(conn, session_id)
     except sqlite3.Error:
         session_ids, run_ids = {session_id}, set()
 
-    # 1. User corrections → memory (agent-level lessons)
+    # 1. User corrections → project memory
     try:
         ph, params = _in_clause(session_ids)
         for row in conn.execute(
@@ -224,12 +249,17 @@ def _extract_facts(conn, session_id, cwd):
             if snippet and snippet.strip():
                 # Keep it concise — truncate to 200 chars
                 clean = atlas_memory.redact_secrets(snippet.strip())
-                fact = _Fact(f"User correction ({project_name}): {_clip(clean)}", clean)
-                memory_facts.append(fact)
+                # Corrections are re-injected at SessionStart; an imperative or
+                # permission-shaped one is flagged so it reads as unreviewed.
+                flag = "[review] " if _REVIEW_RE.search(clean) else ""
+                fact = _Fact(
+                    f"{flag}User correction ({project_name}): {_clip(clean)}", clean
+                )
+                project_facts.append(fact)
     except sqlite3.Error as exc:
         _trace(exc, cwd)
 
-    # 2. Assumption admissions → memory (agent-level lessons)
+    # 2. Assumption admissions → project memory
     try:
         ph, params = _in_clause(session_ids)
         for row in conn.execute(
@@ -243,7 +273,7 @@ def _extract_facts(conn, session_id, cwd):
                 fact = _Fact(
                     f"Assumption to avoid ({project_name}): {_clip(clean)}", clean
                 )
-                memory_facts.append(fact)
+                project_facts.append(fact)
     except sqlite3.Error as exc:
         _trace(exc, cwd)
 
@@ -394,6 +424,7 @@ def main():
         # Write to memory
         import atlas_memory
 
+        root = _project_root_of(cwd)
         for fact, h in fresh_memory:
             result = atlas_memory.add("memory", fact)
             if result.get("success"):
@@ -404,7 +435,7 @@ def main():
                 _record_drop(session_id, "memory", result)
 
         for fact, h in fresh_project:
-            result = atlas_memory.add("project", fact)
+            result = atlas_memory.add("project", fact, root=root)
             if result.get("success"):
                 captured["project"] += 1
                 captured["facts"].append(fact[:80])

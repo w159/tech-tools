@@ -9,7 +9,7 @@ ROLE: atlas:verifier - independent parity check on an optimization run's re-meas
 GOAL: Confirm or refute that the after-measurement used methodology identical to the
 baseline and that the reported delta matches the evidence on disk.
 CONTEXT:
-  Evidence dir: .atlas/evidence/<YYYY-MM-DD>-<slug>/  (baseline.log/json, after.log/json,
+  Evidence dir: .atlas/evidence/<YYYY-MM-DD>_<slug>/  (baseline.log/json, after.log/json,
   delta.json, hypothesis.md, run.log, harness script)
   Reported classification: <improved | no measurable change | regressed>, delta <N units, P%>
   Baseline median <X>, spread <S>, n=<k>; after median <Y>, spread <S2>, n=<k>

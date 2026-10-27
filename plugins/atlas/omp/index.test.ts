@@ -482,6 +482,11 @@ test("omp phase names that are contract phases become the board item phase, lowe
 	]);
 });
 
+test("omp group headings like Investigate map to a contract phase on the board item", () => {
+	const items = boardItemsFromTodoDetails({ phases: [{ name: "Investigate", tasks: [{ content: "read the gate", status: "pending" }] }] });
+	expect(items).toEqual([{ content: "read the gate", status: "pending", phase: "research" }]);
+});
+
 test("unknown omp phase names leave phase absent (no key at all) and legacy items are unchanged", () => {
 	const items = boardItemsFromTodoDetails(TODO_PHASES);
 	expect(items).toEqual([
@@ -701,7 +706,8 @@ test("the Claude-format pin (`model: sonnet`) passes too, in any case", () => {
 	const h = harness();
 	expect(spawnHandler(h)(pinSpawn("implementer", ["sonnet"]), h.ctx)).toBeUndefined();
 	expect(spawnHandler(h)(pinSpawn("implementer", ["Sonnet"]), h.ctx)).toBeUndefined();
-	expect(spawnHandler(h)(pinSpawn("docs-auditor", ["sonnet"]), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(pinSpawn("db-prober", ["sonnet"]), h.ctx)).toBeUndefined();
+	expect(spawnHandler(h)(pinSpawn("docs-auditor", ["haiku"]), h.ctx)).toBeUndefined();
 });
 
 test("a parent-model injection passes for any provider, with or without a level on either side", () => {
@@ -726,8 +732,8 @@ test("the rewrite carries each tier's own pinned list", () => {
 	const live = "anthropic/claude-opus-5-5:medium";
 	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.model).toEqual(["@atlas-verifier", "@default", "sonnet", "@smol"]);
 	expect(spawnHandler(h)(pinSpawn("verifier", [live]), h.ctx)?.note).toBe("atlas: verifier pinned to @atlas-verifier");
-	expect(spawnHandler(h)(pinSpawn("runner", [live]), h.ctx)?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
-	expect(spawnHandler(h)(pinSpawn("explorer", []), h.ctx)?.model).toEqual(["@atlas-worker", "sonnet", "@smol"]);
+	expect(spawnHandler(h)(pinSpawn("runner", [live]), h.ctx)?.model).toEqual(["@atlas-mechanic", "haiku", "@smol"]);
+	expect(spawnHandler(h)(pinSpawn("explorer", []), h.ctx)?.model).toEqual(["@atlas-mechanic", "haiku", "@smol"]);
 });
 
 test("a list that already carries the tier is left untouched, even beside the inherited parent model", () => {
@@ -772,7 +778,7 @@ test("isInheritedSelector: equal, or one `:level` suffix on either side, never t
 
 test("frontmatterModelFor reads the Claude-format pin and fails open to empty", () => {
 	expect(frontmatterModelFor("implementer")).toBe("sonnet");
-	expect(frontmatterModelFor("docs-auditor")).toBe("sonnet");
+	expect(frontmatterModelFor("docs-auditor")).toBe("haiku");
 	expect(frontmatterModelFor("not-an-agent")).toBe("");
 	expect(frontmatterModelFor("../index")).toBe("");
 });
@@ -868,18 +874,18 @@ test("the default export wires the agent guard: an explorer edit is blocked thro
 	expect(emit(explorer, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
 });
 
-test("extension load exports ~/.atlas/settings.json env into process.env; an exported var wins", () => {
+test("extension load exports ~/.atlas/settings.json env into process.env; the store wins over an exported var", () => {
 	const home = process.env.ATLAS_HOME as string;
 	mkdirSync(home, { recursive: true });
 	writeFileSync(join(home, "settings.json"), JSON.stringify({ env: { ATLAS_LEAN_SHELL: "off", ATLAS_CHANNELS: "off", NOT_ATLAS: "x" } }));
 	const oldShell = process.env.ATLAS_LEAN_SHELL;
 	const oldChannels = process.env.ATLAS_CHANNELS;
 	delete process.env.ATLAS_LEAN_SHELL;
-	process.env.ATLAS_CHANNELS = "on"; // exported in the shell: must not be overridden
+	process.env.ATLAS_CHANNELS = "on"; // exported in the shell: a dashboard save in the store must still win
 	try {
 		extension({ on: () => {}, getActiveTools: () => [], registerCommand: () => {} } as unknown as ExtensionAPI);
 		expect(process.env.ATLAS_LEAN_SHELL).toBe("off");
-		expect(process.env.ATLAS_CHANNELS).toBe("on");
+		expect(process.env.ATLAS_CHANNELS).toBe("off");
 		expect(process.env.NOT_ATLAS).toBeUndefined();
 	} finally {
 		if (oldShell === undefined) delete process.env.ATLAS_LEAN_SHELL; else process.env.ATLAS_LEAN_SHELL = oldShell;

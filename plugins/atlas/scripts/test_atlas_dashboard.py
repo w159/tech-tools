@@ -60,6 +60,7 @@ class TestAtlasDashboard(unittest.TestCase):
         with (
             mock.patch.object(self.mod, "_q", return_value=[dict(row)]),
             mock.patch.object(self.mod, "_is_junk_project", return_value=False),
+            mock.patch.object(self.mod, "_junk_project_row", return_value=False),
         ):
             self.assertEqual(self.mod._projects(None), [])
             got = self.mod._projects(None, editable_only=True)
@@ -165,7 +166,7 @@ class TestAtlasDashboard(unittest.TestCase):
                 encoding="utf-8",
             )
             with (
-                mock.patch.object(self.mod, "PLUGIN_ROOT", troot),
+                mock.patch.object(self.mod, "_armada_root", return_value=troot),
                 mock.patch.object(
                     self.mod,
                     "_plugin_config_options",
@@ -195,7 +196,7 @@ class TestAtlasDashboard(unittest.TestCase):
             (troot / ".claude-plugin" / "plugin.json").write_text(
                 json.dumps(
                     {
-                        "name": "atlas",
+                        "name": "armada",
                         "userConfig": {
                             "auvik_api_key": {"title": "Auvik key", "sensitive": True}
                         },
@@ -220,14 +221,14 @@ class TestAtlasDashboard(unittest.TestCase):
             settings = troot / "settings.json"
             settings.write_text("{}", encoding="utf-8")
             with (
-                mock.patch.object(self.mod, "PLUGIN_ROOT", troot),
+                mock.patch.object(self.mod, "_armada_root", return_value=troot),
                 mock.patch.object(self.mod, "_settings_path", return_value=settings),
             ):
                 res = self.mod.write_settings_updates({"auvik_api_key": "secret-value"})
                 self.assertTrue(res["ok"], res)
                 data = json.loads(settings.read_text())
                 self.assertEqual(
-                    data["pluginConfigs"]["atlas@tech-tools"]["options"][
+                    data["pluginConfigs"]["armada@tech-tools"]["options"][
                         "auvik_api_key"
                     ],
                     "secret-value",
@@ -1110,18 +1111,46 @@ class SecurityGuardTest(unittest.TestCase):
             conn.close()
             self.assertEqual(resp.status, 400, payload)
 
+    def test_behavior_post_returns_the_verified_write_shape(self):
+        status, body = self._req(
+            "POST", "/api/behavior", {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "8"}}, self._tok()
+        )
+        self.assertEqual(status, 200)
+        body = json.loads(body)
+        self.assertTrue(body["ok"], body)
+        self.assertEqual((body["key"], body["wanted"]), ("ATLAS_TRIPWIRE_THRESHOLD", "8"))
+        self.assertTrue(all(x["ok"] for x in body["layers"]))
+
+    def test_behavior_post_status_codes_for_confirm_and_range(self):
+        cmd = {"updates": {"ATLAS_OPTIMIZE_CMD": "my-opt {prompt}"}}
+        status, body = self._req("POST", "/api/behavior", cmd, self._tok())
+        self.assertEqual((status, json.loads(body)["error"]), (409, "needs_confirm"))
+        status, body = self._req(
+            "POST", "/api/behavior", {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "999"}}, self._tok()
+        )
+        self.assertEqual((status, json.loads(body)["error"]), (400, "out_of_range"))
+
+    def test_ollama_routes_are_mounted_and_delete_needs_the_token(self):
+        self.assertEqual(self._req("GET", "/api/v2/ollama/status")[0], 200)
+        json_only = {"Content-Type": "application/json"}
+        self.assertEqual(
+            self._req("DELETE", "/api/v2/ollama/models/ghost%3A1b", {"confirm": True}, json_only)[0], 401
+        )
+        status, body = self._req("DELETE", "/api/v2/ollama/models/ghost%3A1b", {}, self._tok())
+        self.assertEqual((status, json.loads(body)["error"]), (409, "needs_confirm"))
+
     def test_behavior_post_writes_only_the_override_file(self):
         real = Path.home() / ".claude" / "settings.json"
         before = real.stat().st_mtime_ns if real.exists() else None
         status, _ = self._req(
             "POST",
             "/api/behavior",
-            {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "1234"}},
+            {"updates": {"ATLAS_TRIPWIRE_THRESHOLD": "12"}},
             self._tok(),
         )
         self.assertEqual(status, 200)
         data = json.loads(self.settings.read_text())
-        self.assertEqual(data["env"]["ATLAS_TRIPWIRE_THRESHOLD"], "1234")
+        self.assertEqual(data["env"]["ATLAS_TRIPWIRE_THRESHOLD"], "12")
         self.assertEqual(real.stat().st_mtime_ns if real.exists() else None, before)
 
 
@@ -1247,8 +1276,9 @@ class SettingsDataTest(unittest.TestCase):
 
     def test_fixture_projects_are_filtered(self):
         f = self.ctl.is_fixture_project
-        # The checkout itself is a real, non-scratch directory (the OS temp dir is scratch).
-        real = SCRIPTS.parent
+        # /usr is a real, non-scratch directory on every host (the OS temp dir is scratch, and the checkout
+        # itself may sit under a "worktrees" path, which is junk by design).
+        real = Path("/usr")
         with tempfile.TemporaryDirectory() as tmp:
             wt = Path(tmp) / "proj" / ".claude" / "worktrees" / "x"
             wt.mkdir(parents=True)
@@ -1444,6 +1474,24 @@ class TestJunkProjectRow(unittest.TestCase):
                 d._junk_project_row(os.path.join(home, ".atlas", "worktrees", "w"))
             )
 
+    def test_markerless_dir_is_junk_marked_dir_is_not(self):
+        import atlas_dashboard as d
+
+        with tempfile.TemporaryDirectory() as t:
+            t = os.path.realpath(t)
+            downloads = os.path.join(t, "Downloads")
+            os.makedirs(downloads)
+            docs_proj = os.path.join(t, "notes")
+            os.makedirs(os.path.join(docs_proj, "docs"))
+            with (
+                mock.patch("atlas_dash_work._junk_root", lambda _p: False),
+                mock.patch.dict(os.environ, {"HOME": t}),
+            ):
+                self.assertTrue(d._junk_project_row(downloads, require_marker=True))
+                self.assertFalse(d._junk_project_row(docs_proj, require_marker=True))
+                # reaper path (no flag) is unchanged: marker-less dirs are not junk here
+                self.assertFalse(d._junk_project_row(downloads))
+
 
 class TestSelfHeal(unittest.TestCase):
     """Watchdog: exec into the newest sibling install when the own dir vanishes."""
@@ -1556,3 +1604,48 @@ class TestSelfHeal(unittest.TestCase):
             hint = d._ui_missing_hint()
         self.assertTrue(hint.startswith("python3 "))
         self.assertTrue(hint.endswith("atlas_dashboard.py ensure"))
+
+
+class TestReapTickHealth(unittest.TestCase):
+    def test_reaper_failure_surfaces_in_health(self):
+        import sqlite3
+        import tempfile
+
+        import atlas_dash_insights as ins
+        import atlas_dashboard as d
+
+        class Ctx:
+            query = {"window": "7d"}
+
+        with tempfile.TemporaryDirectory() as t:
+            real = os.path.join(os.path.realpath(t), "real")
+            os.makedirs(os.path.join(real, ".atlas", ".run"))
+            db = os.path.join(t, "x.db")
+            c = sqlite3.connect(db)
+            c.execute("CREATE TABLE projects(root_path TEXT)")
+            c.execute("INSERT INTO projects VALUES(?)", (real,))
+            c.commit()
+            c.close()
+            orig, d._REAP_LAST = d.dashboard_db_path, 0.0
+            d.dashboard_db_path = lambda: db
+            ins.REAP_FAILURES.clear()
+            try:
+                with (
+                    mock.patch("atlas_dash_work._junk_root", lambda _p: False),
+                    mock.patch(
+                        "atlas_todo.reap_channels",
+                        side_effect=PermissionError(1, "Operation not permitted"),
+                    ),
+                ):
+                    d.reap_tick(now=1000.0, interval=0)
+            finally:
+                d.dashboard_db_path = orig
+            with mock.patch.object(
+                ins, "_open", lambda ctx: ins._Db(sqlite3.connect(":memory:"))
+            ):
+                card = {s["id"]: s for s in ins._health_payload(Ctx())["subsystems"]}
+        r = card["reaper"]
+        self.assertEqual(r["status"], "warn")
+        self.assertIn("recent failures", r["detail"])
+        self.assertTrue(any(real in e and "PermissionError" in e for e in r["evidence"]))
+        self.assertIn(f"reap {real}", [f["path"] for f in ins.REAP_FAILURES])

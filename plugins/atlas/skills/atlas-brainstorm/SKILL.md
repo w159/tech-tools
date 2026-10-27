@@ -1,6 +1,6 @@
 ---
 name: atlas-brainstorm
-description: "Grills a vague idea one hard question at a time, recommending an answer each turn, until shared understanding. Default mode writes a requirements-only docs/plans/ artifact (WHAT, not HOW); strategy mode writes docs/architecture/product-strategy.md. Writes no product code. Use before atlas-plan."
+description: "Grills a vague idea one hard question at a time, recommending an answer each turn, until shared understanding. Default mode writes a requirements-only docs/plans/ artifact (WHAT, not HOW); strategy mode writes docs/architecture/product-strategy.md. Writes no product code. Use when an idea is vague, before atlas-plan."
 when_to_use: "brainstorm, flesh out this idea, what should we build, scope this feature, requirements discovery, product requirements, product strategy, positioning, target users, success metrics, product direction, STRATEGY.md, grill me"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[strategy [section]] <the idea, feature, or request to brainstorm>'
@@ -81,7 +81,7 @@ Read `references/approaches.md`. Elevate to a stated model of the user's actual 
 
 ## Phase 3 - Write the requirements plan
 
-Read `references/plan-sections.md` in full. Compose the requirements-only artifact: Goal Capsule + Product Contract with stable `R-###` requirement IDs and no implementation content. Target path: `docs/plans/<YYYY-MM-DD>-<slug>-brainstorm.md` (today's date; filesystem-safe slug per docs-ssot; if a same-day same-slug file exists that is NOT the resume target, suffix `-2`). The write goes through `atlas:docs-curator` per the docs-ssot ownership boundary - you assemble, it writes - unless the host has no subagent dispatch, in which case write it directly and say so in the report.
+Read `references/plan-sections.md` in full. Compose the requirements-only artifact: Goal Capsule + Product Contract with stable `R-###` requirement IDs and no implementation content. Target path: `docs/plans/<YYYY-MM-DD>_<slug>-brainstorm.md` (today's date; filesystem-safe slug per docs-ssot; if a same-day same-slug file exists that is NOT the resume target, suffix `-2`). The write goes through `atlas:docs-curator` per the docs-ssot ownership boundary - you assemble, it writes - unless the host has no subagent dispatch, in which case write it directly and say so in the report.
 
 Validate the four Ready checks (Complete, Consistent, Focused, Usable - defined in the reference) before handing off. A plan with any failed check is not done; fix the dialogue or the draft, do not hand off a known-broken artifact.
 

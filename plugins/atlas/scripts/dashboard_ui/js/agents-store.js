@@ -18,7 +18,7 @@ const RANK = { input: 0, fail: 1, working: 2, idle: 3, done: 4, unknown: 5 };
 const FROM_HERD = { blocked: "input", working: "working", idle: "idle", done: "done", unknown: "unknown" };
 
 // herd / todo / health status -> Command Center state id.
-export function mapState(raw) {
+function mapState(raw) {
   const k = String(raw === null || raw === undefined ? "unknown" : raw).toLowerCase();
   if (FROM_HERD[k]) return FROM_HERD[k];
   if (k === "in_progress") return "working";
@@ -28,18 +28,18 @@ export function mapState(raw) {
   return "unknown";
 }
 
-export const WORKER_NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/;
+const WORKER_NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/;
 const EXIT_RE = /^exit (-?\d+)(?: \[failed: (.*)\])?/;
 
 // herdr titles carry the harness glyph and a spinner ("\u03c0 \u280f Fix it", "\u03c0 > Fix it"). Strip them.
-export function cleanTitle(title) {
+function cleanTitle(title) {
   return String(title || "")
     .replace(/^[\s\u03c0>*\u2800-\u28ff\u2022\u00b7\u2733\u273b-\u273d]+/u, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-export function workerName(title, label) {
+function workerName(title, label) {
   const t = cleanTitle(title);
   if (WORKER_NAME.test(t)) return t;
   const l = String(label || "").trim();
@@ -162,14 +162,14 @@ export function joinAgents({ herd, todos, irc, colony, projects, seen, now }) {
   return out;
 }
 
-export function countStates(agents) {
+function countStates(agents) {
   const c = { input: 0, fail: 0, working: 0, idle: 0, done: 0, unknown: 0, total: agents.length };
   for (const a of agents) c[a.state] += 1;
   return c;
 }
 
 // workspace > agents roll-up for the rail tree; roll-up state is the most urgent child (same order as the strip).
-export function groupByWorkspace(agents, workspaces) {
+function groupByWorkspace(agents, workspaces) {
   const map = new Map();
   for (const w of workspaces || []) map.set(w.workspace_id, { id: w.workspace_id, label: w.label, focused: Boolean(w.focused), paneCount: w.pane_count, agents: [] });
   for (const a of agents) {
@@ -213,7 +213,7 @@ function layersFrom(src, daemonUp, daemonError) {
 }
 
 // First failing layer, or null. The UI shows exactly one message for it.
-export function firstDownLayer(layers) {
+function firstDownLayer(layers) {
   if (layers.daemon.state === "down") return "daemon";
   if (layers.herdr.state === "down") return "herdr";
   if (layers.webui.state === "down") return "webui";
@@ -420,7 +420,8 @@ function createAgentsStore() {
       src.herd = src.hstat = src.todos = src.irc = null;
       openStream();
       clearInterval(projectsTimer);
-      projectsTimer = setInterval(() => load("projects").then(() => emit()), 60000);
+      // ponytail: skips while hidden; the visibilitychange handler above refreshes on return.
+      projectsTimer = setInterval(() => { if (document.hidden) return; load("projects").then(() => emit()); }, 60000);
       await Promise.all([refresh(), load("projects")]);
       emit(true);
       tickColony();
@@ -482,4 +483,3 @@ function createAgentsStore() {
 }
 
 export const agentsStore = createAgentsStore();
-export default agentsStore;
