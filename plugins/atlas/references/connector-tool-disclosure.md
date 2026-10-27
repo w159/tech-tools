@@ -52,7 +52,7 @@ reported on stderr by name (never by value).
 
 Bundled `mcp/<name>/server.mjs` files are vendored ESM builds. Changing disclosure
 requires source edits under `mcp_servers/*` **and** a rebuild/copy into
-`plugins/atlas/mcp/`. Mass rebuilds are deliberate, not casual.
+`plugins/armada/mcp/`. Mass rebuilds are deliberate, not casual.
 
 ## Falcon behavior (atlas contract)
 

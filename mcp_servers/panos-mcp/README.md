@@ -176,7 +176,7 @@ PAN-OS answers authorization failures, bad xpaths, and malformed elements with *
 |---------|--------------|
 | `npm run build` | tsup build to `dist/` |
 | `npm run pack:mcpb` | build the `.mcpb` bundle for Claude Desktop (`scripts/pack-mcpb.js`) |
-| `npm run bundle:atlas` | build the deps-inlined atlas bundle at `plugins/atlas/mcp/panos/server.mjs` |
+| `npm run bundle:atlas` | build the deps-inlined atlas bundle at `plugins/armada/mcp/panos/server.mjs` |
 | `npm run test:boot` | boot probe: verifies the tool count in each credential state and the safety-signal agreement (also `npm test`) |
 
 ## Validation status

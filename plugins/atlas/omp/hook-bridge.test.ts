@@ -484,23 +484,25 @@ test("an unrecognised xd://mcp__ device fails closed to an MCP name, a file writ
 	expect(claudeNamesForCall("write", { path: "xd://report_issue", content: "x" })).toEqual(["Write"]); // not an MCP device
 });
 
-test("atlas connector calls reach hooks.json's connector_credential_watch matcher (mcp__plugin_atlas_.*)", () => {
+test("armada connector calls reach hooks.json's connector_credential_watch matcher (mcp__plugin_armada_.*)", () => {
 	const watch = loadBridgedHooks().find(h => h.command.includes("connector_credential_watch.py"));
 	if (!watch?.matcher) throw new Error("connector_credential_watch is not bridged with a matcher");
 	const matcher = watch.matcher;
-	for (const device of ["mcp__atlas_falcon_falcon_status", "mcp__atlas_connectwise_cw_status", "mcp__atlas_ninjaone_ninjaone_devices_list", "mcp__atlas_vanta_vanta_status", "mcp__atlas_cipp_cipp_status"]) {
+	for (const device of ["mcp__armada_falcon_falcon_status", "mcp__armada_connectwise_cw_status", "mcp__armada_ninjaone_ninjaone_devices_list", "mcp__armada_vanta_vanta_status", "mcp__armada_cipp_cipp_status"]) {
 		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(true);
 	}
 	for (const device of ["mcp__lean_ctx_ctx_read", "mcp__serena_find_symbol", "mcp__mcp_search_search"]) {
 		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(false);
 	}
-	expect(matcherNames(["Edit", "mcp__atlas_falcon__x"])).toEqual(["Edit", "mcp__atlas_falcon__x", "mcp__plugin_atlas_falcon__x"]);
+	expect(matcherNames(["Edit", "mcp__armada_falcon__x"])).toEqual(["Edit", "mcp__armada_falcon__x", "mcp__plugin_armada_falcon__x"]);
+	// pre-move `atlas` prefix is still aliased (fallback), though the matcher no longer names it
+	expect(matcherNames(["mcp__atlas_falcon__x"])).toEqual(["mcp__atlas_falcon__x", "mcp__plugin_atlas_falcon__x"]);
 });
 
 test("a connectwise MCP call is not seen as an Edit/Write by the file hooks", async () => {
 	const script = hookScript("edit_only.py", {});
 	const { handlers, ctx } = harness(writeConfig({ PreToolUse: [{ matcher: "Edit|Write", hooks: [{ command: `python3 "${script}"` }] }] }, ["edit_only.py"]));
-	await handlers.tool_call({ toolName: "write", input: { path: "xd://mcp__atlas_connectwise_cw_status", content: "{}" } }, ctx());
+	await handlers.tool_call({ toolName: "write", input: { path: "xd://mcp__armada_connectwise_cw_status", content: "{}" } }, ctx());
 	await handlers.tool_call({ toolName: "write", input: { path: "xd://mcp__mcp_search_search", content: "{}" } }, ctx());
 	expect(logOf("edit_only.py").length).toBe(0);
 	await handlers.tool_call({ toolName: "write", input: { path: "src/real.ts", content: "x" } }, ctx());

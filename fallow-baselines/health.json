@@ -891,7 +891,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/mcp/_env/load.mjs": {
+    "plugins/armada/mcp/_env/load.mjs": {
       "crap_critical": {
         "count": 1
       },
@@ -1940,9 +1940,9 @@
     "mcp_servers/blumira-mcp/src/http.ts:complexity",
     "plugins/atlas/omp/style.test.ts:untested risk",
     "mcp_servers/blumira-mcp/src/domains/msp.ts:complexity",
+    "plugins/armada/mcp/_env/load.mjs:untested risk",
     "mcp_servers/knowbe4-mcp/src/domains/groups.ts:complexity",
     "mcp_servers/ninjaone-mcp/src/domains/automation.ts:complexity",
-    "plugins/atlas/mcp/_env/load.mjs:untested risk",
     "mcp_servers/blumira-mcp/src/domains/findings.ts:complexity",
     "mcp_servers/cipp-mcp/src/handlers/tool.handler.ts:complexity",
     "plugins/atlas/omp/index.test.ts:untested risk",

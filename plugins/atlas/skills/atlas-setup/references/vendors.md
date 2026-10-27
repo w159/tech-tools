@@ -1,28 +1,28 @@
 # Atlas connectors reference
 
-Eleven vendor MCP connectors are bundled inside the atlas plugin under a **flat**
-layout: `plugins/atlas/mcp/<name>/`. All Node connectors ship as a single
+Thirteen vendor MCP connectors are bundled inside the armada plugin under a **flat**
+layout: `plugins/armada/mcp/<name>/` (install atlas and armada together). All Node connectors ship as a single
 `server.mjs` ESM bundle. Falcon ships as vendored Python source
 (`pyproject.toml` + `falcon_mcp/`) and is launched with `uv`.
 
-They are intended to be **inert by default**: every `userConfig` key on the atlas
-plugin defaults to `""`. Filling a vendor's required keys **on the atlas plugin**
+They are intended to be **inert by default**: every `userConfig` key on the armada
+plugin defaults to `""`. Filling a vendor's required keys **on the armada plugin**
 (dashboard Credentials, `/plugin config`, or plugin `.env`) is what enables it.
 
 | Kind | Connectors |
 | --- | --- |
-| Node bundles (`mcp/<name>/server.mjs`) | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, paylocity, threatlocker, vanta, sonicwall |
+| Node bundles (`mcp/<name>/server.mjs`) | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta, sonicwall |
 | Python vendored (`mcp/falcon/`) | falcon (requires `uv` on PATH) |
 
 ## userConfig key reference
 
-A connector is ENABLED when its required keys are all non-empty on the atlas
+A connector is ENABLED when its required keys are all non-empty on the armada
 plugin. "Required to enable" lists the minimum keys that make authenticated calls
 possible; remaining keys are optional. Every `*_base_url` (and region/platform)
 key is optional and resolves to the vendor default when left blank.
 
-Verified 2026-09-02 against `plugins/atlas/.mcp.json`,
-`plugins/atlas/.claude-plugin/plugin.json`, wiring unit tests, and live stdio probes.
+Verified 2026-09-02 against `plugins/armada/.mcp.json`,
+`plugins/armada/.claude-plugin/plugin.json`, wiring unit tests, and live stdio probes.
 
 | Connector | Entry point | userConfig keys | Required to enable | Base-URL / region default | Where to get credentials |
 |---|---|---|---|---|---|
@@ -37,6 +37,7 @@ Verified 2026-09-02 against `plugins/atlas/.mcp.json`,
 | Paylocity | `mcp/paylocity/server.mjs` | paylocity_client_id, paylocity_client_secret, paylocity_company_id, paylocity_base_url, paylocity_sandbox | paylocity_client_id, paylocity_client_secret | base_url default `https://api.paylocity.com` | Paylocity API partner credentials |
 | ThreatLocker | `mcp/threatlocker/server.mjs` | threatlocker_api_key, threatlocker_organization_id, threatlocker_base_url | threatlocker_api_key | base_url must match portal instance (blank assumes instance `g`, not universal) | ThreatLocker portal → API user key |
 | Vanta | `mcp/vanta/server.mjs` | vanta_client_id, vanta_client_secret, vanta_base_url | vanta_client_id, vanta_client_secret | base_url default `https://api.vanta.com/v1` | Vanta → Settings → Developer / API |
+| PAN-OS | `mcp/panos/server.mjs` | panos_host, panos_api_key, panos_username, panos_password, panos_target, panos_verify_tls, panos_rest_version | panos_host + panos_api_key (username + password only generate a key) | see `docs/panos-connector-design.md` for defaults | PAN-OS firewall or Panorama admin account (API key) |
 | SonicWall | `mcp/sonicwall/server.mjs` | sonicwall_host, sonicwall_username, sonicwall_password, sonicwall_port, sonicwall_verify_tls, sonicwall_session_override | sonicwall_host, sonicwall_username, sonicwall_password | no vendor default host (the appliance); port default `443`, verify_tls default `true`, session_override default `false` | SonicOS → Device → Settings → Administration (dedicated API admin) |
 
 ## Tool disclosure (verified live)
@@ -48,9 +49,10 @@ Verified 2026-09-02 against `plugins/atlas/.mcp.json`,
 | Always-on full catalog + `*_status` | auvik 39, cipp 43, spanning 14, knowbe4 30, ninjaone 45, paylocity 16, threatlocker 19, vanta 28 | full list; domain tools fail with MISSING_CREDENTIALS when unconfigured |
 | Falcon inert-then-full | falcon | **4** tools unconfigured (`falcon_status` → MISSING_CREDENTIALS); full catalog after auth |
 
-## Setting credentials (atlas plugin only)
+## Setting credentials (armada plugin)
 
-1. Prefer dashboard Credentials, or `/plugin config` on **atlas**.
+1. Prefer dashboard Credentials, or `/plugin config` on **armada**. Values saved under atlas and
+   `~/.config/atlas/atlas.env` are still read as a fallback.
 2. Set required keys only; leave optional base URLs blank unless needed.
 3. Reload Claude Code so MCP children re-read config.
 4. Prefer each connector's `*_status` tool before domain calls (including `falcon_status`).
@@ -60,4 +62,4 @@ Verified 2026-09-02 against `plugins/atlas/.mcp.json`,
 Older docs referred to department folders (`mcp/hr/`, `mcp/it-operations/`, …) and
 `.mcpb` bundles. Those paths are **obsolete**. Current source is flat
 `mcp/<name>/server.mjs` (or `mcp/falcon/` for Python). Credentials always live on
-the **atlas** plugin.
+the **armada** plugin.

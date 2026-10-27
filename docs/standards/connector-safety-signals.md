@@ -1,7 +1,7 @@
 # Connector safety signals: the contract every MCP connector is held to
 
 In-house standard, not an extracted reference. It governs every connector under
-`mcp_servers/` and every bundle under `plugins/atlas/mcp/`. Written 2026-09-17,
+`mcp_servers/` and every bundle under `plugins/armada/mcp/`. Written 2026-09-17,
 after a checklist item that had required a boot harness since it was authored was
 found to reference a file nothing had ever created, and the harness caught a live
 mislabeled destructive tool on its first run.
@@ -101,9 +101,9 @@ allowed; the reverse is the defect the gate exists to catch.
 ## The gate
 
 `node test-mcp-tools.mjs` at the repo root launches every connector exactly as
-`plugins/atlas/.mcp.json` declares it - the eleven Node connectors as
-`plugins/atlas/mcp/<name>/server.mjs` over MCP stdio, `falcon` as
-`uv run --project plugins/atlas/mcp/falcon python mcp/_env/load.py
+`plugins/armada/.mcp.json` declares it - the twelve Node connectors as
+`plugins/armada/mcp/<name>/server.mjs` over MCP stdio, `falcon` as
+`uv run --project plugins/armada/mcp/falcon python mcp/_env/load.py
 falcon_mcp.server` - with placeholder credentials in a from-scratch child
 environment, so it needs no real credentials and cannot reach a live vendor
 appliance. Per connector it asserts:

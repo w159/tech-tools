@@ -1,8 +1,8 @@
 {
   "$schema": "https://fallow.dev/schema.json",
   "ignorePatterns": [
-    "plugins/atlas/mcp/*/server.mjs",
-    "plugins/atlas/mcp/*/http.mjs",
+    "plugins/armada/mcp/*/server.mjs",
+    "plugins/armada/mcp/*/http.mjs",
     "plugins/atlas/scripts/dashboard_ui/vendor/xterm/*",
     "plugins/atlas/scripts/dashboard_ui/css/*.css",
     "plugins/atlas/colony/**",
@@ -11,7 +11,7 @@
   ],
   "entry": [
     "mcp_servers/_shared/__tests__/*.test.ts",
-    "plugins/atlas/mcp/_env/load.mjs",
+    "plugins/armada/mcp/_env/load.mjs",
     "plugins/atlas/mod/register.ts",
     "plugins/atlas/mod/band.tsx",
     "plugins/atlas/mod/pane/*.tsx",

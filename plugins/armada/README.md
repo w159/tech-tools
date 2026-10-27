@@ -49,9 +49,12 @@ or describe the task and let `references/role-routing.md` pick the agent.
 
 ## Credentials
 
-Armada declares no `userConfig` and no `mcpServers`. Every vendor credential
-lives on the `atlas` plugin, set through `/plugin config` on atlas. The
-per-vendor key list is in
+Armada owns the 13 vendor connectors (`plugins/armada/.mcp.json`, servers under
+`plugins/armada/mcp/`) and their `userConfig` keys. Set credentials through
+`/plugin config` on armada. The connector loaders also fall back to values
+saved under the atlas plugin, and `~/.config/atlas/atlas.env` still works.
+Install atlas and armada together. MCP tools are named
+`mcp__plugin_armada_<vendor>__*`. The per-vendor key list is in
 `skills/armada/references/connector-provisioning.md`. Armada never accepts a
 credential typed into chat and never writes one into `.atlas/`.
 

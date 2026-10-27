@@ -16,7 +16,7 @@ class IntegrationsConnectorsTest(unittest.TestCase):
         rows = [
             {
                 "name": "falcon",
-                "server_name": "plugin:atlas:falcon",
+                "server_name": "plugin:armada:falcon",
                 "health": "unconfigured",
                 "enabled": True,
                 "missing_required": ["FALCON_CLIENT_ID"],
@@ -39,7 +39,7 @@ class IntegrationsConnectorsTest(unittest.TestCase):
             },
             {
                 "name": "vanta",
-                "server_name": "plugin:atlas:vanta",
+                "server_name": "plugin:armada:vanta",
                 "health": "degraded",
                 "enabled": True,
                 "fields": [],

@@ -175,7 +175,7 @@ def hook_table(sb):
             "connector_credential_watch.py",
             lambda: b(
                 "PostToolUse",
-                tool_name="mcp__plugin_atlas_falcon__falcon_status",
+                tool_name="mcp__plugin_armada_falcon__falcon_status",
                 tool_input={},
                 tool_response="ok",
             ),
