@@ -1,4 +1,17 @@
 {
-  "description": "Disabled by user request: the UserPromptSubmit nudge hook was interrupting prompts constantly. Original non-blocking command-hook implementation preserved in tpp_nudge.py; hook registration removed.",
-  "hooks": {}
+  "description": "Opt-in: set PROGRAMMER_SCAN_ON_EDIT=1 to have the principles scanner report error-level findings after each Python edit. Silent and non-blocking otherwise.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scan_on_edit.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
 }
