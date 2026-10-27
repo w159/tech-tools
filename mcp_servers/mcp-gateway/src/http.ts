@@ -3,156 +3,172 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { JWTVerifyGetKey } from "jose";
 import type { GatewayConfig } from "./config.js";
-import { AuthError, verifyAccessToken, type Identity } from "./auth.js";
-import type { Gateway } from "./gateway.js";
+import { AuthError, type Identity } from "./auth.js";
+import { requestIdFrom, type AuditLogger } from "./audit.js";
+import type { Gateway, ToolCallResult } from "./gateway.js";
 
 const MAX_BODY_BYTES = 1024 * 1024;
+
+export const SERVER_INFO = { name: "mcp-gateway", version: "0.2.0" };
+
+export interface HttpDeps {
+  config: GatewayConfig;
+  gateway: Gateway;
+  verify: (token: string) => Promise<Identity>;
+  audit: AuditLogger;
+  health: () => object;
+  // RFC 9728 Protected Resource Metadata document.
+  prm: () => object;
+  // Scope advertised in WWW-Authenticate challenges.
+  wwwAuthenticateScope: string;
+  // Anything the resource server does not own (broker mode mounts the
+  // authorization server here).
+  fallback?: (req: IncomingMessage, res: ServerResponse) => void;
+}
 
 function sendJson(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
   res.writeHead(status, { "Content-Type": "application/json", ...headers });
   res.end(JSON.stringify(body));
 }
 
-function protectedResourceMetadata(config: GatewayConfig): Record<string, unknown> {
-  return {
-    resource: config.mcpResourceUrl,
-    authorization_servers: [`https://login.microsoftonline.com/${config.entraTenantId}/v2.0`],
-    bearer_methods_supported: ["header"],
-    scopes_supported: [`${config.mcpResourceUrl}/access_as_user`, "offline_access"],
-  };
+class BodyTooLarge extends Error {}
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    const buf = chunk as Buffer;
+    size += buf.length;
+    // Counted as it streams: a missing or lying Content-Length cannot get past.
+    if (size > MAX_BODY_BYTES) throw new BodyTooLarge();
+    chunks.push(buf);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-async function authenticate(
-  req: IncomingMessage,
-  res: ServerResponse,
-  config: GatewayConfig,
-  keyResolver: JWTVerifyGetKey,
-  origin: string,
-): Promise<Identity | undefined> {
-  const authHeader = req.headers.authorization;
-  const wwwAuthenticate = `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", scope="${config.mcpResourceUrl}/access_as_user"`;
-
-  if (!authHeader?.startsWith("Bearer ")) {
-    sendJson(res, 401, { error: "invalid_token" }, { "WWW-Authenticate": wwwAuthenticate });
-    return undefined;
-  }
-
-  try {
-    return await verifyAccessToken(authHeader.slice(7), config, keyResolver);
-  } catch (err) {
-    if (err instanceof AuthError && err.status === 401) {
-      sendJson(res, 401, { error: "invalid_token" }, { "WWW-Authenticate": wwwAuthenticate });
-    } else {
-      sendJson(res, 500, { error: "internal_error" });
-    }
-    return undefined;
-  }
-}
-
-function createMcpServer(gateway: Gateway, identity: Identity): Server {
-  const server = new Server({ name: "henssler-mcp-gateway", version: "0.1.0" }, { capabilities: { tools: {} } });
+function createMcpServer(gateway: Gateway, identity: Identity, requestId: string): Server {
+  const server = new Server(SERVER_INFO, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: await gateway.listToolsFor(identity.roles),
+    tools: await gateway.listTools(identity, requestId),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) =>
-    gateway.callTool(identity, request.params.name, request.params.arguments),
+    (await gateway.callTool(identity, request.params.name, request.params.arguments, requestId)) as ToolCallResult & {
+      content: never[];
+    },
   );
 
   return server;
 }
 
-async function handleMcpPost(
-  req: IncomingMessage,
-  res: ServerResponse,
-  config: GatewayConfig,
-  gateway: Gateway,
-  keyResolver: JWTVerifyGetKey,
-  origin: string,
-): Promise<void> {
-  const contentLength = Number(req.headers["content-length"] ?? "0");
-  if (contentLength > MAX_BODY_BYTES) {
+function methodNotAllowed(res: ServerResponse): void {
+  sendJson(res, 405, { jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed" }, id: null }, { Allow: "POST" });
+}
+
+async function handleMcpPost(req: IncomingMessage, res: ServerResponse, deps: HttpDeps, requestId: string): Promise<void> {
+  const { config, audit } = deps;
+  const metadataUrl = `${config.publicBaseUrl}/.well-known/oauth-protected-resource/mcp`;
+  const scope = deps.wwwAuthenticateScope;
+  const challenge = `Bearer resource_metadata="${metadataUrl}", scope="${scope}"`;
+
+  if (Number(req.headers["content-length"] ?? "0") > MAX_BODY_BYTES) {
     sendJson(res, 413, { error: "payload_too_large" });
     return;
   }
 
-  const identity = await authenticate(req, res, config, keyResolver, origin);
-  if (!identity) return;
-
-  if (identity.roles.length === 0) {
-    sendJson(res, 403, { error: "insufficient_scope" });
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !/^Bearer /i.test(authHeader)) {
+    audit.emit({ request_id: requestId, event: "auth_failed", reason: "missing_bearer" });
+    sendJson(res, 401, { error: "invalid_token" }, { "WWW-Authenticate": challenge });
     return;
   }
 
-  const server = createMcpServer(gateway, identity);
+  let identity: Identity;
+  try {
+    identity = await deps.verify(authHeader.slice(7).trim());
+  } catch (err) {
+    if (err instanceof AuthError && err.status === 401) {
+      // The reason comes from jose or the tenant pin; it never contains the token.
+      audit.emit({ request_id: requestId, event: "auth_failed", reason: err.message.slice(0, 200) });
+      sendJson(res, 401, { error: "invalid_token" }, { "WWW-Authenticate": challenge });
+    } else {
+      console.error("[http] token verification error:", err instanceof Error ? err.message : err);
+      sendJson(res, 500, { error: "internal_error" });
+    }
+    return;
+  }
+
+  const actor = { sub: identity.sub, email: identity.email, idp: identity.idp, tenant: identity.tenant };
+  if (identity.roles.length === 0) {
+    audit.emit({ request_id: requestId, event: "auth_failed", actor, client_id: identity.clientId, reason: "no_roles" });
+    sendJson(
+      res,
+      403,
+      { error: "insufficient_scope" },
+      { "WWW-Authenticate": `Bearer error="insufficient_scope", scope="${scope}", resource_metadata="${metadataUrl}"` },
+    );
+    return;
+  }
+
+  let body: unknown;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    if (err instanceof BodyTooLarge) sendJson(res, 413, { error: "payload_too_large" }, { Connection: "close" });
+    else sendJson(res, 400, { jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null });
+    return;
+  }
+
+  const server = createMcpServer(deps.gateway, identity, requestId);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
 
   res.on("close", () => {
-    transport.close();
-    server.close();
+    void transport.close();
+    void server.close();
   });
 
   await server.connect(transport as unknown as Transport);
-  await transport.handleRequest(req, res);
+  await transport.handleRequest(req, res, body);
 }
 
-function methodNotAllowed(res: ServerResponse): void {
-  sendJson(res, 405, { jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed" }, id: null });
-}
-
-export function createHttpServer(
-  config: GatewayConfig,
-  gateway: Gateway,
-  keyResolver: JWTVerifyGetKey,
-  backendIds: readonly string[],
-): HttpServer {
+export function createHttpServer(deps: HttpDeps): HttpServer {
   return createServer((req: IncomingMessage, res: ServerResponse) => {
-    // This process only ever runs behind Container Apps external ingress
-    // with allowInsecure:false, so every request that reaches it arrived
-    // over HTTPS from the caller's perspective - verified live: the ingress
-    // config on gwh-mcp-gateway carries "allowInsecure": false and
-    // "transport": "Auto". x-forwarded-proto was tried first and measured
-    // live to still read as non-https (Container Apps' internal edge->
-    // container hop does not reliably forward the original external
-    // scheme), so a header-sniffed value here would rebuild the exact
-    // WWW-Authenticate/RFC-9728 "http://" defect this fix exists to close.
-    // If this code ever runs somewhere the external edge legitimately
-    // serves plain HTTP, that deployment needs its own explicit override,
-    // not a guess from a header this platform does not set trustworthily.
-    const origin = `https://${req.headers.host ?? `${config.host}:${config.port}`}`;
-    const url = new URL(req.url ?? "/", origin);
+    res.setHeader("X-Request-Id", requestIdFrom(req.headers["x-request-id"]));
+    const requestId = res.getHeader("X-Request-Id") as string;
+    // Only the path matters; the base is a placeholder for URL parsing.
+    const path = new URL(req.url ?? "/", "http://localhost").pathname;
 
-    if (url.pathname === "/health" && req.method === "GET") {
-      sendJson(res, 200, { status: "ok", backends: backendIds });
+    if (path === "/health" && req.method === "GET") {
+      sendJson(res, 200, deps.health());
       return;
     }
 
     if (
-      (url.pathname === "/.well-known/oauth-protected-resource" ||
-        url.pathname === "/.well-known/oauth-protected-resource/mcp") &&
+      (path === "/.well-known/oauth-protected-resource" || path === "/.well-known/oauth-protected-resource/mcp") &&
       req.method === "GET"
     ) {
-      sendJson(res, 200, protectedResourceMetadata(config));
+      sendJson(res, 200, deps.prm());
       return;
     }
 
-    if (url.pathname === "/mcp") {
+    if (path === "/mcp") {
       if (req.method === "POST") {
-        handleMcpPost(req, res, config, gateway, keyResolver, origin).catch((err) => {
+        handleMcpPost(req, res, deps, requestId).catch((err) => {
           console.error("[http] /mcp error:", err instanceof Error ? err.message : err);
           if (!res.headersSent) sendJson(res, 500, { jsonrpc: "2.0", error: { code: -32603, message: "Internal error" }, id: null });
         });
         return;
       }
-      if (req.method === "GET" || req.method === "DELETE") {
-        methodNotAllowed(res);
-        return;
-      }
+      methodNotAllowed(res);
+      return;
     }
 
+    if (deps.fallback) {
+      deps.fallback(req, res);
+      return;
+    }
     sendJson(res, 404, { error: "not_found" });
   });
 }

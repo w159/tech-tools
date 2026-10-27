@@ -77,6 +77,21 @@
                 "best-practices",
                 "book"
             ]
+        },
+        {
+            "name": "harbor",
+            "source": "./plugins/harbor",
+            "description": "Admin tools for the enterprise MCP gateway: 4 skills (harbor-setup deploys the gateway into your Azure or Google Cloud account, harbor-policy manages who can call which tools, harbor-audit summarizes the audit log, harbor-connect adds it to Claude as a custom connector), a read-only-by-default harbor-admin agent, and Bicep and Terraform templates.",
+            "category": "developer-tools",
+            "keywords": [
+                "harbor",
+                "mcp",
+                "gateway",
+                "azure",
+                "gcp",
+                "audit",
+                "access-policy"
+            ]
         }
     ]
 }

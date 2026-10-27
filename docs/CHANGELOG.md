@@ -1,19 +1,16 @@
 # Changelog
 
-## Unreleased - 2026-10-27 - Atlas core mods (Claude Code and omp)
+## mcp-gateway 0.2.0, harbor 0.1.0 - 2026-10-27
 
 ### Added
 
-- Atlas core view in both harnesses, built from the run scratch both already write (`plugins/atlas/mod/data/core.ts`, pure, shared): operating contract (reply headers, done items with evidence, open gates), verifier verdicts against worker DONE claims (verified, REFUTED, needs evidence, unchecked), tmux context offload per worker (context kept past the brief vs report returned), and the decision-model route (class/effort -> scope-matrix seats -> the model each seat ran, with drift).
-- Claude Code mod: one core row under the band's phase rail (`mod/core-row.ts`), pane tab `g` now "core" with the four sections plus the gate groups, toasts for each new verdict and each finished worker's offload, status line `atlas ✔N ✖N ⚠N ⇆Nx`, and `/atlas-core` (works headless).
-- omp: the same core row in the mission panel (`omp/core-source.ts`, parity with `contracts/core-golden.ts`) and `/atlas-core` (`omp/core-command.ts`).
-- Real-run fixture `contracts/core-fixture.ts`; evidence in `docs/audits/2026-10-27_atlas-core-mods-evidence.md`.
+- mcp-gateway 0.2.0: broker mode (`GATEWAY_MODE=broker`) with an OAuth 2.1 authorization server (oidc-provider), upstream OIDC sign-in (Entra, Google, generic), dynamic client registration, the jwt-bearer grant for IdP-signed ID-JAG assertions, and in-memory state (one replica). Default-deny `policy.yaml` by connector and effect class, `mcp-gw.audit/1` audit lines, connector catalog (`catalog/`, `scripts/gen-catalog.mjs`), `scripts/gen-jwks.mjs`. See [mcp_servers/mcp-gateway/README.md](../mcp_servers/mcp-gateway/README.md).
+- harbor 0.1.0 (new plugin): `harbor-setup`, `harbor-policy`, `harbor-audit`, `harbor-connect` skills, `harbor-admin` agent, Bicep and Terraform templates, saved audit queries. See [plugins/harbor/README.md](../plugins/harbor/README.md).
 
-### Fixed
+### Changed
 
-- The band never drew in a live Claude Code session: the AbovePrompt render wrote `$.state` to open the docked pane, the engine denied it and skipped the hook. The open now runs in `dockTick` on the rebuild clock.
-- A verdict is matched to the DONE claim whose report names its finding id before falling back to time order, so a verdict on one finding no longer marks an unrelated claim as checked.
-- Core reads are cached by size and mtime and evicted when the file goes away; a missing `findings.json` for one tick no longer re-toasts every verdict.
+- mcp-gateway Dockerfile copies `catalog/` and `scripts/gen-jwks.mjs` and pins the uv image to 0.9.0. `scripts/acr-build.sh` has no default registry, resource group or subscription; it requires all three.
+- Direct mode (Entra) keeps working without env changes.
 
 ## 16.0.0 - 2026-10-27
 

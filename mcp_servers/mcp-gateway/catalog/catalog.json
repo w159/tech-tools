@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "source": "plugins/armada/.mcp.json",
+  "connectors": [
+    {
+      "id": "auvik",
+      "compatRole": "Auvik",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/auvik/server.mjs"
+      ],
+      "envPrefixes": [
+        "AUVIK_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "blumira",
+      "compatRole": "Blumira",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/blumira/server.mjs"
+      ],
+      "envPrefixes": [
+        "BLUMIRA_"
+      ],
+      "stateful": true
+    },
+    {
+      "id": "cipp",
+      "compatRole": "CIPP",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/cipp/server.mjs"
+      ],
+      "envPrefixes": [
+        "CIPP_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "connectwise",
+      "compatRole": "ConnectWise",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/connectwise/server.mjs"
+      ],
+      "envPrefixes": [
+        "CW_MANAGE_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "falcon",
+      "compatRole": "Falcon",
+      "command": "${BACKENDS_ROOT}/falcon/.venv/bin/falcon-mcp",
+      "args": [],
+      "envPrefixes": [
+        "FALCON_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "knowbe4",
+      "compatRole": "KnowBe4",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/knowbe4/server.mjs"
+      ],
+      "envPrefixes": [
+        "KNOWBE4_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "ninjaone",
+      "compatRole": "NinjaOne",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/ninjaone/server.mjs"
+      ],
+      "envPrefixes": [
+        "NINJAONE_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "panos",
+      "compatRole": "PanOS",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/panos/server.mjs"
+      ],
+      "envPrefixes": [
+        "PANOS_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "paylocity",
+      "compatRole": "Paylocity",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/paylocity/server.mjs"
+      ],
+      "envPrefixes": [
+        "PAYLOCITY_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "sonicwall",
+      "compatRole": "SonicWall",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/sonicwall/server.mjs"
+      ],
+      "envPrefixes": [
+        "SONICWALL_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "spanning",
+      "compatRole": "Spanning",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/spanning/server.mjs"
+      ],
+      "envPrefixes": [
+        "SPANNING_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "threatlocker",
+      "compatRole": "ThreatLocker",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/threatlocker/server.mjs"
+      ],
+      "envPrefixes": [
+        "THREATLOCKER_"
+      ],
+      "stateful": false
+    },
+    {
+      "id": "vanta",
+      "compatRole": "Vanta",
+      "command": "node",
+      "args": [
+        "${BACKENDS_ROOT}/vanta/server.mjs"
+      ],
+      "envPrefixes": [
+        "VANTA_"
+      ],
+      "stateful": false
+    }
+  ]
+}
