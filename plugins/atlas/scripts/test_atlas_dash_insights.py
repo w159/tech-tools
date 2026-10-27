@@ -1614,9 +1614,11 @@ class TestProjectPicker(unittest.TestCase):
 
     def test_fixture_temp_and_missing_roots_are_excluded(self):
         home = Path.home()
-        self.assertFalse(
-            ins._is_fixture_root(str(SCRIPTS.parents[2]))
-        )  # a live, non-temp checkout stays
+        # A live, non-temp, non-junk root stays. /usr is a real directory on every host; the checkout
+        # itself is not usable here (a worktree path contains the junk part "worktrees"), and the repo
+        # marker check is stubbed because /usr is not a repo.
+        with mock.patch("atlas_dash_work._real_project", return_value=True):
+            self.assertFalse(ins._is_fixture_root("/usr"))
         with tempfile.TemporaryDirectory() as tmp:
             self.assertTrue(ins._is_fixture_root(tmp))  # exists, but under the temp dir
         for gone in (str(home / "no-such-project-dir"), "/definitely/not/here"):

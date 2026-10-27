@@ -482,12 +482,15 @@ class ServerDown(unittest.TestCase):
             os.environ.pop("HERDR_SOCKET_PATH")
 
     def _ensure_with(self, ups, server):
-        keys = ("_health", "_spawn", "_server_up", "ensure_server", "install_check")
+        keys = ("_health", "_spawn", "_server_up", "ensure_server", "install_check", "_prepare", "_bun")
         saved = {k: getattr(atlas_herdr, k) for k in keys}
         calls, spawns, seq = [], [], list(ups)
         atlas_herdr._health = lambda: False
         atlas_herdr._spawn = lambda: spawns.append(1) or (True, "")
         atlas_herdr.install_check = lambda: {"ok": True}
+        # Host-independent: no real bun lookup, rsync mirror or `bun install` build of the vendored web UI.
+        atlas_herdr._bun = lambda: "/usr/bin/bun"
+        atlas_herdr._prepare = lambda: (True, "built")
         atlas_herdr._server_up = lambda: seq.pop(0) if len(seq) > 1 else seq[0]
         atlas_herdr.ensure_server = lambda wait=1.5: calls.append(wait) or server
         try:

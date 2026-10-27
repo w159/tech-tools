@@ -276,6 +276,11 @@ async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
 	const names = ["ATLAS_DB", "ATLAS_HOOKSTATE_DIR", "ATLAS_HARNESS", "HOME"] as const;
 	const keep: Record<string, string | undefined> = Object.fromEntries(names.map(n => [n, process.env[n]]));
 	try {
+		// An empty .git makes the sandbox its own project root. Without it atlas_paths.project_root() walks up from
+		// `.scratch` into the enclosing checkout and, in a linked worktree, maps to the MAIN worktree: the tripwire's
+		// one-shot spec-advisory marker (.atlas/.run/spec_denies/<session>) then lands in that real repo and survives,
+		// so the first-offense advisory fires on the first run only and every later run denies.
+		mkdirSync(join(root, ".git"));
 		mkdirSync(join(root, "docs"));
 		mkdirSync(join(root, "src"));
 		writeFileSync(join(root, "docs", "CHANGELOG.md"), "x\n");

@@ -32,6 +32,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HOOKS_DIR = Path(__file__).resolve().parent
@@ -655,6 +656,10 @@ class GitignoreSecretContract(unittest.TestCase):
             )
 
 
+@unittest.skipUnless(
+    os.environ.get("ATLAS_CHECK_INSTALL_PARITY") == "1",
+    "opt-in: set ATLAS_CHECK_INSTALL_PARITY=1 to compare the repo against the host's plugin install cache",
+)
 class InstalledParityContract(unittest.TestCase):
     """The repo is not what runs. The installed plugin cache is.
 
@@ -1183,6 +1188,27 @@ class SerenaHealContract(unittest.TestCase):
             self.assertIsNone(boot.heal_serena_project(tmp))
             self.assertFalse((Path(tmp) / ".serena").exists())
 
+    def test_unreadable_config_fails_open_when_open_raises(self):
+        """Root-independent: chmod 000 is ignored for euid 0, so force the OSError."""
+        boot = self._boot()
+        real_open = open
+
+        def deny_cfg(path, *a, **kw):
+            if str(path).endswith("project.yml"):
+                raise PermissionError(13, "denied", str(path))
+            return real_open(path, *a, **kw)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".serena").mkdir()
+            (root / ".serena" / "project.yml").write_text("x", encoding="utf-8")
+            with mock.patch("builtins.open", side_effect=deny_cfg):
+                self.assertIsNone(boot.heal_serena_project(str(root)))
+
+    @unittest.skipIf(
+        hasattr(os, "geteuid") and os.geteuid() == 0,
+        "chmod 000 does not block reads for root; covered by the mocked variant",
+    )
     def test_unreadable_config_fails_open(self):
         boot = self._boot()
         with tempfile.TemporaryDirectory() as tmp:
