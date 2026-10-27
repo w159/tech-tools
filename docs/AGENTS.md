@@ -139,8 +139,8 @@ Verified 2026-07-13 against the shipped tree.
 
 ## Architecture
 
-- Entry points: `plugins/atlas/{hooks,scripts,skills,agents,mcp}` (hook handlers, CLI scripts,
-  38 skills, 14 agents, 12 MCP connector bundles)
+- Entry points: `plugins/atlas/{hooks,scripts,skills,agents}` (hook handlers, CLI scripts,
+  38 skills, 14 agents); the 13 MCP connector bundles ship in `plugins/armada/mcp/`
 - Boundaries: `atlas` plugin (codebase-facing, 14 agents in `plugins/atlas/agents/`) versus
   `armada` plugin (11 department agents in `plugins/armada/agents/`); the split landed in v5.0.0
 - Key modules: 38 skills under `plugins/atlas/skills/`, 14 agents under `plugins/atlas/agents/`,

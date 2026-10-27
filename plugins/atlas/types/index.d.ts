@@ -155,6 +155,7 @@ declare module 'claude-code' {
 			atlasView: 'team' | 'channel' | 'route' | 'gates';
 			gates: { id: 'completion' | 'tripwire' | 'routing' | 'header'; title: string; lines: { id: string; label: string; ok: boolean; detail?: string; fix?: string }[]; error?: string }[];
 			lastHeader: { matched: boolean; phase: string | null } | null;
+			todoExpanded: boolean | null;
 		};
 	}
 }

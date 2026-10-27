@@ -312,7 +312,7 @@ Unreleased, test-verified in source (see `docs/CHANGELOG.md` Unreleased). The he
 - Per-wave cost/token ledger + rollup (persona P2).
 - `atlas-release` changelog assembly from merged PRs (P6).
 - Sweep historical-duplicate detection + contributor reply kit (P6).
-- Signed audit-pack export + read-only connector profile across 12 connectors (P4).
+- Signed audit-pack export + read-only connector profile across 13 connectors (P4).
 - Telemetry gaps 1-7 of findings.json mapping (friction_events, verifications, error_clusters, skill_usage, insights report, pattern_miner) (obs #26593).
 - Headless per-stage orchestration loop for `context_limit_exceeded`.
 - Worktree isolation: worktree live-dispatch gate exercise.
@@ -455,7 +455,7 @@ What would unblock it, in order:
   exists today and it is unrelated.
 
 Interim decision (approved 2026-07-31): vendor the built servers directly into
-`plugins/atlas/mcp/<server-key>/` and launch them with `node` against
+`plugins/atlas/mcp/<server-key>/` (since moved to `plugins/armada/mcp/<server-key>/`) and launch them with `node` against
 `${CLAUDE_PLUGIN_ROOT}`, which works today with no registry or repo work. The npx-from-git
 delivery above remains the eventual target, not the current mechanism. Vendoring work itself
 is in progress and unverified as of this entry - not recorded here as done.

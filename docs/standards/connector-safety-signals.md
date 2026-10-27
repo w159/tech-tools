@@ -140,7 +140,7 @@ credential-less `tools/list` is not the end of the probe:
 - `GATED` and `SKIP` verdicts still exist for a surface that genuinely cannot be
   enumerated (a missing `uv` or venv for falcon reports a named SKIP with the
   command that fixes it), but nothing currently uses them: the run reports
-  `12/12 connector(s), 534 tools` (harness floors sum to 534; re-run the harness and quote its total) fully enumerated, 0 gated, 0 skipped. A new
+  `N/N connector(s), T tools` (13 connectors ship in armada; re-run the harness and quote its total) fully enumerated, 0 gated, 0 skipped. A new
   connector that cannot be fully enumerated must say why in its COVERAGE line
   rather than pass quietly on a partial surface.
 

@@ -895,7 +895,7 @@ tech-tools/
 |- plugins/
 |  |- atlas/                 # the plugin
 |  |  |- .claude-plugin/     # plugin.json + userConfig (51 keys)
-|  |  |- .mcp.json           # 12 connector server definitions
+|  |  |- (no .mcp.json or mcp/: the 13 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
 |  |  |- skills/             # 47 skills
 |  |  |- agents/             # 13 role agents
