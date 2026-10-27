@@ -161,6 +161,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertNotIn('"decision": "block"', r.stdout)
 
     def test_orchestration_session_missing_artifacts_is_blocked(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
 
@@ -237,6 +238,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertNotIn('"decision": "block"', r.stdout)
 
     def test_missing_roadmap_blocks_with_condition_d(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         self._satisfy_all_conditions()
         os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
@@ -244,6 +246,7 @@ class GateOrchestrationTest(unittest.TestCase):
         self.assertIn("ROADMAP.md is missing", r.stdout)
 
     def test_missing_readme_blocks_with_condition_e(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         self._satisfy_all_conditions()
         os.remove(os.path.join(self.tmp, "README.md"))
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
@@ -1014,6 +1017,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_missing_changelog_condition_c(self):
         self._satisfy_all()
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         os.remove(os.path.join(self.tmp, "docs", "CHANGELOG.md"))
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
@@ -1021,6 +1025,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_missing_roadmap_condition_d(self):
         self._satisfy_all()
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
@@ -1028,6 +1033,7 @@ class InProcessMainTest(unittest.TestCase):
 
     def test_missing_readme_condition_e(self):
         self._satisfy_all()
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         os.remove(os.path.join(self.tmp, "README.md"))
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
@@ -1168,7 +1174,9 @@ class HelperUnitTest(unittest.TestCase):
     def test_find_root_finds_docs_dir(self):
         tmp = tempfile.mkdtemp()
         try:
-            os.makedirs(os.path.join(tmp, ".git"))  # docs/ alone is no longer a root marker
+            os.makedirs(
+                os.path.join(tmp, ".git")
+            )  # docs/ alone is no longer a root marker
             os.makedirs(os.path.join(tmp, "docs"))
             nested = Path(tmp) / "a" / "b" / "c"
             nested.mkdir(parents=True)
@@ -1845,6 +1853,50 @@ class ShellEditDelegationTest(unittest.TestCase):
             self.conn, later, "Edit", "main", 0, str(self.root / "src/extra.py")
         )
         self.assertIn("(m) Delegation mandate", self.gate())
+
+
+class DocsConditionsScopedToCodeTest(GateOrchestrationTest):
+    """(c)/(d)/(e)/(h) only apply to a run that shipped non-docs code."""
+
+    def _gate(self):
+        env = dict(self.env, ATLAS_GATE_PHASES="off", ATLAS_GATE_COLONY="off")
+        return _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)
+
+    def _assert_cdeh_silent(self, out):
+        for frag in (
+            "CHANGELOG.md is missing",
+            "ROADMAP.md is missing",
+            "README.md at the project root is missing",
+            "ROADMAP reconciliation",
+        ):
+            self.assertNotIn(frag, out)
+
+    def test_read_only_run_passes_cdeh(self):
+        self._log_run_read("src/app.py")
+        with open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w") as f:
+            f.write("- [done] shipped thing\n")
+        r = self._gate()
+        self._assert_cdeh_silent(r.stdout)
+
+    def test_docs_only_run_passes_cdeh(self):
+        self._log_run_write("docs/notes.md")
+        r = self._gate()
+        self._assert_cdeh_silent(r.stdout)
+
+    def test_code_shipped_still_blocks_cde(self):
+        self._log_run_write("src/app.py")
+        r = self._gate()
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("CHANGELOG.md is missing", r.stdout)
+        self.assertIn("ROADMAP.md is missing", r.stdout)
+        self.assertIn("README.md at the project root is missing", r.stdout)
+
+    def test_code_shipped_still_blocks_h(self):
+        self._log_run_write("src/app.py")
+        with open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w") as f:
+            f.write("- [done] shipped thing\n")
+        r = self._gate()
+        self.assertIn("ROADMAP reconciliation", r.stdout)
 
 
 if __name__ == "__main__":
@@ -2700,6 +2752,7 @@ class InFlightDispatchOrchestrationTest(GateOrchestrationTest):
         self.assertEqual(r.stdout.strip(), "", r.stdout)
 
     def test_gate_blocks_once_subagent_completes(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         r = _run_gate(
             {
                 "session_id": "sess-orch",
@@ -3795,6 +3848,7 @@ class GateDeltaReblockTest(GateOrchestrationTest):
         self.env["ATLAS_GATE_COLONY"] = "off"
 
     def _run(self):
+        self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         return _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
 
     def test_first_stop_full_clause_then_delta(self):
@@ -3884,4 +3938,149 @@ class FailOpenUnreadablePayloadTest(InProcessMainTest):
         # the gate must NOT claim the payload was unreadable.
         rc, out = self._invoke_unreadable("", env_extra={"ATLAS_GATE": "off"})
         self.assertEqual(rc, 0)
+        self.assertNotIn("FAIL-OPEN", out)
+
+
+class StopGateArmingTest(unittest.TestCase):
+    """The Stop gate arms like the dispatch tripwire (atlas_scope.gates_armed) and
+    sees files a shell command changed. Fixtures live under $HOME, not /tmp: a
+    scratch-root project is exempt by design and would hide every case here."""
+
+    SESSION = "arm-sess"
+
+    def setUp(self):
+        self.root = Path(
+            os.path.realpath(
+                tempfile.mkdtemp(prefix="stopgate-", dir=os.path.expanduser("~"))
+            )
+        )
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.state = tempfile.TemporaryDirectory()
+        self.addCleanup(self.state.cleanup)
+        state = Path(self.state.name)
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=str(state / "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=str(state / "hookstate"),
+            ATLAS_GATE_PHASES="off",
+            ATLAS_GATE_COLONY="off",
+        )
+        self.env.pop("ATLAS_GATES", None)
+        self.conn = atlas_db.connect(self.env["ATLAS_DB"])
+        self.addCleanup(self.conn.close)
+        atlas_db.init(self.conn)
+
+    def vcs(self, *args):
+        subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True)
+
+    def put(self, rel, body):
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+
+    def repo(self, docs=False):
+        self.vcs("init", "-q")
+        self.vcs("config", "user.email", "t@example.com")
+        self.vcs("config", "user.name", "t")
+        self.put("src/calc.py", "def add(a, b):\n    return a - b\n")
+        if docs:
+            self.put("docs/guide.md", "# guide\n")
+        self.vcs("add", "-A")
+        self.vcs("commit", "-q", "-m", "init")
+
+    def start(self, orchestrating=False):
+        pid = atlas_db.register_project(self.conn, str(self.root))
+        self.rid = atlas_db.start_run(self.conn, pid, self.SESSION)
+        if orchestrating:
+            atlas_db.mark_orchestrating(self.conn, self.SESSION)
+
+    def snapshot(self):
+        import session_boot
+
+        return session_boot.write_dirty_snapshot(str(self.root), self.SESSION)
+
+    def sed_edit(self):
+        subprocess.run(
+            ["sed", "-i", "s/a - b/a + b/", str(self.root / "src/calc.py")], check=True
+        )
+
+    def gate(self):
+        return _run_gate(
+            dict(session_id=self.SESSION, cwd=str(self.root)), self.env
+        ).stdout
+
+    def test_sed_only_edit_in_docless_armed_project_blocks_on_m(self):
+        self.repo()
+        self.start()
+        self.snapshot()
+        self.sed_edit()
+        self.assertIn("(m) Delegation mandate", self.gate())
+
+    def test_dispatch_clears_m_in_docless_armed_project(self):
+        self.repo()
+        self.start()
+        self.snapshot()
+        self.sed_edit()
+        atlas_db.log_event(self.conn, self.rid, "Task", "main", 0)
+        self.assertEqual(self.gate(), "")
+
+    def test_scratch_root_project_without_docs_stays_unarmed(self):
+        with tempfile.TemporaryDirectory() as plain:
+            self.root = Path(os.path.realpath(plain))
+            self.repo()
+            self.start()
+            self.snapshot()
+            self.sed_edit()
+            self.assertEqual(self.gate(), "")
+
+    def test_shell_code_edit_demands_no_docs_files_in_docless_project(self):
+        self.repo()
+        self.start(orchestrating=True)
+        self.snapshot()
+        self.sed_edit()
+        out = self.gate()
+        self.assertIn("(m) Delegation mandate", out)
+        for frag in (
+            "CHANGELOG.md is missing",
+            "ROADMAP.md is missing",
+            "README.md at the project root is missing",
+            "ROADMAP reconciliation",
+            "Docs drift",
+        ):
+            self.assertNotIn(frag, out)
+
+    def test_shell_code_edit_counts_as_shipped_code_for_cde(self):
+        self.repo(docs=True)
+        self.start(orchestrating=True)
+        self.snapshot()
+        self.sed_edit()
+        atlas_db.log_event(self.conn, self.rid, "Task", "main", 0)
+        out = self.gate()
+        self.assertIn("CHANGELOG.md is missing", out)
+        self.assertNotIn("(m) Delegation mandate", out)
+
+    def test_shell_docs_edit_does_not_demand_cde(self):
+        self.repo(docs=True)
+        self.start(orchestrating=True)
+        self.snapshot()
+        subprocess.run(
+            ["sed", "-i", "s/guide/guide2/", str(self.root / "docs/guide.md")],
+            check=True,
+        )
+        out = self.gate()
+        for frag in ("CHANGELOG.md is missing", "ROADMAP.md is missing"):
+            self.assertNotIn(frag, out)
+
+    def test_non_git_project_falls_back_to_tool_events(self):
+        self.put("package.json", "{}\n")  # an armed marker, but not a repo
+        self.put("app.py", "x = 1\n")
+        self.start()
+        self.assertIsNone(self.snapshot())  # no repo: no snapshot, no error
+        self.assertEqual(self.gate(), "")  # a shell edit is invisible; nothing fails
+        atlas_db.log_event(
+            self.conn, self.rid, "Write", "main", 1, str(self.root / "app.py")
+        )
+        self.conn.commit()
+        out = self.gate()
+        self.assertIn("(m) Delegation mandate", out)
         self.assertNotIn("FAIL-OPEN", out)
