@@ -59,6 +59,7 @@ import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, model
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { registerTeamTool } from "./team-tool";
 import { registerUsageStatusline, userStatuslineCopyExists } from "./usage-statusline";
+import { registerAtlasCoreCommand } from "./core-command";
 import { registerAtlasTuiCommand } from "./tui-command";
 import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
 import { createShellEditTracker } from "./delegation";
@@ -763,6 +764,8 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	if (process.env.ATLAS_STATUSLINE !== "off" && !userStatuslineCopyExists(process.cwd())) registerUsageStatusline(pi);
 	// /atlas-tui: hand the terminal to the curses TUI while omp's renderer is paused.
 	registerAtlasTuiCommand(pi);
+	// /atlas-core: the four-pillar report (same text as the Claude mod).
+	registerAtlasCoreCommand(pi);
 	register(pi, {
 		runState,
 		// getActiveTools() is omp's enabled set (top-level names plus live xd://

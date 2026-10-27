@@ -128,6 +128,23 @@ export interface Orch {
   meta: Record<string, { name?: string; type?: string }>;
 }
 
+/** The Atlas core as the band and pane draw it (mod/data/core.ts CoreModel; the contract holds no imports). */
+export interface CoreState {
+  contract: { header: Tally; evidence: Tally; openGates: number; verifiedDone: Tally };
+  verdicts: { id: string; status: 'verified' | 'rejected' | 'needs-evidence'; title: string; by: string; at: number; evidence: string }[];
+  claims: { owner: string; role: string; status: 'DONE' | 'FAILED' | 'BLOCKED'; at: number; matched: string | null }[];
+  ledger: { verified: number; refuted: number; pending: number; claimed: number; unchecked: number };
+  offload: {
+    workers: { name: string; role: string; model: string | null; brief: number; peak: number; kept: number; returned: number; costUsd: number | null; finished: boolean }[];
+    kept: number;
+    returned: number;
+    ratio: number | null;
+  };
+  routes: { teamId: string; name: string; cls: string; effort: string; isolation: string; maxParallel: number; seats: { role: string; count: number; model: string; effort: string; ran: string[] }[]; drift: string[] }[];
+}
+/** ok of total. */
+export type Tally = { ok: number; total: number };
+
 export type PaneTab = 'colony' | 'channel' | 'board' | 'squad' | 'collab';
 
 /** null = not measured yet (rendered `--`); 0 is a legitimate measured value. */
@@ -156,6 +173,8 @@ declare module 'claude-code' {
 			gates: { id: 'completion' | 'tripwire' | 'routing' | 'header'; title: string; lines: { id: string; label: string; ok: boolean; detail?: string; fix?: string }[]; error?: string }[];
 			lastHeader: { matched: boolean; phase: string | null } | null;
 			todoExpanded: boolean | null;
+			core: CoreState | null;
+			headerTally: { ok: number; total: number };
 		};
 	}
 }
