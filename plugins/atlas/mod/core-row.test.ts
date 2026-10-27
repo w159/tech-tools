@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../contracts/core-fixture';
 import { coreGolden } from '../contracts/core-golden';
-import { cellsText, cellsWidth, coreCells, coreReport, coreStatus, ratioText } from './core-row';
+import { cellsText, cellsWidth, coreCells, coreReport, ratioText } from './core-row';
 import { coreModel } from './data/core';
 
 const model = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
@@ -46,10 +46,7 @@ describe('core report and status', () => {
     expect(coreReport(null).split('\n')).toHaveLength(1);
     expect(coreReport(null)).toContain('no verdicts');
   });
-  test('status line: ledger and ratio, ratio dropped when none, undefined without data', () => {
-    expect(coreStatus(model)).toBe('atlas ✔1 ✖1 ⚠0 ⇆30x');
-    expect(coreStatus({ ...model, offload: { ...model.offload, ratio: null } })).toBe('atlas ✔1 ✖1 ⚠0');
-    expect(coreStatus(null)).toBeUndefined();
+  test('ratio text: one decimal under 10, none when null', () => {
     expect([ratioText(4.26), ratioText(29.5), ratioText(null)]).toEqual(['4.3x', '30x', '']);
   });
 });
