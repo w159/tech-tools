@@ -33,7 +33,11 @@ export interface TokenVerifierOptions {
   rolesFor: (claims: JWTPayload) => string[];
   // Fallback for tokens without an "idp" claim.
   idp: string;
+  // Leeway for exp/nbf in seconds; GatewayConfig.tokenClockToleranceSeconds.
+  clockToleranceSeconds?: number;
 }
+
+export const DEFAULT_CLOCK_TOLERANCE_SECONDS = 5;
 
 export function remoteJwks(jwksUri: string): JWTVerifyGetKey {
   return createRemoteJWKSet(new URL(jwksUri));
@@ -51,7 +55,7 @@ export async function verifyAccessToken(token: string, opts: TokenVerifierOption
     const result = await jwtVerify(token, opts.keyResolver, {
       issuer: opts.issuer,
       audience: opts.audiences,
-      clockTolerance: 60,
+      clockTolerance: opts.clockToleranceSeconds ?? DEFAULT_CLOCK_TOLERANCE_SECONDS,
     });
     payload = result.payload;
   } catch (err) {

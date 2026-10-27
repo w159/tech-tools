@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.0 - 2026-10-27
+
+### Added
+
+- Enterprise mode, Azure first. New skill `armada-enterprise` deploys the MCP gateway (`mcp_servers/mcp-gateway`) for an organization, maps Entra directory groups to connector roles, reviews audit logs, and adds the org connector to Claude. Procedures live in `skills/armada-enterprise/references/` (`setup.md`, `policy.md`, `audit.md`, `connect.md`).
+- Setup is interactive and drives the gateway admin tool (`discover`, `plan`, `provision`). Provisioning is a dry run until the admin says yes.
+- `enterprise/`: Bicep template for Azure (Container Apps, Key Vault, Log Analytics), the five saved audit queries as KQL, and an example `policy.yaml`. The Google Cloud Terraform and Cloud Logging filters are kept but not yet supported.
+- Contract tests for the new skill, its references, and the enterprise layout.
+
+### Changed
+
+- The `armada` router skill and README name `armada-enterprise`. The router stays read-only.
+
 ## 2.0.0 - 2026-10-27
 
 ### BREAKING

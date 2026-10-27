@@ -47,14 +47,12 @@ Gaps, each confirmed in source:
 
 - Runtime stays at `mcp_servers/mcp-gateway` and is evolved in place, same
   as every other server source in this repo. No parallel copy.
-- A new plugin, working name `harbor` (`plugins/harbor/`), carries the
-  admin side: deploy skills, policy skill, audit-insights skill, one admin
-  agent, and the IaC templates. It depends on `armada` for the connector
-  bundles (`plugins/armada/mcp/`) and on nothing in `atlas`.
-- Why not inside `armada`: armada is the per-user, local-stdio deployment
-  layer. The gateway is a server-side product with its own release cycle
-  and its own audience (cloud admins). Keeping it separate means an org can
-  install the gateway plugin without pulling 156 department skills.
+- The admin side is an enterprise mode of the `armada` plugin
+  (`plugins/armada/enterprise/` plus the `armada-enterprise` skill): deploy,
+  policy, audit and connect procedures, and the IaC templates. It uses the
+  connector bundles in `plugins/armada/mcp/` and nothing in `atlas`. A
+  separate plugin was rejected: the gateway fronts the same connectors armada
+  ships, so one plugin keeps one install and one place for org setup.
 
 ### D2. Auth: the gateway runs its own authorization server, federated to the IdP
 
@@ -159,7 +157,7 @@ reuses them. Consequence to accept: removing someone from a group takes effect
 at their next sign-in, bounded by `BROKER_REFRESH_TOKEN_TTL` (default 8 hours),
 which caps the refresh chain.
 
-A `harbor` skill prints a who-can-call-what matrix from the policy and the
+The `armada-enterprise` skill prints a who-can-call-what matrix from the policy and the
 live tool catalog before any policy change ships.
 
 ### D4. Connector isolation
@@ -236,18 +234,20 @@ locked retention policy). Off by default; it costs money.
 | State | Cosmos DB serverless | Firestore |
 | Image | built from a staged context (today's `acr-build.sh` rule), parameterized, no hard-coded subscription | same, Artifact Registry |
 
-`harbor` skills, in run order. Each one shows a plan (`what-if` /
-`terraform plan`) and waits for the admin's yes before creating anything:
+`armada-enterprise` procedures (`references/setup.md`, `policy.md`,
+`audit.md`, `connect.md`), in run order. Azure first; Google Cloud is not yet
+supported. Each shows a plan (dry-run `provision`, `what-if`) and waits for
+the admin's yes before creating anything:
 
-1. `harbor-setup`: pick cloud and IdP, generate `policy.yaml` from the
-   connector catalog, register the IdP client (Entra app registration with
-   app roles generated from the catalog; Google OAuth client), deploy.
-2. `harbor-policy`: edit grants, print the who-can-call-what matrix, roll
-   out.
-3. `harbor-audit`: run the saved insight queries.
-4. `harbor-connect`: print the URL and the steps to add the gateway as a
-   Claude custom connector, and, for Claude Enterprise, how to turn on
-   Enterprise Managed Auth.
+1. `setup`: ask the admin one question at a time, discover the directory,
+   map groups to roles and connectors, generate `policy.yaml`, create the
+   Entra app registration with app roles and group assignments (admin tool),
+   deploy the infrastructure.
+2. `policy`: edit grants, print the who-can-call-what matrix, roll out.
+3. `audit`: run the saved insight queries.
+4. `connect`: print the URL and the steps to add the gateway as a Claude
+   custom connector, and, for Claude Enterprise, how to turn on Enterprise
+   Managed Auth.
 
 ## Prototype scope (after approval)
 

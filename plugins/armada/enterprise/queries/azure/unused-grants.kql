@@ -1,0 +1,23 @@
+// Gateway audit events from Container Apps console logs.
+// Table ContainerAppConsoleLogs_CL, line in column Log_s (Microsoft Learn: Monitor logs in Azure Container Apps).
+// If the environment sends logs to Azure Monitor resource-specific tables instead, use ContainerAppConsoleLogs and column Log.
+// Edit the two lets below, or let the armada-enterprise skill substitute them.
+let lookback = 7d;
+let appName = "example-gateway";
+// Replace the datatable rows with the (role, connector) pairs from policy.yaml grants.
+// Expand a "*" grant into one row per connector you want to check.
+let granted = datatable(role: string, connector: string) [
+    "helpdesk", "ninjaone",
+    "helpdesk", "connectwise",
+    "security", "falcon"
+];
+let used = ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(lookback)
+| where ContainerAppName_s == appName
+| where Log_s startswith "{"
+| extend e = parse_json(Log_s)
+| where tostring(e.schema) == "mcp-gw.audit/1" and tostring(e.event) == "tool_call" and tostring(e.decision) == "allow"
+| mv-expand role = e.roles
+| summarize calls = count() by role = tostring(role), connector = tostring(e.connector);
+granted
+| join kind=leftanti used on role, connector

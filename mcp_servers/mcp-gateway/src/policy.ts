@@ -192,7 +192,7 @@ export function hasAnyGrant(policy: Policy, roles: readonly string[], connector:
 }
 
 // Who-can-call-what matrix: per gateway role and connector, which tools it may
-// call. Backs gateway_access_report and the harbor-policy skill.
+// call. Backs gateway_access_report and the armada-enterprise skill.
 export interface AccessRow {
   role: string;
   connector: string;

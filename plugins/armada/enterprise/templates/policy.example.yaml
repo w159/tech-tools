@@ -1,0 +1,62 @@
+# Example policy for the enterprise MCP gateway (schema version 1).
+#
+# Default deny: a caller can use a tool only when a grant covers its connector
+# and its effect class. A deny_tools match beats every allow.
+#
+# subjects  map an identity claim to a gateway role. Matching is exact and
+#           case sensitive. The claim may hold a string or a list.
+# grants    give a role access to connectors ("*" = all, "gateway" = the
+#           gateway's own audit tools) for effect classes read, write,
+#           destructive. deny_tools lists tool name globs ("*" only).
+#
+# Every grant role must have at least one subjects rule.
+# Replace the example claim values with the ones your identity provider sends.
+
+version: 1
+
+subjects:
+  # Entra app roles arrive in the "roles" claim. The admin tool names each app role value after the gateway role.
+  - role: helpdesk
+    when:
+      claim: roles
+      equals: helpdesk
+  - role: security
+    when:
+      claim: roles
+      equals: security
+  - role: it-admin
+    when:
+      claim: roles
+      equals: it-admin
+  - role: auditor
+    when:
+      claim: roles
+      equals: auditor
+
+grants:
+  # Helpdesk reads and edits tickets and devices, never destructive actions.
+  - role: helpdesk
+    connectors: [connectwise, ninjaone, knowbe4]
+    effects: [read, write]
+    deny_tools:
+      - "*delete*"
+
+  # Security reads everything it monitors and can write in the SIEM and EDR.
+  - role: security
+    connectors: [blumira, falcon, threatlocker, vanta]
+    effects: [read, write]
+  - role: security
+    connectors: [auvik, cipp, panos, sonicwall, spanning, paylocity]
+    effects: [read]
+
+  # IT admins get all effects on infrastructure connectors, except payroll.
+  - role: it-admin
+    connectors: [auvik, cipp, connectwise, ninjaone, panos, sonicwall, spanning]
+    effects: [read, write, destructive]
+    deny_tools:
+      - "*wipe*"
+
+  # Auditors read the gateway's own audit and access report tools.
+  - role: auditor
+    connectors: [gateway]
+    effects: [read]

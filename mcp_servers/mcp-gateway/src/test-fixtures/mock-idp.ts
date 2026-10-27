@@ -11,6 +11,8 @@ export interface TestUser {
   email: string;
   name: string;
   groups: string[];
+  // Entra puts assigned app role values in the ID token's "roles" claim.
+  roles?: string[];
 }
 
 export const TEST_USER: TestUser = {
@@ -121,6 +123,7 @@ export class MockIdp {
         email_verified: true,
         name: this.user.name,
         groups: this.user.groups,
+        ...(this.user.roles ? { roles: this.user.roles } : {}),
       })
         .setProtectedHeader({ alg: "RS256", kid: this.kid })
         .setIssuer(this.issuer)

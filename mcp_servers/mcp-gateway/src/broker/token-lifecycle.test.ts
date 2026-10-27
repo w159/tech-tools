@@ -42,7 +42,7 @@ grants:
 const READERS = ["mcp-readers"];
 const WRITERS = ["mcp-writers"];
 const ACCESS_TTL = 5; // seconds
-const JWT_CLOCK_TOLERANCE = 60; // src/auth.ts verifyAccessToken
+const JWT_CLOCK_TOLERANCE = 5; // src/auth.ts default (TOKEN_CLOCK_TOLERANCE_SECONDS)
 
 async function freePort(): Promise<number> {
   return new Promise((resolve) => {
@@ -271,7 +271,7 @@ describe("token lifecycle: access token and refresh", () => {
     await s?.close();
   });
 
-  it("1. access token: works, still accepted inside the 60s JWT clock tolerance, then 401 with resource_metadata", async () => {
+  it("1. access token: works, still accepted inside the 5s JWT clock tolerance, then 401 with resource_metadata", async () => {
     fakeDate();
     const p = await signIn(s, 43201);
     const token = p.tok!.access_token;
@@ -280,12 +280,12 @@ describe("token lifecycle: access token and refresh", () => {
 
     expect(await listToolsWith(s, token)).toEqual(["fx_read"]);
 
-    // Past exp but inside verifyAccessToken's clockTolerance of 60s: still accepted.
-    jump(ACCESS_TTL + 10);
+    // Past exp but inside verifyAccessToken's default clockTolerance of 5s: still accepted.
+    jump(ACCESS_TTL + JWT_CLOCK_TOLERANCE - 2);
     expect((await mcpRaw(s, token)).status).toBe(200);
 
     // Beyond exp + tolerance: rejected with the discovery challenge.
-    jump(JWT_CLOCK_TOLERANCE + 5);
+    jump(5);
     const expired = await mcpRaw(s, token);
     expect(expired.status).toBe(401);
     expect(expired.wwwAuth).toMatch(/^Bearer resource_metadata="[^"]+\/\.well-known\/oauth-protected-resource\/mcp"/);

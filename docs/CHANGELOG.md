@@ -1,11 +1,24 @@
 # Changelog
 
-## mcp-gateway 0.2.0, harbor 0.1.0 - 2026-10-27
+## mcp-gateway 0.3.0, armada 2.1.0 - 2026-10-27
+
+### Added
+
+- mcp-gateway 0.3.0: admin setup tool (`dist/admin/cli.js`: `discover`, `plan`, `provision`). `plan` turns an org model and answers file into `plan.json` and a gateway `policy.yaml`; `provision` creates the Entra app registration, app roles, group assignments, tenant-wide consent for the delegated scopes and the Graph application permissions the membership check needs (`Application.Read.All`, `GroupMember.Read.All`, `User.Read.All`). Dry run by default, idempotent, `--prune` to remove, `--managed-identity-principal-id` to grant a managed identity too.
+- mcp-gateway 0.3.0: refresh-time membership check (`ENTRA_MEMBERSHIP_CHECK=1`, Entra upstream). A refresh re-resolves the user's roles through Graph with the managed identity or the app's client credentials; a disabled user or a user with no role fails with `invalid_grant`. Fail-closed unless `ENTRA_MEMBERSHIP_FAIL_OPEN=1`; audit reasons `membership_revoked` and `membership_check_unavailable`.
+- Bicep: the Container App has a system-assigned managed identity (output `gatewayPrincipalId`), and `extraEnv` replaces a built-in variable of the same name.
+
+### Changed
+
+- mcp-gateway: `TOKEN_CLOCK_TOLERANCE_SECONDS` default 60 -> 5.
+- harbor is folded into armada 2.1.0 (`plugins/armada/enterprise/`); the `harbor` plugin directory is removed.
+
+## mcp-gateway 0.2.0, armada 2.1.0 - 2026-10-27
 
 ### Added
 
 - mcp-gateway 0.2.0: broker mode (`GATEWAY_MODE=broker`) with an OAuth 2.1 authorization server (oidc-provider), upstream OIDC sign-in (Entra, Google, generic), dynamic client registration, the jwt-bearer grant for IdP-signed ID-JAG assertions, and in-memory state (one replica). Default-deny `policy.yaml` by connector and effect class, `mcp-gw.audit/1` audit lines, connector catalog (`catalog/`, `scripts/gen-catalog.mjs`), `scripts/gen-jwks.mjs`. See [mcp_servers/mcp-gateway/README.md](../mcp_servers/mcp-gateway/README.md).
-- harbor 0.1.0 (new plugin): `harbor-setup`, `harbor-policy`, `harbor-audit`, `harbor-connect` skills, `harbor-admin` agent, Bicep and Terraform templates, saved audit queries. See [plugins/harbor/README.md](../plugins/harbor/README.md).
+- armada 2.1.0 (enterprise mode, Azure first): `armada-enterprise` skill with setup, policy, audit and connect procedures, Bicep template, saved audit queries, example policy. Google Cloud Terraform kept, not yet supported. See [plugins/armada/CHANGELOG.md](../plugins/armada/CHANGELOG.md).
 
 ### Changed
 

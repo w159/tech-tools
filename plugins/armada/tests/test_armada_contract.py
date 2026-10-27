@@ -203,5 +203,61 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(sorted(atlas.get("userConfig", {})), ["atlas_mod_sound"])
 
 
+class EnterpriseModeTest(unittest.TestCase):
+    """Enterprise mode lives in armada; the separate harbor plugin is gone."""
+
+    SKILL = PLUGIN / "skills" / "armada-enterprise"
+    REFERENCES = ["setup", "policy", "audit", "connect"]
+
+    def test_enterprise_skill_exists_with_references(self):
+        self.assertTrue((self.SKILL / "SKILL.md").is_file())
+        fm = frontmatter(self.SKILL / "SKILL.md")
+        self.assertEqual("armada-enterprise", fm.get("name"))
+        for ref in self.REFERENCES:
+            self.assertTrue(
+                (self.SKILL / "references" / f"{ref}.md").is_file(),
+                f"missing references/{ref}.md",
+            )
+
+    def test_enterprise_skill_and_references_resolve_paths(self):
+        pattern = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9_./-]+)")
+        files = [self.SKILL / "SKILL.md"] + sorted(
+            (self.SKILL / "references").glob("*.md")
+        )
+        broken = []
+        for f in files:
+            for rel in pattern.findall(f.read_text(encoding="utf-8")):
+                rel = rel.rstrip(".,`")
+                if not (PLUGIN / rel).exists():
+                    broken.append(f"{f.name}: {rel}")
+        self.assertEqual([], broken, f"dangling plugin-root references: {broken}")
+
+    def test_skill_routes_to_every_reference(self):
+        body = (self.SKILL / "SKILL.md").read_text(encoding="utf-8")
+        for ref in self.REFERENCES:
+            self.assertIn(f"references/{ref}.md", body)
+
+    def test_harbor_plugin_is_gone(self):
+        self.assertFalse((REPO / "plugins" / "harbor").exists())
+        mp = json.loads((REPO / ".claude-plugin" / "marketplace.json").read_text())
+        self.assertNotIn("harbor", [p["name"] for p in mp["plugins"]])
+
+    def test_enterprise_assets_moved_into_armada(self):
+        ent = PLUGIN / "enterprise"
+        for rel in (
+            "infra/azure/main.bicep",
+            "infra/azure/main.bicepparam",
+            "queries/azure/unused-grants.kql",
+            "templates/policy.example.yaml",
+        ):
+            self.assertTrue((ent / rel).is_file(), f"enterprise/{rel} missing")
+
+    def test_router_names_enterprise_skill(self):
+        body = (PLUGIN / "skills" / "armada" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("armada-enterprise", body)
+        readme = (PLUGIN / "README.md").read_text(encoding="utf-8")
+        self.assertIn("armada-enterprise", readme)
+
+
 if __name__ == "__main__":
     sys.exit(0 if unittest.main(exit=False, verbosity=2).result.wasSuccessful() else 1)

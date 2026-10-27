@@ -6,7 +6,7 @@ The gateway is an OAuth 2.1 resource server: it validates access tokens, maps
 token claims to gateway roles, applies a default-deny policy per connector and
 effect class (read, write, destructive), and writes one audit line per
 decision. Design: `docs/architecture/enterprise-mcp-gateway.md`. Admin tooling:
-`plugins/harbor`.
+`plugins/armada` (enterprise mode, skill `armada-enterprise`).
 
 ## Modes
 
@@ -41,6 +41,7 @@ an image layer or a shell history. Error messages name a variable, never its val
 | `AUDIT_HMAC_KEY` | random per process | **secret.** Keys `args_hmac`; set it to compare hashes across restarts |
 | `STATEFUL_IDLE_MS` | `900000` | Idle time before a stateful backend child is stopped |
 | `STATEFUL_MAX_CHILDREN` | `50` | Cap on stateful children per user |
+| `TOKEN_CLOCK_TOLERANCE_SECONDS` | `5` | Clock skew allowed when validating token times, 0 to 300 (was 60 before 0.3.0) |
 | `PORT` | `8080` | Listen port |
 | `HOST` | `0.0.0.0` | Listen address |
 
@@ -60,6 +61,15 @@ matching backend only, by the `envPrefixes` in the catalog. **secret.**
 | `BROKER_TRUSTED_ASSERTION_ISSUERS` | none | JSON list of `{issuer, jwks_uri, tenant?}` whose ID-JAG assertions the jwt-bearer grant accepts |
 | `BROKER_ACCESS_TOKEN_TTL` | `900` | Seconds |
 | `BROKER_REFRESH_TOKEN_TTL` | `28800` | Seconds. Also caps the whole refresh chain (grant lifetime) |
+| `ENTRA_MEMBERSHIP_CHECK` | off | `1` re-resolves roles from Graph on every refresh (see Refresh-time membership check); only with `BROKER_UPSTREAM_KIND=entra` |
+| `ENTRA_TENANT_ID` | from `BROKER_UPSTREAM_ISSUER` | Tenant GUID for the Graph token; needed only when the issuer URL carries no tenant |
+| `ENTRA_SP_OBJECT_ID` | looked up by app id | Object id of the app's service principal. Skips one Graph lookup |
+| `ENTRA_MEMBERSHIP_CACHE_SECONDS` | `300` | How long a resolved membership is reused |
+| `ENTRA_MEMBERSHIP_FAIL_OPEN` | off | `1` lets a refresh succeed when Graph cannot be reached or answers an error (audited) |
+| `ENTRA_GRAPH_BASE_URL` | `https://graph.microsoft.com/v1.0` | Graph endpoint; change for national clouds or tests |
+| `ENTRA_AUTHORITY_HOST` | `https://login.microsoftonline.com` | Token endpoint host for the client credentials flow |
+| `ENTRA_MANAGED_IDENTITY_CLIENT_ID` | system-assigned | Client id of a user-assigned managed identity to use for Graph |
+| `IDENTITY_ENDPOINT`, `IDENTITY_HEADER` | set by Azure | Set both or neither. When present the managed identity gets the Graph token; otherwise the app's client secret does. Container Apps sets them when a managed identity is enabled |
 | `GOOGLE_GROUPS_LOOKUP` | off | `1` resolves Google groups at sign-in; only with `BROKER_UPSTREAM_KIND=google` |
 
 ### Direct mode
@@ -90,7 +100,7 @@ grants:                   # default deny
 Effect class comes from each tool's MCP annotations and fails closed: no
 annotations or no `destructiveHint:false` on a mutating tool means
 `destructive`. Unknown keys, roles or connectors stop startup. A starting
-point is `plugins/harbor/templates/policy.example.yaml`.
+point is `plugins/armada/enterprise/templates/policy.example.yaml`.
 
 ## Audit
 
@@ -102,6 +112,53 @@ One JSON line per event on stdout, schema `mcp-gw.audit/1`. Events:
 `args_hmac`, `tool_count`. Tool arguments, results and tokens are never logged;
 `args_hmac` is an HMAC-SHA-256 of the canonical arguments. The tool
 `gateway_audit_search` reads only the last 1000 events of the current process.
+
+## Refresh-time membership check
+
+With `ENTRA_MEMBERSHIP_CHECK=1` (Entra upstream) every refresh-token grant asks
+Graph again who the user is, using application permissions
+`Application.Read.All`, `GroupMember.Read.All` and `User.Read.All`. The admin
+tool grants them (below). The token comes from the managed identity when
+`IDENTITY_ENDPOINT` and `IDENTITY_HEADER` are set, else from the app's client
+credentials. Results are cached for `ENTRA_MEMBERSHIP_CACHE_SECONDS`.
+
+What revokes access: the user is disabled or deleted, or no app role of the
+gateway app reaches the user (directly or through an assigned group) and the
+policy then resolves to no role. A changed set of roles is
+stamped into the new access token. Revocation takes effect at the next refresh,
+at most one access token lifetime later (`BROKER_ACCESS_TOKEN_TTL`), plus the
+cache time.
+
+Fail-closed is the default. If Graph or the token source cannot be reached, or
+Graph answers an error, the refresh fails with `invalid_grant` and the client
+signs in again. This includes a throttled (HTTP 429) Graph. Set
+`ENTRA_MEMBERSHIP_FAIL_OPEN=1` to let such a refresh through; it is audited.
+
+Audit events (`auth_failed`, `reason` field): `membership_revoked` (refresh
+refused, `outcome` `backend_error`) and `membership_check_unavailable`
+(`outcome` `backend_error` when refused, `ok` when let through by fail-open).
+Lines hold no user ids, group ids or tokens beyond the usual actor fields.
+
+## Admin setup tool
+
+`dist/admin/cli.js` (after `npm run build`) turns a directory into the Entra
+state the gateway needs. It reads `GRAPH_TOKEN`, else the Azure CLI. `discover`
+and a `provision` dry run only read.
+
+```bash
+node dist/admin/cli.js discover --out org-model.json
+node dist/admin/cli.js plan --org org-model.json --answers answers.yaml --out plan.json --policy policy.yaml
+node dist/admin/cli.js provision --plan plan.json
+node dist/admin/cli.js provision --plan plan.json --apply [--prune] [--managed-identity-principal-id <id>]
+```
+
+`plan` is offline and writes `plan.json` and a `policy.yaml` that loads in the
+gateway. `provision --apply` creates or updates the app registration, app
+roles, group assignments, tenant-wide consent for the delegated scopes and the
+Graph application permissions above (for the gateway service principal, and
+for a managed identity with `--managed-identity-principal-id`). It is
+idempotent and deletes nothing without `--prune`. Walkthrough:
+`plugins/armada/skills/armada-enterprise/references/setup.md`.
 
 ## Run locally
 
