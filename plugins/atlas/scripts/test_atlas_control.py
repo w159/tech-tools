@@ -40,12 +40,21 @@ class ControlTestCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name)
-        # Fake plugin registry: the host's ~/.claude/plugins is never read. atlas@tech-tools resolves to
+        # Fake plugin registry: the host's ~/.claude/plugins is never read. atlas@tech-tools and armada@tech-tools resolve to
         # this checkout, so the plugin/MCP assertions see the repo source on any machine.
         plugins_dir = root / "plugins"
         plugins_dir.mkdir()
         (plugins_dir / "installed_plugins.json").write_text(
-            json.dumps({"version": 2, "plugins": {"atlas@tech-tools": [{"installPath": str(SCRIPTS.parent)}]}}),
+            json.dumps(
+                {
+                    "version": 2,
+                    "plugins": {
+                        "atlas@tech-tools": [{"installPath": str(SCRIPTS.parent)}],
+                        # Connector MCP servers live in plugins/armada, so it must resolve to this checkout too.
+                        "armada@tech-tools": [{"installPath": str(SCRIPTS.parent.parent / "armada")}],
+                    },
+                }
+            ),
             encoding="utf-8",
         )
         self.settings = root / "settings.json"
@@ -289,7 +298,8 @@ class TestBehaviorKnobs(ControlTestCase):
 
 class TestMcpServers(ControlTestCase):
     def test_toggle_writes_the_disabled_list(self):
-        name = self.mod.mcp_inventory()["servers"][0]["name"]
+        name = "plugin:armada:cipp"
+        self.assertIn(name, {s["name"] for s in self.mod.mcp_inventory()["servers"]})
         self.assertTrue(self.mod.set_mcp_enabled(name, False)["ok"])
         self.assertIn(name, self.read_settings()["disabledMcpServers"])
         self.assertTrue(self.mod.set_mcp_enabled(name, True)["ok"])
