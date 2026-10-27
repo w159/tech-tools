@@ -134,6 +134,6 @@ Auvik is multi-tenant by design - a single MSP credential sees every client tena
 
 ## Related Skills
 
-- [devices](../devices/SKILL.md)
-- [alerts](../alerts/SKILL.md)
-- [networks](../networks/SKILL.md)
+- [devices](../auvik-devices/SKILL.md)
+- [alerts](../auvik-alerts/SKILL.md)
+- [networks](../auvik-networks/SKILL.md)

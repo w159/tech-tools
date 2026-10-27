@@ -127,6 +127,6 @@ Do not call `auvik_devices_get_details` in a tight loop over every device in a l
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md)
-- [networks](../networks/SKILL.md)
-- [alerts](../alerts/SKILL.md)
+- [api-patterns](../auvik-api-patterns/SKILL.md)
+- [networks](../auvik-networks/SKILL.md)
+- [alerts](../auvik-alerts/SKILL.md)

@@ -159,8 +159,8 @@ Always send dates in ISO 8601 UTC. The Action Log itself stores UTC.
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) - Auth and pagination
-- [computers](../computers/SKILL.md) - Endpoint policy mode context
-- [approval-requests](../approval-requests/SKILL.md) - Decisions that
+- [api-patterns](../threatlocker-api-patterns/SKILL.md) - Auth and pagination
+- [computers](../threatlocker-computers/SKILL.md) - Endpoint policy mode context
+- [approval-requests](../threatlocker-approval-requests/SKILL.md) - Decisions that
   produce Permit actions
-- [organizations](../organizations/SKILL.md) - Multi-tenant pivot
+- [organizations](../threatlocker-organizations/SKILL.md) - Multi-tenant pivot

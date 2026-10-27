@@ -285,7 +285,7 @@ DELETE /api/v2/webhook
 
 ## Related Skills
 
-- [Devices](../devices/SKILL.md) - Device endpoints
-- [Organizations](../organizations/SKILL.md) - Organization endpoints
-- [Alerts](../alerts/SKILL.md) - Alert endpoints
-- [Tickets](../tickets/SKILL.md) - Ticketing endpoints
+- [Devices](../ninjaone-devices/SKILL.md) - Device endpoints
+- [Organizations](../ninjaone-organizations/SKILL.md) - Organization endpoints
+- [Alerts](../ninjaone-alerts/SKILL.md) - Alert endpoints
+- [Tickets](../ninjaone-tickets/SKILL.md) - Ticketing endpoints

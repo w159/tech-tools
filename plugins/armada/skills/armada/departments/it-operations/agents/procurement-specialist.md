@@ -95,5 +95,5 @@ Match the output format to the work mode:
 
 ## Related Skills
 
-- [ConnectWise Manage Product Catalog](../skills/product-catalog/SKILL.md)  -  full field reference, recipes, and patch patterns
-- [ConnectWise API Patterns](../skills/api-patterns/SKILL.md)  -  CW conditions query syntax and JSON Patch rules
+- [ConnectWise Manage Product Catalog](../skills/psa-product-catalog/SKILL.md)  -  full field reference, recipes, and patch patterns
+- [ConnectWise API Patterns](../skills/psa-api-patterns/SKILL.md)  -  CW conditions query syntax and JSON Patch rules

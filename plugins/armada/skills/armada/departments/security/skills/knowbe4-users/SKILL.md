@@ -218,7 +218,7 @@ The risk score is influenced by:
 
 ## Related Skills
 
-- [KnowBe4 Phishing](../phishing/SKILL.md) - Phishing simulation campaigns
-- [KnowBe4 Training](../training/SKILL.md) - Training campaign management
-- [KnowBe4 Reporting](../reporting/SKILL.md) - Risk metrics and dashboards
-- [KnowBe4 API Patterns](../api-patterns/SKILL.md) - Authentication, pagination, and rate limits
+- [KnowBe4 Phishing](../knowbe4-phishing/SKILL.md) - Phishing simulation campaigns
+- [KnowBe4 Training](../knowbe4-training/SKILL.md) - Training campaign management
+- [KnowBe4 Reporting](../knowbe4-reporting/SKILL.md) - Risk metrics and dashboards
+- [KnowBe4 API Patterns](../knowbe4-api-patterns/SKILL.md) - Authentication, pagination, and rate limits

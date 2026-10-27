@@ -157,7 +157,7 @@ blumira_findings_list
 
 ## Related Skills
 
-- [API Patterns](../api-patterns/SKILL.md) - Filtering and pagination
-- [Resolutions](../resolutions/SKILL.md) - Resolution types in depth
-- [Users](../users/SKILL.md) - Finding user IDs for assignment
-- [MSP](../msp/SKILL.md) - Cross-account finding management
+- [API Patterns](../blumira-api-patterns/SKILL.md) - Filtering and pagination
+- [Resolutions](../blumira-resolutions/SKILL.md) - Resolution types in depth
+- [Users](../blumira-users/SKILL.md) - Finding user IDs for assignment
+- [MSP](../blumira-msp/SKILL.md) - Cross-account finding management

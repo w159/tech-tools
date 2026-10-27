@@ -1,6 +1,6 @@
 ---
 name: pandadoc-api-patterns
-description: Work with PandaDoc MCP tools: available tools, API key authentication, the hosted MCP server connection, documentation search, rate limiting, and error handling for the PandaDoc API.
+description: "Work with PandaDoc MCP tools: available tools, API key authentication, the hosted MCP server connection, documentation search, rate limiting, and error handling for the PandaDoc API."
 when_to_use:
   - Connecting to the PandaDoc hosted MCP server and authenticating with an API key
   - Looking up available PandaDoc MCP tools and parameters
@@ -246,7 +246,7 @@ When rate limited, the API returns HTTP 429. Wait before retrying. Use exponenti
 
 ## Related Skills
 
-- [PandaDoc Documents](../documents/SKILL.md) - Document management
-- [PandaDoc Templates](../templates/SKILL.md) - Template library
-- [PandaDoc Recipients](../recipients/SKILL.md) - Recipient and signature management
-- [PandaDoc Proposals](../proposals/SKILL.md) - MSP proposal workflows
+- [PandaDoc Documents](../pandadoc-documents/SKILL.md) - Document management
+- [PandaDoc Templates](../pandadoc-templates/SKILL.md) - Template library
+- [PandaDoc Recipients](../pandadoc-recipients/SKILL.md) - Recipient and signature management
+- [PandaDoc Proposals](../pandadoc-proposals/SKILL.md) - MSP proposal workflows

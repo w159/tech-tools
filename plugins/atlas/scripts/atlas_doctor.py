@@ -23,8 +23,10 @@ if __name__ == "__main__":
     atlas_env.apply_store_env()
 
 # --- environment (overridable so tests never touch the real install) ---
-PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.expanduser(
-    "~/.claude/plugins"
+# Claude Code keeps every ~/.claude path under CLAUDE_CONFIG_DIR when it is set
+# (https://code.claude.com/docs/en/claude-directory.md), installed_plugins.json included.
+PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.join(
+    os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"), "plugins"
 )
 # Same resolution as atlas_db.atlas_home(), inlined so the SessionStart stamp
 # fast path below can run before atlas_db (sqlite3, ~45 ms) is imported.
@@ -616,9 +618,11 @@ def _omp_plugins_dir():
     """omp's plugin registry. Overridable; otherwise the sibling of the claude
     plugins dir's home (~/.claude/plugins -> ~/.omp/plugins) so a test that
     relocates PLUGINS_DIR relocates this too."""
-    return os.environ.get("ATLAS_OMP_PLUGINS_DIR") or os.path.join(
-        os.path.dirname(os.path.dirname(PLUGINS_DIR)), ".omp", "plugins"
-    )
+    if os.environ.get("ATLAS_OMP_PLUGINS_DIR"):
+        return os.environ["ATLAS_OMP_PLUGINS_DIR"]
+    if not os.environ.get("ATLAS_PLUGINS_DIR"):  # CLAUDE_CONFIG_DIR does not move omp
+        return os.path.expanduser("~/.omp/plugins")
+    return os.path.join(os.path.dirname(os.path.dirname(PLUGINS_DIR)), ".omp", "plugins")
 
 
 def check_omp_bridge(plugin_name, version):

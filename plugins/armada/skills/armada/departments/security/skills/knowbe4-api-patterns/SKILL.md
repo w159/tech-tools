@@ -388,7 +388,7 @@ All dates use ISO 8601 format:
 
 ## Related Skills
 
-- [KnowBe4 Phishing](../phishing/SKILL.md) - Phishing simulation campaigns
-- [KnowBe4 Training](../training/SKILL.md) - Training campaign management
-- [KnowBe4 Users](../users/SKILL.md) - User management and risk scores
-- [KnowBe4 Reporting](../reporting/SKILL.md) - Security awareness metrics
+- [KnowBe4 Phishing](../knowbe4-phishing/SKILL.md) - Phishing simulation campaigns
+- [KnowBe4 Training](../knowbe4-training/SKILL.md) - Training campaign management
+- [KnowBe4 Users](../knowbe4-users/SKILL.md) - User management and risk scores
+- [KnowBe4 Reporting](../knowbe4-reporting/SKILL.md) - Security awareness metrics

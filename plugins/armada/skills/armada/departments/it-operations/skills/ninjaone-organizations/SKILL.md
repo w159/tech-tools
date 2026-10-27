@@ -207,5 +207,5 @@ Continue fetching while `pageInfo.hasNextPage` is true.
 
 ## Related Skills
 
-- [Devices](../devices/SKILL.md) - Device management
-- [API Patterns](../api-patterns/SKILL.md) - Authentication and pagination
+- [Devices](../ninjaone-devices/SKILL.md) - Device management
+- [API Patterns](../ninjaone-api-patterns/SKILL.md) - Authentication and pagination

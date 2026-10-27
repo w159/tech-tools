@@ -157,9 +157,9 @@ When a single hash appears across many requests:
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) - Auth and pagination
-- [audit-log](../audit-log/SKILL.md) - Behavior of binaries before
+- [api-patterns](../threatlocker-api-patterns/SKILL.md) - Auth and pagination
+- [audit-log](../threatlocker-audit-log/SKILL.md) - Behavior of binaries before
   approval decisions
-- [computers](../computers/SKILL.md) - Endpoint context for requests
-- [computer-groups](../computer-groups/SKILL.md) - Policy scope of
+- [computers](../threatlocker-computers/SKILL.md) - Endpoint context for requests
+- [computer-groups](../threatlocker-computer-groups/SKILL.md) - Policy scope of
   the resulting permit

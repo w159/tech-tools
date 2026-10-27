@@ -100,5 +100,5 @@ blumira_msp_findings_resolve
 
 ## Related Skills
 
-- [Findings](../findings/SKILL.md) - Finding lifecycle and resolution workflow
-- [MSP](../msp/SKILL.md) - Cross-account resolution management
+- [Findings](../blumira-findings/SKILL.md) - Finding lifecycle and resolution workflow
+- [MSP](../blumira-msp/SKILL.md) - Cross-account resolution management

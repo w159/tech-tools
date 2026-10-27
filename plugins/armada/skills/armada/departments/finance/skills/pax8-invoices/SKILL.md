@@ -217,8 +217,8 @@ For usage-based products like Azure:
 
 ## Related Skills
 
-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Subscription details for invoice items
-- [Pax8 Companies](../companies/SKILL.md) - Company attribution for billing
-- [Pax8 Products](../products/SKILL.md) - Product pricing for margin analysis
-- [Pax8 Orders](../orders/SKILL.md) - Order-to-invoice tracking
+- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
+- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Subscription details for invoice items
+- [Pax8 Companies](../pax8-companies/SKILL.md) - Company attribution for billing
+- [Pax8 Products](../pax8-products/SKILL.md) - Product pricing for margin analysis
+- [Pax8 Orders](../pax8-orders/SKILL.md) - Order-to-invoice tracking

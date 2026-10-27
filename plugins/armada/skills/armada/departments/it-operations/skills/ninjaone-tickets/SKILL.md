@@ -222,7 +222,7 @@ Common tag patterns:
 
 ## Related Skills
 
-- [Devices](../devices/SKILL.md) - Device context
-- [Alerts](../alerts/SKILL.md) - Alert-to-ticket flow
-- [Organizations](../organizations/SKILL.md) - Client context
-- [API Patterns](../api-patterns/SKILL.md) - Authentication
+- [Devices](../ninjaone-devices/SKILL.md) - Device context
+- [Alerts](../ninjaone-alerts/SKILL.md) - Alert-to-ticket flow
+- [Organizations](../ninjaone-organizations/SKILL.md) - Client context
+- [API Patterns](../ninjaone-api-patterns/SKILL.md) - Authentication
