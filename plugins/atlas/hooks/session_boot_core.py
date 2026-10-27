@@ -1188,7 +1188,8 @@ def main():
         import atlas_paths
 
         snapshot = atlas_memory.load_snapshot(
-            root=atlas_paths.project_root(payload.get("cwd") or os.getcwd())
+            root=atlas_paths.project_root(payload.get("cwd") or os.getcwd()),
+            wrap=False,
         )
         # Project lessons first: they are the ones this session can act on.
         parts = [snapshot[k] for k in ("project", "memory") if snapshot.get(k)]
@@ -1207,6 +1208,10 @@ def main():
                 memory_block = (
                     f"{head}\n+{max(total - kept, 1)} more in .atlas/memory/MEMORY.md"
                 )
+            # Recalled notes are quoted untrusted data, never instructions.
+            from recalled_memory import wrap_recalled_memory
+
+            memory_block = wrap_recalled_memory(memory_block) or None
 
     # Hash already-dirty non-docs paths so the Stop gate's delegation mandate can
     # tell shell-written code from inherited dirt. `git status` + hashing costs 60-90 ms on a big dirty tree,

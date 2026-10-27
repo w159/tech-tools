@@ -85,6 +85,13 @@ def _append_seen_hashes(path, new_hashes):
         pass
 
 
+_REVIEW_RE = re.compile(
+    r"\b(?:always|never|must|do not|don't|skip|disable|bypass|permission|allow)\b"
+    r"|--no-verify",
+    re.IGNORECASE,
+)
+
+
 class _Fact(str):
     """A captured fact string that also carries the durable dedupe key (the
     raw signal content) separately from its formatted display text. Needed
@@ -242,7 +249,12 @@ def _extract_facts(conn, session_id, cwd):
             if snippet and snippet.strip():
                 # Keep it concise — truncate to 200 chars
                 clean = atlas_memory.redact_secrets(snippet.strip())
-                fact = _Fact(f"User correction ({project_name}): {_clip(clean)}", clean)
+                # Corrections are re-injected at SessionStart; an imperative or
+                # permission-shaped one is flagged so it reads as unreviewed.
+                flag = "[review] " if _REVIEW_RE.search(clean) else ""
+                fact = _Fact(
+                    f"{flag}User correction ({project_name}): {_clip(clean)}", clean
+                )
                 project_facts.append(fact)
     except sqlite3.Error as exc:
         _trace(exc, cwd)

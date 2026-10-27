@@ -287,6 +287,9 @@ class MainInProcessTest(unittest.TestCase):
         ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("MEM-LINE", ctx)
         self.assertIn("PROJ-LINE", ctx)
+        self.assertIn('<recalled-memory untrusted="true">', ctx)
+        self.assertIn("</recalled-memory>", ctx)
+        self.assertLess(ctx.index("not instructions"), ctx.index("MEM-LINE"))
 
     def test_main_memory_block_lists_project_first_and_passes_root(self):
         self._memory.load_snapshot.return_value = {
