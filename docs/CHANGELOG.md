@@ -1,5 +1,39 @@
 # Changelog
 
+## 16.0.0 - 2026-10-27
+
+Release: atlas 16.0.0, armada 2.0.0, marketplace 5.0.0. Relative to main 15.2.1 (9c20c37). Consumer migration: [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
+
+### BREAKING
+
+- Vendor connectors moved from atlas to armada: `plugins/armada/.mcp.json` and `plugins/armada/mcp/` hold the 13 servers, and armada `plugin.json` carries the 57 connector `userConfig` keys. Tool names change from `mcp__plugin_atlas_<svc>__*` to `mcp__plugin_armada_<svc>__*`. Credentials saved under `atlas@tech-tools` are still read as a fallback; `~/.config/atlas/atlas.env` still works. `connector_credential_watch` stays an atlas hook and fires only when both plugins are installed. Dashboard and control plane resolve armada through `scripts/armada_root.py`.
+
+### Added
+
+- Worker teams: `atlas_mux` claude workers get `--allowedTools` scoped by `tools_profile` (read, edit, exec; `Bash(cmd *)` rules for test runners and read-only git); `--tools-profile` flag on spawn and run-worker. `atlas_panefeed` tolerates non-dict stream events (`permission_denied`).
+- Shared gate rules in `atlas_scope.py` (`is_target_code`, `is_scratch_path`, `is_verification_command`, ...) used by the tripwire, Stop gate and delegation prewarn.
+- `hooks/event_dispatch.py`: one hook process per PreToolUse/PostToolUse event; deny > ask > allow, additionalContext concatenated in order. Measured Pre+Post blocking time per call: Bash 303 ms -> 167 ms, Edit 261 -> 105, Read 182 -> 107.
+- `atlas_doctor` recognizes `synced` (claude.ai) and `--plugin-dir` loads and tolerates a missing `installed_plugins.json`.
+
+### Changed
+
+- Stop completion gate arms when `docs/` exists or `atlas_scope.gates_armed`, sees shell-changed files via the run-start dirty snapshot, and applies the c/d/e/h/f checks only when the run shipped code and `docs/` exists. Test, lint and typecheck commands no longer count as inline work.
+- Stop advisories go out as `systemMessage` (no extra turn). Session-start injection names only installed tools (2425 -> 1991 bytes).
+- Untrusted-data handling: board messages and recalled memory framed as untrusted, NPI/SSN redaction at ingest, selffix treats finding text as untrusted and holds test-infra edits for review, allowlisted verify command with scrubbed env, locked and quarantining findings ledger.
+- ConnectWise: per-request TLS dispatcher, redacted token-exchange errors.
+
+### Fixed
+
+- CLAUDE.md effort-alias claim; connector counts in manifests and docs; `types/index.d.ts` declares `atlas.todoExpanded` so `claude plugin validate plugins/atlas` passes.
+
+### Verified
+
+- Hermetic tests: `ATLAS_*`/`CLAUDE_*` scrubbed in `_test_isolation`, root-safe chmod test, fake plugin registry, path-independent fixtures, omp stubs, deterministic hook-bridge clock; `InstalledParityContract` opt-in via `ATLAS_CHECK_INSTALL_PARITY=1`.
+
+### Known gaps
+
+- The `claude-bg` transport (`_spawn_claude_bg`) does not yet pass the tools profile.
+
 ## 15.2.1 - 2026-10-26
 
 ### Changed

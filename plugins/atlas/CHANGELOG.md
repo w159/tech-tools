@@ -1,5 +1,45 @@
 # Changelog
 
+## 16.0.0 - 2026-10-27
+
+### BREAKING
+
+- The 13 vendor MCP connectors (auvik, blumira, cipp, connectwise, falcon, knowbe4, ninjaone, panos, paylocity, sonicwall, spanning, threatlocker, vanta) moved from atlas to armada 2.0.0. atlas declares no connector MCP servers; a plain atlas install starts no connector processes.
+- Tool names change from `mcp__plugin_atlas_<svc>__*` to `mcp__plugin_armada_<svc>__*`. Update permission allow and deny rules.
+- Install `armada@tech-tools` to keep the connectors, then restart. Credentials saved under `atlas@tech-tools` are still read as a fallback, new saves go under armada, and `~/.config/atlas/atlas.env` still works.
+- `connector_credential_watch` stays an atlas hook, matches the armada prefix (atlas prefix kept as a fallback) and fires only when both plugins are installed.
+- Migration steps: [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
+
+### Added
+
+- Worker teams: claude workers get `--allowedTools` scoped by the member's `tools_profile` (read, edit, exec; `Bash(cmd *)` rules for test runners and read-only git). New `--tools-profile` flag on `atlas_mux` spawn and run-worker.
+- Shared gate rules in `atlas_scope.py` (`is_target_code`, `is_scratch_path`, `is_verification_command` and related predicates), used by the tripwire, the Stop gate and the delegation prewarn.
+- `hooks/event_dispatch.py` runs the PreToolUse and PostToolUse Python hooks in one process per event. Measured Pre+Post blocking time per call: Bash 303 ms -> 167 ms, Edit 261 -> 105, Read 182 -> 107.
+- `atlas_doctor` recognizes `synced` (claude.ai) and `--plugin-dir` loads and tolerates a missing `installed_plugins.json`.
+- Hermetic test suites: `ATLAS_*` and `CLAUDE_*` scrubbed in `_test_isolation`, root-safe chmod test, fake plugin registry, path-independent fixtures, omp stubs for oh-my-pi modules, deterministic hook-bridge clock, hardcoded tsconfig paths removed. `InstalledParityContract` is opt-in via `ATLAS_CHECK_INSTALL_PARITY=1`.
+
+### Changed
+
+- Stop completion gate arms when `docs/` exists or `atlas_scope.gates_armed`, and sees files changed by shell commands through the run-start dirty snapshot. The CHANGELOG, ROADMAP, README and docs-update checks (c, d, e, h, f) apply only when the run shipped code and `docs/` exists.
+- Test, lint and typecheck commands no longer count as inline work.
+- Stop advisories go out as `systemMessage`, so they no longer force an extra turn.
+- Session-start injection names only installed tools (2425 -> 1991 bytes).
+- Board messages and recalled memory reach agents framed as untrusted data; NPI and SSN patterns are redacted at ingest.
+- selffix treats finding text as untrusted, holds test-infrastructure edits for review, runs an allowlisted verify command with a scrubbed environment, and writes the findings ledger under a lock with quarantine.
+- ConnectWise connector: per-request TLS dispatcher and redacted token-exchange errors (ported from the 16.0.0 audit branch).
+
+### Fixed
+
+- `atlas_panefeed` no longer crashes on non-dict stream events such as `permission_denied`.
+- `types/index.d.ts` declares `atlas.todoExpanded`, so `claude plugin validate plugins/atlas` passes.
+- CLAUDE.md effort-alias claim corrected; connector counts fixed in manifests and docs.
+
+### Known gaps
+
+- The `claude-bg` worker transport (`_spawn_claude_bg`) does not yet pass the tools profile.
+
+- Detail: `docs/CHANGELOG.md`.
+
 ## 15.2.1 - 2026-10-26
 
 - Project memories land in `<project>/.atlas/memory/MEMORY.md`; subagent and worktree sessions attribute to their main project.
