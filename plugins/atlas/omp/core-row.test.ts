@@ -1,5 +1,5 @@
 // Parity: the omp panel's core row and /atlas-core print the same text as the Claude mod for the shared core fixture.
-// Goldens: contracts/core-golden.ts. Twin: mod/core-golden.test.ts (if present).
+// Goldens: contracts/core-golden.ts. Twin: mod/core-row.test.ts.
 import { expect, test } from "bun:test";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { coreGolden } from "../contracts/core-golden";
@@ -127,12 +127,14 @@ const fakeRun = (files: Record<string, { text: string; mtimeMs: number }>) => {
 const F = "/r/.atlas/.run/findings.json";
 const LOG = "/r/.atlas/.run/logs/implementer-0001.log";
 
-test("findings.json and the scope matrix are read once across 3 builds", () => {
-	const run = fakeRun({ [F]: { text: "{}", mtimeMs: 1 }, "/p/contracts/scope-matrix.json": { text: "{}", mtimeMs: 1 } });
+test("findings.json, todos.json and the scope matrix are read once across 3 builds", () => {
+	const T = "/r/.atlas/.run/todos.json";
+	const run = fakeRun({ [T]: { text: '{"items":[]}', mtimeMs: 1 }, [F]: { text: "{}", mtimeMs: 1 }, "/p/contracts/scope-matrix.json": { text: "{}", mtimeMs: 1 } });
 	run.src.build("/r");
 	run.src.build("/r");
 	run.src.build("/r");
 	expect(run.count(F)).toBe(1);
+	expect(run.count(T)).toBe(1);
 	expect(run.count("/p/contracts/scope-matrix.json")).toBe(1);
 });
 

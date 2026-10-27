@@ -1,5 +1,5 @@
 // coreTick: toasts once per new verdict (the first read is a baseline), the refutation sound, a finished worker,
-// the status line, logs re-read only when they grew, /atlas-core, and the header tally.
+// the status line, logs re-read when size or mtime changes, /atlas-core, and the header tally.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { coreMatrix } from '../contracts/core-fixture';
@@ -142,6 +142,28 @@ describe('coreTick', () => {
     s.files[path] = good;
     await coreTick(s.$);
     expect(s.rec.toasts).toEqual([]);
+  });
+
+  test('a partial findings.json for one tick does not re-toast every verdict on the next good read', async () => {
+    const s = await session(false);
+    await coreTick(s.$);
+    const path = `${RUN}/findings.json`;
+    const good = s.files[path]!;
+    s.files[path] = good.slice(0, 10);
+    await coreTick(s.$);
+    s.files[path] = good;
+    await coreTick(s.$);
+    expect(s.rec.toasts).toEqual([]);
+  });
+
+  test('board reports with one timestamp keep a stable order whatever the listing order', async () => {
+    const s = await session(false);
+    const note = (owner: string) => JSON.stringify({ kind: 'report', owner, text: 'STATUS: DONE', ts: 100 });
+    s.files[`${RUN}/board/z.jsonl`] = note('implementer-2');
+    s.files[`${RUN}/board/a.jsonl`] = note('implementer-1a');
+    await coreTick(s.$);
+    const core = (await s.state.get({ plugin: 'atlas', key: 'core' })).value as { claims: { owner: string }[] };
+    expect(core.claims.map((c) => c.owner)).toEqual(['implementer-1a', 'implementer-2']);
   });
 
   test('the core is stored only when it changed, and written never by a render', async () => {

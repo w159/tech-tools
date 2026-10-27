@@ -596,11 +596,20 @@ async function readCached($: EngineInterface, path: string): Promise<string | nu
 	return text;
 }
 
+const parses = (text: string): boolean => {
+	try {
+		JSON.parse(text);
+		return true;
+	} catch {
+		return false;
+	}
+};
+
 /** `readCached`, '' when missing. */
 const readGrown = async ($: EngineInterface, path: string): Promise<string> => (await readCached($, path)) ?? '';
 
 const namesIn = async ($: EngineInterface, dir: string, keep: (name: string) => boolean): Promise<string[]> =>
-	(await $.fs.list(dir).catch(() => [])).map((e) => e.name).filter(keep);
+	(await $.fs.list(dir).catch(() => [])).map((e) => e.name).filter(keep).sort();
 
 /** Board `report` notes (ts in epoch seconds) from .atlas/.run/board/*.jsonl. */
 function reportsOf(text: string): ReportNote[] {
@@ -628,7 +637,7 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 	const boards = await namesIn($, `${base}/board`, (n) => n.endsWith('.jsonl'));
 	const reports = (await Promise.all(boards.map(async (n) => reportsOf(await readGrown($, `${base}/board/${n}`))))).flat();
 	const findings = await readCached($, `${base}/findings.json`);
-	coreFindingsOk = findings !== null;
+	coreFindingsOk = findings !== null && (findings.trim() === '' || parses(findings)); // a partial write keeps the seen set
 	const matrix = await readGrown($, `${$.plugin.root}/contracts/scope-matrix.json`);
 	for (const path of Object.keys(coreFiles)) if (!coreTouched.has(path)) delete coreFiles[path];
 	return coreModel({

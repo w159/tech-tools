@@ -76,7 +76,7 @@ export function createCoreSource(deps: CoreSourceDeps = {}): CoreSource {
 	/** This session's non-archived board rows, scoped like channel-view sessionTodos. */
 	const todosOf = (base: string, sessionId?: string): TodoItem[] => {
 		try {
-			const items = (JSON.parse(readText(`${base}/todos.json`)).items ?? []) as (TodoItem & { origin?: string })[];
+			const items = (JSON.parse(cached(`${base}/todos.json`)).items ?? []) as (TodoItem & { origin?: string })[];
 			return items.filter((i) => !i.archived && i.origin !== "advisor" && (!sessionId || i.session_id === sessionId));
 		} catch {
 			return [];
@@ -93,6 +93,7 @@ export function createCoreSource(deps: CoreSourceDeps = {}): CoreSource {
 			const reports = names(`${base}/board`, (n) => n.endsWith(".jsonl")).flatMap((n) => reportsOf(cached(`${base}/board/${n}`)));
 			const findings = cached(`${base}/findings.json`);
 			const matrix = cached(nodePath.join(rootOfPlugin(), "contracts", "scope-matrix.json"));
+			const todos = todosOf(base, opts.sessionId);
 			for (const path of cache.keys()) if (!touched.has(path)) cache.delete(path);
 			return coreModel({
 				findings,
@@ -100,7 +101,7 @@ export function createCoreSource(deps: CoreSourceDeps = {}): CoreSource {
 				matrix,
 				logs,
 				reports,
-				todos: todosOf(base, opts.sessionId),
+				todos,
 				header: opts.header ?? { ok: 0, total: 0 },
 				openGates: opts.openGates ?? 0,
 			});
