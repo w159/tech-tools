@@ -21,6 +21,8 @@ export interface FakeUser {
   groups: string[];
   // App role ids assigned straight to the user.
   direct: string[];
+  // signInSessionsValidFromDateTime (ISO); defaults to long ago, "" omits it.
+  sessionsValidFrom?: string;
 }
 
 export interface RecordedRequest {
@@ -138,7 +140,7 @@ export class FakeEntraGraph {
     if (userMatch) {
       const user = this.users.get(decodeURIComponent(userMatch[1]!));
       if (!user) return send(res, 404, { error: { code: "Request_ResourceNotFound" } });
-      if (rec.method === "GET" && !userMatch[2]) return send(res, 200, { id: userMatch[1], accountEnabled: user.enabled });
+      if (rec.method === "GET" && !userMatch[2]) return send(res, 200, { id: userMatch[1], accountEnabled: user.enabled, ...(user.sessionsValidFrom === "" ? {} : { signInSessionsValidFromDateTime: user.sessionsValidFrom ?? "2020-01-01T00:00:00Z" }) });
       if (rec.method === "POST" && userMatch[2]) {
         const ids = (JSON.parse(body) as { groupIds?: string[] }).groupIds ?? [];
         if (ids.length > 20) return send(res, 400, { error: { code: "Request_BadRequest" } });

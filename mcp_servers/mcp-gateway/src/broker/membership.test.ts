@@ -336,7 +336,7 @@ describe("entra membership check on refresh (fail closed)", () => {
     expect(r.status).toBe(200);
     expect(decodeJwt(r.body.access_token as string).roles).toEqual(["fixture-reader"]);
     expect(await listToolsWith(s, r.body.access_token as string)).toEqual(["fx_read"]);
-    expect(s.graph.count((q) => q.path.endsWith("/checkMemberGroups"))).toBe(1);
+    expect(s.graph.count((q) => q.path.endsWith("/checkMemberGroups"))).toBe(2); // sign-in code exchange + refresh
     expect(auditReasons(s).filter((l) => l.event === "auth_failed")).toEqual([]);
   });
 
@@ -405,10 +405,54 @@ describe("entra membership check on refresh (fail closed)", () => {
     expect(auditReasons(s).filter((l) => l.event === "auth_failed").map((l) => l.reason)).toEqual(["membership_revoked", "membership_revoked"]);
   });
 
+  it("(d2) authorization_code exchange: a user disabled after the browser redirect gets no tokens", async () => {
+    fakeDate();
+    enter(s, { groups: [G_READERS] });
+    s.idp.user = { ...TEST_USER, sub: USER_OID, groups: [G_READERS] };
+    const redirect = "http://127.0.0.1:43341/callback";
+    const provider = new MemoryOAuthProvider(redirect);
+    expect(await auth(provider, { serverUrl: s.resource })).toBe("REDIRECT");
+    const final = await drive(provider.authUrl!, redirect);
+    enter(s, { enabled: false, groups: [G_READERS] });
+    await expect(auth(provider, { serverUrl: s.resource, authorizationCode: final.searchParams.get("code")! })).rejects.toThrow(/grant/i);
+    expect(provider.tok).toBeUndefined();
+    expect(auditReasons(s).filter((l) => l.event === "auth_failed").map((l) => l.reason)).toEqual(["membership_revoked"]);
+  });
+
+  it("(d3) Revoke sessions after sign-in: refresh is invalid_grant; a fresh sign-in works again", async () => {
+    fakeDate();
+    enter(s, { groups: [G_READERS] });
+    const p = await signedIn(s, 43342, [G_READERS]);
+    jump(2);
+    // Entra sets signInSessionsValidFromDateTime to the moment of revocation.
+    s.graph.users.get(USER_OID)!.sessionsValidFrom = new Date().toISOString();
+    const r = await refreshed(s, p);
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe("invalid_grant");
+
+    // Authenticating upstream after the revocation is accepted.
+    jump(2);
+    const again = await signedIn(s, 43343, [G_READERS]);
+    expect(again.tok!.access_token).toBeTruthy();
+    jump(ACCESS_TTL + TOLERANCE + 1);
+    expect((await refreshed(s, again)).status).toBe(200);
+  });
+
+  it("(d4) a user record without signInSessionsValidFromDateTime cannot be proven valid: fails closed", async () => {
+    fakeDate();
+    enter(s, { groups: [G_READERS] });
+    const p = await signedIn(s, 43344, [G_READERS]);
+    s.graph.users.get(USER_OID)!.sessionsValidFrom = "";
+    const r = await refreshed(s, p);
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe("invalid_grant");
+  });
+
   it("(e) Graph 503 or 429: invalid_grant by default, with an audit reason and no inline retry", async () => {
     fakeDate();
     enter(s, { groups: [G_READERS] });
     const p = await signedIn(s, 43305, [G_READERS]);
+    s.graph.requests = []; // count only the refresh attempts below
     s.graph.failStatus = 503;
     const down = await refreshed(s, p);
     expect(down.status).toBe(400);
@@ -440,11 +484,8 @@ describe("entra membership check on refresh (fail closed)", () => {
   it("(e2) a malformed object id cannot be checked and fails closed as revoked", async () => {
     fakeDate();
     s.idp.user = { ...TEST_USER, sub: "not-a-guid", groups: [G_READERS] };
-    const p = await signIn(s, 43306);
-    remember(s, p.tok!.access_token, p.tok!.refresh_token);
-    const r = await refreshed(s, p);
-    expect(r.status).toBe(400);
-    expect(r.body.error).toBe("invalid_grant");
+    // The authorization_code exchange runs the same check, so no tokens are issued at all.
+    await expect(signIn(s, 43306)).rejects.toThrow(/grant/i);
     expect(s.graph.count((q) => q.path.startsWith("/v1.0/users/"))).toBe(0);
   });
 
@@ -467,6 +508,7 @@ describe("entra membership check on refresh (fail closed)", () => {
     fakeDate();
     enter(s, { groups: [G_READERS] });
     const p = await signedIn(s, 43308, [G_READERS]);
+    s.graph.requests = [];
     const a = await refreshed(s, p);
     const b = await refreshed(s, p, a.body.refresh_token as string);
     expect([a.status, b.status]).toEqual([200, 200]);
@@ -549,7 +591,7 @@ describe("graph token: client credentials", () => {
     fakeDate();
     enter(s, { groups: [G_READERS] });
     const p = await signedIn(s, 43331, [G_READERS]);
-    expect(s.graph.tokenRequests).toHaveLength(0); // sign-in does not touch Graph
+    expect(s.graph.tokenRequests).toHaveLength(1); // the sign-in code exchange already checks membership
 
     const a = await refreshed(s, p);
     const b = await refreshed(s, p, a.body.refresh_token as string);

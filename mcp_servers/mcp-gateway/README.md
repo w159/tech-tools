@@ -115,14 +115,16 @@ One JSON line per event on stdout, schema `mcp-gw.audit/1`. Events:
 
 ## Refresh-time membership check
 
-With `ENTRA_MEMBERSHIP_CHECK=1` (Entra upstream) every refresh-token grant asks
+With `ENTRA_MEMBERSHIP_CHECK=1` (Entra upstream) every token-endpoint grant (the sign-in
+code exchange and each refresh) asks
 Graph again who the user is, using application permissions
 `Application.Read.All`, `GroupMember.Read.All` and `User.Read.All`. The admin
 tool grants them (below). The token comes from the managed identity when
 `IDENTITY_ENDPOINT` and `IDENTITY_HEADER` are set, else from the app's client
 credentials. Results are cached for `ENTRA_MEMBERSHIP_CACHE_SECONDS`.
 
-What revokes access: the user is disabled or deleted, or no app role of the
+What revokes access: the user is disabled or deleted, an Entra "Revoke sessions"
+(`signInSessionsValidFromDateTime`) is later than the user's upstream sign-in, or no app role of the
 gateway app reaches the user (directly or through an assigned group) and the
 policy then resolves to no role. A changed set of roles is
 stamped into the new access token. Revocation takes effect at the next refresh,
@@ -155,8 +157,10 @@ node dist/admin/cli.js provision --plan plan.json --apply [--prune] [--managed-i
 `plan` is offline and writes `plan.json` and a `policy.yaml` that loads in the
 gateway. `provision --apply` creates or updates the app registration, app
 roles, group assignments, tenant-wide consent for the delegated scopes and the
-Graph application permissions above (for the gateway service principal, and
-for a managed identity with `--managed-identity-principal-id`). It is
+Graph application permissions above (for the gateway service principal, or,
+with `--managed-identity-principal-id`, for that managed identity only).
+`provision` rejects a plan whose permission ids differ from the built-in ones,
+or whose consent type or resource app id is not `AllPrincipals` / a GUID. It is
 idempotent and deletes nothing without `--prune`. Walkthrough:
 `plugins/armada/skills/armada-enterprise/references/setup.md`.
 

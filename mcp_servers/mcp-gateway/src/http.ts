@@ -10,7 +10,7 @@ import type { Gateway, ToolCallResult } from "./gateway.js";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 
-export const SERVER_INFO = { name: "mcp-gateway", version: "0.3.0" };
+export const SERVER_INFO = { name: "mcp-gateway", version: "0.3.1" };
 
 export interface HttpDeps {
   config: GatewayConfig;

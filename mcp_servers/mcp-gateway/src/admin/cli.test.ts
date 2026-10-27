@@ -46,8 +46,8 @@ describe("admin CLI end to end against the fake Graph", () => {
     expect(dry.stdout).toContain("DRY RUN");
     expect(dry.stdout).toMatch(/^POST \/applications {2}create application "Contoso MCP Gateway"/m);
     expect(dry.stdout).toContain("Would apply 8 write(s).");
-    for (const perm of ["Application.Read.All", "GroupMember.Read.All", "User.Read.All"]) {
-      expect(dry.stdout).toContain(`grant Graph application permission ${perm} to the gateway service principal`);
+    for (const [perm, id] of [["Application.Read.All", "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30"], ["GroupMember.Read.All", "98830695-27a2-44f7-8c18-0c3ebc9698f6"], ["User.Read.All", "df021288-bdef-4463-88db-98f22de89214"]]) {
+      expect(dry.stdout).toContain(`grant Graph application permission ${perm} (${id}) to the gateway service principal`);
     }
     expect(fake.nonGet()).toEqual([]);
 
@@ -66,7 +66,7 @@ describe("admin CLI end to end against the fake Graph", () => {
     outputs.push(d.stdout, d.stderr, pl.stdout, pl.stderr, dry.stdout, dry.stderr, apply.stdout, apply.stderr, again.stdout, again.stderr);
   });
 
-  it("--managed-identity-principal-id grants the Graph permissions to that identity too", async () => {
+  it("--managed-identity-principal-id grants the Graph permissions to that identity", async () => {
     fake.addManagedIdentity();
     const args = ["provision", "--plan", p("plan.json"), "--managed-identity-principal-id", FAKE_MANAGED_IDENTITY_SP_ID];
     const dry = await cli(args, env);

@@ -9,6 +9,15 @@ Release: one merge onto main that adds what main 16.0.0 (ea78927) did not carry.
 - atlas 16.0.1: test hermeticity fix for `HOME` under a scratch root. Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md).
 - Marketplace health check audit: [docs/audits/2026-10-27_marketplace-health/](audits/2026-10-27_marketplace-health/README.md). Its two patches are already applied on this tree.
 
+## mcp-gateway 0.3.1 - 2026-10-27
+
+### Fixed
+
+- Membership check now runs on the sign-in `authorization_code` exchange as well as on refresh, so a disabled user cannot get new tokens through an existing broker session.
+- Entra "Revoke sessions" is honored: the check reads `signInSessionsValidFromDateTime` and treats the grant as revoked when it is later than the time the user authenticated upstream (`authTime` on the code or refresh token). A missing value fails closed.
+- `provision` and `parsePlan` reject a Graph application permission whose id is not the built-in id for its value, an unknown `adminConsent.consentType`, and a non-GUID `resourceAppId`; the dry run prints the permission id; the resource filter is OData-escaped.
+- With `--managed-identity-principal-id` the Graph application permissions go to the managed identity only, not also to the gateway service principal. `Application.Read.All` stays: the role map read needs it.
+
 ## mcp-gateway 0.3.0, armada 2.1.0 - 2026-10-27
 
 ### Added

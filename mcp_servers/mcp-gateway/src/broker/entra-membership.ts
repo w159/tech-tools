@@ -5,7 +5,7 @@
 //   GET  /servicePrincipals/{id}?$select=id,appRoles                         Application.Read.All
 //   GET  /servicePrincipals/{id}/appRoleAssignedTo                           Application.Read.All
 //   POST /users/{oid}/checkMemberGroups  {groupIds}  (transitive, max 20)    GroupMember.Read.All
-//   GET  /users/{oid}?$select=accountEnabled                                 User.Read.All
+//   GET  /users/{oid}?$select=accountEnabled,signInSessionsValidFromDateTime  User.Read.All
 // Docs: learn.microsoft.com/graph/api/serviceprincipal-list-approleassignedto,
 //       learn.microsoft.com/graph/api/directoryobject-checkmembergroups,
 //       learn.microsoft.com/graph/api/user-get.
@@ -194,14 +194,19 @@ export class EntraMembership {
     this.base = opts.graphBaseUrl.replace(/\/$/, "");
   }
 
-  async resolve(oid: string): Promise<MembershipResult> {
+  // authTimeSeconds: when the user last authenticated upstream (epoch seconds).
+  // A signInSessionsValidFromDateTime later than that means "Revoke sessions"
+  // ran since, so the grant is revoked. Unknown auth time cannot be proven
+  // newer, so it counts as revoked too.
+  async resolve(oid: string, authTimeSeconds?: number): Promise<MembershipResult> {
     if (!GUID_RE.test(oid)) return { status: "revoked" };
     const signal = AbortSignal.timeout(this.opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     try {
       const map = await this.getRoleMap(signal);
       const candidateGroups = [...map.groupRoles.keys()];
-      const [enabled, memberOf] = await Promise.all([this.accountEnabled(oid, signal), this.memberGroups(oid, candidateGroups, signal)]);
-      if (enabled !== true || memberOf === "gone") return { status: "revoked" };
+      const [user, memberOf] = await Promise.all([this.userState(oid, signal), this.memberGroups(oid, candidateGroups, signal)]);
+      if (!user.enabled || memberOf === "gone") return { status: "revoked" };
+      if (authTimeSeconds === undefined || user.sessionsValidFromMs > authTimeSeconds * 1000) return { status: "revoked" };
       const roles = new Set<string>(map.userRoles.get(oid.toLowerCase()) ?? []);
       for (const g of memberOf) for (const r of map.groupRoles.get(g.toLowerCase()) ?? []) roles.add(r);
       if (roles.size === 0) return { status: "revoked" };
@@ -299,12 +304,18 @@ export class EntraMembership {
     return { expiresAtMs: this.now() + this.opts.cacheSeconds * 1000, groupRoles, userRoles };
   }
 
-  // true/false from accountEnabled; false also when the user does not exist.
-  private async accountEnabled(oid: string, signal: AbortSignal): Promise<boolean> {
-    const reply = await this.graph("GET", `/users/${encodeURIComponent(oid)}?$select=accountEnabled`, signal);
-    if (reply.status === 404) return false;
+  // enabled is false also when the user does not exist. sessionsValidFromMs is
+  // signInSessionsValidFromDateTime (Learn: user resource type, updated by
+  // revokeSignInSessions; User.Read.All is enough to read it). A missing or
+  // unparseable value cannot prove the sign-in is still valid, so it is an error.
+  private async userState(oid: string, signal: AbortSignal): Promise<{ enabled: boolean; sessionsValidFromMs: number }> {
+    const reply = await this.graph("GET", `/users/${encodeURIComponent(oid)}?$select=accountEnabled,signInSessionsValidFromDateTime`, signal);
+    if (reply.status === 404) return { enabled: false, sessionsValidFromMs: 0 };
     if (reply.status !== 200) throw new MembershipUnavailable(`graph_http_${reply.status}`);
-    return (reply.json as { accountEnabled?: unknown } | undefined)?.accountEnabled === true;
+    const u = reply.json as { accountEnabled?: unknown; signInSessionsValidFromDateTime?: unknown } | undefined;
+    const from = typeof u?.signInSessionsValidFromDateTime === "string" ? Date.parse(u.signInSessionsValidFromDateTime) : NaN;
+    if (!Number.isFinite(from)) throw new MembershipUnavailable("graph_invalid_response");
+    return { enabled: u?.accountEnabled === true, sessionsValidFromMs: from };
   }
 
   private async memberGroups(oid: string, groupIds: string[], signal: AbortSignal): Promise<string[] | "gone"> {

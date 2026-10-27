@@ -103,6 +103,8 @@ beforeAll(async () => {
     BROKER_UPSTREAM_CLIENT_SECRET: IDP_CLIENT_SECRET,
     BROKER_SIGNING_JWKS: JSON.stringify({ keys: [jwk] }),
     BROKER_COOKIE_KEYS: COOKIE_KEY,
+    // This suite checks policy output; the Graph membership check has its own suite.
+    ENTRA_MEMBERSHIP_CHECK: "0",
   });
 
   const server = fileURLToPath(new URL("./fixtures/tool-server.mjs", import.meta.url));
