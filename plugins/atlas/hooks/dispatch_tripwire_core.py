@@ -212,19 +212,6 @@ def _threshold():
         return 4
 
 
-def _system_temp_roots():
-    """Realpaths of the system temp dir plus the common macOS/Linux aliases
-    (/tmp, /private/tmp), since /tmp is a symlink to /private/tmp on macOS and
-    tempfile.gettempdir() can report either form."""
-    import tempfile
-
-    roots = set()
-    for candidate in (tempfile.gettempdir(), "/tmp", "/private/tmp"):
-        with contextlib.suppress(Exception):
-            roots.add(os.path.realpath(candidate).replace("\\", "/").rstrip("/"))
-    return roots
-
-
 def _is_uri_path(path):
     """URI-scheme path (`agent://`, `xd://`, ...): one shared definition lives in
     atlas_db.is_uri_path, which the inline-op counter and completion gate also use."""
@@ -233,7 +220,10 @@ def _is_uri_path(path):
     return is_uri_path(path)
 
 
-def _is_orchestration_path(path):
+def _is_orchestration_path(path, cwd=None):
+    """True when `path` is not target code: unknown, a URI, docs/.atlas/.md, scratch, or
+    outside the project root. One definition, atlas_scope.is_target_code, shared with the
+    completion gate's (m) predicate and delegation_prewarn."""
     if not path:
         return True  # unknown path -> do not punish
     # IRC messages and xd:// device calls arrive as a Write whose "path" is a
@@ -246,15 +236,9 @@ def _is_orchestration_path(path):
         lambda _m: os.path.expanduser("~"),
         os.path.expanduser(path),
     )
-    norm = path.replace("\\", "/")
-    if (
-        norm.startswith("docs/")
-        or "/docs/" in norm
-        or norm.startswith(".atlas/")
-        or "/.atlas/" in norm
-    ):
-        return True
-    return _is_scratch_path(norm)
+    import atlas_scope
+
+    return not atlas_scope.is_target_code(path, cwd)
 
 
 def _is_brief_or_scratch(path):
@@ -268,16 +252,11 @@ def _is_brief_or_scratch(path):
 
 
 def _is_scratch_path(path):
-    """Session scratch space (e.g. the Claude Code scratchpad under the system
-    temp dir) is not target code: it is ephemeral workspace outside the
-    project root, and denying or counting writes there wastes turns for no benefit."""
-    try:
-        real = os.path.realpath(path).replace("\\", "/").rstrip("/")
-    except Exception:
-        return False
-    return any(
-        real == root or real.startswith(root + "/") for root in _system_temp_roots()
-    )
+    """Session scratch space (the Claude Code scratchpad, /tmp, TMPDIR) is not target code;
+    denying or counting writes there wastes turns. Shared: atlas_scope.is_scratch_path."""
+    import atlas_scope
+
+    return atlas_scope.is_scratch_path(path)
 
 
 def _deny(reason):
@@ -1317,7 +1296,16 @@ def _is_read_only_call(tool, tinput):
     mutating Bash still are."""
     if tool in _READ_ONLY_TOOLS:
         return True
-    return tool == "Bash" and _is_read_only_bash((tinput or {}).get("command"))
+    if tool != "Bash":
+        return False
+    command = (tinput or {}).get("command")
+    if _is_read_only_bash(command):
+        return True
+    # Test runners, linters and type checks: the completion gate demands them, so they
+    # are never inline drift (atlas_scope.is_verification_command).
+    import atlas_scope
+
+    return atlas_scope.is_verification_command(_unwrap_lean_ctx(command) if isinstance(command, str) else command)
 
 
 _MUX_TEAM_VERBS = ("spawn-team", "wait", "reap")
