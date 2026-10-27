@@ -1,12 +1,12 @@
-// Native-element sidebar: a hotkey tab strip (r route, t team, c channel, g gates) over exactly one view.
+// Native-element sidebar: a hotkey tab strip (r route, t team, c channel, g core) over exactly one view.
 // Plain column: the host pane draws the one frame.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 // Plan: docs/plans/2026-10-13_atlas-command-center-redesign.md §3.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { openGateCount } from '../gates';
 import { textWidth } from '../theme';
-import { gateRows } from './sidebar-gates';
 import { channelRows } from './sidebar-channel';
+import { coreRows } from './sidebar-core';
 import { routeRows } from './sidebar-route';
 import { teamRows } from './sidebar-team';
 import type { SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';
@@ -18,7 +18,7 @@ const HINT_MIN_INNER = 60;
 const hintFor = (on: SidebarHandlers): string => `press r t c g${on.toggleTodos ? ' o' : ''} · Tab ↑↓ · Esc closes`;
 
 const stripWidth = (ts: { label: string }[]): number => ts.reduce((n, t) => n + textWidth(t.label) + 6, -3);
-const gatesLabels = (open: number): { label: string; short: string } => (open ? { label: `✗ ${open}`, short: `gates ✗${open}` } : { label: '✓ gates', short: 'gates' });
+const coreLabels = (open: number): { label: string; short: string } => (open ? { label: `◈ core ✗${open}`, short: `core ✗${open}` } : { label: '◈ core', short: 'core' });
 type TabSpec = { v: SidebarView; key: string; label: string; short: string };
 
 /** The four view tabs and the board label, glyphs dropped when five buttons with them overflow a docked 56-column pane.
@@ -28,7 +28,7 @@ function tabSpecs(open: number, inner: number, hasBoard: boolean): { tabs: TabSp
     { v: 'route', key: 'r', label: '◎ route', short: 'route' },
     { v: 'team', key: 't', label: '● team', short: 'team' },
     { v: 'channel', key: 'c', label: '✉ channel', short: 'channel' },
-    { v: 'gates', key: 'g', ...gatesLabels(open) },
+    { v: 'gates', key: 'g', ...coreLabels(open) },
   ];
   const compact = stripWidth(tabs) + 13 * +hasBoard > inner;
   const shown = tabs.map((t) => ({ ...t, label: compact ? t.short : t.label }));
@@ -71,7 +71,7 @@ function tabStrip(els: ClientElements, model: SidebarModel, on: SidebarHandlers,
   return els.Box({ key: 'tabs', flexDirection: 'row', flexShrink: 0, children });
 }
 
-const VIEWS = { route: routeRows, team: teamRows, channel: channelRows, gates: gateRows } as const;
+const VIEWS = { route: routeRows, team: teamRows, channel: channelRows, gates: coreRows } as const;
 
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {
   const cols = Math.max(10, model.columns - 1);

@@ -16,7 +16,7 @@ share one board, a Stop gate refuses "done" without evidence, and a doctor mines
 the session telemetry so the plugin can tune its own rules. It runs in Claude
 Code and, through its extension package, in omp.
 
-Current version: **15.2.1** (`plugins/atlas/.claude-plugin/plugin.json`): root resolver, doctor layout and docs naming, local scoring fix, Claude Code and omp parity. The 14.0.0 rework and the 15.0.0 Command Center were withdrawn on 2026-10-22; the dashboard is the 13.0.0 dashboard with a Settings page rebuilt as five tabs in 15.1.0.
+Current version: **16.0.0** (`plugins/atlas/.claude-plugin/plugin.json`). Breaking: the 13 vendor MCP connectors now ship in the armada plugin (2.0.0); install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada). Also in 16.0.0: scoped worker tool profiles, a Stop gate that sees shell-changed files, shared gate rules, one hook process per tool event, and hermetic tests.
 
 Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELOG.md)):
 
@@ -31,7 +31,7 @@ Recent changes (full text in [plugins/atlas/CHANGELOG.md](plugins/atlas/CHANGELO
 | Role agents (`atlas:*`) | 14 | `plugins/atlas/agents/` |
 | Hooks | 17 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 55 non-test Python scripts | `plugins/atlas/scripts/` |
-| MCP connectors | 13 (including `panos` and `sonicwall`), each off until credentials exist | `plugins/atlas/.mcp.json` |
+| MCP connectors | 13 (including `panos` and `sonicwall`), each off until credentials exist | `plugins/armada/.mcp.json` (servers in `plugins/armada/mcp/`; shipped by the armada plugin, install atlas and armada together) |
 | omp agents | 14, generated | `plugins/atlas/omp/agents/` |
 
 ## Contents

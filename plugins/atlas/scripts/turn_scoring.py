@@ -237,7 +237,7 @@ def _facet_questions():
 
 
 def _scrub(text):
-    return session_ingest.SECRET_VAL.sub("***", text or "")
+    return session_ingest.redact_secrets(text or "")
 
 
 def _metrics(text):

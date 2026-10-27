@@ -1,0 +1,16 @@
+{
+  "_comment": "Hand-kept facts the armada manifest cannot carry. compatRole is the <Vendor> part of the legacy <Vendor>.Read/.Write app roles. stateful connectors get one child process per user. command/args replace the derived launch line.",
+  "auvik": { "compatRole": "Auvik" },
+  "blumira": { "compatRole": "Blumira", "stateful": true },
+  "cipp": { "compatRole": "CIPP" },
+  "connectwise": { "compatRole": "ConnectWise" },
+  "falcon": { "compatRole": "Falcon", "command": "${BACKENDS_ROOT}/falcon/.venv/bin/falcon-mcp", "args": [] },
+  "knowbe4": { "compatRole": "KnowBe4" },
+  "ninjaone": { "compatRole": "NinjaOne" },
+  "panos": { "compatRole": "PanOS" },
+  "paylocity": { "compatRole": "Paylocity" },
+  "sonicwall": { "compatRole": "SonicWall" },
+  "spanning": { "compatRole": "Spanning" },
+  "threatlocker": { "compatRole": "ThreatLocker" },
+  "vanta": { "compatRole": "Vanta" }
+}

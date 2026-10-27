@@ -76,11 +76,9 @@ against this workspace, confirm scope first.
 ```
 plugins/atlas/
 ├── .claude-plugin/plugin.json  # plugin manifest
-├── .mcp.json
 ├── agents/             # core subagent definitions (explorer, verifier, planner, ...)
 ├── contracts/          # shared hook/omp contracts
 ├── hooks/              # self-improvement + lifecycle hooks
-├── mcp/                # 12 connector bundles
 ├── omp/                # omp extension
 ├── output-styles/      # the Atlas Orchestrator output style
 ├── references/         # reference material bundled with the plugin
@@ -91,13 +89,15 @@ plugins/atlas/
 ```
 
 Edit targets for an atlas change: whichever of `skills/`, `agents/`, `hooks/`,
-`output-styles/`, `scripts/`, `mcp/` owns the behavior, plus `.claude-plugin/plugin.json` and
+`output-styles/`, `scripts/` owns the behavior, plus `.claude-plugin/plugin.json` and
 `CHANGELOG.md`/`README.md` when the user-visible surface changes.
 
 ### armada - `plugins/armada/`
 
 ```
 plugins/armada/
+├── .mcp.json           # 13 vendor connector server definitions
+├── mcp/                # the 13 connector bundles
 ├── agents/             # one department agent per file (armada-data.md, armada-it-ops.md, ...)
 └── skills/             # department skills carrying org branding, policy, compliance context
 ```
@@ -121,8 +121,8 @@ the plugins are built on:
   the top-level `skills/` library that plugin skills draw from.
 - **Vendor connectors that armada department agents call:**
   - `mcp_servers/<svc>-mcp/` - the MCP server per vendor (Auvik, Blumira, CIPP,
-    ConnectWise Manage, KnowBe4, NinjaOne, PAN-OS, Paylocity, Spanning, ThreatLocker, Vanta;
-    CrowdStrike Falcon is a Python connector under `plugins/atlas/mcp/falcon`).
+    ConnectWise Manage, KnowBe4, NinjaOne, PAN-OS, Paylocity, SonicWall, Spanning, ThreatLocker, Vanta;
+    CrowdStrike Falcon is a Python connector under `plugins/armada/mcp/falcon`).
   - `.mcpb` archives some of those servers pack into (currently threatlocker and panos).
   - `mcp_node/node-<svc>/` - the Node client libraries those servers depend on.
 

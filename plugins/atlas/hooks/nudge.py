@@ -6,7 +6,8 @@ already run. Instead of just saying "please capture a lesson," it reports
 what was actually captured by the hooks above, and only nudges if nothing
 was captured but the session was orchestrating.
 
-Rate-limited and non-blocking: returns additionalContext only, never exit 2.
+Rate-limited and non-blocking: advisory goes out as systemMessage (additionalContext on
+Stop forces an extra model turn), never exit 2.
 Throttling, the stop_hook_active loop guard, and the circuit breaker all
 live in atlas_hook_guard now (see that module for the shared invariant).
 Any error exits 0 silently.
@@ -85,7 +86,7 @@ def main():
             conn.close()
 
     # Silence on success. memory_capture.py already wrote the facts; announcing
-    # that on Stop is additionalContext, which prompts another model turn to say
+    # that on Stop would be additionalContext, which prompts another model turn to say
     # nothing. A Stop hook speaks only when it needs something done.
     if _check_memory_captured():
         sys.exit(0)

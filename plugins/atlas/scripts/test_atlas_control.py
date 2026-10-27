@@ -40,6 +40,23 @@ class ControlTestCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name)
+        # Fake plugin registry: the host's ~/.claude/plugins is never read. atlas@tech-tools and armada@tech-tools resolve to
+        # this checkout, so the plugin/MCP assertions see the repo source on any machine.
+        plugins_dir = root / "plugins"
+        plugins_dir.mkdir()
+        (plugins_dir / "installed_plugins.json").write_text(
+            json.dumps(
+                {
+                    "version": 2,
+                    "plugins": {
+                        "atlas@tech-tools": [{"installPath": str(SCRIPTS.parent)}],
+                        # Connector MCP servers live in plugins/armada, so it must resolve to this checkout too.
+                        "armada@tech-tools": [{"installPath": str(SCRIPTS.parent.parent / "armada")}],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         self.settings = root / "settings.json"
         self.claude_json = root / ".claude.json"
         self.settings.write_text("{}", encoding="utf-8")
@@ -50,6 +67,7 @@ class ControlTestCase(unittest.TestCase):
         patches = [
             mock.patch.object(self.mod, "SETTINGS_PATH", self.settings),
             mock.patch.object(self.mod, "CLAUDE_JSON_PATH", self.claude_json),
+            mock.patch.object(self.mod, "PLUGINS_DIR", plugins_dir),
             # Shell-scope layers live outside ~/.claude; redirect all three so no test touches the real files.
             mock.patch.object(self.mod, "OMP_CONFIG_PATH", root / "omp" / "config.yml"),
             mock.patch.object(self.mod, "env_sh_path", lambda: root / "home" / ".atlas" / "env.sh"),
@@ -280,7 +298,8 @@ class TestBehaviorKnobs(ControlTestCase):
 
 class TestMcpServers(ControlTestCase):
     def test_toggle_writes_the_disabled_list(self):
-        name = self.mod.mcp_inventory()["servers"][0]["name"]
+        name = "plugin:armada:cipp"
+        self.assertIn(name, {s["name"] for s in self.mod.mcp_inventory()["servers"]})
         self.assertTrue(self.mod.set_mcp_enabled(name, False)["ok"])
         self.assertIn(name, self.read_settings()["disabledMcpServers"])
         self.assertTrue(self.mod.set_mcp_enabled(name, True)["ok"])
@@ -292,9 +311,9 @@ class TestMcpServers(ControlTestCase):
         self.assertFalse(res["ok"])
         self.assertEqual(res["error"], "unknown_server")
 
-    def test_atlas_connectors_are_discovered_under_their_qualified_names(self):
+    def test_armada_connectors_are_discovered_under_their_qualified_names(self):
         names = {s["name"] for s in self.mod.mcp_inventory()["servers"]}
-        self.assertIn("plugin:atlas:cipp", names)
+        self.assertIn("plugin:armada:cipp", names)
 
     def test_add_then_remove_a_user_server(self):
         res = self.mod.add_mcp_server(
@@ -387,7 +406,7 @@ class TestConnectorTest(ControlTestCase):
         root = Path(self.tmp.name) / "plugin"
         (root / "mcp" / "_env").mkdir(parents=True)
         (root / "mcp" / "fake").mkdir()
-        shutil.copy(SCRIPTS.parent / "mcp" / "_env" / "load.mjs", root / "mcp" / "_env")
+        shutil.copy(SCRIPTS.parent.parent / "armada" / "mcp" / "_env" / "load.mjs", root / "mcp" / "_env")
         (root / "mcp" / "fake" / "server.mjs").write_text(
             """
 import readline from 'node:readline';
@@ -431,7 +450,7 @@ rl.on('line', (l) => {
 
     def test_unconfigured_and_configured_connectors_are_told_apart(self):
         root = self._fake_plugin()
-        with mock.patch.object(self.mod, "PLUGIN_ROOT", root):
+        with mock.patch.object(self.mod, "_connector_root", return_value=root):
             home = Path(self.tmp.name) / "home"
             home.mkdir()
             env = {"HOME": str(home), "ATLAS_ENV_FILE": str(root / "none.env")}
@@ -457,7 +476,7 @@ rl.on('line', (l) => {
             "if(m.method==='tools/list')console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result:{tools:[]}}));});",
             encoding="utf-8",
         )
-        with mock.patch.object(self.mod, "PLUGIN_ROOT", root):
+        with mock.patch.object(self.mod, "_connector_root", return_value=root):
             res = self.mod.test_connector("fake", timeout=3)
         self.assertIsNone(res["configured"])
         self.assertEqual(res["tool_count"], 0)

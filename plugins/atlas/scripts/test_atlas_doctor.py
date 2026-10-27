@@ -16,6 +16,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 import atlas_doctor
 import atlas_db
 
+HERE_ATLAS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_real_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
 
 _MODULE_ENV = None
 _MODULE_CWD = None
@@ -315,6 +322,46 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertTrue(any("mark_orchestrating" in p for p in problems))
         # The message must name the core file the check actually scanned.
         self.assertTrue(any("dispatch_tripwire_core.py" in p for p in problems))
+
+    def _dispatcher_ip(self, outer_matcher=None, drop_tripwire=False):
+        """Copy the real dispatcher layout into the sandbox install."""
+        src = os.path.join(HERE_ATLAS, "hooks")
+        ip = self.install_101
+        os.makedirs(os.path.join(ip, "hooks"), exist_ok=True)
+        hooks = _load_real_json(os.path.join(src, "hooks.json"))
+        if outer_matcher is not None:
+            for grp in hooks["hooks"]["PostToolUse"]:
+                if "event_dispatch.py" in json.dumps(grp):
+                    grp["matcher"] = outer_matcher
+        write_json(os.path.join(ip, "hooks", "hooks.json"), hooks)
+        with open(os.path.join(src, "event_dispatch.py"), encoding="utf-8") as f:
+            text = f.read()
+        if drop_tripwire:
+            text = text.replace('"dispatch_tripwire"', '"dispatch_tripwire_off"')
+        with open(os.path.join(ip, "hooks", "event_dispatch.py"), "w") as f:
+            f.write(text)
+        with open(os.path.join(ip, "hooks", "dispatch_tripwire.py"), "w") as f:
+            f.write("ORCH_SKILLS = {'x'}\nmark_orchestrating = None\n")
+        return ip
+
+    def test_orchestration_wiring_passes_on_real_dev_tree(self):
+        self.assertEqual(atlas_doctor.check_orchestration_wiring(HERE_ATLAS), [])
+
+    def test_orchestration_wiring_accepts_event_dispatcher_layout(self):
+        ip = self._dispatcher_ip()
+        self.assertEqual(atlas_doctor.check_orchestration_wiring(ip), [])
+
+    def test_orchestration_wiring_flags_dispatcher_without_tripwire_binding(self):
+        ip = self._dispatcher_ip(drop_tripwire=True)
+        problems = atlas_doctor.check_orchestration_wiring(ip)
+        for tool in ("Agent", "Task", "Skill"):
+            self.assertIn(f"PostToolUse matcher missing {tool}", problems)
+
+    def test_orchestration_wiring_flags_dispatcher_outer_matcher_missing_agent(self):
+        ip = self._dispatcher_ip(outer_matcher="Read|Task|Skill")
+        problems = atlas_doctor.check_orchestration_wiring(ip)
+        self.assertIn("PostToolUse matcher missing Agent", problems)
+        self.assertNotIn("PostToolUse matcher missing Task", problems)
 
     def test_norm_repo_treats_url_variants_as_equal(self):
         for u in (
@@ -2553,6 +2600,159 @@ class GateBlockSpikeTest(unittest.TestCase):
         self.assertEqual(self.conn.total_changes, before)
         self.assertEqual(
             self.conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0], findings
+        )
+
+
+class NonMarketplaceLoadTest(unittest.TestCase):
+    """atlas loaded from a claude.ai synced plugin dir or via --plugin-dir is
+    not in installed_plugins.json; the doctor must not report that as unhealthy."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.plugins = os.path.join(self.tmp, "home", ".claude", "plugins")
+        os.makedirs(self.plugins)
+        self.synced_id = "abc_def"
+        self.synced_root = os.path.join(self.plugins, "synced", self.synced_id, "atlas")
+        self.pdir_root = os.path.join(self.tmp, "src", "plugins", "atlas")
+        for root in (self.synced_root, self.pdir_root):
+            self._make_plugin(root)
+        write_json(
+            os.path.join(self.tmp, "src", ".claude-plugin", "marketplace.json"), {}
+        )
+        write_json(
+            os.path.join(self.plugins, "synced", self.synced_id, "atlas.meta.json"),
+            {"marketplace_name": "tech-tools", "installation_preference": "available"},
+        )
+        patches = [
+            mock.patch.object(atlas_doctor, "PLUGINS_DIR", self.plugins),
+            mock.patch.object(
+                atlas_doctor, "STATE_PATH", os.path.join(self.tmp, "state.json")
+            ),
+            # wiring needs the full hooks tree; covered by its own tests
+            mock.patch.object(atlas_doctor, "check_orchestration_wiring", return_value=[]),
+            mock.patch.object(atlas_doctor, "_cmux_bin", return_value=None),
+            mock.patch.dict(
+                os.environ,
+                {
+                    "ATLAS_OMP_PLUGINS_DIR": os.path.join(self.tmp, ".omp", "plugins"),
+                    "CLAUDE_PROJECT_DIR": os.path.join(self.tmp, "project"),
+                    "HOME": os.path.join(self.tmp, "home"),
+                    "ATLAS_DOCTOR_HOOK_TTL_MIN": "0",
+                },
+            ),
+        ]
+        for pt in patches:
+            pt.start()
+            self.addCleanup(pt.stop)
+        os.makedirs(os.path.join(self.tmp, "project"), exist_ok=True)
+
+    @staticmethod
+    def _make_plugin(root):
+        write_json(
+            os.path.join(root, ".claude-plugin", "plugin.json"),
+            {
+                "name": "atlas",
+                "version": "9.9.9",
+                "repository": "https://github.com/w159/tech-tools",
+            },
+        )
+        write_json(
+            os.path.join(root, "hooks", "hooks.json"),
+            {"hooks": {"SessionStart": [{"hooks": [{"command": "x ${CLAUDE_PLUGIN_ROOT}/scripts/a.py"}]}]}},
+        )
+        for rel, body in (
+            ("scripts/a.py", ""),
+            ("agents/x.md", "---\nname: x\n---\n"),
+            ("skills/s/SKILL.md", "---\nname: s\n---\n"),
+        ):
+            fp = os.path.join(root, *rel.split("/"))
+            os.makedirs(os.path.dirname(fp), exist_ok=True)
+            with open(fp, "w") as f:
+                f.write(body)
+
+    def _run(self, root, installed=None):
+        ipath = os.path.join(self.plugins, "installed_plugins.json")
+        if installed is not None:
+            write_json(ipath, installed)
+            write_json(os.path.join(self.plugins, "known_marketplaces.json"), {})
+        with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": root}):
+            results, _ = atlas_doctor.install_checks("atlas")
+        return {r["check"]: r for r in results}
+
+    def _assert_registered(self, by, source):
+        self.assertTrue(by["registered"]["ok"], by["registered"])
+        self.assertIn(source, by["registered"]["detail"])
+        self.assertNotIn("config-readable", by)
+        for cid in ("marketplace-source", "clone-remote", "version-sync", "rollback"):
+            self.assertTrue(by[cid]["ok"], by[cid])
+            self.assertIn("skipped", by[cid]["detail"])
+        bad = [r for r in by.values() if not r["ok"] and r["severity"] != "warn"]
+        self.assertEqual(bad, [])
+
+    def _hook_output(self, root):
+        buf = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": root}),
+            mock.patch.object(atlas_doctor, "behaviour_checks"),
+            contextlib.redirect_stdout(buf),
+        ):
+            self.assertEqual(atlas_doctor.main(["--hook"]), 0)
+        return buf.getvalue()
+
+    def test_synced_layout_without_installed_entry(self):
+        by = self._run(
+            self.synced_root,
+            {"version": 2, "plugins": {"other@mkt": [{"version": "1"}]}},
+        )
+        self._assert_registered(by, "synced")
+        self.assertEqual(self._hook_output(self.synced_root), "")
+
+    def test_plugin_dir_load_not_in_installed_plugins(self):
+        by = self._run(self.pdir_root, {"version": 2, "plugins": {}})
+        self._assert_registered(by, "plugin-dir")
+        self.assertEqual(self._hook_output(self.pdir_root), "")
+
+    def test_installed_plugins_json_missing(self):
+        self.assertFalse(
+            os.path.exists(os.path.join(self.plugins, "installed_plugins.json"))
+        )
+        by = self._run(self.synced_root)
+        self._assert_registered(by, "synced")
+        self.assertEqual(self._hook_output(self.synced_root), "")
+        by = self._run(self.pdir_root)
+        self._assert_registered(by, "plugin-dir")
+
+    def test_missing_config_without_any_load_source_still_fails(self):
+        # cache-shaped root, nothing registered: genuinely unhealthy
+        root = os.path.join(self.plugins, "cache", "m", "atlas", "1.0.0")
+        self._make_plugin(root)
+        by = self._run(root, {"version": 2, "plugins": {}})
+        self.assertFalse(by["registered"]["ok"])
+
+    def test_fix_never_writes_into_synced_install_or_plugins_dir(self):
+        def snapshot():
+            out = {}
+            for base, _, files in os.walk(self.plugins):
+                for f in files:
+                    fp = os.path.join(base, f)
+                    out[fp] = (os.path.getmtime(fp), os.path.getsize(fp))
+            return out
+
+        before = snapshot()
+        buf = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": self.synced_root}),
+            mock.patch.object(atlas_doctor, "behaviour_checks"),
+            contextlib.redirect_stdout(buf),
+        ):
+            atlas_doctor.main(["--fix"])
+        self.assertEqual(snapshot(), before)
+        self.assertFalse(
+            [d for d in os.listdir(self.plugins) if d.startswith(atlas_doctor.TRASH_PREFIX)]
+        )
+        self.assertEqual(
+            sorted(os.listdir(self.plugins)), ["synced"], os.listdir(self.plugins)
         )
 
 

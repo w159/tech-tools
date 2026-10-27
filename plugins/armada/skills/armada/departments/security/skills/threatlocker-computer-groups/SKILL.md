@@ -129,6 +129,6 @@ current name, use `threatlocker_computer_groups_dropdown` to resolve.
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) - Auth and pagination
-- [computers](../computers/SKILL.md) - Computers within groups
-- [organizations](../organizations/SKILL.md) - Org scope for groups
+- [api-patterns](../threatlocker-api-patterns/SKILL.md) - Auth and pagination
+- [computers](../threatlocker-computers/SKILL.md) - Computers within groups
+- [organizations](../threatlocker-organizations/SKILL.md) - Org scope for groups

@@ -118,7 +118,7 @@ RULES = [
     {
         "id": "connectors (atlas-setup)",
         "type": "note",
-        "reason": "Vendor MCP connectors ship inside atlas (plugins/atlas/mcp), "
+        "reason": "Vendor MCP connectors ship in the armada plugin (plugins/armada/mcp), "
         "unconfigured until credentials are saved; run the dashboard Settings page or "
         "the atlas-setup skill, then check <vendor>_status.",
         "cmd": "(already shipped with atlas)",

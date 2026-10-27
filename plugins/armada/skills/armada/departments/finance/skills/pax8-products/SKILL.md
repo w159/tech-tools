@@ -240,8 +240,8 @@ To find these, call `pax8-list-products` with `vendorName=Microsoft` and `search
 
 ## Related Skills
 
-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Active product subscriptions
-- [Pax8 Orders](../orders/SKILL.md) - Ordering products
-- [Pax8 Companies](../companies/SKILL.md) - Client company management
-- [Pax8 Invoices](../invoices/SKILL.md) - Billing for products
+- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
+- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Active product subscriptions
+- [Pax8 Orders](../pax8-orders/SKILL.md) - Ordering products
+- [Pax8 Companies](../pax8-companies/SKILL.md) - Client company management
+- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Billing for products

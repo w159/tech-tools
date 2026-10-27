@@ -70,8 +70,20 @@ def _load_env_file(path: str, label: str, shell_keys: set) -> None:
         os.environ[key] = value
 
 
+def _own_plugin_name() -> str:
+    """Owning plugin name from its plugin.json, else the shipping plugin (`armada`)."""
+    try:
+        pj = Path(__file__).resolve().parents[2] / ".claude-plugin" / "plugin.json"
+        name = json.loads(pj.read_text()).get("name")
+        if isinstance(name, str) and name:
+            return name
+    except (OSError, ValueError, AttributeError, IndexError):
+        pass
+    return "armada"
+
+
 def _marketplace_name() -> str:
-    """Exact `atlas@<marketplace>` key: name from this repo's marketplace.json, else the literal default."""
+    """Marketplace name from this repo's marketplace.json, else the literal default."""
     try:
         mp = Path(__file__).resolve().parents[4] / ".claude-plugin" / "marketplace.json"
         name = json.loads(mp.read_text()).get("name")
@@ -98,9 +110,10 @@ def _saved_option(opt: str) -> str:
                 )
                 or {}
             )
-            _saved_options = (cfg.get(f"atlas@{_marketplace_name()}") or {}).get(
-                "options"
-            ) or {}
+            mkt = _marketplace_name()
+            own = (cfg.get(f"{_own_plugin_name()}@{mkt}") or {}).get("options") or {}
+            legacy = (cfg.get(f"atlas@{mkt}") or {}).get("options") or {}
+            _saved_options = {**legacy, **own}  # own plugin wins; atlas@ is the pre-move fallback
         except (OSError, ValueError, AttributeError):
             pass
     v = _saved_options.get(opt)

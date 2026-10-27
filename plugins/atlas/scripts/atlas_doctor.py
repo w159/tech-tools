@@ -23,8 +23,10 @@ if __name__ == "__main__":
     atlas_env.apply_store_env()
 
 # --- environment (overridable so tests never touch the real install) ---
-PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.expanduser(
-    "~/.claude/plugins"
+# Claude Code keeps every ~/.claude path under CLAUDE_CONFIG_DIR when it is set
+# (https://code.claude.com/docs/en/claude-directory.md), installed_plugins.json included.
+PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.join(
+    os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"), "plugins"
 )
 # Same resolution as atlas_db.atlas_home(), inlined so the SessionStart stamp
 # fast path below can run before atlas_db (sqlite3, ~45 ms) is imported.
@@ -75,6 +77,7 @@ if __name__ == "__main__" and sys.argv[1:] == ["--hook"] and _hook_stamp_fresh("
     sys.exit(0)
 
 import argparse  # noqa: E402 -- after the stamp fast path on purpose
+import ast  # noqa: E402
 import hashlib  # noqa: E402
 import re  # noqa: E402
 import shutil  # noqa: E402
@@ -182,6 +185,30 @@ def self_manifest():
     return own, _load_json(os.path.join(own, ".claude-plugin", "plugin.json"))
 
 
+def detect_load_source(plugin_name="atlas"):
+    """How this plugin was loaded when it has no installed_plugins.json entry.
+
+    Returns ("synced", root) for a claude.ai synced plugin
+    (<plugins>/synced/<id>/<name> with a sibling <name>.meta.json), or
+    ("plugin-dir", root) for a --plugin-dir load of a marketplace source
+    checkout (<repo>/plugins/<name>); else
+    (None, root). Root comes from self_manifest(), never guessed paths."""
+    root = os.path.realpath(self_manifest()[0])
+    parent = os.path.dirname(root)
+    if os.path.basename(os.path.dirname(parent)) == "synced" and os.path.exists(
+        os.path.join(parent, f"{plugin_name}.meta.json")
+    ):
+        return "synced", root
+    # --plugin-dir at a marketplace source checkout: <repo>/plugins/<name>
+    # with <repo>/.claude-plugin/marketplace.json. Never the consumer cache.
+    repo = os.path.dirname(parent)
+    if os.path.basename(parent) == "plugins" and os.path.exists(
+        os.path.join(repo, ".claude-plugin", "marketplace.json")
+    ):
+        return "plugin-dir", root
+    return None, root
+
+
 def find_registration(installed, plugin_name):
     for key, entries in installed.get("plugins", {}).items():
         if key.split("@")[0] == plugin_name and entries:
@@ -283,6 +310,38 @@ def find_stale_assets(ip, clone, plugin_name, user_skills=None, user_agents=None
     return stale
 
 
+def _matcher_covers(matcher, tool):
+    """hooks.json matcher semantics: empty or * matches every tool, else fullmatch."""
+    if matcher in (None, "", "*"):
+        return True
+    try:
+        return re.fullmatch(matcher, tool) is not None
+    except re.error:
+        return False
+
+
+def _dispatcher_tripwire_matcher(ip, event):
+    """The matcher event_dispatch.BINDINGS gives dispatch_tripwire for `event`.
+
+    Parsed from the dispatcher source (no import, so no hook side effects).
+    Returns None when the file or the binding is absent or unparseable.
+    """
+    try:
+        with open(os.path.join(ip, "hooks", "event_dispatch.py"), encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "BINDINGS" for t in node.targets
+            ):
+                bindings = ast.literal_eval(node.value)
+                for name, matcher, _slice in bindings.get(event, ()):
+                    if name == "dispatch_tripwire":
+                        return matcher
+    except (OSError, SyntaxError, ValueError):
+        pass
+    return None
+
+
 def check_orchestration_wiring(ip):
     """Verify the wiring that makes subagent discipline actually engage:
     the tripwire must see Skill/Agent/Task events and auto-set the
@@ -291,13 +350,25 @@ def check_orchestration_wiring(ip):
     hooks_file = os.path.join(ip, "hooks", "hooks.json")
     try:
         blob = _load_json(hooks_file)
-        matcher = ""
+        direct = ""
+        dispatched = []  # (outer matcher, tripwire's inner matcher) pairs
         for grp in blob.get("hooks", {}).get("PostToolUse", []):
-            if "dispatch_tripwire.py" in json.dumps(grp):
-                matcher = grp.get("matcher", "")
+            text = json.dumps(grp)
+            if "dispatch_tripwire.py" in text:
+                direct = grp.get("matcher", "")
+            if "event_dispatch.py" in text:
+                inner = _dispatcher_tripwire_matcher(ip, "PostToolUse")
+                if inner is not None:
+                    dispatched.append((grp.get("matcher", ""), inner))
         for tool in ("Agent", "Task", "Skill"):
-            if tool not in matcher:
-                problems.append(f"PostToolUse matcher missing {tool}")
+            if tool in direct:
+                continue
+            if any(
+                _matcher_covers(outer, tool) and _matcher_covers(inner, tool)
+                for outer, inner in dispatched
+            ):
+                continue
+            problems.append(f"PostToolUse matcher missing {tool}")
     except Exception as e:
         problems.append(f"hooks.json unreadable: {e}")
     tripwire = os.path.join(ip, "hooks", "dispatch_tripwire.py")
@@ -547,9 +618,11 @@ def _omp_plugins_dir():
     """omp's plugin registry. Overridable; otherwise the sibling of the claude
     plugins dir's home (~/.claude/plugins -> ~/.omp/plugins) so a test that
     relocates PLUGINS_DIR relocates this too."""
-    return os.environ.get("ATLAS_OMP_PLUGINS_DIR") or os.path.join(
-        os.path.dirname(os.path.dirname(PLUGINS_DIR)), ".omp", "plugins"
-    )
+    if os.environ.get("ATLAS_OMP_PLUGINS_DIR"):
+        return os.environ["ATLAS_OMP_PLUGINS_DIR"]
+    if not os.environ.get("ATLAS_PLUGINS_DIR"):  # CLAUDE_CONFIG_DIR does not move omp
+        return os.path.expanduser("~/.omp/plugins")
+    return os.path.join(os.path.dirname(os.path.dirname(PLUGINS_DIR)), ".omp", "plugins")
 
 
 def check_omp_bridge(plugin_name, version):
@@ -951,6 +1024,80 @@ def run_checks(plugin_name="atlas"):
     return results, ctx
 
 
+def _content_checks(add, ctx, ip, clone, plugin_name):
+    """C6-C13: checks on the plugin tree at `ip` that need no marketplace."""
+    # C6: every hook the plugin declares must exist in the installed copy
+    hooks_file = os.path.join(ip, "hooks", "hooks.json")
+    if os.path.exists(hooks_file):
+        missing = []
+        blob = json.dumps(_load_json(hooks_file))
+        for rel in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\\ ]+)", blob):
+            if not os.path.exists(os.path.join(ip, rel)):
+                missing.append(rel)
+        add(
+            "hooks-wired",
+            not missing,
+            f"missing: {missing}" if missing else "all hook files present",
+        )
+    else:
+        add("hooks-wired", False, "hooks/hooks.json absent from installed copy")
+
+    # C7: the engine's moving parts are actually there. The plugin ships no
+    # commands/ since 5.0.0 (skills replaced the launchers), so only agents
+    # and skills are required.
+    counts = count_assets(ip)
+    add(
+        "assets",
+        counts["agents"] > 0 and counts["skills"] > 0,
+        json.dumps(counts),
+    )
+
+    # C8: no deprecated/renamed asset may shadow the live set anywhere
+    stale = find_stale_assets(ip, clone, plugin_name)
+    ctx["stale_assets"] = stale
+    add(
+        "stale-assets",
+        not stale,
+        f"{len(stale)} deprecated asset(s): {stale[:4]}" if stale else "none found",
+    )
+
+    # C9: the subagent-discipline wiring must be able to engage
+    wiring = check_orchestration_wiring(ip)
+    add(
+        "orchestration-wiring",
+        not wiring,
+        "; ".join(wiring)
+        if wiring
+        else "tripwire sees Skill/Agent/Task and auto-marks",
+    )
+
+    # C10: explicit user outputStyle must not hide Atlas Orchestrator headers
+    style_ok, style_detail = check_output_style()
+    add("output-style", style_ok, style_detail)
+
+    # C11: the project this doctor runs in should carry the atlas-tooling
+    # routing block. WARN-severity: it does not count toward `failed`/exit
+    # code or --hook's SessionStart warning, because it is a property of the
+    # *consuming project*, not the plugin install, and would otherwise fire
+    # on every unscaffolded repo a user opens.
+    tooling_ok, tooling_detail = check_context_tooling()
+    add("context-tooling", tooling_ok, tooling_detail, severity="warn")
+
+    # C11b: omp cheap-tier roles; WARN-severity (omp-only, user config).
+    mr_ok, mr_detail = check_omp_model_roles()
+    add("omp-model-roles", mr_ok, mr_detail, severity="warn")
+
+    # C12: TypeSafe turn scoring is optional; WARN-severity, never a failure.
+    ts_ok, ts_detail = check_typesafe_scoring()
+    add("typesafe-scoring", ts_ok, ts_detail, severity="warn")
+
+    # C13: cmux browser toolkit is optional (macOS + cmux); WARN-severity.
+    cs_ok, cs_detail = check_cmux_socket()
+    add("cmux-socket", cs_ok, cs_detail, severity="warn")
+    cb_ok, cb_detail = check_cmux_browser_mcp()
+    add("cmux-browser", cb_ok, cb_detail, severity="warn")
+
+
 def install_checks(plugin_name="atlas"):
     results = []
     ctx = {}
@@ -968,16 +1115,36 @@ def install_checks(plugin_name="atlas"):
 
     installed_path = os.path.join(PLUGINS_DIR, "installed_plugins.json")
     markets_path = os.path.join(PLUGINS_DIR, "known_marketplaces.json")
+    # Missing config is not an error by itself: synced / --plugin-dir loads have none.
+    installed, markets, config_err = {}, {}, None
     try:
         installed = _load_json(installed_path)
         markets = _load_json(markets_path)
     except Exception as e:
-        add("config-readable", False, f"cannot read plugin config: {e}")
-        return results, ctx
-
+        config_err = e
     key, reg = find_registration(installed, plugin_name)
     if not reg or not key:
-        add("registered", False, f"{plugin_name} not found in installed_plugins.json")
+        source, root = detect_load_source(plugin_name)
+        if source:
+            ctx["load_source"] = source
+            add("registered", True, f"{plugin_name} loaded from {source} ({root})")
+            for cid in (
+                "marketplace-source",
+                "clone-remote",
+                "version-sync",
+                "rollback",
+                "install-path",
+            ):
+                add(cid, True, f"skipped: {source} load has no marketplace install")
+            _content_checks(add, ctx, root, "", plugin_name)
+            return results, ctx
+        if config_err:
+            add("config-readable", False, f"cannot read plugin config: {config_err}")
+        else:
+            add("registered", False, f"{plugin_name} not found in installed_plugins.json")
+        return results, ctx
+    if config_err:
+        add("config-readable", False, f"cannot read plugin config: {config_err}")
         return results, ctx
     add("registered", True, f"{key} at {reg['version']}")
     mkt_name = key.split("@", 1)[1]
@@ -1078,76 +1245,7 @@ def install_checks(plugin_name="atlas"):
     ok, detail = check_content_drift("claude-code", ip, plugin_name)
     add("install-content", ok, detail, severity="warn")
 
-    # C6: every hook the plugin declares must exist in the installed copy
-    hooks_file = os.path.join(ip, "hooks", "hooks.json")
-    if os.path.exists(hooks_file):
-        missing = []
-        blob = json.dumps(_load_json(hooks_file))
-        for rel in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\\ ]+)", blob):
-            if not os.path.exists(os.path.join(ip, rel)):
-                missing.append(rel)
-        add(
-            "hooks-wired",
-            not missing,
-            f"missing: {missing}" if missing else "all hook files present",
-        )
-    else:
-        add("hooks-wired", False, "hooks/hooks.json absent from installed copy")
-
-    # C7: the engine's moving parts are actually there. The plugin ships no
-    # commands/ since 5.0.0 (skills replaced the launchers), so only agents
-    # and skills are required.
-    counts = count_assets(ip)
-    add(
-        "assets",
-        counts["agents"] > 0 and counts["skills"] > 0,
-        json.dumps(counts),
-    )
-
-    # C8: no deprecated/renamed asset may shadow the live set anywhere
-    stale = find_stale_assets(ip, clone, plugin_name)
-    ctx["stale_assets"] = stale
-    add(
-        "stale-assets",
-        not stale,
-        f"{len(stale)} deprecated asset(s): {stale[:4]}" if stale else "none found",
-    )
-
-    # C9: the subagent-discipline wiring must be able to engage
-    wiring = check_orchestration_wiring(ip)
-    add(
-        "orchestration-wiring",
-        not wiring,
-        "; ".join(wiring)
-        if wiring
-        else "tripwire sees Skill/Agent/Task and auto-marks",
-    )
-
-    # C10: explicit user outputStyle must not hide Atlas Orchestrator headers
-    style_ok, style_detail = check_output_style()
-    add("output-style", style_ok, style_detail)
-
-    # C11: the project this doctor runs in should carry the atlas-tooling
-    # routing block. WARN-severity: it does not count toward `failed`/exit
-    # code or --hook's SessionStart warning, because it is a property of the
-    # *consuming project*, not the plugin install, and would otherwise fire
-    # on every unscaffolded repo a user opens.
-    tooling_ok, tooling_detail = check_context_tooling()
-    add("context-tooling", tooling_ok, tooling_detail, severity="warn")
-
-    # C11b: omp cheap-tier roles; WARN-severity (omp-only, user config).
-    mr_ok, mr_detail = check_omp_model_roles()
-    add("omp-model-roles", mr_ok, mr_detail, severity="warn")
-
-    # C12: TypeSafe turn scoring is optional; WARN-severity, never a failure.
-    ts_ok, ts_detail = check_typesafe_scoring()
-    add("typesafe-scoring", ts_ok, ts_detail, severity="warn")
-
-    # C13: cmux browser toolkit is optional (macOS + cmux); WARN-severity.
-    cs_ok, cs_detail = check_cmux_socket()
-    add("cmux-socket", cs_ok, cs_detail, severity="warn")
-    cb_ok, cb_detail = check_cmux_browser_mcp()
-    add("cmux-browser", cb_ok, cb_detail, severity="warn")
+    _content_checks(add, ctx, ip, clone, plugin_name)
 
     return results, ctx
 
@@ -1276,6 +1374,8 @@ def record_maintenance(action, details=None):
 
 def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
     actions = []
+    if ctx.get("load_source"):  # synced / --plugin-dir: nothing of ours to repair
+        return [f"no-op: atlas loaded from {ctx['load_source']}, not a marketplace install"]
     expected = ctx.get("expected_repo")
     mkt_name, key, reg = ctx.get("mkt_name"), ctx.get("key"), ctx.get("reg")
     if not (expected and key):

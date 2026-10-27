@@ -137,6 +137,6 @@ See [REFERENCE.md](./REFERENCE.md) for device roles, hardware inventory endpoint
 
 ## Related Skills
 
-- [Organizations](../organizations/SKILL.md)  -  Organization management
-- [Alerts](../alerts/SKILL.md)  -  Alert monitoring
-- [API Patterns](../api-patterns/SKILL.md)  -  Authentication and request patterns
+- [Organizations](../ninjaone-organizations/SKILL.md)  -  Organization management
+- [Alerts](../ninjaone-alerts/SKILL.md)  -  Alert monitoring
+- [API Patterns](../ninjaone-api-patterns/SKILL.md)  -  Authentication and request patterns

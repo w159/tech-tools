@@ -166,7 +166,7 @@ class TestAtlasDashboard(unittest.TestCase):
                 encoding="utf-8",
             )
             with (
-                mock.patch.object(self.mod, "PLUGIN_ROOT", troot),
+                mock.patch.object(self.mod, "_armada_root", return_value=troot),
                 mock.patch.object(
                     self.mod,
                     "_plugin_config_options",
@@ -196,7 +196,7 @@ class TestAtlasDashboard(unittest.TestCase):
             (troot / ".claude-plugin" / "plugin.json").write_text(
                 json.dumps(
                     {
-                        "name": "atlas",
+                        "name": "armada",
                         "userConfig": {
                             "auvik_api_key": {"title": "Auvik key", "sensitive": True}
                         },
@@ -221,14 +221,14 @@ class TestAtlasDashboard(unittest.TestCase):
             settings = troot / "settings.json"
             settings.write_text("{}", encoding="utf-8")
             with (
-                mock.patch.object(self.mod, "PLUGIN_ROOT", troot),
+                mock.patch.object(self.mod, "_armada_root", return_value=troot),
                 mock.patch.object(self.mod, "_settings_path", return_value=settings),
             ):
                 res = self.mod.write_settings_updates({"auvik_api_key": "secret-value"})
                 self.assertTrue(res["ok"], res)
                 data = json.loads(settings.read_text())
                 self.assertEqual(
-                    data["pluginConfigs"]["atlas@tech-tools"]["options"][
+                    data["pluginConfigs"]["armada@tech-tools"]["options"][
                         "auvik_api_key"
                     ],
                     "secret-value",
@@ -1276,8 +1276,9 @@ class SettingsDataTest(unittest.TestCase):
 
     def test_fixture_projects_are_filtered(self):
         f = self.ctl.is_fixture_project
-        # The checkout itself is a real, non-scratch directory (the OS temp dir is scratch).
-        real = SCRIPTS.parent
+        # /usr is a real, non-scratch directory on every host (the OS temp dir is scratch, and the checkout
+        # itself may sit under a "worktrees" path, which is junk by design).
+        real = Path("/usr")
         with tempfile.TemporaryDirectory() as tmp:
             wt = Path(tmp) / "proj" / ".claude" / "worktrees" / "x"
             wt.mkdir(parents=True)

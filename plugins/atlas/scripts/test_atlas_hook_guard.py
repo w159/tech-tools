@@ -194,7 +194,7 @@ class EmitDedupeTest(_GuardTestCase):
             self.assertTrue(guard.emit(payload, "nudge", "hello there"))
         with mock.patch("sys.stdout", out2):
             self.assertFalse(guard.emit(payload, "nudge", "hello there"))
-        self.assertIn("additionalContext", out1.getvalue())
+        self.assertIn("systemMessage", out1.getvalue())
         self.assertEqual(out2.getvalue(), "")
 
     def test_same_message_different_session_emits_again(self):
@@ -203,8 +203,8 @@ class EmitDedupeTest(_GuardTestCase):
             self.assertTrue(guard.emit({"session_id": "e2"}, "nudge", "same text"))
         with mock.patch("sys.stdout", out2):
             self.assertTrue(guard.emit({"session_id": "e3"}, "nudge", "same text"))
-        self.assertIn("additionalContext", out1.getvalue())
-        self.assertIn("additionalContext", out2.getvalue())
+        self.assertIn("systemMessage", out1.getvalue())
+        self.assertIn("systemMessage", out2.getvalue())
 
     def test_different_hook_same_session_and_message_emits_again(self):
         """Dedupe is per (session, hook, hash) -- a different hook saying the
@@ -215,13 +215,35 @@ class EmitDedupeTest(_GuardTestCase):
             self.assertTrue(guard.emit(payload, "nudge", "shared text"))
         with mock.patch("sys.stdout", out2):
             self.assertTrue(guard.emit(payload, "memory_capture", "shared text"))
-        self.assertIn("additionalContext", out2.getvalue())
+        self.assertIn("systemMessage", out2.getvalue())
+
+    def test_stop_events_never_emit_additional_context(self):
+        for event in ("Stop", "SubagentStop", None):
+            payload = {"session_id": "e5-%s" % event}
+            if event:
+                payload["hook_event_name"] = event
+            out = io.StringIO()
+            with mock.patch("sys.stdout", out):
+                self.assertTrue(guard.emit(payload, "nudge", "advisory"))
+            data = json.loads(out.getvalue())
+            self.assertEqual(data, {"systemMessage": "advisory"})
+
+    def test_non_stop_event_keeps_additional_context(self):
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out):
+            self.assertTrue(
+                guard.emit(
+                    {"session_id": "e6", "hook_event_name": "PreToolUse"}, "x", "hi"
+                )
+            )
+        data = json.loads(out.getvalue())
+        self.assertEqual(data["hookSpecificOutput"]["additionalContext"], "hi")
 
     def test_missing_session_id_still_emits_without_crashing(self):
         out = io.StringIO()
         with mock.patch("sys.stdout", out):
             self.assertTrue(guard.emit({}, "nudge", "no session here"))
-        self.assertIn("additionalContext", out.getvalue())
+        self.assertIn("systemMessage", out.getvalue())
 
 
 class StateDirTest(unittest.TestCase):

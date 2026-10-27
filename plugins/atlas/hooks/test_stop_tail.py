@@ -1,8 +1,11 @@
 """stop_tail runs the four Stop tail hooks in one process with isolated failures."""
 
 import io
+import json
 import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -51,6 +54,42 @@ class StopTailTest(unittest.TestCase):
         before = sys.stdin
         self._run({})
         self.assertIs(sys.stdin, before)
+
+
+class StopTailOutputTest(unittest.TestCase):
+    """A Stop hook's hookSpecificOutput.additionalContext continues the conversation
+    (an extra model turn). Only decision "block" with a reason may do that."""
+
+    def test_non_blocking_stop_emits_no_additional_context(self):
+        tmp = tempfile.mkdtemp()
+        env = dict(
+            os.environ,
+            ATLAS_HOME=tmp,
+            ATLAS_DB=os.path.join(tmp, "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=os.path.join(tmp, "hookstate"),
+            ATLAS_QUIET="off",
+        )
+        payload = {
+            "hook_event_name": "Stop",
+            "session_id": "stop-tail-quiet",
+            "cwd": tmp,
+        }
+        r = subprocess.run(
+            [sys.executable, "-S", os.path.join(os.path.dirname(__file__), "stop_tail.py")],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60,
+        )
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn("additionalContext", r.stdout)
+
+    def test_no_stop_hook_source_emits_additional_context(self):
+        # nudge is the only TAIL hook that speaks; it must go through
+        # atlas_hook_guard.emit, which routes Stop to systemMessage.
+        src = open(os.path.join(os.path.dirname(__file__), "nudge.py")).read()
+        self.assertNotIn('"additionalContext"', src)
 
 
 if __name__ == "__main__":

@@ -116,7 +116,7 @@ Follow these checkpoints before closing any ticket:
 
 ## Related Skills
 
-- [ConnectWise Companies](../companies/SKILL.md)  -  Company management
-- [ConnectWise Contacts](../contacts/SKILL.md)  -  Contact management
-- [ConnectWise Time Entries](../time-entries/SKILL.md)  -  Time tracking
-- [ConnectWise API Patterns](../api-patterns/SKILL.md)  -  Query syntax and auth
+- [ConnectWise Companies](../psa-companies/SKILL.md)  -  Company management
+- [ConnectWise Contacts](../psa-contacts/SKILL.md)  -  Contact management
+- [ConnectWise Time Entries](../psa-time-entries/SKILL.md)  -  Time tracking
+- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md)  -  Query syntax and auth

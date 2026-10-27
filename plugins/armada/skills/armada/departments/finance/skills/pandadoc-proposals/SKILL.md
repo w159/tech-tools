@@ -1,6 +1,6 @@
 ---
 name: pandadoc-proposals
-description: Build MSP proposal workflows in PandaDoc: managed service agreements (MSAs), statements of work (SOWs), hardware quotes, and project proposals with content variables, pricing tables, and pipeline tracking.
+description: "Build MSP proposal workflows in PandaDoc: managed service agreements (MSAs), statements of work (SOWs), hardware quotes, and project proposals with content variables, pricing tables, and pipeline tracking."
 when_to_use:
   - Creating MSAs, SOWs, hardware quotes, or project proposals in PandaDoc
   - Configuring content variables and pricing tables for MSP proposals
@@ -352,7 +352,7 @@ Avg. Time to Sign: 4.2 days
 
 ## Related Skills
 
-- [PandaDoc API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
-- [PandaDoc Documents](../documents/SKILL.md) - Document creation and lifecycle
-- [PandaDoc Templates](../templates/SKILL.md) - Template library for proposals
-- [PandaDoc Recipients](../recipients/SKILL.md) - Recipient management for multi-party signing
+- [PandaDoc API Patterns](../pandadoc-api-patterns/SKILL.md) - MCP tools reference and connection info
+- [PandaDoc Documents](../pandadoc-documents/SKILL.md) - Document creation and lifecycle
+- [PandaDoc Templates](../pandadoc-templates/SKILL.md) - Template library for proposals
+- [PandaDoc Recipients](../pandadoc-recipients/SKILL.md) - Recipient management for multi-party signing

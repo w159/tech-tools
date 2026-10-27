@@ -201,8 +201,8 @@ Use the `externalId` field to match Pax8 companies with PSA records:
 
 ## Related Skills
 
-- [Pax8 API Patterns](../api-patterns/SKILL.md) - MCP tools reference and connection info
-- [Pax8 Subscriptions](../subscriptions/SKILL.md) - Subscription management per company
-- [Pax8 Orders](../orders/SKILL.md) - Ordering products for companies
-- [Pax8 Invoices](../invoices/SKILL.md) - Company billing and invoices
-- [Pax8 Products](../products/SKILL.md) - Product catalog
+- [Pax8 API Patterns](../pax8-api-patterns/SKILL.md) - MCP tools reference and connection info
+- [Pax8 Subscriptions](../pax8-subscriptions/SKILL.md) - Subscription management per company
+- [Pax8 Orders](../pax8-orders/SKILL.md) - Ordering products for companies
+- [Pax8 Invoices](../pax8-invoices/SKILL.md) - Company billing and invoices
+- [Pax8 Products](../pax8-products/SKILL.md) - Product catalog

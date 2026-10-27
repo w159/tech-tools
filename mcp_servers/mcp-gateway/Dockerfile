@@ -1,5 +1,5 @@
 # Build context is the repo root:
-#   docker build -f mcp_servers/mcp-gateway/Dockerfile -t mcp-gateway .
+#   docker build -f mcp_servers/mcp-gateway/Dockerfile -t mcp-gateway:dev .
 #
 # Stage 1: build the gateway's TypeScript into dist/.
 FROM node:22-bookworm-slim AS build
@@ -17,16 +17,20 @@ FROM node:22-bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.0 /uv /usr/local/bin/uv
 
 # Vendor MCP server bundles, spawned as stdio children by the gateway.
-COPY plugins/atlas/mcp/ /app/mcp/
+COPY plugins/armada/mcp/ /app/mcp/
 RUN cd /app/mcp/falcon && uv sync --frozen --no-dev
 
 # The gateway itself.
 COPY --from=build /app/gateway/dist /app/gateway/dist
 COPY --from=build /app/gateway/node_modules /app/gateway/node_modules
 COPY mcp_servers/mcp-gateway/package.json /app/gateway/package.json
+# config.ts resolves ../catalog/catalog.json relative to dist/.
+COPY mcp_servers/mcp-gateway/catalog /app/gateway/catalog
+# Admin helper, run as `npm run -s gen-jwks` (jose is a runtime dependency).
+COPY mcp_servers/mcp-gateway/scripts/gen-jwks.mjs /app/gateway/scripts/gen-jwks.mjs
 
 RUN chown -R node:node /app
 USER node

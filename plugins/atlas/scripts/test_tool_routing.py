@@ -80,6 +80,18 @@ class BootLinesTests(unittest.TestCase):
         self.assertIn("activate_project", blob)
         self.assertIn("tool-routing.md", blob)
 
+    def test_routes_only_present_tools(self):
+        stack = {"has_code": True, "languages": ["python"], "js_ts": False}
+        lines = tool_routing.boot_lines(stack=stack, present={"serena"})
+        blob = "\n".join(lines)
+        self.assertIn("serena", blob)
+        for absent in ("lean-ctx", "context-mode", "claude-mem"):
+            self.assertNotIn(absent, blob)
+
+    def test_nothing_present_emits_no_routing(self):
+        stack = {"has_code": True, "languages": ["python"], "js_ts": False}
+        self.assertEqual(tool_routing.boot_lines(stack=stack, present=set()), [])
+
     def test_js_mentions_fallow(self):
         lines = tool_routing.boot_lines(
             stack={"has_code": True, "languages": ["typescript"], "js_ts": True}

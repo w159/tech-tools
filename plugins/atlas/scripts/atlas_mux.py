@@ -124,6 +124,36 @@ WORKER_MCP_ALLOW = (
     "mcp__serena__find_implementations",
     "mcp__serena__get_diagnostics_for_file",
 )
+# Scoped per-profile allow rules for claude workers (scope-matrix tools_profile: read | edit | exec). Rule syntax is
+# https://code.claude.com/docs/en/permissions : `Bash(prefix *)` matches the prefix and the bare command, and a compound
+# command is split on && || ; | & newlines with EACH part matched on its own, so `python3 -c '..'; echo "exit=$?"`
+# needs both a python3 rule and an echo rule. No blanket Bash, no writing git subcommands.
+WORKER_READ_ALLOW = ("Read", "Grep", "Glob")
+WORKER_EXEC_ALLOW = tuple(
+    f"Bash({cmd} *)"
+    for cmd in (
+        "python3", "python", "pytest", "uv run", "npm test", "npm run", "yarn test", "yarn run", "pnpm test",
+        "pnpm run", "bun test", "bun run", "node", "go test", "cargo test", "make",
+        "git status", "git diff", "git log", "git show", "git rev-parse", "git ls-files", "git blame",
+        "ls", "cat", "grep", "rg", "sed -n", "echo", "head", "tail", "wc",
+    )
+)
+WORKER_EDIT_ALLOW = ("Edit", "Write", "MultiEdit")
+
+
+def worker_allow(tools_profile=None) -> tuple:
+    """--allowedTools entries for a claude worker: MCP navigation always; read tools, run commands and edit tools
+    widen with the member's tools_profile. An unknown or unset profile keeps the MCP navigation list only."""
+    allow = WORKER_MCP_ALLOW
+    if tools_profile in ("read", "edit", "exec"):
+        allow += WORKER_READ_ALLOW
+    if tools_profile in ("edit", "exec"):
+        allow += WORKER_EXEC_ALLOW
+    if tools_profile == "edit":
+        allow += WORKER_EDIT_ALLOW
+    return allow
+
+
 # omp prints one of these per unreachable MCP server; the run itself is fine.
 NOISE_RE = re.compile(
     r"^(Warning: MCP server .* its tools are unavailable|Extension error\b)"
@@ -514,6 +544,7 @@ def harness_argv(
     permission_mode: str,
     omp_extension: str | None = None,
     cwd: str | None = None,
+    tools_profile: str | None = None,
 ) -> list:
     if harness == "codex":
         # exec --json: one JSON event per line (atlas_panefeed renders them); workspace-write lets the worker edit
@@ -555,7 +586,7 @@ def harness_argv(
         # --allowedTools is variadic: another flag must follow it so it cannot swallow the prompt
         return argv + [
             "--allowedTools",
-            ",".join(WORKER_MCP_ALLOW),
+            ",".join(worker_allow(tools_profile)),
             "--permission-mode",
             permission_mode,
             prompt,
@@ -1031,9 +1062,22 @@ def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> 
         # permission-class mismatch (the interactive lead runs the accepting side); the
         # allow rules cover the brief's two mandatory actions (board-note Bash call,
         # claude-mem MCP search) so an unattended worker never prompts on them
+        # plus worker_allow(tools_profile): the same scoped rules a pane worker gets via --allowedTools,
+        # so a dontAsk claude-bg worker can run its verification commands
         "--settings",
-        '{"crossSessionInbound":"accept","permissions":{"allow":'
-        '["Bash(python3 *atlas_todo.py*)","mcp__claude_mem_mcp_search"]}}',
+        json.dumps(
+            {
+                "crossSessionInbound": "accept",
+                "permissions": {
+                    "allow": [
+                        "Bash(python3 *atlas_todo.py*)",
+                        "mcp__claude_mem_mcp_search",
+                        *worker_allow(getattr(args, "tools_profile", None)),
+                    ]
+                },
+            },
+            separators=(",", ":"),
+        ),
     ]
     if model:
         argv += ["--model", model]
@@ -1145,6 +1189,8 @@ def _spawn_registered(args, root: str, chan) -> int:
     ]
     if args.agents_dir:
         worker += ["--agents-dir", args.agents_dir]
+    if getattr(args, "tools_profile", None):
+        worker += ["--tools-profile", args.tools_profile]
     if model:
         worker += ["--model", model]
     if level:
@@ -1246,6 +1292,7 @@ def cmd_run_worker(args) -> int:
             args.permission_mode,
             args.omp_extension,
             os.path.abspath(args.cwd or root),
+            getattr(args, "tools_profile", None),
         )
     env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
     channel = (os.environ.get("ATLAS_CHANNEL") or "").strip()
@@ -1975,6 +2022,7 @@ def cmd_spawn_team(args) -> int:
             thinking=_team_thinking(args.harness, member["role"]),
             agents_dir=None,
             permission_mode=None,
+            tools_profile=member.get("tools_profile"),
             command_override=None,
             omp_extension=None,
             root=root,
@@ -2258,6 +2306,11 @@ def _parser() -> argparse.ArgumentParser:
             "--permission-mode",
             default=permission_default,
             help="claude --permission-mode (default acceptEdits; claude-bg spawns default dontAsk)",
+        )
+        sp.add_argument(
+            "--tools-profile",
+            choices=("read", "edit", "exec"),
+            help="claude only: scope-matrix tools_profile; widens the worker's scoped --allowedTools rules",
         )
         sp.add_argument(
             "--command-override", help="test-only: shell command replacing the harness"

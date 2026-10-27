@@ -40,12 +40,12 @@ describe('sidebar shell', () => {
     const t = tree();
     const tabs = (['route', 'team', 'channel', 'gates'] as const).map((v) => tab(t, v).props);
     expect(tabs.map((b) => b.hotkey)).toEqual(['r', 't', 'c', 'g']);
-    expect(tabs.map((b) => b.label)).toEqual(['◎ route', '● team', '✉ channel', '✗ 1']);
+    expect(tabs.map((b) => b.label)).toEqual(['◎ route', '● team', '✉ channel', '◈ core ✗1']);
     expect(tabs.every((b) => b.plain === true)).toBe(true);
   });
 
-  test('the gates tab reads ✓ gates when none are open', () => {
-    expect(tab(tree({}, 'team', []), 'gates').props.label).toBe('✓ gates');
+  test('the g tab reads ◈ core when no gate is open', () => {
+    expect(tab(tree({}, 'team', []), 'gates').props.label).toBe('◈ core');
   });
 
   test('the current tab is bold, the others dim; pressing a tab sets that view', () => {

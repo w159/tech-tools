@@ -145,8 +145,8 @@ was registered to the wrong tenant:
 
 ## Related Skills
 
-- [api-patterns](../api-patterns/SKILL.md) - `organizationId` header
+- [api-patterns](../threatlocker-api-patterns/SKILL.md) - `organizationId` header
   and `childOrganizations` body flag
-- [computers](../computers/SKILL.md) - Computers within an org
-- [approval-requests](../approval-requests/SKILL.md) - Per-tenant queue
-- [audit-log](../audit-log/SKILL.md) - Per-tenant Action Log
+- [computers](../threatlocker-computers/SKILL.md) - Computers within an org
+- [approval-requests](../threatlocker-approval-requests/SKILL.md) - Per-tenant queue
+- [audit-log](../threatlocker-audit-log/SKILL.md) - Per-tenant Action Log

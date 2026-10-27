@@ -34,11 +34,13 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atlas_paths  # noqa: E402
+from atlas_memory import _file_lock  # noqa: E402
 
 STATUSES = ("verified", "rejected", "needs-evidence", "open")
 RELPATH = (".atlas", ".run", "findings.json")
@@ -55,18 +57,43 @@ def find_root(start: Path) -> Path | None:
     return root if any((root / m).exists() for m in markers) else None
 
 
-def load(path: Path) -> list:
-    """Existing findings as a list. A missing or unreadable file starts fresh;
-    a file holding {"findings": [...]} is unwrapped so both shapes round-trip."""
+def _quarantine(path: Path) -> Path | None:
+    """Move an unparseable ledger aside (findings.json.corrupt-<ns>) so a later
+    save cannot silently erase it. Returns the new path, or None if the move failed."""
+    dest = path.with_name(f"{path.name}.corrupt-{time.time_ns()}")
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, ValueError):
+        os.replace(path, dest)
+    except OSError:
+        return None
+    return dest
+
+
+def load(path: Path) -> list:
+    """Existing findings as a list. A missing file starts fresh; a file holding
+    {"findings": [...]} is unwrapped so both shapes round-trip. A file that exists
+    but is unreadable/corrupt is quarantined with a stderr warning, never dropped."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return []
+    except OSError:
+        text = None
+    data = None
+    if text is not None:
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
     if isinstance(data, list):
         return data
-    if isinstance(data, dict):
-        items = data.get("findings")
-        return items if isinstance(items, list) else []
+    if isinstance(data, dict) and isinstance(data.get("findings"), list):
+        return data["findings"]
+    moved = _quarantine(path)
+    print(
+        "atlas_finding: WARNING %s is corrupt or not a findings ledger; %s"
+        % (path, "preserved as %s" % moved if moved else "could not be preserved"),
+        file=sys.stderr,
+    )
     return []
 
 
@@ -309,10 +336,11 @@ def main(argv: list | None = None) -> int:
 
     path = root.joinpath(*RELPATH)
     entry = build_entry(args)
-    findings = load(path)
-    findings.append(entry)
     try:
-        save(path, findings)
+        with _file_lock(path):
+            findings = load(path)
+            findings.append(entry)
+            save(path, findings)
     except OSError as exc:
         print("atlas_finding: could not write %s: %s" % (path, exc), file=sys.stderr)
         return 1

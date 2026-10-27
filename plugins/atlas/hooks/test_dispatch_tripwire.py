@@ -249,16 +249,20 @@ class TripwireTest(unittest.TestCase):
         blob = json.dumps(data)
         self.assertIn("Agent", blob)
         self.assertIn("Task", blob)
-        # stronger: the tripwire group's matcher must include Agent and Task
+        # stronger: the tripwire binding's matcher must include Agent, Task and Skill. It is run by
+        # event_dispatch.py (one process per event); hooks.json carries that dispatcher.
+        import event_dispatch
+
         ok = False
-        for grp in data.get("hooks", {}).get("PostToolUse", []):
-            hooks = json.dumps(grp.get("hooks", grp))
-            if "dispatch_tripwire.py" in hooks:
-                self.assertIn("Agent", grp.get("matcher", ""))
-                self.assertIn("Task", grp.get("matcher", ""))
-                self.assertIn("Skill", grp.get("matcher", ""))
+        for name, matcher, _ in event_dispatch.BINDINGS["PostToolUse"]:
+            if name == "dispatch_tripwire":
+                self.assertIn("Agent", matcher)
+                self.assertIn("Task", matcher)
+                self.assertIn("Skill", matcher)
                 ok = True
-        self.assertTrue(ok, "dispatch_tripwire entry not found in PostToolUse")
+        self.assertTrue(ok, "dispatch_tripwire binding not found in PostToolUse")
+        for event in ("PreToolUse", "PostToolUse"):
+            self.assertIn(f'event_dispatch.py\\" {event}', entries)
 
     def _fresh_unmarked_session(self, session_id):
         import atlas_db
@@ -943,17 +947,19 @@ class TripwireTest(unittest.TestCase):
         hj = os.path.join(os.path.dirname(__file__), "hooks.json")
         with open(hj) as f:
             data = json.load(f)  # asserts hooks.json parses as JSON
+        import event_dispatch
+
         pre = data["hooks"]["PreToolUse"]
-        # bash_advisor's Bash registration must be untouched.
-        bash_advisor_ok = any(
-            "bash_advisor.py" in json.dumps(g) and g.get("matcher") == "Bash"
-            for g in pre
+        self.assertTrue(
+            any("event_dispatch.py" in json.dumps(g) for g in pre),
+            "PreToolUse must run the event dispatcher",
         )
-        self.assertTrue(bash_advisor_ok, "bash_advisor Bash registration disturbed")
+        bindings = {n: m for n, m, _ in event_dispatch.BINDINGS["PreToolUse"]}
+        # bash_advisor's Bash registration must be untouched.
+        self.assertEqual(bindings.get("bash_advisor"), "Bash")
         # dispatch_tripwire must be registered on PreToolUse with the full matcher.
-        tw = [g for g in pre if "dispatch_tripwire.py" in json.dumps(g)]
-        self.assertTrue(tw, "dispatch_tripwire not registered on PreToolUse")
-        matcher = tw[0].get("matcher", "")
+        self.assertIn("dispatch_tripwire", bindings)
+        matcher = bindings["dispatch_tripwire"]
         for t in ("Edit", "Write", "MultiEdit", "Read", "Grep", "Glob", "Bash"):
             self.assertIn(t, matcher)
 
@@ -3039,10 +3045,10 @@ class FootprintArmingTest(unittest.TestCase):
         ]
 
     def test_arms_at_third_distinct_code_file_and_advises_once(self):
-        self.assertEqual(self._edit("/repo/x/a.py").stdout.strip(), "")
-        self.assertEqual(self._edit("/repo/x/b.py", tool="Edit").stdout.strip(), "")
+        self.assertEqual(self._edit("x/a.py").stdout.strip(), "")
+        self.assertEqual(self._edit("x/b.py", tool="Edit").stdout.strip(), "")
         self.assertFalse(self._orchestrating())
-        third = self._edit("/repo/x/c.py", tool="MultiEdit")
+        third = self._edit("x/c.py", tool="MultiEdit")
         self.assertTrue(self._orchestrating())
         notes = self._advisories(third.stdout)
         self.assertEqual(len(notes), 1, third.stdout)
@@ -3053,29 +3059,29 @@ class FootprintArmingTest(unittest.TestCase):
         self.assertIn("PostToolUse", third.stdout)
 
     def test_notebook_edit_counts_toward_the_footprint(self):
-        self._edit("/repo/x/a.py")
-        self._edit("/repo/x/b.py")
-        self._edit("/repo/x/n.ipynb", tool="NotebookEdit")
+        self._edit("x/a.py")
+        self._edit("x/b.py")
+        self._edit("x/n.ipynb", tool="NotebookEdit")
         self.assertTrue(self._orchestrating())
 
     def test_does_not_arm_at_two_distinct_files(self):
-        self._edit("/repo/x/a.py")
-        r = self._edit("/repo/x/b.py")
+        self._edit("x/a.py")
+        r = self._edit("x/b.py")
         self.assertEqual(r.stdout.strip(), "")
         self.assertFalse(self._orchestrating())
 
     def test_repeated_edits_to_one_file_do_not_arm(self):
         for _ in range(6):
-            r = self._edit("/repo/x/a.py", tool="Edit")
+            r = self._edit("x/a.py", tool="Edit")
             self.assertEqual(r.stdout.strip(), "")
         self.assertFalse(self._orchestrating())
 
     def test_docs_and_atlas_paths_do_not_count(self):
         for p in (
             "docs/a.md",
-            "/repo/x/docs/b.md",
+            "x/docs/b.md",
             ".atlas/findings.json",
-            "/repo/x/.atlas/.run/todos.json",
+            "x/.atlas/.run/todos.json",
             "docs/c.md",
         ):
             r = self._edit(p)
@@ -3083,12 +3089,12 @@ class FootprintArmingTest(unittest.TestCase):
         self.assertFalse(self._orchestrating())
 
     def test_docs_do_not_pad_the_count_of_real_code_files(self):
-        self._edit("/repo/x/a.py")
+        self._edit("x/a.py")
         self._edit("docs/a.md")
-        self._edit("/repo/x/b.py")
+        self._edit("x/b.py")
         self._edit(".atlas/notes.md")
         self.assertFalse(self._orchestrating())
-        self._edit("/repo/x/c.py")
+        self._edit("x/c.py")
         self.assertTrue(self._orchestrating())
 
     def test_uri_writes_do_not_count(self):
@@ -3107,31 +3113,31 @@ class FootprintArmingTest(unittest.TestCase):
     def test_sidechain_edits_never_arm(self):
         sub = os.path.join(self.tmp, "proj", self.SESSION, "subagents", "agent-1.jsonl")
         for name in ("a.py", "b.py", "c.py", "d.py"):
-            r = self._edit("/repo/x/" + name, transcript=sub)
+            r = self._edit("x/" + name, transcript=sub)
             self.assertEqual(r.stdout.strip(), "")
         self.assertFalse(self._orchestrating())
 
     def test_env_zero_disables(self):
         env = dict(self.env, ATLAS_FOOTPRINT_FILES="0")
         for name in ("a.py", "b.py", "c.py", "d.py"):
-            r = self._edit("/repo/x/" + name, env=env)
+            r = self._edit("x/" + name, env=env)
             self.assertEqual(r.stdout.strip(), "")
         self.assertFalse(self._orchestrating())
 
     def test_env_overrides_the_threshold(self):
         env = dict(self.env, ATLAS_FOOTPRINT_FILES="2")
-        self._edit("/repo/x/a.py", env=env)
+        self._edit("x/a.py", env=env)
         self.assertFalse(self._orchestrating())
-        r = self._edit("/repo/x/b.py", env=env)
+        r = self._edit("x/b.py", env=env)
         self.assertTrue(self._orchestrating())
         self.assertEqual(len(self._advisories(r.stdout)), 1)
 
     def test_invalid_env_falls_back_to_default_three(self):
         env = dict(self.env, ATLAS_FOOTPRINT_FILES="lots")
-        self._edit("/repo/x/a.py", env=env)
-        self._edit("/repo/x/b.py", env=env)
+        self._edit("x/a.py", env=env)
+        self._edit("x/b.py", env=env)
         self.assertFalse(self._orchestrating())
-        self._edit("/repo/x/c.py", env=env)
+        self._edit("x/c.py", env=env)
         self.assertTrue(self._orchestrating())
 
     def test_already_flagged_run_gets_no_footprint_advisory(self):
@@ -3139,15 +3145,15 @@ class FootprintArmingTest(unittest.TestCase):
         self.atlas_db.mark_orchestrating(conn, self.SESSION)
         conn.close()
         for name in ("a.py", "b.py", "c.py"):
-            r = self._edit("/repo/x/" + name)
+            r = self._edit("x/" + name)
             self.assertNotIn("multi-file", r.stdout)
 
     def test_advisory_is_not_repeated_after_arming(self):
         for name in ("a.py", "b.py"):
-            self._edit("/repo/x/" + name)
-        arming = self._edit("/repo/x/c.py")
+            self._edit("x/" + name)
+        arming = self._edit("x/c.py")
         self.assertEqual(len(self._advisories(arming.stdout)), 1)
-        later = self._edit("/repo/x/d.py")
+        later = self._edit("x/d.py")
         self.assertNotIn("multi-file", later.stdout)
         self.assertNotIn("tripwires are now armed", later.stdout)
 
@@ -3165,7 +3171,7 @@ class FootprintArmingTest(unittest.TestCase):
                     "Write",
                     "main",
                     1,
-                    "/repo/x/" + name,
+                    "x/" + name,
                 )
             with patch.object(
                 self.atlas_db, "mark_orchestrating", side_effect=RuntimeError("db")
@@ -3353,6 +3359,7 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         ("Bash", {"command": "ls -la src"}),
         ("Bash", {"command": "rg 'def main' ."}),
         ("Bash", {"command": "cat a.txt | grep err | wc -l"}),
+        ("Bash", {"command": "pytest -q"}),
         ("Bash", {"command": "find . -name '*.py' 2>/dev/null"}),
     )
     COUNTED = (
@@ -3363,7 +3370,7 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         ("Bash", {"command": "git status && touch a.txt"}),
         ("Bash", {"command": "git log | tee out.txt"}),
         ("Bash", {"command": "rm -rf build"}),
-        ("Bash", {"command": "npm test"}),
+        ("Bash", {"command": "npm install"}),
         ("Write", {"file_path": "docs/x.md"}),
         ("Edit", {"file_path": "docs/x.md"}),
     )

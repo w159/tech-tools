@@ -491,10 +491,14 @@ from atlas. Add these to `.gitignore` in real projects.
 
 ## Connectors
 
-Twelve optional MCP servers in `plugins/atlas/.mcp.json` (eleven Node bundles
-under `plugins/atlas/mcp/<name>/server.mjs`, plus CrowdStrike Falcon launched
-with `uv`). Each stays disabled until its `userConfig` credentials exist (51
-config keys across the twelve); nothing is networked otherwise. Status tool:
+Thirteen optional MCP servers in `plugins/armada/.mcp.json`, shipped by the
+armada plugin (twelve Node bundles under `plugins/armada/mcp/<name>/server.mjs`,
+plus CrowdStrike Falcon launched with `uv`). Atlas and armada must be installed
+together for connectors. Each stays disabled until its `userConfig` credentials
+exist (57 config keys across the thirteen, set with `/plugin config` on armada;
+the loaders also fall back to values saved under atlas, and
+`~/.config/atlas/atlas.env` still works); nothing is networked otherwise. MCP
+tools are named `mcp__plugin_armada_<vendor>__*`. Status tool:
 `<vendor>_status` (ConnectWise: `cw_status`); run it first when a call 401s.
 In chat, `/atlas-setup connectors` walks you through setup.
 
@@ -511,11 +515,12 @@ In chat, `/atlas-setup connectors` walks you through setup.
 | Vanta | GRC / compliance | `vanta_client_id`, `vanta_client_secret` | `vanta_status` |
 | Paylocity | HR / payroll | `paylocity_client_id`, `paylocity_client_secret` (+ `paylocity_company_id`) | `paylocity_status` |
 | PAN-OS | Palo Alto firewall / Panorama | `panos_host`, `panos_api_key` (+ username/password for keygen, `panos_target`) | `panos_status` |
+| SonicWall | SonicOS 7 firewall | `sonicwall_host`, `sonicwall_username`, `sonicwall_password` (+ `sonicwall_port`) | `sonicwall_status` |
 | CrowdStrike Falcon | Endpoint, identity, SIEM, SOAR, SaaS posture | `falcon_client_id`, `falcon_client_secret` (+ `falcon_base_url`, `falcon_member_cid`) | `falcon_status` |
 
-Connector source lives in `mcp_servers/` (11 vendor projects, a `_shared/`
+Connector source lives in `mcp_servers/` (the vendor projects, a `_shared/`
 helper, and `mcp-gateway`, an Entra-ID remote gateway not declared in
-`.mcp.json`); `falcon` is vendored at `plugins/atlas/mcp/falcon`.
+`.mcp.json`); `falcon` is vendored at `plugins/armada/mcp/falcon`.
 
 ## Colony and orchestration
 
@@ -890,7 +895,7 @@ tech-tools/
 |- plugins/
 |  |- atlas/                 # the plugin
 |  |  |- .claude-plugin/     # plugin.json + userConfig (51 keys)
-|  |  |- .mcp.json           # 12 connector server definitions
+|  |  |- (no .mcp.json or mcp/: the 13 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
 |  |  |- skills/             # 47 skills
 |  |  |- agents/             # 13 role agents
@@ -933,9 +938,9 @@ tech-tools/
 - **TypeSafe scoring is optional**: off unless `TYPESAFE_API_KEY` is set, or an
   explicit loopback `ATLAS_TYPESAFE_URL` (+ `ATLAS_TYPESAFE_MODEL`).
 - **Connector credentials are optional per server** (see
-  [Connectors](#connectors)). Set them as the plugin's `userConfig` values (51
+  [Connectors](#connectors)). Set them as the armada plugin's `userConfig` values (57
   keys); each server receives them as `CFG_*` env vars (mapped in
-  `plugins/atlas/.mcp.json`) and also reads a plugin-root `.env` via
+  `plugins/armada/.mcp.json`) and also reads a plugin-root `.env` via
   `ATLAS_ENV_FILE`. Nothing is committed.
 - **Dashboard** binds loopback only (`127.0.0.1:7421`, port via
   `ATLAS_DASHBOARD_PORT`) unless `--allow-remote` is passed; see [Workboard](#browser-dashboard-atlas-workboard).

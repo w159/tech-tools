@@ -471,8 +471,8 @@ const config = {
 
 ## Related Skills
 
-- [ConnectWise Tickets](../tickets/SKILL.md) - Ticket management
-- [ConnectWise Companies](../companies/SKILL.md) - Company management
-- [ConnectWise Contacts](../contacts/SKILL.md) - Contact management
-- [ConnectWise Projects](../projects/SKILL.md) - Project management
-- [ConnectWise Time Entries](../time-entries/SKILL.md) - Time tracking
+- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Ticket management
+- [ConnectWise Companies](../psa-companies/SKILL.md) - Company management
+- [ConnectWise Contacts](../psa-contacts/SKILL.md) - Contact management
+- [ConnectWise Projects](../psa-projects/SKILL.md) - Project management
+- [ConnectWise Time Entries](../psa-time-entries/SKILL.md) - Time tracking

@@ -220,6 +220,6 @@ After scheduled maintenance:
 
 ## Related Skills
 
-- [Devices](../devices/SKILL.md) - Device management
-- [Tickets](../tickets/SKILL.md) - Create tickets from alerts
-- [API Patterns](../api-patterns/SKILL.md) - Authentication
+- [Devices](../ninjaone-devices/SKILL.md) - Device management
+- [Tickets](../ninjaone-tickets/SKILL.md) - Create tickets from alerts
+- [API Patterns](../ninjaone-api-patterns/SKILL.md) - Authentication

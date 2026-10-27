@@ -2021,13 +2021,16 @@ class RegisterProjectRefusals(unittest.TestCase):
 
     def test_refuses_non_project_roots(self):
         d = os.path.join(self.home, "Downloads")
-        for p in (
+        roots = [
             self.home,
             d,
             "/tmp",  # noqa: S108  # asserts the literal /tmp prefix
-            "/private/tmp",
             tempfile.gettempdir(),
-        ):
+        ]
+        # /private/tmp is macOS's real path for /tmp; on Linux it is just an unrelated, nonexistent path.
+        if os.path.realpath("/private/tmp") == os.path.realpath("/tmp"):
+            roots.append("/private/tmp")
+        for p in roots:
             self.assertIsNone(atlas_db.register_project(self.conn, p), p)
         self.assertEqual(self._rows(), [])
 

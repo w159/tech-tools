@@ -1,8 +1,11 @@
 # Connector Provisioning
 
 Vendor MCP connectors are provisioned per department. Credentials are
-collected via the atlas plugin's `userConfig` keys (set through `/plugin
-config`), never through free-text chat.
+collected via the armada plugin's `userConfig` keys (set through `/plugin
+config` on armada), never through free-text chat. Armada also ships the
+connector servers (`plugins/armada/.mcp.json`, `plugins/armada/mcp/`). The
+loaders fall back to values saved under the atlas plugin, and
+`~/.config/atlas/atlas.env` still works.
 
 ## Connector ownership
 
@@ -17,7 +20,10 @@ config`), never through free-text chat.
 | ThreatLocker | security | threatlocker_api_key | api_key |
 | Blumira | security | blumira_jwt_token (or blumira_client_id + blumira_client_secret) | jwt_token OR client_id + client_secret |
 | CIPP | microsoft-365 | cipp_base_url, cipp_api_key (or cipp_tenant_id + cipp_client_id + cipp_client_secret) | base_url + (api_key OR tenant_id + client_id + client_secret) |
+| CrowdStrike Falcon | security | falcon_client_id, falcon_client_secret, falcon_base_url, falcon_member_cid | client_id + client_secret |
 | Paylocity | hr | paylocity_client_id, paylocity_client_secret, paylocity_company_id | client_id + client_secret + company_id |
+| PAN-OS | none assigned | panos_host, panos_api_key (or panos_username + panos_password), panos_target, panos_verify_tls, panos_rest_version | host + (api_key OR username + password) |
+| SonicWall | none assigned | sonicwall_host, sonicwall_username, sonicwall_password, sonicwall_port, sonicwall_verify_tls, sonicwall_session_override | host + username + password |
 | PandaDoc | finance | pandadoc_api_key | api_key |
 | Pax8 | finance | pax8_mcp_token | mcp_token |
 
@@ -32,7 +38,7 @@ For each connector a department needs:
    - Which `userConfig` keys to set (from the table above)
    - Where to get each credential (vendor portal path)
    - That optional base-url keys can stay blank to use the vendor default
-   - To set keys via `/plugin config` on the atlas plugin
+   - To set keys via `/plugin config` on the armada plugin
 3. **Verify.** After the user sets the keys, recheck and confirm the connector
    is enabled.
 4. **Record.** Update the org config's `connectors.provisioned` list.

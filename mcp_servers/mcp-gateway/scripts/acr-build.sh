@@ -9,18 +9,35 @@
 # real `docker build`'s own COPY-time filtering, not az acr build's packer.
 # Measured live on this repo: `az acr build ... .` from the repo root
 # uploaded 726 MiB (including the real secret file `plugins/atlas/.env` and
-# a 47 MB macOS-only stale Python venv under `plugins/atlas/mcp/falcon/`)
+# a 47 MB macOS-only stale Python venv under `plugins/armada/mcp/falcon/`)
 # even with a root `.dockerignore` in place; staging only the files this
 # Dockerfile actually needs into a scratch directory first drops that to
 # 1.88 MiB. For a GLBA/Reg-S-P-regulated deployment, "the build pipeline
 # never receives files it doesn't need" is not optional.
 #
 # Usage: mcp_servers/mcp-gateway/scripts/acr-build.sh [registry] [resource-group] [subscription]
+#   Each value may instead come from ACR_REGISTRY, ACR_RESOURCE_GROUP and
+#   ACR_SUBSCRIPTION. There are no defaults; the script refuses to run
+#   without all three. Optional: IMAGE_TAG (default: latest).
 set -euo pipefail
 
-REGISTRY="${1:-gwhmcpgateway}"
-RESOURCE_GROUP="${2:-gwh-mcp-gateway-rg}"
-SUBSCRIPTION="${3:-d10ed4e7-8973-4fb6-aa90-1d31b8be10b3}"
+usage() {
+  cat >&2 <<'USAGE'
+usage: acr-build.sh [registry] [resource-group] [subscription]
+  or set ACR_REGISTRY, ACR_RESOURCE_GROUP and ACR_SUBSCRIPTION.
+All three are required; there are no defaults. Optional: IMAGE_TAG (default: latest).
+USAGE
+}
+
+REGISTRY="${1:-${ACR_REGISTRY:-}}"
+RESOURCE_GROUP="${2:-${ACR_RESOURCE_GROUP:-}}"
+SUBSCRIPTION="${3:-${ACR_SUBSCRIPTION:-}}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+if [ -z "$REGISTRY" ] || [ -z "$RESOURCE_GROUP" ] || [ -z "$SUBSCRIPTION" ]; then
+  echo "acr-build.sh: registry, resource group and subscription are required." >&2
+  usage
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GATEWAY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -29,14 +46,17 @@ REPO_ROOT="$(cd "$GATEWAY_DIR/../.." && pwd)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
-mkdir -p "$STAGE/mcp_servers/mcp-gateway" "$STAGE/plugins/atlas"
+mkdir -p "$STAGE/mcp_servers/mcp-gateway" "$STAGE/plugins/armada"
 
 cp "$GATEWAY_DIR/Dockerfile" "$GATEWAY_DIR/package.json" "$GATEWAY_DIR/package-lock.json" "$GATEWAY_DIR/tsconfig.json" \
   "$STAGE/mcp_servers/mcp-gateway/"
 cp -R "$GATEWAY_DIR/src" "$STAGE/mcp_servers/mcp-gateway/src"
+cp -R "$GATEWAY_DIR/catalog" "$STAGE/mcp_servers/mcp-gateway/catalog"
+mkdir -p "$STAGE/mcp_servers/mcp-gateway/scripts"
+cp "$GATEWAY_DIR/scripts/gen-jwks.mjs" "$STAGE/mcp_servers/mcp-gateway/scripts/"
 
-cp -R "$REPO_ROOT/plugins/atlas/mcp" "$STAGE/plugins/atlas/mcp"
-rm -rf "$STAGE/plugins/atlas/mcp/falcon/.venv" "$STAGE/plugins/atlas/mcp/falcon/.venv.nosync.noindex"
+cp -R "$REPO_ROOT/plugins/armada/mcp" "$STAGE/plugins/armada/mcp"
+rm -rf "$STAGE/plugins/armada/mcp/falcon/.venv" "$STAGE/plugins/armada/mcp/falcon/.venv.nosync.noindex"
 find "$STAGE" -name ".env" -delete
 find "$STAGE" -name "__pycache__" -type d -prune -exec rm -rf {} +
 
@@ -51,9 +71,9 @@ az acr build \
   --registry "$REGISTRY" \
   --resource-group "$RESOURCE_GROUP" \
   --subscription "$SUBSCRIPTION" \
-  --image mcp-gateway:latest \
+  --image "mcp-gateway:$IMAGE_TAG" \
   --file mcp_servers/mcp-gateway/Dockerfile \
   "$STAGE"
 
-echo "Built and pushed. To deploy: get the digest and redeploy the Container App by exact digest + a new --revision-suffix (a bare :latest tag update does not roll a new revision):"
-echo "  az acr repository show --name $REGISTRY --image mcp-gateway:latest --query digest -o tsv"
+echo "Built and pushed. To deploy: get the digest and redeploy the Container App by exact digest + a new --revision-suffix (a bare tag update does not roll a new revision):"
+echo "  az acr repository show --name $REGISTRY --image "mcp-gateway:$IMAGE_TAG" --query digest -o tsv"

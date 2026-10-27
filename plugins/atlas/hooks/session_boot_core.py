@@ -548,7 +548,11 @@ def write_dirty_snapshot(cwd, session_id):
 
         from docs_drift import find_root as _find_docs_root
 
-        root = _find_docs_root(Path(cwd)) or Path(cwd)
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+        import atlas_scope
+
+        # Same root rule as completion_gate_core.main(): docs root, else git top.
+        root = _find_docs_root(Path(cwd)) or Path(atlas_scope.project_root(str(cwd)))
         target = snapshot_path(root, session_id)
         if os.path.exists(target):
             return None
@@ -1188,7 +1192,8 @@ def main():
         import atlas_paths
 
         snapshot = atlas_memory.load_snapshot(
-            root=atlas_paths.project_root(payload.get("cwd") or os.getcwd())
+            root=atlas_paths.project_root(payload.get("cwd") or os.getcwd()),
+            wrap=False,
         )
         # Project lessons first: they are the ones this session can act on.
         parts = [snapshot[k] for k in ("project", "memory") if snapshot.get(k)]
@@ -1207,6 +1212,10 @@ def main():
                 memory_block = (
                     f"{head}\n+{max(total - kept, 1)} more in .atlas/memory/MEMORY.md"
                 )
+            # Recalled notes are quoted untrusted data, never instructions.
+            from recalled_memory import wrap_recalled_memory
+
+            memory_block = wrap_recalled_memory(memory_block) or None
 
     # Hash already-dirty non-docs paths so the Stop gate's delegation mandate can
     # tell shell-written code from inherited dirt. `git status` + hashing costs 60-90 ms on a big dirty tree,
@@ -1355,7 +1364,17 @@ def main():
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import tool_routing
 
-        for line in tool_routing.boot_lines(root=payload.get("cwd") or os.getcwd()):
+        present = {
+            tool
+            for tool, found in (
+                ("serena", has_cmd("serena") or tool_routing.mcp_configured("serena", boot_root)),
+                ("lean-ctx", has_cmd("lean-ctx") or tool_routing.mcp_configured("lean-ctx", boot_root)),
+                ("context-mode", bool(ctx)),
+                ("claude-mem", bool(mem)),
+            )
+            if found
+        }
+        for line in tool_routing.boot_lines(root=boot_root, present=present):
             if line and line not in lines:
                 lines.append(line)
 

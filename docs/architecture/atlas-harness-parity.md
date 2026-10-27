@@ -256,7 +256,7 @@ Still open:
 - Connector credential watch: omp's MCP name mint drops the server/tool separator (harness limit). The hook bridge
   re-splits the `connectorWatch` servers of `contracts/mcp-servers.json` back to `mcp__<server>__<tool>`
   (`omp/README.md`, Tool-hook bridge additions), so the six hooks.json connector servers are covered; any other
-  MCP server is passed through unchanged and not watched. Also split: `atlas_connectwise` and `mcp_search`; any `xd://mcp__` write is an MCP name (never Write); `matcherNames()` adds the `mcp__plugin_atlas_<srv>__` alias so the watch's matcher fires for atlas connectors.
+  MCP server is passed through unchanged and not watched. Also split: `atlas_connectwise` and `mcp_search`; any `xd://mcp__` write is an MCP name (never Write); `matcherNames()` adds the `mcp__plugin_armada_<srv>__` alias (and the pre-move `mcp__plugin_atlas_<srv>__` one) so the watch's matcher fires for armada connectors.
 - The output style's Claude-only `TodoWrite` gating paragraph (`CLAUDE_CODE_ENABLE_TODO_TOOLS`, `ToolSearch`) is
   no longer rendered on omp: `omp/style.ts:123` (`adaptTodoGatingForOmp`) rewrites it to one actionable clause
   before the tool-name translation (9.0.0). The source file and the contract test that pins it for Claude Code

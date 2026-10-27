@@ -226,7 +226,7 @@ Note: the connected KnowBe4 Reporting API does not expose phishing template brow
 
 ## Related Skills
 
-- [KnowBe4 Training](../training/SKILL.md) - Training campaign management and enrollment
-- [KnowBe4 Users](../users/SKILL.md) - User management and risk scores
-- [KnowBe4 Reporting](../reporting/SKILL.md) - Security awareness metrics and dashboards
-- [KnowBe4 API Patterns](../api-patterns/SKILL.md) - Authentication, pagination, and rate limits
+- [KnowBe4 Training](../knowbe4-training/SKILL.md) - Training campaign management and enrollment
+- [KnowBe4 Users](../knowbe4-users/SKILL.md) - User management and risk scores
+- [KnowBe4 Reporting](../knowbe4-reporting/SKILL.md) - Security awareness metrics and dashboards
+- [KnowBe4 API Patterns](../knowbe4-api-patterns/SKILL.md) - Authentication, pagination, and rate limits

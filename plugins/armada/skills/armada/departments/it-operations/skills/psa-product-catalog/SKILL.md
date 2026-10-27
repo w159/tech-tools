@@ -325,6 +325,6 @@ conditions=_info/lastUpdated>=[2026-01-01T00:00:00Z]
 
 ## Related Skills
 
-- [ConnectWise Tickets](../tickets/SKILL.md)  -  using catalog items as ticket product charges
-- [ConnectWise Projects](../projects/SKILL.md)  -  phase products and project service items
-- [ConnectWise API Patterns](../api-patterns/SKILL.md)  -  query syntax, JSON Patch, pagination
+- [ConnectWise Tickets](../psa-tickets/SKILL.md)  -  using catalog items as ticket product charges
+- [ConnectWise Projects](../psa-projects/SKILL.md)  -  phase products and project service items
+- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md)  -  query syntax, JSON Patch, pagination

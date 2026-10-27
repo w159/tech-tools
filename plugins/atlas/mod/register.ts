@@ -13,7 +13,9 @@ import { PHASES, intentToArgv } from './intents';
 import { bandTree, railPhase, type BandHandlers } from './band';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
-import { gatesError, headerGroup, parseGates } from './gates';
+import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
+import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
+import { coreReport, coreStatus } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { registerDiscipline } from './discipline';
 import { PHASE_RE, registerRestyle } from './restyle';
@@ -67,6 +69,8 @@ const lastHeaderState = atom({ plugin: 'atlas', key: 'lastHeader' } as const, nu
 const gatesState = atom({ plugin: 'atlas', key: 'gates' } as const, []);
 const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'route'); // docs and the tab strip list route first
 const todoExpandedState = atom({ plugin: 'atlas', key: 'todoExpanded' } as const, null as boolean | null); // pane key `o` override; null follows ATLAS_TODO_EXPANDED
+const coreState = atom({ plugin: 'atlas', key: 'core' } as const, null); // CoreModel or null; written by coreTick, read by the band and pane renders
+const headerTallyState = atom({ plugin: 'atlas', key: 'headerTally' } as const, { ok: 0, total: 0 }); // main-agent answers that opened with the ATLAS header, of all answers
 const todoExpanded = async ($: EngineInterface): Promise<boolean> => (await read($, todoExpandedState)) ?? (await $.env.get('ATLAS_TODO_EXPANDED').catch(() => undefined)) === '1';
 
 // ---- module caches left out of $.state ---------------------------------------
@@ -90,6 +94,13 @@ let nameMemo: Record<string, string> = {};
 let gatesBusy = false;
 let pendingDrift: string[] = [];
 let paneChecked = false; // the unasked pane open is decided once per session
+let dockWanted = false; // set by the first AbovePrompt render with a viewport, acted on by dockTick (renders may not write)
+let coreSeen: Set<string> | null = null; // verdict `id:status` seen by the last coreTick; null until its first (baseline) read
+let coreFinished: Record<string, boolean> = {}; // worker -> its offload had finished at the last coreTick
+let coreFiles: Record<string, { key: string; text: string }> = {}; // core inputs keyed by path, re-read only when size or mtime moved
+let coreTouched = new Set<string>(); // paths read by the build in progress; the rest are evicted after it
+let coreFindingsOk = true; // findings.json was readable in the last buildCore
+let soundOn: () => boolean = () => false;
 let tickTimer: { cancel(): void } | null = null;
 /** A spawn-recorded agent the host list does not (yet) contain is only presumed gone after this long. */
 const SPAWN_GRACE_MS = 15_000;
@@ -356,8 +367,17 @@ async function rebuild($: EngineInterface): Promise<void> {
 	}
 }
 
+/** The unasked docked open the first render asked for, done from a tick where `$.state` writes are allowed. */
+export async function dockTick($: EngineInterface): Promise<void> {
+	if (!dockWanted) return;
+	dockWanted = false;
+	await update($, paneOpenedState, () => true);
+	void $.ui.open(PANE_DOCK).then(toastUnplaced($));
+}
+
 /** 1.5 s tick: rebuild only when the data files moved. */
 async function rebuildTick($: EngineInterface): Promise<void> {
+	await dockTick($);
 	if (builder === null) return;
 	const fingerprint = await dataFingerprint($);
 	if (fingerprint === lastFingerprint && (await read($, snapshotState)) !== null) return;
@@ -551,6 +571,119 @@ function bandHandlers($: EngineInterface): BandHandlers {
 	};
 }
 
+// ---- the Atlas core -----------------------------------------------------------
+
+/** A fresh session: the next coreTick is a baseline again. */
+export function resetCore(): void {
+	coreSeen = null;
+	coreFinished = {};
+	coreFiles = {};
+	coreTouched = new Set();
+	coreFindingsOk = true;
+}
+
+/** `<path>` text, re-read only when its size or mtime moved; null when missing or unreadable. */
+async function readCached($: EngineInterface, path: string): Promise<string | null> {
+	const st = await $.fs.stat(path).catch(() => undefined);
+	if (st === undefined) return null;
+	coreTouched.add(path);
+	const key = `${st.size}:${st.mtimeMs}`;
+	const hit = coreFiles[path];
+	if (hit?.key === key) return hit.text;
+	const text = await $.fs.read(path).catch(() => undefined);
+	if (text === undefined) return null;
+	coreFiles[path] = { key, text };
+	return text;
+}
+
+const parses = (text: string): boolean => {
+	try {
+		JSON.parse(text);
+		return true;
+	} catch {
+		return false;
+	}
+};
+
+/** `readCached`, '' when missing. */
+const readGrown = async ($: EngineInterface, path: string): Promise<string> => (await readCached($, path)) ?? '';
+
+const namesIn = async ($: EngineInterface, dir: string, keep: (name: string) => boolean): Promise<string[]> =>
+	(await $.fs.list(dir).catch(() => [])).map((e) => e.name).filter(keep).sort();
+
+/** Board `report` notes (ts in epoch seconds) from .atlas/.run/board/*.jsonl. */
+function reportsOf(text: string): ReportNote[] {
+	return text.split('\n').flatMap((line): ReportNote[] => {
+		try {
+			const n = JSON.parse(line) as { kind?: unknown; owner?: unknown; text?: unknown; ts?: unknown };
+			return n.kind === 'report' && typeof n.owner === 'string' && typeof n.text === 'string' ? [{ owner: n.owner, text: n.text, at: (typeof n.ts === 'number' ? n.ts : 0) * 1000 }] : [];
+		} catch {
+			return [];
+		}
+	});
+}
+
+/** The core model from the run scratch under the snapshot root; null without a board root. Reads only. */
+export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
+	const snap = await read($, snapshotState);
+	const root = snap?.root || '';
+	if (snap === null || root === '') return null;
+	const base = `${root.replace(/\/+$/, '')}/.atlas/.run`;
+	coreTouched = new Set();
+	const teams = await Promise.all((await namesIn($, `${base}/teams`, (n) => n.endsWith('.json'))).map(async (name) => ({ name, text: await readGrown($, `${base}/teams/${name}`) })));
+	const logNames = await namesIn($, `${base}/logs`, (n) => n.endsWith('.log') && n !== 'atlas_mux.log');
+	const logs: Record<string, string> = {};
+	for (const n of logNames) logs[n.replace(/\.log$/, '')] = await readGrown($, `${base}/logs/${n}`);
+	const boards = await namesIn($, `${base}/board`, (n) => n.endsWith('.jsonl'));
+	const reports = (await Promise.all(boards.map(async (n) => reportsOf(await readGrown($, `${base}/board/${n}`))))).flat();
+	const findings = await readCached($, `${base}/findings.json`);
+	coreFindingsOk = findings !== null && (findings.trim() === '' || parses(findings)); // a partial write keeps the seen set
+	const matrix = await readGrown($, `${$.plugin.root}/contracts/scope-matrix.json`);
+	for (const path of Object.keys(coreFiles)) if (!coreTouched.has(path)) delete coreFiles[path];
+	return coreModel({
+		findings: findings ?? '',
+		teams,
+		matrix,
+		logs,
+		reports,
+		todos: snap.todos ?? [],
+		header: await read($, headerTallyState),
+		openGates: openGateCount(await gateGroups($)),
+	});
+}
+
+/** Toasts for what moved since the last read: new verdicts, workers whose offload finished. The first read toasts nothing. */
+function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null): void {
+	if (seen === null) return;
+	for (const v of m.verdicts) {
+		if (seen.has(`${v.id}:${v.status}`)) continue;
+		if (v.status === 'rejected') {
+			$.ui.toast(`✖ REFUTED ${v.id}: ${v.title}`);
+			if (soundOn()) void $.audio.play({ asset: 'mod/fx/fail.wav' }).catch(() => {});
+		} else $.ui.toast(v.status === 'verified' ? `✔ verified ${v.id}: ${v.title}` : `? ${v.id} needs evidence`);
+	}
+	for (const w of m.offload.workers) if (w.finished && !coreFinished[w.name]) $.ui.toast(`⇆ ${w.name} done: ${tok(w.kept)} kept in tmux, ${tok(w.returned)} back`);
+}
+
+/** MUX_MS tick (interactive sessions, never from a render): rebuild the core, toast what moved, keep the status line, store it when it changed. */
+export async function coreTick($: EngineInterface): Promise<void> {
+	try {
+		if (!(await read($, isModOn)) || !(await read($, isInteractive))) return;
+		const built = await buildCore($);
+		if (built === null) return;
+		const first = coreSeen === null;
+		coreToasts($, built, coreSeen);
+		if (coreFindingsOk) coreSeen = new Set(built.verdicts.map((v) => `${v.id}:${v.status}`)); // a missing findings.json keeps the seen set
+		coreFinished = Object.fromEntries(built.offload.workers.map((w) => [w.name, w.finished]));
+		const model = hasCore(built) ? built : null;
+		if (JSON.stringify(model) === JSON.stringify(await read($, coreState)) && !first) return;
+		await update($, coreState, () => model);
+		$.ui.status(coreStatus(model));
+	} catch (err) {
+		$.ui.log(`atlas: core tick failed: ${String(err)}`, { to: 'debug' });
+	}
+}
+
 /** Script groups plus the header group built from the last answer. */
 async function gateGroups($: EngineInterface): Promise<GateGroup[]> {
 	return [...(await read($, gatesState)).filter((g) => g.id !== 'header'), headerGroup(await read($, lastHeaderState))];
@@ -579,6 +712,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	});
 	registerRestyle(on); // its turn.start also drops the previous turn's header phase
 	registerNotify(on, { soundEnabled: () => options.atlas_mod_sound === true });
+	soundOn = () => options.atlas_mod_sound === true;
 
 	// Session boot: read the kill switch, resolve the board, build the first
 	// snapshot, start timers and register commands — interactive sessions only;
@@ -593,6 +727,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			await update($, taskAgentsState, () => []);
 			await update($, paneOpenedState, () => false);
 			paneChecked = false;
+			dockWanted = false;
 			if (!modOn) return next(e);
 			const interactive = e.isInteractive;
 			await update($, isInteractive, () => interactive);
@@ -604,12 +739,15 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			muxAgents = [];
 			muxFirstSeen = {};
 			muxCalls = {};
+			resetCore();
+			await update($, headerTallyState, () => ({ ok: 0, total: 0 }));
 			const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
 			await builder.init(e.cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(e.cwd), await gitBranch($, e.cwd));
 			await rebuild($);
 			if (interactive) {
 				await $.command.register({ name: 'atlas-cc', description: 'Open and focus the Atlas sidebar' });
 				await $.command.register({ name: 'atlas-say', description: 'Post a note to the lead channel', argumentHint: '<message>' });
+				await $.command.register({ name: 'atlas-core', description: 'Show the Atlas core: contract, verdicts, offload, routes' });
 				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
 				$.clock.every(REBUILD_MS, () => {
 					void rebuildTick($);
@@ -619,11 +757,13 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 				});
 				$.clock.every(MUX_MS, () => {
 					void muxTick($);
+					void coreTick($);
 				});
 				$.clock.every(GATES_MS, () => {
 					void runGates($);
 				});
 				void runGates($);
+				void coreTick($);
 				// The tick only runs while a worker is live, so an idle session redraws nothing.
 				tickTimer?.cancel();
 				tickTimer = $.clock.every(TICK_MS, () => {
@@ -662,6 +802,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			if (e.agentId === undefined) {
 				const phase = headerPhaseOf(e.answer, await read($, snapshotState));
 				await update($, headerPhaseState, () => phase);
+				await update($, headerTallyState, (t) => ({ ok: t.ok + +(phase !== null), total: t.total + 1 }));
 				void runGates($);
 			} else {
 				const agentId = e.agentId;
@@ -679,18 +820,17 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
 		if (e.surface !== 'terminal' || e.props.hasSurvey || !(await read($, isModOn)) || !(await read($, isInteractive))) return next(e);
 		// Unasked, the pane docks only beside a fullscreen transcript wide enough for it; checked once, at the first render that knows the viewport.
+		// Drawing is pure: the engine denies a $.state write made while ui.render dispatches (the hook is then
+		// skipped and the band never draws). The render only notes the wish; dockTick opens the pane.
 		if (!paneChecked && e.viewport) {
 			paneChecked = true;
-			if (shouldDock(e.viewport)) {
-				await update($, paneOpenedState, () => true);
-				void $.ui.open(PANE_DOCK).then(toastUnplaced($));
-			}
+			dockWanted = shouldDock(e.viewport);
 		}
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);
 		lastRailPhase = railPhase(snapshot, lastRailPhase); // a blocked reply keeps the phase lit before it
-		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($) }, bandHandlers($));
+		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState) }, bandHandlers($));
 		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
 	});
 
@@ -702,6 +842,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return sidebarTree($.ui.resolve(e), {
 			snapshot,
 			gates: await gateGroups($),
+			core: await read($, coreState),
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
@@ -721,6 +862,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		toastUnplaced($)(await $.ui.open(PANE_ON_DEMAND));
 		void rebuild($);
 		return {};
+	});
+
+	// /atlas-core — the four pillars as text; computed fresh, no UI needed.
+	on('command.run', { command: 'atlas-core' }, async ($) => {
+		const model = await buildCore($).catch(() => null);
+		return { text: coreReport(hasCore(model) ? model : null) };
 	});
 
 	// Session over: the spinner clock stops.

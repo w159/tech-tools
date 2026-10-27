@@ -275,7 +275,7 @@ That is the whole test burden; no broader suite.
 ## As shipped
 
 60 tools. Verified by `npm run test:boot` against
-`plugins/atlas/mcp/panos/server.mjs`: 2 tools with no credentials, 3 in the
+`plugins/armada/mcp/panos/server.mjs`: 2 tools with no credentials, 3 in the
 bootstrap state, 60 with a key, 32 of them `DESTRUCTIVE:`-prefixed, and
 `panos_system_reboot` reading `DESTRUCTIVE: VISIBLE-TO-OTHERS: ...`.
 
@@ -313,8 +313,8 @@ Redacted evidence: `.atlas/evidence/2026-09-17-panos-live-validation.md`.
 | REST version | the `v11.1` default matched the appliance release |
 
 14 of 14 read-only steps passed, driven through the shipped bundle exactly as
-`plugins/atlas/.mcp.json` launches it
-(`node --import plugins/atlas/mcp/_env/load.mjs plugins/atlas/mcp/panos/server.mjs`),
+`plugins/armada/.mcp.json` launches it
+(`node --import plugins/armada/mcp/_env/load.mjs plugins/armada/mcp/panos/server.mjs`),
 not through `dist/` and not by calling the client library directly.
 `tools/list` returned 60 tools with a real key present.
 
@@ -431,10 +431,10 @@ The rules:
 - [x] `mcp_servers/panos-mcp/src/annotate-tool.ts` + the three effect-class wrappers in `src/domains/_helpers.ts` - one decision per tool drives both the `DESTRUCTIVE:` prefix and the `readOnlyHint`/`destructiveHint`/`idempotentHint` annotations; 27 read / 32 mutating / 1 passthrough, nothing unclassified, and name-pattern inference is gone
 - [x] `mcp_servers/panos-mcp/manifest.json` user_config (seven keys, matching `plugin.json`)
 - [x] `mcp_servers/panos-mcp/package.json` at 0.2.0 (was 0.1.0; the user-visible error text, tool descriptions, and `panos_status` output all changed)
-- [x] `npm run build` + `bundle:atlas` -> `plugins/atlas/mcp/panos/server.mjs` (392,960 bytes, rebuilt after the annotation change; two earlier figures in this repo's history - "377 KB" and 394,516 bytes - are both stale, the first predating the live-run fixes and the second predating the annotation fix)
+- [x] `npm run build` + `bundle:atlas` -> `plugins/armada/mcp/panos/server.mjs` (392,960 bytes, rebuilt after the annotation change; two earlier figures in this repo's history - "377 KB" and 394,516 bytes - are both stale, the first predating the live-run fixes and the second predating the annotation fix)
 - [x] `npm run pack:mcpb` -> `panos-mcp.mcpb`, gitignored by `.gitignore:397` (30,884,839 bytes, 3022 entries). Both digests of that same file, algorithm named because a bare "shasum" invites a future reader to read a mismatch into two different algorithms: `shasum -a 1` = `47234788344b483b7db4a82187d5240777452acd`, `shasum -a 256` = `f8d48f51f3d8ad276734fdc9c8e9510ec8b61ff01a327b89c78a3adb7ebaf2b3`.
-- [ ] MCP `serverInfo.version` still reads `0.1.0`. That string is a literal at `src/server.ts:21` rather than read from `package.json`, so it survived the annotation rebuild: `grep -o 'name:"panos-mcp",version:"[^"]*"' plugins/atlas/mcp/panos/server.mjs` still returns `0.1.0` in the current bundle. Deliberately deferred to its own change rather than folded into a safety fix: correcting it forces a fresh `build` + `bundle:atlas` + `pack:mcpb`, which moves the size and both digests two lines above. Those figures should move once, on purpose, with the version bump - not as a side effect of an unrelated commit. Until then the 0.2.0 bump is metadata-only, and this box stays unticked rather than being quietly counted as done.
-- [x] `plugins/atlas/.mcp.json` server entry with seven `CFG_PANOS_*` values
+- [ ] MCP `serverInfo.version` still reads `0.1.0`. That string is a literal at `src/server.ts:21` rather than read from `package.json`, so it survived the annotation rebuild: `grep -o 'name:"panos-mcp",version:"[^"]*"' plugins/armada/mcp/panos/server.mjs` still returns `0.1.0` in the current bundle. Deliberately deferred to its own change rather than folded into a safety fix: correcting it forces a fresh `build` + `bundle:atlas` + `pack:mcpb`, which moves the size and both digests two lines above. Those figures should move once, on purpose, with the version bump - not as a side effect of an unrelated commit. Until then the 0.2.0 bump is metadata-only, and this box stays unticked rather than being quietly counted as done.
+- [x] `plugins/armada/.mcp.json` server entry with seven `CFG_PANOS_*` values
 - [x] `plugins/atlas/.claude-plugin/plugin.json` user_config block
 - [x] `README.md` connector row
 - [x] `.env.template`
@@ -451,7 +451,7 @@ carried a stale figure from an earlier build. A `[x]` here means a command was
 run and its output read, not that the step was intended.
 
 The `CFG_` case matters on its own: `.mcp.json` injects `CFG_PANOS_*`, and
-`plugins/atlas/mcp/_env/load.mjs` strips the prefix. It does so generically for
+`plugins/armada/mcp/_env/load.mjs` strips the prefix. It does so generically for
 any `CFG_` key rather than from a per-vendor list, but the probe exercises that
 path anyway, because a connector that loads with bare env names and silently
 shows two tools under the real plugin invocation is the exact failure

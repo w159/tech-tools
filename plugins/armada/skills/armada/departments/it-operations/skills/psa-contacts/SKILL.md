@@ -352,6 +352,6 @@ Note Fields:
 
 ## Related Skills
 
-- [ConnectWise Companies](../companies/SKILL.md) - Company management
-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
+- [ConnectWise Companies](../psa-companies/SKILL.md) - Company management
+- [ConnectWise Tickets](../psa-tickets/SKILL.md) - Service tickets
+- [ConnectWise API Patterns](../psa-api-patterns/SKILL.md) - Query syntax and auth

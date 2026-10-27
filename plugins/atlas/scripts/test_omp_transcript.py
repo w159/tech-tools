@@ -1520,23 +1520,22 @@ def _mcp_contract():
 
 
 def _connector_matcher_servers():
-    """Server names in the matcher of the hooks.json hook that runs connector_credential_watch.py."""
-    with open(os.path.join(HOOKS, "hooks.json"), encoding="utf-8") as fh:
-        events = json.load(fh)["hooks"]
-    for groups in events.values():
-        for group in groups:
-            if any(
-                "connector_credential_watch.py" in h.get("command", "")
-                for h in group["hooks"]
-            ):
-                names = []
-                for alt in group["matcher"].split("|"):
-                    name = (
-                        alt.strip().removeprefix("mcp__").removesuffix(".*").rstrip("_")
-                    )
-                    if name:
-                        names.append(name)
-                return names
+    """Server names in the matcher of the binding that runs connector_credential_watch.py
+    (hooks/event_dispatch.py BINDINGS, which hooks.json's PostToolUse dispatcher executes)."""
+    if HOOKS not in sys.path:
+        sys.path.insert(0, HOOKS)
+    import event_dispatch
+
+    for name, matcher, _ in event_dispatch.BINDINGS["PostToolUse"]:
+        if name == "connector_credential_watch":
+            names = []
+            for alt in matcher.split("|"):
+                server = (
+                    alt.strip().removeprefix("mcp__").removesuffix(".*").rstrip("_")
+                )
+                if server:
+                    names.append(server)
+            return names
     raise AssertionError("no hook runs connector_credential_watch.py")
 
 

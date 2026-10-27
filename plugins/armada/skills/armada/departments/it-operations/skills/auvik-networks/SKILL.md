@@ -91,6 +91,6 @@ There is no direct "list devices in this network" call - you list devices, list 
 
 ## Related Skills
 
-- [devices](../devices/SKILL.md)
-- [alerts](../alerts/SKILL.md)
-- [api-patterns](../api-patterns/SKILL.md)
+- [devices](../auvik-devices/SKILL.md)
+- [alerts](../auvik-alerts/SKILL.md)
+- [api-patterns](../auvik-api-patterns/SKILL.md)

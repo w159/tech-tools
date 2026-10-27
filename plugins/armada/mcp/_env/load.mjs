@@ -71,7 +71,17 @@ if (process.env.ATLAS_ENV_FILE) loadEnvFile(process.env.ATLAS_ENV_FILE, "ATLAS_E
 // Helper for step 3: omp doesn't expand ${user_config.*}; read the same saved options Claude Code
 // would have used. In memory only (never written/logged); fails soft.
 const PLACEHOLDER = /^\$\{user_config\.([^}]+)\}$/;
-// Exact `atlas@<marketplace>` key only: name from this repo's marketplace.json, else the literal default.
+// Saved options come from `<owning plugin>@<marketplace>` first, then the legacy `atlas@<marketplace>` (connectors
+// lived in atlas before moving to armada). Marketplace name: this repo's marketplace.json, else the literal default.
+function ownPluginName() {
+  try {
+    const name = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", ".claude-plugin", "plugin.json"), "utf8")).name;
+    if (typeof name === "string" && name) return name;
+  } catch {
+    // plugin.json missing/unreadable: assume the shipping plugin
+  }
+  return "armada";
+}
 function marketplaceName() {
   try {
     const name = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "..", "..", ".claude-plugin", "marketplace.json"), "utf8")).name;
@@ -87,7 +97,10 @@ function savedOption(opt) {
     savedOptions = {};
     try {
       const cfg = JSON.parse(readFileSync(join(homedir(), ".claude", "settings.json"), "utf8")).pluginConfigs;
-      savedOptions = cfg?.[`atlas@${marketplaceName()}`]?.options || {};
+      const mkt = marketplaceName();
+      const own = cfg?.[`${ownPluginName()}@${mkt}`]?.options || {};
+      const legacy = cfg?.[`atlas@${mkt}`]?.options || {};
+      savedOptions = { ...legacy, ...own };
     } catch {
       // missing/unreadable/invalid settings: behaviour unchanged
     }

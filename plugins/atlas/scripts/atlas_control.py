@@ -32,6 +32,8 @@ from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS_DIR.parent
+sys.path.insert(0, str(SCRIPTS_DIR))
+import armada_root  # noqa: E402
 CLAUDE_DIR = Path.home() / ".claude"
 SETTINGS_PATH = CLAUDE_DIR / "settings.json"
 CLAUDE_JSON_PATH = Path.home() / ".claude.json"
@@ -1476,19 +1478,30 @@ def _rpc_line(obj) -> bytes:
     return (json.dumps(obj) + "\n").encode("utf-8")
 
 
+def _connector_root() -> Path:
+    """The plugin root that owns the vendor connectors: armada's, else a nonexistent sibling.
+
+    Connectors moved from atlas to armada. With no armada install every connector
+    lookup resolves under a path that does not exist, so callers see "no bundle"
+    instead of crashing.
+    """
+    root, _reason = armada_root.find_armada_root(PLUGIN_ROOT)
+    return root if root is not None else PLUGIN_ROOT / "_armada_not_installed"
+
+
 def _mcp_server_spec(name: str) -> dict:
-    servers = _read_json(PLUGIN_ROOT / ".mcp.json").get("mcpServers") or {}
+    servers = _read_json(_connector_root() / ".mcp.json").get("mcpServers") or {}
     spec = servers.get(name)
     return spec if isinstance(spec, dict) else {}
 
 
 def _subst_root(value: str) -> str:
-    return value.replace("${CLAUDE_PLUGIN_ROOT}", str(PLUGIN_ROOT))
+    return value.replace("${CLAUDE_PLUGIN_ROOT}", str(_connector_root()))
 
 
 def _mcp_dir(name: str) -> Path:
-    """PLUGIN_ROOT/mcp/<name>, or a nonexistent sibling when name would escape mcp/."""
-    base = os.path.realpath(PLUGIN_ROOT / "mcp")
+    """<armada root>/mcp/<name>, or a nonexistent sibling when name would escape mcp/."""
+    base = os.path.realpath(_connector_root() / "mcp")
     p = os.path.realpath(os.path.join(base, name))
     return Path(p) if p.startswith(base + os.sep) else Path(base) / "_invalid"
 
@@ -1562,7 +1575,7 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=_connector_launch_env(name, env),
-            cwd=str(PLUGIN_ROOT),
+            cwd=str(_connector_root() if _connector_root().is_dir() else PLUGIN_ROOT),
         )
     except FileNotFoundError:
         return {
