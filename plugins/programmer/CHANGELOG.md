@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.1 - 2026-10-27
+
+Fixes from the review of PR #49, which merged before they landed.
+
+### Fixed
+
+- DRY001 no longer crashes on Python 3.9 (`bisect` `key=` needs 3.10).
+- `--diff` handles non-ASCII and space-containing paths, user git config (prefixes, external diff), single-file targets and untracked files with spaces (NUL-separated `ls-files`); refs starting with `-` are rejected.
+- A suppression comment with a malformed bracket list suppresses nothing, rule ids match case-insensitively, and a trailing comment on the previous line no longer suppresses the next line.
+- Baseline fingerprints carry an occurrence index, so a new identical copy of a baselined finding is reported; a malformed baseline exits 2 with a message.
+- Parse errors now exit 2 and appear in SARIF `invocations[0].toolExecutionNotifications`.
+- The edit hook always exits 0 on malformed input and loads config from the project root.
+- Corrected the concept path in `pragmatic-profile.md` and `LICENSE`.
+
 ## 1.0.0 - 2026-10-27
 
 Rebuilt from scratch.

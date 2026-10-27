@@ -1,6 +1,6 @@
 {
   "name": "programmer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Finds code that breaks book-derived principles. A deterministic Python scanner with 20 detected rules (DRY, small functions, crash early, Law of Demeter, shared state, injection, dependency rule, inheritance tax, CQS and more), each tied to a book and tip and proven by fixtures; JSON and SARIF output for CI. A cited model judge covers what code cannot decide. 2 skills (review, principles) and 1 agent (principles-judge).",
   "author": {
     "name": "w159",

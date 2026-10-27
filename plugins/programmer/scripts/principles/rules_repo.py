@@ -49,8 +49,11 @@ def _all_normalized_tokens(mod: Module) -> list[tuple[str, int]]:
 def _normalized_tokens(mod: Module, start: int, end: int) -> list[tuple[str, int]]:
     """(normalized token, line) for lines start..end. Names -> N, numbers -> 0, strings -> S."""
     all_toks = _all_normalized_tokens(mod)
-    lo = bisect.bisect_left(all_toks, start, key=lambda t: t[1])
-    hi = bisect.bisect_right(all_toks, end, key=lambda t: t[1])
+    lines = mod.__dict__.get("_norm_lines")
+    if lines is None:  # bisect key= is 3.10+, so bisect a plain list of line numbers
+        lines = mod.__dict__["_norm_lines"] = [t[1] for t in all_toks]
+    lo = bisect.bisect_left(lines, start)
+    hi = bisect.bisect_right(lines, end)
     return all_toks[lo:hi]
 
 

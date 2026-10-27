@@ -34,16 +34,32 @@ def _enrich(f: Finding) -> Finding:
     return f
 
 
+def _git(top: str, *args: str) -> str:
+    # -c core.quotePath=false keeps non-ASCII paths literal; flags below ignore user diff config
+    return subprocess.run(["git", "-c", "core.quotePath=false", "-C", top, *args], capture_output=True, text=True, check=True).stdout
+
+
+def _unquote(path: str) -> str:
+    """Undo git C-style quoting ("caf\\303\\251.py") if present."""
+    if len(path) >= 2 and path[0] == '"' and path[-1] == '"':
+        return path[1:-1].encode("utf-8").decode("unicode_escape").encode("latin-1", "replace").decode("utf-8", "replace")
+    return path
+
+
 def changed_lines(root: Path, ref: str) -> dict[str, set[int]]:
     """Map path (relative to root) -> changed line numbers vs ref, from git diff -U0."""
-    top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
-    diff = subprocess.run(["git", "-C", top, "diff", "-U0", "--no-color", ref, "--", "*.py"], capture_output=True, text=True, check=True).stdout
-    untracked = subprocess.run(["git", "-C", top, "ls-files", "--others", "--exclude-standard", "--", "*.py"], capture_output=True, text=True, check=True).stdout.split()
+    if ref.startswith("-"):
+        raise ValueError(f"invalid --diff ref: {ref!r}")
+    base = root if root.is_dir() else root.parent
+    top = _git(str(base), "rev-parse", "--show-toplevel").strip()
+    diff = _git(top, "diff", "-U0", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/", ref, "--", "*.py")
+    untracked = [u for u in _git(top, "ls-files", "-z", "--others", "--exclude-standard", "--", "*.py").split("\0") if u]
     out: dict[str, set[int]] = {}
     current = None
     for line in diff.splitlines():
         if line.startswith("+++ "):
-            current = None if line.endswith("/dev/null") else line[6:] if line.startswith("+++ b/") else line[4:]
+            name = _unquote(line[4:].rstrip("\t"))
+            current = None if name == "/dev/null" else name[2:] if name.startswith("b/") else name
         elif line.startswith("@@") and current:
             m = re.search(r"\+(\d+)(?:,(\d+))?", line)
             start, count = int(m.group(1)), int(m.group(2) or "1")
@@ -64,8 +80,11 @@ def changed_lines(root: Path, ref: str) -> dict[str, set[int]]:
 
 
 def load_baseline(path: Path) -> set[str]:
-    data = json.loads(path.read_text())
-    return {e["fingerprint"] for e in data.get("findings", [])}
+    try:
+        data = json.loads(path.read_text())
+        return {e["fingerprint"] for e in data.get("findings", [])}
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"malformed baseline {path}: {type(exc).__name__}: {exc}") from exc
 
 
 def scan(target: Path, config: dict, only=None, skip=None, diff_ref: str | None = None, baseline: Path | None = None,
@@ -106,6 +125,7 @@ def scan(target: Path, config: dict, only=None, skip=None, diff_ref: str | None 
     known = load_baseline(baseline) if baseline else set()
     changed = changed_lines(target, diff_ref) if diff_ref else None
     seen = set()
+    live: list[Finding] = []
     for f in raw:
         key = (f.rule, f.path, f.line, f.message)
         if key in seen:
@@ -115,6 +135,14 @@ def scan(target: Path, config: dict, only=None, skip=None, diff_ref: str | None 
         if mod and suppressed(mod, f):
             result.suppressed += 1
             continue
+        live.append(f)
+    # number identical findings per file in source order so a new copy is not hidden by the baseline
+    counts: dict[str, int] = {}
+    for f in sorted(live, key=lambda f: (f.path, f.line, f.rule, f.message)):
+        base = f.fingerprint()
+        f.occurrence = counts.get(base, 0)
+        counts[base] = f.occurrence + 1
+    for f in live:
         if changed is not None:
             lines = changed.get(f.path, set())
             if not lines & set(range(f.line, max(f.end_line, f.line) + 1)):

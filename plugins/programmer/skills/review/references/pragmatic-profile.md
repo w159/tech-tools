@@ -8,7 +8,7 @@ Status definitions:
 - `missing` - no evidence found, and the concept applies to this codebase.
 - `n/a` - the concept genuinely cannot apply (e.g. concurrency in a single-threaded CLI with no shared state). Use sparingly and justify in the note.
 
-Concept files live at `../tpp-principles/references/concepts/<file>.md`. The auditor reads only the files for the assigned dimension.
+Concept files live at `../../principles/references/concepts/<file>.md`. The auditor reads only the files for the assigned dimension.
 
 ---
 

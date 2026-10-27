@@ -98,6 +98,7 @@ class Cli(unittest.TestCase):
         self.assertEqual([f["path"] for f in data["findings"]], ["c.py"])
         self.assertEqual(data["suppressed"], 2)
 
+    @unittest.skipUnless(sys.version_info >= (3, 11), "config needs tomllib")
     def test_config_thresholds_and_disable(self):
         self.write("w.py", "def f(a, b, c, d, e):\n    return a\n")
         self.write(".principles.toml", '[rules.FN002]\nmax_params = 5\n')
@@ -107,6 +108,7 @@ class Cli(unittest.TestCase):
         self.write(".principles.toml", '')
         self.assertIn("FN002", cli("scan", str(self.root)).stdout)
 
+    @unittest.skipUnless(sys.version_info >= (3, 11), "config needs tomllib")
     def test_pyproject_config(self):
         self.write("w.py", "def f(a, b, c, d, e):\n    return a\n")
         self.write("pyproject.toml", '[tool.principles.rules.FN002]\nmax_params = 6\n')
