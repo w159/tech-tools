@@ -30,7 +30,7 @@
   "author": "w159",
   "license": "Apache-2.0",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "node-vanta": "file:../../mcp_node/node-vanta",
     "zod": "^4.6.7"
   },
@@ -41,7 +41,7 @@
     "vitest": "^4.1.12"
   },
   "overrides": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.2"
   },
   "engines": {
     "node": ">=18.0.0"
