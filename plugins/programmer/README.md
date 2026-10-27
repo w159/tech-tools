@@ -1,129 +1,137 @@
-# programmer (Claude Code plugin in the tech-tools marketplace)
+# programmer
 
-Turns The Pragmatic Programmer (20th Anniversary Edition) into an active codebase auditor and coding-time advisor. The book's principles, tips, practices, and lessons become things you can run against a real codebase, not just quotes on a page.
+Finds code that breaks book-derived principles, and proves each finding.
 
-This plugin ships as part of the [tech-tools marketplace](https://github.com/w159/tech-tools) (owner w159), alongside the `atlas` and `armada` plugins. Skills are namespaced `tpp-*` (The Pragmatic Programmer).
+A deterministic Python scanner checks 20 detected rules taken from The Pragmatic Programmer, Clean Code, Clean Architecture, Refactoring and other books in the corpus. Each rule cites its book and tip, and fixture tests prove it fires on a seeded violation and stays quiet on clean code. A read-only model judge covers what code cannot decide (names, responsibilities, domain language, contracts, tests) and must cite the line it read.
 
-## What's included
-
-| Component | Count | Purpose |
-|---|---|---|
-| Skills | 4 | `code-review` (user-run 6-lens, multi-agent review), `code-principles` (auto-fires while you work to surface relevant book principles), `tpp-audit` (Pragmatic Programmer audit), and `tpp-principles` (Pragmatic Programmer principles advisor) |
-| Agents | 7 | `code-review-architecture`, `code-review-correctness`, `code-review-craft`, `code-review-security`, `code-review-data`, `code-review-process`, `tpp-auditor` |
-| Hooks | 0 | disabled — see "The nudge hook" below |
-| References | 89 | the book's concept glossary, repackaged as `references/concepts/*.md` for citation |
-
-## The 6 review lenses
-
-| # | Lens | What it reviews |
-|---|---|---|
-| 1 | Architecture | Module boundaries, dependency direction, use-case isolation, service seams. |
-| 2 | Correctness | Contracts, invariants, error handling, resource safety, concurrency, temporal ordering. |
-| 3 | Craft | Naming, function size, duplication, comments, intent, maintainability. |
-| 4 | Security | Attack surface, least privilege, trust boundaries, secrets, privacy. |
-| 5 | Data | Data ownership, consistency, schema evolution, idempotency, observability. |
-| 6 | Process | Traceability to user need, test quality, delivery safety, feedback loops. |
+Part of the [tech-tools marketplace](https://github.com/w159/tech-tools).
 
 ## Install
 
-Install from the atlas marketplace, then enable the `programmer` plugin. Restart Claude Code after install so the hook loads.
+```text
+/plugin marketplace add w159/tech-tools
+/plugin install programmer@tech-tools
+```
 
-If you are developing this plugin in place, you can also point Claude Code at the plugin dir directly:
+Developing in place:
 
 ```bash
-cc --plugin-dir /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/programmer
+claude --plugin-dir ./plugins/programmer
 ```
 
-## Usage
+## What ships
 
-### Run a book-derived code review
+| Component | Name | Purpose |
+|---|---|---|
+| Skill | `review` | Runs the scanner, then the judge, and writes a ranked report with `file:line`, principle, book and fix. |
+| Skill | `principles` | Advisor: names the 1-4 principles that apply to the code or decision in front of you. |
+| Agent | `principles-judge` | Read-only judge for one batch of files; returns strict JSON. |
+| Hook | `scan_on_edit.py` | Opt-in. After an Edit or Write to a `.py` file, reports error-level findings to Claude. |
+| CLI | `scripts/principles` | The scanner. Python 3.9+ standard library only (config files need 3.11+). |
+
+## The 20 detected rules
+
+| Rule | Severity | Title |
+|---|---|---|
+| DRY001 | warning | Duplicated logic (near-miss functions and repeated blocks) |
+| FN001 | warning | Function too long |
+| FN002 | warning | Long parameter list |
+| FN003 | warning | Flag argument |
+| FN004 | warning | Deep nesting |
+| FN005 | warning | High cyclomatic complexity |
+| ERR001 | error | Swallowed or over-broad exception |
+| DEM001 | warning | Message chain (Law of Demeter) |
+| STATE001 | warning | Mutable global state |
+| RES001 | warning | Resource not paired with release |
+| SEC001 | error | Query built from strings |
+| SEC002 | error | Secret in source |
+| CFG001 | warning | Hardcoded endpoint |
+| ARCH001 | warning | Dependency rule violation |
+| ARCH002 | warning | Import cycle |
+| OO001 | warning | Large class |
+| OO002 | warning | Deep inheritance |
+| CQS001 | warning | Query that mutates |
+| LIT001 | note | Magic number |
+| WIN001 | note | Broken window (TODO/FIXME/XXX) |
+
+Principles, sources and thresholds for each rule: `skills/principles/references/catalog.md` (generated from `scripts/principles/catalog.py`), or `python3 scripts/principles explain DEM001`.
+
+## Usage in Claude Code
 
 ```text
-/programmer:code-review ./my-project
-/programmer:code-review . --scope diff
-/programmer:code-review ./repo --scope all --report ./review.md
+/programmer:review src/
+/programmer:review . --diff main
+/programmer:review src/ --no-judge
+/programmer:review . --profile pragmatic --report review.md
 ```
 
-The skill dispatches 6 reviewer agents in parallel. Each agent scans for concrete evidence signals defined in `skills/code-review/references/rubric.md` and returns a JSON findings array. The skill synthesizes a ranked report (blockers first, then majors, minors, notes) with `file:line` citations, the source book, and an actionable fix. It writes the report to `.code-review-report.md` (or the `--report` path) and prints a summary table plus the top 10 findings.
+The review skill runs the scanner first and keeps its JSON as the source of truth for detected findings. It then dispatches `principles-judge` in parallel batches (8 files per batch, 4 batches max). Judge findings whose evidence does not match the cited line are dropped. Scanner findings the judge disputes stay in the report under "Disputed". The report goes to `.principles-report.md` unless `--report` is given.
 
-### Principles while you work
+Ask "which principle applies here?" or "is this DRY?" and the `principles` skill answers with 1-4 principles, each with its source and a pointer into your code.
 
-```text
-What book principle applies to this refactor?
-Is this a bounded context?
+## Usage as a CLI
+
+```bash
+python3 plugins/programmer/scripts/principles scan src/
+python3 plugins/programmer/scripts/principles scan . --format sarif -o principles.sarif
+python3 plugins/programmer/scripts/principles scan . --diff origin/main --fail-on warning
+python3 plugins/programmer/scripts/principles rules
+python3 plugins/programmer/scripts/principles explain SEC001
 ```
 
-The `code-principles` skill auto-fires while you work to surface 1-4 relevant book principles, each with a concrete pointer tied to your situation and a citation.
+| Option | Effect |
+|---|---|
+| `--format text\|json\|sarif\|md` | Output format. SARIF 2.1.0 works with GitHub code scanning. |
+| `-o FILE` | Write output to a file. |
+| `--rules A,B` / `--skip A,B` | Restrict which rules run. |
+| `--diff [REF]` | Only lines changed vs REF (default `HEAD`), plus untracked files. |
+| `--no-tests` | Skip test files entirely. |
+| `--fail-on error\|warning\|note\|never` | Exit 1 at or above this severity. Default `error`. |
+| `--baseline FILE` / `--write-baseline FILE` | Adopt on a legacy repo: record current findings, report only new ones. |
 
-### Audit a codebase
+Exit codes: 0 clean, 1 findings at or above `--fail-on`, 2 usage or git error.
 
-```text
-/programmer:tpp-audit ./my-project
-/programmer:tpp-audit . --chapters 1,2,5,7
-/programmer:tpp-audit ./repo --report ./audit.md
+## Configuration
+
+`.principles.toml` at the scan root, or `[tool.principles]` in `pyproject.toml`:
+
+```toml
+disable = ["LIT001"]
+exclude = ["migrations/*"]        # globs on paths relative to the scan root
+exclude_dirs = ["vendor"]        # directory names skipped anywhere
+
+[rules.FN002]
+max_params = 5
+
+[rules.ARCH001]
+inner_dirs = ["core"]
 ```
 
-The skill dispatches one `tpp-auditor` per selected dimension in parallel. Each auditor scans for concrete, grep-able evidence signals (defined in `skills/tpp-audit/references/dimensions.md`) and returns a JSON findings array. The skill synthesizes a ranked report (missing first, then partial, then implemented) with file:line citations and the book tip numbers, writes it to `.tpp-audit-report.md` (or the `--report` path), and prints a summary table plus the top 10 gaps.
+## Suppression
 
-The audit reports only. It never modifies code. Re-run it after fixes to verify progress.
-
-### Principles while you work
-
-The `tpp-principles` skill auto-fires when you are designing, debugging, refactoring, testing, naming, handling concurrency or errors, securing code, estimating, or asking what the book says about a situation. It surfaces 1-4 relevant principles, each with the book tip number, a concrete in-practice pointer tied to your situation, and a citation to the concept file. It is advisory and terse by design.
-
-You can also invoke it directly:
-
-```text
-What does The Pragmatic Programmer say about inheritance vs composition?
-Is this DRY?
+```python
+cur.execute(sql)  # principles: ignore[SEC001] sql is a constant from queries.py
 ```
 
-### The nudge hook (disabled)
+`# principles: ignore-file[RULE]` near the top of a file suppresses that rule for the whole file. Write the reason after the bracket.
 
-The `UserPromptSubmit` command hook has been disabled: `hooks/hooks.json` now registers no hooks. The implementation (`hooks/tpp_nudge.py`) is preserved on disk, unwired, in case the nudge is wanted again. It matches prompts against a deterministic domain keyword map and injects a single one-line pointer to the most relevant concept; it never lectures, never outputs more than one line, and can never block a prompt (it always exits 0).
+## Opt-in edit hook
 
-To re-enable: add a `UserPromptSubmit` entry back to `hooks/hooks.json` calling `python3 "${CLAUDE_PLUGIN_ROOT}/hooks/tpp_nudge.py"`. Hook changes require a Claude Code restart to take effect.
+Set `PROGRAMMER_SCAN_ON_EDIT=1` before starting Claude Code. After each Edit or Write to a `.py` file, the hook scans that file and passes up to 5 error-level findings back to Claude. It never blocks a tool call and is silent when off, on clean files, and on files that do not parse.
+
+## Tests
+
+```bash
+cd plugins/programmer && python3 -m unittest discover -s tests -v
+```
+
+The suite proves each rule fires on its `bad` fixture and stays quiet on its `good` fixture, replaces every check with a no-op to prove the fixture test catches it, scans a clean sample project for zero findings, and checks that the docs, manifests and skills match what the code ships.
 
 ## Book corpus
 
-The `code-review` and `code-principles` skills use a curated 31-book corpus as their principle map. The corpus is not a replacement for the books. It is an operational index: each review finding cites a book and a lens so you can trace the recommendation back to the source.
+`skills/principles/references/books.md` maps each of the 30 books to its principles. `skills/principles/references/concepts/` holds 89 Pragmatic Programmer concepts with tip numbers in their frontmatter.
 
-## Source
+## Limits
 
-The concept content under `skills/tpp-principles/references/concepts/` is sourced from the book extraction in the original standalone repo's `docs/glossary/`. Each concept file carries YAML frontmatter (title, category, chapter, topic, source, tips, aliases, related) and a body of What it is / Why it matters / In practice / Related tips / See also.
-
-## Layout
-
-```
-plugins/programmer/
-  .claude-plugin/plugin.json
-  skills/
-    code-review/
-      SKILL.md
-      references/books.md
-      references/rubric.md
-    code-principles/
-      SKILL.md
-      references/books.md
-      references/rubric.md
-    tpp-audit/
-      SKILL.md
-      references/dimensions.md
-    tpp-principles/
-      SKILL.md
-      references/index.md
-      references/concepts/*.md   (89 files)
-  agents/
-    code-review-architecture.md
-    code-review-correctness.md
-    code-review-craft.md
-    code-review-security.md
-    code-review-data.md
-    code-review-process.md
-    tpp-auditor.md
-  hooks/
-    hooks.json
-    tpp_nudge.py
-    test_tpp_nudge.py
-  README.md
-```
+- The scanner reads Python only. Other languages get the judge, not detected rules.
+- Detected rules are heuristics with fixed thresholds. Tune them in config or suppress with a reason.

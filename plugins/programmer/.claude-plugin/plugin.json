@@ -1,7 +1,7 @@
 {
   "name": "programmer",
-  "version": "0.2.1",
-  "description": "A book-derived code-review engine with 4 skills: code-review runs a 6-lens, multi-agent review across a target or diff and produces an evidence-backed report; code-principles surfaces 1-4 relevant book principles while you work; tpp-audit is the Pragmatic Programmer audit; tpp-principles is the Pragmatic Programmer principles advisor.",
+  "version": "1.0.0",
+  "description": "Finds code that breaks book-derived principles. A deterministic Python scanner with 20 detected rules (DRY, small functions, crash early, Law of Demeter, shared state, injection, dependency rule, inheritance tax, CQS and more), each tied to a book and tip and proven by fixtures; JSON and SARIF output for CI. A cited model judge covers what code cannot decide. 2 skills (review, principles) and 1 agent (principles-judge).",
   "author": {
     "name": "w159",
     "url": "https://github.com/w159"
@@ -10,11 +10,11 @@
   "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/programmer",
   "license": "MIT",
   "keywords": [
-    "tpp",
-    "pragmatic-programmer",
-    "audit",
     "code-review",
+    "static-analysis",
     "principles",
-    "best-practices"
+    "clean-code",
+    "pragmatic-programmer",
+    "sarif"
   ]
 }
