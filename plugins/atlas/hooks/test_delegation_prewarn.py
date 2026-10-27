@@ -15,8 +15,8 @@ def run(path, sid, tp="/x/session.jsonl", env=None, tool="Edit"):
 class T(unittest.TestCase):
     def test_warn_once(self):
         sid = uuid.uuid4().hex
-        self.assertIn("(m) delegation mandate", run("/r/plugins/a.py", sid))
-        self.assertEqual(run("/r/plugins/b.py", sid), "")
+        self.assertIn("(m) delegation mandate", run("plugins/a.py", sid))
+        self.assertEqual(run("plugins/b.py", sid), "")
 
     def test_exempt_and_docs(self):
         sid = uuid.uuid4().hex

@@ -341,14 +341,14 @@ def _delegation_exempt():
         return None
 
 
-def _is_delegation_code(path: str, dirs: tuple, exts: tuple) -> bool:
-    """True when `path` is code that counts toward the (m) delegation mandate
-    (not under an exempt dir, no exempt extension). Shared with
-    delegation_prewarn.py so the warning and the gate use one predicate."""
-    return not (
-        path.endswith(exts)
-        or any(path.startswith(d + "/") or f"/{d}/" in path for d in dirs)
-    )
+def _is_delegation_code(path: str, dirs: tuple, exts: tuple, cwd=None) -> bool:
+    """True when `path` is code that counts toward the (m) delegation mandate: inside
+    the project root, not docs/.atlas/.md, not scratch. One predicate,
+    atlas_scope.is_target_code, shared with the dispatch tripwire and
+    delegation_prewarn so the warning, the deny and the gate agree."""
+    import atlas_scope
+
+    return atlas_scope.is_target_code(path, cwd, dirs, exts)
 
 
 def _nondocs_changed(changed_paths: list) -> bool:
@@ -753,7 +753,7 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
         if exempt is None:
             return []  # contract unreadable: fail open, never block
         dirs, exts = exempt
-        run_code = [p for p in paths if p and _is_delegation_code(p, dirs, exts)]
+        run_code = [p for p in paths if p and _is_delegation_code(p, dirs, exts, root)]
         shell_code = _shell_dirty_edits(root, session_id)
         if shell_code:
             # Dirt another session's agents wrote in this shared worktree is not ours.
