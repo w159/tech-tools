@@ -414,5 +414,37 @@ class CodexFeedTests(unittest.TestCase):
         self.assertEqual({0: (250, 1000)}, feed.usage)
 
 
+class NonAssistantEventTests(unittest.TestCase):
+    PERMISSION_DENIED = (
+        r'{"type":"system","subtype":"permission_denied","tool_name":"Bash","tool_use_id":"toolu_x",'
+        r'"decision_reason_type":"subcommandResults","message":"This Bash command contains multiple '
+        r"operations. The following parts require approval: python3 -c 'x', echo \"exit=$?\""
+        + '",'
+        r'"uuid":"u","session_id":"s"}'
+    )
+
+    def test_claude_permission_denied_event_with_string_message_does_not_kill_the_feed(
+        self,
+    ):
+        ev = json.loads(self.PERMISSION_DENIED)
+        self.assertIsInstance(ev["message"], str)
+        feed = pf.Feed("w1", out=io.StringIO(), live=False)
+        feed.event(ev)
+        self.assertEqual(0, feed.tools)
+        self.assertEqual({}, feed.usage)
+
+    def test_non_dict_message_usage_and_item_never_raise_in_any_counter(self):
+        feed = pf.Feed("w1", out=io.StringIO(), live=False)
+        for ev in (
+            {"type": "message_end", "message": "text"},
+            {"type": "assistant", "message": "text"},
+            {"type": "turn.completed", "usage": "x"},
+            {"type": "item.started", "item": "x"},
+            {"type": "message_end", "message": {"role": "assistant", "usage": "x"}},
+        ):
+            feed.event(ev)
+            pf.event_rows(ev)
+
+
 if __name__ == "__main__":
     unittest.main()
