@@ -15,6 +15,7 @@ Release: atlas 16.0.0, armada 2.0.0, marketplace 5.0.0. Relative to main 15.2.1 
 - Shared gate rules in `atlas_scope.py` (`is_target_code`, `is_scratch_path`, `is_verification_command`, ...) used by the tripwire, Stop gate and delegation prewarn.
 - `hooks/event_dispatch.py`: one hook process per PreToolUse/PostToolUse event; deny > ask > allow, additionalContext concatenated in order. Measured Pre+Post blocking time per call: Bash 303 ms -> 167 ms, Edit 261 -> 105, Read 182 -> 107.
 - `atlas_doctor` recognizes `synced` (claude.ai) and `--plugin-dir` loads and tolerates a missing `installed_plugins.json`.
+- `atlas_doctor` `orchestration-wiring` understands the `event_dispatch.py` layout: it accepts either a direct `dispatch_tripwire.py` entry or an `event_dispatch.py` entry whose outer matcher and `BINDINGS` tripwire matcher both cover Agent, Task and Skill. Fixes the false "atlas plugin is unhealthy" warning on the 16.0.0 tree.
 
 ### Changed
 

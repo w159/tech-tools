@@ -75,6 +75,7 @@ if __name__ == "__main__" and sys.argv[1:] == ["--hook"] and _hook_stamp_fresh("
     sys.exit(0)
 
 import argparse  # noqa: E402 -- after the stamp fast path on purpose
+import ast  # noqa: E402
 import hashlib  # noqa: E402
 import re  # noqa: E402
 import shutil  # noqa: E402
@@ -307,6 +308,38 @@ def find_stale_assets(ip, clone, plugin_name, user_skills=None, user_agents=None
     return stale
 
 
+def _matcher_covers(matcher, tool):
+    """hooks.json matcher semantics: empty or * matches every tool, else fullmatch."""
+    if matcher in (None, "", "*"):
+        return True
+    try:
+        return re.fullmatch(matcher, tool) is not None
+    except re.error:
+        return False
+
+
+def _dispatcher_tripwire_matcher(ip, event):
+    """The matcher event_dispatch.BINDINGS gives dispatch_tripwire for `event`.
+
+    Parsed from the dispatcher source (no import, so no hook side effects).
+    Returns None when the file or the binding is absent or unparseable.
+    """
+    try:
+        with open(os.path.join(ip, "hooks", "event_dispatch.py"), encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "BINDINGS" for t in node.targets
+            ):
+                bindings = ast.literal_eval(node.value)
+                for name, matcher, _slice in bindings.get(event, ()):
+                    if name == "dispatch_tripwire":
+                        return matcher
+    except (OSError, SyntaxError, ValueError):
+        pass
+    return None
+
+
 def check_orchestration_wiring(ip):
     """Verify the wiring that makes subagent discipline actually engage:
     the tripwire must see Skill/Agent/Task events and auto-set the
@@ -315,13 +348,25 @@ def check_orchestration_wiring(ip):
     hooks_file = os.path.join(ip, "hooks", "hooks.json")
     try:
         blob = _load_json(hooks_file)
-        matcher = ""
+        direct = ""
+        dispatched = []  # (outer matcher, tripwire's inner matcher) pairs
         for grp in blob.get("hooks", {}).get("PostToolUse", []):
-            if "dispatch_tripwire.py" in json.dumps(grp):
-                matcher = grp.get("matcher", "")
+            text = json.dumps(grp)
+            if "dispatch_tripwire.py" in text:
+                direct = grp.get("matcher", "")
+            if "event_dispatch.py" in text:
+                inner = _dispatcher_tripwire_matcher(ip, "PostToolUse")
+                if inner is not None:
+                    dispatched.append((grp.get("matcher", ""), inner))
         for tool in ("Agent", "Task", "Skill"):
-            if tool not in matcher:
-                problems.append(f"PostToolUse matcher missing {tool}")
+            if tool in direct:
+                continue
+            if any(
+                _matcher_covers(outer, tool) and _matcher_covers(inner, tool)
+                for outer, inner in dispatched
+            ):
+                continue
+            problems.append(f"PostToolUse matcher missing {tool}")
     except Exception as e:
         problems.append(f"hooks.json unreadable: {e}")
     tripwire = os.path.join(ip, "hooks", "dispatch_tripwire.py")

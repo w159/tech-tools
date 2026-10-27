@@ -16,6 +16,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 import atlas_doctor
 import atlas_db
 
+HERE_ATLAS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_real_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
 
 _MODULE_ENV = None
 _MODULE_CWD = None
@@ -315,6 +322,46 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertTrue(any("mark_orchestrating" in p for p in problems))
         # The message must name the core file the check actually scanned.
         self.assertTrue(any("dispatch_tripwire_core.py" in p for p in problems))
+
+    def _dispatcher_ip(self, outer_matcher=None, drop_tripwire=False):
+        """Copy the real dispatcher layout into the sandbox install."""
+        src = os.path.join(HERE_ATLAS, "hooks")
+        ip = self.install_101
+        os.makedirs(os.path.join(ip, "hooks"), exist_ok=True)
+        hooks = _load_real_json(os.path.join(src, "hooks.json"))
+        if outer_matcher is not None:
+            for grp in hooks["hooks"]["PostToolUse"]:
+                if "event_dispatch.py" in json.dumps(grp):
+                    grp["matcher"] = outer_matcher
+        write_json(os.path.join(ip, "hooks", "hooks.json"), hooks)
+        with open(os.path.join(src, "event_dispatch.py"), encoding="utf-8") as f:
+            text = f.read()
+        if drop_tripwire:
+            text = text.replace('"dispatch_tripwire"', '"dispatch_tripwire_off"')
+        with open(os.path.join(ip, "hooks", "event_dispatch.py"), "w") as f:
+            f.write(text)
+        with open(os.path.join(ip, "hooks", "dispatch_tripwire.py"), "w") as f:
+            f.write("ORCH_SKILLS = {'x'}\nmark_orchestrating = None\n")
+        return ip
+
+    def test_orchestration_wiring_passes_on_real_dev_tree(self):
+        self.assertEqual(atlas_doctor.check_orchestration_wiring(HERE_ATLAS), [])
+
+    def test_orchestration_wiring_accepts_event_dispatcher_layout(self):
+        ip = self._dispatcher_ip()
+        self.assertEqual(atlas_doctor.check_orchestration_wiring(ip), [])
+
+    def test_orchestration_wiring_flags_dispatcher_without_tripwire_binding(self):
+        ip = self._dispatcher_ip(drop_tripwire=True)
+        problems = atlas_doctor.check_orchestration_wiring(ip)
+        for tool in ("Agent", "Task", "Skill"):
+            self.assertIn(f"PostToolUse matcher missing {tool}", problems)
+
+    def test_orchestration_wiring_flags_dispatcher_outer_matcher_missing_agent(self):
+        ip = self._dispatcher_ip(outer_matcher="Read|Task|Skill")
+        problems = atlas_doctor.check_orchestration_wiring(ip)
+        self.assertIn("PostToolUse matcher missing Agent", problems)
+        self.assertNotIn("PostToolUse matcher missing Task", problems)
 
     def test_norm_repo_treats_url_variants_as_equal(self):
         for u in (
