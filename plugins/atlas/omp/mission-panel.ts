@@ -6,6 +6,8 @@
  * escape sequences and filled with the panel background, so no line is wider than `width` and no escape is ever cut.
  * Pure: renderPanel(model) -> lines. Gate status comes from a throttled async cache over atlas_gates.py.
  */
+import { type Cell, type Hue, cellsWidth, coreCells } from "../mod/core-row";
+import type { CoreModel } from "../mod/data/core";
 import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
 import { charFrame } from "../mod/roles";
 import type { GateGroup } from "../mod/pane/sidebar";
@@ -61,6 +63,7 @@ export interface PanelModel {
 	idle?: IdleWave;
 	todos?: PanelTodo[]; // the shared board; drawn under the rail
 	todosExpanded?: boolean; // ATLAS_TODO_EXPANDED=1: the list instead of the one-row bar
+	core?: CoreModel | null; // the Atlas core row under the rail; absent or empty: no row
 }
 /** The last wave the idle panel summarizes: member count, first join to last finish, non-zero exits. */
 export interface IdleWave {
@@ -318,12 +321,27 @@ function boardRows(m: PanelModel, w: number, room: number): string[] {
 	return todoLines(m.todos ?? [], { width: w, tick: m.tick, spin: m.laneSpin, expanded: !!m.todosExpanded && room >= 3, maxLines: room });
 }
 
+const HUES: Record<Hue, Rgb> = { text: TXT, muted: MUT, green: GREEN, red: RED, yellow: YEL, violet: VIOLET, sky: SKY, peach: PEACH, teal: TEAL };
+
+/** The core row (twin: mod/band.tsx coreSegments): chips are filled labels, other cells plain text in their hue. */
+export function coreLine(cells: readonly Cell[]): string {
+	return cells.map((x) => (x.chip ? chip(x.t, HUES[x.hue]) : seg(x.t, HUES[x.hue]))).join("");
+}
+
+/** The core row when there is core data and room: it must leave every lane its row (lanes win over the core row). */
+function coreRows(m: PanelModel, w: number, room: number): string[] {
+	const cells = coreCells(m.core, w);
+	if (!cells.length || cellsWidth(cells) > w || room < Math.min(m.workers.length, MAX_LANES) + 1) return [];
+	return [coreLine(cells)];
+}
+
 /** Title, rail and footer always show; the board and the middle rows take what is left of maxLines. */
 function liveRows(m: PanelModel, w: number): string[] {
 	const railLine = rail(m.phase, w, { tick: m.tick, spin: m.spin, idle: false });
 	const mid = Math.max(0, m.maxLines - 3);
 	const board = boardRows(m, w, Math.min(m.todosExpanded ? 5 : 1, Math.max(0, mid - 2))); // keep two rows for lanes
-	return [titleRow(m, w), railLine, ...board, ...middleRows(m, w, mid - board.length), footerRow(m, w)];
+	const core = coreRows(m, w, mid - board.length);
+	return [titleRow(m, w), railLine, ...core, ...board, ...middleRows(m, w, mid - board.length - core.length), footerRow(m, w)];
 }
 
 export function renderPanel(m: PanelModel): string[] {

@@ -1,4 +1,5 @@
 // Shared sidebar model types and the one padding helper the section builders use.
+import type { CoreModel } from '../data/core';
 import type { LiveSnapshot } from '../orchestra-types';
 import { textWidth } from '../theme';
 
@@ -8,6 +9,8 @@ export type SidebarView = 'team' | 'channel' | 'route' | 'gates';
 export type SidebarModel = {
   snapshot: LiveSnapshot;
   gates: GateGroup[];
+  /** The Atlas core (contract, verdicts, offload, routes); the g view draws it above the gate groups. */
+  core?: CoreModel | null;
   ui: { recipient: string | null; expanded: string | null; draft: string; view: SidebarView };
   columns: number;
   rows: number;
