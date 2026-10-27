@@ -1,0 +1,75 @@
+diff --git a/plugins/atlas/scripts/atlas_doctor.py b/plugins/atlas/scripts/atlas_doctor.py
+index ce065c88..ffbe0a29 100644
+--- a/plugins/atlas/scripts/atlas_doctor.py
++++ b/plugins/atlas/scripts/atlas_doctor.py
+@@ -23,8 +23,10 @@ if __name__ == "__main__":
+     atlas_env.apply_store_env()
+ 
+ # --- environment (overridable so tests never touch the real install) ---
+-PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.expanduser(
+-    "~/.claude/plugins"
++# Claude Code keeps every ~/.claude path under CLAUDE_CONFIG_DIR when it is set
++# (https://code.claude.com/docs/en/claude-directory.md), installed_plugins.json included.
++PLUGINS_DIR = os.environ.get("ATLAS_PLUGINS_DIR") or os.path.join(
++    os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"), "plugins"
+ )
+ # Same resolution as atlas_db.atlas_home(), inlined so the SessionStart stamp
+ # fast path below can run before atlas_db (sqlite3, ~45 ms) is imported.
+@@ -616,9 +618,11 @@ def _omp_plugins_dir():
+     """omp's plugin registry. Overridable; otherwise the sibling of the claude
+     plugins dir's home (~/.claude/plugins -> ~/.omp/plugins) so a test that
+     relocates PLUGINS_DIR relocates this too."""
+-    return os.environ.get("ATLAS_OMP_PLUGINS_DIR") or os.path.join(
+-        os.path.dirname(os.path.dirname(PLUGINS_DIR)), ".omp", "plugins"
+-    )
++    if os.environ.get("ATLAS_OMP_PLUGINS_DIR"):
++        return os.environ["ATLAS_OMP_PLUGINS_DIR"]
++    if not os.environ.get("ATLAS_PLUGINS_DIR"):  # CLAUDE_CONFIG_DIR does not move omp
++        return os.path.expanduser("~/.omp/plugins")
++    return os.path.join(os.path.dirname(os.path.dirname(PLUGINS_DIR)), ".omp", "plugins")
+ 
+ 
+ def check_omp_bridge(plugin_name, version):
+diff --git a/plugins/atlas/scripts/test_atlas_doctor_config_dir.py b/plugins/atlas/scripts/test_atlas_doctor_config_dir.py
+new file mode 100644
+index 00000000..8c972cb7
+--- /dev/null
++++ b/plugins/atlas/scripts/test_atlas_doctor_config_dir.py
+@@ -0,0 +1,37 @@
++"""atlas_doctor reads Claude Code's plugin registry from $CLAUDE_CONFIG_DIR/plugins when that is set.
++
++Regression: a fresh install under a custom CLAUDE_CONFIG_DIR warned "atlas not found in
++installed_plugins.json" on every SessionStart because the doctor read ~/.claude/plugins instead.
++"""
++import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
++import os
++import subprocess
++import sys
++
++HERE = os.path.dirname(os.path.abspath(__file__))
++
++
++def _resolve(env_overrides):
++    env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CONFIG_DIR", "ATLAS_PLUGINS_DIR", "ATLAS_OMP_PLUGINS_DIR")}
++    env.update(env_overrides)
++    code = "import atlas_doctor as d; print(d.PLUGINS_DIR); print(d._omp_plugins_dir())"
++    out = subprocess.run([sys.executable, "-c", code], cwd=HERE, env=env, capture_output=True, text=True, check=True)
++    return out.stdout.split("\n")[:2]
++
++
++def test_claude_config_dir_moves_plugins_dir(tmp_path):
++    cfg = str(tmp_path / "cfg")
++    plugins, omp = _resolve({"CLAUDE_CONFIG_DIR": cfg, "HOME": str(tmp_path)})
++    assert plugins == os.path.join(cfg, "plugins")
++    assert omp == os.path.join(str(tmp_path), ".omp", "plugins")
++
++
++def test_default_is_home_dot_claude(tmp_path):
++    plugins, omp = _resolve({"HOME": str(tmp_path)})
++    assert plugins == os.path.join(str(tmp_path), ".claude", "plugins")
++    assert omp == os.path.join(str(tmp_path), ".omp", "plugins")
++
++
++def test_atlas_plugins_dir_still_wins(tmp_path):
++    plugins, _ = _resolve({"CLAUDE_CONFIG_DIR": str(tmp_path / "cfg"), "ATLAS_PLUGINS_DIR": str(tmp_path / "x" / "plugins")})
++    assert plugins == str(tmp_path / "x" / "plugins")
