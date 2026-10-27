@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.1 - 2026-10-27
+
+### Fixed
+
+- SonicWall connector bundle (`mcp/sonicwall/server.mjs`) rebuilt after the `client.ts` HTTP error-message fix for CodeQL alert 43. Runtime output is unchanged.
+
 ## 2.2.0 - 2026-10-27
 
 ### Fixed

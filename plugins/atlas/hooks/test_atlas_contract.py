@@ -25,6 +25,7 @@ _iso_sys.path.insert(
 )
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
+import importlib.util
 import json
 import os
 import re
@@ -1984,3 +1985,13 @@ class ReleaseVersionContractTests(unittest.TestCase):
         text = (PLUGIN_ROOT / "CHANGELOG.md").read_text("utf-8")
         top = re.search(r"^##\s+(\d+\.\d+\.\d+)", text, re.M).group(1)
         self.assertGreaterEqual(self._vt(top), self._vt(self._plugin_version()))
+
+    def test_all_plugin_versions_agree(self):
+        """scripts/check_versions.py: plugin.json, marketplace, CHANGELOG, README."""
+        spec = importlib.util.spec_from_file_location(
+            "check_versions", REPO_ROOT / "scripts" / "check_versions.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        errors, _warnings = mod.check(REPO_ROOT)
+        self.assertEqual(errors, [])

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased - 2026-10-27 - Atlas core mods (Claude Code and omp)
+## 16.2.0 - 2026-10-27
 
 ### Added
 

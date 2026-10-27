@@ -1,6 +1,6 @@
 {
     "name": "atlas",
-    "version": "16.1.0",
+    "version": "16.2.0",
     "description": "Multi-agent coding architect for Claude Code: plans, delegates to named subagents, verifies with evidence, and blocks 'done' until the evidence exists.",
     "author": {
         "name": "w159",
