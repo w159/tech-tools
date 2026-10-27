@@ -1,0 +1,20 @@
+{
+  "name": "harbor",
+  "version": "0.1.0",
+  "description": "Admin tools for the enterprise MCP gateway: deploy it into your Azure or Google Cloud account, manage who can call which tools, and read the audit log.",
+  "author": {
+    "name": "w159",
+    "url": "https://github.com/w159"
+  },
+  "repository": "https://github.com/w159/tech-tools",
+  "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/harbor",
+  "license": "Apache-2.0",
+  "keywords": [
+    "mcp",
+    "gateway",
+    "azure",
+    "gcp",
+    "audit",
+    "access-policy"
+  ]
+}

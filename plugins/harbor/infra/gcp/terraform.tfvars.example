@@ -1,0 +1,17 @@
+# Example values only. Copy to terraform.tfvars and replace every value.
+project_id     = "example-project"
+region         = "us-central1"
+name_prefix    = "mcpgw"
+image          = "us-central1-docker.pkg.dev/example-project/mcp/mcp-gateway:1"
+deploy_service = false
+gateway_mode   = "broker"
+
+extra_env = {
+  BROKER_UPSTREAM_KIND      = "google"
+  BROKER_UPSTREAM_ISSUER    = "https://accounts.google.com"
+  BROKER_UPSTREAM_CLIENT_ID = "example.apps.googleusercontent.com"
+}
+
+connector_secrets = {
+  NINJAONE_CLIENT_SECRET = "mcpgw-ninjaone-client-secret"
+}
