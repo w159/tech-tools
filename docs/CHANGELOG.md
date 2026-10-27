@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased - security alerts
+## atlas 16.2.0, armada 2.2.1, marketplace 5.3.0 - 2026-10-27
+
+Release: cuts the work that landed on main after the last bumps, and adds release automation.
+
+- atlas 16.2.0: atlas core mods, including removal of the atlas status-line entries (PR #60). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md).
+- armada 2.2.1: SonicWall bundle rebuilt after the CodeQL alert 43 error-message fix. Notes: [plugins/armada/CHANGELOG.md](../plugins/armada/CHANGELOG.md).
+- marketplace 5.3.0: armada and programmer entries now carry explicit `version` fields.
+- Releases: `.github/workflows/release.yml` now publishes a GitHub release `<plugin> <ver>` (tag `<plugin>-v<ver>`) for atlas, armada and programmer. `scripts/check_versions.py`, run by `.github/workflows/version-check.yml` and the atlas contract tests, fails on drift between plugin.json, marketplace.json, CHANGELOGs and the README "Current versions:" line.
+
 
 ### Fixed
 

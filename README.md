@@ -10,9 +10,9 @@
 
 </div>
 
-Version 15.0.0 (`plugins/atlas/.claude-plugin/plugin.json`). Release history is in the [CHANGELOG](plugins/atlas/CHANGELOG.md).
+Current versions: atlas 16.2.0, armada 2.2.1, programmer 1.0.1 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
-Current version: **16.0.1** (`plugins/atlas/.claude-plugin/plugin.json`), a test hermeticity fix on top of 16.0.0. Breaking in 16.0.0: the 13 vendor MCP connectors now ship in the armada plugin (2.0.0); install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada). Also in 16.0.0: scoped worker tool profiles, a Stop gate that sees shell-changed files, shared gate rules, one hook process per tool event, and hermetic tests.
+Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
 - **A fixed work loop.** Hooks enforce research, test, implement, verify. A lead session hands work to named role subagents (explorer, implementer, verifier and others) that share one todo board.
 - **A gate on "done".** A Stop hook refuses to let a session finish until there is evidence, a verified finding, current docs and no open todos. Each of its 17 conditions has an off switch.
@@ -321,11 +321,16 @@ Worker pane transport: tmux when installed, else background `claude --bg` proces
 
 ## Releases
 
-Release notes are in the [CHANGELOG](plugins/atlas/CHANGELOG.md) and on
-[GitHub Releases](https://github.com/w159/tech-tools/releases). A release
-workflow (`.github/workflows/release.yml`) tags each release
-`atlas-v<version>` and takes the release body from the matching CHANGELOG
-section.
+Release notes are in each plugin's CHANGELOG ([atlas](plugins/atlas/CHANGELOG.md),
+[armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md))
+and on [GitHub Releases](https://github.com/w159/tech-tools/releases). The
+release workflow (`.github/workflows/release.yml`) publishes `<plugin> <version>`
+with tag `<plugin>-v<version>` for atlas, armada and programmer whenever a
+`plugin.json` changes on main, taking the body from the matching CHANGELOG
+section. To release, bump `plugin.json` and the marketplace entry, add a
+`## <version>` CHANGELOG section, and update the "Current versions:" line above.
+`python3 scripts/check_versions.py` enforces that, in CI
+(`.github/workflows/version-check.yml`) and in the atlas contract tests.
 
 ## Developing atlas
 

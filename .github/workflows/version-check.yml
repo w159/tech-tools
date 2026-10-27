@@ -1,0 +1,18 @@
+name: version-check
+
+# Fails when plugin.json, marketplace.json, CHANGELOGs and the README
+# "Current versions:" line disagree (scripts/check_versions.py).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: python3 scripts/check_versions.py
