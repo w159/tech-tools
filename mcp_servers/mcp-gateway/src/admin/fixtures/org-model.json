@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "tenantId": "11111111-2222-4333-8444-555555555555",
+  "users": {
+    "total": 8,
+    "byDepartment": {
+      "Finance": 2,
+      "IT": 3,
+      "Operations": 1,
+      "Support": 2
+    },
+    "byCompanyName": {
+      "Contoso Example": 6,
+      "Contoso Labs": 2
+    },
+    "byDivision": {
+      "(unset)": 1,
+      "Corporate": 7
+    },
+    "byCostCenter": {
+      "(unset)": 1,
+      "CC-100": 3,
+      "CC-200": 4
+    },
+    "byJobTitle": {
+      "Accountant": 2,
+      "Analyst": 2,
+      "Coordinator": 1,
+      "Engineer": 2,
+      "Manager": 1
+    },
+    "byOfficeLocation": {
+      "HQ": 4,
+      "Remote": 4
+    }
+  },
+  "groups": [
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000003",
+      "displayName": "All Staff",
+      "securityEnabled": true,
+      "mailEnabled": true,
+      "groupTypes": [
+        "DynamicMembership"
+      ],
+      "hasMembershipRule": true,
+      "transitiveMemberCount": 8
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000002",
+      "displayName": "Help Desk",
+      "securityEnabled": true,
+      "mailEnabled": false,
+      "groupTypes": [],
+      "hasMembershipRule": false,
+      "transitiveMemberCount": 2
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000001",
+      "displayName": "IT Operations",
+      "securityEnabled": true,
+      "mailEnabled": false,
+      "groupTypes": [],
+      "hasMembershipRule": false,
+      "transitiveMemberCount": 3
+    }
+  ],
+  "directoryRoles": [
+    {
+      "displayName": "Global Administrator",
+      "memberCount": 1
+    },
+    {
+      "displayName": "Helpdesk Administrator",
+      "memberCount": 2
+    }
+  ],
+  "administrativeUnits": [
+    {
+      "id": "dddddddd-0000-4000-8000-000000000001",
+      "displayName": "Corporate Users",
+      "memberCount": 2
+    }
+  ],
+  "warnings": []
+}

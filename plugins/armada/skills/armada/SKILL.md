@@ -1,6 +1,6 @@
 ---
 name: armada
-description: 'Organizational deployment status and router for the atlas fleet. Reports what is configured (branding, active departments, connectors) and routes to the skill that fixes what is missing. Setup itself lives in armada-brand (branding, run first), armada-department (activate a department), and armada-connect (vendor connectors).'
+description: 'Organizational deployment status and router for the atlas fleet. Reports what is configured (branding, active departments, connectors) and routes to the skill that fixes what is missing. Setup itself lives in armada-brand (branding, run first), armada-department (activate a department), and armada-connect (vendor connectors). Enterprise mode (the org MCP gateway) lives in armada-enterprise.'
 when_to_use: checking an org's atlas deployment state, or finding the right armada setup command
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[blank for status]'
@@ -23,6 +23,8 @@ Setup happens in three skills, in this order:
 | 1 | `/armada:armada-brand` | org name, voice, colors, commit style -> `.atlas/org-config.yaml` |
 | 2 | `/armada:armada-department` | activate a department -> `.atlas/departments/<dept>.yaml` + its agent |
 | 3 | `/armada:armada-connect` | vendor MCP connectors for a department |
+
+Enterprise mode is separate and optional: `/armada:armada-enterprise` deploys the org MCP gateway in Azure, maps directory groups to connector roles, reviews audit logs, and connects Claude to the gateway. Mention it as an option when an org wants one sign-in and one audit log for its connectors; do not start it.
 
 Do not run a guided setup from this skill and do not ask the user which of the
 three they want. Scan, report, and name the next command. They run it.

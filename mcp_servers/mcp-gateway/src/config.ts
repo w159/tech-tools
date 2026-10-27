@@ -43,6 +43,20 @@ export interface BrokerConfig {
   readonly accessTokenTtl: number;
   readonly refreshTokenTtl: number;
   readonly googleGroupsLookup: boolean;
+  // Present when ENTRA_MEMBERSHIP_CHECK=1: refresh grants re-resolve roles.
+  readonly entraMembership?: EntraMembershipConfig;
+}
+
+export interface EntraMembershipConfig {
+  readonly tenantId: string;
+  // Object id of the gateway's service principal; looked up by app id when unset.
+  readonly spObjectId?: string;
+  readonly cacheSeconds: number;
+  readonly failOpen: boolean;
+  readonly graphBaseUrl: string;
+  readonly authorityHost: string;
+  // Both IDENTITY_ENDPOINT and IDENTITY_HEADER set: managed identity token source.
+  readonly managedIdentity?: { readonly endpoint: string; readonly header: string; readonly clientId?: string };
 }
 
 export interface GatewayConfig {
@@ -65,6 +79,8 @@ export interface GatewayConfig {
   readonly statefulMaxChildren: number;
   readonly port: number;
   readonly host: string;
+  // Leeway when verifying access token exp/nbf, in seconds.
+  readonly tokenClockToleranceSeconds: number;
 }
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -145,6 +161,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): GatewayConfig {
   const statefulIdleMs = intVar(env, "STATEFUL_IDLE_MS", 900_000, errors, 1);
   const statefulMaxChildren = intVar(env, "STATEFUL_MAX_CHILDREN", 50, errors, 1);
   const port = intVar(env, "PORT", 8080, errors);
+  const tokenClockToleranceSeconds = intVar(env, "TOKEN_CLOCK_TOLERANCE_SECONDS", 5, errors);
+  if (tokenClockToleranceSeconds > 300) errors.push("TOKEN_CLOCK_TOLERANCE_SECONDS (not an integer <= 300)");
 
   if (errors.length > 0) {
     throw new Error(`mcp-gateway: missing/invalid required env vars: ${errors.join(", ")}`);
@@ -166,6 +184,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     statefulMaxChildren,
     port,
     host: env.HOST || "0.0.0.0",
+    tokenClockToleranceSeconds,
   });
 }
 
@@ -293,6 +312,8 @@ function loadBroker(env: NodeJS.ProcessEnv, errors: string[]): BrokerConfig | un
   const googleGroupsLookup = env.GOOGLE_GROUPS_LOOKUP === "1";
   if (googleGroupsLookup && kind !== "google") errors.push("GOOGLE_GROUPS_LOOKUP (only valid when BROKER_UPSTREAM_KIND=google)");
 
+  const entraMembership = loadEntraMembership(env, kind, issuer, errors);
+
   if (errors.length > before) return undefined;
   return {
     upstream: { issuer: issuer!, clientId: clientId!, clientSecret: clientSecret!, kind: kind as UpstreamKind },
@@ -302,6 +323,67 @@ function loadBroker(env: NodeJS.ProcessEnv, errors: string[]): BrokerConfig | un
     accessTokenTtl,
     refreshTokenTtl,
     googleGroupsLookup,
+    ...(entraMembership ? { entraMembership } : {}),
+  };
+}
+
+// Entra issuers carry the tenant: https://login.microsoftonline.com/<tid>/v2.0
+const ENTRA_ISSUER_TENANT_RE = /^https:\/\/(?:login\.microsoftonline\.com|sts\.windows\.net)\/([0-9a-f-]{36})(?:\/|$)/i;
+
+function loadEntraMembership(
+  env: NodeJS.ProcessEnv,
+  kind: string,
+  upstreamIssuer: string | undefined,
+  errors: string[],
+): EntraMembershipConfig | undefined {
+  if (env.ENTRA_MEMBERSHIP_CHECK !== "1") return undefined;
+  const before = errors.length;
+  if (kind !== "entra") {
+    errors.push("ENTRA_MEMBERSHIP_CHECK (only valid when BROKER_UPSTREAM_KIND=entra)");
+    return undefined;
+  }
+
+  let tenantId = env.ENTRA_TENANT_ID;
+  if (tenantId) {
+    if (!GUID_RE.test(tenantId)) errors.push("ENTRA_TENANT_ID (not a GUID)");
+  } else {
+    tenantId = upstreamIssuer ? ENTRA_ISSUER_TENANT_RE.exec(upstreamIssuer)?.[1] : undefined;
+    if (!tenantId) errors.push("ENTRA_TENANT_ID (required when BROKER_UPSTREAM_ISSUER carries no tenant)");
+  }
+  const spObjectId = env.ENTRA_SP_OBJECT_ID || undefined;
+  if (spObjectId && !GUID_RE.test(spObjectId)) errors.push("ENTRA_SP_OBJECT_ID (not a GUID)");
+  const cacheSeconds = intVar(env, "ENTRA_MEMBERSHIP_CACHE_SECONDS", 300, errors);
+  const failOpen = env.ENTRA_MEMBERSHIP_FAIL_OPEN === "1";
+
+  const graphBaseUrl = env.ENTRA_GRAPH_BASE_URL ? parseHttpUrl(env.ENTRA_GRAPH_BASE_URL) : undefined;
+  if (env.ENTRA_GRAPH_BASE_URL && !graphBaseUrl) errors.push("ENTRA_GRAPH_BASE_URL (not an https URL)");
+  const authorityHost = env.ENTRA_AUTHORITY_HOST ? parseHttpUrl(env.ENTRA_AUTHORITY_HOST) : undefined;
+  if (env.ENTRA_AUTHORITY_HOST && !authorityHost) errors.push("ENTRA_AUTHORITY_HOST (not an https URL)");
+
+  let managedIdentity: EntraMembershipConfig["managedIdentity"];
+  if (Boolean(env.IDENTITY_ENDPOINT) !== Boolean(env.IDENTITY_HEADER)) {
+    errors.push("IDENTITY_ENDPOINT and IDENTITY_HEADER (set both or neither)");
+  } else if (env.IDENTITY_ENDPOINT && env.IDENTITY_HEADER) {
+    const endpoint = parseHttpUrl(env.IDENTITY_ENDPOINT);
+    if (!endpoint) errors.push("IDENTITY_ENDPOINT (not an https URL)");
+    else {
+      managedIdentity = {
+        endpoint: endpoint.toString(),
+        header: env.IDENTITY_HEADER,
+        ...(env.ENTRA_MANAGED_IDENTITY_CLIENT_ID ? { clientId: env.ENTRA_MANAGED_IDENTITY_CLIENT_ID } : {}),
+      };
+    }
+  }
+
+  if (errors.length > before) return undefined;
+  return {
+    tenantId: tenantId!,
+    ...(spObjectId ? { spObjectId } : {}),
+    cacheSeconds,
+    failOpen,
+    graphBaseUrl: stripTrailingSlash(graphBaseUrl?.toString() ?? "https://graph.microsoft.com/v1.0"),
+    authorityHost: stripTrailingSlash(authorityHost?.toString() ?? "https://login.microsoftonline.com"),
+    ...(managedIdentity ? { managedIdentity } : {}),
   };
 }
 

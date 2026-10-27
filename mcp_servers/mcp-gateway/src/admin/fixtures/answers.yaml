@@ -1,0 +1,21 @@
+version: 1
+tenantId: 11111111-2222-4333-8444-555555555555
+gatewayUrl: https://mcp.contoso.example
+appName: Contoso MCP Gateway
+refreshHours: 8
+roles:
+  - name: it-ops
+    description: IT operations staff; full read/write on RMM and PSA, no per-device secrets.
+    groups:
+      - aaaaaaaa-0000-4000-8000-000000000001
+    grants:
+      - connectors: [ninjaone, connectwise]
+        effects: [read, write]
+        deny_tools: [ninjaone_get_secret]
+  - name: helpdesk
+    description: Help desk; read-only on the PSA.
+    groups:
+      - aaaaaaaa-0000-4000-8000-000000000002
+    grants:
+      - connectors: [connectwise]
+        effects: [read]

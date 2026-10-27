@@ -87,7 +87,7 @@ export interface BackendLike {
   close(): Promise<void>;
 }
 
-export const CLIENT_INFO = { name: "mcp-gateway", version: "0.2.0" };
+export const CLIENT_INFO = { name: "mcp-gateway", version: "0.3.0" };
 
 export class Backend implements BackendLike {
   readonly spec: BackendSpec;

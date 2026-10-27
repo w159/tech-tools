@@ -8,7 +8,7 @@ Install alongside `atlas`. Single-project engineering work does not need it.
 
 ## Setup, in order
 
-Four skills, each invocable on its own. Branding first, department second.
+Four skills, each invocable on its own. Branding first, department second. A fifth, `armada-enterprise`, is optional enterprise mode (below).
 
 | | Command | Writes | Does |
 |---|---|---|---|
@@ -17,7 +17,15 @@ Four skills, each invocable on its own. Branding first, department second.
 | 3 | `/armada:armada-connect <vendor>` | `.atlas/departments/<name>.yaml` | Vendor MCP connectors: what is live, what is missing credentials, the exact `/plugin config` keys to fix it. |
 | - | `/armada:armada` | nothing | Read-only status scan: what is configured, what is missing, the single next command. |
 
+| - | `/armada:armada-enterprise` | cloud and directory, after the admin's yes | Enterprise mode: deploy the org MCP gateway in Azure, map Entra groups to connector roles, review audit logs, connect Claude. |
+
 `/armada:armada` never runs a setup interview. It scans and routes.
+
+## Enterprise mode
+
+`/armada:armada-enterprise` runs the connectors behind one organization gateway (`mcp_servers/mcp-gateway`). Users sign in with Microsoft and MFA, each tool call is checked against a role policy built from directory groups, and every call is audited. Azure first; the Google Cloud template in `enterprise/infra/gcp` is kept but not yet supported.
+
+The skill asks the admin one question at a time, shows a dry run, and changes nothing until the admin says yes. Admin role needed: Cloud Application Administrator. Procedures: `skills/armada-enterprise/references/` (`setup.md`, `policy.md`, `audit.md`, `connect.md`). Infra, queries and the example policy: `enterprise/`.
 
 ## The 11 departments
 
@@ -77,6 +85,8 @@ plugins/armada/
   skills/armada-brand/      step 1
   skills/armada-department/ step 2
   skills/armada-connect/    step 3
+  skills/armada-enterprise/ enterprise mode (+ references/)
+  enterprise/               infra/azure (Bicep), infra/gcp (not yet supported), queries, templates
   agents/                   11 department agents
   skills/armada/departments/<dept>/   per-department skill + command library
   skills/armada/references/ org-config schema, department schema, role routing,
@@ -87,7 +97,7 @@ plugins/armada/
 
 Only `skills/<name>/SKILL.md` and `agents/` are discovered by Claude Code.
 Anything nested deeper is reference material, by design. The contract test
-enforces that the four setup skills stay at the discoverable level:
+enforces that the setup skills stay at the discoverable level:
 
 ```
 python3 plugins/armada/tests/test_armada_contract.py

@@ -280,8 +280,9 @@ Tests:
   from env or flags with no organization defaults; refuses to run without
   them.
 - Local container run with the fixture IdP as evidence.
-- `plugins/harbor/`: manifest, skills `harbor-setup`, `harbor-policy`,
-  `harbor-audit`, `harbor-connect`, agent `harbor-admin`, `infra/azure`
-  (Bicep), `infra/gcp` (Terraform), `queries/` (KQL + Cloud Logging).
+- `plugins/armada/` enterprise mode: skill `armada-enterprise` with
+  references `setup`, `policy`, `audit`, `connect`, and `enterprise/` holding
+  `infra/azure` (Bicep), `infra/gcp` (Terraform, not yet supported),
+  `queries/` (KQL + Cloud Logging).
   Templates validated (bicep build, terraform validate), never applied.
 - Marketplace entry, CHANGELOG, README.

@@ -31,6 +31,7 @@ export function buildDirectVerifier(config: GatewayConfig, policy: Policy): (tok
       tenant: d.tenant,
       rolesFor: (claims: JWTPayload) => resolveRoles(policy, claims),
       idp: d.idp,
+      clockToleranceSeconds: config.tokenClockToleranceSeconds,
     });
 }
 

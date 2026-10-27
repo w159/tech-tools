@@ -5,9 +5,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuditLogger } from "../audit.js";
 import { verifyAccessToken, type Identity } from "../auth.js";
 import type { BrokerConfig, GatewayConfig, TrustedAssertionIssuer } from "../config.js";
-import type { Policy } from "../policy.js";
+import { resolveRoles, type Policy } from "../policy.js";
 import { createMemoryAdapter, type MemoryAdapter } from "./adapter.js";
-import { ACCOUNT_MODEL, AccountStore } from "./accounts.js";
+import { ACCOUNT_MODEL, AccountStore, type AccountRecord } from "./accounts.js";
+import { clientCredentialsTokenProvider, EntraMembership, managedIdentityTokenProvider, type FetchLike } from "./entra-membership.js";
 import { lookupGoogleGroups } from "./google-groups.js";
 import { createInteractionHandler, UPSTREAM_LOGIN_MODEL } from "./interactions.js";
 import { JTI_MODEL, JWT_BEARER_GRANT, registerJwtBearerGrant } from "./jwt-bearer.js";
@@ -29,6 +30,8 @@ export interface BrokerOptions {
   adapter?: MemoryAdapter;
   lookupGroups?: (email: string) => Promise<string[]>;
   keyResolverFor?: (issuer: TrustedAssertionIssuer) => JWTVerifyGetKey;
+  // fetch used for Graph and the Graph token endpoints (tests point it at a fake).
+  graphFetch?: FetchLike;
 }
 
 export interface Broker {
@@ -61,6 +64,71 @@ export function createBroker(opts: BrokerOptions): Broker {
   const jtis = new memory.Adapter(JTI_MODEL);
   const sweeper = setInterval(() => memory.sweep(), 60_000);
   sweeper.unref();
+
+  // Entra only: re-resolve roles from Graph on every refresh_token grant.
+  const membershipCfg = broker.entraMembership;
+  const membership = membershipCfg
+    ? new EntraMembership({
+        appId: broker.upstream.clientId,
+        spObjectId: membershipCfg.spObjectId,
+        cacheSeconds: membershipCfg.cacheSeconds,
+        graphBaseUrl: membershipCfg.graphBaseUrl,
+        fetch: opts.graphFetch,
+        tokenProvider: membershipCfg.managedIdentity
+          ? managedIdentityTokenProvider({ ...membershipCfg.managedIdentity, fetch: opts.graphFetch })
+          : clientCredentialsTokenProvider({
+              authorityHost: membershipCfg.authorityHost,
+              tenantId: membershipCfg.tenantId,
+              clientId: broker.upstream.clientId,
+              clientSecret: broker.upstream.clientSecret,
+              fetch: opts.graphFetch,
+            }),
+      })
+    : undefined;
+
+  // Returns false when the refresh must fail with invalid_grant. On success the
+  // account record carries the fresh roles, so extraTokenClaims and the audit
+  // event read them. Audit lines hold reasons only, never ids or tokens.
+  async function refreshStillEntitled(ctx: { oidc?: { client?: { clientId?: string } } }, acct: AccountRecord): Promise<boolean> {
+    if (!membership || !membershipCfg) return true;
+    const clientId = ctx.oidc?.client?.clientId;
+    const fail = (reason: string, outcome: "ok" | "backend_error"): void => {
+      audit.emit({
+        request_id: randomUUID(),
+        event: "auth_failed",
+        actor: { sub: acct.accountId, idp: acct.idp, tenant: acct.tenant },
+        client_id: clientId,
+        reason,
+        outcome,
+      });
+    };
+    const result = await membership.resolve(acct.sub);
+    if (result.status === "unavailable") {
+      if (membershipCfg.failOpen) {
+        fail("membership_check_unavailable", "ok");
+        return true;
+      }
+      fail("membership_check_unavailable", "backend_error");
+      return false;
+    }
+    if (result.status === "revoked") {
+      fail("membership_revoked", "backend_error");
+      return false;
+    }
+    const roles = resolveRoles(policy, {
+      roles: result.appRoles,
+      groups: result.groupIds,
+      oid: acct.sub,
+      ...(acct.tenant ? { tid: acct.tenant } : {}),
+      ...(acct.email ? { email: acct.email } : {}),
+    });
+    if (roles.length === 0) {
+      fail("membership_revoked", "backend_error");
+      return false;
+    }
+    if (roles.join("\n") !== [...acct.roles].sort().join("\n")) await accounts.upsert({ ...acct, roles });
+    return true;
+  }
 
   const resourceInfo = {
     scope: RESOURCE_SCOPE,
@@ -110,9 +178,15 @@ export function createBroker(opts: BrokerOptions): Broker {
     // Rotation on for every client; a replayed refresh token revokes the grant.
     rotateRefreshToken: true,
     issueRefreshToken: async (_ctx: unknown, client: { grantTypeAllowed(t: string): boolean }) => client.grantTypeAllowed("refresh_token"),
-    findAccount: async (_ctx: unknown, id: string) => {
+    // oidc-provider turns an undefined account into invalid_grant on a refresh
+    // (grant_common.validateAccount). That runs before the refresh token is
+    // rotated, so a failed check consumes nothing.
+    findAccount: async (ctx: { oidc?: { params?: Record<string, unknown>; client?: { clientId?: string } } }, id: string) => {
       const acct = await accounts.find(id);
       if (!acct) return undefined;
+      if (membership && ctx?.oidc?.params?.grant_type === "refresh_token" && acct.idp === "entra") {
+        if (!(await refreshStillEntitled(ctx, acct))) return undefined;
+      }
       return {
         accountId: id,
         async claims() {
@@ -208,6 +282,7 @@ export function createBroker(opts: BrokerOptions): Broker {
       rolesFor: (claims: JWTPayload) =>
         Array.isArray(claims.roles) ? claims.roles.filter((r): r is string => typeof r === "string") : [],
       idp: broker.upstream.kind,
+      clockToleranceSeconds: config.tokenClockToleranceSeconds,
     });
 
   return {
