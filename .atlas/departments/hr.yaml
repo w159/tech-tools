@@ -1,0 +1,19 @@
+# Department onboarding - activated by armada.
+# Connector credentials live in the plugin userConfig / ~/.config/atlas/atlas.env, never here.
+# Statuses verified live via each <vendor>_status call on 2026-10-28.
+
+department: "hr"
+display_name: "Human Resources"
+owning_agent: "armada:armada-hr"
+active: true
+
+connectors:
+  - vendor: paylocity
+    status: enabled
+    required_keys:
+      - paylocity_client_id
+      - paylocity_client_secret
+      - paylocity_company_id
+
+routing:
+  notes: "Route payroll and HR data work to armada:armada-hr."

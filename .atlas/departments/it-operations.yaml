@@ -1,0 +1,110 @@
+# Department onboarding - activated by armada.
+# Onboards the it-operations department into this atlas deployment.
+# Connector credentials live on the it-operations plugin userConfig, never here.
+
+department: "it-operations"
+display_name: "IT Operations"
+owning_agent: "armada:armada-it-ops"
+active: true
+
+# Skills this department exposes (mirrors departments/it-operations/skills/).
+skills:
+  - auvik-alerts
+  - auvik-api-patterns
+  - auvik-devices
+  - auvik-networks
+  - change-management
+  - compliance-tracking
+  - ninjaone-alerts
+  - ninjaone-api-patterns
+  - ninjaone-devices
+  - ninjaone-organizations
+  - ninjaone-tickets
+  - process-optimization
+  - psa-api-patterns
+  - psa-companies
+  - psa-contacts
+  - psa-product-catalog
+  - psa-projects
+  - psa-tickets
+  - psa-time-entries
+  - resource-planning
+  - risk-assessment
+  - spanning-api-patterns
+  - spanning-audit-forensics
+  - spanning-backup-health-sweep
+  - spanning-license-utilization
+  - spanning-restore-orchestrator
+  - vendor-management
+
+# Commands this department exposes (mirrors departments/it-operations/commands/).
+commands:
+  - auvik-alert-triage
+  - auvik-capacity-check
+  - auvik-device-inventory
+  - auvik-network-audit
+  - auvik-tenant-overview
+  - capacity-plan
+  - change-request
+  - ninjaone-create-ticket
+  - ninjaone-device-info
+  - ninjaone-list-alerts
+  - ninjaone-search-devices
+  - process-doc
+  - psa-add-note
+  - psa-check-agreement
+  - psa-close-ticket
+  - psa-create-ticket
+  - psa-get-ticket
+  - psa-log-time
+  - psa-lookup-config
+  - psa-schedule-entry
+  - psa-search-tickets
+  - psa-update-ticket
+  - runbook
+  - spanning-health
+  - spanning-restore
+  - status-report
+  - vendor-review
+
+# Vendor connectors. A connector is enabled once its required keys are supplied
+# (plugin config UI / password manager / ~/.config/atlas/atlas.env), never
+# through chat. Verified live via each <vendor>_status call on 2026-10-28.
+connectors:
+  - vendor: ninjaone
+    status: enabled
+    required_keys:
+      - ninjaone_client_id
+      - ninjaone_client_secret
+  - vendor: connectwise
+    status: enabled
+    required_keys:
+      - cw_manage_company_id
+      - cw_manage_public_key
+      - cw_manage_private_key
+      - cw_manage_client_id
+      - cw_manage_base_url
+  - vendor: auvik
+    status: enabled
+    required_keys:
+      - auvik_username
+      - auvik_api_key
+  - vendor: spanning
+    status: enabled
+    required_keys:
+      - spanning_admin_email
+      - spanning_api_token
+
+# Branding: inherit org branding until an org-config.yaml is created.
+branding:
+  voice: ""
+  tone_guidelines: ""
+
+# Policies: inherit org policies until an org-config.yaml is created.
+policies:
+  compliance_frameworks: []
+  approval_workflows: {}
+
+# Routing.
+routing:
+  notes: "Route MSP IT ops work (RMM/PSA/networking/backup) to armada:armada-it-ops. Ask if the target vendor is ambiguous."
