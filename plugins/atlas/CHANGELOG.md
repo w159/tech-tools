@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Crew: workers that rewrote their whole module dropped the stub's docstrings (ranges.py, blocks.py: 0 docstring chars). The run now keeps a pristine copy of each owned stub (`<rundir>/stubs/<rel>`, `ATLAS_CREW_STUBS`), and `irc check`, after the unit check passes and before DONE, inserts the stub's docstring into every module, class, function or method present in both files where the worker wrote none (ast, qualified names; worker-written docstrings and worker-only defs untouched; an unparseable result keeps the worker's file; the unit check is re-run once and the insertion reverted if it fails). Prints `restored N docstrings in <file>`; no model cost (`scripts/test_atlas_crew.py::DocstringRestoreTests`, red before, green now).
 - Crew: `auto_plan` missed a dependency that only the worker's test file imports (`toc` and `text` ran before `blocks` was DONE and hit its `NotImplementedError`). Needs and peer interfaces now include the peers the worker's own tests import, cycles still broken by `_break_cycles`; absolute `pkg.x` imports also resolve under a source dir (`src/pkg/x.py`) (`scripts/test_atlas_crew.py::PlanTests`, red before, green now).
 
 ## 16.4.0 - 2026-10-28
