@@ -1,5 +1,38 @@
 # Changelog
 
+## 16.4.0 - 2026-10-28
+
+### Added
+
+- `/atlas:atlas-crew` skill (`skills/atlas-crew/SKILL.md`): its body runs `atlas_crew.py run $ARGUMENTS --wait 100` as pre-executed shell before the lead's first model call, so the crew is already running (or finished) when the lead reads the page. The lead is one turn (about 57k tokens) instead of two (about 119k). Arguments are the `atlas_crew.py run` flags.
+- Peer interfaces in each worker's context: the public skeleton (classes, signatures, constants, bodies elided) of every planned file the worker imports, from the import graph of the stubs (`scripts/atlas_crew.py` `_interface`, `_local_deps`; import cycles are broken the same way on every run).
+- `irc check` waits for the peers a worker imports (`ATLAS_CREW_NEEDS`), runs its unit check and posts DONE itself; `irc need --done` waits for DONE only and exits 4 when a peer gave up.
+- PostToolUse early exit (`hooks/crew_worker.py` `_early_exit`): right after a Bash call whose check posted DONE, the hook re-runs the check and, if it passes and no direct message is waiting, ends the session with `continue: false`, so the worker spends no final model turn.
+- Workers run with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (no telemetry, flag fetch or summary round trip): `claude -p` exits about 3 s sooner after its result.
+
+### Changed
+
+- Workers no longer announce READY; peers already hold each other's interfaces. Every planned worker's check is `irc check`.
+- The worker protocol says to write the file and run `irc check` unpiped in the same Bash call, and never to sleep.
+
+### Fixed
+
+- Crew: `atlas-crew` is now a manual-only skill (`disable-model-invocation: true`; the manual-skill counts in atlas-setup, its references, README and the reference doc say four), and `auto_plan` no longer makes a worker of a matched file that is another matched file's test or is named `test_*`/`*_test.py` (`scripts/test_atlas_crew.py::PlanTests::test_auto_plan_never_makes_a_worker_of_a_matched_test_file`, red before, green now).
+- Crew: a DONE is never taken from the worker's word. New `irc check` waits for `ATLAS_CREW_NEEDS` (as `need --done`), runs `ATLAS_CREW_UNIT_CHECK` and posts DONE only when it exits 0, so `pytest | tail && irc done` can no longer announce a failing module; every planned worker's check is now `irc check`, and a manual `irc done` re-runs the unit check and refuses on failure. A failing check or refused `irc done` records an `unverified` note that voids the worker's earlier DONE (`has_done` and `need` honour it), so a later pass posts a fresh DONE (`scripts/test_atlas_crew.py::VerifiedDoneTests`, red before, green now).
+- Crew: `irc wait` matched a stale message already on the log (a false DONE) and returned at once. It now scans only new messages by default; `--all` scans history and `--new-only` stays accepted as a no-op (`BusTests::test_wait_ignores_history_by_default_and_finds_it_with_all`).
+- Crew: a worker slept 45 s while four dependents blocked on it. The PreToolUse hook now denies a Bash command containing `sleep N` with N >= 3 s and points to `irc wait` / `irc check`; the worker protocol says never to sleep and to run `irc check` unpiped in the same Bash call as the file write (`SleepDenyTests`).
+
+### Benchmark
+
+Same method as 16.3.0. Crew 16.4.0, 3 runs per task, against the same single-prompt runs. Every run passed every test and left the tests untouched. Full table and method: `docs/audits/2026-10-28_atlas-16.4.0-crew-benchmark.md` at the repository root.
+
+| Task | Single prompt (median) | Crew 16.4.0, 3 runs | Crew vs single (medians) |
+| --- | --- | --- | --- |
+| 8 modules, 213 tests | 853k / 144 s | 137k / 41 s, 137k / 40 s, 137k / 44 s | 16% tokens, 28% wall time |
+| 18 modules, 469 tests | 2.29M / 181 s | 307k / 55 s, 323k / 70 s, 281k / 55 s | 13% tokens, 30% wall time |
+
+The 25% wall-time target is still missed: 40.9 s against 36.0 s on 8 modules (4.9 s over) and 54.9 s against 45.3 s on 18 modules (9.6 s over).
+
 ## 16.3.0 - 2026-10-28
 
 ### Added

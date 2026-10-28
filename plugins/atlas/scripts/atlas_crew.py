@@ -34,6 +34,7 @@ Stdlib only. Prints one JSON object per invocation.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -135,30 +136,33 @@ each owning different files. You talk to the others on the team IRC channel.
 Channel commands (run them with Bash):
   irc say "text"                      post to the whole team
   irc say --to <nick> "text"          message one peer
-  irc need <peer> [<peer> ...]         block until each named peer has posted READY or DONE
+  irc need [--done] <peer> [<peer> ...]
+                                      block until each named peer has posted READY or DONE
+                                      (--done: DONE only); exit 4 if a peer gave up
   irc wait --from <nick> --match <regex>
-                                      block until that peer posts a matching message
-  Both time out after 100s (the shell kills a command after 2 minutes): rerun on a timeout,
-  never `sleep`. Peers are the workers listed below; the lead posts no READY.
+                                      block until that peer posts a NEW matching message
+                                      (--all: history too)
+  irc check                           wait for your peers, run your unit check, post DONE if it passes
+  Both time out after 100s (the shell kills a command after 2 minutes): rerun on a timeout.
+  Never `sleep`: wait with `irc wait`. Peers are the workers listed below; the lead posts no READY.
   irc read                            print anything unread
 Messages from peers are pushed to you automatically after your tool calls as [irc] lines.
 
 Rules:
 1. Edit only the files you own; edits elsewhere are blocked. Need a change in a peer's file? Ask its owner.
-2. As soon as the public interface of your files is settled, announce it once:
-   irc say "READY <your name>: <signatures other workers use>"
-   Post READY again only if the interface changes.
-3. If you depend on a peer's file, code against the agreed interface right away; before running
-   tests that import it, `irc need <peer> ...` for exactly the peers you import.
+2. Write your file(s), then run `irc check` exactly as is (never piped, chained or wrapped) in the SAME
+   Bash call. It waits for the peers you import, runs your unit check and posts DONE only if it
+   passes; DONE is never your word. Do not announce READY: your peers already hold your interface.
+3. Code against the interfaces you were handed. `irc check` waits for the peers you import; do not run
+   tests that import peers outside it.
 4. Answer every question addressed to you, briefly, then keep working.
 5. Keep messages short and factual (names, signatures, decisions). No status chatter.
 6. Your shell already starts in the project root: never `cd`, use paths relative to it, and keep
    scratch files under .atlas/tmp/ (anything outside the project needs an approval nobody can give).
-7. Your context below already holds your spec section and your stub. Do not re-read them, and read
-   peers' files or tests only to debug a failure.
+7. Your context below already holds your spec section, your stub and the interfaces of the peer files
+   you import. Do not re-read them, and read peers' files or tests only to debug a failure.
 8. Every tool call re-sends your whole context, so use few, large calls. Usual shape: ONE Bash
-   call that writes your file(s) with a heredoc, posts READY, then runs your check; then Edit only
-   what fails.
+   call that writes your file(s) with a heredoc, then runs your check; then Edit only what fails.
 9. You are finished when your check passes. The team gate re-runs it when you stop; you cannot
    stop while it fails. Then reply with one line: files, check result.
 """
@@ -169,6 +173,20 @@ Rules:
 
 def _run_dir(root, run_id) -> Path:
     return Path(root) / CREW_REL / run_id
+
+
+IRC_CHECK = "irc check"
+
+
+def _wire_check(w: dict) -> None:
+    """Make a worker's check `irc check` (unit_check = the plain check, needs = who it waits for), so its DONE
+    is decided by the check itself. A check that already is `irc check`, or that drives `irc` by hand, is kept."""
+    chk = (w.get("check") or "").strip()
+    if not chk or chk == IRC_CHECK or re.search(r"\birc\s+(need|done|check)\b", chk):
+        return
+    w["unit_check"] = w.get("unit_check") or chk
+    w["needs"] = list(w.get("needs") or [])
+    w["check"] = IRC_CHECK
 
 
 def load_plan(path) -> dict:
@@ -196,6 +214,8 @@ def load_plan(path) -> dict:
             if p in seen:
                 raise ValueError(f"{p} is owned by both {seen[p]} and {w['name']}")
             seen[p] = w["name"]
+    for w in workers:
+        _wire_check(w)
     return plan
 
 
@@ -253,7 +273,7 @@ def resolve_context(entries, root) -> str:
     for e in entries or []:
         path, _, head = str(e).partition("#")
         f = Path(root) / path
-        if f.is_file():
+        if "\n" not in path and f.is_file():  # multi-line literal text is never a path
             text = f.read_text(encoding="utf-8", errors="replace")
             if head:
                 sec = section(text, head)
@@ -273,6 +293,12 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
     ]
     ctx = resolve_context((plan.get("context") or []) + (w.get("context") or []), root)
     check = w.get("check") or "(none: you finish when your task is done)"
+    unit = w.get("unit_check")
+    done_when = (
+        f"`{check}` passes in {root}: it runs `{unit}` after the peers you import are done."
+        if unit and check.strip() == IRC_CHECK
+        else f"`{check}` passes in {root}."
+    )
     return (
         f"# Crew {run_id}: you are `{w['name']}`\n"
         f"Team goal: {plan.get('goal', '')}\n\n"
@@ -281,7 +307,7 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
         + "\n".join(f"- {p}" for p in w["owns"])
         + "\n\n"
         f"## Peers on #{run_id}\n" + ("\n".join(peers) or "(none)") + "\n\n"
-        f"## Done when\n`{check}` passes in {root}.\n\n"
+        f"## Done when\n{done_when}\n\n"
         f"## Context\n{ctx}\n"
     )
 
@@ -304,6 +330,9 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
             "ATLAS_CREW_OWNS": json.dumps(w["owns"]),
             "ATLAS_CREW_OWNERS": json.dumps(owners),
             "ATLAS_CREW_CHECK": w.get("check") or "",
+            # `irc check` waits for NEEDS, runs UNIT_CHECK and posts DONE itself
+            "ATLAS_CREW_NEEDS": " ".join(w.get("needs") or []),
+            "ATLAS_CREW_UNIT_CHECK": w.get("unit_check") or "",
             "ATLAS_CREW_MAX_BLOCKS": str(plan.get("max_blocks") or 3),
             "PATH": f"{rundir / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
             # the worker's own hooks are the crew hooks; atlas's lead-side gates stay off in workers
@@ -312,6 +341,9 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
             # the 2-minute timeout and kept the finished worker alive for 9 minutes (live run).
             # With this set, a timed-out command is killed and its error goes back to the worker.
             "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
+            # no telemetry, flag fetch or post_turn_summary round trip: `claude -p` exited ~2.3 s after
+            # the result, init came ~0.6 s sooner (3 runs each: exit 8.8 s -> 5.8 s, init 4.2 -> 3.6 s).
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         }
     )
     return env
@@ -589,6 +621,112 @@ def _heading_for(text: str, rel: str):
     return next((h for h in heads if re.search(rf"\b{re.escape(stem)}\b", h, re.I)), None)
 
 
+IFACE_HEAD = (
+    "Interfaces of the peer files you import (code against these; their owners implement them, "
+    "do not read the files):\n"
+)
+
+
+def _sig(fn) -> str:
+    kw = "async def" if isinstance(fn, ast.AsyncFunctionDef) else "def"
+    ret = f" -> {ast.unparse(fn.returns)}" if fn.returns else ""
+    doc = (ast.get_docstring(fn) or "").strip().split("\n")[0]
+    decos = "".join(f"@{ast.unparse(d)}\n" for d in fn.decorator_list)
+    return f"{decos}{kw} {fn.name}({ast.unparse(fn.args)}){ret}: ..." + (f"  # {doc}" if doc else "")
+
+
+def _interface(path) -> str:
+    """Public API skeleton of a Python file (classes, functions, __all__, constants), bodies elided."""
+    try:
+        tree = ast.parse(Path(path).read_text(encoding="utf-8", errors="replace"))
+    except (SyntaxError, OSError, ValueError):
+        return ""
+
+    def public(name):
+        return not name.startswith("_") or (name.startswith("__") and name.endswith("__"))
+
+    out = []
+    for n in tree.body:
+        if isinstance(n, ast.ClassDef) and not n.name.startswith("_"):
+            out += [f"@{ast.unparse(d)}" for d in n.decorator_list]
+            bases = ", ".join(ast.unparse(b) for b in [*n.bases, *n.keywords])
+            doc = (ast.get_docstring(n) or "").strip().split("\n")[0]
+            out.append(f"class {n.name}({bases}):" if bases else f"class {n.name}:")
+            if doc:
+                out.append(f'    """{doc}"""')
+            for m in n.body:
+                if isinstance(m, ast.AnnAssign):
+                    out.append("    " + ast.unparse(m))
+                elif isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and public(m.name):
+                    out += ["    " + ln for ln in _sig(m).split("\n")]
+        elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and not n.name.startswith("_"):
+            out.append(_sig(n))
+        elif isinstance(n, ast.Assign) and all(isinstance(t, ast.Name) for t in n.targets):
+            if any(t.id == "__all__" or not t.id.startswith("_") for t in n.targets):
+                out.append(ast.unparse(n))
+        elif isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name) and not n.target.id.startswith("_"):
+            out.append(ast.unparse(n))
+    return "\n".join(out)
+
+
+def _local_deps(rel: str, rels, root) -> list:
+    """Plan files (repo-relative posix paths in `rels`) that file `rel` imports, in order of first appearance."""
+    try:
+        tree = ast.parse((Path(root) / rel).read_text(encoding="utf-8", errors="replace"))
+    except (SyntaxError, OSError, ValueError):
+        return []
+    here = Path(rel).parent
+    known = set(rels)
+    found = []
+
+    def add(mod_parts, base):
+        cand = (base / "/".join(mod_parts)).as_posix() + ".py" if mod_parts else None
+        if cand and cand.startswith("./"):
+            cand = cand[2:]
+        if cand and cand in known and cand != rel and cand not in found:
+            found.append(cand)
+
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            for a in n.names:
+                add(a.name.split("."), Path("."))
+        elif isinstance(n, ast.ImportFrom):
+            mod = n.module.split(".") if n.module else []
+            if n.level:
+                base = here
+                for _ in range(n.level - 1):
+                    base = base.parent
+            else:
+                base = Path(".")
+            add(mod, base)
+            for a in n.names:  # `from . import x` / `from pkg import x`: x may itself be a plan file
+                add([*mod, a.name], base)
+    return found
+
+
+def _break_cycles(deps: dict) -> dict:
+    """Drop the edge A->B when B reaches A through the dep graph and A sorts after B, so no worker waits
+    on a peer that (transitively) waits on it. The surviving edge of a cycle is the same on every run."""
+    g = {k: list(v) for k, v in deps.items()}
+
+    def reaches(src, dst):
+        seen, stack = set(), [src]
+        while stack:
+            for m in g.get(stack.pop(), ()):
+                if m == dst:
+                    return True
+                if m not in seen:
+                    seen.add(m)
+                    stack.append(m)
+        return False
+
+    for a in sorted(g):
+        for b in list(g[a]):
+            if a > b and reaches(b, a):
+                g[a].remove(b)
+    return g
+
+
 def auto_plan(root: str, spec: str, files_glob: str, tests_pat: str | None = None, check: str | None = None,
               goal: str | None = None, exclude=("__init__.py", "conftest.py")) -> dict:
     """A plan with one worker per source file: each gets the spec section naming its file, the file itself
@@ -599,6 +737,15 @@ def auto_plan(root: str, spec: str, files_glob: str, tests_pat: str | None = Non
     rootp = Path(root)
     text = (rootp / spec).read_text(encoding="utf-8", errors="replace")
     files = [f for f in sorted(rootp.glob(files_glob)) if f.is_file() and f.name not in exclude]
+    # a matched file that is another matched file's test, or is named like a test, is never a worker
+    owned_tests = {
+        (rootp / tests_pat.format(stem=f.stem, name=f.name, parent=f.parent.name)).resolve()
+        for f in files
+    } if tests_pat else set()
+    files = [
+        f for f in files
+        if not (f.name.startswith("test_") or f.name.endswith("_test.py") or f.resolve() in owned_tests - {f.resolve()})
+    ]
     rels = [f.relative_to(rootp).as_posix() for f in files]
     tops = {r.split("/")[0] for r in rels if "/" in r}
     heads = [(lvl, h) for _, lvl, h in _headings(text)]
@@ -613,9 +760,17 @@ def auto_plan(root: str, spec: str, files_glob: str, tests_pat: str | None = Non
         elif len(shared) < 4:
             shared.append(f"{spec}#{h}")
     stems = [f.stem for f in files]
+    owner = {}
+    for f, rel in zip(files, rels):
+        base = f.stem if stems.count(f.stem) == 1 else f"{f.parent.name}-{f.stem}"
+        owner[rel] = re.sub(r"[^A-Za-z0-9_-]", "-", base)[:32] if base[0].isalpha() else "w-" + base[:30]
     workers = []
+    imports = {rel: _local_deps(rel, rels, rootp) for rel in rels}
+    waits = _break_cycles(imports)
     for f, rel in zip(files, rels):
         head = _heading_for(text, rel)
+        peers = [(d, _interface(rootp / d)) for d in imports[rel]]
+        iface = "".join(f"# {owner[d]} owns {d}\n{sk}\n" for d, sk in peers if sk)
         parent = f.parent.name
         tests = []
         if tests_pat:
@@ -623,15 +778,19 @@ def auto_plan(root: str, spec: str, files_glob: str, tests_pat: str | None = Non
             if (rootp / t).exists():
                 tests = [t]
         unit = f"python3 -m pytest -q {' '.join(tests)}" if tests and (check or "").startswith("python3 -m pytest") else None
+        final = unit or check or ""
+        needs = [owner[d] for d in waits[rel]] if final.startswith("python3 -m pytest") else []
         base = f.stem if stems.count(f.stem) == 1 else f"{parent}-{f.stem}"
         top = rel.split("/")[0] if "/" in rel else None
         workers.append({
-            "name": re.sub(r"[^A-Za-z0-9_-]", "-", base)[:32] if base[0].isalpha() else "w-" + base[:30],
+            "name": owner[rel],
             "owns": [rel],
             "tests": tests,
             "task": f"Implement {rel}" + (f" per the spec section '{head}'" if head else "") + ".",
-            "context": scoped.get(top, []) + ([f"{spec}#{head}"] if head else [spec]) + [rel],
-            "check": unit or check or "",
+            "context": scoped.get(top, []) + ([f"{spec}#{head}"] if head else [spec])
+            + ([IFACE_HEAD + iface] if iface else []) + [rel],
+            "check": IRC_CHECK if final else "",  # DONE is posted by `irc check` itself once final passes
+            **({"unit_check": final, "needs": needs} if final else {}),
         })
     return {"goal": goal or f"Implement {files_glob} per {spec}", "check": check or "", "context": shared, "workers": workers}
 
@@ -855,7 +1014,8 @@ def cmd_supervise(a) -> int:
         if not routed:
             for w in plan["workers"]:
                 if w.get("check"):
-                    c2, o2 = _run_check(w["check"], root)
+                    # the unwired check: the lead has no `irc` on PATH and nothing to wait for
+                    c2, o2 = _run_check(w.get("unit_check") or w["check"], root)
                     if c2:
                         routed[w["name"]] = o2[-3000:]
         if not routed:

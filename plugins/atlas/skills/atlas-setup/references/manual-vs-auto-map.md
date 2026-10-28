@@ -1,10 +1,10 @@
 # Manual vs Auto Map
 
-The inventory of the 39 atlas skills. atlas-setup uses this table to tell the user what just came online.
+The inventory of the 40 atlas skills. atlas-setup uses this table to tell the user what just came online.
 
 ## Trigger model
 
-The atlas plugin has three manual skills (atlas-setup, atlas-prompt, atlas-tui). Every other skill auto-triggers from its `description` + `when_to_use`.
+The atlas plugin has four manual skills (atlas-setup, atlas-prompt, atlas-tui, atlas-crew). Every other skill auto-triggers from its `description` + `when_to_use`.
 
 - **Manual** = `disable-model-invocation: true`. The model cannot start it. The user invokes it explicitly by name (slash command or direct call).
 - **Auto** = the model may start it when the task matches the description.
@@ -18,45 +18,46 @@ Several skills carry more than one mode (for example atlas-frontend: build, comp
 | 3 | atlas-bakeoff | auto | Decides a technical choice with evidence: compares 2-3 approaches against named criteria (bakeoff), or grades one option Adopt, Trial, Hold or Reject (verdict) |
 | 4 | atlas-brainstorm | auto | Grills a vague idea one hard question at a time, recommending an answer each turn, until shared understanding |
 | 5 | atlas-compound | auto | Captures one durable, verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check |
-| 6 | atlas-db-audit | auto | Audits a live database read-only via parallel subagents: schema inventory, schema-to-code reconciliation, privileges, naming |
-| 7 | atlas-debug | auto | Diagnoses a reproducible bug, exception, stack trace or bad output and fixes the root cause with evidence |
-| 8 | atlas-doctor | auto | Atlas self-improvement loop: mines cross-session findings from atlas.db, applies accepted changes, records a baseline |
-| 9 | atlas-dogfood | auto | Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route |
-| 10 | atlas-explain | auto | Explains how or why existing code behaves, in chat, with file:line evidence from an atlas:explorer trace; read-only |
-| 11 | atlas-frontend | auto | Builds, refactors or polishes frontend UI on one design system (shadcn/ui, Tailwind, Radix), verified live in the browser |
-| 12 | atlas-gitignore | auto | Generates a zero-trust, deny-by-default .gitignore for a named stack, secrets re-excluded last |
-| 13 | atlas-handoff | auto | Produces a dense session handoff so a fresh session resumes without re-discovery |
-| 14 | atlas-harden | auto | Writes an idempotent endpoint remediation script (CHECK/SET/VERIFY) for RMM or MDM that proves whether it changed state |
-| 15 | atlas-loop | auto | Matches a recurring or iterative task to a library loop: interval loops use /loop, fan-out loops run as a parallel verify workflow |
-| 16 | atlas-optimize | auto | Single-experiment loop: baseline, one hypothesis, one change, identical re-measure, real delta reported |
-| 17 | atlas-orchestrate | auto | Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification |
-| 18 | atlas-plan | auto | Writes an implementation-ready plan to docs/plans/ from a brainstorm artifact or feature description, with U-numbered units and a verification contract |
-| 19 | atlas-prompt | MANUAL | Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous |
-| 20 | atlas-proof | auto | Human-review workflow for project markdown: publishes a doc for review, records anchored comments in a sidecar file, folds feedback back |
-| 21 | atlas-prototype | auto | Builds a throwaway prototype in an isolated run directory to answer one visual, interaction or product-shape question, then promotes decisions into a plan or discards it |
-| 22 | atlas-pulse | auto | Generates a time-windowed product pulse (usage, performance, errors) from wired telemetry, read-only, into docs/pulses/ |
-| 23 | atlas-readme | auto | Generates an onboarding-grade README.md by inspecting the repo, tracing every claim to a file |
-| 24 | atlas-refactor | auto | Refactors, renames or restructures code without changing behavior, with before/after evidence |
-| 25 | atlas-resolve-pr-feedback | auto | Resolves PR review feedback: triages each thread (fix, reply, needs-human), applies approved fixes, drafts replies, confirms before pushing or posting |
-| 26 | atlas-review | auto | Risk-selected multi-persona review of a diff, branch or PR; P0/P1 findings verified, report-only verdict (Ready, Ready-with-fixes, Not-ready) |
-| 27 | atlas-run-watch | auto | Watches a long-running job (PID, log tail, CI URL, API, command loop) or one open GitHub PR's CI with tick/checkpoint/re-arm, spilling logs to a run ledger |
-| 28 | atlas-setup | MANUAL | Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair, tour (first-session walkthrough), menu |
-| 29 | atlas-ship | auto | Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR |
-| 30 | atlas-simplify | auto | Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate |
-| 31 | atlas-status | auto | Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed |
-| 32 | atlas-sweep | auto | Turns feedback into triaged findings |
-| 33 | atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs |
-| 34 | atlas-testing | auto | Plans, generates, and runs tests in any language: detects stack and existing tests, maps testing gaps, recommends and writes the highest-value next test, runs it, reports evidence |
-| 35 | atlas-tui | MANUAL | Opens the Atlas Command Center TUI over live colony tmux workers (omp/claude/codex) |
-| 36 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness |
-| 37 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing |
-| 38 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify |
-| 39 | atlas-worktree | auto | Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection |
+| 6 | atlas-crew | MANUAL | Builds a multi-file deliverable with a parallel tmux + IRC crew, one worker per file, from a pre-executed run |
+| 7 | atlas-db-audit | auto | Audits a live database read-only via parallel subagents: schema inventory, schema-to-code reconciliation, privileges, naming |
+| 8 | atlas-debug | auto | Diagnoses a reproducible bug, exception, stack trace or bad output and fixes the root cause with evidence |
+| 9 | atlas-doctor | auto | Atlas self-improvement loop: mines cross-session findings from atlas.db, applies accepted changes, records a baseline |
+| 10 | atlas-dogfood | auto | Drives the branch or PR diff in a live browser via atlas:ui-runtime-tester: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route |
+| 11 | atlas-explain | auto | Explains how or why existing code behaves, in chat, with file:line evidence from an atlas:explorer trace; read-only |
+| 12 | atlas-frontend | auto | Builds, refactors or polishes frontend UI on one design system (shadcn/ui, Tailwind, Radix), verified live in the browser |
+| 13 | atlas-gitignore | auto | Generates a zero-trust, deny-by-default .gitignore for a named stack, secrets re-excluded last |
+| 14 | atlas-handoff | auto | Produces a dense session handoff so a fresh session resumes without re-discovery |
+| 15 | atlas-harden | auto | Writes an idempotent endpoint remediation script (CHECK/SET/VERIFY) for RMM or MDM that proves whether it changed state |
+| 16 | atlas-loop | auto | Matches a recurring or iterative task to a library loop: interval loops use /loop, fan-out loops run as a parallel verify workflow |
+| 17 | atlas-optimize | auto | Single-experiment loop: baseline, one hypothesis, one change, identical re-measure, real delta reported |
+| 18 | atlas-orchestrate | auto | Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification |
+| 19 | atlas-plan | auto | Writes an implementation-ready plan to docs/plans/ from a brainstorm artifact or feature description, with U-numbered units and a verification contract |
+| 20 | atlas-prompt | MANUAL | Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous |
+| 21 | atlas-proof | auto | Human-review workflow for project markdown: publishes a doc for review, records anchored comments in a sidecar file, folds feedback back |
+| 22 | atlas-prototype | auto | Builds a throwaway prototype in an isolated run directory to answer one visual, interaction or product-shape question, then promotes decisions into a plan or discards it |
+| 23 | atlas-pulse | auto | Generates a time-windowed product pulse (usage, performance, errors) from wired telemetry, read-only, into docs/pulses/ |
+| 24 | atlas-readme | auto | Generates an onboarding-grade README.md by inspecting the repo, tracing every claim to a file |
+| 25 | atlas-refactor | auto | Refactors, renames or restructures code without changing behavior, with before/after evidence |
+| 26 | atlas-resolve-pr-feedback | auto | Resolves PR review feedback: triages each thread (fix, reply, needs-human), applies approved fixes, drafts replies, confirms before pushing or posting |
+| 27 | atlas-review | auto | Risk-selected multi-persona review of a diff, branch or PR; P0/P1 findings verified, report-only verdict (Ready, Ready-with-fixes, Not-ready) |
+| 28 | atlas-run-watch | auto | Watches a long-running job (PID, log tail, CI URL, API, command loop) or one open GitHub PR's CI with tick/checkpoint/re-arm, spilling logs to a run ledger |
+| 29 | atlas-setup | MANUAL | Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair, tour (first-session walkthrough), menu |
+| 30 | atlas-ship | auto | Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR |
+| 31 | atlas-simplify | auto | Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate |
+| 32 | atlas-status | auto | Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed |
+| 33 | atlas-sweep | auto | Turns feedback into triaged findings |
+| 34 | atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs |
+| 35 | atlas-testing | auto | Plans, generates, and runs tests in any language: detects stack and existing tests, maps testing gaps, recommends and writes the highest-value next test, runs it, reports evidence |
+| 36 | atlas-tui | MANUAL | Opens the Atlas Command Center TUI over live colony tmux workers (omp/claude/codex) |
+| 37 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness |
+| 38 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing |
+| 39 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify |
+| 40 | atlas-worktree | auto | Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection |
 
 ## Count check
 
-- Atlas skills: 39 (3 manual, 36 auto)
-- Manual skills: atlas-setup, atlas-prompt, atlas-tui
+- Atlas skills: 40 (4 manual, 36 auto)
+- Manual skills: atlas-setup, atlas-prompt, atlas-tui, atlas-crew
 
 ## Armada (separate plugin)
 
@@ -66,6 +67,6 @@ Org deployment moved to the separate `armada` plugin (department agents and depa
 
 After scaffolding, atlas-setup tells the user:
 
-1. That atlas-setup, atlas-prompt and atlas-tui are the three manual skills and that each is invoked by name.
+1. That atlas-setup, atlas-prompt, atlas-tui and atlas-crew are the four manual skills and that each is invoked by name.
 2. That the other 36 skills are auto-trigger and will start when the task matches their descriptions.
 3. Whether the armada plugin is installed, and that org deployment lives there if the user needs it.

@@ -3,10 +3,13 @@
 --settings, so they run only inside crew workers, never in the lead or a normal session.
 
   PostToolUse  push unread team-channel messages into the worker's context (additionalContext),
-               so a peer's question or announcement lands at the worker's next tool boundary
+               so a peer's question or announcement lands at the worker's next tool boundary; and end
+               the session (continue:false) right after a Bash call whose check just posted DONE and
+               whose check, re-run here, passes (no final model turn)
   PreToolUse   file leases: Edit/Write/MultiEdit/NotebookEdit outside the worker's owned paths is
                denied with the owner's name, and so is a Bash command that plainly writes a peer's
-               file (redirect, tee, sed -i, cp/mv, open(..,'w'), Path.write_*)
+               file (redirect, tee, sed -i, cp/mv, open(..,'w'), Path.write_*); a Bash command with
+               `sleep N` (N >= 3 s) is denied: workers wait with `irc wait` / `irc check`
   Stop         the adversarial gate: the worker may not stop until its own check command passes
                (re-run here, never taken from the worker's word) and it has seen every message
                addressed to it; after ATLAS_CREW_MAX_BLOCKS refusals it is let go and the failure
@@ -14,7 +17,8 @@
 
 Env (pinned by atlas_crew per worker): ATLAS_IRC_DIR, ATLAS_IRC_NICK, ATLAS_CREW_OWNS (JSON list
 of paths or globs relative to ATLAS_CREW_ROOT), ATLAS_CREW_OWNERS (JSON {glob: nick}),
-ATLAS_CREW_CHECK, ATLAS_CREW_ROOT, ATLAS_CREW_MAX_BLOCKS (default 3).
+ATLAS_CREW_CHECK (`irc check` when a unit check exists), ATLAS_CREW_NEEDS and ATLAS_CREW_UNIT_CHECK (read by
+`irc check`), ATLAS_CREW_ROOT, ATLAS_CREW_MAX_BLOCKS (default 3).
 Stdlib only. Every failure path is fail-open: a broken hook must never wedge a worker.
 """
 
@@ -69,23 +73,37 @@ def _out(obj) -> None:
     sys.stdout.write(json.dumps(obj))
 
 
+def _early_exit(payload, d: str, nick: str) -> bool:
+    """True when this Bash call posted the worker's DONE (its check ends in `irc done`) and the check,
+    re-run here, still passes: the session can end now instead of spending a model turn on a reply.
+    Never taken from the post alone: a worker could run `irc done` by hand."""
+    cmd = os.environ.get("ATLAS_CREW_CHECK") or ""
+    if payload.get("tool_name") != "Bash" or not cmd or not atlas_irc.has_done(d, nick):
+        return False
+    code, _ = run_check(cmd, os.environ.get("ATLAS_CREW_ROOT") or os.getcwd())
+    if code == 0:
+        _set_blocks(_blocks(), passed=True)  # Stop does not run after continue:false; the summary reads this
+    return code == 0
+
+
 def post_tool_use(payload) -> None:
     d, nick = os.environ.get("ATLAS_IRC_DIR"), os.environ.get("ATLAS_IRC_NICK")
     if not d or not nick:
         return
+    out = {}
     recs = atlas_irc.drain(d, nick)
-    if not recs:
-        return
-    lines = "\n".join("[irc] " + atlas_irc.fmt(r) for r in recs)
-    _out(
-        {
-            "hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "additionalContext": "Team channel (peer messages; reply with `irc say`, or "
-                f"`irc say --to <nick>` for one peer):\n{lines}",
-            }
+    if recs:
+        lines = "\n".join("[irc] " + atlas_irc.fmt(r) for r in recs)
+        out["hookSpecificOutput"] = {
+            "hookEventName": "PostToolUse",
+            "additionalContext": "Team channel (peer messages; reply with `irc say`, or "
+            f"`irc say --to <nick>` for one peer):\n{lines}",
         }
-    )
+    direct = [r for r in recs if r.get("to") == nick]  # broadcasts (the kickoff names every worker) do not hold it
+    if not direct and _early_exit(payload, d, nick):  # a question for this worker keeps it alive
+        out.update({"continue": False, "stopReason": f"{nick}: check passed (re-verified by the crew gate); done."})
+    if out:
+        _out(out)
 
 
 def _write_pattern(lit: str) -> "re.Pattern":
@@ -116,6 +134,19 @@ def bash_writes_peer_file(cmd: str, mine, owners: dict):
     return None
 
 
+SLEEP_RX = re.compile(r"(?<![\w./-])sleep\s+(\d+(?:\.\d+)?)([smhd]?)(?![\w.])")
+SLEEP_MAX_S = 3  # a pause this long or longer is a poll that `irc wait` does without the idle time
+_UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def long_sleep(cmd: str):
+    """The first `sleep N` in a Bash command with N >= 3 seconds (suffixes s/m/h/d), as written, else None."""
+    for m in SLEEP_RX.finditer(cmd):
+        if float(m.group(1)) * _UNIT_S[m.group(2)] >= SLEEP_MAX_S:
+            return m.group(0)
+    return None
+
+
 def _deny(reason: str) -> None:
     _out({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}})
 
@@ -125,10 +156,17 @@ def pre_tool_use(payload) -> None:
     if tool not in EDIT_TOOLS and tool != "Bash":
         return
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    ti = payload.get("tool_input") or {}
+    nap = long_sleep(ti.get("command") or "") if tool == "Bash" else None
+    if nap:  # live: a worker slept 45 s while four dependents blocked on it
+        _deny(
+            f"`{nap}` is not allowed: workers never sleep. Wait for a peer with `irc wait --from <peer> --timeout <s>` "
+            "(returns the moment it posts), or run `irc check` (waits for your peers, then runs your unit check)."
+        )
+        return
     mine = _env_json("ATLAS_CREW_OWNS", None)
     if not mine:
         return  # no lease list: unrestricted worker
-    ti = payload.get("tool_input") or {}
     if tool == "Bash":
         hit = bash_writes_peer_file(ti.get("command") or "", mine, _env_json("ATLAS_CREW_OWNERS", {}))
         if hit:
@@ -214,14 +252,16 @@ def stop(payload) -> None:
                 {
                     "decision": "block",
                     "reason": f"Your check `{cmd}` still fails (exit {code}); you cannot finish yet "
-                    f"(refusal {n + 1}/{cap}). If the failure is in a peer's file, ask that peer or "
-                    f"`irc need <peer>`. Output tail:\n{tail}",
+                    f"(refusal {n + 1}/{cap}). If the failure is in a peer's file, ask that peer "
+                    f"(irc say --to <peer>); `irc check` already waits for its peers "
+                    f"(exit 3 timed out: rerun; exit 4: a peer gave up). Output tail:\n{tail}",
                 }
             )
             return
         _set_blocks(n, passed=code == 0)
         if code == 0:
-            atlas_irc.post(d, nick, atlas_irc.members(d).get("channel", "#team"), f"DONE {nick}: `{cmd}` passes", kind="done")
+            if not atlas_irc.has_done(d, nick):  # the check's own `irc done` usually posted it already
+                atlas_irc.post(d, nick, atlas_irc.members(d).get("channel", "#team"), f"DONE {nick}: `{cmd}` passes", kind="done")
         else:
             atlas_irc.post(
                 d, nick, atlas_irc.members(d).get("channel", "#team"),

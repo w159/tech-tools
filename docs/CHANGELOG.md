@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 16.4.0 - 2026-10-28
+
+- atlas 16.4.0: `/atlas:atlas-crew` skill (the crew starts before the lead's first model call), peer interfaces in each worker's context, verified DONE (`irc check`), new-only `irc wait`, a sleep deny, an early exit after a re-verified passing check, and lean worker traffic. Against one Claude prompt: 13-16% of the tokens and 28-30% of the wall time (25% target still missed). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.4.0-crew-benchmark.md](audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
+
 ## atlas 16.3.0 - 2026-10-28
 
 - atlas 16.3.0: crew, a parallel build team on tmux and IRC (one worker per file, file leases, per-worker check gate, lean workers), and a fix for tmux workers inheriting the lead's session id. Benchmark against one Claude prompt: 36-47% of the tokens and 36-37% of the wall time. Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.3.0-crew-benchmark.md](audits/2026-10-28_atlas-16.3.0-crew-benchmark.md).

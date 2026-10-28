@@ -32,6 +32,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -432,6 +433,83 @@ def cmd_say(a) -> int:
     return 0
 
 
+def has_done(d, nick: str) -> bool:
+    """True when `nick` has a kind-done record after its most recent kind-failed (GAVE UP) or kind-unverified
+    (a failing `irc check` / refused `irc done`) record: a DONE stands only until the next failure."""
+    done = False
+    for r in history(d):
+        if r.get("from") != nick:
+            continue
+        if r.get("kind") in ("failed", "unverified"):
+            done = False
+        elif r.get("kind") == "done":
+            done = True
+    return done
+
+
+CHECK_TIMEOUT_S = 600
+TAIL_CHARS = 6000
+
+
+def _run_unit_check(d, nick: str):
+    """Run ATLAS_CREW_UNIT_CHECK (shell, cwd ATLAS_CREW_ROOT) and print its output tail. Returns its exit code,
+    or None when no unit check is set. A failure is recorded as an `unverified` note to the nick itself (peers
+    are not told), which voids any earlier DONE of this nick."""
+    cmd = os.environ.get("ATLAS_CREW_UNIT_CHECK") or ""
+    if not cmd:
+        return None
+    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    try:
+        res = subprocess.run(cmd, shell=True, cwd=root, capture_output=True, text=True, timeout=CHECK_TIMEOUT_S)
+        code, out = res.returncode, (res.stdout or "") + (res.stderr or "")
+    except subprocess.TimeoutExpired:
+        code, out = 124, f"check timed out after {CHECK_TIMEOUT_S}s\n"
+    print(out[-TAIL_CHARS:], end="" if out.endswith("\n") or not out else "\n")
+    if code:
+        post(d, nick, nick, f"unverified {nick}: `{cmd}` exited {code}", kind="unverified")
+    return code
+
+
+def _announce_done(d, nick: str, text: str) -> None:
+    if has_done(d, nick):
+        print(f"already announced DONE for {nick}")
+        return
+    post(d, nick, members(d).get("channel") or os.environ.get("ATLAS_IRC_CHANNEL") or "#team", f"DONE {nick}: {text}", kind="done")
+    print(f"posted DONE for {nick}")
+
+
+def cmd_done(a) -> int:
+    """Announce DONE for the calling nick, once: a repeat (e.g. the Stop gate re-running the check) is a
+    no-op until a GAVE UP or failed check intervenes. With ATLAS_CREW_UNIT_CHECK set the check is re-run first
+    and a failure refuses the DONE (exit 1)."""
+    d = _dir(a.dir)
+    nick = _env_nick(a)
+    code = _run_unit_check(d, nick)
+    if code:
+        print(f"refused: DONE {nick} needs the unit check to pass (exit {code})")
+        return 1
+    _announce_done(d, nick, " ".join(a.text) or "check passes")
+    return 0
+
+
+def cmd_check(a) -> int:
+    """The worker's check: wait for ATLAS_CREW_NEEDS (as `need --done`: exit 2 unknown, 3 timeout, 4 a peer
+    gave up), run ATLAS_CREW_UNIT_CHECK, and post DONE only when it exits 0. Exits with the check's code. The
+    DONE decision is made here, so piping the output (`irc check | tail`) cannot turn a failure into a DONE."""
+    d = _dir(a.dir)
+    nick = _env_nick(a)
+    needs = (os.environ.get("ATLAS_CREW_NEEDS") or "").replace(",", " ").split()
+    if needs:
+        rc = cmd_need(argparse.Namespace(dir=a.dir, as_=a.as_, done=True, timeout=a.timeout, peers=needs))
+        if rc:
+            return rc
+    code = _run_unit_check(d, nick)
+    if code:
+        return code
+    _announce_done(d, nick, "check passes")
+    return 0
+
+
 def cmd_read(a) -> int:
     d = _dir(a.dir)
     nick = _env_nick(a)
@@ -464,8 +542,9 @@ def cmd_wait(a) -> int:
         return 2
     deadline = time.time() + a.timeout
     chan = members(d).get("channel", "#team")
-    # a message already on the log counts, read or not: the peer may have announced before we waited
-    scan_from = cursor(d, nick) if a.new_only else 0
+    # only messages after our cursor count, so a stale one (a DONE since invalidated) cannot satisfy the wait;
+    # --all scans the whole log
+    scan_from = 0 if a.all else cursor(d, nick)
     while True:
         for r in history(d, scan_from):
             scan_from = max(scan_from, int(r["seq"]))
@@ -495,8 +574,9 @@ def _unknown_peers(d, names) -> list:
 
 
 def cmd_need(a) -> int:
-    """Block until every named peer has announced READY or DONE. Exit 0 when all have, 3 on timeout
-    (naming who is missing), 2 for a name that is not on the team (the lead posts no READY)."""
+    """Block until every named peer has announced READY or DONE (`--done`: DONE only). Exit 0 when all
+    have, 3 on timeout (naming who is missing), 2 for a name that is not on the team (the lead posts no
+    READY), 4 as soon as a named peer has posted GAVE UP (kind failed), whatever the mode."""
     d = _dir(a.dir)
     nick = _env_nick(a)
     peers = [p for p in ",".join(a.peers).replace(",", " ").split() if p and p != nick]
@@ -504,14 +584,25 @@ def cmd_need(a) -> int:
     if bad:
         print(f"not on the team: {', '.join(bad)}; peers are {', '.join(members(d).get('members') or [])}")
         return 2
+    ok_re = r"DONE\b" if a.done else r"(READY|DONE)\b"
     deadline = time.time() + a.timeout
     ready, seen = {}, 0
     while True:
+        gave_up = []
         for r in history(d, seen):
             seen = max(seen, int(r["seq"]))
             who, text = r.get("from"), r.get("text", "")
-            if who in peers and (r.get("kind") == "done" or re.match(r"(READY|DONE)\b", text)):
+            if who not in peers:
+                continue
+            if r.get("kind") == "unverified":
+                ready.pop(who, None)
+            elif r.get("kind") == "failed" or re.match(r"GAVE UP\b", text):
+                gave_up.append(who)
+            elif r.get("kind") == "done" or re.match(ok_re, text):
                 ready[who] = text
+        if gave_up:
+            print(f"peer gave up: {', '.join(dict.fromkeys(gave_up))}")
+            return 4
         missing = [p for p in peers if p not in ready]
         if not missing:
             for p in peers:
@@ -574,6 +665,17 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--to")
     s.add_argument("text", nargs="+")
     s.set_defaults(fn=cmd_say)
+    dn = sub.add_parser("done", help="announce DONE for yourself, once (idempotent; re-runs ATLAS_CREW_UNIT_CHECK when set)")
+    dn.add_argument("--as", dest="as_")
+    dn.add_argument("text", nargs="*")
+    dn.set_defaults(fn=cmd_done)
+    ck = sub.add_parser(
+        "check",
+        help="wait for ATLAS_CREW_NEEDS, run ATLAS_CREW_UNIT_CHECK, post DONE only if it passes (exit = the check's code)",
+    )
+    ck.add_argument("--as", dest="as_")
+    ck.add_argument("--timeout", type=float, default=100)
+    ck.set_defaults(fn=cmd_check)
     r = sub.add_parser("read", help="print unread messages (advances your cursor)")
     r.add_argument("--as", dest="as_")
     r.add_argument("--all", action="store_true")
@@ -586,11 +688,14 @@ def parser() -> argparse.ArgumentParser:
     w.add_argument("--from", dest="from_")
     w.add_argument("--match")
     w.add_argument("--timeout", type=float, default=100)
-    w.add_argument("--new-only", action="store_true", help="ignore messages already delivered to you")
+    w.add_argument("--all", action="store_true", help="also match messages already delivered to you (scan the whole log)")
+    w.add_argument("--new-only", action="store_true", help="accepted for compatibility; new messages only is the default")
     w.set_defaults(fn=cmd_wait)
     n = sub.add_parser(
-        "need", help="block until every named peer announced READY or DONE (exit 3 on timeout)"
+        "need",
+        help="block until every named peer announced READY or DONE (exit 3 on timeout, 4 if a peer gave up)",
     )
+    n.add_argument("--done", action="store_true", help="only DONE counts, not READY")
     n.add_argument("--as", dest="as_")
     n.add_argument("--timeout", type=float, default=100)
     n.add_argument("peers", nargs="+")

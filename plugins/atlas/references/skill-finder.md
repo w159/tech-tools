@@ -14,6 +14,7 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | --- | --- | --- | --- |
 | Set up, re-run or repair atlas: onboard, install, or wire vendor connectors | atlas-setup | Manual | The lifecycle skill: scaffold docs/, install gates and connectors, run the health check, or `--fix` repairs |
 | Watch the colony's workers live in a terminal UI | atlas-tui | Manual | The Atlas Command Center terminal UI over the colony's tmux workers: sessions, channel feed, a live pane peek, and a steer line |
+| Build several files at once with a parallel crew from a spec or plan.json | atlas-crew | Auto | Runs `atlas_crew.py run` in a pre-executed `!` line: one worker per file on tmux + IRC with file leases and a check gate; the lead only reads the summary |
 | Get a guided first session: what a dispatch, gate, and actually running one task looks like | atlas-setup tour | Manual | A one-time walkthrough ending in one tiny real task, with plain-language glosses for every atlas term |
 
 ## Understand & decide

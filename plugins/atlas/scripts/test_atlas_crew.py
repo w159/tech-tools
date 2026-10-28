@@ -69,15 +69,31 @@ class BusTests(unittest.TestCase):
             code = atlas_irc.main(["--dir", str(d), "wait", "--as", "b", *argv])
         return code, buf.getvalue()
 
-    def test_wait_matches_an_announcement_made_before_waiting(self):
+    def test_wait_matches_an_announcement_made_before_waiting_with_all(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = _bus(tmp)
             atlas_irc.post(d, "a", "#t", "READY a: parse(text) -> Tree")
             code, out = self._wait(
-                d, "--from", "a", "--match", "READY", "--timeout", "2"
+                d, "--all", "--from", "a", "--match", "READY", "--timeout", "2"
             )
             self.assertEqual(code, 0)
             self.assertIn("MATCH <a> #t: READY a", out)
+
+    def test_wait_ignores_history_by_default_and_finds_it_with_all(self):
+        # live: a stale false DONE already on the log satisfied `irc wait --from ranges --match done`
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _bus(tmp)
+            atlas_irc.post(d, "a", "#t", "DONE a: stale", kind="done")
+            atlas_irc.set_cursor(d, "b", 1)  # the stale DONE was already delivered to b
+            code, _ = self._wait(d, "--from", "a", "--match", "done", "--timeout", "0.3")
+            self.assertEqual(code, 3)
+            code, out = self._wait(d, "--all", "--from", "a", "--match", "done", "--timeout", "2")
+            self.assertEqual(code, 0)
+            self.assertIn("DONE a: stale", out)
+            threading.Timer(0.2, lambda: atlas_irc.post(d, "a", "#t", "DONE a: fresh", kind="done")).start()
+            code, out = self._wait(d, "--new-only", "--from", "a", "--match", "done", "--timeout", "5")
+            self.assertEqual(code, 0)
+            self.assertIn("DONE a: fresh", out)
 
     def test_wait_times_out_with_exit_3(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -107,6 +123,27 @@ class BusTests(unittest.TestCase):
             code, out = self._need(d, "a", "c", "--timeout", "5")
             self.assertEqual(code, 0)
             self.assertIn("<c> DONE c", out)
+
+    def test_need_done_ignores_ready_and_returns_after_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _bus(tmp, nicks=("a", "b"))
+            atlas_irc.post(d, "a", "#t", "READY a: f()")
+            code, out = self._need(d, "--done", "a", "--timeout", "0.3")
+            self.assertEqual(code, 3)
+            self.assertIn("still waiting for: a", out)
+            atlas_irc.post(d, "a", "#t", "DONE a", kind="done")
+            code, out = self._need(d, "--done", "a", "--timeout", "2")
+            self.assertEqual(code, 0)
+            self.assertIn("<a> DONE a", out)
+
+    def test_need_exits_4_naming_a_peer_that_gave_up(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _bus(tmp, nicks=("a", "b"))
+            atlas_irc.post(d, "a", "#t", "GAVE UP a: `pytest` still fails", kind="failed")
+            for extra in ((), ("--done",)):
+                code, out = self._need(d, *extra, "a", "--timeout", "5")
+                self.assertEqual(code, 4)
+                self.assertIn("gave up: a", out)
 
     def test_need_and_wait_refuse_a_name_that_is_not_a_peer(self):
         # live: a worker waited 100 s on `--from lead`, then slept 90 s
@@ -264,6 +301,37 @@ class HookTests(unittest.TestCase):
             )
             self.assertIsNone(self._run(env, crew_worker.post_tool_use, {}))
 
+    def test_post_tool_use_ends_session_when_bash_check_posted_done_and_rerun_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, ATLAS_CREW_CHECK="true")
+            bash = {"tool_name": "Bash"}
+            self.assertIsNone(self._run(env, crew_worker.post_tool_use, bash))  # no DONE yet
+            atlas_irc.post(d, "ranges", "#t", "DONE ranges: check passes", kind="done")
+            self.assertIsNone(self._run(env, crew_worker.post_tool_use, {"tool_name": "Edit"}))
+            out = self._run(env, crew_worker.post_tool_use, bash)
+            self.assertIs(out["continue"], False)
+            self.assertIn("ranges", out["stopReason"])
+            self.assertIs(json.loads((d / "stop" / "ranges.json").read_text())["passed"], True)
+
+    def test_post_tool_use_does_not_trust_a_hand_posted_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, ATLAS_CREW_CHECK="exit 1")
+            atlas_irc.post(d, "ranges", "#t", "DONE ranges: check passes", kind="done")
+            self.assertIsNone(self._run(env, crew_worker.post_tool_use, {"tool_name": "Bash"}))
+
+    def test_post_tool_use_early_exit_keeps_pushed_messages_but_yields_to_a_question(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, ATLAS_CREW_CHECK="true")
+            atlas_irc.post(d, "ranges", "#t", "DONE ranges: check passes", kind="done")
+            atlas_irc.post(d, "semver", "#t", "READY semver: Version.parse(s); ranges imports it")
+            out = self._run(env, crew_worker.post_tool_use, {"tool_name": "Bash"})
+            self.assertIs(out["continue"], False)
+            self.assertIn("READY semver", out["hookSpecificOutput"]["additionalContext"])
+            atlas_irc.post(d, "semver", "ranges", "need prerelease compare?")
+            out = self._run(env, crew_worker.post_tool_use, {"tool_name": "Bash"})
+            self.assertNotIn("continue", out)
+            self.assertIn("need prerelease", out["hookSpecificOutput"]["additionalContext"])
+
     def test_stop_gate_refuses_while_check_fails_then_gives_up_at_cap(self):
         with tempfile.TemporaryDirectory() as tmp:
             d, env = self._env(tmp, ATLAS_CREW_CHECK="echo boom; exit 1")
@@ -281,6 +349,28 @@ class HookTests(unittest.TestCase):
             d, env = self._env(tmp, ATLAS_CREW_CHECK="true")
             self.assertIsNone(self._run(env, crew_worker.stop, {}))
             self.assertEqual(atlas_irc.history(d)[-1]["kind"], "done")
+
+    def test_stop_gate_does_not_repeat_a_done_the_check_already_posted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, ATLAS_CREW_CHECK="true")
+            atlas_irc.post(d, "ranges", "#t", "DONE ranges: check passes", kind="done")
+            before = len(atlas_irc.history(d))
+            self.assertIsNone(self._run(env, crew_worker.stop, {}))
+            self.assertEqual(len(atlas_irc.history(d)), before)
+
+    def test_irc_done_posts_once_and_again_after_a_give_up(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _bus(tmp, nicks=("ranges",))
+            dones = lambda: [r for r in atlas_irc.history(d) if r.get("kind") == "done"]
+            with mock.patch.dict(os.environ, {"ATLAS_IRC_NICK": "ranges"}), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(atlas_irc.main(["--dir", str(d), "done"]), 0)
+                self.assertEqual(atlas_irc.main(["--dir", str(d), "done"]), 0)
+                self.assertEqual(len(dones()), 1)
+                self.assertEqual(dones()[0]["text"], "DONE ranges: check passes")
+                atlas_irc.post(d, "ranges", "#t", "GAVE UP ranges: x", kind="failed")
+                self.assertEqual(atlas_irc.main(["--dir", str(d), "done", "fixed"]), 0)
+                self.assertEqual(len(dones()), 2)
+                self.assertEqual(dones()[1]["text"], "DONE ranges: fixed")
 
     def test_stop_gate_holds_a_worker_with_an_unanswered_question(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -361,7 +451,118 @@ class PlanTests(unittest.TestCase):
         a = plan["workers"][0]
         self.assertEqual(a["owns"], ["pkg/a.py"])
         self.assertEqual(a["context"], ["SPEC.md#1. `pkg/a.py`", "pkg/a.py"])
-        self.assertEqual(a["check"], "python3 -m pytest -q tests/test_a.py")
+        self.assertEqual(a["check"], "irc check")
+        self.assertEqual(a["unit_check"], "python3 -m pytest -q tests/test_a.py")
+        self.assertEqual(a["needs"], [])
+
+    def _dep_tree(self, tmp, files):
+        root = Path(tmp)
+        (root / "pkg").mkdir()
+        (root / "tests").mkdir()
+        (root / "SPEC.md").write_text("# Kit\nintro\n")
+        for n, body in files.items():
+            (root / "pkg" / f"{n}.py").write_text(body)
+            (root / "tests" / f"test_{n}.py").write_text("")
+        return atlas_crew.auto_plan(
+            tmp, "SPEC.md", "pkg/*.py", "tests/test_{stem}.py", "python3 -m pytest -q"
+        )
+
+    def test_auto_plan_wires_the_wait_for_imported_peers_into_the_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = self._dep_tree(
+                tmp, {"leaf": "", "mid": "from .leaf import x\n", "top": "from . import leaf, mid\n"}
+            )
+        ws = {w["name"]: w for w in plan["workers"]}
+        for w in ws.values():
+            self.assertEqual(w["check"], "irc check")
+            self.assertNotIn("irc", w["unit_check"])
+        self.assertEqual(ws["leaf"]["needs"], [])
+        self.assertEqual(ws["mid"]["needs"], ["leaf"])
+        self.assertEqual(ws["top"]["needs"], ["leaf", "mid"])
+        self.assertEqual(ws["top"]["unit_check"], "python3 -m pytest -q tests/test_top.py")
+        self.assertEqual(ws["leaf"]["unit_check"], "python3 -m pytest -q tests/test_leaf.py")
+
+    def test_worker_env_carries_the_needs_and_unit_check_of_an_auto_plan_worker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = self._dep_tree(tmp, {"leaf": "", "mid": "from .leaf import x\n"})
+            mid = [w for w in plan["workers"] if w["name"] == "mid"][0]
+            env = atlas_crew.worker_env(Path(tmp) / "run", plan, mid, tmp)
+        self.assertEqual(env["ATLAS_CREW_CHECK"], "irc check")
+        self.assertEqual(env["ATLAS_CREW_NEEDS"], "leaf")
+        self.assertEqual(env["ATLAS_CREW_UNIT_CHECK"], "python3 -m pytest -q tests/test_mid.py")
+
+    def test_load_plan_wraps_a_hand_written_check_in_irc_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "plan.json"
+            p.write_text(json.dumps({"workers": [
+                {"name": "a", "owns": ["a.py"], "task": "t", "check": "pytest -q t_a.py"},
+                {"name": "b", "owns": ["b.py"], "task": "t", "check": "pytest -q t_b.py", "needs": ["a"]},
+                {"name": "c", "owns": ["c.py"], "task": "t"},
+            ]}))
+            ws = {w["name"]: w for w in atlas_crew.load_plan(p)["workers"]}
+            p.write_text(json.dumps({"workers": list(ws.values())}))
+            again = {w["name"]: w for w in atlas_crew.load_plan(p)["workers"]}
+        self.assertEqual((ws["a"]["check"], ws["a"]["unit_check"], ws["a"]["needs"]), ("irc check", "pytest -q t_a.py", []))
+        self.assertEqual(ws["b"]["needs"], ["a"])
+        self.assertFalse(ws["c"].get("check"))
+        self.assertEqual(again, ws)  # idempotent
+
+    def test_import_cycle_yields_no_mutual_wait(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = self._dep_tree(
+                tmp, {"a": "from .b import y\n", "b": "from .a import x\n", "c": "from .a import x\n"}
+            )
+        needs = {w["name"]: w["needs"] for w in plan["workers"]}
+        self.assertEqual(needs, {"a": ["b"], "b": [], "c": ["a"]})
+
+    def test_interface_keeps_public_signatures_and_drops_bodies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "m.py"
+            f.write_text(
+                "from dataclasses import dataclass\n"
+                "@dataclass\nclass Version:\n    \"\"\"A version.\"\"\"\n    major: int\n"
+                "    def bump(self, n: int = 1) -> 'Version':\n        \"\"\"Bump it.\"\"\"\n        raise NotImplementedError\n"
+                "    def _hidden(self): ...\n"
+                "def _private(): ...\n"
+            )
+            out = atlas_crew._interface(f)
+            self.assertEqual(atlas_crew._interface(Path(tmp) / "missing.py"), "")
+        self.assertIn("class Version:", out)
+        self.assertIn("    major: int", out)
+        self.assertIn("def bump(self, n: int=1) -> 'Version': ...  # Bump it.", out)
+        self.assertNotIn("NotImplementedError", out)
+        self.assertNotIn("_hidden", out)
+        self.assertNotIn("_private", out)
+
+    def test_auto_plan_hands_a_worker_the_interfaces_of_the_peers_it_imports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "pkg").mkdir()
+            (root / "SPEC.md").write_text("# Kit\nintro\n## `pkg/a.py`\nA\n")
+            (root / "pkg" / "a.py").write_text("from .b import B\n")
+            (root / "pkg" / "b.py").write_text("class B:\n    def go(self) -> int:\n        raise NotImplementedError\n")
+            (root / "pkg" / "c.py").write_text("import os\n")
+            plan = atlas_crew.auto_plan(tmp, "SPEC.md", "pkg/*.py")
+        ws = {w["name"]: w for w in plan["workers"]}
+        ctx = ws["a"]["context"]
+        iface = [e for e in ctx if e.startswith("Interfaces of the peer files you import")]
+        self.assertEqual(len(iface), 1)
+        self.assertIn("# b owns pkg/b.py", iface[0])
+        self.assertIn("class B:", iface[0])
+        self.assertEqual(ctx[-1], "pkg/a.py")
+        self.assertLess(ctx.index(iface[0]), ctx.index("pkg/a.py"))
+        for n in ("b", "c"):
+            self.assertFalse([e for e in ws[n]["context"] if e.startswith("Interfaces")])
+
+    def test_local_deps_resolves_import_forms_without_self_or_duplicates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "pkg").mkdir()
+            (root / "pkg" / "a.py").write_text(
+                "from . import b as bm\nimport pkg.c\nfrom pkg.b import X\nfrom .a import Y\nimport json\n"
+            )
+            rels = ["pkg/a.py", "pkg/b.py", "pkg/c.py"]
+            self.assertEqual(atlas_crew._local_deps("pkg/a.py", rels, root), ["pkg/b.py", "pkg/c.py"])
 
     def test_a_hash_line_inside_a_code_fence_does_not_end_the_section(self):
         text = (
@@ -390,7 +591,21 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(
             beta["context"], ["SPEC.md#beta overview", "SPEC.md#1. `beta/cli.py`", "beta/cli.py"]
         )
-        self.assertEqual(beta["check"], "python3 -m pytest -q tests/beta/test_cli.py")
+        self.assertEqual(beta["unit_check"], "python3 -m pytest -q tests/beta/test_cli.py")
+
+    def test_auto_plan_never_makes_a_worker_of_a_matched_test_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "SPEC.md").write_text("# Kit\nintro\n")
+            for n in ("geom", "test_geom", "report", "test_report"):
+                (root / f"{n}.py").write_text("")
+            plan = atlas_crew.auto_plan(tmp, "SPEC.md", "*.py", "test_{stem}.py", "python3 -m pytest -q")
+            (root / "extra_test.py").write_text("")
+            (root / "test_solo.py").write_text("")
+            plan2 = atlas_crew.auto_plan(tmp, "SPEC.md", "*.py", None, "python3 -m pytest -q")
+        self.assertEqual([w["name"] for w in plan["workers"]], ["geom", "report"])
+        self.assertEqual(plan["workers"][0]["tests"], ["test_geom.py"])
+        self.assertEqual([w["name"] for w in plan2["workers"]], ["geom", "report"])
 
     def test_worker_prompt_names_peers_ownership_and_check(self):
         plan = {
@@ -505,6 +720,11 @@ class WorkerLaunchTests(unittest.TestCase):
         env = atlas_crew.worker_env(Path("/r"), plan, plan["workers"][0], "/root")
         self.assertEqual(env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"], "1")
 
+    def test_worker_env_skips_nonessential_traffic(self):
+        plan = {"workers": [{"name": "a", "owns": ["a.py"], "task": "t", "check": "true"}]}
+        env = atlas_crew.worker_env(Path("/r"), plan, plan["workers"][0], "/root")
+        self.assertEqual(env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"], "1")
+
     def test_usage_of_counts_cumulative_usage_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             log = Path(tmp) / "w.log"
@@ -527,6 +747,140 @@ class WorkerLaunchTests(unittest.TestCase):
         self.assertEqual(u["total"], 1115)
         self.assertEqual(u["cost_usd"], 0.5)
         self.assertEqual(u["turns"], 6)
+
+
+class VerifiedDoneTests(unittest.TestCase):
+    """A DONE is posted by `irc check` after the unit check passed, never from the worker's word."""
+
+    IRC = str(Path(__file__).resolve().parent / "atlas_irc.py")
+
+    def _env(self, tmp, unit, needs="", nick="ranges"):
+        d = _bus(tmp, nicks=("semver", "ranges"))
+        env = {
+            "ATLAS_IRC_DIR": str(d),
+            "ATLAS_IRC_NICK": nick,
+            "ATLAS_CREW_ROOT": tmp,
+            "ATLAS_CREW_UNIT_CHECK": unit,
+            "ATLAS_CREW_NEEDS": needs,
+        }
+        return d, env
+
+    def _irc(self, env, *argv):
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(buf):
+            code = atlas_irc.main(list(argv))
+        return code, buf.getvalue()
+
+    def _dones(self, d, nick="ranges"):
+        return [r for r in atlas_irc.history(d) if r.get("kind") == "done" and r["from"] == nick]
+
+    def test_check_with_failing_unit_check_posts_no_done_even_when_piped(self):
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, "echo boom-output; exit 1")
+            full = {**os.environ, **env}
+            res = subprocess.run(
+                f"{sys.executable} {self.IRC} check | tail -15 && echo piped-ok",
+                shell=True, env=full, capture_output=True, text=True, cwd=tmp,
+            )
+            self.assertIn("boom-output", res.stdout)
+            self.assertEqual(self._dones(d), [])
+            code, out = self._irc(env, "check")
+            self.assertEqual(code, 1)
+            self.assertIn("boom-output", out)
+            self.assertEqual(self._dones(d), [])
+
+    def test_check_with_passing_unit_check_posts_done_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, "echo all-green")
+            for _ in range(2):
+                code, out = self._irc(env, "check")
+                self.assertEqual(code, 0)
+                self.assertIn("all-green", out)
+            self.assertEqual(len(self._dones(d)), 1)
+
+    def test_check_waits_for_needs_with_need_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, "true", needs="semver")
+            code, out = self._irc(env, "check", "--timeout", "0.3")
+            self.assertEqual(code, 3)
+            self.assertEqual(self._dones(d), [])
+            atlas_irc.post(d, "semver", "#t", "GAVE UP semver: x", kind="failed")
+            self.assertEqual(self._irc(env, "check", "--timeout", "2")[0], 4)
+            _, env2 = self._env(tmp, "true", needs="nobody")
+            self.assertEqual(self._irc({**env, "ATLAS_CREW_NEEDS": "nobody"}, "check")[0], 2)
+
+    def test_check_runs_unit_check_only_after_needs_are_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, "echo ran > ran.txt", needs="semver")
+            atlas_irc.post(d, "semver", "#t", "DONE semver", kind="done")
+            self.assertEqual(self._irc(env, "check", "--timeout", "2")[0], 0)
+            self.assertTrue((Path(tmp) / "ran.txt").exists())  # the shell ran in ATLAS_CREW_ROOT
+
+    def test_manual_done_refuses_while_the_unit_check_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, "echo red-tests; exit 1")
+            code, out = self._irc(env, "done")
+            self.assertEqual(code, 1)
+            self.assertIn("red-tests", out)
+            self.assertEqual(self._dones(d), [])
+            _, env_ok = self._env(tmp, "true")
+            self.assertEqual(self._irc(env_ok, "done")[0], 0)
+            self.assertEqual(len(self._dones(d)), 1)
+
+    def test_a_passing_check_after_a_failed_one_posts_a_fresh_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, "test -f ok.flag")
+            atlas_irc.post(d, "ranges", "#t", "DONE ranges: check passes", kind="done")  # the stale, false DONE
+            self.assertEqual(self._irc(env, "check")[0], 1)
+            self.assertFalse(atlas_irc.has_done(d, "ranges"))
+            peer_env = {**env, "ATLAS_IRC_NICK": "semver"}
+            self.assertEqual(self._irc(peer_env, "need", "--done", "ranges", "--timeout", "0.3")[0], 3)
+            (Path(tmp) / "ok.flag").write_text("")
+            self.assertEqual(self._irc(env, "check")[0], 0)
+            self.assertEqual(len(self._dones(d)), 2)
+            self.assertTrue(atlas_irc.has_done(d, "ranges"))
+            code, out = self._irc(peer_env, "need", "--done", "ranges", "--timeout", "2")
+            self.assertEqual(code, 0)
+            self.assertIn("<ranges> DONE ranges", out)
+
+    def test_a_refused_done_also_invalidates_an_earlier_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, "exit 1")
+            atlas_irc.post(d, "ranges", "#t", "DONE ranges: check passes", kind="done")
+            self.assertEqual(self._irc(env, "done")[0], 1)
+            self.assertFalse(atlas_irc.has_done(d, "ranges"))
+
+    def test_a_failed_check_is_not_broadcast_to_peers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._env(tmp, "exit 1")
+            self._irc(env, "check")
+            self.assertEqual(atlas_irc.drain(d, "semver"), [])
+
+
+class SleepDenyTests(unittest.TestCase):
+    def _denied(self, cmd):
+        env = {
+            "ATLAS_CREW_OWNS": json.dumps(["pkg/ranges.py"]),
+            "ATLAS_CREW_OWNERS": json.dumps({"pkg/ranges.py": "ranges"}),
+        }
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(buf):
+            crew_worker.pre_tool_use({"tool_name": "Bash", "tool_input": {"command": cmd}})
+        out = json.loads(buf.getvalue()) if buf.getvalue() else None
+        return out["hookSpecificOutput"]["permissionDecisionReason"] if out else None
+
+    def test_sleep_of_three_seconds_or_more_is_denied_with_a_pointer_to_irc_wait(self):
+        for cmd in ("sleep 45", "x; sleep 10s; y", "sleep 45; python3 -m pytest -q", "a && sleep 3 && b", "sleep 2.5m"):
+            reason = self._denied(cmd)
+            self.assertIsNotNone(reason, cmd)
+            self.assertIn("irc wait", reason)
+            self.assertIn("irc check", reason)
+
+    def test_short_sleeps_and_lookalike_words_pass(self):
+        for cmd in ("sleep 1", "sleep 2", "echo sleepy", "sleep", "sleep 0.5", "python3 -c 'import time'"):
+            self.assertIsNone(self._denied(cmd), cmd)
 
 
 if __name__ == "__main__":
