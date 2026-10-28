@@ -156,4 +156,24 @@ Scope of the live evidence: the sign-in page and the token path were exercised w
 registered through CIPP's own endpoint; a full browser sign-in through Claude Code using the
 explicit `oauth.clientId` was exercised by the operator in Claude Desktop, not by this session.
 
+### 6a. Claude Code parses `oauth.clientId` in a plugin `.mcp.json`
+
+Verified against the installed Claude Code 2.1.312 with a throwaway plugin under `/tmp`:
+
+```
+oauth: { "clientId": "abc" }   -> Validation passed.
+oauth: { "clientId": 123 }     -> mcpServers.a.oauth.clientId: Invalid input: expected string,
+                                  received number. The plugin loader silently drops this server at load.
+oauth: { "bogusKey": "x" }     -> passed (unknown keys are ignored).
+
+claude plugin validate plugins/armada -> Validation passed
+```
+
+So the plugin config path type-checks `oauth.clientId` on an http entry. What that does not
+prove: that the browser sign-in then uses that client id when a plugin-scoped server connects.
+The command that proves the end-to-end step: install the plugin, run `claude mcp list` to see the
+server, trigger its OAuth flow and confirm the authorize URL carries
+`client_id=a0b18b3a-2064-457f-ab94-1fdb5c11ca80`.
+
+
 
