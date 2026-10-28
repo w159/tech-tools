@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Crew: `auto_plan` missed a dependency that only the worker's test file imports (`toc` and `text` ran before `blocks` was DONE and hit its `NotImplementedError`). Needs and peer interfaces now include the peers the worker's own tests import, cycles still broken by `_break_cycles`; absolute `pkg.x` imports also resolve under a source dir (`src/pkg/x.py`) (`scripts/test_atlas_crew.py::PlanTests`, red before, green now).
+
 ## 16.4.0 - 2026-10-28
 
 ### Added

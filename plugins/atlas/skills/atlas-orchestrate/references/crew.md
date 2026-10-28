@@ -39,7 +39,7 @@ starting anything.
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | tmux         | Session `atlas-<run>`: one window per worker (rendered feed), an `irc` window tailing the channel, an `ircd` window running the gateway. `tmux attach -t atlas-<run>`.     |
 | IRC channel  | `scripts/atlas_irc.py`: an append-only log (`irc/log.jsonl`) with a real RFC 1459 gateway on 127.0.0.1 (`irc/port`). Any IRC client can join `#<run>` and talk to the crew. |
-| Interfaces   | Each worker's context holds the public skeleton (classes, signatures, constants) of every planned file it imports, so it codes against peers without reading them. |
+| Interfaces   | Each worker's context holds the public skeleton (classes, signatures, constants) of every planned file it imports, or its own test file imports (all are waited on), so it codes against peers without reading them. |
 | Delivery     | `hooks/crew_worker.py` PostToolUse pushes unread channel lines into the worker's context; workers use `irc say`, `irc say --to <nick>`, `irc wait --from <nick> --match` (new messages only; `--all` scans history), `irc check`. |
 | Leases       | PreToolUse denies Edit/Write outside the worker's `owns`, and a Bash command that plainly writes a peer's file, naming the owner to ask instead. One tree, no worktrees.     |
 | Check gate   | Stop re-runs the worker's own `check` and refuses to let it stop while the check fails (3 refusals, then GAVE UP is posted). A claim of done is never taken as evidence.    |
