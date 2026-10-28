@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 16.3.0 - 2026-10-28
+
+- atlas 16.3.0: crew, a parallel build team on tmux and IRC (one worker per file, file leases, per-worker check gate, lean workers), and a fix for tmux workers inheriting the lead's session id. Benchmark against one Claude prompt: 36-47% of the tokens and 36-37% of the wall time. Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.3.0-crew-benchmark.md](audits/2026-10-28_atlas-16.3.0-crew-benchmark.md).
+
 ## atlas 16.2.0, armada 2.2.1, marketplace 5.3.0 - 2026-10-27
 
 Release: cuts the work that landed on main after the last bumps, and adds release automation.

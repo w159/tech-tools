@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.2.0 (`.claude-plugin/plugin.json`)                                                                                |
+| Version    | 16.3.0 (`.claude-plugin/plugin.json`)                                                                                |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 39 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
@@ -200,7 +200,45 @@ another subagent.
 ## Context offload to tmux workers
 
 A long task run inline fills the main context window with file reads and tool
-output. Atlas moves that work out:
+output. Atlas moves that work out in two shapes: a crew for a parallel build,
+and a team for read-only work.
+
+### Crew: a parallel build that talks over IRC
+
+```bash
+# One call: one worker per file, each with only its own spec section, waits for the result
+python3 "$ATLAS/scripts/atlas_crew.py" run --spec SPEC.md --files 'pkg/*.py' \
+  --tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q' --wait 580
+tmux attach -t atlas-<run>          # watch: one window per worker, plus the channel
+```
+
+- Workers share one IRC channel (`scripts/atlas_irc.py`): an append-only log
+  plus a real IRC gateway on 127.0.0.1, so you can join `#<run>` from any IRC
+  client and talk to the crew. A hook pushes new channel lines into each
+  worker's context after every tool call. Workers announce interfaces
+  (`READY`), wait for a peer (`irc wait --from <nick> --match READY`), and send
+  each other bug reports (`irc say --to <nick>`).
+- Each worker owns a set of files on one tree. A hook denies edits to a peer's
+  file and names the owner to ask. No worktrees, so nothing waits on a merge.
+- A worker cannot stop until its own check passes: the Stop hook re-runs the
+  check instead of taking the worker's word. After all workers exit, the
+  global check runs and only the owners of failing tests are resumed.
+- Workers are lean: their own session id, no MCP servers, project settings
+  only, tools `Bash,Edit`, a short system prompt. The lead's context gets one
+  JSON summary (tokens, cost, wall time, gate refusals, channel counts).
+
+Measured on two spec-driven builds against one Claude prompt with the same
+model (claude-sonnet-5-5, effort medium) and the same task text; all runs
+passed every test. Numbers and method: [CHANGELOG 16.3.0](CHANGELOG.md).
+
+| Task                                   | Single prompt (median) | Crew (median)       | Crew vs single |
+| -------------------------------------- | ---------------------- | ------------------- | -------------- |
+| 8 modules, 213 tests (3 runs each)     | 853k tokens, 144 s     | 401k tokens, 54 s   | 47% tokens, 37% time |
+| 18 modules, 469 tests (3 runs each)    | 2.29M tokens, 181 s    | 823k tokens, 65 s   | 36% tokens, 36% time |
+
+Usage and the plan format: `skills/atlas-orchestrate/references/crew.md`.
+
+### Team: read-only and review work
 
 ```bash
 # Size a team from the scope matrix and start it as tmux panes
@@ -525,7 +563,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.2.0
+|-- .claude-plugin/plugin.json   manifest, version 16.3.0
 |-- agents/                      14 agents (atlas:<role>)
 |-- skills/                      39 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

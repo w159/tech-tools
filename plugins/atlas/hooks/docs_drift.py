@@ -96,7 +96,10 @@ def git_changed_paths(root: Path) -> list:
             out = subprocess.check_output(args, stderr=subprocess.DEVNULL, timeout=5)
             for line in out.decode(errors="replace").splitlines():
                 line = line.strip()
-                if line:
+                # .atlas/ is Atlas's own run state (the SessionStart dirty
+                # snapshot, crew logs), never shipped code: in a repo that does
+                # not ignore it, it would arm the code-shipping gates by itself.
+                if line and not line.startswith(".atlas/"):
                     paths.add(line)
         except Exception:
             pass  # fail-open: any git error -> treat as no new paths

@@ -1,5 +1,33 @@
 # Changelog
 
+## 16.3.0 - 2026-10-28
+
+### Added
+
+- Crew: a parallel build team on tmux and IRC (`scripts/atlas_crew.py`, `scripts/atlas_irc.py`, `hooks/crew_worker.py`). One call (`atlas_crew.py run --spec SPEC.md --files 'pkg/*.py' --tests 'tests/test_{stem}.py' --check '...' --wait 580`) plans one worker per file, starts them in tmux session `atlas-<run>`, and returns one JSON summary to the lead.
+  - Channel: an append-only log with a real IRC gateway on 127.0.0.1 (`irc/port`); any IRC client can join `#<run>`. A PostToolUse hook pushes new lines into each worker's context. Workers use `irc say [--to <nick>]`, `irc need <peer>...` and `irc wait --from <nick> --match <re>`.
+  - File leases: Edit/Write outside the worker's `owns` is denied, and so is a Bash command that plainly writes a peer's file; the denial names the owner to ask. Workers share one tree, so there is no merge step.
+  - Check gate: a worker cannot stop while its own check fails (the Stop hook re-runs it; 3 refusals, then GAVE UP is posted). After the round, the global check runs and only the owners of failing tests are resumed (`--fix-rounds`).
+  - Lean workers: own session id, `--strict-mcp-config`, project settings only, tools `Bash,Edit`, a short replacement system prompt, no background shells. Measured per-call floor: 3.8k tokens against 55.8k for a default `claude -p` in this environment.
+  - Automatic plan (`--spec/--files/--tests`): each worker gets only its own spec section and stub; in a multi-package tree, package overview sections go only to that package's workers and a stem used twice gets its directory as a prefix.
+- `skills/atlas-orchestrate/references/crew.md`; the orchestrate skill and output style route multi-file builds to the crew and keep `atlas_mux.py spawn-team` for read-only teams.
+
+### Fixed
+
+- `atlas_mux.clean_env` passed the lead's `CLAUDE_CODE_SESSION_ID` and `CLAUDE_CODE_REMOTE_SESSION_ID` to every tmux worker, so each spawn-team worker ran under the lead's session id. Both are now dropped (`scripts/test_atlas_mux_env.py`).
+- The Stop gate's git fallback (`hooks/docs_drift.py` `git_changed_paths`) counted Atlas's own untracked `.atlas/` files, such as the SessionStart dirty snapshot, as shipped code, so a docs-only run in a repo that does not ignore `.atlas/` was asked for evidence, findings and CHANGELOG/ROADMAP/README. `.atlas/` paths are now skipped (`hooks/test_completion_gate.py::StopGateArmingTest::test_shell_docs_edit_does_not_demand_cde`, red on 16.2.0, green now).
+
+### Benchmark
+
+Same task text, same model (claude-sonnet-5-5, effort medium), fresh copy of the fixture per run, tokens = input + cache writes + cache reads + output summed over every process (`modelUsage` of each process's final result). Every run below passed every test and left the tests untouched. Full table and transcripts: `docs/audits/2026-10-28_atlas-16.3.0-crew-benchmark.md` at the repository root.
+
+| Task | Single prompt, 3 runs | Crew 16.3.0, 3 runs | Crew vs single (medians) |
+| --- | --- | --- | --- |
+| 8 modules, 213 tests | 849k / 131 s, 962k / 157 s, 853k / 144 s | 402k / 54 s, 399k / 48 s, 401k / 61 s | 47% tokens, 37% wall time |
+| 18 modules, 469 tests | 2.29M / 181 s, 2.75M / 354 s, 1.67M / 175 s | 881k / 60 s, 823k / 66 s, 810k / 65 s | 36% tokens, 36% wall time |
+
+The 50% token target is met on both tasks. The 25% wall-time target is not: the crew finishes in 36-37% of the single prompt's median time (18% of the one single run that did not delegate to a subagent). What remains is the lead's fixed cost (about 15 s: process start, two model calls, exit) and the critical path of the largest module plus the CLI module that imports every other one.
+
 ## 16.2.0 - 2026-10-27
 
 ### Added

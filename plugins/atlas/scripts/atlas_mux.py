@@ -190,6 +190,9 @@ def _session(run: str) -> str:
     return f"atlas-{run}"
 
 
+LEAD_ONLY_ENV = ("TMUX", "TMUX_PANE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID")
+
+
 def clean_env(env: dict | None = None) -> dict:
     """Env for tmux and its panes with every cmux hook removed (CMUX_*, TERM_PROGRAM=cmux) and cmux CLI shims off
     PATH, so nothing in a pane can reach the cmux socket or surface a UI."""
@@ -197,8 +200,9 @@ def clean_env(env: dict | None = None) -> dict:
         k: v
         for k, v in (os.environ if env is None else env).items()
         # TMUX/TMUX_PANE: atlas sessions are detached and addressed by name; a stale or unresolvable
-        # lead pane must not route (or fail) them.
-        if not k.startswith("CMUX_") and k not in ("TMUX", "TMUX_PANE")
+        # lead pane must not route (or fail) them. The lead's session ids: a worker that inherits them
+        # runs as the lead's session (same transcript id, same board), so every worker gets its own.
+        if not k.startswith("CMUX_") and k not in LEAD_ONLY_ENV
     }
     if out.get("TERM_PROGRAM", "").lower() == "cmux":
         del out["TERM_PROGRAM"]

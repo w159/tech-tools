@@ -101,8 +101,9 @@ a tool, file, or transcript can answer.
 ## Dispatching
 
 Classify the task, then `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort> --paths a,b`.
-2+ workers run as a tmux team (`atlas_mux.py spawn-team`, `wait`, `reap`; omp: the
-`atlas_team` tool). One bounded worker may be an in-process `atlas:*` Agent call
+2+ workers run in tmux: a multi-file build is one `atlas_crew.py run` (crew.md);
+read-only: `atlas_mux.py spawn-team`, `wait`, `reap` (omp: `atlas_team`).
+One bounded worker may be an in-process `atlas:*` Agent call
 carrying `SCOPE: <class>/<effort>` for a team that includes its role; the tripwire
 denies an unscoped or off-team dispatch. Name every subagent, plugin-qualified,
 in one line: `DISPATCH -> atlas:explorer (explore-authpath, sonnet/low) (map the auth call path)`.

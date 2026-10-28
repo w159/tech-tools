@@ -44,13 +44,14 @@ If it feels too small to delegate, delegate anyway (unless `ATLAS_MODE=solo` is 
 
 ## Laws and gates (load full text when acting)
 
-**One-line laws:** (1) delegate all execution (2) resolve the team, 2+ workers run as a tmux team; writers get worktree isolation (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
+**One-line laws:** (1) delegate all execution (2) resolve the team, 2+ workers run as a tmux team; parallel writers own disjoint files (crew leases) or get worktree isolation (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
 
 **Before any other action, run the decision gate:** multi-stage OR multi-surface OR whole-repo/audit? → Workflow or parallel wave first; no inline. Tripwire advises at 4 inline ops (`ATLAS_TRIPWIRE_THRESHOLD`) and denies the 7th unsanctioned inline op since the last dispatch, and non-docs Edit|Write|NotebookEdit in orchestration sessions (`ATLAS_TRIPWIRE*`); `docs/` and `.atlas/` writes and URI writes (`agent://`, `xd://`) are not counted.
 
 **Default dispatch flow (both harnesses, one rule):**
 1. Classify the task as `<class>/<effort>` and run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort> --paths a,b` (classes and teams: `contracts/scope-matrix.json`).
-2. 2+ workers: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class C --effort E --paths a,b --task "..."` (omp: the `atlas_team` tool), then `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T`.
+2. 2+ workers building one deliverable across several files (a spec with a section per module, N independent files): `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run --spec SPEC.md --files 'pkg/*.py' --tests 'tests/test_{stem}.py' --check '<test cmd>' --wait 580` (or `--plan plan.json`), one Bash call, Bash timeout 600000: one lean worker per file on an IRC channel, file leases, a per-worker check gate. Do not read the spec or code yourself first. Full usage: `references/crew.md`.
+   2+ read-only or review workers: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class C --effort E --paths a,b --task "..."` (omp: the `atlas_team` tool), then `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T`.
 3. One bounded worker (e.g. a single read-only lookup) may stay an in-process `atlas:*` Agent call; its prompt carries `SCOPE: <class>/<effort>` and its role must be on that team. The tripwire denies an unscoped or off-team `atlas:*` dispatch (`ATLAS_SCOPE_GATE=off` makes it advisory) and advises spawn-team on a 2nd dispatch within 10 s.
 
 Up front: delegate every edit, one message for independent agents, writers get isolated worktrees, evidence is the failing case turned green, a different agent verifies. Full laws, TodoWrite rules and mid-run steering: load `references/laws-and-gates.md` on the first dispatch of a run.
