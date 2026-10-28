@@ -322,6 +322,7 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
         if k not in SCRUB_ENV and not k.startswith(SCRUB_PREFIX)
     }
     owners = {p: x["name"] for x in plan["workers"] for p in x["owns"]}
+    stubs = {p: str(rundir / "stubs" / p) for p in w["owns"] if (rundir / "stubs" / p).is_file()}
     env.update(
         {
             "ATLAS_IRC_DIR": str(rundir / "irc"),
@@ -329,6 +330,8 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
             "ATLAS_CREW_ROOT": root,
             "ATLAS_CREW_OWNS": json.dumps(w["owns"]),
             "ATLAS_CREW_OWNERS": json.dumps(owners),
+            # pristine copies of the owned stubs: `irc check` restores the docstrings a rewrite dropped
+            "ATLAS_CREW_STUBS": json.dumps(stubs),
             "ATLAS_CREW_CHECK": w.get("check") or "",
             # `irc check` waits for NEEDS, runs UNIT_CHECK and posts DONE itself
             "ATLAS_CREW_NEEDS": " ".join(w.get("needs") or []),
@@ -818,6 +821,17 @@ def cmd_plan(a) -> int:
     return 0
 
 
+def save_stubs(rundir: Path, plan: dict, root: str) -> None:
+    """Keep a pristine copy of every owned .py stub under `<rundir>/stubs/<rel>` before any worker runs."""
+    for w in plan["workers"]:
+        for rel in w["owns"]:
+            src = Path(root, rel)
+            if rel.endswith(".py") and src.is_file():
+                dst = rundir / "stubs" / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, dst)
+
+
 def cmd_run(a) -> int:
     root = os.path.realpath(a.root or os.getcwd())
     try:
@@ -862,6 +876,7 @@ def cmd_run(a) -> int:
             worker_prompt(plan, w, run_id, root), encoding="utf-8"
         )
     (rundir / "run.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    save_stubs(rundir, plan, root)
     roster = "; ".join(f"{w['name']}: {', '.join(w['owns'])}" for w in plan["workers"])
     atlas_irc.post(
         rundir / "irc",

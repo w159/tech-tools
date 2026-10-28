@@ -807,8 +807,8 @@ class WorkerLaunchTests(unittest.TestCase):
         self.assertEqual(u["turns"], 6)
 
 
-class VerifiedDoneTests(unittest.TestCase):
-    """A DONE is posted by `irc check` after the unit check passed, never from the worker's word."""
+class _IrcCase:
+    """Helpers to run `irc` subcommands in-process against a temp bus."""
 
     IRC = str(Path(__file__).resolve().parent / "atlas_irc.py")
 
@@ -831,6 +831,9 @@ class VerifiedDoneTests(unittest.TestCase):
 
     def _dones(self, d, nick="ranges"):
         return [r for r in atlas_irc.history(d) if r.get("kind") == "done" and r["from"] == nick]
+
+class VerifiedDoneTests(_IrcCase, unittest.TestCase):
+    """A DONE is posted by `irc check` after the unit check passed, never from the worker's word."""
 
     def test_check_with_failing_unit_check_posts_no_done_even_when_piped(self):
         import subprocess
@@ -915,6 +918,99 @@ class VerifiedDoneTests(unittest.TestCase):
             d, env = self._env(tmp, "exit 1")
             self._irc(env, "check")
             self.assertEqual(atlas_irc.drain(d, "semver"), [])
+
+
+class DocstringRestoreTests(_IrcCase, unittest.TestCase):
+    """`irc check` puts back the stub docstrings a worker's rewrite dropped, deterministically."""
+
+    STUB = (
+        '"""Module doc."""\n\n\nclass A:\n    """Class doc\n\n    more text\n    """\n\n'
+        '    def m(self):\n        """Method doc."""\n        raise NotImplementedError\n\n\n'
+        'def f(x):\n    """Func doc."""\n    raise NotImplementedError\n\n\n'
+        'def g(x):\n    """Mine."""\n    raise NotImplementedError\n'
+    )
+
+    def _setup(self, tmp, work, unit="true"):
+        d, env = self._env(tmp, unit)
+        stub = Path(tmp) / "stubs" / "pkg" / "m.py"
+        stub.parent.mkdir(parents=True)
+        stub.write_text(self.STUB)
+        (Path(tmp) / "pkg").mkdir()
+        (Path(tmp) / "pkg" / "m.py").write_text(work)
+        env["ATLAS_CREW_OWNS"] = json.dumps(["pkg/m.py"])
+        env["ATLAS_CREW_STUBS"] = json.dumps({"pkg/m.py": str(stub)})
+        return d, env
+
+    def test_restores_module_class_function_and_method_docstrings(self):
+        import ast
+
+        work = "import os\n\n\nclass A:\n    def m(self):\n        return 1\n\n\ndef f(x):\n    return x\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._setup(tmp, work)
+            code, out = self._irc(env, "check")
+            got = (Path(tmp) / "pkg" / "m.py").read_text()
+            t = ast.parse(got)
+            self.assertEqual(code, 0)
+            self.assertIn("restored 4 docstrings in pkg/m.py", out)
+            self.assertEqual(ast.get_docstring(t, clean=False), "Module doc.")
+            self.assertEqual(ast.get_docstring(t.body[2], clean=False), "Class doc\n\n    more text\n    ")
+            self.assertEqual(ast.get_docstring(t.body[2].body[1], clean=False), "Method doc.")
+            self.assertEqual(ast.get_docstring(t.body[3], clean=False), "Func doc.")
+            self.assertIn("return x", got)
+            self.assertEqual(len(self._dones(d)), 1)
+            self.assertNotIn("restored", self._irc(env, "check")[1])  # idempotent
+
+    def test_worker_docstring_and_worker_only_defs_are_left_alone(self):
+        work = '"""Worker module."""\n\n\ndef f(x):\n    """Worker f."""\n    return x\n\n\ndef extra():\n    return 2\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._setup(tmp, work)
+            code, out = self._irc(env, "check")
+            self.assertEqual(code, 0)
+            self.assertNotIn("restored", out)
+            self.assertEqual((Path(tmp) / "pkg" / "m.py").read_text(), work)
+
+    def test_a_def_only_in_the_worker_file_gets_no_docstring(self):
+        work = "def f(x):\n    return x\n\n\ndef extra():\n    return 2\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._setup(tmp, work)
+            self._irc(env, "check")
+            got = (Path(tmp) / "pkg" / "m.py").read_text()
+            self.assertIn("def extra():\n    return 2\n", got)
+            self.assertIn('"""Func doc."""', got)
+
+    def test_an_edit_that_would_not_parse_leaves_the_file_unchanged(self):
+        work = "def f(x):\n    return x\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            d, env = self._setup(tmp, work)
+            stub = Path(env["ATLAS_CREW_STUBS"].split('"')[3])
+            with mock.patch.object(atlas_irc.ast, "parse", side_effect=[atlas_irc.ast.parse(self.STUB), atlas_irc.ast.parse(work), SyntaxError("x")]):
+                new, n = atlas_irc.restore_docstrings(self.STUB, work)
+            self.assertEqual((new, n), (work, 0))
+            self.assertEqual(stub.read_text(), self.STUB)
+
+    def test_a_check_that_fails_after_insertion_reverts_and_done_is_still_posted(self):
+        work = "def f(x):\n    return x\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            # passes on the worker's file, fails once a docstring is present
+            d, env = self._setup(tmp, work, unit="! grep -q Func pkg/m.py")
+            code, out = self._irc(env, "check")
+            self.assertEqual(code, 0)
+            self.assertEqual((Path(tmp) / "pkg" / "m.py").read_text(), work)
+            self.assertNotIn("restored", out)
+            self.assertEqual(len(self._dones(d)), 1)
+            self.assertFalse([r for r in atlas_irc.history(d) if r.get("kind") == "unverified"])
+
+    def test_worker_env_exposes_the_saved_stubs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "proj"
+            (root / "pkg").mkdir(parents=True)
+            (root / "pkg" / "a.py").write_text('"""A."""\n')
+            plan = {"workers": [{"name": "a", "owns": ["pkg/a.py"]}]}
+            rd = Path(tmp) / "run"
+            atlas_crew.save_stubs(rd, plan, str(root))
+            env = atlas_crew.worker_env(rd, plan, plan["workers"][0], str(root))
+            self.assertEqual(json.loads(env["ATLAS_CREW_STUBS"]), {"pkg/a.py": str(rd / "stubs" / "pkg" / "a.py")})
+            self.assertEqual((rd / "stubs" / "pkg" / "a.py").read_text(), '"""A."""\n')
 
 
 class SleepDenyTests(unittest.TestCase):

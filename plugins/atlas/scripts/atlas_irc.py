@@ -27,6 +27,7 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import ast
 import fcntl
 import json
 import os
@@ -451,10 +452,10 @@ CHECK_TIMEOUT_S = 600
 TAIL_CHARS = 6000
 
 
-def _run_unit_check(d, nick: str):
+def _run_unit_check(d, nick: str, quiet: bool = False):
     """Run ATLAS_CREW_UNIT_CHECK (shell, cwd ATLAS_CREW_ROOT) and print its output tail. Returns its exit code,
     or None when no unit check is set. A failure is recorded as an `unverified` note to the nick itself (peers
-    are not told), which voids any earlier DONE of this nick."""
+    are not told), which voids any earlier DONE of this nick. `quiet` prints and records nothing."""
     cmd = os.environ.get("ATLAS_CREW_UNIT_CHECK") or ""
     if not cmd:
         return None
@@ -464,10 +465,122 @@ def _run_unit_check(d, nick: str):
         code, out = res.returncode, (res.stdout or "") + (res.stderr or "")
     except subprocess.TimeoutExpired:
         code, out = 124, f"check timed out after {CHECK_TIMEOUT_S}s\n"
+    if quiet:
+        return code
     print(out[-TAIL_CHARS:], end="" if out.endswith("\n") or not out else "\n")
     if code:
         post(d, nick, nick, f"unverified {nick}: `{cmd}` exited {code}", kind="unverified")
     return code
+
+
+def _doc_nodes(tree) -> dict:
+    """Qualified name -> node for the module ("") and every class/function in it. A name defined twice
+    (overloads, conditional defs) maps to None: it is ambiguous and never touched."""
+    found: dict = {"": tree}
+
+    def walk(node, prefix):
+        for ch in node.body:
+            if isinstance(ch, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                q = prefix + ch.name
+                found[q] = None if q in found else ch
+                walk(ch, q + ".")
+
+    walk(tree, "")
+    return found
+
+
+def _has_doc(node) -> bool:
+    return ast.get_docstring(node, clean=False) is not None
+
+
+def _doc_literal(text: str, indent: str, stub_indent: int) -> list:
+    """Source lines of `text` as a triple-quoted string at `indent`; continuation lines move from the stub's
+    body indentation to `indent`."""
+    body = text.replace("\\", "\\\\").replace('"""', '\\"\\"\\"').replace("\r", "\\r")
+    if body.endswith('"'):
+        body = body[:-1] + '\\"'
+    lines = body.split("\n")
+    out = [lines[0]]
+    for i, ln in enumerate(lines[1:], 1):
+        lead = len(ln) - len(ln.lstrip(" "))
+        keep = ln.strip() or (ln and i == len(lines) - 1)  # the closing quote's own line keeps its indentation
+        out.append(indent + ln[min(lead, stub_indent):] if keep else "")
+    out[0] = '"""' + out[0]
+    out[-1] += '"""'
+    return [indent + out[0]] + out[1:]
+
+
+def restore_docstrings(stub_src: str, work_src: str):
+    """Put back the stub's docstrings the worker's rewrite dropped: for each module, class, function or method
+    present in both (by qualified name) where only the stub has a docstring, insert the stub's text as the
+    first statement. A docstring the worker wrote is never touched. Returns (new source, count); the source is
+    returned unchanged (count 0) when either side does not parse or the edit would not."""
+    try:
+        stub_nodes = _doc_nodes(ast.parse(stub_src))
+        work_nodes = _doc_nodes(ast.parse(work_src))
+    except (SyntaxError, ValueError):
+        return work_src, 0
+    lines = work_src.splitlines(keepends=True)
+    edits = []
+    for q, w in work_nodes.items():
+        sn = stub_nodes.get(q)
+        if w is None or sn is None or not _has_doc(sn) or _has_doc(w) or not w.body:
+            continue
+        first = w.body[0]
+        start = min([first.lineno] + [x.lineno for x in getattr(first, "decorator_list", [])])
+        if q and start == w.lineno:  # one-liner `def f(): ...`: no body line to insert before
+            continue
+        text = ast.get_docstring(sn, clean=False)
+        sbody = sn.body[0]
+        edits.append((start, text, getattr(sbody, "col_offset", 0)))
+    if not edits:
+        return work_src, 0
+    for start, text, sindent in sorted(edits, reverse=True):
+        indent = re.match(r"[ \t]*", lines[start - 1]).group(0)
+        new = [ln + "\n" for ln in _doc_literal(text, indent, sindent)]
+        lines[start - 1:start - 1] = new
+    out = "".join(lines)
+    try:
+        ast.parse(out)
+    except (SyntaxError, ValueError):
+        return work_src, 0
+    return out, len(edits)
+
+
+def _restore_owned_docstrings(d, nick: str) -> bool:
+    """After a passing unit check: restore dropped stub docstrings in the owned .py files (ATLAS_CREW_STUBS maps
+    rel path -> pristine copy). Re-run the unit check once if anything was inserted; if that fails, put the
+    workers' files back. Returns True when docstrings were restored and kept."""
+    try:
+        stubs = json.loads(os.environ.get("ATLAS_CREW_STUBS") or "{}")
+        owns = json.loads(os.environ.get("ATLAS_CREW_OWNS") or "[]")
+    except ValueError:
+        return False
+    root = Path(os.environ.get("ATLAS_CREW_ROOT") or os.getcwd())
+    changed = []
+    for rel in owns:
+        stub = stubs.get(rel)
+        if not rel.endswith(".py") or not stub:
+            continue
+        try:
+            work = (root / rel).read_text(encoding="utf-8")
+            new, n = restore_docstrings(Path(stub).read_text(encoding="utf-8"), work)
+            if n:
+                (root / rel).write_text(new, encoding="utf-8")
+                changed.append((rel, work, n))
+        except OSError:
+            continue
+    if not changed:
+        return False
+    code = _run_unit_check(d, nick, quiet=True)
+    if code:
+        for rel, work, _ in changed:
+            (root / rel).write_text(work, encoding="utf-8")
+        print(f"docstring restore reverted: the unit check exited {code} with them")
+        return False
+    for rel, _, n in changed:
+        print(f"restored {n} docstrings in {rel}")
+    return True
 
 
 def _announce_done(d, nick: str, text: str) -> None:
@@ -506,6 +619,7 @@ def cmd_check(a) -> int:
     code = _run_unit_check(d, nick)
     if code:
         return code
+    _restore_owned_docstrings(d, nick)
     _announce_done(d, nick, "check passes")
     return 0
 
