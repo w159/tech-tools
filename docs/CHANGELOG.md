@@ -13,31 +13,38 @@
   dropped silently, which was hit and fixed during this work.
 - Live verification through the deployed gateway: a real Entra sign-in issued a
   token (`Bearer`, `expires_in 900`, `scope mcp`) and `tools/list` returned
-  **396 tools**, byte-identical across two calls, up from 208 - the increase is
-  falcon (4 -> 145) and connectwise (2 -> 49) gaining their full credential
-  sets. Both now answer real data calls (`falcon_search_hosts`,
-  `cw_list_boards`, `ninjaone_organizations_list`). Paylocity exposes 0 tools
-  because its grant is the `hr` role and the test user holds `company`/`it`:
-  the role model working as designed. This supersedes the "7 of 13 connectors
-  have no credentials" line in the broker-mode entry below.
+  **384 tools**, byte-identical across two calls, up from 208 - falcon (4 ->
+  145), connectwise (2 -> 49), auvik (2 -> 39) and spanning (2 -> 13) gained
+  their full credential sets, and panos (60 -> 0) left with the policy. All six
+  of falcon, connectwise, ninjaone, auvik, spanning and threatlocker answer
+  "authenticated" through the gateway, the first three returning real data.
+  Paylocity exposes 0 tools because its grant is the `hr` role and the test
+  user holds `company`/`it`: the role model working as designed. This
+  supersedes the "7 of 13 connectors have no credentials" line in the
+  broker-mode entry below.
 - Four connectors were sourced from 1Password and validated against the vendor
-  APIs (HTTP 200): **paylocity**, **threatlocker** (the new API token, shard `h`),
-  **auvik** and **spanning**. The values are staged in `~/.config/atlas/atlas.env`
-  (mode 600) and are **not yet in the gateway's Key Vault**: the operator account
-  is under an Entra ID Protection risk block (`AADSTS530032: User blocked due to
-  risk on home tenant`), so no Key Vault write, no container revision and no
-  policy change can be published from this machine until that clears.
+  APIs (HTTP 200): **paylocity**, **threatlocker** (the new API token, shard
+  `h`), **auvik** and **spanning**. The values were seeded into
+  `gwh-mcp-gateway-kv` and are live in the gateway.
+- Two container-wiring gaps were found while making that live and fixed:
+  `auvik-api-key` and `spanning-api-token` were in the vault and in
+  `~/.config/atlas/atlas.env` but were **not** in the container app's secret
+  list or its env list, so both connectors started with no credential
+  ("NOT CONFIGURED" / "Missing SPANNING_ADMIN_EMAIL or SPANNING_API_TOKEN")
+  even though a valid one existed. A credential in the vault is not a
+  credential in the container - the `env` entry is a separate, silent step.
 - Still without a usable credential: **knowbe4** and **vanta** (the stored values
   are rejected 401 by the vendor), and **blumira**, **cipp** and **sonicwall**
   (no value found). Their role grants are already in place, so each works as
   soon as a valid value is stored.
 - **PAN-OS stays local-only** by decision: `PANOS_HOST` is `10.8.254.3` on the
-  corporate VPN and is unreachable from Azure. Its grant is still published in
-  the live policy and must be removed by regenerating `policy.yaml` from the
-  org's real answers input - the same Entra block, not a missing step. Custom
-  domain `mcp.henssler.com` is not bound: henssler.com's nameservers are not in
-  any reachable subscription, so the gateway answers on its Container Apps
-  hostname.
+  corporate VPN and is unreachable from Azure. The grant was removed by
+  regenerating `policy.yaml` from the org's real answers input (the regenerated
+  file was byte-identical to the published one except for the single `panos`
+  line) and storing it as the `policy-yaml` secret - never by hand-editing the
+  generated secret. Custom domain `mcp.henssler.com` is not bound: henssler.com's
+  nameservers are not in any reachable subscription, so the gateway answers on its
+  Container Apps hostname.
 - Runbook: [architecture/mcp-gateway-broker-runbook.md](architecture/mcp-gateway-broker-runbook.md)
   ("Connector credentials (2026-10-28)"). Evidence:
   [../.atlas/evidence/2026-10-28-mcp-gateway-credentials.md](../.atlas/evidence/2026-10-28-mcp-gateway-credentials.md).

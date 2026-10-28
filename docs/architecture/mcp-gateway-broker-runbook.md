@@ -333,74 +333,83 @@ matching env entry is loaded but never reaches the connector.
 ### Live per-connector verification (2026-10-28)
 
 A real interactive Entra sign-in against the live gateway (same shape as
-step 5's verification) returned **396 tools** across the 13 connectors -
-falcon 145, panos 60, connectwise 49, ninjaone 45, threatlocker 30,
-knowbe4 30, vanta 28, spanning 2, sonicwall 2, auvik 2, blumira 2, cipp 1,
-paylocity 0 (paylocity is granted only to the `hr` role; the signed-in
-user holds `company`/`it`, so 0 tools is the role model working, not a
-fault). Per-connector authenticated status, called through the gateway:
-`falcon`, `connectwise` and `ninjaone` authenticated and returned real
-data; `panos` timed out (its host is a private LAN address unreachable
-from Azure - see decision below); `knowbe4`, `vanta` and `threatlocker`
-authenticated-and-rejected at the vendor (stale/invalid credential);
-`paylocity` rejected with `invalid_client` at the vendor token endpoint;
-`auvik`, `blumira`, `cipp`, `sonicwall`, `spanning` report no credential
-configured. Full status table and audit lines:
+step 5's verification) returned **384 tools** across the 13 connectors -
+falcon 145, connectwise 49, ninjaone 45, auvik 39, threatlocker 30,
+knowbe4 30, vanta 28, spanning 13, sonicwall 2, blumira 2, cipp 1,
+panos 0, paylocity 0. `paylocity` is granted only to the `hr` role and
+the signed-in user holds `company`/`it`, so 0 tools is the role model
+working, not a fault; `panos` is 0 because its grant was removed from the
+published policy (see the decision below). Per-connector authenticated
+status, called through the gateway: `falcon`, `connectwise`, `ninjaone`,
+`auvik` ("authCheck: OK (HTTP 200)"), `spanning` ("Auth check: OK (HTTP
+200)") and `threatlocker` ("Auth check: OK (authenticated)") all
+authenticated, the first three returning real data. `knowbe4` and `vanta`
+are still rejected by the vendor; `blumira`, `cipp` and `sonicwall` still
+report no credential configured. Full status table and audit lines:
 `.atlas/evidence/2026-10-28-mcp-gateway-credentials.md`.
+
+Two things that look like gateway faults but are not:
+
+- **Dynamic client registrations do not survive a revision roll.** A client
+  that registered before the roll is answered with `invalid_client`; it has
+  to register again. Re-register after every rollout before concluding the
+  sign-in is broken.
+- **An authorize request without a `scope` is answered with
+  `access_denied`** and an empty description. Send `scope=mcp
+  offline_access`.
 
 ### Decisions taken by the user (2026-10-28)
 
 - **PAN-OS stays local-only.** The appliance is on the corporate VPN and
   no tunnel or Azure VPN is being built, so the gateway should not offer
-  it. Removing `panos` from the grants is still open - it has not been
-  done, because the account needed to publish the new policy is currently
-  blocked (see below). The correct way to do it when unblocked: edit the
-  connector grants in the **input** file for the admin tool's `plan` step
-  (the role/connector mapping in the org's real `answers.yaml`, analogous
-  to `mcp_servers/mcp-gateway/src/admin/fixtures/answers.yaml` - that
+  it. **Done (2026-10-28, later the same day):** `panos` was removed from
+  the `it` role's connector list in the **input** file for the admin
+  tool's `plan` step (the role/connector mapping in the org's real
+  `answers.yaml`, analogous to
+  `mcp_servers/mcp-gateway/src/admin/fixtures/answers.yaml` - that
   tracked file is a Contoso test fixture, **not** the input that produced
-  the live policy), re-run `node dist/admin/cli.js plan --org org-model.json
-  --answers <org-answers.yaml> --out plan.json --policy policy.yaml`, then
-  store the regenerated `policy.yaml` into the `policy-yaml` Key Vault
-  secret (step 3) and roll a revision so the container remounts it. Do
+  the live policy), `node dist/admin/cli.js plan --org org-model.json
+  --answers <org-answers.yaml> --out plan.json --policy policy.yaml` was
+  re-run, and the regenerated `policy.yaml` - byte-identical to the
+  published one except for the single `panos` line - was stored as the
+  `policy-yaml` Key Vault secret and rolled into a new revision. Do
   **not** hand-edit the `policy-yaml` secret or the mounted
   `/mnt/policy/policy.yaml` directly - it is generated output, not a
-  source file.
+  source file. The `panos-*` secrets stay in the vault (harmless: the
+  policy, not the vault, decides what a caller may reach).
 - **No custom domain.** Users connect to the container app's default
   `azurecontainerapps.io` hostname. henssler.com's DNS is served by
   `dcs-001`/`dcs-002`/`dcs-azure.henssler.com`, which is not in any of the
   three Azure subscriptions reachable from here, so `mcp.henssler.com`
   cannot be created from this machine.
 
-### Open blocker: the operator account is risk-blocked in Entra
+### Resolved blocker: the operator account was risk-blocked in Entra
 
-Every Azure CLI call for `da-jmorgan@henssler.com` currently fails with:
+For part of 2026-10-28 every Azure CLI call for
+`da-jmorgan@henssler.com` failed with:
 
 ```
 AADSTS530032: User blocked due to risk on home tenant.
 ```
 
-Reproduce with any authenticated call, e.g.:
-
-```
-az account show
-```
-
-This blocks publishing a new policy, rotating Key Vault secrets, and
-rolling the container app - it is an Entra Identity Protection risk block
-on the account, not a gateway defect. The fix (clearing the risk or
-resetting the account) is outside the gateway, in Entra ID Protection /
-identity administration.
+Reproduce with any authenticated call, e.g. `az account show`. It blocked
+publishing a new policy, rotating Key Vault secrets, and rolling the
+container app - it is an Entra Identity Protection risk block on the
+account, not a gateway defect. It cleared when the operator completed an
+interactive device-code sign-in (`az login --use-device-code`); a cached
+Graph token stays rejected with `TokenIssuedBeforeRevocationTimestamp`
+until that sign-in refreshes it. Everything above was completed after the
+block cleared.
 
 ### Connector credentials still unusable
 
-Nine of the 13 connectors are still unusable after this work and were
-deliberately left as-is pending a fresh credential: `knowbe4`, `vanta`,
-`threatlocker` and `paylocity` have a stored value the vendor rejects;
-`auvik`, `blumira`, `cipp`, `spanning` and `sonicwall` have no value stored
-anywhere. Role grants for all nine stay in place, so each one starts
-working through the gateway the moment a valid credential is stored - no
-policy or env change is needed beyond the credential rotation steps above.
+Five of the 13 connectors are still unusable and were deliberately left
+as-is pending a fresh credential from the vendor: `knowbe4` and `vanta`
+have a stored value the vendor rejects (401), and `blumira`, `cipp` and
+`sonicwall` have no value stored anywhere. Role grants for all five stay
+in place, so each one starts working through the gateway the moment a
+valid credential is stored - no policy or env change is needed beyond the
+credential rotation steps above.
 
 ## Not covered by this runbook
 
