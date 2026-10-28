@@ -10208,5 +10208,59 @@
     "status": "verified",
     "verified_at": "2026-10-28T12:52:04+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "gateway-credentials-2026-10-28",
+    "surface": "mcp-gateway",
+    "category": "credentials",
+    "severity": "medium",
+    "title": "Gateway connector credentials are stored in Key Vault and three connectors authenticate live",
+    "evidence": [
+      ".atlas/evidence/2026-10-28-mcp-gateway-credentials.md",
+      "docs/architecture/mcp-gateway-broker-runbook.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "curl -sS https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io/health",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T17:02:19+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "gateway-credentials-2026-10-28",
+    "surface": "mcp-gateway",
+    "category": "credentials",
+    "severity": "medium",
+    "title": "Gateway credential wiring ships green: tsc clean, 223/223 tests pass, and the docs commit is on the pushed branch",
+    "evidence": [
+      "mcp_servers/mcp-gateway: Test Files 17 passed (17), Tests 223 passed (223)",
+      ".atlas/evidence/2026-10-28-mcp-gateway-credentials.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/mcp-gateway && npx tsc --noEmit && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T17:03:31+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "cipp-connector-url-only",
+    "surface": "armada-plugin",
+    "category": "connector",
+    "severity": "medium",
+    "title": "The CIPP connector is a URL-only remote MCP server; OAuth registration, sign-in and token exchange verified live",
+    "evidence": [
+      ".atlas/evidence/2026-10-28-cipp-connector.md",
+      "mcp_servers/mcp-gateway: 17 files / 223 tests passed; gen-catalog --check current"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/mcp-gateway && node scripts/gen-catalog.mjs --check && npx tsc --noEmit && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T18:00:05+00:00",
+    "verified_by": "main"
   }
 ]
