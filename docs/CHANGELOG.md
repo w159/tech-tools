@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 16.4.1 - 2026-10-28
+
+- atlas 16.4.1: crew fixes. `auto_plan` now orders a worker after the peers its own tests import, and `irc check` restores the stub docstrings a worker's rewrite dropped. Measured against one Claude prompt on 8, 18 and 30 modules: 11-16% of the tokens and 29-33% of the wall time (25% target still missed). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.4.0-crew-benchmark.md](audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
+
 ## atlas 16.4.0 - 2026-10-28
 
 - atlas 16.4.0: `/atlas:atlas-crew` skill (the crew starts before the lead's first model call), peer interfaces in each worker's context, verified DONE (`irc check`), new-only `irc wait`, a sleep deny, an early exit after a re-verified passing check, and lean worker traffic. Against one Claude prompt: 13-16% of the tokens and 28-30% of the wall time (25% target still missed). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.4.0-crew-benchmark.md](audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
