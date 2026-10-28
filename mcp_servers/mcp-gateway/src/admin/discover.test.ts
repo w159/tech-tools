@@ -37,6 +37,20 @@ describe("discover", () => {
     expect(fake.requests.filter((r) => r.path.startsWith("/v1.0/groups?"))).toHaveLength(2);
   });
 
+  it("asks /$count for text/plain, the only type Graph accepts there", async () => {
+    const accepts: string[] = [];
+    const fetchFn: typeof fetch = (input, init) => {
+      const url = String(input);
+      // the only host this test may call is the local fake Graph
+      if (!url.startsWith(`${fake.baseUrl}/`)) return Promise.reject(new Error(`blocked non-fake host: ${url}`));
+      if (url.endsWith("/$count")) accepts.push(new Headers(init?.headers).get("accept") ?? "");
+      return fetch(url, init);
+    };
+    await discover(new GraphClient({ baseUrl: fake.baseUrl, token: TOKEN, readOnly: true, fetchFn, sleep: async () => undefined }), { minCell: 0 });
+    expect(accepts.length).toBeGreaterThan(0);
+    expect(accepts.every((a) => a === "text/plain")).toBe(true);
+  });
+
   it("uses only GET requests", async () => {
     await discover(client(), { minCell: 0 });
     expect(fake.requests.length).toBeGreaterThan(5);

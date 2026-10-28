@@ -193,6 +193,7 @@ class MemoryOAuthProvider implements OAuthClientProvider {
 
 // Browser stand-in: follows the redirect chain (mock IdP signs in with no
 // prompt) and posts the consent form.
+// fallow-ignore-next-line complexity
 async function drive(start: URL, redirectPrefix: string): Promise<URL> {
   const jar = new CookieJar();
   let url = start;
@@ -677,6 +678,37 @@ describe("graph token: managed identity (Container Apps)", () => {
     const graphCalls = s.graph.requests.filter((q) => q.path.startsWith("/v1.0/"));
     expect(graphCalls.every((q) => q.headers.authorization === `Bearer ${MI_TOKEN}`)).toBe(true);
   });
+});
+
+// The deployed identity holds no Graph application permissions, so the app's own
+// client credentials must carry the check.
+describe("graph token: managed identity without Graph roles falls back to client credentials", () => {
+  const cases: Array<[string, (g: FakeEntraGraph) => void]> = [
+    ["token endpoint answers 401", (g) => (g.miStatus = 401)],
+    ["token endpoint answers 403", (g) => (g.miStatus = 403)],
+    // acceptedToken stays GRAPH_TOKEN, so Graph rejects the MI token with 401.
+    ["token is issued but Graph rejects it", () => undefined],
+  ];
+  for (const [name, arrange] of cases) {
+    it(`${name}: resolves roles through client credentials`, async () => {
+      const graph = new FakeEntraGraph();
+      await graph.start();
+      arrange(graph);
+      const s = await startStack({ IDENTITY_ENDPOINT: `${graph.base}/msi/token`, IDENTITY_HEADER: MI_HEADER }, graph);
+      try {
+        fakeDate();
+        enter(s, { groups: [G_READERS] });
+        const p = await signedIn(s, 43361, [G_READERS]);
+        const r = await refreshed(s, p);
+        expect(r.status).toBe(200);
+        expect(await listToolsWith(s, r.body.access_token as string)).toEqual(["fx_read"]);
+        expect(graph.tokenRequests).toHaveLength(1);
+      } finally {
+        await s.close();
+        await graph.stop();
+      }
+    }, 60_000);
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -84,6 +84,8 @@ function sorted(counts: Counts): Counts {
 }
 
 const EVENTUAL = { ConsistencyLevel: "eventual" };
+// Graph's /$count only speaks text/plain; the client default Accept: application/json gets HTTP 415.
+const COUNT_HEADERS = { ...EVENTUAL, Accept: "text/plain" };
 
 // Optional sections need directory permissions an admin may not have granted;
 // a 403 there becomes a warning instead of aborting discovery.
@@ -139,7 +141,7 @@ export async function discover(client: GraphClient, opts: DiscoverOptions = {}):
   }>("/groups?$select=id,displayName,securityEnabled,mailEnabled,groupTypes,membershipRule&$top=999");
   const groups: OrgModel["groups"] = [];
   for (const g of rawGroups) {
-    const count = Number((await client.getText(`/groups/${encodeURIComponent(g.id)}/transitiveMembers/$count`, EVENTUAL)).trim());
+    const count = Number((await client.getText(`/groups/${encodeURIComponent(g.id)}/transitiveMembers/$count`, COUNT_HEADERS)).trim());
     groups.push({
       id: g.id,
       // A small group's name can point at a person; its id still identifies it.

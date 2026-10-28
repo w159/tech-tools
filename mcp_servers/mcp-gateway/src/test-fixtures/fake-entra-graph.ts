@@ -48,6 +48,8 @@ export class FakeEntraGraph {
   // Token the Graph resource endpoints accept.
   acceptedToken = GRAPH_TOKEN;
   tokenExpiresIn = 3600;
+  // When set, the managed identity endpoint answers with this status and no token.
+  miStatus?: number;
   requests: RecordedRequest[] = [];
 
   async start(): Promise<void> {
@@ -101,6 +103,7 @@ export class FakeEntraGraph {
 
     // Managed identity endpoint: GET with X-IDENTITY-HEADER, api-version, resource.
     if (rec.method === "GET" && url.pathname === "/msi/token") {
+      if (this.miStatus !== undefined) return send(res, this.miStatus, { error: "identity_unavailable" });
       if (req.headers["x-identity-header"] !== MI_HEADER || url.searchParams.get("api-version") !== "2019-08-01") {
         return send(res, 400, { error: "bad_request" });
       }

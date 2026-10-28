@@ -10042,5 +10042,171 @@
     "status": "verified",
     "verified_at": "2026-10-26T17:52:10+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "tcd12c5ac",
+    "surface": "mcp-gateway broker /auth + /interaction",
+    "category": "live-verification",
+    "severity": "low",
+    "title": "Live browser sign-in reaches the gateway consent screen and returns an authorization code (Entra SSO, no human-only prompt)",
+    "evidence": [
+      "browser screenshot: gateway 'Authorize access' consent page (Application live-client.mjs, Access requested: mcp)",
+      "/tmp/gw/final-client.log: 'callback ok code=kFOY_I...(len 43)' and final URL http://127.0.0.1:60426/callback?code=kFOY_I_ce7YWtHV8Qq-ebTC8NqUuFuvHksZnP6FRY7e"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client-scoped.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io ; open the printed auth URL in Chrome; click Allow",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:35:58+00:00",
+    "verified_by": "LiveSignInVerify"
+  },
+  {
+    "id": "tcd12c5ac-TOKEN",
+    "surface": "mcp-gateway /token",
+    "category": "production-config",
+    "severity": "high",
+    "title": "Token endpoint fails closed: Entra Graph membership re-check unavailable, so no access token is ever issued (tools/list and tool call unreachable)",
+    "evidence": [
+      "az containerapp logs show -g gwh-mcp-gateway-rg -n gwh-mcp-gateway --tail 60 -> {\"event\":\"auth_failed\",\"actor\":{\"sub\":\"a_ttFU4-CXEhiS32lZ5CUm0PWTNgrBFMfN\",\"idp\":\"entra\",\"tenant\":\"f00db7e5-ade5-49b2-b9cd-8813b81ef30a\"},\"client_id\":\"CIdbbPaoSBGfDShpqeO0b_Np2eNQyZIwbtUWKGcbmcz\",\"reason\":\"membership_check_unavailable\",\"outcome\":\"backend_error\"} (3x: 12:28:00, 12:28:46, 12:34:22)",
+      "/tmp/gw/final-client.log: FAIL: token exchange HTTP 400: {\"error\":\"invalid_grant\",\"error_description\":\"grant request is invalid\"}"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client-scoped.mjs <base>; sign in; consent; the token POST then returns invalid_grant and the audit line says membership_check_unavailable",
+    "proposed_fix": "Give the container's managed identity (gwh-mcp-gateway-id, clientId 27080ee0-e240-4400-bac3-b3fada17fa7d) the Graph app permissions Application.Read.All/User.Read.All/GroupMember.Read.All and set ENTRA_MANAGED_IDENTITY_CLIENT_ID, or make the membership check use the app registration client credentials (verified working from outside: Graph token HTTP 200, servicePrincipals/appRoleAssignedTo/users all HTTP 200)",
+    "blast_radius": "every user of the live broker gateway; no token can be issued until the Graph membership check can authenticate",
+    "status": "rejected",
+    "verified_at": "2026-10-28T12:35:58+00:00",
+    "verified_by": "LiveSignInVerify"
+  },
+  {
+    "id": "tcd12c5ac-CSRF",
+    "surface": "mcp_servers/mcp-gateway/src/broker/interactions.ts securityHeaders() + originOk()",
+    "category": "code-defect",
+    "severity": "high",
+    "title": "Consent form POST is rejected 403 in every real browser: Referrer-Policy no-referrer makes Chrome send Origin: null, which originOk() refuses",
+    "evidence": [
+      "CDP Network.requestWillBeSentExtraInfo for POST /interaction/<uid>/confirm: origin= null | referer= (empty) | sec-fetch-site= same-origin; server answered 403 'Request blocked - This form was submitted from another site.'",
+      "controlled experiment on 127.0.0.1:9913: a page served with 'referrer-policy: no-referrer' produced origin=\"null\" on a same-origin form POST, while the same page without that header produced origin=\"http://127.0.0.1:9913\""
+    ],
+    "doc_refs": [],
+    "reproduction": "open the printed auth URL in Chrome, click Allow on the consent page -> 403 Request blocked",
+    "proposed_fix": "Accept Origin: null (or compare the Origin against the request's own host) in originOk(), or drop Referrer-Policy: no-referrer from the interaction pages, or replace the Origin check with a double-submit CSRF token",
+    "blast_radius": "any browser-based sign-in: the user can never accept the consent screen",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:35:58+00:00",
+    "verified_by": "LiveSignInVerify"
+  },
+  {
+    "id": "tcd12c5ac-SCOPE",
+    "surface": "mcp_servers/mcp-gateway/src/broker/interactions.ts showConsent/handleConfirm + oidc-provider interactions action",
+    "category": "code-defect",
+    "severity": "medium",
+    "title": "Authorization without a scope parameter ends in access_denied (no scope was granted) while the consent page shows 'Access requested: (none)'",
+    "evidence": [
+      "client without scope: callback error=access_denied; with scope=mcp offline_access: callback code=... issued (same browser, same gateway)",
+      "oidc-provider 9.12.2 lib/actions/authorization/interactions.js:73 'authorization request resolved without requesting interactions but no scope was granted'"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client.mjs <base> (no scope) vs node /tmp/gw/live-client-scoped.mjs <base> (scope=mcp offline_access)",
+    "proposed_fix": "Send scope=mcp from the client, and/or default the authorization scope to the resource scope in the gateway; surface the provider error_description on the consent page instead of a bare access_denied",
+    "blast_radius": "any MCP client that omits scope, although the protected-resource metadata advertises scopes_supported=[mcp]",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:35:58+00:00",
+    "verified_by": "LiveSignInVerify"
+  },
+  {
+    "id": "GW-001",
+    "surface": "mcp-gateway",
+    "category": "browser-consent",
+    "severity": "high",
+    "title": "Gateway consent form POST is rejected 403 in every real browser (Referrer-Policy no-referrer makes Chrome send Origin: null)",
+    "evidence": [
+      "live audit + CDP requestWillBeSentExtraInfo origin=null sec-fetch-site=same-origin",
+      "mcp_servers/mcp-gateway/src/broker/interactions.ts:58 (Referrer-Policy), :93 (originOk)"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io -> browser consent POST -> HTTP 403 Request blocked",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:38:32+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "GW-002",
+    "surface": "mcp-gateway",
+    "category": "entra-membership",
+    "severity": "high",
+    "title": "Gateway token endpoint fails closed: membership check cannot get a Graph token from the container (managed identity has no Graph permissions, no client-credentials fallback)",
+    "evidence": [
+      "container audit event auth_failed reason=membership_check_unavailable x3 (12:28:00, 12:28:46, 12:34:22)",
+      "az role assignment list --all --assignee 8fa02505-c220-40bb-abfc-f5fdf72a938b -> no Graph app permissions"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io -> token exchange HTTP 400 invalid_grant",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:38:32+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "te71619af",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Live Entra sign-in through gwh-mcp-gateway--fix1 issues a token, exposes 208 role-scoped tools (no paylocity), and reaches the real NinjaOne backend",
+    "evidence": [
+      "/tmp/gw/reverify2-client.log: token ok type=Bearer expires_in=900 access=eyJhbG...(len 1118) refresh=yjAFKA...(len 43) scope=mcp; tools/list -> 208 tools",
+      "/tmp/gw/reverify3-client.log: tools/call ninjaone_devices_list -> isError=false (organization_id=1)",
+      "az containerapp logs show -g gwh-mcp-gateway-rg -n gwh-mcp-gateway --revision gwh-mcp-gateway--fix1 --tail 300: audit token_issued / tools_listed tool_count=208 / tool_call connector=ninjaone effect=read decision=allow reason=grant:it outcome=ok"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client-refresh.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io 'ninjaone_devices_list' '' '{\"ninjaone_devices_list\":{\"organization_id\":1}}' (consent accepted via browser-use)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:50:33+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "te71619af",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Live Entra sign-in through gwh-mcp-gateway--fix1 issues a token, exposes 208 role-scoped tools (no paylocity), and reaches the real NinjaOne backend",
+    "evidence": [
+      "/tmp/gw/reverify2-client.log: 'token ok type=Bearer expires_in=900 access=<masked len 1118> refresh=<masked len 43> scope=mcp'; 'tools/list -> 208 tools'",
+      "/tmp/gw/reverify3-client.log: tools/call ninjaone_devices_list -> isError=false (organization_id=1)",
+      "az containerapp logs show -g gwh-mcp-gateway-rg -n gwh-mcp-gateway --revision gwh-mcp-gateway--fix1 --tail 300: audit token_issued / tools_listed tool_count=208 / tool_call connector=ninjaone effect=read decision=allow reason=grant:it outcome=ok (no token values in audit)"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client-refresh.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io 'ninjaone_devices_list' '' '{\"ninjaone_devices_list\":{\"organization_id\":1}}' (consent accepted via browser-use)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:50:43+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "GW-003",
+    "surface": "mcp-gateway",
+    "category": "end-to-end",
+    "severity": "info",
+    "title": "Live Entra sign-in through the broker-mode gateway is VERIFIED end to end: token issued, 208 tools scoped to the caller's roles, read-only vendor call succeeded",
+    "evidence": [
+      "client token ok type=Bearer expires_in=900 scope=mcp",
+      "tools/list -> 208 tools (panos 60, ninjaone 45, threatlocker 30, knowbe4 30, vanta 28, falcon 4, spanning 2, sonicwall 2, connectwise 2, blumira 2, auvik 2, cipp 1), zero paylocity tools",
+      "ninjaone_organizations_list isError=false and ninjaone_devices_list isError=false against the real NinjaOne backend",
+      "container audit: token_issued x3, tools_listed tool_count=208 x3, tool_call x7, decision allow reason grant:it"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /tmp/gw && node live-client-scoped.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io (then sign in in the browser)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:52:04+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

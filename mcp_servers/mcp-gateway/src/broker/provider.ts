@@ -8,7 +8,7 @@ import type { BrokerConfig, GatewayConfig, TrustedAssertionIssuer } from "../con
 import { resolveRoles, type Policy } from "../policy.js";
 import { createMemoryAdapter, type MemoryAdapter } from "./adapter.js";
 import { ACCOUNT_MODEL, AccountStore, type AccountRecord } from "./accounts.js";
-import { clientCredentialsTokenProvider, EntraMembership, managedIdentityTokenProvider, type FetchLike } from "./entra-membership.js";
+import { clientCredentialsTokenProvider, EntraMembership, fallbackTokenProvider, managedIdentityTokenProvider, type FetchLike } from "./entra-membership.js";
 import { lookupGoogleGroups } from "./google-groups.js";
 import { createInteractionHandler, UPSTREAM_LOGIN_MODEL } from "./interactions.js";
 import { JTI_MODEL, JWT_BEARER_GRANT, registerJwtBearerGrant } from "./jwt-bearer.js";
@@ -75,15 +75,19 @@ export function createBroker(opts: BrokerOptions): Broker {
         cacheSeconds: membershipCfg.cacheSeconds,
         graphBaseUrl: membershipCfg.graphBaseUrl,
         fetch: opts.graphFetch,
-        tokenProvider: membershipCfg.managedIdentity
-          ? managedIdentityTokenProvider({ ...membershipCfg.managedIdentity, fetch: opts.graphFetch })
-          : clientCredentialsTokenProvider({
-              authorityHost: membershipCfg.authorityHost,
-              tenantId: membershipCfg.tenantId,
-              clientId: broker.upstream.clientId,
-              clientSecret: broker.upstream.clientSecret,
-              fetch: opts.graphFetch,
-            }),
+        tokenProvider: (() => {
+          const clientCredentials = clientCredentialsTokenProvider({
+            authorityHost: membershipCfg.authorityHost,
+            tenantId: membershipCfg.tenantId,
+            clientId: broker.upstream.clientId,
+            clientSecret: broker.upstream.clientSecret,
+            fetch: opts.graphFetch,
+          });
+          // The managed identity may hold no Graph roles; the app's own credentials are the fallback.
+          return membershipCfg.managedIdentity
+            ? fallbackTokenProvider(managedIdentityTokenProvider({ ...membershipCfg.managedIdentity, fetch: opts.graphFetch }), clientCredentials)
+            : clientCredentials;
+        })(),
       })
     : undefined;
 

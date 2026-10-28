@@ -4,6 +4,50 @@
 
 - atlas 16.4.1: crew fixes. `auto_plan` now orders a worker after the peers its own tests import, and `irc check` restores the stub docstrings a worker's rewrite dropped. Measured against one Claude prompt on 8, 18 and 30 modules: 11-16% of the tokens and 29-33% of the wall time (25% target still missed). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.4.0-crew-benchmark.md](audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
 
+## MCP gateway broker-mode cutover - 2026-10-28
+
+- The `gwh-mcp-gateway` Container App moved from direct mode (Entra ID as
+  the OAuth authorization server) to broker mode: the gateway is now its
+  own OAuth 2.1 authorization server (`oidc-provider`), federated to Entra
+  as the upstream IdP. The 26 flat per-vendor `<Vendor>.Read`/`<Vendor>.Write`
+  app roles (plus an orphaned `TypeSafe` pair) were pruned and replaced
+  with 6 named gateway roles (`it`, `compliance`, `accounting`, `hr`,
+  `planning`, `company`), each assigned to a real Entra group rather than
+  an individual. The Anthropic-only IP allowlist on ingress was removed;
+  access control is now Entra sign-in plus the role grant plus the audit
+  log. Design: [architecture/enterprise-mcp-gateway.md](architecture/enterprise-mcp-gateway.md);
+  historical direct-mode record:
+  [architecture/mcp-gateway-design.md](architecture/mcp-gateway-design.md);
+  reproduction steps:
+  [architecture/mcp-gateway-broker-runbook.md](architecture/mcp-gateway-broker-runbook.md);
+  full evidence: `.atlas/findings/2026-10-28_gateway-live-state.md`.
+- Two defects found and fixed during the cutover's live verification: the
+  consent-form POST was rejected 403 in every real browser because
+  `Referrer-Policy: no-referrer` on the consent page made Chrome send
+  `Origin: null`, which the CSRF guard refused - fixed by sending
+  `Referrer-Policy: same-origin` instead (`src/broker/interactions.ts`);
+  and the token endpoint failed closed with `membership_check_unavailable`
+  because the Entra group-membership re-check had only the managed
+  identity as its Graph token source and that identity holds no Graph
+  application permissions - fixed by adding a fallback to the
+  application's own client credentials, with a one-shot retry on a
+  401/403 from Graph, with fail-closed semantics unchanged
+  (`src/broker/entra-membership.ts`, `src/broker/provider.ts`). A third,
+  unrelated defect was also fixed: the admin `discover` tool sent
+  `Accept: application/json` to Graph's `/$count` endpoint, which only
+  speaks `text/plain`, so discovery failed with HTTP 415
+  (`src/admin/discover.ts`).
+- Verification: a real browser sign-in through Entra SSO against the live
+  gateway issued a token (`Bearer`, `expires_in 900`, `scope mcp`, refresh
+  token present), `tools/list` returned 208 tools scoped to exactly the
+  signed-in user's role grants (zero Paylocity tools), byte-identical
+  across two independent sign-ins, and two read-only NinjaOne calls
+  succeeded against the real backend. The gateway's test suite: 17 files,
+  223 tests, `npx tsc --noEmit` clean. Still open: 7 of 13 connectors
+  (auvik, blumira, cipp, falcon, paylocity, spanning, sonicwall) have no
+  credentials in Key Vault yet; the `mcp.henssler.com` custom domain
+  remains unbound (the gateway answers on its Container Apps hostname).
+
 ## atlas 16.4.0 - 2026-10-28
 
 - atlas 16.4.0: `/atlas:atlas-crew` skill (the crew starts before the lead's first model call), peer interfaces in each worker's context, verified DONE (`irc check`), new-only `irc wait`, a sleep deny, an early exit after a re-verified passing check, and lean worker traffic. Against one Claude prompt: 13-16% of the tokens and 28-30% of the wall time (25% target still missed). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.4.0-crew-benchmark.md](audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
@@ -1794,7 +1838,7 @@ as a stdio child with only its own env prefix. Per-vendor app roles
 audited (oid, upn, tool, decision), never arguments or results.
 
 Azure (tenant Henssler Financial, RG `gwh-mcp-gateway-rg`): Entra app
-"Henssler MCP Gateway" (appId `c6e1bf1e-2520-4f1d-b329-8f0f05de34a6`),
+"Henssler MCP Gateway" (real appId not recorded in tracked docs),
 identifier URI `https://mcp.henssler.com/mcp`, v2 tokens, scope
 `access_as_user`, redirect `https://claude.ai/api/mcp/auth_callback`, user
 assignment required, admin consent granted. Hosting (ACR, Key Vault, Container
