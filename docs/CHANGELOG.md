@@ -3,7 +3,7 @@
 ## CIPP connector: URL-only MCP - 2026-10-28
 
 - The CIPP connector is now a **remote MCP server configured by one URL**.
-  `plugins/armada/.mcp.json` declares `"cipp": { "type": "http", "url": "${CFG_CIPP_MCP_URL}" }`, and
+  `plugins/armada/.mcp.json` declares `"cipp": { "type": "http", "url": "${user_config.cipp_mcp_url}" }`, and
   the plugin's user config drops the five CIPP fields (base URL, API key, tenant ID, client ID,
   client secret) for a single `cipp_mcp_url` - the instance's `/api/ExecMcp` endpoint. CIPP runs the
   sign-in: the client registers itself with CIPP's OAuth server, sends the user to Microsoft, and

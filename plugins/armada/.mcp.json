@@ -33,7 +33,7 @@
     },
     "cipp": {
       "type": "http",
-      "url": "${CFG_CIPP_MCP_URL}"
+      "url": "${user_config.cipp_mcp_url}"
     },
     "connectwise": {
       "command": "node",
