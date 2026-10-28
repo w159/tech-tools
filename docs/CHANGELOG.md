@@ -1,5 +1,31 @@
 # Changelog
 
+## CIPP connector: URL-only MCP - 2026-10-28
+
+- The CIPP connector is now a **remote MCP server configured by one URL**.
+  `plugins/armada/.mcp.json` declares `"cipp": { "type": "http", "url": "${CFG_CIPP_MCP_URL}" }`, and
+  the plugin's user config drops the five CIPP fields (base URL, API key, tenant ID, client ID,
+  client secret) for a single `cipp_mcp_url` - the instance's `/api/ExecMcp` endpoint. CIPP runs the
+  sign-in: the client registers itself with CIPP's OAuth server, sends the user to Microsoft, and
+  every call runs with that user's own CIPP role.
+- Verified live against the CIPP instance: dynamic client registration at
+  `POST /api/PublicMcpRegister` answered 201 with a public client
+  (`token_endpoint_auth_method: none`), the PKCE sign-in returned a code, and the token exchange
+  issued a Bearer token (`scope=https://<host>/user_impersonation`, refresh token included). Two
+  details the instance's own metadata gets wrong, which the connector has to handle: request
+  `scope=openid profile offline_access https://<host>/user_impersonation` and **no** `resource`
+  parameter (sending the advertised `resource` makes the tenant answer `AADSTS9010010`), and
+  register the loopback redirect as `http://localhost:<port>/callback` (`127.0.0.1` is rejected with
+  `AADSTS50011`).
+- The gateway keeps its own CIPP backend: `catalog/overrides.json` now carries the command, args and
+  env prefix for `cipp`, so the connector still reaches the gateway although the plugin entry became
+  a remote URL, and `scripts/gen-catalog.mjs` learned to read remote (`type: http`) entries. The
+  generated `catalog/catalog.json` is byte-identical to before this change.
+- The bundled `mcp_servers/cipp-mcp` server is unchanged and still serves the gateway's REST path.
+  Its stored credential is not accepted by this instance, and the MCP endpoint itself answers
+  `Access to this CIPP API endpoint is not allowed, the user does not have the required permission`
+  after a successful sign-in - the signed-in user needs a CIPP role that covers MCP.
+
 ## MCP gateway connector credentials - 2026-10-28
 
 - Every vendor credential the gateway uses is now a **Key Vault reference**, not a

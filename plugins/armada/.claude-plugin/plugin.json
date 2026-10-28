@@ -56,38 +56,6 @@
       "description": "Optional. Leave blank to use the default (https://api.blumira.com/public-api/v1).",
       "default": ""
     },
-    "cipp_base_url": {
-      "type": "string",
-      "title": "CIPP base URL",
-      "description": "URL of your deployed CIPP Azure Function (required for the CIPP connector). Leave blank to disable CIPP.",
-      "default": ""
-    },
-    "cipp_api_key": {
-      "type": "string",
-      "title": "CIPP API key",
-      "description": "Legacy static bearer token. Use this OR the OAuth trio below.",
-      "sensitive": true,
-      "default": ""
-    },
-    "cipp_tenant_id": {
-      "type": "string",
-      "title": "CIPP tenant ID",
-      "description": "Entra tenant ID for modern CIPP OAuth2 auth.",
-      "default": ""
-    },
-    "cipp_client_id": {
-      "type": "string",
-      "title": "CIPP client ID",
-      "description": "App registration client ID for modern CIPP OAuth2 auth.",
-      "default": ""
-    },
-    "cipp_client_secret": {
-      "type": "string",
-      "title": "CIPP client secret",
-      "description": "App registration client secret for modern CIPP OAuth2 auth.",
-      "sensitive": true,
-      "default": ""
-    },
     "cw_manage_company_id": {
       "type": "string",
       "title": "ConnectWise company ID",
@@ -368,6 +336,12 @@
       "type": "string",
       "title": "SonicWall session override",
       "description": "Optional, defaults to false. When true, login and config mode preempt whichever admin currently holds the session. Off by default so automation never silently boots a human out of the console.",
+      "default": ""
+    },
+    "cipp_mcp_url": {
+      "type": "string",
+      "title": "CIPP MCP URL",
+      "description": "The CIPP MCP endpoint of your CIPP instance, ending in /api/ExecMcp (e.g. https://cipp.yourdomain.com/api/ExecMcp). Nothing else is needed: CIPP signs you in with Microsoft, and every call runs with your own CIPP role. The URL is shown on CIPP > Integrations > CIPP-API > MCP tab.",
       "default": ""
     }
   },

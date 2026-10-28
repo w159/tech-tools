@@ -1,5 +1,15 @@
 # Changelog
 
+## CIPP connector: URL-only MCP - 2026-10-28
+
+- The CIPP connector is now a remote MCP server configured by one URL (`cipp_mcp_url`,
+  the instance's `/api/ExecMcp` endpoint). CIPP runs the Microsoft sign-in for each user
+  and every call runs with that user's own CIPP role; the five CIPP credential fields
+  (base URL, API key, tenant ID, client ID, client secret) are gone from the plugin's
+  user config. The gateway's CIPP backend is unchanged - `catalog/overrides.json` keeps
+  its launch line, so the generated catalog is byte-identical.
+
+
 ## 2.2.1 - 2026-10-27
 
 ### Fixed

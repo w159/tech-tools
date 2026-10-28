@@ -411,6 +411,29 @@ in place, so each one starts working through the gateway the moment a
 valid credential is stored - no policy or env change is needed beyond the
 credential rotation steps above.
 
+### The CIPP connector is a remote MCP server (2026-10-28)
+
+The plugin's CIPP connector is no longer a bundled stdio server: it is the CIPP instance's own MCP
+endpoint, configured with one URL (`cipp_mcp_url`, e.g.
+`https://cipp.example.com/api/ExecMcp`), and CIPP handles the OAuth sign-in for each user. The
+gateway's CIPP backend is unchanged (the bundled `cipp-mcp` server over the CIPP REST API) and
+`catalog/overrides.json` keeps the gateway's launch line for it, so the generated catalog is
+unchanged.
+
+Two things the instance's discovery metadata does not get right, for any client that talks to
+`/api/ExecMcp` directly:
+
+- Request `scope=openid profile offline_access https://<host>/user_impersonation` and send **no**
+  `resource` parameter. Sending the `resource` value the protected-resource metadata advertises
+  makes Entra answer `AADSTS9010010: The resource parameter provided in the request doesn't match
+  with the requested scopes`.
+- Register the loopback redirect as `http://localhost:<port>/callback`. Registering
+  `http://127.0.0.1:<port>/callback` is rejected with `AADSTS50011: The redirect URI ... does not
+  match the redirect URIs configured for the application`.
+
+Dynamic client registration works without any client id or secret: `POST /api/PublicMcpRegister`
+answers 201 with `token_endpoint_auth_method: none`.
+
 ## Not covered by this runbook
 
 - Binding the `mcp.henssler.com` custom domain and its certificate - still
