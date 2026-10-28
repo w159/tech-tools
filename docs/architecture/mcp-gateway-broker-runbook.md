@@ -233,6 +233,175 @@ token-endpoint Graph fallback) are in
 `.atlas/findings/2026-10-28_gateway-live-state.md` - this runbook's job is
 reproducing the deployment, not restating that evidence.
 
+## 6. Connector credentials (2026-10-28)
+
+This is the credential wiring for the 13 catalog connectors, loaded and
+verified live after the broker-mode cutover above. It does not repeat the
+4 broker secrets from step 3; those are unrelated to the per-vendor
+credentials here.
+
+### Where each value lives
+
+`gwh-mcp-gateway-kv` (resource group `gwh-mcp-gateway-rg`, subscription
+`d10ed4e7-8973-4fb6-aa90-1d31b8be10b3`) holds 29 vendor secrets, named
+lowercase-hyphen after the env var they feed - `auvik-username`,
+`auvik-region`, `cw-manage-company-id`, `cw-manage-public-key`,
+`cw-manage-private-key`, `cw-manage-client-id`, `cw-manage-url`,
+`falcon-client-id`, `falcon-client-secret`, `falcon-base-url`,
+`knowbe4-api-key`, `knowbe4-region`, `ninjaone-client-id`,
+`ninjaone-client-secret`, `ninjaone-region`, `panos-host`, `panos-api-key`,
+`panos-verify-tls`, `paylocity-client-id`, `paylocity-client-secret`,
+`paylocity-company-id`, `spanning-admin-email`, `spanning-platform`,
+`spanning-api-url`, `threatlocker-api-key`, `threatlocker-organization-id`,
+`threatlocker-base-url`, `vanta-client-id`, `vanta-client-secret` - plus the
+pre-existing broker secrets from step 3.
+
+Each is wired to the container as a Key Vault reference, not a copy: the
+container app secret points at the vault secret by URI and reads it
+through the user-assigned identity `gwh-mcp-gateway-id`, which holds
+**Key Vault Secrets User** on the vault. That split matters operationally:
+rotating a value in the vault needs no container app update, only a new
+revision so the container re-reads the mounted secret.
+
+The connector env vars on the container are UPPER_CASE and point at those
+secrets with `secretRef`: `AUVIK_USERNAME`, `AUVIK_REGION`,
+`CW_MANAGE_COMPANY_ID`, `CW_MANAGE_CLIENT_ID`, `FALCON_CLIENT_ID`,
+`FALCON_CLIENT_SECRET`, `FALCON_BASE_URL`, `KNOWBE4_REGION`,
+`NINJAONE_REGION`, `PAYLOCITY_CLIENT_ID`, `PAYLOCITY_CLIENT_SECRET`,
+`PAYLOCITY_COMPANY_ID`, `SPANNING_ADMIN_EMAIL`, `SPANNING_PLATFORM`,
+`SPANNING_API_URL`, `THREATLOCKER_ORGANIZATION_ID`,
+`THREATLOCKER_BASE_URL`, plus the pre-existing `KNOWBE4_API_KEY`,
+`NINJAONE_CLIENT_ID`/`NINJAONE_CLIENT_SECRET`,
+`PANOS_HOST`/`PANOS_API_KEY`/`PANOS_VERIFY_TLS`, `THREATLOCKER_API_KEY`,
+`VANTA_CLIENT_ID`/`VANTA_CLIENT_SECRET`,
+`CW_MANAGE_URL`/`CW_MANAGE_PUBLIC_KEY`/`CW_MANAGE_PRIVATE_KEY`.
+
+### The prefix rule, and its lowercase-name trap
+
+The gateway forwards env to each vendor MCP server by prefix only
+(`mcp_servers/mcp-gateway/src/backends.ts`: `ALLOWED_COMMON_ENV` plus each
+connector's `envPrefixes` from `catalog/catalog.json`, checked at
+`childEnv()` with `spec.envPrefixes.some((p) => key.startsWith(p))`). A
+connector therefore never sees another vendor's secrets, and an env var
+name must match the vendor's prefix **exactly**, including case. A
+lowercase name such as `falcon-client-secret` passed as an env var is
+silently dropped by the `FALCON_` prefix check - no error, the connector
+just starts unauthenticated. This was a real defect hit during this work;
+the fix is always an UPPER_CASE env var name on the container, pointing at
+the (lowercase-named) Key Vault secret via `secretRef`.
+
+### Local sources of the values before they were centralized
+
+`~/.config/atlas/atlas.env` (the per-user file every local MCP server
+reads), `plugins/atlas/.env`, `~/.claude/settings.json`
+`pluginConfigs[atlas@tech-tools].options`, `~/.zshrc` (Falcon),
+`~/MEGA/Projects/Development/paylocity-api/.env`, and the `agent-penny-kv`
+vault (ConnectWise client id and company id).
+
+### Adding or rotating one connector credential
+
+Read the current value's metadata only (never print the value to a
+terminal or into a file):
+
+```
+az keyvault secret show --vault-name gwh-mcp-gateway-kv --name <secret-name> \
+  --query "{name:name, updated:attributes.updated, enabled:attributes.enabled}"
+```
+
+Rotate: write the new value straight from its source into the vault in one
+pipe, then point the container secret at the vault (idempotent - safe to
+re-run against an existing reference) and roll a new revision so the
+running container re-reads it:
+
+```
+<command producing the new value> | az keyvault secret set \
+  --vault-name gwh-mcp-gateway-kv --name <secret-name> --file -
+
+az containerapp secret set -g gwh-mcp-gateway-rg -n gwh-mcp-gateway \
+  --secrets "<secret-name>=keyvaultref:https://gwh-mcp-gateway-kv.vault.azure.net/secrets/<secret-name>,identityref:/subscriptions/d10ed4e7-8973-4fb6-aa90-1d31b8be10b3/resourceGroups/gwh-mcp-gateway-rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/gwh-mcp-gateway-id"
+
+az containerapp update -g gwh-mcp-gateway-rg -n gwh-mcp-gateway \
+  --revision-suffix <new-suffix>
+```
+
+Add a brand-new connector credential the same way, then add the matching
+UPPER_CASE `env` entry with `secretRef: <secret-name>` to
+`properties.template.containers[0].env` in the container app update
+document (step 4 above) before rolling the revision - a secret with no
+matching env entry is loaded but never reaches the connector.
+
+### Live per-connector verification (2026-10-28)
+
+A real interactive Entra sign-in against the live gateway (same shape as
+step 5's verification) returned **396 tools** across the 13 connectors -
+falcon 145, panos 60, connectwise 49, ninjaone 45, threatlocker 30,
+knowbe4 30, vanta 28, spanning 2, sonicwall 2, auvik 2, blumira 2, cipp 1,
+paylocity 0 (paylocity is granted only to the `hr` role; the signed-in
+user holds `company`/`it`, so 0 tools is the role model working, not a
+fault). Per-connector authenticated status, called through the gateway:
+`falcon`, `connectwise` and `ninjaone` authenticated and returned real
+data; `panos` timed out (its host is a private LAN address unreachable
+from Azure - see decision below); `knowbe4`, `vanta` and `threatlocker`
+authenticated-and-rejected at the vendor (stale/invalid credential);
+`paylocity` rejected with `invalid_client` at the vendor token endpoint;
+`auvik`, `blumira`, `cipp`, `sonicwall`, `spanning` report no credential
+configured. Full status table and audit lines:
+`.atlas/evidence/2026-10-28-mcp-gateway-credentials.md`.
+
+### Decisions taken by the user (2026-10-28)
+
+- **PAN-OS stays local-only.** The appliance is on the corporate VPN and
+  no tunnel or Azure VPN is being built, so the gateway should not offer
+  it. Removing `panos` from the grants is still open - it has not been
+  done, because the account needed to publish the new policy is currently
+  blocked (see below). The correct way to do it when unblocked: edit the
+  connector grants in the **input** file for the admin tool's `plan` step
+  (the role/connector mapping in the org's real `answers.yaml`, analogous
+  to `mcp_servers/mcp-gateway/src/admin/fixtures/answers.yaml` - that
+  tracked file is a Contoso test fixture, **not** the input that produced
+  the live policy), re-run `node dist/admin/cli.js plan --org org-model.json
+  --answers <org-answers.yaml> --out plan.json --policy policy.yaml`, then
+  store the regenerated `policy.yaml` into the `policy-yaml` Key Vault
+  secret (step 3) and roll a revision so the container remounts it. Do
+  **not** hand-edit the `policy-yaml` secret or the mounted
+  `/mnt/policy/policy.yaml` directly - it is generated output, not a
+  source file.
+- **No custom domain.** Users connect to the container app's default
+  `azurecontainerapps.io` hostname. henssler.com's DNS is served by
+  `dcs-001`/`dcs-002`/`dcs-azure.henssler.com`, which is not in any of the
+  three Azure subscriptions reachable from here, so `mcp.henssler.com`
+  cannot be created from this machine.
+
+### Open blocker: the operator account is risk-blocked in Entra
+
+Every Azure CLI call for `da-jmorgan@henssler.com` currently fails with:
+
+```
+AADSTS530032: User blocked due to risk on home tenant.
+```
+
+Reproduce with any authenticated call, e.g.:
+
+```
+az account show
+```
+
+This blocks publishing a new policy, rotating Key Vault secrets, and
+rolling the container app - it is an Entra Identity Protection risk block
+on the account, not a gateway defect. The fix (clearing the risk or
+resetting the account) is outside the gateway, in Entra ID Protection /
+identity administration.
+
+### Connector credentials still unusable
+
+Nine of the 13 connectors are still unusable after this work and were
+deliberately left as-is pending a fresh credential: `knowbe4`, `vanta`,
+`threatlocker` and `paylocity` have a stored value the vendor rejects;
+`auvik`, `blumira`, `cipp`, `spanning` and `sonicwall` have no value stored
+anywhere. Role grants for all nine stay in place, so each one starts
+working through the gateway the moment a valid credential is stored - no
+policy or env change is needed beyond the credential rotation steps above.
+
 ## Not covered by this runbook
 
 - Binding the `mcp.henssler.com` custom domain and its certificate - still
