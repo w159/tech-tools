@@ -1,10 +1,10 @@
 # Changelog
 
-## CIPP connector: remote MCP with OAuth client id - 2026-10-28
+## 2.3.0 - 2026-10-28
 
 - The CIPP connector is now a remote MCP server configured by the instance URL
   (`cipp_mcp_url`, the `/api/ExecMcp` endpoint) and the OAuth client id of the Entra app
-  registration (`cipp_client_id`, a public client id with a working default). The client id,
+  registration (`cipp_client_id`, a public client id, default `a0b18b3a-2064-457f-ab94-1fdb5c11ca80`). The client id,
   declared as `oauth.clientId` on the `.mcp.json` entry, is what makes Claude Code sign in with
   that app registration instead of using dynamic client registration. CIPP runs the Microsoft
   sign-in for each user and every call runs with that user's own CIPP role; the five old CIPP
