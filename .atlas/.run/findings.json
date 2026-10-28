@@ -10262,5 +10262,43 @@
     "status": "verified",
     "verified_at": "2026-10-28T18:00:05+00:00",
     "verified_by": "main"
+  },
+  {
+    "id": "cipp-connector-url-only",
+    "surface": "armada-plugin",
+    "category": "connector",
+    "severity": "medium",
+    "title": "CIPP connector URL-only change independently re-derived by atlas:implementer: no divergence, catalog unchanged, 223/223 tests green",
+    "evidence": [
+      "atlas:implementer (cipp-connector-config): spec re-derived, filesChanged=0, gen-catalog --check current, tsc clean, 223/223 tests",
+      ".atlas/evidence/2026-10-28-cipp-connector.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/mcp-gateway && node scripts/gen-catalog.mjs --check && npx tsc --noEmit && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T18:01:19+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "cipp-connector-client-id",
+    "surface": "armada-plugin",
+    "category": "connector",
+    "severity": "medium",
+    "title": "CIPP connector now carries oauth.clientId: cipp_client_id user config (default a0b18b3a-2064-457f-ab94-1fdb5c11ca80, the same client id CIPP PublicMcpRegister returns); armada contract suite green (21 tests) with a new guard that every user_config placeholder in .mcp.json resolves; gateway suite 223/223; catalog.json unchanged",
+    "evidence": [
+      ".atlas/evidence/2026-10-28-cipp-connector.md section 6",
+      "commit 19de3953: plugins/armada/.mcp.json cipp entry = type http + url from user_config.cipp_mcp_url + oauth.clientId from user_config.cipp_client_id; plugin.json userConfig 53 -> 54",
+      "python3 plugins/armada/tests/test_armada_contract.py -> Ran 21 tests, OK (the count assertion was stale at 57 after the earlier URL-only change; now 54)",
+      "cd mcp_servers/mcp-gateway && node scripts/gen-catalog.mjs --check -> catalog/catalog.json is current; npx tsc --noEmit clean; npm test -> 17 files / 223 tests"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/armada && python3 tests/test_armada_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T18:14:58+00:00",
+    "verified_by": "main"
   }
 ]

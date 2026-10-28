@@ -1,4 +1,4 @@
-# Evidence: the CIPP connector moved to a URL-only remote MCP server (2026-10-28)
+# Evidence: the CIPP connector moved to a remote MCP server (URL + OAuth client id) (2026-10-28)
 
 Observed behaviour against the live CIPP instance
 `https://cippvtfwq.azurewebsites.net`. No secret, token or cookie value is
@@ -109,3 +109,51 @@ node scripts/gen-catalog.mjs --check   -> catalog/catalog.json is current
 npx tsc --noEmit                       -> clean
 npm test                               -> Test Files 17 passed (17), Tests 223 passed (223)
 ```
+
+## 6. Correction: the connector also needs the app registration's client id
+
+The operator reports that signing in against CIPP needs the app registration's client id, not
+only the URL. Verified locally against Claude Code 2.1.312 (no live CIPP sign-in was repeated
+for this path, so this section documents the connector's config shape, not a live token):
+
+```
+claude mcp add --transport http --client-id <id> <name> <url>
+```
+```json
+"tmpcipp": {
+  "type": "http",
+  "url": "https://cippvtfwq.azurewebsites.net/api/ExecMcp",
+  "oauth": { "clientId": "<id>" }
+}
+```
+
+`claude mcp add-json` accepts the same `oauth` block, so `oauth.clientId` is the supported way
+to tell Claude Code to authenticate as a given app registration instead of running dynamic
+client registration against `POST /api/PublicMcpRegister` (section 2). The app registration's
+client id is a public identifier, not a secret.
+
+The plugin therefore ships `oauth.clientId` bound to a `cipp_client_id` user-config key, default
+`a0b18b3a-2064-457f-ab94-1fdb5c11ca80` (the app registration this plugin ships against); an
+instance using a different registration overrides the one field. No client secret is involved -
+this is a public client.
+
+Re-checked on 2026-10-28, after the change:
+
+```
+POST https://cippvtfwq.azurewebsites.net/api/PublicMcpRegister
+  -> {"client_id": "a0b18b3a-2064-457f-ab94-1fdb5c11ca80",
+      "token_endpoint_auth_method": "none", ...}
+```
+
+CIPP's own registration endpoint hands out exactly the client id the plugin now defaults to, so
+the default is the instance's registered public client and not an arbitrary value. An authorize
+request built with that client id, `redirect_uri=http://localhost:<port>/callback`,
+`code_challenge_method=S256`, the scope `openid profile offline_access
+https://cippvtfwq.azurewebsites.net/user_impersonation` and no `resource` parameter reaches the
+Microsoft sign-in page with no `AADSTS` error in the response.
+
+Scope of the live evidence: the sign-in page and the token path were exercised with the client
+registered through CIPP's own endpoint; a full browser sign-in through Claude Code using the
+explicit `oauth.clientId` was exercised by the operator in Claude Desktop, not by this session.
+
+
