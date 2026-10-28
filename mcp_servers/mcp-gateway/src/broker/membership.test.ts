@@ -151,7 +151,7 @@ class MemoryOAuthProvider implements OAuthClientProvider {
   constructor(
     private readonly redirect: string,
     private readonly dropTokensOnInvalid = false,
-  ) {}
+  ) { }
   invalidateCredentials(scope: "all" | "client" | "tokens" | "verifier" | "discovery"): void {
     if (this.dropTokensOnInvalid && (scope === "tokens" || scope === "all")) this.tok = undefined;
   }
@@ -247,7 +247,12 @@ async function refresh(s: Stack, clientId: string, refreshToken: string): Promis
 
 // Raw /mcp call with a bearer token; 401 is decided before MCP parsing.
 async function mcpRaw(s: Stack, token: string): Promise<{ status: number; wwwAuth: string | null }> {
-  const res = await fetch(s.resource, {
+  // Allowlist: only the local fake stack's MCP endpoint may be called.
+  const target = new URL(s.resource);
+  if (target.protocol !== "http:" || target.hostname !== "127.0.0.1" || target.pathname !== "/mcp" || target.origin !== new URL(s.base).origin) {
+    throw new Error(`refusing to call ${s.resource}`);
+  }
+  const res = await fetch(target, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),

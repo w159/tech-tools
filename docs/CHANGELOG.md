@@ -47,6 +47,12 @@
   (auvik, blumira, cipp, falcon, paylocity, spanning, sonicwall) have no
   credentials in Key Vault yet; the `mcp.henssler.com` custom domain
   remains unbound (the gateway answers on its Container Apps hostname).
+- The runbook was corrected to the commands that were actually run: the
+  admin CLI's discover/plan/provision sequence with the existing app id
+  pinned, the real cookie-key generation command, the real
+  `az containerapp update --yaml` form, and the real skill reference path.
+  Observed-behaviour evidence for the cutover:
+  [../.atlas/evidence/2026-10-28-mcp-gateway-broker-mode.md](../.atlas/evidence/2026-10-28-mcp-gateway-broker-mode.md).
 
 ## atlas 16.4.0 - 2026-10-28
 

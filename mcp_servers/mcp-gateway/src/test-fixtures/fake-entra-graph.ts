@@ -151,7 +151,12 @@ export class FakeEntraGraph {
       }
       if (rec.method === "GET" && !userMatch[2]) return send(res, 200, { id: userMatch[1], accountEnabled: user.enabled, ...(user.sessionsValidFrom === "" ? {} : { signInSessionsValidFromDateTime: user.sessionsValidFrom ?? "2020-01-01T00:00:00Z" }) });
       if (rec.method === "POST" && userMatch[2] === "/checkMemberGroups") {
-        const ids = (JSON.parse(body) as { groupIds?: string[] }).groupIds ?? [];
+        let ids: string[];
+        try {
+          ids = (JSON.parse(body) as { groupIds?: string[] }).groupIds ?? [];
+        } catch {
+          return send(res, 400, { error: { code: "Request_BadRequest" } });
+        }
         if (ids.length > 20) return send(res, 400, { error: { code: "Request_BadRequest" } });
         return send(res, 200, { value: ids.filter((g) => user.groups.includes(g)) });
       }
