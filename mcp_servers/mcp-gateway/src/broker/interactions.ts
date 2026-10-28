@@ -55,7 +55,8 @@ function securityHeaders(res: ServerResponse): void {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "no-referrer");
+  // same-origin, not no-referrer: no-referrer makes Chrome send "Origin: null" on our own form POST; this still sends nothing cross-origin.
+  res.setHeader("Referrer-Policy", "same-origin");
   // No form-action: browsers apply it to the redirect chain after a form POST,
   // and the post-consent redirect goes to the client's own redirect URI.
   res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'");

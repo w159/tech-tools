@@ -1,4 +1,62 @@
-# MCP gateway: Entra ID authentication and role-based access
+# MCP gateway: Entra ID authentication and role-based access (HISTORICAL - direct mode, retired 2026-10-28)
+
+**This document describes the "direct mode" deployment (Entra ID as the
+OAuth authorization server, 26 flat per-vendor `<Vendor>.Read`/
+`<Vendor>.Write` app roles, ingress restricted to Anthropic's egress range,
+and the unbound `mcp.henssler.com` connector URL). That deployment was
+replaced in place on 2026-10-28 by the broker-mode gateway: the design is
+`docs/architecture/enterprise-mcp-gateway.md`, the live status and role
+model are there too, the reproduction steps are
+`docs/architecture/mcp-gateway-broker-runbook.md`, and the full before/after
+evidence is `.atlas/findings/2026-10-28_gateway-live-state.md`. Everything
+below this line is kept as the historical record of the direct-mode
+deployment and its incidents; do not treat any "current"/"live"/"applied"
+statement below as true of the gateway today.**
+
+## Current state (broker mode, live since 2026-10-28)
+
+The direct-mode deployment this document records was replaced in place.
+The gateway now runs its own OAuth 2.1 authorization server
+(`oidc-provider`), federated to Entra ID as the upstream IdP, per the
+design in `docs/architecture/enterprise-mcp-gateway.md` (D2, "Broker
+mode"). Key facts, verified live 2026-10-28 (full detail:
+`.atlas/findings/2026-10-28_gateway-live-state.md`; reproduction steps:
+`docs/architecture/mcp-gateway-broker-runbook.md`):
+
+- **Base URL in use today:** the Container Apps hostname
+  `https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io`.
+  The custom domain `mcp.henssler.com` referenced throughout the rest of
+  this document is **still not bound** - `henssler.com` is served by its
+  own nameservers, not the registrar assumed below, and no DNS record for
+  `mcp` exists.
+- **Roles:** the 26 flat per-vendor `<Vendor>.Read`/`<Vendor>.Write` app
+  roles described in this document were pruned. The app now carries 6
+  roles, each named after a gateway role and mapped to one or more Entra
+  groups (full group names are nonpublic; see the findings report for the
+  exact mapping):
+
+  | Role | Connectors (read/write unless noted) |
+  |---|---|
+  | `it` | auvik, panos, sonicwall, ninjaone, falcon, threatlocker, blumira, cipp (read+write+destructive); connectwise, knowbe4, spanning, vanta (read+write) |
+  | `compliance` | vanta, knowbe4, threatlocker, blumira, falcon, auvik (read+write) |
+  | `accounting` | connectwise (read+write) |
+  | `hr` | paylocity, knowbe4 (read+write) |
+  | `planning` | connectwise (read+write); ninjaone, spanning (read) |
+  | `company` | knowbe4, spanning (read) |
+
+  Each role is assigned to a real Entra group (IT, Compliance, Accounting,
+  HR, Planning & Implementation, and an all-staff group respectively), not
+  to individuals - the smoke-test individual assignment this document
+  records below has been superseded.
+- **Ingress:** the Anthropic-only IP allowlist (`160.79.104.0/21`)
+  described in Network below has been **removed**. The gateway is reachable
+  from any network; access control is Entra sign-in plus the role grant
+  plus the audit log, not network position.
+- **Still unbound/open:** `mcp.henssler.com` (above); 7 of 13 connectors
+  (auvik, blumira, cipp, falcon, paylocity, spanning, sonicwall) have no
+  vendor credentials in Key Vault yet, so their tools list but every call
+  fails upstream; broker state (auth codes, refresh tokens, DCR clients) is
+  in-process, so the app stays pinned at 1 replica.
 
 Status: infrastructure/code deployed since 2026-09-24 (see history below);
 re-verified live on 2026-09-28 and partially unblocked, but **UNVERIFIED
@@ -139,7 +197,9 @@ narrow access further; they cannot widen it past what the gateway allows.
    `https://mcp.henssler.com/mcp`. **Do not substitute the raw Container
    Apps hostname without testing it first** - see the UNVERIFIED note in
    Status above about the RFC 9728 `resource` mismatch.
-   Advanced settings: OAuth Client ID `c6e1bf1e-2520-4f1d-b329-8f0f05de34a6`,
+   Advanced settings: OAuth Client ID is the "Henssler MCP Gateway" app
+   registration's client ID (Entra Enterprise Applications; not recorded
+   here as a real identifier),
    Client Secret from Key Vault secret `claude-connector-client-secret`
    (vault `gwh-mcp-gateway-kv`). Supplying the client ID skips dynamic client
    registration, which Entra does not support.
@@ -484,7 +544,7 @@ access to. The infrastructure and code are otherwise complete and verified live.
   which vendor Read/Write roles, then assign them on the "Henssler MCP
   Gateway" enterprise application.
 - **Pre-DNS direct test path: UNVERIFIED and currently BROKEN.**
-  `az account get-access-token --resource c6e1bf1e-2520-4f1d-b329-8f0f05de34a6`
+  `az account get-access-token --resource <henssler-mcp-gateway-app-id>`
   fails with `AADSTS65001` (observed 2026-10-02): the Azure CLI first-party
   client (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`) is not in the app's
   `api.preAuthorizedApplications` (empty), so no token is issued. Making it

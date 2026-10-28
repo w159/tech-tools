@@ -1,9 +1,12 @@
 # Enterprise MCP gateway: design
 
-Status: APPROVED 2026-10-27; a local prototype is built (see
-`docs/plans/enterprise-mcp-gateway-prototype.md`). Prior art it evolves: `mcp_servers/mcp-gateway`
-(0.1.0, Entra-only resource server, 18 passing tests) and its deployment
-record `docs/architecture/mcp-gateway-design.md`.
+Status: **deployed in broker mode for this organization as of 2026-10-28**
+(Azure/Container Apps). Reproduction steps:
+`docs/architecture/mcp-gateway-broker-runbook.md`. Full before/after evidence:
+`.atlas/findings/2026-10-28_gateway-live-state.md`. The design below is
+APPROVED (2026-10-27) and now implemented; the retired direct-mode
+predecessor it evolved from is documented, as history only, in
+`docs/architecture/mcp-gateway-design.md`.
 
 ## Goal
 

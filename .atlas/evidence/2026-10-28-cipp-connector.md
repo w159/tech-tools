@@ -1,0 +1,179 @@
+# Evidence: the CIPP connector moved to a remote MCP server (URL + OAuth client id) (2026-10-28)
+
+Observed behaviour against the live CIPP instance
+`https://cippvtfwq.azurewebsites.net`. No secret, token or cookie value is
+reproduced here - only endpoints, status codes and error text.
+
+## 1. The instance already speaks the MCP OAuth model
+
+```
+GET https://cippvtfwq.azurewebsites.net/.well-known/oauth-protected-resource
+```
+```json
+{"resource":"https://cippvtfwq.azurewebsites.net/api/ExecMcp",
+ "authorization_servers":["https://cippvtfwq.azurewebsites.net"],
+ "scopes_supported":["openid","profile","offline_access",
+   "https://cippvtfwq.azurewebsites.net/user_impersonation"],
+ "bearer_methods_supported":["header"]}
+```
+
+```
+GET https://cippvtfwq.azurewebsites.net/.well-known/oauth-authorization-server
+```
+```json
+{"issuer":"https://cippvtfwq.azurewebsites.net",
+ "authorization_endpoint":"https://login.microsoftonline.com/f00db7e5-.../oauth2/v2.0/authorize",
+ "token_endpoint":"https://login.microsoftonline.com/f00db7e5-.../oauth2/v2.0/token",
+ "registration_endpoint":"https://cippvtfwq.azurewebsites.net/api/PublicMcpRegister",
+ "grant_types_supported":["authorization_code","refresh_token"],
+ "code_challenge_methods_supported":["S256"],
+ "token_endpoint_auth_methods_supported":["none","client_secret_post","client_secret_basic"]}
+```
+
+```
+GET /api/ExecMcp            -> 401
+www-authenticate: Bearer realm="cippvtfwq.azurewebsites.net",
+  authorization_uri="https://login.microsoftonline.com/f00db7e5-.../oauth2/v2.0/authorize",
+  resource_id="d9fa5c31-e298-4adb-bfb7-99dcc09fd2af",
+  scope="openid profile offline_access https://cippvtfwq.azurewebsites.net/user_impersonation",
+  resource_metadata="https://cippvtfwq.azurewebsites.net/.well-known/oauth-protected-resource/api/ExecMcp"
+```
+
+## 2. Dynamic client registration, no client id and no secret
+
+```
+POST https://cippvtfwq.azurewebsites.net/api/PublicMcpRegister
+{"client_name":"cipp-live-check","redirect_uris":["http://localhost:64166/callback"],
+ "grant_types":["authorization_code","refresh_token"],"response_types":["code"],
+ "token_endpoint_auth_method":"none","scope":"openid profile offline_access"}
+```
+```json
+HTTP 201
+{"client_id":"a0b18b3a-2064-457f-ab94-1fdb5c11ca80",
+ "redirect_uris":["http://localhost:64166/callback"],
+ "token_endpoint_auth_method":"none","grant_types":["authorization_code","refresh_token"]}
+```
+
+## 3. Sign-in and token exchange (the recipe the connector must use)
+
+Authorize request that worked:
+
+```
+scope=openid profile offline_access https://cippvtfwq.azurewebsites.net/user_impersonation
+resource omitted
+redirect_uri=http://localhost:<port>/callback
+code_challenge_method=S256
+```
+
+```
+callback ok code=1.AQQA...
+token ok type=Bearer expires_in=5179
+  scope=https://cippvtfwq.azurewebsites.net/user_impersonation refresh=yes
+```
+
+Two rejections worth remembering (both reproduced in the browser):
+
+| request | Entra answer |
+|---|---|
+| `resource=https://cippvtfwq.azurewebsites.net/api/ExecMcp` (the value the protected-resource metadata advertises) | `AADSTS9010010: The resource parameter provided in the request doesn't match with the requested scopes` |
+| `scope=... api://d9fa5c31-.../user_impersonation` | `AADSTS500011: The resource principal named api://d9fa5c31-... was not found in the tenant` |
+| `redirect_uri=http://127.0.0.1:<port>/callback` | `AADSTS50011: The redirect URI ... does not match the redirect URIs configured for the application` |
+
+## 4. Where the MCP call itself stops
+
+```
+POST /api/ExecMcp  (Authorization: Bearer <token>)
+```
+```
+Access to this CIPP API endpoint is not allowed, the user does not have the required permission
+```
+
+The sign-in and the token are correct; the signed-in account does not hold a CIPP role that covers
+the MCP endpoint. CIPP's own rule: a connector that signs a user in runs with that user's CIPP
+role. Fixing it is a CIPP-side role assignment, not a connector change.
+
+## 5. The change in this repository
+
+- `plugins/armada/.mcp.json`: `"cipp": { "type": "http", "url": "${user_config.cipp_mcp_url}" }`.
+  The URL is substituted from the plugin's user config directly: `CFG_*` names only exist inside a
+  stdio entry's `env` block, and an `http` entry has neither an env block nor the `_env/load.mjs`
+  loader that promotes them.
+- `plugins/armada/.claude-plugin/plugin.json`: one `cipp_mcp_url` field replaces the five CIPP
+  credential fields.
+- `mcp_servers/mcp-gateway/catalog/overrides.json`: `cipp` keeps its gateway launch line and env
+  prefix, so the gateway's backend is untouched.
+- `mcp_servers/mcp-gateway/scripts/gen-catalog.mjs`: reads remote (`type: http`) entries.
+
+```
+node scripts/gen-catalog.mjs --check   -> catalog/catalog.json is current
+npx tsc --noEmit                       -> clean
+npm test                               -> Test Files 17 passed (17), Tests 223 passed (223)
+```
+
+## 6. Correction: the connector also needs the app registration's client id
+
+The operator reports that signing in against CIPP needs the app registration's client id, not
+only the URL. Verified locally against Claude Code 2.1.312 (no live CIPP sign-in was repeated
+for this path, so this section documents the connector's config shape, not a live token):
+
+```
+claude mcp add --transport http --client-id <id> <name> <url>
+```
+```json
+"tmpcipp": {
+  "type": "http",
+  "url": "https://cippvtfwq.azurewebsites.net/api/ExecMcp",
+  "oauth": { "clientId": "<id>" }
+}
+```
+
+`claude mcp add-json` accepts the same `oauth` block, so `oauth.clientId` is the supported way
+to tell Claude Code to authenticate as a given app registration instead of running dynamic
+client registration against `POST /api/PublicMcpRegister` (section 2). The app registration's
+client id is a public identifier, not a secret.
+
+The plugin therefore ships `oauth.clientId` bound to a `cipp_client_id` user-config key, default
+`a0b18b3a-2064-457f-ab94-1fdb5c11ca80` (the app registration this plugin ships against); an
+instance using a different registration overrides the one field. No client secret is involved -
+this is a public client.
+
+Re-checked on 2026-10-28, after the change:
+
+```
+POST https://cippvtfwq.azurewebsites.net/api/PublicMcpRegister
+  -> {"client_id": "a0b18b3a-2064-457f-ab94-1fdb5c11ca80",
+      "token_endpoint_auth_method": "none", ...}
+```
+
+CIPP's own registration endpoint hands out exactly the client id the plugin now defaults to, so
+the default is the instance's registered public client and not an arbitrary value. An authorize
+request built with that client id, `redirect_uri=http://localhost:<port>/callback`,
+`code_challenge_method=S256`, the scope `openid profile offline_access
+https://cippvtfwq.azurewebsites.net/user_impersonation` and no `resource` parameter reaches the
+Microsoft sign-in page with no `AADSTS` error in the response.
+
+Scope of the live evidence: the sign-in page and the token path were exercised with the client
+registered through CIPP's own endpoint; a full browser sign-in through Claude Code using the
+explicit `oauth.clientId` was exercised by the operator in Claude Desktop, not by this session.
+
+### 6a. Claude Code parses `oauth.clientId` in a plugin `.mcp.json`
+
+Verified against the installed Claude Code 2.1.312 with a throwaway plugin under `/tmp`:
+
+```
+oauth: { "clientId": "abc" }   -> Validation passed.
+oauth: { "clientId": 123 }     -> mcpServers.a.oauth.clientId: Invalid input: expected string,
+                                  received number. The plugin loader silently drops this server at load.
+oauth: { "bogusKey": "x" }     -> passed (unknown keys are ignored).
+
+claude plugin validate plugins/armada -> Validation passed
+```
+
+So the plugin config path type-checks `oauth.clientId` on an http entry. What that does not
+prove: that the browser sign-in then uses that client id when a plugin-scoped server connects.
+The command that proves the end-to-end step: install the plugin, run `claude mcp list` to see the
+server, trigger its OAuth flow and confirm the authorize URL carries
+`client_id=a0b18b3a-2064-457f-ab94-1fdb5c11ca80`.
+
+
+

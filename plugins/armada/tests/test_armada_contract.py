@@ -179,8 +179,15 @@ class ManifestTest(unittest.TestCase):
         names = [p["name"] for p in mp["plugins"]]
         self.assertIn("armada", names)
 
+    def test_mcp_placeholders_resolve_to_declared_user_config(self):
+        """Every ${user_config.X} in .mcp.json names a key declared in plugin.json."""
+        manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
+        used = set(re.findall(r"\$\{user_config\.([A-Za-z0-9_]+)\}", (PLUGIN / ".mcp.json").read_text()))
+        self.assertTrue(used)
+        self.assertEqual(sorted(used - set(manifest["userConfig"])), [])
+
     def test_armada_declares_the_vendor_connectors_and_atlas_declares_none(self):
-        """The 13 vendor MCP connectors and their 57 credential keys live on armada."""
+        """The 13 vendor MCP connectors and their 54 credential keys live on armada."""
         manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest.get("mcpServers"), "./.mcp.json")
         servers = json.loads((PLUGIN / ".mcp.json").read_text())["mcpServers"]
@@ -191,7 +198,7 @@ class ManifestTest(unittest.TestCase):
                 "paylocity sonicwall spanning threatlocker vanta".split()
             ),
         )
-        self.assertEqual(len(manifest["userConfig"]), 57)
+        self.assertEqual(len(manifest["userConfig"]), 54)
         for name in servers:
             self.assertTrue(
                 (PLUGIN / "mcp" / name).is_dir(), f"mcp/{name} missing on armada"

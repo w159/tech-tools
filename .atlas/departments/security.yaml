@@ -1,0 +1,38 @@
+# Department onboarding - activated by armada.
+# Connector credentials live in the plugin userConfig / ~/.config/atlas/atlas.env, never here.
+# Statuses verified live via each <vendor>_status call on 2026-10-28.
+
+department: "security"
+display_name: "Security"
+owning_agent: "armada:armada-security"
+active: true
+
+connectors:
+  - vendor: falcon
+    status: enabled
+    required_keys:
+      - falcon_client_id
+      - falcon_client_secret
+      - falcon_base_url
+  - vendor: threatlocker
+    status: enabled
+    required_keys:
+      - threatlocker_api_key
+      - threatlocker_organization_id
+      - threatlocker_base_url
+  - vendor: knowbe4
+    status: disabled
+    required_keys:
+      - knowbe4_api_key
+  - vendor: vanta
+    status: disabled
+    required_keys:
+      - vanta_client_id
+      - vanta_client_secret
+  - vendor: blumira
+    status: disabled
+    required_keys:
+      - blumira_jwt_token
+
+routing:
+  notes: "Route endpoint, application-control, awareness and compliance work to armada:armada-security."

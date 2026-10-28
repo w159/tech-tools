@@ -1,0 +1,18 @@
+# Department onboarding - activated by armada.
+# Connector credentials live in the plugin userConfig / ~/.config/atlas/atlas.env, never here.
+# Statuses verified live via each <vendor>_status call on 2026-10-28.
+
+department: "microsoft-365"
+display_name: "Microsoft 365"
+owning_agent: "armada:armada-m365"
+active: true
+
+connectors:
+  - vendor: cipp
+    status: disabled
+    required_keys:
+      - cipp_mcp_url
+      - cipp_client_id
+
+routing:
+  notes: "Route M365 multi-tenant management work to armada:armada-m365."

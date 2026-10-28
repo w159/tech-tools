@@ -1,8 +1,164 @@
 # Changelog
 
+## CIPP connector: remote MCP with OAuth client id - 2026-10-28
+
+- The CIPP connector is now a **remote MCP server configured by the instance URL and the app
+  registration's OAuth client id**. `plugins/armada/.mcp.json` declares
+  `"cipp": { "type": "http", "url": "${user_config.cipp_mcp_url}", "oauth": { "clientId": "${user_config.cipp_client_id}" } }`,
+  and the plugin's user config replaces the five old CIPP fields (base URL, API key, tenant ID,
+  client ID, client secret) with `cipp_mcp_url` (the instance's `/api/ExecMcp` endpoint) and
+  `cipp_client_id` (public client id, working default, no secret). The client id is what makes
+  Claude Code use the app registration instead of dynamic client registration. CIPP runs the
+  sign-in: the client sends the user to Microsoft, and every call runs with that user's own CIPP
+  role. The `oauth.clientId` shape comes from Claude Code's MCP config
+  (`claude mcp add --transport http --client-id`); the client-id sign-in was not exercised against
+  a live CIPP instance in this change. The live notes below cover dynamic client registration.
+- Verified live against the CIPP instance: dynamic client registration at
+  `POST /api/PublicMcpRegister` answered 201 with a public client
+  (`token_endpoint_auth_method: none`), the PKCE sign-in returned a code, and the token exchange
+  issued a Bearer token (`scope=https://<host>/user_impersonation`, refresh token included). Two
+  details the instance's own metadata gets wrong, which the connector has to handle: request
+  `scope=openid profile offline_access https://<host>/user_impersonation` and **no** `resource`
+  parameter (sending the advertised `resource` makes the tenant answer `AADSTS9010010`), and
+  register the loopback redirect as `http://localhost:<port>/callback` (`127.0.0.1` is rejected with
+  `AADSTS50011`).
+- The gateway keeps its own CIPP backend: `catalog/overrides.json` now carries the command, args and
+  env prefix for `cipp`, so the connector still reaches the gateway although the plugin entry became
+  a remote URL, and `scripts/gen-catalog.mjs` learned to read remote (`type: http`) entries. The
+  generated `catalog/catalog.json` is byte-identical to before this change.
+- The bundled `mcp_servers/cipp-mcp` server is unchanged and still serves the gateway's REST path.
+  Its stored credential is not accepted by this instance, and the MCP endpoint itself answers
+  `Access to this CIPP API endpoint is not allowed, the user does not have the required permission`
+  after a successful sign-in - the signed-in user needs a CIPP role that covers MCP.
+
+## MCP gateway connector credentials - 2026-10-28
+
+- Every vendor credential the gateway uses is now a **Key Vault reference**, not a
+  copy: the 29 vendor secrets live in `gwh-mcp-gateway-kv`, each container secret
+  is `{ secretRef: policy-yaml, keyvaultref: https://gwh-mcp-gateway-kv.vault.azure.net/secrets/<name> }`,
+  and the container's user-assigned identity `gwh-mcp-gateway-id` holds Key Vault
+  Secrets User on the vault. No secret value is stored in the container app
+  template, so a template read no longer exposes a credential. The connector env
+  vars are UPPER_CASE (`AUVIK_API_KEY`, `THREATLOCKER_ORGANIZATION_ID`, ...) and
+  are forwarded by the gateway's prefix allowlist; a lowercase env name is
+  dropped silently, which was hit and fixed during this work.
+- Live verification through the deployed gateway: a real Entra sign-in issued a
+  token (`Bearer`, `expires_in 900`, `scope mcp`) and `tools/list` returned
+  **384 tools**, byte-identical across two calls, up from 208 - falcon (4 ->
+  145), connectwise (2 -> 49), auvik (2 -> 39) and spanning (2 -> 13) gained
+  their full credential sets, and panos (60 -> 0) left with the policy. All six
+  of falcon, connectwise, ninjaone, auvik, spanning and threatlocker answer
+  "authenticated" through the gateway, the first three returning real data.
+  Paylocity exposes 0 tools because its grant is the `hr` role and the test
+  user holds `company`/`it`: the role model working as designed. This
+  supersedes the "7 of 13 connectors have no credentials" line in the
+  broker-mode entry below.
+- Four connectors were sourced from 1Password and validated against the vendor
+  APIs (HTTP 200): **paylocity**, **threatlocker** (the new API token, shard
+  `h`), **auvik** and **spanning**. The values were seeded into
+  `gwh-mcp-gateway-kv` and are live in the gateway.
+- Two container-wiring gaps were found while making that live and fixed:
+  `auvik-api-key` and `spanning-api-token` were in the vault and in
+  `~/.config/atlas/atlas.env` but were **not** in the container app's secret
+  list or its env list, so both connectors started with no credential
+  ("NOT CONFIGURED" / "Missing SPANNING_ADMIN_EMAIL or SPANNING_API_TOKEN")
+  even though a valid one existed. A credential in the vault is not a
+  credential in the container - the `env` entry is a separate, silent step.
+- Still without a usable credential: **knowbe4** and **vanta** (the stored values
+  are rejected 401 by the vendor), and **blumira**, **cipp** and **sonicwall**
+  (no value found). Their role grants are already in place, so each works as
+  soon as a valid value is stored.
+- **PAN-OS stays local-only** by decision: `PANOS_HOST` is `10.8.254.3` on the
+  corporate VPN and is unreachable from Azure. The grant was removed by
+  regenerating `policy.yaml` from the org's real answers input (the regenerated
+  file was byte-identical to the published one except for the single `panos`
+  line) and storing it as the `policy-yaml` secret - never by hand-editing the
+  generated secret. Custom domain `mcp.henssler.com` is not bound: henssler.com's
+  nameservers are not in any reachable subscription, so the gateway answers on its
+  Container Apps hostname.
+- Runbook: [architecture/mcp-gateway-broker-runbook.md](architecture/mcp-gateway-broker-runbook.md)
+  ("Connector credentials (2026-10-28)"). Evidence:
+  [../.atlas/evidence/2026-10-28-mcp-gateway-credentials.md](../.atlas/evidence/2026-10-28-mcp-gateway-credentials.md).
+
+## Dynamics connector Entra permissions - 2026-10-28
+
+- The `gwh-dynamics-connector` app registrations now declare the Dataverse delegated resource and are
+  reproducible from this repo. Root cause: the two Entra app registrations declared no
+  `requiredResourceAccess`, so Entra could never issue the delegated token for the org-scoped Dynamics
+  scope and the consent POST was rejected. Both registrations now declare the first-party Dataverse
+  app `00000007-0000-0000-c000-000000000000` with scope id
+  `78ce3f0f-a1ce-49c2-8cde-64b5c0896db4` (`user_impersonation`) under AllPrincipals admin consent, and
+  the stray grants against the Power Pages resource `71234da4-b92f-429d-b8ec-6e62652e50d7` were
+  deleted. The fix lives on the Entra app objects, so it survives a container redeploy and is lost only
+  if the app registrations are recreated.
+- Added `scripts/assert-dynamics-connector-entra-perms.sh` (read-only `--check` by default, idempotent
+  `--apply`, exit 0 pass / 1 fail / 2 environment problem) and
+  `docs/runbooks/dynamics-connector-entra-permissions.md`. Live run against tenant
+  `f00db7e5-ade5-49b2-b9cd-8813b81ef30a`: 8 PASS rows (4 checks x 2 app registrations), exit 0.
+  Verification also caught and fixed three defects: the script and runbook first carried two
+  non-existent application ids (Graph 404s both - the real ones are
+  `96c7a2a1-7598-48cc-bab6-85dd4c1a4370` and `a53421ea-1768-40a3-b0ac-62e469d386c4`); the
+  declared-scope check used a JMESPath form that always returned 0; and `set -e` let az read failures
+  escape as exit 3 instead of the documented 2. `.gitignore` gained one line
+  (`!scripts/assert-dynamics-connector-entra-perms.sh` allow rule in the Root scripts block) because
+  the repo is a deny-by-default allowlist and `/**` ignored the new script.
+- The `--apply` path was deliberately not executed against the live tenant: the tenant already
+  satisfies the target state. Observed-behaviour evidence:
+  `../agent-penny/.atlas/evidence/2026-10-28-entra-perms-check.md`.
+
 ## atlas 16.4.1 - 2026-10-28
 
 - atlas 16.4.1: crew fixes. `auto_plan` now orders a worker after the peers its own tests import, and `irc check` restores the stub docstrings a worker's rewrite dropped. Measured against one Claude prompt on 8, 18 and 30 modules: 11-16% of the tokens and 29-33% of the wall time (25% target still missed). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.4.0-crew-benchmark.md](audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
+
+## MCP gateway broker-mode cutover - 2026-10-28
+
+- The `gwh-mcp-gateway` Container App moved from direct mode (Entra ID as
+  the OAuth authorization server) to broker mode: the gateway is now its
+  own OAuth 2.1 authorization server (`oidc-provider`), federated to Entra
+  as the upstream IdP. The 26 flat per-vendor `<Vendor>.Read`/`<Vendor>.Write`
+  app roles (plus an orphaned `TypeSafe` pair) were pruned and replaced
+  with 6 named gateway roles (`it`, `compliance`, `accounting`, `hr`,
+  `planning`, `company`), each assigned to a real Entra group rather than
+  an individual. The Anthropic-only IP allowlist on ingress was removed;
+  access control is now Entra sign-in plus the role grant plus the audit
+  log. Design: [architecture/enterprise-mcp-gateway.md](architecture/enterprise-mcp-gateway.md);
+  historical direct-mode record:
+  [architecture/mcp-gateway-design.md](architecture/mcp-gateway-design.md);
+  reproduction steps:
+  [architecture/mcp-gateway-broker-runbook.md](architecture/mcp-gateway-broker-runbook.md);
+  full evidence: `.atlas/findings/2026-10-28_gateway-live-state.md`.
+- Two defects found and fixed during the cutover's live verification: the
+  consent-form POST was rejected 403 in every real browser because
+  `Referrer-Policy: no-referrer` on the consent page made Chrome send
+  `Origin: null`, which the CSRF guard refused - fixed by sending
+  `Referrer-Policy: same-origin` instead (`src/broker/interactions.ts`);
+  and the token endpoint failed closed with `membership_check_unavailable`
+  because the Entra group-membership re-check had only the managed
+  identity as its Graph token source and that identity holds no Graph
+  application permissions - fixed by adding a fallback to the
+  application's own client credentials, with a one-shot retry on a
+  401/403 from Graph, with fail-closed semantics unchanged
+  (`src/broker/entra-membership.ts`, `src/broker/provider.ts`). A third,
+  unrelated defect was also fixed: the admin `discover` tool sent
+  `Accept: application/json` to Graph's `/$count` endpoint, which only
+  speaks `text/plain`, so discovery failed with HTTP 415
+  (`src/admin/discover.ts`).
+- Verification: a real browser sign-in through Entra SSO against the live
+  gateway issued a token (`Bearer`, `expires_in 900`, `scope mcp`, refresh
+  token present), `tools/list` returned 208 tools scoped to exactly the
+  signed-in user's role grants (zero Paylocity tools), byte-identical
+  across two independent sign-ins, and two read-only NinjaOne calls
+  succeeded against the real backend. The gateway's test suite: 17 files,
+  223 tests, `npx tsc --noEmit` clean. Still open: 7 of 13 connectors
+  (auvik, blumira, cipp, falcon, paylocity, spanning, sonicwall) have no
+  credentials in Key Vault yet; the `mcp.henssler.com` custom domain
+  remains unbound (the gateway answers on its Container Apps hostname).
+- The runbook was corrected to the commands that were actually run: the
+  admin CLI's discover/plan/provision sequence with the existing app id
+  pinned, the real cookie-key generation command, the real
+  `az containerapp update --yaml` form, and the real skill reference path.
+  Observed-behaviour evidence for the cutover:
+  [../.atlas/evidence/2026-10-28-mcp-gateway-broker-mode.md](../.atlas/evidence/2026-10-28-mcp-gateway-broker-mode.md).
 
 ## atlas 16.4.0 - 2026-10-28
 
@@ -1794,7 +1950,7 @@ as a stdio child with only its own env prefix. Per-vendor app roles
 audited (oid, upn, tool, decision), never arguments or results.
 
 Azure (tenant Henssler Financial, RG `gwh-mcp-gateway-rg`): Entra app
-"Henssler MCP Gateway" (appId `c6e1bf1e-2520-4f1d-b329-8f0f05de34a6`),
+"Henssler MCP Gateway" (real appId not recorded in tracked docs),
 identifier URI `https://mcp.henssler.com/mcp`, v2 tokens, scope
 `access_as_user`, redirect `https://claude.ai/api/mcp/auth_callback`, user
 assignment required, admin consent granted. Hosting (ACR, Key Vault, Container
