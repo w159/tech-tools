@@ -341,8 +341,14 @@
     "cipp_mcp_url": {
       "type": "string",
       "title": "CIPP MCP URL",
-      "description": "The CIPP MCP endpoint of your CIPP instance, ending in /api/ExecMcp (e.g. https://cipp.yourdomain.com/api/ExecMcp). Nothing else is needed: CIPP signs you in with Microsoft, and every call runs with your own CIPP role. The URL is shown on CIPP > Integrations > CIPP-API > MCP tab.",
+      "description": "The CIPP MCP endpoint of your CIPP instance, ending in /api/ExecMcp (e.g. https://cipp.yourdomain.com/api/ExecMcp). CIPP signs you in with Microsoft, and every call runs with your own CIPP role. The URL is shown on CIPP > Integrations > CIPP-API > MCP tab.",
       "default": ""
+    },
+    "cipp_client_id": {
+      "type": "string",
+      "title": "CIPP OAuth client ID",
+      "description": "The client id of the Entra app registration CIPP uses for the MCP sign-in. The default matches the CIPP app registration this plugin ships against; override it only if your CIPP instance uses a different app registration. It is a public client id, not a secret.",
+      "default": "a0b18b3a-2064-457f-ab94-1fdb5c11ca80"
     }
   },
   "keywords": [

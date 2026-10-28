@@ -1,12 +1,17 @@
 # Changelog
 
-## CIPP connector: URL-only MCP - 2026-10-28
+## CIPP connector: remote MCP with OAuth client id - 2026-10-28
 
-- The CIPP connector is now a remote MCP server configured by one URL (`cipp_mcp_url`,
-  the instance's `/api/ExecMcp` endpoint). CIPP runs the Microsoft sign-in for each user
-  and every call runs with that user's own CIPP role; the five CIPP credential fields
-  (base URL, API key, tenant ID, client ID, client secret) are gone from the plugin's
-  user config. The gateway's CIPP backend is unchanged - `catalog/overrides.json` keeps
+- The CIPP connector is now a remote MCP server configured by the instance URL
+  (`cipp_mcp_url`, the `/api/ExecMcp` endpoint) and the OAuth client id of the Entra app
+  registration (`cipp_client_id`, a public client id with a working default). The client id,
+  declared as `oauth.clientId` on the `.mcp.json` entry, is what makes Claude Code sign in with
+  that app registration instead of using dynamic client registration. CIPP runs the Microsoft
+  sign-in for each user and every call runs with that user's own CIPP role; the five old CIPP
+  credential fields (base URL, API key, tenant ID, client ID, client secret) are gone from the
+  plugin's user config. The `oauth.clientId` shape follows Claude Code's MCP config
+  (`claude mcp add --transport http --client-id`); the client-id sign-in was not exercised
+  against a live CIPP instance in this change. The gateway's CIPP backend is unchanged - `catalog/overrides.json` keeps
   its launch line, so the generated catalog is byte-identical.
 
 

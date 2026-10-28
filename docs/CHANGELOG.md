@@ -1,13 +1,18 @@
 # Changelog
 
-## CIPP connector: URL-only MCP - 2026-10-28
+## CIPP connector: remote MCP with OAuth client id - 2026-10-28
 
-- The CIPP connector is now a **remote MCP server configured by one URL**.
-  `plugins/armada/.mcp.json` declares `"cipp": { "type": "http", "url": "${user_config.cipp_mcp_url}" }`, and
-  the plugin's user config drops the five CIPP fields (base URL, API key, tenant ID, client ID,
-  client secret) for a single `cipp_mcp_url` - the instance's `/api/ExecMcp` endpoint. CIPP runs the
-  sign-in: the client registers itself with CIPP's OAuth server, sends the user to Microsoft, and
-  every call runs with that user's own CIPP role.
+- The CIPP connector is now a **remote MCP server configured by the instance URL and the app
+  registration's OAuth client id**. `plugins/armada/.mcp.json` declares
+  `"cipp": { "type": "http", "url": "${user_config.cipp_mcp_url}", "oauth": { "clientId": "${user_config.cipp_client_id}" } }`,
+  and the plugin's user config replaces the five old CIPP fields (base URL, API key, tenant ID,
+  client ID, client secret) with `cipp_mcp_url` (the instance's `/api/ExecMcp` endpoint) and
+  `cipp_client_id` (public client id, working default, no secret). The client id is what makes
+  Claude Code use the app registration instead of dynamic client registration. CIPP runs the
+  sign-in: the client sends the user to Microsoft, and every call runs with that user's own CIPP
+  role. The `oauth.clientId` shape comes from Claude Code's MCP config
+  (`claude mcp add --transport http --client-id`); the client-id sign-in was not exercised against
+  a live CIPP instance in this change. The live notes below cover dynamic client registration.
 - Verified live against the CIPP instance: dynamic client registration at
   `POST /api/PublicMcpRegister` answered 201 with a public client
   (`token_endpoint_auth_method: none`), the PKCE sign-in returned a code, and the token exchange
@@ -74,6 +79,32 @@
 - Runbook: [architecture/mcp-gateway-broker-runbook.md](architecture/mcp-gateway-broker-runbook.md)
   ("Connector credentials (2026-10-28)"). Evidence:
   [../.atlas/evidence/2026-10-28-mcp-gateway-credentials.md](../.atlas/evidence/2026-10-28-mcp-gateway-credentials.md).
+
+## Dynamics connector Entra permissions - 2026-10-28
+
+- The `gwh-dynamics-connector` app registrations now declare the Dataverse delegated resource and are
+  reproducible from this repo. Root cause: the two Entra app registrations declared no
+  `requiredResourceAccess`, so Entra could never issue the delegated token for the org-scoped Dynamics
+  scope and the consent POST was rejected. Both registrations now declare the first-party Dataverse
+  app `00000007-0000-0000-c000-000000000000` with scope id
+  `78ce3f0f-a1ce-49c2-8cde-64b5c0896db4` (`user_impersonation`) under AllPrincipals admin consent, and
+  the stray grants against the Power Pages resource `71234da4-b92f-429d-b8ec-6e62652e50d7` were
+  deleted. The fix lives on the Entra app objects, so it survives a container redeploy and is lost only
+  if the app registrations are recreated.
+- Added `scripts/assert-dynamics-connector-entra-perms.sh` (read-only `--check` by default, idempotent
+  `--apply`, exit 0 pass / 1 fail / 2 environment problem) and
+  `docs/runbooks/dynamics-connector-entra-permissions.md`. Live run against tenant
+  `f00db7e5-ade5-49b2-b9cd-8813b81ef30a`: 8 PASS rows (4 checks x 2 app registrations), exit 0.
+  Verification also caught and fixed three defects: the script and runbook first carried two
+  non-existent application ids (Graph 404s both - the real ones are
+  `96c7a2a1-7598-48cc-bab6-85dd4c1a4370` and `a53421ea-1768-40a3-b0ac-62e469d386c4`); the
+  declared-scope check used a JMESPath form that always returned 0; and `set -e` let az read failures
+  escape as exit 3 instead of the documented 2. `.gitignore` gained one line
+  (`!scripts/assert-dynamics-connector-entra-perms.sh` allow rule in the Root scripts block) because
+  the repo is a deny-by-default allowlist and `/**` ignored the new script.
+- The `--apply` path was deliberately not executed against the live tenant: the tenant already
+  satisfies the target state. Observed-behaviour evidence:
+  `../agent-penny/.atlas/evidence/2026-10-28-entra-perms-check.md`.
 
 ## atlas 16.4.1 - 2026-10-28
 

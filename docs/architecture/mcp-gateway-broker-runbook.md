@@ -414,8 +414,11 @@ credential rotation steps above.
 ### The CIPP connector is a remote MCP server (2026-10-28)
 
 The plugin's CIPP connector is no longer a bundled stdio server: it is the CIPP instance's own MCP
-endpoint, configured with one URL (`cipp_mcp_url`, e.g.
-`https://cipp.example.com/api/ExecMcp`), and CIPP handles the OAuth sign-in for each user. The
+endpoint, configured with the instance URL (`cipp_mcp_url`, e.g.
+`https://cipp.example.com/api/ExecMcp`) and the app registration's OAuth client id
+(`cipp_client_id`, written as `oauth.clientId` so Claude Code signs in with that registration
+instead of dynamic client registration; the client-id path was not exercised against a live
+instance), and CIPP handles the OAuth sign-in for each user. The
 gateway's CIPP backend is unchanged (the bundled `cipp-mcp` server over the CIPP REST API) and
 `catalog/overrides.json` keeps the gateway's launch line for it, so the generated catalog is
 unchanged.

@@ -33,7 +33,8 @@
     },
     "cipp": {
       "type": "http",
-      "url": "${user_config.cipp_mcp_url}"
+      "url": "${user_config.cipp_mcp_url}",
+      "oauth": { "clientId": "${user_config.cipp_client_id}" }
     },
     "connectwise": {
       "command": "node",
