@@ -683,6 +683,10 @@ def _local_deps(rel: str, rels, root) -> list:
         cand = (base / "/".join(mod_parts)).as_posix() + ".py" if mod_parts else None
         if cand and cand.startswith("./"):
             cand = cand[2:]
+        if cand and cand not in known and base == Path("."):
+            # absolute name of a package that lives below a source dir (`src/pkg/x.py` for `pkg.x`)
+            hits = [k for k in known if k.endswith("/" + cand)]
+            cand = hits[0] if len(hits) == 1 else cand
         if cand and cand in known and cand != rel and cand not in found:
             found.append(cand)
 
@@ -765,18 +769,28 @@ def auto_plan(root: str, spec: str, files_glob: str, tests_pat: str | None = Non
         base = f.stem if stems.count(f.stem) == 1 else f"{f.parent.name}-{f.stem}"
         owner[rel] = re.sub(r"[^A-Za-z0-9_-]", "-", base)[:32] if base[0].isalpha() else "w-" + base[:30]
     workers = []
-    imports = {rel: _local_deps(rel, rels, rootp) for rel in rels}
+
+    def own_tests(f):
+        if not tests_pat:
+            return []
+        t = tests_pat.format(stem=f.stem, name=f.name, parent=f.parent.name)
+        return [t] if (rootp / t).exists() else []
+
+    # a worker needs the peers its stub imports and the peers its own tests import (a test can reach a
+    # peer the stub never names; running it before that peer is DONE hits the peer's stub)
+    imports = {}
+    for f, rel in zip(files, rels):
+        deps = _local_deps(rel, rels, rootp)
+        for t in own_tests(f):
+            deps += [d for d in _local_deps(t, rels, rootp) if d != rel and d not in deps]
+        imports[rel] = deps
     waits = _break_cycles(imports)
     for f, rel in zip(files, rels):
         head = _heading_for(text, rel)
         peers = [(d, _interface(rootp / d)) for d in imports[rel]]
         iface = "".join(f"# {owner[d]} owns {d}\n{sk}\n" for d, sk in peers if sk)
         parent = f.parent.name
-        tests = []
-        if tests_pat:
-            t = tests_pat.format(stem=f.stem, name=f.name, parent=parent)
-            if (rootp / t).exists():
-                tests = [t]
+        tests = own_tests(f)
         unit = f"python3 -m pytest -q {' '.join(tests)}" if tests and (check or "").startswith("python3 -m pytest") else None
         final = unit or check or ""
         needs = [owner[d] for d in waits[rel]] if final.startswith("python3 -m pytest") else []

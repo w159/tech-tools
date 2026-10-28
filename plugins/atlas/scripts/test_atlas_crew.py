@@ -564,6 +564,64 @@ class PlanTests(unittest.TestCase):
             rels = ["pkg/a.py", "pkg/b.py", "pkg/c.py"]
             self.assertEqual(atlas_crew._local_deps("pkg/a.py", rels, root), ["pkg/b.py", "pkg/c.py"])
 
+    def _kit(self, tmp, src, tests, layout="pkg"):
+        """Write a tree: `src` {rel: body} and `tests` {rel: body} under tmp, plus a SPEC.md."""
+        root = Path(tmp)
+        (root / "SPEC.md").write_text("# Kit\nintro\n")
+        for rel, body in {**src, **tests}.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(body)
+        return root
+
+    def test_auto_plan_context_does_not_hold_the_workers_test_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._kit(tmp, {"pkg/a.py": "from .b import B\n", "pkg/b.py": "class B:\n    pass\n"},
+                      {"tests/test_a.py": "def test_a():\n    assert 1 == 1\n", "tests/test_b.py": "def test_b(): pass\n"})
+            plan = atlas_crew.auto_plan(tmp, "SPEC.md", "pkg/*.py", "tests/test_{stem}.py", "python3 -m pytest -q")
+        a = {w["name"]: w for w in plan["workers"]}["a"]
+        self.assertEqual(a["tests"], ["tests/test_a.py"])
+        self.assertFalse([e for e in a["context"] if "def test_" in e])
+
+    def test_needs_include_a_peer_imported_inside_a_function(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._kit(tmp, {"pkg/a.py": "def f():\n    if True:\n        from .b import B\n        return B\n", "pkg/b.py": ""},
+                      {"tests/test_a.py": "", "tests/test_b.py": ""})
+            plan = atlas_crew.auto_plan(tmp, "SPEC.md", "pkg/*.py", "tests/test_{stem}.py", "python3 -m pytest -q")
+        self.assertEqual({w["name"]: w for w in plan["workers"]}["a"]["needs"], ["b"])
+
+    def test_needs_include_a_peer_imported_as_from_dot_import_x(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._kit(tmp, {"pkg/a.py": "from . import b\n", "pkg/b.py": ""},
+                      {"tests/test_a.py": "", "tests/test_b.py": ""})
+            plan = atlas_crew.auto_plan(tmp, "SPEC.md", "pkg/*.py", "tests/test_{stem}.py", "python3 -m pytest -q")
+        self.assertEqual({w["name"]: w for w in plan["workers"]}["a"]["needs"], ["b"])
+
+    def test_needs_include_a_peer_imported_by_absolute_package_name_in_a_src_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._kit(tmp, {"src/pkg/a.py": "import pkg.b\n", "src/pkg/b.py": ""},
+                      {"tests/test_a.py": "", "tests/test_b.py": ""})
+            plan = atlas_crew.auto_plan(tmp, "SPEC.md", "src/pkg/*.py", "tests/test_{stem}.py", "python3 -m pytest -q")
+        self.assertEqual({w["name"]: w for w in plan["workers"]}["a"]["needs"], ["b"])
+
+    def test_needs_include_a_peer_only_the_workers_test_file_imports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._kit(tmp, {"pkg/a.py": "", "pkg/b.py": "def parse(s):\n    raise NotImplementedError\n"},
+                      {"tests/test_a.py": "from pkg.a import f\nfrom pkg.b import parse\n", "tests/test_b.py": ""})
+            plan = atlas_crew.auto_plan(tmp, "SPEC.md", "pkg/*.py", "tests/test_{stem}.py", "python3 -m pytest -q")
+        ws = {w["name"]: w for w in plan["workers"]}
+        self.assertEqual(ws["a"]["needs"], ["b"])
+        self.assertEqual(ws["b"]["needs"], [])
+        self.assertTrue([e for e in ws["a"]["context"] if e.startswith("Interfaces")])
+
+    def test_cycles_through_test_imports_are_still_broken(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._kit(tmp, {"pkg/a.py": "from .b import x\n", "pkg/b.py": ""},
+                      {"tests/test_a.py": "", "tests/test_b.py": "from pkg.a import y\n"})
+            plan = atlas_crew.auto_plan(tmp, "SPEC.md", "pkg/*.py", "tests/test_{stem}.py", "python3 -m pytest -q")
+        ws = {w["name"]: w for w in plan["workers"]}
+        self.assertEqual(ws["a"]["needs"], ["b"])
+        self.assertEqual(ws["b"]["needs"], [])
+
     def test_a_hash_line_inside_a_code_fence_does_not_end_the_section(self):
         text = (
             "# Spec\n## 6. `lock.py`\nformat:\n```\n# lockfile v1\npkg a\n```\n"
