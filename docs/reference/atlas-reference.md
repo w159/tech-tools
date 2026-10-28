@@ -87,9 +87,9 @@ profile only; named profiles have their own config) and restart omp.
 ## Use it in chat
 
 Atlas is driven from the chat prompt of Claude Code or omp. Type a skill name
-followed by what you want, or just describe the work: 36 of the 39 skills
-auto-trigger from their description. The three manual skills, `/atlas-setup`,
-`/atlas-prompt` and `/atlas-tui`, you invoke yourself. The output blocks below are illustrative
+followed by what you want, or just describe the work: 36 of the 40 skills
+auto-trigger from their description. The four manual skills, `/atlas-setup`,
+`/atlas-prompt`, `/atlas-tui` and `/atlas-crew`, you invoke yourself. The output blocks below are illustrative
 sketches, not captured runs; real answers are longer, but open with the
 `ATLAS | <glyph> <phase> | <state>` status line the output style requires.
 
@@ -913,7 +913,7 @@ tech-tools/
 |  |  |- .claude-plugin/     # plugin.json + userConfig (51 keys)
 |  |  |- (no .mcp.json or mcp/: the 13 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
-|  |  |- skills/             # 39 skills
+|  |  |- skills/             # 40 skills
 |  |  |- agents/             # 14 agents
 |  |  |- hooks/              # 18 hook programs / 22 bindings (17 in hooks/, atlas_doctor.py, the 18th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
 |  |  |- scripts/            # 27 scripts + tests; dashboard_ui/ holds the Workboard v2 static assets

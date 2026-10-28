@@ -59,7 +59,7 @@ degrade atlas.
 
 ## Manual skill
 
-The atlas plugin has three manual skills (`atlas-setup`, `atlas-prompt`, `atlas-tui`)
+The atlas plugin has four manual skills (`atlas-setup`, `atlas-prompt`, `atlas-tui`, `atlas-crew`)
 (`disable-model-invocation: true`, `user-invocable: true`). It never
 auto-triggers from a description match; the user must invoke them
 explicitly. Doctor (`atlas_doctor.py`) is not a skill itself - it is the

@@ -8,9 +8,9 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.3.0 (`.claude-plugin/plugin.json`)                                                                                |
+| Version    | 16.4.0 (`.claude-plugin/plugin.json`)                                                                                |
 | License    | Apache-2.0                                                                                                           |
-| Ships      | 39 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
+| Ships      | 40 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 13 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
@@ -210,14 +210,17 @@ and a team for read-only work.
 python3 "$ATLAS/scripts/atlas_crew.py" run --spec SPEC.md --files 'pkg/*.py' \
   --tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q' --wait 580
 tmux attach -t atlas-<run>          # watch: one window per worker, plus the channel
+# or from a Claude session, with the same flags: the crew runs before the lead's first model call
+/atlas:atlas-crew --spec SPEC.md --files 'pkg/*.py' --tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q'
 ```
 
 - Workers share one IRC channel (`scripts/atlas_irc.py`): an append-only log
   plus a real IRC gateway on 127.0.0.1, so you can join `#<run>` from any IRC
   client and talk to the crew. A hook pushes new channel lines into each
-  worker's context after every tool call. Workers announce interfaces
-  (`READY`), wait for a peer (`irc wait --from <nick> --match READY`), and send
-  each other bug reports (`irc say --to <nick>`).
+  worker's context after every tool call. Each worker is handed the interfaces
+  of the peer files it imports; `irc check` waits for those peers, runs the
+  worker's check and posts DONE only if it passes. Workers send each other bug
+  reports (`irc say --to <nick>`) and wait with `irc wait`, never `sleep`.
 - Each worker owns a set of files on one tree. A hook denies edits to a peer's
   file and names the owner to ask. No worktrees, so nothing waits on a merge.
 - A worker cannot stop until its own check passes: the Stop hook re-runs the
@@ -229,12 +232,12 @@ tmux attach -t atlas-<run>          # watch: one window per worker, plus the cha
 
 Measured on two spec-driven builds against one Claude prompt with the same
 model (claude-sonnet-5-5, effort medium) and the same task text; all runs
-passed every test. Numbers and method: [CHANGELOG 16.3.0](CHANGELOG.md).
+passed every test. Numbers and method: [2026-10-28_atlas-16.4.0-crew-benchmark.md](../../docs/audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
 
 | Task                                   | Single prompt (median) | Crew (median)       | Crew vs single |
 | -------------------------------------- | ---------------------- | ------------------- | -------------- |
-| 8 modules, 213 tests (3 runs each)     | 853k tokens, 144 s     | 401k tokens, 54 s   | 47% tokens, 37% time |
-| 18 modules, 469 tests (3 runs each)    | 2.29M tokens, 181 s    | 823k tokens, 65 s   | 36% tokens, 36% time |
+| 8 modules, 213 tests (3 runs each)     | 853k tokens, 144 s     | 137k tokens, 41 s   | 16% tokens, 28% time |
+| 18 modules, 469 tests (3 runs each)    | 2.29M tokens, 181 s    | 307k tokens, 55 s   | 13% tokens, 30% time |
 
 Usage and the plan format: `skills/atlas-orchestrate/references/crew.md`.
 
@@ -311,8 +314,8 @@ judgment:
 
 ## Skills
 
-39 skills. Three are invoked by name only (`disable-model-invocation: true`):
-`atlas-setup`, `atlas-prompt` and `atlas-tui`. The other 36 load on relevance
+40 skills. Four are invoked by name only (`disable-model-invocation: true`):
+`atlas-setup`, `atlas-prompt`, `atlas-tui` and `atlas-crew`. The other 36 load on relevance
 from their `description`. Overlapping capabilities are modes of one skill, not
 separate skills; each multi-mode skill documents its modes in its `SKILL.md` or
 its `references/`.
@@ -358,6 +361,7 @@ its `references/`.
 | Operate | atlas-setup               | Manual: onboard, install, connectors, repair, tour, menu                                                                                        |
 | Operate | atlas-doctor              | Mines cross-session telemetry into findings, applies accepted changes, records a baseline                                                       |
 | Operate | atlas-tui                 | Opens a terminal UI over the colony's tmux workers                                                                                              |
+| Operate | atlas-crew                | Builds a multi-file deliverable with a parallel tmux + IRC crew, one worker per file, from a pre-executed run |
 
 ## Agents
 
@@ -563,9 +567,9 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.3.0
+|-- .claude-plugin/plugin.json   manifest, version 16.4.0
 |-- agents/                      14 agents (atlas:<role>)
-|-- skills/                      39 skills, one directory each
+|-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
 |-- scripts/                     CLIs: doctor, mux, resolve, todo, finding, gates,
 |                                dashboard, statusline, worktrees, telemetry
