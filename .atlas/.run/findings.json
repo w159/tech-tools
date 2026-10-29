@@ -10161,5 +10161,22 @@
     "status": "verified",
     "verified_at": "2026-10-29T05:30:22+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "rel1660-land",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 16.6.0 landed on main 76784cf9",
+    "evidence": [
+      "full suite 4438 passed 7 skipped; contract/crew/conformance 290 passed; v18 medians 40.0/47.5/52.3s; ls-remote main=76784cf9; tag push 403"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q -p no:cacheprovider plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-29T06:53:05+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]
