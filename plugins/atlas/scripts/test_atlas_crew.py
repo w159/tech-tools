@@ -1323,36 +1323,17 @@ class V16Tests(unittest.TestCase):
         w = {"name": "a", "owns": ["a.py"], "task": "do a", "tests": ["tests/test_a.py"], "check": "true", **kw}
         return {"goal": "g", "workers": [w]}
 
-    def test_delay_subtracts_own_generation_including_interface_text(self):
+    def test_delay_is_dep_wait_minus_own_spec_generation(self):
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "SPEC.md").write_text("## dep\n" + "x" * 16000 + "\n\n## cli\n" + "x" * 400 + "\n")
-            iface = "# dep owns dep.py\n" + "def f(): ...\n" * 2000  # ~26k chars: ~65 s of its own generation
+            iface = "# dep owns dep.py\n" + "def f(): ...\n" * 2000  # interface text does not count toward own gen
             cli = {"name": "cli", "owns": ["cli.py"], "task": "t", "needs": ["dep"], "context": ["SPEC.md#cli", iface]}
             dep = {"name": "dep", "owns": ["dep.py"], "task": "t", "context": ["SPEC.md#dep"]}
             plain = dict(cli, context=["SPEC.md#cli"])
-            slow = {x["name"]: x for x in atlas_crew.launch_order({"workers": [dep, cli]}, tmp, ncpu=4)}
-            fast = {x["name"]: x for x in atlas_crew.launch_order({"workers": [dep, plain]}, tmp, ncpu=4)}
-        self.assertEqual(slow["cli"]["delay"], 0)  # own gen (spec + interfaces) ~66 s > dep_wait - margin
-        self.assertGreater(fast["cli"]["delay"], 0)  # same worker without the interface text still waits
-
-    def test_prompt_has_capped_tests_block_and_toggle_removes_it(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            plan = self._plan(tmp)
-            on = atlas_crew.worker_prompt(plan, plan["workers"][0], "crew-x", tmp)
-            with mock.patch.dict(os.environ, {"ATLAS_CREW_TESTS_CTX": "off"}):
-                off = atlas_crew.worker_prompt(plan, plan["workers"][0], "crew-x", tmp)
-            small = self._plan(tmp, tests=[])
-            (Path(tmp) / "test_small.py").write_text("def test_x():\n    assert 1\n")
-            small["workers"][0]["unit_check"] = "python3 -m pytest -q test_small.py"
-            via_check = atlas_crew.worker_prompt(small, small["workers"][0], "crew-x", tmp)
-        self.assertIn("## Tests you must pass", on)
-        self.assertIn("def test_0():", on)
-        body = on.split("## Tests you must pass", 1)[1]
-        self.assertLessEqual(len(body), atlas_crew.TESTS_CTX_CAP + 300)
-        self.assertIn("(truncated: tests/test_a.py", body)
-        self.assertNotIn("def test_1999", on)
-        self.assertNotIn("Tests you must pass", off)
-        self.assertIn("def test_x():", via_check)
+            a = {x["name"]: x for x in atlas_crew.launch_order({"workers": [dep, cli]}, tmp, ncpu=4)}
+            b = {x["name"]: x for x in atlas_crew.launch_order({"workers": [dep, plain]}, tmp, ncpu=4)}
+        self.assertGreater(a["cli"]["delay"], 0)
+        self.assertEqual(a["cli"]["delay"], b["cli"]["delay"])
 
     def test_docstring_trim_line_default_and_toggle(self):
         with tempfile.TemporaryDirectory() as tmp:

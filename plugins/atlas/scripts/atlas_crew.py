@@ -311,45 +311,6 @@ def _needs_closure(plan: dict, w: dict) -> list:
     return closure
 
 
-TESTS_CTX_CAP = 12000  # chars of test files put into one worker prompt
-
-
-def _unit_check_test_files(w: dict, root) -> set:
-    """Existing files named in the worker's unit_check whose basename looks like a test file."""
-    found = set()
-    for tok in (w.get("unit_check") or "").split():
-        name = Path(tok).name
-        if "test" in name and name.endswith(".py") and Path(root, tok).is_file():
-            found.add(Path(tok).as_posix())
-    return found
-
-
-def _tests_block(w: dict, root) -> str:
-    """The worker's own test files as one fenced "Tests you must pass" block, TESTS_CTX_CAP chars in all (a file
-    is cut at a line boundary with a note). The worker cannot see the failing parametrize row otherwise.
-    "" with ATLAS_CREW_TESTS_CTX=off or without test files."""
-    if os.environ.get("ATLAS_CREW_TESTS_CTX", "on").strip().lower() == "off":
-        return ""
-    files = sorted(_worker_test_files(w, root) | _unit_check_test_files(w, root))
-    parts, left = [], TESTS_CTX_CAP
-    for rel in files:
-        if left <= 0:
-            parts.append(f"(not shown: {rel}: prompt test budget used up)")
-            continue
-        try:
-            text = Path(root, rel).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        note = ""
-        if len(text) > left:
-            text = text[: text.rfind("\n", 0, left) + 1] if "\n" in text[:left] else ""
-            note = f"\n(truncated: {rel} continues; run it to see the rest)"
-        left -= len(text)
-        fence = "````" if "```" in text else "```"
-        parts.append(f"--- {rel} ---\n{fence}python\n{text.rstrip(chr(10))}\n{fence}{note}")
-    return ("\n## Tests you must pass\n" + "\n\n".join(parts) + "\n") if parts else ""
-
-
 def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
     peers = [
         f"- {p['name']} owns {', '.join(p['owns'])}"
@@ -383,7 +344,7 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
         + trim
         + f"## Peers on #{run_id}\n" + ("\n".join(peers) or "(none)") + "\n\n"
         f"## Done when\n{done_when}\n\n"
-        f"## Context\n{ctx}\n" + _tests_block(w, root)
+        f"## Context\n{ctx}\n"
     )
 
 
@@ -942,11 +903,6 @@ def _weight(w: dict, root) -> int:
     return n
 
 
-def _literal_chars(w: dict) -> int:
-    """Chars of the worker's multi-line literal context entries (the peer interfaces it codes against)."""
-    return sum(len(str(e)) for e in w.get("context") or [] if "\n" in str(e))
-
-
 def launch_order(plan: dict, root, ncpu: int | None = None) -> list:
     """[{"name", "nice", "slack", "delay"}] in launch order: critical workers first, so they get the CPU.
 
@@ -957,7 +913,7 @@ def launch_order(plan: dict, root, ncpu: int | None = None) -> list:
     makespan M, slack = LF - HOP_S - gen_s. Order: least slack first, ties by larger weight, then name.
     nice = min(19, 4 * (rank // ncpu)): the first ncpu workers run at nice 0.
     delay: a worker whose needs finish long after it could have is held back so it does not compete for the CPU
-    while booting: dep_wait = max(fin of needs) - own_gen (spec + interface chars / GEN_CHARS_PER_S), delay = min(STAGGER_CAP_S, max(0, dep_wait -
+    while booting: dep_wait = max(fin of needs) - gen_s, delay = min(STAGGER_CAP_S, max(0, dep_wait -
     STAGGER_MARGIN_S)); 0 without needs or with ATLAS_CREW_STAGGER=off."""
     ncpu = ncpu or os.cpu_count() or 4
     ws = {w["name"]: w for w in plan["workers"]}
@@ -994,9 +950,7 @@ def launch_order(plan: dict, root, ncpu: int | None = None) -> list:
     def delay(n):
         if not stagger or not needs[n]:
             return 0.0
-        # own_gen counts the interface text it reads too: mdkit-cli est. 14.7 s from its spec, took 24 s
-        own_gen = gen[n] + _literal_chars(ws[n]) / GEN_CHARS_PER_S
-        dep_wait = max(fin[d] for d in needs[n]) - own_gen
+        dep_wait = max(fin[d] for d in needs[n]) - gen[n]
         return round(min(STAGGER_CAP_S, max(0.0, dep_wait - STAGGER_MARGIN_S)), 2)
 
     return [
