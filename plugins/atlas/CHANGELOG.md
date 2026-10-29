@@ -1,5 +1,14 @@
 # Changelog
 
+## 16.6.0 - 2026-10-29
+
+### Changed
+
+- Crew: workers are told to omit docstrings on the stub functions they fill in, and `irc check` restores them. Fewer output tokens on the critical file: `ranges.py` went from about 4,041 to about 3,600 output tokens and its API call from about 22.7 s to about 20.0 s. `ATLAS_CREW_SKIP_DOCSTRINGS=off` makes workers keep the docstrings.
+- Crew: `ATLAS_CREW_WORKER_EFFORT` and `ATLAS_CREW_WORKER_MODEL` override the effort and model the workers run with. Defaults are unchanged (the lead's `--effort` and `--model`).
+- Crew: early own-code check. A worker runs a check of its own code while its needs are still pending. `ATLAS_CREW_EARLY_CHECK=off` disables it.
+- Measured against one Claude prompt (claude-sonnet-5-5, effort medium, medians of 3, every run passed every test): 8 modules 40.0 s (27.8% of 144.1 s), 18 modules 47.5 s (26.2% of 181.2 s), 30 modules 52.3 s (23.0% of 227.8 s); tokens 16.8%, 11.8% and 12.7%. The 25% target is met at 30 modules and missed at 8 and 18. Evidence: `docs/audits/2026-10-29_atlas-16.6.0-crew-benchmark.md`, `.atlas/evidence/2026-10-29_crew-16.6.0/`.
+
 ## 16.5.0 - 2026-10-29
 
 ### Changed
