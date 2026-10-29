@@ -60,9 +60,9 @@ ascending slack (ties: heavier first, then name) at `nice = min(19, 4 * (rank //
 `run.json` as `launch`, and `worker --nice N` applies it before `claude` starts. Fix rounds run at nice 0.
 `ATLAS_CREW_PRIORITY=off` launches in plan order at nice 0. Stagger: a worker whose needs finish later waits `min(8, wait - 7.5)` s (`worker --delay`, round 0; `ATLAS_CREW_STAGGER=off` disables). Worker prompt toggles: `ATLAS_CREW_SKIP_DOCSTRINGS=off` drops the omit-stub-docstrings line; `ATLAS_CREW_WORKER_EFFORT=low|medium|high` overrides every worker's effort; `ATLAS_CREW_WORKER_MODEL=<id>` overrides every worker's model.
 
-The lead's context holds the start line and one summary: per-worker tokens,
-cost, wall time, gate refusals, and channel counts (messages, READY
-announcements, direct worker-to-worker messages, messages from IRC clients).
+The lead's context holds the start line and one summary: per-worker tokens, cost, wall time, gate refusals, and channel counts (messages, READY announcements, direct worker-to-worker messages, messages from IRC clients).
+
+Warm lead: `scripts/atlas_warm_lead.py start --root . -- claude <lead args>` keeps a started, idle `claude -p` stream-json lead in tmux session `atlas-warm-lead` (a detached subprocess without tmux); `send --root . --wait '/atlas:atlas-crew ...'` hands it the task, so timing starts at hand-off, and prints `{"result","is_error","handoff_s","log"}` (refused while busy). With `--recycle on` (default) each result closes the lead and starts a fresh one; `off` keeps one conversation. `status` shows rss and cpu, `stop` is idempotent. It adds no permission flags: the lead args you pass decide.
 
 ## Plan
 
