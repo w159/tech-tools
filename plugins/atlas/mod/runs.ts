@@ -4,7 +4,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import { fitText, textWidth } from './theme';
 
-export type Segment = { t: string; color?: string; bg?: string; bold?: boolean; inverse?: boolean };
+export type Segment = { t: string; color?: string; bg?: string; bold?: boolean; inverse?: boolean; strike?: boolean };
 
 /** Lay runs inside `cols` cells; the run that overflows is cut with an ellipsis. */
 export function fitRuns(els: ClientElements, parts: Segment[], cols: number): RenderElement[] {
@@ -14,7 +14,7 @@ export function fitRuns(els: ClientElements, parts: Segment[], cols: number): Re
     if (left <= 0) break;
     const t = fitText(p.t, left);
     left -= textWidth(t);
-    out.push(els.Text({ color: p.color, backgroundColor: p.bg, bold: p.bold, inverse: p.inverse, children: t }));
+    out.push(els.Text({ color: p.color, backgroundColor: p.bg, bold: p.bold, inverse: p.inverse, strikethrough: p.strike, children: t }));
   }
   return out;
 }

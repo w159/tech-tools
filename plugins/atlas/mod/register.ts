@@ -11,6 +11,8 @@ import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
 import { PHASES, intentToArgv } from './intents';
 import { bandTree, railPhase, type BandHandlers } from './band';
+import { hudAgents, hudBudget, hudCompactRows, hudRows } from './hud';
+import { rowOf } from './runs';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
@@ -35,6 +37,7 @@ const PANE_ID = 'atlas';
 const PANE_DOCK = { id: PANE_ID, title: 'Atlas', columns: 56 } as const;
 const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: true, focus: true } as const;
 const TICK_MS = 250;
+const BAND_MIN_ROWS = 7; // the Mission Control band keeps at least this many rows; the HUD takes the rest of the budget
 const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
 
 /** The pane opens by itself only docked: a fullscreen terminal wide enough to leave the transcript its room. */
@@ -180,6 +183,7 @@ export function mapListed(
 				state: LIST_STATE[a.status] ?? 'running',
 				source: 'task' as const,
 				...(task !== undefined ? { task } : {}),
+				...(spawned?.model ? { model: spawned.model } : {}),
 			},
 		};
 	});
@@ -829,8 +833,15 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);
 		lastRailPhase = railPhase(snapshot, lastRailPhase); // a blocked reply keeps the phase lit before it
-		const band = bandTree($.ui.resolve(e), { snapshot, live: liveWorkers(snapshot, Date.now()), gates, columns: e.props.bodyColumns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState) }, bandHandlers($));
-		return $.ui.resolve(e).Box({ flexDirection: 'column', flexShrink: 0, children: [band, await next(e)] });
+		const els = $.ui.resolve(e);
+		const columns = e.props.bodyColumns; // measured live: with the docked pane open, viewport.columns is the transcript's own width (143) and bodyColumns is that less the engine's five (138)
+		const live = liveWorkers(snapshot, Date.now());
+		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
+		const hudIn = { todos: snapshot.todos ?? [], agents: hudAgents(live, snapshot.squad) };
+		const hud = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off' ? // ATLAS_HUD=off: no TODO / Subagents / Waiting rows
+			 hudRows(hudIn, { cols: columns, maxRows: hudBudget(e.props.maxRows ?? 0, hudCompactRows(hudIn), BAND_MIN_ROWS) }) : [];
+		const band = bandTree(els, { snapshot, live, gates, columns, tick: await read($, spinnerTickState), maxRows: hud.length > 0 ? e.props.maxRows - hud.length : e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState) }, bandHandlers($));
+		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: hud.map((r) => rowOf(els, r, columns)) })] : []), band, await next(e)] });
 	});
 
 	// The Atlas sidebar: a native tree, so its elements join the engine's focus ring.

@@ -1,5 +1,18 @@
 # Changelog
 
+## 16.8.0 - 2026-10-29
+
+### Added
+
+- Claude Code display parity with omp. The Claude Code mod now draws omp's TODO tree (phases in plan order with Roman numerals and `done/total`, the active phase expanded, completed items struck through, a progress spine) and the `Subagents · N running` block (model, name, `[role]`, task, last tool) with a waiting line, above the Mission Control band (`mod/hud.ts`, one pure renderer with a golden test of the omp layout). The subagent model is captured at `agent.spawn` (explicit model, else the role's pinned model, else the parent's). The HUD keeps its compact form when Claude Code shrinks the area above the prompt (measured `maxRows` 18 idle, 14-15 with agents, 10 while the lead works, 6 while Claude Code draws its own task list); the band gives up rows first. `ATLAS_HUD=off` hides it.
+- atlas-doctor display checks: `display-todo-tools` (`CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, without which Claude Code gives non-listed models no task tools and the TODO tree stays empty; `--fix` writes it into settings `env`), `display-mod` (mod module wired, `ATLAS_MOD`/`ATLAS_HUD` not off), `display-todo-mirror` (PostToolUse wiring covers every todo tool), `display-statusline` (`--fix` sets `statusLine` to `atlas_statusline.py` when unset or stale, never overwrites another tool's), `display-harness`. Settings path honors `CLAUDE_CONFIG_DIR`; an invalid settings file is never written.
+- Board mirror follows Claude Code's default task tools: `todo_capture.py` handles `TaskCreate` (adds the item, `[phase]` prefix kept) and `TaskUpdate` (status, subject, `deleted` removes); TodoWrite behaviour unchanged.
+
+### Fixed
+
+- Mission Control band width beside the docked Atlas pane: the band uses `bodyColumns` (the transcript width less five), so it stays in its full tier and no row runs under the pane.
+- Evidence: `.atlas/evidence/2026-10-29_display-parity-16.8.0/` (before/after tmux captures of both harnesses on the same scenario).
+
 ## 16.7.0 - 2026-10-29
 
 ### Added

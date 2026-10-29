@@ -36,7 +36,7 @@ FORMER = (
         "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task",
         "dispatch_tripwire",
     ),
-    ("PostToolUse", "TodoWrite|Agent|Task|Bash", "todo_capture"),
+    ("PostToolUse", "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash", "todo_capture"),
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "format_after_edit"),
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "docs_drift_watch"),
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "delegation_prewarn"),
@@ -56,7 +56,7 @@ FORMER = (
 STANDALONE = {"fallow_gate", "format_after_edit"}  # keep their own hooks.json process
 
 TOOLS = (
-    "Edit edit MultiEdit Write NotebookEdit Read read Grep Glob Bash Agent Task Skill TodoWrite "
+    "Edit edit MultiEdit Write NotebookEdit Read read Grep Glob Bash Agent Task Skill TodoWrite TaskCreate TaskUpdate TaskGet "
     "WebFetch WebSearch BashOutput Editor ReadMe mcp__lean-ctx__ctx_read mcp__x__ctx_read_all "
     "mcp__plugin_armada_falcon__falcon_status mcp__falcon-mcp__x mcp__cipp_x mcp__connectwise__y "
     "mcp__plaid__z mcp__gcloud__a mcp__other__thing xd://x"
@@ -109,6 +109,12 @@ class BindingTableTest(unittest.TestCase):
         self.assertNotIn(
             "todo_capture", ed.select("PostToolUse", "TodoWrite", harness="omp")
         )
+
+    def test_dispatcher_routes_the_claude_code_task_tools_to_todo_capture(self):
+        for tool in ("TaskCreate", "TaskUpdate", "TodoWrite"):
+            self.assertIn("todo_capture", ed.select("PostToolUse", tool, harness="claude"))
+        self.assertNotIn("todo_capture", ed.select("PostToolUse", "TaskGet", harness="claude"))
+        self.assertNotIn("todo_capture", ed.select("PostToolUse", "TaskCreate", harness="omp"))
 
     def test_hooks_json_outer_matcher_covers_exactly_the_inner_bindings(self):
         hooks = _hooks_json()

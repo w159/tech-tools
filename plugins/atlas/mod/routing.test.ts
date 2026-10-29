@@ -17,6 +17,7 @@ interface SpawnEvent {
   description: string;
   subagentType: string;
   model?: string;
+  parentModel?: string;
   fork: boolean;
   name?: string;
 }
@@ -221,6 +222,31 @@ describe('registerRouting Agent tool name', () => {
       expect(await orchNames($)).toEqual(['impl-auth']);
     });
   }
+});
+
+describe('registerRouting spawn model', () => {
+  const orchMeta = async ($: { state: ReturnType<typeof memState> }) =>
+    Object.values(((await $.state.get({ plugin: 'atlas', key: 'orch' })).value as { meta: Record<string, { name?: string; model?: string }> }).meta);
+  const spawned = async (over: Partial<SpawnEvent>, personas: Persona[] = []) => {
+    const { on, pick, $, recorded } = captureOn();
+    registerRouting(on, { getPersonas: () => personas, logDrift() {} });
+    const $c = { ...$, clock: { now: async () => 1000 } };
+    await pick('agent.spawn')($c, spawnInput(over), spawnNext);
+    const squad = ((await $.state.get({ plugin: 'atlas', key: 'taskAgents' })).value as Array<{ model?: string }>).map((a) => a.model);
+    return { meta: await orchMeta($), squad, recorded };
+  };
+  test('an explicit spawn model and the spawn name reach the orchestration meta and the task agent', async () => {
+    const { meta, squad } = await spawned({ model: 'opus', parentModel: 'sonnet', name: 'explorer-calc', subagentType: 'Explore' });
+    expect(meta.map((m) => [m.name, m.model])).toEqual([['explorer-calc', 'opus']]);
+    expect(squad).toEqual(['opus']);
+  });
+  test('an unpinned spawn inherits the parent model', async () => {
+    expect((await spawned({ parentModel: 'sonnet', subagentType: 'Explore' })).meta.map((m) => m.model)).toEqual(['sonnet']);
+    expect((await spawned({ model: 'inherit', parentModel: 'sonnet', subagentType: 'Explore' })).meta.map((m) => m.model)).toEqual(['sonnet']);
+  });
+  test('a known role shows its frontmatter pin, not the parent model', async () => {
+    expect((await spawned({ parentModel: 'opus' }, [persona])).meta.map((m) => m.model)).toEqual(['haiku']);
+  });
 });
 
 describe('registerRouting turn.step', () => {

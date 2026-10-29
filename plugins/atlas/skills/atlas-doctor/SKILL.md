@@ -244,6 +244,22 @@ contradiction is a potential product regression - report it as its own
 finding and let Phase 3 decide, exactly as the refresh would report a skill
 contradicting its own lessons.
 
+## Display checks
+
+`atlas_doctor.py` also answers "why do I not see the TODO tree, Subagents block,
+mission control band or status line?". These rows are WARN severity (user
+configuration, not plugin damage), run in every mode, and are repaired by
+`--fix` where the repair is safe. The settings file is
+`$CLAUDE_CONFIG_DIR/settings.json` (default `~/.claude/settings.json`).
+
+| Check | Looks for | `--fix` |
+|---|---|---|
+| `display-todo-tools` | `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` in settings `env` or the process env (Claude Code 2.1.233+); without it the TodoWrite/Task tools are absent on unlisted models and the board stays empty. Also flags a `CLAUDE_CODE_ENABLE_TASKS` that is not unset, `0` or `1`. | Merges `"env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"}`, keeps every other key, atomic write. Invalid JSON is never written. |
+| `display-mod` | `hooks/hooks.json` lists `../mod/register.ts` in `modules` and the file exists; `ATLAS_MOD` / `ATLAS_HUD` are not `off`. | Report only. The switches are a user choice: remove them from settings `env` and the shell profile to undo. |
+| `display-todo-mirror` | The `PostToolUse` matcher in `hooks.json` covers every tool `todo_capture` is dispatched for (`event_dispatch.py`). | Report only (update the plugin). |
+| `display-statusline` | `statusLine` runs `atlas_statusline.py`. | Sets it to `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_statusline.py"` (the installed plugin root written out as an absolute path) when unset or pointing at a missing Atlas script. A statusLine from another tool is reported and never overwritten. |
+| `display-harness` | `claude-code`, or under `ATLAS_HARNESS=omp` whether the omp extension that draws mission control is registered (same result as `omp-bridge`). | Report only. |
+
 ## Report
 
 At the end of a run, tell the user in one dense block: how many facets were

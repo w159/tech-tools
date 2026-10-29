@@ -5,6 +5,9 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { register, syncAgentsFromList } from './register';
+import { hudAgents } from './hud';
+import { liveWorkers } from './data/live';
+import { busySnap } from './live_fixture';
 import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
@@ -243,5 +246,19 @@ describe('stale workers', () => {
     expect(at(1_000 + 15_000)).toEqual([['explorer', 'running'], ['ghost01', 'running']]); // young: the host list may lag the spawn
     expect(at(1_000 + 15_001)).toEqual([['explorer', 'running'], ['ghost01', 'finished']]);
     expect(syncAgentsFromList(listed, recorded, {}, 9_999_999).map((a) => a.state)).toEqual(['running', 'running']); // no spawn time: never expire
+  });
+});
+
+describe('spawn model and name reach the HUD agent', () => {
+  test('the Agent call name labels the lane and the spawn model rides the squad row into the HUD agent', () => {
+    const squad = syncAgentsFromList(
+      [{ id: 'a6839f49ee72a2b14', description: 'Map band row count', type: 'atlas:explorer', status: 'running' }],
+      [],
+      { a6839f49ee72a2b14: { name: 'explorer-calc', type: 'atlas:explorer', model: 'claude-sonnet-5' } },
+    );
+    expect(squad.map((a) => [a.name, a.model])).toEqual([['explorer-calc', 'claude-sonnet-5']]);
+    const snap = { ...busySnap(), squad };
+    const [agent] = hudAgents(liveWorkers(snap, snap.now), squad);
+    expect(agent).toMatchObject({ name: 'explorer-calc', role: 'explorer', model: 'claude-sonnet-5', task: 'Map band row count' });
   });
 });

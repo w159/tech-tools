@@ -55,9 +55,9 @@ test('press a member, type, submit: the note goes to that member and the draft c
 });
 
 /** Boot the real module on a fake board whose host agent list is `agents`. */
-async function boot(on: On, agents: unknown[]) {
+async function boot(on: On, agents: unknown[], env: Record<string, string> = {}) {
   const clock = mock.clock(on);
-  mock.env(on, { ATLAS_PROJECT_ROOT: '/repo' });
+  mock.env(on, { ATLAS_PROJECT_ROOT: '/repo', ...env });
   on('session.id', async () => ({ value: 'abcdef-0000' }) as never);
   on('session.start', async (_$, e) => ({ cwd: (e as { cwd: string }).cwd }) as never);
   on('ui.log', async () => ({ value: undefined }) as never);
@@ -138,4 +138,42 @@ test('the band worker glyph moves between 2 s samples while a worker runs', asyn
   for (let i = 0; i < 6; i++) rows.push(await bandGlyphAfter($, clock, 2000));
   expect(rows[0]).toContain('impl-a'); // the band drew the worker, not an empty tree
   expect(new Set(rows).size).toBeGreaterThan(2);
+});
+
+/** Everything the AbovePrompt render drew, as one string. */
+async function abovePromptText($: Engine, maxRows: number, bodyColumns = 160): Promise<string> {
+  const ui = await $.ui.mount({ plugin: 'atlas', surface: 'terminal', component: 'AbovePrompt', requestId: 'band', props: { bodyColumns, hasSurvey: false, maxRows } as never });
+  const text = JSON.stringify([ui.drawn, (await ui.findAll({})).map((n) => n.text)]);
+  await ui.unmount();
+  return text;
+}
+
+test('the band draws the Subagents block and Waiting line above itself; ATLAS_HUD=off removes them', async ($, on) => {
+  await boot(on, [AGENT]);
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
+  const shown = await abovePromptText($, 30);
+  expect(shown).toContain('Subagents');
+  expect(shown).toContain('1 running');
+  expect(shown).toContain('Waiting on implementer agent');
+  expect(shown.indexOf('Subagents')).toBeLessThan(shown.indexOf('ATLAS'));
+  const tight = await abovePromptText($, 7); // the band gives up rows first: the Subagents block stays
+  expect(tight).toContain('Subagents');
+  expect(tight).toContain('ATLAS');
+});
+
+test('ATLAS_HUD=off draws no HUD rows', async ($, on) => {
+  await boot(on, [AGENT], { ATLAS_HUD: 'off' });
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
+  expect(await abovePromptText($, 30)).not.toContain('Subagents');
+});
+
+test('with the docked pane open (measured: viewport 143, bodyColumns 138) the band draws its full tier', async ($, on) => {
+  await boot(on, [AGENT]);
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
+  const shown = await abovePromptText($, 18, 138);
+  expect(shown).toContain('mission control');
+  expect(shown).toContain('1 live');
 });

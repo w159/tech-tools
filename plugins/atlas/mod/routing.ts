@@ -31,8 +31,8 @@ export interface RoutingDeps {
 }
 
 /** Track a spawned agent as a live task agent (capped at 64). */
-function withAgent(agents: SquadAgent[], agentId: string, persona: string, task?: string): SquadAgent[] {
-  const extra = task ? { task } : {};
+function withAgent(agents: SquadAgent[], agentId: string, persona: string, task?: string, model?: string): SquadAgent[] {
+  const extra = { ...(task ? { task } : {}), ...(model ? { model } : {}) };
   return agents.some((a) => a.name === agentId)
     ? agents.map((a) => (a.name === agentId ? { ...a, persona, ...extra } : a))
     : [...agents, { name: agentId, persona, state: 'running' as const, source: 'task' as const, ...extra }].slice(-64);
@@ -107,11 +107,14 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
       try {
         const agentId = result.agentId;
         const label = e.subagentType.replace(ATLAS_PREFIX, '').toLowerCase();
-        await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? (label || 'unknown'), e.description));
+        // explicit model, else the role's frontmatter pin, else the parent's (what `inherit` resolves to)
+        const pinned = persona && persona.model !== 'inherit' ? persona.model : undefined;
+        const model = (e.model && e.model !== 'inherit' ? e.model : undefined) ?? pinned ?? (e.parentModel || undefined);
+        await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? (label || 'unknown'), e.description, model));
         const now = await $.clock.now();
         const name = e.name || matchCall(calls, e, now) || promptName(e.prompt);
         const scope = /^\s*SCOPE:\s*(\S+)/m.exec(e.prompt ?? '')?.[1];
-        await update($, orchState, (o) => onSpawn(o, agentId, e.description || e.prompt, now, { ...(name ? { name } : {}), ...(scope ? { scope } : {}), type: e.subagentType }));
+        await update($, orchState, (o) => onSpawn(o, agentId, e.description || e.prompt, now, { ...(name ? { name } : {}), ...(scope ? { scope } : {}), ...(model ? { model } : {}), type: e.subagentType }));
       } catch {
         // recording never blocks a spawn
       }

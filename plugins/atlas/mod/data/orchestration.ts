@@ -25,7 +25,7 @@ export interface Orch {
   meta: Record<string, SpawnMeta>;
 }
 
-export interface SpawnMeta { name?: string; type?: string; at?: number; scope?: string } // at: spawn time (ms); scope: prompt `SCOPE:` value
+export interface SpawnMeta { name?: string; type?: string; at?: number; scope?: string; model?: string } // at: spawn time (ms); scope: prompt `SCOPE:` value; model: the spawn's `model`, else the parent's (what `inherit` resolves to)
 
 export const EMPTY_ORCH: Orch = { activity: {}, comms: [], stage: {}, meta: {} };
 

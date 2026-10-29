@@ -173,5 +173,107 @@ class TodoNudge(unittest.TestCase):
 
 
 
+def _create(root, subject, task_id, sid="s1", **extra):
+    return run_hook(
+        {
+            "session_id": sid,
+            "cwd": root,
+            "tool_name": "TaskCreate",
+            "tool_input": {"subject": subject, "description": "d", **extra},
+            "tool_response": {"task": {"id": task_id, "subject": subject}},
+        }
+    )
+
+
+def _update(root, task_id, sid="s1", **fields):
+    return run_hook(
+        {
+            "session_id": sid,
+            "cwd": root,
+            "tool_name": "TaskUpdate",
+            "tool_input": {"taskId": task_id, **fields},
+            "tool_response": {"success": True, "taskId": task_id, "updatedFields": list(fields)},
+        }
+    )
+
+
+class TaskToolsCapture(unittest.TestCase):
+    """Claude Code's default task tools (TaskCreate/TaskUpdate) feed the same board."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+
+    def items(self):
+        return atlas_todo.load(self.root)["items"]
+
+    def test_task_create_adds_a_pending_item(self):
+        self.assertEqual(_create(self.root, "write the thing", "1"), 0)
+        (item,) = self.items()
+        self.assertEqual((item["content"], item["status"], item["session_id"]), ("write the thing", "pending", "s1"))
+        self.assertEqual(item["task_id"], "1")
+
+    def test_task_create_keeps_the_phase_prefix(self):
+        _create(self.root, "[implement] build it", "1")
+        _create(self.root, "[bogus] nope", "2")
+        by = {i["content"]: i.get("phase") for i in self.items()}
+        self.assertEqual(by, {"[implement] build it": "implement", "[bogus] nope": None})
+
+    def test_task_create_response_may_be_a_json_string(self):
+        run_hook({"session_id": "s1", "cwd": self.root, "tool_name": "TaskCreate",
+                  "tool_input": {"subject": "x"}, "tool_response": json.dumps({"task": {"id": "7", "subject": "x"}})})
+        self.assertEqual([i["task_id"] for i in self.items()], ["7"])
+
+    def test_task_update_changes_status(self):
+        _create(self.root, "a", "1")
+        _update(self.root, "1", status="in_progress")
+        self.assertEqual(self.items()[0]["status"], "in_progress")
+        _update(self.root, "1", status="completed")
+        item = self.items()[0]
+        self.assertEqual(item["status"], "completed")
+        self.assertTrue(item["completed_at"])
+
+    def test_task_update_changes_subject(self):
+        _create(self.root, "a", "1")
+        _update(self.root, "1", subject="[verify] b")
+        item = self.items()[0]
+        self.assertEqual((item["content"], item.get("phase")), ("[verify] b", "verify"))
+
+    def test_task_update_deleted_removes_the_item(self):
+        _create(self.root, "a", "1")
+        _create(self.root, "b", "2")
+        _update(self.root, "1", status="deleted")
+        self.assertEqual([i["content"] for i in self.items()], ["b"])
+
+    def test_unknown_task_id_is_ignored(self):
+        _create(self.root, "a", "1")
+        self.assertEqual(_update(self.root, "99", status="completed"), 0)
+        self.assertEqual([(i["content"], i["status"]) for i in self.items()], [("a", "pending")])
+
+    def test_update_is_session_scoped(self):
+        _create(self.root, "a", "1", sid="s1")
+        _update(self.root, "1", sid="s2", status="completed")
+        self.assertEqual(self.items()[0]["status"], "pending")
+
+    def test_failed_update_response_is_ignored(self):
+        _create(self.root, "a", "1")
+        run_hook({"session_id": "s1", "cwd": self.root, "tool_name": "TaskUpdate",
+                  "tool_input": {"taskId": "1", "status": "completed"},
+                  "tool_response": {"success": False, "taskId": "1", "updatedFields": [], "error": "x"}})
+        self.assertEqual(self.items()[0]["status"], "pending")
+
+    def test_todo_write_still_mirrors_beside_task_items(self):
+        run_hook({"session_id": "s1", "cwd": self.root, "tool_name": "TodoWrite",
+                  "tool_input": {"todos": [{"content": "one", "status": "completed"}]}})
+        self.assertEqual([(i["content"], i["status"]) for i in self.items()], [("one", "completed")])
+
+    def test_off_switch(self):
+        run_hook({"session_id": "s1", "cwd": self.root, "tool_name": "TaskCreate",
+                  "tool_input": {"subject": "x"}, "tool_response": {"task": {"id": "1", "subject": "x"}}},
+                 env_extra={"ATLAS_TODO": "off"})
+        self.assertEqual(self.items(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

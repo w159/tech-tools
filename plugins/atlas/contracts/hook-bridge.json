@@ -65,7 +65,7 @@
     "PostToolUse": [
       {
         "script": "todo_capture.py",
-        "matcher": "TodoWrite|Agent|Task|Bash",
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash",
         "timeout": 10
       },
       {

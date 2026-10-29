@@ -653,6 +653,215 @@ def check_omp_bridge(plugin_name, version):
     return True, f"omp bridge {reg.get('version')} at {ip}"
 
 
+# --- display checks: why Atlas's TODO tree, Subagents block, band and status line are missing ---
+DISPLAY_TODO_ENV = "CLAUDE_CODE_ENABLE_TODO_TOOLS"
+DISPLAY_TASKS_ENV = "CLAUDE_CODE_ENABLE_TASKS"
+DISPLAY_SWITCHES = ("ATLAS_MOD", "ATLAS_HUD")
+DISPLAY_MOD_MODULE = "../mod/register.ts"
+DISPLAY_TODO_FALLBACK_TOOLS = ("TodoWrite", "TaskCreate", "TaskUpdate", "Agent", "Task", "Bash")
+_OFF_VALUES = ("off", "0", "false", "no")
+
+
+def _claude_settings_path():
+    return os.path.join(
+        os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
+        "settings.json",
+    )
+
+
+def _display_plugin_root(plugin_root=None):
+    return plugin_root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _read_settings(path):
+    """(data, err). A missing file is ({}, None); unreadable or non-object JSON is (None, why)."""
+    if not os.path.exists(path):
+        return {}, None
+    try:
+        data = _load_json(path)
+    except Exception as e:
+        return None, f"{path} is not valid JSON ({e})"
+    if not isinstance(data, dict):
+        return None, f"{path} is not a JSON object"
+    return data, None
+
+
+def _settings_env(data):
+    env = data.get("env") if isinstance(data, dict) else None
+    return {k: str(v) for k, v in env.items()} if isinstance(env, dict) else {}
+
+
+def _display_value(name, settings_env, env):
+    """Settings env wins over the process env, as Claude Code applies it to its own process."""
+    return settings_env.get(name, env.get(name))
+
+
+def _atlas_statusline_script(plugin_root):
+    return os.path.join(plugin_root, "scripts", "atlas_statusline.py")
+
+
+def _atlas_statusline_command(plugin_root):
+    # Same form atlas_statusline.py install writes.
+    return 'python3 "%s"' % _atlas_statusline_script(plugin_root)
+
+
+def _statusline_script_path(cfg):
+    cmd = cfg.get("command") if isinstance(cfg, dict) else None
+    m = re.search(r'"?([^"\s]*atlas_statusline\.py)', cmd) if isinstance(cmd, str) else None
+    return m.group(1) if m else None
+
+
+def _todo_capture_tools(plugin_root):
+    try:
+        with open(os.path.join(plugin_root, "hooks", "event_dispatch.py"), encoding="utf-8") as f:
+            m = re.search(r'\(\s*"todo_capture"\s*,\s*"([^"]+)"', f.read())
+        if m:
+            return tuple(m.group(1).split("|"))
+    except OSError:
+        pass
+    return DISPLAY_TODO_FALLBACK_TOOLS
+
+
+def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="atlas", version=None):
+    """Checks that explain a missing TODO tree, Subagents block, mission control band or
+    status line. Every row is warn severity: these are user configuration, not plugin damage.
+    Injectable paths/env keep tests off the real ~/.claude. Returns [{check, ok, detail, severity}]."""
+    env = os.environ if env is None else env
+    root = _display_plugin_root(plugin_root)
+    path = settings_path or _claude_settings_path()
+    rows = []
+
+    def add(cid, ok, detail):
+        rows.append({"check": cid, "ok": ok, "detail": detail, "severity": "warn"})
+
+    data, err = _read_settings(path)
+    senv = _settings_env(data) if data is not None else {}
+
+    # 1. task-tracking tools on every model
+    tasks = _display_value(DISPLAY_TASKS_ENV, senv, env)
+    if err:
+        add("display-todo-tools", False, f"{err}; fix the JSON by hand (--fix will not touch it), "
+            f'then set "env": {{"{DISPLAY_TODO_ENV}": "1"}}')
+    elif _display_value(DISPLAY_TODO_ENV, senv, env) in ("1", "true"):
+        bad = tasks not in (None, "", "0", "1")
+        add("display-todo-tools", not bad, (
+            f"{DISPLAY_TASKS_ENV}={tasks!r} is not 0 or 1; unset it or use 0 (TodoWrite) / 1 (Task tools)"
+            if bad else f"{DISPLAY_TODO_ENV}=1 (task tools on every model; needs Claude Code 2.1.233+)"))
+    else:
+        add("display-todo-tools", False,
+            f"{DISPLAY_TODO_ENV} is not 1: on models Claude Code does not list, the TodoWrite/Task tools "
+            f'are absent and the TODO tree and Subagents block stay empty. `atlas_doctor.py --fix` writes '
+            f'"env": {{"{DISPLAY_TODO_ENV}": "1"}} into {path}')
+
+    # 2. the mod module that draws the band, plus its kill switches
+    hooks_file = os.path.join(root, "hooks", "hooks.json")
+    problems = []
+    try:
+        mods = _load_json(hooks_file).get("modules") or []
+        if not any(isinstance(m, str) and m.endswith("mod/register.ts") for m in mods):
+            problems.append(f"{hooks_file} does not list {DISPLAY_MOD_MODULE} in \"modules\" (reinstall/update the plugin)")
+        elif not os.path.isfile(os.path.normpath(os.path.join(root, "hooks", DISPLAY_MOD_MODULE))):
+            problems.append(f"{DISPLAY_MOD_MODULE} is listed but mod/register.ts is missing under {root}")
+    except Exception as e:
+        problems.append(f"cannot read {hooks_file}: {e}")
+    for name in DISPLAY_SWITCHES:
+        val = _display_value(name, senv, env)
+        if isinstance(val, str) and val.strip().lower() in _OFF_VALUES:
+            problems.append(f"{name}={val} switches the display off (your choice); to undo, remove it from "
+                            f"{path} \"env\" and your shell profile")
+    add("display-mod", not problems, "; ".join(problems) or f"{DISPLAY_MOD_MODULE} registered; ATLAS_MOD/ATLAS_HUD not off")
+
+    # 3. board mirror wiring
+    tools = _todo_capture_tools(root)
+    try:
+        post = _load_json(hooks_file).get("hooks", {}).get("PostToolUse", [])
+        wired = [g.get("matcher") for g in post if any(
+            "event_dispatch.py" in h.get("command", "") or "todo_capture.py" in h.get("command", "")
+            for h in g.get("hooks", []))]
+        missing = [t for t in tools if not any(_matcher_covers(m, t) for m in wired)]
+        extra = [t for t in ("TaskCreate", "TaskUpdate") if not any(_matcher_covers(m, t) for m in wired)]
+        if missing:
+            add("display-todo-mirror", False, f"PostToolUse in {hooks_file} does not cover {missing}: the board "
+                "will not mirror those calls (update the plugin)")
+        else:
+            add("display-todo-mirror", True, f"PostToolUse covers {list(tools)}" + (
+                f"; {extra} are not mirrored (todo_capture handles TodoWrite)" if extra else ""))
+    except Exception as e:
+        add("display-todo-mirror", False, f"cannot read {hooks_file}: {e}")
+
+    # 4. status line
+    if err:
+        add("display-statusline", False, f"{err}; cannot check statusLine")
+    else:
+        cfg = data.get("statusLine")
+        script = _statusline_script_path(cfg)
+        if cfg in (None, {}, ""):
+            add("display-statusline", False, f"statusLine unset in {path}; `atlas_doctor.py --fix` sets it to "
+                f"{_atlas_statusline_command(root)}")
+        elif script and not os.path.isfile(script):
+            add("display-statusline", False, f"statusLine points at missing {script}; `atlas_doctor.py --fix` "
+                f"repoints it to {_atlas_statusline_command(root)}")
+        elif script:
+            add("display-statusline", True, f"statusLine runs {script}")
+        else:
+            add("display-statusline", False, f"statusLine in {path} is another tool's command; left untouched. "
+                f"To use Atlas's, set it to {_atlas_statusline_command(root)}")
+
+    # 5. harness
+    if env.get("ATLAS_HARNESS") == "omp":
+        ok, detail = check_omp_bridge(plugin_name, version)
+        add("display-harness", ok, "omp: mission control is drawn by the omp extension; " + detail)
+    else:
+        add("display-harness", True, "claude-code")
+    return rows
+
+
+def _atomic_write_json(path, data):
+    text = json.dumps(data, indent=2) + "\n"
+    json.loads(text)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp = f"{path}.atlas-tmp.{os.getpid()}"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def fix_display(settings_path=None, env=None, plugin_root=None):
+    """--fix only: merge the task-tools env var and, when unset or dead, the Atlas statusLine into
+    the user settings.json with one atomic write. Never edits unreadable JSON, never overwrites a
+    foreign statusLine, never touches the ATLAS_MOD/ATLAS_HUD switches. Returns a list of lines."""
+    env = os.environ if env is None else env
+    root = _display_plugin_root(plugin_root)
+    path = settings_path or _claude_settings_path()
+    data, err = _read_settings(path)
+    if err:
+        return [f"SKIP display fixes: {err}; fix the JSON by hand"]
+    notes, senv, changed = [], data.get("env"), False
+    if senv is not None and not isinstance(senv, dict):
+        notes.append(f"SKIP {DISPLAY_TODO_ENV}: \"env\" in {path} is not an object")
+    elif _display_value(DISPLAY_TODO_ENV, _settings_env(data), env) not in ("1", "true"):
+        data["env"] = dict(senv or {}, **{DISPLAY_TODO_ENV: "1"})
+        notes.append(f'set env.{DISPLAY_TODO_ENV}="1" in {path}')
+        changed = True
+    cfg = data.get("statusLine")
+    script = _statusline_script_path(cfg)
+    if os.path.isfile(_atlas_statusline_script(root)) and (
+        cfg in (None, {}, "") or (script and not os.path.isfile(script))
+    ):
+        data["statusLine"] = {"type": "command", "command": _atlas_statusline_command(root)}
+        notes.append(f"set statusLine to {_atlas_statusline_command(root)} in {path}")
+        changed = True
+    elif cfg not in (None, {}, "") and not script:
+        notes.append("statusLine is another tool's command; left untouched")
+    if changed:
+        _atomic_write_json(path, data)
+    return ["display: " + n for n in notes] or ["display settings already correct"]
+
+
 DRIFT_GLOBS = (
     ("omp", ".ts"),
     ("hooks", ".py"),
@@ -1021,6 +1230,7 @@ def run_checks(plugin_name="atlas"):
         plugin_name,
         version,
     )
+    results.extend(display_checks(plugin_name=plugin_name, version=version))
     return results, ctx
 
 
@@ -3607,6 +3817,10 @@ def main(argv=None):
     if args.fix:
         # own branch: the check is severity "warn", so `failed` never holds it
         print(f"FIX: {fix_context_tooling()}")
+        for line in fix_display():
+            print(f"FIX: {line}")
+        results = [r for r in results if not r["check"].startswith("display-")]
+        results += display_checks(plugin_name=args.plugin)  # VERIFY the display fixes
         fix_layout_all(_project_dir())
 
     if not args.hook:

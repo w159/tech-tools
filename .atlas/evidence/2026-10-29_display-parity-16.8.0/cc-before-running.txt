@@ -1,0 +1,55 @@
+● Since TodoWrite isn't available in this toolset, I'll track progress via the header count and log the plan through atlas_todo.py. Dispatching│                                                      ✕
+  two workers now: one to list functions in src/calc.py, another to check if CHANGELOG mentions calc. · summary                                │r: route │ t: team │ c: channel │ g: core ✗1 │ o: board
+                                                                                                                                               │◎◠ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+  Ran 1 shell command                                                                                                                          │◎ research 0/1
+                                                                                                                                               │◉ [research] Map add and sub call paths
+● 2 background agents launched (↓ to manage)                                                                                                   │
+   ├ atlas:explorer (List calc.py functions)                                                                                                   │
+   └ atlas:docs-auditor (Check CHANGELOG for calc)                                                                                             │
+ ◆ ATLAS  ◎ RESEARCH  1/5 Board mirrored (5 needed, 1 complete). Both workers are running in the background. Waiting for them to return, nothi…│
+▸ 11s · 2 workers · ctx 7%                                                                                                                     │
+▌ ✔ a3557a  explorer done · STATUS: DONE · 13s                                                                                                 │
+ ◆ ATLAS  ◎ RESEARCH  1/5 Explorer returned: src/calc.py has two functions, add at line 1 and sub at line 4. Its 60 second sleep was blocked b…│
+▸ 2s · 2 workers · ctx 7%                                                                                                                      │
+▌ ✔ af0d3c  docs-auditor done · STATUS: DONE · 13s                                                                                             │
+ ◆ ATLAS  ◎ RESEARCH  1/5 Both workers returned. Stopping here as instructed.                                                                  │
+- Explorer: src/calc.py has two functions, not three. add at line 1, sub at line 4.                                                            │
+- Docs auditor: docs/CHANGELOG.md does not mention calc. It holds only the heading at line 1.                                                  │
+- Sleep step: both agents had their 60 second sleep blocked by the harness and did not work around it. Each returned after about 13 seconds.   │
+                                                                                                                                               │
+TodoWrite was not available in this toolset, so the five-item plan went to the Atlas board instead. The board shows 5 needed, 1 complete. Items│
+3 through 5 remain pending and untouched.                                                                                                      │
+▸ 11s · 2 workers · ctx 7%                                                                                                                     │
+                                                                                                                                               │
+● atlas: $.ui.toast: a toast left the stack before it was ever drawn                                                                           │
+                                                                                                                                               │
+❯ Display test 2. In ONE message launch two Agent calls in the background in parallel: atlas:explorer named explorer-calc (prompt: SCOPE:      │
+  research/low. GOAL: read src/calc.py, then README.md, then docs/CHANGELOG.md, one Read per turn, and after each read write one sentence      │
+  about it. DELIVERABLE: 3 sentences. TOOLS: Read), and atlas:docs-auditor named docs-auditor-calc (prompt: SCOPE: research/low. GOAL: read    │
+  docs/CHANGELOG.md, README.md and src/calc.py one Read per turn and report whether docs mention calc. DELIVERABLE: one line. TOOLS: Read).    │
+  Then wait for both and stop.                                                                                                                 │
+ ◆ ATLAS  ◎ RESEARCH  Display test 2: dispatching both workers in the background, then waiting.                                                │
+DISPATCH -> atlas:explorer (explorer-calc, research/low) (read calc.py, README, CHANGELOG, one sentence each)                                  │
+DISPATCH -> atlas:docs-auditor (docs-auditor-calc, research/low) (do docs mention calc)                                                        │
+                                                                                                                                               │
+● 2 background agents launched (↓ to manage)                                                                                                   │
+   ├ atlas:explorer (Read three files, one sentence each)                                                                                      │
+   └ atlas:docs-auditor (Check whether docs mention calc)                                                                                      │
+ ◆ ATLAS  ◎ RESEARCH  Both workers launched in the background. Waiting for both to return, nothing else until then.                            │
+▸ 11s · 2 workers · ctx 7%                                                                                                                     │
+ ◆ ATLAS  ·  mission control  ·  demo@master  ·  wave 2  ·  research/low.                           ◷ 00:14   2 live   ctx 7%   ✖ 1 gates  [-] │
+  ◆ RESEARCH ▶ theory ▶ test ▶ implement ▶ verify ▶ done                                                                                       │
+ board ██████                   2/8 ⠏ [research] Map add and sub call paths                                                                    │
+  THINK ◔-◔ explorer-acc6           explorer     Bash        python3 "/home/user/tech… ███▍                          ▁▁▁▁▁▁▁▁▁▄▄▂     14s      │
+  THINK °-° docs-auditor-ada6       docs-auditor Bash        python3 "/home/user/tech… ██▌                           ▁▁▁▁▁▁▁▁▁▁▆▄     11s      │
+  #demo@master  21:51 lead → docs-auditor-ada6: Check whether docs mention calc   21:51 docs-auditor-ada6 → all: joined                        │
+ tasks                    0/3   ✔ completion   ✖ tripwire   ✔ routing   ✔ header  r: route  t: team  c: channel  g: core  o: board             │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ research: Map add and sub call paths
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ↓ to manage
+
+  ● main
+  ◯ atlas:explorer      Read three files, one sentence each                                                                                                                       15s · ↓ 39.1k tokens
+  ◯ atlas:docs-auditor  Check whether docs mention calc                                                                                                                           11s · ↓ 38.9k tokens

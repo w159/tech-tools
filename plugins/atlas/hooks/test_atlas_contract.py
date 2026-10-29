@@ -1743,7 +1743,7 @@ class TodoBoardContract(unittest.TestCase):
             for ev, name, m in _dispatched()
             if ev == "PostToolUse" and name == "todo_capture"
         ]
-        self.assertEqual(matchers, ["TodoWrite|Agent|Task|Bash"])
+        self.assertEqual(matchers, ["TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash"])
 
     def test_gate_falls_back_to_board_and_ledger(self):
         src = (HOOKS_DIR / "completion_gate_core.py").read_text(encoding="utf-8")
@@ -1995,3 +1995,18 @@ class ReleaseVersionContractTests(unittest.TestCase):
         spec.loader.exec_module(mod)
         errors, _warnings = mod.check(REPO_ROOT)
         self.assertEqual(errors, [])
+
+
+class DisplayChecksContract(unittest.TestCase):
+    """Every display- doctor check is documented, and the mod stays declared."""
+
+    def test_display_check_ids_documented_in_skill(self):
+        src = (PLUGIN_ROOT / "scripts" / "atlas_doctor.py").read_text("utf-8")
+        ids = set(re.findall(r'"(display-[a-z-]+)"', src))
+        self.assertTrue(ids, "no display- check ids found in atlas_doctor.py")
+        skill = (PLUGIN_ROOT / "skills" / "atlas-doctor" / "SKILL.md").read_text("utf-8")
+        self.assertEqual(sorted(i for i in ids if f"`{i}`" not in skill), [])
+
+    def test_hooks_json_still_declares_mod_module(self):
+        hooks = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text("utf-8"))
+        self.assertIn("../mod/register.ts", hooks.get("modules", []))

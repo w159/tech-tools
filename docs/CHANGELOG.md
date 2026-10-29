@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 16.8.0 - 2026-10-29
+
+- atlas 16.8.0: Claude Code shows the same TODO tree, Subagents block and Mission Control band as omp (`mod/hud.ts`), the board mirrors `TaskCreate`/`TaskUpdate`, and atlas-doctor gains `display-` checks with `--fix` for the task-tools env flag and the status line. Evidence: `.atlas/evidence/2026-10-29_display-parity-16.8.0/`.
+
 ## atlas 16.7.0 - 2026-10-29
 
 - atlas 16.7.0: warm lead. `atlas_warm_lead.py start|send|status|stop` keeps a tmux-hosted Claude Code lead started and idle (recycled after each task by default) and hands it a task as a stream-json line; `send --wait` waits for background agents and returns the last result with a `results` count. Team timing is measured from hand-off to an already-running lead. Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md). Benchmark: see docs/audits/2026-10-29_atlas-16.7.0-warm-lead.md
