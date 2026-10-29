@@ -58,7 +58,7 @@ corr 0.8 with spec chars, negative with owned stubs); gen time = weight / 400 ch
 over `needs` give each worker its slack (how late it may finish without delaying the end). Workers launch by
 ascending slack (ties: heavier first, then name) at `nice = min(19, 4 * (rank // ncpu))`; the order is stored in
 `run.json` as `launch`, and `worker --nice N` applies it before `claude` starts. Fix rounds run at nice 0.
-`ATLAS_CREW_PRIORITY=off` launches in plan order at nice 0. Stagger: a worker whose needs finish later waits `min(8, wait - 7.5)` s (`worker --delay`, round 0; `ATLAS_CREW_STAGGER=off` disables).
+`ATLAS_CREW_PRIORITY=off` launches in plan order at nice 0. Stagger: a worker whose needs finish later waits `min(8, wait - 7.5)` s, wait = needs' finish minus its own generation (spec plus interface chars / 400) (`worker --delay`, round 0; `ATLAS_CREW_STAGGER=off` disables). Worker prompt toggles: `ATLAS_CREW_TESTS_CTX=off` drops the "Tests you must pass" block (own test files, 12000 chars), `ATLAS_CREW_SKIP_DOCSTRINGS=off` drops the omit-stub-docstrings line; `ATLAS_CREW_WORKER_EFFORT=low|medium|high` overrides every worker's effort.
 
 The lead's context holds the start line and one summary: per-worker tokens,
 cost, wall time, gate refusals, and channel counts (messages, READY
