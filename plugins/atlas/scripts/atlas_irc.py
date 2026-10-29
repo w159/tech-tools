@@ -21,6 +21,10 @@ Layout of a bus directory D:
   D/members.json         {"channel": "#t", "members": [nicks], "lead": nick}
 
 Env defaults for the CLI: ATLAS_IRC_DIR, ATLAS_IRC_NICK, ATLAS_IRC_CHANNEL.
+
+`check` runs the unit check speculatively once every peer in ATLAS_CREW_NEEDS_ALL has installed its file
+(ATLAS_CREW_PEER_OWNS, ATLAS_CREW_STUB_DIR; off with ATLAS_CREW_SPECULATE=off) and posts DONE without a second
+run when those peers then post DONE for the same bytes.
 Stdlib only.
 """
 
@@ -72,8 +76,8 @@ def init_bus(d, channel: str, nicks: list, lead: str = "lead") -> Path:
     return p
 
 
-def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str | None = None) -> dict:
-    """Append one message under an exclusive lock and return it (with its seq)."""
+def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str | None = None, extra: dict | None = None) -> dict:
+    """Append one message under an exclusive lock and return it (with its seq). `extra` adds fields (e.g. a DONE's digest)."""
     text = (text or "").strip()[:MAX_TEXT]
     p = Path(d) / "log.jsonl"
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -99,6 +103,8 @@ def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str |
                 rec["kind"] = kind
             if via:
                 rec["via"] = via
+            if extra:
+                rec.update(extra)
             fh.seek(0, os.SEEK_END)
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
             fh.flush()
@@ -448,14 +454,75 @@ def has_done(d, nick: str) -> bool:
     return done
 
 
+def _owned_files(root, owns) -> list:
+    """Sorted rel paths of the owned files: literal paths as written (even if missing), globs and directories expanded."""
+    out = set()
+    for pat in owns or []:
+        pat = pat.rstrip("/")
+        if any(c in pat for c in "*?["):
+            found = [f for f in Path(root).glob(pat) if f.is_file()]
+        elif Path(root, pat).is_dir():
+            found = [f for f in Path(root, pat).rglob("*") if f.is_file()]
+        else:
+            out.add(pat)
+            continue
+        out.update(f.relative_to(root).as_posix() for f in found)
+    return sorted(out)
+
+
+def _owned_digest(root, owns) -> str:
+    """sha256 over the sorted owned rel paths and their bytes; a missing file hashes as empty plus a marker."""
+    import hashlib
+
+    h = hashlib.sha256()
+    for rel in _owned_files(root, owns):
+        try:
+            data = Path(root, rel).read_bytes()
+            mark = b"F"
+        except OSError:
+            data, mark = b"", b"M"
+        h.update(rel.encode() + b"\0" + mark + b"\0" + hashlib.sha256(data).digest())
+    return h.hexdigest()
+
+
+def _env_owns():
+    try:
+        owns = json.loads(os.environ.get("ATLAS_CREW_OWNS") or "[]")
+    except ValueError:
+        return []
+    return owns if isinstance(owns, list) else []
+
+
+def done_current(d, nick: str, root=None, owns=None) -> bool:
+    """True when `nick` holds a DONE (has_done) whose recorded digest equals the owned files' digest now: the
+    verified DONE still describes the files on disk, so a hook can skip re-running the check (3-5 s on slow
+    test files). A DONE without a digest is never current."""
+    if not has_done(d, nick):
+        return False
+    rec = next((r for r in reversed(history(d)) if r.get("from") == nick and r.get("kind") == "done"), None)
+    if not rec or not rec.get("digest"):
+        return False
+    root = root or os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    owns = _env_owns() if owns is None else owns
+    return rec["digest"] == _owned_digest(root, owns)
+
+
+def latest_done_record(d, nick: str):
+    """The latest kind-done record of `nick` while it still stands (has_done), else None."""
+    if not has_done(d, nick):
+        return None
+    return next((r for r in reversed(history(d)) if r.get("from") == nick and r.get("kind") == "done"), None)
+
+
 CHECK_TIMEOUT_S = 600
 TAIL_CHARS = 6000
 
 
-def _run_unit_check(d, nick: str, quiet: bool = False):
+def _run_unit_check(d, nick: str, quiet: bool = False, capture: list | None = None):
     """Run ATLAS_CREW_UNIT_CHECK (shell, cwd ATLAS_CREW_ROOT) and print its output tail. Returns its exit code,
     or None when no unit check is set. A failure is recorded as an `unverified` note to the nick itself (peers
-    are not told), which voids any earlier DONE of this nick. `quiet` prints and records nothing."""
+    are not told), which voids any earlier DONE of this nick. `quiet` prints and records nothing; with
+    `capture` (a list) it appends the output tail it would have printed."""
     cmd = os.environ.get("ATLAS_CREW_UNIT_CHECK") or ""
     if not cmd:
         return None
@@ -465,9 +532,13 @@ def _run_unit_check(d, nick: str, quiet: bool = False):
         code, out = res.returncode, (res.stdout or "") + (res.stderr or "")
     except subprocess.TimeoutExpired:
         code, out = 124, f"check timed out after {CHECK_TIMEOUT_S}s\n"
+    tail = out[-TAIL_CHARS:]
+    tail += "" if tail.endswith("\n") or not tail else "\n"
     if quiet:
+        if capture is not None:
+            capture.append(tail)
         return code
-    print(out[-TAIL_CHARS:], end="" if out.endswith("\n") or not out else "\n")
+    print(tail, end="")
     if code:
         post(d, nick, nick, f"unverified {nick}: `{cmd}` exited {code}", kind="unverified")
     return code
@@ -547,47 +618,121 @@ def restore_docstrings(stub_src: str, work_src: str):
     return out, len(edits)
 
 
-def _restore_owned_docstrings(d, nick: str) -> bool:
-    """After a passing unit check: restore dropped stub docstrings in the owned .py files (ATLAS_CREW_STUBS maps
-    rel path -> pristine copy). Re-run the unit check once if anything was inserted; if that fails, put the
-    workers' files back. Returns True when docstrings were restored and kept."""
+def _restore_owned_docstrings(root=None) -> list:
+    """Before the unit check: restore dropped stub docstrings in the owned .py files (ATLAS_CREW_STUBS maps
+    rel path -> pristine copy) so one unit check covers the final files. A restore result that does not parse
+    is skipped. Returns [(rel, pre-restore text, count)] for the files changed, for `_revert_restored` and the
+    "restored N docstrings" lines."""
     try:
         stubs = json.loads(os.environ.get("ATLAS_CREW_STUBS") or "{}")
         owns = json.loads(os.environ.get("ATLAS_CREW_OWNS") or "[]")
     except ValueError:
-        return False
-    root = Path(os.environ.get("ATLAS_CREW_ROOT") or os.getcwd())
+        return []
+    root = Path(root or os.environ.get("ATLAS_CREW_ROOT") or os.getcwd())
     changed = []
     for rel in owns:
         stub = stubs.get(rel)
         if not rel.endswith(".py") or not stub:
             continue
         try:
-            work = (root / rel).read_text(encoding="utf-8")
+            raw = (root / rel).read_bytes()
+            work = raw.decode("utf-8")
             new, n = restore_docstrings(Path(stub).read_text(encoding="utf-8"), work)
-            if n:
-                (root / rel).write_text(new, encoding="utf-8")
-                changed.append((rel, work, n))
+            if not n:
+                continue
+            ast.parse(new)
+            (root / rel).write_text(new, encoding="utf-8")
+            changed.append((rel, raw, n))
+        except (OSError, ValueError, SyntaxError):
+            continue
+    return changed
+
+
+def _revert_restored(changed, root=None) -> None:
+    """Put back the exact pre-restore bytes of every file `_restore_owned_docstrings` changed."""
+    root = Path(root or os.environ.get("ATLAS_CREW_ROOT") or os.getcwd())
+    for rel, raw, _ in changed:
+        try:
+            (root / rel).write_bytes(raw)
+        except OSError:
+            pass
+
+
+def _check_with_docstrings(d, nick: str, quiet: bool = False, capture: list | None = None) -> int:
+    """One unit check per pass (a second run cost the store worker's DONE hop 3.3-4.8 s on the critical chain):
+    restore the stub docstrings first, run the check once. Pass keeps them; fail puts the pre-restore bytes
+    back, and the printed failure is from the run with the docstrings. Returns the check's code (None: no
+    unit check set). `quiet` (the speculative run) prints and records nothing; `capture` collects the lines
+    that would have been printed, in order."""
+    def say(line: str) -> None:
+        if quiet:
+            if capture is not None:
+                capture.append(line + "\n")
+        else:
+            print(line)
+
+    changed = _restore_owned_docstrings()
+    code = _run_unit_check(d, nick, quiet=quiet, capture=capture)
+    if changed and code:
+        _revert_restored(changed)
+        say("(docstrings were restored for this run and have been removed again)")
+    elif changed:
+        for rel, _, n in changed:
+            say(f"restored {n} docstrings in {rel}")
+    return code
+
+
+def install_staged(stage, root, owns) -> list:
+    """Copy each staged owned file `stage/<p>` over `root/<p>` when the staged copy is newer than the real one
+    (or the real one is missing) and the bytes differ. Returns the rel paths installed. Workers Write into
+    their stage dir (a shell heredoc write is refused by Claude Code's Bash safety check) and `irc check`
+    installs the result before it runs the unit check."""
+    done = []
+    for p in owns or []:
+        s, o = Path(stage) / p, Path(root) / p
+        try:
+            if not s.is_file():
+                continue
+            if o.exists() and s.stat().st_mtime_ns <= o.stat().st_mtime_ns:
+                continue
+            data = s.read_bytes()
+            if o.is_file() and o.read_bytes() == data:
+                continue
+            o.parent.mkdir(parents=True, exist_ok=True)
+            o.write_bytes(data)
+            done.append(p)
         except OSError:
             continue
-    if not changed:
-        return False
-    code = _run_unit_check(d, nick, quiet=True)
-    if code:
-        for rel, work, _ in changed:
-            (root / rel).write_text(work, encoding="utf-8")
-        print(f"docstring restore reverted: the unit check exited {code} with them")
-        return False
-    for rel, _, n in changed:
-        print(f"restored {n} docstrings in {rel}")
-    return True
+    return done
 
 
-def _announce_done(d, nick: str, text: str) -> None:
+def _install_from_env() -> list:
+    """install_staged from ATLAS_CREW_STAGE / _ROOT / _OWNS (a no-op when unset); prints one line per file."""
+    stage = os.environ.get("ATLAS_CREW_STAGE")
+    if not stage:
+        return []
+    try:
+        owns = json.loads(os.environ.get("ATLAS_CREW_OWNS") or "[]")
+    except ValueError:
+        return []
+    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    got = install_staged(stage, root, owns)
+    for p in got:
+        print(f"installed {p} from staged copy")
+    return got
+
+
+def _announce_done(d, nick: str, text: str, peer_digests: dict | None = None) -> None:
+    """Post DONE with the own-files digest; `peer_digests` ({peer: digest} of the closure bytes the passing unit
+    check ran against) rides along when given, so the supervisor can skip re-running this worker's tests."""
     if has_done(d, nick):
         print(f"already announced DONE for {nick}")
         return
-    post(d, nick, members(d).get("channel") or os.environ.get("ATLAS_IRC_CHANNEL") or "#team", f"DONE {nick}: {text}", kind="done")
+    extra = {"digest": _owned_digest(os.environ.get("ATLAS_CREW_ROOT") or os.getcwd(), _env_owns())}
+    if peer_digests is not None:
+        extra["peer_digests"] = peer_digests
+    post(d, nick, members(d).get("channel") or os.environ.get("ATLAS_IRC_CHANNEL") or "#team", f"DONE {nick}: {text}", kind="done",
+         extra=extra)
     print(f"posted DONE for {nick}")
 
 
@@ -597,7 +742,8 @@ def cmd_done(a) -> int:
     and a failure refuses the DONE (exit 1)."""
     d = _dir(a.dir)
     nick = _env_nick(a)
-    code = _run_unit_check(d, nick)
+    _install_from_env()
+    code = _check_with_docstrings(d, nick)
     if code:
         print(f"refused: DONE {nick} needs the unit check to pass (exit {code})")
         return 1
@@ -605,22 +751,135 @@ def cmd_done(a) -> int:
     return 0
 
 
+# Measured: each DONE hop on a dependency chain costs 0.5-0.8 s (poll, pytest start, post); on 8 modules the
+# chain ranges -> registry -> graph -> resolver -> cli took 2.5 s after the critical file's DONE.
+SPECULATE_POLL_S = 0.2
+
+
+def _peer_owns_env():
+    """ATLAS_CREW_PEER_OWNS as {nick: [owned rel paths]}, or None when unset or malformed."""
+    try:
+        peer_owns = json.loads(os.environ.get("ATLAS_CREW_PEER_OWNS") or "")
+    except ValueError:
+        return None
+    ok = isinstance(peer_owns, dict) and all(isinstance(v, list) for v in peer_owns.values())
+    return peer_owns if ok else None
+
+
+def _peer_ready(d, root, peer: str, owns, stub_dir) -> bool:
+    """Test-ready: `peer` has a current DONE, or it owns concrete paths and every one is a file whose bytes
+    differ from its pristine stub copy in `stub_dir` (a glob, a directory or a missing stub is not ready)."""
+    if has_done(d, peer):
+        return True
+    concrete = [p for p in owns or [] if not any(c in p for c in "*?[")]
+    if not concrete or len(concrete) != len(owns) or not stub_dir:
+        return False
+    for rel in concrete:
+        try:
+            if Path(root, rel).read_bytes() == Path(stub_dir, rel).read_bytes():
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def _peer_gave_up(d, peer: str) -> bool:
+    """True when the latest done/failed record of `peer` is a GAVE UP (kind failed)."""
+    gave_up = False
+    for r in history(d):
+        if r.get("from") == peer and r.get("kind") in ("failed", "done"):
+            gave_up = r.get("kind") == "failed"
+    return gave_up
+
+
+def _latest_done_digest(d, peer: str):
+    """The digest on `peer`'s latest DONE record (None: no DONE, or one without a digest)."""
+    rec = next((r for r in reversed(history(d)) if r.get("from") == peer and r.get("kind") == "done"), None)
+    return rec.get("digest") if rec else None
+
+
+def _peer_digests(root, peers, peer_owns) -> dict:
+    """{peer: _owned_digest of the files it owns} for the speculative-run snapshots."""
+    return {p: _owned_digest(root, peer_owns.get(p) or []) for p in peers}
+
+
+def _closure_snapshot(root, nick: str):
+    """{peer: digest} over ATLAS_CREW_NEEDS_ALL now, or None when ATLAS_CREW_PEER_OWNS is missing or lacks a peer."""
+    peers = [p for p in dict.fromkeys((os.environ.get("ATLAS_CREW_NEEDS_ALL") or "").replace(",", " ").split()) if p != nick]
+    peer_owns = _peer_owns_env()
+    if peer_owns is None or any(p not in peer_owns for p in peers):
+        return None
+    return _peer_digests(root, peers, peer_owns)
+
+
+def _wait_peers_ready(d, root, peers, peer_owns, deadline) -> bool:
+    """Poll until every peer is test-ready. False on timeout or when a peer gave up (the normal path reports it)."""
+    stub_dir = os.environ.get("ATLAS_CREW_STUB_DIR")
+    while True:
+        if any(_peer_gave_up(d, p) for p in peers):
+            return False
+        if all(_peer_ready(d, root, p, peer_owns[p], stub_dir) for p in peers):
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(SPECULATE_POLL_S)
+
+
+def _speculate(d, nick: str, a, deadline):
+    """Speculative check: once every closure peer is test-ready run the unit check quietly, before the peers'
+    DONEs. Returns None to fall through to the normal path (nothing printed), else the exit code. A valid pass
+    (peer files unchanged across the run, every peer then DONE for exactly those bytes) prints the captured
+    output and posts DONE with no second run."""
+    closure = (os.environ.get("ATLAS_CREW_NEEDS_ALL") or os.environ.get("ATLAS_CREW_NEEDS") or "").replace(",", " ").split()
+    closure = [p for p in dict.fromkeys(closure) if p != nick]
+    peer_owns = _peer_owns_env()
+    if not closure or peer_owns is None or any(p not in peer_owns for p in closure):
+        return None
+    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    if not _wait_peers_ready(d, root, closure, peer_owns, deadline):
+        return None
+    before = _peer_digests(root, closure, peer_owns)
+    out: list = []
+    code = _check_with_docstrings(d, nick, quiet=True, capture=out)
+    if code or _peer_digests(root, closure, peer_owns) != before:
+        return None
+    rc = cmd_need(argparse.Namespace(dir=a.dir, as_=a.as_, done=True, timeout=max(deadline - time.time(), 0), peers=closure))
+    if rc:
+        return rc
+    if any(_latest_done_digest(d, p) != before[p] for p in closure):
+        return None
+    print("".join(out), end="")
+    _announce_done(d, nick, "check passes", before)
+    return 0
+
+
 def cmd_check(a) -> int:
     """The worker's check: wait for ATLAS_CREW_NEEDS (as `need --done`: exit 2 unknown, 3 timeout, 4 a peer
     gave up), run ATLAS_CREW_UNIT_CHECK, and post DONE only when it exits 0. Exits with the check's code. The
-    DONE decision is made here, so piping the output (`irc check | tail`) cannot turn a failure into a DONE."""
+    DONE decision is made here, so piping the output (`irc check | tail`) cannot turn a failure into a DONE.
+    With needs and ATLAS_CREW_SPECULATE not "off", the check first runs speculatively (`_speculate`) as soon as
+    every peer in ATLAS_CREW_NEEDS_ALL has installed its file; a failed or invalidated run prints nothing and
+    the normal path above runs after the needs' DONE, so failure output only ever comes from that later run."""
     d = _dir(a.dir)
     nick = _env_nick(a)
+    _install_from_env()
     needs = (os.environ.get("ATLAS_CREW_NEEDS") or "").replace(",", " ").split()
+    deadline = time.time() + a.timeout
+    if needs and (os.environ.get("ATLAS_CREW_SPECULATE") or "").lower() != "off":
+        rc = _speculate(d, nick, a, deadline)
+        if rc is not None:
+            return rc
     if needs:
-        rc = cmd_need(argparse.Namespace(dir=a.dir, as_=a.as_, done=True, timeout=a.timeout, peers=needs))
+        rc = cmd_need(argparse.Namespace(dir=a.dir, as_=a.as_, done=True, timeout=max(deadline - time.time(), 0), peers=needs))
         if rc:
             return rc
-    code = _run_unit_check(d, nick)
+    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    snap = _closure_snapshot(root, nick)
+    code = _check_with_docstrings(d, nick)
     if code:
         return code
-    _restore_owned_docstrings(d, nick)
-    _announce_done(d, nick, "check passes")
+    # peer_digests only when the closure bytes were the same before and after the passing run
+    _announce_done(d, nick, "check passes", snap if snap is not None and _closure_snapshot(root, nick) == snap else None)
     return 0
 
 

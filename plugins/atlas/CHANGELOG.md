@@ -1,5 +1,20 @@
 # Changelog
 
+## 16.5.0 - 2026-10-29
+
+### Changed
+
+- Crew: critical workers launch first. `atlas_crew.launch_order` ranks workers by slack over the `needs` graph (generation time = owned-file and context-section chars / 250 per s, 1.5 s per hop) and gives rank `r` the nice value `min(19, 4 * (r // ncpu))`; `cmd_run` launches in that order, stores it as `launch` in `run.json`, and `worker --nice N` calls `os.nice` before `claude` starts. 30 workers started at once on 4 CPUs: median init 10.6 s, first result 19.4 s (alone: 0.7 s, 4.1 s); with 8 of the 30 at nice 0 and 22 at nice 15, those 8 got init 2.1 s and result 6.6 s. `ATLAS_CREW_PRIORITY=off` restores plan order at nice 0; fix rounds always run at nice 0.
+- Crew: workers write files with the Write tool into a stage dir (`.atlas/tmp/<run>/<nick>/`, `ATLAS_CREW_STAGE`) instead of shell heredocs, and `WORKER_TOOLS` is `Bash,Edit,Write`. Claude Code's Bash safety check refuses some heredoc writes ("Contains brace with quote character (expansion obfuscation)"): 4 workers per 30-module run lost a whole file generation (10-25 s), then failed Edit with "File has not been read yet". `irc check` / `irc done` install a staged file over the real one when it is newer and differs (`atlas_irc.install_staged`); the PreToolUse hook allows Edit/Write in the worker's own stage dir only; the supervisor removes `.atlas/tmp/<run>` after `summary.json`. No permission handling is changed.
+- Crew: the global check no longer waits for worker processes to exit (tails run 1-8 s under load). Round 0 starts it once every worker has exited or holds a current verified DONE, snapshots the sha256 of every owned file, waits for the exits (cap `RESULT_GRACE_S` + 10 s) and re-runs the check if an owned file changed. The round records `check_started_before_exit` next to `all_exited`.
+- Crew: one unit-check run per verified DONE. `irc check` / `irc done` restore the stub docstrings before the unit check and run it once (pass keeps them, failure puts back the exact pre-restore bytes; only a result that parses is written); the second run after the restore cost the store worker's DONE hop 8.9-9.6 s against a 3.3-4.8 s check. The old re-run path is gone.
+- Crew: the supervisor's global check runs as parallel pytest shards when it is a plain pytest command and the workers' `tests` name 2 or more files (`atlas_crew.sharded_check`): `min(ncpu, files)` size-balanced shards plus a rest shard with `--ignore` for every known file (rest exit 5 counts as a pass); failing shards' output first; rounds record `check_shards`. The 784-test `python3 -m pytest -q` took 3.95 s in one benchmark run and 8.5-8.9 s in two others (one test file had a 5.1 s test). `ATLAS_CREW_SHARD=off` runs it once.
+- Crew: a worker exits right after its verified DONE. The DONE record carries `digest` (sha256 over the sorted owned paths and bytes, `atlas_irc._owned_digest`); `atlas_irc.done_current` is true while it matches the files now, and the PostToolUse early exit and the Stop gate then skip re-running the check (workers exited 4.6-7.6 s after DONE, summary.json 7.9-9.3 s after the last DONE, 30-module benchmark). A DONE without a digest, or after an owned file changed, takes the old re-run path. `sharded_check` now prints failing shards last so the summary's 800-char `check_tail` shows the failure.
+- Crew: generation weight is the spec section chars only, at 400 chars/s (162 worker runs: API time correlates 0.78-0.84 with spec chars, -0.18 to -0.28 with owned stub chars; residual sd 3.75 s). A worker that would only wait on peers starts later: `worker --delay min(8, wait - 7.5)` s in round 0, where `wait` is the latest finish of its needs. `ATLAS_CREW_STAGGER=off` disables it.
+- Crew: speculative `irc check`. It runs the unit check as soon as every peer file is installed, without waiting for the peers' DONE, and posts DONE without a re-run when the peers' DONE digests then match the bytes it tested against (8 modules: all DONEs within 0.6 s of the critical file's DONE, was 2.5 s). `ATLAS_CREW_SPECULATE=off` disables it (`scripts/test_atlas_irc_speculate.py`).
+- Crew: the DONE record also carries `peer_digests` (the digests of its needs closure). The supervisor's final check skips a test file whose worker holds a current DONE with `digest` and `peer_digests` equal to the bytes on disk; unowned tests still run, and the round records `check_cached` (the full re-run cost 1.7-4.4 s after the last DONE at 30 modules). `ATLAS_CREW_CHECK_CACHE=off` disables it.
+- Crew: the final check is sharded across CPUs and each `irc check` restores docstrings in one pass (see the entries above); with v11-v15 together, crew vs one Claude prompt on the same task: 8 modules 40.6 s (28.2% of 144.1 s), 18 modules 47.8 s (26.4% of 181.2 s), 30 modules 56.5 s (24.8% of 227.8 s); tokens 16.9%, 11.9% and 13.0%. Evidence: `docs/audits/2026-10-29_atlas-16.5.0-crew-benchmark.md`, `.atlas/evidence/2026-10-29_crew-16.5.0/`.
+
 ## 16.4.1 - 2026-10-28
 
 ### Fixed
@@ -3665,7 +3680,7 @@ too. Where one mentions the Herd iframe, the tmux Colony page or
     routing, hooks-automation, and atlas-setup install stages.
   - Dashboard behavior knob `ATLAS_FALLOW`; session boot reports fallow presence on JS/TS trees.
 
-## Unreleased
+## 16.5.0 - 2026-10-29
 
 ## [5.22.0] - 2026-09-02
 
@@ -5196,7 +5211,7 @@ independently verified (`docs/.run/findings.json` at repo root); 115/115 tests.
   README hook table, and sextant public-API docs reconciled against the shipped
   code and re-verified claim-by-claim.
 
-## Unreleased
+## 16.5.0 - 2026-10-29
 
 Agent-roster and spec-conformance hardening pass (audit:
 `docs/audits/2026-07-07_atlas-harden/`). No version bump in this pass - release
