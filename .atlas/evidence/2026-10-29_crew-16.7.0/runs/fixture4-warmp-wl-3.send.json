@@ -1,0 +1,5 @@
+{
+ "result": "ATLAS | \u2705 verify | crew done\n\n30 workers, 33.2 s wall, 352,901 worker tokens ($1.36), check `python3 -m pytest -q` exit 0 (all 30 test files verified by worker DONE on the same bytes, 5 shards, 0 gate refusals).",
+ "is_error": false,
+ "handoff_s": 40.027
+}

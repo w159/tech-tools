@@ -1,0 +1,57 @@
+{
+ "arm": "warmp",
+ "wall_s": 45.6,
+ "pytest_rc": 0,
+ "passed": 213,
+ "failed": 0,
+ "tests_touched": "?? tests/__pycache__/",
+ "tokens": 339171,
+ "cost_usd": 0.641,
+ "parts": {
+  "lead.log": {
+   "total": 60025,
+   "cost": 0.1198,
+   "turns": 1
+  },
+  "cli.log": {
+   "total": 53544,
+   "cost": 0.0814,
+   "turns": 7
+  },
+  "graph.log": {
+   "total": 9902,
+   "cost": 0.0381,
+   "turns": 3
+  },
+  "lockfile.log": {
+   "total": 22895,
+   "cost": 0.0617,
+   "turns": 4
+  },
+  "manifest.log": {
+   "total": 34931,
+   "cost": 0.0678,
+   "turns": 5
+  },
+  "ranges.log": {
+   "total": 56455,
+   "cost": 0.0944,
+   "turns": 7
+  },
+  "registry.log": {
+   "total": 9438,
+   "cost": 0.035,
+   "turns": 3
+  },
+  "resolver.log": {
+   "total": 9429,
+   "cost": 0.0335,
+   "turns": 3
+  },
+  "semver.log": {
+   "total": 82552,
+   "cost": 0.1098,
+   "turns": 10
+  }
+ }
+}

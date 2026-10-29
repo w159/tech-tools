@@ -1,0 +1,6 @@
+{
+ "result": "ATLAS | \ud83c\udfc1 done | crew finished green\n\n30 workers, 33.9 s wall, 355,032 worker tokens ($1.36), check `python3 -m pytest -q` exit 0 (30 test files verified by worker DONE on the same bytes, so the shards reused them), 0 gate refusals.\n\nOne thing to know: `irc.from_workers` and `direct_worker_to_worker` are both 0, so the workers didn't talk to each other this run.",
+ "is_error": false,
+ "results": 1,
+ "handoff_s": 43.23
+}
