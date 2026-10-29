@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 16.6.0 - 2026-10-29
+
+- atlas 16.6.0: crew trims the critical file and checks earlier. Workers omit stub docstrings (`irc check` restores them), a worker waiting on peers checks its own code early, and `ATLAS_CREW_WORKER_EFFORT` / `ATLAS_CREW_WORKER_MODEL` override the worker effort and model. Against one Claude prompt: 11.8-16.8% of the tokens and 23.0-27.8% of the wall time (the 25% target is met at 30 modules, 52.3 s against 57.0 s; missed at 8 and 18). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-29_atlas-16.6.0-crew-benchmark.md](audits/2026-10-29_atlas-16.6.0-crew-benchmark.md).
+
 ## atlas 16.5.0 - 2026-10-29
 
 - atlas 16.5.0: crew critical path. Critical workers launch first, workers write through a stage dir instead of shell heredocs, the final check is sharded and starts before workers exit, DONE records owned-file digests (hooks skip re-checks, the supervisor skips test files a worker already passed on the same bytes), generation weight comes from spec section size, workers that would only wait are staggered, and `irc check` runs speculatively once the peer files are installed. Against one Claude prompt: 12-17% of the tokens and 24.8-28.2% of the wall time (the 25% target is met at 30 modules, 56.5 s against 57.0 s; missed at 8 and 18). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-29_atlas-16.5.0-crew-benchmark.md](audits/2026-10-29_atlas-16.5.0-crew-benchmark.md).
