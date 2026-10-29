@@ -12,7 +12,10 @@ missing; state.json says which). The host spawns the lead as
 piped, appends every stdout line to `.atlas/.run/warm/<name>/lead.log` and takes tasks from the FIFO
 `inbox`. The CLI runs its SessionStart hooks at start and prints an `autocompact_state` line when idle;
 that line is "ready". `send` writes one stream-json user line, so the turn (slash commands included)
-starts at hand-off; `--wait` blocks until that turn's `result` line. With `--recycle on` (default) the
+starts at hand-off; `--wait` blocks until the task is finished. A lead that starts background agents
+emits an early `result` line, then a `task_notification` line per finished agent and one more turn (more
+`result` lines); the task is finished only at a `result` when every `task_started` id has its
+`task_notification` and the turn the notifications trigger has answered (see `Host.on_event`). With `--recycle on` (default) the
 host closes the lead's stdin after each result and starts a fresh lead, so the next task meets a warm
 lead with a clean context; `off` keeps one conversation.
 
@@ -41,6 +44,7 @@ LEAD_FLAGS = (
 )
 ENV_DROP = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID", "TMUX", "TMUX_PANE")
 READY_WAIT = 60.0  # `send` waits this long for a lead that is still starting or recycling
+SETTLE = 30.0  # no lead output for this long after a result with no open agent: the task is finished
 
 
 def rundir(root, name: str) -> Path:
@@ -85,12 +89,12 @@ def pid_alive(pid) -> bool:
         return True
 
 
-def event_type(line: str) -> str | None:
+def event_dict(line: str) -> dict:
     try:
         ev = json.loads(line)
     except ValueError:
-        return None
-    return ev.get("type") if isinstance(ev, dict) else None
+        return {}
+    return ev if isinstance(ev, dict) else {}
 
 
 def out(obj, code: int = 0) -> int:
@@ -112,8 +116,38 @@ class Host:
         self.lock = threading.Lock()
         self.stopping = threading.Event()
         self.result_seen = threading.Event()
+        self.reset_task()
         self.proc: subprocess.Popen | None = None
         self.log = open(self.rd / "lead.log", "a", buffering=1)
+
+    def reset_task(self) -> None:
+        self.open: set[str] = set()  # background agents started in this task and not yet notified
+        self.results = 0  # result lines in this task
+        self.owed = 0  # notifications that arrived after a result: each owes one more result line
+        self.last_line = time.time()
+
+    def on_event(self, ev: dict) -> None:
+        """Track one lead line; call with self.lock held. Finishes the task at a result with nothing open."""
+        kind, sub = ev.get("type"), ev.get("subtype")
+        if kind == "system" and sub == "task_started":
+            self.open.add(str(ev.get("task_id") or ev.get("tool_use_id")))
+        elif kind == "system" and sub == "task_notification":
+            self.open.discard(str(ev.get("task_id") or ev.get("tool_use_id")))
+            if self.results:
+                self.owed += 1  # the CLI answers it with another turn, and every such turn ends in a result
+        elif kind == "result":
+            self.results += 1
+            write_state(self.rd, results=self.results)
+            if not self.open and self.results - 1 >= self.owed:
+                self.finish()
+
+    def finish(self) -> None:
+        write_state(
+            self.rd, status="recycling" if self.recycle else "idle", last_result=time.time(),
+            last_results=self.results, done=int((read_state(self.rd) or {}).get("done", 0)) + 1,
+        )  # fmt: skip
+        self.reset_task()
+        self.result_seen.set()
 
     def spawn(self) -> None:
         env = {k: v for k, v in os.environ.items() if k not in ENV_DROP}
@@ -134,15 +168,15 @@ class Host:
     def read_lead(self, proc: subprocess.Popen) -> None:
         for line in proc.stdout:
             # State flips BEFORE the line is logged, so a sender that sees the result also sees idle/recycling.
-            kind = event_type(line) if proc is self.proc else None
-            if kind == "result":
-                with self.lock:
-                    write_state(self.rd, status="recycling" if self.recycle else "idle", last_result=time.time())
-                self.result_seen.set()
-            elif kind == "autocompact_state":
-                with self.lock:
-                    if (read_state(self.rd) or {}).get("status") == "starting":
+            ev = event_dict(line) if proc is self.proc else {}
+            with self.lock:
+                self.last_line = time.time()
+                status = (read_state(self.rd) or {}).get("status")
+                if ev.get("type") == "autocompact_state":
+                    if status == "starting":
                         write_state(self.rd, status="idle", ready=time.time())
+                elif status == "busy":
+                    self.on_event(ev)
             self.log.write(line if line.endswith("\n") else line + "\n")
 
     def close_lead(self, grace: float = 15.0) -> None:
@@ -184,7 +218,8 @@ class Host:
                     if st.get("status") != "idle" or self.proc is None or self.proc.poll() is not None:
                         self.log.write(json.dumps({"type": "warm_rejected", "status": st.get("status")}) + "\n")
                         continue
-                    write_state(self.rd, status="busy", tasks=int(st.get("tasks", 0)) + 1, last_send=time.time())
+                    self.reset_task()
+                    write_state(self.rd, status="busy", tasks=int(st.get("tasks", 0)) + 1, last_send=time.time(), results=0)
                     try:
                         self.proc.stdin.write(line + "\n")
                         self.proc.stdin.flush()
@@ -200,6 +235,9 @@ class Host:
         threading.Thread(target=self.inbox_loop, args=(fd,), daemon=True).start()
         reason = "stopped"
         while not self.stopping.is_set():
+            with self.lock:  # counts disagree (a notification that owed no turn): do not hang the task
+                if (read_state(self.rd) or {}).get("status") == "busy" and self.results and not self.open and time.time() - self.last_line > SETTLE:
+                    self.finish()
             if self.result_seen.wait(0.1):
                 self.result_seen.clear()
                 if self.recycle and not self.stopping.is_set():
@@ -369,7 +407,7 @@ def cmd_send(a) -> int:
     if st.get("status") != "idle":
         return fail(f"warm lead '{a.name}' is {st.get('status')}, not idle: task refused", status=st.get("status"))
     log = rd / "lead.log"
-    off, before = log.stat().st_size, int(st.get("tasks", 0))
+    off, before, done_before = log.stat().st_size, int(st.get("tasks", 0)), int(st.get("done", 0))
     line = json.dumps({"type": "user", "message": {"role": "user", "content": task}}) + "\n"
     try:
         fd = os.open(rd / "inbox", os.O_WRONLY | os.O_NONBLOCK)
@@ -388,28 +426,30 @@ def cmd_send(a) -> int:
     if not a.wait:
         return out({"ok": True, "sent": True, "tasks": st["tasks"], "log": str(log)})
     deadline = t0 + a.timeout
+    results: list[dict] = []
     while True:
         lines, off = new_lines(log, off)
         for ln in lines:
-            try:
-                ev = json.loads(ln)
-            except ValueError:
-                continue
+            ev = event_dict(ln)
             if ev.get("type") == "result":
-                t_res = time.time()
-                err = bool(ev.get("is_error"))
-                text = ev.get("result")
-                if text is None:
-                    text = "; ".join(map(str, ev.get("errors") or [])) or ev.get("subtype", "")
-                rec = {"result": text, "is_error": err, "handoff_s": round(t_res - t0, 3), "log": str(log)}
-                if waited:
-                    rec["waited_ready_s"] = round(waited, 3)  # handoff_s includes this wait
-                return out(rec, 1 if err else 0)
+                results.append(ev)
         st = read_state(rd) or {}
+        # The host flips state to finished BEFORE it logs the final result, so also wait for that line.
+        if int(st.get("done", 0)) > done_before and len(results) >= int(st.get("last_results", 1)):
+            t_res = time.time()
+            ev = results[-1]
+            err = bool(ev.get("is_error"))
+            text = ev.get("result")
+            if text is None:
+                text = "; ".join(map(str, ev.get("errors") or [])) or ev.get("subtype", "")
+            rec = {"result": text, "is_error": err, "results": len(results), "handoff_s": round(t_res - t0, 3), "log": str(log)}
+            if waited:
+                rec["waited_ready_s"] = round(waited, 3)  # handoff_s includes this wait
+            return out(rec, 1 if err else 0)
         if st.get("status") == "stopped" or not pid_alive(st.get("host_pid")):
-            return fail("the lead stopped before it produced a result", log=str(log))
+            return fail("the lead stopped before it produced a result", log=str(log), results=len(results))
         if time.time() > deadline:
-            return fail(f"no result within {a.timeout:g}s (the task is still running)", code=3, log=str(log))
+            return fail(f"no final result within {a.timeout:g}s (the task is still running)", code=3, log=str(log), results=len(results))
         time.sleep(0.02)
 
 
