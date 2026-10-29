@@ -39,6 +39,12 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-10-29 | rel1650-land | verified | atlas 16.5.0 landed on main 9c90adef | [2026-10-29_rel1650-land.md](2026-10-29_rel1650-land.md) |
+| 2026-10-29 | rel1650-c5 | rejected | plugins/atlas/CHANGELOG.md has two historic 'Unreleased' headings relabeled '16.5.0 - 2026-10-29' (lines 3683, 5214) | [2026-10-29_rel1650-c5.md](2026-10-29_rel1650-c5.md) |
+| 2026-10-29 | rel1650-c3 | verified | v15 benchmark figures match 9 raw files; singles match 16.4.0 doc | [2026-10-29_rel1650-c3.md](2026-10-29_rel1650-c3.md) |
+| 2026-10-29 | rel1650-c2 | verified | 4 test files: 274 passed, 5 skipped, 122 subtests | [2026-10-29_rel1650-c2.md](2026-10-29_rel1650-c2.md) |
+| 2026-10-29 | rel1650-c1 | verified | 9613f930 parent b05b20cd, no runtime state touched | [2026-10-29_rel1650-c1.md](2026-10-29_rel1650-c1.md) |
+| 2026-10-28 | ad6dbf7f-atlas-skip | verified | docs_drift skips .atlas/ paths; test fails without, passes with, suite green | [2026-10-28_ad6dbf7f-atlas-skip.md](2026-10-28_ad6dbf7f-atlas-skip.md) |
 | 2026-10-26 | S5-typesafe-url | verified | TypeSafe URL accepts base or full form; local-tag on hosted refused; missing-formatter skips off the fault log | [2026-10-26_s5-typesafe-url.md](2026-10-26_s5-typesafe-url.md) |
 | 2026-10-26 | S3-docs-underscore | verified | Docs naming: YYYY-MM-DD_slug, hyphen migration, docs-root routing, embedded date parse | [2026-10-26_s3-docs-underscore.md](2026-10-26_s3-docs-underscore.md) |
 | 2026-10-26 | S2-doctor-layout | verified | atlas_doctor: .atlas layout repair (project-scoped, never ancestors), docs naming report/--fix, scoring + project-identity checks | [2026-10-26_s2-doctor-layout.md](2026-10-26_s2-doctor-layout.md) |
