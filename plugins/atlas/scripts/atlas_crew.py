@@ -455,6 +455,12 @@ def worker_effort(w: dict, meta: dict):
     return env if env in ("low", "medium", "high") else (w.get("effort") or meta.get("effort"))
 
 
+def worker_model(w: dict, meta: dict):
+    """ATLAS_CREW_WORKER_MODEL ([A-Za-z0-9._-]+) replaces the worker/plan model; unset or invalid: unchanged."""
+    env = os.environ.get("ATLAS_CREW_WORKER_MODEL", "").strip()
+    return env if re.fullmatch(r"[A-Za-z0-9._-]+", env) else (w.get("model") or meta.get("model"))
+
+
 def worker_argv(model, effort, settings, sid, prompt, resume=None, name=None) -> list:
     argv = ["claude", "-p", "--output-format", "stream-json", "--verbose"]
     argv += ["--resume", resume] if resume else ["--session-id", sid]
@@ -539,7 +545,7 @@ def cmd_worker(a) -> int:
             encoding="utf-8"
         )
         resume = sid
-    model = w.get("model") or meta.get("model")
+    model = worker_model(w, meta)
     effort = worker_effort(w, meta)
     argv = worker_argv(model, effort, meta["settings"], sid, prompt, resume=resume, name=f"{meta['run_id']}-{a.name}")
     env = worker_env(rundir, plan, w, root)
@@ -1000,7 +1006,7 @@ def cmd_run(a) -> int:
         "run_id": run_id,
         "root": root,
         "plan": plan,
-        "model": a.model,
+        "model": worker_model({}, {"model": a.model}),
         "effort": a.effort,
         "settings": worker_settings(rundir),
         "session": f"atlas-{run_id}",

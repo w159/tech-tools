@@ -1345,6 +1345,16 @@ class V16Tests(unittest.TestCase):
         self.assertIn("`irc check` restores them", on)
         self.assertNotIn("Omit the docstrings", off)
 
+    def test_worker_model_env_overrides_and_invalid_is_ignored(self):
+        w, meta = {"model": "plan-m"}, {"model": "meta-m"}
+        self.assertEqual(atlas_crew.worker_model(w, meta), "plan-m")
+        self.assertEqual(atlas_crew.worker_model({}, meta), "meta-m")
+        with mock.patch.dict(os.environ, {"ATLAS_CREW_WORKER_MODEL": "claude-haiku-4.5"}):
+            self.assertEqual(atlas_crew.worker_model(w, meta), "claude-haiku-4.5")
+        for bad in ("a b", "x;rm", "  "):
+            with mock.patch.dict(os.environ, {"ATLAS_CREW_WORKER_MODEL": bad}):
+                self.assertEqual(atlas_crew.worker_model(w, meta), "plan-m")
+
     def test_worker_effort_env_overrides_plan_and_default_is_unchanged(self):
         w, meta = {"effort": "low"}, {"effort": "high"}
         self.assertEqual(atlas_crew.worker_effort(w, meta), "low")
