@@ -1,0 +1,17 @@
+{
+ "arm": "singlew",
+ "wall_s": 317.9,
+ "pytest_rc": 0,
+ "passed": 469,
+ "failed": 0,
+ "tests_touched": "M tests/__pycache__/__init__.cpython-313.pyc\n M tests/mdkit/__pycache__/__init__.cpython-313.pyc\n M tests/pkgkit/__pycache__/__init__.cpython-313.pyc",
+ "tokens": 2456411,
+ "cost_usd": 1.163,
+ "parts": {
+  "lead.log": {
+   "total": 2456411,
+   "cost": 1.1629,
+   "turns": 23
+  }
+ }
+}

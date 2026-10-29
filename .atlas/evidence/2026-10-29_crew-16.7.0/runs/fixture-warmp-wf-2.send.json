@@ -1,0 +1,6 @@
+{
+ "result": "ATLAS | \ud83c\udfc1 done | crew-134643b325 green\n\n8 workers, 26.7 s wall, 85,393 worker tokens ($0.354), `python3 -m pytest -q` exit 0 (8 test files verified by worker DONE on the same bytes, 5 check shards, 0 gate refusals). The pytest tail reports \"no tests ran\", which comes from the final `rest` shard. The 8 test files were counted as cached, not re-run there.",
+ "is_error": false,
+ "results": 1,
+ "handoff_s": 38.453
+}

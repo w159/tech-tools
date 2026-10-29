@@ -1,0 +1,6 @@
+{
+ "result": "ATLAS | \ud83c\udfc1 done | crew finished\n\n30 workers, 40.3 s wall, 363,123 worker tokens ($1.385), `check_exit` 0 (`python3 -m pytest -q`; the 30 test files were verified by the workers on the same bytes, so the check skipped them). The IRC channel logged 33 messages, 2 of them direct worker-to-worker.",
+ "is_error": false,
+ "results": 1,
+ "handoff_s": 48.936
+}

@@ -1,0 +1,17 @@
+{
+ "arm": "singlew",
+ "wall_s": 227.3,
+ "pytest_rc": 0,
+ "passed": 784,
+ "failed": 0,
+ "tests_touched": "?? tests/__pycache__/\n?? tests/cronkit/__pycache__/\n?? tests/mdkit/__pycache__/\n?? tests/pkgkit/__pycache__/",
+ "tokens": 3548627,
+ "cost_usd": 1.764,
+ "parts": {
+  "lead.log": {
+   "total": 3548627,
+   "cost": 1.7642,
+   "turns": 11
+  }
+ }
+}

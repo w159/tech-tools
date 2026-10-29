@@ -1,0 +1,6 @@
+{
+ "result": "ATLAS | \ud83c\udfc1 done | crew-13500170ea passed\n\n18 workers, 28.9 s wall, 211,329 worker tokens ($0.82), `check_exit` 0 (5 shards, all 18 test files verified by worker DONE on the same bytes). No gate refusals. IRC had 19 messages, none worker-to-worker.",
+ "is_error": false,
+ "results": 1,
+ "handoff_s": 38.545
+}

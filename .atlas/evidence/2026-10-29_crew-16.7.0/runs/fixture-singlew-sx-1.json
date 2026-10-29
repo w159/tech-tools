@@ -1,0 +1,17 @@
+{
+ "arm": "singlew",
+ "wall_s": 173.4,
+ "pytest_rc": 0,
+ "passed": 213,
+ "failed": 0,
+ "tests_touched": "?? tests/__pycache__/",
+ "tokens": 869787,
+ "cost_usd": 0.604,
+ "parts": {
+  "lead.log": {
+   "total": 869787,
+   "cost": 0.6041,
+   "turns": 10
+  }
+ }
+}
