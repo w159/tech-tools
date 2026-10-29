@@ -1563,12 +1563,34 @@ class ShardedCheckTests(unittest.TestCase):
             self.assertEqual(atlas_crew._known_test_files(plan, Path(tmp)), ["test_a.py", "test_b.py", "test_c.py"])
 
 
+class PlainPytestTests(unittest.TestCase):
+    """Only an allowlisted `pytest` command counts as the whole file's check."""
+
+    def _files(self, unit):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "t.py").write_text("")
+            Path(tmp, "tests").mkdir()
+            Path(tmp, "tests/test_a.py").write_text("")
+            return atlas_crew._plain_pytest_files(unit, tmp)
+
+    def test_narrowing_commands_are_not_plain(self):
+        for unit in ("python3 -m pytest -kfoo t.py", "python3 -m pytest --last-failed t.py", "python3 -m pytest --ignore-glob=*b* t.py",
+                     "python3 -m pytest --deselect=t.py::x t.py", "python3 -m pytest -k foo t.py", "pytest t.py::x",
+                     "pytest -q t.py -m slow", "pytest -q t.py && true", "pytest -q missing.py", "python3 -m unittest t.py"):
+            self.assertIsNone(self._files(unit), unit)
+
+    def test_allowlisted_commands_are_plain(self):
+        self.assertEqual(self._files("python3 -m pytest -q tests/test_a.py"), ["tests/test_a.py"])
+        self.assertEqual(self._files("pytest -qq -x -p no:cacheprovider t.py"), ["t.py"])
+        self.assertEqual(self._files("python -m pytest -pno:cacheprovider t.py"), ["t.py"])
+
+
 class CheckCacheTests(unittest.TestCase):
     """The supervisor's final check skips test files whose worker's DONE passed against the bytes on disk."""
 
     PY = f"{sys.executable} -m pytest -q"
 
-    def _run(self, tmp, mutate=None, peer_digests=True, rest=True, env=None):
+    def _run(self, tmp, mutate=None, peer_digests=True, rest=True, env=None, test_digest=True, unit_b=None):
         rundir = Path(tmp) / ".atlas/.run/crew/crew-t"
         (rundir / "exit").mkdir(parents=True)
         d = atlas_irc.init_bus(rundir / "irc", "#crew-t", ["a", "b"], lead="lead")
@@ -1580,12 +1602,14 @@ class CheckCacheTests(unittest.TestCase):
             "check": self.PY,
             "workers": [
                 {"name": "a", "owns": ["a.py"], "tests": ["test_a.py"], "unit_check": "python3 -m pytest -q test_a.py", "needs": [], "task": "t"},
-                {"name": "b", "owns": ["b.py"], "tests": ["test_b.py"], "unit_check": "python3 -m pytest -q test_b.py", "needs": ["a"], "task": "t"},
+                {"name": "b", "owns": ["b.py"], "tests": ["test_b.py"], "unit_check": unit_b or "python3 -m pytest -q test_b.py", "needs": ["a"], "task": "t"},
             ],
         }
         dig = lambda f: atlas_irc._owned_digest(root, [f])
-        atlas_irc.post(d, "a", "#crew-t", "DONE a: ok", kind="done", extra={"digest": dig("a.py"), "peer_digests": {}})
-        extra = {"digest": dig("b.py"), **({"peer_digests": {"a": dig("a.py")}} if peer_digests else {})}
+        td = lambda u: {"test_digest": atlas_irc.test_inputs_digest(root, u)} if test_digest else {}
+        atlas_irc.post(d, "a", "#crew-t", "DONE a: ok", kind="done",
+                       extra={"digest": dig("a.py"), "peer_digests": {}, **td("python3 -m pytest -q test_a.py")})
+        extra = {"digest": dig("b.py"), **td(plan["workers"][1]["unit_check"]), **({"peer_digests": {"a": dig("a.py")}} if peer_digests else {})}
         atlas_irc.post(d, "b", "#crew-t", "DONE b: ok", kind="done", extra=extra)
         meta = {"run_id": "crew-t", "root": tmp, "plan": plan, "tmux": False, "started": time.time(), "fix_rounds": 0, "timeout": 60}
         (rundir / "run.json").write_text(json.dumps(meta))
@@ -1622,6 +1646,37 @@ class CheckCacheTests(unittest.TestCase):
             r0, ran = self._run(tmp, peer_digests=False)
         self.assertEqual(r0["check_cached"], ["test_a.py"])
         self.assertEqual(ran, ["b", "rest"])
+
+    def test_test_file_edited_after_done_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r0, ran = self._run(tmp, mutate=lambda root: (root / "test_b.py").write_text(
+                (root / "test_b.py").read_text() + "\n# edited\n"))
+        self.assertEqual(r0["check_cached"], ["test_a.py"])
+        self.assertEqual(ran, ["b", "rest"])
+
+    def test_conftest_edited_after_done_is_not_skipped(self):
+        def mutate(root):
+            (root / "sub").mkdir()
+            (root / "sub/conftest.py").write_text("X = 2\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "conftest.py").write_text("X = 1\n")
+            r0, ran = self._run(tmp, mutate=lambda root: (root / "conftest.py").write_text("X = 2\n"))
+            self.assertEqual(r0["check_cached"], [])
+        with tempfile.TemporaryDirectory() as tmp:
+            r0, _ = self._run(tmp, mutate=mutate)
+        self.assertEqual(r0["check_cached"], [])
+
+    def test_pytest_ini_edited_after_done_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "pytest.ini").write_text("[pytest]\n")
+            r0, _ = self._run(tmp, mutate=lambda root: (root / "pytest.ini").write_text("[pytest]\naddopts = -q\n"))
+        self.assertEqual(r0["check_cached"], [])
+
+    def test_done_without_test_digest_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r0, ran = self._run(tmp, test_digest=False)
+        self.assertEqual(r0["check_cached"], [])
+        self.assertEqual(ran, ["a", "b", "rest"])
 
     def test_cache_off_runs_everything(self):
         with tempfile.TemporaryDirectory() as tmp:
