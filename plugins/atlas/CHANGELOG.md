@@ -1,5 +1,14 @@
 # Changelog
 
+## 16.7.0 - 2026-10-29
+
+### Added
+
+- Warm lead: `scripts/atlas_warm_lead.py start|send|status|stop` keeps a Claude Code lead already started and idle, so a crew task meets a lead that has finished its startup. `start` runs a host in a detached tmux session `atlas-warm-<name>` (a detached subprocess when tmux is missing) and waits until the lead prints `autocompact_state`; `send [--wait] TASK|-` writes one stream-json user line, so the turn starts at hand-off. Recycle is on by default: after each task the host closes the lead and starts a fresh one, so the next task gets a clean context (`--recycle off` keeps one conversation). No permission flags are added; the lead args after `--` decide what the lead may do.
+- `send --wait` waits for background agents. A lead that starts background agents emits an early `result` line, then a `task_notification` line per finished agent and one more turn. The host treats the task as finished only at a `result` when every `task_started` id has its `task_notification` and the turns those notifications trigger have answered. Until then state stays `busy`. The JSON reports `results` (result lines in the task) and the last result's text and `is_error`; `handoff_s` runs from send to that last result. Recycle happens after the task is finished.
+- Benchmark rule: team timing runs from hand-off to an already-running lead (`handoff_s`), not from process start, because the warm lead has already paid its startup.
+- Benchmark: see docs/audits/2026-10-29_atlas-16.7.0-warm-lead.md
+
 ## 16.6.0 - 2026-10-29
 
 ### Changed

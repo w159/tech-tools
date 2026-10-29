@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -30,8 +31,19 @@ for line in sys.stdin:
     msg = json.loads(line)
     time.sleep(opt("--delay"))
     print(json.dumps({"type": "assistant", "message": {"content": "thinking"}}), flush=True)
-    print(json.dumps({"type": "result", "subtype": "success", "is_error": "--error" in a,
-                      "result": "%d|%s" % (os.getpid(), msg["message"]["content"])}), flush=True)
+    bg = int(opt("--bg"))  # background agents: early result, one notification each, then the answering turns
+    for i in range(bg):
+        print(json.dumps({"type": "system", "subtype": "task_started", "task_id": "t%d" % i}), flush=True)
+    def result(text):
+        print(json.dumps({"type": "result", "subtype": "success", "is_error": "--error" in a,
+                          "result": text}), flush=True)
+    result("%d|%s" % (os.getpid(), msg["message"]["content"]) if not bg else "early")
+    for i in range(bg):
+        time.sleep(opt("--bg-delay"))
+        print(json.dumps({"type": "system", "subtype": "task_notification", "task_id": "t%d" % i,
+                          "status": "completed"}), flush=True)
+    for i in range(bg):  # the CLI answers the notifications in one turn that ends in one result per notification
+        result("%d|%s|final%d" % (os.getpid(), msg["message"]["content"], i))
 '''
 
 
@@ -93,6 +105,31 @@ class WarmLeadTests(unittest.TestCase):
         self.assertGreater(body["handoff_s"], 0)
         self.assertTrue(Path(body["log"]).read_text().count('"type": "result"') == 1)
         self.assertEqual(self.state()["tasks"], 1)
+
+    def test_send_wait_waits_for_background_agents(self):
+        self.start(lead=["--bg", "1", "--bg-delay", "1.5"])
+        out = {}
+        t = threading.Thread(target=lambda: out.update(zip(("rc", "body"), self.cli("send", "--wait", "bg task"))))
+        t.start()
+        time.sleep(0.7)  # past the early result, before the notification
+        self.assertIn("early", Path(self.state()["root"], ".atlas/.run/warm", self.name, "lead.log").read_text())
+        self.assertEqual(self.state()["status"], "busy")
+        self.assertEqual(self.state()["results"], 1)
+        t.join(30)
+        self.assertEqual(out["rc"], 0, out)
+        body = out["body"]
+        self.assertEqual(body["results"], 2)
+        self.assertTrue(body["result"].endswith("|bg task|final0"), body)
+        self.assertGreaterEqual(body["handoff_s"], 1.5)
+        self.wait_idle()
+        self.assertEqual(self.state()["tasks"], 1)
+
+    def test_send_wait_batched_results_after_two_agents(self):
+        self.start(lead=["--bg", "2", "--bg-delay", "0.3"])
+        rc, body = self.cli("send", "--wait", "two bg")
+        self.assertEqual(rc, 0, body)
+        self.assertEqual(body["results"], 3)
+        self.assertTrue(body["result"].endswith("|two bg|final1"), body)
 
     def test_send_reads_stdin_and_error_result_is_nonzero(self):
         self.start(lead=["--error"])

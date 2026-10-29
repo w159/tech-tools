@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.6.0 (`.claude-plugin/plugin.json`)                                                                                |
+| Version    | 16.7.0 (`.claude-plugin/plugin.json`)                                                                                |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
@@ -240,6 +240,20 @@ passed every test. Numbers and method: [2026-10-28_atlas-16.4.0-crew-benchmark.m
 | 18 modules, 469 tests (3 runs each)    | 2.29M tokens, 181 s    | 307k tokens, 55 s   | 13% tokens, 30% time |
 
 Usage and the plan format: `skills/atlas-orchestrate/references/crew.md`.
+
+### Warm lead: a lead that is already started
+
+```bash
+python3 "$ATLAS/scripts/atlas_warm_lead.py" start --root . -- claude --model sonnet --effort medium
+python3 "$ATLAS/scripts/atlas_warm_lead.py" send --root . --wait "/atlas:atlas-crew --spec SPEC.md --files 'pkg/*.py'"
+python3 "$ATLAS/scripts/atlas_warm_lead.py" status --root .
+python3 "$ATLAS/scripts/atlas_warm_lead.py" stop --root .
+```
+
+`start` runs the lead in a detached tmux session `atlas-warm-lead` and returns when it is idle.
+`send --wait` returns when the task is finished: with background agents running it waits for the last
+`result` (JSON: `result`, `is_error`, `results`, `handoff_s`). After each task the lead is recycled
+(`--recycle off` keeps one conversation). Add no permission flags unless the lead needs them.
 
 ### Team: read-only and review work
 
@@ -567,7 +581,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.6.0
+|-- .claude-plugin/plugin.json   manifest, version 16.7.0
 |-- agents/                      14 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

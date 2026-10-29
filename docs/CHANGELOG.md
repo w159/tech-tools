@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 16.7.0 - 2026-10-29
+
+- atlas 16.7.0: warm lead. `atlas_warm_lead.py start|send|status|stop` keeps a tmux-hosted Claude Code lead started and idle (recycled after each task by default) and hands it a task as a stream-json line; `send --wait` waits for background agents and returns the last result with a `results` count. Team timing is measured from hand-off to an already-running lead. Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md). Benchmark: see docs/audits/2026-10-29_atlas-16.7.0-warm-lead.md
+
 ## atlas 16.6.0 - 2026-10-29
 
 - atlas 16.6.0: crew trims the critical file and checks earlier. Workers omit stub docstrings (`irc check` restores them), a worker waiting on peers checks its own code early, and `ATLAS_CREW_WORKER_EFFORT` / `ATLAS_CREW_WORKER_MODEL` override the worker effort and model. Against one Claude prompt: 11.8-16.8% of the tokens and 23.0-27.8% of the wall time (the 25% target is met at 30 modules, 52.3 s against 57.0 s; missed at 8 and 18). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-29_atlas-16.6.0-crew-benchmark.md](audits/2026-10-29_atlas-16.6.0-crew-benchmark.md).
