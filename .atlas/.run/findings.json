@@ -10042,5 +10042,124 @@
     "status": "verified",
     "verified_at": "2026-10-26T17:52:10+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "ad6dbf7f-atlas-skip",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "docs_drift skips .atlas/ paths; test fails without, passes with, suite green",
+    "evidence": [
+      "plugins/atlas/hooks/docs_drift.py:102; hooks/test_completion_gate.py:4092"
+    ],
+    "doc_refs": [],
+    "reproduction": "HOME=/root/atlas-home python3 -m pytest -q -p no:cacheprovider hooks/test_completion_gate.py hooks/test_atlas_gates.py hooks/test_atlas_contract.py (626 passed, 5 skipped); reverted copy: 1 failed",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T05:09:50+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "rel1650-c1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "9613f930 parent b05b20cd, no runtime state touched",
+    "evidence": [
+      "git show --stat 9613f930"
+    ],
+    "doc_refs": [],
+    "reproduction": "git log -1 --format='%H %P' 9613f930; git show --stat 9613f930",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-29T05:24:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "rel1650-c2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "4 test files: 274 passed, 5 skipped, 122 subtests",
+    "evidence": [
+      "pytest output"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py plugins/atlas/scripts/test_atlas_crew.py plugins/atlas/scripts/test_atlas_irc_speculate.py plugins/atlas/scripts/test_skill_agent_conformance.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-29T05:24:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "rel1650-c3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "v15 benchmark figures match 9 raw files; singles match 16.4.0 doc",
+    "evidence": [
+      ".atlas/evidence/2026-10-29_crew-16.5.0/*.json; docs/audits/2026-10-28_atlas-16.4.0-crew-benchmark.md:45,57,166-168"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 recompute of medians/percentages over fixture{,3,4}-v15-{1,2,3}.json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-29T05:24:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "rel1650-c4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "cached final check: holes in closure scope and narrowing-flag list",
+    "evidence": [
+      "atlas_crew.py:1312-1315 (digest scope), :1304-1306 and _NARROWING_FLAGS (-kfoo, --last-failed, --ignore-glob not detected)"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code; python predicate eval of _NARROWING_FLAGS on sample unit_checks",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-10-29T05:24:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "rel1650-c5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "plugins/atlas/CHANGELOG.md has two historic 'Unreleased' headings relabeled '16.5.0 - 2026-10-29' (lines 3683, 5214)",
+    "evidence": [
+      "plugins/atlas/CHANGELOG.md:3683,5214; git diff b05b20cd 9613f930 -- plugins/atlas/CHANGELOG.md hunks @@ -3665 and @@ -5196"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -n '^## 16.5.0' plugins/atlas/CHANGELOG.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-29T05:24:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "rel1650-land",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 16.5.0 landed on main 9c90adef",
+    "evidence": [
+      "crew+irc+contract+conformance: 280 passed 5 skipped; full suite on 9613f930: 4367 passed; seeded faults A/B/C fail the cache tests; one 16.5.0 heading; ls-remote main=9c90adef"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q plugins/atlas/hooks/test_atlas_contract.py plugins/atlas/scripts/test_atlas_crew.py plugins/atlas/scripts/test_atlas_irc_speculate.py plugins/atlas/scripts/test_skill_agent_conformance.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-29T05:30:22+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]
