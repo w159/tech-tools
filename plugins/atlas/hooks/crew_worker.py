@@ -18,7 +18,8 @@
 Env (pinned by atlas_crew per worker): ATLAS_IRC_DIR, ATLAS_IRC_NICK, ATLAS_CREW_OWNS (JSON list
 of paths or globs relative to ATLAS_CREW_ROOT), ATLAS_CREW_OWNERS (JSON {glob: nick}),
 ATLAS_CREW_CHECK (`irc check` when a unit check exists), ATLAS_CREW_NEEDS and ATLAS_CREW_UNIT_CHECK (read by
-`irc check`), ATLAS_CREW_ROOT, ATLAS_CREW_MAX_BLOCKS (default 3).
+`irc check`), ATLAS_CREW_ROOT, ATLAS_CREW_MAX_BLOCKS (default 3), ATLAS_CREW_STAGE (the worker's own stage
+dir, .atlas/tmp/<run>/<nick>: Edit/Write inside it is allowed, a peer's stage dir stays leased).
 Stdlib only. Every failure path is fail-open: a broken hook must never wedge a worker.
 """
 
@@ -80,6 +81,9 @@ def _early_exit(payload, d: str, nick: str) -> bool:
     cmd = os.environ.get("ATLAS_CREW_CHECK") or ""
     if payload.get("tool_name") != "Bash" or not cmd or not atlas_irc.has_done(d, nick):
         return False
+    if atlas_irc.done_current(d, nick):  # owned files unchanged since the verified DONE: skip the 3-5 s re-run
+        _set_blocks(_blocks(), passed=True)
+        return True
     code, _ = run_check(cmd, os.environ.get("ATLAS_CREW_ROOT") or os.getcwd())
     if code == 0:
         _set_blocks(_blocks(), passed=True)  # Stop does not run after continue:false; the summary reads this
@@ -178,9 +182,15 @@ def pre_tool_use(payload) -> None:
     path = ti.get("file_path") or ti.get("notebook_path") or ""
     if not path:
         return
-    rel = _rel(path if os.path.isabs(path) else os.path.join(root, path), root)
+    full = path if os.path.isabs(path) else os.path.join(root, path)
+    rel = _rel(full, root)
     if owns(rel, mine):
         return
+    stage = os.environ.get("ATLAS_CREW_STAGE")  # own stage dir only: `irc check` installs what is written there
+    if stage:
+        sreal = os.path.realpath(stage)
+        if os.path.realpath(full).startswith(sreal + os.sep):
+            return
     who = owner_of(rel, _env_json("ATLAS_CREW_OWNERS", {})) or "the lead"
     _out(
         {
@@ -240,7 +250,11 @@ def stop(payload) -> None:
         lines = "\n".join("[irc] " + atlas_irc.fmt(r) for r in recs)
         _out({"decision": "block", "reason": f"Unread team messages for you; answer them (irc say) before finishing:\n{lines}"})
         return
-    # 2. the worker's own check, re-run here: a claim of done is not evidence
+    # 2. a verified DONE whose owned-file digest still matches needs no re-run (worker exits 4.6-7.6 s after DONE otherwise)
+    if os.environ.get("ATLAS_CREW_CHECK") and atlas_irc.done_current(d, nick):
+        _set_blocks(n, passed=True)
+        return
+    # 3. the worker's own check, re-run here: a claim of done is not evidence
     cmd = os.environ.get("ATLAS_CREW_CHECK") or ""
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
     if cmd:

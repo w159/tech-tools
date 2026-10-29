@@ -55,9 +55,12 @@ import atlas_irc  # noqa: E402
 
 CREW_REL = Path(".atlas") / ".run" / "crew"
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
-# Bash writes and reads files (heredoc, cat, sed); Edit patches. Each extra tool schema is re-sent on
-# every call (Read+Write cost about 1k tokens per call, measured).
-WORKER_TOOLS = "Bash,Edit"
+# Write creates each owned file (staged, then installed by `irc check`); Bash runs the check; Edit patches.
+# Shell heredoc writes are not used: Claude Code's Bash safety check refuses some of them ("Contains brace
+# with quote character (expansion obfuscation)"); 4 workers per 30-module run lost a whole file generation
+# (10-25 s) to it, then failed Edit with "File has not been read yet". Each extra tool schema is re-sent on
+# every call (Read+Write cost about 1k tokens per call, measured), Write alone is small.
+WORKER_TOOLS = "Bash,Edit,Write"
 # Env a worker must not inherit: the lead's session identity (workers would write their transcript
 # under the lead's session id) and host-injected context that bloats every worker turn.
 SCRUB_ENV = (
@@ -124,8 +127,8 @@ DEV_BASH = (
 
 BASE_PROMPT = """\
 You are an expert software engineer running non-interactively in a git repository (your working
-directory). Use the tools to read, write and run code. Prefer Bash heredocs for whole-file writes,
-run the code to verify it, and stay terse: no explanations, plans or summaries unless asked.
+directory). Use the tools to read, write and run code. Write whole files with the Write tool (never with
+shell heredocs), run the code to verify it, and stay terse: no explanations, plans or summaries unless asked.
 
 """
 
@@ -150,9 +153,13 @@ Messages from peers are pushed to you automatically after your tool calls as [ir
 
 Rules:
 1. Edit only the files you own; edits elsewhere are blocked. Need a change in a peer's file? Ask its owner.
-2. Write your file(s), then run `irc check` exactly as is (never piped, chained or wrapped) in the SAME
-   Bash call. It waits for the peers you import, runs your unit check and posts DONE only if it
-   passes; DONE is never your word. Do not announce READY: your peers already hold your interface.
+2. Write each file you own in full with the Write tool to its staged path (listed under "You own"; a new
+   file, so no Read is needed), and in the SAME reply call Bash `irc check` exactly as is (never piped,
+   chained or wrapped) after the Write. `irc check` copies a staged file over the real one when the staged
+   copy is newer, waits for the peers you import, runs your unit check and posts DONE only if it passes;
+   DONE is never your word. If it fails, fix with Edit on the staged file, then `irc check` again. Never
+   write files with shell heredocs (the shell safety check refuses some code). Do not announce READY:
+   your peers already hold your interface.
 3. Code against the interfaces you were handed. `irc check` waits for the peers you import; do not run
    tests that import peers outside it.
 4. Answer every question addressed to you, briefly, then keep working.
@@ -161,8 +168,8 @@ Rules:
    scratch files under .atlas/tmp/ (anything outside the project needs an approval nobody can give).
 7. Your context below already holds your spec section, your stub and the interfaces of the peer files
    you import. Do not re-read them, and read peers' files or tests only to debug a failure.
-8. Every tool call re-sends your whole context, so use few, large calls. Usual shape: ONE Bash
-   call that writes your file(s) with a heredoc, then runs your check; then Edit only what fails.
+8. Every tool call re-sends your whole context, so use few, large calls. Usual shape: ONE reply with a
+   Write per file you own plus `irc check`; then Edit only what fails.
 9. You are finished when your check passes. The team gate re-runs it when you stop; you cannot
    stop while it fails. Then reply with one line: files, check result.
 """
@@ -285,6 +292,25 @@ def resolve_context(entries, root) -> str:
     return "\n\n".join(parts)
 
 
+def _stage_dir(root, run_id: str, nick: str) -> Path:
+    """Where a worker writes its files before `irc check` installs them: <root>/.atlas/tmp/<run_id>/<nick>."""
+    return Path(root) / ".atlas" / "tmp" / run_id / nick
+
+
+def _needs_closure(plan: dict, w: dict) -> list:
+    """Transitive closure of `w`'s needs in plan order of discovery (never the worker itself; cycle-safe)."""
+    by_name = {x["name"]: x for x in plan["workers"]}
+    closure: list = []
+    todo = list(w.get("needs") or [])
+    while todo:
+        n = todo.pop(0)
+        if n == w["name"] or n in closure or n not in by_name:
+            continue
+        closure.append(n)
+        todo.extend(by_name[n].get("needs") or [])
+    return closure
+
+
 def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
     peers = [
         f"- {p['name']} owns {', '.join(p['owns'])}"
@@ -304,7 +330,10 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
         f"Team goal: {plan.get('goal', '')}\n\n"
         f"## Your task\n{w['task'].strip()}\n\n"
         f"## You own (only you may edit)\n"
-        + "\n".join(f"- {p}" for p in w["owns"])
+        + "\n".join(
+            f"- {p} (write it to {_stage_dir(root, run_id, w['name']).relative_to(root).as_posix()}/{p})"
+            for p in w["owns"]
+        )
         + "\n\n"
         f"## Peers on #{run_id}\n" + ("\n".join(peers) or "(none)") + "\n\n"
         f"## Done when\n{done_when}\n\n"
@@ -323,18 +352,26 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
     }
     owners = {p: x["name"] for x in plan["workers"] for p in x["owns"]}
     stubs = {p: str(rundir / "stubs" / p) for p in w["owns"] if (rundir / "stubs" / p).is_file()}
+    # transitive closure of needs (never the worker itself; cycle-safe) for the speculative peer check
+    by_name = {x["name"]: x for x in plan["workers"]}
+    closure = _needs_closure(plan, w)
     env.update(
         {
             "ATLAS_IRC_DIR": str(rundir / "irc"),
             "ATLAS_IRC_NICK": w["name"],
             "ATLAS_CREW_ROOT": root,
             "ATLAS_CREW_OWNS": json.dumps(w["owns"]),
+            # Write lands here; `irc check` installs a staged file over the real one when it is newer
+            "ATLAS_CREW_STAGE": str(_stage_dir(root, rundir.name, w["name"])),
             "ATLAS_CREW_OWNERS": json.dumps(owners),
             # pristine copies of the owned stubs: `irc check` restores the docstrings a rewrite dropped
             "ATLAS_CREW_STUBS": json.dumps(stubs),
             "ATLAS_CREW_CHECK": w.get("check") or "",
             # `irc check` waits for NEEDS, runs UNIT_CHECK and posts DONE itself
             "ATLAS_CREW_NEEDS": " ".join(w.get("needs") or []),
+            "ATLAS_CREW_NEEDS_ALL": " ".join(closure),
+            "ATLAS_CREW_PEER_OWNS": json.dumps({n: by_name[n]["owns"] for n in closure}),
+            "ATLAS_CREW_STUB_DIR": str(rundir / "stubs"),
             "ATLAS_CREW_UNIT_CHECK": w.get("unit_check") or "",
             "ATLAS_CREW_MAX_BLOCKS": str(plan.get("max_blocks") or 3),
             "PATH": f"{rundir / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
@@ -511,6 +548,16 @@ def cmd_worker(a) -> int:
             feed.start()
         except Exception:
             feed = None
+    delay = getattr(a, "delay", 0) or 0
+    if rnd == 0 and delay > 0:
+        # boot contention: a worker that will wait on its peers anyway sleeps first, so the CPU goes to the
+        # critical workers while they boot (30 workers on 4 CPUs: the critical one spent ~6 s booting)
+        time.sleep(delay)
+    if getattr(a, "nice", 0) and a.nice > 0:
+        try:
+            os.nice(a.nice)  # claude and its hooks inherit it
+        except (OSError, AttributeError):
+            pass
     t0 = time.time()
     code = 1
     with log_path.open("w", encoding="utf-8") as log:
@@ -821,6 +868,84 @@ def cmd_plan(a) -> int:
     return 0
 
 
+# least-squares through the origin on 162 benchmark worker runs: API time ~ spec chars / 400 (residual sd 3.75 s)
+GEN_CHARS_PER_S = 400
+STAGGER_MARGIN_S = 7.5  # two residual sds: only wait estimates beyond this earn a delay
+STAGGER_CAP_S = 8.0  # longest launch delay
+HOP_S = 1.5  # one hop: a dependent's `irc check` sees its peer's DONE and runs its own check
+
+
+def _weight(w: dict, root) -> int:
+    """Chars of the markdown sections its `path#Heading` context entries resolve to (the spec it reads).
+
+    Measured on 162 worker runs: API time correlates 0.78-0.84 with these spec chars and -0.18 to -0.28 with the
+    chars of the owned stub files, so owned files are not counted."""
+    n = 0
+    for e in w.get("context") or []:
+        path, _, head = str(e).partition("#")
+        f = Path(root) / path
+        if head and "\n" not in path and f.is_file():
+            sec = section(f.read_text(encoding="utf-8", errors="replace"), head)
+            n += len(sec or "")
+    return n
+
+
+def launch_order(plan: dict, root, ncpu: int | None = None) -> list:
+    """[{"name", "nice", "slack", "delay"}] in launch order: critical workers first, so they get the CPU.
+
+    30 `claude -p` workers started at once on 4 CPUs: median init 10.6 s, first result 19.4 s (alone: init
+    0.7 s, result 4.1 s). With 8 of the 30 at nice 0 and 22 at nice 15, those 8 got init 2.1 s and result 6.6 s.
+    Slack is how long a worker can be late without delaying the end: forward pass fin(w) = max(gen_s(w),
+    fin of its needs) + HOP_S with unlimited CPU, backward pass LF(w) = the latest finish that keeps the
+    makespan M, slack = LF - HOP_S - gen_s. Order: least slack first, ties by larger weight, then name.
+    nice = min(19, 4 * (rank // ncpu)): the first ncpu workers run at nice 0.
+    delay: a worker whose needs finish long after it could have is held back so it does not compete for the CPU
+    while booting: dep_wait = max(fin of needs) - gen_s, delay = min(STAGGER_CAP_S, max(0, dep_wait -
+    STAGGER_MARGIN_S)); 0 without needs or with ATLAS_CREW_STAGGER=off."""
+    ncpu = ncpu or os.cpu_count() or 4
+    ws = {w["name"]: w for w in plan["workers"]}
+    weight = {n: _weight(w, root) for n, w in ws.items()}
+    gen = {n: weight[n] / GEN_CHARS_PER_S for n in ws}
+    needs = {n: [x for x in (w.get("needs") or []) if x in ws and x != n] for n, w in ws.items()}
+    dependents = {n: [] for n in ws}
+    for n, deps in needs.items():
+        for d in deps:
+            dependents[d].append(n)
+    fin: dict = {}
+
+    def forward(n, seen=()):
+        if n not in fin:
+            deps = [d for d in needs[n] if d not in seen]  # needs is acyclic (_break_cycles); belt and braces
+            fin[n] = max([gen[n]] + [forward(d, (*seen, n)) for d in deps]) + HOP_S
+        return fin[n]
+
+    for n in ws:
+        forward(n)
+    makespan = max(fin.values())
+    lf: dict = {}
+
+    def backward(n, seen=()):
+        if n not in lf:
+            ds = [d for d in dependents[n] if d not in seen]
+            lf[n] = makespan if not ds else min(backward(d, (*seen, n)) - HOP_S for d in ds)
+        return lf[n]
+
+    slack = {n: backward(n) - HOP_S - gen[n] for n in ws}
+    order = sorted(ws, key=lambda n: (slack[n], -weight[n], n))
+    stagger = os.environ.get("ATLAS_CREW_STAGGER", "on") != "off"
+
+    def delay(n):
+        if not stagger or not needs[n]:
+            return 0.0
+        dep_wait = max(fin[d] for d in needs[n]) - gen[n]
+        return round(min(STAGGER_CAP_S, max(0.0, dep_wait - STAGGER_MARGIN_S)), 2)
+
+    return [
+        {"name": n, "nice": min(19, 4 * (i // ncpu)), "slack": round(slack[n], 2), "delay": delay(n)}
+        for i, n in enumerate(order)
+    ]
+
+
 def save_stubs(rundir: Path, plan: dict, root: str) -> None:
     """Keep a pristine copy of every owned .py stub under `<rundir>/stubs/<rel>` before any worker runs."""
     for w in plan["workers"]:
@@ -875,6 +1000,10 @@ def cmd_run(a) -> int:
         (rundir / "prompts" / f"{w['name']}.md").write_text(
             worker_prompt(plan, w, run_id, root), encoding="utf-8"
         )
+    if os.environ.get("ATLAS_CREW_PRIORITY", "on") == "off":
+        meta["launch"] = [{"name": n, "nice": 0, "slack": None, "delay": 0} for n in nicks]
+    else:
+        meta["launch"] = launch_order(plan, root)
     (rundir / "run.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     save_stubs(rundir, plan, root)
     roster = "; ".join(f"{w['name']}: {', '.join(w['owns'])}" for w in plan["workers"])
@@ -919,13 +1048,16 @@ def cmd_run(a) -> int:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-    for w in plan["workers"]:
+    for item in meta["launch"]:
         _launch(
             meta,
             rundir,
-            w["name"],
+            item["name"],
             0,
-            _self_cmd("worker", "--rundir", str(rundir), "--name", w["name"]),
+            _self_cmd(
+                "worker", "--rundir", str(rundir), "--name", item["name"], "--nice", str(item["nice"]),
+                "--delay", str(item.get("delay", 0)),
+            ),
         )
     # the supervisor owns the run from here: global check, fix rounds, summary
     sup = _self_cmd("supervise", "--rundir", str(rundir))
@@ -991,6 +1123,36 @@ def _wait_round(rundir, names, rnd, deadline) -> bool:
     return False
 
 
+def _wait_ready(rundir, names, rnd, deadline) -> bool:
+    """Until every worker has exited (round `rnd`) or holds a current verified DONE."""
+    while time.time() < deadline:
+        if all(_exited(rundir, n, rnd) or atlas_irc.has_done(rundir / "irc", n) for n in names):
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def _owned_hashes(root, plan) -> dict:
+    """sha256 of every planned owned file now on disk (globs and directories expanded)."""
+    import hashlib
+
+    out = {}
+    for w in plan["workers"]:
+        for pat in w.get("owns") or []:
+            if any(c in pat for c in "*?["):
+                found = Path(root).glob(pat)
+            else:
+                f = Path(root, pat)
+                found = f.rglob("*") if f.is_dir() else [f]
+            for f in found:
+                try:
+                    if f.is_file():
+                        out[f.relative_to(root).as_posix()] = hashlib.sha256(f.read_bytes()).hexdigest()
+                except OSError:
+                    pass
+    return out
+
+
 def _run_check(cmd, root, timeout=900):
     try:
         r = subprocess.run(
@@ -999,6 +1161,170 @@ def _run_check(cmd, root, timeout=900):
         return r.returncode, (r.stdout or "") + (r.stderr or "")
     except subprocess.TimeoutExpired:
         return 124, f"timed out after {timeout}s"
+
+
+SHARD_TAIL_CHARS = 6000  # per failing shard; a passing shard keeps 200 (summarize reads check_tail from the end)
+_PLAIN_PYTEST = re.compile(r"\bpytest\b")
+_SHELL_OPS = re.compile(r"[|&;<>`$()\n]")
+
+
+def _known_test_files(plan: dict, root) -> list:
+    """Union of every worker's `tests` entries that exist under root (globs expanded), as sorted posix rel paths."""
+    found = set()
+    for w in plan.get("workers") or []:
+        found.update(_worker_test_files(w, root))
+    return sorted(found)
+
+
+def _worker_test_files(w: dict, root) -> set:
+    """The existing files of one worker's `tests` entries (globs expanded), as posix rel paths."""
+    found = set()
+    for pat in w.get("tests") or []:
+        if not pat:
+            continue
+        try:
+            hits = Path(root).glob(pat) if any(c in pat for c in "*?[") else [Path(root, pat)]
+            for f in hits:
+                if f.is_file():
+                    found.add(f.relative_to(root).as_posix())
+        except (OSError, ValueError, NotImplementedError):
+            continue
+    return found
+
+
+def _shard_files(files, root, n) -> list:
+    """Greedy balance by file size: largest first into the lightest shard. Empty shards are dropped."""
+    def size(f):
+        try:
+            return Path(root, f).stat().st_size
+        except OSError:
+            return 0
+
+    shards = [[0, []] for _ in range(max(1, n))]
+    for f in sorted(files, key=lambda f: (-size(f), f)):
+        lightest = min(shards, key=lambda s: s[0])
+        lightest[0] += size(f)
+        lightest[1].append(f)
+    return [sorted(fs) for _, fs in shards if fs]
+
+
+def _shard_jobs(cmd, root, test_files, ncpu, skip=()):
+    """[(shell command, label, is_rest)] for a sharded run, or [] when `cmd` runs unsharded: not a plain pytest
+    command (no `|`, `&&`, `;`, `>` ...), fewer than 2 known files, or ATLAS_CREW_SHARD=off. Files in `skip` get
+    no shard and are `--ignore`d by the rest shard."""
+    skip = set(skip or ())
+    files = [f for f in (test_files or []) if f not in skip]
+    if (
+        os.environ.get("ATLAS_CREW_SHARD", "").strip().lower() == "off"
+        or len(files) + len(skip) < 2
+        or not _PLAIN_PYTEST.search(cmd or "")
+        or _SHELL_OPS.search(cmd or "")
+    ):
+        return []
+    try:
+        base = shlex.split(cmd)
+    except ValueError:
+        return []
+    groups = _shard_files(files, root, min(max(1, int(ncpu or 1)), max(1, len(files))))
+    jobs = [(shlex.join([*base, *g, "-p", "no:cacheprovider"]), ", ".join(g), False) for g in groups]
+    ignores = [f"--ignore={f}" for f in sorted([*files, *skip])]
+    jobs.append((shlex.join([*base, *ignores, "-p", "no:cacheprovider"]), "rest (everything else)", True))
+    return jobs
+
+
+def shard_count(cmd, root, test_files, ncpu) -> int:
+    """Number of processes `sharded_check` runs for these arguments (1 when unsharded)."""
+    return len(_shard_jobs(cmd, root, test_files, ncpu)) or 1
+
+
+def sharded_check(cmd, root, test_files, ncpu, timeout=900, skip=()):
+    """Run a plain pytest `cmd` as parallel shards: min(ncpu, files) shards of the workers' known test files
+    plus one "rest" shard (`--ignore` for every known file) so tests outside their lists still run. The
+    supervisor's global check runs after the last DONE, on the critical path: the 784-test `python3 -m pytest
+    -q` took 3.95 s in one benchmark run and 8.5-8.9 s in two others, where one test file had a 5.1 s test.
+    Returns (code, output): the first nonzero shard code (the rest shard's exit 5, no tests collected, counts
+    as 0), passing shards' output first, failing last (the summary keeps the output tail). Anything unsharded runs `cmd` once through _run_check.
+    `skip`: test files already verified by their worker's DONE (verified_test_files): not run, not sharded."""
+    skip = sorted(set(skip or ()))
+    jobs = _shard_jobs(cmd, root, test_files, ncpu, skip)
+    if not jobs:
+        return _run_check(cmd, root, timeout)
+    procs = [
+        (subprocess.Popen(c, shell=True, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True), label, rest)
+        for c, label, rest in jobs
+    ]
+    t_end = time.time() + timeout
+    results = []
+    for pr, label, rest in procs:
+        try:
+            o, _ = pr.communicate(timeout=max(1.0, t_end - time.time()))
+            code = pr.returncode
+        except subprocess.TimeoutExpired:
+            pr.kill()
+            o, _ = pr.communicate()
+            code, o = 124, f"timed out after {timeout}s\n{o or ''}"
+        if rest and code == 5:  # nothing left outside the known files
+            code = 0
+        results.append((code, label, o or ""))
+    combined = next((c for c, _, _ in results if c), 0)
+    parts = []
+    for code, label, o in sorted(results, key=lambda r: r[0] != 0):  # stable: failing shards last, so out[-800:] shows them
+        parts.append(f"=== shard [{label}] exit {code} ===\n{o[-(SHARD_TAIL_CHARS if code else 200):]}")
+    if skip:
+        parts.insert(0, f"{len(skip)} test files verified by worker DONE on the same bytes; skipped")
+    return combined, "\n".join(parts)
+
+
+# Measured (30-module benchmark, 3 runs): after the last worker DONE the supervisor's sharded full-suite check
+# took 4.4 s, 1.7 s and 3.9 s of wall time on the critical path (1.4 s at 18 modules), re-running test files
+# every worker's `irc check` had just passed. A worker's DONE records digests of its own files and of its
+# needs closure; matching digests mean the passing run saw exactly the bytes on disk, so that file is skipped.
+_NARROWING_FLAGS = ("-k", "-m", "--deselect", "--ignore", "--lf", "--co", "--collect-only")
+
+
+def verified_test_files(plan: dict, root, irc_dir, cmd, test_files, ncpu) -> list:
+    """Sorted test files whose every listing worker has a standing DONE (atlas_irc.latest_done_record) with
+    digest == its own files' digest now and peer_digests covering its whole needs closure, each equal to that
+    peer's digest now, and whose unit_check is a plain pytest command naming the file. [] when the check does
+    not shard or ATLAS_CREW_CHECK_CACHE=off."""
+    if os.environ.get("ATLAS_CREW_CHECK_CACHE", "").strip().lower() == "off" or not _shard_jobs(cmd, root, test_files, ncpu):
+        return []
+    by_name = {x["name"]: x for x in plan.get("workers") or []}
+    known, ok = set(test_files or []), {}
+    for w in by_name.values():
+        files = _worker_test_files(w, root) & known
+        if not files:
+            continue
+        unit = w.get("unit_check") or ""
+        try:
+            toks = shlex.split(unit)
+        except ValueError:
+            toks = []
+        args = toks[next((i for i, t in enumerate(toks) if _PLAIN_PYTEST.search(t)), len(toks)) + 1:]  # after `pytest`
+        plain = bool(_PLAIN_PYTEST.search(unit)) and not _SHELL_OPS.search(unit) and not any(
+            t in _NARROWING_FLAGS or t.startswith(("--ignore=", "--deselect=")) for t in args
+        )
+        rec = atlas_irc.latest_done_record(irc_dir, w["name"])
+        pd = rec.get("peer_digests") if rec else None
+        good = (
+            plain
+            and isinstance(pd, dict)
+            and rec.get("digest") == atlas_irc._owned_digest(root, w.get("owns") or [])
+            and all(
+                p in by_name and pd.get(p) == atlas_irc._owned_digest(root, by_name[p].get("owns") or [])
+                for p in _needs_closure(plan, w)
+            )
+        )
+        for f in files:
+            ok[f] = ok.get(f, True) and good and f in toks
+    return sorted(f for f, v in ok.items() if v)
+
+
+def _global_check(plan: dict, root, rundir, check, tfiles, ncpu):
+    """(code, output, cached) of one sharded global check; cached = the test files skipped as worker-verified."""
+    cached = verified_test_files(plan, root, rundir / "irc", check, tfiles, ncpu)
+    code, out = sharded_check(check, root, tfiles, ncpu, skip=cached)
+    return code, out, cached
 
 
 def route_failures(plan: dict, output: str) -> dict:
@@ -1025,14 +1351,26 @@ def cmd_supervise(a) -> int:
     names = [w["name"] for w in plan["workers"]]
     deadline = meta["started"] + float(meta.get("timeout") or 3600)
     rounds = []
-    finished = _wait_round(rundir, names, 0, deadline)
     check = plan.get("check")
-    code, out = (0, "") if not check else _run_check(check, root)
+    # the global check needs every worker's files, not their processes' exit: exit tails run 1-8 s under
+    # load. Wait until each worker has exited or holds a current verified DONE, check, then collect exits.
+    _wait_ready(rundir, names, 0, deadline)
+    before = _owned_hashes(root, plan)
+    check_before_exit = not all(_exited(rundir, n, 0) for n in names)
+    tfiles, ncpu = _known_test_files(plan, root), os.cpu_count() or 1
+    nsh = shard_count(check, root, tfiles, ncpu) if check else 1
+    code, out, cached = (0, "", []) if not check else _global_check(plan, root, rundir, check, tfiles, ncpu)
+    finished = _wait_round(rundir, names, 0, min(deadline, time.time() + RESULT_GRACE_S + 10))
+    if check and _owned_hashes(root, plan) != before:
+        code, out, cached = _global_check(plan, root, rundir, check, tfiles, ncpu)  # a file changed while the check ran: its verdict is stale
     rounds.append(
         {
             "round": 0,
             "all_exited": finished,
+            "check_started_before_exit": check_before_exit,
             "check_exit": code,
+            "check_shards": nsh,
+            "check_cached": cached,
             "t": round(time.time() - meta["started"], 1),
         }
     )
@@ -1080,13 +1418,17 @@ def cmd_supervise(a) -> int:
                 ),
             )
         finished = _wait_round(rundir, list(routed), rnd, deadline)
-        code, out = _run_check(check, root)
+        tfiles = _known_test_files(plan, root)
+        nsh = shard_count(check, root, tfiles, ncpu)
+        code, out, cached = _global_check(plan, root, rundir, check, tfiles, ncpu)
         rounds.append(
             {
                 "round": rnd,
                 "workers": list(routed),
                 "all_exited": finished,
                 "check_exit": code,
+                "check_shards": nsh,
+                "check_cached": cached,
                 "t": round(time.time() - meta["started"], 1),
             }
         )
@@ -1094,6 +1436,7 @@ def cmd_supervise(a) -> int:
     (rundir / "summary.json").write_text(
         json.dumps(summary, indent=1), encoding="utf-8"
     )
+    shutil.rmtree(Path(root) / ".atlas" / "tmp" / meta["run_id"], ignore_errors=True)  # staged copies
     atlas_irc.post(
         rundir / "irc",
         "lead",
@@ -1299,6 +1642,8 @@ def parser():
     w.add_argument("--rundir", required=True)
     w.add_argument("--name", required=True)
     w.add_argument("--round", type=int, default=0)
+    w.add_argument("--nice", type=int, default=0, help="os.nice() increment before claude starts")
+    w.add_argument("--delay", type=float, default=0, help="seconds to sleep before claude starts (round 0 only)")
     w.add_argument("--no-hold", action="store_true")
     w.set_defaults(fn=cmd_worker)
     s = sub.add_parser("supervise")

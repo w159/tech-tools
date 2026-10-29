@@ -1,0 +1,107 @@
+{
+ "arm": "skill",
+ "wall_s": 49.5,
+ "pytest_rc": 0,
+ "passed": 469,
+ "failed": 0,
+ "tests_touched": "M tests/__pycache__/__init__.cpython-313.pyc\n M tests/mdkit/__pycache__/__init__.cpython-313.pyc\n M tests/pkgkit/__pycache__/__init__.cpython-313.pyc",
+ "tokens": 272761,
+ "cost_usd": 0.963,
+ "parts": {
+  "lead.log": {
+   "total": 58871,
+   "cost": 0.1165,
+   "turns": 1
+  },
+  "ast.log": {
+   "total": 11509,
+   "cost": 0.0495,
+   "turns": 3
+  },
+  "blocks.log": {
+   "total": 12040,
+   "cost": 0.053,
+   "turns": 3
+  },
+  "graph.log": {
+   "total": 10230,
+   "cost": 0.0402,
+   "turns": 3
+  },
+  "html.log": {
+   "total": 10506,
+   "cost": 0.0408,
+   "turns": 3
+  },
+  "inline.log": {
+   "total": 13793,
+   "cost": 0.0688,
+   "turns": 3
+  },
+  "links.log": {
+   "total": 9494,
+   "cost": 0.0316,
+   "turns": 3
+  },
+  "lint.log": {
+   "total": 10996,
+   "cost": 0.0439,
+   "turns": 3
+  },
+  "lockfile.log": {
+   "total": 11328,
+   "cost": 0.0488,
+   "turns": 3
+  },
+  "manifest.log": {
+   "total": 11018,
+   "cost": 0.0478,
+   "turns": 3
+  },
+  "mdkit-cli.log": {
+   "total": 28461,
+   "cost": 0.0785,
+   "turns": 5
+  },
+  "pkgkit-cli.log": {
+   "total": 11906,
+   "cost": 0.0494,
+   "turns": 3
+  },
+  "ranges.log": {
+   "total": 13475,
+   "cost": 0.0666,
+   "turns": 3
+  },
+  "registry.log": {
+   "total": 9814,
+   "cost": 0.0376,
+   "turns": 3
+  },
+  "resolver.log": {
+   "total": 10015,
+   "cost": 0.0382,
+   "turns": 3
+  },
+  "semver.log": {
+   "total": 10118,
+   "cost": 0.0414,
+   "turns": 3
+  },
+  "text.log": {
+   "total": 10251,
+   "cost": 0.0407,
+   "turns": 3
+  },
+  "toc.log": {
+   "total": 9652,
+   "cost": 0.0337,
+   "turns": 3
+  },
+  "tokens.log": {
+   "total": 9284,
+   "cost": 0.0361,
+   "turns": 3
+  }
+ }
+}

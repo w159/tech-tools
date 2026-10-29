@@ -1,0 +1,167 @@
+{
+ "arm": "skill",
+ "wall_s": 52.0,
+ "pytest_rc": 0,
+ "passed": 784,
+ "failed": 0,
+ "tests_touched": "?? tests/__pycache__/\n?? tests/cronkit/__pycache__/\n?? tests/mdkit/__pycache__/\n?? tests/pkgkit/__pycache__/",
+ "tokens": 416330,
+ "cost_usd": 1.525,
+ "parts": {
+  "lead.log": {
+   "total": 60217,
+   "cost": 0.1217,
+   "turns": 1
+  },
+  "ast.log": {
+   "total": 11507,
+   "cost": 0.0483,
+   "turns": 3
+  },
+  "blocks.log": {
+   "total": 12454,
+   "cost": 0.056,
+   "turns": 3
+  },
+  "cronkit-cli.log": {
+   "total": 18131,
+   "cost": 0.0824,
+   "turns": 3
+  },
+  "dates.log": {
+   "total": 9495,
+   "cost": 0.0371,
+   "turns": 3
+  },
+  "describe.log": {
+   "total": 10977,
+   "cost": 0.0414,
+   "turns": 3
+  },
+  "expr.log": {
+   "total": 11059,
+   "cost": 0.0408,
+   "turns": 3
+  },
+  "field.log": {
+   "total": 9856,
+   "cost": 0.04,
+   "turns": 3
+  },
+  "graph.log": {
+   "total": 10443,
+   "cost": 0.0412,
+   "turns": 3
+  },
+  "holidays.log": {
+   "total": 11825,
+   "cost": 0.0484,
+   "turns": 3
+  },
+  "html.log": {
+   "total": 10665,
+   "cost": 0.0413,
+   "turns": 3
+  },
+  "inline.log": {
+   "total": 13842,
+   "cost": 0.0682,
+   "turns": 3
+  },
+  "jobs.log": {
+   "total": 11934,
+   "cost": 0.0464,
+   "turns": 3
+  },
+  "links.log": {
+   "total": 9714,
+   "cost": 0.0327,
+   "turns": 3
+  },
+  "lint.log": {
+   "total": 11077,
+   "cost": 0.0436,
+   "turns": 3
+  },
+  "lockfile.log": {
+   "total": 11747,
+   "cost": 0.0518,
+   "turns": 3
+  },
+  "manifest.log": {
+   "total": 11285,
+   "cost": 0.0493,
+   "turns": 3
+  },
+  "mdkit-cli.log": {
+   "total": 28405,
+   "cost": 0.0752,
+   "turns": 5
+  },
+  "pkgkit-cli.log": {
+   "total": 12158,
+   "cost": 0.0508,
+   "turns": 3
+  },
+  "ranges.log": {
+   "total": 13251,
+   "cost": 0.0632,
+   "turns": 3
+  },
+  "registry.log": {
+   "total": 9812,
+   "cost": 0.0364,
+   "turns": 3
+  },
+  "resolver.log": {
+   "total": 9921,
+   "cost": 0.0361,
+   "turns": 3
+  },
+  "runner.log": {
+   "total": 12243,
+   "cost": 0.0467,
+   "turns": 3
+  },
+  "schedule.log": {
+   "total": 12112,
+   "cost": 0.0518,
+   "turns": 3
+  },
+  "semver.log": {
+   "total": 10469,
+   "cost": 0.0437,
+   "turns": 3
+  },
+  "stamp.log": {
+   "total": 10834,
+   "cost": 0.0402,
+   "turns": 3
+  },
+  "store.log": {
+   "total": 12259,
+   "cost": 0.0461,
+   "turns": 3
+  },
+  "text.log": {
+   "total": 10369,
+   "cost": 0.0407,
+   "turns": 3
+  },
+  "toc.log": {
+   "total": 9845,
+   "cost": 0.0344,
+   "turns": 3
+  },
+  "tokens.log": {
+   "total": 9477,
+   "cost": 0.0369,
+   "turns": 3
+  },
+  "tz.log": {
+   "total": 8947,
+   "cost": 0.0318,
+   "turns": 3
+  }
+ }
+}
