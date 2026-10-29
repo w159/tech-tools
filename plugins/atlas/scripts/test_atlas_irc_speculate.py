@@ -197,5 +197,79 @@ class SpeculateTests(unittest.TestCase):
         self.assertNotIn("peer_digests", self.done_rec())
 
 
+class EarlyCheckTests(unittest.TestCase):
+    """The early own-code check: needs pending, pytest failures that are not stub/import errors surface now."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        tmp = Path(self._tmp.name)
+        self.root = tmp / "root"
+        self.root.mkdir()
+        self.d = atlas_irc.init_bus(tmp / "irc", "#t", ["me", "peer"], lead="lead")
+        (self.root / "peer.py").write_text("def f():\n    raise NotImplementedError\n")
+        (self.root / "me.py").write_text("x = 1\n")
+        self.test = self.root / "test_me.py"
+
+    def env(self, **over):
+        env = {
+            "ATLAS_CREW_ROOT": str(self.root),
+            "ATLAS_CREW_OWNS": json.dumps(["me.py"]),
+            "ATLAS_CREW_NEEDS": "peer",
+            "ATLAS_CREW_SPECULATE": "off",
+            "ATLAS_CREW_UNIT_CHECK": "python3 -m pytest -q -p no:cacheprovider test_me.py",
+        }
+        env.update(over)
+        return env
+
+    def check(self, env, timeout=1):
+        a = argparse.Namespace(dir=str(self.d), as_="me", timeout=timeout)
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out):
+            rc = atlas_irc.cmd_check(a)
+        return rc, out.getvalue()
+
+    def own_fail(self):
+        self.test.write_text("def test_own():\n    assert 1 == 2, 'own-bug'\n")
+
+    def peer_fail(self):
+        self.test.write_text("import peer\n\ndef test_peer():\n    peer.f()\n")
+
+    def test_a_pending_need_and_own_failure_exits_1_without_done(self):
+        self.own_fail()
+        rc, out = self.check(self.env())
+        self.assertEqual(rc, 1)
+        self.assertIn("test_own", out)
+        self.assertIn("do not depend on unfinished peers", out)
+        self.assertFalse(atlas_irc.has_done(self.d, "me"))
+
+    def test_b_only_stub_failures_proceed_to_wait(self):
+        self.peer_fail()
+        rc, out = self.check(self.env())
+        self.assertEqual(rc, 3)  # need timeout: the normal wait ran
+        self.assertNotIn("do not depend on unfinished peers", out)
+
+    def test_c_unchanged_digest_skips_the_early_check(self):
+        self.own_fail()
+        self.assertEqual(self.check(self.env())[0], 1)
+        rc, out = self.check(self.env())
+        self.assertEqual(rc, 3)
+        self.assertNotIn("test_own", out)
+
+    def test_d_toggle_off_skips_the_early_check(self):
+        self.own_fail()
+        rc, out = self.check(self.env(ATLAS_CREW_EARLY_CHECK="off"))
+        self.assertEqual(rc, 3)
+        self.assertNotIn("test_own", out)
+
+    def test_e_all_needs_ready_skips_the_early_check(self):
+        self.own_fail()
+        atlas_irc.post(self.d, "peer", "#t", "DONE peer: ok", kind="done")
+        with mock.patch.object(atlas_irc, "_own_failures", side_effect=AssertionError("early check ran")):
+            rc, out = self.check(self.env())
+        self.assertEqual(rc, 1)  # the normal unit check failed
+        self.assertIn("own-bug", out)
+
+
 if __name__ == "__main__":
     unittest.main()

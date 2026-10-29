@@ -897,6 +897,70 @@ def _speculate(d, nick: str, a, deadline):
     return 0
 
 
+EARLY_CHECK_TIMEOUT_S = 20
+EARLY_TAIL_CHARS = 3000
+STUB_MARKER = "NotImplementedError"
+PEER_IMPORT_MARKERS = ("ModuleNotFoundError", "ImportError", "cannot import name")
+
+
+def _own_failures(xml_path) -> list:
+    """[(test id, short message)] for each junit <failure> whose text neither names the stub marker nor an
+    import error: those come from an unfinished peer, not from the worker's own code. <error> elements
+    (collection and import errors) are never own."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.parse(xml_path).getroot()
+    except (OSError, ET.ParseError):
+        return []
+    found = []
+    for tc in root.iter("testcase"):
+        for f in tc.findall("failure"):
+            text = (f.get("message") or "") + "\n" + (f.text or "")
+            if STUB_MARKER in text or any(m in text for m in PEER_IMPORT_MARKERS):
+                continue
+            tid = f"{(tc.get('classname') or '').replace('.', '/')}.py::{tc.get('name')}" if tc.get("classname") else tc.get("name")
+            found.append((tid, (f.get("message") or "").strip().splitlines()[0][:300] if (f.get("message") or "").strip() else ""))
+    return found
+
+
+def _early_check(d, nick: str, needs) -> int | None:
+    """While a need is not DONE, run the unit check once per owned-files digest (quiet, junit-xml via
+    PYTEST_ADDOPTS, EARLY_CHECK_TIMEOUT_S) and return 1 after printing the failures that do not depend on
+    unfinished peers; None to carry on to the normal wait. ATLAS_CREW_EARLY_CHECK=off disables it."""
+    cmd = os.environ.get("ATLAS_CREW_UNIT_CHECK") or ""
+    if (os.environ.get("ATLAS_CREW_EARLY_CHECK") or "").lower() == "off" or "pytest" not in cmd:
+        return None
+    if all(has_done(d, p) for p in needs if p != nick):
+        return None
+    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    digest = _owned_digest(root, _env_owns())
+    marker = Path(d) / f"earlycheck-{nick}.digest"
+    try:
+        if marker.read_text().strip() == digest:
+            return None
+    except OSError:
+        pass
+    try:
+        marker.write_text(digest)
+    except OSError:
+        pass
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        xml = os.path.join(tmp, "early.xml")
+        env = dict(os.environ)
+        env["PYTEST_ADDOPTS"] = (env.get("PYTEST_ADDOPTS", "") + f" --junitxml={xml} -p no:cacheprovider").strip()
+        try:
+            subprocess.run(cmd, shell=True, cwd=root, capture_output=True, text=True, env=env, timeout=EARLY_CHECK_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            return None
+        own = _own_failures(xml)
+    if not own:
+        return None
+    body = "".join(f"FAILED {t}: {m}\n" for t, m in own)[:EARLY_TAIL_CHARS]
+    print(body + "These failures do not depend on unfinished peers (no NotImplementedError or import error); fix them now. `irc check` again waits for the peers.")
+    return 1
+
+
 def cmd_check(a) -> int:
     """The worker's check: wait for ATLAS_CREW_NEEDS (as `need --done`: exit 2 unknown, 3 timeout, 4 a peer
     gave up), run ATLAS_CREW_UNIT_CHECK, and post DONE only when it exits 0. Exits with the check's code. The
@@ -909,6 +973,10 @@ def cmd_check(a) -> int:
     _install_from_env()
     needs = (os.environ.get("ATLAS_CREW_NEEDS") or "").replace(",", " ").split()
     deadline = time.time() + a.timeout
+    if needs:
+        rc = _early_check(d, nick, needs)
+        if rc is not None:
+            return rc
     if needs and (os.environ.get("ATLAS_CREW_SPECULATE") or "").lower() != "off":
         rc = _speculate(d, nick, a, deadline)
         if rc is not None:
