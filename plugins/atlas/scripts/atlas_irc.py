@@ -485,6 +485,49 @@ def _owned_digest(root, owns) -> str:
     return h.hexdigest()
 
 
+_SHARED_PYTEST_INPUTS = ("pytest.ini", "pyproject.toml", "setup.cfg", "tox.ini")
+_SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".tox", ".mypy_cache", ".pytest_cache"}
+
+
+def test_inputs_digest(root, unit_check) -> str:
+    """sha256 over the sorted (rel path, bytes) of the test files a unit_check names (its tokens that are existing
+    files under root) plus the shared pytest inputs: conftest.py anywhere under root and pytest.ini, pyproject.toml,
+    setup.cfg, tox.ini at root. Worker (_announce_done) and supervisor (verified_test_files) both call this, so a
+    test file or shared input edited after DONE changes the value. Limit: imports outside the declared needs
+    closure are in no digest (needs is derived from stub and test imports; `irc check` relies on the same edges)."""
+    import hashlib
+    import shlex
+
+    root = Path(root)
+    rels = set()
+    try:
+        toks = shlex.split(unit_check or "")
+    except ValueError:
+        toks = []
+    for t in toks:
+        try:
+            f = root / t
+            if not t.startswith("-") and f.is_file():
+                rels.add(f.resolve().relative_to(root.resolve()).as_posix())
+        except (OSError, ValueError):
+            continue
+    for name in _SHARED_PYTEST_INPUTS:
+        if (root / name).is_file():
+            rels.add(name)
+    for dp, dns, fns in os.walk(root):
+        dns[:] = [x for x in dns if x not in _SKIP_DIRS]
+        if "conftest.py" in fns:
+            rels.add((Path(dp) / "conftest.py").relative_to(root).as_posix())
+    h = hashlib.sha256()
+    for rel in sorted(rels):
+        try:
+            data = (root / rel).read_bytes()
+        except OSError:
+            data = b""
+        h.update(rel.encode() + b"\0" + hashlib.sha256(data).digest())
+    return h.hexdigest()
+
+
 def _env_owns():
     try:
         owns = json.loads(os.environ.get("ATLAS_CREW_OWNS") or "[]")
@@ -723,12 +766,13 @@ def _install_from_env() -> list:
 
 
 def _announce_done(d, nick: str, text: str, peer_digests: dict | None = None) -> None:
-    """Post DONE with the own-files digest; `peer_digests` ({peer: digest} of the closure bytes the passing unit
+    """Post DONE with the own-files digest and test_digest (test files + shared pytest inputs); `peer_digests` ({peer: digest} of the closure bytes the passing unit
     check ran against) rides along when given, so the supervisor can skip re-running this worker's tests."""
     if has_done(d, nick):
         print(f"already announced DONE for {nick}")
         return
-    extra = {"digest": _owned_digest(os.environ.get("ATLAS_CREW_ROOT") or os.getcwd(), _env_owns())}
+    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    extra = {"digest": _owned_digest(root, _env_owns()), "test_digest": test_inputs_digest(root, os.environ.get("ATLAS_CREW_UNIT_CHECK") or "")}
     if peer_digests is not None:
         extra["peer_digests"] = peer_digests
     post(d, nick, members(d).get("channel") or os.environ.get("ATLAS_IRC_CHANNEL") or "#team", f"DONE {nick}: {text}", kind="done",

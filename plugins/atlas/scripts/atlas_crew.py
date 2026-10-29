@@ -1279,12 +1279,46 @@ def sharded_check(cmd, root, test_files, ncpu, timeout=900, skip=()):
 # took 4.4 s, 1.7 s and 3.9 s of wall time on the critical path (1.4 s at 18 modules), re-running test files
 # every worker's `irc check` had just passed. A worker's DONE records digests of its own files and of its
 # needs closure; matching digests mean the passing run saw exactly the bytes on disk, so that file is skipped.
-_NARROWING_FLAGS = ("-k", "-m", "--deselect", "--ignore", "--lf", "--co", "--collect-only")
+_PLAIN_FLAGS = {"-q", "-qq", "-x", "-pno:cacheprovider"}
+_PY_BIN = re.compile(r"^python[\d.]*$")
+
+
+def _plain_pytest_files(unit, root):
+    """Test files a unit_check names when it is plain pytest, else None. Allowlist: `python3 -m pytest` /
+    `python -m pytest` / `pytest`, then only -q, -qq, -x, `-p no:cacheprovider` (or -pno:cacheprovider) and literal
+    test file paths existing under root. Any other token (-k, --lf, --ignore-glob, ...) is not plain."""
+    try:
+        toks = shlex.split(unit or "")
+    except ValueError:
+        return None
+    if _SHELL_OPS.search(unit or "") or not toks:
+        return None
+    head = os.path.basename(toks[0])
+    if head == "pytest":
+        rest = toks[1:]
+    elif _PY_BIN.match(head) and toks[1:3] == ["-m", "pytest"]:
+        rest = toks[3:]
+    else:
+        return None
+    files, i = [], 0
+    while i < len(rest):
+        t = rest[i]
+        if t in _PLAIN_FLAGS:
+            pass
+        elif t == "-p" and rest[i + 1:i + 2] == ["no:cacheprovider"]:
+            i += 1
+        elif not t.startswith("-") and Path(root, t).is_file():
+            files.append(t)
+        else:
+            return None
+        i += 1
+    return files
 
 
 def verified_test_files(plan: dict, root, irc_dir, cmd, test_files, ncpu) -> list:
     """Sorted test files whose every listing worker has a standing DONE (atlas_irc.latest_done_record) with
-    digest == its own files' digest now and peer_digests covering its whole needs closure, each equal to that
+    digest == its own files' digest now, test_digest == the recomputed digest of its test files and shared pytest
+    inputs (conftest.py, pytest.ini, pyproject.toml, setup.cfg, tox.ini), and peer_digests covering its whole needs closure, each equal to that
     peer's digest now, and whose unit_check is a plain pytest command naming the file. [] when the check does
     not shard or ATLAS_CREW_CHECK_CACHE=off."""
     if os.environ.get("ATLAS_CREW_CHECK_CACHE", "").strip().lower() == "off" or not _shard_jobs(cmd, root, test_files, ncpu):
@@ -1296,19 +1330,15 @@ def verified_test_files(plan: dict, root, irc_dir, cmd, test_files, ncpu) -> lis
         if not files:
             continue
         unit = w.get("unit_check") or ""
-        try:
-            toks = shlex.split(unit)
-        except ValueError:
-            toks = []
-        args = toks[next((i for i, t in enumerate(toks) if _PLAIN_PYTEST.search(t)), len(toks)) + 1:]  # after `pytest`
-        plain = bool(_PLAIN_PYTEST.search(unit)) and not _SHELL_OPS.search(unit) and not any(
-            t in _NARROWING_FLAGS or t.startswith(("--ignore=", "--deselect=")) for t in args
-        )
+        toks = _plain_pytest_files(unit, root)
+        plain = toks is not None
         rec = atlas_irc.latest_done_record(irc_dir, w["name"])
         pd = rec.get("peer_digests") if rec else None
         good = (
             plain
             and isinstance(pd, dict)
+            and bool(rec.get("test_digest"))
+            and rec.get("test_digest") == atlas_irc.test_inputs_digest(root, unit)
             and rec.get("digest") == atlas_irc._owned_digest(root, w.get("owns") or [])
             and all(
                 p in by_name and pd.get(p) == atlas_irc._owned_digest(root, by_name[p].get("owns") or [])
@@ -1316,7 +1346,7 @@ def verified_test_files(plan: dict, root, irc_dir, cmd, test_files, ncpu) -> lis
             )
         )
         for f in files:
-            ok[f] = ok.get(f, True) and good and f in toks
+            ok[f] = ok.get(f, True) and good and f in (toks or [])
     return sorted(f for f, v in ok.items() if v)
 
 
