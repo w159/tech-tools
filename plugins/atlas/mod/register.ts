@@ -15,6 +15,7 @@ import { hudAgents, hudBudget, hudCompactRows, hudRows } from './hud';
 import { rowOf } from './runs';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
+import { leadChannelName } from './data/root';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -837,10 +838,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const columns = e.props.bodyColumns; // measured live: with the docked pane open, viewport.columns is the transcript's own width (143) and bodyColumns is that less the engine's five (138)
 		const live = liveWorkers(snapshot, Date.now());
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
-		const hudIn = { todos: snapshot.todos ?? [], agents: hudAgents(live, snapshot.squad) };
+		const hudIn = { todos: snapshot.todos ?? [], agents: hudAgents(live, snapshot.squad), root: snapshot.root };
 		const hud = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off' ? // ATLAS_HUD=off: no TODO / Subagents / Waiting rows
 			 hudRows(hudIn, { cols: columns, maxRows: hudBudget(e.props.maxRows ?? 0, hudCompactRows(hudIn), BAND_MIN_ROWS) }) : [];
-		const band = bandTree(els, { snapshot, live, gates, columns, tick: await read($, spinnerTickState), maxRows: hud.length > 0 ? e.props.maxRows - hud.length : e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState) }, bandHandlers($));
+		const band = bandTree(els, { snapshot, live, gates, columns, tick: await read($, spinnerTickState), maxRows: hud.length > 0 ? e.props.maxRows - hud.length : e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
 		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: hud.map((r) => rowOf(els, r, columns)) })] : []), band, await next(e)] });
 	});
 

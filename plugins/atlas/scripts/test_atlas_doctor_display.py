@@ -39,6 +39,9 @@ class DisplayBase(unittest.TestCase):
             return json.load(f)
 
 
+BOTH = {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1", "CLAUDE_CODE_ENABLE_TASKS": "0"}
+
+
 class TodoToolsTest(DisplayBase):
     def test_missing_env_flagged_fixed_and_other_keys_kept(self):
         self.write({"model": "opus", "env": {"FOO": "bar"}})
@@ -46,21 +49,48 @@ class TodoToolsTest(DisplayBase):
         self.assertFalse(row["ok"])
         self.assertEqual(row["severity"], "warn")
         self.assertIn("CLAUDE_CODE_ENABLE_TODO_TOOLS", row["detail"])
+        self.assertIn("CLAUDE_CODE_ENABLE_TASKS", row["detail"])
         self.fix()
         data = self.read()
         self.assertEqual(data["model"], "opus")
-        self.assertEqual(data["env"], {"FOO": "bar", "CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"})
+        self.assertEqual(data["env"], dict(BOTH, FOO="bar"))
         self.assertTrue(self.rows()["display-todo-tools"]["ok"])
+
+    def test_only_todo_tools_warns_about_tasks(self):
+        self.write({"env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"}})
+        row = self.rows()["display-todo-tools"]
+        self.assertFalse(row["ok"])
+        self.assertIn("CLAUDE_CODE_ENABLE_TASKS is not 0", row["detail"])
+        self.assertNotIn("TODO_TOOLS is not 1", row["detail"])
+        self.fix()
+        self.assertEqual(self.read()["env"], BOTH)
+
+    def test_tasks_one_warns_and_fix_flips_to_zero(self):
+        self.write({"env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1", "CLAUDE_CODE_ENABLE_TASKS": "1"}})
+        self.assertFalse(self.rows()["display-todo-tools"]["ok"])
+        self.fix()
+        self.assertEqual(self.read()["env"], BOTH)
+
+    def test_tasks_only_warns_about_todo_tools(self):
+        self.write({"env": {"CLAUDE_CODE_ENABLE_TASKS": "0"}})
+        row = self.rows()["display-todo-tools"]
+        self.assertFalse(row["ok"])
+        self.assertIn("CLAUDE_CODE_ENABLE_TODO_TOOLS is not 1", row["detail"])
+
+    def test_both_pass(self):
+        self.write({"env": dict(BOTH)})
+        self.assertTrue(self.rows()["display-todo-tools"]["ok"])
+        self.fix()
+        self.assertEqual(self.read()["env"], BOTH)
 
     def test_process_env_satisfies_check(self):
         self.write({})
-        self.assertTrue(self.rows({"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"})["display-todo-tools"]["ok"])
+        self.assertTrue(self.rows(dict(BOTH))["display-todo-tools"]["ok"])
+        self.assertFalse(self.rows({"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"})["display-todo-tools"]["ok"])
 
-    def test_bad_tasks_value_flagged(self):
-        self.write({"env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1", "CLAUDE_CODE_ENABLE_TASKS": "maybe"}})
-        row = self.rows()["display-todo-tools"]
-        self.assertFalse(row["ok"])
-        self.assertIn("CLAUDE_CODE_ENABLE_TASKS", row["detail"])
+    def test_settings_env_wins_over_process_env(self):
+        self.write({"env": {"CLAUDE_CODE_ENABLE_TASKS": "1", "CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"}})
+        self.assertFalse(self.rows(dict(BOTH))["display-todo-tools"]["ok"])
 
     def test_bad_json_is_not_written(self):
         self.write("{ not json")
@@ -129,7 +159,7 @@ class StatusLineTest(DisplayBase):
 
     def test_foreign_statusline_warns_and_is_untouched(self):
         foreign = {"type": "command", "command": "~/bin/my-line.sh"}
-        self.write({"statusLine": foreign, "env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"}})
+        self.write({"statusLine": foreign, "env": dict(BOTH)})
         row = self.rows()["display-statusline"]
         self.assertFalse(row["ok"])
         self.assertEqual(row["severity"], "warn")

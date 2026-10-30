@@ -1349,10 +1349,11 @@ class OrchestrationContract(unittest.TestCase):
         sessions produced zero todo state. The style must name a fallback the
         model can actually execute."""
         body = OUTPUT_STYLE.read_text(encoding="utf-8")
-        self.assertIn("not always in the toolset", body)
+        self.assertIn("may be absent", body)
         self.assertIn("LEDGER |", body)
-        self.assertRegex(body, r"gated model families")
+        self.assertRegex(body, r"gated models")
         self.assertIn("CLAUDE_CODE_ENABLE_TODO_TOOLS", body)
+        self.assertIn("CLAUDE_CODE_ENABLE_TASKS=0", body)
         # The fallback is worthless if it relaxes the verification rule.
         self.assertIn("only on verified work", body)
 

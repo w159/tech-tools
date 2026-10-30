@@ -1,5 +1,14 @@
 # Changelog
 
+## 16.9.0 - 2026-10-30
+
+### Fixed
+
+- Claude Code display now matches omp on a fresh install. Audited by installing main from the marketplace into a clean config and running a real lead session in tmux beside the omp reference screenshot. Closed: the TODO tree put `[docs]` (and any non-contract `[label]`) under "Other" instead of its own phase, and counted subagent dispatch rows; the board row read 3/13 and the tasks row 2/10 for an 11-item plan (both now 2/11); the board row kept the `[phase]` prefix; subagent models show `provider/model` (`anthropic/sonnet`, or the parent's full id when it is the same family; no version is invented); the tool preview shows the lowercase tool and the call's description, fitted to the width; omp's blank rows between TODO, Subagents, the waiting line and the band, and inside the band, are drawn when rows allow and dropped first under pressure; the rail shows the phase spinner while running; the title no longer carries `ctx` or a route label omp does not show; the running band drops the key hints and the mod-only `header` chip; the channel chip and ticker name the lead `lead-<sid6>` like omp.
+- Claude Code's own task checklist no longer squeezes Atlas. With the Task tools (`TaskCreate`/`TaskUpdate`) Claude Code redraws its checklist above the prompt on every update, cutting Atlas to about 6 rows. `display-todo-tools` in atlas-doctor now requires `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` and `CLAUDE_CODE_ENABLE_TASKS=0` (TodoWrite, which draws no checklist) and `--fix` writes both. The orchestrator output style names both variables.
+
+Evidence: `.atlas/evidence/2026-10-30_display-parity-16.9.0/`.
+
 ## 16.8.0 - 2026-10-29
 
 ### Added

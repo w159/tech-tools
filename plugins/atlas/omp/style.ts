@@ -119,7 +119,7 @@ export function translateToolNames(text: string, map: ToolNameMap): string {
  * LEDGER line. The source file is untouched, so the contract test that pins the Claude wording still holds.
  * A source that no longer matches is passed through unchanged.
  */
-const CLAUDE_TODO_GATING = /`TodoWrite` is not always in the toolset:[\s\S]*?the LEDGER line is a fallback, used only if no\s+Atlas band is visible:/;
+const CLAUDE_TODO_GATING = /`TodoWrite` may be absent:[\s\S]*?the LEDGER line is a fallback\s+when no Atlas band shows:/;
 
 export function adaptTodoGatingForOmp(body: string): string {
 	return body.replace(CLAUDE_TODO_GATING, "If `TodoWrite` is not callable (check once, silently), carry one line under the header:");

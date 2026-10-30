@@ -1,0 +1,50 @@
+  SUCCESS CRITERIA: all three files read.
+  OUT OF SCOPE: any edit.
+  STOP CONDITIONS: after the third read.
+  REPORT: the sentences.
+  3) Wait for both and stop. Do not edit any file.
+ ◆ ATLAS  ◎ RESEARCH  loading the todo tool
+
+● 2 background agents launched (↓ to manage)
+   ├ atlas:verifier (Verifier eval reads)
+   └ atlas:docs-auditor (Docs curator gate reads)
+ ◆ ATLAS  ◎ RESEARCH  2/11 waiting on verifier-eval and docs-curator-gate
+The 11-item plan is on the todo list. Both background agents are running. Nothing else to do until they report.
+▸ 9s · 2 workers · ctx 6%
+TODO                                                                                                                                                                                                [-]
+ ├─ I. Research · 1/2
+ │  ├─ ☑ Trace history load failure root cause
+ │  └─ ☐ Trace gate path and pre-gate costs
+ ├─ II. Implement · 1/4
+ ├─ III. Verify · 0/4
+ ├─ IV. Docs · 0/1
+ └─────
+Subagents · 2 running
+ ├─ • ◑ anthropic/sonnet verifier-eval [verifier]: Verifier eval reads
+ │  └ ✓ read: Read README.md
+ └─ • ◑ anthropic/haiku docs-curator-gate [docs-auditor]: Docs curator gate reads
+    └ ✓ read: Read docs/CHANGELOG.md
+⏳ Waiting on verifier and docs-auditor agents
+ ◆ ATLAS  ·  mission control  ·  demo3@master  ·  wave 1                                                                                                              ◷ 00:10   2 live   ✖ 5 gates
+  ◞ RESEARCH ▶ theory ▶ test ▶ implement ▶ verify ▶ done
+ board ████▎                    2/11 ⠏ Trace gate path and pre-gate costs
+
+  THINK ◉~◉ verifier-eval           verifier     Read        README.md                                                                          ██▍                           ▁▁▁▁▁▁▁▁▁▁▄▂     10s
+  THINK °~° docs-curator-gate       docs-auditor Read        CHANGELOG.md                                                                       ██                            ▁▁▁▁▁▁▁▁▁▁▂▄      9s
+
+  #lead-efb6ce  04:21 lead-efb6ce → docs-curator-gate: Docs curator gate reads   04:21 docs-curator-gate → all: joined
+ tasks ███▎               2/11   ✔ completion   ✖ tripwire   ✖ routing
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ research: Trace gate path and pre-gate costs
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demo3   ⏱ 0m49s    👾  Sonnet 5.5  ·  medium                                                                                                                                  ◐ medium · /effort
+  📚  ctx   6% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  62.4k / 1M        │  💰  session       plan    62.4k tok  cache 96%
+  ⏳  5h    4% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  3h38m anthropic   │  🔌  anthropic     plan    62.4k tok  claude-sonnet-…
+  📅  7d   23% ▅▅▅▁▁▁▁▁▁▁▁▁▁▁  5d11h anthropic   │
+  ⏸ manual mode on
+
+  ● main
+  ◯ verifier-eval      Verifier eval reads                                                                                                                                        10s · ↓ 37.5k tokens
+  ◯ docs-curator-gate  Docs curator gate reads                                                                                                                                     8s · ↓ 37.7k tokens
+

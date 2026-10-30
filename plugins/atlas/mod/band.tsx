@@ -16,10 +16,11 @@ import { chip, eighthBar, gradientBar, merge, nickColor, padRow, seg, sparkline 
 import { charFrame, type CharState } from './roles';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
-import { fitText, formatDuration, MOCHA as M, mix, phaseHue, textWidth } from './theme';
+import { fitText, formatDuration, MOCHA as M, mix, phaseHue, spin, textWidth } from './theme';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
-export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; core?: CoreModel | null };
+export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; core?: CoreModel | null; team?: string; leadName?: string };
+// `team` (omp: the team record's `<class>/<effort>`) is the title's only scope label; `leadName` (omp: `lead-<sid6>`) names the lead in the ticker. Both absent: not shown / `lead`.
 
 const FULL = 120;
 const MID = 80;
@@ -41,7 +42,7 @@ export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; la
 ];
 const BAND_HINT = `click or ctrl+x Tab, then ${BAND_BUTTONS.map((b) => b.key).join(' ')} `;
 
-type Ctx = { s: LiveSnapshot; rail: string; cols: number; tick: number; full: boolean; now: number; done: number; total: number; open: number; gates: GateGroup[]; todoExpanded: boolean; core: CoreModel | null };
+type Ctx = { s: LiveSnapshot; rail: string; cols: number; tick: number; full: boolean; now: number; done: number; total: number; open: number; gates: GateGroup[]; todoExpanded: boolean; core: CoreModel | null; team?: string; leadName?: string };
 
 const padTo = (t: string, n: number): string => { const f = fitText(t, n); return f + ' '.repeat(Math.max(0, n - textWidth(f))); };
 const clock = (ms: number): string => {
@@ -69,13 +70,12 @@ const boardOf = (s: LiveSnapshot): string => (s.channel ? s.channel.split('/')[0
 const gatesBrief = (c: Ctx): string => (!c.gates.some(hasGateData) ? '' : c.open ? `✖ ${c.open} gates` : '✔ gates');
 const statsOf = (c: Ctx, shown: LiveWorker[]): string => {
   const since = Math.min(...shown.map((w) => w.startedAt));
-  const parts = [`◷ ${clock(c.now - since)}`, `${activeCount(shown)} live`, c.s.contextPct > 0 ? `ctx ${c.s.contextPct}%` : '', gatesBrief(c)];
+  const parts = [`◷ ${clock(c.now - since)}`, `${activeCount(shown)} live`, gatesBrief(c)];
   return `${parts.filter(Boolean).join('   ')} `;
 };
 
 function titleRow(c: Ctx, all: LiveWorker[], shown: LiveWorker[]): Segment[] {
-  const scope = shown.find((w) => w.scope)?.scope;
-  const left = [`${MARK} ATLAS`, ...(c.full ? ['mission control'] : []), boardOf(c.s), `wave ${waveOf(all)}`, ...(scope ? [scope] : [])].join('  ·  ');
+  const left = [`${MARK} ATLAS`, ...(c.full ? ['mission control'] : []), boardOf(c.s), `wave ${waveOf(all)}`, ...(c.team ? [c.team] : [])].join('  ·  ');
   return withChips(c, titleChips(c), (w) => gradientBar(left, statsOf(c, shown), w, M.violet, M.sky));
 }
 
@@ -83,10 +83,11 @@ function titleRow(c: Ctx, all: LiveWorker[], shown: LiveWorker[]): Segment[] {
 
 const pastPill = (id: string, compact: boolean): Segment => ({ t: compact ? ' ✓ ' : ` ✓ ${id} `, color: M.base, bg: mix(phaseHue(id), M.panel, 0.45) });
 const futurePill = (id: string, compact: boolean): Segment => ({ t: compact ? ' · ' : ` ${id} `, color: M.muted, bg: M.panel2 });
-/** The current phase: bright hue, its white mix cycling with the tick while workers run. */
+/** The current phase: bright hue, its white mix cycling with the tick while workers run; the phase's spinner frame
+ * leads the label while running, a steady ◆ when idle (twin: omp currentPill). */
 const nowPill = (id: string, tick: number, animate: boolean): Segment => {
   const shimmer = animate ? 0.25 + 0.25 * ((tick % 4) / 3) : 0.15;
-  return { t: ` ◆ ${id.toUpperCase()} `, color: M.base, bg: mix(phaseHue(id), M.white, shimmer), bold: true };
+  return { t: ` ${animate ? spin(tick, id) : '◆'} ${id.toUpperCase()} `, color: M.base, bg: mix(phaseHue(id), M.white, shimmer), bold: true };
 };
 
 /** Pill for one phase; `rel` is its position against the current phase (0 current, <0 past, >0 future). */
@@ -173,9 +174,10 @@ const nick = (name: string): Segment => seg(name, nickColor(name), M.panel, true
 
 /** Last two channel messages as `hh:mm from → to: text`, led by the channel chip. */
 function ticker(c: Ctx): Segment[] {
-  const channel = c.s.channel?.split('/').pop() ?? 'lead';
+  const channel = c.leadName ?? c.s.channel?.split('/').pop() ?? 'lead';
+  const named = (n: string): string => (c.leadName && n === 'lead' ? c.leadName : n); // comms collapse the lead's name to `lead`; omp shows the board's own
   const msgs = c.s.comms.slice(-TICKER_ROWS).flatMap((m, i) => [
-    seg(`${i ? '   ' : ''}${hhmm(m.ts)} `, M.dim), nick(m.from), seg(' → ', M.muted), nick(m.to), seg(`: ${m.text.replace(/\s+/g, ' ')}`, M.text),
+    seg(`${i ? '   ' : ''}${hhmm(m.ts)} `, M.dim), nick(named(m.from)), seg(' → ', M.muted), nick(named(m.to)), seg(`: ${m.text.replace(/\s+/g, ' ')}`, M.text),
   ]);
   return padRow([seg(' '), chip(`#${channel}`, M.violet), seg(' '), ...msgs], c.cols);
 }
@@ -301,24 +303,28 @@ function narrowRow(c: Ctx, shown: LiveWorker[]): Segment[] {
 }
 
 /** Title, rail, as many lanes as fit, then "+N more", ticker and footer per `planRows`. */
-function fullRows(els: ClientElements, c: Ctx, all: LiveWorker[], shown: LiveWorker[], maxRows: number, on?: BandHandlers): Row[] {
+function fullRows(els: ClientElements, c: Ctx, all: LiveWorker[], shown: LiveWorker[], maxRows: number): Row[] {
   const core = maxRows >= 4 ? coreRow(c) : []; // title, rail, core and one lane
   const board = boardRows(c, maxRows - 3 - core.length, 2); // keep title, rail, core and one lane
   const plan = planRows(maxRows - board.length - core.length, shown.length, c.s.comms.length > 0);
-  const rows: Row[] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, true), c.cols), ...core, ...board, ...shown.slice(0, plan.lanes).map((w) => lane(w, c))].map((r) => (Array.isArray(r) ? merge(r) : r));
-  if (plan.more) rows.push(padRow([seg(`   +${shown.length - plan.lanes} more`, M.muted)], c.cols));
-  if (plan.ticker) rows.push(ticker(c));
-  if (plan.footer) rows.push(footer(els, c, on));
-  return rows;
+  const head: Row[] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, true), c.cols), ...core, ...board];
+  const lanes: Row[] = shown.slice(0, plan.lanes).map((w) => lane(w, c));
+  const extras: Row[] = [...(plan.more ? [padRow([seg(`   +${shown.length - plan.lanes} more`, M.muted)], c.cols)] : []), ...(plan.ticker ? [ticker(c)] : [])];
+  // omp breathe(): spare rows become a blank under the board, then a blank between the lanes and the extras; the first to go under budget.
+  const spare = maxRows - head.length - lanes.length - extras.length - +plan.footer;
+  const blank = (): Row => padRow([seg(' ')], c.cols);
+  const rows = [...head, ...(spare >= 1 ? [blank()] : []), ...lanes, ...(spare >= 2 && extras.length ? [blank()] : []), ...extras, ...(plan.footer ? [footer(els, c)] : [])];
+  return rows.map((r) => (Array.isArray(r) ? merge(r) : r));
 }
 
-export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12, lastPhase = null, todoExpanded = false, core = null }: BandModel, on?: BandHandlers): RenderElement {
+export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12, lastPhase = null, todoExpanded = false, core = null, team, leadName }: BandModel, on?: BandHandlers): RenderElement {
+  gates = gates.filter((g) => g.id !== 'header'); // the header check is the mod's own group; omp's gates row never shows it
   const { done, total } = routeCounts(s.todoGroups, s.contract);
   const all = live.filter((w) => w.state !== 'parked'); // parked workers are resting
   const shown = all.filter((w) => w.state !== 'done');
   const cols = Math.max(1, columns);
-  const c: Ctx = { s, rail: railPhase(s, lastPhase), cols, tick, full: cols >= FULL, now: s.now, done, total, open: openGateCount(gates), gates, todoExpanded, core };
+  const c: Ctx = { s, rail: railPhase(s, lastPhase), cols, tick, full: cols >= FULL, now: s.now, done, total, open: openGateCount(gates), gates, todoExpanded, core, team, leadName };
   if (!shown.length) return panel(els, idleRows(els, c, all, maxRows, on), cols);
   if (cols < MID || maxRows < 3) return panel(els, [narrowRow(c, shown)], cols);
-  return panel(els, fullRows(els, c, all, shown, maxRows, on), cols);
+  return panel(els, fullRows(els, c, all, shown, maxRows), cols);
 }

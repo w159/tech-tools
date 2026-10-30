@@ -5,7 +5,7 @@ import { bandTree, planRows, shortTool } from './band';
 import { callBuckets, liveWorkers } from './data/live';
 import { pushCall } from './data/orchestration';
 import { busySnap, NOW } from './live_fixture';
-import { MOCHA, textWidth } from './theme';
+import { MOCHA, spin, textWidth } from './theme';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -40,6 +40,16 @@ describe('band board panel', () => {
     expect(rows[2]).toContain('1/3');
     expect(rows[2]).toContain('impl-auth: edit auth middleware');
   });
+  test('collapsed bar counts the lead plan only: 2/11 with two dispatch rows present', () => {
+    const plan = Array.from({ length: 11 }, (_, n) => ({ id: `p${n}`, content: `plan item ${n}`, status: n < 2 ? 'completed' : 'pending' }));
+    const dispatch = [
+      { id: 'd0', content: 'dispatch one', status: 'completed', origin: 'dispatch' },
+      { id: 'd1', content: 'dispatch two', status: 'in_progress', origin: 'dispatch' },
+    ];
+    const { rows } = panel(160, { snapshot: busySnap({ todos: [...plan, ...dispatch] as any }) });
+    expect(rows[2]).toContain('2/11');
+    expect(rows[2]).not.toContain('/13');
+  });
   test('expanded lists every item', () => {
     const { rows } = panel(160, { snapshot: busySnap({ todos: boardTodos as any }), todoExpanded: true, maxRows: 14 });
     expect(rows.slice(2, 5).map((r) => r.trim().slice(0, 1))).toEqual(['✔', expect.any(String), '○']);
@@ -54,10 +64,11 @@ describe('Mission Control band', () => {
     expect(rows[0]).toContain('◆ ATLAS');
     expect(rows[0]).toContain('mission control');
     expect(rows[0]).toMatch(/◷ \d\d:\d\d/);
-    expect(rows[0]).toContain('ctx 12%');
+    expect(rows[0]).not.toContain('ctx'); // omp's title has no context-percent stat
     expect(all).not.toContain('$');
     for (const s of ['RUN ', 'WAIT', 'FAIL', 'explorer-1', 'Grep', '#lead-1', 'need a decision on the token ttl', 'tasks', '✖ completion']) expect(all).toContain(s);
-    expect(rows).toHaveLength(7); // title + rail + blocked, failed, working lanes + ticker + footer
+    expect(rows.filter((r) => r.trim())).toHaveLength(7); // title + rail + blocked, failed, working lanes + ticker + footer
+    expect(rows).toHaveLength(9); // plus omp's two breathing rows (under the rail, above the ticker)
   });
   test('title bar is a truecolor gradient: every cell filled, colours move left to right', () => {
     const title = panel(160).rowNodes[0]!;
@@ -69,7 +80,7 @@ describe('Mission Control band', () => {
   test('phase rail: past pills checked, current upper-case and bright, future plain', () => {
     const rail = panel(160).rows[1]!;
     expect(rail).toContain(' ✓ research ');
-    expect(rail).toContain(' ◆ IMPLEMENT ');
+    expect(rail).toContain(` ${spin(3, 'implement')} IMPLEMENT `); // the phase's spinner frame while running (omp currentPill)
     expect(rail).toContain(' verify ');
     expect(rail).toContain('▶');
   });
@@ -96,7 +107,7 @@ describe('Mission Control band', () => {
     expect(pushCall(Array.from({ length: 60 }, () => NOW), NOW)).toHaveLength(48);
   });
   test('ticker: channel chip and hashed nick colours, stable per name', () => {
-    const ticker = panel(160).rowNodes[5]!;
+    const ticker = laneOf(panel(160).rowNodes, '#lead-1');
     const chip = cells(ticker).find((t) => String(t.props.children).includes('#lead-1'))!;
     expect(chip.props.backgroundColor).toBe(MOCHA.violet);
     const nick = (n: string) => cells(ticker).find((t) => t.props.children === n)?.props.color;
@@ -204,11 +215,61 @@ describe('Mission Control band', () => {
     expect(lane('failed', 0)).toContain('◔n◔');
     expect(lane('failed', 3)).toContain('◔n◔');
   });
-  test('title shows the dispatch scope and the wave', () => {
+  test('title shows the wave; a scope label only when the caller passes a team (omp: the team record)', () => {
     const snapshot = busySnap();
     snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, scope: 'audit/medium' };
     const title = panel(160, { snapshot, live: liveWorkers(snapshot, NOW) }).rows[0]!;
-    expect(title).toContain('audit/medium');
+    expect(title).not.toContain('audit/medium');
     expect(title).toMatch(/wave \d/);
+    expect(panel(160, { snapshot, live: liveWorkers(snapshot, NOW), team: 'fix/low' }).rows[0]).toContain('wave 1  ·  fix/low');
+  });
+});
+
+describe('band parity with the omp mission panel', () => {
+  const rowsOf = (over: Record<string, unknown> = {}) => panel(200, { gates: [gate], ...over }).rows;
+  test('running band: no key hints or control buttons, only the task bar and gate chips', () => {
+    const { all, rows } = panel(200, { gates: [gate] });
+    expect(all).not.toMatch(/r: route|click or ctrl\+x/);
+    expect(rows[rows.length - 1]).toMatch(/^ tasks .*\d+\/\d+ +✖ completion/);
+  });
+  test('the header check group never draws a chip or counts as an open gate', () => {
+    const header = { id: 'header' as const, title: 'Header', lines: [{ ok: false, label: 'h' }] } as any;
+    const { all, rows } = panel(200, { gates: [gate, header] });
+    expect(all).not.toContain('header');
+    expect(rows[0]).toContain('✖ 1 gates');
+  });
+  test('breathing rows: a blank under the board and one above the ticker; the first to go under budget', () => {
+    const rows = rowsOf();
+    expect(rows[2]!.trim()).toBe(''); // no board here: straight under the rail
+    const ticker = rows.findIndex((r) => r.includes('#lead-1'));
+    expect(rows[ticker - 1]!.trim()).toBe('');
+    expect(rows[ticker - 2]!.trim()).not.toBe('');
+    expect(rowsOf({ maxRows: 8 }).filter((r) => !r.trim())).toHaveLength(1);
+    expect(rowsOf({ maxRows: 7 }).filter((r) => !r.trim())).toHaveLength(0);
+    for (const maxRows of [3, 4, 5, 6, 7, 8, 9, 12]) expect(rowsOf({ maxRows }).length).toBeLessThanOrEqual(maxRows);
+  });
+  test('ticker names the lead like omp: the board name, not the collapsed `lead`', () => {
+    const named = panel(200, { leadName: 'lead-01a189' }).rows.find((r) => r.includes('#lead-01a189'))!;
+    expect(named).toContain('→ lead-01a189:');
+    expect(named).not.toContain('→ lead:');
+    expect(named).toContain('explorer-1 → lead-01a189');
+  });
+  test('the running rail leads the current phase with its own spinner frame; idle keeps a steady ◆', () => {
+    for (const tick of [0, 1, 2]) expect(panel(200, { tick }).rows[1]).toContain(`${spin(tick, 'implement')} IMPLEMENT`);
+    expect(panel(200, { snapshot: idleSnap(), live: [] }).rows[1]).toContain('◆ IMPLEMENT');
+  });
+  test('rail separator is ▶ and the board spinner is the braille frame, as in omp', () => {
+    const snapshot = busySnap({ todos: [{ id: 'b', content: '[research] edit auth middleware', status: 'in_progress', owner: 'impl-auth' }] as any });
+    const rows = panel(200, { snapshot, tick: 0 }).rows;
+    expect(rows[1]).toContain('▶');
+    expect(rows[2]).toContain('⠋ impl-auth: edit auth middleware');
+  });
+  test('board text drops the [phase] / [label] prefix', () => {
+    const todos = [{ id: 'x', content: '[research] Trace gate path', status: 'in_progress' }, { id: 'y', content: '[label] Other', status: 'pending' }];
+    const collapsed = panel(200, { snapshot: busySnap({ todos: todos as any }) }).rows[2]!;
+    expect(collapsed).toContain('Trace gate path');
+    expect(collapsed).not.toContain('[research]');
+    const open = panel(200, { snapshot: busySnap({ todos: todos as any }), todoExpanded: true, maxRows: 14 }).all;
+    expect(open).not.toMatch(/\[(research|label)\]/);
   });
 });

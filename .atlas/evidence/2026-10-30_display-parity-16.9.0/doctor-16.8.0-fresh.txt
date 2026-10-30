@@ -1,0 +1,5 @@
+WARN  display-todo-tools   CLAUDE_CODE_ENABLE_TODO_TOOLS is not 1: on models Claude Code does not list, the TodoWrite/Task tools are absent and the TODO tree and Subagents block stay empty. `atlas_doctor.py --fix` writes "env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"} into /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg2/settings.json
+PASS  display-mod          ../mod/register.ts registered; ATLAS_MOD/ATLAS_HUD not off
+PASS  display-todo-mirror  PostToolUse covers ['TodoWrite', 'TaskCreate', 'TaskUpdate', 'Agent', 'Task', 'Bash']
+WARN  display-statusline   statusLine unset in /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg2/settings.json; `atlas_doctor.py --fix` sets it to python3 "/tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg2/plugins/cache/tech-tools/atlas/16.8.0/scripts/atlas_statusline.py"
+PASS  display-harness      claude-code

@@ -3,6 +3,7 @@
 // content, evidence), capped by the row budget with a `+N more` row. Pure: rows in, Segment rows out.
 // The shimmer (a bright cell sweeping the filled bar) and the in-progress glyph follow the spinner tick.
 import type { TodoItem } from './contract';
+import { isPlanItem } from './data/todos';
 import { chip, merge, padRow, seg } from './paint';
 import type { Segment } from './runs';
 import { fitText, MOCHA as M, mix, spin, textWidth } from './theme';
@@ -17,6 +18,9 @@ const glyphOf = (status: string, tick: number): Segment => {
   const [ch, color] = GLYPH[status] ?? GLYPH.pending!;
   return seg(ch, color);
 };
+
+/** Board text without the contract's `[phase] ` / `[label] ` prefix (omp shows the bare title; the phase groups already name it). */
+const bare = (content: string): string => content.replace(/^\s*\[[^\]]+\]\s*/, '');
 
 const glyphAt = (i: number, whole: number, part: number): string => (i < whole ? '█' : i === whole ? EIGHTHS[part] ?? ' ' : ' ');
 const cellColor = (ch: string, i: number, lit: number, base: string): string => (ch === ' ' ? M.dim : i === lit ? mix(base, M.white, 0.6) : base);
@@ -37,13 +41,14 @@ function bar(frac: number, width: number, tick: number, pulse: boolean): Segment
 const runsWidth = (parts: Segment[]): number => textWidth(parts.map((p) => p.t).join(''));
 
 function collapsed(items: TodoItem[], o: TodoPanelOpts): Segment[] {
-  const done = items.filter((i) => i.status === 'completed').length;
+  const plan = items.filter(isPlanItem); // the lead's plan only: per-subagent dispatch rows stay out of done/total and the bar
+  const done = plan.filter((i) => i.status === 'completed').length;
   const cur = items.find((i) => i.status === 'in_progress');
   const barW = Math.max(6, Math.min(24, Math.floor(o.cols / 4)));
-  const head = [seg(' '), seg('board ', M.muted), ...bar(done / items.length, barW, o.tick, !!cur), seg(` ${done}/${items.length} `, M.text, M.panel, true)];
+  const head = [seg(' '), seg('board ', M.muted), ...bar(done / Math.max(1, plan.length), barW, o.tick, !!cur), seg(` ${done}/${plan.length} `, M.text, M.panel, true)];
   const room = o.cols - runsWidth(head) - 1;
   const tail = cur && room > 6
-    ? [glyphOf('in_progress', o.tick), seg(` ${fitText(`${cur.owner ? `${cur.owner}: ` : ''}${cur.content}`, room - 2)}`, M.text)]
+    ? [glyphOf('in_progress', o.tick), seg(` ${fitText(`${cur.owner ? `${cur.owner}: ` : ''}${bare(cur.content)}`, room - 2)}`, M.text)]
     : [];
   return padRow(fitRow([...head, ...tail], o.cols), o.cols);
 }
@@ -70,7 +75,7 @@ function itemRow(i: TodoItem, o: TodoPanelOpts, indent = ''): Segment[] {
   const head = [seg(` ${indent}`), glyphOf(i.status, o.tick), seg(' '), ...ownerCell(i)];
   const ev = cleanEvidence(i);
   const room = o.cols - runsWidth(head) - 1;
-  const content = fitText(i.content, ev ? Math.max(10, Math.floor(room * 0.6)) : room);
+  const content = fitText(bare(i.content), ev ? Math.max(10, Math.floor(room * 0.6)) : room);
   const color = i.status === 'completed' ? M.muted : M.text;
   return padRow(fitRow([...head, seg(content, color), ...evidenceTail(ev, room, textWidth(content))], o.cols), o.cols);
 }

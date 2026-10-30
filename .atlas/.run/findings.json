@@ -10178,5 +10178,22 @@
     "status": "verified",
     "verified_at": "2026-10-29T06:53:05+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "t9597f35a",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "No new test failures on changed tree vs head (pytest, plugin test, bun)",
+    "evidence": [
+      "/tmp/claude-0/suite-changed.txt /tmp/claude-0/suite-head.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "uvx --with pytest-subtests pytest plugins/atlas -q; claude plugin test plugins/atlas; bun test in plugins/atlas/omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-30T04:48:43+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

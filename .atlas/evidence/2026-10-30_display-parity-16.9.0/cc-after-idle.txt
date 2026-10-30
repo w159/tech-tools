@@ -1,0 +1,50 @@
+
+● 2 background agents launched (↓ to manage)
+   ├ atlas:verifier (Verifier eval reads)
+   └ atlas:docs-auditor (Docs curator gate reads)
+ ◆ ATLAS  ◎ RESEARCH  2/11 waiting on verifier-eval and docs-curator-gate
+The 11-item plan is on the todo list. Both background agents are running. Nothing else to do until they report.
+▸ 11s · ctx 6%
+▌ ✔ verifier-eval  verifier done · STATUS: DONE · 20s
+ ◆ ATLAS  ◎ RESEARCH  2/11 verifier-eval done, docs-curator-gate still running
+verifier-eval finished all three reads:
+1. src/calc.py defines add(a,b) and sub(a,b), returning a+b and a-b.
+2. README.md has only the heading # demo.
+3. docs/CHANGELOG.md has only the heading # Changelog and no entries.
+
+Waiting on docs-curator-gate.
+▸ 2s · ctx 6%
+▌ ✔ docs-curator-gate  docs-auditor done · STATUS: DONE · 19s
+ ◆ ATLAS  ◎ RESEARCH  2/11 both agents finished, no files edited
+docs-curator-gate read all three files and found that the docs don't mention calc:
+- docs/CHANGELOG.md has only # Changelog, and README.md has only # demo. Neither has an entry or description for the calc module.
+- src/calc.py defines add (line 1) and sub (line 4), with no docstrings.
+
+Both agents reported 3/3 reads and no changes. Stopping here as asked.
+▸ 29s · ctx 6%
+TODO                                                                                                                                                                                                [-]
+ ├─ I. Research · 1/2
+ │  ├─ ☑ Trace history load failure root cause
+ │  └─ ☐ Trace gate path and pre-gate costs
+ ├─ II. Implement · 1/4
+ ├─ III. Verify · 0/4
+ ├─ IV. Docs · 0/1
+ └─────
+ ◆ ATLAS  ·  idle  ·  last wave: 2 workers · 52s · ✔ ok                                                                                                                                  gates ✖5
+  ◆ RESEARCH ▶ theory ▶ test ▶ implement ▶ verify ▶ done
+  CONTRACT  header 3/3 · evidence 2/4 · ✖ 5 gates   VERDICT  0 claims · ✔ 1 verified · ✖ 0 refuted · ? 0 open · ⚠ 0 unchecked   OFFLOAD  no workers yet   ROUTE  no team yet
+ board ████▎                    2/11 ⠸ Trace gate path and pre-gate costs
+ tasks ███▎               2/11   ✔ completion   ✖ tripwire   ✖ routing  r: route  t: team  c: channel  g: core  o: board                                     click or ctrl+x Tab, then r t c g o
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ research: Trace gate path and pre-gate costs
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demo3   ⏱ 1m11s    👾  Sonnet 5.5  ·  medium
+  📚  ctx   6% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  64.8k / 1M        │  💰  session       plan    65.0k tok  cache 98%
+  ⏳  5h    4% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  3h38m anthropic   │  🔌  anthropic     plan    65.0k tok  claude-sonnet-…
+  📅  7d   23% ▅▅▅▁▁▁▁▁▁▁▁▁▁▁  5d11h anthropic   │
+  ⏸ manual mode on
+
+
+
+

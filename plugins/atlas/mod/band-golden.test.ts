@@ -7,6 +7,7 @@ import { golden } from "../contracts/band-golden";
 import { bandTree } from "./band";
 import { liveWorkers } from "./data/live";
 import { busySnap } from "./live_fixture";
+import { spin } from "./theme";
 
 type Node = { kind: string; props: Record<string, any> };
 const mk =
@@ -103,7 +104,12 @@ describe("band golden rows", () => {
       columns: fx.columns,
       tick: 0,
       maxRows: 12,
+      team: fx.scope, // omp takes it from the team record; register.ts passes none
     }) as unknown as Node;
-    expect(trimRows((tree.props.children as Node[]).map(text))).toEqual(golden);
+    // Twin of omp's textRows: the blank spacer rows carry no text. omp's test injects spin "◆" for the current pill;
+    // here the pill wears the implement frame at tick 0, folded to the same glyph.
+    const rows = trimRows((tree.props.children as Node[]).map(text)).filter((r) => r !== "");
+    expect(rows.map((r) => r.replace(spin(0, "implement"), "◆"))).toEqual(golden);
+    expect(trimRows((tree.props.children as Node[]).map(text)).filter((r) => r === "")).toHaveLength(2);
   });
 });

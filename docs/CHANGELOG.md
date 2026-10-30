@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 16.9.0 - 2026-10-30
+
+- atlas 16.9.0: fresh-install audit of the Claude Code display against omp. The TODO tree, Subagents block and Mission Control band now match omp (label phases like `[docs]`, plan-only counts 2/11, prefix-free board row, `provider/model`, tool descriptions, omp spacing, lead channel name), and atlas-doctor's `display-todo-tools` now sets `CLAUDE_CODE_ENABLE_TASKS=0` so Claude Code's own checklist stops squeezing Atlas to 6 rows. Evidence: `.atlas/evidence/2026-10-30_display-parity-16.9.0/`.
+
 ## atlas 16.8.0 - 2026-10-29
 
 - atlas 16.8.0: Claude Code shows the same TODO tree, Subagents block and Mission Control band as omp (`mod/hud.ts`), the board mirrors `TaskCreate`/`TaskUpdate`, and atlas-doctor gains `display-` checks with `--fix` for the task-tools env flag and the status line. Evidence: `.atlas/evidence/2026-10-29_display-parity-16.8.0/`.

@@ -1,0 +1,12 @@
+WARN  display-todo-tools   CLAUDE_CODE_ENABLE_TODO_TOOLS is not 1 (the TodoWrite tool is absent on models Claude Code does not list); CLAUDE_CODE_ENABLE_TASKS is not 0 (the Task tools make Claude Code draw and re-expand its own checklist above the prompt, squeezing the Atlas TODO tree and band to about 6 rows). `atlas_doctor.py --fix` writes "env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1", "CLAUDE_CO
+PASS  display-mod          ../mod/register.ts registered; ATLAS_MOD/ATLAS_HUD not off
+PASS  display-todo-mirror  PostToolUse covers ['TodoWrite', 'TaskCreate', 'TaskUpdate', 'Agent', 'Task', 'Bash']
+WARN  display-statusline   statusLine unset in /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg3/settings.json; `atlas_doctor.py --fix` sets it to python3 "/tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg3/plugins/cache/tech-tools/atlas/16.8.0/scripts/atlas_statusline.py"
+PASS  display-harness      claude-code
+FIX: display: set env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1" and env.CLAUDE_CODE_ENABLE_TASKS="0" in /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg3/settings.json
+FIX: display: set statusLine to python3 "/tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg3/plugins/cache/tech-tools/atlas/16.8.0/scripts/atlas_statusline.py" in /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg3/settings.json
+PASS  display-todo-tools   CLAUDE_CODE_ENABLE_TODO_TOOLS=1 and CLAUDE_CODE_ENABLE_TASKS=0 (TodoWrite on every model, no Claude Code checklist; needs Claude Code 2.1.233+)
+PASS  display-mod          ../mod/register.ts registered; ATLAS_MOD/ATLAS_HUD not off
+PASS  display-todo-mirror  PostToolUse covers ['TodoWrite', 'TaskCreate', 'TaskUpdate', 'Agent', 'Task', 'Bash']
+PASS  display-statusline   statusLine runs /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg3/plugins/cache/tech-tools/atlas/16.8.0/scripts/atlas_statusline.py
+PASS  display-harness      claude-code

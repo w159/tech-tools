@@ -70,11 +70,11 @@ prose. A run that ships code makes the list before the first dispatch, one item
 per subagent. An item flips to `completed` only when verified, not when a
 subagent returns.
 
-`TodoWrite` is not always in the toolset: gated model families drop it unless
-`CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, and under `ENABLE_TOOL_SEARCH` it is deferred
-(`ToolSearch("select:TodoWrite")`). Without it, carry the count on the header
-(`<n>/<m>`); the LEDGER line is a fallback, used only if no
-Atlas band is visible:
+`TodoWrite` may be absent: gated models drop it unless
+`CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (with `CLAUDE_CODE_ENABLE_TASKS=0`), and under
+`ENABLE_TOOL_SEARCH` it is deferred (`ToolSearch("select:TodoWrite")`). Without
+it, carry the count on the header (`<n>/<m>`); the LEDGER line is a fallback
+when no Atlas band shows:
 
     LEDGER | 3/5 | now: wire the gate | left: contract test, docs
 

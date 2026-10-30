@@ -87,6 +87,9 @@ const createdAt = (it: BoardItem): number => Number(it.created_at) || 0;
 const isLive = (it: BoardItem, sessionId: string): boolean =>
   it.session_id === sessionId || (it.status !== 'completed' && it.origin !== 'carried');
 
+/** The lead's own plan: hook-added dispatch rows (one per subagent dispatch) are bookkeeping, not plan items. */
+export const isPlanItem = (it: object): boolean => (it as { origin?: string }).origin !== 'dispatch';
+
 /** Advisor notes are not operating-contract work: they never join phase groups or progress. */
 const isAdvisor = (it: BoardItem): boolean => it.origin === 'advisor';
 /** Carried rows are re-stamped with the new session id at boot (atlas_todo.carry) yet belong to an earlier plan. */
@@ -106,7 +109,7 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
   const rank: Record<string, number> = { in_progress: 0, pending: 1, completed: 2 };
   const row = (it: BoardItem) => ({
     id: it.id, content: clip(it.content, 160), status: it.status, owner: it.owner ?? null, evidence: it.evidence ? clip(it.evidence, 200) : null,
-    live: isLive(it, sessionId),
+    live: isLive(it, sessionId), ...(it.origin ? { origin: it.origin } : {}),
   });
   const contractItems = items.filter(it => !notOwn(it));
   const groups: TodoGroup[] = [];
@@ -138,7 +141,8 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
 }
 
 /** AtlasSnapshot['counts']: done/total overall and per contract.todoPhases phase. */
-export function computeCounts(items: TodoItem[], contract: Contract): AtlasSnapshot['counts'] {
+export function computeCounts(all: TodoItem[], contract: Contract): AtlasSnapshot['counts'] {
+  const items = all.filter(isPlanItem);
   const byPhase: Record<string, PhaseCount> = {};
   for (const p of contract.todoPhases) byPhase[p] = { done: 0, total: 0 };
   let done = 0;
@@ -165,9 +169,8 @@ export function currentPhase(
   return { phase: 'research', source: 'default' };
 }
 
-/** done/total over exactly the tasks the route shows: items of the contract-phase groups (advisor notes and unsorted excluded). */
-export function routeCounts(groups: readonly TodoGroup[], contract: Contract): { done: number; total: number } {
-  const phases: readonly string[] = contract.todoPhases;
-  const items = groups.filter((g) => phases.includes(g.phase)).flatMap((g) => g.items);
+/** done/total over the lead's plan: every group's items (contract phases and unsorted, so label phases count) except advisor notes and dispatch rows; same basis as computeCounts. */
+export function routeCounts(groups: readonly TodoGroup[], _contract?: Contract): { done: number; total: number } {
+  const items = groups.filter((g) => g.phase !== 'advisor').flatMap((g) => g.items).filter(isPlanItem);
   return { done: items.filter((i) => i.status === 'completed').length, total: items.length };
 }

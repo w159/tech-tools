@@ -22,9 +22,10 @@ const hotkeys = (n: Node): string[] => buttons(n).map((b) => b.props.hotkey).fil
 
 const calls: string[] = [];
 const handlers: BandHandlers = { openView: (v) => calls.push(`open:${v}`), toggleTodos: () => calls.push('board') };
-const band = (columns = 160, on: BandHandlers | null = handlers): Node => {
-  const snapshot = busySnap();
-  return bandTree(els, { snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns, tick: 0, maxRows: 12 }, on ?? undefined) as unknown as Node;
+/** The idle band (no live worker): the only state that carries the control buttons, as omp draws none while running. */
+const band = (columns = 160, on: BandHandlers | null = handlers, running = false): Node => {
+  const snapshot = running ? busySnap() : busySnap({ squad: [], activity: {}, comms: [] });
+  return bandTree(els, { snapshot, live: running ? liveWorkers(snapshot, NOW) : [], gates: [], columns, tick: 0, maxRows: 12 }, on ?? undefined) as unknown as Node;
 };
 const byKey = (root: Node, key: string): Node => {
   const b = buttons(root).find((x) => x.props.key === key);
@@ -47,6 +48,11 @@ describe('band footer buttons', () => {
   test('the buttons survive the 80-column tier and drop with no handlers', () => {
     expect(buttons(band(90)).length).toBe(5);
     expect(buttons(band(160, null)).length).toBe(0);
+  });
+  test('a running band carries no buttons and no hint (omp has none)', () => {
+    const t = band(160, handlers, true);
+    expect(buttons(t).length).toBe(0);
+    expect(textOf(t)).not.toMatch(/click or ctrl\+x/);
   });
   test('the hint states the gesture and every key it lists exists as a hotkey', () => {
     const t = band();

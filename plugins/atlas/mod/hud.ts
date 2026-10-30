@@ -4,6 +4,7 @@
 // spine glyphs, progress fill, active-phase rule, collapse caps and the subagent line format.
 import type { SquadAgent, TodoItem } from './contract';
 import type { LiveWorker } from './data/live';
+import { isPlanItem } from './data/todos';
 import type { Segment } from './runs';
 import { fitText, MOCHA as M, textWidth } from './theme';
 
@@ -16,6 +17,8 @@ export type HudAgent = {
   state: string;
   tool?: string | null;
   target?: string | null;
+  /** The current (else last) call's intent: omp's tool-preview detail. */
+  detail?: string | null;
   lastTool?: string | null;
   lastLine?: string;
 };
@@ -24,11 +27,12 @@ export type HudAgent = {
 export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[]): HudAgent[] {
   return live.map((w) => {
     const s = squad.find((a) => a.name === w.name);
-    return { name: w.name, role: w.role, state: w.state, tool: w.tool, target: w.target, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
+    return { name: w.name, role: w.role, state: w.state, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
 }
 
-export type HudInput = { todos: TodoItem[]; agents: HudAgent[] };
+/** `root` (the project root) makes paths in a tool preview project-relative. */
+export type HudInput = { todos: TodoItem[]; agents: HudAgent[]; root?: string | null };
 export type HudOpts = { cols: number; maxRows: number };
 
 const C = { accent: M.violet, muted: M.muted, dim: M.grey, done: M.muted, ok: M.green, warn: M.yellow, bad: M.red } as const;
@@ -70,14 +74,19 @@ export function truncateMiddle(text: string, width: number): string {
 
 type Group = { id: string; label: string; tasks: TodoItem[] };
 
-/** Phases in order of first appearance in the plan; items with no phase go under a final "Other". */
+const LABEL_PREFIX = /^\[([A-Za-z][\w-]*)\]\s+/;
+/** The item's phase: its stamped contract phase, else a `[label] ` content prefix (a label that is not a contract phase, e.g. `[docs]`). */
+const phaseOf = (t: TodoItem): string | undefined => t.phase ?? LABEL_PREFIX.exec(t.content)?.[1]?.toLowerCase();
+
+/** Phases (contract or `[label]` ones) in order of first appearance in the plan; items with no label go under a final "Other". */
 function groupsOf(todos: TodoItem[]): Group[] {
   const groups: Group[] = [];
   const other: TodoItem[] = [];
   for (const t of todos) {
-    if (!t.phase) { other.push(t); continue; }
-    let g = groups.find((x) => x.id === t.phase);
-    if (!g) groups.push((g = { id: t.phase, label: capitalize(t.phase), tasks: [] }));
+    const phase = phaseOf(t);
+    if (!phase) { other.push(t); continue; }
+    let g = groups.find((x) => x.id === phase);
+    if (!g) groups.push((g = { id: phase, label: capitalize(phase), tasks: [] }));
     g.tasks.push(t);
   }
   if (other.length > 0) groups.push({ id: 'other', label: 'Other', tasks: other });
@@ -114,7 +123,8 @@ export function selectCollapsed(tasks: TodoItem[], isActive: (t: TodoItem) => bo
 }
 
 function itemRun(t: TodoItem, matched: boolean): Segment[] {
-  const text = t.phase ? t.content.replace(new RegExp(`^\\[${t.phase}\\]\\s*`), '') : t.content;
+  const phase = phaseOf(t);
+  const text = phase ? t.content.replace(new RegExp(`^\\[${phase}\\]\\s*`, 'i'), '') : t.content;
   switch (t.status) {
     case 'completed': return [seg(`${CHECKED} `, C.done), seg(text, C.done, { strike: true })];
     case 'abandoned': return [seg(`${BOX} `, C.bad), seg(text, C.bad, { strike: true })];
@@ -181,7 +191,13 @@ function todoBlock(todos: TodoItem[], agents: HudAgent[], caps: TodoCaps): Segme
 
 type AgentCaps = { limit: number; preview: boolean; noMore?: boolean };
 
-function agentRows(running: HudAgent[], caps: AgentCaps): Segment[][] {
+/** omp's `provider/model` badge: a bare alias or id is an Anthropic model (`sonnet` -> `anthropic/sonnet`); never a guessed version. */
+export function modelLabel(model: string): string {
+  const m = model.replace(/\s+/g, ' ').trim();
+  return m === '' || m.includes('/') ? m : `anthropic/${m}`;
+}
+
+function agentRows(running: HudAgent[], caps: AgentCaps, root?: string | null): Segment[][] {
   const shown = running.slice(0, caps.limit);
   const rows: Segment[][] = [[seg('Subagents', C.accent, { bold: true }), seg(` · ${running.length} running`, C.dim)]];
   const more = running.length - shown.length;
@@ -189,13 +205,13 @@ function agentRows(running: HudAgent[], caps: AgentCaps): Segment[][] {
   shown.forEach((a, i) => {
     const last = i === shown.length - 1 && !showMore;
     const head: Segment[] = [seg(' '), seg(`${last ? TREE.last : TREE.branch} `, C.dim), seg('• ', C.accent)];
-    if (a.model) head.push(seg(`${THINK} `, C.accent), seg(`${truncateMiddle(a.model.replace(/\s+/g, ' ').trim(), MODEL_BADGE_WIDTH - 2)} `, C.dim));
+    if (a.model) head.push(seg(`${THINK} `, C.accent), seg(`${truncateMiddle(modelLabel(a.model), MODEL_BADGE_WIDTH - 2)} `, C.dim));
     head.push(seg(a.name, C.accent, { bold: true }));
     if (a.role && a.role !== a.name && a.role !== 'unknown') head.push(seg(` [${a.role}]`, C.dim));
     const task = (a.task ?? '').replace(/\s*[\r\n]+\s*/g, ' ↵ ').trim();
     if (task && task !== a.name) head.push(seg(': ', C.accent), seg(task, C.accent));
     rows.push(head);
-    const preview = caps.preview ? previewOf(a) : undefined;
+    const preview = caps.preview ? previewOf(a, root) : undefined;
     if (preview) rows.push([seg(' '), seg(`${last ? '   ' : `${TREE.vertical}  `}${TREE.hook} `, C.dim), ...preview]);
   });
   if (showMore) rows.push([seg(' '), seg(`${TREE.last} `, C.dim), seg(`… ${more} more`, C.dim)]);
@@ -203,13 +219,15 @@ function agentRows(running: HudAgent[], caps: AgentCaps): Segment[][] {
 }
 
 /** The agent's current tool call, or between calls its last one marked done. */
-function previewOf(a: HudAgent): Segment[] | undefined {
+function previewOf(a: HudAgent, root?: string | null): Segment[] | undefined {
+  const base = root ? `${root.replace(/\/+$/, '')}/` : '';
   const flat = (s: string | null | undefined): string => (s ?? '').replace(/\s+/g, ' ').trim();
-  if (a.tool) return [seg(a.tool, C.muted), ...(flat(a.target) ? [seg(`: ${flat(a.target)}`, C.dim)] : [])];
-  if (a.lastTool) {
-    const detail = flat(a.lastLine) || flat(a.target);
-    return [seg('✓ ', C.ok), seg(a.lastTool, C.dim), ...(detail ? [seg(`: ${detail}`, C.dim)] : [])];
-  }
+  const rel = (s: string): string => (base ? s.split(base).join('') : s);
+  // omp: the call's own intent (lower-case tool name, then its description), else the args.
+  const detail = rel(flat(a.detail) || flat(a.lastLine) || flat(a.target));
+  const current = rel(flat(a.detail) || flat(a.target));
+  if (a.tool) return [seg(a.tool.toLowerCase(), C.muted), ...(current ? [seg(`: ${current}`, C.dim)] : [])];
+  if (a.lastTool) return [seg('✓ ', C.ok), seg(a.lastTool.toLowerCase(), C.dim), ...(detail ? [seg(`: ${detail}`, C.dim)] : [])];
   return undefined;
 }
 
@@ -225,6 +243,8 @@ export function waitingText(running: HudAgent[]): string {
 // ---- assembly ---------------------------------------------------------------------------------------
 
 type Plan = { todo: TodoCaps | null; agents: AgentCaps | null; waiting: boolean };
+
+const BLANK = (): Segment[] => [seg('')];
 
 /** The compact form the HUD always keeps: TODO header, the active phase with its items, the Subagents header and one row per running agent. */
 const COMPACT: Plan = { todo: { taskCap: 2, stageCap: 0, bare: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false };
@@ -243,17 +263,26 @@ const LADDER: Plan[] = [
   { todo: null, agents: { limit: 1, preview: false }, waiting: false },
 ];
 
-const planRows = ({ todos, agents }: HudInput, plan: Plan): Segment[][] => {
+/** `blanks` adds omp's spacer rows: one above the first block, two between the TODO tail and Subagents, one above the Waiting line and one below it. */
+const planRows = ({ todos, agents, root }: HudInput, plan: Plan, blanks = false): Segment[][] => {
   const running = agents.filter(isRunning);
   const rows: Segment[][] = [];
-  if (plan.todo && todos.length > 0) rows.push(...todoBlock(todos, agents, plan.todo));
-  if (plan.agents && running.length > 0) rows.push(...agentRows(running, plan.agents));
-  if (plan.waiting && running.length > 0) rows.push([seg('⏳ ', C.warn), seg(waitingText(running), C.muted)]);
+  const todoRows = plan.todo && todos.length > 0 ? todoBlock(todos, agents, plan.todo) : [];
+  const agentBlock = plan.agents && running.length > 0 ? agentRows(running, plan.agents, root) : [];
+  if (blanks && (todoRows.length > 0 || agentBlock.length > 0)) rows.push(BLANK());
+  rows.push(...todoRows);
+  if (blanks && todoRows.length > 0 && agentBlock.length > 0) rows.push(BLANK(), BLANK());
+  rows.push(...agentBlock);
+  if (plan.waiting && running.length > 0) {
+    if (blanks) rows.push(BLANK());
+    rows.push([seg('⏳ ', C.warn), seg(waitingText(running), C.muted)]);
+    if (blanks) rows.push(BLANK());
+  }
   return rows;
 };
 
 /** Rows of the compact form: what the HUD keeps whatever the band is given. */
-export const hudCompactRows = (input: HudInput): number => planRows(input, COMPACT).length;
+export const hudCompactRows = (input: HudInput): number => planRows({ ...input, todos: input.todos.filter(isPlanItem) }, COMPACT).length;
 
 /** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to 1. */
 export const hudBudget = (maxRows: number, compact: number, bandRows = 7): number => {
@@ -275,12 +304,22 @@ const clip = (row: Segment[], cols: number): Segment[] => {
 };
 
 /** The HUD rows above the band: TODO tree, Subagents block, Waiting line; [] when there is nothing to show. */
-export function hudRows({ todos, agents }: HudInput, { cols, maxRows }: HudOpts): Segment[][] {
+export function hudRows(input: HudInput, { cols, maxRows }: HudOpts): Segment[][] {
+  // Only the lead's plan: hook-added dispatch rows are not plan items.
+  const { agents, root } = input;
+  const todos = input.todos.filter(isPlanItem);
   const running = agents.filter(isRunning);
   if (maxRows <= 0 || (todos.length === 0 && running.length === 0)) return [];
-  for (const plan of LADDER) {
-    const rows = planRows({ todos, agents }, plan);
-    if (rows.length <= maxRows) return rows.map((r) => clip(r, cols));
+  const fit = (plan: Plan, blanks: boolean): Segment[][] | undefined => {
+    const rows = planRows({ todos, agents, root }, plan, blanks);
+    return rows.length <= maxRows ? rows.map((r) => clip(r, cols)) : undefined;
+  };
+  // Spacer rows go first under budget pressure: the full form without them before any other shrink step.
+  const full = fit(LADDER[0]!, true) ?? fit(LADDER[0]!, false);
+  if (full) return full;
+  for (const plan of LADDER.slice(1)) {
+    const rows = fit(plan, false);
+    if (rows) return rows;
   }
   return [];
 }

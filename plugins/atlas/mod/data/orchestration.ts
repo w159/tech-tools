@@ -81,6 +81,30 @@ export const targetOf = (input: unknown): string | undefined => {
   return [baseOf(a.file_path), baseOf(a.path), headOf(a.command), headOf(a.pattern), headOf(a.query)].find(Boolean);
 };
 
+const DETAIL_MAX = 200;
+const oneLine = (v: unknown): string => strOf(v).replace(/\s+/g, ' ').trim();
+/** omp's tool-preview detail: the call's own intent. Bash -> description, else the command; Read -> "Read <path>[:a-b]"; Grep/Glob -> the pattern; others -> description or the first string input. Paths stay as given (the HUD relativizes). */
+export const detailOf = (tool: string, input: unknown): string | undefined => {
+  const a = (input ?? {}) as Record<string, unknown>;
+  const first = Object.values(a).find((v) => typeof v === 'string' && v.trim() !== '');
+  let out: string;
+  switch (tool.toLowerCase()) {
+    case 'bash': out = oneLine(a.description) || oneLine(a.command); break;
+    case 'read': {
+      const path = oneLine(a.file_path) || oneLine(a.path);
+      const from = Number(a.offset);
+      const n = Number(a.limit);
+      const range = from > 0 && n > 0 ? `:${from}-${from + n - 1}` : from > 0 ? `:${from}` : n > 0 ? `:1-${n}` : '';
+      out = path ? `Read ${path}${range}` : '';
+      break;
+    }
+    case 'grep': case 'glob': out = oneLine(a.pattern) || oneLine(a.query); break;
+    default: out = oneLine(a.description) || oneLine(first);
+  }
+  if (out === '') return undefined;
+  return out.length > DETAIL_MAX ? `${out.slice(0, DETAIL_MAX - 1)}…` : out;
+};
+
 const CALL_WINDOW_MS = 60_000;
 const MAX_CALLS = 48; // ring cap: the sparkline only shows the last minute
 
@@ -91,7 +115,7 @@ export const pushCall = (calls: readonly number[] | undefined, now: number): num
 /** tool.call in flight (before next). */
 export function onToolStart(o: Orch, agent: string, tool: string, now: number, input?: unknown): Orch {
   const prev = o.activity[agent] ?? blank(now);
-  const next = { ...prev, tool, since: now, target: targetOf(input), toolCount: prev.toolCount + 1, mood: 'working' as const, calls: pushCall(prev.calls, now) };
+  const next = { ...prev, tool, since: now, target: targetOf(input), detail: detailOf(tool, input), toolCount: prev.toolCount + 1, mood: 'working' as const, calls: pushCall(prev.calls, now) };
   return {
     ...o,
     activity: { ...o.activity, [agent]: next },

@@ -737,21 +737,24 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
     data, err = _read_settings(path)
     senv = _settings_env(data) if data is not None else {}
 
-    # 1. task-tracking tools on every model
-    tasks = _display_value(DISPLAY_TASKS_ENV, senv, env)
+    # 1. legacy TodoWrite on every model: TODO_TOOLS=1 alone selects the Task tools, whose checklist
+    # Claude Code draws and re-expands above the prompt, squeezing the Atlas TODO tree and band
+    want = f'"env": {{"{DISPLAY_TODO_ENV}": "1", "{DISPLAY_TASKS_ENV}": "0"}}'
     if err:
-        add("display-todo-tools", False, f"{err}; fix the JSON by hand (--fix will not touch it), "
-            f'then set "env": {{"{DISPLAY_TODO_ENV}": "1"}}')
-    elif _display_value(DISPLAY_TODO_ENV, senv, env) in ("1", "true"):
-        bad = tasks not in (None, "", "0", "1")
-        add("display-todo-tools", not bad, (
-            f"{DISPLAY_TASKS_ENV}={tasks!r} is not 0 or 1; unset it or use 0 (TodoWrite) / 1 (Task tools)"
-            if bad else f"{DISPLAY_TODO_ENV}=1 (task tools on every model; needs Claude Code 2.1.233+)"))
+        add("display-todo-tools", False, f"{err}; fix the JSON by hand (--fix will not touch it), then set {want}")
     else:
-        add("display-todo-tools", False,
-            f"{DISPLAY_TODO_ENV} is not 1: on models Claude Code does not list, the TodoWrite/Task tools "
-            f'are absent and the TODO tree and Subagents block stay empty. `atlas_doctor.py --fix` writes '
-            f'"env": {{"{DISPLAY_TODO_ENV}": "1"}} into {path}')
+        todo = _display_value(DISPLAY_TODO_ENV, senv, env)
+        tasks = _display_value(DISPLAY_TASKS_ENV, senv, env)
+        missing = []
+        if todo not in ("1", "true"):
+            missing.append(f"{DISPLAY_TODO_ENV} is not 1 (the TodoWrite tool is absent on models Claude Code does not list)")
+        if str(tasks).strip() != "0":
+            missing.append(f"{DISPLAY_TASKS_ENV} is not 0 (the Task tools make Claude Code draw and re-expand its own "
+                           "checklist above the prompt, squeezing the Atlas TODO tree and band to about 6 rows)")
+        add("display-todo-tools", not missing, (
+            "; ".join(missing) + f". `atlas_doctor.py --fix` writes {want} into {path}" if missing
+            else f"{DISPLAY_TODO_ENV}=1 and {DISPLAY_TASKS_ENV}=0 (TodoWrite on every model, no Claude Code checklist; "
+                 "needs Claude Code 2.1.233+)"))
 
     # 2. the mod module that draws the band, plus its kill switches
     hooks_file = os.path.join(root, "hooks", "hooks.json")
@@ -831,7 +834,7 @@ def _atomic_write_json(path, data):
 
 
 def fix_display(settings_path=None, env=None, plugin_root=None):
-    """--fix only: merge the task-tools env var and, when unset or dead, the Atlas statusLine into
+    """--fix only: merge the TodoWrite env vars (TODO_TOOLS=1, TASKS=0) and, when unset or dead, the Atlas statusLine into
     the user settings.json with one atomic write. Never edits unreadable JSON, never overwrites a
     foreign statusLine, never touches the ATLAS_MOD/ATLAS_HUD switches. Returns a list of lines."""
     env = os.environ if env is None else env
@@ -843,10 +846,15 @@ def fix_display(settings_path=None, env=None, plugin_root=None):
     notes, senv, changed = [], data.get("env"), False
     if senv is not None and not isinstance(senv, dict):
         notes.append(f"SKIP {DISPLAY_TODO_ENV}: \"env\" in {path} is not an object")
-    elif _display_value(DISPLAY_TODO_ENV, _settings_env(data), env) not in ("1", "true"):
-        data["env"] = dict(senv or {}, **{DISPLAY_TODO_ENV: "1"})
-        notes.append(f'set env.{DISPLAY_TODO_ENV}="1" in {path}')
-        changed = True
+    else:
+        want = {DISPLAY_TODO_ENV: "1", DISPLAY_TASKS_ENV: "0"}
+        cur = _settings_env(data)
+        todo_ok = _display_value(DISPLAY_TODO_ENV, cur, env) in ("1", "true")
+        tasks_ok = str(_display_value(DISPLAY_TASKS_ENV, cur, env)).strip() == "0"
+        if not (todo_ok and tasks_ok):
+            data["env"] = dict(senv or {}, **want)
+            notes.append(f'set env.{DISPLAY_TODO_ENV}="1" and env.{DISPLAY_TASKS_ENV}="0" in {path}')
+            changed = True
     cfg = data.get("statusLine")
     script = _statusline_script_path(cfg)
     if os.path.isfile(_atlas_statusline_script(root)) and (

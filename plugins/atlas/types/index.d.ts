@@ -110,7 +110,7 @@ export interface TodoGroup {
   phase: PhaseId | 'unsorted' | 'advisor';
   dept: string;
   glyph: string;
-  items: { id: string; content: string; status: string; owner: string | null; evidence: string | null; live: boolean }[];
+  items: { id: string; content: string; status: string; owner: string | null; evidence: string | null; live: boolean; origin?: string }[];
   done: number;
   total: number;
 }

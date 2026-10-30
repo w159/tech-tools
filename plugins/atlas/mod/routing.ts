@@ -30,6 +30,12 @@ export interface RoutingDeps {
   logDrift: (msg: string) => void;
 }
 
+/** The spawn's model for the HUD: an alias (`sonnet`) resolves to the parent's full id only when that id is of the same family; otherwise the alias stays (never an invented version). */
+export function fullModel(model: string | undefined, parentModel: string | undefined): string | undefined {
+  if (!model || !parentModel || model.includes('-') || model.includes('/')) return model;
+  return parentModel.toLowerCase().includes(model.toLowerCase()) ? parentModel : model;
+}
+
 /** Track a spawned agent as a live task agent (capped at 64). */
 function withAgent(agents: SquadAgent[], agentId: string, persona: string, task?: string, model?: string): SquadAgent[] {
   const extra = { ...(task ? { task } : {}), ...(model ? { model } : {}) };
@@ -110,7 +116,7 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
         // explicit model, else the role's frontmatter pin, else the parent's (what `inherit` resolves to)
         const pinned = persona && persona.model !== 'inherit' ? persona.model : undefined;
         const model = (e.model && e.model !== 'inherit' ? e.model : undefined) ?? pinned ?? (e.parentModel || undefined);
-        await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? (label || 'unknown'), e.description, model));
+        await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? (label || 'unknown'), e.description, fullModel(model, e.parentModel || undefined)));
         const now = await $.clock.now();
         const name = e.name || matchCall(calls, e, now) || promptName(e.prompt);
         const scope = /^\s*SCOPE:\s*(\S+)/m.exec(e.prompt ?? '')?.[1];

@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.8.0 (`.claude-plugin/plugin.json`)                                                                                |
+| Version    | 16.9.0 (`.claude-plugin/plugin.json`)                                                                                |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
@@ -483,10 +483,13 @@ Above the band, `mod/hud.ts` draws the same TODO tree and `Subagents · N runnin
 block omp shows natively (phases in plan order, active phase expanded, completed
 items struck through; model, name, role, task and last tool per subagent), so
 Claude Code and omp present a run the same way. `ATLAS_HUD=off` hides it. The
-tree needs Claude Code's task tools: on models Claude Code does not list, set
-`CLAUDE_CODE_ENABLE_TODO_TOOLS=1`. `atlas_doctor.py` reports this and the other
-display settings as `display-` checks, and `atlas_doctor.py --fix` sets the env
-flag and the status line.
+tree needs the legacy `TodoWrite` tool: set `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`
+(TodoWrite on every model) and `CLAUDE_CODE_ENABLE_TASKS=0` (without it Claude
+Code uses TaskCreate/TaskUpdate and draws its own checklist above the prompt,
+re-expanding it on every update, which squeezes the Atlas TODO tree and band to
+about 6 rows). `atlas_doctor.py` reports this and the other display settings as
+`display-` checks, and `atlas_doctor.py --fix` sets both env flags and the status
+line.
 
 ## omp and codex
 
@@ -590,7 +593,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.8.0
+|-- .claude-plugin/plugin.json   manifest, version 16.9.0
 |-- agents/                      14 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
