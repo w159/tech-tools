@@ -269,6 +269,7 @@ def fix_project_memory(root):
     try:
         import inspect
 
+        import atlas_db
         import atlas_memory
 
         fn = getattr(atlas_memory, "migrate_global_to_projects", None)
@@ -276,6 +277,10 @@ def fix_project_memory(root):
             return out + ["memory migration: not available in this atlas_memory"]
         params = inspect.signature(fn).parameters
         kw = {"apply": True} if "apply" in params else {}
+        if "home" in params:
+            kw["home"] = atlas_db.atlas_home()
+        if "db_path" in params:
+            kw["db_path"] = atlas_db.db_path()
         for name in ("root", "project_root", "cwd", "only_root"):
             if name in params:
                 kw[name] = root

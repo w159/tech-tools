@@ -1,0 +1,30 @@
+▌ EVIDENCE:                                                                                                                                    │                                                      ✕
+▌ 1. RED (tests written first), `python3 -m pytest tests/test_calc.py -q | tail -15` -> ERROR collecting tests/test_calc.py ... "E   ImportEr… │r: route │ t: team │ c: channel │ g: core ✗6 │ o: board
+▌ 2. GREEN after editing src/calc.py, same command -> "........ [100%]" / "8 passed in 0.01s". I reran it after rewriting calc.py to the one-… │◎◜ ─ ◇○ ─ ⚗○ ─ ☰○○ ─ ⚒○─ ✓○
+▌ 3. `git status --short` -> " M docs/CHANGELOG.md", " M src/calc.py", "?? .atlas/", "?? src/__pycache__/", "?? tests/"                        │nothing planned
+▌ 4. `git diff` -> CHANGELOG adds a blank line, "## Unreleased", "### Added", then the two bullets. calc.py is append-only: add and sub show … │
+ ◆ ATLAS  ✓ VERIFY  3/7 implementer reports red then green (8 passed); dispatching 2 verifiers                                                 │
+DISPATCH -> atlas:verifier (verify-tests, sonnet/medium) (rerun tests independently)                                                           │
+DISPATCH -> atlas:verifier (verify-diff, sonnet/medium) (review the diff against the ask)                                                      │
+                                                                                                                                               │
+● 2 background agents launched (↓ to manage)                                                                                                   │
+   ├ Rerun tests independently                                                                                                                 │
+   └ Review the diff                                                                                                                           │
+▌ ✔ Implement mul/div, tests, changelog  implementer done · STATUS: DONE · 29s                                                                 │
+                                                                                                                                               │
+✢ Sautéing · verifier · verifier-acd0 (23s · ↓ 1.7k tokens)                                                                                    │
+  ⎿  Tip: See an artifact you'd like to build on? Duplicate, in its title menu, gives you your own editable copy.                              │
+ ◆ ATLAS · research 0/0 · 2 working · ✖6                                                                                                   [-] │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoB30   ⏱ 3m29s    👾  Fable 5.1  ·  high
+  📚  ctx   8% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  79.1k / 1M        │  💰  session       plan    80.8k tok  cache 98%
+  ⏳  5h    8% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  4h5m anthropic    │  🔌  anthropic     plan    80.8k tok  claude-fable-5…
+  📅  7d   33% ▅▅▅▅▅▁▁▁▁▁▁▁▁▁  4d17h anthropic   │
+  ⏵⏵ auto mode on (shift+tab to cycle) · /tasks to see subagents
+
+  ● main
+  ◯ atlas:verifier  Rerun tests independently                                                                                                                                         2s · ↑ 58 tokens
+  ◯ atlas:verifier  Review the diff                                                                                                                                                  2s · ↑ 100 tokens

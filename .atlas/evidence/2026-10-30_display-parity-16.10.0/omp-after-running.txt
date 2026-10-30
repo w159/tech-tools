@@ -1,0 +1,55 @@
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ $ python3 /home/user/tech-tools/plugins/atlas/scripts/atlas_todo.py set '[{"content":"Trace calc module","status":"completed"},{"content":"Map add and sub call                                      │
+│ paths","status":"in_progress"},{"content":"Add mul to src/calc.py","status":"pending"}]' --root /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/omp-demo         │
+│ --session $(ls -t /tmp/claude-0/omp-home/agent/sessions/*/*.jsonl | head -1 | sed 's/.*_//;s/[.]jsonl$//')                                                                                           │
+├─── Output ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ {"ok": true, "counts": {"needed": 3, "remaining": 2, "complete": 1, "claimed": 0}}                                                                                                                   │
+╰─── Wall: 0.24s · Timeout: 300s ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─── ⇶ Task 2 agents ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ GOAL: answer read-only questions about the demo repo.                                                                                                                                                │
+│ DELIVERABLE: one line answer.                                                                                                                                                                        │
+│ SUCCESS CRITERIA: answer is grounded in the file read.                                                                                                                                               │
+│ OUT OF SCOPE: any edit.                                                                                                                                                                              │
+│ STOP CONDITIONS: stop after one read.                                                                                                                                                                │
+│ TOOLS: read                                                                                                                                                                                          │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ • explorer-calc ⟦explorer⟧ list functions in src/calc.py CHANNEL: … · 1 🛠 · 1 req · 0.6%/200K                                                                                                        │
+│   └ read: src/calc.py                                                                                                                                                                                │
+│ • docs-auditor-calc ⟦docs-auditor⟧ does docs/CHANGELOG.md mention calc CHA… · 1 🛠 · 1 req · 0.6%/200K                                                                                                │
+│   └ read: docs/CHANGELOG.md                                                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ done
+
+ Subagents · 2 running                                                                                                                                                                            Alt+A
+  ├─ • explorer-calc ⟦explorer⟧ list functions in src/calc.py ↵ CHANNEL: omp-demo@master/lead-01a18e (you are explorer-calc; lead lead-01a18e; siblings: docs-auditor-calc). ↵ Post: python3 "/home/us…
+  └─ • docs-auditor-calc ⟦docs-auditor⟧ does docs/CHANGELOG.md mention calc ↵ CHANNEL: omp-demo@master/lead-01a18e (you are docs-auditor-calc; lead lead-01a18e; siblings: explorer-calc). ↵ Post: pyt…
+
+  ⎋ Waiting for 2 background jobs: explorer-calc, docs-auditor-calc                                                                                                                         Display test
+
+  TODO
+   ├─ I. Tasks · 1/3
+   │  ├─ ☑ Trace calc module
+   │  ├─ ☐ Map add and sub call paths
+   │  └─ ☐ Add mul to src/calc.py
+   └─────
+  ◆ ATLAS  ·  mission control  ·  omp-demo@master  ·  wave 1                                                                                                                ◷ 00:10   2 live   gates …
+   ◠ RESEARCH ▶ theory ▶ test ▶ implement ▶ verify ▶ done
+  board ████████                 1/3 ⠧ Map add and sub call paths
+
+   THINK ◔-◔ explorer-calc           explorer     read        calc.py                                                                               ██▎                           ▁▁▁▁▁▁▁▁▁▁▁▂     10s
+   THINK °-° docs-auditor-calc       auditor      read        CHANGELOG.md                                                                          ██▎                           ▁▁▁▁▁▁▁▁▁▁▁▂     10s
+  tasks ██████             1/3   gates …
+ ⠹ 11s > ⬢ Sonnet 5 (fake) > 🗑 …e-93ab-1aadb2a05a17/scratchpad/omp-demo > ⑂ master ?1 ▶─0.6%──────────────────────────────────────────────────────────────────────╎──────────┃──────────────200K─◀ 👥 2
+╰─                                                                                                                                                                            ←← to see 2 running agents
+ 📁  omp-demo   🐸········  0m00s · thinking…    👾  Claude Sonnet 5 (fake)  ·  off
+ ​
+ 📚  ctx   1% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  1.2k / 200k       │  💰  session      $0.00     2.4k tok  cache 0%
+ ⏳  5h   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                    │  🔌  fake         $0.00     2.4k tok  claude-sonnet-5
+ 📅  7d   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                    │
+ atlas  idle · 0 live · gates ? · verified never · scoring ok
+ ​
+

@@ -252,13 +252,17 @@ configuration, not plugin damage), run in every mode, and are repaired by
 `--fix` where the repair is safe. The settings file is
 `$CLAUDE_CONFIG_DIR/settings.json` (default `~/.claude/settings.json`).
 
-| Check | Looks for | `--fix` |
+Full table of what each check looks for and what `--fix` does: `references/display-checks.md`.
+
+| Check | Concern | `--fix` |
 |---|---|---|
-| `display-todo-tools` | `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` and `CLAUDE_CODE_ENABLE_TASKS=0` in settings `env` or the process env (Claude Code 2.1.233+). The first gives every model the TodoWrite tool; the second keeps Claude Code on TodoWrite instead of the Task tools, whose own checklist Claude Code draws and re-expands above the prompt on every TaskCreate/TaskUpdate, squeezing the Atlas TODO tree and band to about 6 rows. WARN if either is missing. | Merges `"env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1", "CLAUDE_CODE_ENABLE_TASKS": "0"}`, keeps every other key, atomic write. Invalid JSON is never written. |
-| `display-mod` | `hooks/hooks.json` lists `../mod/register.ts` in `modules` and the file exists; `ATLAS_MOD` / `ATLAS_HUD` are not `off`. | Report only. The switches are a user choice: remove them from settings `env` and the shell profile to undo. |
-| `display-todo-mirror` | The `PostToolUse` matcher in `hooks.json` covers every tool `todo_capture` is dispatched for (`event_dispatch.py`). | Report only (update the plugin). |
-| `display-statusline` | `statusLine` runs `atlas_statusline.py`. | Sets it to `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_statusline.py"` (the installed plugin root written out as an absolute path) when unset or pointing at a missing Atlas script. A statusLine from another tool is reported and never overwritten. |
-| `display-harness` | `claude-code`, or under `ATLAS_HARNESS=omp` whether the omp extension that draws mission control is registered (same result as `omp-bridge`). | Report only. |
+| `display-todo-tools` | `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` and `CLAUDE_CODE_ENABLE_TASKS=0`; without both Claude Code draws its own checklist, taking the rows the Subagents block needs | writes both |
+| `display-mod` | `../mod/register.ts` registered; `ATLAS_MOD` / `ATLAS_HUD` not off | report only |
+| `display-todo-mirror` | `PostToolUse` matcher covers `todo_capture` tools | report only |
+| `display-statusline` | `statusLine` runs `atlas_statusline.py` | sets it if unset or dead |
+| `display-harness` | `claude-code`, or the omp extension is registered | report only |
+| `display-omp-todo` | omp `todo.enabled` is not false (user `config.yml`, project `.omp`/`.claude` files); omp pins `todo` top-level under `tools.xdev`, so no xdev check | sets it true in place |
+| `display-hud` | `ATLAS_HUD` not off in Claude Code settings `env`; INFO when the terminal is under 30 rows | removes the key |
 
 ## Report
 

@@ -155,6 +155,59 @@ class StatuslineTest(unittest.TestCase):
         self.run_main(["uninstall"] + args)
         self.assertNotIn("statusLine", jload(settings))
 
+    def project(self, running, shown, age_ms=1000, raw=None):
+        proj = os.path.join(self.tmp, "proj")
+        run = os.path.join(proj, ".atlas", ".run")
+        os.makedirs(run, exist_ok=True)
+        with open(os.path.join(run, "agents-running.json"), "w") as f:
+            if raw is not None:
+                f.write(raw)
+            else:
+                json.dump(
+                    {
+                        "ts": time.time() * 1000 - age_ms,
+                        "running": [
+                            {"name": n, "role": "explorer", "model": ""} for n in running
+                        ],
+                        "hudRowsShown": shown,
+                    },
+                    f,
+                )
+        d = full_fixture()
+        d["workspace"] = {"current_dir": proj}
+        return d
+
+    def test_fresh_uncovered_shows_segment(self):
+        rows = self.rows(self.project(["explorer-a", "explorer-b"], 0))
+        self.assertTrue(
+            any("agents 2 running: explorer-a, explorer-b" in r for r in rows), rows
+        )
+
+    def test_hud_covers_all_shows_nothing(self):
+        rows = self.rows(self.project(["explorer-a", "explorer-b"], 2))
+        self.assertFalse(any("agents " in r and "running" in r for r in rows), rows)
+
+    def test_stale_shows_nothing(self):
+        rows = self.rows(self.project(["explorer-a"], 0, age_ms=16000))
+        self.assertFalse(any("running:" in r for r in rows), rows)
+
+    def test_malformed_shows_nothing(self):
+        rows = self.rows(self.project([], 0, raw="{not json"))
+        self.assertFalse(any("running:" in r for r in rows), rows)
+        self.assertTrue(any("proj" in r for r in rows))
+
+    def test_empty_running_shows_nothing(self):
+        rows = self.rows(self.project([], 0))
+        self.assertFalse(any("running:" in r for r in rows), rows)
+
+    def test_narrow_width_clipped(self):
+        names = ["explorer-%02d" % i for i in range(12)]
+        for width in (60, 70, 120):
+            rows = self.rows(self.project(names, 0), width=width)
+            seg = [r for r in rows if "running:" in r]
+            self.assertEqual(len(seg), 1, (width, rows))
+            self.assertLess(sl.vw(seg[0]), width)
+
 
 if __name__ == "__main__":
     unittest.main()

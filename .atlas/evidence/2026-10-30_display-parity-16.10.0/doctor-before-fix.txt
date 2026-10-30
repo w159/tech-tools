@@ -1,0 +1,12 @@
+### installed version
+2:  "version": 2,
+8:        "version": "16.10.0",
+### before --fix (no --fix)
+WARN  display-todo-tools   CLAUDE_CODE_ENABLE_TODO_TOOLS is not 1 (the TodoWrite tool is absent on models Claude Code does not list); CLAUDE_CODE_ENABLE_TASKS is not 0 (the Task tools make Claude Code draw and re-expand its own checklist above the prompt, squeezing the Atlas TODO tree and band to about 6 rows). `atlas_doctor.py --fix` writes "env": {"CLAUDE_CODE_ENABLE_TODO_TOOLS": "1", "CLAUDE_CODE_ENABLE_TASKS": "0"} into /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg8/settings.json. Why it matters: without both, Claude Code draws its own checklist above the prompt, which takes the rows Atlas needs for the Subagents block
+PASS  display-mod          ../mod/register.ts registered; ATLAS_MOD/ATLAS_HUD not off
+PASS  display-todo-mirror  PostToolUse covers ['TodoWrite', 'TaskCreate', 'TaskUpdate', 'Agent', 'Task', 'Bash']
+PASS  display-statusline   statusLine runs /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg8/plugins/cache/tech-tools/atlas/16.10.0/scripts/atlas_statusline.py
+PASS  display-omp-todo     omp: no settings file found; todo.enabled defaults to true (n/a)
+PASS  display-hud          ATLAS_HUD not off in Claude Code settings
+PASS  display-harness      claude-code
+1 PROBLEM(S) - atlas

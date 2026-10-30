@@ -1,0 +1,22 @@
+Installed plugins:
+
+  > atlas@tech-tools
+    Version: 16.10.0
+    Read from: /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/fresh16100/plugins/atlas
+    Scope: user
+    Status: √ enabled
+
+{
+  "version": 2,
+  "plugins": {
+    "atlas@tech-tools": [
+      {
+        "scope": "user",
+        "installPath": "/tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg8/plugins/cache/tech-tools/atlas/16.10.0",
+        "version": "16.10.0",
+        "installedAt": "2026-10-30T22:30:59.415Z",
+        "lastUpdated": "2026-10-30T22:30:59.415Z"
+      }
+    ]
+  }
+}

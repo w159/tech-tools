@@ -11,7 +11,7 @@ import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
 import { PHASES, intentToArgv } from './intents';
 import { bandTree, railPhase, type BandHandlers } from './band';
-import { hudAgents, hudBudget, hudCompactRows, hudRows } from './hud';
+import { hudAgents, hudBudget, hudCompactRows, hudRows, isRunning } from './hud';
 import { rowOf } from './runs';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -269,6 +269,26 @@ async function statSig($: EngineInterface, path: string): Promise<string> {
 		return `${s.mtimeMs}:${s.size}`;
 	} catch {
 		return '-';
+	}
+}
+
+let lastRunningSig: string | undefined;
+/** Test seam: forget the last written signature. */
+export const resetRunningSig = (): void => { lastRunningSig = undefined; };
+
+/** Writes `.atlas/.run/agents-running.json` for the Claude Code status line when the running set (names + roles) or the rendered row count changes; temp file + mv, fail soft, never throws out of render. */
+export async function publishRunning($: EngineInterface, root: string | null | undefined, running: readonly { name: string; role?: string; model?: string }[], hudRowsShown: number): Promise<void> {
+	try {
+		if (root === undefined || root === null || root === '') return;
+		const sig = `${root}|${hudRowsShown}|${running.map((a) => `${a.name}:${a.role ?? ''}`).join(',')}`;
+		if (sig === lastRunningSig) return;
+		lastRunningSig = sig;
+		const path = `${root.replace(/\/+$/, '')}/.atlas/.run/agents-running.json`;
+		const body = JSON.stringify({ ts: await $.clock.now(), running: running.map((a) => ({ name: a.name, role: a.role ?? '', model: a.model ?? '' })), hudRowsShown });
+		await $.fs.write(`${path}.tmp`, body);
+		await $.process.run(['mv', '-f', `${path}.tmp`, path]);
+	} catch {
+		lastRunningSig = undefined;
 	}
 }
 
@@ -840,7 +860,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		const hudIn = { todos: snapshot.todos ?? [], agents: hudAgents(live, snapshot.squad), root: snapshot.root };
 		const hud = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off' ? // ATLAS_HUD=off: no TODO / Subagents / Waiting rows
-			 hudRows(hudIn, { cols: columns, maxRows: hudBudget(e.props.maxRows ?? 0, hudCompactRows(hudIn), BAND_MIN_ROWS) }) : [];
+			 hudRows(hudIn, { cols: columns, maxRows: hudBudget(e.props.maxRows ?? 0, hudCompactRows(hudIn), BAND_MIN_ROWS, hudIn.agents.some(isRunning)) }) : [];
+		void publishRunning($, snapshot.root, hudIn.agents.filter(isRunning), hud.filter((r) => r.some((x) => x.t === '• ')).length);
 		const band = bandTree(els, { snapshot, live, gates, columns, tick: await read($, spinnerTickState), maxRows: hud.length > 0 ? e.props.maxRows - hud.length : e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
 		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: hud.map((r) => rowOf(els, r, columns)) })] : []), band, await next(e)] });
 	});

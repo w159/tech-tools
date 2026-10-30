@@ -265,6 +265,17 @@ class DoctorTest(Base):
         self.assertEqual(calls, [(self.root, True)])
         self.assertTrue(any("memory migration: ok" in l for l in out))
 
+    def test_fix_passes_home_and_db_path_to_real_migration(self):
+        import atlas_memory
+
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home, True)
+        db = os.path.join(home, "atlas.db")
+        with mock.patch.dict(os.environ, {"ATLAS_HOME": home, "ATLAS_DB": db}):
+            out = doctor_layout.fix_project_memory(self.root)
+        self.assertFalse(any("migration failed" in l for l in out), out)
+        self.assertTrue(any(l.startswith("memory migration: ") for l in out), out)
+
     def test_fix_tolerates_missing_migration(self):
         import atlas_memory
 

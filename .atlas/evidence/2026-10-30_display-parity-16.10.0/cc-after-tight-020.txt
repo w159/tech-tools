@@ -1,0 +1,24 @@
+                                                                                                                                               │                                                      ✕
+  Ran 2 shell commands                                                                                                                         │r: route │ t: team │ c: channel │ g: core ✗6 │ o: board
+                                                                                                                                               │◎◡ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+● I've set up the research board with 8 items and am sending out three explorers to map the calculator source, the test layout, and the        │nothing planned
+  changelog format. · summary                                                                                                                  │
+                                                                                                                                               │
+● 2 background agents launched (↓ to manage)                                                                                                   │
+   ├ Map src/calc.py                                                                                                                           │
+   └ Map test layout                                                                                                                           │
+                                                                                                                                               │
+✽ Swirling · explorer Bash · explorer-a834 (58s · ↓ 3.7k tokens)                                                                               │
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work                                                     │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoA24   ⏱ 2m00s    👾  Fable 5.1  ·  high
+  📚  ctx   7% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  66.7k / 1M        │  💰  session       plan    66.7k tok  cache 96%
+  ⏳  5h    6% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  4h16m anthropic   │  🔌  anthropic     plan    66.7k tok  claude-fable-5…
+  📅  7d   33% ▅▅▅▅▅▁▁▁▁▁▁▁▁▁  4d17h anthropic   │
+  ⏸ manual mode on
+
+  ● main
+  ◯ atlas:explorer  Map src/calc.py                                                                                                                                               10s · ↓ 32.1k tokens

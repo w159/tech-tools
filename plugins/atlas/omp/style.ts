@@ -113,16 +113,27 @@ export function translateToolNames(text: string, map: ToolNameMap): string {
 }
 
 /**
- * The style's paragraph on why `TodoWrite` may be missing is Claude Code mechanics (`CLAUDE_CODE_ENABLE_TODO_TOOLS`,
- * `ENABLE_TOOL_SEARCH`, a ToolSearch select) with nothing omp can act on; translated, it read as a nonsense
- * `xd:// device catalog("select:todo")` instruction. Under omp keep only the actionable part: check once, then the
- * LEDGER line. The source file is untouched, so the contract test that pins the Claude wording still holds.
- * A source that no longer matches is passed through unchanged.
+ * The style's todo section is written for Claude Code: `TodoWrite` may be absent (`CLAUDE_CODE_ENABLE_TODO_TOOLS`,
+ * `ENABLE_TOOL_SEARCH`, a ToolSearch select), a LEDGER line stands in for it, and the lead mirrors the plan to the
+ * board by hand with `atlas_todo.py set`. None of that holds in omp: `todo` is always present when todo.enabled,
+ * omp's TODO tree is fed only by a successful `todo` result, and index.ts mirrors every `todo` result to the board.
+ * A lead that followed the manual `set` line got a board but no TODO tree. Under omp the whole section is replaced.
+ * The source file is untouched, so the contract test that pins the Claude wording still holds. A source whose section
+ * no longer matches is passed through unchanged.
  */
-const CLAUDE_TODO_GATING = /`TodoWrite` may be absent:[\s\S]*?the LEDGER line is a fallback\s+when no Atlas band shows:/;
+const CLAUDE_TODO_SECTION = /## The todo list is the progress display\n[\s\S]*?(?=\n## )/;
+const OMP_TODO_SECTION = `## The todo list is the progress display
+
+Record and update the plan with the \`todo\` tool: make the first \`todo\` call with the first real work, before the
+first dispatch, one item per subagent when the run ships code, and prefix each item with its phase (\`Research:\`,
+\`Implement:\`, \`Verify:\`, \`Docs:\`) so the tree groups by phase. The list carries done and left: never re-list open
+items in prose. An item flips to \`completed\` only when verified, not when a subagent returns. Atlas mirrors every
+\`todo\` result to the board the gate reads automatically, so in omp do not run \`atlas_todo.py set\` yourself. Carry the
+count on the header (\`<n>/<m>\`); it moves only on verified work and a \`done\` header requires n/n.
+`;
 
 export function adaptTodoGatingForOmp(body: string): string {
-	return body.replace(CLAUDE_TODO_GATING, "If `TodoWrite` is not callable (check once, silently), carry one line under the header:");
+	return body.replace(CLAUDE_TODO_SECTION, () => OMP_TODO_SECTION);
 }
 
 let cached: { key: string; text: string } | undefined;

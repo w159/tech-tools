@@ -1,0 +1,8 @@
+Installed plugins:
+
+  > atlas@tech-tools
+    Version: 16.9.0
+    Read from: /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/fresh4/plugins/atlas
+    Scope: user
+    Status: √ enabled
+

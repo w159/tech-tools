@@ -55,6 +55,7 @@ import { readFileSync, statSync } from "node:fs";
 import * as nodePath from "node:path";
 import { registerAgentGuard } from "./agent-guard";
 import { phaseFromName, registerChannelView, registerLaneToolRecorder } from "./channel-view";
+import { registerTodoFallback } from "./todo-fallback";
 import { ATLAS_AGENT_TARGETABLE, frontmatterModelFor, isInheritedSelector, modelPatternsFor, roleFor } from "./atlas-agents";
 import { defaultAdvisorDeps, registerAdvisorGate } from "./advisor";
 import { registerTeamTool } from "./team-tool";
@@ -755,6 +756,8 @@ export default function atlasOmpExtension(pi: ExtensionAPI): void {
 	registerAgentGuard(pi);
 	// Live channel view above the editor while task subagents run (omp's irc:relay card lasts 10s and hides lead<->child).
 	const channelView = registerChannelView(pi);
+	// TODO tree for a lead that plans on the board but never calls omp's `todo` tool (todo-fallback.ts).
+	registerTodoFallback(pi);
 	registerWorkerReport(pi, { onChannelOpen: channelView.open });
 	// Team workers and task subs write their current tool; the lead's lanes read it (channel-view.ts laneTool).
 	registerLaneToolRecorder(pi);

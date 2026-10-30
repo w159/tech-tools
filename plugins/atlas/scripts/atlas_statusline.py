@@ -295,6 +295,53 @@ def fallow_line(cwd, home):
         return ""
 
 
+# ---------- running agents ----------
+
+AGENTS_FILE = os.path.join(".atlas", ".run", "agents-running.json")
+AGENTS_FRESH_S = 15
+
+
+def agents_line(cwd, now=None):
+    """`agents 2 running: a, b` from the mod's agents-running.json when the HUD
+    shows fewer agent rows than are running; "" when missing, stale, bad or covered."""
+    try:
+        if not cwd:
+            return ""
+        d = os.path.abspath(cwd)
+        while True:
+            path = os.path.join(d, AGENTS_FILE)
+            if os.path.isfile(path):
+                break
+            parent = os.path.dirname(d)
+            if parent == d:
+                return ""
+            d = parent
+        with open(path, encoding="utf-8") as f:
+            doc = json.load(f)
+        ts = doc.get("ts")
+        now_ms = (time.time() if now is None else now) * 1000
+        if not isinstance(ts, (int, float)) or isinstance(ts, bool):
+            return ""
+        if not (0 <= now_ms - ts < AGENTS_FRESH_S * 1000):
+            return ""
+        running = [
+            str(a.get("name"))
+            for a in doc.get("running", [])
+            if isinstance(a, dict) and a.get("name")
+        ]
+        shown = doc.get("hudRowsShown", 0)
+        if not running or not isinstance(shown, int) or shown >= len(running):
+            return ""
+        return "%sagents %d running:%s %s" % (
+            YELLOW,
+            len(running),
+            R,
+            ", ".join(running),
+        )
+    except Exception:
+        return ""
+
+
 # ---------- render ----------
 
 
@@ -580,6 +627,9 @@ def render(data, width, home):
         else:
             rows.append(left[i].rstrip())
     rows = [clip(r, row_cols) if vw(r) > row_cols else r for r in rows]
+    al = agents_line(str(cwd))
+    if al:
+        rows.append(clip(al, row_cols))
     fl = fallow_line(str(cwd), home)
     if fl:
         rows.append(clip(fl, row_cols))

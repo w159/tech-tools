@@ -382,8 +382,8 @@ export function registerLaneToolRecorder(pi: Pick<ExtensionAPI, "on">, env: Reco
  * This session's todo progress, scoped like the Claude mod (mod/data/todos.ts): other sessions' rows and advisor notes
  * never count. `phase` is the in_progress item's contract phase only (mod currentPhase); absent, the header decides.
  */
-type BoardRow = { status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string; content?: string; owner?: string; evidence?: string };
-function sessionTodos(root: string, sessionId?: string): BoardRow[] {
+export type BoardRow = { status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string; content?: string; owner?: string; evidence?: string };
+export function sessionTodos(root: string, sessionId?: string): BoardRow[] {
 	let items: BoardRow[] = [];
 	try {
 		items = JSON.parse(readFileSync(nodePath.join(root, ".atlas", ".run", "todos.json"), "utf8")).items ?? [];
@@ -434,7 +434,7 @@ function worktreeMainRoot(dir: string): string | undefined {
 }
 
 /** Board root for a cwd: ATLAS_PROJECT_ROOT, else the nearest ancestor holding `.atlas` (a linked worktree maps to its main repo, like atlas_todo.find_root). */
-function boardRoot(cwd: string, env: Record<string, string | undefined>): string {
+export function boardRoot(cwd: string, env: Record<string, string | undefined>): string {
 	if (env.ATLAS_PROJECT_ROOT) return env.ATLAS_PROJECT_ROOT;
 	for (let dir = cwd; ; dir = nodePath.dirname(dir)) {
 		const main = worktreeMainRoot(dir);

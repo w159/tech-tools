@@ -75,8 +75,18 @@ export function truncateMiddle(text: string, width: number): string {
 type Group = { id: string; label: string; tasks: TodoItem[] };
 
 const LABEL_PREFIX = /^\[([A-Za-z][\w-]*)\]\s+/;
-/** The item's phase: its stamped contract phase, else a `[label] ` content prefix (a label that is not a contract phase, e.g. `[docs]`). */
-const phaseOf = (t: TodoItem): string | undefined => t.phase ?? LABEL_PREFIX.exec(t.content)?.[1]?.toLowerCase();
+/** A leading `Word: ` or `Word - ` where Word names a plan phase (a lead writes "Research: map the auth path"). Other words ("Note: x") are not phases. */
+const WORD_PREFIX = /^(research|theory|plan|design|test|implement|build|fix|verify|review|validate|docs|ship)(?::\s+|\s+-\s+)/i;
+/** The item's phase: its stamped contract phase, else a `[label] ` or `Word: ` content prefix (a label that is not a contract phase, e.g. `[docs]`). */
+const phaseOf = (t: TodoItem): string | undefined => t.phase ?? (LABEL_PREFIX.exec(t.content)?.[1] ?? WORD_PREFIX.exec(t.content)?.[1])?.toLowerCase();
+
+/** The item's text without the prefix that put it in its phase. */
+function displayText(t: TodoItem): string {
+  const phase = phaseOf(t);
+  if (!phase) return t.content;
+  const m = LABEL_PREFIX.exec(t.content) ?? WORD_PREFIX.exec(t.content);
+  return m && m[1]!.toLowerCase() === phase ? t.content.slice(m[0].length) : t.content;
+}
 
 /** Phases (contract or `[label]` ones) in order of first appearance in the plan; items with no label go under a final "Other". */
 function groupsOf(todos: TodoItem[]): Group[] {
@@ -123,8 +133,7 @@ export function selectCollapsed(tasks: TodoItem[], isActive: (t: TodoItem) => bo
 }
 
 function itemRun(t: TodoItem, matched: boolean): Segment[] {
-  const phase = phaseOf(t);
-  const text = phase ? t.content.replace(new RegExp(`^\\[${phase}\\]\\s*`, 'i'), '') : t.content;
+  const text = displayText(t);
   switch (t.status) {
     case 'completed': return [seg(`${CHECKED} `, C.done), seg(text, C.done, { strike: true })];
     case 'abandoned': return [seg(`${BOX} `, C.bad), seg(text, C.bad, { strike: true })];
@@ -135,11 +144,23 @@ function itemRun(t: TodoItem, matched: boolean): Segment[] {
 }
 
 /** `bare` drops the trailing-stages row and the closing tail: just the header, the active phase and its items. */
-type TodoCaps = { taskCap: number; stageCap: number; bare?: boolean };
+type TodoCaps = { taskCap: number; stageCap: number; bare?: boolean; summary?: boolean };
+
+/** One row: `TODO · done/total · <in-progress, else agent-owned, else next open item>`. */
+function todoSummary(groups: Group[], agents: HudAgent[]): Segment[] {
+  const all = groups.flatMap((g) => g.tasks);
+  const owners = new Set(agents.filter(isRunning).map((a) => a.name));
+  const focus = all.find((t) => t.status === 'in_progress')
+    ?? all.find((t) => t.status === 'pending' && t.owner !== undefined && owners.has(t.owner))
+    ?? all.find((t) => !isClosed(t));
+  const done = all.filter(isClosed).length;
+  return [seg('TODO', C.accent, { bold: true }), seg(` · ${done}/${all.length}`, C.dim), ...(focus ? [seg(` · ${displayText(focus)}`, C.accent)] : [])];
+}
 
 function todoBlock(todos: TodoItem[], agents: HudAgent[], caps: TodoCaps): Segment[][] {
   const groups = groupsOf(todos);
   if (groups.length === 0) return [];
+  if (caps.summary) return [todoSummary(groups, agents)];
   const multi = groups.length > 1;
   const activeIdx = activeIndex(groups);
   const owners = new Set(agents.filter(isRunning).map((a) => a.name));
@@ -189,7 +210,7 @@ function todoBlock(todos: TodoItem[], agents: HudAgent[], caps: TodoCaps): Segme
 
 // ---- Subagents --------------------------------------------------------------------------------------
 
-type AgentCaps = { limit: number; preview: boolean; noMore?: boolean };
+type AgentCaps = { limit: number; preview: boolean };
 
 /** omp's `provider/model` badge: a bare alias or id is an Anthropic model (`sonnet` -> `anthropic/sonnet`); never a guessed version. */
 export function modelLabel(model: string): string {
@@ -201,7 +222,7 @@ function agentRows(running: HudAgent[], caps: AgentCaps, root?: string | null): 
   const shown = running.slice(0, caps.limit);
   const rows: Segment[][] = [[seg('Subagents', C.accent, { bold: true }), seg(` · ${running.length} running`, C.dim)]];
   const more = running.length - shown.length;
-  const showMore = more > 0 && !caps.noMore;
+  const showMore = more > 0;
   shown.forEach((a, i) => {
     const last = i === shown.length - 1 && !showMore;
     const head: Segment[] = [seg(' '), seg(`${last ? TREE.last : TREE.branch} `, C.dim), seg('• ', C.accent)];
@@ -249,7 +270,7 @@ const BLANK = (): Segment[] => [seg('')];
 /** The compact form the HUD always keeps: TODO header, the active phase with its items, the Subagents header and one row per running agent. */
 const COMPACT: Plan = { todo: { taskCap: 2, stageCap: 0, bare: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false };
 
-/** Fidelity ladder: collapse first (previews, task caps, stage caps), then shed the tree's tail and stage rows down to the compact form, then fewer tasks and agents, then drop the tree, last the Subagents. */
+/** Fidelity ladder: collapse first (previews, task caps, stage caps), then shed the tree's tail and stage rows down to the compact form, then one task, then a one-row TODO summary. A running agent is never shed for the tree: the summary goes before agents are cut to one, and the tree goes before the last agent. Hidden agents always show as a "… N more" row, down to the header and that row; hudRows keeps the header alone for one row. With no running agent the summary rungs are skipped. */
 const LADDER: Plan[] = [
   { todo: { taskCap: 5, stageCap: 4 }, agents: { limit: AGENT_LIMIT, preview: true }, waiting: true },
   { todo: { taskCap: 5, stageCap: 4 }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: true },
@@ -258,9 +279,11 @@ const LADDER: Plan[] = [
   { todo: { taskCap: 2, stageCap: 0 }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false },
   COMPACT,
   { todo: { taskCap: 1, stageCap: 0, bare: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false },
-  { todo: { taskCap: 1, stageCap: 0, bare: true }, agents: { limit: 1, preview: false, noMore: true }, waiting: false },
-  { todo: { taskCap: 1, stageCap: 0, bare: true }, agents: null, waiting: false },
+  { todo: { taskCap: 1, stageCap: 0, summary: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false },
+  { todo: { taskCap: 1, stageCap: 0, summary: true }, agents: { limit: 1, preview: false }, waiting: false },
+  { todo: null, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false },
   { todo: null, agents: { limit: 1, preview: false }, waiting: false },
+  { todo: null, agents: { limit: 0, preview: false }, waiting: false },
 ];
 
 /** `blanks` adds omp's spacer rows: one above the first block, two between the TODO tail and Subagents, one above the Waiting line and one below it. */
@@ -284,11 +307,12 @@ const planRows = ({ todos, agents, root }: HudInput, plan: Plan, blanks = false)
 /** Rows of the compact form: what the HUD keeps whatever the band is given. */
 export const hudCompactRows = (input: HudInput): number => planRows({ ...input, todos: input.todos.filter(isPlanItem) }, COMPACT).length;
 
-/** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to 1. */
-export const hudBudget = (maxRows: number, compact: number, bandRows = 7): number => {
+/** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to 1; with an agent running the HUD keeps at least 2. */
+export const hudBudget = (maxRows: number, compact: number, bandRows = 7, running = false): number => {
   if (maxRows <= 0) return 0;
   const room = maxRows - bandRows;
-  return compact <= maxRows - 3 ? Math.max(room, compact) : Math.max(room, Math.min(compact, maxRows - 1));
+  const budget = compact <= maxRows - 3 ? Math.max(room, compact) : Math.max(room, Math.min(compact, maxRows - 1));
+  return running ? Math.max(budget, Math.min(2, maxRows)) : budget; // a running agent keeps its Subagents header and one row: the band gives up rows first
 };
 
 const clip = (row: Segment[], cols: number): Segment[] => {
@@ -318,8 +342,10 @@ export function hudRows(input: HudInput, { cols, maxRows }: HudOpts): Segment[][
   const full = fit(LADDER[0]!, true) ?? fit(LADDER[0]!, false);
   if (full) return full;
   for (const plan of LADDER.slice(1)) {
+    if (plan.todo?.summary && running.length === 0) continue;
     const rows = fit(plan, false);
     if (rows) return rows;
   }
-  return [];
+  // One row of budget: the Subagents header alone, which still counts every running agent.
+  return running.length > 0 ? [clip(agentRows(running, { limit: 0, preview: false })[0]!, cols)] : [];
 }

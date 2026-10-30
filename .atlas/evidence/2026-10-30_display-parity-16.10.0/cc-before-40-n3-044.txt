@@ -1,0 +1,40 @@
+                                                                                                                                               │                                                      ✕
+ ◆ ATLAS  ◎ RESEARCH  loading the orchestrate skill and the task list tool, then dispatching three research subagents                          │r: route │ t: team │ c: channel │ g: core ✗5 │ o: board
+                                                                                                                                               │◎◟ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+● Skill(atlas:atlas-orchestrate)                                                                                                               │nothing planned
+  ⎿  Successfully loaded skill · 8 tools allowed                                                                                               │
+                                                                                                                                               │
+  Ran 1 shell command, recalled 1 memory                                                                                                       │
+                                                                                                                                               │
+● The task list tool isn't available here, so I'm tracking progress in the ledger and atlas board. Three research explorers are now being      │
+  dispatched in parallel to map the calc source, the test layout, and the changelog. · summary                                                 │
+                                                                                                                                               │
+  Ran 1 shell command                                                                                                                          │
+                                                                                                                                               │
+● 3 background agents launched (↓ to manage)                                                                                                   │
+   ├ Map src/calc.py                                                                                                                           │
+   ├ Map test layout                                                                                                                           │
+   └ Read docs/CHANGELOG.md                                                                                                                    │
+                                                                                                                                               │
+✶ Burrowing · explorer-a7ff · explorer-a8c0 (59s · ↓ 4.4k tokens)                                                                              │
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work                                                     │
+TODO                                                                                                                                       [-] │
+ ├─ Other · 0/6                                                                                                                                │
+ │  ├─ ☐ Research: map src/calc.py (explorer)                                                                                                  │
+ │  └─ … 2 more active todos                                                                                                                   │
+Subagents · 2 running                                                                                                                          │
+ └─ • ◑ anthropic/haiku explorer-a7ff [explorer]: Map test layout                                                                              │
+ ◆ ATLAS · research 0/6 · 2 working · ✖5                                                                                                       │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demo7   ⏱ 3m37s    👾  Fable 5.1  ·  high
+  📚  ctx   7% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  66.2k / 1M        │  💰  session       plan    69.1k tok  cache 94%
+  ⏳  5h    4% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  4h49m anthropic   │  🔌  anthropic     plan    69.1k tok  claude-fable-5…
+  📅  7d   32% ▅▅▅▅▁▁▁▁▁▁▁▁▁▁  4d17h anthropic   │
+  ⏸ manual mode on · /tasks to see subagents
+
+  ● main
+  ◯ atlas:explorer  Map test layout                                                                                                                                                9s · ↓ 32.3k tokens
+  ◯ atlas:explorer  Read docs/CHANGELOG.md                                                                                                                                         2s · ↑ 29.9k tokens

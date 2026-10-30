@@ -1,5 +1,20 @@
 # Changelog
 
+## 16.10.0 - 2026-10-30
+
+### Fixed
+
+- Claude Code status line keeps running subagents visible when the area above the prompt gives Atlas no rows (maxRows 0). The mod writes `.atlas/.run/agents-running.json` (running names, roles, `hudRowsShown`) when the running set changes; `atlas_statusline.py` adds an `agents N running: a, b` row when the file is under 15 s old and the HUD shows fewer agent rows than are running.
+- Claude Code HUD keeps Subagents visible under a tight prompt slot. Root cause, seen in real Claude Code 2.1.314 sessions: the row ladder dropped Subagents before it shrank the TODO tree, a no-more rung hid agents silently, and the HUD could be given fewer than 2 rows. Now the TODO tree shrinks to a one-row summary first, agents that do not fit show a `... N more` row, the HUD budget floor is 2 rows while an agent runs (the band yields, and draws nothing at 0 rows), and `Research:` style phase prefixes (`Word: `) group into phases like `[label]` ones.
+- omp TODO tree. Root cause: omp draws its tree only from its own `todo` tool, and the omp prompt also told the lead to write the plan with `atlas_todo.py set`, so a board-only lead showed Subagents but no tree. The prompt now names `todo` as the plan record, and a fallback tree is drawn from the board when the lead never calls `todo` (removed on the first native todo result).
+
+- atlas-doctor `--fix` no longer crashes on memory migration (`migrate_global_to_projects() missing 2 required positional arguments: 'home' and 'db_path'`). `fix_project_memory` in `doctor_layout.py` now passes both; covered by `DoctorTest.test_fix_passes_home_and_db_path_to_real_migration`.
+- The status line `agents N running: ...` row was checked live in Claude Code 2.1.314 at 200x24: it appeared in every explorer, implementer and verifier wave while the HUD had no rows above the prompt. At that height the row takes the place of Claude Code's own agent list rows (the list is drawn by Claude Code, a mod cannot place a row after it). Evidence: `.atlas/evidence/2026-10-30_display-parity-16.10.0/`.
+
+### Added
+
+- atlas-doctor `display-omp-todo` (omp `todo.enabled` is not false) and `display-hud` (`ATLAS_HUD` is not exactly `off`, the only value `mod/register.ts` honours), both repaired by `--fix`. `display-todo-tools` now says why it matters.
+
 ## 16.9.0 - 2026-10-30
 
 ### Fixed

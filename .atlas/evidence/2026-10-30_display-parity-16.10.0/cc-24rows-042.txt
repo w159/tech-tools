@@ -1,0 +1,24 @@
+      87        "completed_at": null,                                                                                                          │                                                      ✕
+      88        "archived": false                                                                                                              │r: route │ t: team │ c: channel │g: core ✗12 │ o: board
+  ⎿  Allowed by auto mode                                                                                                                      │
+▌ ✔ abdc63  implementer done · STATUS: DONE · 23s                                                                                              │◎✓ ─ ◇✓ ─ ⚗✓ ─ ☰○✓ ─ ○✓ ─ ✓◕
+                                                                                                                                               │nothing planned
+● 2 background agents launched (↓ to manage)                                                                                                   │
+   ├ Rerun calc tests                                                                                                                          │
+   └ Review calc diff                                                                                                                          │
+ ◆ ATLAS  ✓ VERIFY  4/6 two verifiers running                                                                                                  │
+Both verifiers are dispatched. I will record their verdicts in findings.json when they report. Nothing else to do meanwhile, so I am waiting   │
+inside the turn.                                                                                                                               │
+▸ 9s · 2 workers · ctx 8%                                                                                                                      │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ research: Implement mul/div + tests + changelog (implementer)
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoS24   ⏱ 11m00s    👾  Fable 5.1  ·  high
+  📚  ctx   8% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  84.5k / 1M        │  💰  session       plan    84.6k tok  cache 97%
+  ⏳  5h   11% ▅▅▁▁▁▁▁▁▁▁▁▁▁▁  3h34m anthropic   │  🔌  anthropic     plan    84.6k tok  claude-fable-5…
+  📅  7d   34% ▅▅▅▅▅▁▁▁▁▁▁▁▁▁  4d16h anthropic   │
+  agents 2 running: verifier, verifier-a882
+  ⏵⏵ auto mode on (shift+tab to cycle)
+
+  ● main

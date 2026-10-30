@@ -40,6 +40,8 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
 | 2026-10-30 | t9597f35a | verified | No new test failures on changed tree vs head (pytest, plugin test, bun) | [2026-10-30_t9597f35a.md](2026-10-30_t9597f35a.md) |
+| 2026-10-30 | t7a5c1943-omp | verified | omp 16.10.0 board-only lead shows TODO tree + Subagents; 16.9.0 shows Subagents only | [2026-10-30_t7a5c1943-omp.md](2026-10-30_t7a5c1943-omp.md) |
+| 2026-10-30 | t7a5c1943-cc | rejected | CC 16.10.0 keeps Subagents visible under tight slot: not at 200x24 (19/19 violating), partial at 30, ok at 40 | [2026-10-30_t7a5c1943-cc.md](2026-10-30_t7a5c1943-cc.md) |
 | 2026-10-29 | rel1660-land | verified | atlas 16.6.0 landed on main 76784cf9 | [2026-10-29_rel1660-land.md](2026-10-29_rel1660-land.md) |
 | 2026-10-29 | rel1650-land | verified | atlas 16.5.0 landed on main 9c90adef | [2026-10-29_rel1650-land.md](2026-10-29_rel1650-land.md) |
 | 2026-10-29 | rel1650-c5 | rejected | plugins/atlas/CHANGELOG.md has two historic 'Unreleased' headings relabeled '16.5.0 - 2026-10-29' (lines 3683, 5214) | [2026-10-29_rel1650-c5.md](2026-10-29_rel1650-c5.md) |

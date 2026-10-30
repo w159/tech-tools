@@ -166,7 +166,7 @@ test("drift: the injected block is exactly the translated single-source style", 
 	expect(rendered).not.toContain("CLAUDE_CODE_ENABLE_TODO_TOOLS");
 	expect(rendered).not.toContain("ENABLE_TOOL_SEARCH");
 	expect(rendered).not.toContain("device catalog(");
-	expect(rendered).toContain("If `todo` is not callable (check once, silently), carry one line under the header:");
+	expect(rendered).not.toContain("LEDGER");
 	expect(body).toContain("CLAUDE_CODE_ENABLE_TODO_TOOLS"); // Claude Code's source text is unchanged
 	expect(rendered).not.toContain("force-for-plugin");
 });
@@ -320,4 +320,16 @@ test("a store save of ATLAS_STYLE=off applies on the next call without reloading
 	} finally {
 		rmSync(join(home, "settings.json"), { force: true });
 	}
+});
+
+test("omp todo section: `todo` records the plan, Atlas mirrors it, no atlas_todo.py set, no LEDGER fallback", () => {
+	const rendered = renderOmpStyle() ?? "";
+	const section = rendered.slice(rendered.indexOf("## The todo list"), rendered.indexOf("## Steering arrives mid-run"));
+	expect(section).toContain("with the `todo` tool");
+	expect(section).toContain("first `todo` call with the first real work");
+	expect(section).toContain("mirrors");
+	expect(section).toContain("do not run `atlas_todo.py set`");
+	expect(section).not.toContain("atlas_todo.py\" set");
+	expect(section).not.toContain("LEDGER");
+	expect(section).not.toContain("not callable");
 });

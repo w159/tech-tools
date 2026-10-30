@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.9.0 (`.claude-plugin/plugin.json`)                                                                                |
+| Version    | 16.10.0 (`.claude-plugin/plugin.json`)                                                                               |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
@@ -482,14 +482,22 @@ evaluation with the Stop hook. `ATLAS_MOD=off` disables it. Detail:
 Above the band, `mod/hud.ts` draws the same TODO tree and `Subagents · N running`
 block omp shows natively (phases in plan order, active phase expanded, completed
 items struck through; model, name, role, task and last tool per subagent), so
-Claude Code and omp present a run the same way. `ATLAS_HUD=off` hides it. The
+Claude Code and omp present a run the same way. `ATLAS_HUD=off` (exactly that
+value) hides it. While an agent runs the Subagents block is never dropped: the
+TODO tree shrinks to a one-row summary first, a `... N more` row stands in for
+agents that do not fit, and the HUD keeps at least 2 rows (the band yields, down
+to none). Phase labels such as `Research:` or `Implement:` group the tree. The
 tree needs the legacy `TodoWrite` tool: set `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`
 (TodoWrite on every model) and `CLAUDE_CODE_ENABLE_TASKS=0` (without it Claude
 Code uses TaskCreate/TaskUpdate and draws its own checklist above the prompt,
 re-expanding it on every update, which squeezes the Atlas TODO tree and band to
-about 6 rows). `atlas_doctor.py` reports this and the other display settings as
-`display-` checks, and `atlas_doctor.py --fix` sets both env flags and the status
-line.
+about 6 rows). When the prompt slot leaves the HUD fewer agent rows than are running (down to none), the status line adds `agents N running: a, b`, read from `.atlas/.run/agents-running.json` (written by the mod on change, ignored when older than 15 s or when the HUD already shows every agent). `atlas_doctor.py` reports this and the other display settings as
+`display-` checks (`display-hud` flags `ATLAS_HUD=off`; `display-omp-todo` flags
+`todo.enabled=false` in omp settings), and `atlas_doctor.py --fix` sets both env
+flags and the status line, removes `ATLAS_HUD=off` and sets omp `todo.enabled`
+true. On omp the lead records the plan with omp's own `todo` tool; when it never
+calls it, the extension draws a fallback TODO tree from the board until the
+first native todo result.
 
 ## omp and codex
 
@@ -593,7 +601,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.9.0
+|-- .claude-plugin/plugin.json   manifest, version 16.10.0
 |-- agents/                      14 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

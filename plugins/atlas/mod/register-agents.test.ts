@@ -4,7 +4,7 @@
 // (null until session.measure carries a value; a measured 0 stays a 0).
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { register, syncAgentsFromList } from './register';
+import { publishRunning, register, resetRunningSig, syncAgentsFromList } from './register';
 import { hudAgents } from './hud';
 import { liveWorkers } from './data/live';
 import { busySnap } from './live_fixture';
@@ -260,5 +260,42 @@ describe('spawn model and name reach the HUD agent', () => {
     const snap = { ...busySnap(), squad };
     const [agent] = hudAgents(liveWorkers(snap, snap.now), squad);
     expect(agent).toMatchObject({ name: 'explorer-calc', role: 'explorer', model: 'claude-sonnet-5', task: 'Map band row count' });
+  });
+});
+
+describe('agents-running.json writer', () => {
+  function writerEngine() {
+    const files = new Map<string, string>();
+    const cmds: string[][] = [];
+    const $ = {
+      clock: { now: async () => 1_760_000_000_000 },
+      fs: { write: async (p: string, t: string) => { files.set(p, t); } },
+      process: { run: async (argv: string[]) => { cmds.push(argv); if (argv[0] === 'mv') { files.set(argv[3]!, files.get(argv[2]!) ?? ''); files.delete(argv[2]!); } return { exitCode: 0, stdout: '', stderr: '' }; } },
+    };
+    return { $: $ as unknown as EngineInterface, files, cmds };
+  }
+
+  test('writes atomically on change, skips an unchanged set, writes [] when it empties', async () => {
+    resetRunningSig();
+    const { $, files, cmds } = writerEngine();
+    const path = '/tmp/proj/.atlas/.run/agents-running.json';
+    const two = [{ name: 'explorer-a', role: 'atlas:explorer' }, { name: 'explorer-b', role: 'atlas:explorer', model: 'm' }];
+    await publishRunning($, '/tmp/proj/', two, 0);
+    expect(JSON.parse(files.get(path)!)).toEqual({ ts: 1_760_000_000_000, running: [{ name: 'explorer-a', role: 'atlas:explorer', model: '' }, { name: 'explorer-b', role: 'atlas:explorer', model: 'm' }], hudRowsShown: 0 });
+    expect(files.has(`${path}.tmp`)).toBe(false);
+    expect(cmds.length).toBe(1);
+    await publishRunning($, '/tmp/proj/', two, 0);
+    expect(cmds.length).toBe(1);
+    await publishRunning($, '/tmp/proj/', [], 0);
+    expect(JSON.parse(files.get(path)!).running).toEqual([]);
+  });
+
+  test('never throws and does nothing without a root', async () => {
+    resetRunningSig();
+    const bad = { clock: { now: async () => 1 }, fs: { write: async () => { throw new Error('denied'); } }, process: { run: async () => ({}) } } as unknown as EngineInterface;
+    await publishRunning(bad, '/tmp/proj', [{ name: 'a' }], 0);
+    const { $, files } = writerEngine();
+    await publishRunning($, null, [{ name: 'a' }], 0);
+    expect(files.size).toBe(0);
   });
 });

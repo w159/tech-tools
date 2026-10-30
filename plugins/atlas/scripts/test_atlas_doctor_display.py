@@ -113,6 +113,16 @@ class ModTest(DisplayBase):
         self.assertIn("ATLAS_HUD=off", self.rows({"ATLAS_HUD": "off"})["display-mod"]["detail"])
         self.assertTrue(self.rows()["display-mod"]["ok"])
 
+    def test_only_exact_off_is_flagged(self):
+        for val in ("0", "false", "OFF", "no"):
+            self.write({"env": {"ATLAS_MOD": val, "ATLAS_HUD": val}})
+            self.assertTrue(self.rows()["display-mod"]["ok"], val)
+            self.assertTrue(self.rows({"ATLAS_MOD": val})["display-mod"]["ok"], val)
+        self.write({"env": {"ATLAS_MOD": "off"}})
+        self.assertFalse(self.rows()["display-mod"]["ok"])
+        self.write({})
+        self.assertFalse(self.rows({"ATLAS_HUD": "off"})["display-mod"]["ok"])
+
     def test_hooks_without_module_flagged(self):
         p = os.path.join(self.root, "hooks", "hooks.json")
         data = json.load(open(p))
@@ -190,6 +200,157 @@ class HarnessTest(DisplayBase):
         row = self.rows({"ATLAS_HARNESS": "omp"})["display-harness"]
         self.assertTrue(row["detail"].startswith("omp:"))
         self.assertIn("omp not installed", row["detail"])
+
+
+class OmpTodoTest(DisplayBase):
+    def setUp(self):
+        super().setUp()
+        self.agent = os.path.join(self.tmp, "omp-agent")
+        self.proj = os.path.join(self.tmp, "proj")
+        os.makedirs(self.agent)
+        os.makedirs(os.path.join(self.proj, ".omp"))
+        self.write({})
+
+    def rows(self, env=None):
+        out = d.display_checks(self.settings, env or {}, self.root, project_dir=self.proj, omp_agent_dir=self.agent)
+        return {r["check"]: r for r in out}
+
+    def fix(self, env=None):
+        return d.fix_display(self.settings, env or {}, self.root, project_dir=self.proj, omp_agent_dir=self.agent)
+
+    def put(self, rel, text):
+        fp = os.path.join(self.agent if not rel.startswith("proj/") else self.proj, rel.replace("proj/", ""))
+        with open(fp, "w") as f:
+            f.write(text)
+        return fp
+
+    def text(self, fp):
+        with open(fp) as f:
+            return f.read()
+
+    def test_no_settings_file_is_na(self):
+        row = self.rows()["display-omp-todo"]
+        self.assertTrue(row["ok"])
+        self.assertIn("n/a", row["detail"])
+
+    def test_enabled_or_unset_passes(self):
+        self.put("config.yml", "todo:\n  enabled: true\n")
+        self.assertTrue(self.rows()["display-omp-todo"]["ok"])
+        self.put("config.yml", "theme: dark\n")
+        self.assertTrue(self.rows()["display-omp-todo"]["ok"])
+
+    def test_user_yaml_block_false_warns_and_fix_keeps_rest(self):
+        text = "# my omp\ntheme: dark\ntodo:\n  enabled: false  # off for now\n  reminders: true\nother: 1\n"
+        fp = self.put("config.yml", text)
+        row = self.rows()["display-omp-todo"]
+        self.assertFalse(row["ok"])
+        self.assertEqual(row["severity"], "warn")
+        self.assertIn(fp, row["detail"])
+        self.fix()
+        self.assertEqual(self.text(fp), text.replace("enabled: false", "enabled: true"))
+        self.assertTrue(self.rows()["display-omp-todo"]["ok"])
+
+    def test_flat_dotted_and_inline_yaml_forms(self):
+        fp = self.put("config.yml", 'a: 1\n"todo.enabled": false\n')
+        self.assertFalse(self.rows()["display-omp-todo"]["ok"])
+        self.fix()
+        self.assertEqual(self.text(fp), 'a: 1\n"todo.enabled": true\n')
+        fp = self.put("config.yml", "todo: {enabled: no}\n")
+        self.assertFalse(self.rows()["display-omp-todo"]["ok"])
+        self.fix()
+        self.assertTrue(self.rows()["display-omp-todo"]["ok"])
+
+    def test_project_json_false_warns_and_fix_sets_true(self):
+        fp = self.put("proj/.omp/settings.json", json.dumps({"x": 1, "todo": {"enabled": False, "reminders": False}}))
+        self.assertFalse(self.rows()["display-omp-todo"]["ok"])
+        self.fix()
+        self.assertEqual(json.load(open(fp)), {"x": 1, "todo": {"enabled": True, "reminders": False}})
+        self.assertTrue(self.rows()["display-omp-todo"]["ok"])
+
+    def test_project_claude_settings_false_warns(self):
+        os.makedirs(os.path.join(self.proj, ".claude"))
+        fp = self.put("proj/.claude/settings.json", json.dumps({"todo.enabled": False}))
+        self.assertFalse(self.rows()["display-omp-todo"]["ok"])
+        self.fix()
+        self.assertEqual(json.load(open(fp)), {"todo.enabled": True})
+
+    def test_project_true_overrides_user_false(self):
+        self.put("config.yml", "todo:\n  enabled: false\n")
+        self.put("proj/.omp/config.yml", "todo:\n  enabled: true\n")
+        self.assertTrue(self.rows()["display-omp-todo"]["ok"])
+
+    def test_user_false_project_unset_warns(self):
+        self.put("config.yml", "todo:\n  enabled: false\n")
+        self.put("proj/.omp/config.yml", "theme: dark\n")
+        self.assertFalse(self.rows()["display-omp-todo"]["ok"])
+
+
+class HudTest(DisplayBase):
+    def setUp(self):
+        super().setUp()
+        self.proj = os.path.join(self.tmp, "proj")
+        os.makedirs(os.path.join(self.proj, ".claude"))
+
+    def rows(self, env=None, term_rows=None):
+        out = d.display_checks(self.settings, env or {}, self.root, project_dir=self.proj,
+                               omp_agent_dir=os.path.join(self.tmp, "none"), term_rows=term_rows)
+        return {r["check"]: r for r in out}
+
+    def fix(self, env=None):
+        return d.fix_display(self.settings, env or {}, self.root, project_dir=self.proj,
+                             omp_agent_dir=os.path.join(self.tmp, "none"))
+
+    def test_clean_passes(self):
+        self.write({"env": {"ATLAS_HUD": "on", "FOO": "bar"}})
+        self.assertTrue(self.rows()["display-hud"]["ok"])
+
+    def test_user_off_warns_and_fix_removes_only_that_key(self):
+        self.write({"model": "opus", "env": {"ATLAS_HUD": "off", "FOO": "bar"}})
+        row = self.rows()["display-hud"]
+        self.assertFalse(row["ok"])
+        self.assertEqual(row["severity"], "warn")
+        self.assertIn("ATLAS_HUD=off", row["detail"])
+        self.fix()
+        data = self.read()
+        self.assertEqual(data["model"], "opus")
+        self.assertEqual(data["env"]["FOO"], "bar")
+        self.assertNotIn("ATLAS_HUD", data["env"])
+        self.assertTrue(self.rows()["display-hud"]["ok"])
+
+    def test_project_settings_and_local_off(self):
+        self.write({})
+        for name in ("settings.json", "settings.local.json"):
+            with open(os.path.join(self.proj, ".claude", name), "w") as f:
+                json.dump({"env": {"ATLAS_HUD": "off"}}, f)
+        self.assertFalse(self.rows()["display-hud"]["ok"])
+        self.fix()
+        self.assertTrue(self.rows()["display-hud"]["ok"])
+        for name in ("settings.json", "settings.local.json"):
+            self.assertNotIn("ATLAS_HUD", json.load(open(os.path.join(self.proj, ".claude", name))).get("env", {}))
+
+    def test_values_register_ts_ignores_are_not_flagged(self):
+        # register.ts hides the HUD only when ATLAS_HUD === 'off'; these leave it on.
+        for val in ("0", "false", "no", "OFF", "Off", " off"):
+            self.write({"env": {"ATLAS_HUD": val}})
+            self.assertTrue(self.rows()["display-hud"]["ok"], val)
+            self.fix()
+            self.assertEqual(self.read()["env"]["ATLAS_HUD"], val)
+
+    def test_short_terminal_is_info_only(self):
+        self.write({})
+        row = self.rows(term_rows=20)["display-hud"]
+        self.assertTrue(row["ok"])
+        self.assertIn("INFO: terminal is 20 rows", row["detail"])
+        self.assertNotIn("INFO", self.rows(term_rows=40)["display-hud"]["detail"])
+        self.assertNotIn("INFO", self.rows(term_rows=None)["display-hud"]["detail"])
+
+
+class TodoToolsWhyTest(DisplayBase):
+    def test_message_says_why(self):
+        self.write({})
+        detail = self.rows()["display-todo-tools"]["detail"]
+        self.assertIn("draws its own checklist above the prompt", detail)
+        self.assertIn("Subagents block", detail)
 
 
 if __name__ == "__main__":

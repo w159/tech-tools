@@ -10195,5 +10195,39 @@
     "status": "verified",
     "verified_at": "2026-10-30T04:48:43+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "t7a5c1943-cc",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "CC 16.10.0 keeps Subagents visible under tight slot: not at 200x24 (19/19 violating), partial at 30, ok at 40",
+    "evidence": [
+      "/tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/evidence-16.10/cc-frame-analysis.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "launch.sh a24 cfg8 demoA24 par.txt 200 24 120 4; python3 evidence-16.10/analyze.py b24 a24",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-10-30T22:52:54+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "t7a5c1943-omp",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "omp 16.10.0 board-only lead shows TODO tree + Subagents; 16.9.0 shows Subagents only",
+    "evidence": [
+      "/tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/evidence-16.10/omp-after-running.txt; /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/evidence-16.10/omp-before-running.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "omp-rig-ev/run-atlas.sh ev16100 (FAKE_LEAD_MODE=atlas) vs ATLAS_OMP_EXT=fresh4/plugins/atlas/omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-30T22:52:54+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

@@ -1,0 +1,11 @@
+### re-check
+PASS  display-todo-tools   CLAUDE_CODE_ENABLE_TODO_TOOLS=1 and CLAUDE_CODE_ENABLE_TASKS=0 (TodoWrite on every model, no Claude Code checklist; needs Claude Code 2.1.233+)
+PASS  display-mod          ../mod/register.ts registered; ATLAS_MOD/ATLAS_HUD not off
+PASS  display-todo-mirror  PostToolUse covers ['TodoWrite', 'TaskCreate', 'TaskUpdate', 'Agent', 'Task', 'Bash']
+PASS  display-statusline   statusLine runs /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/cfg8/plugins/cache/tech-tools/atlas/16.10.0/scripts/atlas_statusline.py
+PASS  display-omp-todo     omp: no settings file found; todo.enabled defaults to true (n/a)
+PASS  display-hud          ATLAS_HUD not off in Claude Code settings
+PASS  display-harness      claude-code
+1 PROBLEM(S) - atlas
+### files in temp HOME
+/tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/dochome/.atlas/doctor-state.json

@@ -316,9 +316,94 @@ describe('hud budget at the measured AbovePrompt maxRows', () => {
     expect([18, 15, 14, 10, 6].map((n) => hudBudget(n, 7))).toEqual([11, 8, 7, 7, 5]);
     expect(hudBudget(0, 7)).toBe(0);
   });
-  test('a tight budget still shows the Subagents header and the active phase before dropping the tree', () => {
+  test('a tight budget keeps the Subagents header and every agent, shrinking the tree to a one-row summary', () => {
     const tight = lines(hudRows(input, { cols: 138, maxRows: 5 }));
-    expect(tight[0]).toBe('TODO');
-    expect(tight).toEqual(['TODO', ' ├─ I. Research · 1/2', ' │  └─ ☐ Trace gate path and pre-gate costs', 'Subagents · 2 running', ' └─ • ◑ ollama/minima….1-flash:cloud verifier-eval [verifier]: Verify gate fix shows no scorer regression']);
+    expect(tight.length).toBeLessThanOrEqual(5);
+    expect(tight[0]).toBe('TODO · 2/11 · Trace gate path and pre-gate costs');
+    expect(tight[1]).toBe('Subagents · 2 running');
+    expect(tight.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate'))).toHaveLength(2);
+  });
+});
+
+describe('hud ladder keeps Subagents over the TODO tree', () => {
+  const phases = ['research', 'implement', 'verify', 'docs'];
+  const bigPlan: TodoItem[] = Array.from({ length: 11 }, (_, i) =>
+    todo(`b${i}`, `Item number ${i}`, i === 0 ? 'completed' : i === 1 ? 'in_progress' : 'pending', phases[Math.min(3, Math.floor(i / 3))]));
+  const two: HudAgent[] = [
+    { name: 'a-one', role: 'explorer', task: 'first task', state: 'working' },
+    { name: 'a-two', role: 'verifier', task: 'second task', state: 'working' },
+  ];
+
+  test('budgets 2..8 with two running agents always keep the Subagents header', () => {
+    for (let maxRows = 2; maxRows <= 8; maxRows++) {
+      const out = lines(hudRows({ todos: bigPlan, agents: two }, { cols: 100, maxRows }));
+      expect(out.length).toBeLessThanOrEqual(maxRows);
+      expect(out.some((l) => l.startsWith('Subagents'))).toBe(true);
+    }
+  });
+
+  test('a one-row TODO summary shows at small budgets, with the active item', () => {
+    const out = lines(hudRows({ todos: bigPlan, agents: two }, { cols: 100, maxRows: 4 }));
+    expect(out[0]).toBe('TODO · 1/11 · Item number 1');
+    expect(out.some((l) => l.startsWith('Subagents'))).toBe(true);
+    expect(out.filter((l) => l.includes('├─ I.'))).toEqual([]);
+  });
+
+  test('no running agents: the tree shrinks as before and never becomes a summary', () => {
+    for (let maxRows = 1; maxRows <= 8; maxRows++) {
+      const out = lines(hudRows({ todos: bigPlan, agents: [] }, { cols: 100, maxRows }));
+      expect(out.every((l) => !l.startsWith('TODO ·'))).toBe(true);
+    }
+    expect(lines(hudRows({ todos: bigPlan, agents: [] }, { cols: 100, maxRows: 2 }))).toEqual([]);
+  });
+
+  test('"Research: x" / "Implement: y" items group by phase and show without the prefix', () => {
+    const plan = [todo('a', 'Research: map the code', 'in_progress'), todo('b', 'Implement - patch it', 'pending'), todo('c', 'research: second look', 'pending')];
+    const out = solidLines(hudRows({ todos: plan, agents: [] }, { cols: 100, maxRows: 20 }));
+    expect(out).toContain(' ├─ I. Research · 0/2');
+    expect(out).toContain(' │  ├─ ☐ map the code');
+    expect(out.some((l) => l.includes('II. Implement · 0/1'))).toBe(true);
+    expect(out.join('\n')).not.toContain('Research:');
+  });
+
+  test('an unknown "Note: z" prefix stays under Other with its text intact; a stamped phase wins', () => {
+    const note = solidLines(hudRows({ todos: [todo('a', 'Note: z', 'pending')], agents: [] }, { cols: 100, maxRows: 20 }));
+    expect(note[1]).toBe(' ├─ Other · 0/1');
+    expect(note.some((l) => l.includes('☐ Note: z'))).toBe(true);
+    const stamped = solidLines(hudRows({ todos: [todo('b', 'Research: keep stamp', 'in_progress', 'verify')], agents: [] }, { cols: 100, maxRows: 20 }));
+    expect(stamped.some((l) => l.includes('Verify · 0/1'))).toBe(true);
+    expect(stamped.some((l) => l.includes('Research: keep stamp'))).toBe(true);
+  });
+});
+
+describe('hud never hides a running agent silently, nor draws an empty HUD at a tight slot', () => {
+  const plan: TodoItem[] = Array.from({ length: 11 }, (_, i) => todo(`c${i}`, `Step ${i}`, i === 1 ? 'in_progress' : 'pending', ['research', 'implement', 'verify', 'docs'][i % 4]));
+  const mk = (n: number): HudAgent[] => Array.from({ length: n }, (_, i) => ({ name: `ag-${i}`, role: 'explorer', task: `task ${i}`, state: 'working' as const }));
+  const shownAgents = (out: string[]): number => out.filter((l) => /ag-\d/.test(l)).length;
+  const moreCount = (out: string[]): number => Number(out.map((l) => /… (\d+) more$/.exec(l)?.[1]).find((n) => n !== undefined) ?? 0);
+
+  test('2 running agents at budgets 2..8: agent rows shown plus the "… N more" count equal the running count', () => {
+    for (const todos of [plan, []]) {
+      for (let maxRows = 2; maxRows <= 8; maxRows++) {
+        const out = lines(hudRows({ todos, agents: mk(2) }, { cols: 100, maxRows }));
+        expect(out.length).toBeLessThanOrEqual(maxRows);
+        expect(out.some((l) => l.startsWith('Subagents'))).toBe(true);
+        expect(shownAgents(out) + moreCount(out)).toBe(2);
+      }
+    }
+  });
+
+  test('hudRows at maxRows 1, 2, 3 with agents running', () => {
+    expect(lines(hudRows({ todos: plan, agents: mk(2) }, { cols: 100, maxRows: 1 }))).toEqual(['Subagents · 2 running']);
+    expect(lines(hudRows({ todos: plan, agents: mk(2) }, { cols: 100, maxRows: 2 }))).toEqual(['Subagents · 2 running', ' └─ … 2 more']);
+    expect(lines(hudRows({ todos: plan, agents: mk(1) }, { cols: 100, maxRows: 2 })).slice(0, 1)).toEqual(['Subagents · 1 running']);
+    for (const n of [1, 2, 3]) expect(hudRows({ todos: plan, agents: mk(n) }, { cols: 100, maxRows: 3 }).length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('hudBudget gives a running agent at least 2 rows once maxRows >= 2', () => {
+    for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
+    expect(hudBudget(1, 7, 7, true)).toBe(1);
+    expect(hudBudget(2, 7)).toBe(1); // no agent running: unchanged
+    expect(hudBudget(0, 7, 7, true)).toBe(0);
   });
 });

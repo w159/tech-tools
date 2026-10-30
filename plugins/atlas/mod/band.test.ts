@@ -143,6 +143,14 @@ describe('Mission Control band', () => {
   test('maxRows under 3 falls back to the title row', () => {
     expect(panel(160, { maxRows: 2 }).rows).toHaveLength(1);
   });
+  test('maxRows 0 or below draws no rows (idle or working); maxRows 1 is the title row only', () => {
+    for (const maxRows of [0, -1]) {
+      expect(panel(160, { maxRows }).rows).toHaveLength(0);
+      expect(panel(160, { maxRows, snapshot: idleSnap() }).rows).toHaveLength(0);
+    }
+    expect(panel(160, { maxRows: 1 }).rows).toHaveLength(1);
+    expect(panel(160, { maxRows: 1, snapshot: idleSnap() }).rows).toHaveLength(1);
+  });
   test('idle: two rows, dim title with the last wave, settled rail, no spinner', () => {
     const snapshot = busySnap({ comms: [] });
     snapshot.squad = snapshot.squad.map((a) => ({ ...a, state: 'finished' as const }));

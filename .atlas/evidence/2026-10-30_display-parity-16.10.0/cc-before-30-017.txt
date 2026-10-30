@@ -1,0 +1,30 @@
+                                                                                                                                               │                                                      ✕
+ ◆ ATLAS  ◎ RESEARCH  0/7 plan set, resolving research team                                                                                    │r: route │ t: team │ c: channel │ g: core ✗5 │ o: board
+No TodoWrite tool exists in this harness, so the plan goes on the Atlas board and the header count.                                            │◎◞ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+                                                                                                                                               │nothing planned
+  Ran 1 shell command                                                                                                                          │
+                                                                                                                                               │
+● I'm sending three explorers out at once: one to map src/calc.py, one to map the test layout, and one to read the changelog. · summary        │
+                                                                                                                                               │
+● 3 background agents launched (↓ to manage)                                                                                                   │
+   ├ Map src/calc.py                                                                                                                           │
+   ├ Map test layout                                                                                                                           │
+   └ Read docs/CHANGELOG.md                                                                                                                    │
+▌ ✔ Map src/calc.py  explorer done · STATUS: DONE · 14s                                                                                        │
+                                                                                                                                               │
+✻ Ideating · explorer-aa62 · explorer-a59e (54s · ↓ 3.8k tokens)                                                                               │
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work                                                     │
+ ◆ ATLAS · research 0/0 · 2 working · ✖5                                                                                                   [-] │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoB30   ⏱ 1m50s    👾  Fable 5.1  ·  high
+  📚  ctx   7% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  65.8k / 1M        │  💰  session       plan    67.6k tok  cache 98%
+  ⏳  5h    8% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  4h6m anthropic    │  🔌  anthropic     plan    67.6k tok  claude-fable-5…
+  📅  7d   33% ▅▅▅▅▅▁▁▁▁▁▁▁▁▁  4d17h anthropic   │
+  ⏸ manual mode on · /tasks to see subagents
+
+  ● main
+  ◯ atlas:explorer  Map test layout                                                                                                                                                6s · ↓ 32.7k tokens
+  ◯ atlas:explorer  Read docs/CHANGELOG.md                                                                                                                                                          0s

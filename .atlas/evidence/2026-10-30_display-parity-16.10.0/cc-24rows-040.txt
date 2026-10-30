@@ -1,0 +1,24 @@
+      86        "evidence": null,                                                                                                              │                                                      ✕
+      87        "completed_at": null,                                                                                                          │r: route │ t: team │ c: channel │g: core ✗13 │ o: board
+      88        "archived": false                                                                                                              │
+  ⎿  Allowed by auto mode                                                                                                                      │◎◞ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+▌ ✔ abdc63  implementer done · STATUS: DONE · 23s                                                                                              │nothing planned
+                                                                                                                                               │
+● 2 background agents launched (↓ to manage)                                                                                                   │
+   ├ Rerun calc tests                                                                                                                          │
+   └ Review calc diff                                                                                                                          │
+                                                                                                                                               │
+✻ Blanching · verifier · verifier-a882 (30s · ↓ 2.0k tokens)                                                                                   │
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work                                                     │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoS24   ⏱ 10m57s    👾  Fable 5.1  ·  high
+  📚  ctx   8% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  81.7k / 1M        │  💰  session       plan    83.2k tok  cache 98%
+  ⏳  5h   11% ▅▅▁▁▁▁▁▁▁▁▁▁▁▁  3h34m anthropic   │  🔌  anthropic     plan    83.2k tok  claude-fable-5…
+  📅  7d   34% ▅▅▅▅▅▁▁▁▁▁▁▁▁▁  4d16h anthropic   │
+  ⏵⏵ auto mode on (shift+tab to cycle)
+
+  ● main
+  ◯ atlas:verifier  Rerun calc tests                                                                                                                                                   1s · ↑ 4 tokens

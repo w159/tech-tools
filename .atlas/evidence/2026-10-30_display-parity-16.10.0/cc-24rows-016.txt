@@ -1,0 +1,24 @@
+● 3 background agents launched (↓ to manage)                                                                        ╭─────────────────────────╮│                                                      ✕
+   ├ Map src/calc.py                                                                                                │ atlas                   ││r: route │ t: team │ c: channel │ g: core ✗7 │ o: board
+   ├ Map test layout                                                                                                │ ▸ explorer-a4e7 spawned ││◎◞ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+   └ Read docs/CHANGELOG.md                                                                                         ╰─────────────────────────╯│nothing planned
+ ◆ ATLAS  ◎ RESEARCH  0/6 three explorers running, waiting for their reports                               ╭──────────────────────────────────╮│
+The three explorers are dispatched and running in the background. I have nothing further to do until their │ atlas                            ││
+inside the turn.                                                                                           │ ✓ explorer 18s · 1. Read         ││
+▸ 0s · 2 workers · ctx 7%                                                                                  │ /tmp/claude-0/-home-user-tech-t… ││
+▌ ✔ Map src/calc.py  explorer done · STATUS: DONE · 17s                                                    ╰──────────────────────────────────╯│
+                                                                                                                                               │
+✢ Reticulating · explorer-adb5 · explorer-a4e7 Bash                                                                                            │
+  ⎿  Tip: Use /theme to change the color theme                                                                                                 │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoS24   ⏱ 9m20s    👾  Fable 5.1  ·  high
+  📚  ctx   7% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  70.9k / 1M        │  💰  session       plan    71.0k tok  cache 95%
+  ⏳  5h   11% ▅▅▁▁▁▁▁▁▁▁▁▁▁▁  3h36m anthropic   │  🔌  anthropic     plan    71.0k tok  claude-fable-5…
+  📅  7d   34% ▅▅▅▅▅▁▁▁▁▁▁▁▁▁  4d16h anthropic   │
+  agents 2 running: explorer-adb5, explorer-a4e7
+  ⏸ manual mode on · /tasks to see subagents
+
+  ● main

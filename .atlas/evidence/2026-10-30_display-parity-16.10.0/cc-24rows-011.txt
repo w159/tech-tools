@@ -1,0 +1,24 @@
+                                                                                                                                               │                                                      ✕
+  Ran 3 shell commands, recalled 1 memory                                                                                                      │r: route │ t: team │ c: channel │ g: core ✗8 │ o: board
+                                                                                                                                               │◎◞ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+● I'm dispatching three explorers in parallel: one to map src/calc.py, one for the test layout, and one to read the changelog. Implementation, │nothing planned
+  the test rerun, and the diff review come after that. · summary                                                                               │
+▌ ⢿ explorer  explorer · haiku·low                                                                                                             │
+▌ goal  Map src/calc.py                                                                                                                        │
+▌ now   running                                                                                                                                │
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)                                                                                       │
+                                                                                                                                               │
+✢ Waddling · explorer (50s · ↓ 3.1k tokens)                                                                                                    │
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work                                                     │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoS24   ⏱ 9m01s    👾  Fable 5.1  ·  high
+  📚  ctx   7% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  67.3k / 1M        │  💰  session       plan    67.5k tok  cache 99%
+  ⏳  5h   11% ▅▅▁▁▁▁▁▁▁▁▁▁▁▁  3h36m anthropic   │  🔌  anthropic     plan    67.5k tok  claude-fable-5…
+  📅  7d   34% ▅▅▅▅▅▁▁▁▁▁▁▁▁▁  4d16h anthropic   │
+  ⏸ manual mode on
+
+  ● main
+  ◯ atlas:explorer  Map src/calc.py                                                                                                                                                                 1s

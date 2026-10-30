@@ -323,6 +323,7 @@ export function bandTree(els: ClientElements, { snapshot: s, live, gates, column
   const all = live.filter((w) => w.state !== 'parked'); // parked workers are resting
   const shown = all.filter((w) => w.state !== 'done');
   const cols = Math.max(1, columns);
+  if (maxRows < 1) return panel(els, [], cols); // the HUD can take the whole slot: draw nothing rather than a title row past the budget
   const c: Ctx = { s, rail: railPhase(s, lastPhase), cols, tick, full: cols >= FULL, now: s.now, done, total, open: openGateCount(gates), gates, todoExpanded, core, team, leadName };
   if (!shown.length) return panel(els, idleRows(els, c, all, maxRows, on), cols);
   if (cols < MID || maxRows < 3) return panel(els, [narrowRow(c, shown)], cols);

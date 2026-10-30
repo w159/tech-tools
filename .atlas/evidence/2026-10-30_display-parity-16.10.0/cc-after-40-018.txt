@@ -1,0 +1,40 @@
+                                                                                                                                               │                                                      ✕
+● Skill(atlas:atlas-orchestrate)                                                                                                               │r: route │ t: team │ c: channel │ g: core ✗6 │ o: board
+  ⎿  Successfully loaded skill · 8 tools allowed                                                                                               │◎◝ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+                                                                                                                                               │nothing planned
+  Recalled 1 memory                                                                                                                            │
+ ◆ ATLAS  ◎ RESEARCH  orienting: loading task list tool and resolving the team                                                                 │
+                                                                                                                                               │
+  Ran 2 shell commands                                                                                                                         │
+ ◆ ATLAS  ◎ RESEARCH  0/8 task list tool is absent here, so the plan goes on the Atlas board and the header count                              │
+LEDGER | 0/8 | now: three research explorers | left: implement x3, verify x2                                                                   │
+                                                                                                                                               │
+  Ran 1 shell command                                                                                                                          │
+                                                                                                                                               │
+● 3 background agents launched (↓ to manage)                                                                                                   │
+   ├ Map src/calc.py                                                                                                                           │
+   ├ Map test layout                                                                                                                           │
+   └ Read docs/CHANGELOG.md                                                                                                                    │
+                                                                                                                                               │
+✽ Misting · explorer · explorer-a977 (1m 2s · ↓ 4.2k tokens)                                                                                   │
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work                                                     │
+TODO · 0/8 · map src/calc.py (explorer)                                                                                                    [-] │
+Subagents · 3 running                                                                                                                          │
+ ├─ • ◑ anthropic/haiku explorer: Map src/calc.py                                                                                              │
+ ├─ • ◑ anthropic/haiku explorer-a977 [explorer]: Map test layout                                                                              │
+ └─ • ◑ anthropic/haiku explorer-a773 [explorer]: Read docs/CHANGELOG.md                                                                       │
+ ◆ ATLAS · research 0/8 · 3 working · ✖6                                                                                                       │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoA40   ⏱ 1m54s    👾  Fable 5.1  ·  high
+  📚  ctx   7% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  65.1k / 1M        │  💰  session       plan    67.9k tok  cache 56%
+  ⏳  5h    7% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  4h14m anthropic   │  🔌  anthropic     plan    67.9k tok  claude-fable-5…
+  📅  7d   33% ▅▅▅▅▅▁▁▁▁▁▁▁▁▁  4d17h anthropic   │
+  ⏸ manual mode on
+
+  ● main
+  ◯ atlas:explorer  Map src/calc.py                                                                                                                                               15s · ↓ 33.4k tokens
+  ◯ atlas:explorer  Map test layout                                                                                                                                                7s · ↓ 32.5k tokens
+  ◯ atlas:explorer  Read docs/CHANGELOG.md                                                                                                                                                          0s

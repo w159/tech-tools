@@ -1,0 +1,55 @@
+                                                                                                 Do Y)
+
+
+
+ Display test
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ $ python3 /home/user/tech-tools/plugins/atlas/scripts/atlas_todo.py set '[{"content":"Trace calc module","status":"completed"},{"content":"Map add and sub call                                      │
+│ paths","status":"in_progress"},{"content":"Add mul to src/calc.py","status":"pending"}]' --root /tmp/claude-0/-home-user-tech-tools/efb6ce52-9f4c-5fae-93ab-1aadb2a05a17/scratchpad/omp-demo         │
+│ --session $(ls -t /tmp/claude-0/omp-home/agent/sessions/*/*.jsonl | head -1 | sed 's/.*_//;s/[.]jsonl$//')                                                                                           │
+├─── Output ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ {"ok": true, "counts": {"needed": 3, "remaining": 2, "complete": 1, "claimed": 0}}                                                                                                                   │
+╰─── Wall: 0.26s · Timeout: 300s ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭─── • Task 2 agents ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ GOAL: answer read-only questions about the demo repo.                                                                                                                                                │
+│ DELIVERABLE: one line answer.                                                                                                                                                                        │
+│ SUCCESS CRITERIA: answer is grounded in the file read.                                                                                                                                               │
+│ OUT OF SCOPE: any edit.                                                                                                                                                                              │
+│ STOP CONDITIONS: stop after one read.                                                                                                                                                                │
+│ TOOLS: read                                                                                                                                                                                          │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ • explorer-calc ⟦explorer⟧ · 1 🛠 · 2 req · 0.6%/200K                                                                                                                                                 │
+│ • docs-auditor-calc ⟦docs-auditor⟧ · 1 🛠 · 2 req · 0.6%/200K                                                                                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ done
+
+ • Background job completed [task] docs-auditor-calc (40.8s)
+ • Background job completed [task] explorer-calc (40.8s)
+
+ done
+
+ done
+
+                                                                                                                                                                                            Display test
+
+  ◆ ATLAS  ·  idle  ·  last wave: 2 workers · 41s · ✔ ok
+   ✓ research ▶ ✓ theory ▶ ✓ test ▶ ✓ implement ▶ ✓ verify ▶ ◆ DONE
+  board ████████                 1/3 ⠋ Map add and sub call paths
+ π > ⬢ Sonnet 5 (fake) > 🗑 …e-93ab-1aadb2a05a17/scratchpad/omp-demo > ⑂ master ?1 ▶─0.6%──────────────────────────────────────────────────────────────────────────────╎───────────┃────────────────200K─
+╰─
+ 📁  omp-demo   🐇  napping · last run 0m00s · 2 runs    👾  Claude Sonnet 5 (fake)  ·  off
+ ​
+ 📚  ctx   1% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  1.2k / 200k       │  💰  session      $0.00     4.9k tok  cache 0%
+ ⏳  5h   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                    │  🔌  fake         $0.00     4.9k tok  claude-sonnet-5
+ 📅  7d   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                    │
+ atlas  idle 1/3 · 2 live · gates ? · verified never · scoring ok
+ ​
+
+
+
+
+

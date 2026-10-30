@@ -659,7 +659,6 @@ DISPLAY_TASKS_ENV = "CLAUDE_CODE_ENABLE_TASKS"
 DISPLAY_SWITCHES = ("ATLAS_MOD", "ATLAS_HUD")
 DISPLAY_MOD_MODULE = "../mod/register.ts"
 DISPLAY_TODO_FALLBACK_TOOLS = ("TodoWrite", "TaskCreate", "TaskUpdate", "Agent", "Task", "Bash")
-_OFF_VALUES = ("off", "0", "false", "no")
 
 
 def _claude_settings_path():
@@ -722,13 +721,166 @@ def _todo_capture_tools(plugin_root):
     return DISPLAY_TODO_FALLBACK_TOOLS
 
 
-def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="atlas", version=None):
+# omp reads `todo.enabled` (default true) from config.yml in its agent dir (PI_CODING_AGENT_DIR, else
+# ~/.omp/agent; pi-utils dirs.ts getAgentDir, MAIN_CONFIG_FILENAMES) and from project layers
+# .omp/config.yml, .omp/settings.json, .claude/settings.json (pi-coding-agent config/settings.ts watch list).
+# The project layer overrides the user layer. tools/index.ts drops the `todo` tool when it is false and
+# tools/xdev.ts XDEV_KEEP_TOP_LEVEL pins `todo` top-level in every xdev mode, so only this setting hides it.
+_YAML_TRUE = ("true", "yes", "on")
+_YAML_FALSE = ("false", "no", "off")
+_YAML_FLAT_RE = re.compile(r"""^(["']?)todo\.enabled\1\s*:\s*([A-Za-z]+)""")
+_YAML_INLINE_RE = re.compile(r"^todo\s*:\s*\{[^}]*?\benabled\s*:\s*([A-Za-z]+)")
+_YAML_BLOCK_RE = re.compile(r"^todo\s*:\s*(#.*)?$")
+_YAML_LEAF_RE = re.compile(r"^[ \t]+enabled\s*:\s*([A-Za-z]+)")
+
+
+def _omp_agent_dir(env, default_ok=True):
+    d = env.get("PI_CODING_AGENT_DIR")
+    if d:
+        return os.path.abspath(os.path.expanduser(d))
+    return os.path.expanduser("~/.omp/agent") if default_ok else None
+
+
+def _omp_settings_files(agent_dir, project_dir):
+    """Existing omp settings files in precedence order (later overrides earlier)."""
+    out = []
+    if agent_dir:
+        for name in ("config.yml", "config.yaml"):  # omp reads the first one present
+            fp = os.path.join(agent_dir, name)
+            if os.path.isfile(fp):
+                out.append(fp)
+                break
+    if project_dir:
+        for rel in (".omp/config.yml", ".omp/settings.json", ".claude/settings.json"):
+            fp = os.path.join(project_dir, *rel.split("/"))
+            if os.path.isfile(fp):
+                out.append(fp)
+    return out
+
+
+def _yaml_bool(tok):
+    t = tok.lower()
+    return True if t in _YAML_TRUE else False if t in _YAML_FALSE else None
+
+
+def _yaml_todo_hits(text):
+    """[(line_index, start, end, bool|None)] for every todo.enabled value token in a YAML file."""
+    hits, in_block = [], False
+    for i, line in enumerate(text.splitlines()):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line[0] not in " \t":
+            in_block = False
+            m = _YAML_FLAT_RE.match(line)
+            if m:
+                hits.append((i, m.start(2), m.end(2), _yaml_bool(m.group(2))))
+                continue
+            m = _YAML_INLINE_RE.match(line)
+            if m:
+                hits.append((i, m.start(1), m.end(1), _yaml_bool(m.group(1))))
+                continue
+            in_block = bool(_YAML_BLOCK_RE.match(line))
+        elif in_block:
+            m = _YAML_LEAF_RE.match(line)
+            if m:
+                hits.append((i, m.start(1), m.end(1), _yaml_bool(m.group(1))))
+    return hits
+
+
+def _omp_todo_setting(path):
+    """(value, err): True/False when the file sets todo.enabled, None when it does not."""
+    try:
+        if path.endswith(".json"):
+            data = _load_json(path)
+            if not isinstance(data, dict):
+                return None, f"{path} is not a JSON object"
+            if isinstance(data.get("todo"), dict) and isinstance(data["todo"].get("enabled"), bool):
+                return data["todo"]["enabled"], None
+            val = data.get("todo.enabled")
+            return (val if isinstance(val, bool) else None), None
+        with open(path, encoding="utf-8") as f:
+            vals = [h[3] for h in _yaml_todo_hits(f.read()) if h[3] is not None]
+        return (vals[-1] if vals else None), None
+    except Exception as e:
+        return None, f"cannot read {path}: {e}"
+
+
+def _omp_set_todo_true(path):
+    """Set todo.enabled true in place, keeping every other byte of a YAML file. Returns True if changed."""
+    if path.endswith(".json"):
+        data = _load_json(path)
+        if isinstance(data.get("todo"), dict) and data["todo"].get("enabled") is False:
+            data["todo"]["enabled"] = True
+        elif data.get("todo.enabled") is False:
+            data["todo.enabled"] = True
+        else:
+            return False
+        _atomic_write_json(path, data)
+        return True
+    with open(path, encoding="utf-8", newline="") as f:
+        text = f.read()
+    lines = text.splitlines(keepends=True)
+    changed = False
+    for i, a, b, val in _yaml_todo_hits(text):
+        if val is False:
+            lines[i] = lines[i][:a] + "true" + lines[i][b:]
+            changed = True
+    if changed:
+        tmp = f"{path}.atlas-tmp.{os.getpid()}"
+        try:
+            with open(tmp, "w", encoding="utf-8", newline="") as f:
+                f.write("".join(lines))
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+    return changed
+
+
+def _hud_off_files(settings_path, project_dir):
+    """Claude Code settings files whose env sets ATLAS_HUD to exactly 'off': [(path, value)].
+    mod/register.ts hides the HUD only on that exact string (case-sensitive, untrimmed)."""
+    paths = [settings_path]
+    if project_dir:
+        paths += [os.path.join(project_dir, ".claude", n) for n in ("settings.json", "settings.local.json")]
+    out = []
+    for fp in dict.fromkeys(os.path.abspath(x) for x in paths):
+        data, err = _read_settings(fp)
+        val = _settings_env(data).get("ATLAS_HUD") if data else None
+        if val == "off":
+            out.append((fp, val))
+    return out
+
+
+HUD_MIN_ROWS = 30
+
+
+def _terminal_rows(term_rows):
+    if term_rows is not None:
+        return term_rows
+    try:
+        return shutil.get_terminal_size().lines if sys.stdout.isatty() else None
+    except OSError:
+        return None
+
+
+def _display_dirs(settings_path, env, project_dir, omp_agent_dir):
+    """Real run (no injected settings path): real project dir and omp agent dir. Injected: only what is passed."""
+    real = settings_path is None
+    proj = project_dir if project_dir is not None else (_project_dir() if real else None)
+    omp = omp_agent_dir if omp_agent_dir is not None else _omp_agent_dir(env, default_ok=real)
+    return proj, omp
+
+
+def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="atlas", version=None,
+                   project_dir=None, omp_agent_dir=None, term_rows=None):
     """Checks that explain a missing TODO tree, Subagents block, mission control band or
     status line. Every row is warn severity: these are user configuration, not plugin damage.
     Injectable paths/env keep tests off the real ~/.claude. Returns [{check, ok, detail, severity}]."""
     env = os.environ if env is None else env
     root = _display_plugin_root(plugin_root)
     path = settings_path or _claude_settings_path()
+    proj, omp_dir = _display_dirs(settings_path, env, project_dir, omp_agent_dir)
     rows = []
 
     def add(cid, ok, detail):
@@ -755,6 +907,9 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
             "; ".join(missing) + f". `atlas_doctor.py --fix` writes {want} into {path}" if missing
             else f"{DISPLAY_TODO_ENV}=1 and {DISPLAY_TASKS_ENV}=0 (TodoWrite on every model, no Claude Code checklist; "
                  "needs Claude Code 2.1.233+)"))
+    if not err and not rows[-1]["ok"]:
+        rows[-1]["detail"] += (". Why it matters: without both, Claude Code draws its own checklist above the prompt, "
+                               "which takes the rows Atlas needs for the Subagents block")
 
     # 2. the mod module that draws the band, plus its kill switches
     hooks_file = os.path.join(root, "hooks", "hooks.json")
@@ -769,7 +924,7 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
         problems.append(f"cannot read {hooks_file}: {e}")
     for name in DISPLAY_SWITCHES:
         val = _display_value(name, senv, env)
-        if isinstance(val, str) and val.strip().lower() in _OFF_VALUES:
+        if val == "off":  # mod/register.ts hides on exactly 'off' (ATLAS_MOD :726, ATLAS_HUD :842)
             problems.append(f"{name}={val} switches the display off (your choice); to undo, remove it from "
                             f"{path} \"env\" and your shell profile")
     add("display-mod", not problems, "; ".join(problems) or f"{DISPLAY_MOD_MODULE} registered; ATLAS_MOD/ATLAS_HUD not off")
@@ -810,7 +965,40 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
             add("display-statusline", False, f"statusLine in {path} is another tool's command; left untouched. "
                 f"To use Atlas's, set it to {_atlas_statusline_command(root)}")
 
-    # 5. harness
+    # 5. omp todo tool: the omp TODO tree renders only from omp's native `todo` tool
+    files = _omp_settings_files(omp_dir, proj)
+    if not files:
+        add("display-omp-todo", True, "omp: no settings file found; todo.enabled defaults to true (n/a)")
+    else:
+        vals, bad = [], []
+        for fp in files:
+            val, ferr = _omp_todo_setting(fp)
+            if ferr:
+                bad.append(ferr)
+            elif val is not None:
+                vals.append((fp, val))
+        off = [fp for fp, v in vals if v is False]
+        if vals and vals[-1][1] is False:  # the last layer that sets it wins (project over user)
+            add("display-omp-todo", False, f"todo.enabled is false in {', '.join(off)}: omp has no todo tool, so its "
+                "TODO tree cannot render. `atlas_doctor.py --fix` sets it to true")
+        elif bad:
+            add("display-omp-todo", False, "; ".join(bad) + "; fix by hand (--fix will not touch it)")
+        else:
+            add("display-omp-todo", True, "todo.enabled is not false in " + ", ".join(files)
+                if vals else "todo.enabled unset (defaults to true)")
+
+    # 6. Claude Code HUD kill switch, plus an INFO line when the terminal is too short for it
+    hud = _hud_off_files(path, proj)
+    short = _terminal_rows(term_rows)
+    note = (f"; INFO: terminal is {short} rows (< {HUD_MIN_ROWS}); Claude Code caps the area above the prompt at "
+            "half the terminal, so the HUD collapses. Enlarge the window") if short is not None and short < HUD_MIN_ROWS else ""
+    if hud:
+        add("display-hud", False, "; ".join(f"ATLAS_HUD={v} in {fp}" for fp, v in hud) + " hides the TODO tree and "
+            "Subagents block together. `atlas_doctor.py --fix` removes the key" + note)
+    else:
+        add("display-hud", True, "ATLAS_HUD not off in Claude Code settings" + note)
+
+    # 7. harness
     if env.get("ATLAS_HARNESS") == "omp":
         ok, detail = check_omp_bridge(plugin_name, version)
         add("display-harness", ok, "omp: mission control is drawn by the omp extension; " + detail)
@@ -833,17 +1021,35 @@ def _atomic_write_json(path, data):
             os.remove(tmp)
 
 
-def fix_display(settings_path=None, env=None, plugin_root=None):
+def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None, omp_agent_dir=None):
     """--fix only: merge the TodoWrite env vars (TODO_TOOLS=1, TASKS=0) and, when unset or dead, the Atlas statusLine into
     the user settings.json with one atomic write. Never edits unreadable JSON, never overwrites a
-    foreign statusLine, never touches the ATLAS_MOD/ATLAS_HUD switches. Returns a list of lines."""
+    foreign statusLine, removes ATLAS_HUD=off from Claude Code settings env, sets omp todo.enabled true, never touches ATLAS_MOD. Returns a list of lines."""
     env = os.environ if env is None else env
     root = _display_plugin_root(plugin_root)
     path = settings_path or _claude_settings_path()
+    proj, omp_dir = _display_dirs(settings_path, env, project_dir, omp_agent_dir)
+    notes = []
+    for fp in _omp_settings_files(omp_dir, proj):
+        try:
+            if _omp_todo_setting(fp)[0] is False and _omp_set_todo_true(fp):
+                notes.append(f"set todo.enabled true in {fp}")
+        except Exception as e:
+            notes.append(f"SKIP {fp}: {e}")
+    for fp, val in _hud_off_files(path, proj):
+        try:
+            hd = _load_json(fp)
+            hd["env"].pop("ATLAS_HUD", None)
+            if not hd["env"]:
+                hd.pop("env")
+            _atomic_write_json(fp, hd)
+            notes.append(f"removed env.ATLAS_HUD={val} from {fp}")
+        except Exception as e:
+            notes.append(f"SKIP {fp}: {e}")
     data, err = _read_settings(path)
     if err:
-        return [f"SKIP display fixes: {err}; fix the JSON by hand"]
-    notes, senv, changed = [], data.get("env"), False
+        return ["display: " + n for n in notes] + [f"SKIP display fixes: {err}; fix the JSON by hand"]
+    senv, changed = data.get("env"), False
     if senv is not None and not isinstance(senv, dict):
         notes.append(f"SKIP {DISPLAY_TODO_ENV}: \"env\" in {path} is not an object")
     else:
