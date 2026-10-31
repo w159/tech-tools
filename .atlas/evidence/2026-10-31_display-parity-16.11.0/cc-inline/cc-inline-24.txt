@@ -1,0 +1,24 @@
+ ├─ III. Verify · 0/2
+ │  ├─ ☐ rerun test suite (verifier)
+ │  └─ ☐ review the diff (verifier)
+Subagents · 2 running
+ ├─ • ◑ anthropic/sonnet verifier: Rerun test suite
+ └─ • ◑ anthropic/sonnet verifier-a69d [verifier]: Review the diff
+⏳ Waiting on verifier agents
+ ◆ ATLAS  ·  mission control  ·  demoI2@master  ·  wave 3                                                                                                            ◷ 00:15   2 live   ✖ 12 gates
+  ✓ research ▶ ✓ theory ▶ ✓ test ▶ ✓ implement ▶ ◓ VERIFY ▶ done
+  CONTRACT  header 4/4 · evidence 0/4 · ✖ 12 gates   VERDICT  0 claims · ✔ 2 verified · ✖ 0 refuted · ? 0 open · ⚠ 0 unchecked   OFFLOAD  no workers yet   ROUTE  no team yet
+  RUN   ◉O◉ verifier                verifier     SubagentH…                                                                                     ███▌                          ▁▁▁▁▁▁▁▁▁▂▂▂     16s
+  THINK ◉-◉ verifier-a69d           verifier     Bash        python3 -c "                                                                       ███▌                          ▁▁▁▁▁▁▁▁▁▂▂▁     16s
+ tasks ████████████       4/6   ✖ completion   ✖ tripwire   ✖ routing
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoI2   ⏱ 3m54s    👾  Fable 5.1  ·  high · ctx 8%
+  ⏵⏵ auto mode on (shift+tab to cycle)
+
+  ● main
+  ◯ atlas:verifier  Rerun test suite                                                                                                                                              15s · ↓ 34.2k tokens
+  ◯ atlas:verifier  Review the diff                                                                                                                                               15s · ↓ 33.4k tokens
+

@@ -872,6 +872,31 @@ def _display_dirs(settings_path, env, project_dir, omp_agent_dir):
     return proj, omp
 
 
+RENDERER_ENV = "CLAUDE_CODE_NO_FLICKER"
+RENDERER_OFF_ENV = "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN"
+
+
+def _renderer_state(settings_path, proj, env):
+    """(mode, layer, why). mode is 'fullscreen' or 'inline'; layer is the settings file that decided it
+    (None when the env decided or nothing is set); why names the env var when one decided."""
+    paths = [settings_path]
+    if proj:
+        paths += [os.path.join(proj, ".claude", n) for n in ("settings.json", "settings.local.json")]
+    val, layer = None, None
+    for fp in dict.fromkeys(os.path.abspath(x) for x in paths):  # low to high precedence
+        data, _ = _read_settings(fp)
+        if data and isinstance(data.get("tui"), str):
+            val, layer = data["tui"], fp
+    senv = _settings_env(_read_settings(settings_path)[0] or {})
+    off = _display_value(RENDERER_OFF_ENV, senv, env)
+    flicker = _display_value(RENDERER_ENV, senv, env)
+    if off or str(flicker).strip() == "0":
+        return "inline", layer, RENDERER_OFF_ENV if off else f"{RENDERER_ENV}=0"
+    if str(flicker).strip() == "1":
+        return "fullscreen", None, f"{RENDERER_ENV}=1"
+    return ("fullscreen" if val == "fullscreen" else "inline"), layer, None
+
+
 def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="atlas", version=None,
                    project_dir=None, omp_agent_dir=None, term_rows=None):
     """Checks that explain a missing TODO tree, Subagents block, mission control band or
@@ -998,6 +1023,22 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
     else:
         add("display-hud", True, "ATLAS_HUD not off in Claude Code settings" + note)
 
+    # 8. Claude Code fullscreen renderer: everything under the transcript shares half the screen
+    mode, layer, why = _renderer_state(path, proj, env)
+    if mode == "fullscreen":
+        shared = ("Claude Code's fullscreen renderer gives the TODO tree, Subagents, prompt and status line together "
+                  "at most half the screen, so Atlas's widgets get only the rows left (none on a 24-row terminal); "
+                  "the default renderer draws them above the prompt like omp")
+        if why:
+            add("display-renderer", False, f"{shared}. {why} sets it: unset {RENDERER_ENV} in your shell profile "
+                "(--fix does not edit the environment)")
+        else:
+            add("display-renderer", False, f"{shared}. \"tui\": \"fullscreen\" in {layer}; `atlas_doctor.py --fix` "
+                "sets \"tui\": \"default\" there; undo with `/tui fullscreen`")
+    else:
+        add("display-renderer", True, "default (inline) renderer; " + (
+            f"{why} turns fullscreen off" if why else f"\"tui\" is {'set in ' + layer if layer else 'unset'}"))
+
     # 7. harness
     if env.get("ATLAS_HARNESS") == "omp":
         ok, detail = check_omp_bridge(plugin_name, version)
@@ -1046,6 +1087,17 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
             notes.append(f"removed env.ATLAS_HUD={val} from {fp}")
         except Exception as e:
             notes.append(f"SKIP {fp}: {e}")
+    mode, layer, why = _renderer_state(path, proj, env)
+    if mode == "fullscreen" and layer and not why:
+        try:
+            ld = _load_json(layer)
+            ld["tui"] = "default"
+            _atomic_write_json(layer, ld)
+            notes.append(f'set "tui": "default" in {layer}')
+        except Exception as e:
+            notes.append(f"SKIP {layer}: {e}")
+    elif mode == "fullscreen" and why:
+        notes.append(f"{why} forces the fullscreen renderer; unset it in your shell (left untouched)")
     data, err = _read_settings(path)
     if err:
         return ["display: " + n for n in notes] + [f"SKIP display fixes: {err}; fix the JSON by hand"]
@@ -1066,8 +1118,13 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
     if os.path.isfile(_atlas_statusline_script(root)) and (
         cfg in (None, {}, "") or (script and not os.path.isfile(script))
     ):
-        data["statusLine"] = {"type": "command", "command": _atlas_statusline_command(root)}
-        notes.append(f"set statusLine to {_atlas_statusline_command(root)} in {path}")
+        data["statusLine"] = dict(cfg if isinstance(cfg, dict) else {}, type="command", command=_atlas_statusline_command(root), refreshInterval=5)
+        notes.append(f"set statusLine to {_atlas_statusline_command(root)} (refreshInterval 5) in {path}")
+        changed = True
+    elif isinstance(cfg, dict) and script and os.path.isfile(script) and "refreshInterval" not in cfg:
+        # The compact one-row switch needs the line re-run every few seconds, not only after a turn.
+        data["statusLine"] = dict(cfg, refreshInterval=5)
+        notes.append(f"added refreshInterval 5 to statusLine in {path}")
         changed = True
     elif cfg not in (None, {}, "") and not script:
         notes.append("statusLine is another tool's command; left untouched")

@@ -155,21 +155,22 @@ class StatuslineTest(unittest.TestCase):
         self.run_main(["uninstall"] + args)
         self.assertNotIn("statusLine", jload(settings))
 
-    def project(self, running, shown, age_ms=1000, raw=None):
+    def project(self, wanted, shown, age_ms=1000, raw=None, starved=None):
         proj = os.path.join(self.tmp, "proj")
         run = os.path.join(proj, ".atlas", ".run")
         os.makedirs(run, exist_ok=True)
-        with open(os.path.join(run, "agents-running.json"), "w") as f:
+        with open(os.path.join(run, "hud-state.json"), "w") as f:
             if raw is not None:
                 f.write(raw)
             else:
                 json.dump(
                     {
                         "ts": time.time() * 1000 - age_ms,
-                        "running": [
-                            {"name": n, "role": "explorer", "model": ""} for n in running
-                        ],
-                        "hudRowsShown": shown,
+                        "maxRows": 2,
+                        "wanted": wanted,
+                        "shown": shown,
+                        "fullscreen": True,
+                        **({} if starved is None else {"starved": starved}),
                     },
                     f,
                 )
@@ -177,36 +178,82 @@ class StatuslineTest(unittest.TestCase):
         d["workspace"] = {"current_dir": proj}
         return d
 
-    def test_fresh_uncovered_shows_segment(self):
-        rows = self.rows(self.project(["explorer-a", "explorer-b"], 0))
-        self.assertTrue(
-            any("agents 2 running: explorer-a, explorer-b" in r for r in rows), rows
-        )
+    def test_starved_and_fresh_prints_one_row_with_ctx(self):
+        rows = self.rows(self.project(8, 2))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("proj", rows[0])
+        self.assertIn("Claude Opus 5.5", rows[0])
+        self.assertRegex(rows[0], r"\u00b7 ctx 51%")
 
-    def test_hud_covers_all_shows_nothing(self):
-        rows = self.rows(self.project(["explorer-a", "explorer-b"], 2))
-        self.assertFalse(any("agents " in r and "running" in r for r in rows), rows)
+    def test_published_starved_flag_wins_over_shown_vs_wanted(self):
+        # the loop: line compact -> HUD fits (shown == wanted) but the mod says starved at full height
+        self.assertEqual(len(self.rows(self.project(8, 8, starved=True))), 1)
+        self.assertGreater(len(self.rows(self.project(8, 0, starved=False))), 3)
 
-    def test_stale_shows_nothing(self):
-        rows = self.rows(self.project(["explorer-a"], 0, age_ms=16000))
-        self.assertFalse(any("running:" in r for r in rows), rows)
+    def test_render_writes_statusline_rows_file(self):
+        data = self.project(8, 8, starved=False)
+        self.rows(data)
+        path = os.path.join(self.tmp, "proj", ".atlas", ".run", "statusline-rows.json")
+        doc = jload(path)
+        full = doc["fullRows"]
+        self.assertGreater(full, 3)
+        self.assertEqual(doc["rows"], full)
+        self.assertLess(abs(time.time() * 1000 - doc["ts"]), 5000)
+        self.assertFalse(os.path.exists(path + ".tmp"))
+        self.project(8, 8, starved=True)
+        self.assertEqual(len(self.rows(data)), 1)
+        doc = jload(path)
+        self.assertEqual((doc["rows"], doc["fullRows"]), (1, full))
 
-    def test_malformed_shows_nothing(self):
-        rows = self.rows(self.project([], 0, raw="{not json"))
-        self.assertFalse(any("running:" in r for r in rows), rows)
-        self.assertTrue(any("proj" in r for r in rows))
+    def test_git_repo_binds_before_ancestor_stray_atlas(self):
+        # repo with .git and (once the hooks create it) its own .atlas/.run, under a parent with a stray .atlas
+        stray = os.path.join(self.tmp, "stray")
+        repo = os.path.join(stray, "repo")
+        os.makedirs(os.path.join(stray, ".atlas", ".run"))
+        os.makedirs(os.path.join(repo, ".git"))
+        stray_rows = os.path.join(stray, ".atlas", ".run", "statusline-rows.json")
+        sl.write_rows(repo, 3, 9)  # repo has no .atlas yet: must not leak into the ancestor's
+        self.assertFalse(os.path.exists(stray_rows))
+        os.makedirs(os.path.join(repo, ".atlas", ".run"))
+        with open(os.path.join(repo, ".atlas", ".run", "hud-state.json"), "w") as f:
+            json.dump({"ts": int(time.time() * 1000), "wanted": 8, "shown": 0, "starved": True}, f)
+        self.assertTrue(sl.hud_starved(repo))
+        sl.write_rows(repo, 3, 9)
+        self.assertTrue(os.path.exists(os.path.join(repo, ".atlas", ".run", "statusline-rows.json")))
+        self.assertFalse(os.path.exists(stray_rows))
 
-    def test_empty_running_shows_nothing(self):
-        rows = self.rows(self.project([], 0))
-        self.assertFalse(any("running:" in r for r in rows), rows)
+    def test_no_atlas_dir_writes_nothing(self):
+        self.rows(full_fixture())
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, ".atlas")))
 
-    def test_narrow_width_clipped(self):
-        names = ["explorer-%02d" % i for i in range(12)]
-        for width in (60, 70, 120):
-            rows = self.rows(self.project(names, 0), width=width)
-            seg = [r for r in rows if "running:" in r]
-            self.assertEqual(len(seg), 1, (width, rows))
-            self.assertLess(sl.vw(seg[0]), width)
+    def test_compact_row_clipped_to_width(self):
+        for width in (40, 60, 120):
+            rows = self.rows(self.project(8, 0), width=width)
+            self.assertEqual(len(rows), 1, (width, rows))
+            self.assertLess(sl.vw(rows[0]), width)
+
+    def test_not_starved_prints_full_grid(self):
+        rows = self.rows(self.project(8, 8))
+        self.assertGreater(len(rows), 3, rows)
+        self.assertFalse(any("\u00b7 ctx" in r for r in rows), rows)
+
+    def test_stale_state_prints_full_grid(self):
+        self.assertGreater(len(self.rows(self.project(8, 0, age_ms=16000))), 3)
+
+    def test_malformed_or_missing_state_prints_full_grid(self):
+        self.assertGreater(len(self.rows(self.project(8, 0, raw="{not json"))), 3)
+        self.assertGreater(len(self.rows(self.project(8, 0, raw='{"ts": 1}'))), 3)
+        self.assertGreater(len(self.rows(full_fixture())), 3)
+
+    def test_install_writes_refresh_interval_and_keeps_user_keys(self):
+        settings = os.path.join(self.tmp, "settings.json")
+        with open(settings, "w") as f:
+            json.dump({"statusLine": {"type": "command", "command": "x", "padding": 3}}, f)
+        self.run_main(["install", "--settings", settings, "--home", self.tmp])
+        sl_cfg = jload(settings)["statusLine"]
+        self.assertEqual(sl_cfg["refreshInterval"], 5)
+        self.assertEqual(sl_cfg["padding"], 3)
+        self.assertIn("atlas_statusline.py", sl_cfg["command"])
 
 
 if __name__ == "__main__":

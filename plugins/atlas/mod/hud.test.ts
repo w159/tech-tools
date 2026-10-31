@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import type { TodoItem } from './contract';
+import { effectiveRows, inlineBelowRows } from './register';
 import { hudAgents, hudBudget, hudCompactRows, hudRows, modelLabel, roman, selectCollapsed, truncateMiddle, waitingText, type HudAgent } from './hud';
 import { detailOf } from './data/orchestration';
 import { computeCounts, routeCounts } from './data/todos';
@@ -179,7 +180,7 @@ describe('hud row budget', () => {
     expect(at(18)).toEqual(GOLDEN.filter((l) => l !== '')); // 18 and 14: the five spacers drop first, content intact
     expect(at(14)).toEqual(GOLDEN.filter((l) => l !== ''));
     expect(at(10).filter((l) => l === '')).toEqual([]);
-    expect(at(10)).toHaveLength(9); // previews shed, never a spacer
+    expect(at(10)).toHaveLength(10); // previews shed, never a spacer; the Waiting line rides along while a row is left
     expect(at(6).filter((l) => l === '')).toEqual([]);
     expect(at(6).length).toBeLessThanOrEqual(6);
   });
@@ -295,10 +296,11 @@ describe('hud budget at the measured AbovePrompt maxRows', () => {
   const input = { todos: PLAN, agents: AGENTS };
   const compact = hudCompactRows(input);
   test('the compact form is the TODO header, active phase rows, the Subagents header and one row per agent', () => {
-    expect(compact).toBe(7);
+    expect(compact).toBe(8);
     expect(lines(hudRows(input, { cols: 138, maxRows: compact }))).toEqual([
       'TODO', ' ├─ I. Research · 1/2', ' │  ├─ ☑ Trace history load failure root cause', ' │  └─ ☐ Trace gate path and pre-gate costs',
       'Subagents · 2 running', ' ├─ • ◑ ollama/minima….1-flash:cloud verifier-eval [verifier]: Verify gate fix shows no scorer regression', ' └─ • ◑ anthropic/claude-sonnet-5 docs-curator-gate [docs-curator]: Update docs for gate stage order, fail-closed decision, backstop',
+      '⏳ Waiting on verifier and docs-curator agents',
     ]);
   });
   test('the band gives up rows first: the HUD keeps its compact form at every measured maxRows', () => {
@@ -307,13 +309,19 @@ describe('hud budget at the measured AbovePrompt maxRows', () => {
     expect(18 - take(18)).toBeGreaterThanOrEqual(7); // roomy: the band keeps its 7 rows
     expect(take(15)).toBeGreaterThanOrEqual(compact);
     expect(take(14)).toBeGreaterThanOrEqual(compact);
-    expect(10 - take(10)).toBe(3); // the band shrinks to title, rail and one lane
+    expect(10 - take(10)).toBe(2); // the band shrinks to title and rail: the Waiting line stays ahead of its lane
     expect(take(10)).toBe(compact);
-    expect(6 - take(6)).toBeGreaterThanOrEqual(1); // never the whole budget
-    expect(take(6)).toBeLessThanOrEqual(5);
+    expect(take(6)).toBe(5); // compact (8) does not fit: the HUD takes the summary form, header, agents and Waiting line (5) and the band yields entirely
+    expect(hudBudget(4, 5)).toBe(4);
+  });
+  test('the Waiting line is kept ahead of any band row once the Subagents header is up and a row is left', () => {
+    const tail = (n: number): string[] => lines(hudRows(input, { cols: 138, maxRows: n }));
+    for (const n of [5, 6, 7, 8, 9, 10, 12]) expect([n, tail(n).some((l) => l.startsWith('⏳ Waiting'))]).toEqual([n, true]);
+    expect(tail(8).at(-1)).toBe('⏳ Waiting on verifier and docs-curator agents');
+    expect(tail(4).some((l) => l.startsWith('⏳'))).toBe(false); // no row left past the summary, header and agents: the line goes first
   });
   test('budget arithmetic', () => {
-    expect([18, 15, 14, 10, 6].map((n) => hudBudget(n, 7))).toEqual([11, 8, 7, 7, 5]);
+    expect([18, 15, 14, 10, 6].map((n) => hudBudget(n, 8))).toEqual([11, 8, 8, 8, 6]);
     expect(hudBudget(0, 7)).toBe(0);
   });
   test('a tight budget keeps the Subagents header and every agent, shrinking the tree to a one-row summary', () => {
@@ -403,7 +411,56 @@ describe('hud never hides a running agent silently, nor draws an empty HUD at a 
   test('hudBudget gives a running agent at least 2 rows once maxRows >= 2', () => {
     for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
     expect(hudBudget(1, 7, 7, true)).toBe(1);
-    expect(hudBudget(2, 7)).toBe(1); // no agent running: unchanged
+    expect(hudBudget(2, 7)).toBe(2); // no agent running: the HUD still wins the whole short budget
     expect(hudBudget(0, 7, 7, true)).toBe(0);
+  });
+});
+
+describe('inline renderer budget (viewport less the rows below the AbovePrompt slot)', () => {
+  const input = { todos: PLAN, agents: AGENTS };
+  const hudAt = (viewportRows: number, statusRows: number | null = 4): string[] => {
+    const eff = effectiveRows(viewportRows, { rows: viewportRows, isFullscreen: false }, statusRows, 2); // the slot is the whole terminal
+    return lines(hudRows(input, { cols: 138, maxRows: hudBudget(eff, hudCompactRows(input), 7, true) }));
+  };
+  test('rows below the slot: prompt 3, status line, mode line and blank 2, the blank row above the prompt 1, agent list main + one per running agent', () => {
+    expect(inlineBelowRows(4, 2)).toBe(3 + 4 + 2 + 3 + 1);
+    expect(inlineBelowRows(null, 0)).toBe(3 + 5 + 2 + 1);
+  });
+  test('fullscreen and a missing viewport keep the slot as reported; inline takes the smaller of slot and viewport less below', () => {
+    expect(effectiveRows(18, { rows: 24, isFullscreen: true }, 4, 2)).toBe(18);
+    expect(effectiveRows(18, undefined, 4, 2)).toBe(18);
+    expect(effectiveRows(24, { rows: 24, isFullscreen: false }, 4, 2)).toBe(11);
+    expect(effectiveRows(24, { rows: 30, isFullscreen: false }, 4, 2)).toBe(17);
+    expect(effectiveRows(10, { rows: 60, isFullscreen: false }, 4, 2)).toBe(10);
+    expect(effectiveRows(24, { rows: 8, isFullscreen: false }, 4, 2)).toBe(0);
+  });
+  test('30 rows, 1 running agent, 6-item 3-phase plan: the blank row above the prompt is counted so the TODO header is not scrolled off', () => {
+    const plan = [
+      todo('a1', 'Trace the failure', 'completed', 'research'),
+      todo('a2', 'Trace the gate', 'in_progress', 'research'),
+      todo('b1', 'Patch the gate', 'pending', 'implement'),
+      todo('b2', 'Add the test', 'pending', 'implement'),
+      todo('c1', 'Run the suite', 'pending', 'verify'),
+      todo('c2', 'Review the diff', 'pending', 'verify'),
+    ];
+    const one = AGENTS.slice(0, 1);
+    const rows = 30;
+    const eff = effectiveRows(rows, { rows, isFullscreen: false }, 4, 1);
+    expect(eff).toBe(rows - (3 + 4 + 2 + 1 + 2));
+    const shown = lines(hudRows({ todos: plan, agents: one }, { cols: 138, maxRows: hudBudget(eff, hudCompactRows({ todos: plan, agents: one }), 7, true) }));
+    expect(shown.length).toBeLessThanOrEqual(eff);
+    expect(shown.some((l) => l.startsWith('TODO'))).toBe(true);
+    expect(shown.some((l) => l.startsWith('Subagents · 1 running'))).toBe(true);
+  });
+  test('24 and 30 rows with 2 running agents and a long todo list: the HUD fits, keeps the TODO, Subagents, agents and Waiting line', () => {
+    for (const rows of [24, 30]) {
+      const eff = effectiveRows(rows, { rows, isFullscreen: false }, 4, 2);
+      const shown = hudAt(rows);
+      expect(shown.length).toBeLessThanOrEqual(eff);
+      expect(shown.some((l) => l.startsWith('TODO'))).toBe(true);
+      expect(shown.some((l) => l.startsWith('Subagents · 2 running'))).toBe(true);
+      expect(shown.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate'))).toHaveLength(2);
+      expect(shown.at(-1)?.startsWith('⏳ Waiting')).toBe(true);
+    }
   });
 });

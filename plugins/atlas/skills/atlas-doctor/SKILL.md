@@ -263,6 +263,7 @@ Full table of what each check looks for and what `--fix` does: `references/displ
 | `display-harness` | `claude-code`, or the omp extension is registered | report only |
 | `display-omp-todo` | omp `todo.enabled` is not false (user `config.yml`, project `.omp`/`.claude` files); omp pins `todo` top-level under `tools.xdev`, so no xdev check | sets it true in place |
 | `display-hud` | `ATLAS_HUD` not off in Claude Code settings `env`; INFO when the terminal is under 30 rows | removes the key |
+| `display-renderer` | Claude Code `tui` is not `fullscreen` (nor `CLAUDE_CODE_NO_FLICKER=1`): fullscreen caps TODO tree, Subagents, prompt and status line at half the screen | sets `"tui": "default"` in the layer that set it; env var: report only |
 
 ## Report
 

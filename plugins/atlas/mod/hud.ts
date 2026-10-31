@@ -267,8 +267,8 @@ type Plan = { todo: TodoCaps | null; agents: AgentCaps | null; waiting: boolean 
 
 const BLANK = (): Segment[] => [seg('')];
 
-/** The compact form the HUD always keeps: TODO header, the active phase with its items, the Subagents header and one row per running agent. */
-const COMPACT: Plan = { todo: { taskCap: 2, stageCap: 0, bare: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false };
+/** The compact form the HUD always keeps: TODO header, the active phase with its items, the Subagents header, one row per running agent and the Waiting line. */
+const COMPACT: Plan = { todo: { taskCap: 2, stageCap: 0, bare: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: true };
 
 /** Fidelity ladder: collapse first (previews, task caps, stage caps), then shed the tree's tail and stage rows down to the compact form, then one task, then a one-row TODO summary. A running agent is never shed for the tree: the summary goes before agents are cut to one, and the tree goes before the last agent. Hidden agents always show as a "… N more" row, down to the header and that row; hudRows keeps the header alone for one row. With no running agent the summary rungs are skipped. */
 const LADDER: Plan[] = [
@@ -276,9 +276,9 @@ const LADDER: Plan[] = [
   { todo: { taskCap: 5, stageCap: 4 }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: true },
   { todo: { taskCap: 3, stageCap: 4 }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: true },
   { todo: { taskCap: 2, stageCap: 2 }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: true },
-  { todo: { taskCap: 2, stageCap: 0 }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false },
+  { todo: { taskCap: 2, stageCap: 0 }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: true },
   COMPACT,
-  { todo: { taskCap: 1, stageCap: 0, bare: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false },
+  { todo: { taskCap: 1, stageCap: 0, bare: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: true },
   { todo: { taskCap: 1, stageCap: 0, summary: true }, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false },
   { todo: { taskCap: 1, stageCap: 0, summary: true }, agents: { limit: 1, preview: false }, waiting: false },
   { todo: null, agents: { limit: AGENT_LIMIT, preview: false }, waiting: false },
@@ -304,14 +304,14 @@ const planRows = ({ todos, agents, root }: HudInput, plan: Plan, blanks = false)
   return rows;
 };
 
-/** Rows of the compact form: what the HUD keeps whatever the band is given. */
+/** Rows of the compact form (Waiting line included, so the band gives up rows before it): what the HUD keeps whatever the band is given. */
 export const hudCompactRows = (input: HudInput): number => planRows({ ...input, todos: input.todos.filter(isPlanItem) }, COMPACT).length;
 
-/** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to 1; with an agent running the HUD keeps at least 2. */
+/** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to none when the compact form needs every row; with an agent running the HUD keeps at least 2. */
 export const hudBudget = (maxRows: number, compact: number, bandRows = 7, running = false): number => {
   if (maxRows <= 0) return 0;
   const room = maxRows - bandRows;
-  const budget = compact <= maxRows - 3 ? Math.max(room, compact) : Math.max(room, Math.min(compact, maxRows - 1));
+  const budget = compact <= maxRows - 3 ? Math.max(room, compact) : Math.max(room, Math.min(compact, maxRows));
   return running ? Math.max(budget, Math.min(2, maxRows)) : budget; // a running agent keeps its Subagents header and one row: the band gives up rows first
 };
 
@@ -336,7 +336,10 @@ export function hudRows(input: HudInput, { cols, maxRows }: HudOpts): Segment[][
   if (maxRows <= 0 || (todos.length === 0 && running.length === 0)) return [];
   const fit = (plan: Plan, blanks: boolean): Segment[][] | undefined => {
     const rows = planRows({ todos, agents, root }, plan, blanks);
-    return rows.length <= maxRows ? rows.map((r) => clip(r, cols)) : undefined;
+    if (rows.length > maxRows) return undefined;
+    // The Waiting line rides along whenever the Subagents block is up and a row is left.
+    if (!plan.waiting && plan.agents && running.length > 0 && rows.length < maxRows) rows.push([seg('⏳ ', C.warn), seg(waitingText(running), C.muted)]);
+    return rows.map((r) => clip(r, cols));
   };
   // Spacer rows go first under budget pressure: the full form without them before any other shrink step.
   const full = fit(LADDER[0]!, true) ?? fit(LADDER[0]!, false);

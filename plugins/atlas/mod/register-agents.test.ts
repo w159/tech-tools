@@ -4,8 +4,8 @@
 // (null until session.measure carries a value; a measured 0 stays a 0).
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { publishRunning, register, resetRunningSig, syncAgentsFromList } from './register';
-import { hudAgents } from './hud';
+import { hudStarvedAtFullLine, publishHudState, readStatuslineRows, register, resetHudStateSig, syncAgentsFromList } from './register';
+import { hudAgents, hudBudget } from './hud';
 import { liveWorkers } from './data/live';
 import { busySnap } from './live_fixture';
 import { memState } from './test_helpers';
@@ -263,39 +263,93 @@ describe('spawn model and name reach the HUD agent', () => {
   });
 });
 
-describe('agents-running.json writer', () => {
-  function writerEngine() {
+describe('hud-state.json writer', () => {
+  function writerEngine(clock: { t: number }) {
     const files = new Map<string, string>();
     const cmds: string[][] = [];
     const $ = {
-      clock: { now: async () => 1_760_000_000_000 },
+      clock: { now: async () => clock.t },
       fs: { write: async (p: string, t: string) => { files.set(p, t); } },
       process: { run: async (argv: string[]) => { cmds.push(argv); if (argv[0] === 'mv') { files.set(argv[3]!, files.get(argv[2]!) ?? ''); files.delete(argv[2]!); } return { exitCode: 0, stdout: '', stderr: '' }; } },
     };
     return { $: $ as unknown as EngineInterface, files, cmds };
   }
+  const path = '/tmp/proj/.atlas/.run/hud-state.json';
 
-  test('writes atomically on change, skips an unchanged set, writes [] when it empties', async () => {
-    resetRunningSig();
-    const { $, files, cmds } = writerEngine();
-    const path = '/tmp/proj/.atlas/.run/agents-running.json';
-    const two = [{ name: 'explorer-a', role: 'atlas:explorer' }, { name: 'explorer-b', role: 'atlas:explorer', model: 'm' }];
-    await publishRunning($, '/tmp/proj/', two, 0);
-    expect(JSON.parse(files.get(path)!)).toEqual({ ts: 1_760_000_000_000, running: [{ name: 'explorer-a', role: 'atlas:explorer', model: '' }, { name: 'explorer-b', role: 'atlas:explorer', model: 'm' }], hudRowsShown: 0 });
+  test('writes {ts,maxRows,wanted,shown,fullscreen} atomically and skips an unchanged state', async () => {
+    resetHudStateSig();
+    const clock = { t: 1_760_000_000_000 };
+    const { $, files, cmds } = writerEngine(clock);
+    await publishHudState($, '/tmp/proj/', { maxRows: 12, wanted: 7, shown: 7, fullscreen: true });
+    expect(JSON.parse(files.get(path)!)).toEqual({ ts: 1_760_000_000_000, maxRows: 12, wanted: 7, shown: 7, fullscreen: true, starved: false });
     expect(files.has(`${path}.tmp`)).toBe(false);
+    clock.t += 60_000;
+    await publishHudState($, '/tmp/proj/', { maxRows: 12, wanted: 7, shown: 7, fullscreen: true });
+    expect(cmds.length).toBe(1); // satisfied HUD: no rewrite however old
+    await publishHudState($, '/tmp/proj/', { maxRows: 2, wanted: 7, shown: 2, fullscreen: true });
+    expect(JSON.parse(files.get(path)!)).toMatchObject({ maxRows: 2, wanted: 7, shown: 2 });
+    expect(cmds.length).toBe(2);
+  });
+
+  test('rewrites at least every 5 s while shown < wanted so the reader stays fresh', async () => {
+    resetHudStateSig();
+    const clock = { t: 1_760_000_000_000 };
+    const { $, files, cmds } = writerEngine(clock);
+    const starved = { maxRows: 2, wanted: 9, shown: 2, fullscreen: true };
+    await publishHudState($, '/tmp/proj', starved);
+    clock.t += 4_000;
+    await publishHudState($, '/tmp/proj', starved);
     expect(cmds.length).toBe(1);
-    await publishRunning($, '/tmp/proj/', two, 0);
-    expect(cmds.length).toBe(1);
-    await publishRunning($, '/tmp/proj/', [], 0);
-    expect(JSON.parse(files.get(path)!).running).toEqual([]);
+    clock.t += 1_000;
+    await publishHudState($, '/tmp/proj', starved);
+    expect(cmds.length).toBe(2);
+    expect(JSON.parse(files.get(path)!).ts).toBe(1_760_000_005_000);
   });
 
   test('never throws and does nothing without a root', async () => {
-    resetRunningSig();
+    resetHudStateSig();
     const bad = { clock: { now: async () => 1 }, fs: { write: async () => { throw new Error('denied'); } }, process: { run: async () => ({}) } } as unknown as EngineInterface;
-    await publishRunning(bad, '/tmp/proj', [{ name: 'a' }], 0);
-    const { $, files } = writerEngine();
-    await publishRunning($, null, [{ name: 'a' }], 0);
+    await publishHudState(bad, '/tmp/proj', { maxRows: 1, wanted: 1, shown: 0, fullscreen: false });
+    const { $, files } = writerEngine({ t: 1 });
+    await publishHudState($, null, { maxRows: 1, wanted: 1, shown: 0, fullscreen: false });
     expect(files.size).toBe(0);
   });
+});
+
+describe('starved is judged against the rows the HUD gets with the FULL status line', () => {
+	const wanted = 6;
+	const shownAt = (cap: number): number => Math.min(wanted, hudBudget(cap, 2, 7, false));
+	const compactReport = { ts: 1, rows: 1, fullRows: 4 }; // the status line printed 1 row; its full grid is 4
+
+	test('loop: compact line frees 3 rows, the HUD then fits, yet starved stays true', () => {
+		expect(shownAt(10)).toBeLessThan(wanted); // full line: HUD short of rows
+		expect(shownAt(13)).toBe(wanted); // compact line: the same HUD fits (shown == wanted)
+		expect(hudStarvedAtFullLine(10, wanted, shownAt, null)).toBe(true); // no report: maxRows taken as is
+		expect(hudStarvedAtFullLine(13, wanted, shownAt, compactReport)).toBe(true); // old shown < wanted rule said false here
+	});
+
+	test('a genuinely roomy slot is not starved, with or without a compact report', () => {
+		expect(hudStarvedAtFullLine(20, wanted, shownAt, null)).toBe(false);
+		expect(hudStarvedAtFullLine(20, wanted, shownAt, compactReport)).toBe(false); // 20 - 3 = 17 still fits
+		expect(hudStarvedAtFullLine(20, wanted, shownAt, { ts: 1, rows: 4, fullRows: 4 })).toBe(false);
+	});
+
+	test('readStatuslineRows takes a fresh report only', async () => {
+		const clock = { t: 1_760_000_000_000 };
+		const text = (ts: number) => JSON.stringify({ ts, rows: 1, fullRows: 4 });
+		const mk = (body: string | Error) => ({ clock: { now: async () => clock.t }, fs: { read: async () => { if (body instanceof Error) throw body; return body; } } }) as unknown as EngineInterface;
+		expect(await readStatuslineRows(mk(text(clock.t - 14_000)), '/tmp/proj')).toEqual({ ts: clock.t - 14_000, rows: 1, fullRows: 4 });
+		expect(await readStatuslineRows(mk(text(clock.t - 16_000)), '/tmp/proj')).toBeNull();
+		expect(await readStatuslineRows(mk('{not json'), '/tmp/proj')).toBeNull();
+		expect(await readStatuslineRows(mk(new Error('ENOENT')), '/tmp/proj')).toBeNull();
+		expect(await readStatuslineRows(mk(text(clock.t)), null)).toBeNull();
+	});
+
+	test('publishHudState writes the supplied starved flag over shown < wanted', async () => {
+		resetHudStateSig();
+		const files = new Map<string, string>();
+		const $ = { clock: { now: async () => 5 }, fs: { write: async (p: string, t: string) => { files.set(p, t); } }, process: { run: async (a: string[]) => { files.set(a[3]!, files.get(a[2]!) ?? ''); return {}; } } } as unknown as EngineInterface;
+		await publishHudState($, '/tmp/p', { maxRows: 13, wanted: 6, shown: 6, fullscreen: true, starved: true });
+		expect(JSON.parse(files.get('/tmp/p/.atlas/.run/hud-state.json')!)).toMatchObject({ shown: 6, wanted: 6, starved: true });
+	});
 });

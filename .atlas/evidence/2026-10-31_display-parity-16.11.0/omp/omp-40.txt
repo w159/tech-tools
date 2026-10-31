@@ -1,0 +1,40 @@
+│ • explorer-calc ⟦explorer⟧ list functions in src/calc.py CHANNEL: … · 1 🛠 · 1 req · 0.6%/200K                                                                                                        │
+│   └ read: src/calc.py                                                                                                                                                                                │
+│ • docs-auditor-calc ⟦docs-auditor⟧ does docs/CHANGELOG.md mention calc CHA… · 1 🛠 · 1 req · 0.6%/200K                                                                                                │
+│   └ read: docs/CHANGELOG.md                                                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ done
+
+ TODO
+  ├─ I. Research · 1/2
+  │  ├─ ☑ Trace calc module
+  │  └─ ☐ Map add and sub call paths
+  ├─ II. Implement · 0/1
+  ├─ III. Verify · 0/1
+  ├─ IV. Docs · 0/1
+  └─────
+
+ Subagents · 2 running                                                                                                                                                                            Alt+A
+  ├─ • explorer-calc ⟦explorer⟧ list functions in src/calc.py ↵ CHANNEL: omp-demo@master/lead-01a18f (you are explorer-calc; lead lead-01a18f; siblings: docs-auditor-calc). ↵ Post: python3 "/home/us…
+  └─ • docs-auditor-calc ⟦docs-auditor⟧ does docs/CHANGELOG.md mention calc ↵ CHANNEL: omp-demo@master/lead-01a18f (you are docs-auditor-calc; lead lead-01a18f; siblings: explorer-calc). ↵ Post: pyt…
+
+  ⎋ Waiting for 2 background jobs: explorer-calc, docs-auditor-calc                                                                                                                         Display test
+
+  ◆ ATLAS  ·  mission control  ·  omp-demo@master  ·  wave 1                                                                                                                ◷ 00:16   2 live   gates …
+   ◟ RESEARCH ▶ theory ▶ test ▶ implement ▶ verify ▶ done
+  board ████▊                    1/5 ⠙ Map add and sub call paths
+
+   THINK ◔=◔ explorer-calc           explorer     read        calc.py                                                                               ███▋                          ▁▁▁▁▁▁▁▁▁▁▂▁     16s
+   THINK °=° docs-auditor-calc       auditor      read        CHANGELOG.md                                                                          ███▋                          ▁▁▁▁▁▁▁▁▁▁▂▁     16s
+  tasks ███▌               1/5   gates …
+ ⠦ 25s > ⬢ Sonnet 5 (fake) > 🗑 …e-93ab-1aadb2a05a17/scratchpad/omp-demo > ⑂ master ?1 ▶─0.6%──────────────────────────────────────────────────────────────────────╎──────────┃──────────────200K─◀ 👥 2
+╰─                                                                                                                                                                            ←← to see 2 running agents
+ 📁  omp-demo   🐸········  0m00s · thinking… · tools 1    👾  Claude Sonnet 5 (fake)  ·  off
+ ​
+ 📚  ctx   1% ▅▁▁▁▁▁▁▁▁▁▁▁▁▁  1.2k / 200k       │  💰  session      $0.00     3.7k tok  cache 0%
+ ⏳  5h   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                    │  🔌  fake         $0.00     3.7k tok  claude-sonnet-5
+ 📅  7d   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                    │
+ atlas  research 1/5 · 2 live · gates ? · verified never · scoring ok
+ ​
+

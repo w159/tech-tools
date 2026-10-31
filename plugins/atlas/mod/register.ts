@@ -272,23 +272,62 @@ async function statSig($: EngineInterface, path: string): Promise<string> {
 	}
 }
 
-let lastRunningSig: string | undefined;
-/** Test seam: forget the last written signature. */
-export const resetRunningSig = (): void => { lastRunningSig = undefined; };
+export type HudState = { maxRows: number; wanted: number; shown: number; fullscreen: boolean; starved?: boolean };
+/** `.atlas/.run/statusline-rows.json`: the rows the status line printed last and the rows its full grid would take. */
+export type StatuslineRows = { ts: number; rows: number; fullRows: number };
+const STATUSLINE_ROWS_FRESH_MS = 15_000;
 
-/** Writes `.atlas/.run/agents-running.json` for the Claude Code status line when the running set (names + roles) or the rendered row count changes; temp file + mv, fail soft, never throws out of render. */
-export async function publishRunning($: EngineInterface, root: string | null | undefined, running: readonly { name: string; role?: string; model?: string }[], hudRowsShown: number): Promise<void> {
+/** Reads the status line's row report; null when missing, malformed or older than 15 s. */
+export async function readStatuslineRows($: EngineInterface, root: string | null | undefined): Promise<StatuslineRows | null> {
+	try {
+		if (root === undefined || root === null || root === '') return null;
+		const text = await $.fs.read(`${root.replace(/\/+$/, '')}/.atlas/.run/statusline-rows.json`);
+		const doc = JSON.parse(text) as Partial<StatuslineRows>;
+		const { ts, rows, fullRows } = doc;
+		if (![ts, rows, fullRows].every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
+		const age = (await $.clock.now()) - (ts as number);
+		return age >= 0 && age < STATUSLINE_ROWS_FRESH_MS ? { ts: ts as number, rows: rows as number, fullRows: fullRows as number } : null;
+	} catch {
+		return null;
+	}
+}
+
+/** True when the HUD cannot get `wanted` rows even with the status line at its full height. The status line's rows come out of the same capped slot as the HUD, so the current `maxRows` is measured with the line compact; add back what the full grid would take before judging, or the answer flips as soon as the line shrinks. */
+export function hudStarvedAtFullLine(maxRows: number, wanted: number, shownAt: (maxRows: number) => number, report: StatuslineRows | null): boolean {
+	const extra = report === null ? 0 : Math.max(0, report.fullRows - report.rows);
+	return shownAt(Math.max(0, maxRows - extra)) < wanted;
+}
+/** Rows below the AbovePrompt slot in the inline renderer: prompt box (3), the status line (its reported rows, 5 when unknown), mode line and a blank (2), the blank row Claude Code draws between the content and the prompt's top rule (1), and Claude Code's own agent list ("main" plus one row per running agent). */
+export function inlineBelowRows(statusRows: number | null, running: number): number {
+	return 3 + (statusRows ?? 5) + 2 + 1 + (running > 0 ? 1 + running : 0);
+}
+
+/** The row budget for the HUD and band: the slot's `maxRows` in fullscreen; inline that slot is the whole terminal, so the rows below it come off the viewport height and the smaller wins. */
+export function effectiveRows(maxRows: number, viewport: { rows: number; isFullscreen?: boolean } | undefined, statusRows: number | null, running: number): number {
+	if (viewport === undefined || viewport.isFullscreen === true || !Number.isFinite(viewport.rows)) return maxRows;
+	return Math.max(0, Math.min(maxRows, viewport.rows - inlineBelowRows(statusRows, running)));
+}
+const HUD_STATE_REFRESH_MS = 5000; // while starved the file is rewritten at least this often so the status line's freshness check holds
+let lastHudSig: string | undefined;
+let lastHudWriteMs = 0;
+/** Test seam: forget the last written state. */
+export const resetHudStateSig = (): void => { lastHudSig = undefined; lastHudWriteMs = 0; };
+
+/** Writes `.atlas/.run/hud-state.json` ({ts, maxRows, wanted, shown, fullscreen, starved}) for the Claude Code status line: it shrinks to one row while `starved` (the HUD short of rows even with the full status line). Skips an unchanged state, except a starved one is rewritten every 5 s; temp file + mv, fail soft, never throws out of render. */
+export async function publishHudState($: EngineInterface, root: string | null | undefined, state: HudState): Promise<void> {
 	try {
 		if (root === undefined || root === null || root === '') return;
-		const sig = `${root}|${hudRowsShown}|${running.map((a) => `${a.name}:${a.role ?? ''}`).join(',')}`;
-		if (sig === lastRunningSig) return;
-		lastRunningSig = sig;
-		const path = `${root.replace(/\/+$/, '')}/.atlas/.run/agents-running.json`;
-		const body = JSON.stringify({ ts: await $.clock.now(), running: running.map((a) => ({ name: a.name, role: a.role ?? '', model: a.model ?? '' })), hudRowsShown });
-		await $.fs.write(`${path}.tmp`, body);
+		const now = await $.clock.now();
+		const starved = state.starved ?? state.shown < state.wanted;
+		const sig = `${root}|${state.maxRows}|${state.wanted}|${state.shown}|${state.fullscreen}|${starved}`;
+		if (sig === lastHudSig && !(starved && now - lastHudWriteMs >= HUD_STATE_REFRESH_MS)) return;
+		lastHudSig = sig;
+		lastHudWriteMs = now;
+		const path = `${root.replace(/\/+$/, '')}/.atlas/.run/hud-state.json`;
+		await $.fs.write(`${path}.tmp`, JSON.stringify({ ts: now, ...state, starved }));
 		await $.process.run(['mv', '-f', `${path}.tmp`, path]);
 	} catch {
-		lastRunningSig = undefined;
+		lastHudSig = undefined;
 	}
 }
 
@@ -859,10 +898,26 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const live = liveWorkers(snapshot, Date.now());
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		const hudIn = { todos: snapshot.todos ?? [], agents: hudAgents(live, snapshot.squad), root: snapshot.root };
-		const hud = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off' ? // ATLAS_HUD=off: no TODO / Subagents / Waiting rows
-			 hudRows(hudIn, { cols: columns, maxRows: hudBudget(e.props.maxRows ?? 0, hudCompactRows(hudIn), BAND_MIN_ROWS, hudIn.agents.some(isRunning)) }) : [];
-		void publishRunning($, snapshot.root, hudIn.agents.filter(isRunning), hud.filter((r) => r.some((x) => x.t === '• ')).length);
-		const band = bandTree(els, { snapshot, live, gates, columns, tick: await read($, spinnerTickState), maxRows: hud.length > 0 ? e.props.maxRows - hud.length : e.props.maxRows, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
+		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents / Waiting rows
+		const running = hudIn.agents.some(isRunning);
+		const runningCount = hudIn.agents.filter(isRunning).length;
+		const report = await readStatuslineRows($, snapshot.root);
+		const slotRows = e.props.maxRows ?? 0;
+		const budget = e.props.maxRows === undefined ? 0 : effectiveRows(slotRows, e.viewport, report?.rows ?? null, runningCount); // no slot reported: nothing to cap
+		const hud = hudOn ? hudRows(hudIn, { cols: columns, maxRows: hudBudget(budget, hudCompactRows(hudIn), BAND_MIN_ROWS, running) }) : [];
+		const wanted = hudOn ? hudRows(hudIn, { cols: columns, maxRows: 1_000 }).length : 0;
+		const compact = hudCompactRows(hudIn);
+		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { cols: columns, maxRows: hudBudget(cap, compact, BAND_MIN_ROWS, running) }).length : 0;
+		const inline = e.viewport !== undefined && e.viewport.isFullscreen !== true;
+		void publishHudState($, snapshot.root, {
+			maxRows: budget,
+			wanted,
+			shown: hud.length,
+			fullscreen: e.viewport?.isFullscreen === true,
+			// fullscreen: the status line shares the slot, so add back what its full grid would take; inline it sits below the slot, so judge with the full grid taken off the viewport
+			starved: inline ? shownAt(effectiveRows(slotRows, e.viewport, report?.fullRows ?? null, runningCount)) < wanted : hudStarvedAtFullLine(slotRows, wanted, shownAt, report),
+		});
+		const band = bandTree(els, { snapshot, live, gates, columns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows === undefined ? undefined : hud.length > 0 ? budget - hud.length : budget, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
 		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: hud.map((r) => rowOf(els, r, columns)) })] : []), band, await next(e)] });
 	});
 

@@ -162,6 +162,16 @@ test('the band draws the Subagents block and Waiting line above itself; ATLAS_HU
   expect(tight).toContain('ATLAS');
 });
 
+test('at a starved maxRows the HUD wins every row and the band draws none', async ($, on) => {
+  await boot(on, [AGENT]);
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
+  const two = await abovePromptText($, 2);
+  expect(two).toContain('Subagents');
+  expect(two).not.toContain('ATLAS');
+  expect(two).not.toContain('mission control');
+});
+
 test('ATLAS_HUD=off draws no HUD rows', async ($, on) => {
   await boot(on, [AGENT], { ATLAS_HUD: 'off' });
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);

@@ -163,6 +163,7 @@ class StatusLineTest(DisplayBase):
         self.fix()
         sl = self.read()["statusLine"]
         self.assertEqual(sl["type"], "command")
+        self.assertEqual(sl["refreshInterval"], 5)
         self.assertEqual(sl["command"], 'python3 "%s"' % os.path.join(self.root, "scripts", "atlas_statusline.py"))
         self.assertEqual(self.read()["theme"], "dark")
         self.assertTrue(self.rows()["display-statusline"]["ok"])
@@ -175,6 +176,13 @@ class StatusLineTest(DisplayBase):
         self.assertEqual(row["severity"], "warn")
         self.fix()
         self.assertEqual(self.read()["statusLine"], foreign)
+
+    def test_live_atlas_line_gains_refresh_interval_and_keeps_user_keys(self):
+        script = os.path.join(self.root, "scripts", "atlas_statusline.py")
+        self.write({"statusLine": {"type": "command", "command": 'python3 "%s"' % script, "padding": 2}})
+        self.fix()
+        sl = self.read()["statusLine"]
+        self.assertEqual((sl["refreshInterval"], sl["padding"]), (5, 2))
 
     def test_stale_atlas_path_repointed(self):
         self.write({"statusLine": {"type": "command", "command": 'python3 "/gone/0.0.1/scripts/atlas_statusline.py"'}})
@@ -343,6 +351,64 @@ class HudTest(DisplayBase):
         self.assertIn("INFO: terminal is 20 rows", row["detail"])
         self.assertNotIn("INFO", self.rows(term_rows=40)["display-hud"]["detail"])
         self.assertNotIn("INFO", self.rows(term_rows=None)["display-hud"]["detail"])
+
+
+class RendererTest(HudTest):
+    """display-renderer: Claude Code's fullscreen renderer caps everything under the transcript at half the screen."""
+
+    def local(self):
+        return os.path.join(self.proj, ".claude", "settings.local.json")
+
+    def put(self, path, obj):
+        with open(path, "w") as f:
+            json.dump(obj, f)
+
+    def test_unset_passes(self):
+        self.write({"model": "opus"})
+        row = self.rows()["display-renderer"]
+        self.assertTrue(row["ok"])
+        self.assertEqual(row["severity"], "warn")
+
+    def test_user_fullscreen_warns_and_fix_sets_default(self):
+        self.write({"model": "opus", "tui": "fullscreen"})
+        row = self.rows()["display-renderer"]
+        self.assertFalse(row["ok"])
+        self.assertIn("half", row["detail"])
+        self.assertIn("/tui fullscreen", row["detail"])
+        self.assertIn(self.settings, row["detail"])
+        self.fix()
+        data = self.read()
+        self.assertEqual((data["model"], data["tui"]), ("opus", "default"))
+        row = self.rows()["display-renderer"]
+        self.assertTrue(row["ok"])
+        self.assertIn(self.settings, row["detail"])
+
+    def test_local_fullscreen_over_user_default_edits_local_layer(self):
+        self.write({"tui": "default"})
+        self.put(self.local(), {"tui": "fullscreen", "x": 1})
+        row = self.rows()["display-renderer"]
+        self.assertFalse(row["ok"])
+        self.assertIn("settings.local.json", row["detail"])
+        self.fix()
+        with open(self.local()) as f:
+            self.assertEqual(json.load(f), {"tui": "default", "x": 1})
+        self.assertEqual(self.read()["tui"], "default")
+        self.assertTrue(self.rows()["display-renderer"]["ok"])
+
+    def test_env_no_flicker_warns_and_fix_leaves_files(self):
+        self.write({"model": "opus"})
+        env = {"CLAUDE_CODE_NO_FLICKER": "1"}
+        row = self.rows(env)["display-renderer"]
+        self.assertFalse(row["ok"])
+        self.assertIn("CLAUDE_CODE_NO_FLICKER", row["detail"])
+        self.fix(env)
+        self.assertNotIn("tui", self.read())
+        self.assertFalse(self.rows(env)["display-renderer"]["ok"])
+
+    def test_no_flicker_zero_overrides_fullscreen_setting(self):
+        self.write({"tui": "fullscreen"})
+        self.assertTrue(self.rows({"CLAUDE_CODE_NO_FLICKER": "0"})["display-renderer"]["ok"])
+        self.assertTrue(self.rows({"CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN": "1"})["display-renderer"]["ok"])
 
 
 class TodoToolsWhyTest(DisplayBase):

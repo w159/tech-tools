@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.10.0 (`.claude-plugin/plugin.json`)                                                                               |
+| Version    | 16.11.0 (`.claude-plugin/plugin.json`)                                                                               |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
@@ -491,7 +491,7 @@ tree needs the legacy `TodoWrite` tool: set `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`
 (TodoWrite on every model) and `CLAUDE_CODE_ENABLE_TASKS=0` (without it Claude
 Code uses TaskCreate/TaskUpdate and draws its own checklist above the prompt,
 re-expanding it on every update, which squeezes the Atlas TODO tree and band to
-about 6 rows). When the prompt slot leaves the HUD fewer agent rows than are running (down to none), the status line adds `agents N running: a, b`, read from `.atlas/.run/agents-running.json` (written by the mod on change, ignored when older than 15 s or when the HUD already shows every agent). `atlas_doctor.py` reports this and the other display settings as
+about 6 rows). The HUD wins the row budget over the Mission Control band. Claude Code's fullscreen renderer gives everything under the transcript (prompt, status line, mode line, agent list) one slot capped at half the terminal, and a status line command is told no row budget. So the mod writes `.atlas/.run/hud-state.json` (`{ts, maxRows, wanted, shown, fullscreen}`, `wanted` being the rows the HUD would draw unrestricted); while it is fresher than 15 s and `shown < wanted` the status line prints one row only (folder, timer, model, `· ctx N%`) and otherwise the full grid. `atlas_statusline.py install` and `atlas_doctor.py --fix` set `refreshInterval: 5` on the statusLine entry (other keys are kept) so the switch lands within seconds. `atlas_doctor.py` reports this and the other display settings as
 `display-` checks (`display-hud` flags `ATLAS_HUD=off`; `display-omp-todo` flags
 `todo.enabled=false` in omp settings), and `atlas_doctor.py --fix` sets both env
 flags and the status line, removes `ATLAS_HUD=off` and sets omp `todo.enabled`
@@ -601,7 +601,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.10.0
+|-- .claude-plugin/plugin.json   manifest, version 16.11.0
 |-- agents/                      14 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

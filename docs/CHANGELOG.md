@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 16.11.0 - 2026-10-31
+
+- atlas 16.11.0: omp-style TODO and Subagents widgets in Claude Code in both renderers, the status line agents row removed (agents-running.json is no longer written), and a new atlas-doctor display-renderer check.
+
 ## atlas 16.10.0 - 2026-10-30
 
 - atlas 16.10.0: Claude Code HUD keeps Subagents visible under a tight prompt slot (root cause: the ladder dropped Subagents before the TODO tree, a no-more rung hid agents silently, and the HUD could get fewer than 2 rows; seen in real Claude Code 2.1.314 sessions), `Research:` style phase grouping, and the omp TODO tree (root cause: omp draws its tree only from its own `todo` tool and the omp prompt also told the lead to write the plan with `atlas_todo.py set`, so a board-only lead showed Subagents but no tree; fix: the prompt names `todo` as the plan record and a fallback tree is drawn from the board). atlas-doctor gains `display-omp-todo` and `display-hud` with `--fix`. The Claude Code status line also shows `agents N running: a, b` (fed by `.atlas/.run/agents-running.json`, written by the mod on change) when the HUD shows fewer agent rows than are running. atlas-doctor `--fix` no longer crashes on memory migration (`migrate_global_to_projects()` now gets `home` and `db_path`). The status line row was checked live at 200x24 in Claude Code 2.1.314; at that height it takes the place of Claude Code's own agent list rows. Evidence: `.atlas/evidence/2026-10-30_display-parity-16.10.0/`.

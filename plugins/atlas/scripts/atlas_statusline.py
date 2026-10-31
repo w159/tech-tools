@@ -22,6 +22,7 @@ import time
 import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import atlas_paths  # noqa: E402
 
 R = "\x1b[0m"
 CYAN = "\x1b[1;36m"
@@ -295,51 +296,64 @@ def fallow_line(cwd, home):
         return ""
 
 
-# ---------- running agents ----------
+# ---------- HUD row budget ----------
 
-AGENTS_FILE = os.path.join(".atlas", ".run", "agents-running.json")
-AGENTS_FRESH_S = 15
+HUD_STATE_FILE = os.path.join(".atlas", ".run", "hud-state.json")
+ROWS_FILE = os.path.join(".atlas", ".run", "statusline-rows.json")
+HUD_FRESH_S = 15
+STATUSLINE_REFRESH_S = 5  # seconds; lets the compact switch land without waiting for an assistant turn
 
 
-def agents_line(cwd, now=None):
-    """`agents 2 running: a, b` from the mod's agents-running.json when the HUD
-    shows fewer agent rows than are running; "" when missing, stale, bad or covered."""
+def _hud_root(cwd):
+    """Project root the hooks and the mod write .atlas under (atlas_paths.project_root:
+    nearest .git first, else nearest .atlas), not the nearest ancestor holding a stray .atlas."""
+    return atlas_paths.project_root(str(cwd))
+
+
+def write_rows(cwd, rows, full_rows, now=None):
+    """Publishes {ts, rows, fullRows} to .atlas/.run/statusline-rows.json so the mod can size
+    its starved decision against the rows the FULL grid would take from the same slot. Atomic,
+    fail soft, silent."""
     try:
         if not cwd:
-            return ""
-        d = os.path.abspath(cwd)
-        while True:
-            path = os.path.join(d, AGENTS_FILE)
-            if os.path.isfile(path):
-                break
-            parent = os.path.dirname(d)
-            if parent == d:
-                return ""
-            d = parent
-        with open(path, encoding="utf-8") as f:
-            doc = json.load(f)
-        ts = doc.get("ts")
-        now_ms = (time.time() if now is None else now) * 1000
-        if not isinstance(ts, (int, float)) or isinstance(ts, bool):
-            return ""
-        if not (0 <= now_ms - ts < AGENTS_FRESH_S * 1000):
-            return ""
-        running = [
-            str(a.get("name"))
-            for a in doc.get("running", [])
-            if isinstance(a, dict) and a.get("name")
-        ]
-        shown = doc.get("hudRowsShown", 0)
-        if not running or not isinstance(shown, int) or shown >= len(running):
-            return ""
-        return "%sagents %d running:%s %s" % (
-            YELLOW,
-            len(running),
-            R,
-            ", ".join(running),
-        )
+            return
+        root = _hud_root(cwd)
+        if not os.path.isdir(os.path.join(root, ".atlas", ".run")):
+            return
+        path = os.path.join(root, ROWS_FILE)
+        tmp = "%s.%d.tmp" % (path, os.getpid())
+        ts = int((time.time() if now is None else now) * 1000)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"ts": ts, "rows": int(rows), "fullRows": int(full_rows)}, f)
+        os.replace(tmp, path)
     except Exception:
-        return ""
+        pass
+
+
+def hud_starved(cwd, now=None):
+    """True when the mod's hud-state.json (fresher than 15 s) says the HUD above the
+    prompt could not get its wanted rows even with this line at full height, so this line
+    must shrink to one row. Uses the published `starved` flag (older mods: shown < wanted).
+    False when missing, stale, malformed or not starved."""
+    try:
+        if not cwd:
+            return False
+        root = _hud_root(cwd)
+        with open(os.path.join(root, HUD_STATE_FILE), encoding="utf-8") as f:
+            doc = json.load(f)
+        ts, wanted, shown = doc.get("ts"), doc.get("wanted"), doc.get("shown")
+        for v in (ts, wanted, shown):
+            if not isinstance(v, (int, float)) or isinstance(v, bool):
+                return False
+        now_ms = (time.time() if now is None else now) * 1000
+        if not (0 <= now_ms - ts < HUD_FRESH_S * 1000):
+            return False
+        flag = doc.get("starved")
+        if isinstance(flag, bool):
+            return flag
+        return shown < wanted
+    except Exception:
+        return False
 
 
 # ---------- render ----------
@@ -491,6 +505,7 @@ def render(data, width, home):
         else None
     )
     ctx_m = None
+    ctx_pct = 0
     if cu is not None and size > 0:
         toks = sum(
             num_of(cu.get(k))
@@ -500,6 +515,7 @@ def render(data, width, home):
                 "cache_read_input_tokens",
             )
         )
+        ctx_pct = int(round(toks / size * 100))
         ctx_m = meter(
             ic["ctx"],
             "ctx",
@@ -509,6 +525,7 @@ def render(data, width, home):
         )
     elif isinstance(cwd_d.get("used_percentage"), (int, float)):
         up = cwd_d["used_percentage"]
+        ctx_pct = int(round(up))
         det = (
             "%s / %s" % (fmt_tokens(up / 100 * size), fmt_size(size))
             if size > 0
@@ -627,13 +644,14 @@ def render(data, width, home):
         else:
             rows.append(left[i].rstrip())
     rows = [clip(r, row_cols) if vw(r) > row_cols else r for r in rows]
-    al = agents_line(str(cwd))
-    if al:
-        rows.append(clip(al, row_cols))
     fl = fallow_line(str(cwd), home)
-    if fl:
-        rows.append(clip(fl, row_cols))
-    return rows
+    full = rows + ([clip(fl, row_cols)] if fl else [])
+    if hud_starved(str(cwd)):
+        out = [clip("%s%s \u00b7 ctx %d%%%s" % (first, DIM, ctx_pct, R), row_cols)]
+    else:
+        out = full
+    write_rows(str(cwd), len(out), len(full))
+    return out
 
 
 # ---------- install / uninstall ----------
@@ -660,10 +678,14 @@ def install(settings, home):
     cfg = _load(settings)
     if not os.path.exists(prev):
         _save(prev, {"statusLine": cfg.get("statusLine")})
-    cfg["statusLine"] = {
-        "type": "command",
-        "command": 'python3 "%s"' % os.path.abspath(__file__),
-    }
+    entry = cfg.get("statusLine")
+    entry = dict(entry) if isinstance(entry, dict) else {}  # keep user keys such as padding
+    entry.update(
+        type="command",
+        command='python3 "%s"' % os.path.abspath(__file__),
+        refreshInterval=STATUSLINE_REFRESH_S,
+    )
+    cfg["statusLine"] = entry
     _save(settings, cfg)
     return "installed statusLine in %s (previous saved to %s)" % (settings, prev)
 

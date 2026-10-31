@@ -1,0 +1,43 @@
+FIX: repointed marketplace source to https://github.com/w159/tech-tools.git
+FIX: SKIP tooling block: /tmp/tmp.anxrAy3SmL/proj/AGENTS.md does not exist (run atlas-setup)
+FIX: display: set "tui": "default" in <scratch>/cfgI/settings.json
+FIX: display: set env.CLAUDE_CODE_ENABLE_TODO_TOOLS="1" and env.CLAUDE_CODE_ENABLE_TASKS="0" in <scratch>/cfgI/settings.json
+FIX: display: set statusLine to python3 "<scratch>/cfgI/plugins/cache/tech-tools/atlas/16.11.0/scripts/atlas_statusline.py" (refreshInterval 5) in <scratch>/cfgI/settings.json
+FIX: layout manual: /tmp/.atlas -> /tmp/tmp.anxrAy3SmL/home/.atlas/archive/2026-10-31_stray-atlas_atlas ancestor folder, not moved automatically; run: mv /tmp/.atlas /tmp/tmp.anxrAy3SmL/home/.atlas/archive/2026-10-31_stray-atlas_atlas
+FIX: findings records: {'wrote': 0, 'already_recorded': 0, 'no_id_skipped': 0}
+FIX: memory migration: {'moves': {}, 'stamps': [], 'left': [], 'applied': True}
+PASS  registered           atlas@tech-tools at 16.11.0
+PASS  marketplace-source   https://github.com/w159/tech-tools.git (expected w159/tech-tools)
+FAIL  clone-remote         marketplace clone missing at <scratch>/fresh1611
+PASS  version-sync         installed 16.11.0, marketplace 16.11.0
+PASS  rollback             16.11.0 >= floor 0
+PASS  install-path         cache manifest 16.11.0 vs entry 16.11.0
+PASS  install-content      claude-code: 102 runtime files match the reference
+PASS  hooks-wired          all hook files present
+PASS  assets               {"commands": 0, "agents": 14, "skills": 40}
+PASS  stale-assets         none found
+PASS  orchestration-wiring tripwire sees Skill/Agent/Task and auto-marks
+PASS  output-style         outputStyle unset (plugin force-for-plugin should apply)
+WARN  context-tooling      /tmp/tmp.anxrAy3SmL/proj/AGENTS.md does not exist; run atlas-setup to scaffold it
+PASS  omp-model-roles      no omp config; skipped
+WARN  typesafe-scoring     TYPESAFE_API_KEY not set; ATLAS_TYPESAFE_SCORING=on; 0 turn_scores row(s) in last 7d; last scored never
+PASS  cmux-socket          cmux browser is macOS-only (n/a)
+PASS  cmux-browser         cmux browser not applicable (n/a)
+PASS  hook-faults          0 hook fault(s) in 24h
+WARN  gates-armed          gates not armed in /tmp/tmp.anxrAy3SmL/proj (scratch dir or no project marker)
+PASS  omp-bridge           omp not installed (n/a)
+PASS  db-writable          no atlas.db yet at /tmp/tmp.anxrAy3SmL/home/.atlas/atlas.db
+PASS  display-todo-tools   CLAUDE_CODE_ENABLE_TODO_TOOLS=1 and CLAUDE_CODE_ENABLE_TASKS=0 (TodoWrite on every model, no Claude Code checklist; needs Claude Code 2.1.233+)
+PASS  display-mod          ../mod/register.ts registered; ATLAS_MOD/ATLAS_HUD not off
+PASS  display-todo-mirror  PostToolUse covers ['TodoWrite', 'TaskCreate', 'TaskUpdate', 'Agent', 'Task', 'Bash']
+PASS  display-statusline   statusLine runs <scratch>/cfgI/plugins/cache/tech-tools/atlas/16.11.0/scripts/atlas_statusline.py
+PASS  display-omp-todo     omp: no settings file found; todo.enabled defaults to true (n/a)
+PASS  display-hud          ATLAS_HUD not off in Claude Code settings
+PASS  display-renderer     default (inline) renderer; "tui" is set in <scratch>/cfgI/settings.json
+PASS  display-harness      claude-code
+WARN  atlas-layout         1 misplaced (--fix archives, never deletes):
+      container: /tmp/.atlas
+PASS  docs-naming          docs names conform
+PASS  project-memory       0 terminal finding(s) without a .atlas/findings record, 0 global memory entr(ies) tagged with this project
+PASS  project-identity     no atlas.db to inspect
+1 PROBLEM(S) - atlas

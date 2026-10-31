@@ -48,3 +48,25 @@ test('leadChannelName leads with the sid6 name, then the folder@branch fallback'
 	// Short session ids are used whole, no padding.
 	expect(leadChannelName('ab', 'repo', 'feat')).toEqual(['lead-ab', 'repo@feat']);
 });
+test('boardRoot prefers the git repo over an ancestor stray .atlas, like the hooks (atlas_paths.project_root)', async () => {
+	// Repo has no .atlas yet; the parent has a stray one. The repo wins.
+	expect(await boardRoot(memFs(['/p/.atlas', '/p/repo/.git']), '/p/repo/sub', {})).toBe('/p/repo');
+	// Once the repo's .atlas appears the answer is the same root (no rebinding needed).
+	expect(await boardRoot(memFs(['/p/.atlas', '/p/repo/.git', '/p/repo/.atlas']), '/p/repo/sub', {})).toBe('/p/repo');
+	// No git anywhere: nearest .atlas ancestor still wins.
+	expect(await boardRoot(memFs(['/p/.atlas']), '/p/repo', {})).toBe('/p');
+});
+
+test('boardRoot maps a linked worktree (.git file) to the main repo root', async () => {
+	const files: Record<string, string> = {
+		'/main/wt/.git': 'gitdir: /main/.git/worktrees/wt\n',
+		'/main/.git/worktrees/wt/commondir': '../..\n',
+	};
+	const fs: FsLike = {
+		read: async (p) => files[p],
+		stat: async () => undefined,
+		list: async () => [],
+		exists: async (p) => p in files,
+	};
+	expect(await boardRoot(fs, '/main/wt/src', {})).toBe('/main');
+});

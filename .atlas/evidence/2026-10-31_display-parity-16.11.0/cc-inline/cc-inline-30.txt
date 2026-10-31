@@ -1,0 +1,30 @@
+TODO                                                                                                                                                                                                [-]
+ ├─ I. Research · 0/3
+ │  ├─ ☐ map src/calc.py (explorer)
+ │  ├─ ☐ map test layout in tests/ (explorer)
+ │  └─ ☐ read docs/CHANGELOG.md format (explorer)
+ ├─ II. Implement · 0/1
+ ├─ III. Verify · 0/2
+ └─────
+Subagents · 1 running
+ └─ • ◑ anthropic/haiku explorer: Map src/calc.py
+⏳ Waiting on explorer agent
+ ◆ ATLAS  ·  mission control  ·  demoI2@master  ·  wave 1                                                                                                             ◷ 00:01   1 live   ✖ 8 gates
+  ◜ RESEARCH ▶ theory ▶ test ▶ implement ▶ verify ▶ done
+ board                          0/6 ⠹ Research: map src/calc.py (explorer)
+
+  START ◔~◔ explorer                explorer     starting                                                                                       ▍                             ▁▁▁▁▁▁▁▁▁▁▁▁      2s
+
+  #lead-efb6ce  01:55 lead-efb6ce → explorer: Map src/calc.py   01:55 explorer → all: joined
+ tasks                    0/6   ✖ completion   ✖ tripwire   ✖ routing
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoI2   ⏱ 1m46s    👾  Fable 5.1  ·  high · ctx 7%
+  ⏸ manual mode on
+
+  ● main
+  ◯ atlas:explorer  Map src/calc.py                                                                                                                                                3s · ↑ 29.8k tokens
+
+

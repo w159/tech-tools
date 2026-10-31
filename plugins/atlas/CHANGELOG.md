@@ -1,5 +1,21 @@
 # Changelog
 
+## 16.11.0 - 2026-10-31
+
+### Changed
+
+- Claude Code now draws the TODO tree and Subagents widgets above the prompt the way omp does, in both renderers; the status line agents row from 16.10.0 is removed (agents-running.json is no longer written).
+- The HUD (TODO tree, Subagents, Waiting line) gets the rows first; the mission control band gives up rows before the HUD does, down to zero.
+- Inline (default) renderer: the HUD budget is the visible screen minus the prompt, status line and Claude Code's own agent list, so the TODO tree and Subagents stay on screen at 24 and 30 rows instead of scrolling off the top.
+- The Waiting-for-background-jobs line is kept ahead of any band row.
+- The mod publishes .atlas/.run/hud-state.json; when the HUD is short of rows the Atlas status line drops to one compact row (with hysteresis judged at the full-line size so it does not flip back and forth).
+- Claude Code mod and status line bind to the project's git root (the same rule the hooks use, atlas_paths.project_root), so a project whose .atlas/ appears after the session starts shows its own TODO tree instead of an ancestor folder's empty board.
+- Inline renderer budget counts the blank row Claude Code draws above the prompt, so the TODO header no longer scrolls off at 30 rows.
+
+### Added
+
+- atlas-doctor: new display-renderer check warns when "tui": "fullscreen" is set (Claude Code caps the bottom area at half the screen) and --fix sets "tui": "default"; --fix also sets statusLine refreshInterval 5, keeping user keys.
+
 ## 16.10.0 - 2026-10-30
 
 ### Fixed

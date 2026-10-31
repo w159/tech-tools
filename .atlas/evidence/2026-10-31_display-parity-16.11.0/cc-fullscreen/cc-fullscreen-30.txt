@@ -1,0 +1,30 @@
+                                                                                                                                               │                                                      ✕
+  ⎿  Successfully loaded skill · 8 tools allowed                                                                                               │r: route │ t: team │ c: channel │ g: core ✗7 │ o: board
+                                                                                                                                               │◎◜ ─ ◇○ ─ ⚗○ ─ ☰○ ─ ⚒○ ─ ✓○
+  Recalled 1 memory                                                                                                                            │nothing planned
+ ◆ ATLAS  ◎ RESEARCH  0/8 plan written, dispatching three research subagents                                                                   │
+                                                                                                                                               │
+  Ran 1 shell command                                                                                                                          │
+                                                                                                                                               │
+● DISPATCH -> atlas:explorer (explore-calc, map src/calc.py), atlas:explorer (explore-tests, map test layout), atlas:explorer                  │
+  (explore-changelog, read docs/CHANGELOG.md), all foreground in one message.                                                                  │
+▌ ⣾ explorer  explorer · haiku·low                                                                                                             │
+▌ goal  Map src/calc.py                                                                                                                        │
+▌ now   running                                                                                                                                │
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)                                                                                       │
+                                                                                                                                               │
+✶ Whisking · explorer Bash (26s · ↓ 1.8k tokens)                                                                                               │
+TODO · 0/8 · map src/calc.py (explorer)                                                                                                    [-] │
+Subagents · 1 running                                                                                                                          │
+ └─ • ◑ anthropic/haiku explorer: Map src/calc.py                                                                                              │
+⏳ Waiting on explorer agent                                                                                                                   │
+ ◆ ATLAS · research 0/8 · 1 working · ✖7                                                                                                       │
+                                                                                                                                               │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  📁  demoF   ⏱ 1m47s    👾  Fable 5.1  ·  high · ctx 6%
+  ⏸ manual mode on
+
+  ● main
+  ◯ atlas:explorer  Map src/calc.py                                                                                                                                                3s · ↓ 29.8k tokens
