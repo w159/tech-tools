@@ -103,14 +103,14 @@ Categorize every discovered source into one of five tiers:
 - **CONTEXTUAL**: Design files, competitor mentions, industry analyses. Inform but don't define.
 - **STALE**: Outdated docs superseded by newer versions. Flag but deprioritize.
 
-Apply ranking weights (see skills/discover-brand/references/source-ranking.md for details):
+Apply ranking weights (see skills/brand-discover-brand/references/source-ranking.md for details):
 1. Recency - newer sources outrank older
 2. Explicitness - explicit brand instructions outrank implicit patterns
 3. Authority - official docs outrank informal materials
 4. Specificity - detailed guidance outranks vague principles
 5. Cross-source consistency - corroborated elements rank higher
 
-If zero AUTHORITATIVE sources are found after triage, apply adaptive scoring (see skills/discover-brand/references/source-ranking.md "Adaptive Scoring: No Authoritative Sources"). Flag this in the discovery report.
+If zero AUTHORITATIVE sources are found after triage, apply adaptive scoring (see skills/brand-discover-brand/references/source-ranking.md "Adaptive Scoring: No Authoritative Sources"). Flag this in the discovery report.
 
 ### Phase 3: Deep Fetch
 

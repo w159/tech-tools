@@ -259,5 +259,18 @@ class EnterpriseModeTest(unittest.TestCase):
         self.assertIn("armada-enterprise", readme)
 
 
+class DepartmentAgentReferenceTest(unittest.TestCase):
+    def test_agent_reference_paths_exist(self):
+        """Department agents cite skills/<name>/references/<file>; each must resolve inside the department."""
+        departments = PLUGIN / "skills/armada/departments"
+        cited = 0
+        for agent in departments.glob("*/agents/*.md"):
+            for m in re.finditer(r"skills/([\w-]+)/references/([\w./-]+\.md)", agent.read_text(encoding="utf-8")):
+                cited += 1
+                target = agent.parents[1] / "skills" / m.group(1) / "references" / m.group(2)
+                self.assertTrue(target.is_file(), f"{agent.relative_to(PLUGIN)} cites missing {m.group(0)}")
+        self.assertGreater(cited, 0)
+
+
 if __name__ == "__main__":
     sys.exit(0 if unittest.main(exit=False, verbosity=2).result.wasSuccessful() else 1)

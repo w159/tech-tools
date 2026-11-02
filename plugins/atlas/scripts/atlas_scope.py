@@ -108,6 +108,12 @@ def is_uri_path(path: str) -> bool:
 
 
 def _scratch_roots() -> tuple[str, ...]:
+    # Test-only: ATLAS_SCRATCH_ROOTS (os.pathsep-separated absolute paths, empty = none) replaces the
+    # defaults so a suite run from a checkout under /tmp is not itself treated as scratch.
+    override = os.environ.get("ATLAS_SCRATCH_ROOTS")
+    if override is not None:
+        roots = [os.path.realpath(r) for r in override.split(os.pathsep) if os.path.isabs(r)]
+        return tuple(r.rstrip("/") for r in roots if r.rstrip("/"))
     roots = [os.path.realpath(r) for r in SCRATCH_ROOTS]
     for var in ("TMPDIR", "TEMP", "TMP"):
         value = os.environ.get(var)

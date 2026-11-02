@@ -150,11 +150,13 @@ firebase-adminsdk*.json
 !CLA.md
 !marketplace.json
 !pyrightconfig.json
+!conftest.py
 
 # ---- Root scripts ----
 !test-mcp-tools.mjs
 !scripts/
 !scripts/check_versions.py
+!scripts/test_*.py
 
 # ---- fallow baselines (audit gate: pre-existing findings recorded as debt, not hidden) ----
 # Written by `fallow dead-code|health|dupes --save-baseline`; read via the `audit` key in

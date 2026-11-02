@@ -278,6 +278,9 @@ async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
 	const emptyHome = mkdtempSync(join(dir, "home-"));
 	const names = ["ATLAS_DB", "ATLAS_HOOKSTATE_DIR", "ATLAS_HARNESS", "HOME"] as const;
 	const keep: Record<string, string | undefined> = Object.fromEntries(names.map(n => [n, process.env[n]]));
+	// The spawned hooks inherit this process's cwd, and atlas_scope resolves project scope from it. Run from the sandbox so a
+	// checkout under /tmp (scratch) does not make the sandbox path look "outside the project".
+	const keepCwd = process.cwd();
 	try {
 		// An empty .git makes the sandbox its own project root. Without it atlas_paths.project_root() walks up from
 		// `.scratch` into the enclosing checkout and, in a linked worktree, maps to the MAIN worktree: the tripwire's
@@ -292,8 +295,10 @@ async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
 		process.env.ATLAS_HOOKSTATE_DIR = join(dir, "hookstate");
 		process.env.ATLAS_HARNESS = "omp";
 		process.env.HOME = emptyHome;
+		process.chdir(root);
 		return await body(root);
 	} finally {
+		process.chdir(keepCwd);
 		for (const n of names) {
 			if (keep[n] === undefined) delete process.env[n];
 			else process.env[n] = keep[n];

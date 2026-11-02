@@ -42,6 +42,9 @@ class WorkerExemptionTest(unittest.TestCase):
             "always"  # temp-dir cwd leaves gates unarmed otherwise
         )
         self.env["ATLAS_CHANNELS"] = "off"
+        # A checkout cloned under /tmp is the hook's cwd; keep it from reading as scratch so the
+        # footprint test means the same wherever the repo lives.
+        self.env["ATLAS_SCRATCH_ROOTS"] = os.path.join(self.tmp, "no-scratch")
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
 

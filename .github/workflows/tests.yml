@@ -1,0 +1,22 @@
+name: tests
+
+# Fast, hermetic checks only: no network, no vendor credentials, no Bun/herdr.
+# The vendored falcon MCP tests and the omp (Bun) suites are not run here.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # ubuntu-latest (24.04) ships Python 3.12; a venv avoids the PEP 668 system-pip block.
+      - run: python3 --version && python3 -m venv .venv && .venv/bin/python -m pip install --quiet pytest
+      - run: .venv/bin/python scripts/check_versions.py
+      - run: .venv/bin/python -m pytest -q -p no:cacheprovider scripts plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py

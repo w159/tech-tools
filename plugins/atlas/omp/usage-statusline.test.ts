@@ -78,7 +78,7 @@ test("atlas segment text matches the Claude Code statusline literal for one fixt
 	const members = [{ name: "lead-x", role: "lead", joined: NOW - 900 }, ...[0, 1, 2].map(i => ({ name: `w${i}`, role: "subagent", joined: NOW - 60 })), { name: "done", role: "subagent", joined: NOW - 60, ended_at: NOW - 5 }];
 	writeFileSync(join(root, ".atlas", ".run", "channels.json"), JSON.stringify({ channels: { c: { members } } }));
 	writeFileSync(join(root, ".atlas", ".run", "findings.json"), JSON.stringify([{ status: "verified", verified_at: new Date((NOW - 240) * 1000).toISOString() }]));
-	const key = createHash("sha1").update(`${realpathSync(root)}|s1`).digest("hex").slice(0, 12);
+	const key = createHash("sha256").update(`${realpathSync(root)}|s1`).digest("hex").slice(0, 12);
 	writeFileSync(join(home, ".atlas", `status-gates-${key}.json`), JSON.stringify({ at: NOW, failing: 0 }));
 	const db = new Database(join(home, ".atlas", "atlas.db"));
 	db.run("CREATE TABLE turn_scores (id INTEGER PRIMARY KEY, session_id TEXT, message_uuid TEXT, judgment TEXT, kind TEXT, label TEXT, scored_at REAL)");
