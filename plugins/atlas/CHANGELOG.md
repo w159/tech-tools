@@ -1,5 +1,30 @@
 # Changelog
 
+## 16.11.1 - 2026-11-02
+
+### Fixed
+
+- Inline-edit deny (`dispatch_tripwire`) scopes the project to the payload `cwd`, not the hook process cwd; the footprint count uses the same scope.
+- Omp `CLAUDE_MEM_SERVER` is anchored like the Python `recall_gate`, so a foreign server such as `mcp__evil__claude_mem_dump` no longer counts as a claude-mem call; the shared recall gate cases cover it.
+- `recall_gate` anchors the claude-mem tool name.
+- Hooks: fallow probe has a timeout and a negative cache; `eval` is seen as a shell wrapper; `rm` root variants are denied; a null prompt is normalised; a non-dict `tool_input` is normalised; `crew_worker` denies only a real `sleep` command word; `nudge` is silent when the DB has no tables yet.
+- `atlas_irc` terminates torn log lines, reports body truncation and resolves the pytest runner.
+- `atlas_mux` / `atlas_resolve`: spawn-team exit code, wait on unlaunched members, run-aware status/kill, path scope validation, exit-line match, transport note.
+- `atlas_crew`: usage errors for `plan`, unknown-run errors for `status`/`wait`/`kill`.
+- `atlas_doctor`: an unreadable `settings.json` is FAIL; `--fix` backs up `settings.json` and reports overridden values.
+- Scripts: `--help` prints usage and exits 0 (`release_notes`, `lint_docs_names`, `control`, `herdr`, `rig`, `atlas_context_optimizer optimize`, `atlas_todo add`); an unknown `atlas_todo add` flag is a usage error; `record-recall`, `memory add` and `omp_transcript` return failure exit codes.
+
+### Tests
+
+- Tripwire tests are location-independent; `ATLAS_SCRATCH_ROOTS` test override; sha256 statusline key.
+- New test modules import `_test_isolation`.
+- New tests for the payload-cwd edit deny, the anchored omp claude-mem match, `crew_worker` sleep, CLI `--help`, `atlas_crew`, `atlas_mux`, `atlas_irc` and `atlas_doctor`.
+- Root `conftest.py`, strict semver check in `scripts/check_versions.py` and a skill-count test.
+
+### CI
+
+- New `.github/workflows/tests.yml` runs the hermetic Python checks.
+
 ## 16.11.0 - 2026-10-31
 
 ### Changed

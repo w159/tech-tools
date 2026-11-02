@@ -1,5 +1,21 @@
 # Changelog
 
+## atlas 16.11.1 - 2026-11-02
+
+- atlas 16.11.1: inline-edit deny scopes to the payload cwd; omp claude-mem match anchored like the Python recall gate; hooks hardening (fallow probe timeout, eval wrapper, rm root variants, null prompt, non-dict tool_input, crew_worker sleep, nudge on empty DB); atlas_irc, atlas_mux, atlas_resolve, atlas_crew and atlas_doctor fixes; script `--help` and failure exit codes; location-independent tripwire tests. CI: new tests workflow. Details in plugins/atlas/CHANGELOG.md.
+
+## armada 2.2.2 - 2026-11-02
+
+- armada 2.2.2: `discover-brand` reference paths fixed, `mcp/_env/load.py --help`, release zip drops caches and tests. Details in plugins/armada/CHANGELOG.md.
+
+## programmer 1.0.2 - 2026-11-02
+
+- programmer 1.0.2: scanner false-positive and false-negative fixes (BOM files, FN004 depth, SEC001, SEC002, RES001, CFG001, CQS001, STATE001, ERR001, LIT001, WIN001), per-file rule crash reporting, `--write-baseline` exit 2 on parse errors. Details in plugins/programmer/CHANGELOG.md.
+
+## marketplace 5.3.1 - 2026-11-02
+
+- marketplace 5.3.1: atlas 16.11.1, armada 2.2.2, programmer 1.0.2. Root `conftest.py`, strict semver check and skill-count test; tests workflow in CI.
+
 ## atlas 16.11.0 - 2026-10-31
 
 - atlas 16.11.0: omp-style TODO and Subagents widgets in Claude Code in both renderers, the status line agents row removed (agents-running.json is no longer written), and a new atlas-doctor display-renderer check.

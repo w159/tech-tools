@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.2 - 2026-11-02
+
+### Fixed
+
+- Scanner files with a BOM are scanned; FN004 depth is computed iteratively; a rule that crashes on a file is reported per file.
+- Precision fixes for SEC001, SEC002, RES001, CFG001, CQS001, STATE001, ERR001, LIT001 and WIN001.
+- ERR001 treats reporting methods on any receiver as handling and matches `.log` receivers by whole token; SEC001 recognises PRAGMA/EXEC/WITH/MERGE/REPLACE/TRUNCATE; WIN001 ignores `print(file=sys.stderr)`.
+- Project-root test classification is shared with the hook.
+- `--write-baseline` keeps exit 2 on parse errors.
+- The scanner's own crash handler and baseline exit stay clean under its rules.
+- `review` skill documents the exit codes; `__version__` matches `plugin.json`.
+
+### Tests
+
+- New `tests/conftest.py` and `tests/test_scanner_fixes.py`.
+
 ## 1.0.1 - 2026-10-27
 
 Fixes from the review of PR #49, which merged before they landed.

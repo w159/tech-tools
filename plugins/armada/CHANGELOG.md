@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.2.2 - 2026-11-02
+
+### Fixed
+
+- `discover-brand` agent reference paths corrected.
+- `mcp/_env/load.py` prints usage on `--help`.
+- The release zip no longer includes caches or tests.
+
+### Tests
+
+- Contract test covers the corrected paths and `load.py --help`.
+
 ## 2.2.1 - 2026-10-27
 
 ### Fixed
