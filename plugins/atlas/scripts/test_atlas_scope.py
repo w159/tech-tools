@@ -13,6 +13,30 @@ import atlas_scope  # noqa: E402
 REPO = str(Path(__file__).resolve().parents[3])
 
 
+class ScratchRootsOverrideTest(unittest.TestCase):
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ)
+        self.env.start()
+        self.addCleanup(self.env.stop)
+        os.environ.pop("ATLAS_SCRATCH_ROOTS", None)
+
+    def test_default_roots_treat_tmp_as_scratch(self):
+        self.assertTrue(atlas_scope.is_scratch_path("/tmp/anything/x.py"))
+
+    def test_override_replaces_defaults(self):
+        os.environ["ATLAS_SCRATCH_ROOTS"] = "/opt/atlas-scratch-only"
+        self.assertFalse(atlas_scope.is_scratch_path("/tmp/anything/x.py"))
+        self.assertTrue(atlas_scope.is_scratch_path("/opt/atlas-scratch-only/x.py"))
+
+    def test_empty_override_means_no_scratch_roots(self):
+        os.environ["ATLAS_SCRATCH_ROOTS"] = ""
+        self.assertFalse(atlas_scope.is_scratch_path("/tmp/anything/x.py"))
+
+    def test_relative_entries_are_ignored(self):
+        os.environ["ATLAS_SCRATCH_ROOTS"] = "tmp"
+        self.assertEqual(atlas_scope._scratch_roots(), ())
+
+
 class GatesArmedTest(unittest.TestCase):
     def setUp(self):
         self.env = mock.patch.dict(os.environ)
