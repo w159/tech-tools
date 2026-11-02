@@ -53,7 +53,7 @@ jobs:
             python3 plugins/atlas/scripts/release_notes.py "$ver" "plugins/$name/CHANGELOG.md" > notes.md || {
               echo "::error::plugins/$name/CHANGELOG.md has no released '## $ver' section (missing or marked unreleased)"; exit 1; }
 
-            zip -qr "$name.zip" "plugins/$name" -x '*/node_modules/*' '*/.git/*'
+            zip -qr "$name.zip" "plugins/$name" -x '*/node_modules/*' '*/.git/*' '*/__pycache__/*' '*.pyc' '*/.pytest_cache/*' '*/.venv/*' '*/tests/*'
             assets=""
             if [ "$(stat -c %s "$name.zip")" -ge 104857600 ]; then
               rm "$name.zip"

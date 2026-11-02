@@ -145,6 +145,9 @@ def _promote_cfg(shell_keys: set) -> None:
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__.split("Usage:", 1)[1].strip().replace("python load.py", "usage: load.py"))
+        sys.exit(0)
     if len(sys.argv) < 2:
         print("[atlas env] usage: load.py <module.to.run>", file=sys.stderr)
         sys.exit(2)
