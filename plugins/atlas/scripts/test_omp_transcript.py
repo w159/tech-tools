@@ -656,6 +656,14 @@ class ConversionShapeTest(_TmpCase):
         self.assertIn("error", out)
         self.assertFalse(os.path.exists(os.path.join(self.tmp, "o.jsonl")))
 
+    def test_bad_arguments_exit_2_with_error_json(self):
+        for args in ([], ["convert"], ["bogus"]):
+            proc = subprocess.run(
+                [sys.executable, CLI, *args], capture_output=True, text=True
+            )
+            self.assertEqual(proc.returncode, 2, (args, proc.stdout, proc.stderr))
+            self.assertFalse(json.loads(proc.stdout)["ok"])
+
     def test_rerun_is_idempotent_and_atomic(self):
         out, first = self.convert(FIXTURE)
         with open(out, "rb") as fh:

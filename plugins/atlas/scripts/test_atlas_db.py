@@ -1482,9 +1482,10 @@ class MainCliTest(unittest.TestCase):
 
     def test_main_record_recall_rejects_invalid_outcome(self):
         # Lines 973-979: an outcome word other than hit/miss is rejected.
-        out = self._run_cli(["atlas_db.py", "record-recall", "sess-bad", "maybe"])
-        self.assertIn("must be 'hit' or 'miss'", out)
-        self.assertIn("maybe", out)
+        out = io.StringIO()
+        with self.assertRaises(SystemExit) as cm, contextlib.redirect_stdout(out):
+            self._run_cli(["atlas_db.py", "record-recall", "sess-bad", "maybe"])
+        self.assertEqual(cm.exception.code, 2)  # S4: a rejected outcome is a failure exit
 
     def test_main_record_recall_no_run(self):
         # Lines 984-985: session with no run -> recall not recorded.
