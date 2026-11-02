@@ -33,9 +33,12 @@ from __future__ import annotations
 import argparse
 import ast
 import fcntl
+import importlib.util
 import json
 import os
 import re
+import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -78,7 +81,9 @@ def init_bus(d, channel: str, nicks: list, lead: str = "lead") -> Path:
 
 def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str | None = None, extra: dict | None = None) -> dict:
     """Append one message under an exclusive lock and return it (with its seq). `extra` adds fields (e.g. a DONE's digest)."""
-    text = (text or "").strip()[:MAX_TEXT]
+    text = (text or "").strip()
+    truncated = len(text) > MAX_TEXT
+    text = text[:MAX_TEXT]
     p = Path(d) / "log.jsonl"
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, "a+", encoding="utf-8") as fh:
@@ -99,6 +104,8 @@ def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str |
                 "to": to,
                 "text": text,
             }
+            if truncated:
+                rec["truncated"] = True
             if kind:
                 rec["kind"] = kind
             if via:
@@ -106,6 +113,10 @@ def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str |
             if extra:
                 rec.update(extra)
             fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            # a crashed writer can leave a torn last line with no newline; terminate it so this record starts clean
+            if size and os.pread(fh.fileno(), 1, size - 1) != b"\n":
+                fh.write("\n")
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
             fh.flush()
             os.fsync(fh.fileno())
@@ -436,7 +447,8 @@ def cmd_say(a) -> int:
     if text == "-":
         text = sys.stdin.read()
     rec = post(d, nick, to, text)
-    print(f"sent #{rec['seq']} to {to}")
+    note = f" (truncated to {MAX_TEXT} chars)" if rec.get("truncated") else ""
+    print(f"sent #{rec['seq']} to {to}{note}")
     return 0
 
 
@@ -557,6 +569,22 @@ def latest_done_record(d, nick: str):
     return next((r for r in reversed(history(d)) if r.get("from") == nick and r.get("kind") == "done"), None)
 
 
+def _check_cmd(cmd: str) -> str:
+    """The shell command to run for a unit check. A leading `python3 -m pytest` / `python -m pytest` is run with
+    this interpreter when it can import pytest, else with the `pytest` on PATH (uv/pipx installs are not
+    importable by the system python3); anything else, or no usable runner at all, is left as written."""
+    m = re.match(r"\s*python3?\s+-m\s+pytest\b", cmd)
+    if not m:
+        return cmd
+    if importlib.util.find_spec("pytest") is not None:
+        runner = f"{shlex.quote(sys.executable)} -m pytest"
+    elif shutil.which("pytest"):
+        runner = "pytest"
+    else:
+        return cmd
+    return runner + cmd[m.end():]
+
+
 CHECK_TIMEOUT_S = 600
 TAIL_CHARS = 6000
 
@@ -571,7 +599,7 @@ def _run_unit_check(d, nick: str, quiet: bool = False, capture: list | None = No
         return None
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
     try:
-        res = subprocess.run(cmd, shell=True, cwd=root, capture_output=True, text=True, timeout=CHECK_TIMEOUT_S)
+        res = subprocess.run(_check_cmd(cmd), shell=True, cwd=root, capture_output=True, text=True, timeout=CHECK_TIMEOUT_S)
         code, out = res.returncode, (res.stdout or "") + (res.stderr or "")
     except subprocess.TimeoutExpired:
         code, out = 124, f"check timed out after {CHECK_TIMEOUT_S}s\n"
@@ -950,7 +978,7 @@ def _early_check(d, nick: str, needs) -> int | None:
         env = dict(os.environ)
         env["PYTEST_ADDOPTS"] = (env.get("PYTEST_ADDOPTS", "") + f" --junitxml={xml} -p no:cacheprovider").strip()
         try:
-            subprocess.run(cmd, shell=True, cwd=root, capture_output=True, text=True, env=env, timeout=EARLY_CHECK_TIMEOUT_S)
+            subprocess.run(_check_cmd(cmd), shell=True, cwd=root, capture_output=True, text=True, env=env, timeout=EARLY_CHECK_TIMEOUT_S)
         except subprocess.TimeoutExpired:
             return None
         own = _own_failures(xml)

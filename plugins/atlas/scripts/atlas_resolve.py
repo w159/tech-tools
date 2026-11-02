@@ -6,6 +6,7 @@ omp/resolve.ts (identical semantics). CLI: atlas_resolve.py <class> <effort> [--
 """
 
 import json
+import os
 import posixpath
 import sys
 from pathlib import Path
@@ -31,6 +32,20 @@ def normalize_paths(paths):
     return sorted(
         {posixpath.normpath(p.strip()) for p in (paths or []) if p and p.strip()}
     )
+
+
+def check_paths(raw, root=None):
+    """The paths of a `--paths a,b` value. ValueError when it names no path at all (an empty value must not
+    silently widen the scope to the whole project) or a path that resolves outside the project root."""
+    parts = [p.strip() for p in (raw or "").split(",") if p.strip()]
+    if not parts:
+        raise ValueError("--paths was given but names no path; omit it for whole-project scope")
+    base = os.path.abspath(root or os.getcwd())
+    for p in parts:
+        full = os.path.abspath(os.path.join(base, p))
+        if os.path.commonpath([base, full]) != base:
+            raise ValueError(f"path {p!r} resolves outside the project root {base}")
+    return parts
 
 
 def resolve(task_class, effort, paths=None):
@@ -75,8 +90,12 @@ def main(argv):
         i = argv.index("--paths")
         if i + 1 >= len(argv):
             return _fail(f"--paths needs a value (a,b). {USAGE}")
-        paths = argv[i + 1].split(",")
+        raw = argv[i + 1]
         argv = argv[:i] + argv[i + 2 :]
+        try:
+            paths = check_paths(raw)
+        except ValueError as e:
+            return _fail(str(e))
     else:
         paths = None
     if len(argv) != 2:

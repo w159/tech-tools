@@ -102,6 +102,62 @@ class TodoToolsTest(DisplayBase):
             self.assertEqual(f.read(), "{ not json")
         self.assertEqual([n for n in os.listdir(self.tmp) if "atlas-tmp" in n], [])
 
+    def test_bad_json_is_fail_severity_and_fails_the_verdict(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        self.write("{ not json")
+        row = self.rows()["display-todo-tools"]
+        self.assertEqual("fail", row["severity"])
+        rows = list(self.rows().values())
+        out = io.StringIO()
+        with mock.patch.object(d, "run_checks", return_value=(rows, {})), \
+                mock.patch.object(d, "layout_checks", return_value=[]), \
+                contextlib.redirect_stdout(out):
+            code = d.main(["--plugin", "atlas"])
+        text = out.getvalue()
+        self.assertEqual(1, code, text)
+        self.assertRegex(text, r"(?m)^FAIL  display-todo-tools")
+        self.assertNotIn("HEALTHY", text)
+        with open(self.settings) as f:
+            self.assertEqual(f.read(), "{ not json")  # never overwritten
+
+    def test_valid_settings_missing_env_stays_warn(self):
+        self.write({})
+        self.assertEqual("warn", self.rows()["display-todo-tools"]["severity"])
+
+
+class FixBackupTest(DisplayBase):
+    def baks(self):
+        return sorted(n for n in os.listdir(self.tmp) if ".atlas-bak-" in n)
+
+    def test_fix_backs_up_and_reports_overridden_user_value(self):
+        self.write({"env": {"CLAUDE_CODE_ENABLE_TASKS": "1", "CLAUDE_CODE_ENABLE_TODO_TOOLS": "1", "FOO": "bar"}})
+        before = open(self.settings).read()
+        notes = self.fix()
+        self.assertEqual("0", self.read()["env"]["CLAUDE_CODE_ENABLE_TASKS"])  # the shipped value is unchanged
+        baks = self.baks()
+        self.assertEqual(1, len(baks), notes)
+        self.assertEqual(before, open(os.path.join(self.tmp, baks[0])).read())
+        joined = "\n".join(notes)
+        self.assertIn(baks[0], joined)
+        self.assertIn("CLAUDE_CODE_ENABLE_TASKS", joined)
+        self.assertIn("'1' -> '0'", joined)
+        self.assertNotIn("FOO", joined)
+
+    def test_second_fix_with_nothing_to_change_writes_no_new_backup(self):
+        self.write({"env": {"CLAUDE_CODE_ENABLE_TASKS": "1"}})
+        self.fix()
+        first = self.baks()
+        self.assertEqual(1, len(first))
+        self.fix()
+        self.assertEqual(first, self.baks())
+
+    def test_fix_of_a_missing_settings_file_makes_no_backup(self):
+        self.fix()
+        self.assertEqual([], self.baks())
+
 
 class ModTest(DisplayBase):
     def test_switch_off_flagged_in_settings_and_process_env(self):

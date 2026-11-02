@@ -900,7 +900,8 @@ def _renderer_state(settings_path, proj, env):
 def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="atlas", version=None,
                    project_dir=None, omp_agent_dir=None, term_rows=None):
     """Checks that explain a missing TODO tree, Subagents block, mission control band or
-    status line. Every row is warn severity: these are user configuration, not plugin damage.
+    status line. Every row is warn severity (these are user configuration, not plugin damage) except an unreadable
+    settings.json, which is fail: every other display check is blind without it and --fix cannot repair it.
     Injectable paths/env keep tests off the real ~/.claude. Returns [{check, ok, detail, severity}]."""
     env = os.environ if env is None else env
     root = _display_plugin_root(plugin_root)
@@ -908,8 +909,8 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
     proj, omp_dir = _display_dirs(settings_path, env, project_dir, omp_agent_dir)
     rows = []
 
-    def add(cid, ok, detail):
-        rows.append({"check": cid, "ok": ok, "detail": detail, "severity": "warn"})
+    def add(cid, ok, detail, severity="warn"):
+        rows.append({"check": cid, "ok": ok, "detail": detail, "severity": severity})
 
     data, err = _read_settings(path)
     senv = _settings_env(data) if data is not None else {}
@@ -918,7 +919,8 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
     # Claude Code draws and re-expands above the prompt, squeezing the Atlas TODO tree and band
     want = f'"env": {{"{DISPLAY_TODO_ENV}": "1", "{DISPLAY_TASKS_ENV}": "0"}}'
     if err:
-        add("display-todo-tools", False, f"{err}; fix the JSON by hand (--fix will not touch it), then set {want}")
+        add("display-todo-tools", False, f"{err}; fix the JSON by hand (--fix will not touch it), then set {want}",
+            severity="fail")
     else:
         todo = _display_value(DISPLAY_TODO_ENV, senv, env)
         tasks = _display_value(DISPLAY_TASKS_ENV, senv, env)
@@ -1062,6 +1064,23 @@ def _atomic_write_json(path, data):
             os.remove(tmp)
 
 
+def _backup_settings(path):
+    """Copy an existing settings file to <path>.atlas-bak-<timestamp> before --fix rewrites it; returns the backup
+    path, or None when there was nothing to copy or the copy failed."""
+    if not os.path.isfile(path):
+        return None
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    bak, n = f"{path}.atlas-bak-{stamp}", 1
+    while os.path.exists(bak):
+        n += 1
+        bak = f"{path}.atlas-bak-{stamp}-{n}"
+    try:
+        shutil.copy2(path, bak)
+    except OSError:
+        return None
+    return bak
+
+
 def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None, omp_agent_dir=None):
     """--fix only: merge the TodoWrite env vars (TODO_TOOLS=1, TASKS=0) and, when unset or dead, the Atlas statusLine into
     the user settings.json with one atomic write. Never edits unreadable JSON, never overwrites a
@@ -1071,6 +1090,16 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
     path = settings_path or _claude_settings_path()
     proj, omp_dir = _display_dirs(settings_path, env, project_dir, omp_agent_dir)
     notes = []
+    backed = []
+
+    def pre_write(fp):
+        """Back the user settings file up once, before the first --fix write to it."""
+        if backed or os.path.abspath(fp) != os.path.abspath(path):
+            return
+        backed.append(_backup_settings(path))
+        if backed[0]:
+            notes.append(f"backed up {path} to {backed[0]}")
+
     for fp in _omp_settings_files(omp_dir, proj):
         try:
             if _omp_todo_setting(fp)[0] is False and _omp_set_todo_true(fp):
@@ -1080,6 +1109,7 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
     for fp, val in _hud_off_files(path, proj):
         try:
             hd = _load_json(fp)
+            pre_write(fp)
             hd["env"].pop("ATLAS_HUD", None)
             if not hd["env"]:
                 hd.pop("env")
@@ -1091,6 +1121,7 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
     if mode == "fullscreen" and layer and not why:
         try:
             ld = _load_json(layer)
+            pre_write(layer)
             ld["tui"] = "default"
             _atomic_write_json(layer, ld)
             notes.append(f'set "tui": "default" in {layer}')
@@ -1102,6 +1133,7 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
     if err:
         return ["display: " + n for n in notes] + [f"SKIP display fixes: {err}; fix the JSON by hand"]
     senv, changed = data.get("env"), False
+    user_set = dict(senv) if isinstance(senv, dict) else {}
     if senv is not None and not isinstance(senv, dict):
         notes.append(f"SKIP {DISPLAY_TODO_ENV}: \"env\" in {path} is not an object")
     else:
@@ -1112,6 +1144,8 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
         if not (todo_ok and tasks_ok):
             data["env"] = dict(senv or {}, **want)
             notes.append(f'set env.{DISPLAY_TODO_ENV}="1" and env.{DISPLAY_TASKS_ENV}="0" in {path}')
+            notes += [f"overrode your env.{k}: {user_set[k]!r} -> {v!r}" for k, v in want.items()
+                      if k in user_set and str(user_set[k]) != v]
             changed = True
     cfg = data.get("statusLine")
     script = _statusline_script_path(cfg)
@@ -1129,6 +1163,7 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
     elif cfg not in (None, {}, "") and not script:
         notes.append("statusLine is another tool's command; left untouched")
     if changed:
+        pre_write(path)
         _atomic_write_json(path, data)
     return ["display: " + n for n in notes] or ["display settings already correct"]
 
