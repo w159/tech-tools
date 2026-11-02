@@ -27,6 +27,9 @@ def section(text: str, version: str):
 
 
 def main(argv):
+    if len(argv) > 1 and argv[1] in ("--help", "-h"):
+        print("usage: release_notes.py <version> [changelog]")
+        return 0
     if len(argv) < 2:
         print("usage: release_notes.py <version> [changelog]", file=sys.stderr)
         return 2

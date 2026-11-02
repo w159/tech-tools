@@ -1241,6 +1241,11 @@ def main(argv: list[str]) -> int:
         "reap": reap,
         "install-check": install_check,
     }
+    if len(argv) >= 2 and argv[1] in ("--help", "-h"):
+        print(
+            "usage: atlas_herdr.py status|ensure|reap|install-check|create-pane|prompt|close-pane"
+        )
+        return 0
     if len(argv) >= 2 and argv[1] == "create-pane":
         out = _create_pane_cli(argv[2:])
     elif len(argv) >= 2 and argv[1] == "prompt":
