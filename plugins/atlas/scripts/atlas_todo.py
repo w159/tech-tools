@@ -2144,6 +2144,15 @@ def _cli(argv: Optional[List[str]] = None) -> int:
 
     root = flags.get("root")
     cmd = positional[0] if positional else "counts"
+    if cmd == "add":
+        # `add` takes one content argument: a stray flag-shaped word is a typo, not content.
+        if any(p in ("--help", "-h") for p in positional[1:]):
+            print(_USAGE)
+            return 0
+        stray = [p for p in positional[1:] if p.startswith("--")]
+        if stray:
+            sys.stderr.write("atlas_todo.py add: unknown flag %s\n%s" % (stray[0], _USAGE))
+            return 2
     out: Dict[str, Any]
     try:
         if cmd == "list":
