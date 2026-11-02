@@ -283,5 +283,64 @@ class ShellSyntaxBypassTests(unittest.TestCase):
             self.assertTrue(fg._is_git_commit_or_push(cmd), cmd)
 
 
+class NpxProbeNegativeCacheTests(unittest.TestCase):
+    """H1: a missing fallow must not cost the npx probe timeout on every commit."""
+
+    def setUp(self):
+        import tempfile
+
+        self._tmp = tempfile.mkdtemp()
+        self._env = mock.patch.dict(os.environ, {"ATLAS_HOOKSTATE_DIR": self._tmp})
+        self._env.start()
+
+    def tearDown(self):
+        self._env.stop()
+
+    def test_probe_timeout_is_short(self):
+        self.assertLessEqual(fg._NPX_PROBE_TIMEOUT, 3)
+
+    def test_not_installed_result_is_cached(self):
+        calls = []
+
+        def fake_run(*a, **k):
+            calls.append(a)
+            return subprocess.CompletedProcess(a, 1, "", "not found")
+
+        with (
+            mock.patch("shutil.which", side_effect=lambda n: "/x/npx" if n == "npx" else None),
+            mock.patch("subprocess.run", side_effect=fake_run),
+        ):
+            self.assertIsNone(fg._resolve_runner())
+            self.assertIsNone(fg._resolve_runner())
+        self.assertEqual(len(calls), 1)
+
+    def test_timeout_is_cached_too(self):
+        calls = []
+
+        def fake_run(*a, **k):
+            calls.append(a)
+            raise subprocess.TimeoutExpired("npx", 3)
+
+        with (
+            mock.patch("shutil.which", side_effect=lambda n: "/x/npx" if n == "npx" else None),
+            mock.patch("subprocess.run", side_effect=fake_run),
+        ):
+            self.assertIsNone(fg._resolve_runner())
+            self.assertIsNone(fg._resolve_runner())
+        self.assertEqual(len(calls), 1)
+
+    def test_cache_expires(self):
+        fg._negative_store()
+        old = os.path.getmtime(fg._negative_path()) - fg._NEGATIVE_TTL - 5
+        os.utime(fg._negative_path(), (old, old))
+        self.assertFalse(fg._negative_cached())
+
+
+class EvalWrappedGateTests(unittest.TestCase):
+    def test_eval_commit_is_gated(self):
+        self.assertTrue(fg._is_git_commit_or_push('eval "git commit -m x"'))
+        self.assertTrue(fg._is_git_commit_or_push("eval 'git push'"))
+
+
 if __name__ == "__main__":
     unittest.main()

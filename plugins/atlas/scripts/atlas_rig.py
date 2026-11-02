@@ -591,6 +591,9 @@ def main(argv: list[str]) -> int:
         "list-panes": list_panes,
         "agents": agents,
     }
+    if len(argv) >= 2 and argv[1] in ("--help", "-h"):
+        print("usage: atlas_rig.py status|ensure|list-panes|agents")
+        return 0
     if len(argv) != 2 or argv[1] not in cmds:
         sys.stderr.write("usage: atlas_rig.py status|ensure|list-panes|agents\n")
         return 2

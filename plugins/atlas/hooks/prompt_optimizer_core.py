@@ -667,7 +667,7 @@ def _mark_prompt_boundary(data: dict) -> None:
 
 def main() -> int:
     data = atlas_hook_guard.load_payload("prompt_optimizer")
-    prompt = data.get("prompt", "").strip()
+    prompt = (data.get("prompt") or "").strip()
     if not prompt:
         return 0
     if _is_harness_event(prompt):

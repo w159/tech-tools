@@ -290,6 +290,8 @@ def load_payload(hook_name, raw=None):
         if data["tool_input"] is not None:
             bad.append(f"tool_input={type(data['tool_input']).__name__}")
         data["tool_input"] = {}
+    if "prompt" in data and data["prompt"] is None:
+        data["prompt"] = ""  # an explicit null prompt is an empty prompt, not a fault
     for key in _STR_FIELDS:
         val = data.get(key)
         if val is not None and not isinstance(val, str):

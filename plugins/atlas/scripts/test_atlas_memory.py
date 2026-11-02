@@ -390,6 +390,17 @@ class TestAtlasMemory(unittest.TestCase):
         out = self._run_cli(["atlas_memory.py", "add", "memory", "cli", "fact"])
         self.assertIn("success", out)
 
+    def test_cli_add_empty_content_exits_nonzero(self):
+        out = io.StringIO()
+        with (
+            mock.patch.object(sys, "argv", ["atlas_memory.py", "add", "memory"]),
+            redirect_stdout(out),
+            self.assertRaises(SystemExit) as cm,
+        ):
+            atlas_memory._cli()
+        self.assertEqual(cm.exception.code, 1)
+        self.assertIn("cannot be empty", out.getvalue())
+
     def test_cli_remove(self):
         atlas_memory.add("memory", "cli entry")
         out = self._run_cli(["atlas_memory.py", "remove", "memory", "cli", "entry"])

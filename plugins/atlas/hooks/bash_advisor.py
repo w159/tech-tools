@@ -83,8 +83,10 @@ _RM_FLAG = r"(?:--[a-z-]+|-[a-zA-Z]+)"
 # (compiled pattern, human reason). Order only affects which reason is reported first.
 
 # Root / home targets, optionally quoted, with a trailing slash or glob:
-# /  /*  ~  ~/  ~/*  $HOME  $HOME/  "$HOME"  "${HOME}/"  ${HOME}/*
-_ROOT_HOME = r"[\"']?(?:/\*?|~/?\*?|~/\*|\$\{?HOME\}?/?\*?)[\"']?"
+# /  //  /*  /.  ~  ~/  ~/*  ~/.  $HOME  $HOME/  "$HOME"  "$HOME"/  "${HOME}/"  ${HOME}/*
+_ROOT_HOME = (
+    r"[\"']?(?:/+[.*]?|(?:~|\$\{?HOME\}?)(?:\*|/+[.*]?)?)[\"']?(?:/+[.*]?)?"
+)
 _RM_TARGET = r"(" + _ROOT_HOME + r")(\s|$)"
 
 _CATASTROPHIC = [
@@ -230,6 +232,7 @@ _WRAPPERS = {
     "command": frozenset(),
     "exec": frozenset({"-a"}),
     "builtin": frozenset(),
+    "eval": frozenset(),
     "setsid": frozenset(),
     "nice": frozenset({"-n"}),
     "xargs": frozenset(
@@ -261,6 +264,10 @@ _SHELL_C = re.compile(
     r"""\b(?:ba|z|da|k)?sh\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*c[A-Za-z]*\s+(['"])(.*?)\1""",
     re.S,
 )
+
+
+# `eval "git commit -m x"`: the quoted argument is re-parsed as a command line.
+_EVAL_Q = re.compile(r"""\beval\s+(['"])(.*?)\1""", re.S)
 
 
 def _regex_segments(command: str):
@@ -355,6 +362,8 @@ def _git_subcommands(command: str, _depth: int = 0):
         return
     if _depth < 2:
         for m in _SHELL_C.finditer(command[: _SEGMENT_HEAD * 4]):
+            yield from _git_subcommands(m.group(2), _depth + 1)
+        for m in _EVAL_Q.finditer(command[: _SEGMENT_HEAD * 4]):
             yield from _git_subcommands(m.group(2), _depth + 1)
     for tokens in _command_segments(command):
         tokens = _strip_wrappers(tokens)

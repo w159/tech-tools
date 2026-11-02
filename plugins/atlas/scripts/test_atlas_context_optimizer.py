@@ -503,6 +503,18 @@ Body.
         data = json.loads(buf.getvalue())
         self.assertTrue(data["dry_run"])
 
+    def test_cli_optimize_help_prints_usage_and_changes_nothing(self):
+        for flag in ("--help", "-h"):
+            buf = io.StringIO()
+            with (
+                mock.patch.object(sys, "argv", ["prog", "optimize", flag]),
+                mock.patch.object(opt, "optimize") as run,
+                contextlib.redirect_stdout(buf),
+            ):
+                opt._cli()
+            run.assert_not_called()
+            self.assertIn("Usage", buf.getvalue())
+
     def test_cli_enable_skill(self):
         self._create_skill("to-enable", disabled=True)
         buf = io.StringIO()

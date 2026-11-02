@@ -700,19 +700,24 @@ def main(argv=None) -> int:
     conv.add_argument("--session-file", required=True)
     conv.add_argument("--out", required=True)
     conv.add_argument("--session-id", default=None)
+    rc = 0
     try:
         args = parser.parse_args(argv)
         if args.cmd != "convert":
+            rc = 2
             raise ValueError(
                 "usage: omp_transcript.py convert --session-file F --out O"
             )
         result = convert_file(args.session_file, args.out, args.session_id)
-    except SystemExit:
+    except SystemExit as exc:
+        if exc.code in (0, None):  # --help already printed its usage
+            return 0
         result = {"ok": False, "error": "bad arguments"}
+        rc = 2
     except Exception as exc:  # noqa: BLE001 -- fail open, never wedge a session
         result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     print(json.dumps(result))
-    return 0
+    return rc
 
 
 if __name__ == "__main__":

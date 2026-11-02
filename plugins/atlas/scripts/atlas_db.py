@@ -2019,6 +2019,7 @@ if __name__ == "__main__":
                 "recall outcome must be 'hit' or 'miss', got %r; not recorded"
                 % _outcome
             )
+            _sys.exit(2)
         else:
             _c = connect()
             init(_c)

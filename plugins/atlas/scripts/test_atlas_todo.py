@@ -1071,6 +1071,28 @@ class CliHelp(unittest.TestCase):
             self.assertIn("complete", r.stdout)
             self.assertNotIn("unknown_command", r.stdout)
 
+    def test_add_unknown_flag_is_usage_error_and_writes_nothing(self):
+        import tempfile
+
+        root = tempfile.mkdtemp()
+        subprocess.run(["git", "init", "-q", root], check=True)
+        r = self._run("add", "--bogus-flag", "--root", root)
+        self.assertEqual(r.returncode, 2, (r.stdout, r.stderr))
+        self.assertIn("usage:", r.stderr)
+        listed = self._run("list", "--root", root)
+        self.assertNotIn("bogus", listed.stdout)
+
+    def test_add_help_prints_usage_and_writes_nothing(self):
+        import tempfile
+
+        root = tempfile.mkdtemp()
+        subprocess.run(["git", "init", "-q", root], check=True)
+        for flag in ("--help", "-h"):
+            r = self._run("add", flag, "--root", root)
+            self.assertEqual(r.returncode, 0, (flag, r.stdout, r.stderr))
+            self.assertIn("usage:", r.stdout)
+        self.assertNotIn("help", self._run("list", "--root", root).stdout)
+
     def test_unknown_command_still_errors(self):
         r = self._run("definitely-not-a-verb")
         self.assertEqual(r.returncode, 1)

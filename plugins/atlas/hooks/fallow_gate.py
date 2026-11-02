@@ -45,7 +45,10 @@ import atlas_hook_guard  # noqa: E402
 # hooks.json timeout for this hook (300s), or the harness kills us before the
 # fail-open path returns. F13: the audit is capped at 60s - a hung `fallow audit`
 # used to burn 240s on EVERY commit/push before the fail-open notice.
-_NPX_PROBE_TIMEOUT = 20
+_NPX_PROBE_TIMEOUT = 3
+# A "fallow not installed" probe result is cached so later commits skip the npx
+# probe entirely instead of paying its timeout on every git commit/push.
+_NEGATIVE_TTL = 600
 _VERSION_TIMEOUT = 15
 _AUDIT_TIMEOUT = 60
 
@@ -100,6 +103,30 @@ def _below_floor(version: str, floor: str) -> bool:
     return v < f
 
 
+def _negative_path() -> str:
+    return os.path.join(atlas_hook_guard._state_dir(), "fallow_gate_absent")
+
+
+def _negative_cached() -> bool:
+    """True when a recent probe found no npx-resolvable fallow (fail-open cache)."""
+    import time
+
+    try:
+        return time.time() - os.path.getmtime(_negative_path()) < _NEGATIVE_TTL
+    except OSError:
+        return False
+
+
+def _negative_store() -> None:
+    try:
+        path = _negative_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            fh.write("1")
+    except OSError:
+        pass
+
+
 def _resolve_runner() -> tuple[list[str], str] | None:
     """Return (argv_prefix, description) for invoking fallow, or None."""
     import shutil
@@ -111,6 +138,8 @@ def _resolve_runner() -> tuple[list[str], str] | None:
     npx = shutil.which("npx")
     if not npx:
         return None
+    if _negative_cached():
+        return None
     # Prefer a local install without network; match official gate's probe.
     try:
         probe = subprocess.run(
@@ -120,9 +149,11 @@ def _resolve_runner() -> tuple[list[str], str] | None:
             timeout=_NPX_PROBE_TIMEOUT,
         )
     except (OSError, subprocess.TimeoutExpired):
+        _negative_store()
         return None
     out = (probe.stdout or "") + (probe.stderr or "")
     if probe.returncode != 0 or "fallow" not in out.lower():
+        _negative_store()
         return None
     return [npx, "--no-install", "fallow"], "npx --no-install fallow"
 

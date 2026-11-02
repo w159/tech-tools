@@ -490,5 +490,34 @@ class RecallGateTest(unittest.TestCase):
             self.assertEqual(_run_main(payload), (0, ""))
 
 
+class RecallNameAnchorTest(unittest.TestCase):
+    """H4: a foreign tool merely named like claude-mem is not a recall."""
+
+    def test_real_names_count(self):
+        for name in (
+            "mcp__plugin_claude-mem_mcp-search__search",
+            "mcp__claude_mem_mcp_search_search",
+            "mcp__claude_mem__mcp_search_search",
+            "mcp__plugin_claude_mem_mcp_search_search",
+            "mcp__mcp_search_search",
+        ):
+            self.assertTrue(recall_gate._is_recall(name, {}), name)
+
+    def test_lookalikes_do_not_count(self):
+        for name in (
+            "mcp__evil__claude_mem_dump",
+            "mcp__lean-ctx__mcp_search_x",
+            "mcp__plugin_evil_claude-mem__search",
+            "mcp__claude_memory_dump",
+            "claude_mem",
+        ):
+            self.assertFalse(recall_gate._is_recall(name, {}), name)
+        self.assertFalse(
+            recall_gate._is_recall(
+                "Write", {"path": "xd://mcp__evil__claude_mem_dump", "content": "{}"}
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

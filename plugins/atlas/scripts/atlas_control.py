@@ -1954,6 +1954,9 @@ def main(argv=None):
     """Small CLI so the control plane is inspectable without the web UI."""
     argv = list(sys.argv[1:] if argv is None else argv)
     cmd = argv[0] if argv else "behavior"
+    if cmd in ("--help", "-h"):
+        print("usage: atlas_control.py [behavior|ecosystem|test <connector>]")
+        return 0
     if cmd == "behavior":
         payload = behavior_state()
     elif cmd == "ecosystem":

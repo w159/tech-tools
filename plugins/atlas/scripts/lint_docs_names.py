@@ -690,6 +690,11 @@ def structure_gaps(root: Path) -> list:
 
 def _cli(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    if "--help" in args or "-h" in args:
+        print(
+            "usage: lint_docs_names.py [--root DIR] [--all] [--fix] [--structure] [paths...]"
+        )
+        return 0
     root = Path(os.getcwd())
     if "--root" in args:
         i = args.index("--root")

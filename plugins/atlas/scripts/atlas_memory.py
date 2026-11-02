@@ -823,7 +823,10 @@ def _cli():
     elif cmd == "add":
         target = sys.argv[2] if len(sys.argv) > 2 else "memory"
         content = " ".join(sys.argv[3:])
-        print(json.dumps(add(target, content), indent=2))
+        result = add(target, content)
+        print(json.dumps(result, indent=2))
+        if not result.get("success"):
+            sys.exit(1)
     elif cmd == "remove":
         target = sys.argv[2] if len(sys.argv) > 2 else "memory"
         old_text = " ".join(sys.argv[3:])
