@@ -1630,6 +1630,33 @@ class InProcessTest(unittest.TestCase):
         self.assertEqual(self._run_main(self._pre("Read", {"file_path": "c.py"})), "")
 
 
+class StringToolInputTest(unittest.TestCase):
+    """L3: a non-dict tool_input is "no input", not an AttributeError fail-open fault."""
+
+    def test_string_tool_input_behaves_like_empty_input(self):
+        hooks_dir = os.path.dirname(__file__)
+        base = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "session_id": "s-str",
+            "cwd": tempfile.mkdtemp(),
+        }
+        outs = []
+        for tin in ("oops", [], None, {}):
+            home = tempfile.mkdtemp()
+            p = subprocess.run(
+                [sys.executable, os.path.join(hooks_dir, "dispatch_tripwire.py")],
+                input=json.dumps({**base, "tool_input": tin}),
+                capture_output=True,
+                text=True,
+                env={**os.environ, "HOME": home, "CLAUDE_PROJECT_DIR": base["cwd"]},
+            )
+            self.assertEqual(p.returncode, 0)
+            self.assertNotIn("fail-open", p.stderr, repr(tin))
+            outs.append(p.stdout)
+        self.assertEqual(len(set(outs)), 1, outs)
+
+
 class WorktreeFlagTest(unittest.TestCase):
     """A dispatch with isolation="worktree" is recorded, so the completion gate
     can demand close-out without firing on worktrees the user created."""

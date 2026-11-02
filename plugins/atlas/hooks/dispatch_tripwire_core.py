@@ -2286,6 +2286,8 @@ def main():
         _record_fault(exc)
         return
     payload = payload if isinstance(payload, dict) else {}
+    if "tool_input" in payload and not isinstance(payload["tool_input"], dict):
+        payload["tool_input"] = {}  # a malformed tool_input is "no input", the gate still applies
     if isinstance(payload, dict) and isinstance(payload.get("cwd"), str):
         _PAYLOAD_CWD[0] = payload["cwd"]
     if payload.get("hook_event_name") == "SubagentStart":
