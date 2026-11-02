@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+import _test_isolation  # noqa: F401  (redirects ~/.atlas to a tempdir)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = (
     "release_notes.py",

@@ -10,6 +10,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import crew_worker  # noqa: E402
 
 
