@@ -138,16 +138,31 @@ def bash_writes_peer_file(cmd: str, mine, owners: dict):
     return None
 
 
-SLEEP_RX = re.compile(r"(?<![\w./-])sleep\s+(\d+(?:\.\d+)?)([smhd]?)(?![\w.])")
+# `sleep N` only as a command word: at the start of a line or after a shell operator, a
+# keyword or a prefix wrapper. `grep 'sleep 10' log` and `echo "sleep 5"` are text.
+SLEEP_RX = re.compile(
+    r"(?:^|[;&|(`]|\b(?:then|do|else|time|nohup|exec|command|sudo|env)\s)\s*"
+    r"(sleep\s+(\d+(?:\.\d+)?)([smhd]?))(?![\w.])",
+    re.M,
+)
+_QUOTED = re.compile(r'\'[^\']*\'|"(?:\\.|[^"\\])*"')
+_SHELL_C = re.compile(r"""\b(?:ba|z|da|k)?sh\s+(?:-\w+\s+)*-\w*c\w*\s+(['"])(.*?)\1""", re.S)
 SLEEP_MAX_S = 3  # a pause this long or longer is a poll that `irc wait` does without the idle time
 _UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
 
 
-def long_sleep(cmd: str):
-    """The first `sleep N` in a Bash command with N >= 3 seconds (suffixes s/m/h/d), as written, else None."""
-    for m in SLEEP_RX.finditer(cmd):
-        if float(m.group(1)) * _UNIT_S[m.group(2)] >= SLEEP_MAX_S:
-            return m.group(0)
+def long_sleep(cmd: str, _depth: int = 0):
+    """The first `sleep N` command in a Bash command with N >= 3 seconds (suffixes s/m/h/d), as written,
+    else None. Quoted text is not a command, except the script of `sh -c '...'`."""
+    if _depth < 2:
+        for m in _SHELL_C.finditer(cmd):
+            nap = long_sleep(m.group(2), _depth + 1)
+            if nap:
+                return nap
+    bare = _QUOTED.sub(" ", cmd)
+    for m in SLEEP_RX.finditer(bare):
+        if float(m.group(2)) * _UNIT_S[m.group(3)] >= SLEEP_MAX_S:
+            return m.group(1)
     return None
 
 
