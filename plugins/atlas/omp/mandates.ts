@@ -51,7 +51,10 @@ export function loadMandates(path: string = nodePath.join(pluginRoot(), "contrac
 /** The recall line's stable prefix, used as the idempotency marker. */
 export const RECALL_MARKER = "Recall first:";
 
-const CLAUDE_MEM_SERVER = /claude[-_]?mem|mcp[-_]?search/i;
+// Anchored like hooks/recall_gate.py _MEM_TOOL: the server part of the tool name must itself be
+// claude-mem / mcp-search (optionally behind Claude Code's `plugin_` prefix), so a foreign
+// server whose tool is merely named like one (`mcp__evil__claude_mem_dump`) never counts.
+const CLAUDE_MEM_SERVER = /^mcp__(?:plugin_)?(?:claude[-_]?mem|mcp[-_]?search)(?:[-_]|$)/i;
 
 /** The claude-mem search route callable now: a bare tool or an xd:// device (needs `write`). */
 export function claudeMemRoute(active: string[] | undefined): string | undefined {
@@ -59,8 +62,7 @@ export function claudeMemRoute(active: string[] | undefined): string | undefined
 	if (!active.includes("write")) return undefined;
 	for (const name of active) {
 		if (!name.startsWith("mcp__") || !name.toLowerCase().endsWith("_search")) continue;
-		const server = name.slice("mcp__".length, -"_search".length);
-		if (CLAUDE_MEM_SERVER.test(server)) return `xd://${name}`;
+		if (CLAUDE_MEM_SERVER.test(name)) return `xd://${name}`;
 	}
 	return undefined;
 }
@@ -76,7 +78,7 @@ function satisfiesRecall(toolName: string, input: unknown): boolean {
 	if (CLAUDE_MEM_SERVER.test(toolName)) return true;
 	if (toolName.toLowerCase() !== "write" || !input || typeof input !== "object") return false;
 	const { path, file_path: filePath } = input as { path?: unknown; file_path?: unknown };
-	return [path, filePath].some(p => typeof p === "string" && p.startsWith("xd://mcp__") && CLAUDE_MEM_SERVER.test(p));
+	return [path, filePath].some(p => typeof p === "string" && p.startsWith("xd://mcp__") && CLAUDE_MEM_SERVER.test(p.slice("xd://".length)));
 }
 
 const SEGMENT_SPLIT = /&&|\|\||;|\|/;

@@ -86,6 +86,22 @@ test("session_start drops the frozen recall line", () => {
 	expect(after).not.toBe(first);
 });
 
+test("claude-mem name matching is anchored to the server part of the tool name", () => {
+	expect(claudeMemRoute(["write", "mcp__evil__claude_mem_dump_search"])).toBeUndefined();
+	expect(claudeMemRoute(["write", "mcp__evil_claude_mem_search"])).toBeUndefined();
+	expect(claudeMemRoute(["write", "mcp__plugin_claude-mem_mcp-search__search"])).toBe("xd://mcp__plugin_claude-mem_mcp-search__search");
+	expect(claudeMemRoute(["write", "mcp__claude_mem_mcp_search_search"])).toBe("xd://mcp__claude_mem_mcp_search_search");
+	const h = harness();
+	h.start(["base"]);
+	expect(h.call("mcp__evil__claude_mem_dump", {})?.block).toBe(true);
+	expect(h.call("write", { path: "xd://mcp__evil__claude_mem_dump", content: "{}" })?.block).toBe(true);
+	for (const name of ["mcp__plugin_claude-mem_mcp-search__search", "mcp__claude_mem_mcp_search_search", "mcp__mcp_search_search"]) {
+		const g = harness();
+		g.start(["base"]);
+		expect(g.call(name, {})).toBeUndefined();
+	}
+});
+
 test("recall stays silent when claude-mem is not callable, in subagents, or when killed", () => {
 	expect(claudeMemRoute(["read", "write", "mcp__lean_ctx_ctx_search"])).toBeUndefined();
 	expect(claudeMemRoute(["read", "mcp__claude_mem_mcp_search_search"])).toBeUndefined(); // no write: device unreachable
