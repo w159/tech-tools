@@ -271,5 +271,59 @@ class EarlyCheckTests(unittest.TestCase):
         self.assertIn("own-bug", out)
 
 
+class PostRobustnessTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.d = atlas_irc.init_bus(Path(self._tmp.name) / "irc", "#t", ["a", "b"], lead="lead")
+
+    def test_post_after_torn_line_keeps_the_new_record_and_unique_seq(self):
+        atlas_irc.post(self.d, "a", "#t", "one")
+        with open(self.d / "log.jsonl", "a", encoding="utf-8") as fh:
+            fh.write('{"seq": 2, "ts": 1.0, "from": "a", "to": "#t", "te')  # crashed writer, no newline
+        rec = atlas_irc.post(self.d, "b", "#t", "three")
+        again = atlas_irc.post(self.d, "b", "#t", "four")
+        got = [(r["seq"], r["text"]) for r in atlas_irc.history(self.d)]
+        self.assertEqual([(1, "one"), (rec["seq"], "three"), (again["seq"], "four")], got)
+        self.assertEqual(len({s for s, _ in got}), 3)
+        self.assertEqual(again["seq"], rec["seq"] + 1)
+
+    def test_post_to_clean_log_adds_no_blank_line(self):
+        atlas_irc.post(self.d, "a", "#t", "one")
+        atlas_irc.post(self.d, "a", "#t", "two")
+        lines = (self.d / "log.jsonl").read_text().split("\n")
+        self.assertEqual(["", ], lines[-1:])
+        self.assertTrue(all(lines[:-1]))
+
+    def test_oversize_body_is_capped_and_reported(self):
+        rec = atlas_irc.post(self.d, "a", "#t", "x" * (atlas_irc.MAX_TEXT + 50))
+        self.assertEqual(atlas_irc.MAX_TEXT, len(rec["text"]))
+        self.assertTrue(rec.get("truncated"))
+        self.assertTrue(atlas_irc.history(self.d)[-1].get("truncated"))
+        ok = atlas_irc.post(self.d, "a", "#t", "short")
+        self.assertNotIn("truncated", ok)
+        out = io.StringIO()
+        a = argparse.Namespace(dir=str(self.d), as_="a", to="#t", text=["y" * (atlas_irc.MAX_TEXT + 1)])
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(0, atlas_irc.cmd_say(a))
+        self.assertIn("truncated", out.getvalue())
+
+
+class CheckRunnerTests(unittest.TestCase):
+    def test_python_m_pytest_falls_back_to_pytest_on_path_when_not_importable(self):
+        with mock.patch("importlib.util.find_spec", return_value=None), \
+                mock.patch("shutil.which", return_value="/usr/bin/pytest"):
+            self.assertEqual("pytest -q t.py", atlas_irc._check_cmd("python3 -m pytest -q t.py"))
+
+    def test_python_m_pytest_uses_this_interpreter_when_importable(self):
+        with mock.patch("importlib.util.find_spec", return_value=object()):
+            out = atlas_irc._check_cmd("python3 -m pytest -q t.py")
+        self.assertTrue(out.endswith(" -m pytest -q t.py") and "python3 " not in out.split(" -m")[0], out)
+
+    def test_other_commands_are_untouched(self):
+        self.assertEqual("make test", atlas_irc._check_cmd("make test"))
+        self.assertEqual("pytest -q", atlas_irc._check_cmd("pytest -q"))
+
+
 if __name__ == "__main__":
     unittest.main()
