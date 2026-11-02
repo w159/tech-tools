@@ -20,7 +20,7 @@ Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in 
 
 | What | Count | Source |
 |---|---|---|
-| Skills | 39 (3 manual) | `plugins/atlas/skills/` |
+| Skills | 40 (4 manual) | `plugins/atlas/skills/` |
 | Role agents (`atlas:*`) | 14 | `plugins/atlas/agents/` |
 | Hooks | 18 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 70 non-test Python files | `plugins/atlas/scripts/` |

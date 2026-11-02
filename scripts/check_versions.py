@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when plugin versions drift between plugin.json, marketplace.json, CHANGELOGs and README.
 
-Errors (exit 1): marketplace entry != plugin.json; no released `## <ver>` CHANGELOG
+Errors (exit 1): version is not strict MAJOR.MINOR.PATCH; marketplace entry != plugin.json; no released `## <ver>` CHANGELOG
 section; README "Current versions:" line missing a plugin's version.
 Warning only: CHANGELOG has an Unreleased section while plugin.json equals the top release.
 """
@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PLUGINS = ("atlas", "armada", "programmer")
+SEMVER = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)")
 
 
 def check(root=ROOT):
@@ -26,6 +27,9 @@ def check(root=ROOT):
         base = root / "plugins" / name
         ver = json.loads((base / ".claude-plugin/plugin.json").read_text("utf-8"))["version"]
         got = entries.get(name, {}).get("version")
+        for where, v in (("plugin.json", ver), ("marketplace.json", got)):
+            if not isinstance(v, str) or not SEMVER.fullmatch(v):
+                errors.append(f"{name}: {where} version {v!r} is not strict MAJOR.MINOR.PATCH (no leading zeros)")
         if got != ver:
             errors.append(f"{name}: marketplace.json version {got!r} != plugin.json {ver!r}")
         heads = re.findall(r"^##\s+(.+)$", (base / "CHANGELOG.md").read_text("utf-8"), re.M)
