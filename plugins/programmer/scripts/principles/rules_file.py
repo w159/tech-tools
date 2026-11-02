@@ -203,13 +203,29 @@ def _handler_types(h: ast.ExceptHandler) -> list[str]:
     return [e.id if isinstance(e, ast.Name) else (e.attr if isinstance(e, ast.Attribute) else "") for e in elts]
 
 
+REPORT_METHODS = {"debug", "info", "warn", "warning", "error", "exception", "critical", "fatal"}
+NUMERIC_RECEIVERS = {"math", "cmath", "np", "numpy", "scipy", "torch", "jnp", "tf"}
+
+
 def _logger_like(recv: ast.AST) -> bool:
-    """logger / self.log / logging / logging.getLogger(...) / traceback, not math.log."""
+    """Receiver of an ambiguous method (.log, .print_exc): logger / self.audit_log / logging.getLogger(...) / traceback."""
     if isinstance(recv, ast.Call):
         recv = recv.func
     name = recv.id if isinstance(recv, ast.Name) else recv.attr if isinstance(recv, ast.Attribute) else ""
-    name = name.lower()
-    return "log" in name or name in ("traceback", "warnings")
+    tokens = set(re.split(r"_+", re.sub(r"(?<=[a-z])(?=[A-Z])", "_", name).lower()))
+    return bool(tokens & {"log", "logger", "logging", "getlogger", "traceback", "warnings"}) or name.lower().endswith("getlogger")
+
+
+def _handles_call(f: ast.Attribute) -> bool:
+    """Reporting methods count on any receiver (hc.warn, console.error); .log and print_exc need a logger-like one."""
+    if f.attr in REPORT_METHODS:
+        return True
+    if f.attr in LOG_METHODS:
+        base = f.value
+        if isinstance(base, ast.Name) and base.id in NUMERIC_RECEIVERS:
+            return False
+        return _logger_like(base)
+    return False
 
 
 def _reraises_or_logs(h: ast.ExceptHandler) -> bool:
@@ -218,7 +234,7 @@ def _reraises_or_logs(h: ast.ExceptHandler) -> bool:
             return True
         if isinstance(node, ast.Call):
             f = node.func
-            if isinstance(f, ast.Attribute) and f.attr in LOG_METHODS and _logger_like(f.value):
+            if isinstance(f, ast.Attribute) and _handles_call(f):
                 return True
             if isinstance(f, ast.Name) and f.id in ("print",) and h.name:
                 return True
@@ -430,7 +446,7 @@ def check_res001(mod: Module, opts: dict) -> list[Finding]:
 SQL_SINKS = {"execute", "executemany", "executescript", "raw", "mogrify"}
 
 
-SQL_WORD = re.compile(r"(?i)\b(select|insert|update|delete|where|from|drop|alter|create|union)\b")
+SQL_WORD = re.compile(r"(?i)\b(select|insert|update|delete|where|from|drop|alter|create|union|pragma|exec|execute|with|merge|replace|truncate)\b")
 
 
 def _literal_text(expr: ast.AST) -> str:
@@ -723,6 +739,11 @@ def check_lit001(mod: Module, opts: dict) -> list[Finding]:
 TODO_RE = re.compile(r"#.*\b(TODO|FIXME|HACK|XXX)\b")
 
 
+def _to_stderr(call: ast.Call) -> bool:
+    """print(..., file=sys.stderr): a diagnostic channel, not stray output."""
+    return any(k.arg == "file" and isinstance(k.value, ast.Attribute) and k.value.attr == "stderr" for k in call.keywords)
+
+
 def check_win001(mod: Module, opts: dict) -> list[Finding]:
     out = []
     for line_no, text in mod.comments:
@@ -736,7 +757,7 @@ def check_win001(mod: Module, opts: dict) -> list[Finding]:
         name = mod.dotted(node.func)
         if name in ("breakpoint", "pdb.set_trace", "ipdb.set_trace"):
             out.append(mod.finding("WIN001", node, f"Debugger call '{name}()' left in source.", end_line=node.lineno))
-        elif name == "print" and library:
+        elif name == "print" and library and not _to_stderr(node):
             out.append(mod.finding("WIN001", node, "print() in a library module; use logging or return the value.", end_line=node.lineno))
     return out
 

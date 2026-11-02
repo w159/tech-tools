@@ -188,6 +188,31 @@ class Rules(Base):
             src = f"def f():\n    try:\n        pass\n    except Exception:\n        {call}\n"
             self.assertEqual(self.rules(src, "ERR001"), [], call)
 
+    def test_r1_reporting_method_on_any_receiver_is_handling(self):
+        for call in ("hc.warn('x', e)", "console.error(e)", "self.out.info(e)"):
+            src = f"def f():\n    try:\n        pass\n    except Exception as e:\n        {call}\n"
+            self.assertEqual(self.rules(src, "ERR001"), [], call)
+
+    def test_r1_numeric_log_still_flagged(self):
+        for call in ("math.log(1)", "np.log(1)", "numpy.log(2)"):
+            src = f"import math, numpy, numpy as np\ndef f():\n    try:\n        pass\n    except Exception:\n        return {call}\n"
+            self.assertEqual(self.rules(src, "ERR001"), ["ERR001"], call)
+
+    def test_r2_log_receiver_matches_whole_token(self):
+        for recv, want in (("blog", 1), ("self.catalog", 1), ("log", 0), ("self._logger", 0), ("self.audit_log", 0)):
+            src = f"def f(blog=None):\n    try:\n        pass\n    except Exception:\n        {recv}.log('x')\n"
+            self.assertEqual(len(self.rules(src, "ERR001")), want, recv)
+
+    def test_r3_pragma_and_other_sql_keywords_flagged(self):
+        for sql in ("PRAGMA table_info({t})", "WITH x AS (SELECT 1) {t}", "EXEC sp_{t}", "TRUNCATE {t}", "REPLACE INTO {t}", "MERGE {t}"):
+            src = f'def f(cur, t):\n    cur.execute(f"{sql}")\n'
+            self.assertEqual(self.rules(src, "SEC001"), ["SEC001"], sql)
+
+    def test_r4_stderr_print_not_a_broken_window(self):
+        src = 'import sys\ndef f():\n    print("warn", file=sys.stderr)\n'
+        self.assertEqual(self.rules(src, "WIN001"), [])
+        self.assertEqual(self.rules('def f():\n    print("x", file=out)\n', "WIN001"), ["WIN001"])
+
     def test_p13_constant_arithmetic_in_named_constant(self):
         self.assertEqual(self.rules("TIMEOUT_SECS = 60 * 60\n", "LIT001"), [])
 
