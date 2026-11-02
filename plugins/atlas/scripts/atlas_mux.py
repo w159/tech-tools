@@ -158,8 +158,8 @@ def worker_allow(tools_profile=None) -> tuple:
 NOISE_RE = re.compile(
     r"^(Warning: MCP server .* its tools are unavailable|Extension error\b)"
 )
-# the exit line is the LAST line of the report note (a bare `exit N` note is the one-line case)
-EXIT_NOTE_RE = re.compile(r"^exit (-?\d+)[^\n]*\Z", re.M)
+# the LAST `exit N` line of a report note, wherever it sits (a bare `exit N` note is the one-line case)
+EXIT_NOTE_RE = re.compile(r"^exit (-?\d+)[^\n]*$(?![\s\S]*^exit -?\d)", re.M)
 # omp -p exits 0 on these, so run-worker classifies by output. First match wins.
 FAIL_SIGNS = (
     (re.compile(r"\bmodel\b[^\n]{0,60}\bnot found\b", re.I), "model not found"),
@@ -1146,6 +1146,7 @@ def cmd_spawn(args) -> int:
     root = os.path.abspath(
         args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
     )
+    _note_run(root, args.run, args.name)
     # Lead side: this process runs in the lead's env, so the worker joins the lead's channel
     # here; a worker never registers itself (an inherited env grants no membership).
     chan = atlas_todo.register_member(root, args.name)
@@ -1455,9 +1456,44 @@ def _report(lines: list[str]) -> str:
     return "\n".join([t for t in lines if not NOISE_RE.match(t)][-20:])
 
 
-def _board_exits(root: Path) -> list:
+RUNS_REL = Path(".atlas") / ".run" / "runs"
+
+
+def _note_run(root: str, run: str, name: str) -> None:
+    """Remember that `name` was spawned into `run` (one name per line): status/kill tell a run that ended from one
+    that never existed, and status shows only this run's board. Best effort: a read-only tree just loses it."""
+    try:
+        path = Path(root) / RUNS_REL / run
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(name + "\n")
+    except OSError:
+        pass
+
+
+def _run_trace(root: str, run: str) -> set | None:
+    """Worker names recorded for `run` (spawn marker plus its team record, live or archived); None when the run
+    left no trace at all."""
+    names, seen = set(), False
+    try:
+        names |= {l.strip() for l in (Path(root) / RUNS_REL / run).read_text(encoding="utf-8").splitlines() if l.strip()}
+        seen = True
+    except OSError:
+        pass
+    for rec_path in (_team_dir(root) / f"{run}.json", _team_dir(root) / "archive" / f"{run}.json"):
+        try:
+            names |= {m["name"] for m in json.loads(rec_path.read_text(encoding="utf-8")).get("members", [])}
+            seen = True
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    return names if seen else None
+
+
+def _board_exits(root: Path, only: set | None = None) -> list:
     board = []
     for path in sorted((root / BOARD_REL).glob("*.jsonl")):
+        if only is not None and path.stem not in only:
+            continue
         exit_code = None
         try:
             for line in path.read_text(encoding="utf-8").splitlines():
@@ -1533,6 +1569,11 @@ def cmd_status(args) -> int:
     # a team's workers are tiled panes of one window, which `workers` (tmux windows) collapses to one row
     has_team = use != "herdr" and _tmux("has-session", "-t", session).returncode == 0
     panes = _team_pane_rows(session, str(root)) if has_team else []
+    trace = _run_trace(str(root), args.run)
+    # claude-bg groups workers by root, not run, so only the pane transports can call a run unknown
+    if use != "claude-bg" and trace is None and not workers and not panes and windows is None:
+        return _emit({"ok": False, "error": f"unknown run {args.run!r}", "run": args.run, "session_name": session}, 1)
+    mine = (trace or set()) | {w["name"] for w in workers} | {p["name"] for p in panes}
     return _emit(
         {
             "ok": True,
@@ -1542,7 +1583,7 @@ def cmd_status(args) -> int:
             "tmux": use == "tmux" and windows is not None,
             "workers": workers,
             "panes": panes,
-            "board": _board_exits(root),
+            "board": _board_exits(root, mine),
         }
     )
 
@@ -1608,6 +1649,9 @@ def cmd_kill(args) -> int:
         import atlas_seats
 
         res = atlas_seats.close_run(args.run)
+        if res["ok"] and not res["closed"] and not stopped and _run_trace(root, args.run) is None:
+            return _emit({"ok": False, "session_name": session, "transport": configured, "killed": False,
+                          "error": f"unknown run {args.run!r}"}, 1)
         if not res["ok"]:
             if stopped:
                 _kill_notes(root, stopped)
@@ -1634,6 +1678,9 @@ def cmd_kill(args) -> int:
     if _tmux("has-session", "-t", session).returncode != 0:
         if stopped:
             _kill_notes(root, stopped)
+        elif configured != "claude-bg" and _run_trace(root, args.run) is None:
+            return _emit({"ok": False, "session_name": session, "transport": configured, "killed": False,
+                          "error": f"unknown run {args.run!r}"}, 1)
         return _emit(
             {
                 "ok": True,
@@ -1986,8 +2033,8 @@ def cmd_spawn_team(args) -> int:
         if args.task_file
         else (args.task or "")
     )
-    paths = args.paths.split(",") if args.paths else None
     try:
+        paths = atlas_resolve.check_paths(args.paths, root) if args.paths is not None else None
         rec = build_team(args.cls, args.effort, paths, task, args.team_id)
         shared, rec["member_tasks"] = split_member_tasks(task, rec["members"])
         if rec["member_tasks"]:
@@ -2024,6 +2071,9 @@ def cmd_spawn_team(args) -> int:
             os.environ["ATLAS_COLONY_TRANSPORT"] = "tmux"
         else:
             note = "tmux not on PATH: fell back to claude-bg"
+    forced = os.environ.get("ATLAS_COLONY_TRANSPORT", "").strip().lower()
+    if forced not in ("herdr", "tmux", "claude-bg"):
+        note = f"unknown ATLAS_COLONY_TRANSPORT {forced!r} (want herdr|tmux|claude-bg): using {transport()}"
     if os.environ.get("ATLAS_MUX", "").strip().lower() == "off":
         return _emit({"ok": False, "error": "mux mode is disabled: ATLAS_MUX=off"}, 2)
     if transport() == "tmux":
@@ -2088,9 +2138,13 @@ def cmd_spawn_team(args) -> int:
     wave_logged = _log_wave(
         rec, run_id, results
     )  # after spawn: each member's resolved model is known
+    failed = {r["name"]: str(r.get("error") or "spawn failed") for r in results if not r.get("ok")}
+    if failed:  # `wait` reads this: a member that never launched will never report
+        rec["failed_members"] = failed
+        path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
     return _emit(
         {
-            "ok": all(r.get("ok") for r in results),
+            "ok": not failed,
             "team_id": rec["team_id"],
             "session": _session(rec["team_id"]),
             "transport": rec["transport"],
@@ -2101,7 +2155,8 @@ def cmd_spawn_team(args) -> int:
             "max_parallel": rec["max_parallel"],
             "members": results,
             "worktrees": rec["worktrees"],
-        }
+        },
+        0 if not failed else 1,
     )
 
 
@@ -2122,11 +2177,14 @@ def cmd_wait(args) -> int:
     names = [m["name"] for m in rec["members"]]
     t0 = time.time()
 
+    never_launched = set(rec.get("failed_members") or {})
+
     def dead_silent() -> set:
-        # a pane whose process is gone with no exit note will never report; do not wait out the timeout for it
+        # a pane whose process is gone with no exit note will never report; do not wait out the timeout for it.
+        # A member whose spawn failed has no pane at all and never reports either.
         if rec.get("transport") in ("claude-bg", "herdr"):
-            return set()
-        return {
+            return set(never_launched)
+        return never_launched | {
             p["name"]
             for p in _team_panes(_session(rec["team_id"]))
             if p["dead"] and not _exited(root, p["name"])
@@ -2159,6 +2217,7 @@ def cmd_wait(args) -> int:
                 "name": n,
                 "exit": _num(int, found.group(1), None) if found else None,
                 "dead_without_report": n in silent and not found,
+                **({"never_launched": True, "launch_error": rec["failed_members"][n]} if n in never_launched else {}),
                 "duration_s": round(_num(float, mine[-1]["ts"], rec["created"]) - rec["created"], 1)
                 if found
                 else None,

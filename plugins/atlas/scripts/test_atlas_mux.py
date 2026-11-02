@@ -1390,12 +1390,44 @@ class StatusKillTests(Base):
         self.assertEqual(0, board["Alpha"].get("exit"))
 
     def test_status_without_session(self):
+        """A run that was spawned and has since ended reports ok with no session."""
+        rc, data, _, err = self._spawn()
+        self.assertEqual(0, rc, (data, err))
+        _run("kill", "--run", "r1", env=self.spawn_env(), cwd=self.root)
         rc, data, _, err = _run(
-            "status", "--run", "zz", env=self.spawn_env(), cwd=self.root
+            "status", "--run", "r1", env=self.spawn_env(), cwd=self.root
         )
         self.assertEqual(0, rc, (data, err))
         self.assertFalse(data.get("tmux"), data)
-        self.assertIn("zz", data.get("session_name", "") + str(data.get("run", "")))
+        self.assertIn("r1", data.get("session_name", "") + str(data.get("run", "")))
+
+    def test_status_unknown_run_is_an_error(self):
+        rc, data, _, err = _run(
+            "status", "--run", "nosuch", env=self.spawn_env(), cwd=self.root
+        )
+        self.assertEqual(1, rc, (data, err))
+        self.assertFalse(data["ok"], data)
+        self.assertIn("unknown run", data["error"])
+
+    def test_status_board_only_lists_this_runs_workers(self):
+        rc, data, _, err = self._spawn()
+        self.assertEqual(0, rc, (data, err))
+        other = pathlib.Path(self.root, ".atlas/.run/board/Stranger.jsonl")
+        other.parent.mkdir(parents=True, exist_ok=True)
+        other.write_text(json.dumps({"text": "exit 0"}) + "\n")
+        rc, data, _, err = _run("status", "--run", "r1", env=self.spawn_env(), cwd=self.root)
+        self.assertEqual(0, rc, (data, err))
+        names = [b["name"] for b in data["board"]]
+        self.assertIn("Alpha", names)
+        self.assertNotIn("Stranger", names)
+
+    def test_kill_unknown_run_is_an_error(self):
+        rc, data, _, err = _run(
+            "kill", "--run", "nosuch", env=self.spawn_env(), cwd=self.root
+        )
+        self.assertEqual(1, rc, (data, err))
+        self.assertFalse(data["ok"], data)
+        self.assertIn("unknown run", data["error"])
 
     def test_kill_idempotent(self):
         rc, data, _, err = self._spawn()
@@ -3393,6 +3425,110 @@ class WorktreeIsolationTests(unittest.TestCase):
         members = [{"name": "implementer-a", "role": "implementer"}, {"name": "implementer-b", "role": "implementer"}]
         _, per = atlas_mux.split_member_tasks("## member: implementer-2\nB\n## member: implementer\nA\n", members)
         self.assertEqual(("A", "B"), (per["implementer-a"], per["implementer-b"]))
+
+
+class TeamFlowFixTests(unittest.TestCase):
+    """spawn-team / wait / resolve regressions from the team-flow review."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo = os.path.join(self.tmp, "repo")
+        os.mkdir(self.repo)
+        subprocess.run(["git", "-C", self.repo, "init", "-q"], check=True, capture_output=True)  # no commits: HEAD is invalid
+
+    def _team(self, *extra, env=None, root=None):
+        import atlas_mux
+
+        buf = io.StringIO()
+
+        def fake_spawn(ns):
+            print(json.dumps({"ok": True, "name": ns.name}))
+            return 0
+
+        e = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on", **(env or {})}
+        with mock.patch.dict(os.environ, e), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
+                mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-tf")), \
+                contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--task", "t",
+                                   "--root", root or self.repo, "--poll", "0.01", *extra])
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def test_spawn_team_exits_nonzero_when_a_member_fails(self):
+        code, out = self._team()
+        self.assertFalse(out["ok"], out)
+        self.assertEqual(1, code, out)
+
+    def test_wait_returns_at_once_for_members_that_never_launched(self):
+        import atlas_mux
+
+        code, out = self._team()
+        self.assertEqual(1, code)
+        buf = io.StringIO()
+        # the verifier launched and has finished; the two implementers' worktrees failed and never will
+        with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "claude-bg"}), contextlib.redirect_stdout(buf), \
+                mock.patch.object(atlas_mux, "_exited", lambda root, name: name.startswith("verifier")):
+            wcode = atlas_mux.main(["wait", "--team", out["team_id"], "--root", self.repo, "--timeout", "30", "--poll", "0.05"])
+        got = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertLess(got["elapsed_s"], 5, got)
+        self.assertEqual(1, wcode)
+        launched = [m for m in got["members"] if m.get("never_launched")]
+        self.assertTrue(launched, got)
+        self.assertTrue(all(m["dead_without_report"] for m in launched), got)
+
+    def test_unknown_transport_keeps_the_fallback_and_says_so(self):
+        code, out = self._team("--dry-run", env={"ATLAS_COLONY_TRANSPORT": "bogus"})
+        self.assertEqual(0, code)
+        code, out = self._team(env={"ATLAS_COLONY_TRANSPORT": "bogus"}, root=self.tmp)
+        self.assertIn("bogus", out["transport_note"] or "", out)
+        self.assertIn(out["transport"], ("tmux", "claude-bg"))
+
+    def test_empty_or_comma_only_paths_is_a_usage_error(self):
+        for raw in ("", ",,", " , "):
+            with self.subTest(raw=raw):
+                code, out = self._team("--paths", raw, "--dry-run", root=self.tmp)
+                self.assertEqual(2, code, out)
+                self.assertFalse(out["ok"])
+                self.assertIn("--paths", out["error"])
+
+    def test_paths_outside_the_project_root_are_rejected(self):
+        for raw in ("../../etc/passwd", "/etc/passwd", "a.py,../x.py"):
+            with self.subTest(raw=raw):
+                code, out = self._team("--paths", raw, "--dry-run", root=self.tmp)
+                self.assertEqual(2, code, out)
+                self.assertIn("outside the project root", out["error"])
+
+    def test_paths_inside_the_root_are_accepted(self):
+        code, out = self._team("--paths", f"src/*.py,{self.tmp}/b.py", "--dry-run", root=self.tmp)
+        self.assertEqual(0, code, out)
+
+    def test_omitted_paths_keeps_whole_project_scope(self):
+        code, out = self._team("--dry-run", root=self.tmp)
+        self.assertEqual(0, code, out)
+        self.assertEqual([], out["team"]["file_scope"])
+
+    def test_resolve_cli_rejects_empty_and_escaping_paths(self):
+        import atlas_resolve
+
+        for raw in ("", ",,", "../../etc/passwd", "/etc/passwd"):
+            with self.subTest(raw=raw):
+                buf, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+                    code = atlas_resolve.main(["audit", "low", "--paths", raw])
+                self.assertEqual(2, code)
+                self.assertFalse(json.loads(buf.getvalue())["ok"])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(0, atlas_resolve.main(["audit", "low", "--paths", "src/a.py"]))
+
+    def test_exit_line_found_anywhere_in_a_report_note(self):
+        import atlas_mux
+
+        m = atlas_mux.EXIT_NOTE_RE.search("exit 0 in 12s\nSTATUS: DONE")
+        self.assertEqual("0", m and m.group(1))
+        m = atlas_mux.EXIT_NOTE_RE.search("exit 1 [failed]\nretry\nexit 0 in 3s\nSTATUS: DONE\n")
+        self.assertEqual("0", m and m.group(1))  # the last exit line wins
+        self.assertEqual("137", atlas_mux.EXIT_NOTE_RE.search("exit 137").group(1))
+        self.assertIsNone(atlas_mux.EXIT_NOTE_RE.search("STATUS: DONE\nnot an exit 0 line"))
 
 
 class ColonyNameSourceTests(unittest.TestCase):
