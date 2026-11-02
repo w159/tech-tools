@@ -33,7 +33,7 @@ def expected(root: Path, rule_id: str) -> set[tuple[str, int]]:
 
 
 def found(root: Path, rule_id: str) -> set[tuple[str, int]]:
-    result = scan(root, {}, only=[rule_id])
+    result = scan(root, {}, only=[rule_id], project_root=root)  # fixtures sit under tests/: classify from the fixture root
     assert not result.errors, result.errors
     return {(f.path, f.line) for f in result.findings}
 
@@ -81,7 +81,7 @@ class RuleFixtures(unittest.TestCase):
 
 class Err001Messages(unittest.TestCase):
     def test_discard_and_fallback_handlers_get_distinct_messages(self):
-        result = scan(FIXTURES / "ERR001" / "bad", {}, only=["ERR001"])
+        result = scan(FIXTURES / "ERR001" / "bad", {}, only=["ERR001"], project_root=FIXTURES / "ERR001" / "bad")
         by_line = {f.line: f.message for f in result.findings}
         src = (FIXTURES / "ERR001" / "bad" / "errs.py").read_text().splitlines()
         discard = next(n for n, l in enumerate(src, 1) if l.strip() == "except Exception:  # expect: ERR001")
@@ -94,7 +94,7 @@ class Err001Messages(unittest.TestCase):
 
 class CleanProject(unittest.TestCase):
     def test_clean_project_has_zero_findings_across_all_rules(self):
-        result = scan(HERE / "fixtures" / "clean_project", {})
+        result = scan(HERE / "fixtures" / "clean_project", {}, project_root=HERE / "fixtures" / "clean_project")
         self.assertEqual(result.errors, [])
         self.assertGreater(result.files_scanned, 3)
         self.assertEqual([f"{f.path}:{f.line} {f.rule}" for f in result.findings], [])

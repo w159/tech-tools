@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--config", help="path to a .principles.toml (default: <target>/.principles.toml or pyproject [tool.principles])")
     s.add_argument("--diff", nargs="?", const="HEAD", metavar="REF", help="only report findings on lines changed vs REF (default HEAD)")
     s.add_argument("--baseline", help="ignore findings whose fingerprints are in this JSON report")
-    s.add_argument("--write-baseline", metavar="FILE", help="write current findings as a baseline and exit 0")
+    s.add_argument("--write-baseline", metavar="FILE", help="write current findings as a baseline and exit 0 (2 if any file failed to parse)")
     s.add_argument("--no-tests", action="store_true", help="skip test files entirely")
     s.add_argument("--fail-on", choices=["error", "warning", "note", "never"], default="error",
                    help="exit 1 if any finding is at or above this severity (default error)")
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.write_baseline:
         Path(args.write_baseline).write_text(to_json(result))
         print(f"principles: wrote baseline with {len(result.findings)} findings to {args.write_baseline}", file=sys.stderr)
-        return 0
+        return 2 if result.errors else 0  # unparsed files were not baselined: still a failed run
 
     rendered = RENDER[args.format](result)
     if args.output:

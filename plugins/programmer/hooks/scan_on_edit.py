@@ -33,11 +33,11 @@ def main() -> int:
         target = Path(path)
         if target.suffix != ".py" or not target.is_file():
             return 0
-        from principles.core import load_config
+        from principles.core import find_project_root, load_config
         from principles.engine import scan
 
         config = load_config(project_root(target))
-        result = scan(target, config)
+        result = scan(target, config, project_root=find_project_root(target.parent))
     except Exception as exc:  # a broken hook or malformed payload must never break the edit loop
         print(f"principles hook skipped: {type(exc).__name__}", file=sys.stderr)
         return 0

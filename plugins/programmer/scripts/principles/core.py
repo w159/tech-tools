@@ -53,6 +53,16 @@ class Finding:
         return d
 
 
+def _is_main_guard(node: ast.AST) -> bool:
+    """A real top-level `if __name__ == "__main__":`."""
+    if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare) and len(node.test.ops) == 1
+            and isinstance(node.test.ops[0], ast.Eq)):
+        return False
+    sides = [node.test.left, node.test.comparators[0]]
+    return any(isinstance(s, ast.Name) and s.id == "__name__" for s in sides) \
+        and any(isinstance(s, ast.Constant) and s.value == "__main__" for s in sides)
+
+
 class Module:
     """One parsed Python file plus the lookups rules need."""
 
@@ -71,7 +81,7 @@ class Module:
         self.imports = self._import_aliases()
         self.docstrings = self._docstring_nodes()
         self.comments = self._comments()
-        self.has_main_guard = "__name__" in source and "__main__" in source
+        self.has_main_guard = any(_is_main_guard(n) for n in self.tree.body)
         self.is_config_module = path.stem.lower() in CONFIG_FILE_STEMS or path.stem.lower().endswith(("_config", "_settings"))
 
     # --- helpers -----------------------------------------------------------------
@@ -185,6 +195,15 @@ def selected_rules(config: dict, only: list[str] | None, skip: list[str] | None)
 # --- discovery -------------------------------------------------------------------
 
 
+def find_project_root(base: Path) -> Path:
+    """Nearest ancestor holding .git (directory or worktree file), else base itself."""
+    base = base.resolve()
+    for d in (base, *base.parents):
+        if (d / ".git").exists():
+            return d
+    return base
+
+
 def is_test_path(rel: str, globs: list[str]) -> bool:
     name = rel.rsplit("/", 1)[-1]
     return any(fnmatch.fnmatch(name, g) or fnmatch.fnmatch(rel, g) for g in globs)
@@ -192,7 +211,10 @@ def is_test_path(rel: str, globs: list[str]) -> bool:
 
 def discover(root: Path, config: dict) -> list[Path]:
     if root.is_file():
-        return [root] if root.suffix == ".py" else []
+        if root.suffix == ".py":
+            return [root]
+        print(f"principles: {root.name} is not a Python file (.py); nothing scanned", file=sys.stderr)
+        return []
     excludes = set(DEFAULT_EXCLUDES) | set(config.get("exclude_dirs", []))
     extra_globs = config.get("exclude", [])
     files = []
