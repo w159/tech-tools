@@ -127,7 +127,7 @@ def scan(target: Path, config: dict, only=None, skip=None, diff_ref: str | None 
                     continue
                 try:
                     raw.extend(FILE_CHECKS[rule_id](mod, opts))
-                except Exception as exc:  # one rule crashing on one file is a reported error, not a traceback
+                except Exception as exc:  # principles: ignore[ERR001] recorded in result.errors, which forces exit 2
                     result.errors.append({"path": mod.rel, "error": f"rule {rule_id} failed: {type(exc).__name__}: {exc}".splitlines()[0]})
 
     by_rel = {m.rel: m for m in mods}

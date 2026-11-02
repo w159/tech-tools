@@ -87,7 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.write_baseline:
         Path(args.write_baseline).write_text(to_json(result))
         print(f"principles: wrote baseline with {len(result.findings)} findings to {args.write_baseline}", file=sys.stderr)
-        return 2 if result.errors else 0  # unparsed files were not baselined: still a failed run
+        if result.errors:  # unparsed files were not baselined: still a failed run
+            return 2
+        return 0
 
     rendered = RENDER[args.format](result)
     if args.output:
