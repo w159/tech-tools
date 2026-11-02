@@ -78,6 +78,8 @@ def main():
         if not atlas_db.is_orchestrating(conn, session):
             sys.exit(0)  # only nudge after real orchestration turns
     except Exception as exc:
+        if "no such table" in str(exc):
+            sys.exit(0)  # fresh HOME/project: no DB schema yet, so nothing orchestrated; stay silent
         # Fail-closed on the orchestration check: a transient DB error must not
         # fall through to a spurious self-improvement nudge. Skip rather than
         # nudge, since we cannot confirm this was an orchestration turn.

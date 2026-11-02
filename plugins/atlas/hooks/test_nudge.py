@@ -187,6 +187,19 @@ class InProcessMainTest(unittest.TestCase):
         self.assertEqual(out, "")
         self.assertIn("[atlas] nudge: skipping, DB error:", err)
 
+    def test_fresh_db_without_tables_is_silent(self):
+        # L5: an empty DB file (no `runs` table yet) is not an error worth a stderr line.
+        import sqlite3
+
+        db = os.path.join(self.tmp, "fresh.db")
+        sqlite3.connect(db).close()
+        code, out, err = self._run_main(
+            {"session_id": "sess-orch"}, env=dict(self.env, ATLAS_DB=db)
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "")
+
     def test_memory_captured_is_silent(self):
         """memory_capture already wrote the facts. Announcing that on Stop is
         additionalContext, which costs a whole extra model turn to say nothing.
