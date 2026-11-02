@@ -1751,5 +1751,42 @@ class CheckCacheTests(unittest.TestCase):
         self.assertIn("2 test files verified by worker DONE on the same bytes; skipped", out)
 
 
+class CliUsageTests(unittest.TestCase):
+    def _main(self, *argv):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = atlas_crew.main(list(argv))
+        return code, buf.getvalue()
+
+    def test_plan_without_spec_is_a_usage_error_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self._main("plan", "--files", "src/*.py", "--root", tmp)
+        self.assertEqual(2, code)
+        self.assertFalse(json.loads(out)["ok"])
+
+    def test_plan_without_files_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self._main("plan", "--spec", "SPEC.md", "--root", tmp)
+        self.assertEqual(2, code)
+        self.assertFalse(json.loads(out)["ok"])
+
+    def test_plan_with_missing_spec_file_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self._main("plan", "--spec", "NOPE.md", "--files", "*.py", "--root", tmp)
+        self.assertEqual(2, code)
+        self.assertFalse(json.loads(out)["ok"])
+
+    def test_status_wait_kill_of_an_unknown_run_report_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for cmd in ("status", "kill", "wait"):
+                with self.subTest(cmd=cmd):
+                    extra = ["--timeout", "0.1"] if cmd == "wait" else []
+                    code, out = self._main(cmd, "--run", "nosuch", "--root", tmp, *extra)
+                    self.assertEqual(1, code)
+                    got = json.loads(out)
+                    self.assertFalse(got["ok"])
+                    self.assertIn("unknown run", got["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

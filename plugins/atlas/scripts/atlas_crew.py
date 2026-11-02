@@ -880,7 +880,13 @@ def auto_plan(root: str, spec: str, files_glob: str, tests_pat: str | None = Non
 
 def cmd_plan(a) -> int:
     root = os.path.realpath(a.root or os.getcwd())
-    plan = auto_plan(root, a.spec, a.files, a.tests, a.check, a.goal)
+    try:
+        if not (a.spec and a.files):
+            raise ValueError("plan needs --spec and --files")
+        plan = auto_plan(root, a.spec, a.files, a.tests, a.check, a.goal)
+    except (OSError, ValueError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}))
+        return 2
     if a.out:
         Path(root, a.out).write_text(json.dumps(plan, indent=1), encoding="utf-8")
     print(json.dumps(plan, indent=1))
@@ -1606,8 +1612,19 @@ def summarize(rundir: Path, meta: dict, rounds, code, out) -> dict:
     }
 
 
-def cmd_wait(a) -> int:
+def _known_run(a) -> Path | None:
+    """The run's directory, or None after printing an unknown-run error (a run exists once `run` wrote run.json)."""
     rundir = _run_dir(a.root or os.getcwd(), a.run)
+    if (rundir / "run.json").is_file():
+        return rundir
+    print(json.dumps({"ok": False, "error": f"unknown run {a.run!r}: no {rundir / 'run.json'}"}))
+    return None
+
+
+def cmd_wait(a) -> int:
+    rundir = _known_run(a)
+    if rundir is None:
+        return 1
     end = time.time() + a.timeout
     while time.time() < end:
         s = rundir / "summary.json"
@@ -1638,12 +1655,17 @@ def status(rundir: Path) -> dict:
 
 
 def cmd_status(a) -> int:
-    print(json.dumps(status(_run_dir(a.root or os.getcwd(), a.run))))
+    rundir = _known_run(a)
+    if rundir is None:
+        return 1
+    print(json.dumps(status(rundir)))
     return 0
 
 
 def cmd_kill(a) -> int:
-    rundir = _run_dir(a.root or os.getcwd(), a.run)
+    rundir = _known_run(a)
+    if rundir is None:
+        return 1
     meta = json.loads((rundir / "run.json").read_text(encoding="utf-8"))
     killed = []
     for p in (rundir / "pid").glob("*"):
