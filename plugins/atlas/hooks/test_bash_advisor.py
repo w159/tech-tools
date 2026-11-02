@@ -570,5 +570,41 @@ class GitSubcommandBypassTests(unittest.TestCase):
         self.assertTrue(_match_git_commit(cmd))
 
 
+class RmRootVariantsTest(unittest.TestCase):
+    """H3: root/home spellings that bypassed _RM_TARGET."""
+
+    def test_root_and_home_variants_flagged(self):
+        for cmd in (
+            "rm -rf //",
+            'rm -rf "$HOME"/',
+            "rm -rf /.",
+            "rm -rf ~/.",
+            "rm -rf $HOME/.",
+            'rm -rf "${HOME}"/*',
+        ):
+            self.assertEqual(
+                _match_catastrophic(cmd),
+                "recursive force-delete of a root/home path",
+                cmd,
+            )
+
+    def test_scoped_paths_not_flagged(self):
+        for cmd in ("rm -rf ./build", "rm -rf /tmp/x", "rm -rf ~/.cache", "rm -rf /.git"):
+            self.assertIsNone(_match_catastrophic(cmd), cmd)
+
+
+class EvalWrappedCommitTest(unittest.TestCase):
+    """L1: eval "git commit" is seen like sh -c."""
+
+    def test_eval_sees_git_subcommand(self):
+        from bash_advisor import _git_subcommands
+
+        for cmd in ('eval "git commit -m x"', "eval 'git push origin main'", "eval git commit -m x"):
+            self.assertTrue(
+                {"commit", "push"} & set(_git_subcommands(cmd)), cmd
+            )
+        self.assertEqual(list(_git_subcommands('echo "eval git commit"')), [])
+
+
 if __name__ == "__main__":
     unittest.main()
