@@ -1405,7 +1405,15 @@ def _record_dispatch_deny(
 
 
 def _pre_tool_use(
-    conn, atlas_db, tool, session, path, tinput=None, session_model="", root=None
+    conn,
+    atlas_db,
+    tool,
+    session,
+    path,
+    tinput=None,
+    session_model="",
+    root=None,
+    cwd=None,
 ):
     """Deny tier: fires before the op lands, orchestration-flagged sessions only."""
     # The deny tier is independently kill-switchable; the advisory tier persists.
@@ -1580,7 +1588,7 @@ def _pre_tool_use(
             _scope_gate(deny, tinput or {}, root, session)
         return
     # (b) Editing production target code inline is the sharpest violation.
-    if tool in EDIT_TOOLS and not _is_orchestration_path(path):
+    if tool in EDIT_TOOLS and not _is_orchestration_path(path, cwd):
         _deny(
             "DENY - atlas orchestrators never edit target code inline. "
             f"Route this {tool} of {path} to atlas:implementer."
@@ -1672,7 +1680,7 @@ def _footprint_files():
     return value if value >= 0 else FOOTPRINT_FILES_DEFAULT
 
 
-def _footprint_paths(conn, atlas_db, session):
+def _footprint_paths(conn, atlas_db, session, cwd=None):
     """Distinct target-code paths this run has written. Docs, .atlas/, URI writes
     and system-temp scratch are exempt, exactly as _is_orchestration_path defines."""
     run_id = atlas_db.current_run_id(conn, session)
@@ -1681,7 +1689,7 @@ def _footprint_paths(conn, atlas_db, session):
     return {
         p
         for p in atlas_db.run_changed_paths(conn, run_id)
-        if not _is_orchestration_path(p)
+        if not _is_orchestration_path(p, cwd)
     }
 
 
@@ -1696,7 +1704,7 @@ def _footprint_arm(conn, atlas_db, session, cwd):
     limit = _footprint_files()
     if limit <= 0 or atlas_db.is_orchestrating(conn, session):
         return False
-    paths = _footprint_paths(conn, atlas_db, session)
+    paths = _footprint_paths(conn, atlas_db, session, cwd)
     if len(paths) < limit:
         return False
     _arm_orchestrating(conn, atlas_db, session, cwd)
@@ -2499,6 +2507,7 @@ def _run(payload):
                         tinput,
                         str(payload.get("session_model") or ""),
                         root=find_root(Path(payload.get("cwd") or os.getcwd())),
+                        cwd=payload.get("cwd"),
                     )
                 if buf.getvalue():
                     sys.stdout.write(buf.getvalue())  # a deny wins; drop the nudge
@@ -2581,7 +2590,9 @@ def _run(payload):
             return  # MultiEdit/NotebookEdit are logged for the footprint only
         count = atlas_db.inline_ops_since_last_dispatch(conn, run_id)
 
-        edit_to_target = tool in EDIT_TOOLS and not _is_orchestration_path(path)
+        edit_to_target = tool in EDIT_TOOLS and not _is_orchestration_path(
+            path, payload.get("cwd")
+        )
         if armed and (count >= _threshold() or edit_to_target):
             if _is_worker() or not atlas_db.is_orchestrating(conn, session):
                 return  # WS1: non-orchestration sessions are logged but never nagged

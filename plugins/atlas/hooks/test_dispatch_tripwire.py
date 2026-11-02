@@ -747,6 +747,34 @@ class TripwireTest(unittest.TestCase):
         self.assertIn('"permissionDecision": "deny"', r.stdout)
         self.assertIn("never edit target code inline", r.stdout)
 
+    def test_pre_edit_deny_scopes_to_payload_cwd_not_process_cwd(self):
+        """The project scope for the inline-edit deny is the payload's cwd. Run the hook
+        from a different project dir than the payload cwd: target code in the payload
+        project is still denied, a docs/ path there is not."""
+        proj = _test_isolation.make_real_project_dir(self)
+        other = _test_isolation.make_real_project_dir(self)
+        for sub in ("src", "docs"):
+            os.makedirs(os.path.join(proj, sub))
+
+        def fire(tool, rel):
+            payload = self._pre_payload(tool, {"file_path": os.path.join(proj, rel)})
+            payload["cwd"] = proj
+            return subprocess.run(
+                [sys.executable, HOOK],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                env=self.env,
+                cwd=other,
+            )
+
+        for tool in ("Edit", "Write"):
+            r = fire(tool, "src/app.py")
+            self.assertEqual(r.returncode, 0)
+            self.assertIn("never edit target code inline", r.stdout, tool)
+            r = fire(tool, "docs/notes.md")
+            self.assertNotIn("never edit target code inline", r.stdout, tool)
+
     def test_pre_allows_write_to_uri_scheme_path(self):
         """IRC messages and xd:// device calls reach the hook as a Write whose
         path is a URI (agent://Foo). A URI is not a file, so it is never target
