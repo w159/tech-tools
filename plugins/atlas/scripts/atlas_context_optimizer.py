@@ -483,6 +483,10 @@ def _cli():
     cmd = sys.argv[1]
     if cmd == "status":
         print(json.dumps(status(), indent=2))
+    elif cmd == "optimize" and ("--help" in sys.argv or "-h" in sys.argv):
+        print("Usage: atlas_context_optimizer.py optimize [--dry-run] [--aggressive]")
+        print("  optimize  — disable unused assets (use --dry-run to preview)")
+        print("  --help    — show this usage; changes nothing")
     elif cmd == "optimize":
         dry = "--dry-run" in sys.argv
         aggressive = "--aggressive" in sys.argv
