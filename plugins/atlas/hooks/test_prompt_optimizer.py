@@ -978,6 +978,13 @@ class EndToEndSubprocessTest(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0)
 
+    def test_null_prompt_is_an_empty_prompt_not_a_fault(self):
+        env = dict(self.env, HOME=tempfile.mkdtemp())
+        r = _run_hook_subprocess({"hook_event_name": "UserPromptSubmit", "prompt": None}, env)
+        self.assertEqual(r.returncode, 0)
+        self.assertNotIn("fail-open", r.stderr)
+        self.assertEqual(r.stdout, "")
+
 
 if __name__ == "__main__":
     unittest.main()
