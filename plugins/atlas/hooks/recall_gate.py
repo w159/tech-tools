@@ -68,6 +68,12 @@ CC_ROUTE = "mcp__plugin_claude-mem_mcp-search__search"
 # Server/tool names that ARE a claude-mem call (mirrors CLAUDE_MEM_SERVER in omp/mandates.ts).
 _MEM_NAME = re.compile(r"claude[-_]?mem|mcp[-_]?search", re.I)
 # Neither denied nor satisfying (omp `todo` is matched case-insensitively too).
+# A claude-mem CALL: the tool name's server part must itself be claude-mem / mcp-search
+# (optionally behind Claude Code's `plugin_` prefix), so a foreign server whose tool is
+# merely named like one (`mcp__evil__claude_mem_dump`) never satisfies the gate.
+_MEM_TOOL = re.compile(
+    r"^mcp__(?:plugin_)?(?:claude[-_]?mem|mcp[-_]?search)(?:[-_]|$)", re.I
+)
 _EXEMPT = (
     "todowrite",
     "todo",
@@ -96,7 +102,7 @@ def _contract() -> dict | None:
 def _is_recall(tool_name: str, tool_input) -> bool:
     """True when the call IS the claude-mem recall: a claude-mem tool, or a Write to an
     `xd://mcp__` claude-mem device (`path`, or `file_path` as Claude Code names it)."""
-    if _MEM_NAME.search(tool_name):
+    if _MEM_TOOL.match(tool_name):
         return True
     if tool_name.lower() != "write" or not isinstance(tool_input, dict):
         return False
@@ -105,7 +111,7 @@ def _is_recall(tool_name: str, tool_input) -> bool:
         if (
             isinstance(value, str)
             and value.startswith("xd://mcp__")
-            and _MEM_NAME.search(value)
+            and _MEM_TOOL.match(value[len("xd://") :])
         ):
             return True
     return False
