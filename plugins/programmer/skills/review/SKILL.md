@@ -24,7 +24,7 @@ Two passes. The scanner is the source of truth for the 20 detected rules: same i
    ```bash
    out="$(mktemp)" && python3 "${CLAUDE_PLUGIN_ROOT}/scripts/principles" scan <path> --format json --fail-on never -o "$out"; echo "exit=$? json=$out"
    ```
-   Read the JSON file it names. Exit code 2 means a usage or git error: show stderr and stop. `errors` in the JSON lists files that did not parse; report them, do not guess at their content.
+   Read the JSON file it names. Exit code 2 has two causes: a usage or git error (no JSON; show stderr and stop), or files that did not parse (the JSON is complete and lists them under `errors`; continue, report them, do not guess at their content). Tell them apart by whether the JSON file exists and parses.
 2. If `--no-judge`, skip to step 5.
 3. Pick judge batches: the files with the most detected findings first, then the rest of the changed or target files, at most 8 files per batch and at most 4 batches. Dispatch `programmer:principles-judge` once per batch, all in one message so they run in parallel. Each prompt carries: the target root, the file list, the scanner findings for those files (from the JSON), and `profile: pragmatic` when requested.
 4. Each judge returns a JSON object with `judged` and `disputed` arrays. Validate it: every judged finding has `rule`, `path`, `line`, `principle`, `source`, `evidence`, `fix`. Re-dispatch a batch once if it returns prose. Drop judged findings whose `evidence` is not the text of the cited line (open the file and check).

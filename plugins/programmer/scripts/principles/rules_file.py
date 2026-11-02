@@ -135,29 +135,31 @@ def check_fn003(mod: Module, opts: dict) -> list[Finding]:
 # --- FN004 -------------------------------------------------------------------
 
 
-def _max_depth(mod: Module, node: ast.AST, depth: int, limit: int, hits: list):
-    for child in ast.iter_child_nodes(node):
-        if isinstance(child, FUNC + (ast.ClassDef, ast.Lambda)):
-            continue
-        if isinstance(child, BLOCKS):
-            parent = mod.parents.get(child)
-            is_elif = isinstance(child, ast.If) and isinstance(parent, ast.If) and parent.orelse == [child]
+def _first_too_deep(mod: Module, func: ast.AST, limit: int):
+    """First block (source order) nested deeper than limit, or None. Iterative: expression chains can be thousands deep."""
+    stack = [(func, 0)]
+    while stack:
+        node, depth = stack.pop()
+        d = depth
+        if node is not func and isinstance(node, BLOCKS):
+            parent = mod.parents.get(node)
+            is_elif = isinstance(node, ast.If) and isinstance(parent, ast.If) and parent.orelse == [node]
             d = depth if is_elif else depth + 1
-            if d > limit and not hits:
-                hits.append((child, d))
-            _max_depth(mod, child, d, limit, hits)
-        else:
-            _max_depth(mod, child, depth, limit, hits)
+            if d > limit:
+                return node, d
+        for child in reversed(list(ast.iter_child_nodes(node))):
+            if not isinstance(child, FUNC + (ast.ClassDef, ast.Lambda)):
+                stack.append((child, d))
+    return None
 
 
 def check_fn004(mod: Module, opts: dict) -> list[Finding]:
     limit = opts["max_depth"]
     out = []
     for func in _functions(mod):
-        hits: list = []
-        _max_depth(mod, func, 0, limit, hits)
-        if hits:
-            node, d = hits[0]
+        hit = _first_too_deep(mod, func, limit)
+        if hit:
+            node, d = hit
             out.append(mod.finding("FN004", node, f"'{func.name}' nests {d} blocks deep here (limit {limit}).", end_line=node.lineno))
     return out
 
@@ -201,13 +203,38 @@ def _handler_types(h: ast.ExceptHandler) -> list[str]:
     return [e.id if isinstance(e, ast.Name) else (e.attr if isinstance(e, ast.Attribute) else "") for e in elts]
 
 
+REPORT_METHODS = {"debug", "info", "warn", "warning", "error", "exception", "critical", "fatal"}
+NUMERIC_RECEIVERS = {"math", "cmath", "np", "numpy", "scipy", "torch", "jnp", "tf"}
+
+
+def _logger_like(recv: ast.AST) -> bool:
+    """Receiver of an ambiguous method (.log, .print_exc): logger / self.audit_log / logging.getLogger(...) / traceback."""
+    if isinstance(recv, ast.Call):
+        recv = recv.func
+    name = recv.id if isinstance(recv, ast.Name) else recv.attr if isinstance(recv, ast.Attribute) else ""
+    tokens = set(re.split(r"_+", re.sub(r"(?<=[a-z])(?=[A-Z])", "_", name).lower()))
+    return bool(tokens & {"log", "logger", "logging", "getlogger", "traceback", "warnings"}) or name.lower().endswith("getlogger")
+
+
+def _handles_call(f: ast.Attribute) -> bool:
+    """Reporting methods count on any receiver (hc.warn, console.error); .log and print_exc need a logger-like one."""
+    if f.attr in REPORT_METHODS:
+        return True
+    if f.attr in LOG_METHODS:
+        base = f.value
+        if isinstance(base, ast.Name) and base.id in NUMERIC_RECEIVERS:
+            return False
+        return _logger_like(base)
+    return False
+
+
 def _reraises_or_logs(h: ast.ExceptHandler) -> bool:
     for node in ast.walk(ast.Module(body=h.body, type_ignores=[])):
         if isinstance(node, ast.Raise):
             return True
         if isinstance(node, ast.Call):
             f = node.func
-            if isinstance(f, ast.Attribute) and f.attr in LOG_METHODS:
+            if isinstance(f, ast.Attribute) and _handles_call(f):
                 return True
             if isinstance(f, ast.Name) and f.id in ("print",) and h.name:
                 return True
@@ -333,6 +360,8 @@ def check_state001(mod: Module, opts: dict) -> list[Finding]:
     mutables = _module_mutables(mod)
     for func in _functions(mod):
         local = {a.arg for a in func.args.args + func.args.kwonlyargs}
+        declared_global = {n for g in _own_nodes(func) if isinstance(g, ast.Global) for n in g.names}
+        local |= {n.id for n in _own_nodes(func) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)} - declared_global
         reported = set()
         for node in _own_nodes(func):
             if isinstance(node, ast.Global):
@@ -359,6 +388,9 @@ RESOURCE_CALLS = {
     "urllib.request.urlopen", "zipfile.ZipFile", "tarfile.open", "tempfile.TemporaryFile",
     "tempfile.NamedTemporaryFile", "psycopg2.connect", "pymysql.connect", "gzip.open", "bz2.open", "lzma.open",
 }
+
+
+MANAGING_CALLS = {"closing", "aclosing", "enter_context", "enter_async_context", "callback", "push"}
 
 
 def _released_in_finally(mod: Module, node: ast.AST) -> bool:
@@ -390,8 +422,10 @@ def check_res001(mod: Module, opts: dict) -> list[Finding]:
         parent = mod.parents.get(node)
         if isinstance(parent, ast.withitem):
             continue
-        if isinstance(parent, ast.Call):  # closing(open(...)), ExitStack.enter_context(open(...))
-            continue
+        if isinstance(parent, ast.Call) and node in parent.args:  # closing(open(...)), ExitStack.enter_context(open(...))
+            wrapper = (mod.dotted(parent.func) or "").rsplit(".", 1)[-1]
+            if wrapper in MANAGING_CALLS:
+                continue
         if isinstance(parent, ast.Attribute) and parent.value is node and parent.attr == "close" \
                 and isinstance(mod.parents.get(parent), ast.Call):
             continue  # open(...).close(): released in the same expression
@@ -412,14 +446,26 @@ def check_res001(mod: Module, opts: dict) -> list[Finding]:
 SQL_SINKS = {"execute", "executemany", "executescript", "raw", "mogrify"}
 
 
+SQL_WORD = re.compile(r"(?i)\b(select|insert|update|delete|where|from|drop|alter|create|union|pragma|exec|execute|with|merge|replace|truncate)\b")
+
+
+def _literal_text(expr: ast.AST) -> str:
+    """All constant string fragments of a formatted-string expression."""
+    return " ".join(n.value for n in ast.walk(expr) if isinstance(n, ast.Constant) and isinstance(n.value, str))
+
+
 def _tainted(expr: ast.AST) -> bool:
+    return _formatted(expr) and bool(SQL_WORD.search(_literal_text(expr)))
+
+
+def _formatted(expr: ast.AST) -> bool:
     if isinstance(expr, ast.JoinedStr):
         return any(isinstance(v, ast.FormattedValue) for v in expr.values)
     if isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.Mod):
         return isinstance(expr.left, (ast.Constant, ast.JoinedStr)) and not isinstance(getattr(expr.left, "value", ""), (int, float))
     if isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.Add):
         sides = (expr.left, expr.right)
-        has_str = any(isinstance(s, ast.Constant) and isinstance(s.value, str) for s in sides) or any(_tainted(s) for s in sides)
+        has_str = any(isinstance(s, ast.Constant) and isinstance(s.value, str) for s in sides) or any(_formatted(s) for s in sides)
         has_dyn = any(not isinstance(s, ast.Constant) for s in sides)
         return has_str and has_dyn
     if isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute) and expr.func.attr == "format":
@@ -459,6 +505,10 @@ SECRET_FORMATS = [
 ]
 
 
+# the secret noun must end the name (db_password, API_TOKEN, secret_key), not modify it (secret_mode)
+SECRET_SUFFIX = re.compile(r"(?i)(passw(or)?d|passwd|secret|api_?key|access_?key|private_?key|auth_?token|token|credential)s?(_?(key|value))?\d*$")
+
+
 def _looks_like_secret_value(v: str) -> bool:
     if len(v) < 8 or " " in v or v.startswith(("http://", "https://", "/", "$", "%")):
         return False
@@ -491,7 +541,7 @@ def check_sec002(mod: Module, opts: dict) -> list[Finding]:
             name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else target.value if isinstance(target, ast.Constant) else ""
             if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
                 continue
-            if SECRET_NAME.search(name) and not NOT_SECRET_NAME.search(name) and _looks_like_secret_value(value.value):
+            if SECRET_SUFFIX.search(name) and not NOT_SECRET_NAME.search(name) and _looks_like_secret_value(value.value):
                 add(value, f"Literal assigned to secret-like name '{name}'; load it from the environment or a secret store.")
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in mod.docstrings:
             if any(p.search(node.value) for p in SECRET_FORMATS):
@@ -516,7 +566,7 @@ def check_cfg001(mod: Module, opts: dict) -> list[Finding]:
         parent = mod.parents.get(node)
         if isinstance(parent, ast.Assign) and any(isinstance(t, ast.Name) and t.id.startswith("__") for t in parent.targets):
             continue  # __url__ metadata
-        if isinstance(parent, ast.keyword) and parent.arg in ("help", "description", "epilog", "url", "homepage"):
+        if isinstance(parent, ast.keyword) and parent.arg in ("help", "description", "epilog", "homepage"):
             continue
         out.append(mod.finding("CFG001", node, f"Hardcoded endpoint '{node.value[:60]}'; read it from configuration or the environment.", end_line=node.lineno))
     return out
@@ -570,15 +620,36 @@ def check_oo001(mod: Module, opts: dict) -> list[Finding]:
 QUERY_PREFIX = re.compile(r"^_*(get|is|has|can|should)_")
 
 
+def _is_self_attr(n: ast.AST, attr: str) -> bool:
+    return isinstance(n, ast.Attribute) and n.attr == attr and isinstance(n.value, ast.Name) and n.value.id == "self"
+
+
+def _unset_check(test: ast.AST, attr: str) -> bool:
+    """True for tests that ask whether self.attr is not yet set: `is None`, `not x`, `not hasattr`, `k not in x`."""
+    if isinstance(test, ast.BoolOp):
+        return any(_unset_check(v, attr) for v in test.values)
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        v = test.operand
+        if _is_self_attr(v, attr):
+            return True
+        return isinstance(v, ast.Call) and isinstance(v.func, ast.Name) and v.func.id == "hasattr" \
+            and any(isinstance(a, ast.Constant) and a.value == attr for a in v.args)
+    if isinstance(test, ast.Compare) and len(test.ops) == 1:
+        op, left, right = test.ops[0], test.left, test.comparators[0]
+        if isinstance(op, (ast.Is, ast.Eq)) and _is_self_attr(left, attr):
+            return isinstance(right, ast.Constant) and right.value is None
+        if isinstance(op, ast.NotIn):
+            return _is_self_attr(right, attr)
+    return False
+
+
 def _guarded_lazy_init(mod: Module, node: ast.AST, attr: str) -> bool:
+    if isinstance(node, ast.AugAssign):
+        return False  # a counter update is never lazy initialisation
     cur = mod.parents.get(node)
     while cur is not None and not isinstance(cur, FUNC):
-        if isinstance(cur, ast.If):
-            for n in ast.walk(cur.test):
-                if isinstance(n, ast.Attribute) and n.attr == attr:
-                    return True
-                if isinstance(n, ast.Constant) and n.value == attr:  # hasattr(self, "x")
-                    return True
+        if isinstance(cur, ast.If) and _unset_check(cur.test, attr):
+            return True
         cur = mod.parents.get(cur)
     return False
 
@@ -609,6 +680,20 @@ def check_cqs001(mod: Module, opts: dict) -> list[Finding]:
 # --- LIT001 ------------------------------------------------------------------
 
 
+def _const_expr(node: ast.AST) -> bool:
+    """Arithmetic over literals only (60 * 60); one name in it makes it a real computation."""
+    stack = [node]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ast.BinOp):
+            stack += [n.left, n.right]
+        elif isinstance(n, ast.UnaryOp):
+            stack.append(n.operand)
+        elif not isinstance(n, ast.Constant):
+            return False
+    return True
+
+
 def check_lit001(mod: Module, opts: dict) -> list[Finding]:
     allowed = set(opts["allowed"])
     out, seen = [], set()
@@ -625,7 +710,7 @@ def check_lit001(mod: Module, opts: dict) -> list[Finding]:
             continue
         child, p = node_for_parent, mod.parents.get(node_for_parent)
         # walk up through containers to the owning statement: a module-level table names its numbers
-        while isinstance(p, (ast.Tuple, ast.List, ast.Set, ast.Dict, ast.UnaryOp)):
+        while isinstance(p, (ast.Tuple, ast.List, ast.Set, ast.Dict, ast.UnaryOp)) or (isinstance(p, ast.BinOp) and _const_expr(p)):
             child, p = p, mod.parents.get(p)
         if isinstance(p, (ast.Assign, ast.AnnAssign)):
             targets = p.targets if isinstance(p, ast.Assign) else [p.target]
@@ -637,6 +722,8 @@ def check_lit001(mod: Module, opts: dict) -> list[Finding]:
             continue  # a number used as the index is exempt; a literal being indexed is not
         if isinstance(p, ast.Call) and isinstance(p.func, ast.Name) and p.func.id in ("range", "round", "sleep", "exit"):
             continue
+        if isinstance(p, ast.Call) and isinstance(p.func, ast.Attribute) and p.func.attr == "sleep":
+            continue  # time.sleep(0.5), asyncio.sleep(2)
         if isinstance(p, (ast.Compare,)) and isinstance(mod.parents.get(p), ast.Assert):
             continue
         key = (node.lineno, value)
@@ -652,6 +739,11 @@ def check_lit001(mod: Module, opts: dict) -> list[Finding]:
 TODO_RE = re.compile(r"#.*\b(TODO|FIXME|HACK|XXX)\b")
 
 
+def _to_stderr(call: ast.Call) -> bool:
+    """print(..., file=sys.stderr): a diagnostic channel, not stray output."""
+    return any(k.arg == "file" and isinstance(k.value, ast.Attribute) and k.value.attr == "stderr" for k in call.keywords)
+
+
 def check_win001(mod: Module, opts: dict) -> list[Finding]:
     out = []
     for line_no, text in mod.comments:
@@ -665,7 +757,7 @@ def check_win001(mod: Module, opts: dict) -> list[Finding]:
         name = mod.dotted(node.func)
         if name in ("breakpoint", "pdb.set_trace", "ipdb.set_trace"):
             out.append(mod.finding("WIN001", node, f"Debugger call '{name}()' left in source.", end_line=node.lineno))
-        elif name == "print" and library:
+        elif name == "print" and library and not _to_stderr(node):
             out.append(mod.finding("WIN001", node, "print() in a library module; use logging or return the value.", end_line=node.lineno))
     return out
 

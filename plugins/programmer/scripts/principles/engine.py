@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .catalog import RULES_BY_ID, SEVERITY_ORDER
-from .core import (DEFAULT_TEST_GLOBS, Finding, Module, discover, is_test_path,
+from .core import (DEFAULT_TEST_GLOBS, Finding, Module, discover, find_project_root, is_test_path,
                    rule_options, selected_rules, suppressed)
 from .rules_file import FILE_CHECKS
 from .rules_repo import REPO_CHECKS
@@ -88,9 +88,11 @@ def load_baseline(path: Path) -> set[str]:
 
 
 def scan(target: Path, config: dict, only=None, skip=None, diff_ref: str | None = None, baseline: Path | None = None,
-         include_tests: bool = True) -> ScanResult:
+         include_tests: bool = True, project_root: Path | None = None) -> ScanResult:
     target = target.resolve()
     root = target if target.is_dir() else target.parent
+    # test files are classified by their path from the project root so every scan target agrees
+    class_root = (project_root or find_project_root(root)).resolve()
     rules = selected_rules(config, only, skip)
     result = ScanResult(root=str(root), rules=rules)
     test_globs = config.get("test_globs", DEFAULT_TEST_GLOBS)
@@ -98,13 +100,17 @@ def scan(target: Path, config: dict, only=None, skip=None, diff_ref: str | None 
     mods: list[Module] = []
     for path in discover(target, config):
         rel = path.relative_to(root).as_posix()
-        is_test = is_test_path(rel, test_globs)
+        try:
+            test_rel = path.relative_to(class_root).as_posix()
+        except ValueError:
+            test_rel = rel
+        is_test = is_test_path(test_rel, test_globs)
         if is_test and not include_tests:
             continue
         try:
-            source = path.read_text(encoding="utf-8")
+            source = path.read_text(encoding="utf-8-sig")  # tolerate a UTF-8 BOM
             mods.append(Module(root, path, source, is_test))
-        except (SyntaxError, UnicodeDecodeError, ValueError) as exc:
+        except (SyntaxError, UnicodeDecodeError, ValueError, RecursionError) as exc:
             result.errors.append({"path": rel, "error": f"{type(exc).__name__}: {exc}".splitlines()[0]})
     result.files_scanned = len(mods)
 
@@ -119,7 +125,10 @@ def scan(target: Path, config: dict, only=None, skip=None, diff_ref: str | None 
             for mod in mods:
                 if rule.skip_tests and mod.is_test:
                     continue
-                raw.extend(FILE_CHECKS[rule_id](mod, opts))
+                try:
+                    raw.extend(FILE_CHECKS[rule_id](mod, opts))
+                except Exception as exc:  # principles: ignore[ERR001] recorded in result.errors, which forces exit 2
+                    result.errors.append({"path": mod.rel, "error": f"rule {rule_id} failed: {type(exc).__name__}: {exc}".splitlines()[0]})
 
     by_rel = {m.rel: m for m in mods}
     known = load_baseline(baseline) if baseline else set()
