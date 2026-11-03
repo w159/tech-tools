@@ -532,14 +532,6 @@ def _herdr_url() -> str:
         return ""
 
 
-def member_state(root: str, name: str) -> str | None:
-    """State of a registry member, None when `name` is not on the roster (or is a lead)."""
-    for m in build_colony(root, all_=True)["members"]:
-        if m["name"] == name and m["kind"] != "lead":
-            return m["state"]
-    return None
-
-
 REFUSAL = {"finished": "member_finished", "dead": "member_dead"}
 
 

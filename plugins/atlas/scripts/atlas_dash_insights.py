@@ -978,10 +978,6 @@ def _tool_error_summary(items: list[dict]) -> dict:
 # ----------------------------------------------------------------- health
 
 
-def _status_from(count: int, fail_at: int, warn_at: int = 1) -> str:
-    return "fail" if count >= fail_at else "warn" if count >= warn_at else "ok"
-
-
 HISTORY_BUCKETS = (
     10  # sparkline resolution: this many {t, ok, fail} buckets across the window
 )

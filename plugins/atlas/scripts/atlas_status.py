@@ -80,11 +80,6 @@ def _evidence_brief(entry):
     return text.strip()[:160]
 
 
-def _verified_at(entry):
-    ts = str(entry.get("verified_at") or "")
-    return ts if ts else ""
-
-
 def plan_section(root, name):
     path = find_plan(root, name)
     if not path:

@@ -278,28 +278,6 @@ def boot_lines(
     return lines
 
 
-def discovery_rules() -> list[dict]:
-    """Extra discover_capabilities RULES entries (callables filled by importer)."""
-    return [
-        {
-            "id": "serena",
-            "type": "mcp",
-            "reason": "Codebase symbol intelligence: activate_project, overview, find, "
-            "referencing, surgical edits. Primary code nav; never start with Grep.",
-            "cmd": "claude mcp add serena -- <your serena launcher; see serena docs>",
-            "match_key": "has_code",
-        },
-        {
-            "id": "lean-ctx",
-            "type": "mcp",
-            "reason": "Context-shaped reads: ctx_compose/ctx_search/ctx_read keep raw "
-            "bytes out of the window. Fallback when serena is down; first choice for prose/config.",
-            "cmd": "claude mcp add lean-ctx -- <lean-ctx launcher>",
-            "match_key": "has_code",
-        },
-    ]
-
-
 def main() -> int:
     import sys
 

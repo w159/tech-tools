@@ -1370,12 +1370,6 @@ def _write_env_file(updates: dict):
     }
 
 
-# keep old name for tests
-def write_env_updates(updates: dict):
-    # Prefer settings.json userConfig mapping
-    return write_settings_updates(updates)
-
-
 # --- singleton daemon -------------------------------------------------------
 
 

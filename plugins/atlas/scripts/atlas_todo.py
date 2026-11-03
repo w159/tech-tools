@@ -487,23 +487,6 @@ def claim(root: Optional[str], item_id: str, owner: str, force: bool = False) ->
         return {"ok": True, "item": item, "counts": counts(board)}
 
 
-def unclaim(root: Optional[str], item_id: str, owner: str) -> dict:
-    with _file_lock(board_path(root)):
-        board = _locked_load(root)
-        item = _find(board, item_id)
-        if item is None:
-            return {"ok": False, "error": "not_found", "id": item_id}
-        if item.get("owner") and owner and item["owner"] != owner:
-            return {"ok": False, "error": "not_claim_owner"}
-        item["owner"] = None
-        item["claimed_at"] = None
-        if item.get("status") == "in_progress":
-            item["status"] = "pending"
-        _touch(item)
-        save(root, board)
-        return {"ok": True, "item": item, "counts": counts(board)}
-
-
 def set_status(
     root: Optional[str],
     item_id: str,

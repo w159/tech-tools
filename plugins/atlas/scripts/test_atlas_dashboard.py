@@ -188,10 +188,6 @@ class TestAtlasDashboard(unittest.TestCase):
                 if field["sensitive"]:
                     self.assertEqual(field.get("value"), "", field["env_key"])
 
-    def test_env_write_rejects_unknown(self):
-        res = self.mod.write_env_updates({"NOT_A_REAL_KEY": "x"})
-        self.assertFalse(res["ok"])
-
     def test_settings_write_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
             troot = Path(tmp)
