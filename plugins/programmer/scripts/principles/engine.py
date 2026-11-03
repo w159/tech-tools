@@ -56,14 +56,24 @@ def changed_lines(root: Path, ref: str) -> dict[str, set[int]]:
     untracked = [u for u in _git(top, "ls-files", "-z", "--others", "--exclude-standard", "--", "*.py").split("\0") if u]
     out: dict[str, set[int]] = {}
     current = None
+    old_left = new_left = 0  # lines still owed by the current hunk; a "+++ " inside it is content, not a header
     for line in diff.splitlines():
-        if line.startswith("+++ "):
+        if (old_left > 0 or new_left > 0) and line[:1] in ("+", "-", " "):
+            if line[0] != "+":
+                old_left -= 1
+            if line[0] != "-":
+                new_left -= 1
+        elif line.startswith("+++ "):
             name = _unquote(line[4:].rstrip("\t"))
             current = None if name == "/dev/null" else name[2:] if name.startswith("b/") else name
-        elif line.startswith("@@") and current:
-            m = re.search(r"\+(\d+)(?:,(\d+))?", line)
-            start, count = int(m.group(1)), int(m.group(2) or "1")
-            out.setdefault(current, set()).update(range(start, start + max(count, 1)))
+        elif line.startswith("@@"):
+            m = re.match(r"@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
+            if not m:
+                continue
+            old_left = int(m.group(1) or "1")
+            start, new_left = int(m.group(2)), int(m.group(3) or "1")
+            if current:
+                out.setdefault(current, set()).update(range(start, start + max(new_left, 1)))
     for rel in untracked:
         p = Path(top) / rel
         out[rel] = set(range(1, len(p.read_text(errors="replace").splitlines()) + 2))

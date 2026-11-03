@@ -359,7 +359,9 @@ def check_state001(mod: Module, opts: dict) -> list[Finding]:
     out = []
     mutables = _module_mutables(mod)
     for func in _functions(mod):
-        local = {a.arg for a in func.args.args + func.args.kwonlyargs}
+        fa = func.args
+        local = {a.arg for a in fa.posonlyargs + fa.args + fa.kwonlyargs}
+        local |= {a.arg for a in (fa.vararg, fa.kwarg) if a is not None}
         declared_global = {n for g in _own_nodes(func) if isinstance(g, ast.Global) for n in g.names}
         local |= {n.id for n in _own_nodes(func) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)} - declared_global
         reported = set()
@@ -393,6 +395,18 @@ RESOURCE_CALLS = {
 MANAGING_CALLS = {"closing", "aclosing", "enter_context", "enter_async_context", "callback", "push"}
 
 
+def _bound_names(mod: Module, node: ast.AST) -> set[str]:
+    """Names the acquired resource is bound to (f = open(..), f: T = open(..), (f := open(..)))."""
+    parent = mod.parents.get(node)
+    if isinstance(parent, ast.Assign):
+        targets = parent.targets
+    elif isinstance(parent, (ast.AnnAssign, ast.NamedExpr)):
+        targets = [parent.target]
+    else:
+        return set()
+    return {t.id for t in targets if isinstance(t, ast.Name)}
+
+
 def _released_in_finally(mod: Module, node: ast.AST) -> bool:
     cur = mod.parents.get(node)
     while cur is not None and not isinstance(cur, FUNC):
@@ -402,11 +416,13 @@ def _released_in_finally(mod: Module, node: ast.AST) -> bool:
     func = mod.enclosing(node, FUNC)
     if func is None:
         return False
-    # acquired then released by a later try/finally in the same function
+    # acquired then released by a later try/finally in the same function; close() must be called on the bound name
+    bound = _bound_names(mod, node)
     for n in _own_nodes(func):
         if isinstance(n, ast.Try) and n.finalbody and n.lineno > node.lineno:
             for m in ast.walk(ast.Module(body=n.finalbody, type_ignores=[])):
-                if isinstance(m, ast.Call) and isinstance(m.func, ast.Attribute) and m.func.attr == "close":
+                if isinstance(m, ast.Call) and isinstance(m.func, ast.Attribute) and m.func.attr == "close" \
+                        and isinstance(m.func.value, ast.Name) and m.func.value.id in bound:
                     return True
     return False
 
@@ -449,13 +465,30 @@ SQL_SINKS = {"execute", "executemany", "executescript", "raw", "mogrify"}
 SQL_WORD = re.compile(r"(?i)\b(select|insert|update|delete|where|from|drop|alter|create|union|pragma|exec|execute|with|merge|replace|truncate)\b")
 
 
-def _literal_text(expr: ast.AST) -> str:
-    """All constant string fragments of a formatted-string expression."""
-    return " ".join(n.value for n in ast.walk(expr) if isinstance(n, ast.Constant) and isinstance(n.value, str))
+SQL_START = re.compile(r"(?i)\s*(select|insert|update|delete|where|from|drop|alter|create|union|pragma|exec|execute|with|merge|replace|truncate)\b")
+SQL_STRUCTURE = re.compile(r"(?is)\bselect\b.*\bfrom\b|\binsert\s+into\b|\bupdate\b.*\bset\b|\bdelete\s+from\b")
+
+
+def _segments(expr: ast.AST) -> list[str]:
+    """Constant string fragments of an expression, in source order."""
+    nodes = [n for n in ast.walk(expr) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+    nodes.sort(key=lambda n: (getattr(n, "lineno", 0), getattr(n, "col_offset", 0)))
+    return [n.value for n in nodes]
+
+
+def _sql_like(segments: list[str]) -> bool:
+    """A SQL keyword counts when it begins a fragment or the text has SQL structure; prose like 'create a backup of' does not."""
+    return any(SQL_START.match(seg) for seg in segments) or bool(SQL_STRUCTURE.search(" ".join(segments)))
 
 
 def _tainted(expr: ast.AST) -> bool:
-    return _formatted(expr) and bool(SQL_WORD.search(_literal_text(expr)))
+    return _formatted(expr) and _sql_like(_segments(expr))
+
+
+def _concat_tainted(parts: list[ast.AST]) -> bool:
+    """Query text built from a base assignment plus later `+=` pieces, at least one of them dynamic."""
+    dynamic = any(_formatted(p) or any(not isinstance(n, ast.Constant) for n in ast.walk(p)) for p in parts)
+    return dynamic and _sql_like([seg for p in parts for seg in _segments(p)])
 
 
 def _formatted(expr: ast.AST) -> bool:
@@ -485,10 +518,17 @@ def check_sec001(mod: Module, opts: dict) -> list[Finding]:
         if isinstance(arg, ast.Name):
             func = mod.enclosing(node, FUNC)
             scope = _own_nodes(func) if func else ast.walk(mod.tree)
+            scope = list(scope)
             assigns = [n for n in scope if isinstance(n, ast.Assign) and n.lineno < node.lineno and any(isinstance(t, ast.Name) and t.id == arg.id for t in n.targets)]
-            if assigns and _tainted(max(assigns, key=lambda n: n.lineno).value):
-                src = max(assigns, key=lambda n: n.lineno)
+            src = max(assigns, key=lambda n: n.lineno) if assigns else None
+            augs = [n for n in scope if isinstance(n, ast.AugAssign) and isinstance(n.op, ast.Add) and isinstance(n.target, ast.Name)
+                    and n.target.id == arg.id and n.lineno < node.lineno and (src is None or n.lineno > src.lineno)]
+            augs.sort(key=lambda n: n.lineno)
+            if src is not None and _tainted(src.value):
                 out.append(mod.finding("SEC001", node, f"'{arg.id}' (built by string formatting on line {src.lineno}) is passed to '{node.func.attr}()'; use bound parameters.", end_line=node.lineno))
+            elif augs and _concat_tainted(([src.value] if src is not None else []) + [a.value for a in augs]):
+                first = src or augs[0]
+                out.append(mod.finding("SEC001", node, f"'{arg.id}' (built by string concatenation from line {first.lineno}) is passed to '{node.func.attr}()'; use bound parameters.", end_line=node.lineno))
     return out
 
 
@@ -512,11 +552,22 @@ SECRET_SUFFIX = re.compile(r"(?i)(passw(or)?d|passwd|secret|api_?key|access_?key
 def _looks_like_secret_value(v: str) -> bool:
     if len(v) < 8 or " " in v or v.startswith(("http://", "https://", "/", "$", "%")):
         return False
-    if "{" in v or re.fullmatch(r"[A-Z0-9_]+", v):  # templates, env var names
+    if "{" in v:  # templates
         return False
+    if re.fullmatch(r"[A-Z0-9_]+", v):  # env var names (DB_PASSWORD); long underscore-free letter+digit runs are keys
+        if not (len(v) >= 16 and "_" not in v and re.search(r"[A-Z]", v) and re.search(r"\d", v)):
+            return False
     if len(set(v)) <= 2:  # "********", "xxxxxxxx"
         return False
     return True
+
+
+def _unpack_pairs(target: ast.AST, value: ast.AST) -> list[tuple[ast.AST, ast.AST]]:
+    """`a, b = x, y` -> [(a, x), (b, y)]; plain targets pass through."""
+    if isinstance(target, (ast.Tuple, ast.List)) and isinstance(value, (ast.Tuple, ast.List)) \
+            and len(target.elts) == len(value.elts) and not any(isinstance(e, ast.Starred) for e in target.elts + value.elts):
+        return [p for t, v in zip(target.elts, value.elts) for p in _unpack_pairs(t, v)]
+    return [(target, value)]
 
 
 def check_sec002(mod: Module, opts: dict) -> list[Finding]:
@@ -530,8 +581,11 @@ def check_sec002(mod: Module, opts: dict) -> list[Finding]:
     for node in ast.walk(mod.tree):
         pairs = []
         if isinstance(node, ast.Assign):
-            pairs = [(t, node.value) for t in node.targets]
+            for t in node.targets:
+                pairs.extend(_unpack_pairs(t, node.value))
         elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            pairs = [(node.target, node.value)]
+        elif isinstance(node, ast.NamedExpr):
             pairs = [(node.target, node.value)]
         elif isinstance(node, ast.keyword) and node.arg:
             pairs = [(ast.Name(id=node.arg), node.value)]

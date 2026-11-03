@@ -231,5 +231,89 @@ class Rules(Base):
         self.assertEqual(self.rules(src, "WIN001"), [])
 
 
+class ScannerFixesRound2(Base):
+    def _git(self, *a):
+        subprocess.run([*GIT, *a], cwd=self.root, check=True, capture_output=True)
+
+    def test_f5_added_line_starting_plus_plus_is_not_a_file_header(self):
+        old = 'def a():\n    """doc\n    """\n\n\ndef pad():\n    return 1\n\n\ndef b():\n    return 2\n'
+        self.write("m.py", old)
+        self._git("init", "-q")
+        self._git("add", ".")
+        self._git("commit", "-q", "-m", "init")
+        new = old.replace('    """doc\n', '    """doc\n++ note\n').replace("return 2", 'password = "Qwerty123456!"\n    return 2')
+        p = self.write("m.py", new)
+        full = scan(p, {}, only=["SEC002"])
+        self.assertEqual([f.rule for f in full.findings], ["SEC002"])
+        diffed = scan(p, {}, only=["SEC002"], diff_ref="HEAD")
+        self.assertEqual([f.rule for f in diffed.findings], ["SEC002"])
+
+    def test_f6_walrus_secret_flagged(self):
+        self.assertEqual(self.rules('if (client_secret := "Z9QWERTY12345678"):\n    pass\n', "SEC002"), ["SEC002"])
+
+    def test_f7_tuple_unpacking_secret_flagged(self):
+        self.assertEqual(self.rules('db_password, db_user = "hunter2hunter2", "svc"\n', "SEC002"), ["SEC002"])
+        self.assertEqual(self.rules('db_user, db_password = "svc", "hunter2hunter2"\n', "SEC002"), ["SEC002"])
+        self.assertEqual(self.rules('a, b = "hunter2hunter2", "svc"\n', "SEC002"), [])
+
+    def test_f8_uppercase_digit_secret_flagged_but_env_names_exempt(self):
+        self.assertEqual(self.rules('CLIENT_SECRET = "ABCDEF1234567890"\n', "SEC002"), ["SEC002"])
+        for v in ("DB_PASSWORD", "API_KEY", "MY_SERVICE_API_TOKEN_NAME"):
+            self.assertEqual(self.rules(f'CLIENT_SECRET = "{v}"\n', "SEC002"), [], v)
+
+    def test_f9_augmented_assignment_sql_flagged(self):
+        src = """
+            def f(cur, user):
+                sql = "SELECT * FROM users WHERE name = '"
+                sql += user + "'"
+                cur.execute(sql)
+        """
+        self.assertEqual(self.rules(src, "SEC001"), ["SEC001"])
+
+    def test_f11_sql_keyword_inside_prose_not_flagged(self):
+        src = 'def f(bot, name):\n    bot.execute(f"Please create a backup of {name}")\n'
+        self.assertEqual(self.rules(src, "SEC001"), [])
+
+    def test_f11_sql_structure_mid_text_still_flagged(self):
+        for sql in ("run: select a from {t}", "do insert into {t} values (1)", "x update {t} set a = 1", "now delete from {t}"):
+            src = f'def f(cur, t):\n    cur.execute(f"{sql}")\n'
+            self.assertEqual(self.rules(src, "SEC001"), ["SEC001"], sql)
+
+    def test_f11_dynamic_fragment_without_keyword_unchanged(self):
+        src = 'def f(cur, prefix, w):\n    cur.execute(f"{prefix} {w}")\n'
+        self.assertEqual(self.rules(src, "SEC001"), [])
+
+    def test_f12_posonly_vararg_kwarg_shadow_module_state(self):
+        for sig, body in (("_CACHE, key, value, /", "_CACHE[key] = value"), ("*_CACHE", "_CACHE[0] = 1"), ("**_CACHE", "_CACHE['a'] = 1")):
+            src = f"_CACHE = {{}}\ndef fn({sig}):\n    {body}\n"
+            self.assertEqual(self.rules(src, "STATE001"), [], sig)
+
+    def test_f12_real_module_mutation_still_flagged(self):
+        self.assertEqual(self.rules("_CACHE = {}\ndef fn(key, /):\n    _CACHE[key] = 1\n", "STATE001"), ["STATE001"])
+
+    def test_f13_close_on_other_object_does_not_release(self):
+        src = """
+            def f(path, other):
+                f = open(path)
+                try:
+                    other.close()
+                finally:
+                    other.close()
+                return f.read()
+        """
+        self.assertEqual(self.rules(src, "RES001"), ["RES001"])
+
+    def test_f13_close_on_bound_name_still_releases(self):
+        src = """
+            def f(path):
+                f = open(path)
+                try:
+                    return f.read()
+                finally:
+                    f.close()
+        """
+        self.assertEqual(self.rules(src, "RES001"), [])
+
+
 if __name__ == "__main__":
     unittest.main()
