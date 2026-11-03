@@ -6,12 +6,17 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   tests:
+    # the full job below owns push/schedule/dispatch runs on its own
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -20,3 +25,20 @@ jobs:
       - run: python3 --version && python3 -m venv .venv && .venv/bin/python -m pip install --quiet pytest
       - run: .venv/bin/python scripts/check_versions.py
       - run: .venv/bin/python -m pytest -q -p no:cacheprovider scripts plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py
+
+  # Full root pytest suite plus the omp (Bun) suites. Slow, so not run on PRs.
+  full:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # tmux is used by the atlas colony/mux tests; ubuntu-latest does not guarantee it.
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq tmux
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: python3 --version && python3 -m venv .venv && .venv/bin/python -m pip install --quiet pytest
+      - run: .venv/bin/python -m pytest -q -p no:cacheprovider
+      - run: bun test
+        working-directory: plugins/atlas/omp
