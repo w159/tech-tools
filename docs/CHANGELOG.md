@@ -1,5 +1,21 @@
 # Changelog
 
+## atlas 16.11.2 - 2026-11-03
+
+- atlas 16.11.2: IRC history reads only the log tail; unique cursor temp file; dashboard self-heal exec loop fixed; selffix allowlist survives `python -O`; `format_after_edit` skips a root cwd; 6 unused functions removed; omp fixes (quoted lean-ctx path, git commit match parity, subdirectory cwd edits, ingest dir cleanup, per-matcher hook faults, sed in-place forms, roman numerals); CI full suite job. Details in plugins/atlas/CHANGELOG.md.
+
+## armada 2.2.3 - 2026-11-03
+
+- armada 2.2.3: data skill packager fixes, empty env export treated as unset, release workflow fails on a fatal `git ls-remote`. Details in plugins/armada/CHANGELOG.md.
+
+## programmer 1.0.3 - 2026-11-03
+
+- programmer 1.0.3: `--diff` finding loss fixed; SEC001, SEC002, STATE001 and RES001 precision fixes. Details in plugins/programmer/CHANGELOG.md.
+
+## marketplace 5.3.2 - 2026-11-03
+
+- marketplace 5.3.2: atlas 16.11.2, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 16.11.1 - 2026-11-02
 
 - atlas 16.11.1: inline-edit deny scopes to the payload cwd; omp claude-mem match anchored like the Python recall gate; hooks hardening (fallow probe timeout, eval wrapper, rm root variants, null prompt, non-dict tool_input, crew_worker sleep, nudge on empty DB); atlas_irc, atlas_mux, atlas_resolve, atlas_crew and atlas_doctor fixes; script `--help` and failure exit codes; location-independent tripwire tests. CI: new tests workflow. Details in plugins/atlas/CHANGELOG.md.

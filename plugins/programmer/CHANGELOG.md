@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.3 - 2026-11-03
+
+### Fixed
+
+- `--diff` no longer drops findings after a `++ ` line.
+- SEC002 catches walrus assignments, tuple unpacking and long uppercase secrets.
+- SEC001 follows `+=` concatenation and no longer flags prose containing a SQL word.
+- STATE001 counts posonly, `*args` and `**kwargs` parameters as locals.
+- RES001 requires `close()` on the resource itself.
+
 ## 1.0.2 - 2026-11-02
 
 ### Fixed

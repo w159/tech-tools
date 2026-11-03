@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.3 - 2026-11-03
+
+### Fixed
+
+- The data skill packager works under dotted parent dirs, skips its own output zip and fails on zero files.
+- The env loader treats an empty shell export as unset.
+- The release workflow fails on a fatal `git ls-remote` instead of creating a release.
+
 ## 2.2.2 - 2026-11-02
 
 ### Fixed

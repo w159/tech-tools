@@ -1,5 +1,27 @@
 # Changelog
 
+## 16.11.2 - 2026-11-03
+
+### Fixed
+
+- `atlas_irc` history reads only the log tail, so polling no longer re-reads the whole log.
+- `atlas_irc` cursor writes use a unique temp file per writer, fixing a crash with concurrent writers.
+- Dashboard self-heal no longer loops with exec between two broken installs.
+- The `atlas_selffix` column allowlist survives `python -O`.
+- `format_after_edit` does nothing when the cwd is the filesystem root.
+- Omp: the lean-ctx bin path is quoted in the wrapped shell command.
+- Omp: `matchGitCommit` matches the Python `bash_advisor` (newline, `--no-pager`, `--git-dir`, `env`, `sh -c`).
+- Omp: edits from a subdirectory cwd are counted.
+- Omp: the ingest dir is removed when the detached spawn fails.
+- Omp: one bad hook matcher no longer drops all bridged hooks.
+- Omp: `sed` in-place and `w` file forms are no longer denied as read-only.
+- Omp: roman numerals past 39 render correctly.
+
+### Changed
+
+- Removed 6 unused functions.
+- CI: a full test suite job runs on push to main, weekly and on manual dispatch.
+
 ## 16.11.1 - 2026-11-02
 
 ### Fixed
