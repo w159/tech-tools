@@ -294,6 +294,32 @@ def transport() -> str:
     return "tmux" if shutil.which("tmux") else "claude-bg"
 
 
+def _seats_ready() -> bool:
+    """First-use point of the seat daemon (it no longer starts at SessionStart). True when seats are up. Otherwise a
+    detached `atlas_seats.ensure_background()` is launched (once; flags and failure backoff are honoured there) and
+    False tells the caller to use tmux for THIS spawn; the next spawn finds the daemon up. Never waits."""
+    if _seats_up():
+        return True
+    try:
+        import atlas_seats
+
+        atlas_seats.ensure_background()
+    except Exception:
+        pass
+    return False
+
+
+def spawn_transport() -> str:
+    """transport() for a spawn: the seat transport (only when forced via ATLAS_COLONY_TRANSPORT=herdr) degrades to
+    tmux while the daemon is not up. An in-process fallback is pinned in the env so one spawn-team stays on one
+    transport; a later spawn starts clean once the daemon is up."""
+    use = transport()
+    if use == "herdr" and not _seats_ready():
+        os.environ["ATLAS_COLONY_TRANSPORT"] = "tmux"
+        return "tmux"
+    return use
+
+
 def _pane_transport() -> str:
     """'herdr' only when forced via ATLAS_COLONY_TRANSPORT, else 'tmux' — for workers that must run as panes
     (omp has no claude --bg equivalent; interactive launches always need a pane)."""
@@ -1170,7 +1196,7 @@ def _spawn_registered(args, root: str, chan) -> int:
     if tier_error:
         atlas_todo.leave(root, chan, args.name)
         return _emit({"ok": False, "error": tier_error}, 2)
-    use = transport()
+    use = spawn_transport()  # seats start on first use; tmux for this spawn if down
     if use == "claude-bg":
         if args.harness == "claude":
             return _spawn_claude_bg(args, root, chan, model, level, session)
@@ -2076,7 +2102,8 @@ def cmd_spawn_team(args) -> int:
         note = f"unknown ATLAS_COLONY_TRANSPORT {forced!r} (want herdr|tmux|claude-bg): using {transport()}"
     if os.environ.get("ATLAS_MUX", "").strip().lower() == "off":
         return _emit({"ok": False, "error": "mux mode is disabled: ATLAS_MUX=off"}, 2)
-    if transport() == "tmux":
+    chosen = spawn_transport()  # first use of the seat daemon: launches it detached, this team runs on tmux if down
+    if chosen == "tmux":
         busy = _sweep_orphan_session(rec["team_id"])
         if busy:
             return _emit({"ok": False, "error": busy}, 1)
@@ -2088,7 +2115,7 @@ def cmd_spawn_team(args) -> int:
         return _emit({"ok": False, "error": f"channel registry lock busy: {exc}"}, 1)
     os.environ["ATLAS_CHANNEL"] = chan
     os.environ["ATLAS_LEAD_NAME"] = lead
-    rec["channel"], rec["transport"], rec["lead"] = chan, transport(), lead
+    rec["channel"], rec["transport"], rec["lead"] = chan, chosen, lead
     rec["source"] = _lead_source(root, lead, sid)
     rec["created"] = time.time()
     path.parent.mkdir(parents=True, exist_ok=True)

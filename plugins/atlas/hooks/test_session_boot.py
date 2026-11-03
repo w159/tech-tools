@@ -1092,9 +1092,7 @@ class EnsureColonyCacheTest(unittest.TestCase):
             with (
                 mock.patch("subprocess.run") as run,
                 mock.patch("subprocess.Popen") as popen,
-                mock.patch.object(
-                    __import__("atlas_seats"), "backend", return_value="herdr"
-                ),
+                mock.patch.object(session_boot, "_boot_herdr_wanted", return_value=True),
                 # herdr down -> one ensure_server attempt; never start (or probe) the real server
                 mock.patch.object(
                     __import__("atlas_herdr"),

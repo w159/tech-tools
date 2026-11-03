@@ -5,6 +5,7 @@ ATLAS_SEAT_BACKEND=rig|herdr|off overrides detection. Every public function dele
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import json
 import os
@@ -249,6 +250,66 @@ def web_url() -> str:
 def reset_status_cache() -> None:
     """Drop the cached status so the page's next read is fresh."""
     _herdr()._status_cache = None
+
+
+ENSURE_BACKOFF_S = 1800  # a failed first-use ensure (npm install, daemon start) is not retried for this long
+ENSURE_PENDING_S = 240  # a start launched this recently is still running: do not launch another
+
+
+def _flag_off(name: str) -> bool:
+    return os.environ.get(name, "on").lower() in ("0", "off", "false", "no")
+
+
+def ensure_background() -> str:
+    """First-use start of the seat daemon: launch `atlas_seats.py ensure` detached and return at once (callers never
+    wait on an npm install). Returns off (ATLAS_COLONY / ATLAS_HERDR_AUTOSTART), none, herdr (not started here: the
+    SessionStart colony path owns herdr), backoff (a recent ensure failed), pending (one is already running),
+    started or error. State lives in $ATLAS_HOME/seat-ensure-state.json: {"state": "starting"|"failed", "at": ts};
+    success removes it and rewrites seat-status-cache.json, failure leaves no .tmp behind."""
+    if _flag_off("ATLAS_COLONY") or _flag_off("ATLAS_HERDR_AUTOSTART"):
+        return "off"
+    kind = backend()
+    if kind != "rig":
+        return "herdr" if kind == "herdr" else "none"
+    home = os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas")
+    state = os.path.join(home, "seat-ensure-state.json")
+    try:
+        with open(state) as f:
+            st = json.load(f)
+        age = time.time() - float(st.get("at", 0))
+        if st.get("state") == "failed" and 0 <= age < ENSURE_BACKOFF_S:
+            return "backoff"
+        if st.get("state") == "starting" and 0 <= age < ENSURE_PENDING_S:
+            return "pending"
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    try:
+        os.makedirs(home, exist_ok=True)
+        with open(state, "w") as f:
+            json.dump({"state": "starting", "at": time.time()}, f)
+        subprocess.Popen(
+            [
+                "sh",
+                "-c",
+                '"$0" "$1" ensure >"$2.tmp" 2>>"$3" && mv "$2.tmp" "$2" && rm -f "$4"'
+                ' || { rm -f "$2.tmp"; printf \'{"state": "failed", "at": %s}\\n\' "$(date +%s)" >"$4"; }',
+                sys.executable,
+                os.path.abspath(__file__),
+                os.path.join(home, "seat-status-cache.json"),
+                os.path.join(home, "seat-ensure.log"),
+                state,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            env=os.environ.copy(),
+        )
+        return "started"
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.remove(state)
+        return "error"
 
 
 def main(argv: list[str]) -> int:

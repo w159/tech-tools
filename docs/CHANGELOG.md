@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 16.11.4 - 2026-11-03
+
+- atlas 16.11.4: the seat daemon starts on first use instead of every SessionStart (boot 282 -> 208 ms median), with a 30 minute backoff after a failed start. Details in plugins/atlas/CHANGELOG.md.
+
+## marketplace 5.3.4 - 2026-11-03
+
+- marketplace 5.3.4: atlas 16.11.4, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 16.11.3 - 2026-11-03
 
 - atlas 16.11.3: hook guard concurrency tests pin the `spawn` start method (Python 3.14 forkserver default broke the CI full suite). Details in plugins/atlas/CHANGELOG.md.

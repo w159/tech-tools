@@ -138,7 +138,7 @@ def launch(
     env_chan, env_lead = atlas_mux.atlas_todo.env_channel(root)
     chan = (env.get("ATLAS_CHANNEL") or env_chan).strip()
     lead = (env.get("ATLAS_LEAD_NAME") or env_lead).strip()
-    use = atlas_mux.transport()
+    use = atlas_mux.spawn_transport()
     if use == "claude-bg":
         # claude-bg is the mux's own claude-worker dispatch; a launch always needs a pane target.
         use = atlas_mux._pane_transport()

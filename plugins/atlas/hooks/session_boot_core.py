@@ -166,60 +166,26 @@ def _boot_log(stage, reason):
         pass
 
 
-def _boot_seats(home):
-    """Seat backend gate for ensure_colony. Returns (handled, None): handled=True means the boot path is done
-    (rig or none: silent, failures only in colony-boot.log); False means backend herdr, run the legacy path."""
-    import subprocess
+def _boot_herdr_wanted(home):
+    """Cheap gate for the legacy herdr colony path (no `node --version`, no subprocess, no seat spawn). The seat
+    daemon (OpenRig) is NOT started here: it starts on first use (atlas_seats.ensure_background, called from
+    atlas_mux). ATLAS_SEAT_BACKEND=herdr -> True; rig/off -> False; unset -> True only when no rig binary exists,
+    node+npm are not both on PATH (rig would be the backend) and herdr is installed."""
+    import shutil
 
-    scripts = os.path.abspath(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
-    )
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
-    import atlas_seats
-
-    kind = atlas_seats.backend()
-    if kind == "herdr":
+    env = (os.environ.get("ATLAS_SEAT_BACKEND") or "").strip().lower()
+    if env in ("rig", "off", "herdr"):
+        return env == "herdr"
+    if os.path.isfile(
+        os.path.join(home, "openrig", "npm", "node_modules", ".bin", "rig")
+    ) or shutil.which("rig"):
         return False
-    if kind == "none":
-        _boot_log("backend", "none")
-        return True
-    if os.environ.get("ATLAS_HERDR_AUTOSTART", "on").lower() in (
-        "0",
-        "off",
-        "false",
-        "no",
-    ):
-        return True
-    cache = os.path.join(home, "seat-status-cache.json")
-    try:
-        with open(cache) as f:
-            if (
-                json.load(f).get("healthy")
-                and time.time() - os.path.getmtime(cache) < _COLONY_TRUST_S
-            ):
-                return True
-    except (OSError, ValueError):
-        pass
-    os.makedirs(home, exist_ok=True)
-    # detached + idempotent (ensure_server probes /healthz first); output refreshes the cache, errors go to the log
-    subprocess.Popen(
-        [
-            "sh",
-            "-c",
-            '"$0" "$1" ensure >"$2.tmp" 2>>"$3" && mv "$2.tmp" "$2"',
-            sys.executable,
-            os.path.join(scripts, "atlas_seats.py"),
-            cache,
-            os.path.join(home, "seat-ensure.log"),
-        ],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        env=os.environ.copy(),
+    if shutil.which("node") and shutil.which("npm"):
+        return False
+    return bool(
+        shutil.which("herdr")
+        or os.path.exists(os.path.join(os.path.expanduser("~"), ".local", "bin", "herdr"))
     )
-    return True
 
 
 def ensure_colony():
@@ -235,8 +201,8 @@ def ensure_colony():
         home = os.environ.get("ATLAS_HOME") or os.path.join(
             os.path.expanduser("~"), ".atlas"
         )
-        if _boot_seats(home):
-            return None  # rig/none: silent by design
+        if not _boot_herdr_wanted(home):
+            return None  # seats (rig) start on first use, not here; no herdr: nothing to probe
         script = os.path.abspath(
             os.path.join(
                 os.path.dirname(os.path.abspath(__file__)),

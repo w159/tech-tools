@@ -211,3 +211,89 @@ class BackendTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EnsureBackgroundTests(unittest.TestCase):
+    """First-use start: detached ensure, in-flight guard, failure backoff, env flags."""
+
+    def setUp(self):
+        import tempfile
+
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, self.home, True)
+        s._reset_backend_cache()
+        self.addCleanup(s._reset_backend_cache)
+        self.fake_bin = Path(self.home) / "bin"
+        self.fake_bin.mkdir()
+        npm = self.fake_bin / "npm"
+        npm.write_text("#!/bin/sh\nexit 1\n")
+        npm.chmod(0o755)
+        p = mock.patch.dict(
+            os.environ,
+            {
+                "ATLAS_HOME": self.home,
+                "ATLAS_SEAT_BACKEND": "rig",
+                "ATLAS_RIG_PORT": "47993",
+                "PATH": f"{self.fake_bin}{os.pathsep}{os.environ['PATH']}",
+            },
+        )
+        p.start()
+        self.addCleanup(p.stop)
+        for k in ("ATLAS_COLONY", "ATLAS_HERDR_AUTOSTART"):
+            os.environ.pop(k, None)
+        self.spawned = []
+        self.real_popen = __import__("subprocess").Popen
+
+    def popen_runs_sync(self):
+        """Stands in for the detached Popen: runs the very same argv to completion so the shell wrapper
+        (cache / failure marker) really executes against the fake failing npm."""
+
+        def fake(argv, **kw):
+            self.spawned.append(argv)
+            self.real_popen(argv, env=kw.get("env")).wait(timeout=60)
+            return mock.MagicMock()
+
+        return mock.patch("subprocess.Popen", side_effect=fake)
+
+    def marker(self):
+        return Path(self.home) / "seat-ensure-state.json"
+
+    def test_failed_ensure_backs_off_then_retries_after_window(self):
+        import json
+
+        with self.popen_runs_sync():
+            self.assertEqual("started", s.ensure_background())
+            self.assertEqual(1, len(self.spawned))
+            st = json.loads(self.marker().read_text())
+            self.assertEqual("failed", st["state"])
+            self.assertFalse(list(Path(self.home).glob("*.tmp")), "no .tmp leftover after a failed ensure")
+            self.assertEqual("backoff", s.ensure_background())
+            self.assertEqual(1, len(self.spawned), "inside the backoff window npm install must not rerun")
+            st["at"] -= s.ENSURE_BACKOFF_S + 1
+            self.marker().write_text(json.dumps(st))
+            self.assertEqual("started", s.ensure_background())
+            self.assertEqual(2, len(self.spawned))
+
+    def test_in_flight_start_is_not_launched_twice(self):
+        with mock.patch("subprocess.Popen") as popen:
+            self.assertEqual("started", s.ensure_background())
+            self.assertEqual("pending", s.ensure_background())
+        self.assertEqual(1, popen.call_count)
+        self.assertTrue(popen.call_args[1]["start_new_session"])
+
+    def test_flags_suppress_ensure(self):
+        for k in ("ATLAS_COLONY", "ATLAS_HERDR_AUTOSTART"):
+            for val in ("off", "0", "false", "no"):
+                with self.subTest(k=k, val=val), mock.patch.dict(os.environ, {k: val}), mock.patch(
+                    "subprocess.Popen"
+                ) as popen:
+                    self.assertEqual("off", s.ensure_background())
+                    popen.assert_not_called()
+
+    def test_backend_none_and_herdr_never_spawn(self):
+        for be, want in (("off", "none"), ("herdr", "herdr")):
+            with self.subTest(be=be), mock.patch.dict(os.environ, {"ATLAS_SEAT_BACKEND": be}), mock.patch(
+                "subprocess.Popen"
+            ) as popen:
+                self.assertEqual(want, s.ensure_background())
+                popen.assert_not_called()

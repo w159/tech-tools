@@ -152,7 +152,7 @@ atlas-orchestrate ship the rate limiter across API and cache
 
 The lead splits the work into named workers that share one board. Watch it in
 the [Workboard](#browser-dashboard-atlas-workboard); mux mode is on by default, so workers run through `atlas_mux.py spawn` (`ATLAS_MUX=off` disables it). Workers run as managed seats of the
-agent runtime, which starts itself silently at session start (OpenRig by
+agent runtime, which starts itself in the background on first use (OpenRig by
 default, herdr as the fallback; `ATLAS_SEAT_BACKEND` picks one, see
 [mux mode](#herdr-colony-mode-mux) and `docs/architecture/atlas-colony.md`); with no
 runtime, claude workers fall back to `claude --bg` background agents.
@@ -317,9 +317,9 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_DECISION=off` | model-based prompt-arm decision (regex answer stays) |
 | `ATLAS_MUX` | unset = mux mode on (default); `ATLAS_MUX=off` disables it (claude workers as `claude --bg` background agents; panes via `ATLAS_COLONY_TRANSPORT`) |
 | `ATLAS_COLONY_TRANSPORT` | `herdr` (the pane transport label), `tmux` or `claude-bg` forces that transport; unset = managed seats whenever the seat backend is up, else `claude-bg` for claude workers and tmux for omp workers |
-| `ATLAS_SEAT_BACKEND` | `rig` (OpenRig, default when Node 22/24 is present), `herdr`, or `off`; the agent runtime starts itself at SessionStart, nothing is launched by hand (see `docs/architecture/atlas-colony.md`, "Seat backend") |
+| `ATLAS_SEAT_BACKEND` | `rig` (OpenRig, default when Node 22/24 is present), `herdr`, or `off`; the agent runtime starts itself on first use (a spawn that finds it down launches it detached and runs on tmux that once), nothing is launched by hand (see `docs/architecture/atlas-colony.md`, "Seat backend") |
 | `ATLAS_RIG_PORT` | OpenRig daemon port on 127.0.0.1 (default 7437; state under `$ATLAS_HOME/openrig/`) |
-| `ATLAS_HERDR_AUTOSTART=off` | SessionStart autostart of the seat backend (both OpenRig and herdr) |
+| `ATLAS_HERDR_AUTOSTART=off` | Autostart of the seat backend: the OpenRig daemon on first use (`atlas_mux` spawn), the herdr colony at SessionStart |
 | `ATLAS_COLONY=off` | SessionStart colony step entirely (`0`, `off`, `false`, `no`) |
 | `ATLAS_REMOTE_PORT` | HTTPS port `atlas_remote.py` maps with `tailscale serve` (default 8443, never 443) |
 | `ATLAS_DASHBOARD_URL` | where the herdr web UI's `/atlas/**` gateway proxies the dashboard (loopback only; default `http://127.0.0.1:7421`) |

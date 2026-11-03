@@ -319,7 +319,10 @@ class HerdrLaunchTest(unittest.TestCase):
 
     def test_herdr_error_is_a_failed_result(self):
         os.environ["HERDR_SOCKET_PATH"] = "/nonexistent/h.sock"
-        with mock.patch.object(atlas_mux, "transport", lambda: "herdr"):
+        with (
+            mock.patch.object(atlas_mux, "transport", lambda: "herdr"),
+            mock.patch.object(atlas_mux, "_seats_up", return_value=True),  # daemon "up": the pane call itself fails
+        ):
             res = atlas_launch.launch(self.root, "x", "p")
         self.assertFalse(res["ok"])
         self.assertIn("socket_missing", res["reason"])

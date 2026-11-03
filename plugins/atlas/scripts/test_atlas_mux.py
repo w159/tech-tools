@@ -3781,3 +3781,70 @@ class WorkerToolsProfileAllowTests(unittest.TestCase):
             self.assertEqual("exec", ns.tools_profile)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             p.parse_args(["spawn", *common, "--tools-profile", "bogus"])
+
+
+class SeatsFirstUseTests(Base):
+    """Seats start on first use, not at SessionStart: a spawn that would use the seat transport (forced herdr) while
+    the daemon is down starts `atlas_seats.py ensure` detached ONCE and spawns this worker on tmux."""
+
+    def _spawn_forced_seats(self, extra=None, name="Alpha"):
+        import atlas_mux
+        import atlas_seats
+
+        home = os.path.join(self.root, "atlas-home")
+        env = self.spawn_env(extra={"ATLAS_COLONY_TRANSPORT": "herdr", "ATLAS_HOME": home, **(extra or {})})
+        for k in ("ATLAS_COLONY", "ATLAS_HERDR_AUTOSTART", "ATLAS_SEAT_BACKEND"):
+            if k not in (extra or {}):
+                env.pop(k, None)
+        prompt = self.make_prompt("p-" + name, "x")
+        argv = [
+            "spawn", "--run", "r1", "--name", name, "--harness", "omp",
+            "--agent", "implementer", "--prompt-file", prompt, "--model", "x/y",
+            "--thinking", "low", "--root", self.root,
+        ]  # fmt: skip
+        opened, ensures, panes = [], [], []
+
+        def fake_popen(argv_, *a, **kw):
+            if any("atlas_seats.py" in str(x) for x in argv_):
+                ensures.append(argv_)
+            return mock.MagicMock()
+
+        def fake_create(*a, **kw):
+            panes.append(a)
+            return {"ok": True, "pane_id": "p1"}
+
+        buf = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.object(atlas_mux, "_seats_up", return_value=False),
+            mock.patch.object(atlas_seats, "backend", return_value="rig"),
+            mock.patch("subprocess.Popen", side_effect=fake_popen),
+            mock.patch.object(atlas_seats, "create_pane", side_effect=fake_create),
+            mock.patch.object(atlas_mux, "_open_window", side_effect=lambda *a, **k: opened.append(a) or None),
+            contextlib.redirect_stdout(buf),
+        ):
+            rc = atlas_mux.main(argv)
+        return rc, opened, ensures, panes
+
+    def test_down_seats_start_one_background_ensure_and_spawn_on_tmux(self):
+        rc, opened, ensures, panes = self._spawn_forced_seats()
+        self.assertEqual(0, rc)
+        self.assertEqual(1, len(ensures), ensures)
+        self.assertIn(" ensure ", ensures[0][2])
+        self.assertEqual(1, len(opened), "this spawn must fall back to a tmux window")
+        self.assertEqual([], panes, "no seat pane while the daemon is not up")
+
+    def test_two_spawns_still_one_ensure(self):
+        _, _, first, _ = self._spawn_forced_seats(name="Alpha")
+        rc, _, second, _ = self._spawn_forced_seats(name="Beta")
+        self.assertEqual(0, rc)
+        self.assertEqual(1, len(first))
+        self.assertEqual([], second, "a start already in flight must not be launched twice")
+
+    def test_flags_suppress_first_use_ensure(self):
+        for flag in ({"ATLAS_COLONY": "off"}, {"ATLAS_HERDR_AUTOSTART": "off"}):
+            with self.subTest(flag=flag):
+                rc, opened, ensures, _ = self._spawn_forced_seats(extra=flag, name="W" + next(iter(flag))[6:10])
+                self.assertEqual(0, rc)
+                self.assertEqual([], ensures)
+                self.assertEqual(1, len(opened))
