@@ -35,9 +35,16 @@ jobs:
           for name in atlas armada programmer; do
             ver=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "plugins/$name/.claude-plugin/plugin.json")
             tag="$name-v$ver"
-            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            # ls-remote --exit-code: 0 = tag present, 2 = no match; anything else
+            # (e.g. 128: broken origin or auth) is a failure, never "tag absent".
+            rc=0
+            git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 || rc=$?
+            if [ "$rc" -eq 0 ]; then
               echo "Tag $tag already exists; skipping."
               continue
+            elif [ "$rc" -ne 2 ]; then
+              echo "::error::git ls-remote failed (exit $rc) while checking tag $tag; refusing to release"
+              exit 1
             fi
 
             # The marketplace entry must carry the same version when it has one.

@@ -115,12 +115,13 @@ for (const key of Object.keys(process.env)) {
   const name = key.slice(4);
   let value = process.env[key];
   const ph = PLACEHOLDER.exec(value);
-  if (ph && process.env[name] === undefined) value = savedOption(ph[1]);
+  const unset = !isUsable(process.env[name]);
+  if (ph && unset) value = savedOption(ph[1]);
   if (!isUsable(value)) {
-    if (ph && process.env[name] === undefined) note(`${name}: unresolved; set ${name} in ~/.config/atlas/atlas.env (chmod 600)`);
+    if (ph && unset) note(`${name}: unresolved; set ${name} in ~/.config/atlas/atlas.env (chmod 600)`);
     continue;
   }
-  if (process.env[name] === undefined) process.env[name] = value;
+  if (unset) process.env[name] = value;
   else if (process.env[name] !== value && !shellKeys.has(name)) {
     note(`${name}: env file value wins over saved userConfig (${key}); update or remove the file entry`);
   }

@@ -127,15 +127,16 @@ def _promote_cfg(shell_keys: set) -> None:
         name = key[4:]
         value = os.environ[key]
         ph = _PLACEHOLDER.match(value)
-        if ph and name not in os.environ:
+        unset = not _is_usable(os.environ.get(name, ""))
+        if ph and unset:
             value = _saved_option(ph.group(1))
         if not _is_usable(value):
-            if ph and name not in os.environ:
+            if ph and unset:
                 _note(
                     f"{name}: unresolved; set {name} in ~/.config/atlas/atlas.env (chmod 600)"
                 )
             continue
-        if name not in os.environ:
+        if unset:
             os.environ[name] = value
         elif os.environ[name] != value and name not in shell_keys:
             _note(
