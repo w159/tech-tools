@@ -161,3 +161,16 @@ test("resolveTarget expands ~ and $HOME instead of joining them onto cwd", () =>
 	expect(resolveTarget("/repo", "src/a.ts")).toBe("/repo/src/a.ts");
 	expect(resolveTarget("/repo", "~other/a.ts")).toBe("/repo/~other/a.ts");
 });
+
+test("sed in-place and no-space w commands are writes; plain -n scripts stay exploration", () => {
+	const c = loadNativeTools();
+	const cases: Array<[string, boolean]> = [
+		["sed -ni s/a/b/ f", false], ["sed -n --in-place s/a/b/ f", false], ["sed -n --in-place=.bak s/a/b/ f", false],
+		["sed -n --in s/a/b/ f", false], ["sed -nEi s/a/b/ f", false], ["sed -n -i.bak s/a/b/ f", false],
+		["sed -n 'wout.txt' f", false], ["sed -n \"wout.txt\" f", false], ["sed -n '1p;wout.txt' f", false],
+		["sed -n 's/a/b/wout.txt' f", false], ["sed -n '1,3{p;wout.txt}' f", false], ["sed -n '1p; wout.txt' f", false],
+		["sed -n '/a/p' f", true], ["sed -n 1p www.txt", true], ["sed -n '/show/p' f", true],
+		["sed -n 1,5p /tmp/work.txt", true],
+	];
+	for (const [cmd, exploration] of cases) expect([cmd, isExplorationShell(cmd, c)]).toEqual([cmd, exploration]);
+});

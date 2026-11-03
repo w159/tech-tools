@@ -134,6 +134,27 @@ const SHELL_SUBSTITUTION = /\$\(|`|<\(|>\(/;
 /** sed program text that writes/executes: a standalone or address-prefixed `w`/`W`/`e` command. */
 const SED_WRITE_CMD = /(?<![\w\\])[wWe](?![\w])|(?<=\d)[wWe](?![\w])/;
 
+/** sed `w`/`W` command whose filename follows with no space (`wout.txt`, `1p;wout`, `s/a/b/wout`); matched on the script text only, so a file named `www.txt` stays a read. */
+const SED_WRITE_NOSPACE = /(?<![\w\\])[wW](?=[^\s;}'"])/;
+
+/** sed short-flag cluster that includes `i` (`-i`, `-ni`, `-nEi`, `-i.bak`) or a `--in-place[=SUFFIX]` (or unambiguous prefix) long option. */
+function sedInPlace(token: string): boolean {
+	if (token.startsWith("--")) return token.length > 2 && "--in-place".startsWith(token.split("=")[0]);
+	return /^-[^-]*i/.test(token);
+}
+
+/** The sed script text: the first non-option token, re-joined across whitespace when it is quoted; quotes stripped. */
+function sedScript(args: string[]): string {
+	const i = args.findIndex(t => !t.startsWith("-"));
+	if (i < 0) return "";
+	const first = args[i];
+	const q = first[0];
+	if (q !== "'" && q !== '"') return first;
+	let text = first;
+	for (let j = i + 1; j < args.length && !(text.length > 1 && text.endsWith(q)); j++) text += ` ${args[j]}`;
+	return text.replace(/^['"]|['"]$/g, "");
+}
+
 /** awk program text that can run commands or write: system(), getline, close(), any pipe/redirect, -f/--file/--include/--load. */
 const AWK_UNSAFE = /system|getline|close\s*\(|[|>]|^-f|^--file|^--include|^--load/;
 
@@ -179,7 +200,8 @@ function explorationSegments(command: string, contract: NativeToolContract | und
 		const inPlaceFlag = tokens.slice(1).some(t => t.startsWith("-i"));
 		let ok = spec.commands.includes(name);
 		if (name === "sed") {
-			ok = !!tokens[1]?.startsWith("-n") && !inPlaceFlag && !tokens.slice(1).some(t => SED_WRITE_CMD.test(t));
+			const args = tokens.slice(1);
+			ok = !!tokens[1]?.startsWith("-n") && !inPlaceFlag && !args.some(sedInPlace) && !args.some(t => SED_WRITE_CMD.test(t)) && !SED_WRITE_NOSPACE.test(sedScript(args));
 		} else if (name === "awk") {
 			ok = !inPlaceFlag && !tokens.slice(1).some(t => AWK_UNSAFE.test(t));
 		}
