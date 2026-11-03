@@ -136,7 +136,14 @@ export function loadBridgedHooksFor(
 			for (const group of groups) {
 				if (!group || typeof group !== "object" || !("hooks" in group) || !Array.isArray(group.hooks)) continue;
 				const rawMatcher = "matcher" in group && typeof group.matcher === "string" ? group.matcher : "";
-				const matcher = rawMatcher && rawMatcher !== "*" ? new RegExp(`^(?:${rawMatcher})$`) : undefined;
+				let matcher: RegExp | undefined;
+				try {
+					matcher = rawMatcher && rawMatcher !== "*" ? new RegExp(`^(?:${rawMatcher})$`) : undefined;
+				} catch (error) {
+					// one bad matcher skips only its group; the rest of the bridged hooks stay
+					recordFault("hook-bridge", `invalid matcher ${JSON.stringify(rawMatcher)} in ${hooksPath} (${String(error).slice(0, 120)}): hook group skipped`, "BadMatcher", undefined);
+					continue;
+				}
 				for (const hook of group.hooks) {
 					if (!hook || typeof hook !== "object" || !("command" in hook) || typeof hook.command !== "string") continue;
 					const script = /([\w.-]+\.py)/.exec(hook.command)?.[1];

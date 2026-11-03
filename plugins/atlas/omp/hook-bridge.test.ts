@@ -657,3 +657,26 @@ test("session_start opens the lead's channel once, with zero members, before any
 	killed.handlers.session_start?.({}, killed.ctx("main"));
 	expect(channelArgv.length).toBe(2);
 });
+
+test("one invalid matcher skips only its group, records a fault naming it, and keeps the rest", () => {
+	const home = mkdtempSync(join(tmpdir(), "atlas-badmatch-"));
+	const saved = process.env.ATLAS_HOME;
+	process.env.ATLAS_HOME = home;
+	try {
+		writeFileSync(join(home, "hooks.json"), JSON.stringify({ hooks: { PreToolUse: [
+			{ matcher: "(Edit", hooks: [{ type: "command", command: 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/bad.py"' }] },
+			{ matcher: "Bash", hooks: [{ type: "command", command: 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/good.py"' }] },
+		] } }));
+		writeFileSync(join(home, "contract.json"), JSON.stringify({ bridged: ["bad.py", "good.py"] }));
+		const hooks = loadBridgedHooksFor(["PreToolUse"], "bridged", join(home, "hooks.json"), join(home, "contract.json"));
+		expect(hooks.map(h => /([\w.-]+\.py)/.exec(h.command)?.[1])).toEqual(["good.py"]);
+		const rows = faultsIn(home);
+		expect(rows.length).toBe(1);
+		expect(rows[0].error).toContain("(Edit");
+		expect(rows[0].error).not.toContain("install is stale");
+	} finally {
+		if (saved === undefined) delete process.env.ATLAS_HOME;
+		else process.env.ATLAS_HOME = saved;
+		rmSync(home, { recursive: true, force: true });
+	}
+});
