@@ -3164,6 +3164,11 @@ def _reap_loop():
 HEAL_CHECK_S = 20
 _HTTPD: ThreadingHTTPServer | None = None
 _EXEC = os.execv  # seam: tests stub this instead of really exec-ing
+_HEAL_SEEN_ENV = "ATLAS_DASH_HEAL_SEEN"  # os.pathsep list of scripts already exec'd into: breaks exec ping-pong
+
+
+def _heal_seen() -> set[str]:
+    return {p for p in os.environ.get(_HEAL_SEEN_ENV, "").split(os.pathsep) if p}
 
 
 def _own_install_roots() -> list[Path]:
@@ -3260,8 +3265,9 @@ def _self_heal_target(
         return None
     if self_scripts is None:
         self_scripts = {os.path.realpath(s) for s in (sys.argv[0], __file__)}
+    skip = self_scripts | _heal_seen()
     for _ver, script in reversed(_sibling_installs(scan)):
-        if os.path.realpath(script) not in self_scripts:
+        if os.path.realpath(script) not in skip:
             return script
     return None
 
@@ -3279,6 +3285,8 @@ def _self_heal_exec(target: Path) -> None:
     if _HTTPD is not None:
         with contextlib.suppress(OSError):
             _HTTPD.server_close()
+    seen = _heal_seen() | {os.path.realpath(s) for s in (sys.argv[0], __file__, target)}
+    os.environ[_HEAL_SEEN_ENV] = os.pathsep.join(sorted(seen))
     _EXEC(sys.executable, [sys.executable, str(target), *sys.argv[1:]])
 
 
