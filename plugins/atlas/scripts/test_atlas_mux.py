@@ -3848,3 +3848,43 @@ class SeatsFirstUseTests(Base):
                 self.assertEqual(0, rc)
                 self.assertEqual([], ensures)
                 self.assertEqual(1, len(opened))
+
+
+class SeatsFallbackRunTransportTests(Base):
+    """A single spawn that fell back to tmux (forced seat transport, daemon down) records the transport it used, so
+    `status --run` and `kill --run` in the same forced env find the tmux window instead of asking the seat backend."""
+
+    def _main(self, argv, env):
+        import atlas_mux
+        import atlas_seats
+
+        buf = io.StringIO()
+        closed = []
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.object(atlas_mux, "_seats_up", return_value=False),
+            mock.patch.object(atlas_seats, "ensure_background", return_value="started"),
+            mock.patch.object(atlas_seats, "list_panes", return_value=[]),
+            mock.patch.object(atlas_seats, "close_run", side_effect=lambda r: closed.append(r) or {"ok": True, "closed": 0}),
+            contextlib.redirect_stdout(buf),
+        ):
+            rc = atlas_mux.main(argv)
+        return rc, json.loads(buf.getvalue().strip().splitlines()[-1]), closed
+
+    def test_status_and_kill_follow_the_recorded_tmux_transport(self):
+        env = self.spawn_env(extra={"ATLAS_COLONY_TRANSPORT": "herdr"})
+        prompt = self.make_prompt("p-fb", "x")
+        rc, out, _ = self._main(
+            ["spawn", "--run", "r1", "--name", "Alpha", "--harness", "omp", "--agent", "implementer",
+             "--prompt-file", prompt, "--model", "x/y", "--thinking", "low", "--root", self.root],
+            env,
+        )  # fmt: skip
+        self.assertEqual(0, rc, out)
+        rc, out, closed = self._main(["status", "--run", "r1", "--root", self.root], env)
+        self.assertEqual(0, rc, out)
+        self.assertEqual(["Alpha"], [w["name"] for w in out["workers"]])
+        self.assertEqual("tmux", out.get("transport"))
+        rc, out, closed = self._main(["kill", "--run", "r1", "--root", self.root], env)
+        self.assertEqual(0, rc, out)
+        self.assertEqual([], closed, "kill must not ask the seat backend about a tmux run")
+        self.assertTrue(any("kill-session" in c for c in _tmux_log_calls(self.state)))

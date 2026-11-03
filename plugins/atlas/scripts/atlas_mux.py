@@ -1250,6 +1250,7 @@ def _spawn_registered(args, root: str, chan) -> int:
         + (shlex.join(["env", *forwarded]) + " " if forwarded else "")
         + shlex.join(worker)
     )
+    _note_run_transport(root, args.run, use)
     if use == "herdr":
         # herdr panes get the board pins as well: run-worker re-pins them for the harness, the pane shell needs them
         # for anything the lead runs there (and for the hooks of a manually started harness).
@@ -1497,6 +1498,34 @@ def _note_run(root: str, run: str, name: str) -> None:
         pass
 
 
+def _note_run_transport(root: str, run: str, use: str) -> None:
+    """Record the pane transport a single spawn actually used (`<run>.transport`, one name per line): a spawn that fell
+    back to tmux while the seat transport was forced must not be looked up in seat panes by status/kill. Best effort."""
+    try:
+        path = Path(root) / RUNS_REL / f"{run}.transport"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        have = set(path.read_text(encoding="utf-8").split()) if path.exists() else set()
+        if use not in have:
+            with open(path, "a", encoding="utf-8") as fh:
+                fh.write(use + "\n")
+    except OSError:
+        pass
+
+
+def _run_transport(root, run: str) -> str:
+    """transport() for reading a run: when the env forces the seat transport but every recorded single spawn of the
+    run fell back to tmux, the run lives in tmux. Mixed or unrecorded runs keep the env-derived transport."""
+    use = transport()
+    if use == "herdr":
+        try:
+            used = set((Path(root) / RUNS_REL / f"{run}.transport").read_text(encoding="utf-8").split())
+        except OSError:
+            return use
+        if used == {"tmux"}:
+            return "tmux"
+    return use
+
+
 def _run_trace(root: str, run: str) -> set | None:
     """Worker names recorded for `run` (spawn marker plus its team record, live or archived); None when the run
     left no trace at all."""
@@ -1547,7 +1576,7 @@ def cmd_status(args) -> int:
             args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
         )
     )
-    use = transport()
+    use = _run_transport(root, args.run)
     if use == "claude-bg":
         rows = _claude_workers(str(root)) or []
         # a running worker's terminal output: `claude logs <id>` (the pane transports capture it live)
@@ -1665,7 +1694,7 @@ def cmd_kill(args) -> int:
     root = os.path.abspath(
         args.root or os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()
     )
-    use = transport()
+    use = _run_transport(root, args.run)
     configured = use
     stopped: list = []
     if use == "claude-bg":
