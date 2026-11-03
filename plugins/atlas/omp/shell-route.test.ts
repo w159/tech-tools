@@ -235,3 +235,15 @@ test("a store save of ATLAS_LEAN_SHELL=off applies on the next call without relo
 		rmSync(join(home, "settings.json"), { force: true });
 	}
 });
+
+test("wrapCommand quotes a lean-ctx path that contains a space or a quote", () => {
+	const dir = mkdtempSync(join(tmpdir(), "atlas lean 'q' "));
+	try {
+		const bin = join(dir, "lean-ctx");
+		writeFileSync(bin, '#!/bin/sh\nshift\nexec /bin/sh -c "$1"\n', { mode: 0o755 });
+		const r = runCaptureSync(["/bin/sh", "-c", wrapCommand("echo routed", bin)], { cwd: root });
+		expect({ code: r.code, out: r.stdout.trim() }).toEqual({ code: 0, out: "routed" });
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});

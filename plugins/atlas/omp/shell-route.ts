@@ -34,16 +34,26 @@ const LEAN_NAME = "lean-ctx";
 function startsWithLeanCtx(command: string, bin: string): boolean {
 	const c = command.trim();
 	if (c === LEAN_NAME || c.startsWith(`${LEAN_NAME} `)) return true;
-	return bin !== "" && (c === bin || c.startsWith(`${bin} `));
+	return bin !== "" && (c === bin || c.startsWith(`${bin} `) || c.startsWith(`${shWord(bin)} `));
+}
+
+/** POSIX single-quote escaping (' -> '\''). */
+function shQuote(text: string): string {
+	return `'${text.replaceAll("'", "'\\''")}'`;
+}
+
+/** The binary path as one shell word: left bare when it has only safe characters, else single-quoted. */
+function shWord(path: string): string {
+	return /^[A-Za-z0-9_\/.:@%+=,-]+$/.test(path) ? path : shQuote(path);
 }
 
 /**
- * `<bin> -c '<command>'` with POSIX single-quote escaping (' -> '\''). Commands
+ * `<bin> -c '<command>'` (bin single-quoted when it has unsafe characters) with POSIX single-quote escaping (' -> '\''). Commands
  * already starting with lean-ctx pass through unchanged, so wrapping is idempotent.
  */
 export function wrapCommand(command: string, bin: string): string {
 	if (command === "" || bin === "" || startsWithLeanCtx(command, bin)) return command;
-	return `${bin} -c '${command.replaceAll("'", "'\\''")}'`;
+	return `${shWord(bin)} -c ${shQuote(command)}`;
 }
 
 /** Executable regular file at path? */
