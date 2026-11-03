@@ -16,6 +16,10 @@ import tempfile
 import unittest
 from unittest import mock
 
+# Pinned: the default start method differs by version (fork on Linux <= 3.13,
+# forkserver on 3.14+), and forkserver startup broke with BrokenPipeError in CI.
+_MP = multiprocessing.get_context("spawn")
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
@@ -307,7 +311,7 @@ class ConcurrencyTest(unittest.TestCase):
         session_id = "concurrent-sess"
         n = 16
         procs = [
-            multiprocessing.Process(
+            _MP.Process(
                 target=_should_run_worker, args=(tmp, session_id, "hook-%d" % i)
             )
             for i in range(n)
@@ -337,7 +341,7 @@ class ConcurrencyTest(unittest.TestCase):
         session_id = "concurrent-emit-sess"
         n = 16
         procs = [
-            multiprocessing.Process(
+            _MP.Process(
                 target=_emit_worker, args=(tmp, session_id, "message-%d" % i)
             )
             for i in range(n)
