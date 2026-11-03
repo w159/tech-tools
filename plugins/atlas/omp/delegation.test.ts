@@ -123,3 +123,15 @@ test("agent tool-state dirs (.serena, .lean-ctx, ...) are never counted; src/app
 	expect(Object.keys(snapshotDirty(root) ?? {})).toEqual(["src/app.py"]);
 	expect(newShellEdits(before, snapshotDirty(root))).toEqual(["src/app.py"]);
 });
+
+test("snapshotDirty from a subdirectory counts a shell edit to a dirty file at the repo root", () => {
+	const root = repo();
+	write(root, "base.py", "a = 1\n");
+	const sub = nodePath.join(root, "src");
+	const before = snapshotDirty(sub);
+	expect(before?.["base.py"]).toBeDefined();
+	expect(before?.["base.py"]).not.toBe("deleted");
+	write(root, "base.py", "a = 2\n");
+	write(root, "src/calc.py", "def add(a, b):\n    return a + b\n");
+	expect(newShellEdits(before, snapshotDirty(sub))).toEqual(["base.py", "src/calc.py"]);
+});

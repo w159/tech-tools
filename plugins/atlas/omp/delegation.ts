@@ -58,13 +58,16 @@ export function snapshotDirty(root: string): Record<string, string> | undefined 
 		});
 		// A non-zero exit (not a git work tree, git missing) or a timeout kill is "unknown", as the old throw was.
 		if (code !== 0) return undefined;
+		// porcelain paths are relative to the repo root, not to `root` (which may be a subdirectory)
+		const top = runCaptureSync(["git", "rev-parse", "--show-toplevel"], { cwd: root, timeoutMs: 10_000 });
+		const gitRoot = top.code === 0 && top.stdout.trim() ? top.stdout.trim() : root;
 		const snapshot: Record<string, string> = {};
 		for (const field of out.split("\0")) {
 			// "XY path"; the bare original-path field that follows a rename has no XY prefix.
 			if (field.length < 4 || field[2] !== " ") continue;
 			const rel = field.slice(3);
 			if (exempt(rel)) continue;
-			snapshot[rel] = hashOf(nodePath.join(root, rel));
+			snapshot[rel] = hashOf(nodePath.join(gitRoot, rel));
 		}
 		return snapshot;
 	} catch {
