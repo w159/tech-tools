@@ -226,36 +226,118 @@ if __name__ == "__main__":
     unittest.main()
 
 
+# Expected backend() of cef065ec (the decision SessionStart used before seats moved to first use), hard-coded.
+# Key: (node major or None, rig binary, herdr web-ui installed, herdr server up); no rigs running; npm present with node.
+# Boot's herdr colony path ran exactly when this was "herdr".
+OLD_BACKEND = {
+    (None, True, True, True): 'herdr', (None, True, True, False): 'rig', (None, True, False, True): 'herdr', (None, True, False, False): 'rig',
+    (None, False, True, True): 'herdr', (None, False, True, False): 'herdr', (None, False, False, True): 'herdr', (None, False, False, False): 'none',
+    (18, True, True, True): 'herdr', (18, True, True, False): 'rig', (18, True, False, True): 'herdr', (18, True, False, False): 'rig',
+    (18, False, True, True): 'herdr', (18, False, True, False): 'herdr', (18, False, False, True): 'herdr', (18, False, False, False): 'none',
+    (20, True, True, True): 'herdr', (20, True, True, False): 'rig', (20, True, False, True): 'herdr', (20, True, False, False): 'rig',
+    (20, False, True, True): 'herdr', (20, False, True, False): 'herdr', (20, False, False, True): 'herdr', (20, False, False, False): 'none',
+    (22, True, True, True): 'herdr', (22, True, True, False): 'rig', (22, True, False, True): 'herdr', (22, True, False, False): 'rig',
+    (22, False, True, True): 'herdr', (22, False, True, False): 'rig', (22, False, False, True): 'herdr', (22, False, False, False): 'rig',
+    (24, True, True, True): 'herdr', (24, True, True, False): 'rig', (24, True, False, True): 'herdr', (24, True, False, False): 'rig',
+    (24, False, True, True): 'herdr', (24, False, True, False): 'rig', (24, False, False, True): 'herdr', (24, False, False, False): 'rig',
+    (26, True, True, True): 'herdr', (26, True, True, False): 'rig', (26, True, False, True): 'herdr', (26, True, False, False): 'rig',
+    (26, False, True, True): 'herdr', (26, False, True, False): 'herdr', (26, False, False, True): 'herdr', (26, False, False, False): 'none',
+}
+
+
 class BootHerdrGateTests(unittest.TestCase):
-    """Boot's herdr-colony gate is subprocess-free (it replaced the seat backend probe, which ran `node --version`
-    and, for rig, a detached `atlas_seats.py ensure`). Rig machines stay silent at boot; the seats start on first use."""
+    """Boot's herdr-colony gate reproduces the old backend()-based decision without a per-boot subprocess (the seat
+    backend probe ran `node --version`; the node major is now cached in ATLAS_HOME by path+mtime+size)."""
 
     def setUp(self):
+        import shutil
+
         self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home, True)
+        self.bin = os.path.join(self.home, "fakebin")
+        os.makedirs(self.bin)
         p = mock.patch.dict(os.environ, {"ATLAS_HOME": self.home, "ATLAS_COLONY": "on", "HOME": self.home})
         p.start()
         self.addCleanup(p.stop)
         os.environ.pop("ATLAS_SEAT_BACKEND", None)
+        os.environ["PATH"] = self.bin + os.pathsep + "/usr/bin" + os.pathsep + "/bin"
 
-    def gate(self, which=None):
-        which = which or {}
-        with mock.patch("shutil.which", side_effect=lambda n, *a, **k: which.get(n)):
+    def shim(self, node):
+        want = {} if node is None else {"node": f"#!/bin/sh\necho v{node}.1.0\n", "npm": "#!/bin/sh\nexit 0\n"}
+        for n in ("node", "npm"):
+            f = os.path.join(self.bin, n)
+            if n not in want:
+                if os.path.exists(f):
+                    os.remove(f)
+            elif not os.path.exists(f) or open(f).read() != want[n]:  # untouched shim keeps its mtime: warm cache
+                with open(f, "w") as fh:
+                    fh.write(want[n])
+                os.chmod(f, 0o755)
+
+    def gate(self, node, rig, installed, server):
+        import atlas_herdr
+        import atlas_rig
+
+        self.shim(node)
+        root = os.path.join(self.home, "plugin")
+        os.makedirs(os.path.join(root, "scripts"), exist_ok=True)
+        marker = os.path.join(root, "scripts", "plugin.ts")
+        if installed:
+            open(marker, "w").close()
+        elif os.path.exists(marker):
+            os.remove(marker)
+        sock = os.path.join(self.home, "herdr.sock")  # existence is the cheap pre-check; _server_up is patched
+        if server:
+            open(sock, "w").close()
+        elif os.path.exists(sock):
+            os.remove(sock)
+        os.environ["HERDR_SOCKET_PATH"] = sock
+        with (
+            mock.patch.object(atlas_rig, "_bin", return_value="/x/rig" if rig else None),
+            mock.patch.object(atlas_rig, "_rigs", return_value=[]),
+            mock.patch.object(atlas_herdr, "_server_up", return_value=server),
+            mock.patch.object(atlas_herdr, "PLUGIN_ROOT", __import__("pathlib").Path(root)),
+        ):
             return session_boot._boot_herdr_wanted(self.home)
+
+    def test_gate_equals_old_backend_decision(self):
+        for key, old in OLD_BACKEND.items():
+            with self.subTest(key=key):
+                for f in ("node-major-cache.json",):
+                    p = os.path.join(self.home, f)
+                    if os.path.exists(p):
+                        os.remove(p)
+                self.assertEqual(old == "herdr", self.gate(*key), f"old backend {old!r}")
 
     def test_env_decides_when_set(self):
         for val, want in (("herdr", True), ("rig", False), ("off", False)):
             with mock.patch.dict(os.environ, {"ATLAS_SEAT_BACKEND": val}):
-                self.assertEqual(self.gate({"herdr": "/x/herdr"}), want)
+                self.assertEqual(self.gate(None, False, False, False), want)
 
-    def test_rig_present_or_installable_skips_herdr(self):
-        self.assertFalse(self.gate({"rig": "/x/rig", "herdr": "/x/herdr"}))
-        self.assertFalse(self.gate({"node": "/x/node", "npm": "/x/npm", "herdr": "/x/herdr"}))
+    def test_warm_node_cache_runs_no_subprocess(self):
+        self.gate(20, False, True, False)  # cold: one `node --version`
+        with mock.patch("subprocess.run") as run, mock.patch("subprocess.Popen") as popen:
+            self.assertTrue(self.gate(20, False, True, False))
+        run.assert_not_called()
+        popen.assert_not_called()
 
-    def test_herdr_only_machine_runs_legacy_path(self):
-        self.assertTrue(self.gate({"herdr": "/x/herdr"}))
+    def test_node_cache_is_keyed_by_binary(self):
+        self.assertTrue(self.gate(20, False, True, False))  # node 20, web-ui installed: herdr
+        self.gate(22, False, True, False)  # shim() rewrites node -> new mtime/size
+        self.assertFalse(self.gate_same_node(True), "a new node install must not reuse the old cached major")
 
-    def test_nothing_installed_is_silent(self):
-        self.assertFalse(self.gate({}))
+    def gate_same_node(self, installed):
+        import atlas_herdr
+        import atlas_rig
+
+        root = os.path.join(self.home, "plugin")
+        with (
+            mock.patch.object(atlas_rig, "_bin", return_value=None),
+            mock.patch.object(atlas_rig, "_rigs", return_value=[]),
+            mock.patch.object(atlas_herdr, "_server_up", return_value=False),
+            mock.patch.object(atlas_herdr, "PLUGIN_ROOT", __import__("pathlib").Path(root)),
+        ):
+            return session_boot._boot_herdr_wanted(self.home)
 
     def test_rig_boot_is_silent_and_spawns_nothing(self):
         with mock.patch.dict(os.environ, {"ATLAS_SEAT_BACKEND": "rig"}), mock.patch("subprocess.Popen") as popen:
@@ -288,5 +370,3 @@ class BootDoesNotStartSeatsTests(unittest.TestCase):
         self.assertEqual([], spawned)
         backend.assert_not_called()
         node_ok.assert_not_called()
-        for c in run.call_args_list:
-            self.assertNotIn("--version", " ".join(map(str, c[0][0])))

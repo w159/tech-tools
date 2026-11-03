@@ -27,16 +27,75 @@ _NAMES = (
 )
 
 
+def _node_rule(version_text: str) -> bool:
+    """OpenRig needs Node 22 or 24 (and npm to install it)."""
+    return bool(shutil.which("npm")) and int(
+        version_text.strip().lstrip("v").split(".")[0]
+    ) in (22, 24)
+
+
 def _node_ok() -> bool:
     try:
         v = subprocess.run(
             ["node", "--version"], capture_output=True, text=True, timeout=5
         ).stdout
-        return bool(shutil.which("npm")) and int(
-            v.strip().lstrip("v").split(".")[0]
-        ) in (22, 24)
+        return _node_rule(v)
     except Exception:
         return False
+
+
+def _node_ok_cached(home: str) -> bool:
+    """_node_ok() without a per-call subprocess: the `node --version` major is cached in
+    $ATLAS_HOME/node-major-cache.json keyed by the resolved node path + mtime + size, so it runs once per node
+    install. Failures are never cached."""
+    try:
+        node = shutil.which("node")
+        if not node:
+            return False
+        real = os.path.realpath(node)
+        st = os.stat(real)
+        key = [real, st.st_mtime_ns, st.st_size]
+        cache = os.path.join(home, "node-major-cache.json")
+        try:
+            with open(cache) as f:
+                c = json.load(f)
+            if c.get("key") == key:
+                return _node_rule(str(c["version"]))
+        except (OSError, ValueError, KeyError):
+            pass
+        v = subprocess.run(
+            [node, "--version"], capture_output=True, text=True, timeout=5
+        ).stdout
+        ok = _node_rule(v)
+        with contextlib.suppress(OSError):
+            os.makedirs(home, exist_ok=True)
+            with open(cache + ".tmp", "w") as f:
+                json.dump({"key": key, "version": v.strip()}, f)
+            os.replace(cache + ".tmp", cache)
+        return ok
+    except Exception:
+        return False
+
+
+def decide_backend(rig_bin, node_ok, rigs_empty, herdr_server_up, herdr_installed) -> str:
+    """The one backend decision (rig | herdr | none), shared by backend() and SessionStart's herdr gate so they
+    cannot drift. Every argument is a zero-arg callable so callers pick cheap or exact probes and unused ones never
+    run: rig when its binary exists or node 22/24 + npm are present, except herdr when no rigs run and the herdr
+    server is up; without rig, herdr when its web-ui is installed or its server is up, else none."""
+    if rig_bin() or node_ok():
+        # rig holds no rigs (or its ps failed) but herdr is up: the live panes are herdr's
+        try:
+            if rigs_empty() and herdr_server_up():
+                return "herdr"
+        except Exception:
+            pass
+        return "rig"
+    try:
+        if herdr_installed() or herdr_server_up():
+            return "herdr"
+    except Exception:
+        pass
+    return "none"
 
 
 _BACKEND_TTL_S = 30.0
@@ -71,23 +130,14 @@ def _detect_backend() -> str:
     if env == "off":
         return "none"
     rig = importlib.import_module("atlas_rig")
-    if rig._bin() or _node_ok():
-        # rig holds no rigs (or its ps failed) but herdr is up: the live panes are herdr's
-        try:
-            if not rig._rigs() and importlib.import_module(
-                "atlas_herdr"
-            ).status().get("herdr_server"):
-                return "herdr"
-        except Exception:
-            pass
-        return "rig"
-    try:
-        h = importlib.import_module("atlas_herdr").status()
-        if h.get("installed") or h.get("herdr_server"):
-            return "herdr"
-    except Exception:
-        pass
-    return "none"
+    herdr = importlib.import_module("atlas_herdr")
+    return decide_backend(
+        rig._bin,
+        _node_ok,
+        lambda: not rig._rigs(),
+        lambda: herdr.status().get("herdr_server"),
+        lambda: herdr.status().get("installed"),
+    )
 
 
 _NO_BACKEND = {"ok": False, "reason": "no seat backend"}

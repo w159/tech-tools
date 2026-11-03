@@ -10229,5 +10229,22 @@
     "status": "verified",
     "verified_at": "2026-10-30T22:52:54+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "seats-lazy-14b28ad",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "fix/seats-lazy 14b28ad: _boot_herdr_wanted drops herdr web-ui boot on non-22/24 node+npm machines",
+    "evidence": [
+      "plugins/atlas/hooks/session_boot_core.py:_boot_herdr_wanted vs atlas_seats._node_ok/_detect_backend; repro node v20+npm+herdr web-ui installed: OLD backend()=herdr, NEW wanted=False"
+    ],
+    "doc_refs": [],
+    "reproduction": "node shim v20 + npm shim, fake colony/herdr-web-ui/scripts/plugin.ts, compare atlas_seats.backend() vs session_boot_core._boot_herdr_wanted",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-03T08:20:41+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

@@ -167,24 +167,44 @@ def _boot_log(stage, reason):
 
 
 def _boot_herdr_wanted(home):
-    """Cheap gate for the legacy herdr colony path (no `node --version`, no subprocess, no seat spawn). The seat
-    daemon (OpenRig) is NOT started here: it starts on first use (atlas_seats.ensure_background, called from
-    atlas_mux). ATLAS_SEAT_BACKEND=herdr -> True; rig/off -> False; unset -> True only when no rig binary exists,
-    node+npm are not both on PATH (rig would be the backend) and herdr is installed."""
-    import shutil
-
+    """Does the legacy herdr colony path run at boot? Exactly when the old `atlas_seats.backend()` said herdr, via the
+    shared `atlas_seats.decide_backend`, but with subprocess-free probes: the node major is cached in ATLAS_HOME
+    (`node --version` runs once per node install), the herdr server is a socket ping, web-ui presence a file check.
+    `rig ps` runs only when a herdr server is up AND rig is present. The seat daemon is NOT started here: it starts on
+    first use (atlas_seats.ensure_background, from atlas_mux). ATLAS_SEAT_BACKEND=herdr yes; rig/off no."""
     env = (os.environ.get("ATLAS_SEAT_BACKEND") or "").strip().lower()
     if env in ("rig", "off", "herdr"):
         return env == "herdr"
-    if os.path.isfile(
-        os.path.join(home, "openrig", "npm", "node_modules", ".bin", "rig")
-    ) or shutil.which("rig"):
-        return False
-    if shutil.which("node") and shutil.which("npm"):
-        return False
-    return bool(
-        shutil.which("herdr")
-        or os.path.exists(os.path.join(os.path.expanduser("~"), ".local", "bin", "herdr"))
+    scripts = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+    )
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import atlas_rig
+    import atlas_seats
+
+    def herdr():
+        import atlas_herdr  # ~50 ms to import: only when a herdr socket exists or herdr-only detection needs it
+
+        return atlas_herdr
+
+    def server_up():
+        # same socket path rule as atlas_herdr._sock_path; a missing socket means "down" without the import
+        sock = os.environ.get("HERDR_SOCKET_PATH") or os.path.join(
+            os.path.expanduser("~"), ".config", "herdr", "herdr.sock"
+        )
+        return os.path.exists(sock) and bool(herdr()._server_up())
+
+    return (
+        atlas_seats.decide_backend(
+            atlas_rig._bin,
+            lambda: atlas_seats._node_ok_cached(home),
+            # cheap order: `rig ps` only when a herdr server answers (otherwise the result is rig either way)
+            lambda: server_up() and not atlas_rig._rigs(),
+            server_up,
+            lambda: (herdr().PLUGIN_ROOT / "scripts" / "plugin.ts").is_file(),
+        )
+        == "herdr"
     )
 
 
