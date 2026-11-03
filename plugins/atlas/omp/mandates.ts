@@ -81,34 +81,197 @@ function satisfiesRecall(toolName: string, input: unknown): boolean {
 	return [path, filePath].some(p => typeof p === "string" && p.startsWith("xd://mcp__") && CLAUDE_MEM_SERVER.test(p.slice("xd://".length)));
 }
 
-const SEGMENT_SPLIT = /&&|\|\||;|\|/;
+const SEGMENT_SPLIT = /&&|\|\||[;|&()`\n]/g;
 const ENV_ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*=/;
-const GIT_EQ_OPTS = ["--git-dir=", "--work-tree=", "--exec-path=", "--namespace="];
+/** git global options that consume the NEXT token as their value (`--opt=v` forms are covered by the generic "starts with -" rule). */
+const GIT_VALUE_OPTS = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env", "--attr-source"]);
+/** Prefix wrappers that run their remaining argv; value = flags that take a value. */
+const WRAPPERS = new Map<string, Set<string>>([
+	["env", new Set(["-u", "-C", "-S", "--unset", "--chdir", "--split-string"])],
+	["time", new Set(["-f", "-o", "--format", "--output"])],
+	["nohup", new Set()],
+	["command", new Set()],
+	["exec", new Set(["-a"])],
+	["builtin", new Set()],
+	["eval", new Set()],
+	["setsid", new Set()],
+	["nice", new Set(["-n"])],
+	["xargs", new Set(["-I", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "-l"])],
+	["sudo", new Set(["-u", "-g", "-h", "-p", "-C", "-r", "-t", "-U", "-D", "-R", "-T"])],
+]);
+const LEADERS = new Set(["then", "do", "else", "elif", "if", "while", "until", "!", "{", "}"]);
+const SEPARATOR_CHARS = new Set(";&|()`\n");
+const PUNCTUATION_CHARS = new Set(";&|()<>`\n");
+/** Bounds from bash_advisor.py: only the head of each segment is tokenised and only the first segments are visited. */
+const SEGMENT_HEAD = 2048;
+const MAX_SEGMENTS = 4096;
+const SHLEX_MAX = 16384;
+const SHELL_C = /\b(?:ba|z|da|k)?sh\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*c[A-Za-z]*\s+(['"])(.*?)\1/gs;
+const EVAL_Q = /\beval\s+(['"])(.*?)\1/gs;
 
-/** Minimal shlex-like split: whitespace-separated, single/double quotes group. */
-function shellWords(segment: string): string[] {
-	const words: string[] = [];
-	const re = /"((?:\\.|[^"\\])*)"|'([^']*)'|(\S+)/g;
-	for (let m = re.exec(segment); m; m = re.exec(segment)) words.push(m[1] ?? m[2] ?? m[3]);
-	return words;
+/**
+ * Port of Python's shlex (posix mode, whitespace_split). `punct` mimics `punctuation_chars=";&|()<>`\n"`
+ * with `#` as a comment character (bash_advisor builds shlex.shlex directly); `shlex.split` is the other
+ * mode (no punctuation, no comments, newline is whitespace). Throws like Python's ValueError on an
+ * unbalanced quote or a trailing backslash.
+ */
+function shlexTokens(text: string, punct: boolean): string[] {
+	const whitespace = punct ? " \t\r" : " \t\r\n";
+	const tokens: string[] = [];
+	let token = "";
+	let quoted = false;
+	let state: string = " ";
+	let escapedState = "";
+	const isPunct = (c: string) => punct && PUNCTUATION_CHARS.has(c);
+	const skipComment = (from: number): number => {
+		const nl = text.indexOf("\n", from);
+		return nl < 0 ? text.length : nl + 1;
+	};
+	const emit = () => {
+		if (token !== "" || quoted) tokens.push(token);
+		token = "";
+		quoted = false;
+	};
+	for (let i = 0; i < text.length; i++) {
+		const c = text[i];
+		if (state === " ") {
+			if (whitespace.includes(c)) continue;
+			if (punct && c === "#") i = skipComment(i + 1) - 1;
+			else if (c === "\\") ((escapedState = "a"), (state = c));
+			else if (c === "'" || c === '"') ((state = c), (quoted = true));
+			else if (isPunct(c)) ((token = c), (state = "c"));
+			else ((token = c), (state = "a"));
+		} else if (state === "a" || state === "c") {
+			if (whitespace.includes(c)) {
+				state = " ";
+				emit();
+			} else if (punct && c === "#") {
+				state = " ";
+				i = skipComment(i + 1) - 1;
+				emit();
+			} else if (state === "c") {
+				if (isPunct(c)) token += c;
+				else {
+					i -= 1; // push the char back; it starts the next token
+					state = " ";
+					emit();
+				}
+			} else if (c === "'" || c === '"') ((state = c), (quoted = true));
+			else if (c === "\\") ((escapedState = "a"), (state = c));
+			else if (isPunct(c)) {
+				i -= 1;
+				state = " ";
+				emit();
+			} else token += c;
+		} else if (state === "\\") {
+			if ((escapedState === "'" || escapedState === '"') && c !== state && c !== escapedState) token += state;
+			token += c;
+			state = escapedState;
+		} else {
+			// inside a quote (state is the quote character)
+			quoted = true;
+			if (c === state) state = "a";
+			else if (c === "\\" && state === '"') ((escapedState = state), (state = c));
+			else token += c;
+		}
+	}
+	if (state === "'" || state === '"') throw new Error("No closing quotation");
+	if (state === "\\") throw new Error("No escaped character");
+	emit();
+	return tokens;
 }
 
-/** Parse contract mirrored from hooks/bash_advisor.py `_match_git_commit`. */
-export function matchGitCommit(command: string): boolean {
-	for (const segment of (command ?? "").split(SEGMENT_SPLIT)) {
-		let tokens = shellWords(segment);
-		while (tokens.length && ENV_ASSIGN.test(tokens[0])) tokens = tokens.slice(1);
+/** Fallback segmentation (bounded, quote-unaware regex split). */
+function* regexSegments(command: string): Generator<string[]> {
+	let last = 0;
+	let splits = 0;
+	const segments: string[] = [];
+	for (const m of command.matchAll(SEGMENT_SPLIT)) {
+		if (splits >= MAX_SEGMENTS) break;
+		segments.push(command.slice(last, m.index));
+		last = (m.index ?? 0) + m[0].length;
+		splits += 1;
+	}
+	segments.push(command.slice(last));
+	for (const raw of segments) {
+		const segment = raw.slice(0, SEGMENT_HEAD);
+		if (!segment.includes("git")) continue;
+		try {
+			yield shlexTokens(segment, false);
+		} catch {
+			yield segment.split(/\s+/).filter(Boolean);
+		}
+	}
+}
+
+/** One argv token list per shell segment; segments end at ; & | && || ( ) ` and newlines. */
+function* commandSegments(command: string): Generator<string[]> {
+	if (command.length > SHLEX_MAX) return yield* regexSegments(command);
+	let tokens: string[];
+	try {
+		tokens = shlexTokens(command, true);
+	} catch {
+		return yield* regexSegments(command);
+	}
+	let current: string[] = [];
+	for (const tok of tokens) {
+		if ([...tok].every(ch => SEPARATOR_CHARS.has(ch))) {
+			if (current.length) yield current;
+			current = [];
+		} else current.push(tok);
+	}
+	if (current.length) yield current;
+}
+
+/** Drop leading NAME=val, shell keywords and prefix wrappers with their flags; return the real argv. */
+function stripWrappers(input: string[]): string[] {
+	let tokens = input;
+	while (tokens.length) {
+		const tok = tokens[0];
+		if (ENV_ASSIGN.test(tok) || LEADERS.has(tok)) {
+			tokens = tokens.slice(1);
+			continue;
+		}
+		const valueFlags = WRAPPERS.get(tok.slice(tok.lastIndexOf("/") + 1));
+		if (!valueFlags) break;
+		const name = tok.slice(tok.lastIndexOf("/") + 1);
+		tokens = tokens.slice(1);
+		if (name === "command" && (tokens[0] === "-v" || tokens[0] === "-V")) return [];
+		while (tokens.length && tokens[0].startsWith("-")) {
+			const flag = tokens[0];
+			tokens = tokens.slice(1);
+			if (flag === "--") break;
+			if (valueFlags.has(flag) && tokens.length) tokens = tokens.slice(1);
+		}
+	}
+	return tokens;
+}
+
+/** The git subcommand each shell segment runs (and those of `sh -c` / `eval` quoted scripts, two levels deep). */
+function gitSubcommands(command: string, depth = 0): string[] {
+	const out: string[] = [];
+	if (!command || !command.includes("git")) return out;
+	if (depth < 2) {
+		const head = command.slice(0, SEGMENT_HEAD * 4);
+		for (const re of [SHELL_C, EVAL_Q]) for (const m of head.matchAll(re)) out.push(...gitSubcommands(m[2], depth + 1));
+	}
+	for (const raw of commandSegments(command)) {
+		const tokens = stripWrappers(raw);
 		if (!tokens.length || !(tokens[0] === "git" || tokens[0].endsWith("/git"))) continue;
 		let i = 1;
 		while (i < tokens.length) {
-			const tok = tokens[i];
-			if (tok === "-C" || tok === "-c") i += 2;
-			else if (tok === "--" || GIT_EQ_OPTS.some(p => tok.startsWith(p))) i += 1;
+			if (GIT_VALUE_OPTS.has(tokens[i])) i += 2;
+			else if (tokens[i].startsWith("-")) i += 1;
 			else break;
 		}
-		if (tokens[i] === "commit") return true;
+		if (i < tokens.length) out.push(tokens[i]);
 	}
-	return false;
+	return out;
+}
+
+/** Parse contract mirrored from hooks/bash_advisor.py `_match_git_commit` (pinned by a parity test). */
+export function matchGitCommit(command: string): boolean {
+	return gitSubcommands(command ?? "").includes("commit");
 }
 
 /** Python's `re.sub(r"[^A-Za-z0-9_.-]", "_", id)`: the marker filename scheme shared with hooks/recall_gate.py. */

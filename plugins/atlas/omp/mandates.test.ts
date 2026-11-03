@@ -337,3 +337,59 @@ test("recall gate persistence: an unusable marker dir fails open to the in-memor
 		expect(h.call("read", { path: "a.ts" }, "sess-A")?.block).toBe(true); // nothing persisted
 	});
 });
+
+// Parity with hooks/bash_advisor.py `_match_git_commit`: the same strings go through both implementations.
+const PARITY_COMMANDS = [
+	...contract.gitCommitCases.match,
+	...contract.gitCommitCases.noMatch,
+	"echo a\ngit commit -m x",
+	"git --no-pager commit -m x",
+	"git --git-dir /r commit -m x",
+	"git --git-dir=/r --work-tree /w commit -m x",
+	"env GIT_X=1 git commit -m x",
+	"env -u FOO git commit -m x",
+	"bash -c 'git commit -m x'",
+	"sh -lc \"git commit -m x\"",
+	"eval \"git commit -m x\"",
+	"sudo -u root git commit -m x",
+	"nohup git commit -m x",
+	"if true; then git commit -m x; fi",
+	"(git commit -m x)",
+	"git add . & git commit -m x",
+	"echo $(git commit -m x)",
+	"echo `git commit -m x`",
+	"echo git commit",
+	"git stash commit",
+	"git status",
+	"git -C /r log",
+	"command -v git commit",
+	"echo 'a && git commit' ; true",
+	"git commit-tree abc",
+	"echo \"unbalanced git commit",
+	"/usr/bin/git commit -m x",
+	"git -c user.name=x commit -m x",
+	"git -- commit",
+	"echo a # git commit",
+	"echo a # c\ngit commit -m x",
+	"echo a#b; git commit",
+	"git commit # note",
+	"git \\\ncommit",
+	"echo \"a\\\"b\" && git commit",
+	"git status 2>&1 | git commit",
+	"git '' commit",
+	"time -p git commit -m x",
+	"xargs -I{} git commit {}",
+	"git commit " + "x".repeat(17000),
+	"echo " + "y".repeat(17000) + " ; git commit",
+	"",
+];
+
+test("matchGitCommit agrees with bash_advisor._match_git_commit on a shared string table", () => {
+	const hooksDir = join(import.meta.dir, "..", "hooks");
+	const script = "import sys, json\nsys.path.insert(0, sys.argv[1])\nimport bash_advisor\nprint(json.dumps([bash_advisor._match_git_commit(c) for c in json.load(sys.stdin)]))\n";
+	const proc = Bun.spawnSync(["python3", "-c", script, hooksDir], { stdin: new TextEncoder().encode(JSON.stringify(PARITY_COMMANDS)), stdout: "pipe", stderr: "pipe" });
+	expect(proc.stderr.toString()).toBe("");
+	const py = JSON.parse(proc.stdout.toString()) as boolean[];
+	expect(py.length).toBe(PARITY_COMMANDS.length);
+	PARITY_COMMANDS.forEach((cmd, i) => expect({ cmd, ts: matchGitCommit(cmd) }).toEqual({ cmd, ts: py[i] }));
+});
