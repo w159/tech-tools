@@ -2,7 +2,7 @@
 
 ## atlas 16.11.4 - 2026-11-03
 
-- atlas 16.11.4: the seat daemon starts on first use instead of every SessionStart (boot about 270-285 -> 241-245 ms median), with a 30 minute backoff after a failed start. Details in plugins/atlas/CHANGELOG.md.
+- atlas 16.11.4: the seat daemon starts on first use instead of every SessionStart (boot about 270-285 -> 241-245 ms median), with a 30 minute backoff after a failed start. A wrong-shaped node-major cache file now self-heals instead of pinning node_ok to False. Details in plugins/atlas/CHANGELOG.md.
 
 ## marketplace 5.3.4 - 2026-11-03
 

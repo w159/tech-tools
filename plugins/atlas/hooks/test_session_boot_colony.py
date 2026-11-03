@@ -326,6 +326,21 @@ class BootHerdrGateTests(unittest.TestCase):
         self.gate(22, False, True, False)  # shim() rewrites node -> new mtime/size
         self.assertFalse(self.gate_same_node(True), "a new node install must not reuse the old cached major")
 
+    def test_wrong_shape_cache_self_heals(self):
+        import atlas_seats
+
+        self.shim(22)
+        cache = os.path.join(self.home, "node-major-cache.json")
+        for payload in ("[]", "null", "5", '"x"', '{"key": "k", "major": "22"}'):
+            with self.subTest(payload=payload):
+                with open(cache, "w") as f:
+                    f.write(payload)
+                self.assertTrue(atlas_seats._node_ok_cached(self.home))
+                with open(cache) as f:
+                    c = json.load(f)
+                self.assertEqual(c["version"], "v22.1.0")
+                self.assertIsInstance(c["key"], list)
+
     def gate_same_node(self, installed):
         import atlas_herdr
         import atlas_rig

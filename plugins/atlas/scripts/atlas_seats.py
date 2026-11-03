@@ -61,7 +61,7 @@ def _node_ok_cached(home: str) -> bool:
                 c = json.load(f)
             if c.get("key") == key:
                 return _node_rule(str(c["version"]))
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError, AttributeError, TypeError):
             pass
         v = subprocess.run(
             [node, "--version"], capture_output=True, text=True, timeout=5
