@@ -24,7 +24,7 @@ When a directly related `atlas-brainstorm` or `atlas-plan` artifact exists and i
 Discard is the default posture for throwaway code once decisions are captured, and it deletes **only what this run created**:
 
 - Isolated mode: remove the run directory when the user agrees, or leave it - `decisions.md` content has already been promoted or recapped, so nothing durable is lost either way. Ask once when unsure; never delete a prototype the user said to keep.
-- Real-app scratch worktree: `git worktree remove <path>` and `git branch -D prototype/<slug>` once the user agrees. These are destructive local git operations on throwaway state the run itself created - confirm with the user before removing if any uncommitted work in the worktree is not obviously this run's.
+- Real-app scratch worktree (`worker/<name>` at `.atlas/wt/<name>`, made with `atlas_wt.py add <name>`): once the user agrees, discard with `atlas_wt.py prune`, which removes only merged, clean worker worktrees and their branches; it never forces. For a prototype that was never merged and is to be thrown away, ask the user before deleting it: it is unmerged work, and `references/git-policy.md` rule 7 forbids deleting unmerged or dirty work without asking. Confirm first too if any uncommitted work in the worktree is not obviously this run's.
 - Overlay mode: revert this run's changes to the named files, then verify with `git status`/`git diff` that only the pre-run state remains. If a clean revert is impossible, name every file left modified in the recap.
 - Never touch: user work outside this run, product source, `.atlas/evidence/`, or the findings ledger.
 

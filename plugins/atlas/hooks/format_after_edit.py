@@ -11,7 +11,7 @@ Why this matters for an orchestrator: a uniform, formatter-clean tree means diff
 minimal and reviewers (and verifier subagents) see only real changes, not whitespace noise.
 
 Formatters (first available wins; all respect the repo's local config):
-  .py                              ruff format -> black
+  .py                              ruff format -> black (each only when the repo configures it)
   .js .jsx .ts .tsx .mjs .cjs      project-local prettier -> global prettier
   .json .jsonc .css .scss .less    (same prettier resolution)
   .html .vue .svelte .md .mdx .yaml .yml
@@ -141,14 +141,56 @@ def _has_prettier_config(path: str, cwd: str) -> bool:
     return False
 
 
+def _pyproject_has(d: str, section: str) -> bool:
+    pp = os.path.join(d, "pyproject.toml")
+    try:
+        with open(pp, encoding="utf-8") as f:
+            return any(ln.strip().startswith(section) for ln in f)
+    except OSError:
+        return False
+
+
+def _has_ruff_config(d: str) -> bool:
+    return (
+        os.path.isfile(os.path.join(d, "ruff.toml"))
+        or os.path.isfile(os.path.join(d, ".ruff.toml"))
+        or _pyproject_has(d, "[tool.ruff")
+    )
+
+
+def _has_black_config(d: str) -> bool:
+    return _pyproject_has(d, "[tool.black")
+
+
+def _py_config(path: str, cwd: str, pred) -> bool:
+    """True when `pred(dir)` holds for a directory at or above the edited file
+    (relative paths resolve against cwd), stopping at the repo root (first dir
+    holding .git)."""
+    d = os.path.dirname(os.path.abspath(os.path.join(cwd or "", path)))
+    while True:
+        if pred(d):
+            return True
+        if os.path.exists(os.path.join(d, ".git")):
+            return False
+        parent = os.path.dirname(d)
+        if parent == d:
+            return False
+        d = parent
+
+
 def candidates_for(path: str, cwd: str) -> list[list[str]]:
     """Ordered formatter argv candidates for this file (path appended by caller)."""
     ext = os.path.splitext(path)[1].lower()
     if ext == ".py":
         out = []
-        if shutil.which("ruff"):
-            out.append(["ruff", "format"])
-        if shutil.which("black"):
+        # Both are config-gated like prettier: a legacy repo that never opted in
+        # must not be reformatted, nor gain a .ruff_cache/.
+        if shutil.which("ruff") and _py_config(path, cwd, _has_ruff_config):
+            cmd = ["ruff", "format"]
+            if not _py_config(path, cwd, lambda d: os.path.isdir(os.path.join(d, ".ruff_cache"))):
+                cmd.append("--no-cache")
+            out.append(cmd)
+        if shutil.which("black") and _py_config(path, cwd, _has_black_config):
             out.append(["black", "-q"])
         return out
     if ext in PRETTIER_EXTS:

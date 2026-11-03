@@ -44,7 +44,7 @@ Mode routing rules:
 - No `docs/` before that call -> continue with the rest of onboard (below).
 - `docs/` already existed -> the scaffold call above already repaired it;
   go straight to recommendations (below) instead of repeating onboard steps
-  3-9.
+  3-10.
 - Anything that smells like a broken install (subagents do not launch, the
   plugin acts like an older version, marketplace points at a stale fork)
   -> repair. Auto-repair with `--fix` runs
@@ -125,13 +125,22 @@ When `docs/` does not exist:
    not installed.
 9. **Recommend** - run the recommendation analysis and present the top
    3-5 next steps.
+10. **Analytics choice (opt-in, default off)** - run
+    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_analytics.py" explain`, then
+    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_analytics.py" preview`, and show both
+    verbatim. Then AskUserQuestion: "Turn on anonymous Atlas usage counts?" with options
+    "No, keep it off" (default, listed first) and "Yes, enable". Only on an explicit
+    yes run `atlas_analytics.py enable`; on no or no answer run `atlas_analytics.py disable`
+    so the question is not asked again. Never enable without that yes. Mention that
+    `prove` checks the payload against the anonymity rules and `delete` removes everything.
+    Skip when `atlas_analytics.py status` already shows a decision.
 
 Every no-args run executes step 2 (`scripts/scaffold_docs.py`) first,
 whether or not `docs/` already exists - that call is what repairs a
 partial, missing, or drifted structure before anything else happens. If
-`docs/` did not exist, continue through the rest of onboarding (steps 3-9)
+`docs/` did not exist, continue through the rest of onboarding (steps 3-10)
 below. If `docs/` already existed, the scaffold call already repaired it;
-skip straight to recommendations (below) instead of repeating steps 3-9.
+skip straight to recommendations (below) instead of repeating steps 3-10.
 
 ## Compound Pack health check
 

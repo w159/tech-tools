@@ -35,8 +35,9 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
   (d) `docs/ROADMAP.md` exists and is non-empty.
   (e) `README.md` at the project root exists and is non-empty.
   (f) No docs drift: if THIS RUN's own activity (atlas_db events + tool_calls,
-      not the whole working tree) wrote non-docs files, at least one docs/
-      file changed too -- this is the deterministic trigger that forces an
+      not the whole working tree) wrote non-docs files, docs/CHANGELOG.md
+      changed too (any other docs/ path does not clear it, matching
+      docs_drift.py) -- this is the deterministic trigger that forces an
       atlas:docs-curator dispatch before "done". If this run wrote zero
       non-docs files, (f) is skipped -- a dirty tree left by an earlier
       session is not this run's problem to fix.
@@ -163,6 +164,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 from docs_drift import docs_drift as _docs_drift  # noqa: E402
 from docs_drift import find_root as _find_root  # noqa: E402
 from docs_drift import git_changed_paths as _git_changed_paths  # noqa: E402
+
+try:  # opt-in usage counters; a missing module never changes gate behavior
+    from atlas_analytics import record as _record_analytics
+except ImportError:  # pragma: no cover
+    _record_analytics = None
 
 # Block texts are read by the model and pasted into a shell it runs itself,
 # where $CLAUDE_PLUGIN_ROOT is NOT set (Claude Code expands it only for the hook
@@ -293,27 +299,48 @@ def _check_readme(root: Path) -> bool:
     return _check_nonempty(root / "README.md")
 
 
+def _roadmap_done_items(content: str) -> bool:
+    """True when ROADMAP text holds a done item: a checklist `- [x]`/`- [done]`,
+    `status: done`, or a table row whose Status column (named by the header row)
+    reads `done`. Case-insensitive, whitespace-stripped."""
+    status_col = None
+    for raw in content.splitlines():
+        line = raw.strip().lower()
+        if re.match(r"[-*]\s*\[(x|done)\]", line) or re.match(r"status:\s*done\b", line):
+            return True
+        if not line.startswith("|"):
+            status_col = None
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if all(re.fullmatch(r":?-{2,}:?", c) or not c for c in cells):
+            continue  # separator row
+        if status_col is None:
+            if "status" in cells:
+                status_col = cells.index("status")
+            continue
+        if status_col < len(cells) and cells[status_col] == "done":
+            return True
+    return False
+
+
 def _check_roadmap_reconciled(root: Path) -> bool:
     """(h) ROADMAP.md must not contain items with status 'done'.
 
-    A 'done' item in ROADMAP is a defect — it should have been moved to
-    CHANGELOG with a date and evidence citation. This check scans for
-    the `- [done]` pattern or `status: done` in ROADMAP.md.
+    A 'done' item in ROADMAP is a defect -- it should have been moved to
+    CHANGELOG with a date and evidence citation. Detects a Status-column cell
+    equal to `done` (case-insensitive, any padding), `- [x]` / `- [done]`
+    checklist items, and `status: done`.
 
     Returns True if ROADMAP is reconciled (no 'done' items found).
-    Fail-open on OSError (can't read → don't block).
+    Fail-open on OSError (can't read -> don't block).
     """
     roadmap = root / "docs" / "ROADMAP.md"
     try:
         if not roadmap.is_file():
             return True  # condition (d) handles missing ROADMAP
-        content = roadmap.read_text(encoding="utf-8").lower()
-        # Check for common patterns: "- [done]", "status: done", "| done |"
-        return not (
-            "- [done]" in content or "status: done" in content or "| done |" in content
-        )
+        return not _roadmap_done_items(roadmap.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError):
-        return True  # can't read → fail open
+        return True  # can't read -> fail open
 
 
 def _solo_mode():
@@ -387,24 +414,27 @@ def _target_exists(path: str, root: Path | None = None) -> bool:
 
 
 def _docs_moved_in_git(root: Path) -> bool:
-    """True when git sees a changed docs/ path, regardless of how it was written.
+    """True when git sees docs/CHANGELOG.md changed, regardless of how it was written.
 
     Condition (f)'s primary signal is `run_changed_paths`, which is fed by tool
     calls carrying a `file_path`. A docs file written by a Bash-invoked script
     never produces one, so a run whose docs are genuinely current can still be
     blocked for drift - observed twice while shipping 5.14.0. This is the
-    cross-check: git-visible docs movement suppresses the block.
+    cross-check, and it uses the same rule as docs_drift.py: only the CHANGELOG
+    clears drift, so an unrelated docs/ scratch file does not.
 
     Deliberately one-directional. It can only PREVENT a false block, never cause
-    one. The cost is that stale docs edits left by an earlier session can mask
-    this run's real drift; that is the cheaper failure than blocking a run that
-    already did the work, which is how a gate teaches people to ignore it.
+    one. The cost is that a stale CHANGELOG edit left by an earlier session can
+    mask this run's real drift; that is the cheaper failure than blocking a run
+    that already did the work, which is how a gate teaches people to ignore it.
     """
     try:
         changed = _git_changed_paths(root)
     except Exception:
         return False  # git unavailable -> no suppression, primary signal stands
-    return any(p.startswith("docs/") or "/docs/" in p for p in changed)
+    # Reuse docs_drift's rule: a non-docs sentinel plus the git paths has no drift
+    # exactly when the CHANGELOG is among them.
+    return not _docs_drift(["__non_docs__", *changed])
 
 
 def _latest_transcript_todos(transcript_path: str) -> list | None:
@@ -1505,6 +1535,10 @@ def main() -> int:
                 )
             return 0
         _record_gate_block(data.get("session_id", ""), failed)
+        if _record_analytics is not None:
+            for letter in failed:
+                with contextlib.suppress(Exception):
+                    _record_analytics(f"gate.{letter.lower()}.block")
         # F8: mark every failing letter. The first Stop per letter ships the
         # full clause (computed below, BEFORE these markers exist); later
         # Stops ship a one-line delta. (n)/(o)/(p) keep their original

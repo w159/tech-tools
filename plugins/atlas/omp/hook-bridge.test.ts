@@ -487,7 +487,7 @@ test("an unrecognised xd://mcp__ device fails closed to an MCP name, a file writ
 	expect(claudeNamesForCall("write", { path: "xd://report_issue", content: "x" })).toEqual(["Write"]); // not an MCP device
 });
 
-test("armada connector calls reach hooks.json's connector_credential_watch matcher (mcp__plugin_armada_.*)", () => {
+test("every MCP call reaches the connector_credential_watch matcher; the hook itself filters content servers", () => {
 	const watch = loadBridgedHooks().find(h => h.command.includes("connector_credential_watch.py"));
 	if (!watch?.matcher) throw new Error("connector_credential_watch is not bridged with a matcher");
 	const matcher = watch.matcher;
@@ -495,7 +495,16 @@ test("armada connector calls reach hooks.json's connector_credential_watch match
 		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(true);
 	}
 	for (const device of ["mcp__lean_ctx_ctx_read", "mcp__serena_find_symbol", "mcp__mcp_search_search"]) {
-		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(false);
+		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(true);
+		for (const response of ["401 Unauthorized invalid api key", { ok: true }]) {
+			const out = Bun.spawnSync(["python3", join(pluginRoot(), "hooks", "connector_credential_watch.py")], {
+				stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "PostToolUse", tool_name: claudeNamesForCall("write", { path: `xd://${device}` })[0], tool_response: response, session_id: "s" })),
+				stdout: "pipe",
+				stderr: "pipe",
+			});
+			expect(out.exitCode).toBe(0);
+			expect(out.stdout.toString().trim()).toBe("");
+		}
 	}
 	expect(matcherNames(["Edit", "mcp__armada_falcon__x"])).toEqual(["Edit", "mcp__armada_falcon__x", "mcp__plugin_armada_falcon__x"]);
 	// pre-move `atlas` prefix is still aliased (fallback), though the matcher no longer names it

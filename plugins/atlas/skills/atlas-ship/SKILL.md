@@ -6,7 +6,7 @@ allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, ToolSearch
 argument-hint: '[commit-only] [files...] [exclude:<paths>] [description-only] [babysit:off|checkpoint]'
 ---
 
-**atlas-ship never pushes, opens a pull request, edits a PR body, or performs any remote write without an explicit user confirmation at the point of risk; the local commit is the only step that ever runs without asking.** Invoking this skill authorizes verification and a local commit only; the push and the PR are decisions the user owns, made fresh each time, in the conversation, after seeing what would leave the machine. PR creation goes through the `xd://github` device (`pr_create` op) with `gh` as fallback.
+**atlas-ship never pushes, opens a pull request, edits a PR body, or performs any remote write without an explicit user confirmation at the point of risk; the local commit is the only step that ever runs without asking.** Invoking this skill authorizes verification and a local commit only; the push and the PR are decisions the user owns, made fresh each time, in the conversation, after seeing what would leave the machine. A yes to a push is never a yes to a PR. PR creation goes through the `xd://github` device (`pr_create` op) with `gh` as fallback.
 
 Apply the Operating Contract to this entire task. It is injected below.
 
@@ -31,8 +31,8 @@ Read `references/repo-state.md` and run its probe sequence first - one argv-form
 - **No remote configured** - the shipping path ends at the local commit. Say so plainly up front ("No git remote - this ship stops at the local commit"), still run Steps 2-3 so the work is verified and committed, then report the end state. Never attempt a push, never ask a confirmation question whose answer cannot change anything.
 - **Open PR already exists for this branch** - the push (after consent) lands on it; skip `pr_create` and offer the description update instead.
 - **PR state unknown** (device or `gh` errored) - resolve auth/connectivity first. A failed probe is never "no PR"; never risk opening a duplicate.
-- **Detached HEAD, or on the default branch with work** - create a feature branch automatically (name derived from the change content; add a non-conflicting suffix if taken), re-read `git branch --show-current`, and continue. Do not ask whether to branch. On the default branch with no work - report and stop.
-- **Feature branch** - continue.
+- **Detached HEAD, or on ANY protected branch with work** (`atlas_git.py protected` - default branch, `main`/`master`/`production`/`release/*`, GitHub-protected) - run `atlas_git.py branch <slug>` (slug from the change content). It REUSES the existing branch for the same work or creates one `atlas/<slug>` within the branch cap; never create a new branch per ship. Re-read `git branch --show-current` and continue. Do not ask whether to branch. On a protected branch with no work - report and stop. Committing on a protected branch needs the user's explicit ask plus `atlas_git.py allow`; see `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`.
+- **Feature branch already checked out** - use it as is; do not create another.
 
 ## Step 2 - Verify a clean, gate-passing tree (compose atlas:verifier)
 
@@ -61,36 +61,37 @@ Present one message containing:
 
 - the commit hash(es) and subject(s) about to ship;
 - the branch and the target remote (or "no remote - nothing to confirm, ship ends here");
-- exactly what will happen on yes: `git push -u origin HEAD`, then a PR from `<head>` to `<base>` titled `<title>` whose body leads with `<first sentence>`;
+- exactly what will happen on yes: `git push -u origin HEAD` (landing on the existing PR when one is open);
+- the PR question, asked separately and only when the user asked for a PR or none exists and `atlas_git.py check pr` is not `deny` (policy `prs: off` means never ask): a PR from `<head>` to `<base>` titled `<title>` whose body leads with `<first sentence>`;
 - any verifier residuals (including docs-current gaps) the user would be waiving.
 
 Then wait. Full consent mechanics - what counts as an explicit yes, what never counts, the one-action scope of a confirmation - are in `references/push-gate.md`.
 
-- **Explicit yes** - continue to Step 5.
+- **Explicit yes to the push** - continue to Step 5, push only. A yes to the push does not authorize a PR; open one only if the user asked for a PR or answers yes to the separate PR question, and the repo's `prs` policy is not `off`.
 - **No, silence, or an unrelated reply** - report the local commit as the end state and give the user the exact commands to run themselves (`git push -u origin HEAD`). This is a successful terminal, not a failure. A later "ship it" re-enters at Step 5 with a fresh re-verification.
 - **No remote** - skip this step entirely and report the local commit as the final state.
 
-## Step 5 - Push and open the PR (only after explicit yes)
+## Step 5 - Push, and open a PR only if asked (only after explicit yes)
 
 Re-verify at the point of risk (snapshot rule): branch is still the intended one, remote still present, PR presence re-checked immediately before create - a "no PR" from Step 1 is a stale snapshot, and a PR that appeared since (or was missed by an unknown-state probe) means take the existing-PR path, never open a duplicate.
 
 1. **Push** - `git push -u origin HEAD`, pushing the live HEAD, never a remembered branch name. Never `--force`/`--force-with-lease`. If the remote rejects as non-fast-forward, stop and report - resolving remote-history divergence (fetch/rebase/push-again) is a fresh user decision, not this skill's.
-2. **Compose the PR title and body** per `references/pr-body.md`, grounded in the actual three-dot diff (`base...HEAD`) and any linked artifacts already in hand: `docs/plans/<slug>.md`, `.atlas/findings/<YYYY-MM-DD>_<slug>.md`, verified entries from `.atlas/.run/findings.json`, the plan unit IDs on the commits. Never a generic summary; never invented `Fixes`.
-3. **Create via the github device.** Write JSON to `xd://github` with `op: "pr_create"`, `title`, `body`, `head: <current branch>`, `base: <default branch>` (pass `repo` when the checkout's default remote is not the target; `draft: true` only if the user asked for a draft in the confirmation). Bash `gh pr create` is the fallback only when the device is unavailable - and then the body goes via `--body-file <path>`, never stdin or `--body "$(...)"` (`gh` exits 0 with an empty body). On the device path, pass the body text directly; do not round-trip through a shell heredoc.
-4. **Report** the PR URL, the shipped commit range, and the residuals the user waived.
+2. **PR only if the user asked for one (or said yes to the PR question) and `prs` policy allows it; otherwise skip to step 4.** Open PR already exists for this branch: the push landed on it, never a second PR. Compose the PR title and body** per `references/pr-body.md`, grounded in the actual three-dot diff (`base...HEAD`) and any linked artifacts already in hand: `docs/plans/<slug>.md`, `.atlas/findings/<YYYY-MM-DD>_<slug>.md`, verified entries from `.atlas/.run/findings.json`, the plan unit IDs on the commits. Never a generic summary; never invented `Fixes`.
+3. **Create via the github device** (only when step 2 says so). Write JSON to `xd://github` with `op: "pr_create"`, `title`, `body`, `head: <current branch>`, `base: <default branch>` (pass `repo` when the checkout's default remote is not the target; `draft: true` only if the user asked for a draft in the confirmation). Bash `gh pr create` is the fallback only when the device is unavailable - and then the body goes via `--body-file <path>`, never stdin or `--body "$(...)"` (`gh` exits 0 with an empty body). On the device path, pass the body text directly; do not round-trip through a shell heredoc.
+4. **Report** the push result, the PR URL if one exists or was opened, the shipped commit range, and the residuals the user waived.
 
-## Step 6 - Babysit handoff (only if the user wants it)
+## Step 6 - Babysit handoff (only if a PR exists and the user wants it)
 
 After the PR URL, one line: CI watching is available via `atlas-run-watch` with a `pr:<N>` target (checkpoint tick or sustained watch) - want it? Only on a yes, invoke `atlas-run-watch` naming the PR (pass `checkpoint` when the user wants one tick and a report). It then owns the watch and holds its own push-consent gate for any fix it makes - hand off cleanly, do not run watch mechanics yourself, and do not substitute `gh pr checks --watch`, a poll loop, or a promise to check later.
 
-Done when the user answers the watch offer (or declines); a declined watch is the successful terminal of this skill: the PR URL plus the Step 7 report is done. If the user wants watching but `atlas-run-watch` cannot load, report that blocked - never improvise a narrower watch.
+Once the branch's work is later merged, branch cleanup is `atlas_git.py clean --remote`, never a manual loop. Done when the user answers the watch offer (or declines); a declined watch is the successful terminal of this skill: the PR URL plus the Step 7 report is done. If the user wants watching but `atlas-run-watch` cannot load, report that blocked - never improvise a narrower watch.
 
 ## Step 7 - REPORT
 
 - Verifier verdict and its findings.json evidence path; residuals waived by the user.
 - Commit hash(es) and subject(s) (or "nothing to commit").
 - The confirmation exchange: what was asked, what was answered (or that it was never reached - no remote).
-- Push and PR results with the URL, or the exact local-only end state with the user-runnable commands.
+- Push result, and PR result with the URL only if a PR was asked for, or the exact local-only end state with the user-runnable commands.
 - Babysit ownership: handed off (with mode), declined, or unavailable.
 
 Never say "shipped" for a state that is only committed locally; never say "done" for a state that skipped the gate without saying the gate was skipped and why.

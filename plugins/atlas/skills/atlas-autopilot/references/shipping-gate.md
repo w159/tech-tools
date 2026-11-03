@@ -39,7 +39,7 @@ The summary must cover, compactly:
 - **Known risk:** anything from review or testing the user should weigh before the
   push - unapplied findings, budget exhaustion, skipped checks.
 
-Then ask, plainly: push and open a PR, or stop here? A "yes" must be the user's own
+Then ask, plainly: push, or stop here? Ask about a PR as a separate question, and only if the user asked for one or none exists and the repo's `prs` policy is not `off` (`${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`); a yes to the push is not a yes to a PR. A "yes" must be the user's own
 words in this conversation. Silence, an unrelated reply, or a change of subject is
 a no - end the run with the summary as the final report.
 
@@ -51,11 +51,11 @@ The work is safe on the local branch; nothing is lost.
 
 With a confirmed yes:
 
-1. **`atlas-ship`** - commit-and-push + PR with its own confirmation model, now
+1. **`atlas-ship`** - commit-and-push (+ PR only if asked and policy allows; an existing PR for the branch takes the push) with its own confirmation model, now
    satisfied. Pass the run context: plan/defect path, the consent-gate summary,
    residual findings (they render into the PR's "Unapplied review findings"
    checklist rather than vanishing).
-2. **`atlas-run-watch`** on the opened PR, with the CI-repair budget (default 3
+2. **`atlas-run-watch`** on the PR, if one exists, with the CI-repair budget (default 3
    rounds, shared `budget:N` override). CI failures and review comments route
    through `atlas-debug` (convergent fixes) and `atlas-resolve-pr-feedback`;
    divergent or product-shaped feedback becomes a `needs-human` residual - it does

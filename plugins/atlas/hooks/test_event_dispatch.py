@@ -29,6 +29,7 @@ import event_dispatch as ed  # noqa: E402
 FORMER = (
     ("PreToolUse", "*", "recall_gate"),
     ("PreToolUse", "Bash", "bash_advisor"),
+    ("PreToolUse", "Bash|Write|Agent|Task|mcp__.*", "git_guard"),  # added after the split; same table
     ("PreToolUse", "Bash", "fallow_gate"),
     ("PreToolUse", "Edit|edit|MultiEdit", "edit_read_nudge"),
     (
@@ -48,8 +49,7 @@ FORMER = (
     ),
     (
         "PostToolUse",
-        "mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*"
-        "|mcp__plaid__.*|mcp__gcloud__.*",
+        "mcp__.*",
         "connector_credential_watch",
     ),
 )
@@ -59,7 +59,7 @@ TOOLS = (
     "Edit edit MultiEdit Write NotebookEdit Read read Grep Glob Bash Agent Task Skill TodoWrite TaskCreate TaskUpdate TaskGet "
     "WebFetch WebSearch BashOutput Editor ReadMe mcp__lean-ctx__ctx_read mcp__x__ctx_read_all "
     "mcp__plugin_armada_falcon__falcon_status mcp__falcon-mcp__x mcp__cipp_x mcp__connectwise__y "
-    "mcp__plaid__z mcp__gcloud__a mcp__other__thing xd://x"
+    "mcp__plaid__z mcp__gcloud__a mcp__other__thing mcp__ramp__list_cards xd://x"
 ).split() + ["", None]
 
 
@@ -75,6 +75,45 @@ def _old_selection(event, tool):
 def _hooks_json():
     with open(os.path.join(HERE, "hooks.json"), encoding="utf-8") as fh:
         return json.load(fh)["hooks"]
+
+
+class ConnectorWatchPrefilterTest(unittest.TestCase):
+    """connector_credential_watch is bound to every mcp__* tool, so a success
+    payload must return before the hook module is even imported."""
+
+    def _run(self, response):
+        raw = json.dumps(
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "mcp__ramp__list_cards",
+                "tool_input": {"limit": 5},
+                "tool_response": response,
+            }
+        )
+        called = []
+
+        def fake_resolve(name):
+            called.append(name)
+            return lambda: 0
+
+        with mock.patch.object(ed, "_resolve", fake_resolve):
+            ed.run_event("PostToolUse", raw, harness="claude")
+        return called
+
+    def test_any_mcp_tool_selects_the_watch(self):
+        self.assertIn(
+            "connector_credential_watch",
+            ed.select("PostToolUse", "mcp__ramp__list_cards", harness="claude"),
+        )
+
+    def test_success_payload_never_runs_the_hook(self):
+        ok = {"content": [{"type": "text", "text": '{"cards": [{"id": "c1"}]}'}]}
+        self.assertNotIn("connector_credential_watch", self._run(ok))
+
+    def test_auth_failure_payload_runs_the_hook(self):
+        for text in ("HTTP 401 Unauthorized", "403 Forbidden", "Invalid Token", "token expired"):
+            bad = {"isError": True, "content": [{"type": "text", "text": text}]}
+            self.assertIn("connector_credential_watch", self._run(bad), text)
 
 
 class BindingTableTest(unittest.TestCase):
@@ -500,6 +539,94 @@ class RunEventTest(unittest.TestCase):
     def test_main_ignores_an_unknown_event(self):
         with mock.patch.object(sys, "stdin", io.StringIO("{}")):
             self.assertEqual(ed.main(["Stop"]), 0)
+
+
+class AnalyticsHookPointTest(unittest.TestCase):
+    """event_dispatch feeds atlas_analytics.record with names only, and never lets it change hook output."""
+
+    def _run(self, event, payload, fakes, record=None, missing=False):
+        table = tuple((n, "*", 5) for n in fakes)
+        calls = []
+        fake_mod = mock.MagicMock()
+        fake_mod.record.side_effect = record or (lambda key, n=1: calls.append(key))
+        mods = {"atlas_analytics": None if missing else fake_mod}
+        with (
+            mock.patch.dict(ed.BINDINGS, {event: table}),
+            mock.patch.object(ed, "_resolve", lambda name: fakes[name].main),
+            mock.patch.object(ed, "_fault"),
+            mock.patch.dict(sys.modules, mods),
+        ):
+            out = ed.run_event(event, json.dumps(payload), harness="claude")
+        return out, calls
+
+    @staticmethod
+    def _says(event, **spec):
+        def fn():
+            print(_doc(event, **spec))
+            return 0
+
+        return fn
+
+    def test_records_deny_ask_and_context_per_hook(self):
+        fakes = {
+            "a": _Fake(self._says("PreToolUse", permissionDecision="deny", permissionDecisionReason="no")),
+            "b": _Fake(self._says("PreToolUse", permissionDecision="ask", permissionDecisionReason="hm")),
+            "c": _Fake(self._says("PreToolUse", additionalContext="note")),
+            "d": _Fake(lambda: 0),
+        }
+        _, calls = self._run("PreToolUse", {"tool_name": "Bash"}, fakes)
+        self.assertEqual(calls, ["hook.a.deny", "hook.b.ask", "hook.c.context"])
+
+    def test_records_atlas_skill_and_agent_on_post_only(self):
+        quiet = {"q": _Fake(lambda: 0)}
+        _, calls = self._run(
+            "PostToolUse", {"tool_name": "Skill", "tool_input": {"skill": "atlas:atlas-ship", "args": "secret"}}, quiet
+        )
+        self.assertEqual(calls, ["skill.atlas-ship"])
+        _, calls = self._run(
+            "PostToolUse",
+            {"tool_name": "Agent", "tool_input": {"subagent_type": "atlas:implementer", "prompt": "secret"}},
+            quiet,
+        )
+        self.assertEqual(calls, ["agent.implementer"])
+        _, calls = self._run(
+            "PostToolUse", {"tool_name": "Task", "tool_input": {"subagent_type": "atlas:verifier"}}, quiet
+        )
+        self.assertEqual(calls, ["agent.verifier"])
+        for payload in (
+            {"tool_name": "Skill", "tool_input": {"skill": "other:thing"}},
+            {"tool_name": "Skill", "tool_input": {"skill": "atlas:"}},
+            {"tool_name": "Agent", "tool_input": {"subagent_type": "general-purpose"}},
+            {"tool_name": "Skill", "tool_input": "x"},
+        ):
+            _, calls = self._run("PostToolUse", payload, quiet)
+            self.assertEqual(calls, [], payload)
+        _, calls = self._run(
+            "PreToolUse", {"tool_name": "Agent", "tool_input": {"subagent_type": "atlas:implementer"}}, quiet
+        )
+        self.assertEqual(calls, [])
+
+    def test_exit_2_block_counts_as_a_deny(self):
+        def block():
+            sys.stderr.write("blocked")
+            return 2
+
+        out, calls = self._run("PreToolUse", {"tool_name": "Bash"}, {"x": _Fake(block)})
+        self.assertEqual(out[0], 2)
+        self.assertEqual(calls, ["hook.x.deny"])
+
+    def test_missing_or_broken_analytics_never_changes_output(self):
+        fakes = {"a": _Fake(self._says("PreToolUse", permissionDecision="deny", permissionDecisionReason="no"))}
+        base, _ = self._run("PreToolUse", {"tool_name": "Bash"}, fakes)
+
+        def boom(key, n=1):
+            raise RuntimeError("analytics down")
+
+        broken, _ = self._run("PreToolUse", {"tool_name": "Bash"}, fakes, record=boom)
+        gone, _ = self._run("PreToolUse", {"tool_name": "Bash"}, fakes, missing=True)
+        self.assertEqual(base, broken)
+        self.assertEqual(base, gone)
+        self.assertIn("deny", base[1])
 
 
 class ParityTest(unittest.TestCase):

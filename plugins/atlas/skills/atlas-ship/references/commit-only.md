@@ -53,4 +53,4 @@ git commit -F <message-file> -- file1 file2 file3
 
 Commit-only mode owns: staging named files, message authorship, and the local commit itself.
 
-Out of scope: pushing, PRs, merging, remote branches (`atlas-ship`), and branch strategy beyond committing - if detached HEAD or on the default branch, stop and surface that to the user rather than silently creating a branch or committing to `main`.
+Out of scope: pushing, PRs, merging, remote branches (`atlas-ship`), and branch strategy beyond committing - if detached HEAD or on a protected branch (`atlas_git.py protected`), stop and surface that to the user rather than silently creating a branch or committing to `main`.

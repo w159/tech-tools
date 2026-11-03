@@ -44,6 +44,7 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
 )
 import atlas_env  # noqa: E402
+
 atlas_env.apply_store_env()
 import atlas_hook_guard  # noqa: E402
 
@@ -84,35 +85,21 @@ _RM_FLAG = r"(?:--[a-z-]+|-[a-zA-Z]+)"
 
 # Root / home targets, optionally quoted, with a trailing slash or glob:
 # /  //  /*  /.  ~  ~/  ~/*  ~/.  $HOME  $HOME/  "$HOME"  "$HOME"/  "${HOME}/"  ${HOME}/*
-_ROOT_HOME = (
-    r"[\"']?(?:/+[.*]?|(?:~|\$\{?HOME\}?)(?:\*|/+[.*]?)?)[\"']?(?:/+[.*]?)?"
-)
+_ROOT_HOME = r"[\"']?(?:/+[.*]?|(?:~|\$\{?HOME\}?)(?:\*|/+[.*]?)?)[\"']?(?:/+[.*]?)?"
 _RM_TARGET = r"(" + _ROOT_HOME + r")(\s|$)"
 
 _CATASTROPHIC = [
-    (
-        re.compile(
-            r"\brm\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+" + _RM_TARGET
-        ),
-        "recursive force-delete of a root/home path",
-    ),
-    (
-        re.compile(
-            r"\brm\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*\s+" + _RM_TARGET
-        ),
-        "recursive force-delete of a root/home path",
-    ),
-    # Long-flag and mixed forms (e.g. "rm --recursive --force /", "rm -r --force /").
-    # Two bounded lookaheads confirm a recursive flag and a force flag appear among the
-    # leading flag tokens; the lookaheads only consume flag tokens (each - prefixed), so
-    # they cannot scan past the target into a later command. Then flag tokens are consumed
-    # and the catastrophic root/home target is matched.
+    # Flag tokens (-rf, -Rf, -fR, -r -f, --recursive, --force, --no-preserve-root) may come
+    # in any order, optionally followed by a bare `--`, then the root/home target. Two
+    # bounded lookaheads confirm a recursive flag and a force flag appear among the leading
+    # flag tokens; they only consume flag tokens (each - prefixed), so they cannot scan
+    # past the target into a later command.
     (
         re.compile(
             r"\brm\s+"
-            r"(?=(?:" + _RM_FLAG + r"\s+)*(?:--recursive|-[a-zA-Z]*r[a-zA-Z]*))"
-            r"(?=(?:" + _RM_FLAG + r"\s+)*(?:--force|-[a-zA-Z]*f[a-zA-Z]*))"
-            r"(?:" + _RM_FLAG + r"\s+)+" + _RM_TARGET
+            r"(?=(?:" + _RM_FLAG + r"\s+)*(?:--recursive|-[a-zA-Z]*[rR][a-zA-Z]*)\s)"
+            r"(?=(?:" + _RM_FLAG + r"\s+)*(?:--force|-[a-zA-Z]*f[a-zA-Z]*)\s)"
+            r"(?:" + _RM_FLAG + r"\s+)+(?:--\s+)?" + _RM_TARGET
         ),
         "recursive force-delete of a root/home path",
     ),
@@ -149,10 +136,39 @@ _CATASTROPHIC = [
 ]
 
 
+# Literal prefilters, parallel to _CATASTROPHIC / _SECRETS: each entry is a tuple of
+# any-of groups that must ALL hit (case-sensitive; "i" entries are matched against the
+# lowercased command) before the regex runs. A substring scan is C-speed, so a long benign
+# command skips the regex scans entirely. Every gate is a necessary literal of its regex.
+_CATASTROPHIC_GATES = (
+    (("rm",),),
+    (("rm",),),
+    (("find",),),
+    ((":(",),),
+    (("mkfs",),),
+    (("dd",),),
+    (("/dev/",),),
+    (("chmod",),),
+)
+
+
+def _gated(command: str, lowered: list, groups: tuple) -> bool:
+    for group in groups:
+        if group and group[0] == "i":
+            if not lowered:
+                lowered.append(command.lower())
+            if not any(k in lowered[0] for k in group[1:]):
+                return False
+        elif not any(k in command for k in group):
+            return False
+    return True
+
+
 def _match_catastrophic(command: str) -> str | None:
     """Return the human reason string if the command matches a catastrophic pattern."""
-    for pat, reason in _CATASTROPHIC:
-        if pat.search(command):
+    lowered: list = []
+    for (pat, reason), gate in zip(_CATASTROPHIC, _CATASTROPHIC_GATES):
+        if _gated(command, lowered, gate) and pat.search(command):
             return reason
     return None
 
@@ -186,6 +202,31 @@ _SECRETS = [
         "a bearer/API token",
     ),
     (
+        # Reading a credential file straight to output. .env.example/.sample/.template and
+        # public keys are not secrets.
+        re.compile(
+            r"\b(?:cat|less|more|head|tail|bat)\b[^\n;&|]*?"
+            r"(?:(?<![\w.-])\.env(?:\.(?!(?:example|sample|template)\b)[\w-]+)?(?=[\s\"';&|]|$)"
+            r"|\.aws/credentials\b|\.netrc\b"
+            r"|[\w./~-]*\.pem\b"
+            r"|\bid_(?:rsa|dsa|ecdsa|ed25519)(?![\w.-]))"
+        ),
+        "a credential file read to output",
+    ),
+    (
+        # Bare `env` / `printenv` with no arguments dumps the whole environment.
+        re.compile(r"(?:^|[;&|(`]\s*|\bsudo\s+)(?:env|printenv)\s*(?=$|[;&|)`])"),
+        "the full environment dump",
+    ),
+    (
+        re.compile(
+            r"\bgh\s+auth\s+token\b"
+            r"|\baz\s+account\s+get-access-token\b"
+            r"|\bgcloud\s+auth\s+print-(?:access|identity)-token\b"
+        ),
+        "a CLI-issued access token",
+    ),
+    (
         # A lone `|` after the variable means the value is piped into another
         # command (e.g. `echo "$GH_TOKEN" | gh auth login --with-token`), not
         # printed; `||` is not a pipe.
@@ -199,10 +240,26 @@ _SECRETS = [
 ]
 
 
+_SECRETS_GATES = (
+    (("AKIA",),),
+    ((("i", "aws_secret_access_key")),),
+    (("ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"),),
+    ((("i", "authorization", "bearer")),),
+    (("cat", "less", "more", "head", "tail", "bat"),),
+    (("env",),),
+    (("token",),),
+    (
+        ("env", "echo", "printf"),
+        ("_TOKEN", "_SECRET", "_PASSWORD", "_API_KEY", "CFG_", "AWS_SECRET_ACCESS_KEY"),
+    ),
+)
+
+
 def _match_secrets(command: str) -> str | None:
     """Return the human reason string if the command prints secrets to output."""
-    for pat, reason in _SECRETS:
-        if pat.search(command):
+    lowered: list = []
+    for (pat, reason), gate in zip(_SECRETS, _SECRETS_GATES):
+        if _gated(command, lowered, gate) and pat.search(command):
             return reason
     return None
 
@@ -235,9 +292,7 @@ _WRAPPERS = {
     "eval": frozenset(),
     "setsid": frozenset(),
     "nice": frozenset({"-n"}),
-    "xargs": frozenset(
-        {"-I", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "-l"}
-    ),
+    "xargs": frozenset({"-I", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "-l"}),
     "sudo": frozenset(
         {"-u", "-g", "-h", "-p", "-C", "-r", "-t", "-U", "-D", "-R", "-T"}
     ),
@@ -357,29 +412,60 @@ def _git_subcommands(command: str, _depth: int = 0):
     same way (two levels deep), so wrapping is no bypass. `$(...)` and backtick
     bodies are segmented like any other command.
     """
+    for argv, _chdir in _git_invocations(command, _depth):
+        yield argv[0]
+
+
+def _git_invocations(command: str, _depth: int = 0):
+    """Yield (argv, chdir) per git segment: argv starts at the subcommand
+    (`["push", "origin", "main"]`), chdir is the last `-C <dir>` global option or
+    None. Same parse contract as _git_subcommands, which is built on it."""
     command = command or ""
     if "git" not in command:
         return
     if _depth < 2:
         for m in _SHELL_C.finditer(command[: _SEGMENT_HEAD * 4]):
-            yield from _git_subcommands(m.group(2), _depth + 1)
+            yield from _git_invocations(m.group(2), _depth + 1)
         for m in _EVAL_Q.finditer(command[: _SEGMENT_HEAD * 4]):
-            yield from _git_subcommands(m.group(2), _depth + 1)
+            yield from _git_invocations(m.group(2), _depth + 1)
     for tokens in _command_segments(command):
         tokens = _strip_wrappers(tokens)
         if not tokens or not (tokens[0] == "git" or tokens[0].endswith("/git")):
             continue
-        i = 1
+        i, chdir = 1, None
         while i < len(tokens):
             tok = tokens[i]
             if tok in _GIT_VALUE_OPTS:
+                if tok == "-C" and i + 1 < len(tokens):
+                    chdir = (
+                        tokens[i + 1]
+                        if chdir is None or os.path.isabs(tokens[i + 1])
+                        else os.path.join(chdir, tokens[i + 1])
+                    )
                 i += 2
             elif tok.startswith("-"):
                 i += 1
             else:
                 break
         if i < len(tokens):
-            yield tokens[i]
+            yield tokens[i:], chdir
+
+
+def _program_invocations(command: str, programs: tuple, _depth: int = 0):
+    """Yield the argv (program name first) of every segment running one of
+    `programs` (e.g. ("gh", "hub")), wrappers and `sh -c` bodies included."""
+    command = command or ""
+    if not any(p in command for p in programs):
+        return
+    if _depth < 2:
+        for m in _SHELL_C.finditer(command[: _SEGMENT_HEAD * 4]):
+            yield from _program_invocations(m.group(2), programs, _depth + 1)
+        for m in _EVAL_Q.finditer(command[: _SEGMENT_HEAD * 4]):
+            yield from _program_invocations(m.group(2), programs, _depth + 1)
+    for tokens in _command_segments(command):
+        tokens = _strip_wrappers(tokens)
+        if tokens and tokens[0].rsplit("/", 1)[-1] in programs:
+            yield tokens
 
 
 def _match_git_commit(command: str) -> bool:

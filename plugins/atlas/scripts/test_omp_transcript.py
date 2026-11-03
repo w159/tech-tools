@@ -1527,8 +1527,8 @@ def _mcp_contract():
         return json.load(fh)
 
 
-def _connector_matcher_servers():
-    """Server names in the matcher of the binding that runs connector_credential_watch.py
+def _connector_matcher():
+    """Matcher of the binding that runs connector_credential_watch.py
     (hooks/event_dispatch.py BINDINGS, which hooks.json's PostToolUse dispatcher executes)."""
     if HOOKS not in sys.path:
         sys.path.insert(0, HOOKS)
@@ -1536,14 +1536,7 @@ def _connector_matcher_servers():
 
     for name, matcher, _ in event_dispatch.BINDINGS["PostToolUse"]:
         if name == "connector_credential_watch":
-            names = []
-            for alt in matcher.split("|"):
-                server = (
-                    alt.strip().removeprefix("mcp__").removesuffix(".*").rstrip("_")
-                )
-                if server:
-                    names.append(server)
-            return names
+            return matcher
     raise AssertionError("no hook runs connector_credential_watch.py")
 
 
@@ -1551,13 +1544,12 @@ class McpServersContractTest(unittest.TestCase):
     """contracts/mcp-servers.json: two lists with different purposes, each pinned to its reader."""
 
     def test_connector_watch_equals_the_hooks_json_connector_matcher(self):
-        self.assertEqual(
-            set(_mcp_contract()["connectorWatch"]), set(_connector_matcher_servers())
-        )
-        self.assertEqual(
-            len(_mcp_contract()["connectorWatch"]),
-            len(set(_mcp_contract()["connectorWatch"])),
-        )
+        # The matcher covers every MCP tool (a payload prefilter keeps it cheap), so
+        # connectorWatch is a name-split table for the OMP bridge, not a matcher filter.
+        self.assertEqual(_connector_matcher(), "mcp__.*")
+        watch = _mcp_contract()["connectorWatch"]
+        self.assertTrue(watch)
+        self.assertEqual(len(watch), len(set(watch)))
 
     def test_known_mcp_servers_equal_the_contract_underscored_servers(self):
         self.assertEqual(

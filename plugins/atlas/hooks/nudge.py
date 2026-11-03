@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Atlas self-improvement nudge — enhanced to report what was captured.
 
-Fires on Stop and SubagentStop after memory_capture.py and auto_skill.py have
+Fires on Stop (not SubagentStop) after memory_capture.py and auto_skill.py have
 already run. Instead of just saying "please capture a lesson," it reports
 what was actually captured by the hooks above, and only nudges if nothing
 was captured but the session was orchestrating.
@@ -55,7 +55,12 @@ def _non_docs_changed(cwd):
         return False
     for line in out.splitlines():
         path = line[3:].split(" -> ")[-1].strip('"')
-        if path and not path.startswith("docs/") and not path.endswith(".md"):
+        # .atlas/ is Atlas run state, not code (docs_drift.git_changed_paths excludes it too).
+        if (
+            path
+            and not path.startswith(("docs/", ".atlas/"))
+            and not path.endswith(".md")
+        ):
             return True
     return False
 

@@ -54,20 +54,68 @@ class CandidatesTest(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.cwd = self.tmp
 
+    def _write(self, name, text=""):
+        with open(os.path.join(self.tmp, name), "w") as f:
+            f.write(text)
+
     def test_python_prefers_ruff_over_black(self):
+        self._write("ruff.toml")
         with mock.patch.object(
             format_after_edit.shutil, "which", side_effect=lambda c: c == "ruff"
         ):
             out = format_after_edit.candidates_for("foo.py", self.cwd)
-        self.assertEqual(out, [["ruff", "format"]])
+        self.assertEqual(out, [["ruff", "format", "--no-cache"]])
 
     def test_python_falls_back_to_black_when_no_ruff(self):
+        self._write("pyproject.toml", "[tool.black]\nline-length = 100\n")
+
         def which(c):
             return c == "black"
 
         with mock.patch.object(format_after_edit.shutil, "which", side_effect=which):
             out = format_after_edit.candidates_for("x.py", self.cwd)
         self.assertEqual(out, [["black", "-q"]])
+
+    def test_python_ruff_requires_ruff_config(self):
+        with mock.patch.object(format_after_edit.shutil, "which", return_value="/x"):
+            self.assertEqual(format_after_edit.candidates_for("a.py", self.tmp), [])
+        self._write("pyproject.toml", "[project]\nname = 'x'\n")
+        with mock.patch.object(format_after_edit.shutil, "which", return_value="/x"):
+            self.assertEqual(format_after_edit.candidates_for("a.py", self.tmp), [])
+
+    def test_python_ruff_config_variants_and_no_cache(self):
+        for name, text in (
+            ("pyproject.toml", "[tool.ruff]\nline-length = 90\n"),
+            ("ruff.toml", ""),
+            (".ruff.toml", ""),
+        ):
+            d = tempfile.mkdtemp()
+            with open(os.path.join(d, name), "w") as f:
+                f.write(text)
+            with mock.patch.object(
+                format_after_edit.shutil, "which", side_effect=lambda c: c == "ruff"
+            ):
+                out = format_after_edit.candidates_for(os.path.join(d, "a.py"), d)
+            self.assertEqual(out, [["ruff", "format", "--no-cache"]], name)
+
+    def test_python_ruff_keeps_cache_when_repo_has_one(self):
+        self._write("ruff.toml")
+        os.makedirs(os.path.join(self.tmp, ".ruff_cache"))
+        with mock.patch.object(
+            format_after_edit.shutil, "which", side_effect=lambda c: c == "ruff"
+        ):
+            out = format_after_edit.candidates_for(os.path.join(self.tmp, "a.py"), self.tmp)
+        self.assertEqual(out, [["ruff", "format"]])
+
+    def test_python_config_found_in_ancestor_of_file(self):
+        self._write("ruff.toml")
+        sub = os.path.join(self.tmp, "pkg", "inner")
+        os.makedirs(sub)
+        with mock.patch.object(
+            format_after_edit.shutil, "which", side_effect=lambda c: c == "ruff"
+        ):
+            out = format_after_edit.candidates_for(os.path.join(sub, "a.py"), "/")
+        self.assertEqual(out[0][:2], ["ruff", "format"])
 
     def test_python_no_formatters_returns_empty(self):
         with mock.patch.object(format_after_edit.shutil, "which", return_value=None):
@@ -256,6 +304,10 @@ class MainInProcessTest(unittest.TestCase):
         self.target = os.path.join(self.tmp, "edited.py")
         with open(self.target, "w") as f:
             f.write("x = 1\n")
+        with open(os.path.join(self.tmp, "ruff.toml"), "w") as f:
+            f.write("")  # ruff/black are config-gated
+        with open(os.path.join(self.tmp, "pyproject.toml"), "w") as f:
+            f.write("[tool.black]\n")
 
     def _run_main(self, payload):
         buf = io.StringIO(json.dumps(payload))

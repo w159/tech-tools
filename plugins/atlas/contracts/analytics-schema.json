@@ -1,0 +1,57 @@
+{
+  "_doc": "Allowlist for opt-in Atlas analytics (scripts/atlas_analytics.py). A counter key is accepted only if it fully matches one pattern below. Placeholders {name} expand to the closed enums in 'enums'; 'source' enums are derived at runtime from files SHIPPED in this plugin, so a user's own skill, repo, path or project name can never match. Every family states in 'purpose' which part of Atlas it improves and how. Adding a family or enum here is the only way to collect anything new.",
+  "schema": 1,
+  "max_count": 10000,
+  "enums": {
+    "hook": {"source": "hooks"},
+    "skill": {"source": "skills"},
+    "role": {"source": "agents"},
+    "class": {"source": "scope_classes"},
+    "effort": {"source": "scope_efforts"},
+    "decision": {"values": ["deny", "ask", "context", "fault"]},
+    "reason": {"values": ["protected", "cap", "pr", "branch", "worktree", "force", "unread", "other"]},
+    "size": {"values": ["1", "2", "3-4", "5-8", "9+"]},
+    "letter": {"values": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]},
+    "cleaned": {"values": ["worktrees", "branches", "remote"]},
+    "branchop": {"values": ["created", "reused"]},
+    "alertkind": {"values": ["dependabot", "code", "secret"]},
+    "severity": {"values": ["low", "medium", "high", "critical"]}
+  },
+  "families": {
+    "hook": {
+      "patterns": ["hook.{hook}.{decision}", "hook.{hook}.{decision}.{reason}"],
+      "purpose": "Hooks improved: shows which shipped hooks deny, ask, inject context or fault in practice, and for what class of reason, so noisy or over-strict hooks get loosened and faulting hooks get fixed first."
+    },
+    "skill": {
+      "patterns": ["skill.{skill}"],
+      "purpose": "Skills improved: shows which shipped skills are actually used, so unused ones can be merged or retired, descriptions tuned where a skill never triggers, and effort put into the ones people rely on."
+    },
+    "agent": {
+      "patterns": ["agent.{role}"],
+      "purpose": "Subagent roster improved: shows which shipped subagent roles get dispatched, so roles nobody uses are cut and busy ones are tuned."
+    },
+    "team": {
+      "patterns": ["team.{class}.{effort}", "team.size.{size}"],
+      "purpose": "Team sizing improved: shows which task classes and effort levels are chosen and how large teams get, so the scope matrix defaults match real work and over-large teams are trimmed."
+    },
+    "gate": {
+      "patterns": ["gate.{letter}.block"],
+      "purpose": "Completion gate improved: shows which completion-gate checks block a finish most often, so false positives are removed and the checks that catch real problems are made clearer."
+    },
+    "git": {
+      "patterns": ["git.clean.{cleaned}", "git.branch.{branchop}"],
+      "purpose": "Git hygiene improved: shows whether automatic cleanup of worktrees, local and remote branches runs and whether branches are reused instead of multiplied, so branch and worktree sprawl is tuned out."
+    },
+    "security": {
+      "patterns": ["security.alerts.{alertkind}.{severity}"],
+      "purpose": "Security automation improved: shows how many GitHub dependabot, code scanning and secret alerts of each severity Atlas handles, so triage and auto-fix effort go where alerts actually occur."
+    }
+  },
+  "never_collected": [
+    "install, session, user or machine identifiers",
+    "timestamps finer than the ISO week",
+    "usernames, hostnames, IP addresses, home or working directories, file names or paths",
+    "repository, organisation, branch, project or user-defined skill names",
+    "prompts, model output, code, commit messages, error messages or file contents"
+  ]
+}

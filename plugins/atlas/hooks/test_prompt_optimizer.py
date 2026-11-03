@@ -504,6 +504,25 @@ class IsHarnessEventTest(unittest.TestCase):
     def test_leading_whitespace_stripped(self):
         self.assertTrue(po._is_harness_event("   <task-notification>x"))
 
+    def test_user_prompt_starting_with_jsx_tag_not_harness(self):
+        for text in (
+            "<Button> in src/App.tsx throws TypeError when clicked",
+            "<div> is not centered in index.html, fix it",
+            "<T> generic in utils.ts fails to infer",
+        ):
+            self.assertFalse(po._is_harness_event(text), text)
+
+    def test_known_harness_tags_match(self):
+        for tag in (
+            "command-name",
+            "local-command-stdout",
+            "local-command-caveat",
+            "wake",
+            "user-prompt-submit-hook",
+            "agent-message from=\"x\"",
+        ):
+            self.assertTrue(po._is_harness_event(f"<{tag}>body"), tag)
+
 
 class ArmOrchestrationTest(unittest.TestCase):
     def setUp(self):

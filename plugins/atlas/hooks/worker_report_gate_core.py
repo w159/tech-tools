@@ -41,6 +41,21 @@ GLOB_CHARS = set("*?{}[]")
 # Annotations that say the entry is intentionally not a surviving file.
 # A non-zero failure count in the evidence contradicts a DONE report ("5 failed", "2 errors").
 FAILING_RE = re.compile(r"(?<![\d.])[1-9]\d*\s+(?:failed|failures?|errors?)\b", re.I)
+# Bare failure markers (`FAILED`, `Error: ...`); case-sensitive so prose like "errors-free" is not one.
+FAILING_WORD_RE = re.compile(r"\bFAILED\b|\bError:")
+# Phrases that mention failures but report them as resolved or absent.
+RESOLVED_RE = re.compile(
+    r"\d+\s+(?:failed|failures?|errors?)\s*\([^)]*\b0\s+remaining\b[^)]*\)"
+    r"|\b(?:no|0)\s+(?:failed|failures?|errors?)\b"
+    r"|\berrors?-free\b",
+    re.I,
+)
+
+
+def has_failing(text):
+    """True when evidence text reports an unresolved failure."""
+    text = RESOLVED_RE.sub(" ", text)
+    return bool(FAILING_RE.search(text) or FAILING_WORD_RE.search(text))
 GONE_RE = re.compile(r"delet|remov|throwaway|scratch|temp|not committed", re.I)
 
 
@@ -180,7 +195,7 @@ def check_report(msg, agent_type, cwd, report):
             problems.append(
                 "a DONE report needs at least one numbered EVIDENCE line with a command and its real output (`1. <command> -> <output>`)"
             )
-        if FAILING_RE.search(last_evidence_row(sec.get("EVIDENCE", ""))):
+        if has_failing(last_evidence_row(sec.get("EVIDENCE", ""))):
             problems.append(
                 "a DONE report's EVIDENCE shows failing results; report FAILED or fix and re-run"
             )

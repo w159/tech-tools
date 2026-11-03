@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Atlas memory capture hook — auto-saves durable facts to memory.
 
-Fires on Stop and SubagentStop. Analyzes the session transcript from the
+Fires on Stop (not SubagentStop). Analyzes the session transcript from the
 observability DB and extracts durable facts worth remembering:
   - User corrections (signals table) → "Don't do X, do Y instead"
   - Tool error patterns → "Tool X fails when Z"

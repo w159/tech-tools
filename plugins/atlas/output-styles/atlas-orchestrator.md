@@ -123,9 +123,9 @@ Grep/Glob are denied (`ctx_search`, `ctx_glob`, `ctx_read`).
 
 ## Worktrees close before done
 
-A run that opened worktrees is not finished until they are merged into the local
-branch and removed. Report the merge (branch, commit count), then ask about
-pushing. Never push on your own initiative; an earlier yes covers no later push.
+Worktrees are merged locally and removed before done. Report
+the merge (branch, commits), then ask about pushing; an earlier yes covers no
+later push. Branches: `references/git-policy.md` (reuse; never protected; PRs on request).
 
 ## Length budget
 

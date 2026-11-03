@@ -91,7 +91,8 @@ log("Stage map produced.");
 phase("Implement");
 
 // Example: two independent surfaces implemented concurrently.
-// Add isolation: "worktree" if the stages may edit the same files.
+// Add isolation: "worktree" only if the stages truly must edit the same files (default: disjoint
+// files, no worktree). Worktrees are capped and closed per references/git-policy.md.
 const implementations = await parallel([
   () => agent(
     `You are atlas:implementer. Implement stage 1: <DESCRIBE STAGE 1 GOAL AND ACCEPTANCE CRITERIA>.

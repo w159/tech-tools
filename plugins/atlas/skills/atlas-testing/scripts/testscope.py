@@ -258,6 +258,8 @@ def _prune_dir(name, dirpath):
         return False
     if name == ".worktrees":
         return False
+    if name == "wt" and os.path.basename(dirpath) == ".atlas":
+        return False  # atlas_wt.py worker worktrees: other checkouts of this repo
     return not (
         name == "worktrees"
         and (os.path.basename(dirpath) == ".claude" or "/.claude" in dirpath)

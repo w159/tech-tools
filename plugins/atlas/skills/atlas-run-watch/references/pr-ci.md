@@ -17,6 +17,7 @@ Apply the operating contract (`${CLAUDE_PLUGIN_ROOT}/references/operating-contra
 
 - **Merge-readiness is never merge authorization.** This skill never merges, never approves a gated CI run, never rebases, never force-pushes, never rewrites history, and never weakens a test to clear a red check. When it looks ready, print the exact merge command for the user.
 - **Push consent is required.** Committing a verified fix locally is authorized by the babysit invocation. `git push` / device `pr_push` happens ONLY after an explicit user yes at the point of risk - the same rule as `atlas-ship`. After consent, push once and re-arm the watch. A live user instruction ("stop pushing", "leave CI alone") supersedes the standing authorization the moment it arrives.
+- **Fixes land on the PR's existing head branch.** Never open a new branch or a second PR for a repair round (`${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`).
 - **One PR at a time, one writer at a time.** No stack traversal, no sibling-PR fixes. The fix loop mutates only this PR's head branch in its checkout worktree.
 - **Review threads are read-only here.** Surface new human review comments verbatim; never reply, never resolve, never edit a PR body - that work belongs to `atlas-resolve-pr-feedback` (referenced by name in the report).
 - **Draft PRs are opt-in.** If the resolved PR is a draft and no human explicitly named it, report the draft status and stop.

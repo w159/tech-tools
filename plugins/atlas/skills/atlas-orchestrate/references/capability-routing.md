@@ -106,7 +106,7 @@ correct and serena is not.
 - **`context7` is mandatory** before any library behavior claim or API-targeted edit. A finding that says "library X is misused" with no doc citation is `unverified`.
 - **`context-mode` for anything noisy.** Bash is only for git/mkdir/rm/mv/navigation and short fixed-output observation.
 - **Read-only stays read-only.** Discovery/verification/DB-probing subagents get `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]` so they cannot mutate.
-- **`isolation: worktree`** on any two subagents that might edit the same files in parallel - prevents working-tree conflicts.
+- **`isolation: worktree`** only on two subagents that truly must edit the same files in parallel (otherwise crew leases on disjoint files); capped by `max_worktrees`, see `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`.
 
 ## Cross-surface fault localization (which layer owns the bug?)
 

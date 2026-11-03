@@ -26,10 +26,10 @@ Everything here is a snapshot before any action - a hint, not ground truth. Re-v
 
 ## Branch resolution
 
-- **Detached HEAD** - create a feature branch from current HEAD before continuing. Derive the name from the change content (`git checkout -b <branch>`), re-read `git branch --show-current`, and use that result for the rest of the run. Do not ask whether to branch - invoking the ship workflow is already confirmation the work should become branch-backed. If the name exists, pick a non-conflicting suffix or ask only if the conflict cannot be resolved safely.
-- **On the default branch with work** (uncommitted, unpushed, or no upstream) - create a feature branch automatically; pushing the default directly is not supported. Continue with the same derivation rule. Do not ask whether to branch.
-- **On the default branch with no work** - report that there is nothing to ship and stop.
-- **Feature branch** - continue.
+- **Detached HEAD** - put the work on a branch before continuing with `atlas_git.py branch <slug>` (slug from the change content; it reuses the branch for the same work, else creates `atlas/<slug>` within the cap), re-read `git branch --show-current`, and use that result for the rest of the run. Do not ask whether to branch.
+- **On ANY protected branch with work** (`atlas_git.py protected`; uncommitted, unpushed, or no upstream) - `atlas_git.py branch <slug>`, which reuses an existing branch for the same work; never a new branch per ship. Pushing a protected branch is not supported without the user's explicit ask and `atlas_git.py allow`. Do not ask whether to branch.
+- **On a protected branch with no work** - report that there is nothing to ship and stop.
+- **Feature branch** - use as is.
 - **Unborn repo** (no commits at all) - report and stop; there is no tree to verify or commit.
 
 If the PR check returned a non-empty array, do not blindly take index 0: another contributor's fork can share the branch name (`--head` filters by branch, not `<owner>:<branch>`). Select the entry whose `headRepositoryOwner` and `headRefName` match the current head. One match = use it (note the URL and body). Multiple unresolvable matches = ambiguous: stop and show the candidates rather than act on the wrong PR.

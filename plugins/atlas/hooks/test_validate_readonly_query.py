@@ -194,6 +194,33 @@ class ValidateReadonlyQueryTest(unittest.TestCase):
             run_hook(payload("INSERT/**/INTO t VALUES (1)")).returncode, 2
         )
 
+    # --- write verbs missed by the first pass ---
+
+    def test_more_write_forms_blocked(self):
+        for cmd in [
+            "UPDATE public.users AS u SET name = 'x'",
+            "DELETE users",
+            "DROP TYPE mood",
+            "DROP OWNED BY joe",
+            "CALL purge_all()",
+            "VACUUM FULL",
+            "REINDEX DATABASE prod",
+            "EXEC sp_executesql N'DROP PROCEDURE p'",
+        ]:
+            with self.subTest(cmd=cmd):
+                self.assertEqual(run_hook(payload(cmd)).returncode, 2)
+
+    def test_read_forms_still_pass(self):
+        for cmd in [
+            "WITH x AS (SELECT 1) SELECT * FROM x",
+            "SELECT call_count, vacuum_count FROM stats",
+            "SELECT * FROM calls WHERE type = 'drop'",
+            "EXPLAIN SELECT 1",
+            "git branch --delete feature",
+        ]:
+            with self.subTest(cmd=cmd):
+                self.assertEqual(run_hook(payload(cmd)).returncode, 0)
+
     # --- case-insensitive ---
 
     def test_lowercase_insert_blocked(self):

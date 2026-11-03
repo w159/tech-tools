@@ -2696,12 +2696,30 @@ class ColonyDenyTest(unittest.TestCase):
         for expected in ("explorer-map-band-rows", "explorer-map-band-rows-2"):
             upd = self._updated(self._no_report(description="Map band rows"))
             self.assertEqual(upd["name"], expected)
-            self.assertIn("\nREPORT: file:line findings first", upd["prompt"])
-            self.assertTrue(upd["prompt"].rstrip().endswith("end with STATUS: DONE"))
+            self.assertIn("\nREPORT: STATUS: DONE|FAILED|BLOCKED as the first line", upd["prompt"])
+            self.assertNotIn("end with STATUS", upd["prompt"])
 
     def test_missing_report_is_not_injected_when_autoname_off(self):
         r = self._no_report(env=dict(self.env, ATLAS_AUTONAME="off"), name="x-explorer")
-        self.assertNotIn("file:line findings first", r.stdout)
+        self.assertNotIn("as the first line", r.stdout)
+
+    def test_injected_report_line_matches_gate_contract(self):
+        import dispatch_tripwire_core as core
+        import worker_report_gate_core as gate
+
+        line = core.DEFAULT_REPORT_LINE
+        self.assertIn("STATUS", line)
+        self.assertLess(line.index("STATUS"), line.index("findings"))
+        with open(gate.CONTRACT_PATH if hasattr(gate, "CONTRACT_PATH") else os.path.join(
+            os.path.dirname(os.path.abspath(gate.__file__)), "..", "contracts", "worker-protocol.json"
+        )) as f:
+            report = json.load(f)["report"]
+        msg = (
+            "STATUS: DONE\nSTEPS: 1/1\nFILES_CHANGED: a.py:3\n"
+            "EVIDENCE:\n1. pytest -q -> 5 passed\n"
+            "DELIVERABLE: a.py:3 fixed\nNEXT: none"
+        )
+        self.assertEqual(gate.check_report(msg, "atlas:explorer", None, report), [])
 
     def test_missing_name_is_denied_when_autoname_off(self):
         r = self._unnamed(env=dict(self.env, ATLAS_AUTONAME="off"), name="")

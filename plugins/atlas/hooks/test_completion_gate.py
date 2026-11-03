@@ -1597,11 +1597,12 @@ class DocsMovedInGitTest(unittest.TestCase):
         ):
             self.assertTrue(completion_gate._docs_moved_in_git(Path("/x")))
 
-    def test_nested_docs_path_counts(self):
+    def test_nested_changelog_counts(self):
+        """Only a CHANGELOG path clears drift (same rule as docs_drift.py)."""
         with mock.patch.object(
             completion_gate,
             "_git_changed_paths",
-            return_value=["plugins/atlas/docs/x.md"],
+            return_value=["plugins/atlas/docs/CHANGELOG.md"],
         ):
             self.assertTrue(completion_gate._docs_moved_in_git(Path("/x")))
 
@@ -4105,3 +4106,93 @@ class StopGateArmingTest(unittest.TestCase):
         out = self.gate()
         self.assertIn("(m) Delegation mandate", out)
         self.assertNotIn("FAIL-OPEN", out)
+
+
+class RoadmapReconciledStatusTest(unittest.TestCase):
+    """(h) parses the ROADMAP Status column / checklist items, not exact strings."""
+
+    def _check(self, text):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        os.makedirs(os.path.join(tmp, "docs"))
+        with open(os.path.join(tmp, "docs", "ROADMAP.md"), "w") as f:
+            f.write(text)
+        return completion_gate._check_roadmap_reconciled(Path(tmp))
+
+    TABLE = "| ID | Item | Status |\n|----|------|--------|\n%s\n"
+
+    def test_padded_done_cell_is_unreconciled(self):
+        self.assertFalse(self._check(self.TABLE % "| R1 | thing | done   |"))
+
+    def test_unpadded_done_cell_is_unreconciled(self):
+        self.assertFalse(self._check("|ID|Status|\n|--|--|\n|R1|done|\n"))
+
+    def test_status_column_not_last_and_case_insensitive(self):
+        self.assertFalse(
+            self._check("| Status | Item |\n|---|---|\n|  DONE  | thing |\n")
+        )
+
+    def test_checked_checklist_item_is_unreconciled(self):
+        self.assertFalse(self._check("- [x] shipped\n"))
+        self.assertFalse(self._check("- [X] shipped\n"))
+
+    def test_open_items_are_reconciled(self):
+        self.assertTrue(self._check(self.TABLE % "| R1 | thing | planned |"))
+        self.assertTrue(self._check("- [ ] later\n"))
+
+    def test_word_done_outside_status_column_is_fine(self):
+        self.assertTrue(self._check(self.TABLE % "| R1 | get it done | planned |"))
+
+
+class DocsMovedInGitRealRepoTest(unittest.TestCase):
+    """(f) agrees with docs_drift.py: only the CHANGELOG clears drift."""
+
+    def _repo(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        def git(*a):
+            subprocess.run(
+                ["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", *a],
+                check=True,
+                capture_output=True,
+            )
+        git("init", "-q")
+        os.makedirs(os.path.join(tmp, "src"))
+        with open(os.path.join(tmp, "src", "a.py"), "w") as f:
+            f.write("x = 1\n")
+        git("add", ".")
+        git("commit", "-qm", "init")
+        with open(os.path.join(tmp, "src", "a.py"), "w") as f:
+            f.write("x = 2\n")
+        return Path(tmp)
+
+    def test_scratch_doc_does_not_clear_drift(self):
+        root = self._repo()
+        os.makedirs(root / "docs" / "architecture")
+        (root / "docs" / "architecture" / "scratch.md").write_text("n\n")
+        self.assertFalse(completion_gate._docs_moved_in_git(root))
+
+    def test_changelog_clears_drift(self):
+        root = self._repo()
+        (root / "docs").mkdir()
+        (root / "docs" / "CHANGELOG.md").write_text("n\n")
+        self.assertTrue(completion_gate._docs_moved_in_git(root))
+
+
+class GateBlockAnalyticsTest(GateOrchestrationTest):
+    """A blocking verdict records gate.<letter>.block through atlas_analytics."""
+
+    def test_block_records_gate_key(self):
+        ah = os.path.join(self.tmp, "ah")
+        env = dict(self.env, ATLAS_HOME=ah, ATLAS_GATE_PHASES="off", ATLAS_GATE_COLONY="off")
+        env.pop("ATLAS_ANALYTICS", None)
+        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        subprocess.run(
+            [sys.executable, os.path.join(scripts, "atlas_analytics.py"), "enable"],
+            env=env, check=True, capture_output=True,
+        )
+        self._log_run_write("src/app.py")
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)
+        self.assertIn('"decision": "block"', r.stdout)
+        ev = Path(ah, "analytics", "events.jsonl").read_text()
+        self.assertIn('"k":"gate.c.block"', ev)

@@ -289,11 +289,11 @@ export function loadConnectorServers(path: string = nodePath.join(pluginRoot(), 
 }
 
 /**
- * MCP servers hooks.json's connector matcher names (`mcp__plugin_armada_.*|mcp__falcon-mcp__.*|
- * mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*`). omp mints
- * `mcp__<server>_<tool>` with ONE underscore, so the server/tool boundary is lost;
- * this table (longest prefix first) recovers it for the servers hooks.json cares about.
- * Read from contracts/mcp-servers.json `connectorWatch`.
+ * Connector servers whose omp-minted names need splitting. hooks.json binds connector_credential_watch to
+ * `mcp__.*` (every MCP tool reaches it; the hook itself skips content servers and non-auth-failure payloads),
+ * so this table is NOT a filter: it only recovers the server/tool boundary. omp mints
+ * `mcp__<server>_<tool>` with ONE underscore, so the boundary is lost; this table (longest prefix first)
+ * restores it for known connectors. Read from contracts/mcp-servers.json `connectorWatch`.
  */
 export const CONNECTOR_SERVERS: readonly string[] = loadConnectorServers();
 
@@ -367,7 +367,7 @@ function mcpClaudeName(bare: string): string {
 /**
  * Names a hooks.json matcher is tested against. omp mints armada connectors as `mcp__armada_<srv>_<tool>` (split:
  * `mcp__armada_<srv>__<tool>`); Claude Code names them `mcp__plugin_armada_<srv>__<tool>`, which is what the
- * connector_credential_watch matcher (`mcp__plugin_armada_.*`) names. Without the alias that watcher never fires on omp.
+ * connector_credential_watch hook's server parser (`mcp__(plugin_)?armada_<srv>`) expects. The matcher itself is `mcp__.*`.
  * The `atlas` prefix is the pre-move name (connectors shipped in atlas), aliased the same way as a fallback.
  */
 export function matcherNames(names: string[]): string[] {

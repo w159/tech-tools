@@ -7,6 +7,7 @@
 - [2. `format` - format-on-edit](#2-format---format-on-edit)
 - [3. `advisor` - catastrophic-command warning](#3-advisor---catastrophic-command-warning)
 - [4. `completion-gate` - the Definition-of-done backstop (opt-out)](#4-completion-gate---the-definition-of-done-backstop-opt-out)
+- [Skill graph check](#skill-graph-check)
 - [Extending](#extending)
 
 Hooks turn the orchestrator's rules into things that *happen on their own* instead of things
@@ -21,6 +22,7 @@ hook that may *deny* a tool call, and only when fallow audit returns `verdict: f
 | `optimizer` | `UserPromptSubmit` | `hooks/prompt_optimizer.py` | optimize the prompt through a local model before Claude sees it; trigger-gated |
 | `advisor` | `PreToolUse` (Bash) | `hooks/bash_advisor.py` | advisory-only; emits a warning on catastrophic, near-irreversible commands only |
 | `fallow-gate` | `PreToolUse` (Bash) | `hooks/fallow_gate.py` | agent gate: on `git commit`/`git push`, run `fallow audit --format json --quiet --explain --gate-marker agent`; deny on fail; skip if fallow absent (`ATLAS_FALLOW=off`) |
+| `git-guard` | `PreToolUse` (Bash) | `hooks/git_guard.py` | git policy guard: denies or asks on commit/push to a protected branch, enforces the branch/worktree caps, gates PR creation per the `prs` policy; rules in `references/git-policy.md` |
 | `recall-gate` | `PreToolUse` (all tools) | `hooks/recall_gate.py` | claude-mem recall is required once per session: the first main-thread call that is neither a claude-mem call nor `TodoWrite` is denied on every attempt until then (reason from `contracts/mandates.json` `recallGate`, 279 -> 197 B); a claude-mem call satisfies it. ToolSearch name variants are normalized. Armed when the claude-mem plugin is enabled; skips subagent transcripts; fail-open (`ATLAS_MANDATES=off`). omp twin: `omp/mandates.ts` (omp: armed only when a claude-mem route is callable now) |
 | `format` | `PostToolUse` (Edit\|Write\|MultiEdit) | `hooks/format_after_edit.py` | auto-format the edited file (ruff/prettier/gofmt/rustfmt); synchronous under the plugin hooks.json (async only when installed via `install_hooks.py`). A formatter failure is a quiet skip, not a hook crash |
 | `dispatch-tripwire` | `PostToolUse` + `PreToolUse` | `hooks/dispatch_tripwire.py` | Existing armed-orchestrator drift/spec guards plus two colony dispatch guards (armed sessions, `atlas:*` only): a dispatch with no `name` is denied (named dispatches put the sibling on the roster for SendMessage and board notes; the guard stands down while `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`, because teams mode turns a named main-conversation dispatch into a teammate - inherits the lead's effort, runs in the lead's cwd - and atlas workers must stay scoped subagents; the name requirement is also lifted when `TMUX` is set but `TMUX_PANE` is empty), and a per-call `model` that overrides the agent definition's frontmatter tier is denied (`model: inherit` or no model accepts any; an unreadable definition fails open; the omp gate accepts omp's expansion of a frontmatter alias, e.g. sonnet -> anthropic/claude-sonnet-5). Independently, docs/ projects deny native Grep/Glob only when lean-ctx is reachable (binary on PATH AND a lean-ctx MCP server configured in `.mcp.json` / project or `~` Claude settings; the deny names the `ToolSearch("select:mcp__<server>__ctx_search")` load step; the exploration deny text is 126 B, was 343 B), otherwise a one-time allow-nudge, including subagents; an allowed native call still counts toward and is subject to the armed inline-op threshold deny, and allow-nudge Read/Bash once per tool/session (`ctx_read`; `ctx_shell` / context-mode `ctx_execute`). `ATLAS_TRIPWIRE_HARD=off` disables denies, not nudges. It also denies `atlas:*` dispatches lacking GOAL/DELIVERABLE/SUCCESS CRITERIA/OUT OF SCOPE/STOP CONDITIONS/REPORT (the deny names exactly the missing labels and gives a paste-ready skeleton; REPORT fields STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT), with >1 GOAL, or lacking the batched ToolSearch+nav-tool TOOLS block, a `atlas:runner` dispatch without a numbered `STEPS:` block (cap 7), and any nested Agent/Task from a subagent (not disabled by `ATLAS_TRIPWIRE=off`). Footprint arming: an unflagged run is armed once the main thread has edited 3 distinct code files (`ATLAS_FOOTPRINT_FILES`, 0 disables). Worker exemption (10.4.1): a session with a non-blank `ATLAS_WORKER_NAME` (pinned by `atlas_mux`/`atlas_launch`) is never armed and gets no deny tier or STOP advisories; leads unchanged. |
@@ -38,7 +40,7 @@ advisory tier: `ATLAS_TRIPWIRE=off` silences drift coaching only (the nested-dis
 policy are unaffected; the latter is switched by `ATLAS_TRIPWIRE_HARD=off`, which disables only
 the deny tier and leaves the advisory nag in place). `hooks/validate-readonly-query.sh` is
 not wired in hooks.json; it is a read-only SQL guard available for the DB-audit
-subagents to invoke during read-only audits. In total 18 hook programs / 22 bindings are wired.
+subagents to invoke during read-only audits. In total 19 hook programs / 23 bindings are wired.
 
 ## Install (gated, idempotent)
 
@@ -162,7 +164,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     one is current state. (i) enforces DRAINING a list; (k) is what enforces having one.
   - (j) Worktree close-out: if this run dispatched an agent with `isolation: "worktree"`
     (recorded by the dispatch tripwire in `runs.used_worktrees`) and `git worktree list`
-    still shows trees beyond the main one, block. Scoped to this run's own dispatches, so a
+    still shows trees beyond the main one, block (close with `atlas_wt.py merge` then `atlas_wt.py prune` / `atlas_git.py clean`). Scoped to this run's own dispatches, so a
     user's long-lived worktrees never trip it.
   - (k) Plan mandate: if this run shipped code and NO plan surface ever carried a single
     item -- no `TodoWrite` call, no non-manual board item for this session, no `LEDGER`
@@ -209,6 +211,29 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   does not install it, add `--select completion-gate`). Disable with `ATLAS_GATE=off`. (Note: it coexists with codebase-brain's
   `validate_gate.py` Stop hook -- that one is message-text based, this one is artifact based;
   complementary.)
+
+## Skill graph check
+
+A test-time guard for the skill text itself, not a hook. `scripts/atlas_skillgraph.py` compiles each
+skill (SKILL.md plus the `references/*.md` it links) into a step graph: Step nodes with file, line,
+the exact quoted source line, kind (approval, remote, local_write, read, judgment) and effect, joined
+by THEN edges in document order. The question "which remote steps (push, PR and issue writes,
+publish, MCP/device PR ops) have no approval step before them?" is then a query, not a review.
+
+```sh
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_skillgraph.py" check [--skills-dir DIR] [--json]   # exit 1 on any ungated remote step
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_skillgraph.py" compile <skill> [--json]            # the graph for one skill
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_skillgraph.py" dot <skill>                         # Graphviz text
+```
+
+`scripts/test_atlas_skillgraph.py` runs `check` over the shipped skills, so a skill that gains an
+unasked remote step fails pytest. The fix is the consent step `references/git-policy.md` already
+requires, written in the skill. `contracts/skillgraph-allow.json` ("skill:file:line-quote-prefix" to
+reason) is for remote steps that are legitimately preapproved; it ships empty and each entry needs a
+written reason. An approval gates only remote steps of an action class it names (push, pr,
+release, issue, api-write); a git-policy.md reference gates push and pr. Known limit: a skill that
+states a class-naming consent rule early gates every later step of that class, so the check proves a
+consent rule precedes the action, not that the step honours it.
 
 ## Extending
 

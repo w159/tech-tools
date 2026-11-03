@@ -129,5 +129,100 @@ class WtTests(unittest.TestCase):
         self.assertEqual(out["pruned_branches"], ["worker/zed"])
 
 
+def wt_env(root, extra, *args):
+    return subprocess.run(
+        [sys.executable, WT, "--root", str(root), *args],
+        capture_output=True,
+        text=True,
+        env=dict(os.environ, **extra),
+    )
+
+
+class WtGitHygieneTests(unittest.TestCase):
+    def test_add_base_defaults_to_the_default_branch_not_a_literal_main(self):
+        r = Path(tempfile.mkdtemp()).resolve()
+        sh(r, "git", "init", "-q", "-b", "trunk")  # no `main` here
+        sh(r, "git", "config", "user.email", "t@t")
+        sh(r, "git", "config", "user.name", "t")
+        (r / ".gitignore").write_text(".atlas/\n")
+        (r / "a.txt").write_text("a\n")
+        sh(r, "git", "add", "-A")
+        sh(r, "git", "commit", "-qm", "init")
+        trunk = sh(r, "git", "rev-parse", "trunk")
+        sh(r, "git", "switch", "-q", "-c", "feature")  # the lead is elsewhere, with its own commit
+        (r / "f.txt").write_text("f\n")
+        sh(r, "git", "add", "f.txt")
+        sh(r, "git", "commit", "-qm", "feature work")
+        p = wt(r, "add", "ann")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(sh(r, "git", "rev-parse", "worker/ann"), trunk)
+
+    def test_add_base_flag_still_wins(self):
+        r = make_repo()
+        sh(r, "git", "switch", "-q", "-c", "other")
+        (r / "o.txt").write_text("o\n")
+        sh(r, "git", "add", "o.txt")
+        sh(r, "git", "commit", "-qm", "other")
+        self.assertEqual(wt(r, "add", "bea", "--base", "other").returncode, 0)
+        self.assertEqual(sh(r, "git", "rev-parse", "worker/bea"), sh(r, "git", "rev-parse", "other"))
+
+    def test_add_respects_the_worktree_cap(self):
+        r = make_repo()
+        env = {"ATLAS_GIT_MAX_WORKTREES": "1"}
+        self.assertEqual(wt_env(r, env, "add", "cal").returncode, 0)
+        commit_in_worker(r, "cal")  # unmerged work: a clean cannot reclaim the slot
+        p = wt_env(r, env, "add", "dee")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("cap 1", p.stderr)
+        self.assertFalse((r / ".atlas" / "wt" / "dee").exists())
+        self.assertEqual(sh(r, "git", "branch", "--list", "worker/dee"), "")
+        self.assertEqual(wt_env(r, env, "add", "cal").returncode, 0)  # an existing worktree is not a new one
+
+    def test_add_gitignores_the_worktree_dir_only_when_needed(self):
+        r = make_repo()  # .gitignore already has .atlas/
+        before = (r / ".gitignore").read_text()
+        wt(r, "add", "eli")
+        self.assertEqual((r / ".gitignore").read_text(), before)
+
+        r2 = make_repo()
+        (r2 / ".gitignore").write_text("node_modules/")  # no trailing newline, no .atlas rule
+        sh(r2, "git", "add", ".gitignore")
+        sh(r2, "git", "commit", "-qm", "ignore")
+        self.assertEqual(wt(r2, "add", "fay").returncode, 0)
+        self.assertEqual((r2 / ".gitignore").read_text(), "node_modules/\n.atlas/wt/\n")
+        self.assertEqual(sh(r2, "git", "status", "--porcelain", "--untracked-files=all"), "M .gitignore")
+        wt(r2, "add", "gus")
+        self.assertEqual((r2 / ".gitignore").read_text().count(".atlas/wt/"), 1)
+
+    def test_prune_also_removes_clean_merged_worktrees_but_not_work(self):
+        r = make_repo()
+        env = {"ATLAS_GIT_WORKTREE_IDLE_MINUTES": "0"}
+        wt(r, "add", "hal")  # nothing committed: merged
+        wt(r, "add", "ivy")
+        commit_in_worker(r, "ivy")  # unmerged
+        wt(r, "add", "jon")
+        (r / ".atlas" / "wt" / "jon" / "scratch.txt").write_text("x")  # dirty
+        out = json.loads(wt_env(r, env, "prune").stdout)
+        self.assertEqual([Path(x).name for x in out["worktrees_removed"]], ["hal"])
+        self.assertFalse((r / ".atlas" / "wt" / "hal").exists())
+        self.assertEqual(sh(r, "git", "branch", "--list", "worker/hal"), "")
+        for kept in ("ivy", "jon"):
+            self.assertTrue((r / ".atlas" / "wt" / kept).exists())
+            self.assertIn("worker/" + kept, sh(r, "git", "branch", "--list", "worker/*"))
+
+    def test_prune_keeps_a_recently_used_worktree_by_default(self):
+        r = make_repo()
+        wt(r, "add", "kim")
+        out = json.loads(wt(r, "prune").stdout)
+        self.assertEqual(out["worktrees_removed"], [])
+        self.assertTrue((r / ".atlas" / "wt" / "kim").exists())
+
+    def test_team_style_agent_names_flow_through_status(self):
+        r = make_repo()
+        self.assertEqual(wt(r, "add", "tabc123-implementer-1").returncode, 0)
+        rows = json.loads(wt(r, "status").stdout)
+        self.assertEqual([x["branch"] for x in rows], ["worker/tabc123-implementer-1"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -483,6 +483,14 @@ def resolve_substantive(prompt: str, decide=None) -> bool:
     return prompt_decision.apply_verdict(regex_yes, verdict, prompt)
 
 
+# Opening tags the harness wraps around events it injects as a user turn. A user
+# prompt that merely starts with "<" (JSX/HTML such as "<Button> throws...") is not one.
+_HARNESS_TAG_RE = re.compile(
+    r"<(?:task-notification|system-reminder|command-[a-z-]+|local-command-[a-z-]+"
+    r"|wake|agent-message|user-prompt-submit-hook)(?=[\s>/])"
+)
+
+
 def _is_harness_event(prompt: str) -> bool:
     """True when `prompt` is a harness-generated event, not a user request.
 
@@ -497,7 +505,7 @@ def _is_harness_event(prompt: str) -> bool:
     no new work.
     """
     head = prompt.lstrip()[:200]
-    if head.startswith("<"):
+    if _HARNESS_TAG_RE.match(head):
         return True
     if head.startswith("Another Claude session sent a message"):
         return True

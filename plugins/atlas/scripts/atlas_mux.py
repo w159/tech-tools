@@ -1882,14 +1882,17 @@ def _is_git_repo(root: str) -> bool:
 
 def worktree_plan(rec: dict, root: str) -> dict:
     """{member name: {path, branch}} for edit-capable members when the resolved team says
-    isolation=worktree and root is a git repo; {} otherwise. Pure: creates nothing."""
+    isolation=worktree and root is a git repo; {} otherwise. Pure: creates nothing.
+
+    Same convention as atlas_wt.py (branch worker/<agent>, worktree .atlas/wt/<agent>, agent =
+    <team>-<member>), so `atlas_wt.py status|merge|prune` and the completion gate see team work."""
     if rec.get("isolation") != "worktree" or not _is_git_repo(root):
         return {}
     team = rec["team_id"]
     return {
         m["name"]: {
-            "path": str(Path(root) / ".claude" / "worktrees" / f"atlas-{team}-{m['name']}"),
-            "branch": f"atlas/{team}/{m['name']}",
+            "path": str(Path(root) / ".atlas" / "wt" / f"{team}-{m['name']}"),
+            "branch": f"worker/{team}-{m['name']}",
         }
         for m in rec["members"]
         if m["role"] in _EDIT_ROLES
@@ -1897,15 +1900,70 @@ def worktree_plan(rec: dict, root: str) -> dict:
 
 
 def add_worktree(root: str, wt: dict) -> str | None:
-    """Create wt's branch+worktree from HEAD; None on success or when it already exists, else the git error."""
+    """Create wt's branch+worktree from HEAD; None on success or when it already exists, else the
+    error: a git failure, or the atlas_git worktree cap (merged worktrees are cleaned first)."""
     if Path(wt["path"]).exists():
         return None
+    try:
+        import atlas_git
+        import atlas_wt
+
+        verdict = atlas_git.check_action(root, "worktree")
+        if verdict["decision"] == "deny":
+            return verdict["reason"]
+        atlas_wt.ensure_ignored(Path(root))
+    except Exception:  # noqa: BLE001 -- fail-open: hygiene modules never block a spawn by crashing
+        pass
     res = subprocess.run(
         ["git", "-C", root, "worktree", "add", "-b", wt["branch"], wt["path"], "HEAD"],
         capture_output=True,
         text=True,
     )
     return None if res.returncode == 0 else (res.stderr or res.stdout).strip()[-300:]
+
+
+def _ahead_of_others(root: str, branch: str) -> int | None:
+    """Commits on `branch` that no other local or remote ref contains (work that exists nowhere else)."""
+    res = subprocess.run(
+        ["git", "-C", root, "rev-list", "--count", branch, "--not", f"--exclude={branch}", "--branches", "--remotes"],
+        capture_output=True,
+        text=True,
+    )
+    return int(res.stdout.strip()) if res.returncode == 0 and res.stdout.strip().isdigit() else None
+
+
+def _reap_worktrees(root: str, rec: dict) -> tuple:
+    """(removed member names, kept rows) for a team's worktrees. A worktree goes only when it is clean
+    and its branch holds nothing no other ref has; then its branch goes (`branch -d`, `-D` only after
+    that same proof). Everything else stays for `atlas_wt.py merge`, with its ahead count."""
+    removed, kept = [], []
+    subprocess.run(["git", "-C", root, "worktree", "prune"], capture_output=True)
+    for member, wt in (rec.get("worktrees") or {}).items():
+        path, branch = wt["path"], wt["branch"]
+        exists = Path(path).is_dir()
+        dirty = bool(
+            exists
+            and subprocess.run(["git", "-C", path, "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
+        )
+        has_branch = subprocess.run(
+            ["git", "-C", root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True
+        ).returncode == 0
+        ahead = _ahead_of_others(root, branch) if has_branch else 0
+        if dirty or ahead != 0:
+            kept.append({"member": member, "path": path, "branch": branch, "ahead": ahead, "dirty": dirty})
+            continue
+        if exists:
+            rm = subprocess.run(["git", "-C", root, "worktree", "remove", path], capture_output=True, text=True)
+            if rm.returncode != 0:
+                kept.append({"member": member, "path": path, "branch": branch, "ahead": ahead, "dirty": dirty,
+                             "error": (rm.stderr or rm.stdout).strip()[-200:]})
+                continue
+        if has_branch:
+            drop = subprocess.run(["git", "-C", root, "branch", "-d", branch], capture_output=True)
+            if drop.returncode != 0:  # nothing unique on it (checked above), but HEAD may not contain it
+                subprocess.run(["git", "-C", root, "branch", "-D", branch], capture_output=True)
+        removed.append(member)
+    return removed, kept
 
 
 def _team_dir(root: str) -> Path:
@@ -2081,6 +2139,22 @@ def _sweep_orphan_session(team_id: str) -> str | None:
     return None
 
 
+def _size_bucket(n: int) -> str:
+    return "1" if n <= 1 else "2" if n == 2 else "3-4" if n <= 4 else "5-8" if n <= 8 else "9+"
+
+
+def _record_team(rec: dict) -> None:
+    """Opt-in analytics: resolved class/effort and team size bucket. Never raises; no I/O when disabled."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from atlas_analytics import record
+
+        record(f"team.{rec['class']}.{rec['effort']}")
+        record(f"team.size.{_size_bucket(len(rec['members']))}")
+    except Exception:  # noqa: BLE001 -- analytics never breaks a spawn
+        pass
+
+
 def cmd_spawn_team(args) -> int:
     root = _root(args)
     task = (
@@ -2154,6 +2228,7 @@ def cmd_spawn_team(args) -> int:
     headline = (first.strip().splitlines() or [""])[0][:120]
     kickoff = f"kickoff {rec['team_id']}: {headline} | members: {members} | scope: {', '.join(rec['file_scope']) or 'whole project'}"
     atlas_todo.note(root, lead, kickoff, to="all", channel=chan, kind="kickoff")
+    _record_team(rec)
 
     def spawn(member: dict) -> dict:
         wt = rec["worktrees"].get(member["name"])
@@ -2425,6 +2500,7 @@ def cmd_reap(args) -> int:
     if state == "live":
         arch.mkdir(parents=True, exist_ok=True)
         (_team_dir(root) / f"{rec['team_id']}.json").replace(archived_path)
+    wt_removed, wt_kept = _reap_worktrees(root, rec)
     prompts = [_team_dir(root) / f"{rec['team_id']}-{n}.prompt" for n in names]
     removed = 0
     for p in prompts:
@@ -2443,8 +2519,10 @@ def cmd_reap(args) -> int:
             "session_left": _tmux("has-session", "-t", session).returncode == 0,
             "channels_reaped": reaped.get("reaped"),
             "prompts_removed": removed,
-            # left in place for the lead to merge (atlas_wt.py merge)
             "worktrees": rec.get("worktrees") or {},
+            "worktrees_removed": wt_removed,  # clean and nothing unique on the branch: gone
+            # holding work: left for the lead to merge (atlas_wt.py merge worker/<team>-<member>)
+            "worktrees_kept": wt_kept,
             "archived": str(archived_path) if state != "recovered" else None,
         }
     )

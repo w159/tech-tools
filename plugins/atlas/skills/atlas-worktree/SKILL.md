@@ -20,6 +20,12 @@ non-fatal fetch, and refuse-on-failure. Worktrees are tracked in the
 `.atlas/.run/worktrees.json` ledger, which lets sibling skills discover and reuse a tree
 instead of creating duplicates the harness cannot see.
 
+**One naming scheme (git policy).** Branch `worker/<name>`, worktree `.atlas/wt/<name>` - the
+convention of `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_wt.py`, the only one `atlas_git.py clean` and `atlas_wt.py prune`
+understand (spawn-team members are `worker/<team>-<member>`). Worktrees are the exception, not the
+default (crew leases on disjoint files come first) and are capped by `max_worktrees`. Full rules:
+`${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`.
+
 Apply the Operating Contract to this entire task. It is injected below.
 
 ```!
@@ -39,8 +45,8 @@ atlas-orchestrate and every sibling skill - read it before creating anything.
   "worktrees": [
     {
       "id": "S2-U1",
-      "path": ".worktrees/s2-u1-auth-retry",
-      "branch": "atlas/s2-u1-auth-retry",
+      "path": ".atlas/wt/s2-u1-auth-retry",
+      "branch": "worker/s2-u1-auth-retry",
       "head_sha": "abc1234",
       "base_branch": "main",
       "base_sha": "def5678",
@@ -95,18 +101,19 @@ blocker has been reported instead.
    the caller act (work there in place; or, only if a clean separate tree is essential and the
    caller confirms, create a *detached* worktree at the same commit).
 
-4. **Run from the repo root:** `cd "$(git rev-parse --show-toplevel)"`. Without this, `.worktrees/<slug>`
-   and the `.gitignore` edit land in a subdirectory.
+4. **Run from the repo root:** `cd "$(git rev-parse --show-toplevel)"`. Without this, `.atlas/wt/<name>`
+   lands in a subdirectory.
 
-5. **Name it meaningfully.** Branch `atlas/<slug>`, path `.worktrees/<slug>`, where `<slug>` comes
+5. **Name it meaningfully.** Branch `worker/<name>`, path `.atlas/wt/<name>`, where `<name>` comes
    from the work description or unit id (`s2-u1-auth-retry`, `spike-cache-layout`) using the
    filesystem-safe slug rules from the docs SSOT. Never an opaque auto-generated name - the slug
    is what a human reading `git worktree list` uses to recognize the tree.
 
-6. **Ensure `.worktrees/` is gitignored before creating anything:**
-   `git check-ignore -q .worktrees/` - **with the trailing slash**, so an existing directory-only
-   rule is honored even before the directory exists. Not ignored → add a `.worktrees/` line to
-   `.gitignore`.
+6. **Respect the cap, and ensure `.atlas/wt/` is gitignored before creating anything.** At
+   `max_worktrees` (`atlas_git.py status`) do not create another: reuse one, or run
+   `atlas_git.py clean` / `atlas_wt.py prune` to free a slot, and ask the user before removing
+   anything dirty or unmerged. `git check-ignore -q .atlas/wt/` - **with the trailing slash**;
+   not ignored → add a `.atlas/wt/` line to `.gitignore`.
 
 7. **Resolve and track the base.** Base branch: the caller's named base, else origin's default
    branch, else `main`. `git fetch origin <base>` is **non-fatal** - no `origin` remote, a
@@ -114,19 +121,20 @@ blocker has been reported instead.
    Record the resolved base commit (`git rev-parse <base>`) as `base_sha`.
 
 8. **Create, per mode:**
-   - **New work (implementer unit, wave worker):** `git worktree add -b atlas/<slug> .worktrees/<slug> <base>`.
+   - **New work (implementer unit, wave worker):** `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_wt.py" add <name> --base <base>`
+     (branch `worker/<name>`, path `.atlas/wt/<name>`).
      Branch mode because its commits are merged back (implementation-units §3 commit ownership).
-   - **Existing branch or tag:** `git worktree add .worktrees/<slug> <target-ref>` - subject to the
+   - **Existing branch or tag:** `git worktree add .atlas/wt/<name> <target-ref>` - subject to the
      one-branch rule in step 3.
    - **Pull request:** check out on a **local branch** - `git fetch origin pull/<n>/head:pr-<n>` then
-     `git worktree add .worktrees/<slug> pr-<n>` (plain git, no `gh` required). Never a detached
+     `git worktree add .atlas/wt/<name> pr-<n>` (plain git, no `gh` required). Never a detached
      `FETCH_HEAD`: it orphans the commits instead of updating the PR. The fork-safe variant - detach,
      then `gh pr checkout <n>` inside the tree - is optional, only when the `gh` CLI is already
      available and push-tracking back to the PR is needed. Subject to the one-branch rule in step 3.
-   - **Detached spike / bakeoff experiment:** `git worktree add --detach .worktrees/<slug> <ref>`.
+   - **Detached spike / bakeoff experiment:** `git worktree add --detach .atlas/wt/<name> <ref>`.
      Detached because its commits are disposable output to be diffed and reported, not merged. If
      the caller later wants to keep a spike's work, create a branch at its HEAD
-     (`git branch atlas/<slug> HEAD` from inside the tree) before teardown.
+     (`git branch worker/<name> HEAD` from inside the tree) before teardown.
 
 9. **Write the ledger entry** (step-9 fields above), then report path, branch or detached SHA,
    and `base_sha`. A wave worker's dispatch prompt carries the intended `base_sha`, and the worker
@@ -153,16 +161,16 @@ tree, in dependency order:
    --force` to bypass this step - `--force` on a dirty tree requires the caller's explicit yes at
    the point of risk, per change.
 3. **Land the work.** Branched tree: merge its branch into the local branch
-   (`git merge --no-ff atlas/<slug>`), revalidating remaining wave results against the advancing
+   (`atlas_wt.py merge <name>`, `--no-ff`, one branch at a time), revalidating remaining wave results against the advancing
    tree (implementation-units §3 integration steps). Detached spike: diff against `base_sha` and
    report findings; removal discards any commits, which requires the confirmation in step 2 if
    commits exist.
-4. **Remove:** `git worktree remove <path>` (no `--force` unless step 2's explicit confirmation
+4. **Remove:** `atlas_wt.py prune` (or `git worktree remove <path>`; no `--force` unless step 2's explicit confirmation
    was given for a dirty tree). Update the ledger: mark the entry `removed` or drop it.
-5. **Branch disposition.** A branch this skill created (`atlas/` prefix) whose work merged in
-   step 3: `git branch -d atlas/<slug>` - safe delete, which refuses unmerged branches. If it
+5. **Branch disposition.** A branch this skill created (`worker/` prefix) whose work merged in
+   step 3: `atlas_git.py clean` (or `git branch -d worker/<name>`) - safe delete, which refuses unmerged branches. If it
    refuses, leave the branch in place and report that its committed work is still reachable
-   there. Never `git branch -D` from this skill. Detached spikes have no branch to delete.
+   there. Never `git branch -D` from this skill. Unmerged or dirty work is never deleted without asking the user. Detached spikes have no branch to delete.
 6. **Never push.** Offering the push is the completion gate's and user's decision, never this
    skill's.
 

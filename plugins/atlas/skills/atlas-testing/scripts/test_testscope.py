@@ -280,10 +280,12 @@ class TestscopeTest(unittest.TestCase):
         write(root, "app.py", "x = 1\n")
         write(root, "node_modules.nosync/x.js", "module.exports = 1\n")
         write(root, ".worktrees/w/lib.rb", "class Foo; end\n")
+        write(root, ".atlas/wt/worker-a/lib.go", "package a\n")
         det = testscope.detect(root)
         self.assertIn("python", det["languages"])
         self.assertNotIn("javascript", det["languages"])
         self.assertNotIn("ruby", det["languages"])
+        self.assertNotIn("go", det["languages"])
 
     def test_nonexec_baselines(self):
         root = self.register(tempfile.mkdtemp(prefix="tsc_nonexec_"))

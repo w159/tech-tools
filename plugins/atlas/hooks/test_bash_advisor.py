@@ -56,6 +56,29 @@ class RmCatastrophicTest(unittest.TestCase):
             "recursive force-delete of a root/home path",
         )
 
+    def test_rm_flag_variants_detected(self):
+        """-R, any flag order, --recursive and `--` before the target are all caught."""
+        for cmd in [
+            "rm -Rf /",
+            "rm -fR ~",
+            "rm -rf -- /",
+            "rm -R -f /",
+            "rm -rf --no-preserve-root /",
+            "rm --recursive -f -- /",
+            "rm -fr -- $HOME",
+            "rm -Rfv /",
+        ]:
+            with self.subTest(cmd=cmd):
+                self.assertEqual(
+                    _match_catastrophic(cmd),
+                    "recursive force-delete of a root/home path",
+                )
+
+    def test_rm_variants_on_safe_target_not_flagged(self):
+        for cmd in ["rm -Rf build/", "rm -rf -- build", "rm -fR ./tmp", "rm -R /tmp/x"]:
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(_match_catastrophic(cmd))
+
     def test_safe_rm_not_flagged(self):
         """Recursive force-delete of a build dir is not catastrophic-root."""
         self.assertIsNone(_match_catastrophic("rm -rf build/"))
@@ -262,9 +285,48 @@ class MatchSecretsPatternsTest(unittest.TestCase):
                 reason = bash_advisor._match_secrets(cmd)
                 self.assertIsNotNone(reason, f"missed secret in: {cmd}")
 
+    def test_secret_file_and_token_commands_detected(self):
+        for cmd in [
+            "cat .env",
+            "cat .env.local",
+            "less ./app/.env.production",
+            "head -n 5 .env",
+            "tail -f ~/.aws/credentials",
+            "bat ~/.netrc",
+            "cat server.pem",
+            "cat ~/.ssh/id_rsa",
+            "cat ~/.ssh/id_ed25519",
+            "printenv",
+            "env",
+            "env | sort",
+            "gh auth token",
+            "az account get-access-token",
+            "gcloud auth print-access-token",
+            "gcloud auth print-identity-token",
+        ]:
+            with self.subTest(cmd=cmd):
+                self.assertIsNotNone(
+                    bash_advisor._match_secrets(cmd), f"missed secret in: {cmd}"
+                )
+
+    def test_secret_file_lookalikes_not_flagged(self):
+        for cmd in [
+            "cat .env.example",
+            "cat .env.sample",
+            "cat .env.template",
+            "cat .environment",
+            "cat ~/.ssh/id_rsa.pub",
+            "cat README.md",
+            "env FOO=1 python3 x.py",
+            "env -i sh -c true",
+            "gh auth status",
+            "printenv PATH",
+        ]:
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(bash_advisor._match_secrets(cmd))
+
     def test_benign_commands_not_flagged(self):
         for cmd in [
-            "env",
             "printenv PATH",
             "ls -la",
             "grep -r token docs/",

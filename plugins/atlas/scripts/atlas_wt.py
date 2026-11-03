@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Isolated worker branches: one git worktree per parallel implementer.
 
-    atlas_wt.py add <agent> [--base main]   worktree .atlas/wt/<agent>, branch worker/<agent>
+    atlas_wt.py add <agent> [--base B]      worktree .atlas/wt/<agent>, branch worker/<agent>
+                                            (B defaults to the repo's default branch; honours the worktree cap)
     atlas_wt.py status                      JSON list, one row per worker/* branch
     atlas_wt.py merge <agent>               verified finding required; --no-ff merge; cleanup
-    atlas_wt.py prune                       drop stale worktree metadata + merged orphan branches
+    atlas_wt.py prune                       drop stale worktree metadata + merged orphan branches, then
+                                            remove clean merged worktrees (atlas_git.py clean, local only)
 
 Contract: branch `worker/<agent>`, worktree `.atlas/wt/<agent>` under the main
-working tree's root. Never pushes, never forces (no --force, no `branch -D`, no
+working tree's root (colony teams use `<team>-<member>` as the agent name, so
+atlas_mux team worktrees are managed here too). `.atlas/wt/` is kept gitignored. Never pushes, never forces (no --force, no `branch -D`, no
 `reset`), never edits the main tree except through the merge itself. Every
 refusal exits 1 with the exact reason on stderr.
 """
@@ -24,6 +27,11 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from atlas_finding import RELPATH, load  # noqa: E402
+
+try:  # fail-open: wt still works if the git policy module is unusable
+    import atlas_git
+except Exception:  # noqa: BLE001
+    atlas_git = None
 
 PREFIX = "worker/"
 WT_DIR = (".atlas", "wt")
@@ -95,8 +103,32 @@ def _registered(root: Path, path: Path) -> bool:
     )
 
 
-def cmd_add(root: Path, agent: str, base: str) -> dict:
+def ensure_ignored(root: Path) -> bool:
+    """Make sure `.atlas/wt/` is gitignored (the worktrees live inside the main tree). Returns True
+    when a line had to be appended to .gitignore. An existing ignore rule (e.g. `.atlas/`) is enough."""
+    rel = "/".join(WT_DIR) + "/"
+    if git(root, "check-ignore", "-q", rel, check=False).returncode == 0:
+        return False
+    ignore = root / ".gitignore"
+    text = ignore.read_text(encoding="utf-8") if ignore.exists() else ""
+    ignore.write_text(
+        text + ("" if not text or text.endswith("\n") else "\n") + rel + "\n",
+        encoding="utf-8",
+    )
+    return True
+
+
+def default_base(root: Path) -> str:
+    """The base a new worker branch starts from: the repo's default branch, else HEAD."""
+    try:
+        return (atlas_git.default_branch(root) if atlas_git else None) or "HEAD"
+    except Exception:  # noqa: BLE001
+        return "HEAD"
+
+
+def cmd_add(root: Path, agent: str, base: str | None = None) -> dict:
     _check_agent(agent)
+    base = base or default_base(root)
     branch, path = PREFIX + agent, wt_path(root, agent)
     if path.exists() and _registered(root, path):
         cur = git(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
@@ -112,6 +144,11 @@ def cmd_add(root: Path, agent: str, base: str) -> dict:
         raise WtError(
             "%s exists but is not a registered worktree; remove it by hand" % path
         )
+    if atlas_git is not None:
+        verdict = atlas_git.check_action(root, "worktree")
+        if verdict["decision"] == "deny":
+            raise WtError(verdict["reason"])
+    ensure_ignored(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     if _branch_exists(root, branch):
         git(root, "worktree", "add", str(path), branch)
@@ -225,7 +262,17 @@ def cmd_prune(root: Path) -> dict:
         if r["worktree"] is None and r["merged"]:
             git(root, "branch", "-d", r["branch"])
             removed.append(r["branch"])
-    return {"pruned_branches": removed}
+    out = {"pruned_branches": removed}
+    if atlas_git is not None:  # clean merged worktrees too (never dirty, locked, unmerged or recent ones)
+        try:
+            res = atlas_git.clean(root)
+            out["worktrees_removed"] = res.get("worktrees_removed", [])
+            out["branches_deleted"] = res.get("branches_deleted", [])
+            if res.get("errors"):
+                out["errors"] = res["errors"]
+        except Exception as exc:  # noqa: BLE001
+            out["clean_error"] = str(exc)[:200]
+    return out
 
 
 def main(argv: list | None = None) -> int:
@@ -234,7 +281,7 @@ def main(argv: list | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("add")
     a.add_argument("agent")
-    a.add_argument("--base", default="main")
+    a.add_argument("--base", default=None, help="default: the repo's default branch, else HEAD")
     sub.add_parser("status")
     m = sub.add_parser("merge")
     m.add_argument("agent")

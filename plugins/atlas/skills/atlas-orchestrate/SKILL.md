@@ -44,7 +44,7 @@ If it feels too small to delegate, delegate anyway (unless `ATLAS_MODE=solo` is 
 
 ## Laws and gates (load full text when acting)
 
-**One-line laws:** (1) delegate all execution (2) resolve the team, 2+ workers run as a tmux team; parallel writers own disjoint files (crew leases) or get worktree isolation (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
+**One-line laws:** (1) delegate all execution (2) resolve the team, 2+ workers run as a tmux team; parallel writers own disjoint files (crew leases) or, only when they truly collide, a capped worktree; one git policy, `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md` (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
 
 **Before any other action, run the decision gate:** multi-stage OR multi-surface OR whole-repo/audit? → Workflow or parallel wave first; no inline. Tripwire advises at 4 inline ops (`ATLAS_TRIPWIRE_THRESHOLD`) and denies the 7th unsanctioned inline op since the last dispatch, and non-docs Edit|Write|NotebookEdit in orchestration sessions (`ATLAS_TRIPWIRE*`); `docs/` and `.atlas/` writes and URI writes (`agent://`, `xd://`) are not counted.
 
@@ -80,7 +80,7 @@ Orchestrator stays Opus-tier; subagents default Sonnet, drop to Haiku for read-a
 
 ## Automation (hooks)
 
-18 hook programs / 22 bindings auto-load via `hooks/hooks.json` (including the fallow agent gate and the `worker_report_gate` SubagentStop check). Fail-open on missing deps. Key enforcers: `session_boot`, `prompt_optimizer` (+ arm-early), `bash_advisor`, `fallow_gate`, `dispatch_tripwire`, `completion_gate`, `recall_gate`, `todo_capture`, `worker_report_gate`, `format_after_edit`, `docs_drift_watch`, `connector_credential_watch`, `ingest_session`, `memory_capture`, `chronicle_facet`, `nudge`, `atlas_doctor`. Full contract/env: **load `references/hooks-automation.md`**. JS/TS fallow usage: **load `references/fallow-tools.md`**.
+19 hook programs / 23 bindings auto-load via `hooks/hooks.json` (including the fallow agent gate and the `worker_report_gate` SubagentStop check). Fail-open on missing deps. Key enforcers: `session_boot`, `prompt_optimizer` (+ arm-early), `bash_advisor`, `fallow_gate`, `dispatch_tripwire`, `completion_gate`, `recall_gate`, `todo_capture`, `worker_report_gate`, `format_after_edit`, `docs_drift_watch`, `connector_credential_watch`, `ingest_session`, `memory_capture`, `chronicle_facet`, `nudge`, `atlas_doctor`. Full contract/env: **load `references/hooks-automation.md`**. JS/TS fallow usage: **load `references/fallow-tools.md`**.
 
 ## Solo mode (ATLAS_MODE=solo)
 

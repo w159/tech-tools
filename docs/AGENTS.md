@@ -144,7 +144,7 @@ Verified 2026-07-13 against the shipped tree.
 - Boundaries: `atlas` plugin (codebase-facing, 14 agents in `plugins/atlas/agents/`) versus
   `armada` plugin (11 department agents in `plugins/armada/agents/`); the split landed in v5.0.0
 - Key modules: 40 skills under `plugins/atlas/skills/`, 14 agents under `plugins/atlas/agents/`,
-  hook handlers under `plugins/atlas/hooks/` (18 programs, 22 bindings in `hooks/hooks.json`, including
+  hook handlers under `plugins/atlas/hooks/` (19 programs, 23 bindings in `hooks/hooks.json`, including
   `worker_report_gate.py` on SubagentStop), CLI scripts under `plugins/atlas/scripts/`, 13 MCP
   connector bundles under `plugins/armada/mcp/` (listed in `plugins/armada/.mcp.json`)
 

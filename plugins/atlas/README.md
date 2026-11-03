@@ -8,9 +8,9 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.11.4 (`.claude-plugin/plugin.json`)                                                                               |
+| Version    | 16.12.0 (`.claude-plugin/plugin.json`)                                                                               |
 | License    | Apache-2.0                                                                                                           |
-| Ships      | 40 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
+| Ships      | 41 skills, 14 agents, 19 hook programs / 23 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 13 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
@@ -30,6 +30,7 @@ session, so your context window holds reports instead of raw output.
 - [Command Center, statusline and in-terminal mod](#command-center-statusline-and-in-terminal-mod)
 - [omp and codex](#omp-and-codex)
 - [Self-improvement and telemetry](#self-improvement-and-telemetry)
+- [Analytics (opt-in)](#analytics-opt-in)
 - [Security and data handling](#security-and-data-handling)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
@@ -328,7 +329,7 @@ judgment:
 
 ## Skills
 
-40 skills. Four are invoked by name only (`disable-model-invocation: true`):
+41 skills. Four are invoked by name only (`disable-model-invocation: true`):
 `atlas-setup`, `atlas-prompt`, `atlas-tui` and `atlas-crew`. The other 36 load on relevance
 from their `description`. Overlapping capabilities are modes of one skill, not
 separate skills; each multi-mode skill documents its modes in its `SKILL.md` or
@@ -363,6 +364,7 @@ its `references/`.
 | Ship    | atlas-ship                | Verifier checks a clean tree, makes the local commit, stops before any push or PR                                                               |
 | Ship    | atlas-worktree            | Creates, reuses and tears down linked git worktrees with dirty-state protection                                                                 |
 | Ship    | atlas-run-watch           | Watches a long job or one PR's CI; repairs genuine CI failures, asks before pushing, never merges                                               |
+| Ship    | atlas-security            | Triages Dependabot, code-scanning and secret alerts, fixes on one branch, a fresh verifier confirms each fix |
 | Ship    | atlas-resolve-pr-feedback | Triages PR review threads, applies approved fixes, confirms before posting                                                                      |
 | Docs    | atlas-readme              | Generates a README by inspecting the repo, every claim traced to a file                                                                         |
 | Docs    | atlas-wiki                | Refreshes `docs/wiki/` diagrams from `docs/architecture/`                                                                                       |
@@ -406,7 +408,7 @@ fork, so their judgment starts clean.
 
 ## Hooks
 
-18 hook programs / 22 bindings, wired from `hooks/hooks.json` when the plugin is
+19 hook programs / 23 bindings, wired from `hooks/hooks.json` when the plugin is
 enabled. `hooks/event_dispatch.py` runs the PreToolUse and PostToolUse hooks in
 one process per tool event, each with its original matcher and a time slice;
 `hooks/stop_tail.py` does the same for four Stop hooks. Measured on 16.0.0,
@@ -427,6 +429,7 @@ fail-open when the CLI is absent).
 | `event_dispatch.py`             | PreToolUse, PostToolUse                                            | One process per tool event that runs the hooks below in-process                                                                                                                                                                                                                                                                                                                                                                              |
 | `recall_gate.py`                | PreToolUse                                                         | With claude-mem enabled, denies tool calls until one real claude-mem recall happens (`ATLAS_MANDATES=off`)                                                                                                                                                                                                                                                                                                                                   |
 | `bash_advisor.py`               | PreToolUse (Bash)                                                  | Warns on catastrophic commands; never denies                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `git_guard.py`                  | PreToolUse (Bash, Write, Agent, Task, mcp__*)                      | Keeps commits and pushes off protected branches (the default branch, `production`, `release/*`, GitHub-protected) while other branches are in use, caps local branches and linked worktrees, and turns every pull-request creation into a permission prompt. Policy: `.atlas/git-policy.json`, `scripts/atlas_git.py policy` (`ATLAS_GIT_GUARD=off`)                                                                                         |
 | `edit_read_nudge.py`            | PreToolUse, PostToolUse                                            | Nudges when an edit targets a file read only through `ctx_read`                                                                                                                                                                                                                                                                                                                                                                              |
 | `dispatch_tripwire.py`          | PreToolUse, PostToolUse, SubagentStart                             | Routes native Grep and Glob to lean-ctx where it is configured; counts inline work and denies past the threshold in orchestration runs; names an unnamed `atlas:*` dispatch (denies it instead with `ATLAS_AUTONAME=off`); denies model-overriding `atlas:*` dispatches, dispatches missing the GOAL / DELIVERABLE / SUCCESS CRITERIA / OUT OF SCOPE / STOP CONDITIONS spec or bundling more than one GOAL, and any nested subagent dispatch |
 | `fallow_gate.py`                | PreToolUse (Bash)                                                  | Runs `fallow audit` on `git commit` and `git push` and denies on `verdict: fail` or a CLI below the minimum version (`ATLAS_FALLOW=off`)                                                                                                                                                                                                                                                                                                     |
@@ -539,6 +542,42 @@ config picks the model.
 No hook creates a skill or a slash command. Learned knowledge goes to findings,
 `docs/lessons/` and memory.
 
+## Analytics (opt-in)
+
+Off by default. Nothing is recorded and nothing leaves your machine unless you opt in; undecided counts as off.
+`ATLAS_ANALYTICS=off` forces it off and silences the boot notice. Purpose: weekly counts that show which skills,
+hooks and gates are used or noisy, so Atlas can be improved. Nothing else.
+
+**Collected** (whole-number counters per ISO week, names from the allowlist in
+[contracts/analytics-schema.json](contracts/analytics-schema.json), each family with a stated purpose):
+hook decisions (`hook.<hook>.<deny|ask|context|fault>[.<reason>]`), skill and agent use, team class/effort/size,
+completion-gate blocks, git cleanup counts, security alert counts by severity; plus Atlas version, harness,
+OS family, Python minor version and the week.
+
+**Never collected:** install, session or user ids; timestamps finer than the week; usernames, hostnames, IPs;
+paths, home or working directories, file names; repo, org, branch, project or your own skill names; prompts, code,
+commit or error messages. Allowed names are read from files shipped with Atlas, so yours can never match. Unknown
+keys are dropped when recorded and again when the payload is built.
+
+**Sending:** there is no built-in server address. `send` refuses until you set one
+(`enable --endpoint https://...` or `ATLAS_ANALYTICS_ENDPOINT`; https only, plain http only for localhost).
+Each payload is appended to `sent.jsonl` before it is posted, one per finished week.
+
+```bash
+python3 scripts/atlas_analytics.py explain    # what and why, in plain language
+python3 scripts/atlas_analytics.py preview    # the exact payload that would be sent
+python3 scripts/atlas_analytics.py enable     # opt in (disable [--keep] opts out)
+python3 scripts/atlas_analytics.py status     # state, files, event count, week range
+python3 scripts/atlas_analytics.py export --out atlas-counts.json   # share by hand instead
+python3 scripts/atlas_analytics.py delete     # remove ~/.atlas/analytics entirely
+```
+
+**Verify anonymity yourself:** `python3 scripts/atlas_analytics.py prove` builds the current payload and checks it:
+no key outside the schema, only integer counts, and none of your username, hostname, home dir, working dir, git
+remote, e-mail addresses, IP addresses, absolute paths or long hex/base64 tokens anywhere in it; it exits non-zero on
+any failure. You can also read `~/.atlas/analytics/events.jsonl` (pending counts, one `{"w","k","n"}` per line)
+and `sent.jsonl` (every payload as sent), and run `pytest scripts/test_atlas_analytics.py`.
+
 ## Security and data handling
 
 - No push without consent. `atlas-ship`, `atlas-run-watch` and
@@ -601,9 +640,9 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.11.4
+|-- .claude-plugin/plugin.json   manifest, version 16.12.0
 |-- agents/                      14 agents (atlas:<role>)
-|-- skills/                      40 skills, one directory each
+|-- skills/                      41 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
 |-- scripts/                     CLIs: doctor, mux, resolve, todo, finding, gates,
 |                                dashboard, statusline, worktrees, telemetry

@@ -1,5 +1,43 @@
 # Changelog
 
+## 16.12.0 - 2026-11-03
+
+### Added
+
+- `scripts/atlas_git.py`, the git policy behind the new hygiene rules. `protected` lists protected branches (the repo default branch, a production branch, `main`/`master`/`production`/`release/*`, and branches GitHub reports as protected; `protected --refresh` re-reads the GitHub protected-branch cache). The policy caps local branches at 8 and linked worktrees at 4 (`max_branches`, `max_worktrees` in `.atlas/git-policy.json`). `clean` removes merged or idle worktrees and merged branches; remote branches are only deleted with `--remote`, and only agent-made merged ones. `branch <slug>` creates a feature branch, `check` returns allow/ask/deny for an action, and `allow` records a grant that needs the user's own words.
+- `hooks/git_guard.py`, a PreToolUse guard. Commit, merge and push on a protected branch are denied when other branches are active and asked otherwise; PR creation asks by default (`prs` policy: `ask`, `off`, `allow`); the branch and worktree caps are enforced; MCP GitHub writes and Agent worktree isolation are checked too. `ATLAS_GIT_GUARD=off` disables it. Wired in `hooks.json`, `contracts/hook-bridge.json` and the omp bridge list.
+- `references/git-policy.md`, the policy reference the skills and agents now point to.
+- `scripts/atlas_security.py` and the `atlas-security` skill: triage of Dependabot, code scanning and secret scanning alerts. The leaked value of a secret-scanning alert is never stored.
+- `scripts/atlas_analytics.py` with `contracts/analytics-schema.json`: opt-in anonymous usage counters. Subcommands `status`, `explain`, `enable`, `disable`, `preview`, `prove`, `export`, `delete`, `send`. No endpoint ships by default and `send` refuses until one is configured, so nothing leaves the machine without opt-in. The completion gate records its counters through it when enabled.
+- Session boot starts a detached local `atlas_git.py clean` in the background when the last clean is older than `auto_clean_hours` (never with `--remote`; `ATLAS_GIT_AUTOCLEAN=off` skips it) and prints one boot line when a branch or worktree cap is hit.
+- `scripts/atlas_skillgraph.py` compiles each skill's `SKILL.md` (plus linked references) into a step graph: Skill, Step and Reference nodes joined by HAS_STEP, THEN and USES edges. Each step carries its file, line and exact quote, validated against the source. `check` fails on any push, PR, release, issue or API-write step with no consent step of the same action class earlier on the path. `contracts/skillgraph-allow.json` (empty) holds reasoned exceptions. `scripts/test_atlas_skillgraph.py` includes a conformance test over the shipped skills. Before and after: 21 remote steps in the shipped skills, 0 ungated, on both 77e9c403 and this tree. Limit: it proves a consent step exists earlier on the path, not that the agent obeys it; a step planted at the end of a skill that already states push/PR consent counts as gated (30 of 41 end plants caught, 41 of 41 plants before the first step). Inspired by the graph engineering approach (skills compiled into graphs so governance becomes a query).
+- Tests: 134 test functions in the four new test files (`test_atlas_git.py`, `test_atlas_security.py`, `test_atlas_analytics.py`, `test_git_guard.py`) and 65 added to existing test files.
+
+### Changed
+
+- `atlas_mux` team worktrees use branch `worker/<team>-<member>` in `.atlas/wt/`, matching `atlas_wt`. `reap` removes clean worktrees with no unique commits and leaves ones holding work for the lead to merge.
+- `atlas_wt add` takes its base from the repo default branch when `--base` is not given and honors the worktree cap. `prune` also runs the policy clean.
+- `atlas-ship` reuses an existing feature branch, creates one with `atlas_git.py branch` from any protected branch, and asks for push consent and PR consent separately. A yes to the push does not authorize a PR.
+- Skill and agent text (orchestrate, worktree, review, setup, prototype, loop and the implementer/runner agents, including the omp copies) follow `references/git-policy.md`.
+- `connector_credential_watch` now covers every `mcp__` tool (matcher `mcp__.*`) behind a cheap prefilter instead of a fixed server list.
+- `format_after_edit` runs ruff or black on Python files only when the repo configures them, and passes `--no-cache` to ruff when the repo has no `.ruff_cache`.
+- Session boot no longer scaffolds `docs/` in projects that `atlas-setup` has not onboarded.
+- `bash_advisor` regexes run only when their required literals are present. On a 100k-character command, scorecard `bash_advisor_100k_ms` is 69.9/78.4 ms on 16.11.4 and 44.6/36.1 ms now (two runs each).
+- The analytics opt-in boot notice is shorter (first-boot `additionalContext` 2183 -> 1996 bytes) and is still shown once per version.
+- The PreToolUse dispatcher budget goes from 30 to 40 s and the `hooks.json` timeout from 35 to 45 s. These are worst-case caps only.
+
+### Fixed
+
+- The branch/worktree cap message named a non-existent `max_branchs` key; it now names `max_branches` or `max_worktrees`.
+- `bash_advisor` catches `rm -Rf`, `-fR` and `--` variants against root and home paths, and commands that print secrets (`cat .env`, bare `env`/`printenv`, `gh auth token`, `az` and `gcloud` token commands).
+- The read-only SQL guard closes gaps: `UPDATE ... AS`, bare `DELETE`, `DROP TYPE` and `DROP OWNED`, `CALL`, `VACUUM FULL`, `REINDEX` and `EXEC sp_`.
+- Completion gate (h) parses the Status column of a ROADMAP table by its header, and (f) is cleared only by `docs/CHANGELOG.md`, matching `docs_drift`.
+- `docs_drift_watch` ignores cache timestamps in the future (clock reset).
+- `nudge` ignores `.atlas/` paths.
+- The prompt optimizer no longer treats a prompt that starts with a JSX or HTML tag as a harness event; only the harness tags are matched.
+- The worker report gate no longer flags "0 remaining", "no failures" or "errors-free" as failures.
+- The tripwire default `REPORT:` line now puts `STATUS:` first.
+
 ## 16.11.4 - 2026-11-03
 
 ### Changed

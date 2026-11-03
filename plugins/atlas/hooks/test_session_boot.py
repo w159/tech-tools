@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 from unittest import mock
 
@@ -828,7 +829,22 @@ class DocsStructureRepairTest(unittest.TestCase):
             return set()
         return {n for n in os.listdir(docs) if os.path.isdir(os.path.join(docs, n))}
 
+    def _onboard(self):
+        """The signal atlas-setup leaves behind: .atlas/AGENTS.md (scaffold_docs.py)."""
+        os.makedirs(os.path.join(self.tmp, ".atlas"), exist_ok=True)
+        with open(os.path.join(self.tmp, ".atlas", "AGENTS.md"), "w", encoding="utf-8") as fh:
+            fh.write("# atlas\n")
+
+    def test_docs_tree_in_a_non_onboarded_project_is_left_alone(self):
+        """A repo that merely has docs/ never asked for Atlas scaffolding: boot
+        creates no docs/* folders there (it may only keep .atlas/ run state)."""
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        out = self._boot()
+        self.assertNotIn("docs structure repaired", out)
+        self.assertEqual(self._subdirs(), set())
+
     def test_partial_docs_tree_is_completed(self):
+        self._onboard()
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
         out = self._boot()
         self.assertIn("docs structure repaired", out)
@@ -836,6 +852,7 @@ class DocsStructureRepairTest(unittest.TestCase):
             self.assertIn(required, self._subdirs())
 
     def test_repair_is_idempotent_and_then_silent(self):
+        self._onboard()
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
         self._boot("s1")
         before = self._subdirs()
@@ -851,6 +868,7 @@ class DocsStructureRepairTest(unittest.TestCase):
         self.assertFalse(os.path.isdir(os.path.join(self.tmp, "docs")))
 
     def test_kill_switch_disables_repair(self):
+        self._onboard()
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
         self.env["ATLAS_DOCS_REPAIR"] = "off"
         out = self._boot()
@@ -1525,3 +1543,210 @@ class LeadChannelOpenTest(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         spy.assert_called_once()
+
+
+GIT_ENV = {
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@t",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@t",
+}
+
+
+def _git(cwd, *args):
+    return subprocess.run(
+        ["git", "-C", str(cwd), *args],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=dict(os.environ, **GIT_ENV),
+    ).stdout.strip()
+
+
+class GitHygieneBootTest(unittest.TestCase):
+    """Boot starts a detached LOCAL clean when the stamp is stale, runs no git itself, and says one line."""
+
+    def setUp(self):
+        self.repo = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.repo, True)
+        _git(self.repo, "init", "-q", "-b", "main")
+        _git(self.repo, "commit", "-q", "--allow-empty", "-m", "i")
+        self.stamp = os.path.join(self.repo, ".atlas", ".run", "git-clean-stamp.json")
+        env = {"ATLAS_HOME": tempfile.mkdtemp(), "ATLAS_GIT_AUTOCLEAN": "on"}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for k in list(os.environ):
+            if k.startswith("ATLAS_GIT_") and k != "ATLAS_GIT_AUTOCLEAN":
+                del os.environ[k]
+
+    def _stamp(self, **kw):
+        os.makedirs(os.path.dirname(self.stamp), exist_ok=True)
+        with open(self.stamp, "w", encoding="utf-8") as fh:
+            json.dump(kw, fh)
+
+    def _boot(self, cwd=None):
+        with mock.patch("subprocess.Popen") as popen:
+            line = session_boot.git_hygiene_boot(cwd or self.repo)
+        return line, popen
+
+    def test_missing_stamp_spawns_a_detached_local_clean(self):
+        line, popen = self._boot()
+        self.assertIsNone(line)
+        popen.assert_called_once()
+        argv = popen.call_args.args[0]
+        self.assertEqual(argv[0], sys.executable)
+        self.assertTrue(argv[1].endswith(os.path.join("scripts", "atlas_git.py")))
+        self.assertEqual(argv[2:], ["--root", self.repo, "clean"])
+        self.assertNotIn("--remote", argv)
+        kw = popen.call_args.kwargs
+        self.assertTrue(kw["start_new_session"])
+        for stream in ("stdin", "stdout", "stderr"):
+            self.assertEqual(kw[stream], subprocess.DEVNULL)
+        with open(self.stamp, encoding="utf-8") as fh:  # slot claimed: a burst of sessions spawns one
+            self.assertLess(abs(json.load(fh)["at"] - time.time()), 30)
+        self.assertEqual(self._boot()[1].call_count, 0)
+
+    def test_stale_stamp_spawns_fresh_stamp_does_not(self):
+        self._stamp(at=int(time.time()) - 7 * 3600)
+        self.assertEqual(self._boot()[1].call_count, 1)
+        self._stamp(at=int(time.time()) - 3600)
+        self.assertEqual(self._boot()[1].call_count, 0)
+
+    def test_stale_threshold_follows_the_policy(self):
+        self._stamp(at=int(time.time()) - 3600)
+        with mock.patch.dict(os.environ, {"ATLAS_GIT_AUTO_CLEAN_HOURS": "1"}):
+            self.assertEqual(self._boot()[1].call_count, 1)
+
+    def test_kill_switches_and_non_repos_never_spawn(self):
+        for env in (
+            {"ATLAS_GIT_AUTOCLEAN": "off"},
+            {"ATLAS_GIT_GUARD": "off"},
+            {"ATLAS_GIT_CLEANUP_LOCAL": "off"},
+            {"ATLAS_GIT_AUTO_CLEAN_HOURS": "0"},
+        ):
+            with self.subTest(env=env), mock.patch.dict(os.environ, env):
+                self.assertEqual(self._boot()[1].call_count, 0)
+        plain = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, plain, True)
+        self.assertEqual(self._boot(plain)[1].call_count, 0)
+
+    def test_linked_worktree_cleans_the_main_root(self):
+        wt = os.path.join(os.path.dirname(self.repo), os.path.basename(self.repo) + "-wt")
+        self.addCleanup(shutil.rmtree, wt, True)
+        _git(self.repo, "worktree", "add", "-q", wt, "-b", "worker/x")
+        self.assertEqual(session_boot._git_main_root(wt), self.repo)
+        self.assertEqual(session_boot._git_main_root(os.path.join(wt, "sub")), self.repo)
+        _line, popen = self._boot(wt)
+        self.assertEqual(popen.call_args.args[0][3], self.repo)
+
+    def test_boot_line_only_when_at_the_cap_and_without_running_git(self):
+        self._stamp(at=int(time.time()), worktrees=1, max_worktrees=4, branches=3, max_branches=8)
+        with mock.patch("subprocess.run", side_effect=AssertionError("git on the boot path")):
+            self.assertIsNone(session_boot.git_hygiene_boot(self.repo))
+            self._stamp(at=int(time.time()), worktrees=4, max_worktrees=4, branches=9, max_branches=8)
+            line = session_boot.git_hygiene_boot(self.repo)
+        self.assertIn("4/4 worktrees", line)
+        self.assertIn("9/8 branches", line)
+        self.assertIn("atlas_git.py status", line)
+        self.assertEqual(line.count("\n"), 0)
+
+    def test_corrupt_stamp_is_treated_as_missing(self):
+        os.makedirs(os.path.dirname(self.stamp))
+        with open(self.stamp, "w", encoding="utf-8") as fh:
+            fh.write("{nope")
+        line, popen = self._boot()
+        self.assertIsNone(line)
+        self.assertEqual(popen.call_count, 1)
+
+    def test_clean_writes_the_counts_boot_reads(self):
+        import atlas_git
+
+        self._stamp(at=0)
+        atlas_git.clean(self.repo)
+        with open(self.stamp, encoding="utf-8") as fh:
+            got = json.load(fh)
+        self.assertEqual((got["worktrees"], got["branches"]), (0, 0))
+        self.assertEqual((got["max_worktrees"], got["max_branches"]), (4, 8))
+
+
+class OptionalBootTextTest(unittest.TestCase):
+    """atlas_security.boot_line / atlas_analytics.boot_notice join boot when present and vanish when not."""
+
+    # the in-process boot harness (isolated env, mocked curator/memory), without re-running its tests
+    setUp = MainInProcessTest.setUp
+    tearDown = MainInProcessTest.tearDown
+    _restore_environ = MainInProcessTest._restore_environ
+
+    def _fake(self, name, func, value):
+        mod = types.ModuleType(name)
+        if func:
+            setattr(mod, func, value)
+        return mod
+
+    def _boot(self, modules):
+        patch = {"atlas_security": None, "atlas_analytics": None, **modules}
+        with (
+            mock.patch.dict(sys.modules, patch),
+            mock.patch.object(session_boot, "git_hygiene_boot", return_value=None),
+        ):
+            code, out = run_main_inprocess({"session_id": "s1", "cwd": self.tmp}, self.env)
+        self.assertEqual(code, 0)
+        return json.loads(out)
+
+    def test_absent_modules_change_nothing(self):
+        data = self._boot({})  # None in sys.modules makes the import raise ImportError
+        self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
+        self.assertNotIn("\n", data["systemMessage"])
+
+    def test_module_without_the_function_is_skipped(self):
+        data = self._boot(
+            {"atlas_security": self._fake("atlas_security", None, None), "atlas_analytics": self._fake("atlas_analytics", None, None)}
+        )
+        self.assertIn("Atlas: orchestrator posture", data["hookSpecificOutput"]["additionalContext"])
+
+    def test_raising_module_is_fail_open(self):
+        def boom(*a):
+            raise RuntimeError("down")
+
+        data = self._boot({"atlas_security": self._fake("atlas_security", "boot_line", boom)})
+        self.assertIn("Atlas: orchestrator posture", data["hookSpecificOutput"]["additionalContext"])
+
+    def test_security_line_goes_into_context_only(self):
+        seen = []
+        data = self._boot(
+            {"atlas_security": self._fake("atlas_security", "boot_line", lambda root: seen.append(root) or "SEC-LINE-1")}
+        )
+        self.assertIn("SEC-LINE-1", data["hookSpecificOutput"]["additionalContext"])
+        self.assertNotIn("SEC-LINE-1", data["systemMessage"])
+        self.assertEqual(seen, [self.tmp])
+
+    def test_analytics_notice_goes_into_context_and_system_message(self):
+        data = self._boot({"atlas_analytics": self._fake("atlas_analytics", "boot_notice", lambda: "NOTICE-TEXT")})
+        self.assertIn("NOTICE-TEXT", data["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("NOTICE-TEXT", data["systemMessage"])
+        self.assertTrue(data["systemMessage"].startswith("Atlas ready"))
+
+    def test_non_string_and_empty_results_are_ignored(self):
+        data = self._boot(
+            {
+                "atlas_security": self._fake("atlas_security", "boot_line", lambda root: ["x"]),
+                "atlas_analytics": self._fake("atlas_analytics", "boot_notice", lambda: "  "),
+            }
+        )
+        self.assertNotIn("\n", data["systemMessage"])
+
+    def test_hygiene_line_reaches_the_context_and_a_failure_does_not_break_boot(self):
+        with (
+            mock.patch.dict(sys.modules, {"atlas_security": None, "atlas_analytics": None}),
+            mock.patch.object(session_boot, "git_hygiene_boot", return_value="git hygiene: HYG-LINE"),
+        ):
+            _, out = run_main_inprocess({"session_id": "s1", "cwd": self.tmp}, self.env)
+        self.assertIn("HYG-LINE", json.loads(out)["hookSpecificOutput"]["additionalContext"])
+        with (
+            mock.patch.dict(sys.modules, {"atlas_security": None, "atlas_analytics": None}),
+            mock.patch.object(session_boot, "git_hygiene_boot", side_effect=RuntimeError("x")),
+        ):
+            code, out = run_main_inprocess({"session_id": "s1", "cwd": self.tmp}, self.env)
+        self.assertEqual(code, 0)
+        self.assertIn("Atlas: orchestrator posture", out)

@@ -3391,8 +3391,9 @@ class WorktreeIsolationTests(unittest.TestCase):
         self.assertTrue(wts)
         self.assertEqual({"implementer"}, {roles[n] for n in wts})
         for n, wt in wts.items():
-            self.assertEqual(os.path.join(self.repo, ".claude", "worktrees", f"atlas-{out['team']['team_id']}-{n}"), wt["path"])
-            self.assertEqual(f"atlas/{out['team']['team_id']}/{n}", wt["branch"])
+            team = out["team"]["team_id"]
+            self.assertEqual(os.path.join(self.repo, ".atlas", "wt", f"{team}-{n}"), wt["path"])
+            self.assertEqual(f"worker/{team}-{n}", wt["branch"])  # atlas_wt's convention: status/merge/prune see it
             self.assertFalse(os.path.exists(wt["path"]))  # dry run creates nothing
 
     def test_spawn_creates_worktrees_and_runs_members_there(self):
@@ -3407,7 +3408,9 @@ class WorktreeIsolationTests(unittest.TestCase):
             else:
                 self.assertIsNone(ns.cwd)  # verifier stays in the main root
         listed = subprocess.run(["git", "-C", self.repo, "worktree", "list"], capture_output=True, text=True).stdout
-        self.assertEqual(len(wts), listed.count("atlas-"))
+        self.assertEqual(len(wts), listed.count(os.path.join(".atlas", "wt") + os.sep))
+        ignored = subprocess.run(["git", "-C", self.repo, "check-ignore", "-q", ".atlas/wt/"]).returncode
+        self.assertEqual(0, ignored)  # the worktrees never show up as untracked files
         self.assertTrue(all("worktree" in m for m in out["members"] if m["name"] in wts))
 
     def test_non_git_root_gets_no_worktrees(self):
@@ -3888,3 +3891,149 @@ class SeatsFallbackRunTransportTests(Base):
         self.assertEqual(0, rc, out)
         self.assertEqual([], closed, "kill must not ask the seat backend about a tmux run")
         self.assertTrue(any("kill-session" in c for c in _tmux_log_calls(self.state)))
+
+
+class WorktreeReapTests(unittest.TestCase):
+    """add_worktree honours the atlas_git cap; reap removes idle member worktrees and keeps the ones with work."""
+
+    def setUp(self):
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo = os.path.join(self.tmp, "repo")
+        os.mkdir(self.repo)
+        self.git = lambda *a, cwd=None: subprocess.run(
+            ["git", "-C", cwd or self.repo, *a],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t"),
+        ).stdout.strip()
+        self.git("init", "-q", "-b", "main")
+        self.git("commit", "-q", "--allow-empty", "-m", "i")
+        os.makedirs(os.path.join(self.repo, ".atlas", ".run", "teams"))
+
+    def _plan(self, team, names):
+        import atlas_mux
+
+        rec = {"isolation": "worktree", "team_id": team, "members": [{"name": n, "role": "implementer"} for n in names]}
+        return rec, atlas_mux.worktree_plan(rec, self.repo)
+
+    def test_add_worktree_refuses_over_the_cap(self):
+        import atlas_mux
+
+        _, plan = self._plan("tc", ["implementer-1", "implementer-2"])
+        with mock.patch.dict(os.environ, {"ATLAS_GIT_MAX_WORKTREES": "1"}):
+            self.assertIsNone(atlas_mux.add_worktree(self.repo, plan["implementer-1"]))
+            self.git("commit", "-q", "--allow-empty", "-m", "work", cwd=plan["implementer-1"]["path"])
+            err = atlas_mux.add_worktree(self.repo, plan["implementer-2"])
+        self.assertIsInstance(err, str)
+        self.assertIn("cap 1", err)
+        self.assertFalse(os.path.exists(plan["implementer-2"]["path"]))
+        self.assertNotIn(plan["implementer-2"]["branch"], self.git("branch", "--format=%(refname:short)").split())
+
+    def test_add_worktree_is_still_idempotent(self):
+        import atlas_mux
+
+        _, plan = self._plan("ti", ["implementer-1"])
+        wt = plan["implementer-1"]
+        self.assertIsNone(atlas_mux.add_worktree(self.repo, wt))
+        self.assertIsNone(atlas_mux.add_worktree(self.repo, wt))
+
+    def test_reap_removes_idle_worktrees_and_keeps_the_ones_with_commits(self):
+        import atlas_mux
+
+        rec, plan = self._plan("tr", ["implementer-1", "implementer-2", "implementer-3"])
+        for wt in plan.values():
+            self.assertIsNone(atlas_mux.add_worktree(self.repo, wt))
+        busy, dirty, idle = (plan["implementer-%d" % i] for i in (1, 2, 3))
+        (pathlib.Path(busy["path"]) / "w.txt").write_text("w\n")
+        self.git("add", "w.txt", cwd=busy["path"])
+        self.git("commit", "-q", "-m", "work", cwd=busy["path"])
+        (pathlib.Path(dirty["path"]) / "scratch.txt").write_text("x")  # untracked file: not clean
+        rec.update(members=[{"name": n} for n in plan], transport="tmux", created=time.time(), worktrees=plan)
+        pathlib.Path(self.repo, ".atlas/.run/teams/tr.json").write_text(json.dumps(rec))
+
+        buf = io.StringIO()
+        fail = subprocess.CompletedProcess([], 1, "", "")
+        with mock.patch.object(atlas_mux, "_tmux", return_value=fail), mock.patch.object(atlas_mux, "_kill_notes"), \
+                contextlib.redirect_stdout(buf):
+            self.assertEqual(0, atlas_mux.main(["reap", "--team", "tr", "--root", self.repo]))
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+
+        self.assertEqual(["implementer-3"], out["worktrees_removed"])
+        kept = {k["member"]: k for k in out["worktrees_kept"]}
+        self.assertEqual({"implementer-1", "implementer-2"}, set(kept))
+        self.assertEqual(1, kept["implementer-1"]["ahead"])
+        self.assertEqual(0, kept["implementer-2"]["ahead"])
+        self.assertTrue(kept["implementer-2"]["dirty"])
+        self.assertFalse(os.path.exists(idle["path"]))
+        self.assertTrue(os.path.isdir(busy["path"]) and os.path.isdir(dirty["path"]))
+        branches = self.git("branch", "--format=%(refname:short)").split()
+        self.assertNotIn(idle["branch"], branches)
+        self.assertIn(busy["branch"], branches)
+        self.assertIn(dirty["branch"], branches)
+        # the kept ones are exactly what atlas_wt status reports
+        wt_status = json.loads(
+            subprocess.run([sys.executable, str(SCRIPT.parent / "atlas_wt.py"), "--root", self.repo, "status"],
+                           capture_output=True, text=True, check=True).stdout
+        )
+        self.assertEqual({busy["branch"], dirty["branch"]}, {r["branch"] for r in wt_status})
+
+    def test_reap_twice_is_harmless(self):
+        import atlas_mux
+
+        rec, plan = self._plan("t2", ["implementer-1"])
+        self.assertIsNone(atlas_mux.add_worktree(self.repo, plan["implementer-1"]))
+        rec.update(members=[{"name": "implementer-1"}], transport="tmux", created=time.time(), worktrees=plan)
+        pathlib.Path(self.repo, ".atlas/.run/teams/t2.json").write_text(json.dumps(rec))
+        fail = subprocess.CompletedProcess([], 1, "", "")
+        for _ in range(2):
+            buf = io.StringIO()
+            with mock.patch.object(atlas_mux, "_tmux", return_value=fail), mock.patch.object(atlas_mux, "_kill_notes"), \
+                    contextlib.redirect_stdout(buf):
+                self.assertEqual(0, atlas_mux.main(["reap", "--team", "t2", "--root", self.repo]))
+            out = json.loads(buf.getvalue().strip().splitlines()[-1])
+            self.assertEqual([], out["worktrees_kept"])
+        self.assertFalse(os.path.exists(plan["implementer-1"]["path"]))
+
+
+class TeamAnalyticsTests(WorktreeIsolationTests):
+    """spawn-team records the resolved class/effort and a team size bucket, only when analytics is opted in."""
+
+    def setUp(self):
+        super().setUp()
+        import atlas_analytics
+
+        self.A = atlas_analytics
+        self.home = os.path.join(self.tmp, "ah")
+        patcher = mock.patch.dict(os.environ, {"ATLAS_HOME": self.home})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.A._reset)
+        self.A._reset()
+
+    def _events(self):
+        p = pathlib.Path(self.home, "analytics", "events.jsonl")
+        return [json.loads(ln)["k"] for ln in p.read_text().splitlines()] if p.exists() else []
+
+    def test_enabled_records_class_effort_and_size(self):
+        pathlib.Path(self.home, "analytics").mkdir(parents=True)
+        pathlib.Path(self.home, "analytics", "consent.json").write_text(json.dumps({"enabled": True, "decided": True}))
+        self.A._reset()
+        import atlas_mux
+
+        code, out, _ = self._spawn_team()
+        self.assertEqual(0, code, out)
+        self.assertEqual(["team.implement.medium", "team.size." + atlas_mux._size_bucket(len(out["members"]))],
+                         self._events())
+
+    def test_disabled_writes_nothing(self):
+        code, out, _ = self._spawn_team()
+        self.assertEqual(0, code, out)
+        self.assertFalse(pathlib.Path(self.home, "analytics").exists())
+
+    def test_size_buckets(self):
+        import atlas_mux
+
+        got = [atlas_mux._size_bucket(n) for n in (1, 2, 3, 4, 5, 8, 9, 20)]
+        self.assertEqual(["1", "2", "3-4", "3-4", "5-8", "5-8", "9+", "9+"], got)

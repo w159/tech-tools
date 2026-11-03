@@ -19,14 +19,16 @@ The single rule this skill exists to enforce: **nothing leaves this machine - no
 
 ## Scope of a yes
 
+A yes to the push is not a yes to a PR; the PR needs the user's request or its own separate yes, and an open PR for the branch is pushed to, never duplicated.
+
 One confirmation authorizes exactly the actions enumerated in the ask: the push of the named commits to the named remote, and (if offered) the PR create with the shown title and lead sentence. If, between the ask and the action, the state changed - new commits appeared, the branch moved, a PR appeared, the verifier residuals grew - the confirmation is stale: re-present the changed facts and ask again.
 
 ## The ask (what Step 4 presents)
 
 - Commit hash(es) + subject(s).
 - Branch -> remote, and PR head -> base if a PR is planned.
-- The exact commands that will run: `git push -u origin HEAD`, then the `pr_create` call.
-- The PR title and first sentence of the body.
+- The exact command that will run: `git push -u origin HEAD`.
+- The PR, as a separate question: the `pr_create` call, title and first sentence of the body. Only when the user asked for a PR (or none exists and they want one) and `prs` policy is not `off`.
 - Verifier residuals the user would waive (docs-current gaps, skipped checks).
 - Anything excluded and left uncommitted.
 
@@ -36,6 +38,7 @@ Keep it one message. The user answers; the skill does not proceed on a partial r
 
 - **No / silence / unrelated reply** - terminal and successful: the work exists as verified local commits, and the report says exactly that, plus the user-runnable commands (`git push -u origin HEAD`, then `gh pr create` or the device path).
 - **No remote** - the gate is never presented; the local commit is the end state, stated plainly.
+- **Yes to the push, no PR asked** - push only, report the branch, and stop; no PR.
 - **Later consent** ("ship it" in a later message) - a fresh confirmation; re-enter at Step 5 with a fresh snapshot re-verification (branch, remote, PR presence).
 
 ## Supersession

@@ -33,7 +33,7 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 ## Hard behavioral lines
 
 1. **Report-only by default.** This skill never mutates the working tree unless the invocation carries an explicit `apply:local` flag. Even then, mutation happens in a separate post-report phase via `atlas:implementer` on an isolated, self-reviewed commit - never during the review pass itself.
-2. **Never push, never open a PR, never merge.** Not even under `apply:local`. Gating push/PR is the orchestrator's consent model (`atlas-orchestrate`), not this skill's.
+2. **Never push, never open a PR, never merge, never create a branch or worktree.** Not even under `apply:local`, which commits only on the current branch and stops if it is protected (`${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`). Gating push/PR is the orchestrator's consent model (`atlas-orchestrate`), not this skill's.
 3. **Reviewer independence is load-bearing.** Reviewers receive the diff scope and intent context, but never each other's findings, never the synthesis, and never the validator verdicts. Do not "save tokens" by sharing results between reviewers; correlated reviewers find correlated things and the report inherits their blind spots.
 4. **Severity never grants mutation permission.** A P0 finding is information about risk, not authorization to fix.
 5. **No user questions.** Resolve scope, depth, and roster from the diff and repo. State assumptions in the report instead of asking.

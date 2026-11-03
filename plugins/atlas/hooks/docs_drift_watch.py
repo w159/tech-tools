@@ -11,7 +11,7 @@ the edited file is itself under docs/, or under .atlas/.
 
 Debounced: warns on the first drifting edit, then every 5th drifting edit
 after that, so it does not nag on every edit. The streak resets the moment a
-docs/ file appears in the diff (drift cleared), so a later regression warns
+docs/CHANGELOG.md appears in the diff (drift cleared), so a later regression warns
 again immediately. The streak is also session-scoped: the state file records
 the session_id it was last touched by, and a new/missing session_id resets
 the streak before incrementing, so a fresh session always warns on its first
@@ -110,7 +110,7 @@ def _cached_changed_paths(root: Path, state: dict) -> list:
         if (
             isinstance(ts, (int, float))
             and isinstance(cached, list)
-            and (now - ts) < GIT_CACHE_TTL_SECONDS
+            and 0 <= (now - ts) < GIT_CACHE_TTL_SECONDS  # negative: clock reset
         ):
             return cached
     changed = git_changed_paths(root)  # may raise -- caller handles fail-open

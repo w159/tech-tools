@@ -785,7 +785,7 @@ AUTONAMES_RELPATH = (".atlas", ".run", "autonames")
 
 
 _PENDING_REPORT = [False]
-DEFAULT_REPORT_LINE = "REPORT: file:line findings first, then one line per file touched; end with STATUS: DONE"
+DEFAULT_REPORT_LINE = "REPORT: STATUS: DONE|FAILED|BLOCKED as the first line, then file:line findings, then one line per file touched"
 _NAME_STOPWORDS = {
     "the",
     "a",

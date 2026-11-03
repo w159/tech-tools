@@ -50,6 +50,7 @@ BINDINGS = {
     "PreToolUse": (
         ("recall_gate", "*", 8),
         ("bash_advisor", "Bash", 8),
+        ("git_guard", "Bash|Write|Agent|Task|mcp__.*", 8),
         ("edit_read_nudge", "Edit|edit|MultiEdit", 8),
         (
             "dispatch_tripwire",
@@ -69,15 +70,23 @@ BINDINGS = {
         ),
         (
             "connector_credential_watch",
-            "mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*"
-            "|mcp__plaid__.*|mcp__gcloud__.*",
+            "mcp__.*",
             8,
         ),
     ),
 }
 
 # Whole-process budget per event; hooks.json gives the dispatcher a little more.
-BUDGET_S = {"PreToolUse": 30.0, "PostToolUse": 40.0}
+BUDGET_S = {"PreToolUse": 40.0, "PostToolUse": 40.0}
+
+# Hooks bound to a broad matcher stay free on the common path: the hook module is not even
+# imported unless the raw payload contains one of these markers (a superset of what the hook
+# itself treats as an auth failure; a false positive only costs the hook's own check).
+_PREFILTER = {
+    "connector_credential_watch": re.compile(
+        r"401|403|unauthori|forbidden|expired|invalid|authentication", re.I
+    ),
+}
 
 OMP_NATIVE = frozenset({"recall_gate", "todo_capture"})
 _MODULES = {"dispatch_tripwire": "dispatch_tripwire_core"}
@@ -277,6 +286,57 @@ def merge(event, results):
     return 0, (json.dumps(doc) + "\n" if doc else ""), stderr
 
 
+def _analytics_keys(event, payload, results):
+    """Anonymous counter keys for one tool event: which hooks denied/asked/added context, which
+    atlas skill or agent ran. Names only: never a command, path, prompt or tool_input value."""
+    keys = []
+    for name, rc, out, _ in results:
+        if rc == 2:
+            keys.append("hook.%s.deny" % name)
+            continue
+        if not out:
+            continue
+        docs, _stray = _docs(out)
+        for doc in docs:
+            spec = doc.get("hookSpecificOutput")
+            if not isinstance(spec, dict):
+                continue
+            decision = spec.get("permissionDecision")
+            if decision in ("deny", "ask"):
+                keys.append("hook.%s.%s" % (name, decision))
+            ctx = spec.get("additionalContext")
+            if isinstance(ctx, str) and ctx.strip():
+                keys.append("hook.%s.context" % name)
+    if event == "PostToolUse":
+        tool = payload.get("tool_name")
+        ti = payload.get("tool_input")
+        ti = ti if isinstance(ti, dict) else {}
+        if tool == "Skill":
+            skill = ti.get("skill")
+            if isinstance(skill, str) and skill.startswith("atlas:") and len(skill) > 6:
+                keys.append("skill." + skill[len("atlas:") :])
+        elif tool in ("Agent", "Task"):
+            role = ti.get("subagent_type")
+            if isinstance(role, str) and role.startswith("atlas:") and len(role) > 6:
+                keys.append("agent." + role[len("atlas:") :])
+    return keys
+
+
+def _record_analytics(event, payload, results):
+    """Feed atlas_analytics.record (a cheap no-op until the user opts in). Fail-open: a missing or
+    broken analytics module never changes hook output."""
+    try:
+        keys = _analytics_keys(event, payload, results)
+        if not keys:
+            return
+        import atlas_analytics
+
+        for key in keys:
+            atlas_analytics.record(key)
+    except Exception:  # noqa: BLE001 -- including ImportError and a record() that raises
+        pass
+
+
 def run_event(event, raw, harness=None):
     """Run every applicable hook for one event payload; returns (exit code, stdout, stderr)."""
     try:
@@ -299,9 +359,14 @@ def run_event(event, raw, harness=None):
         if left <= 0:
             _fault(name, TimeoutError("event_dispatch budget spent"), cwd)
             continue
+        gate = _PREFILTER.get(name)
+        if gate is not None and not gate.search(raw):
+            continue
         rc, out, err = _invoke(name, raw, min(slices[name], left), cwd)
         results.append((name, rc, out, err))
-    return merge(event, results)
+    merged = merge(event, results)
+    _record_analytics(event, payload, results)
+    return merged
 
 
 def main(argv=None):

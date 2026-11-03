@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -268,6 +269,15 @@ class DocsDriftWatchInProcessTest(unittest.TestCase):
         with open(os.path.join(self.tmp, "brand_new.py"), "w") as f:
             f.write("x\n")
         self.assertIn("brand_new.py", docs_drift.git_changed_paths(Path(self.tmp)))
+
+    def test_future_timestamp_cache_is_rejected(self):
+        # A ts ahead of now (monotonic clock reset after reboot) is not a valid cache.
+        future = time.monotonic() + 86400
+        state = {"git_cache": {"ts": future, "changed": ["stale.py"]}}
+        with mock.patch.object(dw, "git_changed_paths", return_value=["fresh.py"]):
+            out = dw._cached_changed_paths(Path(self.tmp), state)
+        self.assertEqual(out, ["fresh.py"])
+        self.assertEqual(state["git_cache"]["changed"], ["fresh.py"])
 
     def test_git_cache_reused_within_ttl_and_refreshed_after(self):
         path = os.path.join(self.tmp, "app.py")

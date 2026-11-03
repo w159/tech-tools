@@ -99,7 +99,7 @@ The independence test still governs what counts as a separate stage: do not spli
 
 "Genuinely independent" is a precondition you confirm, not a feeling. Before dispatching any parallel wave, run a CONFLICT-CHECK: for each subagent in the wave, list its expected write/touch set (the files or paths it will create or modify) and any ordering need (whether it consumes another agent's output). Then compare the sets across the wave. If two agents would write the same file or path, or one needs another's output, they are NOT independent for that wave - so you MUST either:
 
-- (a) give the colliding agents the dispatch-time `isolation: "worktree"` option (see `subagent-kit.md`) so their edits land in isolated worktrees and cannot collide, OR
+- (a) give only the colliding agents the dispatch-time `isolation: "worktree"` option (see `subagent-kit.md`; counts against `max_worktrees`, see `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`) so their edits land in isolated worktrees and cannot collide, OR
 - (b) serialize just those agents (run them in order so the dependency or the shared write resolves), while still fanning out every non-colliding agent in the same wave concurrently.
 
 `isolation: "worktree"` is a dispatch-time Agent option, not agent-file frontmatter. When concurrent stages may edit the same files, give each colliding subagent that option so their edits land in isolated worktrees and cannot collide. Read-only concurrent stages have no write set, so they pass the CONFLICT-CHECK automatically and need no isolation.

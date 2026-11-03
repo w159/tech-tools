@@ -88,6 +88,9 @@ os.environ["ATLAS_COLONY"] = "off"
 # A real dashboard started by a test (or a child it spawns) must not run the self-fix scheduler: that
 # thread creates git worktrees and atlas/selffix-* branches in whatever repo the test points at.
 os.environ["ATLAS_SELFFIX"] = "0"
+# Session boot starts a detached `atlas_git.py clean` in the cwd's repo; a test driving boot from this
+# checkout must never clean the real repo's branches and worktrees.
+os.environ["ATLAS_GIT_AUTOCLEAN"] = "off"
 os.environ["ATLAS_DASHBOARD_PORT"] = "17969"
 
 # The values this helper set, so tests can assert against them even if another test

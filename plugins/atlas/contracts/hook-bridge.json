@@ -4,7 +4,7 @@
     "SessionStart": "first main before_agent_start",
     "UserPromptSubmit": "every main before_agent_start",
     "PreToolUse": "tool_call (main and subagent sessions); an omp task batch is run once per item as a Claude Task dispatch",
-    "PostToolUse": "tool_result (payload carries tool_response = stringified result content, transcript_path and is_error; omp-minted mcp__<server>_<tool> names of the hooks.json connector servers are re-split to mcp__<server>__<tool>)",
+    "PostToolUse": "tool_result (payload carries tool_response = stringified result content, transcript_path and is_error; omp-minted mcp__<server>_<tool> names of the servers listed in contracts/mcp-servers.json connectorWatch (the hooks.json connector matcher is mcp__.*, so any mcp__ tool reaches the credential watch) are re-split to mcp__<server>__<tool>)",
     "Stop": "session_stop (main only): omp_transcript.py converts the omp session file BEFORE any hook runs, then both Stop hooks (completion_gate.py, then stop_tail.py, which runs ingest_session, chronicle_facet, memory_capture and nudge in one process) run in hooks.json order (capture hooks must run even when the gate blocks); the first {decision: block, reason} becomes the omp session_stop result {decision: block, reason}, not plain context. The payload mirrors Claude Code's Stop payload, including last_assistant_message: the text blocks of session_stop.last_assistant_message joined by newlines (omitted when the event carries no text), which completion_gate.py condition (n) reads",
     "SessionEnd": "session_shutdown on a main session: ingest_session.py spawned detached (never awaited) after transcript conversion",
     "SubagentStop": "session_shutdown on a subagent session: ingest_session.py spawned detached after transcript conversion",
@@ -20,6 +20,7 @@
     "atlas_doctor.py",
     "prompt_optimizer.py",
     "bash_advisor.py",
+    "git_guard.py",
     "fallow_gate.py",
     "format_after_edit.py",
     "docs_drift_watch.py",
@@ -49,6 +50,11 @@
       {
         "script": "bash_advisor.py",
         "matcher": "Bash",
+        "timeout": 10
+      },
+      {
+        "script": "git_guard.py",
+        "matcher": "Bash|Write|Agent|Task|mcp__.*",
         "timeout": 10
       },
       {
@@ -90,7 +96,7 @@
       },
       {
         "script": "connector_credential_watch.py",
-        "matcher": "mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*",
+        "matcher": "mcp__.*",
         "timeout": 10
       }
     ]

@@ -6,7 +6,7 @@ Required read before you write any prototype code, alongside `references/preview
 
 Fidelity is a different axis from size (`references/scoping.md` owns sizing, which the go-ahead depends on). Throwaway means unmaintained and unshipped, not thin - do not test, abstract, or harden past runnable, but take finish as far as the dimension under test needs. A flow or state model gets rich enough to drive; a visual direction gets finished enough to judge; a placement question stays thin. Fidelity may differ per avenue within one wide run. Do not stay low-fidelity on principle, and persist state only when persistence is the question.
 
-Prototype code gets none of the product's engineering gates: no tests, no lint discipline, no abstraction for reuse, no error handling beyond what keeps the demo from breaking mid-reaction. It must be obvious to any later reader that this is throwaway - keep it inside the run directory (or the `prototype/<slug>` scratch branch) so the quarantine does the labeling.
+Prototype code gets none of the product's engineering gates: no tests, no lint discipline, no abstraction for reuse, no error handling beyond what keeps the demo from breaking mid-reaction. It must be obvious to any later reader that this is throwaway - keep it inside the run directory (or the `worker/<name>` scratch worktree) so the quarantine does the labeling.
 
 ## Substrate
 
@@ -20,7 +20,7 @@ On the web path the artifact is whatever a browser can display and you can autho
 
 The run root is `.atlas/.run/prototypes/<YYYY-MM-DD>_<slug>/`. `.atlas/.run/` is already gitignored in an atlas-scaffolded repo; verify with `git -C <repo root> check-ignore -q .atlas/.run/`. If it is not covered, tell the user and get their agreement before appending the one ignore line (or before proceeding at all) - never modify `.gitignore` silently. Fallback root when the user declines, asks that nothing be left in the repo, the run is not in a git repository, or the path fails the checks: `/tmp/atlas-prototypes-<uid>/<YYYY-MM-DD>_<slug>/`, where survival is best-effort - do not promise it a lifetime.
 
-Real-app runtime questions (density or chrome on an existing page, nav feel in the actual app) use the scratch-worktree mode from the containment boundary: a sibling worktree on `prototype/<slug>`. In-place overlay in the user's working tree only on their explicit ask, and overlay edits are written through an `atlas:implementer` dispatch so the product tree is touched only by an agent whose brief says exactly which files it may touch and that everything is reverted at the end.
+Real-app runtime questions (density or chrome on an existing page, nav feel in the actual app) use the scratch-worktree mode from the containment boundary: a worker worktree created with `atlas_wt.py add <name>` (branch `worker/<name>`, path `.atlas/wt/<name>`; see `references/git-policy.md`). In-place overlay in the user's working tree only on their explicit ask, and overlay edits are written through an `atlas:implementer` dispatch so the product tree is touched only by an agent whose brief says exactly which files it may touch and that everything is reverted at the end.
 
 The one clean exception to the capsule: an overlay run has no run directory and leaves no artifact. Say so when handing over.
 

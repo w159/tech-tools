@@ -182,7 +182,7 @@ class WiringContract(unittest.TestCase):
         """Saved dashboard knobs must reach already-running sessions: each entry applies
         the Atlas store before it imports any atlas module (core modules read knobs)."""
         entries = sorted({p for p in _script_paths() if p.suffix == ".py"})
-        self.assertEqual(len(entries), 18, [p.name for p in entries])
+        self.assertEqual(len(entries), 19, [p.name for p in entries])
         call = "atlas_env.apply_store_env()"
         bad = []
         for path in entries:
@@ -1459,10 +1459,10 @@ class InsightRemediationContract(unittest.TestCase):
         self.assertEqual(len(matchers), 1)
         self.assertTrue(matchers[0].startswith("mcp__"))
         matcher = matchers[0]
-        # Must NOT be a blanket mcp__ sweep: lean-ctx/context-mode/serena return
-        # file content, and this repo's own sources contain "Invalid Token".
-        self.assertNotEqual(matcher, "mcp__.*")
-        self.assertIn("mcp__plugin_armada_", matcher)
+        # Any mcp__* call: the dispatcher short-circuits on a success payload, and
+        # connector_credential_watch itself skips content servers (lean-ctx,
+        # context-mode, serena, ...) whose results are file content.
+        self.assertEqual(matcher, "mcp__.*")
         for content_server in ("lean-ctx", "context-mode", "serena", "context7"):
             self.assertNotIn(content_server, matcher)
 

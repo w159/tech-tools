@@ -63,6 +63,7 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Run the whole pipeline (brainstorm -> plan -> work -> simplify -> review -> commit) with consent gates | atlas-autopilot | Auto | Consent-gated autonomous run of the full spec-to-ship loop; hard stop before any push/PR/merge |
 | Make one clean, well-scoped local commit | atlas-ship commit-only | Auto | A conventional message grounded in the real diff; stages only the intended files; never pushes |
 | Commit, push, and open a PR when work is verified | atlas-ship | Auto | Fresh-context verifier, local commit, then a hard stop for your confirmation before anything leaves the machine |
+| Triage and fix Dependabot, code-scanning and secret-scanning alerts | atlas-security | Auto | One grouped fix branch, a fresh-context verifier confirming each patched version, and an honest report of what could not be read or fixed; never one PR per alert |
 | Announce what just shipped | atlas-status announce | Auto | Plain-language release note / changelog entry / Slack-style draft, grounded in real changes; never auto-posted |
 | Put a doc or draft through human review with comments | atlas-proof | Auto | Review workflow with anchored comments in a sidecar file and applied edits |
 | Work in an isolated git worktree for parallel work | atlas-worktree | Auto | Linked worktree with run-ledger reuse and dirty-state-protected teardown |

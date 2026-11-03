@@ -397,6 +397,27 @@ class WorkerReportGateTest(unittest.TestCase):
         self.assertIn("STEPS", out["reason"])
         self.assertIn("EVIDENCE", out["reason"])
 
+    def test_resolved_or_zero_failure_phrases_do_not_block(self):
+        for ev in [
+            "1. ruff check --fix -> Found 3 errors (3 fixed, 0 remaining).",
+            "1. lint -> errors-free",
+            "1. tsc -> no errors",
+            "1. pytest -> 12 passed, 0 failed",
+        ]:
+            with self.subTest(ev=ev):
+                self.assertFalse(self.blocked(self.report(evidence=ev)))
+
+    def test_real_failure_phrases_still_block(self):
+        for ev in [
+            "1. pytest -> 2 failed, 5 passed",
+            "1. pytest -> FAILED",
+            "1. tsc -> Error: cannot find module",
+            "1. tsc -> 3 errors",
+            "1. ruff check -> Found 3 errors (1 fixed, 2 remaining).",
+        ]:
+            with self.subTest(ev=ev):
+                self.assertTrue(self.blocked(self.report(evidence=ev)))
+
     def test_steps_done_over_total_blocks(self):
         self.assertTrue(self.blocked(self.report(steps="9/3")))
         self.assertFalse(self.blocked(self.report(steps="3/3")))

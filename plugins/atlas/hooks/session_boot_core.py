@@ -1014,6 +1014,112 @@ def open_lead_channel_once(payload, run=None):
     return None
 
 
+# --- git hygiene (scripts/atlas_git.py) --------------------------------------
+# Boot never runs git for this: it reads the clean stamp the last `atlas_git.py clean` wrote and, when the
+# stamp is older than policy auto_clean_hours, starts a DETACHED local clean (never --remote). Kill
+# switches: ATLAS_GIT_GUARD=off, ATLAS_GIT_AUTOCLEAN=off.
+
+
+def _git_main_root(cwd):
+    """Main working tree root of the repo holding cwd, from the filesystem alone (no git process):
+    a `.git` directory, or a linked worktree's `.git` file -> .../<main>/.git/worktrees/<name>."""
+    d = os.path.abspath(cwd)
+    while True:
+        dotgit = os.path.join(d, ".git")
+        if os.path.isdir(dotgit):
+            return d
+        if os.path.isfile(dotgit):
+            with open(dotgit, encoding="utf-8") as fh:
+                text = fh.read()
+            if text.startswith("gitdir:"):
+                gd = os.path.normpath(os.path.join(d, text.split(":", 1)[1].strip()))
+                if os.path.basename(os.path.dirname(gd)) == "worktrees":
+                    common = os.path.dirname(os.path.dirname(gd))
+                    if os.path.basename(common) == ".git":
+                        return os.path.dirname(common)
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
+def git_hygiene_boot(cwd, now=None):
+    """One boot line when the last clean left worktrees/branches at their caps; starts the background
+    clean when it is due. Returns the line or None. Fail-open: the caller wraps this in suppress."""
+    if os.environ.get("ATLAS_GIT_GUARD", "").lower() in ("off", "0", "false"):
+        return None
+    root = _git_main_root(cwd)
+    if not root:
+        return None
+    scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import atlas_git
+
+    pol = atlas_git.load_policy(root)
+    stamp_path = os.path.join(root, *atlas_git.RUN_REL, atlas_git.STAMP_NAME)
+    stamp = {}
+    with contextlib.suppress(OSError, ValueError):
+        with open(stamp_path, encoding="utf-8") as fh:
+            loaded = json.load(fh)
+        stamp = loaded if isinstance(loaded, dict) else {}
+    now = time.time() if now is None else now
+    hours = pol["auto_clean_hours"]
+    due = (
+        hours > 0
+        and pol["cleanup_local"] != "off"
+        and os.environ.get("ATLAS_GIT_AUTOCLEAN", "").lower() != "off"
+        and now - float(stamp.get("at") or 0) >= hours * 3600
+    )
+    if due:
+        import subprocess
+
+        subprocess.Popen(
+            [
+                sys.executable,
+                os.path.join(scripts, "atlas_git.py"),
+                "--root",
+                root,
+                "clean",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        # claim the slot so a burst of sessions does not each start one; the clean rewrites the stamp
+        os.makedirs(os.path.dirname(stamp_path), exist_ok=True)
+        with open(stamp_path, "w", encoding="utf-8") as fh:
+            json.dump({**stamp, "at": int(now)}, fh)
+    over = []
+    for key, noun in (("worktrees", "worktrees"), ("branches", "branches")):
+        n, cap = stamp.get(key), stamp.get("max_" + key)
+        if isinstance(n, int) and isinstance(cap, int) and cap > 0 and n >= cap:
+            over.append(f"{n}/{cap} {noun}")
+    if not over:
+        return None
+    return (
+        f"git hygiene: {' and '.join(over)} at the cap (new ones are refused) - "
+        "run atlas_git.py status; merged ones are cleaned automatically, unmerged work never is."
+    )
+
+
+def _optional_boot_text(module, func, *args):
+    """str returned by module.func(*args), or None when the module/function is absent or raises.
+    Fail-open by design: companion modules may not be installed in every tree."""
+    try:
+        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        out = getattr(__import__(module), func)(*args)
+    except (ImportError, AttributeError):
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+    return out if isinstance(out, str) and out.strip() else None
+
+
 def main():
     payload = {}
     with contextlib.suppress(Exception):
@@ -1135,9 +1241,10 @@ def main():
     # opposite call is made for anything needing judgement -- a file's name, a
     # CHANGELOG entry -- which the completion gate still blocks on.
     #
-    # Gated on docs/ ALREADY existing: creating a docs/ tree in a project that
-    # never asked for one is intrusive, and first-time onboarding belongs to
-    # atlas-setup. A project with no docs/ gets a one-line notice instead
+    # Gated on docs/ ALREADY existing AND the project already being onboarded
+    # (.atlas/AGENTS.md or .atlas/CLAUDE.md, seeded by atlas-setup): creating
+    # docs/ folders in a project that never asked for them is intrusive, and
+    # first-time onboarding belongs to atlas-setup. A project with no docs/ gets a one-line notice instead
     # (deliberately NOT prefixed 'Setup gap:', which means a missing dependency).
     # Fail-open; ATLAS_DOCS_REPAIR=off skips entirely.
     docs_line = None
@@ -1160,7 +1267,15 @@ def main():
             # find_root returns the ancestor holding docs/, or None when the
             # project has no documentation tree at all.
             _docs_root = _find_docs_root(Path(payload.get("cwd") or os.getcwd()))
-            if _docs_root is not None:
+            # Scaffolding is for projects atlas-setup already onboarded (it seeds
+            # .atlas/AGENTS.md / .atlas/CLAUDE.md; no hook writes either). A repo
+            # that merely has a docs/ folder is left alone.
+            _onboarded = _docs_root is not None and any(
+                (_docs_root / ".atlas" / n).is_file() for n in ("AGENTS.md", "CLAUDE.md")
+            )
+            if _docs_root is not None and not _onboarded:
+                pass
+            elif _docs_root is not None:
                 created = []
                 for rel, _reason in lint_docs_names.structure_gaps(_docs_root):
                     if not rel.endswith("/"):
@@ -1282,6 +1397,18 @@ def main():
     ):  # omp/style.ts injects the header rule itself
         lines.extend(status_contract_lines(active_style))
     lines.append(team_flow_line())
+    # git hygiene, security and the analytics opt-in notice: early, so the 3500-byte cap never drops them
+    boot_notice = _optional_boot_text("atlas_analytics", "boot_notice")
+    if boot_notice:
+        lines.append(boot_notice)
+    _cwd = payload.get("cwd") or os.getcwd()
+    sec_line = _optional_boot_text("atlas_security", "boot_line", _git_main_root(_cwd) or _cwd)
+    if sec_line:
+        lines.append(sec_line)
+    with contextlib.suppress(Exception):  # best-effort; never block boot
+        hygiene = git_hygiene_boot(_cwd)
+        if hygiene:
+            lines.append(hygiene)
     # claude-mem recall mandate: armed only when the claude-mem plugin (its MCP
     # search server) is enabled; a bare CLI/module cannot be called as a tool.
     recall = (
@@ -1401,6 +1528,8 @@ def main():
             f" | outputStyle={active_style!r} (docs: plugin style should still win; "
             "boot contract injected as a hedge)"
         )
+    if boot_notice:  # the opt-in disclosure is shown to the user, not only injected for the model
+        sys_msg += "\n" + boot_notice
     # Status contract must never be truncated away: keep it first, then fill.
     body = "\n".join(lines)
     if len(body) > 3500:

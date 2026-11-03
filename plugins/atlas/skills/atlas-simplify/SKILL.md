@@ -57,7 +57,7 @@ Read `${CLAUDE_SKILL_DIR}/references/apply-and-verify.md` and apply its triage r
 
 ## Step 4 - Apply via atlas:implementer
 
-Group accepted findings by file and dispatch `atlas:implementer` - one dispatch per independent file group, all groups in ONE message when independent, `isolation: "worktree"` when groups touch overlapping files (per subagent-kit's conflict-check). Each implementer receives its files' exact findings (location, evidence, fix, autofix class) and edits only inside the mutation boundary. The orchestrator never edits target code directly. Done when every accepted finding is applied or reverted.
+Group accepted findings by file and dispatch `atlas:implementer` - one dispatch per independent file group, all groups in ONE message when independent, `isolation: "worktree"` only when groups truly collide on the same files (capped by `max_worktrees`, `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`) (per subagent-kit's conflict-check). Each implementer receives its files' exact findings (location, evidence, fix, autofix class) and edits only inside the mutation boundary. The orchestrator never edits target code directly. Done when every accepted finding is applied or reverted.
 
 ## Step 5 - Verify via atlas:verifier (gate re-run)
 

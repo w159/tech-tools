@@ -5,6 +5,14 @@
 - New `scripts/check_attribution.py` and `attribution` CI job: a push to main or a PR fails when a new commit has Claude as author or committer, a Claude co-author trailer, a `Claude-Session:` trailer or the Claude Code footer. CLAUDE.md hard rule 6 sets the commit identity.
 - Security: lockfile bumps for follow-redirects 1.16.2 and @hono/node-server 2.1.6 (Dependabot #64), plus @hono/node-server 2.1.6 in ninjaone-mcp, which #64 missed.
 
+## atlas 16.12.0 - 2026-11-03
+
+- atlas 16.12.0: git hygiene. New `atlas_git.py` policy (protected branches, branch cap 8, worktree cap 4, auto clean of merged work) and a `git_guard.py` PreToolUse guard; push and PR consent are separate in atlas-ship. Adds the `atlas-security` skill, opt-in anonymous analytics (no default endpoint), and fixes in bash_advisor, the read-only SQL guard, the completion gate and several hooks. Details in plugins/atlas/CHANGELOG.md.
+
+## marketplace 5.4.0 - 2026-11-03
+
+- marketplace 5.4.0: atlas 16.12.0, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 16.11.4 - 2026-11-03
 
 - atlas 16.11.4: the seat daemon starts on first use instead of every SessionStart (boot about 270-285 -> 241-245 ms median), with a 30 minute backoff after a failed start. A wrong-shaped node-major cache file now self-heals instead of pinning node_ok to False. Details in plugins/atlas/CHANGELOG.md.

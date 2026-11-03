@@ -178,6 +178,17 @@ class InProcessMainTest(unittest.TestCase):
         open(os.path.join(repo, "app.py"), "w").write("x")
         self.assertTrue(nudge._non_docs_changed(repo))
 
+    def test_non_docs_changed_ignores_atlas_state_dir(self):
+        import subprocess as sp
+
+        repo = tempfile.mkdtemp()
+        sp.run(["git", "init", "-q"], cwd=repo, check=True)
+        os.makedirs(os.path.join(repo, ".atlas", ".run"))
+        open(os.path.join(repo, ".atlas", ".run", "x.json"), "w").write("{}")
+        self.assertFalse(nudge._non_docs_changed(repo))
+        open(os.path.join(repo, "app.py"), "w").write("x")
+        self.assertTrue(nudge._non_docs_changed(repo))
+
     def test_db_error_skips_without_spurious_nudge(self):
         # ATLAS_DB pointing at a directory makes atlas_db.connect() raise; the
         # M7 fix requires exit 0 with a stderr note and NO stdout nudge.

@@ -1,6 +1,6 @@
 # Manual vs Auto Map
 
-The inventory of the 40 atlas skills. atlas-setup uses this table to tell the user what just came online.
+The inventory of the 41 atlas skills. atlas-setup uses this table to tell the user what just came online.
 
 ## Trigger model
 
@@ -41,22 +41,23 @@ Several skills carry more than one mode (for example atlas-frontend: build, comp
 | 26 | atlas-resolve-pr-feedback | auto | Resolves PR review feedback: triages each thread (fix, reply, needs-human), applies approved fixes, drafts replies, confirms before pushing or posting |
 | 27 | atlas-review | auto | Risk-selected multi-persona review of a diff, branch or PR; P0/P1 findings verified, report-only verdict (Ready, Ready-with-fixes, Not-ready) |
 | 28 | atlas-run-watch | auto | Watches a long-running job (PID, log tail, CI URL, API, command loop) or one open GitHub PR's CI with tick/checkpoint/re-arm, spilling logs to a run ledger |
-| 29 | atlas-setup | MANUAL | Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair, tour (first-session walkthrough), menu |
-| 30 | atlas-ship | auto | Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR |
-| 31 | atlas-simplify | auto | Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate |
-| 32 | atlas-status | auto | Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed |
-| 33 | atlas-sweep | auto | Turns feedback into triaged findings |
-| 34 | atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs |
-| 35 | atlas-testing | auto | Plans, generates, and runs tests in any language: detects stack and existing tests, maps testing gaps, recommends and writes the highest-value next test, runs it, reports evidence |
-| 36 | atlas-tui | MANUAL | Opens the Atlas Command Center TUI over live colony tmux workers (omp/claude/codex) |
-| 37 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness |
-| 38 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing |
-| 39 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify |
-| 40 | atlas-worktree | auto | Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection |
+| 29 | atlas-security | auto | Triages open GitHub Dependabot, code-scanning and secret-scanning alerts, plans grouped fixes on one working branch, verifies each fix with a fresh verifier, reports what could not be read or fixed |
+| 30 | atlas-setup | MANUAL | Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair, tour (first-session walkthrough), menu |
+| 31 | atlas-ship | auto | Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR |
+| 32 | atlas-simplify | auto | Behavior-preserving simplification pass over a fresh diff (reuse, quality, efficiency reviewers), then re-runs the gate |
+| 33 | atlas-status | auto | Builds a stakeholder-readable status rollup for a plan or feature from docs/plans/, findings, the todo board and commits, claims labeled verified or assumed |
+| 34 | atlas-sweep | auto | Turns feedback into triaged findings |
+| 35 | atlas-test-xcode | auto | Tests an iOS app on the simulator: boots it, builds and tests via xcodebuild, captures screenshots and logs |
+| 36 | atlas-testing | auto | Plans, generates, and runs tests in any language: detects stack and existing tests, maps testing gaps, recommends and writes the highest-value next test, runs it, reports evidence |
+| 37 | atlas-tui | MANUAL | Opens the Atlas Command Center TUI over live colony tmux workers (omp/claude/codex) |
+| 38 | atlas-ux-test | auto | UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness |
+| 39 | atlas-validate | auto | Verifies a finished Claude Code plugin: structure, manifest and content quality, file:line findings, pass or fail per check, no auto-fixing |
+| 40 | atlas-wiki | auto | Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify |
+| 41 | atlas-worktree | auto | Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection |
 
 ## Count check
 
-- Atlas skills: 40 (4 manual, 36 auto)
+- Atlas skills: 41 (4 manual, 37 auto)
 - Manual skills: atlas-setup, atlas-prompt, atlas-tui, atlas-crew
 
 ## Armada (separate plugin)
