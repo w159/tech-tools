@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
-import { TODO_WIDGET_KEY, registerTodoFallback, todoTreeLines } from "./todo-fallback";
+import { TODO_WIDGET_KEY, registerTodoFallback, roman, todoTreeLines } from "./todo-fallback";
 
 function board(items: Array<{ content: string; status: string; session_id?: string }>) {
 	const root = mkdtempSync(join(tmpdir(), "todo-fb-"));
@@ -99,4 +99,9 @@ test("items of another session are ignored", () => {
 	const h = harness(b.root);
 	h.fire("before_agent_start");
 	expect(h.widgets.filter(Boolean)).toEqual([]);
+});
+
+test("roman covers 4, 9, 14, 40, 49, 50, 90 and 99", () => {
+	const cases: Array<[number, string]> = [[4, "IV"], [9, "IX"], [14, "XIV"], [40, "XL"], [49, "XLIX"], [50, "L"], [90, "XC"], [99, "XCIX"]];
+	for (const [n, s] of cases) expect([n, roman(n)]).toEqual([n, s]);
 });
