@@ -259,7 +259,10 @@ def main() -> int:
     cwd = data.get("cwd") or os.getcwd()
     # Files outside the session cwd (other repos, OneDrive) are not atlas's to
     # format; touching them produced hundreds of friction rows a day. No row, no fault.
-    if not pathlib.Path(os.path.realpath(fp)).is_relative_to(os.path.realpath(cwd)):
+    real_cwd = os.path.realpath(cwd)
+    if real_cwd == os.path.dirname(real_cwd):  # cwd "/" contains every file: not a project root
+        return 0
+    if not pathlib.Path(os.path.realpath(fp)).is_relative_to(real_cwd):
         return 0
     reasons: set[str] = set()
     cands = candidates_for(fp, cwd)
