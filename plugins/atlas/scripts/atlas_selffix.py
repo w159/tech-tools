@@ -261,7 +261,8 @@ def _set(conn, fid, state, log=None, **cols):
     if log is not None:
         cols["fix_log"] = log[-4000:]
     bad = set(cols) - _SET_COLUMNS
-    assert not bad, f"_set: unexpected column(s) {sorted(bad)}"
+    if bad:  # explicit raise: a bare assert is stripped under python -O
+        raise AssertionError(f"_set: unexpected column(s) {sorted(bad)}")
     sets = ",".join(f"{k}=?" for k in cols)
     conn.execute(f"UPDATE findings SET {sets} WHERE id=?", (*cols.values(), fid))
     conn.commit()
