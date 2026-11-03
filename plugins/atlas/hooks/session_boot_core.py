@@ -1120,6 +1120,86 @@ def _optional_boot_text(module, func, *args):
     return out if isinstance(out, str) and out.strip() else None
 
 
+UPDATE_CHECK_INTERVAL_S = 24 * 3600
+_VER_RE = r"[0-9]{1,6}(?:\.[0-9]{1,6}){0,2}"
+
+
+def _atlas_home():
+    return os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas")
+
+
+def update_notice(now=None, popen=None):
+    """One line when GitHub publishes a newer atlas than this install, else None.
+
+    The boot path stays network- and subprocess-free: it reads two small JSON files under ATLAS_HOME and,
+    at most once per 24 h (state file update-check-state.json), starts `atlas_doctor.py --update-check`
+    DETACHED, which writes update-check.json. The notice therefore appears on a later boot. Fail-open.
+    ATLAS_UPDATE_CHECK=off disables both halves. Wording is harness-neutral (omp shows it too)."""
+    import re
+
+    if os.environ.get("ATLAS_UPDATE_CHECK", "").lower() == "off":
+        return None
+    home = _atlas_home()
+    now = time.time() if now is None else now
+    state_path = os.path.join(home, "update-check-state.json")
+    try:
+        with open(state_path) as f:
+            last = float(json.load(f).get("last_start", 0))
+    except (OSError, ValueError, TypeError, AttributeError):
+        last = 0.0
+    if not 0 <= now - last < UPDATE_CHECK_INTERVAL_S:
+        with contextlib.suppress(Exception):
+            os.makedirs(home, exist_ok=True)
+            with open(state_path, "w") as f:
+                json.dump({"last_start": now}, f)
+            import subprocess
+
+            (popen or subprocess.Popen)(
+                [
+                    sys.executable,
+                    os.path.join(
+                        os.path.dirname(os.path.abspath(__file__)),
+                        "..",
+                        "scripts",
+                        "atlas_doctor.py",
+                    ),
+                    "--update-check",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+    try:
+        with open(os.path.join(home, "update-check.json")) as f:
+            res = json.load(f)
+        own = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            ".claude-plugin",
+            "plugin.json",
+        )
+        with open(own) as f:
+            installed = str(json.load(f)["version"])
+        published = str(res.get("published") or "")
+        mkt = str(res.get("marketplace") or "")
+        if not re.fullmatch(_VER_RE, published) or not re.fullmatch(_VER_RE, installed):
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,32}", mkt):
+            mkt = "tech-tools"
+
+        def tup(v):
+            return tuple(int(x) for x in v.split("."))
+
+        if tup(published) <= tup(installed):
+            return None
+        return (
+            f"atlas {published} is published (installed {installed}): "
+            f"claude plugin marketplace update {mkt} && claude plugin update atlas@{mkt}"
+        )
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
 def main():
     payload = {}
     with contextlib.suppress(Exception):
@@ -1482,6 +1562,11 @@ def main():
 
     if docs_line:
         lines.append(docs_line)
+
+    with contextlib.suppress(Exception):  # update notice is best-effort; never block boot
+        notice = update_notice()
+        if notice:
+            lines.append(notice)
 
     with contextlib.suppress(Exception):  # serena heal is best-effort; never block boot
         healed = heal_serena_project(payload.get("cwd") or os.getcwd())

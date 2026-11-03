@@ -61,6 +61,8 @@ else:
 ATLAS_HOME = os.path.join(ROOT, ".atlas")
 os.makedirs(ATLAS_HOME, exist_ok=True)
 os.environ["ATLAS_HOME"] = ATLAS_HOME
+# the boot-time update probe spawns a detached doctor that talks to GitHub; never from a test
+os.environ.setdefault("ATLAS_UPDATE_CHECK", "off")
 os.environ["ATLAS_DB"] = os.path.join(ATLAS_HOME, "atlas.db")
 os.environ["ATLAS_DASHBOARD_DB"] = os.environ["ATLAS_DB"]
 os.environ["ATLAS_HOOKSTATE_DIR"] = os.path.join(ATLAS_HOME, "hookstate")

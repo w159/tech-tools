@@ -7,7 +7,7 @@
 
 ## atlas 16.12.0 - 2026-11-03
 
-- atlas 16.12.0: git hygiene. New `atlas_git.py` policy (protected branches, branch cap 8, worktree cap 4, auto clean of merged work) and a `git_guard.py` PreToolUse guard; push and PR consent are separate in atlas-ship. Adds the `atlas-security` skill, opt-in anonymous analytics (no default endpoint), and fixes in bash_advisor, the read-only SQL guard, the completion gate and several hooks. Details in plugins/atlas/CHANGELOG.md.
+- atlas 16.12.0: git hygiene. New `atlas_git.py` policy (protected branches, branch cap 8, worktree cap 4, auto clean of merged work) and a `git_guard.py` PreToolUse guard; push and PR consent are separate in atlas-ship. Adds the `atlas-security` skill, opt-in anonymous analytics (no default endpoint), and fixes in bash_advisor, the read-only SQL guard, the completion gate and several hooks. Also folds in the 16.11.5 work that was never released on its own: a doctor check `clone-fresh` warns when the marketplace clone is behind GitHub (the cause of "already at the latest version" after a release), and session start shows a one-line notice when a newer atlas is published (background probe, at most once per 24 h, no network on the boot path). Details in plugins/atlas/CHANGELOG.md.
 
 ## marketplace 5.4.0 - 2026-11-03
 

@@ -55,13 +55,14 @@ claude plugin marketplace update tech-tools
 claude plugin update atlas@tech-tools
 ```
 
-Restart the session afterwards: hooks resolve at session start.
+Restart the session afterwards: hooks resolve at session start. `claude plugin update` alone does not refresh the catalog: it reads the local marketplace clone, so a stale clone reports "already at the latest version". To have Claude Code refresh third-party marketplaces on its own, turn on auto-update (off by default for every non-Anthropic marketplace): `/plugin` > Marketplaces > tech-tools > Enable auto-update. `atlas_doctor.py` check `clone-fresh` warns when the clone is behind GitHub.
 
 **omp** (the oh-my-pi coding agent CLI, which atlas also supports):
 
 ```bash
 omp plugin install atlas@tech-tools    # first time (tech-tools is already a configured marketplace if you added it)
-omp plugin upgrade atlas               # update
+omp plugin marketplace update tech-tools   # update: refresh the catalog first
+omp plugin upgrade atlas               # then upgrade (alone it reads the cached catalog)
 ```
 
 **Onboard a project once:**

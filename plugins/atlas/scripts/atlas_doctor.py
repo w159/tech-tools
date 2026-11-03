@@ -223,6 +223,203 @@ def marketplace_plugin_version(clone_dir, plugin_name):
     return _load_json(mf)["version"] if os.path.exists(mf) else None
 
 
+# --- clone-fresh: is the marketplace clone behind GitHub? (read-only, never mutates the clone) ---
+UPDATE_NET_TIMEOUT = 5  # seconds, per network call
+UPDATE_MKT_DEFAULT = "tech-tools"
+
+
+def _ls_remote_head(url, timeout=UPDATE_NET_TIMEOUT):
+    """Remote default-branch sha via `git ls-remote <url> HEAD`, or None when unreachable."""
+    try:
+        r = subprocess.run(
+            ["git", "ls-remote", url, "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    words = r.stdout.split() if r.returncode == 0 else []
+    return words[0] if words and re.fullmatch(r"[0-9a-f]{40,64}", words[0]) else None
+
+
+def _published_plugin_version(repo, plugin_name, timeout=UPDATE_NET_TIMEOUT):
+    """Version GitHub offers for the plugin, or None.
+
+    One GET of the raw plugin.json. The alternative, `git fetch --depth=1` into a
+    temp ref, writes objects into the user's clone, which a read-only check must
+    not do; `git ls-remote` only yields a sha, never file contents. raw.githubusercontent
+    needs no auth for the public repo and is a single small request."""
+    import urllib.request
+
+    url = (
+        f"https://raw.githubusercontent.com/{repo}/HEAD/plugins/{plugin_name}"
+        "/.claude-plugin/plugin.json"
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 -- fixed https host
+            return str(json.loads(resp.read(65536))["version"])
+    except Exception:  # offline, 404, bad JSON: version stays unknown
+        return None
+
+
+def auto_update_disabled_by_env():
+    """Claude Code turns the whole auto-update pass off for these variables unless
+    FORCE_AUTOUPDATE_PLUGINS is set (plugins/loading.md, "When auto-update runs")."""
+    if os.environ.get("FORCE_AUTOUPDATE_PLUGINS"):
+        return False
+    return any(
+        os.environ.get(v)
+        for v in (
+            "DISABLE_UPDATES",
+            "DISABLE_AUTOUPDATER",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+        )
+    )
+
+
+def auto_update_enabled(mkt_name, mkt):
+    """Mirror Claude Code's precedence (plugins/loading.md, "When auto-update runs"):
+    an extraKnownMarketplaces autoUpdate in settings (local > project > user), then
+    known_marketplaces.json, else off (the default for every non-Anthropic marketplace)."""
+    project = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    found = None
+    for path in (  # lowest precedence first; a later bool wins
+        os.path.join(os.path.dirname(PLUGINS_DIR), "settings.json"),
+        os.path.join(project, ".claude", "settings.json"),
+        os.path.join(project, ".claude", "settings.local.json"),
+    ):
+        try:
+            val = _load_json(path)["extraKnownMarketplaces"][mkt_name]["autoUpdate"]
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if isinstance(val, bool):
+            found = val
+    return found if found is not None else mkt.get("autoUpdate") is True
+
+
+def update_probe(clone, plugin_name):
+    """Compare the clone HEAD with the remote default branch. Never raises, never writes.
+
+    Returns {"state": "skipped"|"offline"|"fresh"|"stale", "local", "remote", "published", "repo"}."""
+    out = {"state": "skipped", "local": None, "remote": None, "published": None, "repo": ""}
+    try:
+        if not clone or not os.path.isdir(os.path.join(clone, ".git")):
+            return out
+        url = _git(["remote", "get-url", "origin"], clone).stdout.strip()
+        local = _git(["rev-parse", "HEAD"], clone).stdout.strip()
+        if not url or not local:
+            return out
+        out["local"] = local
+        out["repo"] = norm_repo(url) if "github.com" in url else ""
+        out["remote"] = _ls_remote_head(url)
+        if not out["remote"]:
+            out["state"] = "offline"
+            return out
+        out["state"] = "fresh" if out["remote"] == local else "stale"
+        if out["state"] == "stale" and out["repo"]:
+            out["published"] = _published_plugin_version(out["repo"], plugin_name)
+    except Exception:  # the check must never crash the doctor or a hook chain
+        out["state"] = "skipped"
+    return out
+
+
+def update_commands(mkt_name, plugin_name):
+    return (
+        f"claude plugin marketplace update {mkt_name} && "
+        f"claude plugin update {plugin_name}@{mkt_name}, then restart Claude Code"
+    )
+
+
+def check_clone_fresh(clone, mkt_name, mkt, plugin_name, installed_ver):
+    """C3b: returns (ok, detail, severity). `claude plugin update` reads the LOCAL clone's
+    catalog, so a clone that fell behind GitHub reads as "already at the latest version"."""
+    src = mkt.get("source", {}) if isinstance(mkt, dict) else {}
+    if src.get("source") == "directory":
+        return True, "skipped: directory-sourced marketplace", "warn"
+    if HOOK_MODE:  # SessionStart must stay network-free; the boot notice covers this case
+        return True, "skipped: hook mode (no network at session start)", "warn"
+    auto = auto_update_enabled(mkt_name, mkt)
+    probe = update_probe(clone, plugin_name)
+    if probe["state"] == "skipped":
+        return True, "skipped: marketplace clone is not a git checkout", "warn"
+    if probe["state"] == "offline":
+        return True, "skipped: offline", "warn"
+    env_off = auto_update_disabled_by_env()
+    auto_txt = (
+        "auto-update disabled by environment"
+        if env_off
+        else ("auto-update on" if auto else "auto-update off")
+    )
+    if probe["state"] == "fresh":
+        return True, f"clone at {probe['local'][:7]} matches origin; {auto_txt}", "warn"
+    pub = probe["published"]
+    pub_txt = f"published {pub}" if pub else "published version unknown"
+    detail = (
+        f"marketplace clone {probe['local'][:7]} is behind origin {probe['remote'][:7]} "
+        f"(installed {installed_ver}, {pub_txt}); {auto_txt}. "
+        f"Run: {update_commands(mkt_name, plugin_name)}"
+    )
+    if not auto and not env_off:
+        detail += (
+            f". To stop doing this by hand: /plugin > Marketplaces > {mkt_name} > Enable auto-update"
+        )
+    return False, detail, "warn"
+
+
+def update_result_path():
+    return os.path.join(
+        os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas"),
+        "update-check.json",
+    )
+
+
+def run_update_check(plugin_name="atlas"):
+    """Detached probe started by session_boot (<= once per 24 h). Writes update-check.json
+    for a later boot to read; offline or unknown leaves the previous result untouched."""
+    if os.environ.get("ATLAS_UPDATE_CHECK", "").lower() == "off":
+        return 0
+    try:
+        installed = _load_json(os.path.join(PLUGINS_DIR, "installed_plugins.json"))
+        markets = _load_json(os.path.join(PLUGINS_DIR, "known_marketplaces.json"))
+        key, reg = find_registration(installed, plugin_name)
+        if not reg or not key:
+            return 0
+        mkt_name = key.split("@", 1)[1]
+        mkt = markets.get(mkt_name, {})
+        if mkt.get("source", {}).get("source") == "directory":
+            return 0
+        clone = mkt.get("installLocation", "")
+        probe = update_probe(clone, plugin_name)
+        if probe["state"] == "fresh":
+            published = marketplace_plugin_version(clone, plugin_name)
+        elif probe["state"] == "stale":
+            published = probe["published"]
+        else:
+            return 0
+        if not published:
+            return 0
+        result = {
+            "checked_at": time.time(),
+            "plugin": plugin_name,
+            "marketplace": mkt_name,
+            "installed": reg["version"],
+            "published": published,
+        }
+        path = update_result_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.{os.getpid()}.tmp"
+        with open(tmp, "w") as f:
+            json.dump(result, f)
+        os.replace(tmp, path)
+    except Exception as e:  # background best-effort; leave a trace, never crash
+        import atlas_faults
+
+        atlas_faults.record("atlas_doctor", e)
+    return 0
+
+
 # --- checks: each appends (check_id, ok, detail) ---
 
 
@@ -1648,6 +1845,7 @@ def install_checks(plugin_name="atlas"):
                 "marketplace-source",
                 "clone-remote",
                 "version-sync",
+                "clone-fresh",
                 "rollback",
                 "install-path",
             ):
@@ -1718,6 +1916,12 @@ def install_checks(plugin_name="atlas"):
         )
     else:
         add("version-sync", False, "marketplace copy has no readable plugin.json")
+
+    # C3b: the clone itself may be behind GitHub (stale catalog => "already latest")
+    fresh_ok, fresh_detail, fresh_sev = check_clone_fresh(
+        clone, mkt_name, mkt, plugin_name, reg["version"]
+    )
+    add("clone-fresh", fresh_ok, fresh_detail, severity=fresh_sev)
 
     # C4: rollback tripwire - never accept a version below the high-water mark.
     # Read-only: the new floor is handed to main() via ctx and persisted only
@@ -3830,6 +4034,11 @@ def main(argv=None):
         help="SessionStart mode: warn only, always exit 0",
     )
     ap.add_argument(
+        "--update-check",
+        action="store_true",
+        help="background probe: record the published plugin version for the boot notice",
+    )
+    ap.add_argument(
         "--purge",
         action="store_true",
         help="purge atlas.db telemetry tables to the row cap and exit",
@@ -4084,6 +4293,9 @@ def main(argv=None):
         verb = "DELETED" if args.apply else "WOULD DELETE (dry run; pass --apply)"
         print(f"{verb}: {json.dumps(counts)}")
         return 0
+
+    if args.update_check:
+        return run_update_check(args.plugin)
 
     if args.purge:
         # M21/M22: trim telemetry oldest-first to the cap and record the run.

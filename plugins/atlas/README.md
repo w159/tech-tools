@@ -632,6 +632,7 @@ tools present in the session.
 | An `atlas:*` dispatch is denied                                                         | The prompt is missing the TOOLS block or a spec block, has no `name` with `ATLAS_AUTONAME=off`, overrides the pinned model, or has two GOALs. The deny message names which. |
 | `spawn-team` reports `worktree: fatal: invalid reference: HEAD`                         | The repo has no commit yet. Make the first commit, then spawn again.                                                                                                        |
 | Connector tools return 401 after a key rotation                                         | The server cached old credentials. Restart the session.                                                                                                                     |
+| `claude plugin update atlas@tech-tools` says "already at the latest version" but a newer atlas is published | The local marketplace clone is stale; the update command does not refresh it. Run `claude plugin marketplace update tech-tools`, then `claude plugin update atlas@tech-tools`, then restart. The doctor's `clone-fresh` check detects this, and a session start shows a one-line notice (checked in the background at most once per 24 h; `ATLAS_UPDATE_CHECK=off` disables it). To refresh automatically, turn on `/plugin` > Marketplaces > tech-tools > Enable auto-update. |
 
 Run `python3 "$ATLAS/scripts/atlas_doctor.py" --fix` first for any
 wiring problem.

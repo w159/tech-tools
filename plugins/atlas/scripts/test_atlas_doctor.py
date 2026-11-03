@@ -1328,6 +1328,209 @@ class AtlasDoctorTest(unittest.TestCase):
             self.assertFalse(c["ok"])
 
 
+class CloneFreshTest(unittest.TestCase):
+    """clone-fresh: a marketplace clone behind GitHub makes `claude plugin update` say "already latest".
+    git and the network are mocked; nothing here may reach the real network."""
+
+    tearDown = AtlasDoctorTest.tearDown
+
+    def setUp(self):
+        AtlasDoctorTest.setUp(self)
+        env = mock.patch.dict(os.environ)  # hermetic: the host may disable auto-update
+        env.start()
+        self.addCleanup(env.stop)
+        for var in (
+            "DISABLE_UPDATES",
+            "DISABLE_AUTOUPDATER",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+            "FORCE_AUTOUPDATE_PLUGINS",
+        ):
+            os.environ.pop(var, None)
+
+    LOCAL = "a" * 40
+    REMOTE = "b" * 40
+
+    def mkt(self, **extra):
+        os.makedirs(os.path.join(self.clone, ".git"), exist_ok=True)
+        mkt = {
+            "source": {"source": "github", "repo": "w159/tech-tools"},
+            "installLocation": self.clone,
+        }
+        mkt.update(extra)
+        return mkt
+
+    def fake_git(self, args, cwd):
+        out = {"rev-parse": self.LOCAL, "remote": "https://github.com/w159/tech-tools.git"}[args[0]]
+        return mock.Mock(stdout=out + "\n", stderr="", returncode=0)
+
+    def probe(self, mkt, remote, published=None, installed="16.11.3"):
+        with (
+            mock.patch.object(atlas_doctor, "_git", side_effect=self.fake_git),
+            mock.patch.object(atlas_doctor, "_ls_remote_head", return_value=remote),
+            mock.patch.object(
+                atlas_doctor, "_published_plugin_version", return_value=published
+            ),
+        ):
+            return atlas_doctor.check_clone_fresh(
+                self.clone, "tech-tools", mkt, "atlas", installed
+            )
+
+    def test_stale_clone_warns_with_commands_and_versions(self):
+        ok, detail, sev = self.probe(self.mkt(), self.REMOTE, published="16.11.4")
+        self.assertFalse(ok)
+        self.assertEqual(sev, "warn")
+        self.assertIn("installed 16.11.3", detail)
+        self.assertIn("published 16.11.4", detail)
+        self.assertIn("claude plugin marketplace update tech-tools", detail)
+        self.assertIn("claude plugin update atlas@tech-tools", detail)
+        self.assertIn("restart", detail)
+
+    def test_stale_clone_unknown_published_version_still_warns(self):
+        ok, detail, _ = self.probe(self.mkt(), self.REMOTE, published=None)
+        self.assertFalse(ok)
+        self.assertIn("published version unknown", detail)
+
+    def test_fresh_clone_passes(self):
+        ok, detail, sev = self.probe(self.mkt(), self.LOCAL)
+        self.assertTrue(ok)
+        self.assertIn("matches origin", detail)
+
+    def test_offline_is_skipped_not_failed(self):
+        ok, detail, sev = self.probe(self.mkt(), None)
+        self.assertTrue(ok)
+        self.assertEqual(detail, "skipped: offline")
+
+    def test_directory_source_is_skipped(self):
+        mkt = self.mkt()
+        mkt["source"] = {"source": "directory", "path": "/some/where"}
+        with mock.patch.object(atlas_doctor, "_ls_remote_head") as net:
+            ok, detail, _ = self.probe(mkt, self.REMOTE)
+        self.assertTrue(ok)
+        self.assertIn("directory", detail)
+        net.assert_not_called()
+
+    def test_clone_without_git_dir_is_skipped(self):
+        mkt = {"source": {"source": "github", "repo": "w159/tech-tools"}, "installLocation": self.clone}
+        with mock.patch.object(atlas_doctor, "_ls_remote_head") as net:
+            ok, detail, _ = atlas_doctor.check_clone_fresh(
+                self.clone, "tech-tools", mkt, "atlas", "16.11.3"
+            )
+        net.assert_not_called()
+        self.assertTrue(ok)
+        self.assertIn("not a git checkout", detail)
+
+    def test_hook_mode_never_touches_the_network(self):
+        with (
+            mock.patch.object(atlas_doctor, "HOOK_MODE", True),
+            mock.patch.object(atlas_doctor, "_ls_remote_head") as net,
+        ):
+            ok, detail, _ = atlas_doctor.check_clone_fresh(
+                self.clone, "tech-tools", self.mkt(), "atlas", "16.11.3"
+            )
+        net.assert_not_called()
+        self.assertTrue(ok)
+        self.assertIn("skipped", detail)
+
+    def test_auto_update_off_suggests_the_toggle(self):
+        _, detail, _ = self.probe(self.mkt(autoUpdate=False), self.REMOTE, "16.11.4")
+        self.assertIn("auto-update off", detail)
+        self.assertIn("/plugin > Marketplaces > tech-tools > Enable auto-update", detail)
+
+    def test_auto_update_on_does_not_suggest_the_toggle(self):
+        _, detail, _ = self.probe(self.mkt(autoUpdate=True), self.REMOTE, "16.11.4")
+        self.assertIn("auto-update on", detail)
+        self.assertNotIn("Enable auto-update", detail)
+
+    def test_settings_extra_known_marketplaces_wins_over_known_marketplaces(self):
+        write_json(
+            os.path.join(os.path.dirname(self.plugins), "settings.json"),
+            {"extraKnownMarketplaces": {"tech-tools": {"autoUpdate": True}}},
+        )
+        self.assertTrue(atlas_doctor.auto_update_enabled("tech-tools", {"autoUpdate": False}))
+        write_json(
+            os.path.join(os.path.dirname(self.plugins), "settings.json"),
+            {"extraKnownMarketplaces": {"tech-tools": {"autoUpdate": False}}},
+        )
+        self.assertFalse(atlas_doctor.auto_update_enabled("tech-tools", {"autoUpdate": True}))
+
+    def _settings(self, path, value):
+        write_json(path, {"extraKnownMarketplaces": {"tech-tools": {"autoUpdate": value}}})
+
+    def test_env_disable_reports_disabled_by_environment(self):
+        for var in ("DISABLE_UPDATES", "DISABLE_AUTOUPDATER", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"):
+            with mock.patch.dict(os.environ, {var: "1"}):
+                os.environ.pop("FORCE_AUTOUPDATE_PLUGINS", None)
+                _, detail, _ = self.probe(self.mkt(autoUpdate=True), self.REMOTE, "16.11.4")
+            self.assertIn("auto-update disabled by environment", detail, var)
+            self.assertNotIn("Enable auto-update", detail)
+
+    def test_force_autoupdate_plugins_overrides_env_disable(self):
+        with mock.patch.dict(os.environ, {"DISABLE_AUTOUPDATER": "1", "FORCE_AUTOUPDATE_PLUGINS": "1"}):
+            _, detail, _ = self.probe(self.mkt(autoUpdate=True), self.REMOTE, "16.11.4")
+        self.assertIn("auto-update on", detail)
+
+    def test_project_and_local_settings_precedence(self):
+        proj = os.path.join(self.tmp, "project", ".claude")
+        user = os.path.join(os.path.dirname(self.plugins), "settings.json")
+        self._settings(user, False)
+        self.assertFalse(atlas_doctor.auto_update_enabled("tech-tools", {}))
+        self._settings(os.path.join(proj, "settings.json"), True)
+        self.assertTrue(atlas_doctor.auto_update_enabled("tech-tools", {}))
+        self._settings(os.path.join(proj, "settings.local.json"), False)
+        self.assertFalse(atlas_doctor.auto_update_enabled("tech-tools", {"autoUpdate": True}))
+        os.remove(os.path.join(proj, "settings.local.json"))
+        self._settings(user, True)
+        self._settings(os.path.join(proj, "settings.json"), False)
+        self.assertFalse(atlas_doctor.auto_update_enabled("tech-tools", {}))
+
+    def test_check_never_writes_user_config(self):
+        paths = [
+            os.path.join(self.plugins, "known_marketplaces.json"),
+            os.path.join(self.plugins, "installed_plugins.json"),
+        ]
+        before = [open(p).read() for p in paths]
+        self.probe(self.mkt(), self.REMOTE, "16.11.4")
+        self.assertEqual(before, [open(p).read() for p in paths])
+
+    def test_run_checks_reports_clone_fresh_after_version_sync(self):
+        with mock.patch.object(atlas_doctor, "_ls_remote_head") as net:
+            results = atlas_doctor.run_checks("atlas")[0]
+        net.assert_not_called()  # fixture clone has no .git
+        ids = [r["check"] for r in results]
+        self.assertEqual(ids.index("clone-fresh"), ids.index("version-sync") + 1)
+
+    def test_update_check_writes_result_for_later_boot(self):
+        home = os.path.join(self.tmp, "ahome")
+        mkt = self.mkt()
+        write_json(os.path.join(self.plugins, "known_marketplaces.json"), {"tech-tools": mkt})
+        with (
+            mock.patch.dict(os.environ, {"ATLAS_HOME": home, "ATLAS_UPDATE_CHECK": "on"}),
+            mock.patch.object(atlas_doctor, "_git", side_effect=self.fake_git),
+            mock.patch.object(atlas_doctor, "_ls_remote_head", return_value=self.REMOTE),
+            mock.patch.object(atlas_doctor, "_published_plugin_version", return_value="16.11.4"),
+        ):
+            self.assertEqual(atlas_doctor.run_update_check("atlas"), 0)
+        with open(os.path.join(home, "update-check.json")) as f:
+            res = json.load(f)
+        self.assertEqual(
+            (res["published"], res["marketplace"], res["installed"]),
+            ("16.11.4", "tech-tools", "1.0.1"),
+        )
+
+    def test_update_check_offline_leaves_previous_result(self):
+        home = os.path.join(self.tmp, "ahome")
+        write_json(os.path.join(self.plugins, "known_marketplaces.json"), {"tech-tools": self.mkt()})
+        write_json(os.path.join(home, "update-check.json"), {"published": "9.9.9"})
+        with (
+            mock.patch.dict(os.environ, {"ATLAS_HOME": home, "ATLAS_UPDATE_CHECK": "on"}),
+            mock.patch.object(atlas_doctor, "_git", side_effect=self.fake_git),
+            mock.patch.object(atlas_doctor, "_ls_remote_head", return_value=None),
+        ):
+            atlas_doctor.run_update_check("atlas")
+        with open(os.path.join(home, "update-check.json")) as f:
+            self.assertEqual(json.load(f), {"published": "9.9.9"})
+
+
 class AtlasDoctorMiningTest(unittest.TestCase):
     """Self-improvement loop: miners -> findings -> baseline -> remeasure."""
 
