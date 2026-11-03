@@ -9,6 +9,7 @@
 - `recall_gate` anchors the claude-mem tool name.
 - Hooks: fallow probe has a timeout and a negative cache; `eval` is seen as a shell wrapper; `rm` root variants are denied; a null prompt is normalised; a non-dict `tool_input` is normalised; `crew_worker` denies only a real `sleep` command word; `nudge` is silent when the DB has no tables yet.
 - `atlas_irc` terminates torn log lines, reports body truncation and resolves the pytest runner.
+- `atlas_irc` gateway writes its port file atomically (temp file, then `os.replace`) and `read_port` retries an empty or partial file until its deadline.
 - `atlas_mux` / `atlas_resolve`: spawn-team exit code, wait on unlaunched members, run-aware status/kill, path scope validation, exit-line match, transport note.
 - `atlas_crew`: usage errors for `plan`, unknown-run errors for `status`/`wait`/`kill`.
 - `atlas_doctor`: an unreadable `settings.json` is FAIL; `--fix` backs up `settings.json` and reports overridden values.

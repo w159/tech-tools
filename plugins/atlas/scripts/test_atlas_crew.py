@@ -167,6 +167,37 @@ class BusTests(unittest.TestCase):
 
 
 class GatewayTests(unittest.TestCase):
+    def test_port_file_is_never_observed_empty_while_rewritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _bus(tmp)
+            gw = atlas_irc.Gateway(d)
+            gw.port = 6667
+            gw.publish_port()
+            stop = threading.Event()
+
+            def rewrite():
+                while not stop.is_set():
+                    gw.publish_port()
+
+            th = threading.Thread(target=rewrite)
+            th.start()
+            try:
+                for _ in range(3000):
+                    self.assertEqual((d / "port").read_text(), "6667")
+            finally:
+                stop.set()
+                th.join()
+
+    def test_read_port_waits_through_an_empty_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = _bus(tmp)
+            (d / "port").write_text("", encoding="utf-8")
+            threading.Timer(
+                0.2, lambda: (d / "port").write_text("4242", encoding="utf-8")
+            ).start()
+            self.assertEqual(atlas_irc.read_port(d, timeout=3), 4242)
+            self.assertIsNone(atlas_irc.read_port(d / "missing", timeout=0.2))
+
     def test_irc_client_joins_sees_replay_and_relays_both_ways(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = _bus(tmp, nicks=("geom", "report"))
@@ -174,11 +205,9 @@ class GatewayTests(unittest.TestCase):
             gw = atlas_irc.Gateway(d)
             th = threading.Thread(target=gw.serve_forever, daemon=True)
             th.start()
-            for _ in range(50):
-                if (d / "port").exists():
-                    break
-                time.sleep(0.05)
-            s = socket.create_connection(("127.0.0.1", int((d / "port").read_text())))
+            port = atlas_irc.read_port(d, timeout=5)
+            self.assertIsNotNone(port)
+            s = socket.create_connection(("127.0.0.1", port))
             s.settimeout(3)
             s.sendall(b"NICK geom\r\nUSER h 0 * :h\r\n")
             time.sleep(0.2)

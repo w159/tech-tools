@@ -222,6 +222,18 @@ class _Client:
         return f"{self.nick}!{self.user or self.nick}@{self.addr[0]}"
 
 
+def read_port(d: Path, timeout: float = 5.0) -> int | None:
+    """Gateway port from `d/port`, retrying a missing, empty or partial file until `timeout`; None on expiry."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return int((Path(d) / "port").read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(0.02)
+
+
 class Gateway:
     """IRC server bridged to the log: client PRIVMSGs are posted to the log, and every new log
     record is relayed to the joined clients, whoever wrote it (workers write the log directly)."""
@@ -262,6 +274,12 @@ class Gateway:
         self._num(c, "353", "=", chan, trail=" ".join(nicks))
         self._num(c, "366", chan, trail="End of /NAMES list.")
 
+    def publish_port(self) -> None:
+        """Write the port file atomically (temp file, then os.replace) so a reader never sees it empty."""
+        tmp = self.d / f".port.{os.getpid()}.{threading.get_ident()}.tmp"
+        tmp.write_text(str(self.port), encoding="utf-8")
+        os.replace(tmp, self.d / "port")
+
     # -- serving
     def serve_forever(self) -> None:
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -269,7 +287,7 @@ class Gateway:
         srv.bind((self.host, self.port))
         srv.listen(16)
         self.port = srv.getsockname()[1]
-        (self.d / "port").write_text(str(self.port), encoding="utf-8")
+        self.publish_port()
         threading.Thread(target=self._relay_loop, daemon=True).start()
         srv.settimeout(0.5)
         while not self.stop.is_set():
