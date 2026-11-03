@@ -849,3 +849,20 @@ test("a store save of ATLAS_STOP_BRIDGE=off applies on the next Stop without rel
 		rmSync(join(home, "settings.json"), { force: true });
 	}
 });
+
+test("a failed detached spawn (bad cwd) removes the owned ingest directory", async () => {
+	const handlers: Record<string, Handler[]> = {};
+	registerStopBridge({ on: (name: string, fn: Handler) => (handlers[name] ??= []).push(fn) } as unknown as Pick<ExtensionAPI, "on">, {
+		hooks: [hook("ingest_session.py", "SessionEnd")],
+		run: async () => "",
+		cache: { convertFresh: async () => "/t.jsonl", forToolHook: async () => "" },
+		convert: async (_f, out) => (writeFileSync(out, "{}\n"), true),
+		env: {},
+		tmpDir: dir,
+		reap: () => {},
+		finishLead: async () => {},
+	});
+	const ctx: Ctx = { cwd: join(dir, "does-not-exist"), agent: { kind: "main" }, sessionManager: { getSessionId: () => "badcwd", getSessionFile: () => "f" } };
+	await handlers.session_shutdown[0]({}, ctx);
+	expect(readdirSync(dir).filter(n => n.startsWith("atlas-ingest-"))).toEqual([]);
+});

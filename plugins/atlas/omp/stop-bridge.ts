@@ -311,7 +311,9 @@ export function startDetached(argv: string[], opts: DetachedOpts): { unref(): vo
 }
 
 function spawnDetachedReal(argv: string[], opts: DetachedOpts): void {
-	startDetached(argv, opts)?.unref();
+	const child = startDetached(argv, opts);
+	if (child) child.unref();
+	else removeOwnedDir(opts.ownedDir); // spawn failed: the exit trap will never run, so remove the dir here
 }
 
 /** Real reaper: detached, output discarded, fail open (channel-reap is bounded by its own --max-idle logic). */
