@@ -79,6 +79,17 @@ Run tests, dashboard, and scripts from **repo paths**:
 Do not use `~/.claude/plugins/cache/tech-tools/atlas/<version>/...` as the place
 to implement or "make it take effect."
 
+### 6. Commits never credit Claude
+
+- Commit as `W159 <49504268+w159@users.noreply.github.com>`. Cloud sessions default
+  to `Claude <noreply@anthropic.com>`: run
+  `git config user.name W159 && git config user.email 49504268+w159@users.noreply.github.com`
+  in every fresh clone before the first commit.
+- No `Co-Authored-By: Claude`, `Claude-Session:` or "Generated with Claude Code" lines,
+  in commits or PR text.
+- `python3 scripts/check_attribution.py origin/main..HEAD` before every push; the
+  `attribution` CI job runs the same check on each push to main and each PR.
+
 ---
 
 ## Quick routing

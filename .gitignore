@@ -156,6 +156,7 @@ firebase-adminsdk*.json
 !test-mcp-tools.mjs
 !scripts/
 !scripts/check_versions.py
+!scripts/check_attribution.py
 !scripts/test_*.py
 
 # ---- fallow baselines (audit gate: pre-existing findings recorded as debt, not hidden) ----

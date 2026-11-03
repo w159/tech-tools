@@ -26,6 +26,32 @@ jobs:
       - run: .venv/bin/python scripts/check_versions.py
       - run: .venv/bin/python -m pytest -q -p no:cacheprovider scripts plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py
 
+  # The owner does not want Claude credited in commits or listed as a contributor.
+  # Checks only the commits this push or PR adds; a force push or new branch checks all of HEAD.
+  attribution:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - name: No Claude author, committer or trailer in new commits
+        env:
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -n "$PR_BASE" ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..HEAD"
+          else
+            range="HEAD"
+          fi
+          echo "checking $range"
+          python3 scripts/check_attribution.py "$range"
+
   # Full root pytest suite plus the omp (Bun) suites. Slow, so not run on PRs.
   full:
     if: github.event_name != 'pull_request'
