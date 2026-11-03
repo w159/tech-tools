@@ -125,13 +125,48 @@ def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str |
     return rec
 
 
+def _tail_start(fh, after: int, block: int = 65536) -> int:
+    """Byte offset of a line boundary at or before the first record with seq > `after`, found by
+    scanning backwards from the end (seq only grows down the file), so a poll reads the tail, not the log."""
+    end = fh.seek(0, os.SEEK_END)
+    pos = end
+    carry = b""
+    while pos > 0:
+        start = max(0, pos - block)
+        fh.seek(start)
+        buf = fh.read(pos - start) + carry
+        lines = buf.split(b"\n")
+        # lines[0] may be a partial line unless start == 0; keep it for the next, earlier block
+        first = 0 if start == 0 else 1
+        # walk complete lines from the end looking for one already read
+        idx = len(buf)
+        for i in range(len(lines) - 1, first - 1, -1):
+            line = lines[i]
+            idx -= len(line)
+            line_start = idx
+            idx -= 1  # the newline before it
+            try:
+                seq = int(json.loads(line).get("seq") or 0)
+            except (ValueError, AttributeError):
+                continue
+            if seq <= after:
+                return start + line_start
+        carry = lines[0] if first else b""
+        pos = start
+        if not first:
+            break
+    return 0
+
+
 def history(d, after: int = 0) -> list:
     out = []
     try:
-        with open(Path(d) / "log.jsonl", encoding="utf-8") as fh:
-            for line in fh:
+        with open(Path(d) / "log.jsonl", "rb") as fh:
+            if after > 0:
+                fh.seek(_tail_start(fh, after))
+            for raw in fh:
                 try:
-                    rec = json.loads(line)
+                    rec = json.loads(raw.decode("utf-8"))
                 except ValueError:
                     continue
                 if int(rec.get("seq") or 0) > after:
