@@ -201,9 +201,13 @@ def cursor(d, nick) -> int:
 def set_cursor(d, nick, seq: int) -> None:
     p = _cursor_path(d, nick)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"seq": seq}), encoding="utf-8")
-    os.replace(tmp, p)
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.{threading.get_ident()}.{os.urandom(4).hex()}.tmp")
+    try:
+        tmp.write_text(json.dumps({"seq": seq}), encoding="utf-8")
+        os.replace(tmp, p)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def drain(d, nick: str, limit: int = 20) -> list:
