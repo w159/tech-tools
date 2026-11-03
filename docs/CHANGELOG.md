@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 16.11.3 - 2026-11-03
+
+- atlas 16.11.3: hook guard concurrency tests pin the `spawn` start method (Python 3.14 forkserver default broke the CI full suite). Details in plugins/atlas/CHANGELOG.md.
+
+## marketplace 5.3.3 - 2026-11-03
+
+- marketplace 5.3.3: atlas 16.11.3, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 16.11.2 - 2026-11-03
 
 - atlas 16.11.2: IRC history reads only the log tail; unique cursor temp file; dashboard self-heal exec loop fixed; selffix allowlist survives `python -O`; `format_after_edit` skips a root cwd; 6 unused functions removed; omp fixes (quoted lean-ctx path, git commit match parity, subdirectory cwd edits, ingest dir cleanup, per-matcher hook faults, sed in-place forms, roman numerals); CI full suite job. Details in plugins/atlas/CHANGELOG.md.

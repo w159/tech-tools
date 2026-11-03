@@ -1,5 +1,11 @@
 # Changelog
 
+## 16.11.3 - 2026-11-03
+
+### Fixed
+
+- `test_atlas_hook_guard` concurrency tests pin the `spawn` multiprocessing start method, so they no longer depend on the version-specific default (forkserver on Python 3.14 broke the full-suite CI job with `BrokenPipeError`).
+
 ## 16.11.2 - 2026-11-03
 
 ### Fixed
