@@ -4,7 +4,7 @@ The inventory of the 40 atlas skills. atlas-setup uses this table to tell the us
 
 ## Trigger model
 
-The atlas plugin has four manual skills (atlas-setup, atlas-prompt, atlas-tui, atlas-crew). Every other skill auto-triggers from its `description` + `when_to_use`.
+The atlas plugin has three manual skills (atlas-setup, atlas-tui, atlas-crew). Every other skill auto-triggers from its `description` + `when_to_use`.
 
 - **Manual** = `disable-model-invocation: true`. The model cannot start it. The user invokes it explicitly by name (slash command or direct call).
 - **Auto** = the model may start it when the task matches the description.
@@ -32,7 +32,7 @@ Several skills carry more than one mode (for example atlas-frontend: build, comp
 | 17 | atlas-optimize | auto | Single-experiment loop: baseline, one hypothesis, one change, identical re-measure, real delta reported |
 | 18 | atlas-orchestrate | auto | Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification |
 | 19 | atlas-plan | auto | Writes an implementation-ready plan to docs/plans/ from a brainstorm artifact or feature description, with U-numbered units and a verification contract |
-| 20 | atlas-prompt | MANUAL | Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous |
+| 20 | atlas-prompt | auto | Rewrites a rough prompt into a right-sized one for a coding agent or chat model; an independent judge model checks every goal and limit survived |
 | 21 | atlas-proof | auto | Human-review workflow for project markdown: publishes a doc for review, records anchored comments in a sidecar file, folds feedback back |
 | 22 | atlas-prototype | auto | Builds a throwaway prototype in an isolated run directory to answer one visual, interaction or product-shape question, then promotes decisions into a plan or discards it |
 | 23 | atlas-pulse | auto | Generates a time-windowed product pulse (usage, performance, errors) from wired telemetry, read-only, into docs/pulses/ |
@@ -56,8 +56,8 @@ Several skills carry more than one mode (for example atlas-frontend: build, comp
 
 ## Count check
 
-- Atlas skills: 40 (4 manual, 36 auto)
-- Manual skills: atlas-setup, atlas-prompt, atlas-tui, atlas-crew
+- Atlas skills: 40 (3 manual, 37 auto)
+- Manual skills: atlas-setup, atlas-tui, atlas-crew
 
 ## Armada (separate plugin)
 
@@ -67,6 +67,6 @@ Org deployment moved to the separate `armada` plugin (department agents and depa
 
 After scaffolding, atlas-setup tells the user:
 
-1. That atlas-setup, atlas-prompt, atlas-tui and atlas-crew are the four manual skills and that each is invoked by name.
+1. That atlas-setup, atlas-tui and atlas-crew are the three manual skills and that each is invoked by name.
 2. That the other 36 skills are auto-trigger and will start when the task matches their descriptions.
 3. Whether the armada plugin is installed, and that org deployment lives there if the user needs it.

@@ -3284,6 +3284,21 @@ class FootprintArmingTest(unittest.TestCase):
             conn.close()
 
 
+    def test_below_threshold_returns_false_and_stays_unarmed(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        conn = self.atlas_db.connect(self.env["ATLAS_DB"])
+        try:
+            self.atlas_db.log_event(
+                conn, self.atlas_db.current_run_id(conn, self.SESSION), "Write", "main", 1, "x/a.py"
+            )
+            self.assertIs(dt._footprint_arm(conn, self.atlas_db, self.SESSION, self.tmp), False)
+            self.assertFalse(self.atlas_db.is_orchestrating(conn, self.SESSION))
+        finally:
+            conn.close()
+
+
 class ModelPinRepresentationTest(unittest.TestCase):
     """The omp gate pins `@atlas-worker`; agents/implementer.md pins `sonnet`.
     Both are the SAME pin, so a dispatch naming either must pass; an omitted
@@ -4590,6 +4605,85 @@ class ScopeGateTest(unittest.TestCase):
         self.assertEqual(decision, "deny")
         for needle in ("TOOLS block", "SCOPE: <class>/<effort>", "unbounded: missing"):
             self.assertIn(needle, reason)
+
+
+class BurstNoteUnitTest(unittest.TestCase):
+    """_burst_note: the first dispatch of a session is never inside the window, even when the clock
+    equals the window exactly (time.time is pinned, so no wall-clock dependence)."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        env = {"ATLAS_BURST_SECS": "10", "ATLAS_HARNESS": "", "ATLAS_TOOLKIT_LOAD": ""}
+        p = patch.dict(os.environ, env)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def note(self, now, session="burst-unit"):
+        with patch("time.time", return_value=now):
+            return self.dt._burst_note(self.root, session)
+
+    def test_first_dispatch_at_exactly_the_window_is_silent(self):
+        self.assertEqual(self.note(10.0), (False, ""))
+
+    def test_second_dispatch_inside_window_is_advisory_and_outside_is_silent(self):
+        self.assertEqual(self.note(1000.0), (False, ""))
+        concurrent, text = self.note(1004.0)  # first never returned: slot still open
+        self.assertTrue(concurrent)
+        self.assertTrue(text.startswith("DENY"))
+        self.assertEqual(self.note(1100.0), (False, ""))
+
+
+class RoleBlockAndIsDenyUnitTest(unittest.TestCase):
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+
+    def test_role_block_lists_every_required_spec_label(self):
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": ""}):
+            block = self.dt._role_block("atlas:implementer")
+        self.assertTrue(block.startswith('Agent(subagent_type="atlas:implementer"'))
+        self.assertTrue(block.endswith(")"))
+        for label in ("TOOLS:", "GOAL:", "DELIVERABLE:", "SUCCESS CRITERIA:", "OUT OF SCOPE:", "STOP CONDITIONS:", "REPORT:"):
+            self.assertIn(label, block)
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
+            self.assertTrue(self.dt._role_block("atlas:implementer").startswith('task(agent="implementer"'))
+
+    def test_role_block_of_the_mechanical_tier_carries_a_capped_steps_line(self):
+        agent, cap = self.dt._mechanical_tier()
+        with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": ""}):
+            self.assertIn(f"STEPS: 1. <exact step> 2. <exact step> (numbered, at most {cap})", self.dt._role_block("atlas:" + agent))
+            self.assertNotIn("STEPS:", self.dt._role_block("atlas:implementer"))
+
+    def test_mechanical_tier_defaults_when_protocol_file_is_unreadable(self):
+        with patch.dict(self.dt._PROTOCOL_CACHE, {}, clear=True), patch.object(
+            self.dt, "_PROTOCOL_FILE", Path("/nonexistent/worker-protocol.json")
+        ):
+            self.assertEqual(self.dt._mechanical_tier(), ("runner", 7))
+
+    def test_tier_accepted_rejects_a_value_outside_the_allow_list_with_false(self):
+        tinput = {"prompt": "SCOPE: fix/medium\n"}
+        self.assertIs(self.dt._tier_accepted(tinput, "implementer", "no-such-model", "model"), False)
+        self.assertIs(self.dt._tier_accepted(tinput, "implementer", "no-such-effort", "effort"), False)
+
+    def test_is_deny_parses_the_decision(self):
+        def out(decision):
+            return json.dumps({"hookSpecificOutput": {"permissionDecision": decision}})
+
+        self.assertIs(self.dt._is_deny(out("deny")), True)
+        self.assertIs(self.dt._is_deny(out("allow")), False)
+        self.assertIs(self.dt._is_deny("not json"), False)
+        self.assertIs(self.dt._is_deny("{}"), False)
+        self.assertIs(self.dt._is_deny(""), False)
 
 
 if __name__ == "__main__":

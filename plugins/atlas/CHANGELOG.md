@@ -1,5 +1,30 @@
 # Changelog
 
+## 17.1.0 - 2026-11-05
+
+atlas-prompt is rebuilt and checked by an independent judge; three new measurement tools; hardened tests; two mod bug fixes.
+
+### Added
+
+- `atlas-prompt` rebuilt: auto-invoked from its description (it was manual-only, so it never fired on its own), writes right-sized output, and every rewrite is checked by `scripts/atlas_prompt_judge.py` (49 tests). The judge runs a deterministic anchor check (paths, names, numbers and quoted text survive) and then a different model in a fresh context marks each goal KEPT, WEAKENED or DROPPED. It uses `codex` when installed (`claude` under Codex), and `ATLAS_PROMPT_JUDGE_CMD` overrides the choice. Evals ship under `skills/atlas-prompt/evals/` (16 rewrite cases, 22 trigger cases, `run_eval.py`). Measured in `docs/audits/2026-11-05_atlas-prompt-eval.md`: goals kept 52 of 68 -> 67 of 68, items nobody asked for added 169 -> 1, total words over all cases 10020 -> 1628, trigger recall 0 of 20 -> 30 of 30 with 0 false fires in 36 negative runs.
+- `scripts/atlas_inventory.py`: maps every function, method, class, constant, type and interface in the plugin, plus hooks, skills, agents and mod files, to the test files that name it (`--tests`, `--json`, `--markdown`). First run in `docs/audits/2026-11-05_atlas-inventory.md`.
+- `scripts/atlas_mutate.py` (19 tests): mutation testing for Python (AST) and TypeScript (compiler API), with a canary check, `--auto-plan`, and `--context DIR` for tests that read files above the plugin. Scores before and after in `docs/audits/2026-11-05_atlas-mutation.md` (TypeScript sample 64.6% -> 77.4% killed, Python sample 56.9% -> 71.8%).
+- `scripts/atlas_parity_rig.py`: runs the hooks live on Claude Code, Codex and omp and compares what each harness does. Results in `docs/audits/2026-11-05_atlas-parity.md`.
+- New tests: `mod/register-edges.test.ts`, `mod/runs.test.ts`, `omp/core-command.test.ts`, `omp/core-source.test.ts`, `omp/mission-panel.test.ts`, `omp/resolve-model.test.ts`, and the judge, inventory, mutate and parity-rig suites.
+
+### Changed
+
+- `atlas-prompt` is no longer a manual skill: 40 skills, 3 manual (`atlas-setup`, `atlas-tui`, `atlas-crew`), 37 auto-triggered. README, reference, `skill-finder`, `atlas-setup` and `atlas-orchestrate` docs are updated to match.
+- Doctor reports no false "unhealthy" warnings under Codex and omp, (the Claude plugin-registry checks are skipped for a Codex load, and the `ATLAS_MANDATES=off` env check is skipped under omp, which sets it itself; details in `docs/audits/2026-11-05_atlas-parity.md`).
+- Mod: `tsc` is clean against the Claude Code 2.1.318 types (`types/index.d.ts` and `mod/contract.ts` snapshot types synced; `mod/bun-preload.d.ts` added).
+- Tests hardened across mod, omp and hooks after mutation runs found tests that passed for the wrong reason (delegation-prewarn subagent and `ATLAS_GATE=off` cases used a path that never counted as code). `bun test` from `plugins/atlas`: 1298 pass, 13 skip, 0 fail. The host kit (`claude plugin test .`) runs 592 pass; the 184 bun-only files do not load there by design.
+
+### Fixed
+
+- Mod: a parked worker no longer crashes the team side pane (`STATE_LOOK` had no `parked` entry in `sidebar-team.tsx`).
+- Mod: the core pane no longer cuts the verdict "needs evidence" to fit a fixed column (`sidebar-core.tsx`).
+- Mod: the sprite API test no longer times out under `claude plugin test`.
+
 ## 17.0.1 - 2026-11-05
 
 Telemetry now has a live receiver.

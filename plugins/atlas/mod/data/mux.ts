@@ -6,7 +6,7 @@ import { targetOf } from './orchestration';
 
 const BLOCKED = ['waiting', 'input', 'blocked'];
 
-function stateOf(w: { dead?: unknown; state?: unknown }, exit: number | null | undefined): AgentState {
+function stateOf(w: { name?: unknown; dead?: unknown; state?: unknown }, exit: number | null | undefined): AgentState {
   if (typeof exit === 'number') return exit === 0 ? 'finished' : 'failed';
   if (w.dead === 1 || w.dead === true) return 'finished';
   return typeof w.state === 'string' && BLOCKED.includes(w.state) ? 'input' : 'running';

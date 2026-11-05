@@ -329,8 +329,8 @@ judgment:
 
 ## Skills
 
-40 skills. Four are invoked by name only (`disable-model-invocation: true`):
-`atlas-setup`, `atlas-prompt`, `atlas-tui` and `atlas-crew`. The other 36 load on relevance
+40 skills. Three are invoked by name only (`disable-model-invocation: true`):
+`atlas-setup`, `atlas-tui` and `atlas-crew`. The other 37 load on relevance
 from their `description`. Overlapping capabilities are modes of one skill, not
 separate skills; each multi-mode skill documents its modes in its `SKILL.md` or
 its `references/`.
@@ -342,7 +342,7 @@ its `references/`.
 | Engine  | atlas-loop                | Matches a recurring or iterative task to a library loop (interval via `/loop`, or a parallel fan-out verify)                                    |
 | Plan    | atlas-brainstorm          | Asks one hard question at a time until requirements are clear; writes a requirements-only plan or a product strategy                            |
 | Plan    | atlas-plan                | Writes an implementation-ready plan to `docs/plans/` with numbered units and a verification contract                                            |
-| Plan    | atlas-prompt              | Rewrites a vague request into a structured prompt, asking up to three questions                                                                 |
+| Plan    | atlas-prompt              | Rewrites a rough prompt into a right-sized one; an independent judge model checks that every goal and limit survived                            |
 | Plan    | atlas-bakeoff             | Decides a costly technical choice with evidence (bakeoff or verdict mode)                                                                       |
 | Plan    | atlas-prototype           | Builds a throwaway prototype to answer one product-shape question                                                                               |
 | Build   | atlas-debug               | Finds and fixes the root cause of a reproducible failure, with evidence                                                                         |

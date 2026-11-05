@@ -10,7 +10,7 @@ allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/e
 
 # atlas-setup - onboarding, install, connectors, repair
 
-One of four manual skills in the fleet (with atlas-prompt, atlas-tui and atlas-crew): the user invokes it explicitly and it never auto-triggers.
+One of three manual skills in the fleet (with atlas-tui and atlas-crew): the user invokes it explicitly and it never auto-triggers.
 Every other atlas skill auto-triggers from its description.
 
 atlas-setup configures, fixes, and organizes any project it runs in. First run
@@ -164,7 +164,7 @@ for the full task-to-skill mapping.
 
 ## The skill inventory
 
-- **4 manual skills** - atlas-setup (this skill), atlas-prompt, atlas-tui, atlas-crew. Invoke by name.
+- **3 manual skills** - atlas-setup (this skill), atlas-tui, atlas-crew. Invoke by name.
 - **36 auto-trigger skills** - the full list with one-line triggers is
   `references/manual-vs-auto-map.md`; the intent-to-skill table is
   `${CLAUDE_PLUGIN_ROOT}/references/skill-finder.md`.

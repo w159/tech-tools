@@ -3,6 +3,7 @@
 // plugins/atlas/.claude-plugin/types/claude-code/index.d.ts (generated, gitignored).
 // Plan: docs/plans/2026-10-09_atlas-mod.md
 
+// ---- BEGIN shared snapshot types (verbatim copy in types/index.d.ts; hooks/test_atlas_contract.py keeps them identical) ----
 export type PhaseId = 'research' | 'theory' | 'test' | 'validate' | 'implement' | 'verify' | 'done' | 'blocked';
 
 export interface Phase { id: PhaseId; glyph: string }
@@ -17,23 +18,33 @@ export interface Contract {
 export interface TodoItem {
   id: string;
   content: string;
-  status: 'pending' | 'in_progress' | 'completed' | string;
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked' | string;
   owner?: string;
   session_id?: string;
   phase?: PhaseId;
   archived?: boolean;
   evidence?: string;
+  claimed_at?: number | null;   // epoch seconds
+  origin?: 'session' | 'carried' | 'manual' | 'advisor' | string;
+  channel?: string;
+  role?: string;
+  carries?: number;
+  carried_at?: number;          // epoch seconds
+  completed_at?: number | null; // epoch seconds
+  updated_at?: number;          // epoch seconds
 }
 
 export interface ChannelNote {
-  ts: string;
+  ts: string; // ISO string (mod/data/channels.ts converts the channel file's epoch seconds with isoTs)
   seq: number;
   owner: string;
   to?: string;
   item?: string;
   text: string;
   channel: string;
-  kind?: string; // 'exit' | 'note' | ...
+  kind?: string; // omitted = plain note; 'exit' | 'claim' | 'release' | 'conflict' | 'report' | 'handoff' | 'blocked' | ...
+  paths?: string[];
+  delivery?: 'delivered' | 'refused';
 }
 
 export interface ChannelMember {
@@ -90,6 +101,7 @@ export interface AtlasSnapshot {
   contextPct: number;
   now: number;                             // epoch ms at build
 }
+// ---- END shared snapshot types ----
 
 // ---- injectable IO (data readers are pure over this; register.ts adapts $.fs) ----
 export interface FsLike {

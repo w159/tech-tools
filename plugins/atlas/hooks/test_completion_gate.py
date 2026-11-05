@@ -2910,6 +2910,22 @@ class DelegationMandateTest(unittest.TestCase):
         )
         self.assertEqual(self.gate(transcript_path=str(transcript)), "")
 
+    def _transcript(self, **rec):
+        transcript = self.root / "session.jsonl"
+        base = {"message": {"content": [{"type": "tool_use", "name": "Task"}]}}
+        transcript.write_text(json.dumps({**base, **rec}) + "\n")
+        return str(transcript)
+
+    def test_transcript_dispatch_before_run_start_does_not_clear_m(self):
+        self.write()
+        old = self._transcript(timestamp="2000-01-01T00:00:00+00:00")
+        self.assertIn("(m) Delegation mandate", self.gate(transcript_path=old))
+
+    def test_transcript_dispatch_without_timestamp_does_not_clear_m(self):
+        self.write()
+        undated = self._transcript()
+        self.assertIn("(m) Delegation mandate", self.gate(transcript_path=undated))
+
     def test_shared_exemption_cases_match_contract(self):
         """contracts/native-tools.json delegationExemptCases are asserted by both
         harnesses (omp/contracts.test.ts runs the same list through isNonDocsPath)."""
@@ -2993,6 +3009,86 @@ class DelegationMandateTest(unittest.TestCase):
         self.write("agent://Foo")
         self.write("src/app.py")
         self.assertIn("(m) Delegation mandate", self.gate())
+
+
+class GateHelperPinsTest(unittest.TestCase):
+    """Return-value and cleanup contracts of small gate helpers."""
+
+    def test_docs_name_violations_fails_open_to_empty_list(self):
+        import lint_docs_names
+
+        with mock.patch.object(lint_docs_names, "changed_paths", side_effect=RuntimeError("boom")):
+            self.assertEqual(completion_gate._docs_name_violations(Path(".")), [])
+
+    def test_unmerged_reason_part_names_branches_with_commit_counts(self):
+        rows = [
+            {"branch": "worker/a", "ahead": 2, "dirty": True},
+            {"branch": "worker/b", "ahead": 1, "dirty": False},
+        ]
+        text = completion_gate._unmerged_reason_part(rows)
+        self.assertIn("(q) Unmerged worker branches: worker/a (+2, dirty), worker/b (+1).", text)
+        self.assertIn("atlas_wt.py merge <agent>", text)
+        self.assertIn("ATLAS_WT_GATE=off", text)
+
+    def test_session_is_orchestrating_closes_connection_and_fails_open(self):
+        conn = mock.MagicMock()
+        with mock.patch("atlas_db.connect", return_value=conn), mock.patch(
+            "atlas_db.is_orchestrating", return_value=True
+        ):
+            self.assertIs(completion_gate._session_is_orchestrating("s"), True)
+        conn.close.assert_called_once_with()
+        with mock.patch("atlas_db.connect", side_effect=RuntimeError("DB down")):
+            self.assertIs(completion_gate._session_is_orchestrating("s"), False)
+
+    def test_run_written_paths_without_a_run_falls_back_to_git_paths(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"ATLAS_DB": os.path.join(td, "atlas.db")}
+            c = atlas_db.connect(env["ATLAS_DB"])
+            atlas_db.init(c)
+            c.close()
+            with mock.patch.dict(os.environ, env), mock.patch.object(
+                completion_gate, "_git_changed_paths", return_value=["src/x.py"]
+            ):
+                self.assertEqual(completion_gate._run_written_paths("no-such-session", Path(td)), ["src/x.py"])
+                self.assertEqual(completion_gate._run_written_paths("no-such-session"), [])
+
+    def test_check_evidence_without_directory_is_exactly_false(self):
+        with tempfile.TemporaryDirectory() as td:
+            self.assertIs(completion_gate._check_evidence(Path(td)), False)
+            self.assertIs(completion_gate._check_evidence(Path(td), 1.0), False)
+
+    def test_run_used_worktrees_fails_open_to_false(self):
+        with mock.patch("atlas_db.connect", side_effect=RuntimeError("DB down")):
+            self.assertIs(completion_gate._run_used_worktrees("s"), False)
+
+    def test_test_run_credit_is_zero_without_a_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"ATLAS_DB": os.path.join(td, "atlas.db")}
+            c = atlas_db.connect(env["ATLAS_DB"])
+            atlas_db.init(c)
+            c.close()
+            with mock.patch.dict(os.environ, env):
+                self.assertEqual(completion_gate._test_run_credit(Path(td), "no-such-session"), 0)
+
+    def test_test_run_credit_is_zero_when_run_start_is_unknown(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"ATLAS_DB": os.path.join(td, "atlas.db")}
+            c = atlas_db.connect(env["ATLAS_DB"])
+            atlas_db.init(c)
+            atlas_db.start_run(c, atlas_db.register_project(c, td), "has-run")
+            c.close()
+            with mock.patch.dict(os.environ, env), mock.patch(
+                "atlas_db.run_started_at", return_value=None
+            ), mock.patch.object(completion_gate, "_tests_executed_this_run", return_value=True):
+                self.assertEqual(completion_gate._test_run_credit(Path(td), "has-run"), 0)
+
+    def test_switch_name_accepts_only_nonempty_strings(self):
+        sw = completion_gate._switch_name
+        self.assertEqual(sw({"switches": {"k": "ATLAS_X"}}, "k", "D"), "ATLAS_X")
+        self.assertEqual(sw({"switches": {"k": ""}}, "k", "D"), "D")
+        self.assertEqual(sw({"switches": {"k": 5}}, "k", "D"), "D")
+        self.assertEqual(sw({"switches": {}}, "k", "D"), "D")
+        self.assertEqual(sw(None, "k", "D"), "D")
 
 
 class SoloModeDelegationTest(unittest.TestCase):

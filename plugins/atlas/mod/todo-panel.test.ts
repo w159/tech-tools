@@ -64,7 +64,7 @@ describe('todo panel', () => {
 
 describe('phase tree (shared fixture)', () => {
   test('expanded groups by phase in contract order with roman headings and identical rows to omp', () => {
-    const rows = todoRows(fx.items, { cols: 60, tick: 0, expanded: true, maxRows: 20 }).map((r) => text(r).trimEnd());
+    const rows = todoRows(fx.items as TodoItem[], { cols: 60, tick: 0, expanded: true, maxRows: 20 }).map((r) => text(r).trimEnd());
     expect(rows).toEqual(fx.rows);
   });
 });

@@ -19,9 +19,9 @@ The optimizer is reached two ways, in priority order: (1) an explicit command ov
 back to the `ollama run` CLI if the server is unreachable. The CLI path strips the word-wrap
 control noise the renderer emits; the API path needs none.
 
-The optimizer runs ONLY on opt-in: a prompt that starts with a trigger prefix, or the
-atlas-prompt skill (slash command), which does its own rewrite in the main session. Every
-other prompt passes through untouched. A bare `SKIP` token returned by the model (its own
+The optimizer runs ONLY on opt-in: a prompt that starts with a trigger prefix. The
+atlas-prompt skill is separate: it rewrites in the main session and has a judge model check the
+result. Every other prompt passes through untouched. A bare `SKIP` token returned by the model (its own
 trivial-input verdict) is treated as a passthrough rather than injected.
 
 Configuration (environment variables):

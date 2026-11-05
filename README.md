@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.0.1, armada 2.2.3, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.1.0, armada 2.2.3, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -20,10 +20,10 @@ Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in 
 
 | What | Count | Source |
 |---|---|---|
-| Skills | 40 (4 manual) | `plugins/atlas/skills/` |
+| Skills | 40 (3 manual) | `plugins/atlas/skills/` |
 | Role agents (`atlas:*`) | 11 | `plugins/atlas/agents/` |
 | Hooks | 19 programs, 23 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
-| Scripts | 70 non-test Python files | `plugins/atlas/scripts/` |
+| Scripts | 77 non-test Python files | `plugins/atlas/scripts/` |
 | MCP connectors | 13, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
 | omp agents | 14, generated | `plugins/atlas/omp/agents/` |
 

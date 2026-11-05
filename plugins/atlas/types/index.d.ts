@@ -3,9 +3,11 @@
 // mod's code. Only derived or non-serializable module caches stay out.
 // `claude plugin validate` requires this contract to be self-contained (no
 // imports), so the snapshot types below are a verbatim copy of the matching
-// block in mod/contract.ts (lines 6-95); keep the two in step.
+// block in mod/contract.ts (between the BEGIN/END markers); keep the two in step
+// (hooks/test_atlas_contract.py fails when they differ).
 
 // fallow-ignore-next-line code-duplication
+// ---- BEGIN shared snapshot types (verbatim copy in types/index.d.ts; hooks/test_atlas_contract.py keeps them identical) ----
 export type PhaseId = 'research' | 'theory' | 'test' | 'validate' | 'implement' | 'verify' | 'done' | 'blocked';
 
 export interface Phase { id: PhaseId; glyph: string }
@@ -37,7 +39,7 @@ export interface TodoItem {
 }
 
 export interface ChannelNote {
-  ts: number; // epoch seconds (float)
+  ts: string; // ISO string (mod/data/channels.ts converts the channel file's epoch seconds with isoTs)
   seq: number;
   owner: string;
   to?: string;
@@ -74,6 +76,7 @@ export interface SquadAgent {
   persona: string;       // persona name or 'armada-<dept>' or 'unknown'
   state: AgentState;
   source: 'task' | 'colony';
+  transport?: string;    // atlas_mux.py transport (tmux|herdr|claude-bg) for mux-launched workers
   task?: string;         // todo item content
   item?: string;         // todo item id
   lastNoteTs?: string;
@@ -102,6 +105,7 @@ export interface AtlasSnapshot {
   contextPct: number;
   now: number;                             // epoch ms at build
 }
+// ---- END shared snapshot types ----
 
 export type Mood = 'idle' | 'working' | 'thinking' | 'blocked' | 'done' | 'failed' | 'celebrate';
 export interface ActivityEntry { tool: string | null; since: number; toolCount: number; tokens: number | null; mood: Mood; lastLine: string }
@@ -148,7 +152,7 @@ export type Tally = { ok: number; total: number };
 export type PaneTab = 'colony' | 'channel' | 'board' | 'squad' | 'collab';
 
 /** null = not measured yet (rendered `--`); 0 is a legitimate measured value. */
-export type Usage = { tokens: number | null; costUsd: number | null; contextPct: number | null };
+export type Usage = { tokens: number | null; costUsd?: number | null; contextPct: number | null }; // costUsd: no mod code measures it yet
 
 /** Spinner animation frame counter (written and read by mod/restyle.tsx). */
 export type SpinnerTick = number;

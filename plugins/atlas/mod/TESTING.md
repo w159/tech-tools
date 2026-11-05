@@ -19,14 +19,15 @@ claude plugin test plugins/atlas
 `claude-code`. It is a shim, not the real kit: tests whose body takes the host engine
 (`test(name, async ($, on) => ...)`, currently the 9 in `register-sidebar.test.ts`, which use `mock.clock`,
 `mock.env` and `$.ui.mount`) are skipped under bun and run only under `claude plugin test`. Expected: bun
-458 pass / 9 skip / 0 fail for `mod`; the host 458 pass for the mod files (its 180 failures are the
-omp/colony `bun:test` files it cannot load, as below).
+596 pass / 9 skip / 0 fail for `mod` (605 tests, 49 files), 560 pass / 4 skip / 0 fail for `omp`, and 1298 pass /
+13 skip / 0 fail for the whole `plugins/atlas` run; the host kit gives 592 pass (its 184 failures are the
+bun-only omp/colony files it cannot load by design, as below).
 
 From the repo root. This loads the plugin the way the engine does and runs each
 test file; it exercises the mod (hooks and the rendered native element trees of the band and
 sidebar), not a surface's paint.
 
-## Measured state (2026-10-13, atlas 12.0.0)
+## Measured state (2026-11-05, atlas 17.1.0)
 
 Full run from the repo root:
 
@@ -37,15 +38,14 @@ claude plugin test plugins/atlas
 Expectation is two-tier:
 
 - **Mod lines must be fully green.** The mod test files load and pass,
-  299 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
+  592 pass (includes `mod/pane/sidebar.test.ts`, `mod/register-sidebar.test.ts`
   and `mod/sprites/sprites.golden.test.ts`, which injects `memFs` from
   `mod/test_helpers.ts` instead of importing `node:fs`, which the host forbids).
-- **Colony/omp residuals are expected failures of the walk.** 171 pre-existing
-  load failures, each a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file
+- **Colony/omp residuals are expected failures of the walk.** 184 load failures, each a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file
   importing `bun:test`, which the mod test host forbids. Those suites stay on
   `bun test` and are not mod regressions.
 
-`bunx tsc --noEmit -p plugins/atlas/mod/tsconfig.json` reports one pre-existing error (`pane/sidebar-team.tsx` indexes its state glyph table with `parked`); nothing else.
+`tsc --noEmit -p plugins/atlas/mod/tsconfig.json` is clean against the Claude Code 2.1.318 types (also `plugins/atlas/tsconfig.json`); the shared snapshot types in `contract.ts` and `types/index.d.ts` are kept in sync.
 
 Host facts: `claude plugin test [dir]` requires a plugin directory whose
 `hooks/hooks.json` names a module (`claude plugin test mod` fails with "no

@@ -1,198 +1,116 @@
 ---
 name: atlas-prompt
-description: "Rewrites an underspecified coding request into a structured, environment-aware prompt, asking up to three scope questions first. Use when a request needs sharpening; invoked by name as /atlas-prompt."
-when_to_use: "sharpen this request, /atlas-prompt"
-allowed-tools: Read, Glob, Grep, Bash, Write, Agent, Task, AskUserQuestion
-argument-hint: '<the vague request to sharpen>'
-disable-model-invocation: true
+description: "Rewrites a rough prompt or request into a clear, right-sized prompt for a coding agent or chat model, then has a judge confirm every goal and limit survived. Use when asked to rewrite, improve, optimize, tighten, shorten or sharpen a prompt (even a one-line prompt pasted inline), whether a prompt is good, or to turn a rough idea into a spec or brief for an agent. Not for doing the task itself."
+when_to_use: "rewrite this prompt, make this a better prompt, optimize my prompt, is this a good prompt, turn this into a spec for an agent, write me a prompt for ChatGPT, /atlas-prompt"
+allowed-tools: Read, Glob, Grep, Bash, Write, AskUserQuestion
+argument-hint: '<the prompt or request to rewrite>'
 ---
 
+# atlas-prompt
 
-
-# `atlas-prompt`
-
-You are a **prompt optimizer for agentic coding workflows**. Your only job here is to
-rewrite the user's request into a structured, unambiguous instruction that a coding agent
-can then execute without needing to ask anything further - wired to the capabilities
-*this specific environment* actually has. Ambiguity gets resolved HERE, at optimization
-time: discover what you can (Step 0), ask the user for what you cannot (Step 1), and
-only then write the block.
-
-The raw request to optimize is:
+Rewrite the request below into the prompt the user should have sent: same goals, same limits,
+nothing added, sized to the job. You write the prompt; you do not do the task.
 
 > $ARGUMENTS
 
-If `$ARGUMENTS` is empty, optimize the user's most recent substantive request in this
-conversation; if there is none, ask them for the one-line goal and stop.
+If that is empty, use the user's latest substantive request; if there is none, ask for it and stop.
 
-## Contents
+## 1. Size it
 
-- [Step 0 - Discover the environment (do this first, silently)](#step-0---discover-the-environment-do-this-first-silently)
-- [Step 1 - Elicit what discovery cannot answer (AskUserQuestion)](#step-1---elicit-what-discovery-cannot-answer-askuserquestion)
-- [Output style directive (tell the executing agent; do not apply it yourself)](#output-style-directive-tell-the-executing-agent-do-not-apply-it-yourself)
-- [Output rules](#output-rules)
-- [Optimization principles (apply ALL that fit)](#optimization-principles-apply-all-that-fit)
-- [Output template (use these section headers verbatim)](#output-template-use-these-section-headers-verbatim)
-- [Intent](#intent)
-- [Approach (canonical order)](#approach-canonical-order)
-- [Required research (before any code)](#required-research-before-any-code)
-- [Mandatory gates](#mandatory-gates)
-- [Subagent plan](#subagent-plan)
-- [Acceptance criteria](#acceptance-criteria)
-- [Output style](#output-style)
-- [Forbidden](#forbidden)
+- **SKIP**: greetings, thanks, acknowledgements, status checks, and text that already starts with
+  `# Optimized Prompt`. Output exactly `SKIP` and stop.
+- **Short**: one deliverable with a clear target. A few lines: goal, done-when, limits.
+- **Full**: several deliverables, open scope, or work that runs long. The sections in step 4.
 
-## Step 0 - Discover the environment (do this first, silently)
+A rewrite longer than the job needs costs the reader and the executing model. When in doubt, go short.
 
-Do NOT assume a fixed toolset. Take stock of what is actually available to you *right now*
-and optimize against that real inventory:
+## 2. Ground it
 
-- **MCP tools** present this session (e.g. a docs resolver like context7, a symbol/LSP
-  server like serena, a memory server, a browser/runtime tester, cloud CLIs). Reference
-  them by their **real tool names** as they appear in your tool list - never invent a
-  tool that isn't loaded.
-- **Skills** available (this plugin ships the `atlas-*` skills; others may be installed).
-- **Subagents** registered (this plugin ships `atlas:explorer`, `atlas:implementer`,
-  `atlas:verifier`, `atlas:db-prober`, `atlas:ui-runtime-tester`; the host may add more).
-- **Project principles** - scan `CLAUDE.md` / `AGENTS.md` / `.agents/` / contributing
-  docs in the working directory for development philosophy, conventions, and hard rules,
-  and fold the binding ones into the rewrite.
+Look up only what changes the wording: a path, symbol or command the request names, the project's own
+rules (`CLAUDE.md`, `AGENTS.md`), and which tools, skills or subagents exist this session. A few lookups,
+not an audit. Name an artifact only if you confirmed it; if the request names one you could not find,
+keep the user's name and say it was not found.
 
-Only cite a tool, skill, subagent, or rule you have confirmed exists. If a capability the
-task would benefit from is absent, say so in the `Forbidden`/notes rather than referencing
-a tool that isn't there.
+## 3. Ask only what you cannot infer
 
-## Step 1 - Elicit what discovery cannot answer (AskUserQuestion)
+If the goal, the scope or the standard of done is ambiguous and a wrong guess would change the result,
+ask one round of at most three questions with AskUserQuestion, options first, your pick marked.
+Otherwise state the assumption in the prompt, labelled as an assumption and never as one of the
+user's limits, and move on. Never a second round; stop there.
 
-After Step 0, check the request against three load-bearing dimensions:
+## 4. Write it
 
-- **Goal** - what outcome counts as success (feature working? bug gone? audit report?)
-- **Scope** - which surfaces/files/services are in bounds, and what must not change
-- **Acceptance** - how the result will be judged (tests green? specific behavior? metric?)
+Keep every goal and limit the user gave, in their terms. Copy limits, numbers, names, paths and
+exceptions exactly ("except `src/api/v1`", "5 attempts per minute"). Then:
 
-If any of these is genuinely ambiguous after reading the codebase context you gathered in
-Step 0, use the **AskUserQuestion tool** - one round, at most three questions, each with
-2-4 concrete options and your recommended option first. Fold the answers into the rewrite.
+- State the outcome and how to tell it is done. List steps only where the user gave an order or the
+  order matters.
+- Add nothing the user did not ask for: no extra features, files, methodologies, TDD or subagent
+  ceremony, docs or changelog work. Verifying the result (run the tests, show the output) is fine,
+  and so are the project's own rules from step 2, named as theirs ("per CLAUDE.md: ...") so they do
+  not read as the user's limits.
+- Write plain imperatives. Save "never" and "do not" for the limits the user stated and for
+  destructive or outward actions; drop capitals, "CRITICAL" and "MUST".
+- If two requirements conflict, resolve it or ask; do not pass the conflict on.
+- No placeholders: bake in the content the user gave, or tell the model to ask for it.
 
-Do NOT ask when discovery already answered the question, when the request is trivial
-(-> `SKIP`), or when a sensible default exists and the stakes are low - state the default
-in the optimized block instead. Never ask a second round: whatever is still unknown after
-one round becomes an explicit assumption listed in the optimized block.
+**Coding agent** (the request is about code, this repository or a task an agent will carry out).
+Short form:
 
-## Output style directive (tell the executing agent; do not apply it yourself)
+    # Optimized Prompt
 
-Write the optimized block in the user's own wording style. Do NOT convert it into
-Simplified Technical English. Instead, end the block with an `## Output style` section that
-tells the agent who will execute it to follow ASDSTE-100 about 80% of the way, using this
-text word for word:
+    <one sentence: the outcome, with the exact names>
+    Done when: <observable check>
+    Limits: <the user's limits, verbatim; leave out if none>
+    Assumptions: <only what you assumed in step 3; leave out if none>
 
-> Write your replies, docs and reports in ASDSTE-100 Simplified Technical English, applied about 80%: short sentences (20 words max for procedures, 25 for descriptions), one instruction per sentence, active voice, approved common words, consistent terms. Keep technical names, code and quoted text unchanged. Relax a rule when it costs clarity.
+Full form, in this order, leaving out any section with nothing to say:
 
-## Output rules
+    # Optimized Prompt
 
-- **Trivial input -> output exactly:** `SKIP`
-  Trivial = greetings, acknowledgements ("ok", "thanks"), single-word lookups, status
-  checks, conversational asides under ~30 chars without an action verb, or any text that
-  already contains the marker `# Optimized Prompt`.
-- **Non-trivial input ->** produce the optimized block per the template below, and nothing
-  else. No commentary, preface, or explanation before or after it. Do not wrap it in code
-  fences. (If the user explicitly asks "what did you change?" afterward, explain then.)
+    ## Goal
+    ## Context        (facts you confirmed that the agent needs)
+    ## Requirements   (one line per goal or limit, user's terms)
+    ## Done when      (observable, testable checks)
+    ## Assumptions    (only what you assumed in step 3)
+    ## Ask before     (only irreversible or outward actions the user did not ask for but the work could reach)
 
-## Optimization principles (apply ALL that fit)
+    ## Output style
+    Write your replies, docs and reports in ASDSTE-100 Simplified Technical English, applied about 80%: short sentences (20 words max for procedures, 25 for descriptions), one instruction per sentence, active voice, approved common words, consistent terms. Keep technical names, code and quoted text unchanged. Relax a rule when it costs clarity.
 
-1. **Disambiguate.** Replace vague nouns/verbs with specific technical terms. "the thing"
-   -> the exact module/file/symbol if knowable; "make it work" -> "fix the failing test in
-   `tests/x.test.ts:42`"; "clean it up" -> name the code smell (long method, primitive
-   obsession, feature envy...).
-2. **Single-term consistency.** Pick one canonical term and use it throughout - never
-   alternate synonyms (route/endpoint/handler; component/widget/UI element; cache/store/buffer).
-3. **Reference established methodology by name** when applicable: SOLID, DRY, KISS, YAGNI,
-   separation of concerns; TDD/BDD, red-green-refactor; DDD (bounded context, aggregate,
-   value object, anti-corruption layer); REST/GraphQL/RPC, event-driven, pub/sub; OAuth 2.0
-   (PKCE/client_credentials/authorization_code), OIDC, JWT, mTLS; ACID/BASE, eventual
-   consistency, optimistic/pessimistic locking, idempotency keys; hexagonal/clean/onion
-   architecture, ports & adapters; CQRS, event sourcing, saga, outbox; circuit breaker,
-   bulkhead, retry with exponential backoff + jitter, timeout budgets; 12-factor, blue-green,
-   canary, feature flags; design patterns (Strategy, Factory, Observer, Decorator, Adapter,
-   Repository, Specification, Visitor); state Big-O explicitly; WCAG 2.1 AA, ARIA, semantic
-   HTML; OWASP Top 10 by category (A01 Broken Access Control, A03 Injection...); HTTP semantics
-   (safe/idempotent/cacheable, status classes); DB normal forms, index strategies (B-tree,
-   hash, GIN, BRIN, covering).
-4. **Order tasks in canonical execution sequence:**
-   `discover -> research-docs -> design/plan -> implement -> test -> validate -> integrate ->
-   document -> retrospect`. Research moves before code; tests move before implementation
-   when TDD applies.
-5. **Detail expansion / compression.** Expand under-specified prompts with concrete
-   acceptance criteria, edge cases, error paths, and observability needs. Compress
-   repetitive prompts - state each requirement once. Strip filler ("please", "if you could",
-   "I was wondering").
-6. **Mandatory gates** - include the relevant subset, phrased against the tools you
-   confirmed in Step 0:
-   - Resolve external library/SDK/API/framework/CLI docs via the available docs MCP
-     (e.g. context7) **before** writing code that touches them.
-   - Inspect existing code with the available symbol/LSP MCP (e.g. serena
-     `get_symbols_overview` / `find_symbol`) **before** editing - never read whole files blindly.
-   - Apply TDD: write the failing test first, watch it fail, implement to green, then refactor.
-   - Run real verification - tests, type-check, build, lint - **before** claiming done, and
-     produce evidence (command output, exit codes), never assertions.
-   - Do not invent API signatures from training data; look them up.
-   - If the task touches 3+ independent files/modules/services, dispatch parallel subagents
-     in ONE message.
-   - For structural edits use symbol-level operations (e.g. `replace_symbol_body`,
-     `rename_symbol`) - never regex find/replace.
-7. **Subagent assignment.** For each discrete sub-task, recommend a specific subagent that
-   exists in this environment, with a self-contained context paragraph (paths, constraints,
-   done criteria) and the expected return format. Map by role:
-   read-only discovery/search -> an explorer agent (e.g. `atlas:explorer`); bounded
-   implementation -> `atlas:implementer`; independent confirm/refute of a finding or fix ->
-   `atlas:verifier`; schema/SQL inspection -> `atlas:db-prober`; live UI/runtime behavior ->
-   `atlas:ui-runtime-tester`. Omit the subagent section entirely if the task is small enough
-   for the main agent alone.
+The `## Output style` paragraph closes both forms, word for word.
 
-## Output template (use these section headers verbatim)
+**Chat model** (the user wants a prompt to paste into ChatGPT, Claude.ai or another assistant, or
+the request is writing or analysis rather than work on code):
+follow `references/chat-prompts.md`. One fenced block, no `# Optimized Prompt` header, no output-style
+paragraph.
 
-For the handoff-to-subagent variant (7-section TASK/EXPECTED OUTCOME/
-CONTEXT/CONSTRAINTS/MUST DO/MUST NOT DO/OUTPUT FORMAT), see
-`references/prompt-spec-template.md`. Use that form when the optimized
-prompt will be persisted as a handoff artifact or run in a fresh
-subagent context; use the inline block below when the main agent acts
-on it directly this session.
+For a prompt that will run in a fresh subagent or be saved as a handoff, use the 7-section form in
+`references/prompt-spec-template.md`.
 
-# Optimized Prompt
+## 5. Judge it
 
-## Intent
+You do not grade your own rewrite. Write the original and the draft to two files with the Write tool,
+then run the judge:
 
-<single declarative sentence stating exactly what the user wants accomplished>
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_prompt_judge.py" --original <original file> --rewrite <draft file>
+```
 
-## Approach (canonical order)
+The script checks the user's hard tokens (paths, names, numbers, quoted text) deterministically, then
+sends both texts to a different model in a fresh context, which marks each goal KEPT, WEAKENED or
+DROPPED and lists anything ADDED.
 
-1. <verb-led, specific step>
-2. <step>
+- Exit 0: confirmed, done.
+- Exit 1: fix exactly the items it names (restore what was dropped or weakened, cut what was added),
+  then run it once more. If it still fails, keep the better draft.
+- Exit 2: no judge model was reachable; the anchor check alone stands.
 
-## Required research (before any code)
+## Output
 
-- <doc / source / code area to inspect - name the actual MCP tool to use>
+The rewrite, then the report's `footer` value copied exactly on its own line. Nothing else: no notes on
+the judge, no summary of changes. If the user asks what changed, explain then.
 
-## Mandatory gates
+## Evals
 
-- <only the gates that apply to this task>
-
-## Subagent plan
-
-- [agent_type] - <self-contained task; expected output>
-- [agent_type] - <task; output>
-(Omit this whole section if the task is small enough for the main agent.)
-
-## Acceptance criteria
-
-- <concrete, testable criterion>
-
-## Output style
-
-<the directive above, verbatim>
-
-## Forbidden
-
-- Inventing API signatures from training data
-- Claiming "done" without producing verification evidence
-- <any other anti-pattern relevant to this task>
+Measured with `evals/run_eval.py` against `evals/cases.json` and `evals/trigger_cases.json`; results in `docs/audits/2026-11-05_atlas-prompt-eval.md`.

@@ -87,9 +87,9 @@ profile only; named profiles have their own config) and restart omp.
 ## Use it in chat
 
 Atlas is driven from the chat prompt of Claude Code or omp. Type a skill name
-followed by what you want, or just describe the work: 36 of the 40 skills
-auto-trigger from their description. The four manual skills, `/atlas-setup`,
-`/atlas-prompt`, `/atlas-tui` and `/atlas-crew`, you invoke yourself. The output blocks below are illustrative
+followed by what you want, or just describe the work: 37 of the 40 skills
+auto-trigger from their description. The three manual skills, `/atlas-setup`,
+`/atlas-tui` and `/atlas-crew`, you invoke yourself. The output blocks below are illustrative
 sketches, not captured runs; real answers are longer, but open with the
 `ATLAS | <glyph> <phase> | <state>` status line the output style requires.
 
@@ -364,7 +364,7 @@ Source: `plugins/atlas/skills/`.
 | `atlas-harden` | remediating or enforcing an endpoint setting at scale | `atlas-harden remediate unencrypted drives for RMM` |
 | `atlas-audit act` | after an atlas-audit run, to act on a finding | `atlas-audit act` |
 | `atlas-loop` | something must run repeatedly, poll for status, iterate until done, or sweep a backlog | `atlas-loop scan dependencies weekly until green` |
-| `atlas-prompt` | you run `/atlas-prompt` (slash command only, not model-invoked) on an underspecified request | `atlas-prompt make the search faster` |
+| `atlas-prompt` | you ask to rewrite, tighten or judge a prompt, or run `/atlas-prompt`; an independent judge model checks the rewrite kept every goal | `rewrite this prompt: make the search faster` |
 | `atlas-readme` | a repo has no README or its README is stale | `atlas-readme` |
 | `atlas-validate` | a plugin is believed complete and needs a structural and content check | `atlas-validate plugins/atlas` |
 | `atlas-wiki` | architecture docs changed or wiki diagrams are stale or missing | `atlas-wiki` |

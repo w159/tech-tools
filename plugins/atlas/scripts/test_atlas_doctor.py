@@ -1283,6 +1283,31 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertFalse(c["ok"])
         self.assertEqual(c["severity"], "fail")
 
+    def test_omp_bridge_mandates_off_is_not_a_disarm(self):
+        # omp/hook-bridge.ts sets ATLAS_MANDATES=off (with ATLAS_HARNESS=omp) on every hook.
+        with mock.patch.dict(
+            os.environ, {"ATLAS_HARNESS": "omp", "ATLAS_MANDATES": "off"}
+        ):
+            c = self._checks()["gates-armed"]
+        self.assertNotIn("disabled by env", c["detail"])
+        # ATLAS_GATES=off is still a disarm under omp
+        with mock.patch.dict(
+            os.environ,
+            {"ATLAS_HARNESS": "omp", "ATLAS_MANDATES": "off", "ATLAS_GATES": "off"},
+        ):
+            c = self._checks()["gates-armed"]
+        self.assertFalse(c["ok"])
+        self.assertIn("ATLAS_GATES=off", c["detail"])
+        self.assertNotIn("ATLAS_MANDATES", c["detail"])
+
+    def test_claude_user_mandates_off_is_still_a_disarm(self):
+        with mock.patch.dict(
+            os.environ, {"ATLAS_HARNESS": "claude", "ATLAS_MANDATES": "off"}
+        ):
+            c = self._checks()["gates-armed"]
+        self.assertFalse(c["ok"])
+        self.assertIn("ATLAS_MANDATES=off", c["detail"])
+
     def test_inert_enforcement_is_reported_from_the_db(self):
         proj = os.path.join(self.tmp, "proj")
         os.makedirs(os.path.join(proj, ".git"))
@@ -2943,6 +2968,31 @@ class NonMarketplaceLoadTest(unittest.TestCase):
         self.assertEqual(self._hook_output(self.synced_root), "")
         by = self._run(self.pdir_root)
         self._assert_registered(by, "plugin-dir")
+
+    def test_codex_cache_layout_needs_no_claude_registry(self):
+        codex_home = os.path.join(self.tmp, "codexhome")
+        root = os.path.join(codex_home, "plugins", "cache", "m", "atlas", "1.0.0")
+        self._make_plugin(root)
+        with mock.patch.dict(os.environ, {"CODEX_HOME": codex_home}):
+            by = self._run(root)
+            self._assert_registered(by, "codex")
+            self.assertEqual(self._hook_output(root), "")
+
+    def test_codex_harness_env_needs_no_claude_registry(self):
+        root = os.path.join(self.plugins, "cache", "m", "atlas", "1.0.0")
+        self._make_plugin(root)
+        with mock.patch.dict(os.environ, {"ATLAS_HARNESS": "codex"}):
+            by = self._run(root)
+            self._assert_registered(by, "codex")
+            self.assertEqual(self._hook_output(root), "")
+
+    def test_claude_with_stray_codex_env_still_reports_missing_config(self):
+        root = os.path.join(self.plugins, "cache", "m", "atlas", "1.0.0")
+        self._make_plugin(root)
+        with mock.patch.dict(os.environ, {"CLAUDECODE": "1", "CODEX_HOME": "/nonexistent"}):
+            os.environ.pop("ATLAS_HARNESS", None)
+            by = self._run(root)
+        self.assertFalse(by["config-readable"]["ok"])
 
     def test_missing_config_without_any_load_source_still_fails(self):
         # cache-shaped root, nothing registered: genuinely unhealthy

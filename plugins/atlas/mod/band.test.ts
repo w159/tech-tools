@@ -207,12 +207,12 @@ describe('Mission Control band', () => {
   });
   test('lanes wear the role character: eyes from the role, mouth from the state, frame from the tick', () => {
     const snapshot = busySnap();
-    snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: 'Grep' } as never;
+    snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: 'Grep' };
     const lane = (tick: number) => text(laneOf(panel(160, { snapshot, live: liveWorkers(snapshot, NOW), tick }).rowNodes, 'explorer-1'));
     expect(lane(0)).toContain('◔_◔');
     expect(lane(1)).toContain('◔o◔');
     expect(lane(0)).not.toBe(lane(1));
-    const thinking = { ...snapshot.activity['explorer-1']!, tool: null, lastTool: 'Grep' } as never;
+    const thinking = { ...snapshot.activity['explorer-1']!, tool: null, lastTool: 'Grep' };
     snapshot.activity['explorer-1'] = thinking;
     expect(lane(0)).toContain('◔~◔');
   });

@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.1.0 - 2026-11-05
+
+- atlas 17.1.0: atlas-prompt rebuilt (auto-invoked, right-sized output, independent judge checks every rewrite keeps the original's goals and limits; 67 of 68 goals kept vs 52, 1 added item vs 169), new `atlas_inventory.py`, `atlas_mutate.py` and `atlas_parity_rig.py`, no false "unhealthy" doctor warnings under Codex and omp, mod `tsc` clean against Claude Code 2.1.318 types, fixes for a parked-worker crash and a truncated "needs evidence" verdict, and hardened tests. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-05_atlas-prompt-eval.md, _atlas-mutation.md, _atlas-parity.md and _atlas-inventory.md.
+
+## marketplace 5.6.0 - 2026-11-05
+
+- marketplace 5.6.0: atlas 17.1.0, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 17.0.1 - 2026-11-05
 
 - atlas 17.0.1: anonymous telemetry now sends to the live endpoint (`https://atlas-telemetry.vercel.app/api/ingest`); the weekly `telemetry-report` workflow falls back to the schema endpoint when `ATLAS_TELEMETRY_URL` is unset and also runs on pushes that change the schema or the workflow. Details in plugins/atlas/CHANGELOG.md.

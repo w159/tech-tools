@@ -79,6 +79,81 @@ class StopTailTest(unittest.TestCase):
             ["chronicle_facet", "memory_capture", "nudge"],
         )
 
+    def test_slice_budget_is_pinned(self):
+        self.assertEqual(
+            stop_tail.SLICES_S,
+            {"ingest_session": 30, "chronicle_facet": 8, "memory_capture": 8, "nudge": 5},
+        )
+
+    def _run_one(self, name, slices=None):
+        import signal
+
+        log = []
+        timers = []
+        real = signal.setitimer
+
+        def rec(which, secs, *a):
+            timers.append(secs)
+            return real(which, secs, *a)
+
+        with (
+            mock.patch.object(stop_tail, "__import__", create=True,
+                              side_effect=lambda n: _Hook(n, log)),
+            mock.patch.object(stop_tail.signal, "setitimer", side_effect=rec),
+        ):
+            if slices is not None:
+                with mock.patch.object(stop_tail, "SLICES_S", slices):
+                    stop_tail._run(name, "{}")
+            else:
+                stop_tail._run(name, "{}")
+        return log, timers
+
+    def test_known_hook_arms_its_slice_then_clears_the_timer(self):
+        import signal
+
+        log, timers = self._run_one("nudge")
+        self.assertEqual(timers, [5, 0])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL)[0], 0)
+
+    def test_unknown_hook_still_runs_and_is_unbounded(self):
+        log, timers = self._run_one("not_in_slices")
+        self.assertEqual([n for n, _ in log], ["not_in_slices"])
+        self.assertEqual(timers, [])
+
+    def test_zero_slice_runs_unbounded(self):
+        log, timers = self._run_one("nudge", slices={"nudge": 0})
+        self.assertEqual(len(log), 1)
+        self.assertEqual(timers, [])
+
+    def test_off_main_thread_runs_unbounded_and_touches_no_timer(self):
+        import threading
+
+        out = {}
+
+        def target():
+            out["r"] = self._run_one("nudge")
+
+        t = threading.Thread(target=target)
+        t.start()
+        t.join(10)
+        log, timers = out["r"]
+        self.assertEqual(len(log), 1)
+        self.assertEqual(timers, [])
+
+    def test_previous_sigalrm_handler_is_restored(self):
+        import signal
+
+        def mine(signum, frame):
+            pass
+
+        old = signal.signal(signal.SIGALRM, mine)
+        try:
+            self._run_one("nudge")
+            self.assertIs(signal.getsignal(signal.SIGALRM), mine)
+        finally:
+            signal.signal(signal.SIGALRM, old)
+
     def test_slices_fit_in_hook_timeout(self):
         self.assertLess(sum(stop_tail.SLICES_S.values()), 60)
 

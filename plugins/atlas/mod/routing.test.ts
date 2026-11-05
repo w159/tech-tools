@@ -5,7 +5,7 @@
 // paths.
 import { describe, expect, test } from 'claude-code/testing';
 import type { On } from 'claude-code';
-import { registerCompletion, registerRouting } from './routing';
+import { fullModel, promptName, registerCompletion, registerRouting } from './routing';
 import type { Persona } from './contract';
 import { memState } from './test_helpers';
 
@@ -334,5 +334,136 @@ describe('registerCompletion', () => {
     registerCompletion(on);
     const result = await pick('turn.complete')($, { answer: 'ATLAS | x\nbody', agentId: 'agent-1' }, () => ({ text: 'kept' }));
     expect(result).toEqual({ text: 'kept' });
+  });
+});
+
+describe('fullModel', () => {
+  test('resolves an alias only to a parent id of the same family', () => {
+    expect(fullModel('sonnet', 'claude-sonnet-5-5')).toBe('claude-sonnet-5-5');
+    expect(fullModel('SONNET', 'Claude-Sonnet-5-5')).toBe('Claude-Sonnet-5-5');
+    expect(fullModel('opus', 'claude-sonnet-5-5')).toBe('opus');
+    expect(fullModel('claude-opus-4', 'claude-sonnet-5-5')).toBe('claude-opus-4');
+    expect(fullModel('vendor/model', 'vendor-model-x')).toBe('vendor/model');
+    expect(fullModel('sonnet', undefined)).toBe('sonnet');
+    expect(fullModel('sonnet', '')).toBe('sonnet');
+    expect(fullModel(undefined, 'claude-sonnet-5-5')).toBeUndefined();
+    expect(fullModel('', 'claude-sonnet-5-5')).toBe('');
+  });
+});
+
+describe('promptName', () => {
+  test('reads the first-line worker name, with the allowed characters only', () => {
+    expect(promptName('name: probe-slow\nSCOPE: x')).toBe('probe-slow');
+    expect(promptName('  NAME:   a.b_c-1 rest')).toBe('a.b_c-1');
+    expect(promptName('hello\nname: later')).toBeUndefined();
+    expect(promptName('name: ')).toBeUndefined();
+  });
+});
+
+describe('registerRouting bookkeeping', () => {
+  const clockAt = (t: { now: number }) => ({ now: async () => t.now });
+  const metaOf = async ($: { state: ReturnType<typeof memState> }) =>
+    (await $.state.get({ plugin: 'atlas', key: 'orch' })).value as { meta: Record<string, { name?: string; model?: string; scope?: string }>; activity: Record<string, { tokens: number | null }> };
+
+  test('caps live task agents at 64, newest kept, and re-spawning an id updates in place', async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [], logDrift() {} });
+    const $c = { ...$, clock: clockAt({ now: 1 }) };
+    for (let i = 0; i < 70; i += 1) await pick('agent.spawn')($c, spawnInput({ subagentType: 'task' }), async () => ({ model: 'm', agentId: `ag-${i}` }));
+    const agents = (await $.state.get({ plugin: 'atlas', key: 'taskAgents' })).value as Array<{ name: string }>;
+    expect(agents.length).toBe(64);
+    expect([agents[0]!.name, agents[63]!.name]).toEqual(['ag-6', 'ag-69']);
+    await pick('agent.spawn')($c, spawnInput({ subagentType: 'task', description: 'again' }), async () => ({ model: 'm', agentId: 'ag-10' }));
+    const after = (await $.state.get({ plugin: 'atlas', key: 'taskAgents' })).value as Array<{ name: string; task?: string }>;
+    expect(after.length).toBe(64);
+    expect(after.filter((a) => a.name === 'ag-10').map((a) => a.task)).toEqual(['again']);
+  });
+
+  test('prompt first-line name and SCOPE reach the orch meta when the spawn and tool call carry no name', async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [], logDrift() {} });
+    const $c = { ...$, clock: clockAt({ now: 1 }) };
+    await pick('agent.spawn')($c, spawnInput({ subagentType: 'task', prompt: 'name: probe-slow\nSCOPE: audit/medium\nbody' }), spawnNext);
+    const meta = (await metaOf($)).meta['agent-1']!;
+    expect([meta.name, meta.scope]).toEqual(['probe-slow', 'audit/medium']);
+  });
+
+  test('an explicit spawn model beats the persona pin; the pin beats the parent', async () => {
+    const run = async (over: Partial<SpawnEvent>) => {
+      const { on, pick, $ } = captureOn();
+      registerRouting(on, { getPersonas: () => [persona], logDrift() {} });
+      await pick('agent.spawn')({ ...$, clock: clockAt({ now: 1 }) }, spawnInput(over), spawnNext);
+      return (await metaOf($)).meta['agent-1']!.model;
+    };
+    expect(await run({ model: 'opus', parentModel: 'sonnet' })).toBe('opus');
+    expect(await run({ parentModel: 'sonnet' })).toBe('haiku');
+    expect(await run({ model: 'inherit', parentModel: 'sonnet' })).toBe('haiku');
+  });
+
+  test('tool.call name matching: id first, then newest same description+type inside 5s, never across type, description or time', async () => {
+    const nameFor = async (calls: Array<{ at: number; id: string; name: string; description?: string; type?: string }>, spawnAt: number, over: Partial<SpawnEvent>) => {
+      const { on, pick, $ } = captureOn();
+      registerRouting(on, { getPersonas: () => [], logDrift() {} });
+      const t = { now: 0 };
+      const $c = { ...$, clock: clockAt(t) };
+      for (const c of calls) {
+        t.now = c.at;
+        await pick('tool.call')($c, { tool: 'Agent', tool_use_id: c.id, name: c.name, subagent_type: c.type ?? 'task', description: c.description ?? 'd' }, () => ({}));
+      }
+      t.now = spawnAt;
+      await pick('agent.spawn')($c, spawnInput({ subagentType: 'task', description: 'd', tool_use_id: '', ...over }), spawnNext);
+      return (await metaOf($)).meta['agent-1']!.name;
+    };
+    expect(await nameFor([{ at: 0, id: 'x', name: 'n1' }], 5000, {})).toBe('n1');
+    expect(await nameFor([{ at: 0, id: 'x', name: 'n1' }], 5001, {})).toBeUndefined();
+    expect(await nameFor([{ at: 0, id: 'x', name: 'n1' }], 100, { description: 'other' })).toBeUndefined();
+    expect(await nameFor([{ at: 0, id: 'x', name: 'n1' }], 100, { subagentType: 'Explore' })).toBeUndefined();
+    expect(await nameFor([{ at: 0, id: 'x', name: 'n1', type: 'Explore' }], 100, {})).toBeUndefined();
+    expect(await nameFor([{ at: 0, id: 'x', name: 'n1', description: 'zzz' }], 100, {})).toBeUndefined();
+    // newest wins among matches
+    expect(await nameFor([{ at: 0, id: 'x', name: 'old' }, { at: 50, id: 'y', name: 'new' }], 100, {})).toBe('new');
+    // the engine's shared id wins over a newer description match, however old the call
+    expect(await nameFor([{ at: 0, id: 'tid', name: 'byid', description: 'zz' }, { at: 4000, id: 'y', name: 'newer' }], 9000, { tool_use_id: 'tid' })).toBe('byid');
+    // an empty spawn id never matches a call that also sent no id
+    expect(await nameFor([{ at: 0, id: '', name: 'noid', description: 'zz' }], 100, {})).toBeUndefined();
+    // a nameless call is not recorded
+    expect(await nameFor([{ at: 0, id: 'x', name: '' }], 100, {})).toBeUndefined();
+  });
+
+  test('pending tool calls are pruned past 5s and capped at the newest 16', async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [], logDrift() {} });
+    const t = { now: 0 };
+    const $c = { ...$, clock: clockAt(t) };
+    const call = async (id: string, at: number) => {
+      t.now = at;
+      await pick('tool.call')($c, { tool: 'Agent', tool_use_id: id, name: `n-${id}`, subagent_type: 'task', description: `d-${id}` }, () => ({}));
+    };
+    for (let i = 0; i < 17; i += 1) await call(`c${i}`, i);
+    const spawnId = async (id: string, at: number) => {
+      t.now = at;
+      await pick('agent.spawn')($c, spawnInput({ subagentType: 'task', description: 'none', tool_use_id: id }), async () => ({ model: 'm', agentId: `s-${id}` }));
+      return (await metaOf($)).meta[`s-${id}`]!.name;
+    };
+    expect(await spawnId('c0', 20)).toBeUndefined(); // 17th call evicted the oldest
+    expect(await spawnId('c1', 21)).toBe('n-c1');
+    expect(await spawnId('c16', 22)).toBe('n-c16');
+    await call('late', 6_000); // prunes every call older than 5s
+    expect(await spawnId('c16', 6_001)).toBeUndefined();
+    expect(await spawnId('late', 6_002)).toBe('n-late');
+  });
+
+  test('turn.complete adds input and output tokens, each defaulting to 0', async () => {
+    const run = async (usage?: { input_tokens?: number; output_tokens?: number }) => {
+      const { on, pick, $ } = captureOn();
+      registerCompletion(on);
+      await pick('turn.complete')({ ...$, clock: clockAt({ now: 5 }) }, { answer: 'ok', ...(usage ? { usage } : {}) } as never, () => ({ text: 't' }));
+      return (await metaOf($)).activity['lead']!.tokens;
+    };
+    expect(await run()).toBeNull();
+    expect(await run({})).toBeNull();
+    expect(await run({ input_tokens: 10 })).toBe(10);
+    expect(await run({ output_tokens: 4 })).toBe(4);
+    expect(await run({ input_tokens: 10, output_tokens: 4 })).toBe(14);
   });
 });

@@ -74,7 +74,7 @@ const NOBODY_HINT = 'nobody dispatched yet, ask the lead to start a worker';
 /** A dispatch edge younger than this marks a worker as spawned this turn. */
 const SPAWN_MS = 90_000;
 
-const STATE_LOOK = { failed: ['✗', C.fail], blocked: ['⏸', C.warn], done: ['✓', C.ok], working: ['', C.live] } as const;
+const STATE_LOOK = { failed: ['✗', C.fail], blocked: ['⏸', C.warn], done: ['✓', C.ok], working: ['', C.live], parked: ['·', C.muted] } as const;
 
 /** 3s / 40s / 2m / 1h. */
 function shortAge(ms: number): string {
@@ -83,7 +83,7 @@ function shortAge(ms: number): string {
 }
 
 const nowText = (w: LiveWorker): string =>
-  w.state === 'blocked' ? 'awaits lead reply' : w.state === 'failed' ? 'failed' : w.state === 'done' ? 'done' : w.tool || 'working';
+  w.state === 'blocked' ? 'awaits lead reply' : w.state === 'failed' ? 'failed' : w.state === 'done' ? 'done' : w.state === 'parked' ? 'parked' : w.tool || 'working';
 
 const cell = (t: string, w: number, right = false): string => {
   const f = fitText(t, w);

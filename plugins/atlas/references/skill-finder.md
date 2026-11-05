@@ -32,7 +32,7 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Intent ("I want to...") | Skill | Trigger | What you get |
 | --- | --- | --- | --- |
 | Nail down requirements before anyone writes code | atlas-brainstorm | Auto | One-question-at-a-time dialogue -> requirements-only artifact in `docs/plans/`; never product code |
-| Turn a vague coding request into a prompt an agent can execute | atlas-prompt | Manual | Structured, environment-aware rewrite of the request (<=3 clarifying questions first) |
+| Turn a rough request into a prompt an agent or chat model can execute | atlas-prompt | Auto | Right-sized rewrite; an independent judge model confirms every goal and limit survived |
 | Write an implementation-ready plan from requirements or a feature description | atlas-plan | Auto | `docs/plans/` plan with U-numbered units, verification contract, and a handoff to atlas-orchestrate |
 | Build a feature end to end across UI, API, and data | atlas-orchestrate | Auto | Parallel dispatch of the atlas squad with an independent verifier closing it |
 | Run a multi-step or whole-codebase job as a coordinated agent run | atlas-orchestrate | Auto | The engine: decomposed subagent dispatches, execution evidence, independent verification, docs kept current |

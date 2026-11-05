@@ -1,0 +1,27 @@
+{
+ "about": "Model-invocation trigger cases for atlas-prompt. fire=true: the user wants a prompt or request rewritten, not the task done. fire=false: the user wants the work itself, including near misses that mention prompts, optimizing or rewriting something else.",
+ "cases": [
+  {"id": "f-rewrite-prompt", "fire": true, "prompt": "Rewrite this prompt so it works better: 'make a script that cleans my downloads folder'"},
+  {"id": "f-better-prompt", "fire": true, "prompt": "can you make this a better prompt? write a linkedin post about my product launch, not too salesy"},
+  {"id": "f-optimize-prompt", "fire": true, "prompt": "optimize my prompt before you start: add dark mode to the settings page"},
+  {"id": "f-sharpen", "fire": true, "prompt": "sharpen this request into something an agent can run: fix the login bug and add tests"},
+  {"id": "f-spec-for-agent", "fire": true, "prompt": "Turn this rough idea into a clear spec I can hand to a coding agent: a CLI that syncs my dotfiles to a git repo"},
+  {"id": "f-is-this-good", "fire": true, "prompt": "Is this a good prompt? 'You are an expert. Summarize the document. Be concise.'"},
+  {"id": "f-tighten", "fire": true, "prompt": "tighten up this prompt for me, it's way too long: 'I would like you to please, if possible, review all of the code in the repository and find any bugs, and also look for performance problems, and then fix them'"},
+  {"id": "f-prompt-for-chatgpt", "fire": true, "prompt": "Write me a prompt I can paste into ChatGPT to triage my inbox every morning"},
+  {"id": "f-improve-system-prompt", "fire": true, "prompt": "improve this system prompt for my support bot: 'You help customers. Answer questions about billing.'"},
+  {"id": "f-clarify-before", "fire": true, "prompt": "before doing anything, rewrite my request as a structured prompt: migrate the users table to postgres"},
+  {"id": "n-fix-bug", "fire": false, "prompt": "fix the failing test in tests/test_cache.py"},
+  {"id": "n-add-feature", "fire": false, "prompt": "add a --json flag to the status command"},
+  {"id": "n-vague-task", "fire": false, "prompt": "make the dashboard faster"},
+  {"id": "n-optimize-sql", "fire": false, "prompt": "optimize this SQL query: SELECT * FROM orders WHERE customer_id IN (SELECT id FROM customers WHERE region='EU')"},
+  {"id": "n-rewrite-function", "fire": false, "prompt": "rewrite the parse_args function in cli.py to use argparse subcommands"},
+  {"id": "n-review-pr", "fire": false, "prompt": "review my diff for bugs before I commit"},
+  {"id": "n-plan", "fire": false, "prompt": "plan the migration from Okta to Entra ID for our SSO apps"},
+  {"id": "n-prompt-feature", "fire": false, "prompt": "add a prompt to the installer that asks the user for their API key"},
+  {"id": "n-explain", "fire": false, "prompt": "explain how the prompt_optimizer hook decides when to run"},
+  {"id": "n-rewrite-readme", "fire": false, "prompt": "rewrite the README intro so it's shorter"},
+  {"id": "n-question", "fire": false, "prompt": "what's the difference between a skill and a subagent in Claude Code?"},
+  {"id": "n-thanks", "fire": false, "prompt": "thanks, that worked"}
+ ]
+}

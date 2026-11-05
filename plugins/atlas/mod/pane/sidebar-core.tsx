@@ -118,6 +118,13 @@ const VERDICT_LOOK: Record<
   "needs-evidence": { g: "?", word: "needs evidence", color: C.warn },
 };
 
+/** Widest verdict word, so no word is ever cut. */
+const VERDICT_WORD_W = Math.max(
+  ...Object.values(VERDICT_LOOK).map((l) => textWidth(l.word)),
+);
+/** Id cell: 15 cells of id plus one gap, so a cut id never touches the word. */
+const VERDICT_ID_W = 15;
+
 function verdictRows(
   els: ClientElements,
   m: CoreModel,
@@ -133,9 +140,9 @@ function verdictRows(
     const checked = m.claims.find((c) => c.matched === v.id);
     const parts: Segment[] = [
       { t: `  ${look.g} `, color: look.color },
-      { t: padTo(scrub(v.id), 16) },
+      { t: `${padTo(scrub(v.id), VERDICT_ID_W)} ` },
       {
-        t: padTo(look.word, 10),
+        t: padTo(look.word, VERDICT_WORD_W),
         color: look.color,
         bold: v.status === "rejected",
       },

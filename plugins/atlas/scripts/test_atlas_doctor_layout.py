@@ -301,6 +301,84 @@ class HookTest(LayoutBase):
         fix.assert_not_called()
 
 
+class SurvivorPinsTest(LayoutBase):
+    """Mutation-survivor pins for doctor_layout helpers."""
+
+    def test_atlas_home_prefers_env_then_dot_atlas_under_home(self):
+        self.assertEqual(doctor_layout.atlas_home(), self.atlas_home)
+        with mock.patch.dict(os.environ):
+            os.environ.pop("ATLAS_HOME")
+            self.assertEqual(
+                doctor_layout.atlas_home(), os.path.join(self.home, ".atlas")
+            )
+
+    def test_layout_summary_lists_kind_and_path(self):
+        found = [
+            {"kind": "stray", "path": "/p/a/.atlas"},
+            {"kind": "nested", "path": "/p/.atlas/.run/.atlas"},
+        ]
+        self.assertEqual(
+            doctor_layout.layout_summary(found),
+            ["stray: /p/a/.atlas", "nested: /p/.atlas/.run/.atlas"],
+        )
+        self.assertEqual(doctor_layout.layout_summary([]), [])
+
+    def test_nested_repo_does_not_stop_the_walk_of_later_siblings(self):
+        touch(os.path.join(self.repo, "later", ".atlas", "a"))
+        walk = [
+            (self.repo, ["inner", "later"], []),
+            (os.path.join(self.repo, "inner"), [], [".git"]),
+            (os.path.join(self.repo, "later"), [".atlas"], []),
+        ]
+        with mock.patch.object(doctor_layout.os, "walk", side_effect=lambda *_a, **_k: iter(walk)):
+            found = doctor_layout.check_atlas_layout(self.repo)
+        self.assertEqual(
+            [(f["kind"], os.path.relpath(f["path"], self.repo)) for f in found],
+            [("stray", "later/.atlas")],
+        )
+
+    def _deep(self, depth):
+        parts = ["abcdefghij"[i] for i in range(depth)]
+        touch(os.path.join(self.repo, ".atlas", *parts, ".atlas", "x"))
+        return os.path.join(*parts, ".atlas")
+
+    def test_nested_scan_reaches_depth_six_but_not_seven(self):
+        six = self._deep(6)
+        self.assertEqual(self.kinds(), [("nested", os.path.join(".atlas", six))])
+        shutil.rmtree(os.path.join(self.repo, ".atlas", "a"))
+        self._deep(7)
+        self.assertEqual(self.kinds(), [])
+
+    def test_fix_project_memory_backfills_with_apply_true(self):
+        import atlas_finding
+
+        with (
+            mock.patch.object(
+                atlas_finding, "backfill_findings", return_value={"wrote": 2}
+            ) as bf,
+            mock.patch("atlas_memory.migrate_global_to_projects", create=True),
+        ):
+            out = doctor_layout.fix_project_memory(self.repo)
+        bf.assert_called_once_with(self.repo, apply=True)
+        self.assertEqual(out[0], "findings records: {'wrote': 2}")
+
+    def test_fix_docs_naming_returns_the_moved_pairs_and_rewrites_references(self):
+        import lint_docs_names
+
+        moved = [("docs/Old.md", "docs/old.md")]
+        with (
+            mock.patch.object(lint_docs_names, "all_artifact_paths", return_value=[]),
+            mock.patch.object(lint_docs_names, "violations", return_value=["v"]),
+            mock.patch.object(lint_docs_names, "plan_renames", return_value="plan"),
+            mock.patch.object(lint_docs_names, "apply_renames", return_value=moved) as ar,
+            mock.patch.object(lint_docs_names, "rewrite_references") as rr,
+        ):
+            got = doctor_layout.fix_docs_naming(self.repo)
+        self.assertEqual(got, moved)
+        self.assertEqual(ar.call_args.args[1], "plan")
+        self.assertEqual(rr.call_args.args[1], moved)
+
+
 class ScoringTest(LayoutBase):
     def test_hosted_url_warns_and_loopback_does_not(self):
         with mock.patch.dict(

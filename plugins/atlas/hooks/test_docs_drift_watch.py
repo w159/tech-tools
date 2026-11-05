@@ -392,5 +392,78 @@ class DocsDriftWatchInProcessTest(unittest.TestCase):
         self.assertEqual(state["streak"], 1)
 
 
+class DocsDriftPureTest(unittest.TestCase):
+    """docs_drift() and git_changed_paths() pinned directly (mutation survivors)."""
+
+    def test_empty_is_not_drift(self):
+        import docs_drift
+
+        self.assertIs(docs_drift.docs_drift([]), False)
+
+    def test_docs_only_run_is_not_drift(self):
+        import docs_drift
+
+        self.assertIs(docs_drift.docs_drift(["docs/a.md", "x/docs/b.md"]), False)
+
+    def test_code_without_changelog_is_drift(self):
+        import docs_drift
+
+        self.assertIs(docs_drift.docs_drift(["app.py", "docs/a.md"]), True)
+
+    def test_root_changelog_clears_drift_and_returns_false_not_none(self):
+        import docs_drift
+
+        self.assertIs(docs_drift.docs_drift(["app.py", "docs/CHANGELOG.md"]), False)
+
+    def test_nested_changelog_clears_drift(self):
+        import docs_drift
+
+        self.assertIs(
+            docs_drift.docs_drift(["app.py", "pkg/docs/CHANGELOG.md"]), False
+        )
+
+    def test_windows_separator_changelog_clears_drift(self):
+        import docs_drift
+
+        self.assertIs(
+            docs_drift.docs_drift(["app.py", "docs\\CHANGELOG.md"]), False
+        )
+
+    def test_changelog_lookalike_does_not_clear_drift(self):
+        import docs_drift
+
+        self.assertIs(docs_drift.docs_drift(["app.py", "docs/OTHER.md"]), True)
+
+    def test_git_changed_paths_filters_blank_and_atlas_lines_with_5s_timeouts(self):
+        import docs_drift
+
+        calls = []
+
+        def fake(args, **kw):
+            calls.append((args, kw))
+            if "rev-parse" in args:
+                return b"/repo\n"
+            return b"a.py\n\n   \n.atlas/run.json\nsub/b.py\n"
+
+        with mock.patch("subprocess.check_output", side_effect=fake):
+            got = docs_drift.git_changed_paths(Path("/x"))
+        self.assertEqual(set(got), {"a.py", "sub/b.py"})
+        self.assertEqual(len(calls), 4)
+        self.assertEqual([kw["timeout"] for _, kw in calls], [5, 5, 5, 5])
+
+    def test_git_changed_paths_missing_git_raises_runtime_error(self):
+        import docs_drift
+
+        with mock.patch("subprocess.check_output", side_effect=FileNotFoundError("git")):
+            with self.assertRaises(RuntimeError):
+                docs_drift.git_changed_paths(Path("/x"))
+
+    def test_git_changed_paths_non_repo_returns_empty_list(self):
+        import docs_drift
+
+        with mock.patch("subprocess.check_output", side_effect=OSError("nope")):
+            self.assertEqual(docs_drift.git_changed_paths(Path("/x")), [])
+
+
 if __name__ == "__main__":
     unittest.main()

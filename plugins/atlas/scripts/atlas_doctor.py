@@ -85,6 +85,7 @@ import subprocess  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 
 import atlas_db  # noqa: E402
+import atlas_harness  # noqa: E402
 import atlas_paths  # noqa: E402
 import doctor_layout  # noqa: E402
 
@@ -185,16 +186,40 @@ def self_manifest():
     return own, _load_json(os.path.join(own, ".claude-plugin", "plugin.json"))
 
 
+def _harness():
+    """Harness running this doctor. Inside Claude Code a stray CODEX_*/OMP_* env var
+    must not reclassify it, so CLAUDECODE wins unless ATLAS_HARNESS names one."""
+    if os.environ.get("ATLAS_HARNESS") in atlas_harness.HARNESSES:
+        return os.environ["ATLAS_HARNESS"]
+    if "CLAUDECODE" in os.environ:
+        return "claude"
+    return atlas_harness.detect_harness()
+
+
+def _on_codex(root):
+    codex_home = os.environ.get("CODEX_HOME") or os.path.join(
+        os.path.expanduser("~"), ".codex"
+    )
+    cache = os.path.realpath(os.path.join(codex_home, "plugins", "cache")) + os.sep
+    if root.startswith(cache):
+        return True
+    return _harness() == "codex"
+
+
 def detect_load_source(plugin_name="atlas"):
     """How this plugin was loaded when it has no installed_plugins.json entry.
 
-    Returns ("synced", root) for a claude.ai synced plugin
+    Returns ("codex", root) on Codex, which has no Claude plugin registry
+    (root under <CODEX_HOME>/plugins/cache, or the harness detected as codex
+    while not inside Claude Code), ("synced", root) for a claude.ai synced plugin
     (<plugins>/synced/<id>/<name> with a sibling <name>.meta.json), or
     ("plugin-dir", root) for a --plugin-dir load of a marketplace source
     checkout (<repo>/plugins/<name>); else
     (None, root). Root comes from self_manifest(), never guessed paths."""
     root = os.path.realpath(self_manifest()[0])
     parent = os.path.dirname(root)
+    if _on_codex(root):
+        return "codex", root
     if os.path.basename(os.path.dirname(parent)) == "synced" and os.path.exists(
         os.path.join(parent, f"{plugin_name}.meta.json")
     ):
@@ -1632,6 +1657,9 @@ def behaviour_checks(add, plugin_name, version, now=None):
         f"{k}=off"
         for k in ("ATLAS_GATES", "ATLAS_MANDATES")
         if os.environ.get(k, "").strip().lower() == "off"
+        # omp/hook-bridge.ts sets ATLAS_MANDATES=off for every bridged hook by design
+        # (omp's own extension enforces natively); it is not a user disarm there.
+        and not (k == "ATLAS_MANDATES" and _harness() == "omp")
     ]
     if off:
         add("gates-armed", False, "enforcement disabled by env: " + ", ".join(off))
@@ -4364,7 +4392,8 @@ def main(argv=None):
             print(
                 f"ATLAS-DOCTOR WARNING: {args.plugin} plugin is unhealthy - "
                 + "; ".join(f"{r['check']}: {r['detail']}" for r in failed)
-                + ". Run: python3 <plugin>/scripts/atlas_doctor.py --fix, then /reload-plugins."
+                + ". Run: python3 <plugin>/scripts/atlas_doctor.py --fix"
+                + (", then /reload-plugins." if _harness() == "claude" else ".")
             )
         return 0
 

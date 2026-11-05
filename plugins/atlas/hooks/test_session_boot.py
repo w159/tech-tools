@@ -1778,3 +1778,125 @@ class OptionalBootTextTest(unittest.TestCase):
             code, out = run_main_inprocess({"session_id": "s1", "cwd": self.tmp}, self.env)
         self.assertEqual(code, 0)
         self.assertIn("Atlas: orchestrator posture", out)
+
+
+class BootCoreSurvivorTests(unittest.TestCase):
+    """session_boot_core helpers pinned against mutation survivors."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
+
+    def _gate(self, env_sock):
+        import pathlib
+
+        import atlas_herdr
+        import atlas_rig
+        import atlas_seats
+
+        env = {"HOME": self.home}
+        if env_sock:
+            env["HERDR_SOCKET_PATH"] = env_sock
+        with (
+            mock.patch.dict(os.environ, env),
+            mock.patch.dict(os.environ, {"ATLAS_SEAT_BACKEND": ""}),
+            mock.patch.object(atlas_rig, "_bin", return_value=None),
+            mock.patch.object(atlas_rig, "_rigs", return_value=[]),
+            mock.patch.object(atlas_seats, "_node_ok_cached", return_value=False),
+            mock.patch.object(atlas_herdr, "_server_up", return_value=True),
+            mock.patch.object(atlas_herdr, "PLUGIN_ROOT", pathlib.Path(self.home) / "none"),
+        ):
+            if not env_sock:
+                os.environ.pop("HERDR_SOCKET_PATH", None)
+            return session_boot._boot_herdr_wanted(self.home)
+
+    def test_herdr_gate_true_when_env_socket_exists_and_server_answers(self):
+        sock = os.path.join(self.home, "custom.sock")
+        open(sock, "w").close()
+        self.assertIs(self._gate(sock), True)
+
+    def test_herdr_gate_false_when_env_socket_missing_even_if_default_exists(self):
+        default = os.path.join(self.home, ".config", "herdr")
+        os.makedirs(default)
+        open(os.path.join(default, "herdr.sock"), "w").close()
+        self.assertIs(self._gate(os.path.join(self.home, "absent.sock")), False)
+
+    def test_herdr_gate_uses_default_socket_under_home_when_env_unset(self):
+        default = os.path.join(self.home, ".config", "herdr")
+        os.makedirs(default)
+        open(os.path.join(default, "herdr.sock"), "w").close()
+        self.assertIs(self._gate(None), True)
+
+    def test_header_template_falls_back_on_empty_or_non_string(self):
+        for bad in ("", None, 5, ["x"]):
+            with self.subTest(bad=bad):
+                with mock.patch.object(
+                    session_boot, "_contract", return_value={"headerTemplate": bad}
+                ):
+                    self.assertEqual(
+                        session_boot.header_template(), session_boot._FALLBACK_TEMPLATE
+                    )
+        with mock.patch.object(
+            session_boot, "_contract", return_value={"headerTemplate": "T {x}"}
+        ):
+            self.assertEqual(session_boot.header_template(), "T {x}")
+
+    def test_plugin_enabled_is_false_not_none_on_error(self):
+        import tool_routing
+
+        with mock.patch.object(
+            tool_routing, "plugin_enabled", side_effect=RuntimeError("boom")
+        ):
+            self.assertIs(session_boot.plugin_enabled("x"), False)
+
+    def test_atlas_home_prefers_env_else_dot_atlas_under_home(self):
+        with mock.patch.dict(os.environ, {"ATLAS_HOME": "/elsewhere"}):
+            self.assertEqual(session_boot._atlas_home(), "/elsewhere")
+        with mock.patch.dict(os.environ, {"HOME": self.home}):
+            os.environ.pop("ATLAS_HOME", None)
+            self.assertEqual(
+                session_boot._atlas_home(), os.path.join(self.home, ".atlas")
+            )
+
+    def _notice(self, published, mkt=None):
+        own = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(session_boot.__file__))),
+            ".claude-plugin",
+            "plugin.json",
+        )
+        with open(own) as f:
+            installed = json.load(f)["version"]
+        doc = {"published": published}
+        if mkt is not None:
+            doc["marketplace"] = mkt
+        with open(os.path.join(self.home, "update-check.json"), "w") as f:
+            json.dump(doc, f)
+        with open(os.path.join(self.home, "update-check-state.json"), "w") as f:
+            json.dump({"last_start": 1_000_000.0}, f)
+        with mock.patch.dict(
+            os.environ, {"ATLAS_HOME": self.home, "ATLAS_UPDATE_CHECK": "on"}
+        ):
+            return session_boot.update_notice(now=1_000_001.0, popen=mock.Mock()), installed
+
+    def test_update_notice_shows_newer_version_with_marketplace(self):
+        got, installed = self._notice("999.0.0", "my-mkt")
+        self.assertEqual(
+            got,
+            f"atlas 999.0.0 is published (installed {installed}): "
+            "claude plugin marketplace update my-mkt && claude plugin update atlas@my-mkt",
+        )
+
+    def test_update_notice_bad_marketplace_falls_back_to_tech_tools(self):
+        got, _ = self._notice("999.0.0", "bad mkt;rm")
+        self.assertIn("marketplace update tech-tools", got)
+
+    def test_update_notice_rejects_malformed_published_version(self):
+        for bad in ("abc", "1.2.3.4", "999.0.0; rm", ""):
+            with self.subTest(bad=bad):
+                got, _ = self._notice(bad)
+                self.assertIsNone(got)
+
+    def test_update_notice_none_when_not_newer(self):
+        _, installed = self._notice("0.0.1")
+        got, _ = self._notice(installed)
+        self.assertIsNone(got)

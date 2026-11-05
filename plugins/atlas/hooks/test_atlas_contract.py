@@ -2014,3 +2014,22 @@ class DisplayChecksContract(unittest.TestCase):
     def test_hooks_json_still_declares_mod_module(self):
         hooks = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text("utf-8"))
         self.assertIn("../mod/register.ts", hooks.get("modules", []))
+
+
+class ModTypesContractSync(unittest.TestCase):
+    """types/index.d.ts must stay self-contained, so it carries a copy of the snapshot types in mod/contract.ts."""
+
+    BEGIN = "// ---- BEGIN shared snapshot types"
+    END = "// ---- END shared snapshot types ----"
+
+    def _block(self, rel: str) -> str:
+        text = (PLUGIN_ROOT / rel).read_text("utf-8")
+        self.assertEqual(text.count(self.BEGIN), 1, f"{rel}: expected one BEGIN marker")
+        self.assertEqual(text.count(self.END), 1, f"{rel}: expected one END marker")
+        start = text.index("\n", text.index(self.BEGIN)) + 1
+        return text[start : text.index(self.END)].strip()
+
+    def test_shared_snapshot_block_identical(self):
+        a, b = self._block("mod/contract.ts"), self._block("types/index.d.ts")
+        self.assertTrue(a, "shared block is empty")
+        self.assertEqual(a, b, "mod/contract.ts and types/index.d.ts shared snapshot blocks drifted; edit both")
