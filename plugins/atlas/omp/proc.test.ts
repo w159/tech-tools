@@ -115,7 +115,8 @@ test("async timeout kills the whole process group, not just the shell", async ()
 	expect(pid).toBeGreaterThan(1);
 	try {
 		expect(res.code).toBeNull();
-		expect(await waitDead(pid, 1_500)).toBe(true);
+		// SIGTERM, then SIGKILL 1 s later: a runner whose children inherit an ignored SIGTERM only dies at the SIGKILL.
+		expect(await waitDead(pid, 3_500)).toBe(true);
 	} finally {
 		cleanup(pid);
 	}

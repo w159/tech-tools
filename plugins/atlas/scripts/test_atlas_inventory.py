@@ -91,14 +91,25 @@ def test_components(tmp_path):
     assert c["mods"] == [{"file": "mod/panel.ts"}] and c["omp"] == [{"file": "omp/ext.ts"}]
 
 
-def test_markdown_summary_and_untested_count(tmp_path):
+_HAS_TS = bool(shutil.which("node") and inv.find_typescript())
+
+
+@pytest.mark.parametrize("parser, untested", [
+    # owned functions and methods: open, inner, helper, fetch, draw, k, run (a class method, typescript only);
+    # helper and draw are named by tests. The pattern scan cannot see `Ext.run`, so it has 6 symbols, not 7.
+    pytest.param("typescript", "5 of 7", marks=pytest.mark.skipif(not _HAS_TS, reason="needs node and typescript")),
+    pytest.param("pattern", "4 of 6"),
+])
+def test_markdown_summary_and_untested_count(tmp_path, monkeypatch, parser, untested):
+    if parser == "pattern":
+        monkeypatch.setattr(inv, "find_typescript", lambda: None)
     root = _plugin(tmp_path)
     md = inv.markdown(inv.build(root, True))
+    assert f"TypeScript parser: {parser}." in md
     assert "| Python source files | 1 |" in md and "Skills: 2 (1 manual)" in md
     assert "colony/herdr-web-ui/src (vendored)" in md
     assert "| Stop | `*` | `python3 x.py` |" in md
-    # owned functions and methods: open, inner, helper, fetch, draw, k, run; helper and draw are named by tests
-    assert "Atlas-owned functions and methods that no test file names: 5 of 7." in md
+    assert f"Atlas-owned functions and methods that no test file names: {untested}." in md
 
 
 def test_area_buckets():
