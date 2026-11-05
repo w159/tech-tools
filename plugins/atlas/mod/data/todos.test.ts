@@ -4,7 +4,7 @@
 // file, computeCounts, currentPhase precedence.
 import { describe, expect, test } from 'claude-code/testing';
 import type { Contract, FsLike, TodoItem } from '../contract';
-import { DEPT, computeCounts, currentPhase, groupTodos, readTodos } from './todos';
+import { DEPT, computeCounts, currentPhase, groupTodos, isPlanItem, readTodos, routeCounts } from './todos';
 
 const CONTRACT: Contract = {
   phases: [],
@@ -215,6 +215,139 @@ describe('groupTodos', () => {
     const adv = (id: string, created_at: number, session_id = 's1') => ({ ...item({ id, session_id }), origin: 'advisor', created_at }) as TodoItem;
     const groups = groupTodos([adv('mid', 20), adv('old', 10, 'other-session'), adv('new', 30)], CONTRACT, 's1');
     expect(groups.at(-1)?.items.map(i => i.id)).toEqual(['new', 'mid', 'old']);
+  });
+});
+
+describe('groupTodos row shaping', () => {
+  const one = (over: Partial<TodoItem> & { origin?: string }) =>
+    groupTodos([{ ...item({ phase: 'test' }), ...over } as TodoItem], CONTRACT, 's1')[0]!.items[0]!;
+
+  test('clips content at 160 chars with an ellipsis and evidence at 200', () => {
+    const exact = one({ content: 'a'.repeat(160), evidence: 'e'.repeat(200) });
+    expect(exact.content).toBe('a'.repeat(160));
+    expect(exact.evidence).toBe('e'.repeat(200));
+    const over = one({ content: 'a'.repeat(161), evidence: 'e'.repeat(201) });
+    expect(over.content).toBe('a'.repeat(159) + '…');
+    expect(over.evidence).toBe('e'.repeat(199) + '…');
+  });
+
+  test('owner passes through, absent owner and empty evidence become null', () => {
+    expect(one({ owner: 'bob' }).owner).toBe('bob');
+    const bare = one({ evidence: '' });
+    expect(bare.owner).toBeNull();
+    expect(bare.evidence).toBeNull();
+  });
+
+  test('origin is carried onto the row only when set', () => {
+    expect(one({ origin: 'manual' }).origin).toBe('manual');
+    expect('origin' in one({})).toBe(false);
+  });
+
+  test('advisor ordering treats a missing created_at as 0, below a positive one', () => {
+    const adv = (id: string, created_at?: number) => ({ ...item({ id }), origin: 'advisor', created_at }) as TodoItem;
+    const g = groupTodos([adv('none'), adv('half', 0.5)], CONTRACT, 's1').at(-1)!;
+    expect(g.items.map(i => i.id)).toEqual(['half', 'none']);
+  });
+
+  test('unknown contract phase gets an upper-cased dept and a dot glyph; completed advisors are dropped', () => {
+    const C: Contract = { ...CONTRACT, todoPhases: ['custom'] as never };
+    const g = groupTodos([item({ phase: 'custom' as never })], C, 's1');
+    expect(g[0]).toMatchObject({ phase: 'custom', dept: 'CUSTOM', glyph: '·' });
+    const adv = { ...item({ status: 'completed' }), origin: 'advisor' } as TodoItem;
+    expect(groupTodos([adv], C, 's1')).toEqual([]);
+  });
+
+  test('in_progress sorts before pending before completed among live rows', () => {
+    const g = groupTodos([
+      item({ id: 'c', phase: 'test', status: 'completed' }),
+      item({ id: 'p', phase: 'test', status: 'pending' }),
+      item({ id: 'i', phase: 'test', status: 'in_progress' }),
+    ], CONTRACT, 's1')[0]!;
+    expect(g.items.map(i => i.id)).toEqual(['i', 'p', 'c']);
+  });
+});
+
+describe('isPlanItem / routeCounts / computeCounts with dispatch rows', () => {
+  const disp = (id: string, status: TodoItem['status'] = 'completed') => ({ ...item({ id, status }), origin: 'dispatch' }) as TodoItem;
+
+  test('isPlanItem is false only for dispatch-origin rows', () => {
+    expect(isPlanItem({ origin: 'dispatch' })).toBe(false);
+    expect(isPlanItem({ origin: 'session' })).toBe(true);
+    expect(isPlanItem({})).toBe(true);
+  });
+
+  test('computeCounts ignores dispatch rows', () => {
+    const c = computeCounts([item({ id: 'a', phase: 'test', status: 'completed' }), disp('d1'), disp('d2', 'pending')], CONTRACT);
+    expect(c.total).toBe(1);
+    expect(c.done).toBe(1);
+    expect(c.byPhase.test).toEqual({ done: 1, total: 1 });
+  });
+
+  test('routeCounts counts every non-advisor group item except dispatch rows', () => {
+    const row = (id: string, status: string, origin?: string) => ({ id, content: id, status, owner: null, evidence: null, live: true, ...(origin ? { origin } : {}) });
+    const groups = [
+      { phase: 'test', dept: 'TEST LAB', glyph: 'T', items: [row('a', 'completed'), row('b', 'pending'), row('dd', 'completed', 'dispatch')], done: 1, total: 3 },
+      { phase: 'unsorted', dept: 'UNSORTED', glyph: '·', items: [row('c', 'completed')], done: 1, total: 1 },
+      { phase: 'advisor', dept: 'ADVISOR NOTES', glyph: '·', items: [row('adv', 'completed')], done: 0, total: 1 },
+    ] as unknown as Parameters<typeof routeCounts>[0];
+    expect(routeCounts(groups)).toEqual({ done: 2, total: 3 });
+    expect(routeCounts([])).toEqual({ done: 0, total: 0 });
+  });
+});
+
+describe('DEPT', () => {
+  test('maps every phase to its department label', () => {
+    expect(DEPT).toEqual({
+      research: 'ARCHIVE', theory: 'OBSERVATORY', test: 'TEST LAB', validate: 'GATE',
+      implement: 'FORGE', verify: 'TRIBUNAL', done: 'HARBOUR',
+    });
+  });
+});
+
+describe('readTodos path and filters', () => {
+  test('strips trailing slashes from root and requires session match for completed rows', async () => {
+    const { fs } = memFs(board([item({ id: 'a' })]));
+    expect((await readTodos(fs, '/r//', 's1', [], CONTRACT)).items.map(i => i.id)).toEqual(['a']);
+  });
+
+  test('a read failure after a successful stat yields an empty list', async () => {
+    const fs: FsLike = {
+      async read() { throw new Error('EACCES'); },
+      async stat() { return { size: 1, mtimeMs: 5 }; },
+      async exists() { return true; },
+      async list() { return []; },
+    };
+    const r = await readTodos(fs, '/r', 's1', [], CONTRACT);
+    expect(r.items).toEqual([]);
+    expect(r.cache.mtimeMs).toBe(5);
+  });
+
+  test('a throwing stat is treated as a missing file', async () => {
+    const fs: FsLike = {
+      async read() { throw new Error('x'); },
+      async stat() { throw new Error('x'); },
+      async exists() { return false; },
+      async list() { return []; },
+    };
+    expect(await readTodos(fs, '/r', 's1', [], CONTRACT)).toEqual({ items: [], cache: { mtimeMs: 0, items: [] } });
+  });
+
+  test('a custom itemPhasePrefix is escaped and parsed', async () => {
+    const C: Contract = { ...CONTRACT, itemPhasePrefix: '(.*)<phase>: ' };
+    const { fs } = memFs(board([item({ id: 'a', content: '(.*)test: x' }), item({ id: 'b', content: 'zz test: x' })]));
+    expect((await readTodos(fs, '/r', 's1', [], C)).items.map(i => i.phase)).toEqual(['test', undefined]);
+  });
+
+  test('a prefix without <phase> never stamps a phase', async () => {
+    const C: Contract = { ...CONTRACT, itemPhasePrefix: 'fixed ' };
+    const { fs } = memFs(board([item({ id: 'a', content: 'fixed test' })]));
+    expect((await readTodos(fs, '/r', 's1', [], C)).items[0]!.phase).toBeUndefined();
+  });
+});
+
+describe('currentPhase without a stamped active phase', () => {
+  test('in_progress item lacking a phase falls through to the header', () => {
+    expect(currentPhase([item({ status: 'in_progress' })], 'theory')).toEqual({ phase: 'theory', source: 'header' });
   });
 });
 

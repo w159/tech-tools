@@ -151,3 +151,111 @@ test('readRoster: first present candidate wins; unreadable/missing file yields n
 	broken.files.set(`${ROOT}/.atlas/.run/channels.json`, '{oops');
 	expect(await readRoster(broken, ROOT, ['proj@main'])).toEqual({ channel: null, members: [] });
 });
+
+async function readTs(ts: unknown): Promise<string> {
+	const fs = new MemFs();
+	boardFile(fs, [{ ...(note(1, 0, 't') as object), ts }]);
+	const [n] = await new NoteReader(fs, ROOT).read('proj@main');
+	return n!.ts;
+}
+
+test('ts normalisation: epoch seconds and ms both become ISO; strings parse or pass through; others are empty', async () => {
+	expect(await readTs(1_700_000_000)).toBe('2023-11-14T22:13:20.000Z'); // seconds
+	expect(await readTs(1_700_000_000_000)).toBe('2023-11-14T22:13:20.000Z'); // ms
+	expect(await readTs('2023-11-14T22:13:20Z')).toBe('2023-11-14T22:13:20.000Z');
+	expect(await readTs('not a date')).toBe('not a date');
+	expect(await readTs(null)).toBe('');
+	expect(await readTs(true)).toBe('');
+	expect(await readTs(1e18)).toBe(''); // out of Date range
+});
+
+test('note field normalisation: owner/text defaults, seq coercion, optional fields, channel is stamped', async () => {
+	const fs = new MemFs();
+	boardFile(fs, [
+		{ channel: 'proj@main', seq: '5', ts: 1_700_000_000, to: 'x', item: 'i-1', kind: 'exit', owner: 'o', text: 'hi' },
+		{ channel: 'proj@main', seq: 'junk', owner: 7, text: 9 },
+		'a string line' as unknown as object,
+		null as unknown as object,
+		{ channel: 'other', seq: 1 },
+	]);
+	const notes = await new NoteReader(fs, ROOT).read('proj@main');
+	expect(notes).toEqual([
+		{ ts: '', seq: 0, owner: '', to: undefined, item: undefined, text: '', channel: 'proj@main', kind: undefined },
+		{ ts: '2023-11-14T22:13:20.000Z', seq: 5, owner: 'o', to: 'x', item: 'i-1', text: 'hi', channel: 'proj@main', kind: 'exit' },
+	]);
+});
+
+test('read: ties on seq break by ts ascending; non-jsonl files are ignored', async () => {
+	const fs = new MemFs();
+	boardFile(fs, [note(1, 1_700_000_200, 'late'), note(1, 1_700_000_100, 'early'), note(1, 1_700_000_300, 'latest')]);
+	fs.files.set(`${ROOT}/.atlas/.run/board/readme.txt`, JSON.stringify(note(0, 1, 'ignored')));
+	const notes = await new NoteReader(fs, ROOT).read('proj@main');
+	expect(notes.map((n) => n.text)).toEqual(['early', 'late', 'latest']);
+});
+
+test('read: a failing stat forces a re-read, and a vanished file drops its cached notes', async () => {
+	const fs = new MemFs();
+	const name = boardFile(fs, [note(1, 1, 'one')]);
+	const reader = new NoteReader(fs, ROOT);
+	expect((await reader.read('proj@main')).length).toBe(1);
+	const realStat = fs.stat.bind(fs);
+	fs.stat = async () => {
+		throw new Error('stat boom');
+	};
+	const before = fs.reads;
+	expect((await reader.read('proj@main')).length).toBe(1);
+	expect(fs.reads).toBe(before + 1);
+	fs.stat = realStat;
+	fs.files.delete(`${ROOT}/.atlas/.run/${name}`);
+	fs.list = async () => [name.replace('board/', '')];
+	expect(await reader.read('proj@main')).toEqual([]);
+});
+
+test('read: a read that throws skips that file only', async () => {
+	const fs = new MemFs();
+	boardFile(fs, [note(1, 1, 'a')]);
+	const good = boardFile(fs, [note(2, 2, 'b')]);
+	const realRead = fs.read.bind(fs);
+	fs.read = async (p: string) => {
+		if (p.endsWith('owner' + (fileNo - 2) + '.jsonl')) throw new Error('EIO');
+		return realRead(p);
+	};
+	expect(good).toContain('board/');
+	expect((await new NoteReader(fs, ROOT).read('proj@main')).map((n) => n.text)).toEqual(['b']);
+});
+
+test('readRoster: null or non-object channels, and junk members, are tolerated; all member fields map through', async () => {
+	const withChannels = (channels: unknown) => {
+		const fs = new MemFs();
+		fs.files.set(`${ROOT}/.atlas/.run/channels.json`, JSON.stringify({ channels }));
+		return fs;
+	};
+	expect(await readRoster(withChannels(null), ROOT, ['c'])).toEqual({ channel: null, members: [] });
+	expect(await readRoster(withChannels('str'), ROOT, ['c'])).toEqual({ channel: null, members: [] });
+	const empty = new MemFs();
+	empty.files.set(`${ROOT}/.atlas/.run/channels.json`, '{}');
+	expect(await readRoster(empty, ROOT, ['c'])).toEqual({ channel: null, members: [] });
+	expect(await readRoster(new MemFs(), ROOT, ['c'])).toEqual({ channel: null, members: [] });
+	const r = await readRoster(
+		withChannels({
+			c: {
+				members: [
+					null,
+					'x',
+					7,
+					{ name: 5 },
+					{ name: 'full', role: 'r', pane_id: '%3', pid: 42, ended_at: 'T', exit_code: 3 },
+					{ name: 'odd', role: 5, pane_id: 9, pid: '42', ended_at: 5, exit_code: '3' },
+				],
+			},
+			notArray: { members: 'nope' },
+		}),
+		ROOT,
+		['notArray', 'c'],
+	);
+	expect(r.channel).toBe('c');
+	expect(r.members).toEqual([
+		{ name: 'full', role: 'r', pane_id: '%3', pid: 42, ended_at: 'T', exit_code: 3 },
+		{ name: 'odd', role: undefined, pane_id: undefined, ended_at: null },
+	]);
+});

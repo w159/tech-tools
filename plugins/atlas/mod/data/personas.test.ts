@@ -177,3 +177,85 @@ describe('stableHue', () => {
     expect(stableHue('impl-auth')).not.toBe(stableHue('verifier-ui'));
   });
 });
+
+describe('stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6)', () => {
+  // Expected values computed with an independent Python FNV-1a + HSL implementation.
+  const cases: [string, string][] = [
+    ['', '#d6d85a'],
+    ['a', '#d85a84'],
+    ['x', '#5ad879'],
+    ['abc', '#715ad8'],
+    ['zz', '#93d85a'],
+    ['impl-auth', '#d85a84'],
+    ['verifier-ui', '#d85ab7'],
+    ['explorer-map', '#ced85a'],
+    ['dispatch-9', '#5ad87e'],
+  ];
+  for (const [name, hex] of cases) {
+    test(`stableHue(${JSON.stringify(name)}) = ${hex}`, () => {
+      expect(stableHue(name)).toBe(hex);
+    });
+  }
+});
+
+describe('parseFrontmatter edge cases', () => {
+  test('accepts a one-character key and rejects a leading colon', () => {
+    expect(parseFrontmatter('---\na: 1\nname: n\n---')).toEqual({ a: '1', name: 'n' });
+    expect(parseFrontmatter('---\n: oops\nname: n\n---')).toEqual({});
+  });
+
+  test('strips matching single and double quotes, leaves mismatched or lone quotes', () => {
+    const fm = parseFrontmatter(`---\na: 'x y'\nb: "x y"\nc: 'x"\nd: "\ne: ""\nf: ''\n---`);
+    expect(fm.a).toBe('x y');
+    expect(fm.b).toBe('x y');
+    expect(fm.c).toBe(`'x"`);
+    expect(fm.d).toBe('"');
+    expect(fm.e).toBe('');
+    expect(fm.f).toBe('');
+  });
+
+  test('stops at the first non key:value line', () => {
+    expect(parseFrontmatter('---\nname: n\njust text\nmodel: m\n---')).toEqual({ name: 'n' });
+  });
+
+  test('skips blank lines inside the head', () => {
+    expect(parseFrontmatter('---\nname: n\n\nmodel: m\n---')).toEqual({ name: 'n', model: 'm' });
+  });
+});
+
+describe('loadContract defaults', () => {
+  test('fills every missing field with its default', async () => {
+    const fs = memFs({ [`${ROOT}/contracts/operating-contract.json`]: '{}' });
+    expect(await loadContract(fs, ROOT)).toEqual({
+      phases: [],
+      todoPhases: [],
+      headerFirstLinePattern: '',
+      itemPhasePrefix: '[<phase>] ',
+    });
+  });
+
+  test('keeps a custom itemPhasePrefix and defaults a phase without id', async () => {
+    const fs = memFs({
+      [`${ROOT}/contracts/operating-contract.json`]: JSON.stringify({ itemPhasePrefix: '<<p>> ', phases: [{}] }),
+    });
+    const c = await loadContract(fs, ROOT);
+    expect(c.itemPhasePrefix).toBe('<<p>> ');
+    expect(c.phases[0]!.id).toBe('research');
+  });
+
+  test('throws when the contract file is missing', async () => {
+    await expect(loadContract(memFs({}), ROOT)).rejects.toThrow('operating contract not found');
+  });
+});
+
+describe('loadPersonas skips', () => {
+  test('skips files without a name and honours explicit fields', async () => {
+    const fs = memFs({
+      [`${ROOT}/agents/a.md`]: '---\ndescription: d\n---\n',
+      [`${ROOT}/agents/b.md`]: '---\nname: b\nmodel: haiku\neffort: high\ncolor: red\ndescription: dd\n---\n',
+    });
+    expect(await loadPersonas(fs, ROOT)).toEqual([
+      { name: 'b', model: 'haiku', effort: 'high', color: 'red', description: 'dd' },
+    ]);
+  });
+});

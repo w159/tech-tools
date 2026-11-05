@@ -1,7 +1,7 @@
 // Mission Control band: filled truecolor panel, width tiers, row budget, idle state, chips, sparkline.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { bandTree, planRows, shortTool } from './band';
+import { bandTree, planRows, railPhase, shortTool } from './band';
 import { callBuckets, liveWorkers } from './data/live';
 import { pushCall } from './data/orchestration';
 import { busySnap, NOW } from './live_fixture';
@@ -233,6 +233,75 @@ describe('Mission Control band', () => {
   });
 });
 
+describe('band layout details', () => {
+  test('tier edges: 80 columns still draws lanes, 79 is the single title row; panel is a non-shrinking column', () => {
+    expect(panel(80).rows.length).toBeGreaterThan(1);
+    expect(panel(79).rows).toHaveLength(1);
+    const { node } = panel(160);
+    expect(node.props).toMatchObject({ flexDirection: 'column', flexShrink: 0 });
+  });
+  test('lane columns: name padded to 23 and role to 12 at full width; name to 17 and no role below 120', () => {
+    const full = text(laneOf(panel(160).rowNodes, 'explorer-1'));
+    expect(full).toContain(`explorer-1${' '.repeat(14)}explorer${' '.repeat(5)}Grep`);
+    const mid = text(laneOf(panel(100).rowNodes, 'explorer-1'));
+    expect(mid).toContain(`explorer-1${' '.repeat(9)}Grep`);
+    expect(mid).not.toContain('explorer ');
+  });
+  test('ticker nicks are bold and take their hashed colour', () => {
+    const ticker = laneOf(panel(160).rowNodes, '#lead-1');
+    const nick = cells(ticker).find((t) => t.props.children === 'explorer-1')!;
+    expect(nick.props.bold).toBe(true);
+    expect(nick.props.backgroundColor).toBe(MOCHA.panel);
+    expect(nick.props.color).toMatch(/^#[0-9a-f]{6}$/);
+  });
+  test('title names the board: channel folder, else project folder, else atlas', () => {
+    const title = (over: Record<string, unknown>) => panel(160, { snapshot: busySnap(over as never) }).rows[0]!;
+    expect(title({ channel: 'proj@main/lead-1' })).toContain('proj@main  ·  wave');
+    expect(title({ channel: null, root: '/work/myproj/' })).toContain('myproj  ·  wave');
+    expect(title({ channel: null, root: null })).toContain('atlas  ·  wave');
+  });
+  test('the current rail pill is bold; lanes stretch the target column so the row ends at the age', () => {
+    const { rowNodes, rows } = panel(160);
+    const now = cells(rowNodes[1]!).find((t) => String(t.props.children).includes('IMPLEMENT'))!;
+    expect(now.props.bold).toBe(true);
+    expect(rows.find((r) => r.includes('explorer-1'))).toMatch(/ 42s $/);
+    expect(panel(200).rows.find((r) => r.includes('explorer-1'))).toMatch(/ 42s $/);
+  });
+  test('a one-line board still shows when only six rows are allowed', () => {
+    const { rows } = panel(160, { snapshot: busySnap({ todos: boardTodos as any }), maxRows: 6 });
+    expect(rows.some((r) => r.includes('1/3'))).toBe(true);
+    expect(rows.length).toBeLessThanOrEqual(6);
+  });
+  test('footer buttons call the right handler: panes by id, the board toggles', () => {
+    const seen: string[] = [];
+    const buttonEls = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button') } as unknown as ClientElements;
+    const node = bandTree(buttonEls, { snapshot: idleSnap(), live: [], gates: [], columns: 160, tick: 0, maxRows: 12 }, { openView: (v) => seen.push(`open:${v}`), toggleTodos: () => seen.push('board') }) as unknown as Node;
+    const last = (node.props.children as Node[]).at(-1)!;
+    const btns = (last.props.children as Node[]).filter((k) => k.kind === 'Button');
+    expect(btns.map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'o']);
+    for (const b of btns) b.props.onPress();
+    expect(seen).toEqual(['open:route', 'open:team', 'open:channel', 'open:gates', 'board']);
+  });
+  test('idle footer with controls never overflows its row and shows the hint only when it fits', () => {
+    const buttonEls = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button') } as unknown as ClientElements;
+    const kids = (n: Node): Node[] => (Array.isArray(n.props.children) ? n.props.children : n.props.children == null ? [] : [n.props.children]).filter((x: unknown) => typeof x === 'object' && x !== null) as Node[];
+    const width = (n: Node): number => kids(n).reduce((a, k) => a + (k.kind === 'Button' ? 3 + String(k.props.label).length : textWidth(String(k.props.children ?? ''))), 0);
+    const footerOf = (columns: number): Node => {
+      const snapshot = idleSnap();
+      const node = bandTree(buttonEls, { snapshot, live: [], gates: [], columns, tick: 0, maxRows: 12 }, { openView() {}, toggleTodos() {} }) as unknown as Node;
+      return (node.props.children as Node[]).at(-1)!;
+    };
+    const hasHint = (n: Node): boolean => kids(n).some((k) => k.kind === 'Text' && String(k.props.children).includes('click or ctrl+x Tab'));
+    for (let columns = 80; columns <= 200; columns += 1) {
+      const f = footerOf(columns);
+      expect([columns, width(f) <= columns]).toEqual([columns, true]);
+      expect(kids(f).filter((k) => k.kind === 'Button')).toHaveLength(5);
+    }
+    expect(hasHint(footerOf(110))).toBe(false);
+    expect(hasHint(footerOf(120))).toBe(true);
+  });
+});
+
 describe('band parity with the omp mission panel', () => {
   const rowsOf = (over: Record<string, unknown> = {}) => panel(200, { gates: [gate], ...over }).rows;
   test('running band: no key hints or control buttons, only the task bar and gate chips', () => {
@@ -279,5 +348,24 @@ describe('band parity with the omp mission panel', () => {
     expect(collapsed).not.toContain('[research]');
     const open = panel(200, { snapshot: busySnap({ todos: todos as any }), todoExpanded: true, maxRows: 14 }).all;
     expect(open).not.toMatch(/\[(research|label)\]/);
+  });
+});
+
+describe('railPhase', () => {
+  const snap = (phase: string) => ({ ...busySnap(), phase }) as ReturnType<typeof busySnap>;
+  const ids = busySnap().contract.phases.map((p) => p.id as string);
+
+  test('an on-rail phase is lit as itself, ignoring lastPhase', () => {
+    const on = ids[1]!;
+    expect(railPhase(snap(on), ids[2])).toBe(on);
+  });
+  test('an off-rail phase falls back to the last rail phase seen', () => {
+    expect(railPhase(snap('blocked'), ids[2])).toBe(ids[2]);
+  });
+  test('an off-rail phase with no or unknown lastPhase lights the first rail phase', () => {
+    const first = railPhase(snap(ids[0]!));
+    expect(railPhase(snap('blocked'))).toBe(first);
+    expect(railPhase(snap('blocked'), null)).toBe(first);
+    expect(railPhase(snap('blocked'), 'nonsense')).toBe(first);
   });
 });

@@ -1,7 +1,8 @@
 // The core model over the captured run (contracts/core-fixture.ts) and small synthetic inputs for the edge cases.
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
-import { claimsOf, coreModel, hasCore, pairClaims, offloadOf, parseFindings, tok, type CoreInput } from './core';
+import type { TodoItem } from '../contract';
+import { claimsOf, coreModel, hasCore, pairClaims, offloadOf, parseFindings, roleOfName, tok, type CoreInput } from './core';
 
 const input = (over: Partial<CoreInput> = {}): CoreInput => ({
   ...coreFixture,
@@ -125,5 +126,114 @@ describe('claim pairing by id', () => {
   test('a verdict whose id no claim names falls back to time order, and tokens match whole words only', () => {
     const claims = claimsOf([rep('implementer-1', '2026-10-27T09:00:00Z', 'about f1x')], roles);
     expect(pairClaims(claims, [finding('f1', '2026-10-27T09:20:00Z')])[0]?.matched).toBe('f1');
+  });
+});
+
+describe('core model: context accounting and defaults', () => {
+  const emptyIn = (over: Partial<CoreInput>): CoreInput =>
+    ({ findings: '', teams: [], matrix: '', logs: {}, reports: [], todos: [], header: { ok: 0, total: 0 }, openGates: 0, ...over });
+
+  test('omp usage sums input + cacheRead + cacheWrite; claude usage sums its three fields', () => {
+    const omp = JSON.stringify({ type: 'message_end', message: { role: 'assistant', usage: { input: 1, cacheRead: 20, cacheWrite: 300 } } });
+    expect(offloadOf('w-1', omp, '').brief).toBe(321);
+    const cl = JSON.stringify({ type: 'assistant', message: { id: 'a', usage: { input_tokens: 1, cache_read_input_tokens: 20, cache_creation_input_tokens: 300 } } });
+    expect(offloadOf('w-1', cl, '').brief).toBe(321);
+  });
+
+  test('assistant lines with the same message id collapse to the latest usage; id-less lines stay separate', () => {
+    const a = (id: string | undefined, n: number) => JSON.stringify({ type: 'assistant', message: { ...(id ? { id } : {}), usage: { input_tokens: n } } });
+    const dup = offloadOf('w-1', [a('m1', 100), a('m1', 300)].join('\n'), '');
+    expect([dup.brief, dup.peak, dup.kept]).toEqual([300, 300, 0]);
+    const anon = offloadOf('w-1', [a(undefined, 100), a(undefined, 300)].join('\n'), '');
+    expect([anon.brief, anon.peak, anon.kept]).toEqual([100, 300, 200]);
+  });
+
+  test('offloadOf: model from the costliest modelUsage entry, cost from total_cost_usd, no calls => zeros', () => {
+    const log = JSON.stringify({ type: 'result', total_cost_usd: 1.25, modelUsage: { cheap: { costUSD: 0.1 }, dear: { costUSD: 1 } } });
+    expect(offloadOf('w-1', log, 'abcde')).toEqual({
+      name: 'w-1', role: 'w', model: 'dear', brief: 0, peak: 0, kept: 0, returned: 2, costUsd: 1.25, finished: true,
+    });
+    expect(offloadOf('w-1', 'not json\n{bad', '').finished).toBe(false);
+    expect(offloadOf('w-1', JSON.stringify({ type: 'result' }), '').model).toBeNull();
+  });
+
+  test('roleOfName strips a trailing tag containing a digit only', () => {
+    expect(roleOfName('implementer-0278')).toBe('implementer');
+    expect(roleOfName('docs-curator-2')).toBe('docs-curator');
+    expect(roleOfName('impl-auth')).toBe('impl-auth');
+    expect(roleOfName('test-engineer-f768')).toBe('test-engineer');
+  });
+
+  test('contract evidence tally counts completed items with non-blank evidence; verifiedDone follows verified ids', () => {
+    const t = (id: string, status: string, evidence?: string) => ({ id, content: id, status, session_id: 's', evidence }) as TodoItem;
+    const m = coreModel(emptyIn({
+      findings: JSON.stringify([{ id: 'a', status: 'verified' }, { id: 'b', status: 'rejected' }]),
+      todos: [t('a', 'completed', 'proof'), t('b', 'completed', '   '), t('c', 'completed'), t('d', 'pending', 'x')],
+      openGates: 2,
+      header: { ok: 1, total: 2 },
+    }));
+    expect(m.contract).toEqual({ header: { ok: 1, total: 2 }, evidence: { ok: 1, total: 3 }, openGates: 2, verifiedDone: { ok: 1, total: 3 } });
+  });
+
+  test('offload ratio is kept/returned, null when either side is zero', () => {
+    const log = JSON.stringify({ type: 'assistant', message: { id: 'a', usage: { input_tokens: 10 } } }) + '\n' + JSON.stringify({ type: 'assistant', message: { id: 'b', usage: { input_tokens: 50 } } });
+    const reports = [{ owner: 'w-1', text: 'x'.repeat(8), at: 1 }];
+    expect(coreModel(emptyIn({ logs: { 'w-1': log }, reports })).offload).toMatchObject({ kept: 40, returned: 2, ratio: 20 });
+    expect(coreModel(emptyIn({ logs: { 'w-1': log } })).offload.ratio).toBeNull();
+    expect(coreModel(emptyIn({ logs: { 'w-1': 'x' }, reports })).offload.ratio).toBeNull();
+  });
+
+  test('a one-token report still yields a ratio; non-finite numbers in team records fall back to defaults', () => {
+    const log = JSON.stringify({ type: 'assistant', message: { id: 'a', usage: { input_tokens: 10 } } }) + '\n' + JSON.stringify({ type: 'assistant', message: { id: 'b', usage: { input_tokens: 50 } } });
+    const one = coreModel(emptyIn({ logs: { 'w-1': log }, reports: [{ owner: 'w-1', text: 'abcd', at: 1 }] }));
+    expect(one.offload).toMatchObject({ kept: 40, returned: 1, ratio: 40 });
+    const matrix = JSON.stringify({ classes: { fix: { low: { team: [{ role: 'implementer' }] } } } });
+    const inf = '{"class":"fix","effort":"low","max_parallel":1e999,"members":[]}';
+    expect(coreModel(emptyIn({ matrix, teams: [{ name: 't.json', text: inf }] })).routes[0]!.maxParallel).toBe(1);
+  });
+
+  test('routes: defaults, ordering by created, class and effort aliases, labelled seats', () => {
+    const matrix = JSON.stringify({
+      class_aliases: { bug: 'fix' },
+      effort_aliases: { lo: 'low' },
+      classes: { fix: { low: { team: [{ role: 'implementer', count: 2, model: 'sonnet' }, { role: 'verifier', seat: 'deep', effort: 'high' }] } } },
+    });
+    const mk = (extra: object, created: number) => JSON.stringify({ class: 'bug', effort: 'lo', created, members: [], ...extra });
+    const m = coreModel(emptyIn({
+      matrix,
+      teams: [{ name: 'late.json', text: mk({ name: 'L' }, 9) }, { name: 'early.json', text: mk({ name: 'E', max_parallel: 3, isolation: 'worktree', team_id: 'T-1' }, 2) }, { name: 'bad.json', text: '{"x":1}' }],
+    }));
+    expect(m.routes.map((r) => [r.teamId, r.name, r.maxParallel, r.isolation])).toEqual([['T-1', 'E', 3, 'worktree'], ['late', 'L', 1, '']]);
+    expect(m.routes[0]!.seats).toEqual([
+      { role: 'implementer', count: 2, model: 'sonnet', effort: 'lo', ran: [] },
+      { role: 'verifier', seat: 'deep', count: 1, model: 'inherit', effort: 'high', ran: [] },
+    ]);
+  });
+
+  test('labelled seats of one role match only the members spawned for that label', () => {
+    const matrix = JSON.stringify({ classes: { fix: { low: { team: [
+      { role: 'verifier', seat: 'a', model: 'haiku' }, { role: 'verifier', seat: 'b', model: 'sonnet' },
+    ] } } } });
+    const members = [{ name: 'verifier-1', role: 'verifier', seat: 'a' }, { name: 'verifier-2', role: 'verifier', seat: 'b' }];
+    const log = (model: string) => JSON.stringify({ type: 'assistant', message: { id: 'z', model, usage: { input_tokens: 1 } } });
+    const m = coreModel(emptyIn({
+      matrix,
+      teams: [{ name: 't.json', text: team(members) }],
+      logs: { 'verifier-1': log('claude-haiku-5'), 'verifier-2': log('claude-sonnet-5') },
+    }));
+    expect(m.routes[0]!.seats.map((s) => s.ran)).toEqual([['claude-haiku-5'], ['claude-sonnet-5']]);
+    expect(m.routes[0]!.drift).toEqual([]);
+  });
+
+  test('hasCore is true for each kind of content on its own', () => {
+    const base = coreModel(emptyIn({}));
+    expect(hasCore({ ...base, verdicts: [{ id: 'a', status: 'verified', title: '', by: '', at: 0, evidence: '' }] })).toBe(true);
+    expect(hasCore({ ...base, claims: [{ owner: 'o', role: 'r', status: 'DONE', at: 0, matched: null }] })).toBe(true);
+    expect(hasCore(coreModel(emptyIn({ logs: { 'w-1': '' } })))).toBe(true);
+    expect(hasCore(coreModel(emptyIn({ matrix: '{}', teams: [{ name: 't.json', text: team([]) }] })))).toBe(true);
+  });
+
+  test('tok formats at the 1000 and 1,000,000 boundaries', () => {
+    expect([tok(0), tok(912), tok(999.6), tok(1000), tok(58800), tok(999999), tok(1_000_000), tok(1_250_000)]).toEqual(['0', '912', '1000', '1.0k', '58.8k', '1000.0k', '1.0M', '1.3M']);
   });
 });

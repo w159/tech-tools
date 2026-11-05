@@ -41,6 +41,9 @@ const cases: Record<string, SidebarModel> = {
   cols30: v('route', { columns: 30 }),
   cols50: v('channel', { columns: 50, tick: 1 }),
   cols120: v('team', { columns: 120, rows: 24 }),
+  // route view with a task row opened: a pending task with no evidence, and a completed one (shown from DONE_MIN_COLS) with its evidence
+  routeOpenPending: v('route', { ui: ui({ view: 'route', expanded: 'task:c' }) }),
+  routeOpenDone: v('route', { columns: 100, ui: ui({ view: 'route', expanded: 'task:a' }), snapshot: { ...busy, todoGroups, phase: 'research', now: NOW } }),
 };
 
 export const serializeGolden = (): string =>

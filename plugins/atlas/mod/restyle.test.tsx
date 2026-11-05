@@ -2,11 +2,12 @@
 // Runs under `claude plugin test` (claude-code/testing): no fs, network or process.
 
 import { expect, test } from 'claude-code/testing'
-import type { AgentInfo, EngineInterface, On } from 'claude-code'
+import type { AgentInfo, EngineInterface, On, RenderElement } from 'claude-code'
 import {
   noisyTree,
   assistantTree,
   durationTree,
+  PHASE_RE,
   personaFor,
   registerRestyle,
   spinnerSuffix,
@@ -282,4 +283,146 @@ test('noisy tool: huge Bash output collapses to a one-line size badge; small/run
   expect(noisyTree({ ...base, output: { stdout: 'ok' } })).toBeNull()
   expect(noisyTree({ ...base, isRunning: true, output: 'x'.repeat(20000) })).toBeNull()
   expect(noisyTree({ ...base, tool: 'Edit', output: 'x'.repeat(20000) })).toBeNull()
+})
+
+// ---- mutation-hardening: what the restyled rows actually say ----
+
+const callBase = { isRunning: false, isErrored: false, isInterrupted: false }
+const taskProps = (over: Record<string, unknown> = {}) => ({
+  tool: 'Task',
+  input: { subagentType: 'atlas:implementer', name: 'impl-auth' },
+  ...callBase,
+  ...over,
+})
+const withActivity = (a: Record<string, unknown>, now = 73_500) =>
+  snap({ now, ...({ activity: { 'impl-auth': a } } as object) })
+const runAgent: AgentInfo[] = [{ id: 'a1', type: 'atlas:implementer', description: '', status: 'running', name: 'impl-auth' }]
+
+test('running worker card shows what it is doing: tool (mcp prefix cut), target, age, tool count', () => {
+  const s = withActivity({ tool: 'mcp__lean-ctx__ctx_read', target: 'register.ts', since: 1000, startedAt: 500, toolCount: 9 })
+  const text = stringsOf(toolUseTree(s, taskProps({ isRunning: true }), runAgent))
+  expect(text).toContain('ctx_read register.ts   ·   1m13s · 9 tools')
+})
+
+test('worker card activity: last tool without a target, and no tool at all, still render the age', () => {
+  const last = withActivity({ lastTool: 'Grep', since: 500, toolCount: 2 })
+  expect(stringsOf(toolUseTree(last, taskProps({ isRunning: true }), runAgent))).toContain('Grep   ·   1m13s · 2 tools')
+  const none = withActivity({ since: 500, toolCount: 0 })
+  const text = stringsOf(toolUseTree(none, taskProps({ isRunning: true }), runAgent))
+  expect(text).toContain('1m13s · 0 tools')
+  expect(text).not.toContain('   ·   ')
+})
+
+test('with no listed agent the card status falls back from the call flags', () => {
+  const s = snap()
+  const label = (over: Record<string, unknown>) => stringsOf(toolUseTree(s, taskProps(over), []))
+  expect(label({ isRunning: true })).toContain('running')
+  expect(label({ isErrored: true })).toContain('✗ impl-auth')
+  expect(label({ isInterrupted: true })).toContain('⏸ impl-auth')
+  expect(label({ output: undefined })).toContain('pending')
+  expect(label({ output: 'ok' })).toContain('✓ impl-auth')
+})
+
+test('a listed agent is found by name, and its status wins over the call flags', () => {
+  const agents: AgentInfo[] = [{ id: 'z', type: 'atlas:implementer', description: '', status: 'completed', name: 'impl-auth' }]
+  const text = stringsOf(toolUseTree(snap(), taskProps({ isRunning: true }), agents))
+  expect(text).toContain('completed')
+  expect(text).toContain('impl-auth')
+})
+
+test('noisy badge is an inverse accent pill with the size; boundary is 8000', () => {
+  const base = { tool: 'Read', input: { file_path: '/a/b.ts' }, ...callBase }
+  const tree = noisyTree({ ...base, output: 'x'.repeat(8000) })! as Extract<RenderElement, { type: string }> & { props: Record<string, unknown>; children: RenderElement[] }
+  const badge = tree.children.at(-1)! as typeof tree
+  expect(badge.props).toMatchObject({ color: '#2fbd9f', inverse: true })
+  expect(stringsOf(badge)).toBe(' ▸ 8.0kB ')
+  expect(stringsOf(tree)).toContain('Read /a/b.ts')
+  expect(noisyTree({ ...base, output: 'x'.repeat(7999) })).toBeNull()
+  expect(stringsOf(noisyTree({ ...base, output: 'x'.repeat(2_500_000) })!)).toContain('▸ 2.5MB')
+  expect(noisyTree({ ...base, output: null })).toBeNull()
+})
+
+test('header pills: tail shows from 60 columns up, only the two pills below, and a width of 1 is narrow', () => {
+  const t = 'ATLAS | 🔧 implement 3/5 | go'
+  expect(pillsOf(t, 60).length).toBeGreaterThan(2)
+  expect(pillsOf(t, 59)).toHaveLength(2)
+  expect(pillsOf(t, 1)).toHaveLength(2)
+  expect(pillsOf(t, 0).length).toBeGreaterThan(2) // unknown width draws it whole
+})
+
+test('assistantTree: phase falls back to the snapshot, bad pattern and empty text give null, layout follows the body', () => {
+  const loose = { ...snap().contract, headerFirstLinePattern: '^ATLAS \\|' }
+  const s = snap({ phase: 'verify', contract: loose })
+  const tree = assistantTree(s, { text: 'ATLAS | ✅ underway | state' }, 120)!
+  expect(tree.type).toBe('Box')
+  expect(stringsOf(tree)).toContain('VERIFY')
+  expect((tree as { props: Record<string, unknown> }).props.flexDirection).toBe('row')
+  expect(assistantTree(snap({ contract: { ...snap().contract, headerFirstLinePattern: '(' } }), { text: 'ATLAS | x | y' })).toBeNull()
+  expect(assistantTree(snap(), { text: '' })).toBeNull()
+  const withBody = assistantTree(snap(), { text: 'ATLAS | 🔧 implement | s\nbody' }, 120)!
+  expect((withBody as { props: Record<string, unknown> }).props.flexDirection).toBe('column')
+})
+
+test('durationTree: capped by the mod clock, delta only when positive, no workers or ctx when zero', () => {
+  const s = snap({ contextPct: 0, counts: { done: 2, total: 5, byPhase: {} } })
+  const tr: ReceiptTracker = { done: 2, turnStart: 1000 }
+  expect(stringsOf(durationTree(s, { durationMs: 600_000 }, tr, 6000))).toBe('▸ 5s')
+  expect(stringsOf(durationTree(s, { durationMs: 3000 }, tr, 60_000))).toBe('▸ 3s')
+  expect(stringsOf(durationTree(s, { durationMs: 7000 }, { done: 5 }, null))).toBe('▸ 7s')
+})
+
+test('personaFor needs the atlas: prefix and a known name', () => {
+  expect(personaFor(snap(), undefined)).toBeUndefined()
+  expect(personaFor(snap(), 'implementer')).toBeUndefined()
+  expect(personaFor(snap(), 'atlas:nobody')).toBeUndefined()
+})
+
+test('UserMessage: agent messages become chat bubbles; prompts, expanded rows, senderless text and mod-off stay engine-drawn', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  expect(regs[6]?.matcher?.component).toBe('UserMessage')
+  const live = fake$({ snapshot: snap() }).$
+  const msg = (props: Record<string, unknown>) => regs[6]!.hook(live, fakeE('UserMessage', props), engineNext)
+  const bubble = await msg({ text: 'ship it', from: { name: 'impl-auth' } })
+  expect(stringsOf(bubble)).toContain('#atlas impl-auth › lead')
+  expect(stringsOf(bubble)).toContain('ship it')
+  expect(await msg({ text: 'ship it' })).toBe(SENTINEL)
+  expect(await msg({ text: 'ship it', from: { name: 'x' }, isExpanded: true })).toBe(SENTINEL)
+  expect(await msg({ text: 'ship it', from: { name: 'x' }, origin: { kind: 'composer' } })).toBe(SENTINEL)
+  const offRegs: Reg[] = []
+  registerRestyle(fakeOn(offRegs)) // ATLAS_MOD is read once per registration
+  const off = fake$({ env: 'off', snapshot: snap() }).$
+  expect(await offRegs[6]!.hook(off,fakeE('UserMessage', { text: 't', from: { name: 'x' } }), engineNext)).toBe(SENTINEL)
+})
+
+test('ToolGroup: two atlas dispatches draw as a numbered wave, anything else stays engine-drawn', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  expect(regs[5]?.matcher?.component).toBe('ToolGroup')
+  const live = fake$({ snapshot: snap() }).$
+  const call = (id: string, name: string) => ({ tool: 'Task', tool_use_id: id, input: { subagentType: 'atlas:implementer', name }, ...callBase })
+  const group = (calls: unknown[]) => regs[5]!.hook(live, fakeE('ToolGroup', { calls }), engineNext)
+  const first = stringsOf(await group([call('t1', 'a'), call('t2', 'b')]))
+  expect(first).toContain('1')
+  expect(first).toContain('implementer')
+  expect(await group([call('t3', 'a')])).toBe(SENTINEL)
+  expect(await group([])).toBe(SENTINEL)
+  const offRegs: Reg[] = []
+  registerRestyle(fakeOn(offRegs))
+  expect(await offRegs[5]!.hook(fake$({ env: 'off', snapshot: snap() }).$, fakeE('ToolGroup', { calls: [call('t1', 'a'), call('t2', 'b')] }), engineNext)).toBe(SENTINEL)
+})
+
+test('a failing clock leaves the receipt on the host figure', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const harness = fake$({ snapshot: snap({ contextPct: 0, counts: { done: 0, total: 0, byPhase: {} } }) })
+  const $ = { ...(harness.$ as object), clock: { now: async () => { throw new Error('no clock') } } } as unknown as EngineInterface
+  await regs[4]?.hook($, {}, echoNext)
+  expect(stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 9000 }), echoNext))).toBe('▸ 9s')
+})
+
+test('PHASE_RE picks a whole phase word and ignores substrings', () => {
+  expect(PHASE_RE.exec(' ⚒ implement 3/5 ')?.[1]).toBe('implement')
+  expect(PHASE_RE.exec('stuck, test blocked')?.[1]).toBe('test')
+  expect(PHASE_RE.exec('contested undone')).toBeNull()
 })
