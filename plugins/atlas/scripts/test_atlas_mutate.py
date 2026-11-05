@@ -146,6 +146,15 @@ def test_ts_sites_skip_types_and_cover_operators():
     assert {s["func"] for s in sites} == {"f"}
 
 
+@pytest.mark.skipif(not (shutil.which("node") and m.find_typescript()), reason="needs node and typescript")
+def test_ts_sites_use_code_point_offsets_after_emoji():
+    src = "// \U0001F600\U0001F600 note\nconst s = `\U0001F680`;\nexport function f(a: number) {\n  return a === 1;\n}\n"
+    sites = [x for x in m.ts_sites(src, "f.ts") if x["desc"] == "=== -> !=="]
+    assert len(sites) == 1
+    assert src[sites[0]["start"]:sites[0]["end"]] == "==="
+    assert m.apply_site(src, sites[0]) == src.replace("a === 1", "a !== 1")
+
+
 def test_cli_list_and_usage(tmp_path, capsys):
     root = _tree(tmp_path, "")
     assert m.main(["--root", str(root), "--target", "pkg/calc.py", "--list"]) == 0

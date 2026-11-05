@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `scripts/atlas_mutate.py`: TypeScript/JavaScript mutants are placed by code point, not UTF-16 offset, so files with emoji before a site (e.g. `omp/usage-statusline.ts`) are mutated at the right operator.
+
 ## 17.1.0 - 2026-11-05
 
 atlas-prompt is rebuilt and checked by an independent judge; three new measurement tools; hardened tests; two mod bug fixes.

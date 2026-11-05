@@ -259,7 +259,17 @@ def ts_sites(source: str, file: str) -> list[dict]:
                           timeout=120, env=dict(os.environ, MUT_FILE=file))
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr[-500:])
-    return json.loads(proc.stdout)
+    sites = json.loads(proc.stdout)
+    if len(source.encode("utf-16-le")) // 2 != len(source):  # node reports UTF-16 offsets; Python slices by code point
+        unit_to_cp = []
+        for i, ch in enumerate(source):
+            unit_to_cp.append(i)
+            if ord(ch) > 0xFFFF:
+                unit_to_cp.append(i)
+        unit_to_cp.append(len(source))
+        for st in sites:
+            st["start"], st["end"] = unit_to_cp[st["start"]], unit_to_cp[st["end"]]
+    return sites
 
 
 # ---- sampling --------------------------------------------------------------------------------
