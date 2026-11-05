@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+import pytest
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
@@ -416,6 +418,400 @@ class TestscopeTest(unittest.TestCase):
         names = {t["tool"] for t in testscope.detect(root)["test_tools"]}
         self.assertIn("pytest", names)
         self.assertNotIn("unittest", names)
+
+def mk(tmp_path, files):
+    for rel, content in files.items():
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+    return str(tmp_path)
+
+
+def tool_names(det):
+    return {t["tool"] for t in det["test_tools"]}
+
+
+def cmds(root):
+    return {r["tool"]: r for r in testscope.command_rows(root)}
+
+
+def test_composer_tools_and_laravel_framework(tmp_path):
+    root = mk(
+        tmp_path,
+        {
+            "composer.json": json.dumps(
+                {
+                    "require": {"laravel/framework": "^11"},
+                    "require-dev": {
+                        "phpunit/phpunit": "^10",
+                        "pestphp/pest": "^2",
+                        "infection/infection": "^0.27",
+                        "phpstan/phpstan": "^1",
+                        "vimeo/psalm": "^5",
+                        "other/pkg": "1",
+                    },
+                }
+            )
+        },
+    )
+    det = testscope.detect(root)
+    assert det["frameworks"] == ["laravel"]
+    assert tool_names(det) == {"phpunit", "pest", "infection", "phpstan", "psalm"}
+    assert [t for t in det["test_tools"] if t["tool"] == "phpunit"][0] == {
+        "tool": "phpunit",
+        "type_ids": ["unit", "integration"],
+        "evidence": "composer.json",
+    }
+    c = cmds(root)
+    assert c["phpunit"]["command"] == "vendor/bin/phpunit"
+    assert c["pest"]["command"] == "vendor/bin/pest"
+    assert c["infection"]["command"] == "vendor/bin/infection"
+    assert c["phpstan"]["command"] == "vendor/bin/phpstan analyse"
+    assert c["psalm"]["command"] == "vendor/bin/psalm"
+
+
+def test_composer_without_laravel_and_bad_json(tmp_path):
+    root = mk(tmp_path, {"composer.json": '{"require": {"phpunit/phpunit": "1"}}'})
+    det = testscope.detect(root)
+    assert det["frameworks"] == []
+    assert tool_names(det) == {"phpunit"}
+    bad = mk(tmp_path / "bad", {"composer.json": "{nope"})
+    assert tool_names(testscope.detect(bad)) == set()
+
+
+def test_csproj_web_sdk_packages_and_dotnet_commands(tmp_path):
+    proj = (
+        '<Project Sdk="Microsoft.NET.Sdk.Web">'
+        '<PackageReference Include="xunit" Version="2" />'
+        '<PackageReference Include="coverlet.collector" Version="6" />'
+        '<PackageReference Include="bunit" Version="1" />'
+        '<PackageReference Include="Microsoft.Playwright" Version="1" />'
+        '<PackageReference Include="Unrelated.Pkg" Version="1" />'
+        "</Project>"
+    )
+    root = mk(
+        tmp_path,
+        {
+            "App/App.csproj": proj,
+            ".config/dotnet-tools.json": '{"tools": {"dotnet-stryker": {}}}',
+        },
+    )
+    det = testscope.detect(root)
+    assert det["frameworks"] == ["aspnet"]
+    assert tool_names(det) == {
+        "xunit",
+        "coverlet",
+        "bunit",
+        "playwright-dotnet",
+        "dotnet-test",
+        "stryker-dotnet",
+    }
+    c = cmds(root)
+    assert c["dotnet-test"]["command"] == "dotnet test"
+    assert c["stryker-dotnet"]["command"] == "dotnet stryker"
+
+
+def test_empty_csproj_adds_only_dotnet_test(tmp_path):
+    root = mk(tmp_path, {"a.csproj": ""})
+    det = testscope.detect(root)
+    assert tool_names(det) == {"dotnet-test"}
+    assert det["frameworks"] == []
+
+
+def test_cargo_tokens_fuzz_dir_and_commands(tmp_path):
+    root = mk(
+        tmp_path,
+        {
+            "Cargo.toml": "[dev-dependencies]\nProptest = '1'\ncriterion = '0.5'\n",
+            "src/lib.rs": "pub fn a() {}\n",
+            "fuzz/fuzz_targets/t.rs": "//\n",
+        },
+    )
+    det = testscope.detect(root)
+    assert tool_names(det) == {"proptest", "criterion", "cargo-fuzz"}
+    fuzz = [t for t in det["test_tools"] if t["tool"] == "cargo-fuzz"][0]
+    assert fuzz["evidence"] == "fuzz"
+    c = cmds(root)
+    assert c["cargo-test"]["command"] == "cargo test"
+    assert c["criterion"]["command"] == "cargo bench"
+    assert c["cargo-fuzz"]["command"] == "cargo fuzz run"
+
+
+def test_cargo_without_fuzz_dir_has_no_cargo_fuzz(tmp_path):
+    root = mk(tmp_path, {"Cargo.toml": "[dependencies]\ninsta = '1'\n", "fuzzy.rs": "x"})
+    assert tool_names(testscope.detect(root)) == {"insta"}
+
+
+@pytest.mark.parametrize(
+    "files,expected",
+    [
+        (["db/migrations/001.sql"], True),
+        (["db/migrate/001.sql"], True),
+        (["alembic/versions/a.py"], True),
+        (["drizzle/0001.sql"], True),
+        (["Migrations/x.sql"], True),
+        (["migrations"], False),
+        (["src/app.py", "db/schema.sql"], False),
+        ([], False),
+    ],
+)
+def test_has_migrations(files, expected):
+    assert testscope.has_migrations(files) is expected
+
+
+def test_sql_baseline_priority_depends_on_migrations():
+    rows = testscope.baseline_rows({"sql": {"files": 1}}, [], ["db/migrations/1.sql"])
+    assert ("data", "db-migration", "must") in rows
+    rows = testscope.baseline_rows({"sql": {"files": 1}}, [], ["db/schema.sql"])
+    assert ("data", "db-migration", "should") in rows
+
+
+def test_bats_dir_uses_evidence_directory():
+    tools = [{"tool": "bats", "type_ids": ["unit"], "evidence": "tests/cli/a.bats"}]
+    assert testscope.bats_dir("/x", tools) == "tests/cli"
+    tools = [{"tool": "bats", "type_ids": ["unit"], "evidence": "a.bats"}]
+    assert testscope.bats_dir("/x", tools) == "."
+    assert testscope.bats_dir("/x", []) == "test"
+
+
+def test_bats_command_row(tmp_path):
+    root = mk(tmp_path, {"t/a.bats": "@test 'x' { true; }\n"})
+    assert cmds(root)["bats"]["command"] == "bats t/"
+
+
+def test_pytest_cmd_uv_lock(tmp_path):
+    assert testscope.pytest_cmd(str(tmp_path)) == "python -m pytest"
+    (tmp_path / "uv.lock").write_text("")
+    assert testscope.pytest_cmd(str(tmp_path)) == "uv run pytest"
+
+
+def test_uv_python_command_rows(tmp_path):
+    root = mk(
+        tmp_path,
+        {
+            "uv.lock": "",
+            "pyproject.toml": '[project]\ndependencies=["pytest","pytest-cov","ruff","mypy"]\n',
+        },
+    )
+    c = cmds(root)
+    assert c["pytest"]["command"] == "uv run pytest --cov"
+    assert c["ruff"]["command"] == "uv run ruff check ."
+    assert c["mypy"]["command"] == "uv run mypy ."
+
+
+def test_unittest_dirs_skips_non_test_files_and_keeps_scanning(tmp_path):
+    root = mk(
+        tmp_path,
+        {
+            "README.md": "x",
+            "helper.py": "import unittest\n",
+            "pkg/test_a.py": "import unittest\n",
+            "pkg/test_b.py": "import unittest\n",
+            "other/b_test.py": "from unittest import TestCase\n",
+            "other/test_plain.py": "def test_x(): pass\n",
+        },
+    )
+    files = ["README.md", "helper.py", "pkg/test_a.py", "pkg/test_b.py",
+             "other/b_test.py", "other/test_plain.py"]
+    assert testscope.unittest_dirs(root, files) == {
+        "pkg": "pkg/test_a.py",
+        "other": "other/b_test.py",
+    }
+
+
+def test_unittest_command_rows(tmp_path):
+    root = mk(
+        tmp_path,
+        {
+            "test_top.py": "import unittest\n",
+            "pkg/test_a.py": "import unittest\n",
+            "sfx/x_test.py": "import unittest\n",
+        },
+    )
+    got = [r["command"] for r in testscope.command_rows(root) if r["tool"] == "unittest"]
+    assert got == [
+        "python3 -m unittest discover",
+        "python3 -m unittest discover -s pkg -p 'test_*.py'",
+        "python3 -m unittest discover -s sfx -p '*_test.py'",
+    ]
+
+
+def test_workflow_scanners_detected_from_ci_files(tmp_path):
+    root = mk(
+        tmp_path,
+        {
+            ".github/workflows/ci.yml": "uses: github/codeql-action\nrun: trivy fs .\n"
+            "run: shellcheck x\nrun: gitleaks detect\n",
+        },
+    )
+    det = testscope.detect(root)
+    assert det["ci"] == [".github/workflows/ci.yml"]
+    assert tool_names(det) == {
+        "github-actions",
+        "codeql",
+        "trivy",
+        "shellcheck",
+        "gitleaks",
+    }
+    ev = {t["tool"]: t["evidence"] for t in det["test_tools"]}
+    assert ev["trivy"] == ".github/workflows/ci.yml"
+
+
+def test_workflow_without_scanner_tokens_only_reports_actions(tmp_path):
+    root = mk(tmp_path, {".github/workflows/ci.yml": "run: echo hi\n"})
+    assert tool_names(testscope.detect(root)) == {"github-actions"}
+
+
+def test_workflow_only_first_iac_scanner_is_recorded(tmp_path):
+    root = mk(tmp_path, {".github/workflows/ci.yml": "tfsec\ncheckov\n"})
+    names = tool_names(testscope.detect(root))
+    assert "checkov" in names and "tfsec" not in names
+
+
+def test_jvm_and_gem_tokens_and_gradle_command(tmp_path):
+    root = mk(
+        tmp_path,
+        {
+            "build.gradle": "testImplementation 'net.jqwik:jqwik'\n",
+            "gradlew": "#!/bin/sh\n",
+            "Gemfile": "gem 'rspec'\ngem 'minitest'\n",
+        },
+    )
+    c = cmds(root)
+    assert c["gradle-test"]["command"] == "./gradlew test"
+    assert c["rspec"]["command"] == "bundle exec rspec"
+    assert c["minitest"]["command"] == "bundle exec rake test"
+
+
+def test_gradle_without_wrapper_and_mvn_wrapper(tmp_path):
+    root = mk(tmp_path, {"pom.xml": "<artifactId>junit</artifactId> pitest"})
+    c = cmds(root)
+    assert c["junit"]["command"] == "mvn test"
+    assert c["gradle-test"]["command"] == "gradle test"
+    (tmp_path / "mvnw").write_text("")
+    assert cmds(root)["junit"]["command"] == "./mvnw test"
+
+
+def test_no_gradle_row_for_junit_alone(tmp_path):
+    root = mk(tmp_path, {"pom.xml": "junit"})
+    assert "gradle-test" not in cmds(root)
+
+
+SAMPLE_DET = {
+    "languages": {"python": {"files": 3}, "go": {"files": 1}},
+    "frameworks": ["fastapi"],
+    "test_tools": [
+        {"tool": "pytest", "type_ids": ["unit", "coverage"], "evidence": "pyproject.toml"}
+    ],
+    "ci": [".github/workflows/ci.yml"],
+}
+
+
+def test_md_detect_exact():
+    assert testscope.md_detect(SAMPLE_DET) == (
+        "# detect\n\n## Languages\n\n| Language | Files |\n|---|---|\n"
+        "| python | 3 |\n| go | 1 |\n\n## Frameworks\n\n- fastapi\n\n"
+        "## Test tools\n\n| Tool | Type IDs | Evidence |\n|---|---|---|\n"
+        "| pytest | unit, coverage | pyproject.toml |\n\n## CI files\n\n"
+        "- .github/workflows/ci.yml\n"
+    )
+
+
+def test_md_detect_empty_lists_say_none():
+    out = testscope.md_detect(
+        {"languages": {}, "frameworks": [], "test_tools": [], "ci": []}
+    )
+    assert out.count("- none\n") == 2
+
+
+def test_md_gaps_exact():
+    rows = [
+        {
+            "area": "python",
+            "type_id": "unit",
+            "status": "missing",
+            "priority": "must",
+            "reason": "r",
+            "reference": "references/x.md",
+        }
+    ]
+    assert testscope.md_gaps(rows) == (
+        "# gaps\n\n| Area | Type | Status | Priority | Reason | Reference |\n"
+        "|---|---|---|---|---|---|\n"
+        "| python | unit | missing | must | r | references/x.md |\n"
+    )
+
+
+def test_md_commands_exact_with_and_without_note():
+    rows = [
+        {"tool": "pytest", "type_id": "unit", "command": "python -m pytest"},
+        {"tool": "axe", "type_id": "accessibility", "command": "x", "note": "n"},
+    ]
+    assert testscope.md_commands(rows) == (
+        "# commands\n\n| Tool | Type | Command | Note |\n|---|---|---|---|\n"
+        "| pytest | unit | `python -m pytest` |  |\n"
+        "| axe | accessibility | `x` | n |\n"
+    )
+
+
+def py_root(tmp_path):
+    return mk(
+        tmp_path,
+        {
+            "pyproject.toml": '[project]\ndependencies=["fastapi","pytest"]\n',
+            "tests/test_a.py": "def test_a(): pass\n",
+        },
+    )
+
+
+def run_main(capsys, *argv):
+    rc = testscope.main(list(argv))
+    return rc, capsys.readouterr().out
+
+
+def test_main_detect_json(tmp_path, capsys):
+    rc, out = run_main(capsys, "detect", "--root", py_root(tmp_path))
+    assert rc == 0
+    data = json.loads(out)
+    assert data["frameworks"] == ["fastapi"]
+    assert "pytest" in {t["tool"] for t in data["test_tools"]}
+    assert out.endswith("}\n")
+    assert out.startswith('{\n  "languages"')
+
+
+def test_main_gaps_json_and_md(tmp_path, capsys):
+    root = py_root(tmp_path)
+    rc, out = run_main(capsys, "gaps", "--root", root)
+    rows = json.loads(out)
+    assert rc == 0 and {"area", "type_id", "status", "priority"} <= set(rows[0])
+    rc, md = run_main(capsys, "gaps", "--root", root, "--format", "md")
+    assert md.startswith("# gaps\n") and "| python | unit | present |" in md
+
+
+def test_main_commands_json_and_md(tmp_path, capsys):
+    root = py_root(tmp_path)
+    rc, out = run_main(capsys, "commands", "--root", root)
+    assert {"tool": "pytest", "type_id": "unit", "command": "python -m pytest"} in json.loads(out)
+    rc, md = run_main(capsys, "commands", "--root", root, "--format", "md")
+    assert md.startswith("# commands\n") and "`python -m pytest`" in md
+
+
+def test_main_detect_md(tmp_path, capsys):
+    rc, md = run_main(capsys, "detect", "--root", py_root(tmp_path), "--format", "md")
+    assert md.startswith("# detect\n") and "- fastapi\n" in md
+
+
+def test_main_rejects_unknown_command(tmp_path, capsys):
+    with pytest.raises(SystemExit) as e:
+        testscope.main(["bogus"])
+    assert e.value.code == 2
+
+
+def test_main_expands_user_in_root(tmp_path, capsys, monkeypatch):
+    root = py_root(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    rc, out = run_main(capsys, "detect", "--root", "~")
+    assert rc == 0 and json.loads(out)["frameworks"] == ["fastapi"]
 
 
 if __name__ == "__main__":

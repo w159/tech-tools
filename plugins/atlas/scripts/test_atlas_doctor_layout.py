@@ -432,6 +432,101 @@ class ScoringTest(LayoutBase):
         conn.close()
 
 
+class MutationHardeningTest(LayoutBase):
+    def test_container_scan_skips_pruned_children_and_keeps_counting(self):
+        box = os.path.join(self.tmp, "box")
+        for name in (".aa", "node_modules", ".venv-x"):
+            os.makedirs(os.path.join(box, name))
+        os.makedirs(os.path.join(box, "r1", ".git"))
+        os.makedirs(os.path.join(box, "r2", ".git"))
+        real = os.scandir
+
+        class Sorted:
+            def __init__(self, path):
+                self.cm = real(path)
+
+            def __enter__(self):
+                return iter(sorted(self.cm.__enter__(), key=lambda e: e.name))
+
+            def __exit__(self, *a):
+                return self.cm.__exit__(*a)
+
+        with mock.patch.object(doctor_layout.os, "scandir", Sorted):
+            self.assertTrue(doctor_layout._is_container(box))
+
+    def test_project_memory_status_counts_each_tagged_entry_once(self):
+        import atlas_finding
+        import atlas_memory
+
+        name = os.path.basename(os.path.abspath(self.repo))
+        entries = {
+            "memory": [f"[{name}] a", "[other] b", f"[{name}] c"],
+            "project": [f"[{name}] d"],
+        }
+        with (
+            mock.patch.object(
+                atlas_finding, "missing_records", return_value=4
+            ),
+            mock.patch.object(
+                atlas_memory, "get_entries", side_effect=lambda t: entries[t]
+            ),
+            mock.patch.object(
+                atlas_memory,
+                "tag_of",
+                side_effect=lambda e: e[1 : e.index("]")],
+            ),
+        ):
+            self.assertEqual(doctor_layout.project_memory_status(self.repo), (4, 3))
+
+    def test_fix_project_memory_passes_apply_only_when_supported(self):
+        import atlas_finding
+        import atlas_memory
+
+        seen = {}
+
+        def with_apply(home, db_path, apply=False, only_root=None):
+            seen["kw"] = (home, db_path, apply, only_root)
+            return "ran"
+
+        def without_apply(home, db_path):
+            seen["plain"] = (home, db_path)
+            return "ran2"
+
+        with mock.patch.object(
+            atlas_finding, "backfill_findings", return_value={}
+        ):
+            with mock.patch.object(
+                atlas_memory, "migrate_global_to_projects", with_apply, create=True
+            ):
+                out = doctor_layout.fix_project_memory(self.repo)
+            self.assertEqual(out[-1], "memory migration: ran")
+            self.assertIs(seen["kw"][2], True)
+            self.assertEqual(seen["kw"][3], self.repo)
+            with mock.patch.object(
+                atlas_memory, "migrate_global_to_projects", without_apply, create=True
+            ):
+                out = doctor_layout.fix_project_memory(self.repo)
+            self.assertEqual(out[-1], "memory migration: ran2")
+
+    def test_context_limit_errors_ignore_rows_older_than_seven_days(self):
+        conn = atlas_db.connect()
+        atlas_db.init(conn)
+        now = 10_000_000.0
+        label = "prompt 0 has 3000 tokens; expected 1-2048"
+        for i, age in enumerate((6.5, 7.5)):
+            atlas_db.upsert_turn_score(
+                conn,
+                "s",
+                f"m{i}",
+                "scoring_error",
+                kind="error",
+                label=label,
+                scored_at=now - age * 86400,
+            )
+        self.assertEqual(doctor_layout.context_limit_errors(conn, now), 1)
+        conn.close()
+
+
 class ProjectIdentityTest(LayoutBase):
     def setUp(self):
         super().setUp()
