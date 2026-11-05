@@ -37,17 +37,31 @@ class ScratchRootsOverrideTest(unittest.TestCase):
         self.assertEqual(atlas_scope._scratch_roots(), ())
 
 
+def _is_scratch(path):
+    real = os.path.realpath(path)
+    return any(
+        real == r or real.startswith(r + os.sep)
+        for r in (os.path.realpath(x) for x in atlas_scope.SCRATCH_ROOTS)
+    )
+
+
 class GatesArmedTest(unittest.TestCase):
     def setUp(self):
         self.env = mock.patch.dict(os.environ)
         self.env.start()
         os.environ.pop("ATLAS_GATES", None)
         self.addCleanup(self.env.stop)
+        # The fixtures need a $HOME that is not under a scratch root (gates_armed never arms those), but they
+        # must not write under the user's real home: use a private fake HOME beside the checkout instead.
+        base = next((b for b in (REPO, _test_isolation.REAL_HOME) if not _is_scratch(b)), None)
+        if base is None:
+            self.skipTest("neither the checkout nor HOME is outside the scratch roots")
+        self.fake_home = tempfile.mkdtemp(dir=base, prefix=".atlas-scope-home-")
+        self.addCleanup(shutil.rmtree, self.fake_home, True)
+        os.environ["HOME"] = self.fake_home
 
     def _home_dir(self):
-        d = tempfile.mkdtemp(dir=str(Path.home()), prefix=".atlas-scope-test-")
-        self.addCleanup(shutil.rmtree, d, True)
-        return d
+        return tempfile.mkdtemp(dir=self.fake_home, prefix=".atlas-scope-test-")
 
     def test_tmp_paths_false(self):
         for p in (
@@ -66,7 +80,8 @@ class GatesArmedTest(unittest.TestCase):
 
     def test_repo_dir_true(self):
         # A real project outside every temp dir: the checkout itself may live under /tmp, which is never armed.
-        repo = _test_isolation.make_real_project_dir(self)
+        repo = self._home_dir()
+        os.makedirs(os.path.join(repo, ".git"))
         sub = os.path.join(repo, "plugins", "atlas")
         os.makedirs(sub)
         self.assertTrue(atlas_scope.gates_armed(repo))
@@ -75,7 +90,6 @@ class GatesArmedTest(unittest.TestCase):
     def test_no_marker_under_home_false(self):
         self.assertFalse(atlas_scope.gates_armed(self._home_dir()))
 
-    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_marker_in_ancestor_under_home_true(self):
         d = self._home_dir()
         Path(d, "package.json").write_text("{}")
@@ -105,7 +119,6 @@ class GatesArmedTest(unittest.TestCase):
         conn.commit()
         conn.close()
 
-    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_db_history_arms_markerless_dir(self):
         d = os.path.realpath(self._home_dir())
         self.assertFalse(atlas_scope.gates_armed(d))

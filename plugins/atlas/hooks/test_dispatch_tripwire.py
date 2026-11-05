@@ -110,7 +110,17 @@ def _named(tinput):
 class TripwireTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.env = dict(os.environ, ATLAS_DB=os.path.join(self.tmp, "atlas.db"))
+        # Pin every knob the STOP nag reads instead of inheriting this worker's ambient os.environ: a leaked
+        # ATLAS_WORKER_NAME / ATLAS_TRIPWIRE_THRESHOLD / ATLAS_GATES from an earlier test module in the same
+        # xdist worker silently turns the nag off (or moves its threshold), which is what these tests assert on.
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            ATLAS_GATES="always",
+            ATLAS_TRIPWIRE="on",
+        )
+        for _k in ("ATLAS_TRIPWIRE_THRESHOLD", "ATLAS_WORKER_NAME"):
+            self.env.pop(_k, None)
         # seed a run so current_run_id resolves
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db

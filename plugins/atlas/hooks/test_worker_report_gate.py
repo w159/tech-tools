@@ -521,12 +521,18 @@ class WorkerReportGateTest(unittest.TestCase):
 
     def test_objective_check_internal_error_fails_open_with_a_fault_row(self):
         msg = self.report(files="a.py")
+        # Private fault log: the process-global ATLAS_HOME is shared by every test in this worker, and an int cwd
+        # does not crash the hook (os.path.isdir(123) is just False), so this test used to pass only when an
+        # earlier test happened to leave a worker_report_gate row there. A list cwd makes os.path.isdir raise
+        # TypeError inside the objective check, which is the internal error under test.
+        home = tempfile.mkdtemp(dir=self.gate)
+        env = dict(self.env, ATLAS_HOME=home)
         r = self.run_hook(
-            payload(last_assistant_message=msg, agent_type="atlas:implementer", cwd=123)
+            payload(last_assistant_message=msg, agent_type="atlas:implementer", cwd=["not", "a", "path"]),
+            env,
         )
         self.assertEqual((r.returncode, r.stdout), (0, ""))
-        faults = os.path.join(os.environ["ATLAS_HOME"], "hook-faults.jsonl")
-        with open(faults, encoding="utf-8") as f:
+        with open(os.path.join(home, "hook-faults.jsonl"), encoding="utf-8") as f:
             self.assertIn("worker_report_gate", f.read())
 
 

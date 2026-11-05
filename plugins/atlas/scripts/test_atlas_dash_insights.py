@@ -20,6 +20,12 @@ sys.path.insert(0, str(SCRIPTS))
 
 
 def _load(name: str):
+    # Reuse the module another test file already imported from the same path. Re-executing it and overwriting
+    # sys.modules[name] leaves every earlier importer holding a different atlas_db object than the one lazy
+    # `import atlas_db` calls inside hooks resolve, so mock.patch.object(atlas_db, ...) there patches the wrong copy.
+    existing = sys.modules.get(name)
+    if existing is not None and Path(getattr(existing, "__file__", "") or "").resolve() == (SCRIPTS / f"{name}.py").resolve():
+        return existing
     spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
