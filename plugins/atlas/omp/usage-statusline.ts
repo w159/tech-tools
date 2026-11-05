@@ -661,7 +661,7 @@ function applyCfg(): void {
   try {
    const parsed = JSON.parse(readFileSync(CFG_PATH, "utf8"));
    // the editor exports { statusLine, widget }; a bare widget object also works
-   raw = (parsed?.widget ?? parsed) as Record<string, unknown>;
+   raw = (parsed?.widget ?? parsed ?? {}) as Record<string, unknown>;
   } catch {
    raw = {}; // unreadable file: fall back to defaults rather than break the line
   }

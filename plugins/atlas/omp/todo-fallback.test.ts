@@ -101,6 +101,102 @@ test("items of another session are ignored", () => {
 	expect(h.widgets.filter(Boolean)).toEqual([]);
 });
 
+/** Harness variant that records every interval the module starts and clears. */
+function timers(root: string, pollMs?: number) {
+	const handlers: Record<string, Array<(e: unknown, c: unknown) => unknown>> = {};
+	const pi = { on: (n: string, h: (e: unknown, c: unknown) => unknown) => void (handlers[n] ??= []).push(h) };
+	const started: Array<{ fn: () => void; ms: number }> = [];
+	const cleared: unknown[] = [];
+	const widgets: Array<string[] | undefined> = [];
+	const view = registerTodoFallback(pi as never, {
+		env: { ATLAS_PROJECT_ROOT: root },
+		pollMs,
+		setInterval: (fn, ms) => (started.push({ fn, ms }), `h${started.length}`),
+		clearInterval: h => void cleared.push(h),
+	});
+	const ctx = { agent: { kind: "main" }, cwd: root, hasUI: true, ui: { setWidget: (_k: string, c: string[] | undefined) => void widgets.push(c) }, sessionManager: { getSessionId: () => "s1" } };
+	const fire = (name: string, e: unknown = {}) => (handlers[name] ?? []).map(h => h(e, ctx));
+	return { started, cleared, widgets, view, fire };
+}
+
+test("polling: one interval at the default 2000ms (or the injected pollMs), however many refreshes", () => {
+	const b = board([{ content: "Research: a", status: "in_progress" }]);
+	const t = timers(b.root);
+	t.fire("before_agent_start");
+	t.fire("before_agent_start");
+	t.fire("tool_result", { toolName: "bash" });
+	expect(t.started.map(s => s.ms)).toEqual([2000]);
+	const custom = timers(b.root, 750);
+	custom.fire("before_agent_start");
+	expect(custom.started.map(s => s.ms)).toEqual([750]);
+});
+
+test("polling: stop() and session_shutdown clear exactly the live handle, once; nothing to clear before a poll exists", () => {
+	const b = board([{ content: "Research: a", status: "in_progress" }]);
+	const t = timers(b.root);
+	t.view.stop();
+	expect(t.cleared).toEqual([]); // no poll yet -> clearInterval must not be called
+	t.fire("before_agent_start");
+	t.view.stop();
+	expect(t.cleared).toEqual(["h1"]);
+	t.view.stop();
+	expect(t.cleared).toEqual(["h1"]); // handle forgotten after the first stop
+	t.fire("before_agent_start"); // a stopped poll restarts on the next refresh
+	expect(t.started.length).toBe(2);
+	t.fire("session_shutdown");
+	expect(t.cleared).toEqual(["h1", "h2"]);
+	expect(t.widgets.at(-1)).toBeUndefined();
+});
+
+test("a native todo stops the poll, and later refreshes never restart it", () => {
+	const b = board([{ content: "Research: a", status: "in_progress" }]);
+	const t = timers(b.root);
+	t.fire("before_agent_start");
+	t.fire("tool_result", { toolName: "TODO", isError: false }); // tool name is case-insensitive
+	expect(t.cleared).toEqual(["h1"]);
+	t.fire("before_agent_start");
+	t.fire("tool_result", { toolName: "bash" });
+	expect(t.started.length).toBe(1);
+});
+
+test("an error todo result or a missing tool name keeps the fallback alive and polling", () => {
+	const b = board([{ content: "Research: a", status: "in_progress" }]);
+	const t = timers(b.root);
+	t.fire("tool_result", { toolName: "todo", isError: true });
+	t.fire("tool_result", {});
+	expect(t.started.length).toBe(1);
+	expect(t.widgets.at(-1)?.[0]).toBe(" TODO");
+});
+
+test("event handlers return undefined (they never veto or rewrite a tool result)", () => {
+	const b = board([{ content: "Research: a", status: "in_progress" }]);
+	const t = timers(b.root);
+	expect(t.fire("before_agent_start")).toEqual([undefined]);
+	expect(t.fire("tool_result", { toolName: "bash" })).toEqual([undefined]);
+	expect(t.fire("tool_result", { toolName: "todo", isError: false })).toEqual([undefined]);
+	expect(t.fire("session_shutdown")).toEqual([undefined]);
+});
+
+test("an unchanged board is not repainted; a changed one is", () => {
+	const b = board([{ content: "Research: a", status: "in_progress" }]);
+	const h = harness(b.root);
+	h.fire("before_agent_start");
+	h.tick();
+	h.tick();
+	expect(h.widgets.length).toBe(1);
+	b.write([{ content: "Research: a", status: "completed" }]);
+	h.tick();
+	expect(h.widgets.length).toBe(2);
+	expect(strip(h.widgets.at(-1) ?? [])).toContain("Research · 1/1");
+});
+
+test("item text is cut at 100 chars with an ellipsis; exactly 100 is kept whole", () => {
+	const hundred = "x".repeat(100);
+	const lines = todoTreeLines([{ content: `Research: ${hundred}`, status: "in_progress" }, { content: `Research: ${hundred}y`, status: "in_progress" }]);
+	expect(lines).toContain(`  │  ├─ ☐ ${hundred}`);
+	expect(lines).toContain(`  │  └─ ☐ ${"x".repeat(99)}…`);
+});
+
 test("roman covers 4, 9, 14, 40, 49, 50, 90 and 99", () => {
 	const cases: Array<[number, string]> = [[4, "IV"], [9, "IX"], [14, "XIV"], [40, "XL"], [49, "XLIX"], [50, "L"], [90, "XC"], [99, "XCIX"]];
 	for (const [n, s] of cases) expect([n, roman(n)]).toEqual([n, s]);

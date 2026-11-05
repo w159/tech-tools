@@ -7,7 +7,7 @@ process.env.ATLAS_GATES = "always";
 // bun run from outside omp/ skips bunfig.toml's preload; never let recordFault reach the real ~/.atlas.
 process.env.ATLAS_HOME = mkdtempSync(join(tmpdir(), "atlas-stop-home-"));
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
@@ -864,5 +864,232 @@ test("a failed detached spawn (bad cwd) removes the owned ingest directory", asy
 	});
 	const ctx: Ctx = { cwd: join(dir, "does-not-exist"), agent: { kind: "main" }, sessionManager: { getSessionId: () => "badcwd", getSessionFile: () => "f" } };
 	await handlers.session_shutdown[0]({}, ctx);
+	expect(readdirSync(dir).filter(n => n.startsWith("atlas-ingest-"))).toEqual([]);
+});
+
+// ---- mutation hardening: pure helpers, message text, cleanup, tracking bounds, member-finish retry ----
+
+test("isTerminalYield: only a successful yield that is not an incremental section submission is terminal", async () => {
+	const { isTerminalYield } = await import("./stop-bridge");
+	expect(isTerminalYield({ toolName: "yield" })).toBe(true); // no result/details at all
+	expect(isTerminalYield({ toolName: "yield", result: null })).toBe(true);
+	expect(isTerminalYield({ toolName: "yield", result: { details: "text" } })).toBe(true); // non-object details
+	expect(isTerminalYield({ toolName: "yield", result: { details: { data: { status: "DONE" } } } })).toBe(true);
+	expect(isTerminalYield({ toolName: "bash" })).toBe(false);
+	expect(isTerminalYield({})).toBe(false);
+	expect(isTerminalYield({ toolName: "yield", isError: true })).toBe(false);
+	// incremental {status:"success", type:[string,...]} section submission is NOT terminal
+	expect(isTerminalYield({ toolName: "yield", result: { details: { status: "success", type: ["summary"] } } })).toBe(false);
+	expect(isTerminalYield({ toolName: "yield", result: { details: { status: "success", type: ["a", "b"] } } })).toBe(false);
+	// every other shape of details.type / details.status is a terminal yield
+	expect(isTerminalYield({ toolName: "yield", result: { details: { status: "error", type: ["summary"] } } })).toBe(true);
+	expect(isTerminalYield({ toolName: "yield", result: { details: { status: "success", type: [] } } })).toBe(true);
+	expect(isTerminalYield({ toolName: "yield", result: { details: { status: "success", type: "summary" } } })).toBe(true);
+	expect(isTerminalYield({ toolName: "yield", result: { details: { status: "success", type: ["a", 1] } } })).toBe(true);
+	expect(isTerminalYield({ toolName: "yield", result: { details: { type: ["a"] } } })).toBe(true);
+});
+
+test("sessionFileOf returns the session file, and \"\" for a missing, non-string or throwing getter", async () => {
+	const { sessionFileOf } = await import("./stop-bridge");
+	const ctx = (sm: unknown) => ({ cwd: "/w", agent: { kind: "main" }, sessionManager: sm }) as never;
+	expect(sessionFileOf(ctx({ getSessionFile: () => "/s/a.jsonl" }))).toBe("/s/a.jsonl");
+	expect(sessionFileOf(ctx({ getSessionFile: () => 5 }))).toBe("");
+	expect(sessionFileOf(ctx({}))).toBe("");
+	expect(sessionFileOf(ctx(undefined))).toBe("");
+	expect(
+		sessionFileOf(
+			ctx({
+				getSessionFile: () => {
+					throw new Error("gone");
+				},
+			}),
+		),
+	).toBe("");
+});
+
+test("last_assistant_message: only non-empty text blocks reach the Stop payload, joined by newlines", async () => {
+	const h = harness();
+	await h.stop({
+		last_assistant_message: {
+			content: [
+				{ type: "text", text: "first" },
+				{ type: "thinking", text: "private chain of thought" }, // has a text field but is not a text block
+				{ type: "text" }, // no text
+				{ text: "no type" },
+				{ type: "text", text: "" },
+				{ type: "text", text: 5 },
+				"bare string",
+				null,
+				{ type: "text", text: "second" },
+			],
+		},
+	});
+	expect(h.payloads[0].last_assistant_message).toBe("first\nsecond");
+	for (const bad of [undefined, null, "just a string", { content: "not an array" }, { content: [] }, { content: [{ type: "tool_use" }] }]) {
+		const g = harness();
+		await g.stop({ last_assistant_message: bad });
+		expect(g.payloads[0]).not.toHaveProperty("last_assistant_message");
+	}
+});
+
+test("a failed conversion removes the whole owned ingest directory, partial output and subagents/ included", async () => {
+	const handlers: Record<string, Handler[]> = {};
+	registerStopBridge({ on: (name: string, fn: Handler) => (handlers[name] ??= []).push(fn) } as unknown as Pick<ExtensionAPI, "on">, {
+		hooks: [hook("ingest_session.py", "SessionEnd")],
+		run: async () => "",
+		cache: { convertFresh: async () => "/t.jsonl", forToolHook: async () => "" },
+		convert: async (_f, out) => {
+			writeFileSync(out, "partial\n");
+			mkdirSync(join(out, "..", "subagents"));
+			writeFileSync(join(out, "..", "subagents", "agent-x.jsonl"), "{}\n");
+			return false;
+		},
+		env: {},
+		tmpDir: dir,
+		reap: () => {},
+		finishLead: async () => {},
+		spawnDetached: () => {
+			throw new Error("must not spawn");
+		},
+	});
+	const ctx: Ctx = { cwd: dir, agent: { kind: "main" }, sessionManager: { getSessionId: () => "partial", getSessionFile: () => "f" } };
+	await handlers.session_shutdown[0]({}, ctx);
+	expect(readdirSync(dir).filter(n => n.startsWith("atlas-ingest-"))).toEqual([]);
+});
+
+test("compaction bookkeeping forgets the oldest session after 64 tracked sessions", async () => {
+	const handlers: Record<string, Handler[]> = {};
+	const spawns: Spawn[] = [];
+	registerStopBridge({ on: (name: string, fn: Handler) => (handlers[name] ??= []).push(fn) } as unknown as Pick<ExtensionAPI, "on">, {
+		hooks: [hook("ingest_session.py", "PreCompact")],
+		run: async () => "",
+		cache: { convertFresh: async () => "/t.jsonl", forToolHook: async () => "" },
+		convert: async (_f, out) => (writeFileSync(out, "{}\n"), true),
+		env: {},
+		tmpDir: dir,
+		now: () => 5_000_000, // the clock never moves: only eviction can lift the 60 s throttle
+		spawnDetached: (argv, opts) => spawns.push({ argv, opts }),
+	});
+	const compact = (sid: string) => handlers.auto_compaction_start[0]({}, { cwd: dir, agent: { kind: "main" }, sessionManager: { getSessionId: () => sid, getSessionFile: () => "f" } });
+	for (let i = 0; i < 64; i++) await compact(`s${i}`);
+	expect(spawns.length).toBe(64);
+	await compact("s0");
+	expect(spawns.length).toBe(64); // 64 sessions fit: s0 is still throttled
+	await compact("s64"); // the 65th session evicts the oldest (s0)
+	expect(spawns.length).toBe(65);
+	await compact("s1");
+	expect(spawns.length).toBe(65); // s1 is still tracked, still throttled
+	await compact("s0");
+	expect(spawns.length).toBe(66); // s0 was forgotten, so it compacts again
+});
+
+/** Puts a fake `python3` first on PATH that logs its argv (one line per call) and prints `reply`. */
+async function withFakePython(reply: string, body: (calls: () => string[]) => Promise<void>): Promise<void> {
+	const bin = join(dir, "fakebin");
+	mkdirSync(bin, { recursive: true });
+	const log = join(dir, "py-calls.log");
+	rmSync(log, { force: true });
+	writeFileSync(join(bin, "python3"), `#!/bin/sh\necho "$*" | tr '\\n' ' ' >> "${log}"\necho >> "${log}"\necho '${reply}'\n`);
+	chmodSync(join(bin, "python3"), 0o755);
+	const saved = process.env.PATH;
+	process.env.PATH = `${bin}:${saved}`;
+	try {
+		await body(() => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean) : []));
+	} finally {
+		process.env.PATH = saved;
+	}
+}
+
+function subBridge() {
+	const handlers: Record<string, Handler[]> = {};
+	registerStopBridge({ on: (name: string, fn: Handler) => (handlers[name] ??= []).push(fn) } as unknown as Pick<ExtensionAPI, "on">, {
+		hooks: [],
+		run: async () => "",
+		cache: { convertFresh: async () => "/t.jsonl", forToolHook: async () => "" },
+		env: {},
+		tmpDir: dir,
+		spawnDetached: () => {},
+	});
+	const sub = (id: string) => ({ cwd: dir, agent: { kind: "sub", id }, sessionManager: { getSessionId: () => id, getSessionFile: () => "f" } }) as unknown as Ctx;
+	return { handlers, sub };
+}
+
+test("a finished sub is marked finished once; an id the registry does not know is retried without its -<n> suffix", async () => {
+	await withFakePython('{"member": null}', async calls => {
+		const { handlers, sub } = subBridge();
+		await handlers.agent_end[0]({ messages: [{ role: "assistant", content: "all done" }] }, sub("Probe-5"));
+		const lines = calls();
+		expect(lines).toHaveLength(2);
+		expect(lines[0]).toContain("member-finish");
+		expect(lines[0]).toContain("--agent Probe-5 --exit 0 --message all done");
+		expect(lines[1]).toContain("--agent Probe --exit 0 --message all done");
+		await handlers.agent_end[0]({ messages: [] }, sub("Probe-5")); // already marked: no further calls
+		expect(calls()).toHaveLength(2);
+	});
+});
+
+test("no retry when the registry matched the member, when the id has no numeric suffix, or when the member field is not null", async () => {
+	await withFakePython('{"member": {"name": "x"}}', async calls => {
+		const { handlers, sub } = subBridge();
+		await handlers.agent_end[0]({ messages: [] }, sub("Found-2"));
+		expect(calls()).toHaveLength(1);
+	});
+	await withFakePython('{"member": null}', async calls => {
+		const { handlers, sub } = subBridge();
+		await handlers.agent_end[0]({ messages: [] }, sub("Plain"));
+		await handlers.agent_end[0]({ messages: [] }, sub("12"));
+		expect(calls()).toHaveLength(2); // one call each: neither id has a "-<n>" suffix to strip
+		expect(calls()[0]).not.toContain("--message"); // an empty report sends no --message
+	});
+});
+
+test("a terminal yield from a sub marks it finished with the rendered report; an incremental yield, a main session and an id-less sub do not", async () => {
+	await withFakePython('{"member": {"name": "x"}}', async calls => {
+		const { handlers, sub } = subBridge();
+		const tee = handlers.tool_execution_end[0];
+		await tee({ toolName: "yield", result: { details: { status: "success", type: ["summary"] } } }, sub("Inc-1"));
+		await tee({ toolName: "yield", result: YIELD_RESULT }, { ...sub("Main-1"), agent: { kind: "main" } } as Ctx);
+		await tee({ toolName: "yield", result: YIELD_RESULT }, sub(""));
+		expect(calls()).toEqual([]);
+		await tee({ toolName: "yield", result: YIELD_RESULT }, sub("Done-3"));
+		expect(calls()).toHaveLength(1);
+		expect(calls()[0]).toContain("--agent Done-3");
+		expect(calls()[0]).toContain("STATUS: DONE");
+	});
+});
+
+test("a yield with sparse data renders zeroed counts, 'none' files and empty deliverable and next; no status renders nothing", async () => {
+	const { textOf } = await import("./stop-bridge");
+	expect(textOf({ details: { data: { status: "BLOCKED" } } })).toBe("STATUS: BLOCKED\nSTEPS: 0/0\nFILES_CHANGED: none\nEVIDENCE:\nDELIVERABLE: \nNEXT: ");
+	expect(textOf({ details: { data: { status: "DONE", stepsDone: "x", stepsTotal: null, filesChanged: "a.ts", evidence: "none" } } })).toBe("STATUS: DONE\nSTEPS: 0/0\nFILES_CHANGED: none\nEVIDENCE:\nDELIVERABLE: \nNEXT: ");
+	expect(textOf({ details: { data: { status: "FAILED", stepsDone: 1, stepsTotal: 3, filesChanged: [], evidence: [{ step: 2, command: "make", output: "boom" }, {}], next: "retry" } } })).toBe(
+		"STATUS: FAILED\nSTEPS: 1/3\nFILES_CHANGED: none\nEVIDENCE:\n2. make -> boom\nundefined. undefined -> undefined\nDELIVERABLE: \nNEXT: retry",
+	);
+	expect(textOf({ details: { data: { status: "" } } })).toBe("");
+	expect(textOf({ details: { data: { stepsDone: 1 } } })).toBe("");
+	expect(textOf({ details: { data: "DONE" } })).toBe("");
+});
+
+test("a failed conversion removes everything it left in its own ingest directory, sidecars included", async () => {
+	const handlers: Record<string, Handler[]> = {};
+	const spawns: Spawn[] = [];
+	registerStopBridge({ on: (name: string, fn: Handler) => (handlers[name] ??= []).push(fn) } as unknown as Pick<ExtensionAPI, "on">, {
+		hooks: [hook("ingest_session.py", "SessionEnd")],
+		run: async () => "",
+		cache: { convertFresh: async () => "/t.jsonl", forToolHook: async () => "" },
+		convert: async (_f, out) => {
+			writeFileSync(out, "partial\n"); // the converter died after writing the transcript and the lead's sidecars
+			mkdirSync(join(out, "..", "subagents"));
+			writeFileSync(join(out, "..", "subagents", "colony.jsonl"), "{}\n");
+			writeFileSync(join(out, "..", "stray.json"), "{}\n");
+			return false;
+		},
+		env: {},
+		tmpDir: dir,
+		spawnDetached: (argv, opts) => spawns.push({ argv, opts }),
+	});
+	const ctx: Ctx = { cwd: dir, agent: { kind: "main" }, sessionManager: { getSessionId: () => "s", getSessionFile: () => "f" } };
+	await handlers.session_shutdown[0]({}, ctx);
+	expect(spawns).toEqual([]);
 	expect(readdirSync(dir).filter(n => n.startsWith("atlas-ingest-"))).toEqual([]);
 });

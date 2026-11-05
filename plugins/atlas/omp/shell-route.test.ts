@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -234,6 +234,82 @@ test("a store save of ATLAS_LEAN_SHELL=off applies on the next call without relo
 	} finally {
 		rmSync(join(home, "settings.json"), { force: true });
 	}
+});
+
+test("wrapCommand: a command that is exactly the binary, or starts with it plus a space, is left alone; a longer name is not", () => {
+	const bin = "/opt/bin/lean-ctx";
+	expect(wrapCommand(bin, bin)).toBe(bin);
+	expect(wrapCommand(`${bin} gain`, bin)).toBe(`${bin} gain`);
+	expect(wrapCommand(`${bin}-extra run`, bin)).toBe(`${bin} -c '${bin}-extra run'`);
+	expect(wrapCommand("lean-ctx-other run", bin)).toBe(`${bin} -c 'lean-ctx-other run'`);
+	expect(wrapCommand("  lean-ctx gain  ", bin)).toBe("  lean-ctx gain  "); // leading whitespace is ignored for the check, the text is kept
+});
+
+test("wrapCommand: empty command or empty binary is returned unchanged", () => {
+	expect(wrapCommand("", "/opt/bin/lean-ctx")).toBe("");
+	expect(wrapCommand("echo hi", "")).toBe("echo hi");
+});
+
+test("wrapCommand: an already-routed command with a quoted (unsafe) binary path is not wrapped twice", () => {
+	const bin = "/opt/my tools/lean-ctx";
+	const once = wrapCommand("echo hi", bin);
+	expect(once).toBe(`'${bin}' -c 'echo hi'`);
+	expect(wrapCommand(once, bin)).toBe(once);
+	expect(wrapCommand(bin, bin)).toBe(bin);
+	expect(wrapCommand("echo it's", "/opt/bin/lean-ctx")).toBe(`/opt/bin/lean-ctx -c 'echo it'\\''s'`);
+});
+
+test("findExecutableOnPath skips a directory that carries the name and keeps looking", () => {
+	const first = join(root, "first");
+	const second = join(root, "second");
+	mkdirSync(join(first, "lean-ctx"), { recursive: true }); // executable-looking directory
+	mkdirSync(second, { recursive: true });
+	writeFileSync(join(second, "lean-ctx"), "#!/bin/sh\n");
+	chmodSync(join(second, "lean-ctx"), 0o755);
+	expect(findExecutableOnPath("lean-ctx", { PATH: `${first}:${second}` })).toBe(join(second, "lean-ctx"));
+	expect(findExecutableOnPath("lean-ctx", { PATH: first })).toBeUndefined();
+	expect(findExecutableOnPath("lean-ctx", { PATH: `::${second}:` })).toBe(join(second, "lean-ctx")); // empty PATH entries are skipped
+});
+
+test("defaultLeanCtxBin resolves from the given env PATH and returns undefined (not null) when absent", () => {
+	const dir = join(root, "found");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "lean-ctx"), "#!/bin/sh\n");
+	chmodSync(join(dir, "lean-ctx"), 0o755);
+	expect(defaultLeanCtxBin({ PATH: dir })).toBe(join(dir, "lean-ctx"));
+	expect(defaultLeanCtxBin({ PATH: join(root, "empty") })).toBeUndefined();
+	// an env without PATH means an empty PATH, never the host's PATH
+	const saved = process.env.PATH;
+	process.env.PATH = dir;
+	try {
+		expect(defaultLeanCtxBin({})).toBeUndefined();
+	} finally {
+		process.env.PATH = saved;
+	}
+});
+
+test("defaultLeanCtxBin falls back to a manual PATH walk when Bun is unavailable", () => {
+	const dir = join(root, "walk");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "lean-ctx"), "#!/bin/sh\n");
+	chmodSync(join(dir, "lean-ctx"), 0o755);
+	const spy = spyOn(Bun, "which").mockImplementation(() => {
+		throw new Error("which exploded"); // a throwing Bun.which falls through to the manual walk
+	});
+	try {
+		expect(defaultLeanCtxBin({ PATH: dir })).toBe(join(dir, "lean-ctx"));
+		expect(defaultLeanCtxBin({ PATH: join(root, "none") })).toBeUndefined();
+	} finally {
+		spy.mockRestore();
+	}
+});
+
+test("the handler returns a revised copy of the input: other fields survive and the original is not mutated", () => {
+	const h = harness({});
+	const input = { command: "echo hi", timeout: 30, cwd: "/w" };
+	const r = h.tool_call({ toolName: "bash", input }, MAIN) as { input: Record<string, unknown> };
+	expect(r.input).toEqual({ command: "/opt/bin/lean-ctx -c 'echo hi'", timeout: 30, cwd: "/w" });
+	expect(input.command).toBe("echo hi");
 });
 
 test("wrapCommand quotes a lean-ctx path that contains a space or a quote", () => {

@@ -1,7 +1,7 @@
-import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WIDGET_KEY, createChannelView, laneCalls, laneTool, sparkBuckets, liveWorkers, registerLaneToolRecorder, spinFrame, todoSummary, finishedMembers, formatNote, readChannelNotes, registerChannelView } from "./channel-view";
+import { WIDGET_KEY, boardRoot, createChannelView, sessionTodos, laneCalls, laneTool, sparkBuckets, liveWorkers, registerLaneToolRecorder, spinFrame, todoSummary, finishedMembers, formatNote, readChannelNotes, registerChannelView } from "./channel-view";
 import { createGatesCache, renderPanel, visibleWidth, type PanelModel } from "./mission-panel";
 import { isTerminalYield, registerStopBridge } from "./stop-bridge";
 import { registerWorkerReport } from "./worker-report";
@@ -631,4 +631,241 @@ test("D6 omp phase names map to rail phases", async () => {
 	expect(railPhase("Setup", undefined)).toBe("research");
 	expect(railPhase("Audit", undefined)).toBe("implement");
 	expect(railPhase("Deliver", undefined)).toBe("done");
+});
+
+// ---- hardening: width, tool-name shortening, registry loss, wave clock, gates plumbing, linger cleanup, recorder cap ----
+
+function widthOf(f: { root: string }, deps: Record<string, unknown>) {
+	const h = harness();
+	const view = createChannelView({ ...h.deps, ...deps } as never);
+	view.open(h.ui, { channel: CHAN, members: ["A"], cwd: f.root });
+	return Math.max(...(h.calls.at(-1) ?? []).map(l => visibleWidth(l)));
+}
+
+test("panel width is the terminal width less the Text padding, never under 40, 120 when the terminal is unknown", () => {
+	const f = fixture();
+	const stdout = process.stdout as { columns?: number };
+	const saved = stdout.columns;
+	try {
+		expect(widthOf(f, { columns: () => 100 })).toBe(98);
+		expect(widthOf(f, { columns: () => 42 })).toBe(40);
+		expect(widthOf(f, { columns: () => 30 })).toBe(40);
+		stdout.columns = 90;
+		expect(widthOf(f, {})).toBe(88); // no override: the real terminal
+		expect(widthOf(f, { columns: () => undefined })).toBe(88);
+		expect(widthOf(f, { columns: () => 150 })).toBe(148); // the override wins over the terminal
+		stdout.columns = undefined;
+		expect(widthOf(f, { columns: () => undefined })).toBe(120);
+	} finally {
+		stdout.columns = saved;
+	}
+});
+
+test("spinFrame: wraps, mirrors negatives and fractions, and falls back to the plain spinner for non-finite counters", () => {
+	expect(spinFrame(0)).toBe("⠋");
+	expect(spinFrame(10)).toBe("⠋");
+	expect(spinFrame(11)).toBe("⠙");
+	expect(spinFrame(-1)).toBe("⠙");
+	expect(spinFrame(1.9)).toBe("⠙");
+	expect(spinFrame(0, "test")).toBe("⠁");
+	expect(spinFrame(7, "implement")).toBe("⣽");
+	expect(spinFrame(3, "unknown-phase")).toBe("⠸");
+	expect(spinFrame(Number.NaN)).toBe("⠋");
+	expect(spinFrame(Number.NaN, "verify")).toBe("⠋");
+	expect(spinFrame(Number.POSITIVE_INFINITY, "verify")).toBe("⠋");
+});
+
+test("lane tool names: Claude mcp prefix dropped, omp's ambiguous split takes the last word, plain tools untouched", () => {
+	const f = fixture();
+	const logs = join(f.root, ".atlas", ".run", "logs");
+	mkdirSync(logs, { recursive: true });
+	const toolOf = (name: string) => {
+		writeFileSync(join(logs, "w.log"), toolUse("t", name, {}));
+		return laneTool(f.root, "w")?.tool;
+	};
+	expect(toolOf("mcp__server__do_thing")).toBe("do_thing");
+	expect(toolOf("mcp__plugin_context-mode_context-mode__ctx_search")).toBe("ctx_search");
+	expect(toolOf("mcp__claude_mem_mcp_search_search")).toBe("search"); // omp: one underscore joins server and tool
+	expect(toolOf("mcp____a_b")).toBe("a_b"); // empty server name: the "__" right after the prefix still splits
+	expect(toolOf("mcp__")).toBe("mcp__"); // nothing after the prefix: keep the name
+	expect(toolOf("Read")).toBe("Read");
+	expect(toolOf("my_mcp__x")).toBe("my_mcp__x");
+});
+
+test("a registry that becomes unreadable after the channel was seen does not end the lanes", () => {
+	const f = fixture();
+	live(f.root, ["w1", "w2"]);
+	const { calls, ui, timers, view } = harness();
+	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root });
+	expect(plain(calls.at(-1))).toMatch(lane("w1"));
+	writeFileSync(join(f.root, ".atlas", ".run", "channels.json"), "{ torn write");
+	timers.iv?.();
+	expect(plain(calls.at(-1))).toMatch(lane("w1")); // unreadable is not proof of a reap
+	expect(plain(calls.at(-1))).toMatch(lane("w2"));
+	expect(plain(calls.at(-1))).not.toContain("last wave");
+	rmSync(join(f.root, ".atlas", ".run", "channels.json"));
+	timers.iv?.();
+	expect(plain(calls.at(-1))).toMatch(lane("w1"));
+});
+
+test("the last-wave summary counts from epoch-second registry clocks and shows nothing failed when no row ever existed", () => {
+	const f = fixture();
+	const run = join(f.root, ".atlas", ".run");
+	const J = 1_700_000_000;
+	const reg = (members: object[]) => writeFileSync(join(run, "channels.json"), JSON.stringify({ version: 1, channels: { [CHAN]: { members } } }));
+	const { calls, ui, timers, view } = harness();
+	timers.clock = (J + 90) * 1000;
+	reg([{ name: "w1", joined: J }, { name: "w2", joined: J + 10 }]); // both still running at the first paint
+	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root });
+	writeFileSync(join(run, "channels.json"), JSON.stringify({ version: 1, channels: {} })); // reaped before anyone's ended_at was read
+	timers.iv?.();
+	expect(plain(calls.at(-1))).toContain("idle  ·  last wave: 2 workers · 1m30s");
+	expect(plain(calls.at(-1))).not.toContain("failed");
+
+	const bare = fixture(); // reaped mount with no registry rows at all: just the roster size
+	const h = harness();
+	h.view.open(h.ui, { channel: CHAN, members: ["a", "b", "c"], cwd: bare.root, reaped: true });
+	expect(plain(h.calls.at(-1))).toContain("last wave: 3 workers");
+	expect(plain(h.calls.at(-1))).not.toContain("failed");
+});
+
+test("gates: the session id (or '-') reaches the cache, open failures reach the core row, and no reading yet still renders it", () => {
+	const f = fixture();
+	writeFileSync(join(f.root, ".atlas", ".run", "findings.json"), JSON.stringify([{ id: "F1", status: "verified", title: "t" }]));
+	const refreshes: Array<[string, string]> = [];
+	const group = (ok: boolean) => ({ id: "completion", title: "Completion", lines: [{ id: "l", label: "x", ok }] });
+	let read: unknown = null;
+	const gates = { read: () => read, refresh: (s: string, r: string) => void refreshes.push([s, r]) };
+	const open = (sessionId?: string) => {
+		const h = harness();
+		const view = createChannelView({ ...h.deps, gates } as never);
+		view.open(h.ui, { channel: CHAN, members: ["A"], cwd: f.root, sessionId });
+		return plain(h.calls.at(-1));
+	};
+	expect(open("sess-9")).toMatch(/✔/); // nothing read yet: core row still present, gates clear
+	expect(open("sess-9")).toContain("CONTRACT");
+	expect(refreshes.at(-1)).toEqual(["sess-9", f.root]);
+	open();
+	expect(refreshes.at(-1)).toEqual(["-", f.root]);
+	read = [group(false), group(true)];
+	expect(open("sess-9")).toMatch(/✖\s?1/);
+	read = [group(true)];
+	expect(open("sess-9")).not.toMatch(/✖\s?\d+ gates|✖1/);
+});
+
+test("stopping while a linger is pending cancels it; stopping an idle view cancels nothing", () => {
+	const f = fixture();
+	const cleared: unknown[] = [];
+	let n = 0;
+	const mk = () => {
+		const h = harness();
+		const deps = { ...h.deps, setTimeout: (fn: () => void) => ((h.timers.to = fn), `T${++n}`), clearTimeout: (t: unknown) => void cleared.push(t) };
+		return { ...h, view: createChannelView(deps as never) };
+	};
+	const idle = mk();
+	idle.view.open(idle.ui, { channel: CHAN, members: ["A"], cwd: f.root });
+	idle.view.stop();
+	expect(cleared).toEqual([]);
+	expect(idle.calls.at(-1)).toBeUndefined();
+	const h = mk();
+	h.view.open(h.ui, { channel: CHAN, members: ["A"], cwd: f.root });
+	f.finish(["A"]);
+	for (let i = 0; i < 4; i++) h.timers.iv?.();
+	expect(h.timers.to).toBeDefined();
+	h.view.stop();
+	expect(cleared).toEqual([`T${n}`]);
+	expect(h.calls.at(-1)).toBeUndefined();
+	expect(h.timers.iv).toBeUndefined();
+});
+
+test("only the lead's assistant text pins the rail: user messages and non-text content never do", () => {
+	const root = atlasFixture([{ name: "w1", joined: 1 }], [{ status: "in_progress", content: "no contract phase" }]);
+	const { calls, ui, deps } = harness({ ATLAS_PROJECT_ROOT: root });
+	type Handler = (e: Record<string, unknown>, c: Record<string, unknown>) => unknown;
+	const handlers: Record<string, Handler[]> = {};
+	const pi = { on: (name: string, h: Handler) => void (handlers[name] ??= []).push(h) } as unknown as Parameters<typeof registerChannelView>[0];
+	const view = registerChannelView(pi, deps);
+	const main = { cwd: root, agent: { kind: "main" } };
+	const send = (message: unknown) => handlers.message_end?.forEach(h => h({ message }, main));
+	const header = [{ type: "text", text: "ATLAS | ⛭ verify | looks like a header" }];
+	const railOf = () => {
+		view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
+		return plain([calls.at(-1)![1]!]);
+	};
+	send({ role: "user", content: header });
+	send({ role: "assistant", content: "ATLAS | ⛭ verify | plain string content" });
+	send({ role: "assistant", content: [{ type: "tool_use", text: "ATLAS | ⛭ verify | x" }] });
+	send(null);
+	expect(railOf()).toMatch(/RESEARCH/);
+	send({ role: "assistant", content: header });
+	expect(railOf()).toMatch(/VERIFY/);
+	send({ role: "assistant", content: [{ type: "text", text: "ATLAS | ⛭ bogus-phase | x" }] }); // not a rail phase: ignored
+	expect(railOf()).toMatch(/VERIFY/);
+	view.stop();
+});
+
+test("the tool recorder keeps only the last 64 call times", () => {
+	const f = fixture();
+	type H = (e: unknown, c: unknown) => unknown;
+	const worker: Record<string, H> = {};
+	registerLaneToolRecorder({ on: (ev: string, h: H) => void (worker[ev] = h) } as never, { ATLAS_WORKER_NAME: "busy-1" });
+	const main = { cwd: f.root, agent: { kind: "main" } };
+	for (let i = 0; i < 70; i++) worker.tool_call?.({ toolName: "bash", input: { command: `echo ${i}` } }, main);
+	expect(laneCalls(f.root, "busy-1")).toHaveLength(64);
+	expect(laneTool(f.root, "busy-1")?.target).toBe("echo 69");
+});
+
+test("sessionTodos: this session's live rows only; archived and advisor rows and an unreadable board give none", () => {
+	const root = atlasFixture(
+		[],
+		[
+			{ content: "mine", status: "pending", session_id: "s1" },
+			{ content: "other session", status: "pending", session_id: "s2" },
+			{ content: "archived", status: "completed", session_id: "s1", archived: true },
+			{ content: "advisor note", status: "pending", session_id: "s1", origin: "advisor" },
+			{ content: "manual", status: "in_progress", session_id: "s1", origin: "manual" },
+		],
+	);
+	expect(sessionTodos(root, "s1").map(i => i.content)).toEqual(["mine", "manual"]);
+	expect(sessionTodos(root, "s2").map(i => i.content)).toEqual(["other session"]);
+	expect(sessionTodos(root).map(i => i.content)).toEqual(["mine", "other session", "manual"]); // no session: every session, still no archived/advisor
+	expect(sessionTodos(root, "nobody")).toEqual([]);
+	const run = join(root, ".atlas", ".run");
+	writeFileSync(join(run, "todos.json"), "{ torn");
+	expect(sessionTodos(root, "s1")).toEqual([]);
+	rmSync(join(run, "todos.json"));
+	expect(sessionTodos(root, "s1")).toEqual([]);
+	writeFileSync(join(run, "todos.json"), JSON.stringify({ version: 1 })); // no items key
+	expect(sessionTodos(root, "s1")).toEqual([]);
+});
+
+test("boardRoot: ATLAS_PROJECT_ROOT wins, else the nearest ancestor with .atlas, a linked worktree maps to its main repo, else cwd", () => {
+	const tree = realpathSync(mkdtempSync(join(tmpdir(), "board-root-")));
+	const proj = join(tree, "proj");
+	const deep = join(proj, "a", "b", "c");
+	mkdirSync(join(proj, ".atlas"), { recursive: true });
+	mkdirSync(deep, { recursive: true });
+	expect(boardRoot(deep, {})).toBe(proj);
+	expect(boardRoot(proj, {})).toBe(proj);
+	expect(boardRoot(deep, { ATLAS_PROJECT_ROOT: "/elsewhere" })).toBe("/elsewhere");
+	expect(boardRoot(deep, { ATLAS_PROJECT_ROOT: "" })).toBe(proj); // empty means unset
+	mkdirSync(join(proj, "a", ".atlas")); // a nearer .atlas shadows the outer one
+	expect(boardRoot(deep, {})).toBe(join(proj, "a"));
+	const bare = join(tree, "bare", "x");
+	mkdirSync(bare, { recursive: true });
+	expect(boardRoot(bare, {})).toBe(bare); // no .atlas anywhere up the tree: the cwd itself
+	// linked worktree: `.git` file -> gitdir -> commondir -> the main repo, even with a stray .atlas of its own
+	const main = join(tree, "main");
+	mkdirSync(join(main, ".git", "worktrees", "wt"), { recursive: true });
+	writeFileSync(join(main, ".git", "worktrees", "wt", "commondir"), "../..\n");
+	const wt = join(tree, "wt");
+	mkdirSync(join(wt, ".atlas"), { recursive: true });
+	mkdirSync(join(wt, "sub"));
+	writeFileSync(join(wt, ".git"), `gitdir: ${join(main, ".git", "worktrees", "wt")}\n`);
+	expect(boardRoot(wt, {})).toBe(main);
+	expect(boardRoot(join(wt, "sub"), {})).toBe(main);
+	writeFileSync(join(main, ".git", "worktrees", "wt", "commondir"), "\n"); // empty commondir: not a usable link, fall back to .atlas
+	expect(boardRoot(wt, {})).toBe(wt);
+	writeFileSync(join(wt, ".git"), "not a gitdir pointer\n");
+	expect(boardRoot(wt, {})).toBe(wt);
 });
