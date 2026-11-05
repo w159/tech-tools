@@ -490,5 +490,55 @@ class RegistryTests(unittest.TestCase):
             self.assertIn(needed, have)
 
 
+class GateProbeAgreementTests(unittest.TestCase):
+    """The gate probes must score what the hooks really decide: a shared session turned the one-shot spec advisory
+    into a false 'allow', and a stale expectation called a foreign mcp-search server a recall."""
+
+    @classmethod
+    def setUpClass(cls):
+        from scorecard import probe_gates
+
+        cls.tmp = Path(tempfile.mkdtemp(prefix="sc-gates-"))
+        ctx = core.Ctx(ROOT, work=cls.tmp)
+        cls.spec = {m["name"]: m for m in probe_gates.probe_dispatch_spec(ctx)}
+        cls.gates = {m["name"]: m for m in probe_gates.probe_gate_correctness(ctx)}
+
+    @classmethod
+    def tearDownClass(cls):
+        __import__("shutil").rmtree(cls.tmp, ignore_errors=True)
+
+    def test_every_spec_decoy_is_denied(self):
+        m = self.spec["dispatch_spec_decoy_denied"]
+        self.assertEqual(m["value"], self.spec["dispatch_spec_decoy_total"]["value"], m.get("detail"))
+
+    def test_every_empty_block_spec_is_denied(self):
+        m = self.spec["dispatch_spec_empty_denied"]
+        self.assertEqual(m["value"], self.spec["dispatch_spec_empty_total"]["value"], m.get("detail"))
+
+    def test_no_gate_probe_disagrees_with_its_hook(self):
+        m = self.gates["gate_probes_mismatch"]
+        self.assertEqual(m["value"], 0, m.get("detail"))
+        self.assertEqual(self.gates["gate_probes_correct"]["value"], self.gates["gate_probes_total"]["value"])
+
+
+@unittest.skipUnless(__import__("shutil").which("tmux"), "needs a real tmux")
+class IrcProbeReceiptTests(unittest.TestCase):
+    """The IRC delivery probe must count a note as received when the hook/worker drain shows it. Drained notes are
+    <board-message> blocks; a recorder that only matched '- from' lines reported 30 of 30 human and 40 of 40
+    agent messages lost while the board showed every one read."""
+
+    def test_no_message_is_lost_on_a_real_tmux(self):
+        from scorecard import probe_mesh
+
+        tmp = Path(tempfile.mkdtemp(prefix="sc-irc-"))
+        self.addCleanup(__import__("shutil").rmtree, tmp, True)
+        got = {m["name"]: m for m in probe_mesh.probe_irc(core.Ctx(ROOT, quick=True, work=tmp))}
+        if got["irc_human_loss"]["state"] != "ok":
+            self.skipTest(got["irc_human_loss"].get("reason", "probe could not run here"))
+        self.assertEqual(got["irc_human_loss"]["value"], 0)
+        self.assertEqual(got["irc_a2a_loss"]["value"], 0)
+        self.assertEqual(got["irc_human_dup"]["value"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

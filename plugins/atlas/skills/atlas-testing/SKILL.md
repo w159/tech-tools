@@ -1,7 +1,7 @@
 ---
 name: atlas-testing
-description: "Plans, generates, and runs tests in any language: detects the stack and existing tests, maps gaps across every testing type (unit through mutation, fuzz, load, security, accessibility), recommends the highest-value next test, writes it, runs it, and reports evidence. Use when adding tests, choosing a test strategy, or finding what testing is missing."
-when_to_use: "write tests, add tests, test strategy, what tests am I missing, test gaps, mutation testing, property-based, fuzz, load test, coverage, flaky tests, contract test, e2e test, benchmark"
+description: "Plans, writes and runs tests in any language: maps gaps across test types (unit through mutation, fuzz, load, security, accessibility), writes the highest-value next test, reports evidence. Use when adding tests or finding what testing is missing."
+when_to_use: "add tests, test strategy, test gaps, mutation, fuzz, flaky tests, coverage"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[path or module] [gaps|plan|write|run|mutate]"
 ---

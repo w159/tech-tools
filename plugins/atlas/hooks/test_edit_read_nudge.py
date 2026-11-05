@@ -47,6 +47,17 @@ class EditReadNudgeTest(unittest.TestCase):
         self.assertIn('read path="%s/a.py:N-M" before edit' % W, out)
         self.assertIn("does not credit ctx_read", out)
 
+    def test_nudge_records_the_unread_reason_once(self):
+        home = tempfile.mkdtemp()
+        with mock.patch.dict(os.environ, {"ATLAS_HOME": home, "ATLAS_ANALYTICS": "on"}):
+            _fire("mcp__lean-ctx__ctx_read", "/w/b.py", "s9", "PostToolUse")
+            self.assertTrue(_fire("edit", "/w/b.py", "s9", "PreToolUse"))
+            self.assertEqual(_fire("edit", "/w/b.py", "s9", "PreToolUse"), "")  # repeat: not emitted
+            _fire("read", "/w/a.py", "s9", "PostToolUse")
+            _fire("edit", "/w/a.py", "s9", "PreToolUse")  # no nudge
+        lines = open(os.path.join(home, "analytics", "events.jsonl")).read().splitlines()
+        self.assertEqual([json.loads(x)["k"] for x in lines], ["hook.edit_read_nudge.context.unread"])
+
     def test_builtin_read_silences(self):
         _fire("mcp__lean-ctx__ctx_read", "/w/a.py", "s2", "PostToolUse")
         _fire("read", "/w/a.py:1-20", "s2", "PostToolUse")

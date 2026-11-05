@@ -537,6 +537,76 @@ class BashAdvisorRegressionTests(unittest.TestCase):
         )
 
 
+class ReasonClassTests(GuardBase):
+    def _classes(self, cmd, repo):
+        v = gg.verdict(bash(cmd, repo))
+        return v["decision"], v.get("reason_class")
+
+    def test_each_rule_maps_to_one_class(self):
+        repo = make_repo()
+        self.assertEqual(self._classes("git commit -m x", repo), ("deny", "protected"))
+        self.assertEqual(self._classes("git push -f origin main", repo), ("deny", "force"))
+        self.assertEqual(self._classes("git push --delete origin main", repo), ("deny", "force"))
+        self.assertEqual(self._classes("gh pr create --fill", repo), ("ask", "pr"))
+        self.assertEqual(
+            self._classes("python3 scripts/atlas_git.py allow main", repo), ("ask", "protected")
+        )
+        sh(repo, "git", "switch", "-q", "feat/x")
+        with mock.patch.dict(os.environ, {"ATLAS_GIT_MAX_BRANCHES": "1", "ATLAS_GIT_PRS": "off"}):
+            self.assertEqual(self._classes("git checkout -b feat/y", repo), ("deny", "branch"))
+            self.assertEqual(self._classes("gh pr create --fill", repo), ("deny", "pr"))
+        sh(repo, "git", "worktree", "add", "-q", str(repo.parent / "wt1"), "-b", "feat/w")
+        commit(repo.parent / "wt1", "w.txt")
+        with mock.patch.dict(os.environ, {"ATLAS_GIT_MAX_WORKTREES": "1"}):
+            self.assertEqual(
+                self._classes("git worktree add ../w -b feat/z", repo), ("deny", "worktree")
+            )
+
+    def test_an_unclassified_verdict_falls_back_to_other(self):
+        self.assertEqual(gg._reason_class({"decision": "deny", "reason": "x"}), "other")
+        self.assertEqual(
+            gg._reason_class({"decision": "deny", "reason": "x", "reason_class": "bogus"}), "other"
+        )
+
+
+class RecordedReasonTests(GuardBase):
+    def _events(self):
+        f = Path(os.environ["ATLAS_HOME"]) / "analytics" / "events.jsonl"
+        return [json.loads(x)["k"] for x in f.read_text().splitlines()] if f.exists() else []
+
+    def _fire(self, cmd, repo, **env):
+        env = {"ATLAS_ANALYTICS": "on", **env}
+        r = subprocess.run(
+            [sys.executable, str(HERE / "git_guard.py")],
+            input=json.dumps(bash(cmd, repo)),
+            capture_output=True,
+            text=True,
+            env=dict(os.environ, **env),
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)["hookSpecificOutput"]["permissionDecision"] if r.stdout else None
+
+    def test_forced_push_to_main_records_deny_force_once(self):
+        repo = make_repo()
+        self.assertEqual(self._fire("git push -f origin main", repo), "deny")
+        self.assertEqual(self._events(), ["hook.git_guard.deny.force"])
+
+    def test_ask_records_ask_and_codex_records_the_deny_it_emitted(self):
+        repo = make_repo(other_branch=False)
+        self.assertEqual(self._fire("git push origin main", repo), "ask")
+        self.assertEqual(self._events(), ["hook.git_guard.ask.protected"])
+        self.assertEqual(self._fire("git push origin main", repo, ATLAS_HARNESS="codex"), "deny")
+        self.assertEqual(
+            self._events(), ["hook.git_guard.ask.protected", "hook.git_guard.deny.protected"]
+        )
+
+    def test_nothing_recorded_when_allowed_or_off(self):
+        repo = make_repo()
+        self.assertIsNone(self._fire("git status", repo))
+        self.assertEqual(self._fire("git commit -m x", repo, ATLAS_ANALYTICS="off"), "deny")
+        self.assertEqual(self._events(), [])
+
+
 class HookProcessTests(GuardBase):
     def _run(self, argv, payload):
         return subprocess.run(

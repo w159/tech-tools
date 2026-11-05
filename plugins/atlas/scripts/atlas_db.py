@@ -606,7 +606,8 @@ def record_recall(conn, run_id, hit):
 # routed through a Write/Edit tool call, not a file. It is never target code, so
 # the tripwire, the inline-op counter and the completion gate all share this one
 # notion. `://` is required: a Windows drive path (`C:\repo\a.py`) has no `//`.
-_URI_PATH = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+from atlas_lazyre import lre  # noqa: E402
+_URI_PATH = lre(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 
 
 def is_uri_path(path):
@@ -1423,7 +1424,7 @@ DENY_MARKERS = (
     "DENY - ",
     "Task execution failed: DENY",
 )
-_HOOK_ERROR_PREFIX = re.compile(r"^\s*PreToolUse:\S+ hook error:\s*")
+_HOOK_ERROR_PREFIX = lre(r"^\s*PreToolUse:\S+ hook error:\s*")
 
 # error_snippet cap: long enough to carry a gate/exception reason, short enough
 # to keep one row per failed call bounded.
@@ -1485,7 +1486,7 @@ ERROR_CLASSES = (
     "unknown",
 )
 
-_MODEL_MISUSE = re.compile(
+_MODEL_MISUSE = lre(
     r"(without (first )?read|has not been read|must (first )?read|read (it|the file) first"
     r"|file has been modified|modified since (it was )?read|stale|hash mismatch"
     r"|hashline|anchor|no (such )?(line|match)|(old_string|old_text).*(not found|unique|multiple)"
@@ -1512,7 +1513,7 @@ _MODEL_MISUSE = re.compile(
     r"|added as a read-only root|rule=\"[\w-]+\" path=|cannot combine query extraction)",
     re.I,
 )
-_ENVIRONMENT = re.compile(
+_ENVIRONMENT = lre(
     r"(exit code|exited with|non-?zero|command failed|enoent|no such file|not found"
     r"|does not exist|permission|eacces|denied by user|timed? ?out|timeout|etimedout"
     r"|econnr|connection (refused|reset|closed)|network|dns|unreachable|mcp error"
@@ -1529,24 +1530,24 @@ _ENVIRONMENT = re.compile(
     re.I,
 )
 _ATLAS_FRAME = r'File "[^"\n]*(?:plugins/atlas/|/\.(?:claude|omp)/[^"\n]*atlas[^"\n/]*/)[^"\n]*\.py"'
-_TOOL_FAULT = re.compile(
+_TOOL_FAULT = lre(
     r"(?:Traceback \(most recent call last\)[\s\S]*?" + _ATLAS_FRAME + r"|hook error:)",
     re.I,
 )
-_TOOL_FAULT_SCRIPT = re.compile(
+_TOOL_FAULT_SCRIPT = lre(
     r"can't open file '([^']*scripts/atlas_[^']*\.py)'", re.I
 )
 # A failed run of the user's own code (eval cell, shell one-liner, ctx_execute) is a
 # traceback or a bare `XError:` line that names no atlas frame (_TOOL_FAULT ran first).
-_CODE_TOOL = re.compile(r"(?:^|__|_)(?:bash|shell|eval|execute|execute_file)$", re.I)
-_USER_CODE = re.compile(
+_CODE_TOOL = lre(r"(?:^|__|_)(?:bash|shell|eval|execute|execute_file)$", re.I)
+_USER_CODE = lre(
     r"\s*(?:Traceback \(most recent call last\)"
     r"|(?:Syntax|Type|Reference|Range|Value|Key|Name|Attribute|Import|Index|Assertion"
     r"|ModuleNotFound|ZeroDivision|FileNotFound)Error\b)"
 )
 # An error-flagged result whose text says the call recovered (e.g. claude-mem
 # falling back to SQLite when Chroma is down): not a tool failure.
-_RECOVERED = re.compile(
+_RECOVERED = lre(
     r"(?:fell|falling|falls) back to|fallback (?:succeeded|used|result)", re.I
 )
 
@@ -1558,7 +1559,7 @@ def is_recovered_error(snippet):
 # error_snippet_of keeps only the head, so a shell result that fills the whole cap
 # with plain output and no failure marker is a command that printed a lot and then
 # exited non-zero: the marker sat in the cut tail.
-_SHELL_TOOL = re.compile(r"(?:^|__|_)(?:bash|shell)$", re.I)
+_SHELL_TOOL = lre(r"(?:^|__|_)(?:bash|shell)$", re.I)
 
 
 def classify_error(tool_name, snippet, denied):

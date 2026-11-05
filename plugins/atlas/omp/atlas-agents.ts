@@ -11,14 +11,14 @@ import { pluginRoot } from "./plugin-path";
  * notice). Tier map (atlas colony):
  *
  * Derived from frontmatter effort (none/low -> off, medium/high -> low; see tiering design 2026-10-20):
- * - off:    explorer, docs-auditor, docs-curator, schema-inventory, naming-glossary-audit, runner, db-prober, ui-runtime-tester
- * - low:    planner, implementer, verifier, completeness-critic, rls-privilege-audit, test-engineer
+ * - off:    explorer, docs-auditor, docs-curator, runner, ui-runtime-tester
+ * - low:    planner, implementer, verifier, completeness-critic, db-prober, test-engineer
  * (one task + one test, then the lead ends the worker and spawns a fresh one)
  *
- * Mechanical tier (Claude `model: haiku`: runner, docs-auditor, schema-inventory, naming-glossary-audit) uses
+ * Mechanical tier (Claude `model: haiku`: runner, docs-auditor, explorer) uses
  * `@atlas-mechanic` with `@smol` as the guaranteed fallback.
  *
- * Roles: judgment agents (verifier, completeness-critic, rls-privilege-audit) run on the `@atlas-verifier` role
+ * Roles: judgment agents (verifier, completeness-critic) run on the `@atlas-verifier` role
  * alias, haiku-pinned agents on `@atlas-mechanic`, the rest on `@atlas-worker`. Role values resolve through `modelRoles.<role>` in the
  * omp config; in omp 18.6.1 an unresolved custom role alias stays a literal
  * token that matches no model while `@smol` still expands, and if nothing
@@ -34,21 +34,18 @@ export const ATLAS_THINKING_LEVELS: Record<string, "off" | "low"> = {
 	explorer: "off",
 	"docs-auditor": "off",
 	"docs-curator": "off",
-	"schema-inventory": "off",
-	"naming-glossary-audit": "off",
 	runner: "off",
-	"db-prober": "off",
 	"ui-runtime-tester": "off",
 	implementer: "low",
 	planner: "low",
 	verifier: "low",
 	"completeness-critic": "low",
-	"rls-privilege-audit": "low",
+	"db-prober": "low",
 	"test-engineer": "low",
 };
 
 /** Agents whose omp tier is the judgment tier (`@atlas-verifier`); every other non-haiku agent is a worker. */
-const VERIFIER_AGENTS: Record<string, true> = { verifier: true, "completeness-critic": true, "rls-privilege-audit": true };
+const VERIFIER_AGENTS: Record<string, true> = { verifier: true, "completeness-critic": true };
 
 /** Role alias for one atlas agent. Claude pins `model: haiku` for the cheap mechanical tier; omp realises it as `@atlas-mechanic`, not only for `runner`. */
 export function roleFor(

@@ -110,6 +110,39 @@ class TestBehaviorKnobs(ControlTestCase):
         self.assertEqual(knob["value"], "9")
         self.assertEqual(knob["source"], "store")
 
+    def test_analytics_knob_is_a_documented_on_off_toggle(self):
+        knob = self._find_knob("ATLAS_ANALYTICS")
+        self.assertEqual(knob["kind"], "toggle")
+        self.assertEqual((knob["on"], knob["off"], knob["default"]), ("on", "off", "on"))
+        text = knob["description"] + " " + knob["details"]
+        self.assertIn("DO_NOT_TRACK", text)
+        self.assertIn("atlas_analytics.py disable", text)
+        self.assertTrue(text.isascii())
+
+    def test_analytics_knob_round_trips_through_the_atlas_store_and_the_client_honours_it(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import atlas_analytics
+
+        self.addCleanup(atlas_analytics._reset)
+        with mock.patch.dict(os.environ):
+            for k in ("DO_NOT_TRACK", "CI", "GITHUB_ACTIONS", "PYTEST_CURRENT_TEST"):
+                os.environ.pop(k, None)
+            atlas_analytics._reset()
+            self.assertEqual(atlas_analytics.state(), (True, "on by default"))
+            res = self.mod.write_behavior_updates({"ATLAS_ANALYTICS": "off"})
+            self.assertTrue(res["ok"], res)
+            store = json.loads((Path(os.environ["ATLAS_HOME"]) / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(store["env"]["ATLAS_ANALYTICS"], "off")
+            knob = self._find_knob("ATLAS_ANALYTICS")
+            self.assertEqual((knob["value"], knob["source"]), ("off", "store"))
+            atlas_analytics._reset()
+            self.assertEqual(atlas_analytics.state(), (False, "ATLAS_ANALYTICS=off"))
+            self.assertIsNone(atlas_analytics.boot_notice())
+            res = self.mod.write_behavior_updates({"ATLAS_ANALYTICS": ""})
+            self.assertEqual(res["cleared"], ["ATLAS_ANALYTICS"])
+            atlas_analytics._reset()
+            self.assertEqual(atlas_analytics.state(), (True, "on by default"))
+
     def test_empty_value_clears_the_override(self):
         self.mod.write_behavior_updates({"ATLAS_TRIPWIRE_THRESHOLD": "9"})
         res = self.mod.write_behavior_updates({"ATLAS_TRIPWIRE_THRESHOLD": ""})

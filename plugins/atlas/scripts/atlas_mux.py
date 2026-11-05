@@ -1771,6 +1771,36 @@ def _sha(*parts) -> str:
 
 DEFAULT_MAX_TEAM = 6  # workers per team; ATLAS_MAX_TEAM overrides
 
+_SEAT_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def check_seats(team: list) -> list:
+    """Per-spec seat labels of one matrix cell (`seat` key, "" when absent). A role may appear in more than one
+    spec of a cell only when every one of those specs carries its own label (`inventory`, `privileges`): the
+    label is what tells two seats of one role apart, e.g. a haiku inventory seat and a sonnet privilege seat.
+    Raises ValueError on a malformed label, a repeated (role, label), or an unlabelled spec sharing its role."""
+    labels = []
+    by_role: dict = {}
+    for spec in team:
+        label = spec.get("seat") or ""
+        if label and not (isinstance(label, str) and _SEAT_RE.match(label) and len(label) <= 24):
+            raise ValueError(f"seat label {label!r} of role {spec['role']!r} must match [a-z0-9-], 1-24 chars")
+        by_role.setdefault(spec["role"], []).append(label)
+        labels.append(label)
+    for role, seen in by_role.items():
+        if len(seen) > 1 and ("" in seen or len(set(seen)) != len(seen)):
+            raise ValueError(
+                f"role {role!r} has {len(seen)} seats in one cell: give each its own `seat` label (got {seen})"
+            )
+    return labels
+
+
+def seat_model(member: dict, harness: str) -> str | None:
+    """The model a labelled seat pins for its worker. Unlabelled seats return None and keep resolving from the
+    role definition (unchanged). Only the claude harness takes the explicit selector: omp and codex
+    resolve tiers from their own role tables, where a bare `haiku` is not a selector."""
+    return member.get("model") if member.get("seat") and harness == "claude" else None
+
 
 def build_team(
     task_class: str, effort: str, paths=None, task: str = "", team_id: str | None = None
@@ -1788,15 +1818,21 @@ def build_team(
             "split the task, or raise it with ATLAS_MAX_TEAM"
         )
     members = []
-    for spec in cell["team"]:
-        for i in range(_cfg_int("count", spec["count"])):
-            members.append(
-                {
-                    "name": f"{spec['role']}-{_sha(tid, spec['role'], i)[:4]}",
-                    "role": spec["role"],
-                    "tools_profile": spec.get("tools_profile"),
-                }
-            )
+    taken: dict = {}  # role -> seats built so far: the name index runs across a role's specs, so two never collide
+    labels = check_seats(cell["team"])
+    for spec, label in zip(cell["team"], labels):
+        for _ in range(_cfg_int("count", spec["count"])):
+            i = taken.get(spec["role"], 0)
+            taken[spec["role"]] = i + 1
+            member = {
+                "name": f"{spec['role']}-{_sha(tid, spec['role'], i)[:4]}",
+                "role": spec["role"],
+                "tools_profile": spec.get("tools_profile"),
+            }
+            if label:  # a labelled seat keeps its own model tier (see seat_model)
+                member["seat"] = label
+                member["model"] = spec.get("model")
+            members.append(member)
     return {
         "team_id": tid,
         "class": task_class,
@@ -1824,23 +1860,31 @@ def split_member_tasks(text: str, members: list) -> tuple:
     by_role: dict = {}
     for m in members:
         by_role.setdefault(m["role"], []).append(m["name"])
+        if m.get("seat"):  # `## member: db-prober-inventory` addresses a labelled seat of that role
+            by_role.setdefault(f"{m['role']}-{m['seat']}", []).append(m["name"])
     used: dict = {}
+    claimed: set = set()  # member names a section already bound (a role-seat section and a role section share members)
     out: dict = {}
     for i, mk in enumerate(marks):
         body = text[mk.end() : marks[i + 1].start() if i + 1 < len(marks) else len(text)].strip()
         label = mk.group(1)
         role, _, n = label.rpartition("-")
-        if role in by_role and n.isdigit():
+        if label in by_role:
+            role = label  # a role or role-seat name matches as-is before the `-N` suffix reading
+            pool = by_role[role]
+            idx = next((i for i, nm in enumerate(pool) if nm not in claimed), len(pool))
+        elif role in by_role and n.isdigit():
             idx = int(n) - 1
         else:
             # bare role: the first member of that role no earlier section claimed
             role = label
             pool = by_role.get(role, [])
-            idx = next((i for i in range(len(pool)) if i not in used.get(role, set())), len(pool))
+            idx = next((i for i in range(len(pool)) if i not in used.get(role, set()) and pool[i] not in claimed), len(pool))
         names = by_role.get(role, [])
         if not 0 <= idx < len(names):
             raise ValueError(f"task file section 'member: {label}' matches no team member (roles: {sorted(by_role)})")
         used.setdefault(role, set()).add(idx)
+        claimed.add(names[idx])
         out[names[idx]] = f"{shared}\n\n{body}".strip() if shared else body
     return shared, out
 
@@ -1857,7 +1901,7 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     cmd = f"python3 {todo}"
     flags = f"--root {qr} --channel {qc}"
     return (
-        f"You are {me} ({member['role']}), 1 of {len(rec['members'])} workers of team {rec['team_id']} "
+        f"You are {me} ({member['role']}{' seat ' + member['seat'] if member.get('seat') else ''}), 1 of {len(rec['members'])} workers of team {rec['team_id']} "
         f"on {chan}. Lead: {lead}. Peers: {', '.join(peers) or '(none)'}.\n\n"
         f"# Task\n{rec.get('member_tasks', {}).get(me) or rec['task']}\n\n# Scope\n{scope}\n\n"
         f"# Protocol\nPost (do not read the script): {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
@@ -2144,7 +2188,7 @@ def _size_bucket(n: int) -> str:
 
 
 def _record_team(rec: dict) -> None:
-    """Opt-in analytics: resolved class/effort and team size bucket. Never raises; no I/O when disabled."""
+    """Anonymous analytics: resolved class/effort and team size bucket. Never raises; no I/O when disabled."""
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from atlas_analytics import record
@@ -2152,6 +2196,33 @@ def _record_team(rec: dict) -> None:
         record(f"team.{rec['class']}.{rec['effort']}")
         record(f"team.size.{_size_bucket(len(rec['members']))}")
     except Exception:  # noqa: BLE001 -- analytics never breaks a spawn
+        pass
+
+
+def _wait_outcome(members: list, finished: bool, timed_out: bool) -> str:
+    """done | failed | timeout for one `wait` result: timeout when a member outlived --timeout; done when every
+    member exited 0 and none was never launched or died without a report; failed otherwise."""
+    if timed_out:
+        return "timeout"
+    bad = any(
+        m.get("exit") not in (0, None) or m.get("never_launched") or m.get("dead_without_report")
+        for m in members
+    )
+    return "done" if finished and not bad else "failed"
+
+
+def _record_wait(rec: dict, members: list, finished: bool, timed_out: bool) -> None:
+    """Anonymous analytics: how the team run ended (team.outcome.*) and its wall time since spawn (team.wall.*).
+    Never raises; no I/O when disabled."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import atlas_analytics
+
+        atlas_analytics.record("team.outcome." + _wait_outcome(members, finished, timed_out))
+        created = rec.get("created")
+        if isinstance(created, (int, float)):
+            atlas_analytics.record("team.wall." + atlas_analytics.wall_bucket(max(0.0, time.time() - created)))
+    except Exception:  # noqa: BLE001 -- analytics never breaks a wait
         pass
 
 
@@ -2223,7 +2294,7 @@ def cmd_spawn_team(args) -> int:
     rec["created"] = time.time()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
-    members = ", ".join(f"{m['name']} ({m['role']})" for m in rec["members"])
+    members = ", ".join(f"{m['name']} ({m['role']}{':' + m['seat'] if m.get('seat') else ''})" for m in rec["members"])
     first = next(iter(rec.get("member_tasks", {}).values()), rec["task"])
     headline = (first.strip().splitlines() or [""])[0][:120]
     kickoff = f"kickoff {rec['team_id']}: {headline} | members: {members} | scope: {', '.join(rec['file_scope']) or 'whole project'}"
@@ -2242,7 +2313,7 @@ def cmd_spawn_team(args) -> int:
             harness=args.harness,
             agent=member["role"],
             prompt_file=str(pf),
-            model=None,
+            model=seat_model(member, args.harness),
             effort=None,
             thinking=_team_thinking(args.harness, member["role"]),
             agents_dir=None,
@@ -2356,6 +2427,7 @@ def cmd_wait(args) -> int:
             }
         )
     finished = all(m["exit"] is not None for m in members)
+    _record_wait(rec, members, finished, timed_out)
     return _emit(
         {
             "ok": finished,

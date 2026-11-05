@@ -867,6 +867,34 @@ class DocsStructureRepairTest(unittest.TestCase):
         self.assertIn("docs SSOT absent", out)
         self.assertFalse(os.path.isdir(os.path.join(self.tmp, "docs")))
 
+    def _context(self, out):
+        return json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+    def test_unscaffolded_repo_gets_one_short_scaffold_notice(self):
+        """No docs/ tree and an incomplete structure used to print two notices (a 23-path list plus the SSOT
+        line, 660+ chars). One line says it all: the count by group, the fix, and that nothing is auto-created."""
+        ctx = self._context(self._boot())
+        notices = [
+            ln
+            for ln in ctx.splitlines()
+            if "docs SSOT absent" in ln or "project structure incomplete" in ln
+        ]
+        self.assertEqual(len(notices), 1, notices)
+        note = notices[0]
+        self.assertLessEqual(len(note), 260)
+        for needed in ("atlas-setup", "ATLAS_DOCS_REPAIR=off", "nothing is created"):
+            self.assertIn(needed, note)
+        self.assertRegex(note, r"missing \d+")
+        self.assertFalse(os.path.isdir(os.path.join(self.tmp, "docs")))
+
+    def test_partial_structure_still_lists_what_is_missing(self):
+        """With a docs/ tree present the SSOT notice does not apply; the gap list stays as it was."""
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        ctx = self._context(self._boot())
+        self.assertNotIn("docs SSOT absent", ctx)
+        self.assertIn("project structure incomplete (missing: ", ctx)
+        self.assertIn(".atlas/evidence/", ctx)
+
     def test_kill_switch_disables_repair(self):
         self._onboard()
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)

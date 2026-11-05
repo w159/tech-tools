@@ -37,6 +37,8 @@ import sys
 import time
 from pathlib import Path
 
+import atlas_harness
+
 DEFAULTS: dict = {
     # caps on what atlas itself creates in one repo
     "max_worktrees": 4,  # linked worktrees (the main checkout does not count)
@@ -273,7 +275,8 @@ def protected_branches(root, policy=None) -> dict:
     return out
 
 
-_GH_URL_RE = re.compile(
+from atlas_lazyre import lre  # noqa: E402
+_GH_URL_RE = lre(
     r"^(?:https?://(?:[^@/]+@)?github\.com/|git@github\.com:|ssh://git@github\.com/)"
     r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$"
 )
@@ -761,7 +764,7 @@ def _analytics(key: str, n: int = 1) -> None:
 # one working branch per piece of work
 
 
-_SLUG_RE = re.compile(r"[^a-z0-9._-]+")
+_SLUG_RE = lre(r"[^a-z0-9._-]+")
 
 
 def slugify(text: str) -> str:
@@ -824,10 +827,18 @@ def _over_cap(root, kind: str, pol: dict) -> tuple:
     return n, cap, (cap > 0 and n >= cap)
 
 
+# Closed set of why a verdict fired (the schema's "reason" enum). Every ask/deny from check_action carries
+# exactly one in "reason_class"; the hook records it as hook.git_guard.<decision>.<class>. "cap" and
+# "other" are part of the enum; no rule here maps to them (other is the hook's fallback).
+REASON_CLASSES = ("protected", "cap", "pr", "branch", "worktree", "force", "unread", "other")
+
+
 def check_action(
     root, action: str, branch: str | None = None, target: str | None = None, policy=None
 ) -> dict:
-    """{"decision": allow|ask|deny, "reason": str}. action: commit | push | branch | worktree | pr."""
+    """{"decision": allow|ask|deny, "reason": str[, "reason_class": one of REASON_CLASSES on ask/deny]}.
+    action: commit | push | branch | worktree | pr. Rule -> class: pr policy -> pr; branch cap -> branch;
+    worktree cap -> worktree; commit/push on a protected branch -> protected."""
     pol = policy or load_policy(root)
     script = "python3 %s" % os.path.abspath(__file__)
     if action == "pr":
@@ -836,12 +847,14 @@ def check_action(
         if pol["prs"] == "off":
             return {
                 "decision": "deny",
+                "reason_class": "pr",
                 "reason": "atlas git policy: opening pull requests is off for this repo (prs=off). Push the "
                 "branch and give the user the compare URL instead; the user can open the PR, or set "
                 '"prs": "ask" in .atlas/git-policy.json.',
             }
         return {
             "decision": "ask",
+            "reason_class": "pr",
             "reason": "atlas git policy (prs=ask): opening a pull request is the user's call. Approve only if "
             'you asked for this PR. Set "prs": "allow" or "off" in .atlas/git-policy.json to stop this prompt.',
         }
@@ -858,6 +871,7 @@ def check_action(
             )
             return {
                 "decision": "deny",
+                "reason_class": action,
                 "reason": "atlas git policy: %d %s already (cap %d; merged ones were cleaned). Reuse an "
                 "existing one (`%s status`), merge or remove finished work, or raise %s in "
                 ".atlas/git-policy.json." % (n, noun, cap, script, "max_worktrees" if action == "worktree" else "max_branches"),
@@ -882,12 +896,14 @@ def check_action(
     if mode == "ask":
         return {
             "decision": "ask",
+            "reason_class": "protected",
             "reason": "atlas git policy: this would %s %s (%s). Approve only if you asked for it."
             % (verb, ref, why),
         }
     in_use = (" Other branches in use: %s." % ", ".join(others[:6])) if others else ""
     return {
         "decision": "deny",
+        "reason_class": "protected",
         "reason": "atlas git policy: refusing to %s %s (%s).%s Work on a branch instead: `%s branch <slug>` "
         "(reuses atlas/<slug> if it exists). Only if the user explicitly asked for %s in this conversation: "
         '`%s allow %s --reason "<their words>"` (they confirm it in a permission prompt), then retry.'
@@ -972,6 +988,8 @@ def main(argv=None) -> int:
         v = check_action(
             root, args.action, branch=branch, target=args.target, policy=pol
         )
+        if v["decision"] == "ask":
+            v["decision"], v["reason"] = atlas_harness.codex_safe_decision("ask", v["reason"])
         return _emit(v, {"allow": 0, "ask": EXIT_ASK, "deny": EXIT_DENY}[v["decision"]])
     except GitError as exc:
         print("atlas_git: %s" % exc, file=sys.stderr)

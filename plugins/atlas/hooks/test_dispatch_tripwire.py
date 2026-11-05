@@ -2501,6 +2501,13 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/medium", model="haiku")))
         self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/high", model="sonnet")))
 
+    def test_two_seats_of_one_role_accept_each_seats_model(self):
+        # db-audit/medium: a haiku inventory seat and a sonnet privilege seat, both atlas:db-prober.
+        self.assertFalse(self._denied(self._tier("atlas:db-prober", "db-audit/medium", model="haiku")))
+        self.assertFalse(self._denied(self._tier("atlas:db-prober", "db-audit/medium", model="sonnet")))
+        # opus is in tier_allow but is no seat's model in this cell
+        self.assertTrue(self._denied(self._tier("atlas:db-prober", "db-audit/medium", model="opus")))
+
     def test_tier_model_must_equal_resolver_not_just_tier_allow(self):
         # opus is in implementer's tier_allow but the resolver says sonnet for implement/medium.
         # (explorer+haiku is the definition's own pin, a legacy accept, so it cannot be the deny case.)
@@ -4243,6 +4250,58 @@ class SpecAdvisoryFirstOffenseTest(unittest.TestCase):
         r = run_hook(payload, self.env)
         hso = json.loads(r.stdout)["hookSpecificOutput"]
         self.assertEqual(hso["permissionDecision"], "deny")
+
+
+class HookPathMatchesSpecCheckTest(unittest.TestCase):
+    """Whatever _unbounded_dispatch flags, the full PreToolUse path must deny from the second offense:
+    a prose 'the goal:' label and a GOAL: label with no body are not finish lines."""
+
+    FULL = (
+        "SCOPE: implement/low\nGOAL: do x\nDELIVERABLE: y\nSUCCESS CRITERIA: z\n"
+        "OUT OF SCOPE: w\nSTOP CONDITIONS: v\nREPORT: STATUS, STEPS, EVIDENCE\n"
+        + TOOLS_BLOCK
+    )
+    setUp = SpecAdvisoryFirstOffenseTest.setUp
+    tearDown = SpecAdvisoryFirstOffenseTest.tearDown
+    CASES = {
+        "prose-goal-label": FULL.replace("GOAL: do x", "the goal: do x"),
+        "empty-goal": FULL.replace("GOAL: do x", "GOAL:"),
+        "empty-deliverable": FULL.replace("DELIVERABLE: y", "DELIVERABLE:"),
+    }
+
+    def _send(self, prompt):
+        return run_hook(
+            {
+                "session_id": "sess-1",
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Agent",
+                "cwd": self.root,
+                "tool_input": _named(
+                    {"subagent_type": "atlas:implementer", "prompt": prompt}
+                ),
+            },
+            self.env,
+        )
+
+    def test_function_and_hook_agree_on_every_flagged_spec(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire_core as core
+
+        self.assertIsNone(
+            core._unbounded_dispatch(
+                {"subagent_type": "atlas:implementer", "prompt": self.FULL}
+            )
+        )
+        for label, prompt in self.CASES.items():
+            with self.subTest(label):
+                flagged = core._unbounded_dispatch(
+                    {"subagent_type": "atlas:implementer", "prompt": prompt}
+                )
+                self.assertIsNotNone(flagged)
+                self._send(self.FULL.replace("DELIVERABLE: y\n", ""))  # spend the advisory
+                hso = json.loads(self._send(prompt).stdout)["hookSpecificOutput"]
+                self.assertEqual(hso["permissionDecision"], "deny")
+                self.assertIn("unbounded", hso["permissionDecisionReason"])
 
 
 class VerifierWatchSlotTest(unittest.TestCase):

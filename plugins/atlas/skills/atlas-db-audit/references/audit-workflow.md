@@ -13,7 +13,7 @@
 
 The read-only database audit runs four investigations in parallel, each in a
 fresh context, then synthesizes in the main context. This reference documents
-the workflow and the three agent roles the skill dispatches.
+the workflow and the agent roles the skill dispatches.
 
 ## Hard constraint: read-only
 
@@ -40,10 +40,10 @@ proceed.
 
 | # | Investigation | Dispatched agent | Orchestrator persists to |
 |---|---|---|---|
-| 1 | Schema inventory | atlas:schema-inventory | `.audit/schema.json` |
+| 1 | Schema inventory | atlas:db-prober `MODE: inventory` | `.audit/schema.json` |
 | 2 | Code-usage map | atlas:explorer | `.audit/code-usage.json` |
-| 3 | Privileges (RLS + grants) | atlas:rls-privilege-audit | `.audit/privileges.json` |
-| 4 | Naming (glossary + conventions) | atlas:naming-glossary-audit | `.audit/naming.json` |
+| 3 | Privileges (RLS + grants) | atlas:db-prober `MODE: privileges` | `.audit/privileges.json` |
+| 4 | Naming (glossary + conventions) | atlas:db-prober `MODE: naming` | `.audit/naming.json` |
 
 These agents have no Write access. Each returns its full report as its final
 message, led by a short structured summary, and the orchestrator persists that
@@ -51,21 +51,25 @@ report verbatim to its file under `.audit/`, so the main context stays lean.
 
 ## Agent roles
 
-### atlas:schema-inventory (role 1)
+### atlas:db-prober `MODE: inventory` (role 1)
 
 Read-only PostgreSQL catalog inventory. Enumerates tables, columns, types,
 constraints, indexes, sequences, functions, and RLS flags from the live
 database via `information_schema` and catalog tables. Returns a full catalog
 snapshot with evidence (catalog query results). Never writes to the DB.
 
-### atlas:rls-privilege-audit (role 3)
+One agent, one mode per dispatch: name `MODE: inventory|privileges|naming` in the
+prompt and run the three in parallel as separate dispatches. Each mode has its own
+return block (see `agents/db-prober.md`).
+
+### atlas:db-prober `MODE: privileges` (role 3)
 
 Read-only PostgreSQL security audit of row-level security, table grants, and
 roles against least privilege. Measures who can read/write what, and where the
 runtime role has more than it needs. Returns findings with evidence (catalog
 query results). Never writes, never grants, never revokes.
 
-### atlas:naming-glossary-audit (role 4)
+### atlas:db-prober `MODE: naming` (role 4)
 
 Read-only audit of table and column names against the project glossary and the
 user-supplied naming-convention notes. Flags drift and mismatches (e.g. an old

@@ -74,7 +74,8 @@ def gates_armed(cwd: str | None = None) -> bool:
             return False
         path = os.path.abspath(cwd or os.getcwd())
         real = os.path.realpath(path)
-        if any(_under(p, r) for p in (path, real) for r in SCRATCH_ROOTS):
+        roots = SCRATCH_ROOTS + _scratch_roots()  # + $TMPDIR/$TEMP/$TMP, as is_scratch_path honours
+        if any(_under(p, r) for p in (path, real) for r in roots):
             return False
         home = os.path.realpath(os.path.expanduser("~"))
         cur = real

@@ -52,7 +52,7 @@ with a plain report. Never advance on "should work."
 
 ## Step 3 - Simplify
 
-Run `atlas-simplify` on the change scope (branch diff or fix scope).
+Run `atlas-refactor` in diff mode (no target argument) on the change scope (branch diff or fix scope).
 
 - **Skip** when the change is docs-only or the diff is under ~10 changed lines -
   there is nothing to simplify and the pass costs more than it can save. Record the

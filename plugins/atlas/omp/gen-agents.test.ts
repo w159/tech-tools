@@ -42,7 +42,7 @@ function frontmatterOf(content: string): Record<string, unknown> {
 
 function expectedModelChain(name: string, source: string): string[] {
 	if (parseSource(source).frontmatter.model === "haiku") return [ATLAS_MECHANIC_ROLE, ATLAS_TIER_DEFAULTS.mechanic, SMOL_FALLBACK_ROLE];
-	if (["verifier", "completeness-critic", "rls-privilege-audit"].includes(name)) {
+	if (["verifier", "completeness-critic"].includes(name)) {
 		return [roleFor(name), ATLAS_DEFAULT_FALLBACK_ROLE, ATLAS_TIER_DEFAULTS.verifier, SMOL_FALLBACK_ROLE];
 	}
 	return [roleFor(name), ATLAS_TIER_DEFAULTS.worker, SMOL_FALLBACK_ROLE];
@@ -100,7 +100,7 @@ test("renderGeneratedAgent YAML-safes descriptions and keeps the body verbatim",
 		'name: "db-prober"',
 		"description: \"Handles: colons, \\\"quotes\\\", and [brackets] fine.\"",
 		"model: sonnet",
-		"effort: low",
+		"effort: medium",
 		"color: yellow",
 		"---",
 		"",
@@ -169,7 +169,7 @@ test("read-only agents' omp definitions list no edit device; the writers still m
 });
 
 test("haiku-pinned roles run the mechanic role, the rest the worker role; implementer thinks at low", () => {
-	for (const name of ["docs-auditor", "naming-glossary-audit", "schema-inventory", "runner", "explorer"]) {
+	for (const name of ["docs-auditor", "runner", "explorer"]) {
 		expect(modelPatternsFor(name)).toEqual(["@atlas-mechanic", ATLAS_TIER_DEFAULTS.mechanic, SMOL_FALLBACK_ROLE]);
 	}
 	expect(modelPatternsFor("db-prober")).toEqual(["@atlas-worker", ATLAS_TIER_DEFAULTS.worker, SMOL_FALLBACK_ROLE]);

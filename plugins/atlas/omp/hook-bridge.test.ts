@@ -689,3 +689,42 @@ test("one invalid matcher skips only its group, records a fault naming it, and k
 		rmSync(home, { recursive: true, force: true });
 	}
 });
+
+test("parseHookOutput keeps a non-blank systemMessage for the user", () => {
+	expect(parseHookOutput(JSON.stringify({ systemMessage: "hello user" }))).toEqual({ systemMessage: "hello user" });
+	expect(parseHookOutput(JSON.stringify({ systemMessage: "   " }))).toEqual({});
+	expect(parseHookOutput(JSON.stringify({ systemMessage: 7 }))).toEqual({});
+});
+
+test("SessionStart systemMessage (the first-run telemetry notice) is shown once per session with ctx.ui.notify", async () => {
+	const notice = "Atlas ready\nAtlas collects anonymous usage counts (turn off: ATLAS_ANALYTICS=off, DO_NOT_TRACK=1)";
+	const boot = hookScript("notice_boot.py", { systemMessage: notice, ...context("SessionStart", "Atlas: orchestrator posture") });
+	const { handlers, ctx } = harness(writeConfig({ SessionStart: [{ hooks: [{ command: `python3 "${boot}"` }] }] }, ["notice_boot.py"]));
+	const shown: Array<{ message: string; type?: string }> = [];
+	const withUi = (hasUI?: boolean) => ({ ...ctx(), hasUI, ui: { notify: (message: string, type?: string) => void shown.push({ message, type }) } }) as Ctx;
+	const first = await handlers.before_agent_start({ prompt: "hi", systemPrompt: ["base"] }, withUi());
+	expect(shown).toEqual([{ message: notice, type: "info" }]);
+	// the notice is for the user: it never joins the model's system prompt
+	expect(JSON.stringify(first?.systemPrompt)).not.toContain("anonymous usage counts");
+	await handlers.before_agent_start({ prompt: "again", systemPrompt: ["base"] }, withUi());
+	expect(shown.length).toBe(1);
+	// a new session shows it again
+	await handlers.session_switch({}, withUi());
+	await handlers.before_agent_start({ prompt: "new session", systemPrompt: ["base"] }, withUi());
+	expect(shown.length).toBe(2);
+});
+
+test("no UI, a throwing notify, or no systemMessage never breaks the turn", async () => {
+	const boot = hookScript("notice_boot2.py", { systemMessage: "note", ...context("SessionStart", "posture") });
+	const { handlers, ctx } = harness(writeConfig({ SessionStart: [{ hooks: [{ command: `python3 "${boot}"` }] }] }, ["notice_boot2.py"]));
+	const headless = { ...ctx(), hasUI: false, ui: { notify: () => { throw new Error("must not be called"); } } } as Ctx;
+	expect((await handlers.before_agent_start({ prompt: "a", systemPrompt: ["base"] }, headless))?.systemPrompt?.length).toBe(2);
+	await handlers.session_switch({}, ctx());
+	const throwing = { ...ctx(), ui: { notify: () => { throw new Error("toast failed"); } } } as Ctx;
+	expect((await handlers.before_agent_start({ prompt: "b", systemPrompt: ["base"] }, throwing))?.systemPrompt?.length).toBe(2);
+	const quiet = hookScript("quiet_boot.py", context("SessionStart", "posture"));
+	const q = harness(writeConfig({ SessionStart: [{ hooks: [{ command: `python3 "${quiet}"` }] }] }, ["quiet_boot.py"]));
+	let called = 0;
+	await q.handlers.before_agent_start({ prompt: "c", systemPrompt: ["base"] }, { ...q.ctx(), ui: { notify: () => void called++ } } as Ctx);
+	expect(called).toBe(0);
+});

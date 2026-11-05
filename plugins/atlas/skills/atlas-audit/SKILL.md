@@ -1,7 +1,7 @@
 ---
 name: atlas-audit
-description: "Audits a codebase: CODE (quality, security, hotspots, dead code, docs drift), ARCHITECTURE (flowcharts, duplication), SELF (atlas run health), or ACT (open a remediation session for one audit finding by id; no id lists them). Use when auditing a repo, mapping architecture or fixing an audit finding."
-when_to_use: "full-codebase quality or security audit, OWASP review, architecture map, find duplication, dead code, coverage gaps, atlas run health, session transcript forensics, fix finding, remediate audit finding, pick a finding, act on audit results, list findings"
+description: "Audits a repo in CODE (quality, security, dead code, docs drift), ARCHITECTURE (maps, duplication), SELF (atlas run health) or ACT (remediate one finding by id) mode. Use when auditing a whole repo or acting on an audit finding; GitHub alerts go to atlas-security."
+when_to_use: "OWASP review, codebase audit, architecture map, coverage gaps, run health forensics, pick a finding, remediate audit finding, open a remediation session"
 argument-hint: '[act [finding-id]]'
 allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion, Workflow
 ---

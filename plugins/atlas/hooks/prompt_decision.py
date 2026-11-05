@@ -23,10 +23,33 @@ from __future__ import annotations
 import json
 import os
 import re
-import urllib.error
-import urllib.parse
-import urllib.request
-import ipaddress
+
+
+class _LazyUrllib:
+    """urllib.request pulls http.client, email and ssl (~14 ms) and only the optional systemone/ollama call
+    uses it: the first access imports the submodule. Kept as a module attribute named `urllib` so callers and
+    tests address it as before; prompt_optimizer_core reuses this instance."""
+
+    @property
+    def request(self):
+        import urllib.request
+
+        return urllib.request
+
+    @property
+    def error(self):
+        import urllib.error
+
+        return urllib.error
+
+    @property
+    def parse(self):
+        import urllib.parse
+
+        return urllib.parse
+
+
+urllib = _LazyUrllib()
 
 CONFIDENCE_MIN = 0.7
 PROMOTE_CONFIDENCE = 0.9
@@ -56,6 +79,8 @@ PROMPT_CLASS = {
 
 
 def _is_loopback(url: str) -> bool:
+    import ipaddress
+
     try:
         host = urllib.parse.urlsplit(url).hostname
     except ValueError:

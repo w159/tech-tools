@@ -299,7 +299,21 @@ def load_payload(hook_name, raw=None):
             data[key] = ""
     if bad:
         fault(hook_name, "wrong-typed payload fields: " + ", ".join(bad))
-    return data
+    return _claude_shaped(data)
+
+
+def _claude_shaped(data):
+    """Codex apply_patch / spawn_agent / update_plan payloads in the Claude shape (one place:
+    atlas_harness). Anything else, and any failure, returns `data` unchanged."""
+    if data.get("tool_name") not in ("apply_patch", "spawn_agent", "update_plan"):
+        return data
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import atlas_harness
+
+        return atlas_harness.normalize_tool_payload(data)
+    except Exception:  # noqa: BLE001 -- normalization is best effort
+        return data
 
 
 def run_hook(hook_name, main):

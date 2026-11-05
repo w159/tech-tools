@@ -65,7 +65,23 @@ def write(text, block):
     return text.rstrip("\n") + "\n\n" + block + "\n"
 
 
+def _help_parser():
+    import argparse
+
+    p = argparse.ArgumentParser(
+        prog="atlas_codex_contract.py",
+        description="Render the atlas:contract block for the repo AGENTS.md (the text Codex reads).",
+    )
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--check", action="store_true", help="print ok, or stale and exit 1, when the block is out of date")
+    g.add_argument("--write", action="store_true", help="write the block into AGENTS.md, leaving text outside the fence alone")
+    return p
+
+
 def main(argv):
+    if any(a in ("-h", "--help") for a in argv):
+        _help_parser().print_help()
+        return 0
     block = render()
     text = TARGET.read_text()
     if "--check" in argv:

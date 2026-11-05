@@ -1,7 +1,7 @@
 ---
 name: atlas-plan
-description: "Writes an implementation-ready plan to docs/plans/ from a brainstorm artifact or feature description, with U-numbered units and a verification contract. Use when requirements are settled."
-when_to_use: "plan this, implementation plan, break into units, how should we build, technical plan, ready for execution"
+description: "Writes an implementation-ready plan to docs/plans/ with U-numbered units and a verification contract, from a brainstorm artifact or feature description. Use when requirements are settled."
+when_to_use: "plan this, implementation plan, turn the brainstorm into a plan, plan the migration, break into units, technical plan"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Task, Agent, ToolSearch
 argument-hint: '<requirements artifact path or feature description>'
 ---

@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 16.12.0, armada 2.2.3, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.0.0, armada 2.2.3, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -20,8 +20,8 @@ Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in 
 
 | What | Count | Source |
 |---|---|---|
-| Skills | 41 (4 manual) | `plugins/atlas/skills/` |
-| Role agents (`atlas:*`) | 14 | `plugins/atlas/agents/` |
+| Skills | 40 (4 manual) | `plugins/atlas/skills/` |
+| Role agents (`atlas:*`) | 11 | `plugins/atlas/agents/` |
 | Hooks | 19 programs, 23 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 70 non-test Python files | `plugins/atlas/scripts/` |
 | MCP connectors | 13, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
@@ -118,7 +118,7 @@ command that fixes it. A worker's card updates in place when it reports.
 - **Transcript storage.** At Stop, `ingest_session.py` copies the session transcript into `~/.atlas/atlas.db`. Text passes through one shared redactor first: credential-shaped strings and a few personal-identifier patterns (SSN, routing and account numbers, card numbers, dates of birth) are replaced with `[REDACTED]` placeholders. The redactor is pattern matching and best effort; it misses unlabeled values, names and addresses. `ATLAS_INGEST=off` turns ingest off.
 - **Local dashboard.** A daemon starts at session start on `http://127.0.0.1:7421/` (loopback only, shared by every open terminal, a per-start token guards writes). `ATLAS_DASHBOARD=off` stops it from starting.
 - **Self-fix scheduler (on by default).** While the dashboard runs, a scheduler checks every 30 minutes for actionable doctor findings and runs up to 2 worker sessions, each in its own git worktree under `~/.atlas/worktrees/` on a branch named `atlas/selffix-<id>`. It never pushes; a passing fix waits as a local branch for you to merge. Set `ATLAS_SELFFIX=0` in your shell to turn it off, or set `selffix.enabled` to `false` in `~/.atlas/dashboard-prefs.json`.
-- **Outbound traffic.** Atlas sends no transcript data off the machine by default. Optional exceptions: turn scoring sends redacted transcript excerpts to api.typesafe.ai only when `TYPESAFE_API_KEY` is set (`ATLAS_TYPESAFE_SCORING=off` disables it), and the prompt classifier can call a local Ollama server. Connectors talk to their vendors once you give them credentials.
+- **Outbound traffic.** Atlas sends no transcript data off the machine by default. It does send anonymous weekly usage counters (skill, hook and gate counts; no ids, prompts, code or paths), on by default and off with `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off` or `python3 plugins/atlas/scripts/atlas_analytics.py disable`; see [plugins/atlas/references/telemetry.md](plugins/atlas/references/telemetry.md). Optional exceptions: turn scoring sends redacted transcript excerpts to api.typesafe.ai only when `TYPESAFE_API_KEY` is set (`ATLAS_TYPESAFE_SCORING=off` disables it), and the prompt classifier can call a local Ollama server. Connectors talk to their vendors once you give them credentials.
 
 ## How it works
 
@@ -343,7 +343,7 @@ and the plugin is reinstalled.
 ```bash
 python3 -m unittest discover -s plugins/atlas/hooks        # hook tests
 python3 -m unittest discover -s plugins/atlas/scripts      # script tests
-bun test plugins/atlas/omp                                 # omp extension tests
+(cd plugins/atlas && bun test omp mod)                     # omp extension + Claude Code mod tests
 ```
 
 The marketplace also carries two optional plugins: `armada` (org deployment)

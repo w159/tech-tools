@@ -757,7 +757,7 @@ MEDIUM_EFFORT_ROLES = {
     "test-engineer",
     "verifier",
     "completeness-critic",
-    "rls-privilege-audit",
+    "db-prober",
 }
 HIGH_EFFORT_ROLES = {"planner"}  # TierTableContract pins the full table
 
@@ -792,7 +792,7 @@ class AgentTierContract(unittest.TestCase):
     """Model, effort, and tool-routing guarantees for every shipped atlas agent."""
 
     def test_agents_exist(self):
-        self.assertGreaterEqual(len(_agent_files()), 12)
+        self.assertGreaterEqual(len(_agent_files()), 11)
 
     def test_every_agent_declares_a_valid_effort(self):
         bad = [
@@ -1033,18 +1033,15 @@ def _fm_list(path: Path, key: str) -> list:
 # "none" effort is thinking-off; Claude Code has no such value so frontmatter says low.
 TIER_TABLE = {
     "runner": ("haiku", "low"),
-    "schema-inventory": ("haiku", "low"),
-    "naming-glossary-audit": ("haiku", "low"),
     "docs-auditor": ("haiku", "low"),
     "explorer": ("haiku", "low"),
-    "db-prober": ("sonnet", "low"),
+    "db-prober": ("sonnet", "medium"),
     "ui-runtime-tester": ("sonnet", "low"),
     "docs-curator": ("sonnet", "low"),
     "implementer": ("sonnet", "medium"),
     "test-engineer": ("sonnet", "medium"),
     "verifier": ("sonnet", "medium"),
     "completeness-critic": ("sonnet", "medium"),
-    "rls-privilege-audit": ("sonnet", "medium"),
     "planner": ("sonnet", "high"),
 }
 
@@ -1119,20 +1116,26 @@ class TierTableContract(unittest.TestCase):
             {"explorer": "haiku"},
         )
 
-    def test_rls_audit_moved_out_of_plain_audit_into_db_audit(self):
+    def test_db_prober_lives_in_db_audit_not_plain_audit(self):
         roles = [s["role"] for s in self._resolve("audit", "high")["team"]]
-        self.assertNotIn("rls-privilege-audit", roles)
+        self.assertNotIn("db-prober", roles)
         db = [s["role"] for s in self._resolve("db-audit", "high")["team"]]
         self.assertEqual(
-            sorted(db),
-            [
-                "completeness-critic",
-                "explorer",
-                "rls-privilege-audit",
-                "schema-inventory",
-            ],
+            sorted(db), ["completeness-critic", "db-prober", "db-prober", "explorer"]
         )
         self.assertEqual(self._resolve("database", "high")["task_class"], "db-audit")
+
+    def test_db_audit_keeps_a_haiku_inventory_seat_beside_the_sonnet_privilege_seat(self):
+        """Two seats of one role, told apart by their `seat` label: the cheap catalog dump stays on haiku."""
+        for eff in ("low", "medium", "high"):
+            seats = {
+                s.get("seat"): s["model"]
+                for s in self._resolve("db-audit", eff)["team"]
+                if s["role"] == "db-prober"
+            }
+            self.assertEqual("haiku", seats["inventory"], eff)
+            if eff != "low":
+                self.assertEqual("sonnet", seats["privileges"], eff)
 
     def test_squad_doc_matches_the_tier_table(self):
         doc = (

@@ -1530,6 +1530,24 @@ class CloneFreshTest(unittest.TestCase):
         with open(os.path.join(home, "update-check.json")) as f:
             self.assertEqual(json.load(f), {"published": "9.9.9"})
 
+    def test_update_check_without_a_registry_records_no_fault(self):
+        """A fresh machine (no installed_plugins.json) or a corrupt one is nothing to check, not a hook fault."""
+        home = os.path.join(self.tmp, "ahome")
+        reg = os.path.join(self.plugins, "installed_plugins.json")
+        for label, setup in (
+            ("missing", lambda: os.remove(reg)),
+            ("malformed", lambda: open(reg, "w").write("{not json")),
+        ):
+            with self.subTest(label):
+                setup()
+                with (
+                    mock.patch.dict(os.environ, {"ATLAS_HOME": home, "ATLAS_UPDATE_CHECK": "on"}),
+                    mock.patch("atlas_faults.record") as rec,
+                ):
+                    self.assertEqual(atlas_doctor.run_update_check("atlas"), 0)
+                rec.assert_not_called()
+                self.assertFalse(os.path.exists(os.path.join(home, "update-check.json")))
+
 
 class AtlasDoctorMiningTest(unittest.TestCase):
     """Self-improvement loop: miners -> findings -> baseline -> remeasure."""

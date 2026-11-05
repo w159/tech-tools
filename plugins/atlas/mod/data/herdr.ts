@@ -24,7 +24,7 @@ const EXIT_CODE_RE = /^exit (-?\d+)/;
 // ('impl-auth', 'verifier-ui', 'docs-cur'); longest prefix wins, else 'unknown'.
 const PERSONA_NAMES = [
   'completeness-critic', 'db-prober', 'docs-auditor', 'docs-curator', 'explorer', 'implementer',
-  'naming-glossary-audit', 'planner', 'rls-privilege-audit', 'runner', 'schema-inventory',
+  'planner', 'runner',
   'ui-runtime-tester', 'verifier',
 ];
 const PERSONA_ALIASES: Record<string, string> = {

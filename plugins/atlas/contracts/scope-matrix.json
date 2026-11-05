@@ -1,5 +1,5 @@
 {
- "_doc": "Scope matrix: (task_class, effort) -> team shape. Read by scripts/atlas_resolve.py and omp/resolve.ts. Role effort must equal agents/<role>.md frontmatter; seat model must be in the role's tier_allow (default: frontmatter model; resolver emits it per seat). tools_profile: read | edit | exec.",
+ "_doc": "Scope matrix: (task_class, effort) -> team shape. Read by scripts/atlas_resolve.py and omp/resolve.ts. Role effort must equal agents/<role>.md frontmatter; seat model must be in the role's tier_allow (default: frontmatter model; resolver emits it per seat). tools_profile: read | edit | exec. seat (optional label, [a-z0-9-]): a cell may list one role in several specs only when each spec has its own seat label; a labelled seat pins its own model for its worker (atlas_mux spawn-team, claude harness) so two seats of one role can run different tiers.",
  "effort_aliases": {
   "med": "medium",
   "hi": "high",
@@ -318,7 +318,7 @@
      {
       "role": "db-prober",
       "count": 1,
-      "effort": "low",
+      "effort": "medium",
       "tools_profile": "read",
       "model": "sonnet"
      }
@@ -330,14 +330,7 @@
     "team": [
      {
       "role": "db-prober",
-      "count": 1,
-      "effort": "low",
-      "tools_profile": "read",
-      "model": "sonnet"
-     },
-     {
-      "role": "rls-privilege-audit",
-      "count": 1,
+      "count": 2,
       "effort": "medium",
       "tools_profile": "read",
       "model": "sonnet"
@@ -350,14 +343,7 @@
     "team": [
      {
       "role": "db-prober",
-      "count": 2,
-      "effort": "low",
-      "tools_profile": "read",
-      "model": "sonnet"
-     },
-     {
-      "role": "rls-privilege-audit",
-      "count": 1,
+      "count": 3,
       "effort": "medium",
       "tools_profile": "read",
       "model": "sonnet"
@@ -474,9 +460,10 @@
    "low": {
     "team": [
      {
-      "role": "schema-inventory",
+      "role": "db-prober",
+      "seat": "inventory",
       "count": 1,
-      "effort": "low",
+      "effort": "medium",
       "tools_profile": "read",
       "model": "haiku"
      }
@@ -487,14 +474,16 @@
    "medium": {
     "team": [
      {
-      "role": "schema-inventory",
+      "role": "db-prober",
+      "seat": "inventory",
       "count": 1,
-      "effort": "low",
+      "effort": "medium",
       "tools_profile": "read",
       "model": "haiku"
      },
      {
-      "role": "rls-privilege-audit",
+      "role": "db-prober",
+      "seat": "privileges",
       "count": 1,
       "effort": "medium",
       "tools_profile": "read",
@@ -514,16 +503,18 @@
       "model": "haiku"
      },
      {
-      "role": "rls-privilege-audit",
+      "role": "db-prober",
+      "seat": "privileges",
       "count": 1,
       "effort": "medium",
       "tools_profile": "read",
       "model": "sonnet"
      },
      {
-      "role": "schema-inventory",
+      "role": "db-prober",
+      "seat": "inventory",
       "count": 1,
-      "effort": "low",
+      "effort": "medium",
       "tools_profile": "read",
       "model": "haiku"
      },

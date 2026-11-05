@@ -463,6 +463,16 @@ _k("ATLAS_DECISION_URL", _DM, "Classifier address", "Loopback endpoint for the p
 # Turn scoring
 _k("ATLAS_TYPESAFE_URL", _TS, "Scoring endpoint", "Base URL of the scoring service; atlas appends /v1/systemone, and a pasted full URL also works. A loopback URL (http://127.0.0.1:11434) scores locally with Ollama and sends nothing off this machine. A hosted URL sends prompt excerpts to TypeSafe, a third-party disclosure.", "url", "https://api.typesafe.ai", details="Read at scripts/typesafe_client.py:58.")
 
+# Telemetry (kept in Session automation: the weekly send starts at session boot)
+_k(
+    "ATLAS_ANALYTICS",
+    _SA,
+    "Anonymous usage counters",
+    "On by default: whole-number counts of which Atlas skills, hooks and gates fire, summed per week and sent once a week. Never code, prompts, paths, names or IDs. DO_NOT_TRACK=1 or `atlas_analytics.py disable` also turn it off.",
+    default="on",
+    details="Off stops all counting and sending at once. Any one of these opts out: this switch, the ATLAS_ANALYTICS=off environment variable, DO_NOT_TRACK=1, or `python3 atlas_analytics.py disable`. See what would be sent with `python3 atlas_analytics.py preview`; the schema is contracts/analytics-schema.json. Read at scripts/atlas_analytics.py.",
+)
+
 
 # --- knob metadata: kind overrides, finite option sets, ranges, effect, applies ---
 # Kept beside the _k() calls as data so each row's behavior is one lookup, not 34 edited signatures.

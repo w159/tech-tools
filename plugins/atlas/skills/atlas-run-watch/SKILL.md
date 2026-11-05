@@ -1,7 +1,7 @@
 ---
 name: atlas-run-watch
-description: "Watches a long-running job (PID, log tail, CI URL, API, command loop) or one open GitHub PR's CI with tick/checkpoint/re-arm, spilling logs to a run ledger. PR targets repair genuine CI failures in a bounded loop, ask before pushing and never merge. Use when a job or PR needs watching."
-when_to_use: "long-running job, watch a PID, tail a log, poll CI status, monitor a pipeline, keep a run alive, checkpoint a watch, babysit this PR, watch CI, fix red checks on the PR, get PR green, flaky test vs real failure"
+description: "Watches a long-running job (PID, log, CI URL, command loop) or one open PR's CI with a tick loop and run ledger; PR mode repairs genuine CI failures in a bounded loop and never merges. Use when a job or PR's CI needs watching."
+when_to_use: "watch a PID, tail a log, keep an eye on, ping me when done, babysit this PR, watch CI, get PR green, flaky vs real failure"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 ---
 

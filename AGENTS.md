@@ -167,16 +167,13 @@ Nothing enforces this under Codex (no hooks, no dispatch gate); follow it by han
 | role | model | effort | tier_allow |
 |---|---|---|---|
 | completeness-critic | sonnet | medium | [sonnet, opus] |
-| db-prober | sonnet | low | [haiku, sonnet] |
+| db-prober | sonnet | medium | [haiku, sonnet, opus] |
 | docs-auditor | haiku | low | [haiku, sonnet] |
 | docs-curator | sonnet | low | [haiku, sonnet] |
 | explorer | haiku | low | [haiku, sonnet] |
 | implementer | sonnet | medium | [sonnet, opus] |
-| naming-glossary-audit | haiku | low | [haiku, sonnet] |
 | planner | sonnet | high | [sonnet, opus] |
-| rls-privilege-audit | sonnet | medium | [sonnet, opus] |
 | runner | haiku | low | [haiku, sonnet] |
-| schema-inventory | haiku | low | [haiku, sonnet] |
 | test-engineer | sonnet | medium | [sonnet] |
 | ui-runtime-tester | sonnet | low | [sonnet] |
 | verifier | sonnet | medium | [sonnet, opus] |

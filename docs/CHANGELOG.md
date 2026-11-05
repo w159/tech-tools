@@ -1,5 +1,17 @@
 # Changelog
 
+## atlas 17.0.0 - 2026-11-05
+
+- atlas 17.0.0: default-on anonymous telemetry, Codex parity, skill and agent consolidation, faster hooks. BREAKING: skill `atlas-simplify` is removed (use `atlas-refactor`, 41 skills become 40); agents `schema-inventory`, `rls-privilege-audit` and `naming-glossary-audit` are removed (use `db-prober` with `MODE: inventory|privileges|naming`, 14 agents become 11); telemetry is on by default (counters only; `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off` or `atlas_analytics.py disable` turn it off). Also: Codex CLI manifests and generated hooks for atlas and programmer, hook p50 SessionStart 155 -> 57 ms, UserPromptSubmit 57 -> 36 ms, every test suite loads from its documented command. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-05_atlas-17.0.0-feature-review.md.
+
+## marketplace 5.5.0 - 2026-11-05
+
+- marketplace 5.5.0: atlas 17.0.0, armada 2.2.3, programmer 1.0.3. Adds `.agents/plugins/marketplace.json` (Codex marketplace for atlas and programmer), the `telemetry/` receiver and report job (`.github/workflows/telemetry-report.yml`, inert until `ATLAS_TELEMETRY_URL` is set), and the `atlas-bun` CI job; `scripts/check_versions.py` also compares the Codex manifest versions.
+
+## repo - 2026-11-05
+
+- Tests: the root `bun test` and the documented omp and mod commands now load from `plugins/atlas` (`bunfig.toml` preloads); the `full` CI job runs `bun test` there.
+
 ## repo - 2026-11-03
 
 - New `scripts/check_attribution.py` and `attribution` CI job: a push to main or a PR fails when a new commit has Claude as author or committer, a Claude co-author trailer, a `Claude-Session:` trailer or the Claude Code footer. CLAUDE.md hard rule 6 sets the commit identity.

@@ -29,21 +29,18 @@ export const CREATURES: Record<string, Creature> = {
   runner: { species: 'Sprint Hare', color: '#f2994a', accent: '#f2f4f8', catchphrase: 'Already done. Next?', ears: 'bunny', hat: 'none', prop: 'stopwatch' },
   planner: { species: 'Blueprint Penguin', color: '#62b8e6', accent: '#2f6fb0', catchphrase: 'Slice it thin.', ears: 'none', hat: 'cap', prop: 'scroll' },
   'completeness-critic': { species: 'Nitpick Bat', color: '#c2528f', accent: '#ffd84a', catchphrase: 'What did we miss?', ears: 'cat', hat: 'visor', prop: 'checklist' },
-  'rls-privilege-audit': { species: 'Lock Badger', color: '#d98324', accent: '#ffd84a', catchphrase: 'Who can read that?', ears: 'round', hat: 'none', prop: 'key', wide: true },
   'db-prober': { species: 'Probe Mole', color: '#f2c040', accent: '#ff5a52', catchphrase: 'Just a quick query.', ears: 'round', hat: 'beret', prop: 'probe' },
   'ui-runtime-tester': { species: 'Pixel Axolotl', color: '#f472b6', accent: '#9be7ff', catchphrase: 'Click it. Break it.', ears: 'fin', hat: 'none', prop: 'cursor', wide: true },
   'docs-curator': { species: 'Quill Moth', color: '#b5a3fa', accent: '#ffd84a', catchphrase: "If it isn't written, it didn't ship.", ears: 'ant', hat: 'none', prop: 'quill' },
   'docs-auditor': { species: 'Drift Hedgehog', color: '#c88a5a', accent: '#52c872', catchphrase: 'Docs drift. I count.', ears: 'none', hat: 'cap', prop: 'book' },
-  'schema-inventory': { species: 'Table Turtle', color: '#2fbd9f', accent: '#f2f4f8', catchphrase: 'Every table, accounted for.', ears: 'none', hat: 'none', prop: 'grid', shell: true },
-  'naming-glossary-audit': { species: 'Tag Parrot', color: '#e8825a', accent: '#52c872', catchphrase: 'Call it what it is.', ears: 'horn', hat: 'none', prop: 'tag' },
   armada: { species: 'Fleet Gull', color: '#9a8cf0', accent: '#ff6b6b', catchphrase: 'Fleet reporting in.', ears: 'fin', hat: 'cap', prop: 'flag' },
   unknown: { species: 'Mystery Blob', color: '#8a8f98', accent: '#f2f4f8', catchphrase: 'Who dis?', ears: 'none', hat: 'none', prop: 'qmark', wide: true },
 };
 
 /** Extra spellings -> creature key (personas.ts names are matched directly). */
 export const ALIASES: Record<string, string> = {
-  reviewer: 'completeness-critic', critic: 'completeness-critic', rls: 'rls-privilege-audit',
-  schema: 'schema-inventory', naming: 'naming-glossary-audit', uitester: 'ui-runtime-tester',
+  reviewer: 'completeness-critic', critic: 'completeness-critic', rls: 'db-prober',
+  schema: 'db-prober', naming: 'db-prober', uitester: 'ui-runtime-tester',
   main: 'lead', 'main thread': 'lead', orchestrator: 'lead', curator: 'docs-curator', auditor: 'docs-auditor',
   dbprober: 'db-prober',
 };

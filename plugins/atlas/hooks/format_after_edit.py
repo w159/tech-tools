@@ -295,6 +295,14 @@ def _record_skip(data: dict, fp: str, reason: str, formatter: str = "") -> None:
 
 def main() -> int:
     data = atlas_hook_guard.load_payload("format_after_edit")
+    # A Codex multi-file apply_patch lists its other files under tool_input["files"].
+    for extra in (data.get("tool_input") or {}).get("files") or []:
+        if isinstance(extra, str) and extra != file_path_from(data):
+            _format_one(dict(data, tool_input={"file_path": extra}))
+    return _format_one(data)
+
+
+def _format_one(data: dict) -> int:
     fp = file_path_from(data)
     if not fp or not os.path.isfile(fp):
         return 0

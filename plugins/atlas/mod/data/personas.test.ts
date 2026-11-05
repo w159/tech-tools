@@ -153,7 +153,7 @@ describe('PERSONA_COLORS', () => {
 
 describe('ROUTING_MATRIX', () => {
   test('copies the plan section 5 table', () => {
-    expect(ROUTING_MATRIX).toHaveLength(14);
+    expect(ROUTING_MATRIX).toHaveLength(12);
     expect(ROUTING_MATRIX.find((r) => r.persona === 'atlas:implementer')).toEqual({
       task: 'One bounded implementation',
       persona: 'atlas:implementer',

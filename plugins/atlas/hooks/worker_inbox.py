@@ -201,12 +201,14 @@ PRIORITY_LABELS = {"handoff": "HANDOFF", "blocked": "BLOCKED", "conflict": "CONF
 # ATLAS_QUIET: short acknowledgements and progress pings stay on the board (the band shows
 # them) instead of being injected into the model's context. Questions, failures, blockers,
 # collaboration kinds and anything longer than a ping still print.
-_QUIET_PING = re.compile(
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+from atlas_lazyre import lre  # noqa: E402
+_QUIET_PING = lre(
     r"^(starting|started|done|joined|ack(nowledged)?|ok(ay)?|on it|working|claimed|"
     r"in progress|progress|running)\b",
     re.I,
 )
-_QUIET_KEEP = re.compile(r"\?|fail|error|block|stuck|cannot|can't|denied|conflict", re.I)
+_QUIET_KEEP = lre(r"\?|fail|error|block|stuck|cannot|can't|denied|conflict", re.I)
 
 
 def _is_ping(rec):
@@ -219,9 +221,9 @@ def _is_ping(rec):
     )
 
 
-_CTRL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
-_CLOSE_TAG = re.compile(r"<(/?)(board-message)", re.IGNORECASE)
-_ATTR_BAD = re.compile(r"[^A-Za-z0-9_.@-]")
+_CTRL = lre(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
+_CLOSE_TAG = lre(r"<(/?)(board-message)", re.IGNORECASE)
+_ATTR_BAD = lre(r"[^A-Za-z0-9_.@-]")
 
 
 def _clean_body(text):

@@ -31,7 +31,11 @@ import atlas_env  # noqa: E402
 
 atlas_env.apply_store_env()
 import atlas_hook_guard  # noqa: E402
+import atlas_harness  # noqa: E402
 
+_REASON_CLASSES = frozenset(
+    ("protected", "cap", "pr", "branch", "worktree", "force", "unread", "other")
+)
 _COMMITTERS = {"commit", "merge", "cherry-pick", "revert", "am"}
 _NO_COMMIT_FLAGS = {
     "--abort",
@@ -77,17 +81,34 @@ _BRANCH_QUERY_FLAGS = {
     "--no-column",
 }
 _PUSH_VALUE_OPTS = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
-_PR_TOOL = re.compile(
+from atlas_lazyre import lre  # noqa: E402
+_PR_TOOL = lre(
     r"(?i)(?:^|__)(?:create_pull_request(?:_with_copilot)?|pull_request_create|create_pr|pr_create)$"
 )
-_API_WRITE_TOOL = re.compile(
+_API_WRITE_TOOL = lre(
     r"(?i)(?:^|__)(?:push_files|create_or_update_file|delete_file)$"
 )
-_ATLAS_GIT = re.compile(r"atlas_git\.py$")
+_ATLAS_GIT = lre(r"atlas_git\.py$")
 
 
-def _decision(kind: str, reason: str) -> dict:
-    return {"decision": kind, "reason": reason}
+def _decision(kind: str, reason: str, reason_class: str = "other") -> dict:
+    return {"decision": kind, "reason": reason, "reason_class": reason_class}
+
+
+def _reason_class(v: dict) -> str:
+    """The closed-enum reason class of a verdict (atlas_git.REASON_CLASSES); anything unmapped is other."""
+    rc = v.get("reason_class")
+    return rc if rc in _REASON_CLASSES else "other"
+
+
+def _record(decision: str, v: dict) -> None:
+    """hook.git_guard.<decision>.<reason class>: the one place a verdict is counted. Stdlib-only writer."""
+    try:
+        import atlas_analytics_hot
+
+        atlas_analytics_hot.record(["hook.git_guard.%s.%s" % (decision, _reason_class(v))])
+    except Exception:  # noqa: BLE001 -- telemetry never affects the verdict
+        pass
 
 
 def _strongest(verdicts: list) -> dict | None:
@@ -252,6 +273,7 @@ def _bash_verdicts(command: str, cwd: str, g) -> list:
                             "atlas git policy: refusing a %s of protected branch %s (%s). That is never "
                             "automated; the user runs it themselves if they really mean it."
                             % ("delete" if delete else "force push", t, why),
+                            "force",
                         )
                     )
                 else:
@@ -311,6 +333,7 @@ def _bash_verdicts(command: str, cwd: str, g) -> list:
                     "Atlas asks for a time-boxed exception to commit/push directly on the protected branch "
                     "%r. Approve only if you asked for that in this conversation."
                     % branch,
+                    "protected",
                 )
             )
     return out
@@ -387,13 +410,17 @@ def main() -> int:
     v = verdict(payload)
     if not v or v.get("decision") not in ("deny", "ask"):
         return 0
+    decision, reason = atlas_harness.codex_safe_decision(
+        v["decision"], v["reason"], payload=payload
+    )
+    _record(decision, v)
     sys.stdout.write(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
-                    "permissionDecision": v["decision"],
-                    "permissionDecisionReason": v["reason"],
+                    "permissionDecision": decision,
+                    "permissionDecisionReason": reason,
                 }
             }
         )

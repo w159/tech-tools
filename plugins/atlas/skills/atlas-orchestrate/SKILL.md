@@ -1,7 +1,7 @@
 ---
 name: atlas-orchestrate
-description: "Orchestrates multi-step, multi-surface or whole-codebase work (build, fix, audit, refactor, investigate) via subagents with independent verification. Includes a feature flow that builds one feature across UI, API and data with the squad. Use when a task spans layers or the repo."
-when_to_use: "orchestrate, whole-repo work, cross-layer bug, frontend and backend and database, multi-step task, subagent waves, implement a feature, add a feature that, build new functionality, full-stack feature"
+description: "Runs multi-step, multi-layer or whole-repo work (build, fix, audit, refactor, investigate, full-stack features) through subagents with independent verification. Use when a task spans layers or the repo."
+when_to_use: "orchestrate, whole-repo work, cross-layer bug, subagent waves, implement a feature across API, database and frontend"
 allowed-tools: Read, Glob, Grep, Bash, TodoWrite, AskUserQuestion, Agent, Task
 ---
 

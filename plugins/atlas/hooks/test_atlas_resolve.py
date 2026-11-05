@@ -86,6 +86,35 @@ class Resolve(unittest.TestCase):
                         t["effort"], _fm_effort(t["role"]), (cls, eff, t["role"])
                     )
                 self.assertGreater(total, 0)
+                self._seat_rule(cls, eff, cell["team"])
+
+    def _seat_rule(self, cls, eff, team):
+        """Rule: a role may fill several specs of one cell only when every such spec has its own `seat`
+        label ([a-z0-9-]); that label, not the model, is what tells the seats apart. Seat effort still
+        equals the role's frontmatter effort, so one effort rule covers every seat."""
+        by_role = {}
+        for t in team:
+            by_role.setdefault(t["role"], []).append(t.get("seat", ""))
+            if "seat" in t:
+                self.assertRegex(t["seat"], r"^[a-z0-9]+(-[a-z0-9]+)*$", (cls, eff))
+        for role, seats in by_role.items():
+            if len(seats) > 1:
+                self.assertNotIn("", seats, (cls, eff, role))
+                self.assertEqual(len(seats), len(set(seats)), (cls, eff, role))
+
+    def test_seat_rule_rejects_unlabelled_or_repeated_seats(self):
+        with self.assertRaises(AssertionError):
+            self._seat_rule("c", "e", [{"role": "r"}, {"role": "r"}])
+        with self.assertRaises(AssertionError):
+            self._seat_rule("c", "e", [{"role": "r", "seat": "a"}, {"role": "r", "seat": "a"}])
+        self._seat_rule("c", "e", [{"role": "r", "seat": "a"}, {"role": "r", "seat": "b"}, {"role": "q"}])
+
+    def test_resolver_passes_the_seat_label_and_each_seat_model_through(self):
+        team = ar.resolve("db-audit", "medium")["team"]
+        got = [(t["role"], t["seat"], t["model"]) for t in team]
+        self.assertEqual(
+            [("db-prober", "inventory", "haiku"), ("db-prober", "privileges", "sonnet")], got
+        )
 
     def test_unknown_raises(self):
         with self.assertRaises(ValueError):

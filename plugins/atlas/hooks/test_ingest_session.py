@@ -274,6 +274,7 @@ class SessionEndLeadTest(unittest.TestCase):
         todo.open_lead_channel(root, lead, ["explorer-ab12"])
         todo.mark_finished(root, "explorer-ab12", 0)
         env = {k: v for k, v in os.environ.items() if k != "ATLAS_LEAD_NAME"}
+        env["ATLAS_INGEST_SYNC"] = "1"  # SessionEnd detaches by default; this test reads the result at once
         subprocess.run(
             [sys.executable, HOOK],
             input=json.dumps(

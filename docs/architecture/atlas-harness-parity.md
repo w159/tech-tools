@@ -268,4 +268,26 @@ Still open:
 
 ## Codex
 
-Codex has no atlas hooks, skills or agents here. It reads the repo `AGENTS.md`, which now carries a generated, unenforced contract block (header, phases, evidence rule, dispatch spec blocks, tier table). Regenerate with `python3 plugins/atlas/scripts/atlas_codex_contract.py --write`; `--check` exits 1 when the block is stale. Context7 (`/openai/codex`) indicates newer Codex releases do support project hooks and `.codex/agents`; wiring those is not done.
+Codex (CLI 0.166) loads the atlas skills and hooks as a plugin (`.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json`, `hooks/hooks.codex.json`). It also reads the repo `AGENTS.md`, which carries a generated, unenforced contract block (header, phases, evidence rule, dispatch spec blocks, tier table). Regenerate with `python3 plugins/atlas/scripts/atlas_codex_contract.py --write`; `--check` exits 1 when the block is stale. PreToolUse ask is converted to deny under Codex by `scripts/atlas_harness.py`.
+
+Sources for everything below: codex-rs tag `rust-v0.166.0` (the installed version), read from `core/src/tools/hook_names.rs`, `handlers/apply_patch.rs`, `handlers/unified_exec/exec_command.rs`, `registry.rs`, `hooks/src/engine/{matcher,discovery}.rs`, `hooks/src/events/session_end.rs`, `agent-roles/src/agent_role_config.rs` and `plugin/src/manifest.rs`, then confirmed against the installed binary.
+
+| Claude hook concept | Codex tool event | Handling |
+|---|---|---|
+| `Bash` / `{command}` | `Bash` / `{command}` (the unified exec tool is named `exec_command` but reports `Bash`) | none needed |
+| `Edit`, `Write`, `MultiEdit` / `{file_path,...}` | `apply_patch` / `{command: <patch text>}`; matchers `Write` and `Edit` alias it, `tool_name` stays `apply_patch` | `expand_tool_payloads`: one Write (Add File) or Edit (Update, Move, Delete) per patched file |
+| `Agent`, `Task` / `{subagent_type,prompt}` | `spawn_agent` / `{message, agent_type, ...}`; matcher `Agent` aliases it | rewritten to Agent; `atlas-<name>` becomes `atlas:<name>` |
+| `TodoWrite` / `{todos}` | `update_plan` / `{plan:[{step,status}]}` | rewritten to TodoWrite |
+| `mcp__<server>__<tool>` | same | none needed |
+| `Read`, `Grep`, `Glob`, `NotebookEdit`, `Skill`, `TaskCreate`, `TaskUpdate` | no such tool (reads go through the shell, `view_image` is images only) | dropped from `hooks.codex.json`; the read-before-edit nudge only sees MCP reads |
+
+`scripts/gen_codex_hooks.py` produces `hooks.codex.json` (matchers above; regex matchers wrapped in `^(...)$` because Codex matches regexes unanchored; no `modules`). Codex clamps SessionEnd and Interrupt hook timeouts to 3 s and warns when a hook asks for more, so the generator writes 3 and `ingest_session.py` detaches its work at SessionEnd. `hooks/list` from the app-server reports no warnings for the installed plugin.
+
+Agents: a plugin manifest has no agents field, but Codex loads `<config folder>/agents/*.toml` (project `.codex/` once trusted, or `~/.codex/`) as roles (`name`, `description` and `developer_instructions` required; other keys are config keys; unknown keys reject the file). `scripts/atlas_codex_agents.py` writes `atlas-<name>.toml` from `agents/*.md`; the real CLI lists all 14 in the spawn tool guidance.
+
+Other plugins on Codex:
+
+- `programmer`: installs (`codex plugin add programmer@tech-tools`, skills `programmer:principles` and `programmer:review` listed). Its opt-in scan-on-edit hook reads `tool_input.file_path`, which `apply_patch` does not carry, so it does nothing there; its `principles-judge` agent cannot ship in a plugin (convert it the same way if wanted).
+- `armada`: not supported. Its 13 connectors are `.mcp.json` entries configured through `userConfig` and `${user_config.*}` substitution; the Codex manifest has no `userConfig` and the installed binary contains neither `userConfig` nor `${user_config`, so every connector would start with literal placeholders. Its 11 department agents also cannot ship in a plugin. No `.codex-plugin` manifest is added, so the Codex marketplace does not list it.
+
+Gaps: no Codex Read/Grep/Glob tool; hooks need trust in Codex (`/hooks`); live hook execution inside a Codex model turn is unverified (no login).

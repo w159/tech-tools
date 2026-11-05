@@ -1,7 +1,7 @@
 ---
 name: atlas-optimize
-description: "Single-experiment loop: baseline, one hypothesis, one change, identical re-measure, real delta reported. Use when a working system's metric should improve; not for bugs or restructuring."
-when_to_use: "performance tuning, reduce latency, bundle size, build time, benchmark, bottleneck, make it faster"
+description: "Runs a single-experiment metric loop: baseline, one hypothesis, one change, identical re-measure, real delta reported. Use when a working system's metric (latency, size, build time) should improve; not for bugs or restructuring."
+when_to_use: "performance tuning, reduce latency, page load, slow build, bundle size, make it faster, bottleneck"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '<target to optimize and the metric that should move>'
 ---
@@ -25,7 +25,7 @@ Atlas runs sessions, not standing infrastructure, so the **measurement-first dis
 - CE's "baseline and final confirmation always use the full configured protocol" -> kept as the parity rule: the re-measurement MUST be byte-for-byte the same method as the baseline (same command, cwd, environment, sample count, aggregation). This is the one invariant the verifier exists to confirm.
 - CE's "a non-improving change is reported as such" -> kept verbatim in spirit: an experiment whose delta does not improve the metric is reported as zero or negative gain, never as success.
 - Codex/CLI delegation backends -> replaced by atlas Task dispatches (`atlas:implementer`, `atlas:explorer`, `atlas:verifier` per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`). No external CLI dependency.
-- CE's experiment log -> `.atlas/evidence/<YYYY-MM-DD>_<slug>/` (baseline + after captures, run log) per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-loop/references/docs-ssot.md`, with the verdict row in `.atlas/.run/findings.json`.
+- CE's experiment log -> `.atlas/evidence/<YYYY-MM-DD>_<slug>/` (baseline + after captures, run log) per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`, with the verdict row in `.atlas/.run/findings.json`.
 - CE's branch/commit mechanics -> the user owns VCS: this skill never pushes, opens a PR, or merges without explicit user confirmation.
 
 ## Identity and role

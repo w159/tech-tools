@@ -1,7 +1,7 @@
 ---
 name: atlas-brainstorm
-description: "Grills a vague idea one hard question at a time, recommending an answer each turn, until shared understanding. Default mode writes a requirements-only docs/plans/ artifact (WHAT, not HOW); strategy mode writes docs/architecture/product-strategy.md. Writes no product code. Use when an idea is vague, before atlas-plan."
-when_to_use: "brainstorm, flesh out this idea, what should we build, scope this feature, requirements discovery, product requirements, product strategy, positioning, target users, success metrics, product direction, STRATEGY.md, grill me"
+description: "Grills an unclear product idea one question at a time into a requirements doc (default) or a product strategy; writes no product code. Use when an idea needs shaping, before atlas-plan."
+when_to_use: "brainstorm, brainstorm requirements, what should we build, requirements discovery, product strategy, STRATEGY.md, grill me"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[strategy [section]] <the idea, feature, or request to brainstorm>'
 ---

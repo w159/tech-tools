@@ -1,0 +1,41 @@
+{
+    "name": "atlas",
+    "version": "17.0.0",
+    "description": "Multi-agent coding architect for Claude Code: plans, delegates to named subagents, verifies with evidence, and blocks 'done' until the evidence exists.",
+    "author": {
+        "name": "w159",
+        "url": "https://github.com/w159"
+    },
+    "repository": "https://github.com/w159/tech-tools",
+    "homepage": "https://github.com/w159/tech-tools/tree/main/plugins/atlas",
+    "license": "Apache-2.0",
+    "keywords": [
+        "atlas",
+        "architect",
+        "subagents",
+        "verification",
+        "hooks",
+        "agentic",
+        "coding-agent",
+        "docs-as-code",
+        "multi-stage-planning",
+        "ux-testing",
+        "operating-contract",
+        "architecture-audit",
+        "security-audit",
+        "code-review",
+        "self-improvement",
+        "observability",
+        "prompt-optimization",
+        "claude-mem",
+        "context-mode",
+        "serena",
+        "lean-ctx",
+        "tool-routing",
+        "fallow",
+        "dead-code",
+        "compound-engineering"
+    ],
+    "skills": "./skills/",
+    "hooks": "./hooks/hooks.codex.json"
+}

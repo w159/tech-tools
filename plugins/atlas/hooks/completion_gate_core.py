@@ -165,10 +165,28 @@ from docs_drift import docs_drift as _docs_drift  # noqa: E402
 from docs_drift import find_root as _find_root  # noqa: E402
 from docs_drift import git_changed_paths as _git_changed_paths  # noqa: E402
 
-try:  # opt-in usage counters; a missing module never changes gate behavior
-    from atlas_analytics import record as _record_analytics
-except ImportError:  # pragma: no cover
-    _record_analytics = None
+
+
+def _record_analytics(key):
+    """Anonymous usage counter gate.<letter>.block (validated). Imported on use, so a Stop that records
+    nothing never pays for the client; a missing or broken module never changes gate behavior."""
+    try:
+        import atlas_analytics
+
+        atlas_analytics.record(key)
+    except Exception:  # noqa: BLE001, S110 -- telemetry never changes a verdict
+        pass
+
+
+def _record_pass():
+    """gate.pass: this Stop was evaluated and allowed with every applicable condition met."""
+    try:
+        import atlas_analytics_hot
+
+        atlas_analytics_hot.record(["gate.pass"])
+    except Exception:  # noqa: BLE001, S110 -- telemetry never changes a verdict
+        pass
+
 
 # Block texts are read by the model and pasted into a shell it runs itself,
 # where $CLAUDE_PLUGIN_ROOT is NOT set (Claude Code expands it only for the hook
@@ -1485,6 +1503,7 @@ def main() -> int:
         if not _session_is_orchestrating(session):
             if missing_delegation and not _has_in_flight_dispatch(data):
                 _record_gate_block(session, ["m"])
+                _record_analytics("gate.m.block")
                 print(
                     json.dumps(
                         {
@@ -1499,6 +1518,8 @@ def main() -> int:
                         }
                     )
                 )
+            elif not missing_delegation:
+                _record_pass()
             return 0  # only (m) applies to unflagged runs
         if _has_in_flight_dispatch(data):
             return 0  # dispatched subagent/workflow/teammate still running -- not a completion claim yet
@@ -1521,6 +1542,7 @@ def main() -> int:
         if not failed:
             # Silence on pass is the contract: the gate speaks only when it blocks.
             _block_loop_reset(session)  # the cap counts consecutive blocks only
+            _record_pass()
             return 0
         count, loop_exhausted = _block_loop_state(session, failed)
         if loop_exhausted:
@@ -1535,10 +1557,8 @@ def main() -> int:
                 )
             return 0
         _record_gate_block(data.get("session_id", ""), failed)
-        if _record_analytics is not None:
-            for letter in failed:
-                with contextlib.suppress(Exception):
-                    _record_analytics(f"gate.{letter.lower()}.block")
+        for letter in failed:
+            _record_analytics(f"gate.{letter.lower()}.block")
         # F8: mark every failing letter. The first Stop per letter ships the
         # full clause (computed below, BEFORE these markers exist); later
         # Stops ship a one-line delta. (n)/(o)/(p) keep their original
@@ -1881,7 +1901,8 @@ def _run_written_paths(session_id: str, root: Path | None = None) -> list:
             conn.close()
 
 
-_TEST_RUNNER_RE = re.compile(
+from atlas_lazyre import lre  # noqa: E402
+_TEST_RUNNER_RE = lre(
     r'(?:^|[;&|]\s*|&&\s*|\|\|\s*|"(?:command|code)":\s*"|\n|\\n)'
     r"\s*(?:sudo\s+)?(?:python3?\s+-m\s+)?"
     r"(pytest|py\.test|npm (run )?test|npx (vitest|jest)|vitest|yarn test|"

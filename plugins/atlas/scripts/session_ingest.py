@@ -110,7 +110,8 @@ def summarize_input(tinput):
 
 # --- behavioral signal taggers ------------------------------------------------
 
-ADMISSION = re.compile(
+from atlas_lazyre import lre  # noqa: E402
+ADMISSION = lre(
     r"\b(never (actually |even )?(tried|tested|implemented|attempted|ran|"
     r"verified|wired|checked)|just assumed|i assumed|assumed it (would|was)|"
     r"did ?n'?t (actually )?(try|test|implement|verify|run|check|wire)|"
@@ -119,12 +120,12 @@ ADMISSION = re.compile(
     r"i never (actually )?(tested|tried|ran|verified|wired|implemented))\b",
     re.I,
 )
-UNVERIFIED = re.compile(
+UNVERIFIED = lre(
     r"\b(should (work|fix|resolve|be fine|do it)|"
     r"this should (work|fix|resolve)|that should (work|fix|do it))\b",
     re.I,
 )
-CORRECTION = re.compile(
+CORRECTION = lre(
     r"\b(that'?s (wrong|not right|incorrect|not what)|"
     r"you (lied|never|did ?n'?t actually|claimed|said)|"
     r"stop (doing|assuming|making)|why did you (assume|say|claim|not)|"
@@ -138,7 +139,7 @@ CORRECTION = re.compile(
 # admission or a correction. Measured on the live corpus before adding this:
 # user_correction 15 -> 9 matching rows, the legacy `friction` bucket 5 -> 0,
 # assumption_admission 51 -> 49.
-QUOTED_BLOCK = re.compile(r"```.*?```|^\s*\|.*$", re.S | re.M)
+QUOTED_BLOCK = lre(r"```.*?```|^\s*\|.*$", re.S | re.M)
 
 
 def _matchable_text(text):
@@ -181,7 +182,7 @@ MACHINE_MARKERS = (
     "Self-improvement: captured",
 )
 
-_QUOTE_PREFIX = re.compile(r"^[\s>]*")
+_QUOTE_PREFIX = lre(r"^[\s>]*")
 
 
 def _strip_quote_prefix(line):
@@ -1734,7 +1735,20 @@ def repair_tmp_transcript_paths(apply=False, root=None, conn=None):
 
 def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
-        print(__doc__)
+        import argparse
+
+        p = argparse.ArgumentParser(
+            prog="session_ingest.py",
+            description=(__doc__ or "").split("\n\n", 1)[0],
+            epilog="\n\n".join((__doc__ or "").split("\n\n")[1:]),
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+        p.add_argument("transcript", nargs="?", help="ingest one transcript jsonl (add --force to re-read it)")
+        p.add_argument("--backfill", nargs="?", metavar="ROOT", help="walk ~/.claude/projects (or ROOT)")
+        p.add_argument("--backfill-agent", nargs="+", metavar="codex|omp [ROOT]", help="walk another agent's session tree")
+        p.add_argument("--backfill-errors", action="store_true", help="re-derive error snippets from claude and omp transcripts")
+        p.add_argument("--repair-tmp-paths", action="store_true", help="re-point temp-dir transcript_path rows (dry run unless --apply)")
+        p.print_help()
         return 0
     if argv[0] == "--backfill-errors":
         t0 = time.time()

@@ -375,6 +375,16 @@ def main(argv: list[str]) -> int:
             )
         },
     }
+    if len(argv) == 2 and argv[1] in ("-h", "--help"):
+        import argparse
+
+        p = argparse.ArgumentParser(
+            prog="atlas_seats.py",
+            description="Seat-backend facade: OpenRig by default, herdr as fallback (ATLAS_SEAT_BACKEND=rig|herdr|off overrides).",
+        )
+        p.add_argument("command", choices=sorted(cmds), help="backend: name the chosen backend; the rest delegate to it")
+        p.print_help()
+        return 0
     if len(argv) != 2 or argv[1] not in cmds:
         sys.stderr.write(
             "usage: atlas_seats.py backend|status|ensure|list-panes|agents\n"

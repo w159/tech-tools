@@ -1,6 +1,6 @@
 ---
 name: runner
-description: "Mechanical executor for ONE tiny task given as numbered STEPS. Does not design, investigate or decide: runs each step exactly as written, records the command and real output as evidence, stops on anything unexpected, and returns a fixed report. Use when a task is fully specified as at most 7 exact steps on at most 5 named files."
+description: "Mechanical executor for one task given as at most 7 numbered STEPS: runs each exactly, stops on surprise, returns evidence. Use when the task is fully specified and needs no judgment."
 model: haiku
 effort: low
 tier_allow: [haiku, sonnet]
@@ -59,4 +59,3 @@ DELIVERABLE: <the output the dispatch's DELIVERABLE asked for, or: none>
 NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>
 ```
 On omp the same fields are returned as the structured result.
-Your board item id is in the prompt (BOARD ITEM: <id>); at start run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" status --id <id> --status in_progress`.

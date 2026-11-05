@@ -15,7 +15,10 @@ atlas_hook_guard (window_seconds=None -- this hook has no throttle of its
 own, only the breaker that silences a thrashing Stop chain).
 """
 
+import io
+import json
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -23,6 +26,45 @@ import atlas_env  # noqa: E402
 atlas_env.apply_store_env()
 import atlas_faults  # noqa: E402
 import atlas_hook_guard  # noqa: E402
+
+
+DETACHED_ENV = "ATLAS_INGEST_DETACHED"
+
+
+def _detach_session_end():
+    """SessionEnd runs inside the harness's shutdown (Codex clamps it to 3 s, Claude Code waits for it):
+    hand the whole job to a detached copy of this hook and return at once. The payload is replayed on
+    the child's stdin; for any other event (or a failed spawn) stdin is restored and the caller runs
+    inline. ATLAS_INGEST_SYNC=1 keeps SessionEnd inline. Returns True when the child took the job."""
+    try:
+        raw = sys.stdin.read()
+    except Exception:  # noqa: BLE001
+        raw = ""
+    sys.stdin = io.StringIO(raw)
+    if os.environ.get(DETACHED_ENV) == "1" or os.environ.get("ATLAS_INGEST_SYNC") == "1":
+        return False
+    try:
+        doc = json.loads(raw, strict=False)
+        if not isinstance(doc, dict) or doc.get("hook_event_name") != "SessionEnd":
+            return False
+        args = [sys.executable] + (["-S"] if sys.flags.no_site else []) + [os.path.abspath(__file__)]
+        child = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=dict(os.environ, **{DETACHED_ENV: "1"}),
+            start_new_session=True,
+        )
+        child.stdin.write(raw.encode("utf-8"))
+        child.stdin.close()
+        return True
+    except ValueError:  # unparseable stdin: the inline path reports it the usual way
+        return False
+    except Exception as exc:  # noqa: BLE001 -- fall back to the inline path
+        atlas_faults.record("ingest_session.detach", exc)
+        sys.stdin = io.StringIO(raw)
+        return False
 
 
 def _spawn_scoring(payload):
@@ -158,6 +200,8 @@ def main():
 
 if __name__ == "__main__":
     try:
+        if os.environ.get("ATLAS_INGEST", "on").lower() != "off" and _detach_session_end():
+            sys.exit(0)
         main()
     except Exception as exc:
         atlas_faults.record("ingest_session", exc)  # best-effort; never block a session

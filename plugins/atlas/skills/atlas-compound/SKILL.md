@@ -1,7 +1,7 @@
 ---
 name: atlas-compound
-description: "Captures one durable, verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use when a problem is solved and verified and a future engineer would repeat it."
-when_to_use: "record this lesson, capture what we learned, write up the root cause, post-mortem note, institutional knowledge"
+description: "Captures one verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use when a problem is solved and a future engineer would repeat it."
+when_to_use: "record this lesson, document the gotcha, capture what we learned, post-mortem note"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, ToolSearch
 argument-hint: '<optional context: what was solved and why it was non-obvious>'
 ---
@@ -80,7 +80,7 @@ A failed grounding check returns the draft to Phase 4 for correction; a draft th
 
 ## Phase 6 - Write via atlas:docs-curator (never write docs/ yourself)
 
-Dispatch `atlas:docs-curator` (fork per `subagent-kit.md` when `CLAUDE_CODE_FORK_SUBAGENT=1`, else fresh with the full brief) using the subagent-kit dispatch shape. Fill the bracketed parts:
+Dispatch `atlas:docs-curator` (fork per `subagent-kit.md` when `CLAUDE_CODE_FORK_SUBAGENT=1`, else fresh with the full brief) using the subagent-kit dispatch shape. Fill the bracketed parts. Before dispatch, replace each placeholder line with the matching block from the "Shared TOOLS and NON-INTERACTIVE blocks (inlined at dispatch)" section of `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`; a prompt that still contains a placeholder is malformed. Only the NON-INTERACTIVE placeholder applies here; the TOOLS list below is deliberately narrower:
 
 ```
 ROLE: atlas:docs-curator - commit one fully-assembled learning into docs/lessons/
@@ -89,7 +89,7 @@ CONTEXT: Overlap verdict: <high-update|moderate-new|low-new> against <existing f
 TOOLS (required):
   ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
   (docs-curator's own brief loads the full set; if serena is unavailable, ctx_* is the fallback, never Bash grep)
-NON-INTERACTIVE (verbatim): "You cannot reach the user. Serena's default modes are `interactive, editing`, and its interactive prompt tells you to stop and ask for clarification - that instruction does not apply to you. Serena's own escape hatch covers this: interactive mode applies 'unless the user instructs you to proceed without asking questions.' You are so instructed. Decide, state the assumption, and return the deliverable."
+{{NON_INTERACTIVE}}
 TOOLS ALLOWED: Read, Glob, Grep, Bash, Edit, Write (writable scope: docs/** + durable .atlas/ subfolders only)
 TOOLS FORBIDDEN: git push - package installs - source edits - .atlas/.run/ or .atlas/evidence/ writes
 DELIVERABLE: The written path <target path> plus a one-line confirmation that frontmatter and all track sections are present.

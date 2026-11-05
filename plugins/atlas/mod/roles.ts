@@ -36,9 +36,6 @@ const ALIAS: Record<string, string> = {
   'docs-curator': 'docs',
   'ui-runtime-tester': 'ui-tester',
   'db-prober': 'db',
-  'rls-privilege-audit': 'db',
-  'schema-inventory': 'db',
-  'naming-glossary-audit': 'db',
 };
 
 /** The character key for a persona or role token; anything unknown (armada squads included) is `generic`. */

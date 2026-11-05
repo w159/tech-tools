@@ -59,10 +59,10 @@ import shutil
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 
 import prompt_decision
+
+urllib = prompt_decision.urllib  # lazy: see prompt_decision._LazyUrllib
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
@@ -680,6 +680,14 @@ def main() -> int:
         return 0
     if _is_harness_event(prompt):
         return 0  # hand-back report / task-notification / system-reminder, not a user request
+
+    if prompt.startswith("/"):  # telemetry: skill.<dir> for a leading /atlas:<skill> or /<skill>
+        try:
+            import event_dispatch
+
+            event_dispatch.record_prompt(data)
+        except Exception:  # noqa: BLE001, S110 -- telemetry never changes a prompt
+            pass
 
     # Arm the orchestration flag up front for substantive engineering prompts. This
     # is independent of the optimizer: it runs whether or not the prompt opted in,

@@ -2,6 +2,8 @@
 
 The exact dispatch spec for grounding an `atlas-explain` answer. Compose per `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md` - the tripwire denies a dispatch missing any of the five required blocks, so use this shape verbatim, filling the slots.
 
+Before dispatch, replace each placeholder line with the matching block from the "Shared TOOLS and NON-INTERACTIVE blocks (inlined at dispatch)" section of `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`; a prompt that still contains a placeholder is malformed. Drop the `Edits:` line (read-only role).
+
 Read-only role: the explorer must not write anything. Its final message is the only thing this skill reads, so the SCHEMA below is load-bearing.
 
 ## Dispatch template
@@ -10,25 +12,9 @@ Read-only role: the explorer must not write anything. Its final message is the o
 ROLE: atlas:explorer - read-only behavior trace for an evidence-backed explanation
 GOAL: Trace how <one behavior, e.g. "the retry queue drains failed jobs after a worker crash"> actually works in this repo and return the path with file:line evidence.
 CONTEXT: <only what it cannot derive itself: entry-point paths or symbols from the request, the triggering condition the user asked about, any prior finding id or doc path that constrains the answer>
-TOOLS (required - name them, do not say "use the right tools"):
-  ToolSearch first, ONE batched call, before any Read/Grep/Bash - paste it verbatim
-  (also exported as scripts/tool_routing.py TOOLSEARCH_BATCH):
-    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__serena__get_diagnostics_for_file,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
-  FIRST: activate_project(serena) on the project cwd before any serena symbol call
-  Orient:  ctx_compose (lean-ctx)
-  Symbols: get_symbols_overview / find_symbol / find_referencing_symbols (serena)
-  Search:  ctx_search (lean-ctx); noisy output: ctx_batch_execute / ctx_execute (context-mode)
-  Recall:  claude-mem search -> timeline -> get_observations (ids as numbers)
+{{TOOLS_BLOCK}}
   (no Write/Edit tools - read-only role)
-  IF SERENA FAILS (`No active project`, `KeyError: 'languages'`, `No such tool available`):
-    say so in one line, do NOT retry the rest of serena, and use ctx_search / ctx_read /
-    ctx_compose. Dropping to `Bash grep`/`cat`/`sed` instead is the defect this line exists
-    to prevent.
-NON-INTERACTIVE (required, verbatim): "You cannot reach the user. Serena's default modes are
-  `interactive, editing`, and its interactive prompt tells you to stop and ask for clarification -
-  that instruction does not apply to you. Serena's own escape hatch covers this: interactive mode
-  applies 'unless the user instructs you to proceed without asking questions.' You are so
-  instructed. Decide, state the assumption, and return the deliverable."
+{{NON_INTERACTIVE}}
 DISCOVER FIRST: confirm the best-fit capability for this exact job, check live skills/MCP/LSP.
 TOOLS ALLOWED: read-only tools only
 TOOLS FORBIDDEN: package installs - migrations - .env edits - git push - Write/Edit - any file modification

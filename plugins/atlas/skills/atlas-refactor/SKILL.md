@@ -1,9 +1,9 @@
 ---
 name: atlas-refactor
-description: "Refactors, renames or restructures code without changing behavior, with before/after evidence. Use when code works but is messy, hard to navigate or carries dead weight."
-when_to_use: "refactor, clean up, restructure, rename, remove dead code, extract, untangle, behavior-preserving"
-allowed-tools: Read, Glob, Grep, Bash, Edit, Write
-argument-hint: '<target symbol or file to refactor>'
+description: "Refactors, renames or restructures code without changing behavior, or (diff mode, no target) runs a three-reviewer simplify pass over a fresh diff, with before/after evidence. Use when code works but is messy, or right after implementing and before review."
+when_to_use: "refactor, restructure a package, rename, extract helpers, remove dead code, simplify my changes, simplification pass, tidy the diff"
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, AskUserQuestion
+argument-hint: '<target symbol or file> | blank or base:<ref> = simplify the fresh diff'
 ---
 
 
@@ -15,6 +15,13 @@ cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
 If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
+
+## Modes
+
+| Mode | When | Procedure |
+|---|---|---|
+| target (default) | A named symbol, file, module or pain point to restructure, rename or clean up | The Sequence below |
+| diff | Simplify, tidy or de-duplicate code that was just implemented: blank arguments, `base:<ref>`, or files edited this session | Read `${CLAUDE_SKILL_DIR}/references/diff-pass.md` in full and follow it instead of the Sequence (three read-only reviewers, triage, implementer, verifier re-gate). It loads `references/personas/code-reuse-reviewer.md`, `references/personas/code-quality-reviewer.md`, `references/personas/efficiency-reviewer.md` and `references/diff-pass-apply-and-verify.md` at its own steps. Everything else on this page still applies. |
 
 Read `${CLAUDE_SKILL_DIR}/references/refactor-checklist.md` and apply the behavior-preservation, test-coverage, and naming rules it defines to every step.
 

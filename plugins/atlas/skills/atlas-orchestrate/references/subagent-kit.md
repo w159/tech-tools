@@ -11,6 +11,7 @@
 - [Claim before work (shared todo board)](#claim-before-work-shared-todo-board)
 - [Colony protocol (siblings)](#colony-protocol-siblings)
 - [Colony mux mode (opt-in, tmux)](#colony-mux-mode-opt-in-tmux)
+- [Shared TOOLS and NON-INTERACTIVE blocks (inlined at dispatch)](#shared-tools-and-non-interactive-blocks-inlined-at-dispatch)
 - [Anti-patterns](#anti-patterns)
 
 How to dispatch a subagent so it stays small, focused, and returns only what you need.
@@ -281,6 +282,10 @@ SessionStart.
 - Not Claude Code agent teams: teammates inherit the lead's effort, which would erase
   the per-role tiers.
 - Test-only: `ATLAS_MUX_WORKER_CMD` / `--command-override` replaces the harness command.
+
+## Shared TOOLS and NON-INTERACTIVE blocks (inlined at dispatch)
+
+The single source for these two blocks is the dispatch spec template above ("The dispatch spec"): the TOOLS block runs from the `TOOLS:` line through the line ending `to prevent.`, and the NON-INTERACTIVE block is the paragraph from `NON-INTERACTIVE (required, verbatim)` through `return the deliverable."` plus its parenthetical. Briefs kept in other skill files never copy them. They carry one placeholder line each, `{{TOOLS_BLOCK}}` and `{{NON_INTERACTIVE}}`, and the dispatcher substitutes the template's text verbatim before dispatch (read only those template lines, e.g. with `sed -n`, not the whole kit). For a read-only role delete the `Edits:` line from the TOOLS block. A brief may add role-specific lines after the placeholder (for example `(no Write/Edit tools - read-only role)`). Briefs that need a narrower ToolSearch list keep only that list and use `{{NON_INTERACTIVE}}`. `skills/` files outside this kit must contain neither block (pinned by `scripts/test_skill_agent_conformance.py`).
 
 ## Anti-patterns
 

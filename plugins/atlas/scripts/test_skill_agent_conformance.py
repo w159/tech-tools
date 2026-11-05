@@ -948,5 +948,62 @@ class TestChecklistDetectors(unittest.TestCase):
         self.assertFalse(_TOC_RE.search("# T\n\n## Overview\n"))
 
 
+class TestSharedDispatchBlocks(unittest.TestCase):
+    """The TOOLS and NON-INTERACTIVE blocks live once, in subagent-kit.md.
+
+    Other skill files carry the {{TOOLS_BLOCK}} / {{NON_INTERACTIVE}} placeholder,
+    and a dispatcher step in the same skill names the kit section that supplies it.
+    """
+
+    KIT = "atlas-orchestrate/references/subagent-kit.md"
+    SECTION = "Shared TOOLS and NON-INTERACTIVE blocks"
+    # Distinctive lines of the two blocks; none may appear outside the kit.
+    FINGERPRINTS = (
+        "Serena's default modes are",
+        "its interactive prompt tells you to stop and ask",
+        "if serena fails (`no active project`",
+        "Dropping to `Bash grep`/`cat`/`sed` instead is the defect",
+        "mcp__serena__find_implementations,mcp__serena__replace_symbol_body",
+    )
+    PLACEHOLDERS = ("{{TOOLS_BLOCK}}", "{{NON_INTERACTIVE}}")
+
+    def _skill_files(self):
+        root = PLUGIN_ROOT / "skills"
+        return [f for f in sorted(root.rglob("*.md"))
+                if f.relative_to(root).as_posix() != self.KIT]
+
+    def test_kit_holds_the_blocks_once(self):
+        kit = (PLUGIN_ROOT / "skills" / self.KIT).read_text("utf-8")
+        self.assertIn(self.SECTION, kit)
+        for fp in self.FINGERPRINTS[:4]:
+            self.assertEqual(kit.lower().count(fp.lower()), 1, fp)
+
+    def test_no_copy_outside_the_kit(self):
+        bad = []
+        for f in self._skill_files():
+            text = f.read_text("utf-8", errors="replace")
+            low = text.lower()
+            bad += [f"{f.relative_to(PLUGIN_ROOT)}: {fp[:40]}"
+                    for fp in self.FINGERPRINTS if fp.lower() in low]
+        self.assertEqual([], bad, "TOOLS/NON-INTERACTIVE block copied outside the kit")
+
+    def test_every_placeholder_has_a_dispatcher_step(self):
+        skills = PLUGIN_ROOT / "skills"
+        bad = []
+        for f in self._skill_files():
+            text = f.read_text("utf-8", errors="replace")
+            if not any(ph in text for ph in self.PLACEHOLDERS):
+                continue
+            skill_dir = skills / f.relative_to(skills).parts[0]
+            named = any(
+                self.SECTION in g.read_text("utf-8", errors="replace")
+                and "subagent-kit.md" in g.read_text("utf-8", errors="replace")
+                for g in skill_dir.rglob("*.md")
+            )
+            if not named:
+                bad.append(str(f.relative_to(PLUGIN_ROOT)))
+        self.assertEqual([], bad, "placeholder with no dispatcher step naming the kit section")
+
+
 if __name__ == "__main__":
     unittest.main()

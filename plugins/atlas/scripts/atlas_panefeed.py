@@ -428,7 +428,7 @@ ROLE_EYES = {
 MOUTHS = {"running": ("_", "o", "O", "^", "u"), "thinking": ("~", "-", "="), "done": ("‿",), "failed": ("n",), "blocked": (".",)}
 _ROLE_ALIAS = {
     "completeness-critic": "critic", "docs-auditor": "docs", "docs-curator": "docs", "ui-runtime-tester": "ui-tester",
-    "db-prober": "db", "rls-privilege-audit": "db", "schema-inventory": "db", "naming-glossary-audit": "db",
+    "db-prober": "db",
 }
 _FEED_STATE = {"run": "running", "done": "done", "fail": "failed"}
 

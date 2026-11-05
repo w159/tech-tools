@@ -4179,6 +4179,48 @@ class DocsMovedInGitRealRepoTest(unittest.TestCase):
         self.assertTrue(completion_gate._docs_moved_in_git(root))
 
 
+class GatePassAnalyticsTest(GateOrchestrationTest):
+    """An allowed Stop records gate.pass; a blocked one does not."""
+
+    def _gate_env(self):
+        ah = os.path.join(self.tmp, "ah")
+        env = dict(self.env, ATLAS_HOME=ah, ATLAS_ANALYTICS="on", ATLAS_GATE_PHASES="off", ATLAS_GATE_COLONY="off")
+        for var in ("CI", "GITHUB_ACTIONS", "PYTEST_CURRENT_TEST", "DO_NOT_TRACK"):
+            env.pop(var, None)
+        return ah, env
+
+    def _events(self, ah):
+        p = Path(ah, "analytics", "events.jsonl")
+        return p.read_text() if p.exists() else ""
+
+    def test_clean_stop_of_an_orchestrating_run_records_pass(self):
+        ah, env = self._gate_env()
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)
+        self.assertNotIn('"decision": "block"', r.stdout)
+        self.assertIn('"k":"gate.pass"', self._events(ah))
+
+    def test_clean_stop_of_a_plain_chat_records_pass(self):
+        ah, env = self._gate_env()
+        r = _run_gate({"session_id": "sess-chat", "cwd": self.tmp}, env)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn('"k":"gate.pass"', self._events(ah))
+
+    def test_blocked_stop_records_the_block_and_no_pass(self):
+        ah, env = self._gate_env()
+        self._log_run_write("src/app.py")
+        r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)
+        self.assertIn('"decision": "block"', r.stdout)
+        ev = self._events(ah)
+        self.assertIn("gate.c.block", ev)
+        self.assertNotIn("gate.pass", ev)
+
+    def test_opted_out_records_nothing(self):
+        ah, env = self._gate_env()
+        env["ATLAS_ANALYTICS"] = "off"
+        _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)
+        self.assertEqual(self._events(ah), "")
+
+
 class GateBlockAnalyticsTest(GateOrchestrationTest):
     """A blocking verdict records gate.<letter>.block through atlas_analytics."""
 

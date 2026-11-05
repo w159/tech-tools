@@ -1,5 +1,9 @@
 [test]
-preload = ["./omp/test-env-preload.ts", "./omp/test-isolation.ts"]
+# omp/: no test may start or adopt the user's dashboard/colony daemon or touch ~/.atlas (see omp/test-isolation.ts);
+# test-omp-stubs.ts stands in for the oh-my-pi host modules when they are not installed.
+# mod/test-shim.ts provides 'claude-code' and 'claude-code/testing' for the mod tests (a shim; the real kit is the
+# host's `claude plugin test`).
+preload = ["./omp/test-env-preload.ts", "./omp/test-isolation.ts", "./omp/test-omp-stubs.ts", "./mod/test-shim.ts"]
 # colony/herdr-web-ui has its own bunfig (a private herdr session); run from here, its contract
 # tests would create workspaces in the user's live herdr, so they are run from that directory
 pathIgnorePatterns = ["colony/herdr-web-ui/**"]

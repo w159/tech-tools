@@ -1,7 +1,7 @@
 ---
 name: atlas-db-audit
 description: "Audits a live database read-only via parallel subagents: schema inventory, schema-to-code reconciliation, privileges, naming. Use when a schema or permission change is coming."
-when_to_use: "database audit, schema drift, table inventory, privilege review, naming conventions, compare schema to code"
+when_to_use: "read-only audit, report only, never implementation: schema drift, table inventory, privilege review (who has write access), naming conventions, compare schema to code, audit the live database before a migration"
 allowed-tools: Read, Glob, Grep, Bash, Agent, Task
 paths: ["**/*.sql", "migrations/**", "supabase/**"]
 argument-hint: '[repo path] [db connection] [glossary path] [naming-convention notes]'
@@ -35,10 +35,10 @@ ENFORCE READ-ONLY:
 - Manual-only: the guard ships unwired (hooks.json does not load it); wiring it per-audit as above is the only enforcement path.
 
 Dispatch four investigations IN PARALLEL, each in a fresh context, each given only the inputs it needs. These agents are read-only (no Write access): each returns its full report as its final message, led by a short structured summary, and the orchestrator persists that report verbatim to its file under `.audit/` so the main context stays lean:
-1. Schema inventory (dispatch atlas:db-prober): a full catalog inventory of the live schema from information_schema and the catalog tables - tables, views, columns, types, constraints, indexes, sequences, functions.
+1. Schema inventory (dispatch atlas:db-prober, `MODE: inventory`): a full catalog inventory of the live schema from information_schema and the catalog tables - tables, views, columns, types, constraints, indexes, sequences, functions.
 2. Code-usage map (dispatch atlas:explorer): every database object the backend code references and exactly where, with file:line for each reference.
-3. Privileges (dispatch atlas:db-prober): row-level-security policies, GRANTs, and roles measured against least privilege - who can read/write what, and where the runtime role has more than it needs.
-4. Naming (dispatch atlas:explorer or general-purpose): object names checked against the glossary and the naming-convention notes you supplied; flag drift and mismatches.
+3. Privileges (dispatch atlas:db-prober, `MODE: privileges`): row-level-security policies, GRANTs, and roles measured against least privilege - who can read/write what, and where the runtime role has more than it needs.
+4. Naming (dispatch atlas:db-prober, `MODE: naming`, with the glossary path and the naming-convention notes): object names checked against the glossary and the naming-convention notes you supplied; flag drift and mismatches.
 
 GROUNDING: each subagent reports only what a tool result confirms - a catalog query result, or a file and line. Anything it cannot verify it labels UNVERIFIED. No finding may rest on a name alone or on training-data assumptions.
 
@@ -61,10 +61,9 @@ REPORT:
 - The `.audit/` file paths holding the full detail.
 
 ## Supporting files
-- `references/audit-workflow.md` - the four parallel investigations, the three
-  agent roles (atlas:schema-inventory, atlas:rls-privilege-audit,
-  atlas:naming-glossary-audit) and the explorer, grounding rules, and
-  synthesis ranking order.
+- `references/audit-workflow.md` - the four parallel investigations, the
+  atlas:db-prober modes (inventory, privileges, naming) and the explorer,
+  grounding rules, and synthesis ranking order.
 - `scripts/read-only-catalog-queries.sql` - SELECT-only catalog query
   templates the prober agents use (tables, columns, constraints, indexes, RLS
   policies, grants, roles, sequences, functions). The

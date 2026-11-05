@@ -66,12 +66,13 @@ MANDATES_PATH = os.path.join(
 CC_ROUTE = "mcp__plugin_claude-mem_mcp-search__search"
 
 # Server/tool names that ARE a claude-mem call (mirrors CLAUDE_MEM_SERVER in omp/mandates.ts).
-_MEM_NAME = re.compile(r"claude[-_]?mem|mcp[-_]?search", re.I)
+from atlas_lazyre import lre  # noqa: E402
+_MEM_NAME = lre(r"claude[-_]?mem|mcp[-_]?search", re.I)
 # Neither denied nor satisfying (omp `todo` is matched case-insensitively too).
 # A claude-mem CALL: the tool name's server part must itself be claude-mem / mcp-search
 # (optionally behind Claude Code's `plugin_` prefix), so a foreign server whose tool is
 # merely named like one (`mcp__evil__claude_mem_dump`) never satisfies the gate.
-_MEM_TOOL = re.compile(
+_MEM_TOOL = lre(
     r"^mcp__(?:plugin_)?(?:claude[-_]?mem|mcp[-_]?search)(?:[-_]|$)", re.I
 )
 _EXEMPT = (

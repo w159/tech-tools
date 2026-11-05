@@ -1,7 +1,7 @@
 ---
 name: atlas-crew
-description: "Builds a multi-file deliverable with a parallel Atlas crew on tmux + IRC (one worker per file, file leases, check gate). Use when a spec or plan splits into independent files to build at once. Args are the atlas_crew.py run flags."
-when_to_use: "crew, parallel workers per file, build these files in parallel, spec to files, plan.json crew"
+description: "Runs a parallel tmux + IRC crew, one worker per file with file leases and a check gate, pre-executed from the run flags. Use when a spec or plan.json splits into independent files to build at once."
+when_to_use: "crew, parallel workers per file, spec to files"
 disable-model-invocation: true
 allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py:*)
 argument-hint: "--plan plan.json | --spec SPEC.md --files 'glob' --tests 'pattern' --check 'cmd'"

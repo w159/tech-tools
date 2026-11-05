@@ -15,9 +15,9 @@ only where the matrix cell says so; the lead stays opus.
 
 | Tier | Use for | Roles (default model) |
 |---|---|---|
-| **haiku** | scan, list, read, count, run a fixed command, catalog dumps, drift and naming audits, read-and-map | `runner`, `schema-inventory`, `naming-glossary-audit`, `docs-auditor`, `explorer` |
-| **sonnet** | judgment: implementation, verification, planning, DB probing, docs curation, tests | `db-prober`, `ui-runtime-tester`, `docs-curator`, `implementer`, `test-engineer`, `verifier`, `completeness-critic`, `rls-privilege-audit`, `planner` |
-| **opus** | you, the orchestrator; a subagent only where `tier_allow` lists it (`implementer`, `verifier`, `completeness-critic`, `rls-privilege-audit`, `planner`) and the matrix says so | the main thread, or a matrix cell |
+| **haiku** | scan, list, read, count, run a fixed command, drift audits, read-and-map | `runner`, `docs-auditor`, `explorer` |
+| **sonnet** | judgment: implementation, verification, planning, DB probing, docs curation, tests | `db-prober`, `ui-runtime-tester`, `docs-curator`, `implementer`, `test-engineer`, `verifier`, `completeness-critic`, `planner` |
+| **opus** | you, the orchestrator; a subagent only where `tier_allow` lists it (`implementer`, `verifier`, `completeness-critic`, `db-prober`, `planner`) and the matrix says so | the main thread, or a matrix cell |
 
 Effort is agent frontmatter (`low` \| `medium` \| `high`); the matrix seat effort must equal it. The
 design's "none" (thinking off) is `low` in Claude Code and `off` on omp (omp maps none/low to `off`,
@@ -25,18 +25,17 @@ medium/high to `low`).
 
 | Effort | Use for | Agents |
 |---|---|---|
-| **low** | executing a clear spec: mapping, cataloguing, curating, running exact steps | `runner`, `explorer`, `docs-auditor`, `docs-curator`, `db-prober`, `ui-runtime-tester`, `schema-inventory`, `naming-glossary-audit` |
-| **medium** | writing code or rendering an independent verdict against evidence you did not hand them | `implementer`, `test-engineer`, `verifier`, `completeness-critic`, `rls-privilege-audit` |
+| **low** | executing a clear spec: mapping, cataloguing, curating, running exact steps | `runner`, `explorer`, `docs-auditor`, `docs-curator`, `ui-runtime-tester` |
+| **medium** | writing code or rendering an independent verdict against evidence you did not hand them | `implementer`, `test-engineer`, `verifier`, `completeness-critic`, `db-prober` (catalog, privilege, naming audits) |
 | **high** | whole-codebase or cross-harness design | `planner` |
 
 Raising a subagent's effort is a last resort after the prompt has been tightened and still fails.
 
 **Every agent carries a `color:`** so a dispatch is identifiable at a glance in the
-terminal, grouped by role family: cyan = read-only discovery (`explorer`,
-`schema-inventory`), blue = planning (`planner`), green = writes code
+terminal, grouped by role family: cyan = read-only discovery (`explorer`), blue = planning (`planner`), green = writes code
 (`implementer`), purple = writes docs (`docs-curator`), pink = live runtime testing
 (`ui-runtime-tester`), yellow/orange = read-only probing and audit (`db-prober`,
-`docs-auditor`, `rls-privilege-audit`, `naming-glossary-audit`), red = adversarial
+`docs-auditor`), red = adversarial
 verdict (`verifier`, `completeness-critic`). The palette is Claude Code's eight -
 `red blue green yellow purple orange pink cyan` - and it is a closed set: the
 frontmatter value is a key into the CLI's own color map, so anything else misses
@@ -76,4 +75,4 @@ This skill ships as part of the **atlas plugin**: the `atlas:*` companions live 
 
 `contracts/scope-matrix.json` maps `(task_class, effort)` to team (role, count, effort, tools profile), isolation and max_parallel. `scripts/atlas_resolve.py <class> <effort> [--paths a,b]` and `omp/resolve.ts` read it identically. Every `atlas:*` dispatch prompt carries `SCOPE: <class>/<effort>`; the tripwire denies one without it and one whose role is outside the resolved team (roles the matrix never names, e.g. `runner`, need only the line). `ATLAS_SCOPE_GATE=off` downgrades both to advisories. `atlas_mux.py spawn-team` sizes a tmux team from the same matrix.
 
-Tier source of truth: role effort in the matrix equals `agents/<role>.md` frontmatter. The seat `model` must be in the role's `tier_allow`; `test_atlas_contract.py` (`TierTableContract`) fails on drift between frontmatter, matrix and this doc. `rls-privilege-audit` is in the `db-audit` class, not plain `audit`.
+Tier source of truth: role effort in the matrix equals `agents/<role>.md` frontmatter. The seat `model` must be in the role's `tier_allow`; `test_atlas_contract.py` (`TierTableContract`) fails on drift between frontmatter, matrix and this doc. `db-prober` is in the `db` and `db-audit` classes, not plain `audit`.

@@ -11,7 +11,7 @@ Source notes for reference files are listed at the end of this file.
 - **atlas-optimize**: Ports Compound Engineering's ce-optimize (spec-YAML optimization runtime with four phases, parallel experiment worktrees, judge-scored variants, decide.mjs accept/revert engine); atlas keeps the measurement-first discipline, the clean-tree gate, the parity rule and the report-non-improvement rule, and drops the machinery.
 - **atlas-plan**: Ports Compound Engineering's ce-plan; ce-doc-review is replaced by atlas:completeness-critic, and CE's solutions corpus and pack resolver by atlas's lessons store and atlas_packs.py.
 - **atlas-proof**: Ports Compound Engineering's ce-proof (publish and annotate markdown through a hosted collaborative editor over a bespoke HTTP/agent API); generalized to native surfaces. Boundaries section derives from CE's credential and delete rules.
-- **atlas-simplify**: Ported from Compound Engineering's ce-simplify-code; adapted to atlas dispatch, verification and artifact conventions.
+- **atlas-refactor**: Its diff mode (formerly a separate skill) is ported from Compound Engineering's ce-simplify-code; adapted to atlas dispatch, verification and artifact conventions.
 - **atlas-worktree**: Mechanics port from Compound Engineering's ce-worktree; CE's 'prefer the harness's native worktree tool and stop' does not port, atlas uses the .atlas/.run/worktrees.json ledger instead.
 
 ## Reference files

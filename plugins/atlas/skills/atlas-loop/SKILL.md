@@ -1,7 +1,7 @@
 ---
 name: atlas-loop
-description: "Matches a recurring or iterative task to a library loop: interval loops use /loop, fan-out loops run as a parallel verify workflow. Use when repeating a task, polling, iterating until a condition holds, or sweeping."
-when_to_use: "run repeatedly, poll for status, keep going until, sweep a backlog, recurring task, scheduled workflow"
+description: "Routes a recurring or iterative task to a library loop: interval loops use /loop, fan-out loops run as a parallel verify workflow. Use when repeating a task, iterating until a condition holds or sweeping a backlog; watching one job or PR goes to atlas-run-watch."
+when_to_use: "run repeatedly, poll repeatedly, keep going until, every N minutes, sweep a backlog, recurring task"
 allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion
 ---
 
@@ -57,7 +57,7 @@ If this skill is invoked with **no task** (bare invocation, or "what loops do yo
 ## Composing and extending
 
 - A loop file is a template, not a cage. If the best-fit loop is 80% right, instantiate it and note the one deviation rather than forcing a worse match.
-- If no loop fits, say so plainly, then offer the closest one as a starting point or propose a new loop (a new `loops/<id>.md` following the existing frontmatter shape: `id`, `name`, `category`, `cadence`, `inputs`). The `<id>` must be a filesystem-safe slug (lowercase, only `a-z 0-9 - _`; no colon, slash, or space - see the slug rule in `${CLAUDE_SKILL_DIR}/references/docs-ssot.md` "Naming conventions"), or the repo cannot be checked out on Windows. Adding a loop means adding its row to `loops/INDEX.md` too.
+- If no loop fits, say so plainly, then offer the closest one as a starting point or propose a new loop (a new `loops/<id>.md` following the existing frontmatter shape: `id`, `name`, `category`, `cadence`, `inputs`). The `<id>` must be a filesystem-safe slug (lowercase, only `a-z 0-9 - _`; no colon, slash, or space - see the slug rule in `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md` "Naming conventions"), or the repo cannot be checked out on Windows. Adding a loop means adding its row to `loops/INDEX.md` too.
 - Loops compose: a `fan-out` sweep can feed a `self-paced` refine on the survivors. When you chain loops, name the handoff (what the first loop produces, what the second consumes).
 
 ## First move

@@ -1,7 +1,7 @@
 ---
 name: atlas-prompt
-description: "Rewrites a vague coding request into a structured, environment-aware prompt, asking up to three questions if scope is ambiguous. Use when a request is underspecified; also invoked by name as /atlas-prompt."
-when_to_use: "invoked by name: /atlas-prompt to sharpen an underspecified request"
+description: "Rewrites an underspecified coding request into a structured, environment-aware prompt, asking up to three scope questions first. Use when a request needs sharpening; invoked by name as /atlas-prompt."
+when_to_use: "sharpen this request, /atlas-prompt"
 allowed-tools: Read, Glob, Grep, Bash, Write, Agent, Task, AskUserQuestion
 argument-hint: '<the vague request to sharpen>'
 disable-model-invocation: true
@@ -24,6 +24,23 @@ The raw request to optimize is:
 
 If `$ARGUMENTS` is empty, optimize the user's most recent substantive request in this
 conversation; if there is none, ask them for the one-line goal and stop.
+
+## Contents
+
+- [Step 0 - Discover the environment (do this first, silently)](#step-0---discover-the-environment-do-this-first-silently)
+- [Step 1 - Elicit what discovery cannot answer (AskUserQuestion)](#step-1---elicit-what-discovery-cannot-answer-askuserquestion)
+- [Output style directive (tell the executing agent; do not apply it yourself)](#output-style-directive-tell-the-executing-agent-do-not-apply-it-yourself)
+- [Output rules](#output-rules)
+- [Optimization principles (apply ALL that fit)](#optimization-principles-apply-all-that-fit)
+- [Output template (use these section headers verbatim)](#output-template-use-these-section-headers-verbatim)
+- [Intent](#intent)
+- [Approach (canonical order)](#approach-canonical-order)
+- [Required research (before any code)](#required-research-before-any-code)
+- [Mandatory gates](#mandatory-gates)
+- [Subagent plan](#subagent-plan)
+- [Acceptance criteria](#acceptance-criteria)
+- [Output style](#output-style)
+- [Forbidden](#forbidden)
 
 ## Step 0 - Discover the environment (do this first, silently)
 

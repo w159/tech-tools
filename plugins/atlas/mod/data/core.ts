@@ -36,6 +36,8 @@ export type Offload = {
 };
 export type Seat = {
   role: string;
+  /** Matrix `seat` label: tells two seats of one role (e.g. a haiku inventory seat and a sonnet privilege seat) apart. */
+  seat?: string;
   count: number;
   model: string;
   effort: string;
@@ -272,6 +274,7 @@ function seatsOf(
   if (!Array.isArray(c?.team)) return [];
   return c.team.map((s: any) => ({
     role: str(s.role),
+    ...(str(s.seat) ? { seat: str(s.seat) } : {}),
     count: num(s.count) || 1,
     model: str(s.model) || "inherit",
     effort: str(s.effort) || effort,
@@ -292,13 +295,22 @@ export function routesOf(
     const members: string[] = Array.isArray(r.members)
       ? r.members.map((m: any) => str(m?.name))
       : [];
-    const ranBy = (role: string): string[] =>
+    // a labelled seat is matched to the members spawned for that label, so two seats of one role keep their own tier
+    const seatOf: Record<string, string> = {};
+    for (const m of Array.isArray(r.members) ? r.members : []) if (str(m?.name) && str(m?.seat)) seatOf[m.name] = m.seat;
+    const ranBy = (role: string, seat?: string): string[] =>
       offload
-        .filter((o) => members.includes(o.name) && o.role === role && o.model)
+        .filter(
+          (o) =>
+            members.includes(o.name) &&
+            o.role === role &&
+            o.model &&
+            (!seat || seatOf[o.name] === seat),
+        )
         .map((o) => o.model!);
     const seats = seatsOf(matrix, str(r.class), str(r.effort)).map((s) => ({
       ...s,
-      ran: ranBy(s.role),
+      ran: ranBy(s.role, s.seat),
     }));
     const drift = seats.flatMap((s) =>
       s.ran

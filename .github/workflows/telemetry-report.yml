@@ -1,0 +1,43 @@
+name: telemetry-report
+
+# Weekly: pull last week's thresholded aggregate from the telemetry server and commit it under
+# telemetry/. Does nothing until the repository variable ATLAS_TELEMETRY_URL is set.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: telemetry-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ATLAS_TELEMETRY_URL: ${{ vars.ATLAS_TELEMETRY_URL }}
+    steps:
+      - name: Skip when no telemetry URL is configured
+        if: env.ATLAS_TELEMETRY_URL == ''
+        run: echo "ATLAS_TELEMETRY_URL is not set; nothing to do."
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        if: env.ATLAS_TELEMETRY_URL != ''
+      - name: Build the weekly report
+        if: env.ATLAS_TELEMETRY_URL != ''
+        run: python3 scripts/telemetry_report.py --url "$ATLAS_TELEMETRY_URL"
+      - name: Commit telemetry changes
+        if: env.ATLAS_TELEMETRY_URL != ''
+        run: |
+          git add telemetry
+          if git diff --cached --quiet; then
+            echo "no telemetry changes"
+            exit 0
+          fi
+          git config user.name "W159"
+          git config user.email "49504268+w159@users.noreply.github.com"
+          git commit -m "telemetry: weekly report"
+          git push

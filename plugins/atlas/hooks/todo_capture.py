@@ -33,7 +33,24 @@ import atlas_env  # noqa: E402
 atlas_env.apply_store_env()
 import atlas_faults  # noqa: E402
 import atlas_hook_guard  # noqa: E402
-import atlas_todo  # noqa: E402
+
+
+class _LazyTodo:
+    """atlas_todo costs ~19 ms to import (subprocess, shutil, sqlite, memory) and most tool events never touch the
+    board, so the first attribute access imports it. The proxy stays the module global (tests patch attributes
+    on it) and forwards every other lookup to the real module."""
+
+    _module = None
+
+    def __getattr__(self, name):
+        if _LazyTodo._module is None:
+            import atlas_todo as module
+
+            _LazyTodo._module = module
+        return getattr(_LazyTodo._module, name)
+
+
+atlas_todo = _LazyTodo()
 
 
 def _is_dispatch(data: dict) -> bool:

@@ -86,6 +86,8 @@ export interface BridgedHook {
 export interface HookOutput {
 	deny?: string;
 	context?: string;
+	/** Claude Code's top-level `systemMessage`: text for the user, not the model (SessionStart shows it via ctx.ui.notify). */
+	systemMessage?: string;
 }
 
 /** A parsed JSON document: an object, array, or scalar. Callers narrow it before use. */
@@ -220,6 +222,7 @@ export function parseHookOutput(stdout: string): HookOutput {
 	if ("decision" in parsed && parsed.decision === "block" && "reason" in parsed && typeof parsed.reason === "string") {
 		out.context = [out.context, parsed.reason].filter(Boolean).join("\n");
 	}
+	if ("systemMessage" in parsed && typeof parsed.systemMessage === "string" && parsed.systemMessage.trim()) out.systemMessage = parsed.systemMessage;
 	return out;
 }
 
@@ -606,11 +609,13 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	const run = deps.run ?? runHook;
 	const now = deps.now ?? Date.now;
 	const off = () => atlasKnob("ATLAS_HOOK_BRIDGE", deps.env ?? process.env) === "off";
-	let sessionContext: Promise<string> | undefined;
+	let sessionContext: Promise<{ text: string; notices: string[] }> | undefined;
 	let channelOpened = false;
+	let noticesShown = false;
 	const reset = () => {
 		sessionContext = undefined;
 		channelOpened = false;
+		noticesShown = false;
 	};
 	pi.on("session_start", (_event, ctx) => {
 		reset();
@@ -670,6 +675,16 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 		}
 	};
 	const toolBudgetMs = () => deps.budgetMs ?? TOOL_CALL_BUDGET_MS;
+	const showNotices = (ctx: { hasUI?: boolean; ui?: { notify?: (message: string, type?: "info") => void } }, notices: string[]) => {
+		if (ctx.hasUI === false || typeof ctx.ui?.notify !== "function") return;
+		for (const message of notices) {
+			try {
+				ctx.ui.notify(message, "info");
+			} catch {
+				// a UI that cannot toast must not break the turn
+			}
+		}
+	};
 
 	pi.on("before_agent_start", async (event, ctx) => {
 		try {
@@ -677,8 +692,16 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			const common = { session_id: sessionIdOf(ctx), cwd: ctx.cwd };
 			const deadline = now() + HANDLER_BUDGET_MS;
-			sessionContext ??= runAll("SessionStart", undefined, { ...common, hook_event_name: "SessionStart", source: "startup" }, deadline).then(join);
-			const startText = await sessionContext;
+			sessionContext ??= runAll("SessionStart", undefined, { ...common, hook_event_name: "SessionStart", source: "startup" }, deadline).then(outs => ({
+				text: join(outs),
+				notices: outs.map(o => o.systemMessage).filter((m): m is string => Boolean(m)),
+			}));
+			const { text: startText, notices } = await sessionContext;
+			// SessionStart `systemMessage` is for the user (the first-run telemetry notice rides on it); omp has no such channel, so show it once per session.
+			if (!noticesShown) {
+				noticesShown = true;
+				showNotices(ctx, notices);
+			}
 			const promptText = join(await runAll("UserPromptSubmit", undefined, { ...common, hook_event_name: "UserPromptSubmit", prompt: event.prompt ?? "" }, deadline));
 			const additions: string[] = [];
 			if (startText && !base.some(e => typeof e === "string" && e.includes(SESSION_MARKER))) additions.push(`${SESSION_MARKER}\n${startText}`);

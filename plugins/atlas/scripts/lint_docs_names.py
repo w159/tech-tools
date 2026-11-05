@@ -90,10 +90,11 @@ EXEMPT_NAMES = frozenset({"README.md", "INDEX.md", ".gitkeep", ".DS_Store"})
 
 # <YYYY-MM-DD>_<slug>. The slug may itself start with a sequence number, which
 # is how a same-day ordered set keeps its order (2026-06-23_01-packer-...).
-_DATED = re.compile(r"^(\d{4})-(\d{2})-(\d{2})_[a-z0-9][a-z0-9._-]*$")
+from atlas_lazyre import lre  # noqa: E402
+_DATED = lre(r"^(\d{4})-(\d{2})-(\d{2})_[a-z0-9][a-z0-9._-]*$")
 # The retired hyphen form (YYYY-MM-DD-slug): migrated by the fixer, keeping its date.
-_DATED_HYPHEN = re.compile(r"^(\d{4})-(\d{2})-(\d{2})-[A-Za-z0-9]")
-_DATE_PREFIX_UNDERSCORE = re.compile(r"^\d{4}-\d{2}-\d{2}_")
+_DATED_HYPHEN = lre(r"^(\d{4})-(\d{2})-(\d{2})-[A-Za-z0-9]")
+_DATE_PREFIX_UNDERSCORE = lre(r"^\d{4}-\d{2}-\d{2}_")
 
 # Root files a project legitimately keeps loose in docs/ (stem, case-insensitive).
 ROOT_CANONICAL = frozenset(
@@ -124,11 +125,11 @@ _ROOT_ROUTES = (
 )
 # A date anywhere but the front: the reported failure mode. Named separately
 # because the fix is "move it", not "add one".
-_DATE_ANYWHERE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+_DATE_ANYWHERE = lre(r"(\d{4})-(\d{2})-(\d{2})")
 # Dates people type into loose file names. YYYYMMDD, then US month-first
 # (M.D.YY, M-D-YYYY, M_D_YYYY). D.M is ambiguous and is read as US M.D.
-_COMPACT_DATE = re.compile(r"(?<!\d)((?:19|20)\d{2})(\d{2})(\d{2})(?!\d)")
-_US_DATE = re.compile(r"(?<!\d)(\d{1,2})[._-](\d{1,2})[._-](\d{4}|\d{2})(?!\d)")
+_COMPACT_DATE = lre(r"(?<!\d)((?:19|20)\d{2})(\d{2})(\d{2})(?!\d)")
+_US_DATE = lre(r"(?<!\d)(\d{1,2})[._-](\d{1,2})[._-](\d{4}|\d{2})(?!\d)")
 
 # Text suffixes worth rewriting references inside. A rename that updates only
 # markdown leaves the code and the comments pointing at a path that is gone.

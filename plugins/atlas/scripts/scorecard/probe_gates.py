@@ -3,6 +3,7 @@ decoys, worker-report nonsense, credential-watch false positives."""
 
 import json
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -202,13 +203,13 @@ class Gates:
             ("Skill", {"skill": "x"}),
         ):
             self.rec(G, f"deny-{tool} first", "deny", rg(self.pre(sid(), tool, ti)))
-        # Contract (recall_gate._MEM_NAME, shared with omp/mandates.ts and the mandates.json
-        # satisfy case mcp__mcp_search_search): the gate matches claude-mem by NAME and any
-        # claude-mem call counts as the recall, so both cases below are allowed by design.
+        # Contract (recall_gate._MEM_TOOL, shared with omp/mandates.ts): the SERVER part of the tool name must be
+        # claude-mem / mcp-search (behind Claude Code's `plugin_` prefix at most). A foreign server that merely has
+        # mcp-search in its name never counts as the recall; the satisfy cases of mandates.json cover real ones.
         self.rec(
             G,
-            "name-match: tool with mcp-search in the name counts as the recall",
-            "allow",
+            "name-match: foreign server with mcp-search in its name is NOT the recall",
+            "deny",
             rg(self.pre(sid(), "mcp__evil_mcp-search__x", {})),
         )
         self.rec(
@@ -915,24 +916,31 @@ def probe_dispatch_spec(ctx):
             skipped(n, "no non-temp sandbox dir", "cases", "higher", cmd, "gates")
             for n in names
         ]
-    s = g.sb.sid()
-    g.orchestrating(s)
-
     def verdict(prompt):
-        r = g.hook(
-            "dispatch_tripwire.py",
-            dict(
-                session_id=s,
-                cwd=g.proj,
-                hook_event_name="PreToolUse",
-                tool_name="Agent",
-                tool_input=dict(
-                    subagent_type="atlas:implementer", prompt=prompt, name="W1"
+        # One fresh orchestrating session per case. The first unbounded-spec offense of a session is a one-shot
+        # advisory (F11) and a dispatch that was allowed counts as still running, so a shared session scored the
+        # first spec offense "allow" and denied later cases for the wrong reason. Burn the advisory with a
+        # throwaway offense first: what is scored is the second-offense verdict, the one that must deny.
+        s = g.sb.sid()
+        g.orchestrating(s)
+
+        def send(text):
+            return g.hook(
+                "dispatch_tripwire.py",
+                dict(
+                    session_id=s,
+                    cwd=g.proj,
+                    hook_event_name="PreToolUse",
+                    tool_name="Agent",
+                    tool_input=dict(
+                        subagent_type="atlas:implementer", prompt=text, name="W1"
+                    ),
+                    transcript_path=g.sb.tp,
                 ),
-                transcript_path=g.sb.tp,
-            ),
-        )
-        return core.hook_decision(r["out"])
+            )
+
+        send(SPEC.replace("DELIVERABLE: y\n", ""))
+        return core.hook_decision(send(prompt)["out"])
 
     labels = [
         "GOAL",
@@ -958,10 +966,8 @@ def probe_dispatch_spec(ctx):
         ),
     }
     empty = {
-        f"empty-{lab.lower().replace(' ', '-')}": SPEC.replace(
-            f"{lab}: ", f"{lab}:", 1
-        ).replace(
-            f"{lab}:" + SPEC.split(f"{lab}:", 1)[1].split("\n", 1)[0], f"{lab}:", 1
+        f"empty-{lab.lower().replace(' ', '-')}": re.sub(
+            rf"(?m)^{lab}:.*$", f"{lab}:", SPEC, count=1
         )
         for lab in labels[:5]
     }

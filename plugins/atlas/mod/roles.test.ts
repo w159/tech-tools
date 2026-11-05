@@ -6,7 +6,7 @@ import { textWidth } from './theme';
 const STATES = Object.keys(MOUTHS) as CharState[];
 const PERSONAS = [
   'explorer', 'implementer', 'verifier', 'runner', 'planner', 'completeness-critic', 'docs-curator', 'docs-auditor',
-  'ui-runtime-tester', 'db-prober', 'rls-privilege-audit', 'schema-inventory', 'naming-glossary-audit', 'armada-sales', 'unknown',
+  'ui-runtime-tester', 'db-prober', 'armada-sales', 'unknown',
 ];
 
 describe('role characters', () => {

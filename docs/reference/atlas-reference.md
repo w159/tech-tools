@@ -356,7 +356,7 @@ Source: `plugins/atlas/skills/`.
 | `atlas-plan` | requirements are settled and a plan is needed before execution | `atlas-plan split invoice storage out of the monolith` |
 | `atlas-orchestrate` (feature flow) | implement or add a feature or build new functionality | `atlas-orchestrate add CSV export` |
 | `atlas-debug` | the actual cause of a failure must be found and fixed | `atlas-debug login returns 500` |
-| `atlas-refactor` | code works but is messy, hard to navigate or carries dead weight | `atlas-refactor extract the pricing rules into a module` |
+| `atlas-refactor` | code works but is messy, or a change was just implemented and needs a behavior-preserving simplify pass before review or commit | `atlas-refactor extract the pricing rules into a module` (or `atlas-refactor` with no argument for the fresh diff) |
 | `atlas-frontend component` | creating a progress modal, upload widget, job panel or other async component | `atlas-frontend component add a cancellable file uploader` |
 | `atlas-frontend` | creating, reworking or polishing frontend UI | `atlas-frontend build the dashboard page` |
 | `atlas-gitignore` | starting a repo or hardening an existing .gitignore | `atlas-gitignore harden for node + terraform` |
@@ -368,7 +368,6 @@ Source: `plugins/atlas/skills/`.
 | `atlas-readme` | a repo has no README or its README is stale | `atlas-readme` |
 | `atlas-validate` | a plugin is believed complete and needs a structural and content check | `atlas-validate plugins/atlas` |
 | `atlas-wiki` | architecture docs changed or wiki diagrams are stale or missing | `atlas-wiki` |
-| `atlas-simplify` | after implementing a change and before review or commit | `atlas-simplify` |
 | `atlas-review` | reviewing a changeset before merge; not whole-codebase audits | `atlas-review PR #142` |
 | `atlas-audit` | audit a repo, map its architecture before a refactor, or check atlas health | `atlas-audit` |
 | `atlas-doctor` | telemetry has accumulated, atlas should self-improve, or before skill/hook/agent changes | `atlas-doctor` |
@@ -413,10 +412,7 @@ edit code; fresh agents start without the leader's assumptions. Source:
 | `atlas:docs-curator` | writes `docs/` only | a shipped change needs docs updated or the structure repaired |
 | `atlas:docs-auditor` | read-only | checking whether docs and project structure still match the code |
 | `atlas:runner` | writes, haiku/low (mechanical tier) | a task is fully specified as at most 7 exact numbered STEPS on at most 5 named files; returns a fixed `STEPS:` report |
-| `atlas:db-prober` | read-only | a task needs facts about database structure, privileges, or query plans |
-| `atlas:schema-inventory` | read-only | running the schema half of a database audit |
-| `atlas:rls-privilege-audit` | read-only | running the security half of a database audit in regulated environments |
-| `atlas:naming-glossary-audit` | read-only | running the nomenclature half of a database audit |
+| `atlas:db-prober` | read-only | a task needs live-database facts; one `MODE:` per dispatch: `inventory`, `privileges`, `naming` or `probe` |
 | `atlas:ui-runtime-tester` | read-only | a UI change needs confirming in a running app rather than by reading code |
 | `atlas:test-engineer` | writes tests | a bounded slice needs tests authored and run: seeded-fault proof per new test, suite run, mutation killed/survived reported; never weakens assertions or edits production code |
 
@@ -914,7 +910,7 @@ tech-tools/
 |  |  |- (no .mcp.json or mcp/: the 13 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
 |  |  |- skills/             # 40 skills
-|  |  |- agents/             # 14 agents
+|  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 18 hook programs / 22 bindings (17 in hooks/, atlas_doctor.py, the 18th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
 |  |  |- scripts/            # 27 scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)

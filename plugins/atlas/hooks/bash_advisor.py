@@ -88,6 +88,7 @@ _RM_FLAG = r"(?:--[a-z-]+|-[a-zA-Z]+)"
 _ROOT_HOME = r"[\"']?(?:/+[.*]?|(?:~|\$\{?HOME\}?)(?:\*|/+[.*]?)?)[\"']?(?:/+[.*]?)?"
 _RM_TARGET = r"(" + _ROOT_HOME + r")(\s|$)"
 
+from atlas_lazyre import lre  # noqa: E402
 _CATASTROPHIC = [
     # Flag tokens (-rf, -Rf, -fR, -r -f, --recursive, --force, --no-preserve-root) may come
     # in any order, optionally followed by a bare `--`, then the root/home target. Two
@@ -95,7 +96,7 @@ _CATASTROPHIC = [
     # flag tokens; they only consume flag tokens (each - prefixed), so they cannot scan
     # past the target into a later command.
     (
-        re.compile(
+        lre(
             r"\brm\s+"
             r"(?=(?:" + _RM_FLAG + r"\s+)*(?:--recursive|-[a-zA-Z]*[rR][a-zA-Z]*)\s)"
             r"(?=(?:" + _RM_FLAG + r"\s+)*(?:--force|-[a-zA-Z]*f[a-zA-Z]*)\s)"
@@ -105,7 +106,7 @@ _CATASTROPHIC = [
     ),
     # `cd / && rm -rf *` : the glob is the root once the cwd is /.
     (
-        re.compile(
+        lre(
             r"\bcd\s+[\"']?/[\"']?\s*(?:&&|;)\s*rm\s+"
             r"(?=(?:-\S+\s+)*-[a-zA-Z]*[rR])(?:-\S+\s+)+(?:\./)?\*(\s|$)"
         ),
@@ -113,24 +114,24 @@ _CATASTROPHIC = [
     ),
     # Unfiltered `find / -delete` (a -name/-type filter is a scoped delete, not flagged).
     (
-        re.compile(
+        lre(
             r"\bfind\s+"
             + _ROOT_HOME
             + r"\s+(?:-(?:maxdepth|mindepth)\s+\d+\s+)*-delete\b"
         ),
         "find -delete over a root/home path",
     ),
-    (re.compile(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:"), "fork bomb"),
+    (lre(r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:"), "fork bomb"),
     # mkfs only as the command word (optionally after sudo / a path), never as an
     # argument: `echo mkfs` and `grep mkfs docs/x` are text, not a format.
     (
-        re.compile(r"(?:^|[;&|(`]\s*|\bsudo\s+)(?:\S*/)?mkfs(\.\w+)?\b", re.MULTILINE),
+        lre(r"(?:^|[;&|(`]\s*|\bsudo\s+)(?:\S*/)?mkfs(\.\w+)?\b", re.MULTILINE),
         "filesystem format",
     ),
-    (re.compile(r"\bdd\b.*\bof=/dev/(disk|sd|nvme|hd)"), "raw write to a disk device"),
-    (re.compile(r">\s*/dev/(sd|nvme|hd|disk)\w*"), "redirect over a disk device"),
+    (lre(r"\bdd\b.*\bof=/dev/(disk|sd|nvme|hd)"), "raw write to a disk device"),
+    (lre(r">\s*/dev/(sd|nvme|hd|disk)\w*"), "redirect over a disk device"),
     (
-        re.compile(r"\bchmod\s+(-[a-zA-Z]*\s+)*-?R[a-zA-Z]*\s+0?777\s+/(\s|$)"),
+        lre(r"\bchmod\s+(-[a-zA-Z]*\s+)*-?R[a-zA-Z]*\s+0?777\s+/(\s|$)"),
         "world-writable chmod on /",
     ),
 ]
@@ -184,17 +185,17 @@ _SECRET_VAR = (
     r"|CFG_[A-Z0-9_]+)"
 )  # nosec: regex of variable NAMES to warn on, not a credential
 _SECRETS = [
-    (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "an AWS access key id"),
+    (lre(r"\bAKIA[0-9A-Z]{16}\b"), "an AWS access key id"),
     (
-        re.compile(r"aws_secret_access_key\s*[=:]\s*[A-Za-z0-9/+=]{40}", re.IGNORECASE),
+        lre(r"aws_secret_access_key\s*[=:]\s*[A-Za-z0-9/+=]{40}", re.IGNORECASE),
         "an AWS secret access key",
     ),
     (
-        re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,})\b"),
+        lre(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,})\b"),
         "a GitHub token",
     ),
     (
-        re.compile(
+        lre(
             r"(?:authorization[\"']?\s*[:=]\s*(?:bearer\s+)?[A-Za-z0-9._~+/=-]{8,}"
             r"|\bbearer\s+[A-Za-z0-9._~+/=-]{8,})",
             re.IGNORECASE,
@@ -204,7 +205,7 @@ _SECRETS = [
     (
         # Reading a credential file straight to output. .env.example/.sample/.template and
         # public keys are not secrets.
-        re.compile(
+        lre(
             r"\b(?:cat|less|more|head|tail|bat)\b[^\n;&|]*?"
             r"(?:(?<![\w.-])\.env(?:\.(?!(?:example|sample|template)\b)[\w-]+)?(?=[\s\"';&|]|$)"
             r"|\.aws/credentials\b|\.netrc\b"
@@ -215,11 +216,11 @@ _SECRETS = [
     ),
     (
         # Bare `env` / `printenv` with no arguments dumps the whole environment.
-        re.compile(r"(?:^|[;&|(`]\s*|\bsudo\s+)(?:env|printenv)\s*(?=$|[;&|)`])"),
+        lre(r"(?:^|[;&|(`]\s*|\bsudo\s+)(?:env|printenv)\s*(?=$|[;&|)`])"),
         "the full environment dump",
     ),
     (
-        re.compile(
+        lre(
             r"\bgh\s+auth\s+token\b"
             r"|\baz\s+account\s+get-access-token\b"
             r"|\bgcloud\s+auth\s+print-(?:access|identity)-token\b"
@@ -230,7 +231,7 @@ _SECRETS = [
         # A lone `|` after the variable means the value is piped into another
         # command (e.g. `echo "$GH_TOKEN" | gh auth login --with-token`), not
         # printed; `||` is not a pipe.
-        re.compile(
+        lre(
             r"\b(?:env|printenv|echo|printf)\b[^\n|;&]*\b"
             + _SECRET_VAR
             + r"(?![^\n;&|]*\|(?!\|))"
@@ -264,8 +265,8 @@ def _match_secrets(command: str) -> str | None:
     return None
 
 
-_SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|&()`\n]")
-_ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_SEGMENT_SPLIT = lre(r"&&|\|\||[;|&()`\n]")
+_ENV_ASSIGN = lre(r"^[A-Za-z_][A-Za-z0-9_]*=")
 # git global options that consume the NEXT token as their value (`--opt=v` forms
 # are covered by the generic "starts with -" rule below).
 _GIT_VALUE_OPTS = frozenset(
@@ -315,14 +316,14 @@ _SHLEX_MAX = 16384
 
 
 # `sh -c '...'` / `bash -lc "..."`: the quoted script runs as its own command line.
-_SHELL_C = re.compile(
+_SHELL_C = lre(
     r"""\b(?:ba|z|da|k)?sh\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*c[A-Za-z]*\s+(['"])(.*?)\1""",
     re.S,
 )
 
 
 # `eval "git commit -m x"`: the quoted argument is re-parsed as a command line.
-_EVAL_Q = re.compile(r"""\beval\s+(['"])(.*?)\1""", re.S)
+_EVAL_Q = lre(r"""\beval\s+(['"])(.*?)\1""", re.S)
 
 
 def _regex_segments(command: str):

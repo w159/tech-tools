@@ -6,6 +6,8 @@ Final review runs `atlas:completeness-critic`; handoff goes to `atlas-orchestrat
 
 **This dispatch is not skippable.** The pre-done gap hunter is `atlas:completeness-critic`. A plan handed off without this review is invalid - not "weaker", invalid.
 
+Before dispatch, replace the `{{TOOLS_BLOCK}}` line (read-only: drop the `Edits:` line) with the matching block from the "Shared TOOLS and NON-INTERACTIVE blocks (inlined at dispatch)" section of `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`; a prompt that still contains a placeholder is malformed.
+
 Dispatch (subagent-kit shape, fork per the subagent-kit reference linked from SKILL.md when `CLAUDE_CODE_FORK_SUBAGENT=1` - the critic judges gaps against everything this session established, which is the point):
 
 ```
@@ -13,9 +15,7 @@ ROLE: pre-done gap critic over an implementation-ready plan
 GOAL: find every gap in <plan-path> before it is used as an execution contract
 CONTEXT: <plan path>; upstream brainstorm path; the R-### / D-### / A-### IDs it carries;
   the research citations it claims (lessons, findings, pack rules); depth tier
-TOOLS (required - name them, do not say "use the right tools"):
-  ToolSearch first, ONE batched call, before any Read/Grep/Bash - paste it verbatim from
-  ${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md
+{{TOOLS_BLOCK}}
 TOOLS ALLOWED: Read, Glob, Grep, Bash (read-only commands)
 TOOLS FORBIDDEN: Write, Edit, package installs, git push
 DELIVERABLE: blocking gaps vs advisory gaps, each with file:line or plan-line evidence

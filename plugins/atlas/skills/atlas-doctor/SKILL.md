@@ -1,7 +1,7 @@
 ---
 name: atlas-doctor
-description: "Atlas self-improvement loop: mines cross-session findings from atlas.db, applies accepted changes, records a baseline. Use when telemetry has accumulated or before changing a skill, hook or agent."
-when_to_use: "atlas self-improve, remeasure improvements, apply accepted findings, stale lesson citations, validate a skill change, atlas.db findings"
+description: "Atlas self-improvement loop: mines cross-session findings from atlas.db, applies accepted changes to atlas itself, records a baseline. Use when atlas telemetry has accumulated or before changing a skill, hook or agent."
+when_to_use: "atlas self-improve, remeasure baseline, apply atlas findings, stale lesson citations"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, AskUserQuestion
 argument-hint: (no args; run periodically or after a heavy session)
 ---
@@ -32,6 +32,17 @@ cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 If the contract did not load above, read
 `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before
 proceeding.
+
+## Contents
+
+- [Phase 1 - ENRICH](#phase-1---enrich)
+- [Phase 2 - MINE](#phase-2---mine)
+- [Phase 3 - DECIDE](#phase-3---decide)
+- [Phase 4 - APPLY](#phase-4---apply)
+- [Phase 5 - MEASURE](#phase-5---measure)
+- [Phase 6 - REFRESH](#phase-6---refresh)
+- [Display checks](#display-checks)
+- [Report](#report)
 
 ## Phase 1 - ENRICH
 
@@ -71,47 +82,9 @@ updates instead of duplicating):
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --mine --json
 ```
 
-The miner registry lives in `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py`'s `MINERS` dict - one
-function per miner, each reading facets + friction_events + metrics +
-tool_calls (or, for a couple of static-code miners, the plugin's own source).
-That dict is the extension point: to add a new class of defect detection,
-write a `mine_*(conn, root)` function returning `_finding(...)` dicts and
-register it there. Nothing else needs to change - `mine()` fingerprints,
-upserts, and dedupes generically for every registry entry.
+Before triaging the mined findings, read `${CLAUDE_SKILL_DIR}/references/mine-details.md`: the `MINERS` registry (the extension point for new detectors), what `tool_error_rate_high:*` and `gate_block` evidence mean, and the optional reply-quality loop (`turn_quality` miner, needs `TYPESAFE_API_KEY`, `ATLAS_TYPESAFE_SCORING=off` disables it).
 
-`tool_error_rate_high:*` findings count only calls that actually ran and failed:
-calls an atlas gate blocked (`tool_calls.denied=1` - the lean-ctx Grep/Glob
-redirect, recall gate, `DENY - ...` dispatch/edit denials) are excluded from both
-the error count and the call total, and are reported separately as `denied` in
-the evidence. The finding's detail and `evidence.top_errors` carry the most
-frequent `tool_calls.error_snippet` texts (first 500 chars of the failed
-result), so triage starts from the actual failure, not a bare rate. Rows
-ingested before `error_snippet` existed have no text; an empty `top_errors`
-means "no text captured", not "no errors".
-
-`friction_events` rows with category `gate_block` carry
-`conditions: <letters> (<names>)` - e.g. `conditions: c,d,e (CHANGELOG missing,
-ROADMAP missing, README missing)` - so a block names the rule that fired.
-
-### Reply-quality loop (turn_quality miner)
-
-Optional; needs `TYPESAFE_API_KEY` in the environment. The `turn_quality`
-miner reads model-scored replies (`turn_scores`), so score first:
-
-1. Score: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/turn_scoring.py" --recent-days 14`
-2. Mine: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --mine`
-3. Review `turn_quality:*` findings. Each names the surface to fix
-   (`target_path`: an `atlas-orchestrator.md` output-style section, a hook, or a skill) and
-   its detail shows whether the judgment predicts next-turn user corrections;
-   treat a judgment that does not predict them as noise.
-4. Apply the fix to that surface (Phase 4), then `--baseline`, and later
-   `--remeasure` re-runs the miner and reports improved|no_change|regressed.
-
-Cost: input tokens only, billed at the provider's current rate (see the provider's
-pricing page); atlas does not compute this cost. Privacy: transcript excerpts are sent to
-api.typesafe.ai with secrets scrubbed; `ATLAS_TYPESAFE_SCORING=off` disables
-scoring. Thresholds are constants in `atlas_doctor.py` (see
-`docs/architecture/atlas-turn-scoring.md`).
+Then list what is open:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_doctor.py" --list-findings --status open --json
@@ -204,45 +177,13 @@ Do not apply a change you cannot measure; define the metric and baseline first. 
 
 ## Phase 6 - REFRESH
 
-A lesson in `docs/lessons/` only compounds value while its evidence still
-holds. A lesson citing `plugins/atlas/hooks/completion_gate.py:88-104` was
-true when written; after the next refactor the citation may point at nothing.
-Trusted silently forever, the store starts lying. This pass (folded into this skill, see
-Provenance) audits the store against the current tree.
-
-Run it in this same session, after MEASURE, at least every few runs (it is
-cheap next to mining):
-
-1. **Candidates.** Every `docs/lessons/*.md` (date-first naming per the docs
-   SSOT), excluding `README.md`. A scope hint in the invocation narrows it; a
-   hint matching nothing never widens it.
-2. **Extract evidence.** Every repo path the lesson cites: bare paths,
-   `file:line` and `file:N-M` spans, evidence files, and any guidance file the
-   lesson names or links. Compare only guidance the lesson names - never
-   search the guidance layer for one.
-3. **Verify against the current tree.** For each citation, one of:
-   - **HOLD** - the file exists and a cited span still locates the claimed
-     content. Read the span and spot-check that it still says what the lesson
-     claims; this is an LLM judgment call in the same tier as Phase 1
-     enrichment, not DB work, so no miner is required.
-   - **DRIFTED** - the file exists but the span no longer locates the content
-     (lines moved, symbols renamed). Find where the evidence lives now and
-     propose the corrected citation.
-   - **GONE** - the file or the evidence is deleted. Propose re-grounding the
-     lesson in new evidence or retiring it; never leave the dead citation.
-4. **Decide.** Route every non-HOLD lesson through the same Apply / Skip /
-   Modify verdict as Phase 3. Apply rewrites the lesson in this run - update
-   the citation, or rewrite the lesson against current code. Skip leaves it
-   stale; the next refresh scan re-surfaces it deterministically, so no
-   fingerprint machinery is needed. A lesson that cannot be verified this
-   session is flagged drifted-pending, never deleted: unverifiable is not
-   false.
-
-This skill never edits the product code a lesson points at to make the
-citation true. If current code contradicts a lesson's guidance, the
-contradiction is a potential product regression - report it as its own
-finding and let Phase 3 decide, exactly as the refresh would report a skill
-contradicting its own lessons.
+Audit `docs/lessons/*.md` (excluding `README.md`) against the current tree, in this same
+session after MEASURE, at least every few runs: a lesson's cited `file:line` evidence goes
+stale after refactors and the store starts lying. Read
+`${CLAUDE_SKILL_DIR}/references/refresh-lessons.md` for the procedure (candidates, evidence
+extraction, HOLD / DRIFTED / GONE verification, Apply / Skip / Modify decision). Never edit
+the product code a lesson points at to make a citation true; a contradiction is its own
+finding for Phase 3.
 
 ## Display checks
 
@@ -252,18 +193,10 @@ configuration, not plugin damage), run in every mode, and are repaired by
 `--fix` where the repair is safe. The settings file is
 `$CLAUDE_CONFIG_DIR/settings.json` (default `~/.claude/settings.json`).
 
-Full table of what each check looks for and what `--fix` does: `references/display-checks.md`.
-
-| Check | Concern | `--fix` |
-|---|---|---|
-| `display-todo-tools` | `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` and `CLAUDE_CODE_ENABLE_TASKS=0`; without both Claude Code draws its own checklist, taking the rows the Subagents block needs | writes both |
-| `display-mod` | `../mod/register.ts` registered; `ATLAS_MOD` / `ATLAS_HUD` not off | report only |
-| `display-todo-mirror` | `PostToolUse` matcher covers `todo_capture` tools | report only |
-| `display-statusline` | `statusLine` runs `atlas_statusline.py` | sets it if unset or dead |
-| `display-harness` | `claude-code`, or the omp extension is registered | report only |
-| `display-omp-todo` | omp `todo.enabled` is not false (user `config.yml`, project `.omp`/`.claude` files); omp pins `todo` top-level under `tools.xdev`, so no xdev check | sets it true in place |
-| `display-hud` | `ATLAS_HUD` not off in Claude Code settings `env`; INFO when the terminal is under 30 rows | removes the key |
-| `display-renderer` | Claude Code `tui` is not `fullscreen` (nor `CLAUDE_CODE_NO_FLICKER=1`): fullscreen caps TODO tree, Subagents, prompt and status line at half the screen | sets `"tui": "default"` in the layer that set it; env var: report only |
+Check ids (concern and `--fix` behavior per id in `references/display-checks.md`; read it
+when one of them is WARN): `display-todo-tools`, `display-mod`, `display-todo-mirror`,
+`display-statusline`, `display-harness`, `display-omp-todo`, `display-hud`,
+`display-renderer`.
 
 ## Report
 

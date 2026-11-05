@@ -280,7 +280,8 @@ _LABEL_SUFFIX = r"[ \t]*[*_]*[ \t]*:[*_]*"
 # A block ENDS at the next LINE-start label only: an ALL-CAPS token inside the
 # block's own text (`xd://MCP__LEAN_CTX_...`, `HTTP:`, a quoted `NOTE:`) must
 # not truncate it. The START label stays clause-anchored above.
-_NEXT_LABEL_LINE_RE = re.compile(
+from atlas_lazyre import lre  # noqa: E402
+_NEXT_LABEL_LINE_RE = lre(
     r"(?m)^[ \t]*(?:[>#*_-]+[ \t]*)*" + r"[A-Z][A-Z &/-]{2,}" + _LABEL_SUFFIX
 )
 
@@ -360,7 +361,7 @@ def _advisory(msg):
     )
 
 
-_SCOPE_LINE = re.compile(r"^SCOPE:\s*([\w-]+)/(\w+)\s*$", re.M)
+_SCOPE_LINE = lre(r"^SCOPE:\s*([\w-]+)/(\w+)\s*$", re.M)
 
 
 # Absolute paths of THIS plugin's scripts: ${CLAUDE_PLUGIN_ROOT} is expanded only by the hook runner,
@@ -421,7 +422,7 @@ def _scope_suggestion(agent):
 
 def _scope_problem(tinput):
     """Deny text for an atlas:* dispatch with no SCOPE line, no resolvable one, or none whose team holds
-    this role; "" otherwise. Roles the matrix never names (runner, schema-inventory...) only need a line.
+    this role; "" otherwise. Roles the matrix never names (runner, docs-auditor...) only need a line.
     Every SCOPE line counts (a batch context's line plus the task's own); aliases like med/explore normalize."""
     agent = str(tinput.get("subagent_type") or "")
     if not agent.startswith("atlas:"):
@@ -669,8 +670,8 @@ def _mechanical_tier():
     return _PROTOCOL_CACHE["tier"]
 
 
-_BLOCK_LABEL_RE = re.compile(r"^[ \t]*[A-Z][A-Z &/-]{2,}[ \t]*:")
-_NUMBERED_RE = re.compile(r"^[ \t]*\d+[.)][ \t]+\S")
+_BLOCK_LABEL_RE = lre(r"^[ \t]*[A-Z][A-Z &/-]{2,}[ \t]*:")
+_NUMBERED_RE = lre(r"^[ \t]*\d+[.)][ \t]+\S")
 
 
 def _runner_steps_problem(tinput):
@@ -722,7 +723,7 @@ AGENTS_DIR = Path(__file__).resolve().parent.parent / "agents"
 # unset (Claude Code expands it only for the hook command line): name scripts by
 # the absolute path resolved here.
 SCRIPTS_DIR = _OWN_SCRIPTS
-_SAFE_AGENT_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
+_SAFE_AGENT_NAME = lre(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
 
 
 def _frontmatter_model(agent):
@@ -1883,15 +1884,15 @@ _GIT_WRITE_PREFIXES = (
 )
 # Command/process substitution runs arbitrary commands: `$(..)`, backticks,
 # `<(..)`, `>(..)`. Matched on the raw text, so a quoted occurrence fails closed too.
-_SHELL_SUBSTITUTION = re.compile(r"\$\(|`|<\(|>\(")
+_SHELL_SUBSTITUTION = lre(r"\$\(|`|<\(|>\(")
 # sed program text that writes or executes: a standalone (or address-prefixed,
 # `2w f`) `w`/`W`/`e` command. Backslash-escaped letters (`\bw`) and letters
 # inside words (`error`) do not match. Over-matching only fails closed.
-_SED_WRITE_CMD = re.compile(r"(?<![\w\\])[wWe](?![\w])|(?<=\d)[wWe](?![\w])")
+_SED_WRITE_CMD = lre(r"(?<![\w\\])[wWe](?![\w])|(?<=\d)[wWe](?![\w])")
 # awk programs that can run commands or write: system(), getline, close(),
 # any pipe, any redirect, -f program file. A program carrying none of these is
 # a pure print/filter. Twin: omp/contracts.ts AWK_UNSAFE.
-_AWK_UNSAFE = re.compile(
+_AWK_UNSAFE = lre(
     r"system|getline|close\s*\(|[|>]|^-f|^--file|^--include|^--load"
 )
 _EXPLORATION_TOOL = {
@@ -1906,13 +1907,13 @@ _EXPLORATION_TOOL = {
     "find": "ctx_glob",
     "fd": "ctx_glob",
 }
-_SEGMENT_SPLIT = re.compile(r"&&|\|\||[;|\n&]")
+_SEGMENT_SPLIT = lre(r"&&|\|\||[;|\n&]")
 # Redirections that write nothing: fd duplications (`2>&1`, `1>&2`) and redirects
 # to exactly /dev/null (`>/dev/null`, `2>/dev/null`, `&>/dev/null`, `>>/dev/null`).
 # Stripped before the "any `>` is a write" check; whatever `>` is left
 # (`> out.txt`, `2>err.log`, `2>1`, `> /dev/nullx`) still counts as a write.
 # Twin: omp/contracts.ts HARMLESS_REDIRECT.
-_HARMLESS_REDIRECT = re.compile(r"\d*>&\d+|(?:\d*|&)>>?\s*/dev/null(?![\w./-])")
+_HARMLESS_REDIRECT = lre(r"\d*>&\d+|(?:\d*|&)>>?\s*/dev/null(?![\w./-])")
 
 
 def _exploration_segments(command):

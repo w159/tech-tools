@@ -1,7 +1,7 @@
 ---
 name: atlas-prototype
-description: "Builds a throwaway prototype in an isolated run directory to answer one visual, interaction or product-shape question, then promotes decisions into a plan or discards it. Use when showing beats arguing."
-when_to_use: "prototype, quick demo, try it and see, mockup that runs, spike a UI, show me options"
+description: "Builds a throwaway prototype in an isolated run directory to answer one visual, interaction or product-shape question, then promotes decisions or discards it. Use when showing beats arguing."
+when_to_use: "prototype, mock up, try it and see, show me options"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[question, brainstorm path, or plan path]'
 ---

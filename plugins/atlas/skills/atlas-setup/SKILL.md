@@ -1,7 +1,7 @@
 ---
 name: atlas-setup
-description: "Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install (claude-mem, context-mode, hooks), connectors (vendor MCP), repair, tour (first-session walkthrough), menu. Use when bringing atlas online, fixing it or learning it."
-when_to_use: "first run, set up atlas, boot the workspace, SSOT scaffolding, tooling install, vendor connectors, what to run next, atlas menu, how does atlas work, atlas tour, subagents not launching, plugin acting like an older version"
+description: "Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install, connectors, repair, tour, menu. Use when bringing atlas online, fixing it or learning it."
+when_to_use: "set up atlas, onboard this repo to atlas, first run, atlas menu, atlas tour, check connectors, subagents not launching"
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[onboard | install | connectors | repair [--fix] | tour | task description | menu [need]]"
@@ -62,21 +62,22 @@ Mode routing rules:
 - To build, fix, audit, or refactor code: this is NOT the skill. Route to
   atlas-orchestrate or the specific task skill.
 
+## Contents
+
+- [The mastery framework standard](#the-mastery-framework-standard)
+- [The docs/ SSOT](#the-docs-ssot)
+- [First run: onboarding](#first-run-onboarding)
+- [Compound Pack health check](#compound-pack-health-check)
+- [Subsequent runs: recommendations](#subsequent-runs-recommendations)
+- [Activation: kick off a skill](#activation-kick-off-a-skill)
+- [The skill inventory](#the-skill-inventory)
+- [The wiki pipeline (graphify wiring)](#the-wiki-pipeline-graphify-wiring)
+- [No-args behavior](#no-args-behavior)
+- [Additional references](#additional-references)
+
 ## The mastery framework standard
 
-Every atlas skill follows the Skills Mastery Framework. The full
-standard is in `references/mastery-framework.md`. The summary:
-
-- **L1 (metadata, ~100 tokens)** - `name` and `description` are always
-  loaded for routing. `description` is the only signal the model uses to
-  auto-trigger.
-- **L2 (SKILL.md body, <5k tokens)** - the operating manual, loaded on
-  trigger. Hard limit: 500 lines.
-- **L3 (bundled files, on demand)** - `references/`, `scripts/`,
-  `templates/` loaded only when L2 directs. One level deep. No chains.
-
-Key rule: `triggers:` is NOT a real Claude Code field. Auto-trigger comes
-ONLY from `description` + `when_to_use`. Never use `triggers:`.
+Every atlas skill follows the Skills Mastery Framework (`references/mastery-framework.md`): L1 `name` + `description` always loaded and the only auto-trigger signal (with `when_to_use`; `triggers:` is not a real field), L2 SKILL.md body under 500 lines loaded on trigger, L3 bundled files one level deep loaded on demand.
 
 ## The docs/ SSOT
 
@@ -108,39 +109,20 @@ When `docs/` does not exist:
    report which skills just came online.
 6. **Run the freshness gate** - wiki fresh, stale, missing, or N/A per
    `${CLAUDE_PLUGIN_ROOT}/skills/atlas-wiki/references/graphify-wiring.md`.
-7. **Deploy self-improvement** - verify the atlas self-improvement system
-   is deployed and functional:
-   - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_memory.py` exists and `~/.atlas/memory/` is writable
-   - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_curator.py` exists
-   - `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py` exists
-   - `hooks/memory_capture.py` and `hooks/chronicle_facet.py` exist; both run in-process from `hooks/stop_tail.py` (the single Stop entry in hooks.json), not as separate hook entries
-   Run the context optimizer to disable unused skills/agents:
-   `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_context_optimizer.py" optimize --dry-run`
-   Present the savings estimate to the user and confirm before applying.
-   This is the single most impactful action for reducing token cost - atlas
-   loads 22 skills + 12 agents into every API call; disabling unused ones
-   can cut that by 40%+.
+7. **Deploy self-improvement** - read `references/onboard-steps.md` (Step 7): verify
+   `atlas_memory.py`, `atlas_curator.py`, `atlas_context_optimizer.py`, the Stop-tail hooks and a
+   writable `~/.atlas/memory/`, run `atlas_context_optimizer.py optimize --dry-run`, present the
+   savings and confirm before applying.
 8. **Compound Pack health check** - see the "Compound Pack health check"
    section below. Conditional: skipped silently when the pack resolver is
    not installed.
 9. **Recommend** - run the recommendation analysis and present the top
    3-5 next steps.
-10. **Analytics choice (opt-in, default off)** - run
-    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_analytics.py" explain`, then
-    `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_analytics.py" preview`, and show both
-    verbatim. Then AskUserQuestion: "Turn on anonymous Atlas usage counts?" with options
-    "No, keep it off" (default, listed first) and "Yes, enable". Only on an explicit
-    yes run `atlas_analytics.py enable`; on no or no answer run `atlas_analytics.py disable`
-    so the question is not asked again. Never enable without that yes. Mention that
-    `prove` checks the payload against the anonymity rules and `delete` removes everything.
-    Skip when `atlas_analytics.py status` already shows a decision.
-
-Every no-args run executes step 2 (`scripts/scaffold_docs.py`) first,
-whether or not `docs/` already exists - that call is what repairs a
-partial, missing, or drifted structure before anything else happens. If
-`docs/` did not exist, continue through the rest of onboarding (steps 3-10)
-below. If `docs/` already existed, the scaffold call already repaired it;
-skip straight to recommendations (below) instead of repeating steps 3-10.
+10. **Analytics choice (anonymous, on by default)** - read `references/onboard-steps.md`
+    (Step 10) and follow it: show `atlas_analytics.py explain`, `preview`, `prove` verbatim, name
+    the four opt-outs, ask "Keep anonymous Atlas usage counts on?" (default yes). Skip when
+    `atlas_analytics.py status` already shows a decision or `DO_NOT_TRACK` / `ATLAS_ANALYTICS=off`
+    is set.
 
 ## Compound Pack health check
 
@@ -150,14 +132,11 @@ Run the Compound Pack health check on request. Read `${CLAUDE_SKILL_DIR}/referen
 
 The "what should I run next" mode. The analysis checks, in priority order:
 
-1. **Setup gaps** - hooks wired? claude-mem installed? context-mode
-   installed? If missing, run install mode.
+1. **Setup gaps** - hooks, claude-mem or context-mode missing: run install mode.
 2. **Self-improvement deployed?** - atlas_memory, atlas_curator,
-   atlas_context_optimizer scripts present? Memory at `~/.atlas/memory/`
-   writable? (Atlas never creates skills: lessons go to memory, findings,
-   and docs.)
-   Run `atlas_context_optimizer.py status` and if >15 skills are enabled,
-   recommend running the optimizer.
+   atlas_context_optimizer present and `~/.atlas/memory/` writable? Run
+   `atlas_context_optimizer.py status`; if >15 skills are enabled,
+   recommend the optimizer.
 3. **Security audit overdue** - has atlas-audit ever run? Is it stale?
 4. **Architecture map missing or stale** - has atlas-audit mapped this
    codebase? Is the map older than the last code change?
@@ -168,14 +147,12 @@ The "what should I run next" mode. The analysis checks, in priority order:
 7. **Docs drift** - does AGENTS.md match the stack? Is CHANGELOG current?
 8. **Recurring task identified** - repeated prompts atlas-loop could
    automate.
-9. **Tech debt accumulation** - TODO/FIXME markers, stale branches.
+9. **Tech debt** - TODO/FIXME markers, stale branches.
 10. **Connector not provisioned** - vendor signals present but the
     connector not configured (connectors mode).
 
 See `references/recommendation-engine.md` for the full analysis matrix.
-Present the top 3-5 recommendations as a numbered list, each with the
-recommended skill, a one-sentence reason, a confidence level, and the
-exact command to invoke.
+Present the top 3-5 as a numbered list: skill, one-sentence reason, confidence, exact command.
 
 ## Activation: kick off a skill
 
@@ -211,15 +188,6 @@ No arguments: run the recommendation analysis and present the top 3-5.
 Install or change nothing without the user picking a recommendation or
 naming a task. "menu": see the menu routing rule above. A task description: route to the best
 skill, asking one question if ambiguous.
-
-## First move
-
-Always run `scripts/scaffold_docs.py` first - it creates the tree from
-nothing or repairs a partial/drifted one, and is a no-op when everything is
-already correct. If `docs/` did not exist before that call: continue with
-wire graphify, inventory, recommend. If it already existed: analyze and
-recommend. If anything about the install itself looks broken, switch to
-repair mode (`references/repair.md`).
 
 ## Additional references
 

@@ -64,24 +64,25 @@ WORKING_CAP_CHARS = 20_000
 # captured text comes from raw user messages. ponytail: pattern list, not entropy detection;
 # add a shape here when a new secret format leaks.
 _REDACTED = "[REDACTED]"
+from atlas_lazyre import lre  # noqa: E402
 _SECRET_PATTERNS = [
     (
-        re.compile(
+        lre(
             r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)"
         ),
         _REDACTED,
     ),
     (
-        re.compile(r"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*"),
+        lre(r"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*"),
         _REDACTED,
     ),  # JWT
-    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 " + _REDACTED),
+    (lre(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 " + _REDACTED),
     (
-        re.compile(r"\b([A-Za-z][\w+.-]*://)[^\s:/@]+:[^\s@/]+@"),
+        lre(r"\b([A-Za-z][\w+.-]*://)[^\s:/@]+:[^\s@/]+@"),
         r"\1" + _REDACTED + "@",
     ),  # URL userinfo
     (
-        re.compile(
+        lre(
             r"\b(?:(?:sk|pk|rk)[-_][A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
             r"|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}"
             r"|glpat-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{30,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,})"
@@ -89,7 +90,7 @@ _SECRET_PATTERNS = [
         _REDACTED,
     ),
     (  # key=value / key: value, quoted values may hold spaces
-        re.compile(
+        lre(
             r"(?i)\b([\w.-]*(?:password|passwd|pwd|passphrase|secret|token|api[_-]?key|apikey|access[_-]?key"
             r"|private[_-]?key|credentials?|authorization|connection[_-]?string)[\w-]*[\"']?\s*[:=]\s*)"
             r"(?:\"[^\"\n]*\"|'[^'\n]*'|[^\s,;\"']+)"
@@ -97,7 +98,7 @@ _SECRET_PATTERNS = [
         r"\1" + _REDACTED,
     ),
     (  # "password hunter2" / "api key is abc123": whitespace form, value must look non-prose
-        re.compile(
+        lre(
             r"(?i)\b((?:password|passwd|passphrase|pwd|secret|token|api[ _-]?key)\s+(?:is\s+)?)"
             r"(?=\S*[\d!@#$%^&*_=+-])(?!\[REDACTED\])\S{6,}"
         ),
@@ -116,9 +117,9 @@ _DATE = (
 # Nonpublic personal information. Labeled forms only, except dashed SSNs and
 # Luhn-valid card numbers, so bare order/ticket numbers survive.
 _NPI_PATTERNS = [
-    (re.compile(r"(?<![\w-])\d{3}-\d{2}-\d{4}(?![\w-])"), "[REDACTED:ssn]"),
+    (lre(r"(?<![\w-])\d{3}-\d{2}-\d{4}(?![\w-])"), "[REDACTED:ssn]"),
     (
-        re.compile(
+        lre(
             r"(?i)(\b(?:ssn|social(?:\s+security)?(?:\s+(?:number|no\.?|num|#))?)\b)"
             + _SEP
             + r"(\d{3}[ -]?\d{2}[ -]?\d{4})(?![\w-])"
@@ -126,7 +127,7 @@ _NPI_PATTERNS = [
         r"\1\2[REDACTED:ssn]",
     ),
     (
-        re.compile(
+        lre(
             r"(?i)(\b(?:routing|aba)\b(?:\s+(?:number|no\.?|num|#))?)"
             + _SEP
             + r"(\d{9})(?![\w-])"
@@ -134,7 +135,7 @@ _NPI_PATTERNS = [
         r"\1\2[REDACTED:routing]",
     ),
     (
-        re.compile(
+        lre(
             r"(?i)(\b(?:acct|account)\b(?:\s+(?:number|no\.?|num|#))?)"
             + _SEP
             + r"(\d{6,17})(?![\w-])"
@@ -142,7 +143,7 @@ _NPI_PATTERNS = [
         r"\1\2[REDACTED:account]",
     ),
     (
-        re.compile(
+        lre(
             r"(?i)(\b(?:dob|d\.o\.b\.?|date\s+of\s+birth|birth\s?date|born(?:\s+on)?)\b)"
             + _SEP
             + "("
@@ -154,7 +155,7 @@ _NPI_PATTERNS = [
 ]
 # 13-19 digits, optional single space/dash between digits, first digit 2-6 (card
 # IINs; keeps 13-digit epoch-millisecond timestamps, which start with 1, out).
-_CARD_RE = re.compile(r"(?<![\w-])[2-6](?:[ -]?\d){12,18}(?![\w-])")
+_CARD_RE = lre(r"(?<![\w-])[2-6](?:[ -]?\d){12,18}(?![\w-])")
 
 
 def _luhn_ok(digits: str) -> bool:
@@ -398,7 +399,7 @@ _NOISE_PREFIXES = ("Tool '",)
 
 # Scope names that are not projects. A subagent's cwd basename becomes its
 # "project", so lessons got filed under agent-<hex> and .run.
-_JUNK_SCOPE = re.compile(r"^(agent-[0-9a-f]{6,}|\.run|\.atlas)$")
+_JUNK_SCOPE = lre(r"^(agent-[0-9a-f]{6,}|\.run|\.atlas)$")
 
 
 def _scope_of(entry: str) -> str:
@@ -702,8 +703,8 @@ def usage(target: str, root: Optional[str] = None) -> Dict[str, Any]:
 # `(name)` or `[name]` project tag. Move each to that project's own store.
 
 # Pure remeasure telemetry: archived globally, never moved into a project.
-_STAMP = re.compile(r"recorded by dashboard remeasure|re-baselined, supersedes #\d+")
-_TAG = re.compile(r"^[^(\[\n]{0,60}[(\[]([^)\]\n]{1,80})[)\]]")
+_STAMP = lre(r"recorded by dashboard remeasure|re-baselined, supersedes #\d+")
+_TAG = lre(r"^[^(\[\n]{0,60}[(\[]([^)\]\n]{1,80})[)\]]")
 
 
 def tag_of(entry: str) -> str:

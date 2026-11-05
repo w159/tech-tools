@@ -1,7 +1,7 @@
 ---
 name: atlas-ship
-description: "Ships finished work: fresh-context verifier checks a clean tree, local commit, stops for confirmation before any push or PR. Commit-only mode makes just the local conventional commit from a file list. Use when work is ready to commit or open a PR."
-when_to_use: "ship it, push this, open a PR, ready to merge, finish and commit, commit these changes, make a commit, conventional commit message, stage and commit"
+description: "Ships finished work: a fresh-context verifier checks a clean tree, then a local commit; stops before any push or PR. Commit-only mode commits a file list. Use when work is ready to commit or open a PR."
+when_to_use: "ship it, ready to commit, conventional commit, stage and commit"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, ToolSearch
 argument-hint: '[commit-only] [files...] [exclude:<paths>] [description-only] [babysit:off|checkpoint]'
 ---

@@ -1,7 +1,7 @@
 ---
 name: atlas-ux-test
-description: "UX test swarm for a web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness. Use when a full UI/UX pass or persona testing is needed."
-when_to_use: "UX test swarm, persona testing, pre-release sweep, full UI pass, re-test after fixes, fuzz the forms"
+description: "Runs a UX test swarm over a whole web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness. Use when a full UI/UX pass or persona testing is needed."
+when_to_use: "persona testing, UX swarm, full UI pass, fuzz the forms"
 allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion
 ---
 
@@ -23,12 +23,26 @@ You orchestrate and verify only. Never navigate the app, enter data, or edit app
 yourself. The swarm DETECTS and REPORTS app bugs with evidence; it never fixes
 `frontend/`/`backend/` code. Your only writes are under the run dir (`docs/claude_testers/run-*/`).
 
+## Contents
+
+- [Why this exists](#why-this-exists)
+- [Invocation options (args -> env knobs)](#invocation-options-args---env-knobs)
+- [Coverage tiers (which phases run)](#coverage-tiers-which-phases-run)
+- [Lifecycle (6 phases, in order)](#lifecycle-6-phases-in-order)
+- [Phase 0 - discover the app (non-negotiable)](#phase-0---discover-the-app-non-negotiable)
+- [Agent roster](#agent-roster)
+- [The three hard gates (synthesis-reporter enforces)](#the-three-hard-gates-synthesis-reporter-enforces)
+- [Run setup](#run-setup)
+- [Driver script](#driver-script)
+- [Browser delegation](#browser-delegation)
+- [References (loaded on demand)](#references-loaded-on-demand)
+- [Reporting back](#reporting-back)
+
 ## Why this exists
 
-A prior run wrote salary to budget/planner tables, read those back, saw HTTP 200, and
-declared "COMPLETE" while the primary profile field was null for all personas and the app
-showed "needs work". It graded the wrong surface. Every rule below makes the swarm grade
-the surface the CLIENT actually reads.
+A prior run declared "COMPLETE" on HTTP 200 writes while the field the client reads was null
+for every persona. Every rule below makes the swarm grade the surface the CLIENT actually
+reads (incident detail: `references/discovery.md`).
 
 ## Invocation options (args -> env knobs)
 
@@ -71,68 +85,14 @@ for the chosen tier is recorded as `skipped`, never silently absent.
 ## Phase 0 - discover the app (non-negotiable)
 
 Before ANY data entry, phase 0 must discover the target app from the repo. Do NOT use
-baked-in URLs or endpoint constants. All values come from reading the repo.
+baked-in URLs or endpoint constants. All values come from reading the repo. Target the DEV
+environment only, never production.
 
-### 0a. Find the dev URL
-
-Read the repo to discover how and where the app is served in development:
-- Check `package.json` scripts (dev, start, serve), `vite.config.ts` / `next.config.js` /
-  `angular.json` / `webpack.config.js`, `.env.development`, `.env.local`, `.env`,
-  `firebase.json` / `vercel.json` / `netlify.toml`, and any CI scripts that launch the app.
-- Extract the hostname and port (e.g. `localhost:5173`, a Firebase Hosting preview URL, a
-  Cloud Run URL from `.env.development`).
-- If the dev URL cannot be determined from the repo alone, ask the user for it once and
-  record it in `RUN_DIR/notes/discovery.json` as `"dev_url_source": "user-provided"`.
-- Target the DEV environment only, never production.
-
-### 0b. Find the API base
-
-Read the repo to discover the API base URL used by the frontend:
-- Check `frontend/src/utils/api.ts` (or equivalent), `.env.development`, `.env`,
-  `vite.config.ts` proxy/rewrite rules, `next.config.js` rewrites, and any config files
-  that set `VITE_API_URL`, `REACT_APP_API_URL`, `NEXT_PUBLIC_API_URL`, or equivalent.
-- If the app is a SPA with a backend-for-frontend on the same host, the API base may be
-  relative (e.g. `/api`); record that.
-- If the API base cannot be determined from the repo alone, ask the user for it once.
-
-### 0c. Probe the REAL save/read-back contract
-
-Read `frontend/src` (or equivalent) to capture how the real client persists the primary
-onboarding/profile record and reads it back (the surface the dashboard displays). This
-probe prevents the swarm from grading the wrong surface:
-- Start at the setup/onboarding wizard entry point. Find the component(s) that drive the
-  primary data-entry flow (look for `Setup`, `Onboarding`, `Wizard`, or `Profile` in
-  component names under the frontend source tree).
-- Trace each form submission to its API client call: endpoint, HTTP method, and exact
-  payload field names.
-- Find the read-back endpoint the client uses to display the submitted values on the
-  dashboard or profile screen.
-- Record whether any derived value is sent explicitly or assumed computed by the backend.
-  Never assume the backend derives a value from another field; verify from source.
-- Cite `file:line` for every claim. Write `"unknown"` rather than guess.
-- Write the result to `RUN_DIR/coverage/contract-snapshot.json`:
-  ```json
-  {
-    "dev_url": "<discovered or user-provided>",
-    "api_base": "<discovered or relative path>",
-    "primary_write": {"endpoint": "...", "method": "...", "payload_fields": [...]},
-    "secondary_writes": [...],
-    "primary_read": {"endpoint": "...", "fields": [...]},
-    "derived_fields": {},
-    "source_refs": ["file:line", ...]
-  }
-  ```
-
-### 0d. Coverage cartography
-
-1. Regenerate the route + field coverage matrices from the frontend source (cartographer).
-2. Copy both into `RUN_DIR/coverage/` with two extra columns: `status` (init `untested`)
-   and `evidence_ref` (empty).
-
-All downstream phases consume `contract-snapshot.json`. If any field in the snapshot is
-`"unknown"`, that is a blocker for data entry; resolve it before running phase 2.
-
-See `references/discovery.md`.
+Read `references/discovery.md` now and dispatch the cartographer from it. It holds the
+steps 0a dev URL, 0b API base, 0c save/read-back contract probe, 0d coverage cartography,
+and the `coverage/contract-snapshot.json` shape. All downstream phases consume that
+snapshot. If any field in it is `"unknown"`, that is a blocker for data entry; resolve it
+before running phase 2. Cite `file:line` for every claim; write `"unknown"` rather than guess.
 
 ## Agent roster
 
@@ -205,17 +165,16 @@ script is read-only with respect to the app: it writes only under `RUN_DIR`.
 
 ## Browser delegation
 
-The browser-walk (phase 3) and fuzz (phase 4) phases delegate all browser work
-to `atlas:ui-runtime-tester` agents, one per persona or route. The agent uses
-the browser surface the harness offers and falls back to headless Playwright
-when none is available. This skill never navigates the app itself. See
-`references/webapp-testing-integration.md` for the boundary, the brief passed
-to each agent and the headless fallback. The `smoke` tier runs no browser walk.
+Phases 3 (browser walk) and 4 (fuzz) delegate all browser work to `atlas:ui-runtime-tester`
+agents, one per persona or route; this skill never navigates the app itself. The `smoke`
+tier runs no browser walk. Read `references/webapp-testing-integration.md` before
+dispatching them: it holds the boundary, the brief passed to each agent and the headless
+fallback.
 
 ## References (loaded on demand)
 
-- `references/discovery.md` - phase 0: cartographer + live-contract probe; the
-  `coverage/contract-snapshot.json` output.
+- `references/discovery.md` - phase 0 (read when phase 0 starts): 0a dev URL, 0b API base,
+  cartographer + live-contract probe; the `coverage/contract-snapshot.json` output.
 - `references/personas.md` - persona generator contract, discovery-driven schema, profile/seed
   semantics, user-count presets.
 - `references/data-entry-contract.md` - the canonical ordered API contract the scripted

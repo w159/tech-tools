@@ -1100,7 +1100,7 @@ class ShippedOmpAgentsThinkingTests(Base):
         )
 
     def test_shipped_agents_exist(self):
-        self.assertGreaterEqual(len(SHIPPED_OMP_AGENTS), 13)
+        self.assertGreaterEqual(len(SHIPPED_OMP_AGENTS), 11)
 
     def test_every_shipped_agent_yields_valid_thinking_in_builder_argv_and_pane_tail(
         self,
@@ -3534,6 +3534,129 @@ class TeamFlowFixTests(unittest.TestCase):
         self.assertIsNone(atlas_mux.EXIT_NOTE_RE.search("STATUS: DONE\nnot an exit 0 line"))
 
 
+class TeamSeatTests(unittest.TestCase):
+    """A cell may hold two seats of one role when each carries its own `seat` label and model tier."""
+
+    def _cell(self, team):
+        return {"file_scope": [], "team": team, "max_parallel": 2, "isolation": "shared"}
+
+    SEATS = [
+        {"role": "db-prober", "seat": "inventory", "count": 1, "tools_profile": "read", "model": "haiku"},
+        {"role": "db-prober", "seat": "privileges", "count": 1, "tools_profile": "read", "model": "sonnet"},
+    ]
+
+    def test_two_seats_of_one_role_get_distinct_names_labels_and_models(self):
+        import atlas_mux
+
+        rec = atlas_mux.build_team("db-audit", "medium", None, "audit", "t1")
+        self.assertEqual(["db-prober", "db-prober"], [m["role"] for m in rec["members"]])
+        names = [m["name"] for m in rec["members"]]
+        self.assertEqual(2, len(set(names)), names)
+        self.assertEqual(["inventory", "privileges"], [m["seat"] for m in rec["members"]])
+        self.assertEqual(["haiku", "sonnet"], [m["model"] for m in rec["members"]])
+        for n in names:  # the name shape every other tool parses is unchanged: <role>-<4 hex>
+            self.assertRegex(n, r"^db-prober-[0-9a-f]{4}$")
+
+    def test_names_of_unlabelled_cells_do_not_move(self):
+        import atlas_mux
+
+        rec = atlas_mux.build_team("implement", "medium", None, "t", "t1")
+        want = [
+            f"{role}-{atlas_mux._sha('t1', role, i)[:4]}"
+            for role, n in (("implementer", 2), ("verifier", 1))
+            for i in range(n)
+        ]
+        self.assertEqual(want, [m["name"] for m in rec["members"]])
+        self.assertTrue(all("seat" not in m and "model" not in m for m in rec["members"]))
+
+    def test_same_role_without_labels_or_with_repeated_labels_is_refused(self):
+        import atlas_mux
+
+        bad = [
+            [{"role": "db-prober", "count": 1}, {"role": "db-prober", "count": 1}],
+            [{"role": "db-prober", "seat": "a", "count": 1}, {"role": "db-prober", "count": 1}],
+            [{"role": "db-prober", "seat": "a", "count": 1}, {"role": "db-prober", "seat": "a", "count": 1}],
+        ]
+        for team in bad:
+            with self.subTest(team=team):
+                with mock.patch.object(atlas_mux.atlas_resolve, "resolve", return_value=self._cell(team)):
+                    with self.assertRaisesRegex(ValueError, "own `seat` label"):
+                        atlas_mux.build_team("audit", "low")
+        for label in ("Inventory", "a b", "x" * 25, "-a"):
+            with self.subTest(label=label):
+                team = [{"role": "db-prober", "seat": label, "count": 1}]
+                with mock.patch.object(atlas_mux.atlas_resolve, "resolve", return_value=self._cell(team)):
+                    with self.assertRaisesRegex(ValueError, "seat label"):
+                        atlas_mux.build_team("audit", "low")
+
+    def test_count_above_one_on_a_labelled_seat_keeps_every_name_unique(self):
+        import atlas_mux
+
+        team = [dict(self.SEATS[0], count=2), self.SEATS[1]]
+        with mock.patch.object(atlas_mux.atlas_resolve, "resolve", return_value=self._cell(team)):
+            rec = atlas_mux.build_team("audit", "low", None, "t", "t2")
+        names = [m["name"] for m in rec["members"]]
+        self.assertEqual(3, len(set(names)), names)
+        self.assertEqual(["inventory", "inventory", "privileges"], [m["seat"] for m in rec["members"]])
+
+    def test_task_file_addresses_a_seat_by_role_and_label(self):
+        import atlas_mux
+
+        members = [
+            {"name": "db-prober-aaaa", "role": "db-prober", "seat": "inventory"},
+            {"name": "db-prober-bbbb", "role": "db-prober", "seat": "privileges"},
+        ]
+        text = "## member: db-prober-privileges\nP\n## member: db-prober-inventory\nI\n"
+        _, per = atlas_mux.split_member_tasks(text, members)
+        self.assertEqual({"db-prober-aaaa": "I", "db-prober-bbbb": "P"}, per)
+        # the plain role and -N forms still bind in member order, and never to a member a seat section took
+        _, per = atlas_mux.split_member_tasks("## member: db-prober-inventory\nI\n## member: db-prober\nX\n", members)
+        self.assertEqual({"db-prober-aaaa": "I", "db-prober-bbbb": "X"}, per)
+        _, per = atlas_mux.split_member_tasks("## member: db-prober\nA\n## member: db-prober-2\nB\n", members)
+        self.assertEqual({"db-prober-aaaa": "A", "db-prober-bbbb": "B"}, per)
+
+    def test_brief_names_the_seat(self):
+        import atlas_mux
+
+        rec = atlas_mux.build_team("db-audit", "medium", None, "audit", "t1")
+        brief = atlas_mux.team_brief(rec, rec["members"][0], "/r", "c", "lead")
+        self.assertIn("(db-prober seat inventory)", brief)
+
+    def _spawned(self, harness):
+        import atlas_mux
+
+        seen = {}
+
+        def fake_spawn(ns):
+            seen[ns.name] = ns.model
+            print(json.dumps({"ok": True, "name": ns.name}))
+            return 0
+
+        with tempfile.TemporaryDirectory() as root:
+            e = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on"}
+            with mock.patch.dict(os.environ, e), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
+                    mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-seat")), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                atlas_mux.main(["spawn-team", "--class", "db-audit", "--effort", "medium", "--task", "t",
+                                "--root", root, "--poll", "0.01", "--harness", harness])
+            rec = json.loads(next(pathlib.Path(root).rglob("t*.json")).read_text())
+        return rec, seen
+
+    def test_spawn_gives_each_seat_its_own_model_on_claude_only(self):
+        rec, seen = self._spawned("claude")
+        by_seat = {m["seat"]: seen[m["name"]] for m in rec["members"]}
+        self.assertEqual({"inventory": "haiku", "privileges": "sonnet"}, by_seat)
+        rec, seen = self._spawned("omp")
+        self.assertEqual({None}, set(seen.values()))  # omp and codex resolve tiers from their own tables
+
+    def test_unlabelled_seats_still_resolve_their_tier_from_the_definition(self):
+        import atlas_mux
+
+        self.assertIsNone(atlas_mux.seat_model({"name": "explorer-aaaa", "role": "explorer", "model": "sonnet"}, "claude"))
+        self.assertEqual("haiku", atlas_mux.seat_model({"role": "db-prober", "seat": "x", "model": "haiku"}, "claude"))
+        self.assertIsNone(atlas_mux.seat_model({"role": "db-prober", "seat": "x", "model": "haiku"}, "codex"))
+
+
 class ColonyNameSourceTests(unittest.TestCase):
     def _dry(self, *extra):
         import atlas_mux
@@ -3998,7 +4121,7 @@ class WorktreeReapTests(unittest.TestCase):
 
 
 class TeamAnalyticsTests(WorktreeIsolationTests):
-    """spawn-team records the resolved class/effort and a team size bucket, only when analytics is opted in."""
+    """spawn-team records the resolved class/effort and a team size bucket, only while analytics is on (explicitly enabled here: pytest counts as automation, so the default is off)."""
 
     def setUp(self):
         super().setUp()
@@ -4027,10 +4150,89 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
         self.assertEqual(["team.implement.medium", "team.size." + atlas_mux._size_bucket(len(out["members"]))],
                          self._events())
 
-    def test_disabled_writes_nothing(self):
+    def test_explicit_disable_writes_nothing(self):
+        pathlib.Path(self.home, "analytics").mkdir(parents=True)
+        consent = pathlib.Path(self.home, "analytics", "consent.json")
+        consent.write_text(json.dumps({"enabled": False, "decided": True}))
+        self.A._reset()
+        code, out, _ = self._spawn_team()
+        self.assertEqual(0, code, out)
+        self.assertEqual([], self._events())
+
+    def test_automation_guard_keeps_the_default_off_under_pytest(self):
+        self.assertEqual((False, "CI or test run (set ATLAS_ANALYTICS=on to count it)"), self.A.state())
         code, out, _ = self._spawn_team()
         self.assertEqual(0, code, out)
         self.assertFalse(pathlib.Path(self.home, "analytics").exists())
+
+    def _enable(self):
+        pathlib.Path(self.home, "analytics").mkdir(parents=True, exist_ok=True)
+        pathlib.Path(self.home, "analytics", "consent.json").write_text(json.dumps({"enabled": True, "decided": True}))
+        self.A._reset()
+
+    def _wait(self, exit_of, timeout="30", age_s=0.0, **patches):
+        """Spawn a team, then `wait` on it with every member's exit note supplied by exit_of(name) (None: no note)."""
+        import atlas_mux
+
+        code, out, _ = self._spawn_team()
+        self.assertEqual(0, code, out)
+        team = out["team_id"]
+        rec_path = pathlib.Path(self.repo, ".atlas", ".run", "teams", team + ".json")
+        rec = json.loads(rec_path.read_text())
+        rec["created"] = time.time() - age_s
+        rec_path.write_text(json.dumps(rec))
+        notes = [
+            {"owner": m["name"], "ts": time.time(), "text": "exit %d" % exit_of(m["name"])}
+            for m in rec["members"]
+            if exit_of(m["name"]) is not None
+        ]
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "claude-bg"}), \
+                mock.patch.object(atlas_mux.atlas_todo, "notes", return_value=notes), \
+                mock.patch.object(atlas_mux, "_exited", lambda root, name: exit_of(name) is not None), \
+                contextlib.redirect_stdout(buf):
+            wcode = atlas_mux.main(["wait", "--team", team, "--root", self.repo, "--timeout", timeout, "--poll", "0.01"])
+        return wcode, json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def _wait_keys(self):
+        return [k for k in self._events() if k.startswith(("team.outcome.", "team.wall."))]
+
+    def test_wait_all_exit_zero_records_done_and_the_wall_bucket(self):
+        self._enable()
+        wcode, got = self._wait(lambda n: 0, age_s=90)
+        self.assertEqual(0, wcode, got)
+        self.assertEqual(["team.outcome.done", "team.wall.1to5m"], self._wait_keys())
+
+    def test_wait_nonzero_exit_records_failed(self):
+        self._enable()
+        wcode, got = self._wait(lambda n: 1 if n.startswith("verifier") else 0)
+        self.assertEqual(0, wcode, got)  # ok means "every member reported"; the exit code decides the outcome
+        self.assertEqual(["team.outcome.failed", "team.wall.lt1m"], self._wait_keys())
+
+    def test_wait_that_times_out_records_timeout(self):
+        self._enable()
+        wcode, got = self._wait(lambda n: None, timeout="0.05", age_s=7200)
+        self.assertEqual(1, wcode, got)
+        self.assertEqual(["team.outcome.timeout", "team.wall.ge60m"], self._wait_keys())
+
+    def test_wait_records_nothing_when_off(self):
+        self.assertEqual([], self._wait_keys())
+        self._wait(lambda n: 0)
+        self.assertFalse(pathlib.Path(self.home, "analytics").exists())
+
+    def test_wait_outcome_and_every_key_is_in_the_schema(self):
+        import atlas_mux
+
+        m = lambda **kw: dict({"name": "a", "exit": 0}, **kw)  # noqa: E731
+        self.assertEqual("done", atlas_mux._wait_outcome([m()], True, False))
+        self.assertEqual("failed", atlas_mux._wait_outcome([m(exit=2)], True, False))
+        self.assertEqual("failed", atlas_mux._wait_outcome([m(exit=None, dead_without_report=True)], True, False))
+        self.assertEqual("failed", atlas_mux._wait_outcome([m(never_launched=True)], True, False))
+        self.assertEqual("timeout", atlas_mux._wait_outcome([m(exit=None)], False, True))
+        for outcome in ("done", "failed", "timeout"):
+            self.assertTrue(self.A.valid_key("team.outcome." + outcome))
+        for secs in (0, 59, 61, 400, 1000, 4000):
+            self.assertTrue(self.A.valid_key("team.wall." + self.A.wall_bucket(secs)))
 
     def test_size_buckets(self):
         import atlas_mux

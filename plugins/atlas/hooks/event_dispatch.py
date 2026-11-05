@@ -26,6 +26,16 @@ Not folded in, on purpose (each stays its own hooks.json process):
   format_after_edit  async by design: the formatter must not block the edit
 Under ATLAS_HARNESS=omp, recall_gate and todo_capture are skipped: omp implements both natively
 (contracts/hook-bridge.json notBridged).
+
+Telemetry (scripts/atlas_analytics.py; counters only, nothing recorded when the user has opted out):
+  dispatch.<event>.ms.<bucket>   once per dispatch: wall time of the whole hook pass
+  hook.<name>.slow               one hook took longer than SLOW_HOOK_MS (1000 ms)
+  hook.<name>.fault              one hook raised, exited with a code other than 0 or 2, or ran out of time
+  hook.<name>.deny|ask|context   what a hook decided (exit 2 counts as deny)
+  skill.<dir> / agent.<role>     an atlas skill or subagent ran (PostToolUse), or a UserPromptSubmit prompt
+                                 starts with /atlas:<skill> or /<skill> (record_prompt, called from
+                                 prompt_optimizer)
+Names only: never a command, path, prompt or tool_input value.
 """
 
 import io
@@ -43,6 +53,7 @@ sys.path.insert(0, os.path.join(_HERE, "..", "scripts"))
 import atlas_env  # noqa: E402
 
 atlas_env.apply_store_env()
+import atlas_harness  # noqa: E402
 
 # (hook name, original hooks.json matcher, SIGALRM slice seconds), in the old hooks.json order.
 # Module and main() are resolved lazily by name; dispatch_tripwire lives in dispatch_tripwire_core.
@@ -90,6 +101,8 @@ _PREFILTER = {
 
 OMP_NATIVE = frozenset({"recall_gate", "todo_capture"})
 _MODULES = {"dispatch_tripwire": "dispatch_tripwire_core"}
+# One hook slower than this is counted as hook.<name>.slow (the schema's "slower than one second").
+SLOW_HOOK_MS = 1000
 _RANK = {"deny": 3, "ask": 2, "allow": 1}
 
 
@@ -124,6 +137,9 @@ def select(event, tool, harness=None):
     ]
 
 
+_FAULTS = None  # run_event's per-dispatch list of faulted hook names (None outside a dispatch)
+
+
 class _SliceExpired(BaseException):
     """BaseException so a hook's own `except Exception` cannot swallow it."""
 
@@ -147,7 +163,9 @@ def _fault(name, exc, cwd=None):
 
 
 def _invoke(name, raw, seconds, cwd=None):
-    """Run one hook; returns (exit code, stdout, stderr). Never raises."""
+    """Run one hook; returns (exit code, stdout, stderr). Never raises. A raise, a slice timeout or an
+    exit code other than 0 and 2 appends `name` to _FAULTS (telemetry hook.<name>.fault)."""
+    faults = _FAULTS
     out, err = io.StringIO(), io.StringIO()
     saved_in = sys.stdin
     sys.stdin = io.StringIO(raw)
@@ -168,9 +186,13 @@ def _invoke(name, raw, seconds, cwd=None):
         rc = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
     except _SliceExpired:
         _fault(name, TimeoutError("event_dispatch slice expired"), cwd)
+        if faults is not None:
+            faults.append(name)
         return 0, "", ""  # a half-written document is unusable: fail open
     except Exception as exc:
         _fault(name, exc, cwd)
+        if faults is not None:
+            faults.append(name)
         return 0, "", err.getvalue()
     finally:
         if bounded:
@@ -180,6 +202,8 @@ def _invoke(name, raw, seconds, cwd=None):
             except (ValueError, OSError):
                 pass
         sys.stdin = saved_in
+    if faults is not None and rc not in (0, 2):
+        faults.append(name)
     return rc, out.getvalue(), err.getvalue()
 
 
@@ -322,50 +346,146 @@ def _analytics_keys(event, payload, results):
     return keys
 
 
-def _record_analytics(event, payload, results):
-    """Feed atlas_analytics.record (a cheap no-op until the user opts in). Fail-open: a missing or
-    broken analytics module never changes hook output."""
+def _bucket(ms):
+    return "lt50" if ms < 50 else "50to200" if ms < 200 else "200to1000" if ms < 1000 else "ge1000"
+
+
+def _record_analytics(event, payload, results, elapsed_ms=None, slow=(), faults=()):
+    """Feed atlas_analytics (a cheap no-op until the user opts in). Fail-open: a missing or broken
+    analytics module never changes hook output. Decisions, skills and agents go through the validating
+    atlas_analytics.record(); the keys built here from BINDINGS names and bucket constants are appended
+    by atlas_analytics_hot, a stdlib-only writer (importing the full client costs milliseconds this hook
+    cannot spend: the dispatcher adds under 2 ms p50)."""
     try:
         keys = _analytics_keys(event, payload, results)
-        if not keys:
+        trusted = ["hook.%s.slow" % n for n in slow] + ["hook.%s.fault" % n for n in faults]
+        if elapsed_ms is not None:
+            trusted.append("dispatch.%s.ms.%s" % (event, _bucket(elapsed_ms)))
+        if not keys and not trusted:
             return
-        import atlas_analytics
+        if trusted:
+            import atlas_analytics_hot
 
-        for key in keys:
-            atlas_analytics.record(key)
+            atlas_analytics_hot.record(trusted)
+        if keys:
+            import atlas_analytics
+
+            for key in keys:
+                atlas_analytics.record(key)
     except Exception:  # noqa: BLE001 -- including ImportError and a record() that raises
         pass
 
 
+_SLASH_SKILL = re.compile(r"/(?:atlas:)?(atlas-[a-z0-9-]{1,60})(?=\s|$)")
+
+
+def prompt_skill_key(prompt):
+    """skill.<dir> when `prompt` starts with /atlas:<skill> or /<skill> naming a shipped atlas skill
+    (a directory under skills/), else None. Nothing after the command is read. A directory that is not a
+    real skill is dropped later: atlas_analytics validates every stored key against its skill list."""
+    if not isinstance(prompt, str):
+        return None
+    m = _SLASH_SKILL.match(prompt.lstrip()[:100])
+    if m is None:
+        return None
+    skill = m.group(1)
+    if not os.path.isdir(os.path.join(_HERE, "..", "skills", skill)):
+        return None
+    return "skill." + skill
+
+
+def record_prompt(payload):
+    """UserPromptSubmit telemetry, called by prompt_optimizer: skill.<dir> for a leading atlas slash
+    command. A prompt that does not start with '/' costs one string test. Never raises."""
+    try:
+        prompt = payload.get("prompt") if isinstance(payload, dict) else None
+        if not isinstance(prompt, str) or not prompt.lstrip().startswith("/"):
+            return
+        key = prompt_skill_key(prompt)
+        if key is None:
+            return
+        import atlas_analytics_hot
+
+        atlas_analytics_hot.record([key])
+    except Exception:  # noqa: BLE001 -- telemetry never changes a prompt
+        pass
+
+
+def _codex_safe(event, payload, merged):
+    """Under Codex a PreToolUse "ask" is a hook error: rewrite the merged document so it denies.
+    Other harnesses and any parse failure pass through unchanged."""
+    code, out, err = merged
+    if event != "PreToolUse" or not out or atlas_harness.detect_harness(payload) != "codex":
+        return merged
+    try:
+        doc = atlas_harness.codex_safe_output(json.loads(out), "codex")
+    except ValueError:
+        return merged
+    return code, json.dumps(doc) + "\n", err
+
+
+def _strip_updated_input(merged):
+    """A hook's updatedInput is in the Claude shape; Codex needs its own (a patch text, not a
+    file_path), so it is dropped when the tool payload was translated."""
+    code, out, err = merged
+    if not out:
+        return merged
+    try:
+        doc = json.loads(out)
+        spec = doc.get("hookSpecificOutput")
+        if not isinstance(spec, dict) or "updatedInput" not in spec:
+            return merged
+        spec.pop("updatedInput")
+    except (ValueError, AttributeError):
+        return merged
+    return code, json.dumps(doc) + "\n", err
+
+
 def run_event(event, raw, harness=None):
-    """Run every applicable hook for one event payload; returns (exit code, stdout, stderr)."""
+    """Run every applicable hook for one event payload; returns (exit code, stdout, stderr).
+    Codex apply_patch / spawn_agent / update_plan payloads are rewritten to the Claude shape first
+    (atlas_harness.expand_tool_payloads); a multi-file patch runs the hooks once per file."""
     try:
         payload = json.loads(raw, strict=False) if raw.strip() else {}
     except ValueError:
         payload = {}
     payload = payload if isinstance(payload, dict) else {}
-    tool = payload.get("tool_name")
-    tool = tool if isinstance(tool, str) else ""
-    cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) else None
-    slices = {name: s for name, _, s in BINDINGS.get(event, ())}
+    variants = atlas_harness.expand_tool_payloads(payload)
+    translated = any(atlas_harness.was_translated(v) for v in variants)
     started = time.monotonic()
     budget = BUDGET_S.get(event, 30.0)
     results = []
-    wanted = select(event, tool, harness)
-    for name, _, seconds in BINDINGS.get(event, ()):
-        if name not in wanted:
-            continue
-        left = budget - (time.monotonic() - started) - 0.5
-        if left <= 0:
-            _fault(name, TimeoutError("event_dispatch budget spent"), cwd)
-            continue
-        gate = _PREFILTER.get(name)
-        if gate is not None and not gate.search(raw):
-            continue
-        rc, out, err = _invoke(name, raw, min(slices[name], left), cwd)
-        results.append((name, rc, out, err))
-    merged = merge(event, results)
-    _record_analytics(event, payload, results)
+    global _FAULTS
+    faults, slow = [], []
+    _FAULTS = faults
+    for variant in variants:
+        vraw = json.dumps(variant) if atlas_harness.was_translated(variant) else raw
+        tool = variant.get("tool_name")
+        tool = tool if isinstance(tool, str) else ""
+        cwd = variant.get("cwd") if isinstance(variant.get("cwd"), str) else None
+        slices = {name: s for name, _, s in BINDINGS.get(event, ())}
+        wanted = select(event, tool, harness)
+        for name, _, seconds in BINDINGS.get(event, ()):
+            if name not in wanted:
+                continue
+            left = budget - (time.monotonic() - started) - 0.5
+            if left <= 0:
+                _fault(name, TimeoutError("event_dispatch budget spent"), cwd)
+                faults.append(name)
+                continue
+            gate = _PREFILTER.get(name)
+            if gate is not None and not gate.search(vraw):
+                continue
+            t0 = time.monotonic()
+            rc, out, err = _invoke(name, vraw, min(slices[name], left), cwd)
+            if (time.monotonic() - t0) * 1000.0 > SLOW_HOOK_MS:
+                slow.append(name)
+            results.append((name, rc, out, err))
+    _FAULTS = None
+    merged = _codex_safe(event, payload, merge(event, results))
+    if translated:
+        merged = _strip_updated_input(merged)
+    _record_analytics(event, variants[0], results, (time.monotonic() - started) * 1000.0, slow, faults)
     return merged
 
 

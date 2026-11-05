@@ -1494,11 +1494,40 @@ def _ps_ancestor_table():
     )
 
 
+_NO_PROC = object()  # /proc is not usable here: the caller falls back to `ps`
+
+
+def _proc_lead_pid() -> Any:
+    """_lead_pid's walk over /proc (stat gives the ppid, comm the name `ps -o comm=` prints). The pid of
+    the nearest harness ancestor, None when the walk finds none, _NO_PROC when /proc cannot answer."""
+    try:
+        pid = os.getpid()
+        for _ in range(8):
+            with open("/proc/%d/stat" % pid, "rb") as fh:
+                stat = fh.read().decode("utf-8", "replace")
+            ppid = int(stat[stat.rindex(")") + 1 :].split()[1])
+            with open("/proc/%d/comm" % pid, "rb") as fh:
+                comm = os.path.basename(fh.read().decode("utf-8", "replace").strip())
+            if comm in _ANCESTOR_HARNESSES:
+                return pid
+            if ppid <= 1 or ppid == pid:
+                return None
+            pid = ppid
+        return None
+    except (OSError, ValueError, IndexError):
+        return _NO_PROC
+
+
 def _lead_pid(run=None) -> Optional[int]:
     """Pid of the nearest ancestor whose comm basename is a harness process (omp runs as
     `bun`, Claude Code hooks run via a shell under `claude`): one `ps -A` dump into a
     pid -> (ppid, comm basename) map, then walk it upward from this process, at most 8
     hops. None when none is found or ps fails."""
+    if run is None:
+        # Linux: walk /proc instead of dumping the whole process table with `ps` (~9 ms).
+        found = _proc_lead_pid()
+        if found is not _NO_PROC:
+            return found
     run = run or _ps_ancestor_table
     try:
         r = run()

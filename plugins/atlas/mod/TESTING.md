@@ -13,6 +13,15 @@ at run time those imports are empty).
 claude plugin test plugins/atlas
 ```
 
+`bun test` runs the same files without the host, through a shim: from `plugins/atlas`, `bun test mod`
+(or `bun test`, which also runs omp and colony). `bunfig.toml` preloads `mod/test-shim.ts`, which stands in for
+`claude-code/testing` (describe, expect, test delegate to bun:test) and for `atom` / `read` / `update` from
+`claude-code`. It is a shim, not the real kit: tests whose body takes the host engine
+(`test(name, async ($, on) => ...)`, currently the 9 in `register-sidebar.test.ts`, which use `mock.clock`,
+`mock.env` and `$.ui.mount`) are skipped under bun and run only under `claude plugin test`. Expected: bun
+458 pass / 9 skip / 0 fail for `mod`; the host 458 pass for the mod files (its 180 failures are the
+omp/colony `bun:test` files it cannot load, as below).
+
 From the repo root. This loads the plugin the way the engine does and runs each
 test file; it exercises the mod (hooks and the rendered native element trees of the band and
 sidebar), not a surface's paint.

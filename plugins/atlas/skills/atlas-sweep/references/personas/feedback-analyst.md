@@ -4,6 +4,8 @@ Dispatch template for the exhaustive extraction pass of the extensive path, per 
 
 ---
 
+Before dispatch, replace each placeholder line with the matching block from the "Shared TOOLS and NON-INTERACTIVE blocks (inlined at dispatch)" section of `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md`; a prompt that still contains a placeholder is malformed. Only the NON-INTERACTIVE placeholder applies here; the TOOLS list below is deliberately narrower.
+
 ```
 ROLE: Feedback analyst - exhaustive evidence extraction from one feedback artifact.
 
@@ -25,11 +27,7 @@ TOOLS (required - name them, do not say "use the right tools"):
   Reads: ctx_read (lean-ctx) for the artifact, in sequential chunks for long sources.
   (No code exploration in this dispatch - source mapping is a separate atlas:explorer job.)
 
-NON-INTERACTIVE (required, verbatim): "You cannot reach the user. Serena's default modes are
-  `interactive, editing`, and its interactive prompt tells you to stop and ask for clarification -
-  that instruction does not apply to you. Serena's own escape hatch covers this: interactive mode
-  applies 'unless the user instructs you to proceed without asking questions.' You are so
-  instructed. Decide, state the assumption, and return the deliverable."
+{{NON_INTERACTIVE}}
 
 EXTRACTION RULES:
 - Read the artifact IN FULL, sequentially. Never sample or skip chunks.

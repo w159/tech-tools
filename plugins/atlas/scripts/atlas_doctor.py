@@ -381,8 +381,11 @@ def run_update_check(plugin_name="atlas"):
     if os.environ.get("ATLAS_UPDATE_CHECK", "").lower() == "off":
         return 0
     try:
-        installed = _load_json(os.path.join(PLUGINS_DIR, "installed_plugins.json"))
-        markets = _load_json(os.path.join(PLUGINS_DIR, "known_marketplaces.json"))
+        try:
+            installed = _load_json(os.path.join(PLUGINS_DIR, "installed_plugins.json"))
+            markets = _load_json(os.path.join(PLUGINS_DIR, "known_marketplaces.json"))
+        except (OSError, ValueError):
+            return 0  # no registry yet (or a corrupt one): nothing to compare, and not a fault
         key, reg = find_registration(installed, plugin_name)
         if not reg or not key:
             return 0

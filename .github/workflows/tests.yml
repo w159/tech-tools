@@ -1,7 +1,7 @@
 name: tests
 
 # Fast, hermetic checks only: no network, no vendor credentials, no Bun/herdr.
-# The vendored falcon MCP tests and the omp (Bun) suites are not run here.
+# The vendored falcon MCP tests are not run here.
 on:
   pull_request:
   push:
@@ -25,6 +25,30 @@ jobs:
       - run: python3 --version && python3 -m venv .venv && .venv/bin/python -m pip install --quiet pytest
       - run: .venv/bin/python scripts/check_versions.py
       - run: .venv/bin/python -m pytest -q -p no:cacheprovider scripts plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py
+
+  # Telemetry receiver: node:test only, no install needed (the Blob SDK is imported lazily).
+  telemetry-server:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - run: node --version && node --test
+        working-directory: telemetry/server
+
+  # Atlas Bun suites: the omp extension and the Claude Code mods (mod/ runs through mod/test-shim.ts, see
+  # mod/TESTING.md). Run from plugins/atlas so bunfig.toml loads the preloads.
+  atlas-bun:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun test omp mod
+        working-directory: plugins/atlas
 
   # The owner does not want Claude credited in commits or listed as a contributor.
   # Checks only the commits this push or PR adds; a force push or new branch checks all of HEAD.
@@ -67,4 +91,4 @@ jobs:
       - run: python3 --version && python3 -m venv .venv && .venv/bin/python -m pip install --quiet pytest
       - run: .venv/bin/python -m pytest -q -p no:cacheprovider
       - run: bun test
-        working-directory: plugins/atlas/omp
+        working-directory: plugins/atlas

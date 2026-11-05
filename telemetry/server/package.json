@@ -1,0 +1,15 @@
+{
+  "name": "atlas-telemetry",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Receiver and aggregator for anonymous Atlas usage counts",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test",
+    "dev": "node dev.js"
+  },
+  "dependencies": {
+    "@vercel/blob": "2.8.2"
+  }
+}

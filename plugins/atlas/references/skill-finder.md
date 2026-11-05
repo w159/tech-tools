@@ -52,7 +52,7 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Review a whole queue of PRs in one batch | atlas-review queue | Auto | One cross-PR triage table: verdict, worst open severity, run-id, sorted by merge-blocking risk |
 | Handle open reviewer comments on a PR | atlas-resolve-pr-feedback | Auto | Each thread triaged fix/reply/needs-human; fixes applied with verification; nothing auto-posted |
 | Keep a PR's CI green until it's mergeable | atlas-run-watch pr | Auto | Watches one PR's CI, classifies flaky vs genuine failures, bounded repair loop; never merges |
-| Slim down a fresh diff without changing behavior | atlas-simplify | Auto | Three read-only reviewers (reuse/quality/efficiency) over the diff, behavior-preserving apply, gate re-run |
+| Slim down a fresh diff without changing behavior | atlas-refactor (diff mode, no target) | Auto | Three read-only reviewers (reuse/quality/efficiency) over the diff, behavior-preserving apply, gate re-run |
 | Ingest new GitHub feedback and triage it | atlas-sweep | Auto | New issues acknowledged, clustered, folded into a rolling `docs/features/` triage doc |
 | Turn raw feedback (transcripts, tickets, session notes) into findings | atlas-sweep analyze | Auto | Prioritized findings each tied to a verbatim source quote |
 

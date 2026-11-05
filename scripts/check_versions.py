@@ -32,6 +32,11 @@ def check(root=ROOT):
                 errors.append(f"{name}: {where} version {v!r} is not strict MAJOR.MINOR.PATCH (no leading zeros)")
         if got != ver:
             errors.append(f"{name}: marketplace.json version {got!r} != plugin.json {ver!r}")
+        codex = base / ".codex-plugin/plugin.json"
+        if codex.is_file():
+            cv = json.loads(codex.read_text("utf-8")).get("version")
+            if cv != ver:
+                errors.append(f"{name}: .codex-plugin/plugin.json version {cv!r} != plugin.json {ver!r}")
         heads = re.findall(r"^##\s+(.+)$", (base / "CHANGELOG.md").read_text("utf-8"), re.M)
         released = [h.split()[0] for h in heads if re.match(r"\d+\.\d+\.\d+", h)]
         if ver not in released:

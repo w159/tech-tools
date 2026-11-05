@@ -1,7 +1,7 @@
 ---
 name: atlas-wiki
 description: "Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify. Use when architecture docs changed, before the completion gate, or when wiki diagrams are stale."
-when_to_use: "wiki is stale, refresh diagrams, architecture changed, generate diagrams, before completion gate"
+when_to_use: "wiki is stale, refresh diagrams, architecture diagrams"
 allowed-tools: Read, Glob, Grep, Bash
 ---
 
@@ -13,6 +13,15 @@ graphify skill on `docs/architecture/` and lands the rendered
 diagrams in `docs/wiki/diagrams/`. atlas-audit consumes the
 resulting `graph.json` to build its navigable hub; atlas-setup checks the
 wiki freshness this skill produces as part of its completion gate.
+
+## Contents
+
+- [Pipeline](#pipeline)
+- [Invocation](#invocation)
+- [When to run](#when-to-run)
+- [Freshness check](#freshness-check)
+- [Relationship to atlas-audit](#relationship-to-atlas-audit)
+- [Relationship to atlas-setup](#relationship-to-atlas-setup)
 
 ## Pipeline
 

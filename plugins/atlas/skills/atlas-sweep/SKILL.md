@@ -1,7 +1,7 @@
 ---
 name: atlas-sweep
-description: "Turns feedback into triaged findings: sweep mode triages new GitHub issues into a docs/features/ triage doc, never auto-closing or replying; analyze mode extracts findings from a transcript or notes. Use when feedback needs triage."
-when_to_use: "triage issues, feedback sweep, analyze transcript, support tickets, pain points"
+description: "Triages GitHub issues into a docs/features/ doc (sweep mode, never closes or replies) or extracts findings from a transcript or notes (analyze mode). Use when user feedback or support tickets need triage."
+when_to_use: "triage issues, bug reports, feedback sweep, analyze transcript, customer interviews, support tickets, pain points"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[setup|reconfigure] [mode:non-interactive] | analyze <feedback artifact path, or nothing if pasting notes>'
 ---

@@ -962,8 +962,6 @@ def open_lead_channel_once(payload, run=None):
     sid = payload.get("session_id", "")
     if not sid:
         return None
-    import subprocess
-
     sys.path.insert(
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
     )
@@ -987,7 +985,16 @@ def open_lead_channel_once(payload, run=None):
             os.makedirs(rd, exist_ok=True)
             with open(os.path.join(rd, f"lead-pane-{lead}.json"), "w") as fh:
                 json.dump({"lead": lead, "pane": pane, "session": sid}, fh)
-    (run or subprocess.run)(
+    if run is None:
+        # Same call the `channel-open` CLI makes (find_root already applied above, zero members), made in
+        # this process: atlas_todo is imported here already, so the child interpreter, its imports and a
+        # second process-table dump are not paid. The CLI path below stays for the test seam.
+        with contextlib.suppress(Exception):
+            atlas_todo.open_lead_channel(
+                root, lead, (), timeout=min(atlas_todo.CHANNEL_LOCK_TIMEOUT_S or 15, 15)
+            )
+        return None
+    run(
         [
             sys.executable,
             os.path.abspath(
@@ -1118,6 +1125,19 @@ def _optional_boot_text(module, func, *args):
     except Exception:  # noqa: BLE001
         return None
     return out if isinstance(out, str) and out.strip() else None
+
+
+def _analytics_session_start(payload):
+    """Telemetry: count this session by harness (session.<claude|omp|codex|unknown>), compact the local event
+    log and start the weekly background send. Once per SessionStart; a context compaction is not a new session.
+    Called after boot_notice so the send only ever follows a shown notice. Fail-open and silent."""
+    if payload.get("source") == "compact":
+        return
+    with contextlib.suppress(Exception):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+        import atlas_analytics
+
+        atlas_analytics.on_session_start(payload)
 
 
 UPDATE_CHECK_INTERVAL_S = 24 * 3600
@@ -1477,10 +1497,11 @@ def main():
     ):  # omp/style.ts injects the header rule itself
         lines.extend(status_contract_lines(active_style))
     lines.append(team_flow_line())
-    # git hygiene, security and the analytics opt-in notice: early, so the 3500-byte cap never drops them
+    # git hygiene, security and the analytics first-run notice: early, so the 3500-byte cap never drops them
     boot_notice = _optional_boot_text("atlas_analytics", "boot_notice")
     if boot_notice:
         lines.append(boot_notice)
+    _analytics_session_start(payload)
     _cwd = payload.get("cwd") or os.getcwd()
     sec_line = _optional_boot_text("atlas_security", "boot_line", _git_main_root(_cwd) or _cwd)
     if sec_line:
@@ -1552,7 +1573,21 @@ def main():
         Exception
     ):  # structure advisory is best-effort; never block boot
         missing = missing_structure(payload.get("cwd") or os.getcwd())
-        if missing:
+        if missing and docs_line and docs_line.startswith("docs SSOT absent"):
+            # No docs/ tree at all: the long gap list and the SSOT notice said the same thing twice (660+ chars).
+            # One line carries the count by group, the fix and the no-auto-create promise.
+            groups = (
+                ("docs/", sum(m.startswith("docs/") for m in missing)),
+                (".atlas/", sum(m.startswith(".atlas/") for m in missing)),
+                ("root files", sum("/" not in m for m in missing)),
+            )
+            parts = ", ".join(f"{n} {name}" for name, n in groups if n)
+            docs_line = (
+                f"docs SSOT absent: project not scaffolded (missing {len(missing)}: {parts}) - run the "
+                "`atlas-setup` skill to scaffold it; nothing is created automatically "
+                "(ATLAS_DOCS_REPAIR=off silences this)."
+            )
+        elif missing:
             lines.append(
                 f"atlas: project structure incomplete (missing: {', '.join(missing)}) - run /atlas-setup to scaffold/repair"
             )

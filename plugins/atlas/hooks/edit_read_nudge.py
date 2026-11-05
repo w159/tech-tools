@@ -44,6 +44,16 @@ def _norm(data):
     return full
 
 
+def _record() -> None:
+    """hook.edit_read_nudge.context.unread: one count per nudge actually written (repeats are not emitted)."""
+    try:
+        import atlas_analytics_hot
+
+        atlas_analytics_hot.record(["hook.edit_read_nudge.context.unread"])
+    except Exception:  # noqa: BLE001 -- telemetry never affects the nudge
+        pass
+
+
 def main() -> int:
     data = atlas_hook_guard.load_payload("edit_read_nudge")
     sid, tool, fp = data.get("session_id"), data.get("tool_name") or "", _norm(data)
@@ -54,7 +64,8 @@ def main() -> int:
         with atlas_hook_guard._locked(sid):
             reads = atlas_hook_guard._load_state(sid).get("reads", {})
         if fp in reads.get("ctx", []) and fp not in reads.get("builtin", []):
-            atlas_hook_guard.emit(data, "edit_read_nudge", MSG % fp)
+            if atlas_hook_guard.emit(data, "edit_read_nudge", MSG % fp):
+                _record()
         return 0
     kind = "ctx" if lower.endswith("ctx_read") else "builtin" if lower == "read" else None
     if kind:

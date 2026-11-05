@@ -1,7 +1,7 @@
 ---
 name: atlas-worktree
 description: "Git-worktree primitive: creates or reuses linked worktrees, tears down with dirty-state protection. Use when isolating parallel implementer waves, spikes or bakeoffs, or closing them at wave end."
-when_to_use: "worktree isolation, parallel waves, spike branch, reuse worktree, clean up worktrees"
+when_to_use: "worktree isolation, own checkout, parallel waves, spike branch, clean up worktrees"
 allowed-tools: Read, Glob, Grep, Bash, Write, Edit, AskUserQuestion
 ---
 
@@ -11,7 +11,7 @@ allowed-tools: Read, Glob, Grep, Bash, Write, Edit, AskUserQuestion
 cannot assume any external or harness-specific worktree skill is available on every host it runs
 on, so every worktree mechanic atlas needs lives here. It is referenced by name from the
 implementation-units reference of `atlas-orchestrate` (parallel implementer waves) and from the
-other skills that need an isolated tree this session (`atlas-simplify`, `atlas-review`'s
+other skills that need an isolated tree this session (`atlas-refactor`'s diff mode, `atlas-review`'s
 `apply:local` path, `atlas-prototype`, `atlas-bakeoff` spikes). Callers invoke this skill by name;
 they do not reimplement worktree commands, naming, or cleanup inline.
 
@@ -33,6 +33,12 @@ cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 ```
 
 If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
+
+## Contents
+
+- [Ledger: `.atlas/.run/worktrees.json`](#ledger-atlasrunworktreesjson)
+- [CREATE - isolate work in a new linked worktree](#create---isolate-work-in-a-new-linked-worktree)
+- [TEARDOWN - close worktrees out at wave end](#teardown---close-worktrees-out-at-wave-end)
 
 ## Ledger: `.atlas/.run/worktrees.json`
 

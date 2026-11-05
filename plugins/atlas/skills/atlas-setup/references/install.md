@@ -75,7 +75,7 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    run `fallow hooks install --target agent` unless the user wants a second,
    project-local gate.
    A separate `hooks/validate-readonly-query.sh` SQL guard ships for the DB-audit
-   subagents (schema-inventory, rls-privilege-audit, naming-glossary-audit) to use
+   subagents (db-prober) to use
    during read-only audits; it is not auto-loaded by hooks.json.
    If the ecc plugin (or another marketplace plugin bundling gate hooks) is
    already installed, verify its gate hooks are wired and active too. If it is

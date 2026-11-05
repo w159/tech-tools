@@ -8,9 +8,9 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.12.0 (`.claude-plugin/plugin.json`)                                                                               |
+| Version    | 17.0.0 (`.claude-plugin/plugin.json`)                                                                               |
 | License    | Apache-2.0                                                                                                           |
-| Ships      | 41 skills, 14 agents, 19 hook programs / 23 bindings, 8 JSON contracts                                               |
+| Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 8 JSON contracts                                               |
 | Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 13 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
@@ -30,7 +30,7 @@ session, so your context window holds reports instead of raw output.
 - [Command Center, statusline and in-terminal mod](#command-center-statusline-and-in-terminal-mod)
 - [omp and codex](#omp-and-codex)
 - [Self-improvement and telemetry](#self-improvement-and-telemetry)
-- [Analytics (opt-in)](#analytics-opt-in)
+- [Telemetry](#telemetry)
 - [Security and data handling](#security-and-data-handling)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
@@ -329,7 +329,7 @@ judgment:
 
 ## Skills
 
-41 skills. Four are invoked by name only (`disable-model-invocation: true`):
+40 skills. Four are invoked by name only (`disable-model-invocation: true`):
 `atlas-setup`, `atlas-prompt`, `atlas-tui` and `atlas-crew`. The other 36 load on relevance
 from their `description`. Overlapping capabilities are modes of one skill, not
 separate skills; each multi-mode skill documents its modes in its `SKILL.md` or
@@ -346,8 +346,7 @@ its `references/`.
 | Plan    | atlas-bakeoff             | Decides a costly technical choice with evidence (bakeoff or verdict mode)                                                                       |
 | Plan    | atlas-prototype           | Builds a throwaway prototype to answer one product-shape question                                                                               |
 | Build   | atlas-debug               | Finds and fixes the root cause of a reproducible failure, with evidence                                                                         |
-| Build   | atlas-refactor            | Restructures code without changing behavior, with before and after evidence                                                                     |
-| Build   | atlas-simplify            | Behavior-preserving simplification of a fresh diff, then re-runs the gate                                                                       |
+| Build   | atlas-refactor            | Restructures code, or simplifies a fresh diff, without changing behavior; before and after evidence, gate re-run                                |
 | Build   | atlas-optimize            | One baseline, one hypothesis, one change, one identical re-measure                                                                              |
 | Build   | atlas-frontend            | Builds, refactors or polishes UI on one design system, verified in a browser                                                                    |
 | Build   | atlas-harden              | Writes an idempotent CHECK/SET/VERIFY endpoint remediation script for RMM or MDM                                                                |
@@ -381,7 +380,7 @@ its `references/`.
 
 ## Agents
 
-14 agents, registered as `atlas:<role>`. Each pins its model and effort in
+11 agents, registered as `atlas:<role>`. Each pins its model and effort in
 frontmatter (a fork inherits the parent's instead); read-only agents have every
 write and edit tool removed.
 
@@ -397,10 +396,7 @@ write and edit tool removed.
 | ui-runtime-tester     | sonnet / low    | Runs the app in a real browser and checks observed states         | No          |
 | docs-curator          | sonnet / low    | Maintains `docs/`, `.atlas/` and root entry files                 | Docs only   |
 | docs-auditor          | haiku / low     | Docs-versus-code drift verdict per area                           | No          |
-| db-prober             | sonnet / low    | Schema, RLS, grants, indexes, EXPLAIN plans                       | No          |
-| schema-inventory      | haiku / low     | PostgreSQL catalog inventory                                      | No          |
-| rls-privilege-audit   | sonnet / medium | RLS and grants against least privilege                            | No          |
-| naming-glossary-audit | haiku / low     | Table and column names against a glossary                         | No          |
+| db-prober             | sonnet / medium | Modes: catalog inventory, RLS and grants audit, glossary naming audit, EXPLAIN probe | No          |
 
 `atlas:planner`, `atlas:completeness-critic` and `atlas:docs-curator` are meant
 to run as forks to inherit history (needs `CLAUDE_CODE_FORK_SUBAGENT=1`). `atlas:verifier` and `atlas:explorer` never
@@ -521,7 +517,36 @@ See [omp/README.md](omp/README.md) for agent generation and model roles.
 
 codex. Codex runs as a colony worker (`--harness codex`) and reads the contract
 from `AGENTS.md` (written by `scripts/atlas_codex_contract.py --write`). Its own
-config picks the model.
+config picks the model. Atlas also installs as a Codex plugin (Codex CLI 0.166):
+
+```bash
+codex plugin marketplace add w159/tech-tools
+codex plugin add atlas@tech-tools
+```
+
+then trust the hooks with `/hooks`. Skills (`.codex-plugin/plugin.json` points at
+the same `skills/`) and hooks (`hooks/hooks.codex.json`, generated from `hooks.json`
+by `scripts/gen_codex_hooks.py`) are shared with Claude Code. Differences:
+
+- Codex rejects a PreToolUse `ask`, so a guard that would ask the human denies
+  instead, with the same reason plus "re-run after confirming with the user"
+  (`scripts/atlas_harness.py`). Claude Code behaviour is unchanged.
+- Agents: a Codex plugin cannot ship agents, but Codex loads custom agents from
+  `.codex/agents/*.toml`. Install the 14 atlas agents for a project with
+  `python3 plugins/atlas/scripts/atlas_codex_agents.py [DIR]` (default
+  `./.codex/agents`; add `--plugin-root /abs/path/to/plugins/atlas` so scripts
+  named in the agents resolve). They appear as `atlas-<name>` and `spawn_agent`
+  with that `agent_type` is gated like `atlas:<name>`.
+- Tool names: Codex edits files with `apply_patch`, spawns agents with `spawn_agent`
+  and has no Read, Grep or Glob tool. `scripts/atlas_harness.py` rewrites
+  `apply_patch` / `spawn_agent` / `update_plan` payloads to the Claude shape before
+  any hook logic runs, so the edit, tripwire and worker gates fire. Reads that go
+  through the shell are not seen by the read-before-edit nudge.
+- SessionEnd: Codex clamps it to 3 s, so the transcript ingest hands its work to a
+  detached process and returns at once (also under Claude Code).
+- Other plugins: `programmer` installs in Codex (skills only); `armada` does not.
+
+`hooks/test_codex_parity.py` holds the contract tests.
 
 ## Self-improvement and telemetry
 
@@ -542,41 +567,28 @@ config picks the model.
 No hook creates a skill or a slash command. Learned knowledge goes to findings,
 `docs/lessons/` and memory.
 
-## Analytics (opt-in)
+## Telemetry
 
-Off by default. Nothing is recorded and nothing leaves your machine unless you opt in; undecided counts as off.
-`ATLAS_ANALYTICS=off` forces it off and silences the boot notice. Purpose: weekly counts that show which skills,
-hooks and gates are used or noisy, so Atlas can be improved. Nothing else.
+On by default: anonymous whole-number counters (which skills, hooks and gates fire, how long the hook pass takes, how
+team runs end), summed per ISO week and sent once the week has ended (when an endpoint is configured). No install id, no prompts, code, paths or names
+of yours. A counter is published only once at least 3 installs reported it. A one-time notice is shown the first time
+(Claude Code and Codex: the SessionStart message; omp: a toast). Full detail, every counter and its purpose, and the
+hosting caveat: [references/telemetry.md](references/telemetry.md).
 
-**Collected** (whole-number counters per ISO week, names from the allowlist in
-[contracts/analytics-schema.json](contracts/analytics-schema.json), each family with a stated purpose):
-hook decisions (`hook.<hook>.<deny|ask|context|fault>[.<reason>]`), skill and agent use, team class/effort/size,
-completion-gate blocks, git cleanup counts, security alert counts by severity; plus Atlas version, harness,
-OS family, Python minor version and the week.
-
-**Never collected:** install, session or user ids; timestamps finer than the week; usernames, hostnames, IPs;
-paths, home or working directories, file names; repo, org, branch, project or your own skill names; prompts, code,
-commit or error messages. Allowed names are read from files shipped with Atlas, so yours can never match. Unknown
-keys are dropped when recorded and again when the payload is built.
-
-**Sending:** there is no built-in server address. `send` refuses until you set one
-(`enable --endpoint https://...` or `ATLAS_ANALYTICS_ENDPOINT`; https only, plain http only for localhost).
-Each payload is appended to `sent.jsonl` before it is posted, one per finished week.
+Turn it off (any one): `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off` (environment or `~/.atlas/settings.json` `env`), the
+"Anonymous usage counters" switch in the Command Center, or `python3 scripts/atlas_analytics.py disable`.
 
 ```bash
 python3 scripts/atlas_analytics.py explain    # what and why, in plain language
 python3 scripts/atlas_analytics.py preview    # the exact payload that would be sent
-python3 scripts/atlas_analytics.py enable     # opt in (disable [--keep] opts out)
+python3 scripts/atlas_analytics.py prove      # check that payload against the anonymity rules
 python3 scripts/atlas_analytics.py status     # state, files, event count, week range
 python3 scripts/atlas_analytics.py export --out atlas-counts.json   # share by hand instead
 python3 scripts/atlas_analytics.py delete     # remove ~/.atlas/analytics entirely
 ```
 
-**Verify anonymity yourself:** `python3 scripts/atlas_analytics.py prove` builds the current payload and checks it:
-no key outside the schema, only integer counts, and none of your username, hostname, home dir, working dir, git
-remote, e-mail addresses, IP addresses, absolute paths or long hex/base64 tokens anywhere in it; it exits non-zero on
-any failure. You can also read `~/.atlas/analytics/events.jsonl` (pending counts, one `{"w","k","n"}` per line)
-and `sent.jsonl` (every payload as sent), and run `pytest scripts/test_atlas_analytics.py`.
+Reports land in `telemetry/REPORT.md` and `telemetry/reports/` of the tech-tools repository. The hosting platform may
+keep request logs the code never reads.
 
 ## Security and data handling
 
@@ -614,6 +626,7 @@ switches:
 | `ATLAS_CHANNELS`                                               | on                       | Colony channels: dispatch steering and the omp channel widget |
 | `ATLAS_STATUSLINE`                                             | on                       | omp statusline only                                           |
 | `ATLAS_INGEST`, `ATLAS_TODO`, `ATLAS_DOCS_REPAIR`              | on                       | Telemetry ingest, board mirror, docs repair                   |
+| `ATLAS_ANALYTICS`                                              | on                       | Anonymous usage counters (`off` or `DO_NOT_TRACK=1` stops them) |
 | `ATLAS_FALLOW`, `ATLAS_CONNECTOR_WATCH`                        | on                       | Commit gate, connector credential advice                      |
 | `ATLAS_TYPESAFE_SCORING`                                       | on (inert without a key) | Turn scoring                                                  |
 
@@ -641,9 +654,9 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 16.12.0
-|-- agents/                      14 agents (atlas:<role>)
-|-- skills/                      41 skills, one directory each
+|-- .claude-plugin/plugin.json   manifest, version 17.0.0
+|-- agents/                      11 agents (atlas:<role>)
+|-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
 |-- scripts/                     CLIs: doctor, mux, resolve, todo, finding, gates,
 |                                dashboard, statusline, worktrees, telemetry

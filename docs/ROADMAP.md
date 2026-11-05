@@ -183,6 +183,16 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas 17.0.0 follow-ups (added 2026-11-05)
+
+Source: `docs/audits/2026-11-05_atlas-17.0.0-feature-review.md`. The release itself is in `plugins/atlas/CHANGELOG.md`.
+
+- [planned] Run atlas hooks, skills and agents inside a live Codex model turn (needs a Codex login); until then Codex parity is verified at payload level only.
+- [planned] Run the telemetry receiver against a real Vercel Blob store and set the `ATLAS_TELEMETRY_URL` repository variable.
+- [planned] Add a model-based skill routing eval; the current numbers are a lexical proxy.
+- [planned] Add a `tsc --noEmit` step for the omp sources (no type check runs in CI).
+- [planned] Confirm the scorecard IRC loss probe on live tmux panes.
+
 ### Proposal follow-ups (2026-10-23)
 
 Twelve shipped changes are in `docs/CHANGELOG.md` (2026-10-23) with evidence in `docs/audits/2026-10-23_atlas-proposal-evidence.md`.
@@ -283,7 +293,8 @@ Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026
 - [planned] Live TUI check under tmux if the verifier reports gaps.
 - [planned] herdr transport attach from the TUI.
 - [planned] Re-run one W1 explorer brief on haiku to validate the tier (an ASSUMED item in `docs/plans/2026-10-20_atlas-tiering-design.md`).
-- [planned] Codex hooks and `.codex/agents` parity (found in stage D3; the contract block shipped in 12.6.0, enforcement did not).
+- [done] Codex CLI parity for skills and hooks (2026-11-05, Unreleased): `.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json`, `hooks/hooks.codex.json`, `scripts/atlas_harness.py` (shared detector; PreToolUse ask becomes deny under Codex), `hooks/test_codex_parity.py`. Loaded in Codex CLI 0.166: 41 skills, 14 hooks. Known gaps: (1) plugins cannot ship agents in Codex, so the 14 agents are not loadable; closing it needs a generator from `agents/*.md` to `.codex/agents/*.toml`; (2) Codex clamps the SessionEnd hook to 3 s, so transcript ingest at session end may be cut short; (3) hooks matching `Agent|Task` (dispatch tripwire, worker gates) do not fire because Codex names its subagent tools differently; (4) a guard that would ask the human now denies, and the model must confirm with the user and re-run; `atlas_git.py allow` needs the user to run it; (5) hooks need trust in Codex (`/hooks`); (6) live hook execution inside a Codex model turn is unverified (no login in this check); (7) armada and programmer are not listed in the Codex marketplace: no `.codex-plugin` manifest, not load-tested.
+- [done] Codex tool mapping, SessionEnd budget and agents (2026-11-05, Unreleased): `apply_patch`, `spawn_agent` and `update_plan` payloads are rewritten to the Claude shape in `scripts/atlas_harness.py` (hooks fire on the Codex tools); `scripts/gen_codex_hooks.py` generates `hooks.codex.json` (Codex matchers, SessionEnd 3 s); `ingest_session.py` detaches at SessionEnd; `scripts/atlas_codex_agents.py` writes `.codex/agents/atlas-*.toml`; `programmer` is in the Codex marketplace, `armada` is not (needs `userConfig`). Remaining: no Codex Read/Grep/Glob tool, live hook run in a model turn unverified, `programmer` scan-on-edit hook is a no-op under Codex.
 
 Unreleased, test-verified in source (see `docs/CHANGELOG.md` Unreleased). The herdr autostart, Start button, reap and tmux items below were verified live during the OpenRig work; the rest keep their live check pending.
 

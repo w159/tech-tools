@@ -268,6 +268,16 @@ def is_installed(rule, root, servers):
 
 
 def main():
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+        import argparse
+
+        p = argparse.ArgumentParser(
+            prog="discover_capabilities.py",
+            description="Scan a project and recommend Atlas capabilities (CLIs, MCP servers, plugins) it lacks.",
+        )
+        p.add_argument("root", nargs="?", default=".", help="project root to scan (default: current directory)")
+        p.print_help()
+        sys.exit(0)
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     c = scan(root)
     servers = _mcp_server_names(root)

@@ -74,7 +74,7 @@ if __name__ == "__main__":
 """
 
 FAKE_INTERACTIVE = r"""
-import sys, os, time, json, threading, subprocess
+import sys, os, re, time, json, threading, subprocess
 name = os.environ["FAKE_NAME"]
 log = open(os.path.join(os.environ["SC_RECV"], f"recv_{name}.jsonl"), "a", buffering=1)
 def rec(kind, line): log.write(json.dumps({"t": time.time(), "kind": kind, "line": line}) + "\n")
@@ -87,7 +87,8 @@ def drain_loop():
             "tool_input": {}, "tool_response": "ok", "session_id": "fake"}))
         if "additionalContext" in p.stdout:
             for l in json.loads(p.stdout)["hookSpecificOutput"]["additionalContext"].splitlines():
-                if l.startswith("- from"): rec("hook", l)
+                # drained notes arrive as <board-message> blocks (tag on the body line), not "- from" lines
+                if re.search(r"[AH]M\d{3}", l): rec("hook", l)
 threading.Thread(target=drain_loop, daemon=True).start()
 print("fake agent ready >", flush=True)
 for line in sys.stdin:
@@ -96,7 +97,7 @@ for line in sys.stdin:
 """
 
 FAKE_WORKER = r"""
-import sys, os, time, json
+import sys, os, re, time, json
 sys.path.insert(0, os.environ["SC_HOOKS"])
 import worker_inbox
 name, root = os.environ["ATLAS_WORKER_NAME"], os.environ["ATLAS_PROJECT_ROOT"]
@@ -105,7 +106,7 @@ while True:
     time.sleep(0.5)
     t = time.time()
     for l in worker_inbox.drain(root, name).splitlines():
-        if l.startswith("- from"): log.write(json.dumps({"t": t, "kind": "drain", "line": l}) + "\n")
+        if re.search(r"[AH]M\d{3}", l): log.write(json.dumps({"t": t, "kind": "drain", "line": l}) + "\n")
 """
 
 IRC_PY = r"""

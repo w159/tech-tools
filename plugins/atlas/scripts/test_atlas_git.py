@@ -443,6 +443,37 @@ class CheckActionTests(Base):
             g.check_action(repo, "commit", branch="main")["decision"], "ask"
         )
 
+    def test_every_ask_and_deny_carries_one_reason_class(self):
+        repo, _ = make_repo()
+        pol = g.load_policy(repo)
+        pr_off = g.check_action(repo, "pr", policy=dict(pol, prs="off"))
+        pr_ask = g.check_action(repo, "pr", policy=dict(pol, prs="ask"))
+        self.assertEqual((pr_off["decision"], pr_off["reason_class"]), ("deny", "pr"))
+        self.assertEqual((pr_ask["decision"], pr_ask["reason_class"]), ("ask", "pr"))
+        ask = g.check_action(repo, "commit", branch="main", policy=dict(pol, on_protected="ask"))
+        deny = g.check_action(repo, "push", target="main", policy=dict(pol, on_protected="deny"))
+        self.assertEqual((ask["decision"], ask["reason_class"]), ("ask", "protected"))
+        self.assertEqual((deny["decision"], deny["reason_class"]), ("deny", "protected"))
+        sh(repo, "git", "branch", "feat/x")
+        sh(repo, "git", "worktree", "add", "-q", str(repo.parent / "wt1"), "-b", "feat/w")
+        capped = dict(pol, max_branches=1, max_worktrees=1, cleanup_local="off")
+        br = g.check_action(repo, "branch", policy=capped)
+        wt = g.check_action(repo, "worktree", policy=capped)
+        self.assertEqual((br["decision"], br["reason_class"]), ("deny", "branch"))
+        self.assertEqual((wt["decision"], wt["reason_class"]), ("deny", "worktree"))
+        for allowed in (
+            g.check_action(repo, "pr", policy=dict(pol, prs="allow")),
+            g.check_action(repo, "commit", branch="feat/x", policy=pol),
+        ):
+            self.assertEqual(allowed["decision"], "allow")
+            self.assertNotIn("reason_class", allowed)
+
+    def test_reason_classes_are_the_schema_enum(self):
+        schema = json.loads(
+            (Path(__file__).resolve().parent.parent / "contracts" / "analytics-schema.json").read_text()
+        )
+        self.assertEqual(set(g.REASON_CLASSES), set(schema["enums"]["reason"]["values"]))
+
     def test_old_branches_do_not_count_as_active(self):
         repo, _ = make_repo()
         sh(repo, "git", "switch", "-q", "-c", "feat/old")
@@ -637,10 +668,24 @@ class AnalyticsTests(Base):
             [("git.branch.created", 1), ("git.branch.reused", 1)], _events(ev)
         )
 
-    def test_disabled_writes_nothing(self):
+    def test_explicit_disable_writes_nothing(self):
+        import atlas_analytics
+
+        d = Path(os.environ["ATLAS_HOME"]) / "analytics"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "consent.json").write_text(json.dumps({"enabled": False, "decided": True}))
+        atlas_analytics._reset()
+        repo, _ = make_repo()
+        sh(repo, "git", "branch", "atlas/a")
+        g.ensure_branch(repo, "work")
+        g.clean(repo, dict(g.load_policy(repo)))
+        self.assertFalse((d / "events.jsonl").exists())
+
+    def test_automation_guard_keeps_the_default_off_under_pytest(self):
         import atlas_analytics
 
         atlas_analytics._reset()
+        self.assertEqual((False, "CI or test run (set ATLAS_ANALYTICS=on to count it)"), atlas_analytics.state())
         repo, _ = make_repo()
         sh(repo, "git", "branch", "atlas/a")
         g.ensure_branch(repo, "work")

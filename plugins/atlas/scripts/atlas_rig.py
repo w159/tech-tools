@@ -17,7 +17,6 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.request
 from pathlib import Path
 
 DEFAULT_PORT = 7437
@@ -133,6 +132,8 @@ def _rig(args: list[str], timeout: float = 10) -> tuple[int, object, str]:
 
 
 def _healthz() -> dict | None:
+    import urllib.request  # ~17 ms: only the health probe needs it, not every module that imports atlas_rig
+
     try:
         with urllib.request.urlopen(f"{_url()}/healthz", timeout=2) as r:
             d = json.loads(r.read())

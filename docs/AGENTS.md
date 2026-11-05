@@ -1,10 +1,10 @@
 # Atlas Subagent Roster
 
-Authoritative list of subagents shipped in `plugins/atlas/agents/`. 14 agents total (the
-2026-07-07 UX-swarm and api-usage-map removal left 12, formerly 18 as of v2.2.1; `atlas:runner` is the thirteenth and `atlas:test-engineer` the fourteenth).
+Authoritative list of subagents shipped in `plugins/atlas/agents/`. 11 agents total (the
+2026-07-07 UX-swarm and api-usage-map removal left 12, formerly 18 as of v2.2.1; `atlas:runner` and `atlas:test-engineer` brought it to 14; the three DB audit agents merged into `atlas:db-prober`).
 Source: `plugins/atlas/agents/*.md` (each file's `name:` and `description:` frontmatter fields).
 
-The atlas plugin ships 14 core agents (listed below). The v5.0.0 split moved 11 additional
+The atlas plugin ships 11 core agents (listed below). The v5.0.0 split moved 11 additional
 `atlas:armada-*` department agents out of atlas and into a separate `armada` plugin
 (`plugins/armada/agents/`), which is part of the Claude Code marketplace but is installed
 alongside `atlas` only for org deployment. The 11 armada department agents are:
@@ -82,13 +82,9 @@ folds into the domain plugins' own MCP-backed audits. There is no remaining code
 
 | Agent | One-line role |
 |---|---|
-| **atlas:db-prober** | Read-only DB inspector: queries schema, RLS policies, GRANTs for the runtime role, indexes, constraints, defaults, and EXPLAIN plans; proposes but never applies changes. |
-| **atlas:schema-inventory** | PostgreSQL catalog inventory: enumerates tables, columns, types, constraints, indexes, and RLS flags from the live database for the schema half of a DB audit. |
-| **atlas:naming-glossary-audit** | Nomenclature auditor: checks PostgreSQL table and column names against a project glossary; focused on user_* to client_* transition or similar rename passes. |
-| **atlas:rls-privilege-audit** | RLS security auditor: checks row-level security policies, table grants, and roles against least privilege for the security half of a DB audit in regulated environments. |
+| **atlas:db-prober** | Read-only DB prober with four modes: inventory (catalog dump), privileges (RLS, grants, roles against least privilege), naming (names against a glossary, rename passes) and probe (indexes, EXPLAIN); proposes but never applies changes. |
 
-Source: `plugins/atlas/agents/db-prober.md`, `schema-inventory.md`,
-`naming-glossary-audit.md`, `rls-privilege-audit.md`.
+Source: `plugins/atlas/agents/db-prober.md`.
 
 ---
 

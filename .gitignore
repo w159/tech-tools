@@ -158,6 +158,17 @@ firebase-adminsdk*.json
 !scripts/check_versions.py
 !scripts/check_attribution.py
 !scripts/test_*.py
+!scripts/telemetry_report.py
+!scripts/gen_codex_hooks.py
+
+# ---- Atlas telemetry (receiver, allowed keys, published reports) ----
+!telemetry/
+!telemetry/**
+telemetry/server/node_modules/
+telemetry/server/.data/
+telemetry/server/.env
+telemetry/server/.env.*
+telemetry/server/.vercel/
 
 # ---- fallow baselines (audit gate: pre-existing findings recorded as debt, not hidden) ----
 # Written by `fallow dead-code|health|dupes --save-baseline`; read via the `audit` key in
@@ -291,6 +302,12 @@ docs/**/.git/**
 .scratch/**
 .agents/
 .agents/**
+# the Codex marketplace manifest is product (Codex reads .agents/plugins/marketplace.json)
+!.agents/
+.agents/*
+!.agents/plugins/
+.agents/plugins/*
+!.agents/plugins/marketplace.json
 improvements/
 improvements/**
 

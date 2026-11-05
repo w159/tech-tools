@@ -281,6 +281,16 @@ def boot_lines(
 def main() -> int:
     import sys
 
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+        import argparse
+
+        p = argparse.ArgumentParser(
+            prog="tool_routing.py",
+            description="Print the detected code stack, the SessionStart tool-routing lines and the ToolSearch batch as JSON.",
+        )
+        p.add_argument("root", nargs="?", default=".", help="project root to scan (default: current directory)")
+        p.print_help()
+        return 0
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     stack = scan_stack(root)
     print(

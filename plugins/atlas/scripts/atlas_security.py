@@ -653,7 +653,7 @@ def write_cache(root: str, data: dict) -> Path:
 
 
 def _record_alerts(summary: dict) -> None:
-    """Opt-in analytics: open-alert tallies per kind and severity from one refresh. Never raises."""
+    """Anonymous analytics: open-alert tallies per kind and severity from one refresh. Never raises."""
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from atlas_analytics import record

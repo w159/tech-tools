@@ -1,16 +1,23 @@
 {
-  "_doc": "Allowlist for opt-in Atlas analytics (scripts/atlas_analytics.py). A counter key is accepted only if it fully matches one pattern below. Placeholders {name} expand to the closed enums in 'enums'; 'source' enums are derived at runtime from files SHIPPED in this plugin, so a user's own skill, repo, path or project name can never match. Every family states in 'purpose' which part of Atlas it improves and how. Adding a family or enum here is the only way to collect anything new.",
-  "schema": 1,
+  "_doc": "Allowlist for Atlas anonymous analytics (scripts/atlas_analytics.py), on by default with DO_NOT_TRACK=1, ATLAS_ANALYTICS=off or `atlas_analytics.py disable` to turn it off. A counter key is accepted only if it fully matches one pattern below. Placeholders {name} expand to the closed enums in 'enums'; 'source' enums are derived at runtime from files SHIPPED in this plugin, so a user's own skill, repo, path or project name can never match. Every family states in 'purpose' which part of Atlas it improves and how. Adding a family or enum here is the only way to collect anything new; the ingest server accepts only telemetry/allowed-keys.json, generated from this file.",
+  "schema": 2,
   "max_count": 10000,
+  "min_installs_published": 3,
+  "endpoint": "",
   "enums": {
     "hook": {"source": "hooks"},
     "skill": {"source": "skills"},
     "role": {"source": "agents"},
     "class": {"source": "scope_classes"},
     "effort": {"source": "scope_efforts"},
-    "decision": {"values": ["deny", "ask", "context", "fault"]},
+    "event": {"source": "hook_events"},
+    "harness": {"values": ["claude", "omp", "codex", "unknown"]},
+    "decision": {"values": ["deny", "ask", "context", "fault", "slow"]},
     "reason": {"values": ["protected", "cap", "pr", "branch", "worktree", "force", "unread", "other"]},
     "size": {"values": ["1", "2", "3-4", "5-8", "9+"]},
+    "ms": {"values": ["lt50", "50to200", "200to1000", "ge1000"]},
+    "wall": {"values": ["lt1m", "1to5m", "5to15m", "15to60m", "ge60m"]},
+    "outcome": {"values": ["done", "failed", "timeout"]},
     "letter": {"values": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]},
     "cleaned": {"values": ["worktrees", "branches", "remote"]},
     "branchop": {"values": ["created", "reused"]},
@@ -18,9 +25,17 @@
     "severity": {"values": ["low", "medium", "high", "critical"]}
   },
   "families": {
+    "session": {
+      "patterns": ["session.{harness}"],
+      "purpose": "Denominator and harness mix: how many sessions ran under Claude Code, omp and Codex, so every other counter can be read as a rate per session and parity work goes to the harness people actually use."
+    },
     "hook": {
       "patterns": ["hook.{hook}.{decision}", "hook.{hook}.{decision}.{reason}"],
-      "purpose": "Hooks improved: shows which shipped hooks deny, ask, inject context or fault in practice, and for what class of reason, so noisy or over-strict hooks get loosened and faulting hooks get fixed first."
+      "purpose": "Hooks improved: shows which shipped hooks deny, ask, inject context, fault or run slower than one second in practice, and for what class of reason, so noisy or over-strict hooks get loosened, slow ones get faster and faulting ones get fixed first."
+    },
+    "dispatch": {
+      "patterns": ["dispatch.{event}.ms.{ms}"],
+      "purpose": "Hook latency: how long the whole Atlas hook pass takes per event, bucketed, so the per-tool-call overhead Atlas adds stays small on real machines and regressions show up."
     },
     "skill": {
       "patterns": ["skill.{skill}"],
@@ -31,12 +46,12 @@
       "purpose": "Subagent roster improved: shows which shipped subagent roles get dispatched, so roles nobody uses are cut and busy ones are tuned."
     },
     "team": {
-      "patterns": ["team.{class}.{effort}", "team.size.{size}"],
-      "purpose": "Team sizing improved: shows which task classes and effort levels are chosen and how large teams get, so the scope matrix defaults match real work and over-large teams are trimmed."
+      "patterns": ["team.{class}.{effort}", "team.size.{size}", "team.outcome.{outcome}", "team.wall.{wall}"],
+      "purpose": "Team runs improved: which task classes and effort levels are chosen, how large teams get, whether runs finish, fail or time out and how long they take, so the scope matrix defaults match real work and failing or slow team shapes get fixed."
     },
     "gate": {
-      "patterns": ["gate.{letter}.block"],
-      "purpose": "Completion gate improved: shows which completion-gate checks block a finish most often, so false positives are removed and the checks that catch real problems are made clearer."
+      "patterns": ["gate.{letter}.block", "gate.pass"],
+      "purpose": "Completion gate improved: which checks block a finish most often against how often a finish passes cleanly, so false positives are removed and the checks that catch real problems are made clearer."
     },
     "git": {
       "patterns": ["git.clean.{cleaned}", "git.branch.{branchop}"],
@@ -48,7 +63,7 @@
     }
   },
   "never_collected": [
-    "install, session, user or machine identifiers",
+    "install, session, user or machine identifiers (each weekly payload has a fresh random nonce used only to drop a duplicate retry)",
     "timestamps finer than the ISO week",
     "usernames, hostnames, IP addresses, home or working directories, file names or paths",
     "repository, organisation, branch, project or user-defined skill names",

@@ -1,0 +1,15 @@
+{
+    "name": "tech-tools",
+    "plugins": [
+        {
+            "name": "atlas",
+            "source": "./plugins/atlas",
+            "category": "developer-tools"
+        },
+        {
+            "name": "programmer",
+            "source": "./plugins/programmer",
+            "category": "developer-tools"
+        }
+    ]
+}

@@ -20,10 +20,10 @@ with ATLAS_FALLOW=off. Version floor via FALLOW_GATE_MIN_VERSION (default
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 
+# json is imported where it is used (not at module level) so the prefilter below can exit before it.
 # typing is not imported (1.7 ms): annotations are strings under __future__, and the
 # JSON payload values are plain `object` here.
 
@@ -33,6 +33,96 @@ import sys
 
 # Default matches fallow's gate floor (gate-marker agent landed in v2.85.0).
 _DEFAULT_MIN_VERSION = "2.85.0"
+
+_GATED_SUBCOMMANDS = ("commit", "push")
+_RAW: str | None = None  # stdin as the prefilter read it; main() reuses it instead of reading again
+
+
+# Mirrors atlas_hook_guard._STR_FIELDS (pinned by hooks/test_fallow_prefilter.py): a payload with any
+# of these wrong-typed is a fault row, so the prefilter leaves it to the full path.
+_PAYLOAD_STR_FIELDS = (
+    "session_id",
+    "cwd",
+    "transcript_path",
+    "tool_name",
+    "hook_event_name",
+    "prompt",
+    "last_assistant_message",
+    "agent_type",
+    "agent_id",
+)
+
+
+def _scan_json(raw: str) -> object:
+    """json.loads(raw, strict=False) through the C scanner alone: `import json` costs ~7 ms of re
+    compilation this process cannot spend. Raises on anything json.loads would reject (the caller then
+    leaves the payload to the full path)."""
+    import _json
+
+    class _Ctx:
+        strict = False
+        object_hook = None
+        object_pairs_hook = None
+        parse_float = float
+        parse_int = int
+
+        @staticmethod
+        def parse_constant(name: str) -> float:
+            return float(name.replace("Infinity", "inf"))
+
+    scan = _json.make_scanner(_Ctx())
+    n = len(raw)
+    i = 0
+    while i < n and raw[i] in " \t\n\r":
+        i += 1
+    obj, end = scan(raw, i)
+    while end < n and raw[end] in " \t\n\r":
+        end += 1
+    if end != n:
+        raise ValueError("extra data")
+    return obj
+
+
+def _prefilter_skips(raw: str | None) -> bool:
+    """True only when running the full gate on `raw` would do nothing at all: empty stdin, or a
+    well-formed payload whose decoded tool_input.command holds no "git" (the gate's own first test,
+    _is_git_commit_or_push). Every other case returns False and the full gate runs: any "git" in the
+    command (git commit/push/merge/rebase/cherry-pick/am, `bash -c`/`sh -c` wrappers, aliases,
+    path-qualified binaries), a payload that does not parse, is not an object or has a wrong-typed
+    field (the full path writes the fault row), an unreadable stdin. Stdlib only; runs before atlas_env
+    and atlas_hook_guard are imported."""
+    if raw is None:
+        return False
+    if not raw.strip():
+        return True  # load_payload: empty stdin is {} quietly
+    try:
+        data = _scan_json(raw)
+        if not isinstance(data, dict):
+            return False
+        for key in _PAYLOAD_STR_FIELDS:
+            val = data.get(key)
+            if val is not None and not isinstance(val, str):
+                return False
+        tinput = data.get("tool_input")
+        if tinput is None:
+            return True
+        if not isinstance(tinput, dict):
+            return False
+        command = tinput.get("command")
+        if command is None:
+            return True
+        return isinstance(command, str) and "git" not in command
+    except Exception:  # noqa: BLE001 -- unsure: run the gate
+        return False
+
+
+if __name__ == "__main__":
+    try:
+        _RAW = sys.stdin.read()
+    except Exception:  # noqa: BLE001 -- let main() meet the same error through load_payload
+        _RAW = None
+    if _prefilter_skips(_RAW):
+        raise SystemExit(0)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -51,9 +141,6 @@ _NPX_PROBE_TIMEOUT = 3
 _NEGATIVE_TTL = 600
 _VERSION_TIMEOUT = 15
 _AUDIT_TIMEOUT = 60
-
-_GATED_SUBCOMMANDS = ("commit", "push")
-
 
 def _env_off(name: str) -> bool:
     return os.environ.get(name, "on").strip().lower() in (
@@ -205,6 +292,8 @@ def _run_audit(
     except OSError as exc:
         return 127, {}, str(exc)
 
+    import json
+
     parsed: dict[str, object] = {}
     stdout = (res.stdout or "").strip()
     if stdout:
@@ -219,6 +308,8 @@ def _run_audit(
 
 def _deny(reason: str) -> None:
     # Documented Claude Code PreToolUse block form (same as dispatch_tripwire).
+    import json
+
     print(
         json.dumps(
             {
@@ -243,7 +334,7 @@ def main() -> int:
     if _env_off("ATLAS_FALLOW"):
         return 0
 
-    payload = atlas_hook_guard.load_payload("fallow_gate")
+    payload = atlas_hook_guard.load_payload("fallow_gate", _RAW)
     command = _command_from(payload)
     if not command or not _is_git_commit_or_push(command):
         return 0
@@ -278,6 +369,8 @@ def main() -> int:
 
     if verdict == "fail":
         # Keep the reason bounded; full JSON still helps the agent fix and retry.
+        import json
+
         body = json.dumps(data, indent=2) if data else "(no JSON body)"
         if len(body) > 12000:
             body = body[:12000] + "\n... [truncated]"

@@ -601,15 +601,17 @@ def test_security_off_disables_everything(env, monkeypatch):
 
 # ---- analytics + protected-branch refresh ---------------------------------------------------------
 def _analytics_home(tmp_path, monkeypatch, enabled):
+    """enabled: True = `enable` consent, False = `disable` consent, None = undecided (pytest guard decides)."""
     import atlas_analytics as A
 
     home = tmp_path / "ah"
     monkeypatch.setenv("ATLAS_HOME", str(home))
     monkeypatch.delenv("ATLAS_ANALYTICS", raising=False)
-    if enabled:
+    monkeypatch.delenv("DO_NOT_TRACK", raising=False)
+    if enabled is not None:
         (home / "analytics").mkdir(parents=True)
         (home / "analytics" / "consent.json").write_text(
-            json.dumps({"enabled": True, "decided": True})
+            json.dumps({"enabled": enabled, "decided": True})
         )
     A._reset()
     return A, home / "analytics" / "events.jsonl"
@@ -633,8 +635,18 @@ def test_refresh_records_open_alert_tallies(env, tmp_path, monkeypatch):
     A._reset()
 
 
-def test_refresh_analytics_disabled_writes_nothing(env, tmp_path, monkeypatch):
+def test_refresh_analytics_explicit_disable_writes_nothing(env, tmp_path, monkeypatch):
     A, ev = _analytics_home(tmp_path, monkeypatch, False)
+    seed_all(env)
+    sec.write_cache(env.root, sec.collect(env.root, "o/r", list(sec.KINDS)))
+    assert not ev.exists()
+    A._reset()
+
+
+def test_refresh_analytics_undecided_under_pytest_writes_nothing(env, tmp_path, monkeypatch):
+    """Default is on, but PYTEST_CURRENT_TEST counts as automation, so an undecided run stays off."""
+    A, ev = _analytics_home(tmp_path, monkeypatch, None)
+    assert A.state() == (False, "CI or test run (set ATLAS_ANALYTICS=on to count it)")
     seed_all(env)
     sec.write_cache(env.root, sec.collect(env.root, "o/r", list(sec.KINDS)))
     assert not ev.parent.exists()

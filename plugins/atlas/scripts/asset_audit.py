@@ -286,7 +286,24 @@ def apply_auto(plan, db, conn):
     return moved
 
 
+def _help_parser():
+    import argparse
+
+    p = argparse.ArgumentParser(
+        prog="asset_audit.py",
+        description="Inventory context-loaded assets, score their relevance to a project and print an action plan.",
+        epilog="Dry run unless --apply; --apply only writes project-level enabledPlugins=false for AUTO actions.",
+    )
+    p.add_argument("root", nargs="?", help="project root to profile (default: current directory)")
+    p.add_argument("--json", action="store_true", help="print the full plan as JSON")
+    p.add_argument("--apply", action="store_true", help="apply the AUTO (project-scoped, reversible) actions")
+    return p
+
+
 def main(argv):
+    if any(a in ("-h", "--help") for a in argv[1:]):
+        _help_parser().print_help()
+        return 0
     root = (
         os.path.abspath(argv[1])
         if len(argv) > 1 and not argv[1].startswith("-")

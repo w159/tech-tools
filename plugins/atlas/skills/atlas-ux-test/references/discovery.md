@@ -10,6 +10,32 @@ HTTP 200, and declared COMPLETE - while the value the CLIENT reads on the dashbo
 for all personas and the app showed "needs work." Discovery captures the real primary-write
 call so the scripted driver mirrors it instead of guessing.
 
+## Finding the dev URL and API base (0a, 0b)
+
+Dev URL (0a):
+
+Read the repo to discover how and where the app is served in development:
+- Check `package.json` scripts (dev, start, serve), `vite.config.ts` / `next.config.js` /
+  `angular.json` / `webpack.config.js`, `.env.development`, `.env.local`, `.env`,
+  `firebase.json` / `vercel.json` / `netlify.toml`, and any CI scripts that launch the app.
+- Extract the hostname and port (e.g. `localhost:5173`, a Firebase Hosting preview URL, a
+  Cloud Run URL from `.env.development`).
+- If the dev URL cannot be determined from the repo alone, ask the user for it once and
+  record it in `RUN_DIR/notes/discovery.json` as `"dev_url_source": "user-provided"`.
+- Target the DEV environment only, never production.
+
+API base (0b):
+
+Read the repo to discover the API base URL used by the frontend:
+- Check `frontend/src/utils/api.ts` (or equivalent), `.env.development`, `.env`,
+  `vite.config.ts` proxy/rewrite rules, `next.config.js` rewrites, and any config files
+  that set `VITE_API_URL`, `REACT_APP_API_URL`, `NEXT_PUBLIC_API_URL`, or equivalent.
+- If the app is a SPA with a backend-for-frontend on the same host, the API base may be
+  relative (e.g. `/api`); record that.
+- If the API base cannot be determined from the repo alone, ask the user for it once.
+
+Run these two before the steps below.
+
 ## What discovery does
 
 1. Coverage cartography. Scan the frontend router file and pages directory for routes and all

@@ -1,7 +1,7 @@
 ---
 name: atlas-autopilot
-description: "Consent-gated autonomous pipeline: runs a ready plan or diagnosed fix via atlas-orchestrate, simplifies, reviews, fixes under a budget, stops at the local commit. Use when a plan should run end to end."
-when_to_use: "autopilot, run the whole pipeline, execute this plan end to end, plan to commit, lfg, hands-off build"
+description: "Runs a ready plan or diagnosed fix end to end with consent gates (orchestrate, diff-mode refactor, review, fix) under a budget, stopping at the local commit. Use when a plan should execute hands-off."
+when_to_use: "autopilot, run the whole pipeline, execute plan end to end, plan to commit, lfg, hands-off build"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[plan-path | debug finding | task description] [budget:3]'
 ---
@@ -50,7 +50,7 @@ Eleven steps, in order. Each step has a machine gate; a failed gate stops the pi
 |---|---|---|---|
 | 1. Intake & route | Classify the input: named plan artifact, diagnosed defect, or raw task | A verified source exists or is produced | `references/pipeline.md` § Intake routing |
 | 2. Execute | Run the plan's units or the debug fix through `atlas-orchestrate` | Complete + independently verified return, findings stamped | `references/pipeline.md` § Execution gate |
-| 3. Simplify | `atlas-simplify` on the change (skip docs-only or < ~10 changed lines) | Behavior-preserving; blast-radius check passes | `references/pipeline.md` § Simplify |
+| 3. Simplify | `atlas-refactor` (diff mode) on the change (skip docs-only or < ~10 changed lines) | Behavior-preserving; blast-radius check passes | `references/pipeline.md` § Simplify |
 | 4. Review | `atlas-review` in report-only mode | Report produced; P0/P1 validated | `references/pipeline.md` § Review |
 | 5. Apply mechanical fixes | High-confidence + mechanical findings only, via `atlas:implementer`, budget-bounded | Budget not exhausted, or residuals persisted | `references/pipeline.md` § Fix loop |
 | 6. Persist residuals | Unapplied findings and deferred decisions into findings ledger + ROADMAP | Every residual written with its reason | `references/pipeline.md` § Residuals |
