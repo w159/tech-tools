@@ -188,7 +188,7 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
 Source: `docs/audits/2026-11-05_atlas-17.0.0-feature-review.md`. The release itself is in `plugins/atlas/CHANGELOG.md`.
 
 - [planned] Run atlas hooks, skills and agents inside a live Codex model turn (needs a Codex login); until then Codex parity is verified at payload level only.
-- [planned] Run the telemetry receiver against a real Vercel Blob store and set the `ATLAS_TELEMETRY_URL` repository variable.
+- [done 2026-11-05] Telemetry receiver is deployed on Vercel with a private Blob store (`https://atlas-telemetry.vercel.app`); the report workflow reads the schema endpoint, so `ATLAS_TELEMETRY_URL` is optional.
 - [planned] Add a model-based skill routing eval; the current numbers are a lexical proxy.
 - [planned] Add a `tsc --noEmit` step for the omp sources (no type check runs in CI).
 - [planned] Confirm the scorecard IRC loss probe on live tmux panes.

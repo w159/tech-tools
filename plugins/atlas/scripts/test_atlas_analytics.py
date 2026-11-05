@@ -46,6 +46,7 @@ VALID = [
     "gate.pass",
 ]
 ENDPOINT = "https://example.invalid/ingest"
+SHIPPED_ENDPOINT = "https://atlas-telemetry.vercel.app/api/ingest"
 NOW = datetime.date(2026, 11, 3)  # ISO 2026-W45
 
 
@@ -71,6 +72,12 @@ def home(tmp_path, monkeypatch):
 
 def fresh():
     A._reset()
+
+
+def no_schema_endpoint(monkeypatch):
+    """Simulate a build that ships no endpoint (the repo schema now ships the live one)."""
+    real = A.load_schema
+    monkeypatch.setattr(A, "load_schema", lambda: {**real(), "endpoint": ""})
 
 
 def enable():
@@ -836,7 +843,8 @@ def test_delete_removes_directory_and_resets_to_default(home):
     assert A.main(["delete"]) == 0  # idempotent
 
 
-def test_status_explain_and_preview_run(home, capsys):
+def test_status_explain_and_preview_run(home, capsys, monkeypatch):
+    no_schema_endpoint(monkeypatch)
     A.record("skill.atlas-setup")
     capsys.readouterr()
     assert A.main(["status"]) == 0
@@ -974,9 +982,11 @@ def net(home, monkeypatch):
 
 
 def test_endpoint_env_overrides_schema_and_blank_means_none(home, monkeypatch):
-    assert A.endpoint() is None  # the shipped schema endpoint is empty
+    assert A.endpoint() == SHIPPED_ENDPOINT  # the shipped schema endpoint is the live receiver
+    assert A.valid_endpoint(SHIPPED_ENDPOINT) is None
+    assert A.load_schema()["endpoint"] == SHIPPED_ENDPOINT
     monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", "  ")
-    assert A.endpoint() is None
+    assert A.endpoint() == SHIPPED_ENDPOINT  # a blank override falls through to the schema
     monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", ENDPOINT)
     assert A.endpoint() == ENDPOINT
     monkeypatch.delenv("ATLAS_ANALYTICS_ENDPOINT")
@@ -1007,9 +1017,30 @@ def test_valid_endpoint_accepts_https_and_localhost(url):
     assert A.valid_endpoint(url) is None
 
 
+def test_send_auto_is_suppressed_under_pytest_with_shipped_endpoint(
+    home, monkeypatch, capsys
+):
+    # Real guard: PYTEST_CURRENT_TEST is set by pytest and is not neutralised here.
+    guard_on(monkeypatch)
+    assert os.environ.get("PYTEST_CURRENT_TEST")
+    assert A.endpoint() == SHIPPED_ENDPOINT
+    on, why = A.state()
+    assert on is False and "CI or test run" in why
+    monkeypatch.setattr(A, "_post", lambda *a: pytest.fail("posted under pytest"))
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda *a, **k: pytest.fail("opened a socket")
+    )
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    capsys.readouterr()
+    assert A.main(["send", "--auto"]) == 2
+    assert A.main(["send"]) == 2
+    assert not (home / "analytics" / "sent.jsonl").exists()
+
+
 def test_send_with_no_endpoint_does_nothing_and_returns_cleanly(
     home, capsys, monkeypatch
 ):
+    no_schema_endpoint(monkeypatch)
     monkeypatch.setattr(
         A, "_post", lambda *a: pytest.fail("posted without an endpoint")
     )
@@ -1256,6 +1287,7 @@ def test_background_send_false_when_off(home, bg, monkeypatch):
 
 def test_background_send_false_without_endpoint(home, bg, monkeypatch):
     monkeypatch.delenv("ATLAS_ANALYTICS_ENDPOINT")
+    no_schema_endpoint(monkeypatch)
     assert A.maybe_send_in_background() is False and bg == []
     monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", "http://example.com/x")  # not https
     assert A.maybe_send_in_background() is False and bg == []

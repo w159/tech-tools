@@ -1,5 +1,16 @@
 # Changelog
 
+## 17.0.1 - 2026-11-05
+
+Telemetry now has a live receiver.
+
+### Changed
+
+- Anonymous telemetry sends to the live endpoint: `contracts/analytics-schema.json` `endpoint` is `https://atlas-telemetry.vercel.app/api/ingest` (a Vercel project with a private Blob store). Weekly counters from installs with telemetry on are posted there once the week has ended; nothing changes for opt-outs (`DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off`, `atlas_analytics.py disable`), and CI and pytest runs still never send.
+- The weekly `telemetry-report` workflow uses the repository variable `ATLAS_TELEMETRY_URL` when set and otherwise derives the base URL from the schema endpoint (trailing `/api/ingest` stripped). It also runs on a push to `main` that touches the schema or the workflow, so the report refreshes when the endpoint changes.
+- Tests: the shipped-endpoint assertion now pins the live URL and `valid_endpoint()`; a new test shows `send --auto` is suppressed under pytest even with the shipped endpoint (no socket is opened).
+- The CI test-order fixes from 17.0.0 (bun tests that failed in CI) are listed under 17.0.0.
+
 ## 17.0.0 - 2026-11-05
 
 Major release: one skill and three agents are removed, and anonymous telemetry is now on by default.

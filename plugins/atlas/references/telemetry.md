@@ -83,7 +83,9 @@ Unknown keys are dropped when recorded, again when the payload is built, and aga
 
 The client posts once per finished week, in the background, only after the notice has been shown and only when an
 endpoint is configured (`endpoint` in the schema, or `ATLAS_ANALYTICS_ENDPOINT`; https only, plain http only for
-localhost). The server stores the validated body and nothing else. It publishes weekly totals only: a counter appears
+localhost). Installs send to `https://atlas-telemetry.vercel.app/api/ingest`, the endpoint shipped in the schema.
+To stop sending, turn telemetry off (see "Turn it off" above: `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off`, or
+`python3 scripts/atlas_analytics.py disable`). The server stores the validated body and nothing else. It publishes weekly totals only: a counter appears
 only once **at least 3 installs** reported it, and version, OS and Python buckets below that threshold fold into
 `other`. Published reports land in the tech-tools repository under `telemetry/reports/`, with the latest summary in
 [`telemetry/REPORT.md`](../../../telemetry/REPORT.md) (regenerated weekly by `scripts/telemetry_report.py`).

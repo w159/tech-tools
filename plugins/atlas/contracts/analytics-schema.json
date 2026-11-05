@@ -3,7 +3,7 @@
   "schema": 2,
   "max_count": 10000,
   "min_installs_published": 3,
-  "endpoint": "",
+  "endpoint": "https://atlas-telemetry.vercel.app/api/ingest",
   "enums": {
     "hook": {"source": "hooks"},
     "skill": {"source": "skills"},

@@ -587,7 +587,8 @@ python3 scripts/atlas_analytics.py export --out atlas-counts.json   # share by h
 python3 scripts/atlas_analytics.py delete     # remove ~/.atlas/analytics entirely
 ```
 
-Reports land in `telemetry/REPORT.md` and `telemetry/reports/` of the tech-tools repository. The hosting platform may
+Installs send to `https://atlas-telemetry.vercel.app/api/ingest`; turn telemetry off with any option above and nothing
+is sent. Reports land in `telemetry/REPORT.md` and `telemetry/reports/` of the tech-tools repository. The hosting platform may
 keep request logs the code never reads.
 
 ## Security and data handling

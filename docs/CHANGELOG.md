@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.0.1 - 2026-11-05
+
+- atlas 17.0.1: anonymous telemetry now sends to the live endpoint (`https://atlas-telemetry.vercel.app/api/ingest`); the weekly `telemetry-report` workflow falls back to the schema endpoint when `ATLAS_TELEMETRY_URL` is unset and also runs on pushes that change the schema or the workflow. Details in plugins/atlas/CHANGELOG.md.
+
+## marketplace 5.5.1 - 2026-11-05
+
+- marketplace 5.5.1: atlas 17.0.1, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 17.0.0 - 2026-11-05
 
 - atlas 17.0.0: default-on anonymous telemetry, Codex parity, skill and agent consolidation, faster hooks. BREAKING: skill `atlas-simplify` is removed (use `atlas-refactor`, 41 skills become 40); agents `schema-inventory`, `rls-privilege-audit` and `naming-glossary-audit` are removed (use `db-prober` with `MODE: inventory|privileges|naming`, 14 agents become 11); telemetry is on by default (counters only; `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off` or `atlas_analytics.py disable` turn it off). Also: Codex CLI manifests and generated hooks for atlas and programmer, hook p50 SessionStart 155 -> 57 ms, UserPromptSubmit 57 -> 36 ms, every test suite loads from its documented command. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-05_atlas-17.0.0-feature-review.md.

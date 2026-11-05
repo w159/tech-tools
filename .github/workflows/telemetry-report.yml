@@ -1,10 +1,16 @@
 name: telemetry-report
 
 # Weekly: pull last week's thresholded aggregate from the telemetry server and commit it under
-# telemetry/. Does nothing until the repository variable ATLAS_TELEMETRY_URL is set.
+# telemetry/. Uses the repository variable ATLAS_TELEMETRY_URL when set, else the base URL of the "endpoint" in
+# plugins/atlas/contracts/analytics-schema.json (trailing /api/ingest stripped). Does nothing when both are empty.
 on:
   schedule:
     - cron: "0 6 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - plugins/atlas/contracts/analytics-schema.json
+      - .github/workflows/telemetry-report.yml
   workflow_dispatch:
 
 permissions:
@@ -19,13 +25,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      ATLAS_TELEMETRY_URL: ${{ vars.ATLAS_TELEMETRY_URL }}
+      VAR_TELEMETRY_URL: ${{ vars.ATLAS_TELEMETRY_URL }}
     steps:
-      - name: Skip when no telemetry URL is configured
-        if: env.ATLAS_TELEMETRY_URL == ''
-        run: echo "ATLAS_TELEMETRY_URL is not set; nothing to do."
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        if: env.ATLAS_TELEMETRY_URL != ''
+      - name: Resolve the telemetry URL
+        run: |
+          url="$VAR_TELEMETRY_URL"
+          if [ -z "$url" ]; then
+            url=$(python3 -c 'import json; e = json.load(open("plugins/atlas/contracts/analytics-schema.json")).get("endpoint") or ""; e = e.strip().rstrip("/"); print(e[: -len("/api/ingest")] if e.endswith("/api/ingest") else e)')
+          fi
+          echo "ATLAS_TELEMETRY_URL=$url" >> "$GITHUB_ENV"
+          if [ -z "$url" ]; then
+            echo "No telemetry URL (ATLAS_TELEMETRY_URL unset and no schema endpoint); nothing to do."
+          fi
       - name: Build the weekly report
         if: env.ATLAS_TELEMETRY_URL != ''
         run: python3 scripts/telemetry_report.py --url "$ATLAS_TELEMETRY_URL"

@@ -59,9 +59,14 @@ always attach a Blob store there.
 2. In the project, Storage, create a Blob store and connect it. Use a private store. This sets
    `BLOB_READ_WRITE_TOKEN`, which switches the backend to Blob.
 3. Deploy. The endpoint is `https://<project>.vercel.app/api/ingest`.
-4. Put that URL in `plugins/atlas/contracts/analytics-schema.json` as `endpoint`, and set the repo
-   variable `ATLAS_TELEMETRY_URL` to the base URL (`https://<project>.vercel.app`, no path). The
-   `telemetry-report` workflow then commits `telemetry/reports/<week>.json` and
-   `telemetry/REPORT.md` every Monday 06:00 UTC.
+4. Put that URL in `plugins/atlas/contracts/analytics-schema.json` as `endpoint`. The
+   `telemetry-report` workflow reads it (base URL = endpoint without `/api/ingest`) and commits
+   `telemetry/reports/<week>.json` and `telemetry/REPORT.md` every Monday 06:00 UTC and on any push
+   to `main` that changes the schema or the workflow. The repo variable `ATLAS_TELEMETRY_URL` is
+   optional: when set, it overrides the schema endpoint.
+
+Current deployment: the project is deployed as `atlas-telemetry` on Vercel at
+https://atlas-telemetry.vercel.app (functions `/api/ingest` and `/api/aggregate`) with a private Blob
+store. The shipped schema endpoint is `https://atlas-telemetry.vercel.app/api/ingest`.
 
 When `allowed-keys.json` changes (new schema keys), redeploy so the server accepts them.

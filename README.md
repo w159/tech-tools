@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.0.0, armada 2.2.3, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.0.1, armada 2.2.3, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -118,7 +118,7 @@ command that fixes it. A worker's card updates in place when it reports.
 - **Transcript storage.** At Stop, `ingest_session.py` copies the session transcript into `~/.atlas/atlas.db`. Text passes through one shared redactor first: credential-shaped strings and a few personal-identifier patterns (SSN, routing and account numbers, card numbers, dates of birth) are replaced with `[REDACTED]` placeholders. The redactor is pattern matching and best effort; it misses unlabeled values, names and addresses. `ATLAS_INGEST=off` turns ingest off.
 - **Local dashboard.** A daemon starts at session start on `http://127.0.0.1:7421/` (loopback only, shared by every open terminal, a per-start token guards writes). `ATLAS_DASHBOARD=off` stops it from starting.
 - **Self-fix scheduler (on by default).** While the dashboard runs, a scheduler checks every 30 minutes for actionable doctor findings and runs up to 2 worker sessions, each in its own git worktree under `~/.atlas/worktrees/` on a branch named `atlas/selffix-<id>`. It never pushes; a passing fix waits as a local branch for you to merge. Set `ATLAS_SELFFIX=0` in your shell to turn it off, or set `selffix.enabled` to `false` in `~/.atlas/dashboard-prefs.json`.
-- **Outbound traffic.** Atlas sends no transcript data off the machine by default. It does send anonymous weekly usage counters (skill, hook and gate counts; no ids, prompts, code or paths), on by default and off with `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off` or `python3 plugins/atlas/scripts/atlas_analytics.py disable`; see [plugins/atlas/references/telemetry.md](plugins/atlas/references/telemetry.md). Optional exceptions: turn scoring sends redacted transcript excerpts to api.typesafe.ai only when `TYPESAFE_API_KEY` is set (`ATLAS_TYPESAFE_SCORING=off` disables it), and the prompt classifier can call a local Ollama server. Connectors talk to their vendors once you give them credentials.
+- **Outbound traffic.** Atlas sends no transcript data off the machine by default. It does send anonymous weekly usage counters (skill, hook and gate counts; no ids, prompts, code or paths), on by default and off with `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off` or `python3 plugins/atlas/scripts/atlas_analytics.py disable`; counters go to https://atlas-telemetry.vercel.app; see [plugins/atlas/references/telemetry.md](plugins/atlas/references/telemetry.md). Optional exceptions: turn scoring sends redacted transcript excerpts to api.typesafe.ai only when `TYPESAFE_API_KEY` is set (`ATLAS_TYPESAFE_SCORING=off` disables it), and the prompt classifier can call a local Ollama server. Connectors talk to their vendors once you give them credentials.
 
 ## How it works
 
