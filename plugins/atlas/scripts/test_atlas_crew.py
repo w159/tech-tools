@@ -1817,5 +1817,446 @@ class CliUsageTests(unittest.TestCase):
                     self.assertIn("unknown run", got["error"])
 
 
+class RunDirHelpers(unittest.TestCase):
+    """_launch, _wait_round, _run_check and the run-directory commands, with the process boundary stubbed."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def _run(self, names=("a", "b"), **meta_extra):
+        rundir = atlas_crew._run_dir(self.root, "r1")
+        (rundir / "exit").mkdir(parents=True)
+        (rundir / "irc").mkdir()
+        meta = {
+            "run_id": "r1",
+            "started": time.time() - 10,
+            "plan": {"workers": [{"name": n} for n in names]},
+            "session": "sess",
+            "tmux": False,
+            **meta_extra,
+        }
+        (rundir / "run.json").write_text(json.dumps(meta))
+        return rundir, meta
+
+    def test_launch_in_tmux_names_the_window_after_the_round(self):
+        rundir, meta = self._run(tmux=True)
+        with mock.patch.object(atlas_crew, "_tmux") as tm:
+            atlas_crew._launch(meta, rundir, "a", 0, "cmd one")
+            atlas_crew._launch(meta, rundir, "a", 2, "cmd two")
+        self.assertEqual(
+            [c.args for c in tm.call_args_list],
+            [
+                ("new-window", "-d", "-t", "sess", "-n", "a", "cmd one"),
+                ("new-window", "-d", "-t", "sess", "-n", "a.fix2", "cmd two"),
+            ],
+        )
+
+    def test_launch_without_tmux_spawns_a_detached_logged_process(self):
+        rundir, meta = self._run(tmux=False)
+        with mock.patch.object(atlas_crew.subprocess, "Popen") as po, mock.patch.object(atlas_crew, "_tmux") as tm:
+            atlas_crew._launch(meta, rundir, "a", 1, "echo 'hi there' x")
+        tm.assert_not_called()
+        self.assertEqual(po.call_args.args[0], ["echo", "hi there", "x"])
+        kw = po.call_args.kwargs
+        self.assertIs(kw["stderr"], atlas_crew.subprocess.STDOUT)
+        self.assertIs(kw["stdin"], atlas_crew.subprocess.DEVNULL)
+        self.assertTrue(kw["start_new_session"])
+        self.assertEqual(kw["stdout"].name, str(rundir / "logs" / "a.r1.pane"))
+        self.assertTrue((rundir / "logs").is_dir())
+        # a second launch with the logs directory already present must not fail
+        with mock.patch.object(atlas_crew.subprocess, "Popen"):
+            atlas_crew._launch(meta, rundir, "b", 0, "true")
+
+    def test_exited_reads_the_exit_record_or_none(self):
+        rundir, _ = self._run()
+        (rundir / "exit" / "a.r0.json").write_text('{"exit": 0}')
+        (rundir / "exit" / "b.r0.json").write_text("{nope")
+        self.assertEqual(atlas_crew._exited(rundir, "a", 0), {"exit": 0})
+        self.assertIsNone(atlas_crew._exited(rundir, "b", 0))
+        self.assertIsNone(atlas_crew._exited(rundir, "c", 0))
+        self.assertIsNone(atlas_crew._exited(rundir, "a", 1))
+
+    def test_wait_round_true_once_every_worker_exited_in_that_round(self):
+        rundir, _ = self._run()
+        for n in ("a", "b"):
+            (rundir / "exit" / f"{n}.r1.json").write_text('{"exit": 0}')
+        self.assertIs(atlas_crew._wait_round(rundir, ["a", "b"], 1, time.time() + 5), True)
+
+    def test_wait_round_false_at_the_deadline_when_one_is_missing(self):
+        rundir, _ = self._run()
+        (rundir / "exit" / "a.r0.json").write_text('{"exit": 0}')
+        with mock.patch.object(atlas_crew.time, "sleep") as sl:
+            self.assertIs(atlas_crew._wait_round(rundir, ["a", "b"], 0, time.time() + 0.05), False)
+        self.assertIs(atlas_crew._wait_round(rundir, ["a", "b"], 0, time.time() - 1), False)
+        self.assertEqual(sl.call_args.args, (0.5,))
+
+    def test_wait_round_polls_until_the_last_worker_exits(self):
+        rundir, _ = self._run()
+        (rundir / "exit" / "a.r0.json").write_text('{"exit": 0}')
+
+        def finish(_s):
+            (rundir / "exit" / "b.r0.json").write_text('{"exit": 0}')
+
+        with mock.patch.object(atlas_crew.time, "sleep", side_effect=finish):
+            self.assertIs(atlas_crew._wait_round(rundir, ["a", "b"], 0, time.time() + 30), True)
+
+    def test_wait_ready_accepts_a_verified_done_as_well_as_an_exit(self):
+        rundir, _ = self._run()
+        (rundir / "exit" / "a.r0.json").write_text('{"exit": 0}')
+        with mock.patch.object(atlas_crew.atlas_irc, "has_done", side_effect=lambda d, n: n == "b") as hd:
+            self.assertIs(atlas_crew._wait_ready(rundir, ["a", "b"], 0, time.time() + 5), True)
+        self.assertEqual(hd.call_args.args, (rundir / "irc", "b"))
+        with mock.patch.object(atlas_crew.atlas_irc, "has_done", return_value=False), mock.patch.object(
+            atlas_crew.time, "sleep"
+        ):
+            self.assertIs(atlas_crew._wait_ready(rundir, ["a", "b"], 0, time.time() + 0.05), False)
+
+    def test_run_check_runs_in_a_shell_in_root_and_joins_both_streams(self):
+        rc, out = atlas_crew._run_check("echo out; echo err 1>&2; exit 3", self.root)
+        self.assertEqual((rc, out), (3, "out\nerr\n"))
+        rc, out = atlas_crew._run_check("pwd", self.root)
+        self.assertEqual((rc, out.strip()), (0, str(self.root.resolve())))
+
+    def test_run_check_timeout_is_124_with_the_budget_in_the_message(self):
+        self.assertEqual(atlas_crew._run_check("sleep 5", self.root, timeout=0.2), (124, "timed out after 0.2s"))
+        with mock.patch.object(atlas_crew.subprocess, "run") as run:
+            run.return_value = types.SimpleNamespace(returncode=0, stdout=None, stderr=None)
+            self.assertEqual(atlas_crew._run_check("x", self.root), (0, ""))
+        self.assertEqual(run.call_args.kwargs["timeout"], 900)
+        self.assertTrue(run.call_args.kwargs["shell"])
+
+    def test_known_run_returns_the_directory_or_prints_the_error(self):
+        rundir, _ = self._run()
+        a = types.SimpleNamespace(root=str(self.root), run="r1")
+        self.assertEqual(atlas_crew._known_run(a), rundir)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertIsNone(atlas_crew._known_run(types.SimpleNamespace(root=str(self.root), run="zz")))
+        got = json.loads(buf.getvalue())
+        self.assertEqual(got["ok"], False)
+        self.assertIn("unknown run 'zz'", got["error"])
+        self.assertIn("run.json", got["error"])
+
+    def test_known_run_defaults_root_to_the_working_directory(self):
+        self._run()
+        a = types.SimpleNamespace(root=None, run="r1")
+        with mock.patch.object(atlas_crew.os, "getcwd", return_value=str(self.root)):
+            self.assertEqual(atlas_crew._known_run(a), atlas_crew._run_dir(self.root, "r1"))
+
+    def test_status_lists_exited_running_and_the_last_three_messages(self):
+        rundir, _ = self._run(names=("a", "b"))
+        (rundir / "exit" / "a.r0.json").write_text('{"exit": 0}')
+        with mock.patch.object(atlas_crew.atlas_irc, "history", return_value=[{"n": i} for i in range(5)]), mock.patch.object(
+            atlas_crew.atlas_irc, "fmt", side_effect=lambda r, w: f"m{r['n']}:{w}"
+        ):
+            st = atlas_crew.status(rundir)
+        self.assertEqual(st["run"], "r1")
+        self.assertEqual((st["exited"], st["running"]), (["a"], ["b"]))
+        self.assertEqual(st["channel_messages"], 5)
+        self.assertEqual(st["last"], ["m2:160", "m3:160", "m4:160"])
+        self.assertGreaterEqual(st["elapsed_s"], 10.0)
+        self.assertLess(st["elapsed_s"], 60.0)
+
+    def test_cmd_status_prints_the_status_json(self):
+        self._run()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = atlas_crew.cmd_status(types.SimpleNamespace(root=str(self.root), run="r1"))
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(buf.getvalue())["run"], "r1")
+
+    def test_cmd_wait_prints_a_finished_summary(self):
+        rundir, _ = self._run()
+        (rundir / "summary.json").write_text('{"ok": true}')
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
+        self.assertEqual((code, buf.getvalue()), (0, '{"ok": true}\n'))
+
+    def test_cmd_wait_times_out_with_status_and_a_hint(self):
+        self._run()
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), mock.patch.object(atlas_crew.time, "sleep"):
+            code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=0))
+        self.assertEqual(code, 3)
+        got = json.loads(buf.getvalue())
+        self.assertIs(got["done"], False)
+        self.assertEqual(got["hint"], "still running; call wait again")
+        self.assertEqual(got["running"], ["a", "b"])
+
+    def test_cmd_wait_polls_every_two_seconds_until_the_summary_appears(self):
+        rundir, _ = self._run()
+
+        def write(_s):
+            (rundir / "summary.json").write_text("{}")
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), mock.patch.object(atlas_crew.time, "sleep", side_effect=write) as sl:
+            code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=60))
+        self.assertEqual(code, 0)
+        self.assertEqual(sl.call_args.args, (2,))
+
+    def test_cmd_kill_terminates_recorded_pids_and_the_tmux_session(self):
+        rundir, _ = self._run(tmux=True)
+        (rundir / "pid").mkdir()
+        (rundir / "pid" / "a").write_text("111")
+        (rundir / "pid" / "b").write_text("not a pid")
+        (rundir / "pid" / "c").write_text("333")
+        sent = []
+
+        def fake_kill(pid, sig):
+            sent.append((pid, sig))
+            if pid == 333:
+                raise ProcessLookupError()
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), mock.patch.object(atlas_crew.os, "kill", fake_kill), mock.patch.object(
+            atlas_crew, "_tmux"
+        ) as tm:
+            code = atlas_crew.cmd_kill(types.SimpleNamespace(root=str(self.root), run="r1"))
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(buf.getvalue()), {"ok": True, "killed": ["a"]})
+        self.assertEqual(sorted(sent), [(111, atlas_crew.signal.SIGTERM), (333, atlas_crew.signal.SIGTERM)])
+        tm.assert_called_once_with("kill-session", "-t", "sess")
+
+    def test_cmd_kill_without_tmux_leaves_tmux_alone(self):
+        self._run(tmux=False)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), mock.patch.object(atlas_crew, "_tmux") as tm:
+            code = atlas_crew.cmd_kill(types.SimpleNamespace(root=str(self.root), run="r1"))
+        self.assertEqual((code, json.loads(buf.getvalue())), (0, {"ok": True, "killed": []}))
+        tm.assert_not_called()
+
+
+class WorkerEnvAndTestFiles(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def _plan(self, **extra):
+        return {
+            "workers": [
+                {"name": "a", "owns": ["a.py", "pkg/a2.py"], "task": "t", "needs": ["b"], "check": "chk", "unit_check": "uc"},
+                {"name": "b", "owns": ["b.py"], "task": "t", "needs": ["c"]},
+                {"name": "c", "owns": ["c.py"], "task": "t", "needs": ["a"]},
+            ],
+            **extra,
+        }
+
+    def test_worker_env_values(self):
+        rundir = self.root / "run-1"
+        (rundir / "stubs" / "pkg").mkdir(parents=True)
+        (rundir / "stubs" / "a.py").write_text("stub")
+        plan = self._plan()
+        with mock.patch.dict(os.environ, {"PATH": "/usr/bin", "KEEP_ME": "1", "CMUX_X": "1", "ATLAS_WORKER_Y": "1", "TMUX": "t"}):
+            env = atlas_crew.worker_env(rundir, plan, plan["workers"][0], "/the/root")
+        self.assertEqual(env["KEEP_ME"], "1")
+        for gone in ("CMUX_X", "ATLAS_WORKER_Y", "TMUX"):
+            self.assertNotIn(gone, env)
+        self.assertEqual(env["ATLAS_IRC_DIR"], str(rundir / "irc"))
+        self.assertEqual(env["ATLAS_IRC_NICK"], "a")
+        self.assertEqual(env["ATLAS_CREW_ROOT"], "/the/root")
+        self.assertEqual(json.loads(env["ATLAS_CREW_OWNS"]), ["a.py", "pkg/a2.py"])
+        self.assertEqual(
+            env["ATLAS_CREW_STAGE"], str(atlas_crew._stage_dir("/the/root", "run-1", "a"))
+        )
+        self.assertEqual(
+            json.loads(env["ATLAS_CREW_OWNERS"]),
+            {"a.py": "a", "pkg/a2.py": "a", "b.py": "b", "c.py": "c"},
+        )
+        self.assertEqual(json.loads(env["ATLAS_CREW_STUBS"]), {"a.py": str(rundir / "stubs" / "a.py")})
+        self.assertEqual(env["ATLAS_CREW_CHECK"], "chk")
+        self.assertEqual(env["ATLAS_CREW_NEEDS"], "b")
+        self.assertEqual(env["ATLAS_CREW_NEEDS_ALL"], "b c")
+        self.assertEqual(json.loads(env["ATLAS_CREW_PEER_OWNS"]), {"b": ["b.py"], "c": ["c.py"]})
+        self.assertEqual(env["ATLAS_CREW_STUB_DIR"], str(rundir / "stubs"))
+        self.assertEqual(env["ATLAS_CREW_UNIT_CHECK"], "uc")
+        self.assertEqual(env["ATLAS_CREW_WORKER"], "a")
+        self.assertEqual(env["PATH"], f"{rundir / 'bin'}{os.pathsep}/usr/bin")
+
+    def test_worker_env_max_blocks_default_and_override(self):
+        plan = self._plan()
+        env = atlas_crew.worker_env(self.root, plan, plan["workers"][1], "/r")
+        self.assertEqual(env["ATLAS_CREW_MAX_BLOCKS"], "3")
+        self.assertEqual(env["ATLAS_CREW_CHECK"], "")
+        self.assertEqual(env["ATLAS_CREW_UNIT_CHECK"], "")
+        plan = self._plan(max_blocks=7)
+        env = atlas_crew.worker_env(self.root, plan, plan["workers"][1], "/r")
+        self.assertEqual(env["ATLAS_CREW_MAX_BLOCKS"], "7")
+        plan = self._plan(max_blocks=0)
+        env = atlas_crew.worker_env(self.root, plan, plan["workers"][1], "/r")
+        self.assertEqual(env["ATLAS_CREW_MAX_BLOCKS"], "3")
+
+    def test_worker_test_files_expands_globs_and_keeps_only_existing_files(self):
+        (self.root / "t").mkdir()
+        for f in ("t/test_a.py", "t/test_b.py", "plain.py", "t/readme.md"):
+            (self.root / f).write_text("x")
+        (self.root / "adir").mkdir()
+        w = {"tests": ["t/test_*.py", "plain.py", "missing.py", "adir", "", None]}
+        self.assertEqual(
+            atlas_crew._worker_test_files(w, self.root), {"t/test_a.py", "t/test_b.py", "plain.py"}
+        )
+        self.assertEqual(atlas_crew._worker_test_files({}, self.root), set())
+        self.assertEqual(atlas_crew._worker_test_files({"tests": ["t/test_?.py"]}, self.root), {"t/test_a.py", "t/test_b.py"})
+        self.assertEqual(atlas_crew._worker_test_files({"tests": ["t/test_[a].py"]}, self.root), {"t/test_a.py"})
+
+    def test_worker_test_files_survives_bad_patterns(self):
+        (self.root / "ok.py").write_text("x")
+        w = {"tests": ["/abs/*.py", "ok.py"]}
+        self.assertEqual(atlas_crew._worker_test_files(w, self.root), {"ok.py"})
+
+    def test_known_test_files_is_the_sorted_union(self):
+        for f in ("z.py", "a.py"):
+            (self.root / f).write_text("x")
+        plan = {"workers": [{"tests": ["z.py"]}, {"tests": ["a.py", "z.py"]}, {}]}
+        self.assertEqual(atlas_crew._known_test_files(plan, self.root), ["a.py", "z.py"])
+        self.assertEqual(atlas_crew._known_test_files({}, self.root), [])
+
+    def test_shard_files_balances_by_size_and_drops_empty_shards(self):
+        sizes = {"big.py": 100, "mid.py": 60, "s1.py": 30, "s2.py": 30, "tiny.py": 1}
+        for f, n in sizes.items():
+            (self.root / f).write_text("x" * n)
+        self.assertEqual(
+            atlas_crew._shard_files(list(sizes), self.root, 2),
+            [["big.py", "tiny.py"], ["mid.py", "s1.py", "s2.py"]],
+        )
+        self.assertEqual(atlas_crew._shard_files(["big.py"], self.root, 4), [["big.py"]])
+        self.assertEqual(atlas_crew._shard_files(["big.py", "mid.py"], self.root, 0), [["big.py", "mid.py"]])
+        self.assertEqual(atlas_crew._shard_files([], self.root, 3), [])
+
+    def test_shard_files_treats_unreadable_files_as_size_zero(self):
+        (self.root / "real.py").write_text("x" * 10)
+        got = atlas_crew._shard_files(["ghost_b.py", "real.py", "ghost_a.py"], self.root, 2)
+        self.assertEqual(got, [["real.py"], ["ghost_a.py", "ghost_b.py"]])
+
+
+class UsageAndSummary(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def _result(self, **kw):
+        base = {
+            "type": "result",
+            "total_cost_usd": 0.5,
+            "num_turns": 2,
+            "modelUsage": {
+                "m1": {"inputTokens": 1, "cacheCreationInputTokens": 2, "cacheReadInputTokens": 4, "outputTokens": 8},
+                "m2": {"inputTokens": 10, "outputTokens": 20},
+            },
+        }
+        base.update(kw)
+        return json.dumps(base)
+
+    def test_usage_of_empty_and_missing_logs_are_all_zero(self):
+        zero = {"input": 0, "cache_write": 0, "cache_read": 0, "output": 0, "cost_usd": 0.0, "turns": 0, "results": 0, "total": 0}
+        log = self.root / "empty.log"
+        log.write_text("")
+        self.assertEqual(atlas_crew.usage_of(log), zero)
+        self.assertEqual(atlas_crew.usage_of(self.root / "missing.log"), zero)
+
+    def test_usage_of_sums_models_and_keeps_the_last_cumulative_result(self):
+        log = self.root / "w.log"
+        log.write_text(
+            "\n".join(
+                [
+                    '{"type":"assistant"}',
+                    "not json at all",
+                    self._result(total_cost_usd=0.1, num_turns=1, modelUsage={"m": {"inputTokens": 99}}),
+                    '{"type": "result", broken',
+                    self._result(),
+                ]
+            )
+        )
+        got = atlas_crew.usage_of(log)
+        self.assertEqual(
+            got,
+            {"input": 11, "cache_write": 2, "cache_read": 4, "output": 28, "cost_usd": 0.5, "turns": 3, "results": 2, "total": 45},
+        )
+
+    def test_usage_of_tolerates_null_fields_and_rounds_cost(self):
+        log = self.root / "w.log"
+        log.write_text(self._result(total_cost_usd=None, num_turns=None, modelUsage=None) + "\n")
+        got = atlas_crew.usage_of(log)
+        self.assertEqual((got["cost_usd"], got["turns"], got["results"], got["total"]), (0.0, 0, 1, 0))
+        log.write_text(self._result(total_cost_usd=0.123456789) + "\n")
+        self.assertEqual(atlas_crew.usage_of(log)["cost_usd"], 0.1235)
+
+    def test_irc_stats_counts_each_message_kind(self):
+        recs = [
+            {"from": "a", "to": "#t", "text": "READY a: f()"},
+            {"from": "a", "to": "b", "text": "question"},
+            {"from": "b", "to": "a", "text": "READY b", "via": "irc"},
+            {"from": "a", "to": "#t", "kind": "done", "text": "DONE"},
+            {"from": "lead", "to": "a", "text": "hi"},
+            {"from": "a", "to": "lead", "text": "yo"},
+            {"from": "a", "to": None, "text": None},
+        ]
+        with mock.patch.object(atlas_crew.atlas_irc, "history", return_value=recs):
+            got = atlas_crew.irc_stats(self.root, ["a", "b"])
+        self.assertEqual(
+            got,
+            {"messages": 7, "from_workers": 3, "direct_worker_to_worker": 2, "ready": 2, "human_or_irc_client": 1},
+        )
+
+    def _summary_setup(self, ex=None):
+        rundir = self.root / "run"
+        (rundir / "logs").mkdir(parents=True)
+        (rundir / "irc" / "stop").mkdir(parents=True)
+        (rundir / "exit").mkdir()
+        (rundir / "logs" / "a.log").write_text(self._result() + "\n")
+        (rundir / "logs" / "a.r1.log").write_text(self._result(total_cost_usd=0.25, num_turns=1) + "\n")
+        (rundir / "logs" / "ab.log").write_text(self._result() + "\n")
+        (rundir / "irc" / "stop" / "a.json").write_text('{"blocks": 2, "passed": true}')
+        (rundir / "exit" / "a.r0.json").write_text('{"exit": 7, "wall_s": 12.5}')
+        meta = {"run_id": "run", "started": time.time() - 100, "plan": {"workers": [{"name": "a"}, {"name": "b"}], "check": "pytest"}}
+        return rundir, meta
+
+    def test_summarize_aggregates_workers_and_totals(self):
+        rundir, meta = self._summary_setup()
+        with mock.patch.object(atlas_crew.atlas_irc, "history", return_value=[]):
+            out = atlas_crew.summarize(rundir, meta, 2, 0, "x" * 500)
+        self.assertIs(out["ok"], True)
+        self.assertEqual((out["run"], out["check"], out["check_exit"], out["rounds"]), ("run", "pytest", 0, 2))
+        self.assertEqual(out["check_tail"], "x" * 200)
+        self.assertGreaterEqual(out["wall_s"], 100.0)
+        self.assertLess(out["wall_s"], 200.0)
+        a, b = out["workers"]
+        self.assertEqual(a["name"], "a")
+        # a.log + a.r1.log + ab.log (the glob is a prefix match, so ab.log is counted too)
+        self.assertEqual((a["exit"], a["wall_s"], a["gate_refusals"], a["own_check_passed"]), (7, 12.5, 2, True))
+        self.assertEqual(a["turns"], 5)
+        self.assertEqual(a["tokens"], 135)
+        self.assertEqual(a["cost_usd"], 1.25)
+        self.assertEqual(
+            (b["name"], b["exit"], b["wall_s"], b["turns"], b["tokens"], b["cost_usd"], b["gate_refusals"], b["own_check_passed"]),
+            ("b", None, None, 0, 0, 0.0, None, None),
+        )
+        self.assertEqual(out["tokens_workers"], {"total": 135, "cost_usd": 1.25})
+        self.assertEqual(out["transcripts"], str(rundir / "logs"))
+        self.assertEqual(out["channel_log"], str(rundir / "irc" / "log.jsonl"))
+        self.assertEqual(out["irc"]["messages"], 0)
+
+    def test_summarize_failure_keeps_the_tail_of_a_longer_output(self):
+        rundir, meta = self._summary_setup()
+        with mock.patch.object(atlas_crew.atlas_irc, "history", return_value=[]):
+            out = atlas_crew.summarize(rundir, meta, 1, 1, "y" * 900 + "TAIL")
+        self.assertIs(out["ok"], False)
+        self.assertEqual(len(out["check_tail"]), 800)
+        self.assertTrue(out["check_tail"].endswith("TAIL"))
+
+    def test_summarize_survives_a_corrupt_gate_file_and_no_logs_dir_entries(self):
+        rundir, meta = self._summary_setup()
+        (rundir / "irc" / "stop" / "a.json").write_text("{bad")
+        with mock.patch.object(atlas_crew.atlas_irc, "history", return_value=[]):
+            out = atlas_crew.summarize(rundir, meta, 1, 0, "")
+        self.assertEqual((out["workers"][0]["gate_refusals"], out["workers"][0]["own_check_passed"]), (None, None))
+        self.assertEqual(out["check_tail"], "")
+
+
 if __name__ == "__main__":
     unittest.main()

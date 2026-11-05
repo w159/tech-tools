@@ -145,5 +145,166 @@ class AtlasGatesTest(unittest.TestCase):
         self.assertEqual(doc["groups"][0]["error"], "gate is off")
 
 
+class AtlasGatesInProcess(unittest.TestCase):
+    """Direct calls of the group builders against a private DB (no subprocess)."""
+
+    def setUp(self):
+        from unittest import mock
+
+        self.mock = mock
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.db = str(Path(self.tmp.name) / "atlas.db")
+        sys.path.insert(0, str(HERE.parent / "scripts"))
+        import atlas_db
+        import atlas_gates
+
+        self.atlas_db, self.gates = atlas_db, atlas_gates
+        patcher = mock.patch.dict(
+            os.environ, {"ATLAS_DB": self.db, "ATLAS_HOME": self.tmp.name}
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("ATLAS_TRIPWIRE_THRESHOLD", None)
+        self.conn = sqlite3.connect(self.db)
+        atlas_db.init(self.conn)
+        self.conn.execute(
+            "INSERT INTO runs (project_id, session_id, orchestrating, started_at) VALUES (1,?,1,?)",
+            (SESSION, 1.0),
+        )
+        self.conn.commit()
+        self.addCleanup(self.conn.close)
+
+    def _inline_ops(self, n):
+        rid = self.atlas_db.current_run_id(self.conn, SESSION)
+        for i in range(n):
+            self.atlas_db.log_event(self.conn, rid, "Write", "main", 1, f"src/f{i}.py")
+        self.conn.commit()
+
+    def _tripwire(self):
+        return {ln["id"]: ln for ln in self.gates.tripwire_group(SESSION)["lines"]}
+
+    def test_inline_limit_default_is_four_and_strict(self):
+        self._inline_ops(3)
+        self.assertTrue(self._tripwire()["inline"]["ok"])
+        self.assertEqual(self._tripwire()["inline"]["detail"], "3 of 4")
+        self._inline_ops(1)
+        line = self._tripwire()["inline"]
+        self.assertEqual(line["detail"], "4 of 4")
+        self.assertFalse(line["ok"])
+
+    def test_inline_limit_env_override_and_bad_value_fallback(self):
+        self._inline_ops(4)
+        with self.mock.patch.dict(os.environ, {"ATLAS_TRIPWIRE_THRESHOLD": "5"}):
+            line = self._tripwire()["inline"]
+            self.assertEqual((line["ok"], line["detail"]), (True, "4 of 5"))
+        with self.mock.patch.dict(os.environ, {"ATLAS_TRIPWIRE_THRESHOLD": "lots"}):
+            line = self._tripwire()["inline"]
+            self.assertEqual((line["ok"], line["detail"]), (False, "4 of 4"))
+
+    def test_armed_line_reports_state(self):
+        line = self._tripwire()["armed"]
+        self.assertEqual((line["ok"], line["detail"]), (True, "armed"))
+        self.conn.execute("UPDATE runs SET orchestrating=0")
+        self.conn.commit()
+        line = self._tripwire()["armed"]
+        self.assertEqual((line["ok"], line["detail"]), (True, "not armed"))
+
+    def test_denial_age_uses_seconds_then_minutes_and_truncates_snippet(self):
+        now = 10_000.0
+        rows = [
+            ("dispatch_denied:a", "x" * 100, now - 119),
+            ("dispatch_denied:b", "boundary", now - 120),
+            ("dispatch_denied:c", None, now - 600),
+            ("dispatch_denied:d", "future", now + 50),
+            ("other:e", "ignored", now - 1),
+        ]
+        for cat, snip, ts in rows:
+            self.conn.execute(
+                "INSERT INTO friction_events (session_id, category, weight, snippet, ts) VALUES (?,?,1,?,?)",
+                (SESSION, cat, snip, ts),
+            )
+        self.conn.commit()
+        with self.mock.patch.object(self.gates.time, "time", return_value=now):
+            lines = self.gates.tripwire_group(SESSION)["lines"]
+        deny = [ln for ln in lines if ln["id"].startswith("deny")]
+        self.assertEqual(
+            [(ln["label"], ln["detail"], ln["ok"]) for ln in deny],
+            [
+                ("Denied: d", "future (0s ago)", False),
+                ("Denied: a", "x" * 80 + " (119s ago)", False),
+                ("Denied: b", "boundary (2m ago)", False),
+                ("Denied: c", " (10m ago)", False),
+            ],
+        )
+
+    def test_routing_counts_only_matching_kind_and_server(self):
+        self.conn.execute("INSERT INTO session_logs (session_id, agent) VALUES (?, 'claude')", (SESSION,))
+        calls = [
+            ("mcp", "serena", "find_symbol", 0),
+            ("mcp", "Serena", "get_symbols_overview", 0),
+            ("mcp", "lean-ctx", "ctx_read", 1),
+            ("mcp", "other", "x", 0),
+            ("builtin", "serena", "Read", 0),
+            ("builtin", None, "Read", 0),
+            ("builtin", None, "Edit", 0),
+        ]
+        for i, (k, s, t, d) in enumerate(calls):
+            self.conn.execute(
+                "INSERT INTO tool_calls (session_id, tool_use_id, tool_name, kind, server, denied) VALUES (?,?,?,?,?,?)",
+                (SESSION, f"tu{i}", t, k, s, d),
+            )
+        self.conn.commit()
+        lines = {ln["id"]: ln for ln in self.gates.routing_group(SESSION)["lines"]}
+        note = self.gates._ROUTING_NOTE
+        self.assertEqual(lines["serena"]["detail"], f"2 {note}")
+        self.assertEqual(lines["lean-ctx"]["detail"], f"1 {note}")
+        self.assertEqual(lines["context-mode"]["detail"], f"0 {note}")
+        self.assertTrue(all(lines[n]["ok"] for n in ("serena", "lean-ctx", "claude-mem")))
+        self.assertEqual((lines["native-Read"]["ok"], lines["native-Read"]["detail"]), (False, f"2 {note}"))
+        self.assertTrue(lines["native-Grep"]["ok"])
+        self.assertEqual((lines["denied"]["ok"], lines["denied"]["detail"]), (False, f"1 {note}"))
+
+    def test_routing_no_calls_all_ok(self):
+        lines = self.gates.routing_group(SESSION)["lines"]
+        self.assertTrue(all(ln["ok"] for ln in lines))
+        self.assertEqual(
+            [ln["id"] for ln in lines][-5:],
+            ["native-Read", "native-Grep", "native-Glob", "native-Bash", "denied"],
+        )
+
+    def test_build_timestamp_is_epoch_milliseconds_and_isolates_failures(self):
+        with self.mock.patch.object(self.gates.time, "time", return_value=1234.5):
+            doc = self.gates.build(SESSION, self.tmp.name)
+        self.assertEqual(doc["generatedAt"], 1234500)
+        with self.mock.patch.object(self.gates, "tripwire_group", side_effect=ValueError("bad")):
+            doc = self.gates.build(SESSION, self.tmp.name)
+        trip = doc["groups"][1]
+        self.assertEqual(
+            trip, {"id": "tripwire", "title": "Dispatch tripwire", "lines": [], "error": "ValueError: bad"}
+        )
+        self.assertEqual(len(doc["groups"][2]["lines"]) > 0, True)
+
+    def test_main_requires_json_flag_and_prints_document(self):
+        import contextlib
+        import io
+
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+            self.gates.main(["--session", SESSION, "--root", self.tmp.name])
+        self.assertEqual(cm.exception.code, 2)
+        for argv in (["--root", "/r", "--json"], ["--session", SESSION, "--json"]):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+                self.gates.main(argv)
+            self.assertEqual(cm.exception.code, 2, argv)
+        buf = io.StringIO()
+        with self.mock.patch.object(self.gates, "build", return_value={"groups": []}) as b:
+            with contextlib.redirect_stdout(buf):
+                rc = self.gates.main(
+                    ["--session", SESSION, "--root", "/r", "--transcript", "/t", "--json"]
+                )
+        b.assert_called_once_with(SESSION, "/r", "/t")
+        self.assertEqual((rc, json.loads(buf.getvalue())), (0, {"groups": []}))
+
+
 if __name__ == "__main__":
     unittest.main()

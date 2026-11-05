@@ -1629,5 +1629,316 @@ class TestProjectPicker(unittest.TestCase):
             self.assertTrue(ins._is_fixture_root(fixture), fixture)
 
 
+class TestConnectorAliases(unittest.TestCase):
+    def test_returns_a_copy_of_the_control_alias_table(self):
+        import atlas_control
+
+        got = ins._connector_aliases()
+        self.assertEqual(got, dict(atlas_control.CONNECTOR_ALIASES))
+        self.assertIn("falcon-mcp", got)
+        got["extra"] = "x"
+        self.assertNotIn("extra", atlas_control.CONNECTOR_ALIASES)
+
+    def test_import_failure_degrades_to_empty_and_warns(self):
+        with mock.patch.dict(sys.modules, {"atlas_control": None}), mock.patch.object(ins.hc, "warn") as warn:
+            self.assertEqual(ins._connector_aliases(), {})
+        area, msg = warn.call_args.args
+        self.assertEqual(area, "connectors")
+        self.assertTrue(msg.startswith("connector aliases unavailable: "))
+
+
+class TestSelffixRoute(InsightsBase):
+    def _post(self, body, conn=None):
+        return ins.route_improve_selffix(Ctx(conn=conn if conn is not None else self.conn, body=body))
+
+    def test_unknown_or_missing_op_is_a_400_with_the_usage_hint(self):
+        for body in ({}, {"op": "explode", "id": "doctor:1"}, {"op": None}, None):
+            status, out = self._post(body)
+            self.assertEqual(status, 400, body)
+            self.assertEqual(out["ok"], False)
+            self.assertEqual(out["error"], "bad request")
+            self.assertEqual(out["why"], "op must be run_now|merge|discard|retry")
+            self.assertEqual(out["do"], 'POST {"op":"merge","id":"doctor:12"}')
+
+    def test_missing_selffix_module_is_a_503(self):
+        with mock.patch.dict(sys.modules, {"atlas_selffix": None}):
+            status, out = self._post({"op": "merge", "id": "doctor:1"})
+        self.assertEqual(status, 503)
+        self.assertEqual((out["error"], out["do"]), ("selffix unavailable", "check atlas_selffix.py"))
+        self.assertTrue(out["why"])
+
+    def test_run_now_starts_a_daemon_thread_running_tick(self):
+        import threading
+
+        import atlas_selffix
+
+        ran = threading.Event()
+        started = {}
+        real_thread = threading.Thread
+
+        def spy(*a, **kw):
+            t = real_thread(*a, **kw)
+            started["name"], started["daemon"] = kw.get("name"), t.daemon
+            return t
+
+        with mock.patch.object(atlas_selffix, "tick", side_effect=lambda *a: ran.set()), mock.patch.object(
+            threading, "Thread", spy
+        ):
+            status, out = self._post({"op": "run_now"})
+        self.assertEqual((status, out), (200, {"ok": True, "started": True}))
+        self.assertTrue(ran.wait(5))
+        self.assertEqual(started, {"name": "selffix-run-now", "daemon": True})
+
+    def test_ids_must_be_doctor_finding_ids(self):
+        for fid in ("", "12", "doctor:", "doctor:x1", "other:12", "doctor:-3", "doctor:1.5"):
+            status, out = self._post({"op": "merge", "id": fid})
+            self.assertEqual(status, 400, fid)
+            self.assertEqual(out["why"], "id must be a doctor finding id like doctor:12")
+
+    def test_ops_dispatch_to_the_matching_function_with_the_numeric_id(self):
+        import atlas_selffix
+
+        for op in ("merge", "discard", "retry"):
+            with mock.patch.object(atlas_selffix, op, return_value={"ok": True, "op": op}) as fn:
+                status, out = self._post({"op": op, "id": "doctor:12"})
+            self.assertEqual((status, out), (200, {"ok": True, "op": op}))
+            fn.assert_called_once_with(self.conn, 12)
+
+    def test_a_failed_operation_is_a_409_carrying_its_reason(self):
+        import atlas_selffix
+
+        with mock.patch.object(atlas_selffix, "merge", return_value={"ok": False, "error": "conflict", "reason": "dirty"}):
+            status, out = self._post({"op": "merge", "id": "doctor:3"})
+        self.assertEqual(status, 409)
+        self.assertEqual((out["error"], out["why"], out["do"], out["ok"]), ("conflict", "dirty", "refresh Improve", False))
+        with mock.patch.object(atlas_selffix, "retry", return_value={}):
+            status, out = self._post({"op": "retry", "id": "doctor:3"})
+        self.assertEqual((status, out["error"], out["why"]), (409, "failed", ""))
+
+
+class TestSelffixPayload(InsightsBase):
+    STUB = {
+        "enabled": False,
+        "running": [],
+        "ready": [],
+        "failed": [],
+        "interval_min": 30,
+        "last_tick": None,
+    }
+
+    def test_unmigrated_findings_table_degrades_to_the_disabled_stub(self):
+        with mock.patch.object(ins._Db, "cols", return_value={"id", "title"}):
+            out = ins._selffix_payload(Ctx(conn=self.conn))
+        self.assertEqual(out, {**self.STUB, "error": "fix_* columns not migrated"})
+
+    def test_db_failure_degrades_to_the_stub_with_the_message(self):
+        class Boom(Ctx):
+            def db(self):
+                raise RuntimeError("no database")
+
+        out = ins._selffix_payload(Boom())
+        self.assertEqual(out, {**self.STUB, "error": "no database"})
+
+    def test_migrated_db_returns_the_selffix_snapshot(self):
+        import atlas_selffix
+
+        with mock.patch.object(atlas_selffix, "snapshot", return_value={"enabled": True, "marker": 1}) as snap:
+            out = ins._selffix_payload(Ctx(conn=self.conn))
+        self.assertEqual(out, {"enabled": True, "marker": 1})
+        snap.assert_called_once_with(self.conn)
+
+    def test_migrated_db_real_snapshot_has_the_panel_keys(self):
+        out = ins._selffix_payload(Ctx(conn=self.conn))
+        for key in ("enabled", "running", "ready", "failed"):
+            self.assertIn(key, out)
+
+
+class TestSeededMutantGaps(InsightsBase):
+    """Exact-value checks on helpers whose constants earlier tests only compared with themselves."""
+
+    def test_history_has_literally_ten_buckets(self):
+        self.assertEqual(ins.HISTORY_BUCKETS, 10)
+        since = NOW - 1000
+        self.assertEqual(len(ins._hist_py([], [], since, 1000)), 10)
+        db = ins._Db(self.conn)
+        rows = ins._hist_sql(db, "tool_calls", "ts", "1=1", "1=0", since, 1000)
+        self.assertEqual(len(rows), 10)
+
+    def test_hist_py_buckets_by_window_position(self):
+        since = 1000.0
+        rows = ins._hist_py([1000.0, 1099.9, 1100.0, 1999.9, 2000.0, 5000.0], [999.0, 1500.0], since, 1000.0)
+        self.assertEqual([r["ok"] for r in rows], [2, 1, 0, 0, 0, 0, 0, 0, 0, 3])
+        self.assertEqual([r["fail"] for r in rows], [0, 0, 0, 0, 0, 1, 0, 0, 0, 0])
+
+    def test_sub_history_reason_only_when_measured_and_history_missing(self):
+        hist = [{"t": "x", "ok": 0, "fail": 0}]
+        sub = ins._sub("db", "DB", "ok", "d", history=hist, history_source="src")
+        self.assertIsNone(sub["history_reason"])
+        self.assertEqual((sub["history"], sub["history_source"]), (hist, "src"))
+        sub = ins._sub("db", "DB", "ok", "d")
+        self.assertEqual(sub["history_reason"], "no timestamped source")
+        self.assertEqual((sub["history"], sub["history_source"]), (None, None))
+        sub = ins._sub("db", "DB", "ok", "d", history_reason="kept in memory")
+        self.assertEqual(sub["history_reason"], "kept in memory")
+        sub = ins._sub("db", "DB", "ok", "d", reason="no source", history_reason="kept in memory")
+        self.assertIsNone(sub["history_reason"])
+        self.assertEqual((sub["status"], sub["measured"], sub["detail"]), ("unknown", False, "no source"))
+
+    def test_ledger_path_is_the_findings_file_under_the_project(self):
+        self.assertEqual(ins._ledger_path("/p"), [Path("/p/.atlas/.run/findings.json")])
+        self.assertEqual(ins._ledger_path(None), [])
+        self.assertEqual(ins._ledger_path(""), [])
+
+    def test_prefs_defaults_are_exact(self):
+        self.assertEqual(
+            ins._defaults(),
+            {
+                "theme": "dark",
+                "density": "comfortable",
+                "default_project": "all",
+                "pinned_projects": [],
+                "hidden_projects": [],
+                "muted_kinds": [],
+                "muted_projects": [],
+                "saved_views": [],
+                "nav_order": [],
+                "refresh_seconds": 8,
+                "noise": {"collapse_duplicates": True, "min_severity": "info"},
+                "selffix": {"enabled": True, "interval_min": 30, "max_concurrent": 2},
+            },
+        )
+        status, prefs = ins.route_prefs_get(Ctx())
+        self.assertEqual((status, prefs), (200, ins._defaults()))
+
+    def test_prefs_put_creates_missing_parent_directories_and_reuses_existing_ones(self):
+        nested = self.home / "a" / "b" / "prefs.json"
+        old = ins.PREFS_PATH
+        ins.PREFS_PATH = nested
+        try:
+            status, body = ins.route_prefs_put(Ctx(body={"theme": "light"}))
+            self.assertEqual(status, 200, body)
+            self.assertEqual(json.loads(nested.read_text())["theme"], "light")
+            status, body = ins.route_prefs_put(Ctx(body={"density": "compact"}))
+            self.assertEqual(status, 200, body)
+            saved = json.loads(nested.read_text())
+            self.assertEqual((saved["theme"], saved["density"]), ("light", "compact"))
+            self.assertEqual(sorted(p.name for p in nested.parent.iterdir()), ["prefs.json"])
+            self.assertEqual(body["next"], "saved density")
+        finally:
+            ins.PREFS_PATH = old
+
+    def test_prefs_put_reports_unwritable_location(self):
+        blocker = self.home / "file"
+        blocker.write_text("x")
+        old = ins.PREFS_PATH
+        ins.PREFS_PATH = blocker / "prefs.json"
+        try:
+            status, body = ins.route_prefs_put(Ctx(body={"theme": "light"}))
+        finally:
+            ins.PREFS_PATH = old
+        self.assertEqual(status, 500)
+        self.assertEqual(body["error"], "could not save prefs")
+
+    def test_health_object_knows_whether_tool_calls_has_a_denied_column(self):
+        h = ins._Health(Ctx(self.conn, {}))
+        self.assertIs(h.has_denied, True)
+        real_cols = ins._Db.cols
+
+        def without_denied(db, table):
+            cols = set(real_cols(db, table))
+            return cols - {"denied"} if table == "tool_calls" else cols
+
+        with mock.patch.object(ins._Db, "cols", without_denied):
+            self.assertIs(ins._Health(Ctx(self.conn, {})).has_denied, False)
+
+    def test_reaper_card_reports_the_newest_failure_and_lists_all(self):
+        saved = list(ins.REAP_FAILURES)
+        self.addCleanup(lambda: (ins.REAP_FAILURES.clear(), ins.REAP_FAILURES.extend(saved)))
+        ins.REAP_FAILURES.clear()
+        ins.REAP_FAILURES.append({"ts": NOW - 50, "path": "/old", "error": "OldErr", "message": "first"})
+        ins.REAP_FAILURES.append({"ts": NOW - 10, "path": "/new", "error": "NewErr", "message": "second"})
+        card = ins._reaper_card(ins._Health(Ctx(self.conn, {})))
+        self.assertEqual(card["status"], "warn")
+        self.assertEqual(card["detail"], "2 recent failures, newest: NewErr: second")
+        self.assertEqual(card["last_fail"], ins._iso(NOW - 10))
+        self.assertEqual(
+            card["evidence"],
+            [f"{ins._iso(NOW - 10)} /new: NewErr: second", f"{ins._iso(NOW - 50)} /old: OldErr: first"],
+        )
+        ins.REAP_FAILURES.clear()
+        card = ins._reaper_card(ins._Health(Ctx(self.conn, {})))
+        self.assertEqual(
+            (card["status"], card["detail"], card["last_fail"], card["evidence"]),
+            ("ok", "no reaper failures since the dashboard started", None, []),
+        )
+
+    def test_transcripts_present_checks_files_without_query_warnings(self):
+        present = self.home / "t.jsonl"
+        present.write_text("{}")
+        self.conn.execute("DELETE FROM session_logs")
+        for sid, path in (("s-here", str(present)), ("s-gone", str(self.home / "nope.jsonl")), ("s-none", None)):
+            self.conn.execute("INSERT INTO session_logs (session_id, transcript_path) VALUES (?,?)", (sid, path))
+        self.conn.commit()
+        db = ins._Db(self.conn)
+        self.assertEqual(ins._transcripts_present(db, {"s-here", "s-gone", "s-none", "s-unknown"}), {"s-here"})
+        self.assertEqual(ins._transcripts_present(db, set()), set())
+
+    def test_transcripts_present_without_a_session_logs_table_is_quiet(self):
+        empty = sqlite3.connect(":memory:")
+        self.addCleanup(empty.close)
+        with mock.patch.object(ins.hc, "warn") as warn:
+            self.assertEqual(ins._transcripts_present(ins._Db(empty), {"a"}), set())
+            self.assertEqual(ins._transcripts_present(ins._Db(self.conn), set()), set())
+        warn.assert_not_called()
+
+    def _silent(self, kind, count, **kw):
+        base = {
+            "id": f"{kind}:1", "kind": kind, "state": "active", "dismissed": False, "count": count,
+            "project": "", "sample": "s", "first": NOW - 20, "last": NOW - 10, "source": "x",
+        }
+        base.update(kw)
+        return base
+
+    def test_overview_attention_severity_rules(self):
+        items = [
+            self._silent("hook_crash", 1, id="a"),
+            self._silent("dashboard_error", 2, id="b"),
+            self._silent("doctor_miner_error", 3, id="c"),
+            self._silent("agent_stuck", 50, id="d"),
+            self._silent("agent_stuck", 49, id="e"),
+            self._silent("hook_burst_tripped", 99, id="f"),
+            self._silent("hook_crash", 99, id="g", state="historic"),
+            self._silent("agent_stuck", 99, id="h", dismissed=True),
+        ]
+        with mock.patch.object(ins, "_collect_events", return_value=(items, [], {"last_run": {}}, [])):
+            status, body = ins.route_overview(Ctx(self.conn, {}))
+        self.assertEqual(status, 200)
+        sev = {a["id"]: a["severity"] for a in body["attention"] if a["id"] in set("abcdef")}
+        self.assertEqual(sev, {"a": "fail", "b": "fail", "c": "fail", "d": "fail", "e": "warn", "f": "warn"})
+        self.assertFalse({"g", "h"} & {a["id"] for a in body["attention"]})
+
+    def test_improve_rule_bucket_starts_at_zero_for_every_counter(self):
+        root = str(Path(self.tmp.name) / "proj")
+        d = Path(root) / ".atlas" / ".run"
+        d.mkdir(parents=True)
+        (d / "findings.json").write_text(
+            json.dumps(
+                [
+                    {"id": "S1", "category": "only-ledger", "severity": "high", "title": "t1", "evidence": [], "status": "verified",
+                     "verified_at": "2026-10-01T00:00:00+00:00"},
+                    {"id": "S2", "category": "only-ledger", "severity": "low", "title": "t2", "evidence": [], "status": "needs-evidence",
+                     "verified_at": "2026-10-02T00:00:00+00:00"},
+                ]
+            )
+        )
+        _, body = self.get(ins.route_improve, project=root)
+        bucket = {r["rule"]: r for r in body["by_rule"]}["only-ledger"]
+        self.assertEqual(
+            {k: bucket[k] for k in ("count", "open", "doctor", "ledger", "baseline", "current", "trend", "verdict")},
+            {"count": 2, "open": 1, "doctor": 0, "ledger": 2, "baseline": None, "current": None, "trend": None, "verdict": None},
+        )
+        self.assertEqual(bucket["projects"], [root])
+
+
 if __name__ == "__main__":
     unittest.main()

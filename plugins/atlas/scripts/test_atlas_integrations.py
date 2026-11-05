@@ -734,5 +734,165 @@ class TestCredentialPaths(TestHostileRoots):
                 self.assertFalse(any(str(self.home / d) in a for a in argv), argv)
 
 
+class FakeCtx:
+    def __init__(self, body=None, conn=None):
+        self._body, self._conn = body, conn
+
+    def json(self):
+        return self._body
+
+    def db(self):
+        if self._conn is None:
+            raise RuntimeError("no db")
+        return self._conn
+
+
+class RouteHandlerUnits(unittest.TestCase):
+    """In-process handlers of atlas_dash_integrations with the integration layer stubbed."""
+
+    def setUp(self):
+        import sqlite3
+        from unittest import mock
+
+        self.mock = mock
+        self.sqlite3 = sqlite3
+
+    def test_reply_status_codes(self):
+        self.assertEqual(routes._reply({"ok": True, "x": 1}), (200, {"ok": True, "x": 1}))
+        self.assertEqual(routes._reply({"ok": False}), (500, {"ok": False}))
+        self.assertEqual(routes._reply({"ok": False, "http": 404}), (404, {"ok": False}))
+        self.assertEqual(routes._reply({"ok": True, "http": 202}), (202, {"ok": True}))
+
+    def test_hp_returns_the_projects_payload_with_status(self):
+        with self.mock.patch.object(routes.ai, "hp_projects", return_value={"ok": True, "projects": [1]}):
+            self.assertEqual(routes._hp(FakeCtx()), (200, {"ok": True, "projects": [1]}))
+
+    def test_deck_wraps_status_in_200(self):
+        with self.mock.patch.object(routes.ai, "deck_status", return_value={"ok": False, "n": 2}):
+            self.assertEqual(routes._deck(FakeCtx()), (200, {"ok": False, "n": 2}))
+
+    def test_hp_start_passes_fields_and_defaults_kind_to_worktree(self):
+        with self.mock.patch.object(routes.ai, "hp_thread_start", return_value={"ok": True}) as m:
+            routes._hp_start(FakeCtx({"project": "p", "title": "t", "repo": "r", "task": "k"}))
+            m.assert_called_once_with("p", "t", "r", "worktree", "k")
+            m.reset_mock()
+            routes._hp_start(FakeCtx({"project": "p", "kind": "plain"}))
+            m.assert_called_once_with("p", None, None, "plain", None)
+            m.reset_mock()
+            routes._hp_start(FakeCtx(None))
+            m.assert_called_once_with(None, None, None, "worktree", None)
+
+    def test_open_file_forwards_body_roots_and_defaults_placement(self):
+        with self.mock.patch.object(routes, "known_roots", return_value=["/r"]), self.mock.patch.object(
+            routes.ai, "open_file", return_value={"ok": True, "http": 201}
+        ) as m:
+            out = routes._open_file(FakeCtx({"path": "a", "root": "b", "line": 3, "range": [1, 2]}))
+            m.assert_called_once_with("a", "b", ["/r"], line=3, rng=[1, 2], placement="split")
+            self.assertEqual(out, (201, {"ok": True}))
+            m.reset_mock()
+            routes._open_file(FakeCtx({"path": "a", "placement": "tab"}))
+            self.assertEqual(m.call_args.kwargs["placement"], "tab")
+
+    def test_open_editor_forwards_body_and_roots(self):
+        with self.mock.patch.object(routes, "known_roots", return_value=["/r"]), self.mock.patch.object(
+            routes.ai, "open_editor", return_value={"ok": False}
+        ) as m:
+            out = routes._open_editor(FakeCtx({"path": "a", "line": 7}))
+            m.assert_called_once_with("a", ["/r"], line=7)
+            self.assertEqual(out, (500, {"ok": False}))
+
+    def test_integrations_adds_connectors_without_mutating_detect(self):
+        detected = {"herdr": True}
+        with self.mock.patch.object(routes.ai, "detect", return_value=detected), self.mock.patch.object(
+            routes, "_connectors", return_value=[{"name": "c"}]
+        ):
+            self.assertEqual(
+                routes._integrations(FakeCtx()), (200, {"herdr": True, "connectors": [{"name": "c"}]})
+            )
+        self.assertEqual(detected, {"herdr": True})
+
+    def test_known_roots_merges_projects_and_live_agent_cwds(self):
+        conn = self.sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE projects (root_path TEXT)")
+        conn.executemany("INSERT INTO projects VALUES (?)", [("/p1",), (None,), ("",), ("/p2",)])
+        agents = {"agents": [{"cwd": "/a1"}, {"cwd": ""}, {}, {"cwd": "/a2"}]}
+        with self.mock.patch.object(routes.atlas_seats, "agents", return_value=agents):
+            self.assertEqual(routes.known_roots(FakeCtx(conn=conn)), ["/p1", "/p2", "/a1", "/a2"])
+
+    def test_known_roots_survives_db_and_agent_failures(self):
+        with self.mock.patch.object(routes.atlas_seats, "agents", side_effect=RuntimeError):
+            self.assertEqual(routes.known_roots(FakeCtx()), [])
+        with self.mock.patch.object(routes.atlas_seats, "agents", return_value={"agents": [{"cwd": "/a"}]}):
+            self.assertEqual(routes.known_roots(FakeCtx()), ["/a"])
+
+    def test_connectors_shape_and_unconfigured_flag(self):
+        import atlas_dash_insights as ins
+
+        rows = [
+            {
+                "name": "n",
+                "server_name": "s",
+                "health": "unconfigured",
+                "enabled": True,
+                "missing_required": None,
+                "fields": [
+                    {"env_key": "K", "is_set": 1, "sensitive": 0, "source": "env", "value": "SECRET"},
+                    {"env_key": "J"},
+                ],
+                "usage": {"calls": 2},
+            },
+            {"name": "m", "health": "ok", "missing_required": ["X"]},
+        ]
+        with self.mock.patch.object(ins, "CONNECTOR_STATUS_PROVIDER", lambda: rows):
+            got = routes._connectors()
+        self.assertEqual(
+            got[0],
+            {
+                "name": "n",
+                "server_name": "s",
+                "health": "unconfigured",
+                "configured": False,
+                "enabled": True,
+                "missing_required": [],
+                "env_vars": [
+                    {"env_key": "K", "is_set": True, "sensitive": False, "source": "env"},
+                    {"env_key": "J", "is_set": False, "sensitive": False, "source": None},
+                ],
+                "usage": {"calls": 2},
+            },
+        )
+        self.assertTrue(got[1]["configured"])
+        self.assertEqual(got[1]["missing_required"], ["X"])
+        self.assertEqual(got[1]["env_vars"], [])
+        self.assertNotIn("SECRET", json.dumps(got))
+
+    def test_connectors_empty_when_no_provider_or_provider_raises(self):
+        import atlas_dash_insights as ins
+
+        def boom():
+            raise RuntimeError("x")
+
+        for provider in (None, boom, lambda: None):
+            with self.mock.patch.object(ins, "CONNECTOR_STATUS_PROVIDER", provider):
+                self.assertEqual(routes._connectors(), [])
+
+    def test_route_table_maps_methods_and_paths_to_handlers(self):
+        import re
+
+        table = {(m, p): h for m, p, h in routes.ROUTES}
+        want = {
+            ("GET", "/api/v2/integrations"): routes._integrations,
+            ("GET", "/api/v2/projects/hp"): routes._hp,
+            ("GET", "/api/v2/deck"): routes._deck,
+            ("POST", "/api/v2/projects/hp/threads"): routes._hp_start,
+            ("POST", "/api/v2/open-file"): routes._open_file,
+            ("POST", "/api/v2/open-editor"): routes._open_editor,
+        }
+        for (method, path), handler in want.items():
+            hits = [h for m, p, h in routes.ROUTES if m == method and re.match(p, path)]
+            self.assertEqual(hits, [handler], (method, path))
+        self.assertEqual(len(table), len(want))
+
+
 if __name__ == "__main__":
     unittest.main()

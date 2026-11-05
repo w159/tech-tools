@@ -292,6 +292,16 @@ class LazyRegexModules(unittest.TestCase):
         self.assertEqual([m.group(0) for m in rx.finditer("abc abbc")], ["abc", "abbc"])
         self.assertTrue(atlas_lazyre.lre("X", 2).match("x"))
 
+    def test_default_flags_are_zero_and_repr_names_the_pattern(self):
+        import re
+
+        for rx in (atlas_lazyre.lre("a.c"), atlas_lazyre.LazyRe("a.c")):
+            self.assertEqual(rx.flags, re.compile("a.c").flags)
+            self.assertIsNone(rx.match("a\nc"))
+            self.assertEqual(repr(rx), "lre('a.c')")
+        self.assertEqual(atlas_lazyre.lre("a.c", re.S).flags, re.compile("a.c", re.S).flags)
+        self.assertIsNotNone(atlas_lazyre.lre("a.c", re.S).match("a\nc"))
+
     def test_hook_modules_compile_nothing_at_import(self):
         mods = [
             "dispatch_tripwire_core",

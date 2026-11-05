@@ -34,6 +34,14 @@ class ApplyStoreEnv(unittest.TestCase):
         atlas_env.apply_store_env(env)
         self.assertEqual(env["ATLAS_X"], "off")
 
+    def test_returns_the_applied_values(self):
+        env = {"ATLAS_HOME": _home({"ATLAS_X": "off", "ATLAS_N": 3})}
+        self.assertEqual(atlas_env.apply_store_env(env), {"ATLAS_X": "off"})
+
+    def test_failure_returns_empty_dict(self):
+        for home in (_home(), _home(raw="{nope"), _home(raw='{"env": ["a"]}')):
+            self.assertEqual(atlas_env.apply_store_env({"ATLAS_HOME": home}), {})
+
     def test_missing_file_is_noop(self):
         env = {"ATLAS_HOME": _home(), "ATLAS_X": "on"}
         atlas_env.apply_store_env(env)

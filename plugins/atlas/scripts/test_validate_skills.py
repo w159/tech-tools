@@ -123,5 +123,90 @@ class ValidateSkillsTest(unittest.TestCase):
         self.assertEqual(bad, [])
 
 
+class Boundaries(unittest.TestCase):
+    def test_description_limit_is_exactly_400(self):
+        base = GOOD.replace("Does a thing. Use when a demo is needed.", "Use when {}")
+        ok = base.format("x" * (400 - len("Use when ")))
+        too_long = base.format("x" * (401 - len("Use when ")))
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(rules(make_root(tmp, ok)), set())
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(rules(make_root(tmp, too_long)), {"desc"})
+
+    def test_parse_frontmatter_unquotes_only_matched_pairs(self):
+        text = "---\nname: 'a'\nb: \"c\"\nd: \"e'\nf: \"\ng: x\n---\nbody\n"
+        fm, body = v.parse_frontmatter(text)
+        self.assertEqual(fm, {"name": "a", "b": "c", "d": "\"e'", "f": '"', "g": "x"})
+        self.assertEqual(body, "body\n")
+
+    def test_parse_frontmatter_skips_lines_without_a_valid_key(self):
+        fm, _ = v.parse_frontmatter("---\nname: a\njusttext\nBad Key: x\n---\nb\n")
+        self.assertEqual(fm, {"name": "a"})
+
+    def test_run_executes_help_by_default(self):
+        body = GOOD + "Run ${CLAUDE_PLUGIN_ROOT}/scripts/tool.py\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(tmp, body, files=[("scripts/tool.py", "import sys; sys.exit(2)\n")])
+            ((_, fails, _),) = v.run(root)
+        self.assertEqual([r for r, _ in fails], ["help"])
+
+    def test_usage_text_is_the_first_docstring_line(self):
+        import contextlib
+        import io
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), self.assertRaises(SystemExit):
+            v.main(["--help"])
+        self.assertIn(v.__doc__.split("\n")[0], buf.getvalue())
+        self.assertNotIn("Rules (each failure", buf.getvalue())
+
+    def test_parse_frontmatter_none_without_block(self):
+        self.assertEqual(v.parse_frontmatter("# t\n"), (None, "# t\n"))
+
+    def test_step_section_ends_at_same_or_higher_level_not_deeper(self):
+        body = (
+            "## Step 1 - A\nintro\n### detail\nmore\n"
+            "## Step 2 - B\nsecond\n# Top\nout\n"
+        )
+        got = dict(v.step_sections(body))
+        self.assertEqual(got["## Step 1 - A"], "intro\n### detail\nmore")
+        self.assertEqual(got["## Step 2 - B"], "second")
+
+    def test_deeper_heading_keeps_completion_line_in_section(self):
+        body = GOOD + "## Step 1 - Go\nDo it.\n### notes\nDone when ok.\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(rules(make_root(tmp, body)), set())
+
+    def test_main_reports_pass_and_exits_zero(self):
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(tmp)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = v.main(["--root", str(root), "--no-run"])
+        out = buf.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("atlas-demo", out)
+        self.assertIn("PASS", out)
+        self.assertIn("1/1 skills pass", out)
+
+    def test_main_reports_failure_and_exits_one(self):
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(tmp, GOOD + "See atlas-ghost.\n")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = v.main(["--root", str(root), "--no-run"])
+        out = buf.getvalue()
+        self.assertEqual(rc, 1)
+        self.assertIn("FAIL", out)
+        self.assertIn("[names] unknown atlas-ghost", out)
+        self.assertIn("0/1 skills pass", out)
+
+
 if __name__ == "__main__":
     unittest.main()
