@@ -203,6 +203,7 @@ export default {
     return null;
   },
   render(ctx) {
+    let dead = false; // set by destroy(): late async work (the xterm load in drawMain) must not build cards nobody will dispose
     const st = { data: null, key: "", space: ctx.params.space || "", seat: ctx.params.seat || "", err: "", cards: new Map(), io: null, ioMap: new Map(), scroll: 0, grid: null, status: "", statusErr: false, built: "" };
     const header = h("div", { class: "tw-head" });
     const side = h("nav", { class: "tw-side", "aria-label": "Terminal spaces" });
@@ -403,7 +404,7 @@ export default {
       drawCrumbs();
       if (!seatsOf(sp).length) return;
       try { await loadXterm(); } catch (e) { st.err = String(e.message || e); return drawFoot(); }
-      if (st.space !== sp.id || st.built !== sp.id) return;
+      if (dead || st.space !== sp.id || st.built !== sp.id) return;
       if (typeof IntersectionObserver !== "undefined") st.io = new IntersectionObserver((es) => es.forEach((e) => { const c = st.ioMap.get(e.target); if (c) onView(c, e.isIntersecting); }), { threshold: 0.1 });
       for (const s of seatsOf(sp)) grid.appendChild(makeCard(s).el);
       applyEnlarge(grid);
@@ -464,7 +465,7 @@ export default {
     S.snapTimer = setInterval(() => { if (!document.hidden) refresh(); }, SEATS_MS);
     S.visHandler = () => { if (!document.hidden) refresh(); };
     document.addEventListener("visibilitychange", S.visHandler);
-    S.disposers.push(disposeCards);
+    S.disposers.push(() => { dead = true; disposeCards(); });
     return root;
   },
   destroy() {

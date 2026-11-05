@@ -3,15 +3,20 @@
  * the newest sibling cache dir (numeric semver, so 1.10 > 1.2) that ships the script; with no
  * sibling the original path is returned unchanged so callers report it missing.
  */
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as nodePath from "node:path";
 
 import { pluginRoot, pluginRootFallback, pluginScript, pluginScriptFallback } from "./plugin-path";
 
-const tmp = fs.mkdtempSync(nodePath.join(os.tmpdir(), "atlas-plugin-path-"));
-afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+const root = fs.mkdtempSync(nodePath.join(os.tmpdir(), "atlas-plugin-path-"));
+afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+// A fresh cache per test: installs made by one test must not be siblings of another's (order-independent, also under --randomize).
+let tmp = root;
+beforeEach(() => {
+	tmp = fs.mkdtempSync(nodePath.join(root, "t-"));
+});
 
 /** Fake versioned cache layout: `<tmp>/cache/<prefix><version>/scripts/atlas_todo.py`. */
 function install(version: string, withScript: boolean): string {

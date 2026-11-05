@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 test("stream mints a fresh single-use ticket per connect and never puts the token in a URL", async () => {
+  const saved = {};
+  for (const k of ["fetch", "EventSource", "document", "CustomEvent"]) saved[k] = globalThis[k];
   const urls = [];
   const posts = [];
   let n = 0;
@@ -56,5 +58,9 @@ test("stream mints a fresh single-use ticket per connect and never puts the toke
   } finally {
     handle?.close(); // stops timers so node can exit
     globalThis.setTimeout = realSetTimeout;
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete globalThis[k];
+      else globalThis[k] = v;
+    }
   }
 });

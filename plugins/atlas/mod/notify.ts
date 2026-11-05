@@ -79,8 +79,6 @@ export function nextStepSuggestion(s: AtlasSnapshot): string | null {
 // The live snapshot is read from $.state (declared here for the key scan).
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
 
-let lastSnapshot: AtlasSnapshot | null = null;
-
 /**
  * Registers answer-turn-boundary notifications. `on` is the mod's On; deps
  * inject the sound toggle (the snapshot is read from $.state). Toasts and the next-step
@@ -90,6 +88,8 @@ export function registerNotify(
 	on: On,
 	deps: { soundEnabled: () => boolean },
 ): void {
+	// Per registration, not module-level: a second registerNotify (another test, a re-register) must not inherit this one's baseline.
+	let lastSnapshot: AtlasSnapshot | null = null;
 	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		try {
 			const snap = await read($, snapshotState);

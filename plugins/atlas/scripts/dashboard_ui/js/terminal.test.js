@@ -144,6 +144,8 @@ test("the host space carries a shell seat and the TUI seat; the TUI keeps the OS
   tui.osc[7717]("garbage");
   expect(sets.length).toBe(0);
   page.destroy();
+  await tick(); // the open;run1 jump awaits the xterm load: it must not build live cards after destroy
+  expect(sockets.every((s) => s.readyState === 3)).toBe(true);
 });
 
 test("at most 6 sockets are live; the rest show capture text with a paused badge", async () => {
