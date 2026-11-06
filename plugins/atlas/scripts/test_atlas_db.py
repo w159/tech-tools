@@ -1973,6 +1973,12 @@ class RunChangedPathsUriTest(unittest.TestCase):
             ["src/other.py", "src/real.py"],
         )
 
+    def test_unreadable_db_reads_as_no_changed_paths(self):
+        """A failing query is 'wrote nothing': an empty list, never None, so the
+        completion gate's fail-open branch can iterate the result."""
+        self.conn.close()
+        self.assertEqual(atlas_db.run_changed_paths(self.conn, self.rid), [])
+
 
 class ClassifyEnvironmentNoiseTest(unittest.TestCase):
     def test_new_messages(self):
