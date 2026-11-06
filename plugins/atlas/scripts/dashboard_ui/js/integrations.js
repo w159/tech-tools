@@ -13,7 +13,8 @@ import { Modal, openModal, closeModal, toast } from "./ui-overlays.js";
 const cache = new Map();
 function cached(key, path, force, ttl) {
   const c = cache.get(key);
-  if (c && !force && Date.now() - c.at < ttl) return c.p;
+  const age = c ? Date.now() - c.at : -1;
+  if (c && !force && age >= 0 && age < ttl) return c.p; // an entry stamped in the future (clock stepped back) is not fresh
   const entry = { at: Date.now(), p: null, data: c ? c.data : null };
   entry.p = api.get(path).then((d) => { entry.data = d; return d; }, (e) => { if (cache.get(key) === entry) cache.delete(key); throw e; });
   cache.set(key, entry);
