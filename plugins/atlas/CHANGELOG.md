@@ -1,5 +1,21 @@
 # Changelog
 
+## 17.2.0 - 2026-11-06
+
+Reliability pass: mutation-hardened tests for the files 17.1.0 left at baseline, product bugs fixed along the way, and test runs that no longer leak temp dirs. Audit: `docs/audits/2026-11-06_atlas-reliability.md`.
+
+### Fixed
+
+- Python: dashboard plugin-cache script glob never matched (`597b7a2`); session boot language ties rank by name (`4e69871`); selffix dirty-file parse and snapshot without a repo (`b34fccc`); `make_fx` float frame index (`663af9a`); plugin-health survives an undecodable manifest and ignores boolean counts (`3447807`, `2c158ad`); irc bus tolerates undecodable log bytes, an empty dir, and takes the say/DONE channel from `members.json` (`f38065b`); irc early check matches the pytest command token, not any command containing "pytest" (`cbcb758`); dash irc name check uses `fullmatch` (`2f0ca50`); docs `_slugify` strips edge underscores (`06adfab`); panefeed initialises `dirty` and the clock (`a6a18c8`); security version key ranks a pre-release below its release (`350b79e`); report gate `git_changed` ignores empty `-z` fields (`c3c6bd6`); `probe_herd` skips blank `ps` lines (`345a49a`); `run_changed_paths` returns `[]` when the db read fails (`862dad2`); dispatch-wave window start is pinned after a long gap (`c87838c`).
+- Dashboard: agent menu and inspector replace fixes (`593afb1`); gateway pane port (`fd4a9f5`); a future-stamped integrations cache entry is stale (`5f2841d`); overview no longer calls `appendChild(null)` without weekly KPIs (`582c51e`); projects, health, activity and improve pages ignore responses that arrive after destroy (`e5e5a63`, `d563c82`, `65f17dc`, `78018be`); channel lens keeps a second pick made during a refresh (`d3fb761`); model picker treats a null search as no filter (`4804754`); `presenceWord` ignores inherited keys (`31f94ba`); agents list sorts channel-less agents last (`ed3c8e7`); dead code removed (`084101e`).
+- omp: `proc.ts` kill timer captures real timers and tolerates handles without `unref` (`ef40aec`).
+
+### Tests
+
+- Mutation score, same seed (1105): 66 remaining Python files 411/647 (63.5%) -> 572/647 (88.4%); 26 remaining TS/JS files 99/258 (38.4%) -> 250/258 (96.9%); 69-file TS/JS sample at max 20, 845/1308 (64.6%) -> 1153/1308 (88.1%). Further files raised in `e8107f9`, `4bacf2c`, `ad9a94f`; `ffb2f52` lets the gitignore contract test pass inside the symlinked mutation mirror.
+- pytest and bun each run in a private `TMPDIR` removed at exit (`2eba5f4`, `e67076d`); a long run used to leave about 159,000 temp dirs (about 26G). omp tests no longer leak hook children (`7a6ad25`). Tests no longer depend on order, real `HOME`, git identity or leaked env vars.
+- Totals: pytest 8451 passed, 7 skipped, 0 failed; bun 3320 pass, 13 skip, 0 fail (also under `--randomize`); `tsc` 0 errors on both tsconfigs.
+
 ## Unreleased
 
 - `scripts/atlas_mutate.py`: TypeScript/JavaScript mutants are placed by code point, not UTF-16 offset, so files with emoji before a site (e.g. `omp/usage-statusline.ts`) are mutated at the right operator.

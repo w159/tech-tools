@@ -1,5 +1,7 @@
 # Atlas mutation testing (2026-11-05, Atlas 17.1.0)
 
+Current numbers: see `2026-11-06_atlas-reliability.md` (this file records the 17.1.0 sample).
+
 Mutation testing changes one thing in a source file (a comparison, a constant, a return value) and runs
 that file's tests. A test suite that still passes did not notice the fault. Measured on the same
 mutants before and after this release:
