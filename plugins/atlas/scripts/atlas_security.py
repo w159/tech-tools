@@ -302,7 +302,9 @@ ECO_ALIASES = {"rust": "cargo", "rubygems": "bundler", "go": "go"}
 
 def _vkey(v: str | None):
     parts = re.findall(r"\d+|[A-Za-z]+", v or "")
-    return tuple((0, int(p)) if p.isdigit() else (-1, p) for p in parts)
+    key = tuple((0, int(p)) if p.isdigit() else (-1, p) for p in parts)
+    # a plain release outranks its own pre-releases (2.0.0 > 2.0.0-beta), so it ends in a marker above any label
+    return key + ((-1, "\uffff"),) if parts and all(p.isdigit() for p in parts) else key
 
 
 def _vmax(versions: list[str]) -> str:

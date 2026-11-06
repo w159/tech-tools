@@ -277,6 +277,14 @@ def test_version_ordering():
     assert sec._vkey("1.a") == ((0, 1), (-1, "a"))
 
 
+def test_prerelease_ranks_below_its_release():
+    assert sec._vmax(["2.0.0-beta", "2.0.0"]) == "2.0.0"
+    assert sec._vkey("2.0.0-beta") < sec._vkey("2.0.0")
+    assert sec._vkey("2.0.0-rc.1") < sec._vkey("2.0.0")
+    assert sec._vkey("2.0.0") < sec._vkey("2.0.1-alpha")
+    assert sec._vkey("1.2") < sec._vkey("1.2.1")
+
+
 def test_lockfiles_lists_names_and_tolerates_missing_dir(tmp_path):
     (tmp_path / "web").mkdir()
     (tmp_path / "web" / "yarn.lock").write_text("")
