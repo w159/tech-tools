@@ -155,3 +155,30 @@ test("sync without a timeout does not sweep a surviving background child", async
 		cleanup(pid);
 	}
 });
+
+test("kill timer survives globalThis timer stubs and is cleared when the child exits", async () => {
+	const realSet = globalThis.setTimeout;
+	const realClear = globalThis.clearTimeout;
+	const errors: unknown[] = [];
+	const onError = (e: unknown) => errors.push(e);
+	let stubbedSets = 0;
+	process.on("uncaughtException", onError);
+	try {
+		const pending = runCapture(["sleep", "0.2"], { timeoutMs: 600 });
+		// Dashboard tests stub timers like this while an omp child is still running.
+		globalThis.setTimeout = (() => {
+			stubbedSets++;
+			return 1;
+		}) as unknown as typeof setTimeout;
+		globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
+		expect((await pending).code).toBe(0);
+		// Outlast the 600 ms kill timer while the stubs are still installed.
+		await new Promise(r => realSet(r, 900));
+	} finally {
+		globalThis.setTimeout = realSet;
+		globalThis.clearTimeout = realClear;
+		process.off("uncaughtException", onError);
+	}
+	expect(errors).toEqual([]);
+	expect(stubbedSets).toBe(0);
+});

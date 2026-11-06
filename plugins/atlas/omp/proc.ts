@@ -32,6 +32,10 @@ export interface CaptureResult {
 	stdout: string;
 }
 
+// Captured at module load so the kill timer survives tests that stub globalThis timers.
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+
 const ENV_STDIN = "ATLAS_PROC_STDIN";
 const ENV_STDOUT = "ATLAS_PROC_STDOUT";
 const SCRIPT = `("$@") <"$${ENV_STDIN}" >"$${ENV_STDOUT}" 2>/dev/null`;
@@ -91,7 +95,7 @@ export function runCapture(argv: string[], opts: CaptureOpts = {}): Promise<Capt
 		return new Promise<CaptureResult>(resolve => {
 			let timer: ReturnType<typeof setTimeout> | undefined;
 			const finish = (result: CaptureResult) => {
-				clearTimeout(timer);
+				if (timer !== undefined) realClearTimeout(timer);
 				fs.rmSync(dir.dir, { recursive: true, force: true });
 				resolve(result);
 			};
@@ -105,9 +109,10 @@ export function runCapture(argv: string[], opts: CaptureOpts = {}): Promise<Capt
 			child.on("error", () => finish({ code: null, stdout: "" }));
 			child.on("close", code => finish({ code, stdout: readOut(dir.stdoutFile) }));
 			if (opts.timeoutMs !== undefined) {
-				timer = setTimeout(() => {
+				timer = realSetTimeout(() => {
 					killGroup("SIGTERM");
-					setTimeout(() => killGroup("SIGKILL"), 1_000).unref();
+					const kill = realSetTimeout(() => killGroup("SIGKILL"), 1_000);
+					(kill as { unref?: () => void }).unref?.();
 					finish({ code: null, stdout: readOut(dir.stdoutFile) });
 				}, opts.timeoutMs);
 			}
