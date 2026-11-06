@@ -133,16 +133,18 @@ async function fetchActivity(extra) {
 
 async function refresh() {
   if (!S || S.inFlight || S.destroyed) return;
-  S.inFlight = true;
+  const st = S; // the page can be destroyed (S nulled) while the read is in flight
+  st.inFlight = true;
   try {
-    S.data = await fetchActivity();
-    S.error = null;
-    S.cursor = newestTs(S.data);
-    S.newIds = new Set();
+    const data = await fetchActivity();
+    st.data = data;
+    st.error = null;
+    st.cursor = newestTs(data);
+    st.newIds = new Set();
   } catch (err) {
-    S.error = err;
+    st.error = err;
   } finally {
-    S.inFlight = false;
+    st.inFlight = false;
   }
   draw();
 }
@@ -150,13 +152,15 @@ async function refresh() {
 // Live tail: ask only for rows newer than the cursor and merge them on top.
 async function tailOnce() {
   if (!S || !S.live || S.inFlight || S.destroyed || !S.data) return;
-  S.inFlight = true;
+  const st = S;
+  st.inFlight = true;
   try {
-    const fresh = await fetchActivity({ since: S.cursor });
-    const known = new Set(allItems(S.data).map((it) => it.id));
+    const fresh = await fetchActivity({ since: st.cursor });
+    if (S !== st) return; // destroyed meanwhile
+    const known = new Set(allItems(st.data).map((it) => it.id));
     const incoming = allItems(fresh).filter((it) => !known.has(it.id));
     if (incoming.length) {
-      const byKey = new Map((S.data.groups || []).map((g) => [g.key, g]));
+      const byKey = new Map((st.data.groups || []).map((g) => [g.key, g]));
       for (const g of fresh.groups || []) {
         const add = (g.items || []).filter((it) => !known.has(it.id));
         if (!add.length) continue;
@@ -167,21 +171,21 @@ async function tailOnce() {
           into.last = g.last || into.last;
         } else {
           const copy = { ...g, items: add };
-          S.data.groups = [copy, ...(S.data.groups || [])];
+          st.data.groups = [copy, ...(st.data.groups || [])];
           byKey.set(g.key, copy);
         }
       }
-      for (const it of incoming) S.newIds.add(it.id);
-      S.cursor = newestTs(S.data) || S.cursor;
-      S.error = null;
-      S.inFlight = false;
+      for (const it of incoming) st.newIds.add(it.id);
+      st.cursor = newestTs(st.data) || st.cursor;
+      st.error = null;
+      st.inFlight = false;
       draw();
       return;
     }
   } catch (err) {
-    S.error = err;
+    st.error = err;
   }
-  S.inFlight = false;
+  st.inFlight = false;
 }
 
 function setLive(on) {
