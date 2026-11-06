@@ -16,7 +16,7 @@ function parseCompound(src) {
   while (rest) {
     if ((m = /^#([\w-]+)/.exec(rest))) c.id = m[1];
     else if ((m = /^\.([\w-]+)/.exec(rest))) c.classes.push(m[1]);
-    else if ((m = /^\[([\w-]+)(?:([\^$*~|]?=)"?([^\]"]*)"?)?\]/.exec(rest))) c.attrs.push({ name: m[1], op: m[2] || null, val: m[3] });
+    else if ((m = /^\[([\w-]+)(?:([\^$*~|]?=)["']?([^\]"']*)["']?)?\]/.exec(rest))) c.attrs.push({ name: m[1], op: m[2] || null, val: m[3] });
     else if ((m = /^:not\(((?:[^()]|\([^()]*\))*)\)/.exec(rest))) c.nots.push(parseCompound(m[1]));
     else if ((m = /^:([\w-]+)/.exec(rest))) c.pseudos.push(m[1]);
     else throw new Error("rich-dom: unsupported selector part: " + rest);
