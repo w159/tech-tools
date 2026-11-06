@@ -841,8 +841,12 @@ def tick(conn=None) -> dict:
 
 def _dirty_files(top) -> set[str]:
     out = _git(["status", "--porcelain"], top)[1]
+    # _git strips the whole output, so a first line like " M path" lost its leading
+    # space; split off the status field instead of slicing a fixed 3 characters.
     return {
-        ln[3:].split(" -> ")[-1].strip('"') for ln in out.splitlines() if ln.strip()
+        ln.split(None, 1)[1].split(" -> ")[-1].strip('"')
+        for ln in out.splitlines()
+        if len(ln.split(None, 1)) == 2
     }
 
 
@@ -956,7 +960,9 @@ def snapshot(conn) -> dict:
         state = _branch_state(top, it["branch"]) if top else "live"
         it["branch_state"] = state
         it["diffstat"] = (
-            _git(["diff", "--stat", f"HEAD...{it['branch']}"], top)[1]
+            "repository not found"
+            if not top
+            else _git(["diff", "--stat", f"HEAD...{it['branch']}"], top)[1]
             if state == "live"
             else f"branch gone ({state}); the next tick marks it merged"
         )
