@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeAll, afterAll } from "bun:test";
+import { test, expect, describe, beforeAll, afterAll, beforeEach } from "bun:test";
 import { installRichDom, restoreRichDom, fire } from "./rich-dom.js";
 import { api, ApiError } from "./api.js";
 import { agentsStore } from "./agents-store.js";
@@ -11,7 +11,7 @@ const realNow = Date.now;
 const until = async (cond, what = "condition") => { const end = realNow() + 3000; while (!cond()) { if (realNow() > end) throw new Error("timed out: " + what); await new Promise((r) => realTimers.setTimeout(r, 1)); } };
 const settle = () => new Promise((r) => realTimers.setTimeout(r, 15));
 
-let dom, win, calls, answers, hashRef, posted, undo, saved, streamOpts, timeouts, warn;
+let boot, dom, win, calls, answers, hashRef, posted, undo, saved, streamOpts, timeouts, warn;
 const $ = (id) => document.getElementById(id);
 const links = (root) => [...root.querySelectorAll("a.nav-link")].map((a) => [a.getAttribute("data-page"), a.getAttribute("href")]);
 const key = (k, props = {}) => { const ev = { type: "keydown", key: k, target: document.body, ...props }; document.dispatchEvent(ev); return ev; };
@@ -78,6 +78,38 @@ beforeAll(async () => {
   await import("./app.js?shell");
   await until(() => root().querySelector("#overview-root"), "overview rendered");
   await until(() => $("version-chip").textContent.includes("Atlas 1.2.3"), "version chip");
+  await until(() => $("project-select") && $("project-select").querySelectorAll("option").length === 4, "switcher");
+  await until(() => $("attention").querySelector("button.attn"), "attention pill");
+  // facts about the first moments of the shell, kept so test order does not matter
+  boot = {
+    hash: hash(), title: document.title, ctx: $("ctx-title").textContent, overview: !!root().querySelector("#overview-root"),
+    theme: document.documentElement.getAttribute("data-theme"), density: document.documentElement.getAttribute("data-density"),
+    prefsReads: calls.filter((c) => c[1] === "prefs").length, overviewCalls: calls.filter((c) => c[1] === "overview").map((c) => c[2]),
+    stream: { project: streamOpts.project, pollMs: streamOpts.pollMs },
+    options: [...$("project-select").querySelectorAll("option")].map((o) => [o.value, o.textContent]), selected: $("project-select").value,
+    pill: [$("attention").querySelector("button.attn").getAttribute("aria-label"), $("attention").querySelector("button.attn").getAttribute("data-level")],
+  };
+});
+
+// every test starts from the same quiet shell: overview, nothing open, no agents, no findings
+beforeEach(async () => {
+  answers.overview = { kpis: [], attention: [], recent_runs: [] };
+  delete answers.put; delete answers.post; delete answers.putResult;
+  closeModal(); closeDrawer(); closePopover(); closePalette();
+  flushTimeouts();
+  for (const i of document.querySelectorAll("input.stray")) i.remove();
+  document.documentElement.setAttribute("data-rail", "expanded");
+  const attr = (n) => document.documentElement.getAttribute(n);
+  if (attr("data-density") !== "comfortable") { fire($("toggle-density"), "click"); await until(() => attr("data-density") === "comfortable", "comfortable"); }
+  if (attr("data-theme") !== "dark") { fire($("toggle-theme"), "click"); await until(() => attr("data-theme") === "dark", "dark"); }
+  if ($("toggle-density").getAttribute("aria-label") !== "Use compact density") { fire($("toggle-density"), "click"); await settle(); fire($("toggle-density"), "click"); await settle(); }
+  try { localStorage.removeItem("atlas.recent"); localStorage.removeItem("atlas.rail"); } catch (_e) { /* none */ }
+  streamOpts.onEvent("herd", { agents: [] });
+  if (hash() !== "#/overview") await goto("#/overview");
+  await until(() => root().querySelector("#overview-root"), "overview");
+  if (!$("attention").querySelector('[data-level="ok"]')) { key("r"); await until(() => $("attention").querySelector('[data-level="ok"]'), "all clear"); }
+  await settle();
+  posted.length = 0; calls.length = 0;
 });
 
 afterAll(() => {
@@ -95,20 +127,19 @@ afterAll(() => {
 
 describe("shell boot", () => {
   test("a missing hash is seeded to the overview and the overview page renders", () => {
-    expect(hash()).toBe("#/overview");
-    expect(root().querySelector("#overview-root")).not.toBeNull();
-    expect($("ctx-title").textContent).toBe("Overview");
-    expect(document.title).toBe("Overview | Atlas Command Center");
+    expect(boot.hash).toBe("#/overview");
+    expect(boot.overview).toBe(true);
+    expect(boot.ctx).toBe("Overview");
+    expect(boot.title).toBe("Overview | Atlas Command Center");
   });
   test("the default theme and density are applied to the document", () => {
-    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-    expect(document.documentElement.getAttribute("data-density")).toBe("comfortable");
+    expect(boot.theme).toBe("dark");
+    expect(boot.density).toBe("comfortable");
   });
   test("server prefs are read once and the project list fills the switcher", async () => {
-    expect(calls.filter((c) => c[1] === "prefs")).toHaveLength(1);
-    await until(() => $("project-select") && $("project-select").querySelectorAll("option").length === 4, "switcher");
-    expect([...$("project-select").querySelectorAll("option")].map((o) => [o.value, o.textContent])).toEqual([["all", "All projects"], ["/w/app", "app"], ["/w/lib", "lib"], ["/w/old", "old"]]);
-    expect($("project-select").value).toBe("all");
+    expect(boot.prefsReads).toBe(1);
+    expect(boot.options).toEqual([["all", "All projects"], ["/w/app", "app"], ["/w/lib", "lib"], ["/w/old", "old"]]);
+    expect(boot.selected).toBe("all");
     expect($("project-select-m")).not.toBeNull();
     expect($("project-switcher").querySelector("label").textContent).toBe("Project");
   });
@@ -150,17 +181,16 @@ describe("shell boot", () => {
     expect($("asof").textContent).toMatch(/^as of \d\d:\d\d:\d\d$/);
   });
   test("overview data was requested for the attention pill and the page", () => {
-    expect(calls.filter((c) => c[1] === "overview").length).toBeGreaterThanOrEqual(2);
-    expect(calls.find((c) => c[1] === "overview")[2]).toEqual({ project: "all", window: "7d" });
+    expect(boot.overviewCalls.length).toBeGreaterThanOrEqual(2);
+    expect(boot.overviewCalls[0]).toEqual({ project: "all", window: "7d" });
   });
   test("the agents store was started with the project and the poll interval", () => {
-    expect(streamOpts.project).toBe("all");
-    expect(streamOpts.pollMs).toBe(8000);
+    expect(boot.stream).toEqual({ project: "all", pollMs: 8000 });
   });
   test("with nothing needing attention the pill says all clear", () => {
+    expect(boot.pill).toEqual(["All clear", "ok"]);
     const pill = $("attention").querySelector("button.attn");
     expect(pill.getAttribute("aria-label")).toBe("All clear");
-    expect(pill.getAttribute("data-level")).toBe("ok");
   });
 });
 
@@ -277,6 +307,7 @@ describe("keyboard", () => {
   });
   test("typing in a field disables the shortcuts", async () => {
     const input = document.createElement("input");
+    input.className = "stray";
     document.body.appendChild(input);
     key("g", { target: input });
     key("l", { target: input });
@@ -569,6 +600,7 @@ describe("agents in the chrome", () => {
     expect(document.title).toBe("(1) Overview | Atlas Command Center");
   });
   test("clicking the pill lists the waiting agents and opens one in the inspector", async () => {
+    push(pane("w1", "blocked"));
     await until(() => $("attention").querySelector('[data-level="input"]'));
     fire($("attention").querySelector('[data-level="input"]'), "click", {});
     await until(() => hasOpenPopover(), "popover");
@@ -644,26 +676,30 @@ describe("framed messages to the host", () => {
   });
   test("the first ancestor origin is the target when the browser exposes one", async () => {
     Object.defineProperty(globalThis.location, "ancestorOrigins", { configurable: true, value: ["https://host.example", "https://top.example"] });
-    posted.length = 0;
-    await goto("#/overview");
-    await until(() => origins().length > 0);
-    expect(origins().pop()).toBe("https://host.example");
-    delete globalThis.location.ancestorOrigins;
+    try {
+      posted.length = 0;
+      await goto("#/projects");
+      await until(() => origins().length > 0);
+      expect(origins().pop()).toBe("https://host.example");
+    } finally { delete globalThis.location.ancestorOrigins; }
   });
   test("otherwise the referrer's origin is used", async () => {
     Object.defineProperty(document, "referrer", { configurable: true, value: "https://ref.example/some/page?x=1" });
-    posted.length = 0;
-    await goto("#/health");
-    await until(() => origins().length > 0);
-    expect(origins().pop()).toBe("https://ref.example");
-    delete document.referrer;
+    try {
+      posted.length = 0;
+      await goto("#/health");
+      await until(() => origins().length > 0);
+      expect(origins().pop()).toBe("https://ref.example");
+    } finally { delete document.referrer; }
   });
   test("a host that throws on postMessage does not break the page", async () => {
     const parent = win.parent;
     win.parent = { postMessage() { throw new Error("blocked"); } };
-    await goto("#/overview");
-    await until(() => root().querySelector("#overview-root"));
-    win.parent = parent;
+    try {
+      await goto("#/activity");
+      await until(() => root().querySelector(".pg-activity"));
+      expect(document.title).toBe("Activity | Atlas Command Center");
+    } finally { win.parent = parent; }
   });
 });
 
