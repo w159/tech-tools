@@ -65,23 +65,24 @@ async function fetchHealth() {
 
 async function refresh(force) {
   if (!S || S.inFlight || S.destroyed) return;
-  S.inFlight = true;
-  const hadError = Boolean(S.error);
+  const st = S; // the page can be destroyed (S nulled) while the read is in flight
+  st.inFlight = true;
+  const hadError = Boolean(st.error);
   let fresh = null;
   try {
     fresh = await fetchHealth();
-    S.error = null;
+    st.error = null;
   } catch (err) {
-    S.error = err;
+    st.error = err;
   } finally {
-    S.inFlight = false;
+    st.inFlight = false;
   }
-  if (!S || S.destroyed) return;
+  if (S !== st || st.destroyed) return;
   if (fresh) {
     const key = changeKey(fresh);
-    const same = key === S.key;
-    S.data = fresh;
-    S.key = key;
+    const same = key === st.key;
+    st.data = fresh;
+    st.key = key;
     if (same && !hadError && !force) return; // nothing real changed: keep the DOM (and scroll, open drawers)
   }
   draw();

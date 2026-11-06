@@ -151,6 +151,14 @@ export class RNode {
   setAttribute(k, v) { this._attrs.set(k, String(v)); }
   removeAttribute(k) { this._attrs.delete(k); }
   hasAttribute(k) { return this._attrs.has(k); }
+  get open() { return this._attrs.has("open"); }
+  set open(v) { if (v) this.setAttribute("open", ""); else this.removeAttribute("open"); }
+  cloneNode(deep) {
+    const c = this.nodeType === 3 ? DOC.createTextNode(this.nodeValue) : DOC.createElement(this.tagName);
+    for (const [k, v] of this._attrs) c.setAttribute(k, v);
+    if (deep) for (const k of this.childNodes) c.appendChild(k.cloneNode(true));
+    return c;
+  }
   isEqualNode(o) {
     if (!o || o.nodeType !== this.nodeType) return false;
     if (this.nodeType === 3) return this.nodeValue === o.nodeValue;
