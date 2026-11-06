@@ -9,7 +9,7 @@ installed or purged. Command output quoted verbatim.
 |---|---|---|
 | A | `◆ ATLAS · idle · last wave: 1 worker · 32m00s · ✔ ok` + rows `CONTRACT / VERDICT / OFFLOAD / ROUTE` + `tasks … 5/7 r: route t: team c: channel g: core o: board` | Claude Code, cwd `~/MEGA/Projects/Web/gwh-doc-analyzer` |
 | B | `◆ ATLAS ✗ IMPLEMENT 3/7 …` pills on the assistant message header | Claude Code, cwd `~/MEGA/Projects/Web/gwh-firstrespondersapp` |
-| C | `ATLAS │ 🔧 implement │ 1/5 (3 implementers running)` raw header, no restyle | omp runtime, third workspace (path unproven) |
+| C | `ATLAS │ 🔧 implement │ 1/5 (3 implementers running)` raw header, no restyle | workspace and host unproven; line is model prose, not a captured draw site |
 
 ## Finding 1 - the two live Claude Code sessions run DIFFERENT atlas versions
 
@@ -128,23 +128,31 @@ block the model wrote inside its own reply:
                 frontend Sentry, backfills); S5 queued until one returns
 ```
 
-So shape C is not a third renderer. It is the model narrating an ATLAS line,
-which happens where the host gives it no band to render - omp applies the
-atlas **output style** instead (`plugins/atlas/omp/style.ts:23` points at
-`output-styles/atlas-orchestrator.md`, with a tool-name translation addendum),
-and `plugins/atlas/omp/mission-panel.ts:131-137` paints phase pills only in the
-Mission Control widget, never in the message header. omp has no call into
-`mod/band.tsx` or `mod/restyle.tsx`, so an omp session can never draw shape A
-or shape B.
+So shape C is not a third renderer: it is the model narrating an ATLAS line in
+prose. Note that this occurrence is in a CLAUDE Code session, so prose lines
+are not omp-exclusive.
 
-Note that shape A and shape C came from the SAME session
-(`gwh-doc-analyzer`, `aa162b87`): one session can show the band and the raw
-prose line at different moments, depending on which host is rendering.
+What the code does establish is host CAPABILITY: omp has no call into
+`mod/band.tsx` or `mod/restyle.tsx` (its phase pills live in the Mission
+Control widget, `omp/mission-panel.ts:131-137`, and its ATLAS guidance reaches
+the model as an output style, `omp/style.ts:23` -> `output-styles/atlas-orchestrator.md`),
+so an omp session cannot draw shape A or shape B - while a Claude Code session
+can produce the prose form, as the transcript above shows.
+
+RETRACTED (2026-11-06): an earlier version of this note claimed shape A and
+shape C came from the SAME session. They do not. The transcript hit is
+`gwh-doc-analyzer` / `aa162b87` with a Sentry `1/8` line; image 1 shows
+different content (Penny memory, Telegram, n8n, Teams, S1-S5 stages) and a `1/5`
+count. Image 1's workspace and host stay UNPROVEN, so the host-based
+attribution above is a capability statement, not an identification of image 1.
 
 ## Unverified
 
 - The exact atlas path loaded by the omp binary is not directly observable
   (compiled binary, `lsof` shows no open atlas files).
+- Image 1's workspace and host are not identified. The only transcript hit for
+  `implementers running` is gwh-doc-analyzer/aa162b87, with Sentry content and 1/8,
+  which does not match image 1's Penny/Telegram/n8n/Teams content and 1/5 count.
 
 ## Reproduction
 
