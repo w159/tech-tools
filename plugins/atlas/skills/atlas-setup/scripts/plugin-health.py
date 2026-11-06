@@ -40,7 +40,7 @@ def manifest_declared_counts(plugin_root: Path) -> tuple[int | None, int | None]
         return None, None
     try:
         data = json.loads(manifest.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (ValueError, OSError):
         return None, None
     # The manifest may declare skills/agents as lists or as a count.
     skills = data.get("skills")
