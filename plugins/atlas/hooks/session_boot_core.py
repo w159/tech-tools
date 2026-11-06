@@ -623,7 +623,7 @@ def _detect_languages(root, cap=3):
             seen += 1
         if seen > _WALK_BUDGET:
             break
-    ranked = sorted(counts.items(), key=lambda kv: -kv[1])[:cap]
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:cap]
     return [lang for lang, _ in ranked]
 
 

@@ -231,8 +231,15 @@ class DetectLanguagesTest(unittest.TestCase):
         self._touch(root, "a.rs")
         self._touch(root, "a.java")
         self._touch(root, "README.md")
-        self.assertEqual(session_boot._detect_languages(root), ["python", "go", "rust"])
+        self.assertEqual(session_boot._detect_languages(root), ["python", "go", "java"])
         self.assertEqual(session_boot._detect_languages(root, cap=1), ["python"])
+
+    def test_tied_counts_break_alphabetically(self):
+        root = tempfile.mkdtemp()
+        self._touch(root, "a.rs")
+        self._touch(root, "a.go")
+        self._touch(root, "a.java")
+        self.assertEqual(session_boot._detect_languages(root), ["go", "java", "rust"])
 
     def test_vendored_and_hidden_virtualenv_dirs_are_skipped(self):
         root = tempfile.mkdtemp()
