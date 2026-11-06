@@ -31,7 +31,7 @@ const TO_STATE = {
   info: "info",
 };
 // Words that differ from the state's own word where the source vocabulary has its own (todo "Open", process "Exited").
-const WORD_FOR_RAW = { open: "Open", exited: "Exited", stopped: "Stopped", partial: "Partial" };
+const WORD_FOR_RAW = { open: "Open", exited: "Exited", stopped: "Stopped" };
 
 export function describeStatus(status) {
   const raw = normStatus(status);

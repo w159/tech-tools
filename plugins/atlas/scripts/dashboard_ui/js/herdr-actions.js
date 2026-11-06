@@ -46,10 +46,6 @@ async function run(label, path, body) {
   }
 }
 
-function confirm({ title, body, action, onYes }) {
-  openModal(Modal({ title, children: [h("p", null, body)], actions: [Button({ label: "Cancel", onClick: () => closeModal() }), Button({ label: action, variant: "danger", onClick: async () => { closeModal(); await onYes(); } })] }));
-}
-
 function prompt({ title, label, value, action, onSubmit, extra }) {
   const field = Input({ label, value: value || "" });
   const input = () => field.querySelector("input");

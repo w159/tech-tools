@@ -24,11 +24,6 @@ export const lastSnap = { key: "", snap: null };
 const S = { timers: [], disposers: [], keyHandler: null };
 
 const base = () => (typeof window !== "undefined" && window.__ATLAS_BASE__) || "";
-const tokenOf = () => {
-  const m = document.querySelector('meta[name="atlas-token"]');
-  const v = m ? m.getAttribute("content") || "" : "";
-  return v === "__ATLAS_TOKEN__" ? "" : v;
-};
 
 function addAsset(tag, attrs) {
   return new Promise((resolve, reject) => {
