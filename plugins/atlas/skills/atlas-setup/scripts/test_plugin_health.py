@@ -89,6 +89,10 @@ class ManifestTests(unittest.TestCase):
         make_plugin(self.root, manifest={"skills": "./skills", "agents": {"a": 1}})
         self.assertEqual(ph.manifest_declared_counts(self.root), (None, None))
 
+    def test_booleans_are_not_counts(self):
+        make_plugin(self.root, manifest={"skills": True, "agents": False})
+        self.assertEqual(ph.manifest_declared_counts(self.root), (None, None))
+
     def test_missing_keys_become_none(self):
         make_plugin(self.root, manifest={"name": "atlas"})
         self.assertEqual(ph.manifest_declared_counts(self.root), (None, None))

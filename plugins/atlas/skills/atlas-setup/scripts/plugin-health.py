@@ -48,8 +48,8 @@ def manifest_declared_counts(plugin_root: Path) -> tuple[int | None, int | None]
     skills_count = len(skills) if isinstance(skills, list) else skills
     agents_count = len(agents) if isinstance(agents, list) else agents
     return (
-        skills_count if isinstance(skills_count, int) else None,
-        agents_count if isinstance(agents_count, int) else None,
+        skills_count if isinstance(skills_count, int) and not isinstance(skills_count, bool) else None,
+        agents_count if isinstance(agents_count, int) and not isinstance(agents_count, bool) else None,
     )
 
 
