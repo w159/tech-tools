@@ -374,3 +374,89 @@ test("rail labels use one source case, styled identically, in every space", asyn
     page.destroy();
   }
 });
+
+const until = async (cond, ms = 5000) => {
+  const end = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error("condition not met in time");
+    await tick(5);
+  }
+};
+const pollNow = () => keys.filter((k) => k[0] === "visibilitychange").forEach((k) => k[1]());
+
+test("the card footer shows state, age and the connection status, and drops the status once the terminal is live", async () => {
+  reset();
+  const realNow = Date.now, NOW = 1_800_000_000_000;
+  Date.now = () => NOW;
+  try {
+    const one = { ...SEATS, spaces: [{ id: "r", name: "r", kind: "colony", seats: [seat("lead@r", { state: "idle", last_activity: NOW / 1000 - 12 })] }] };
+    const root = await mount(one, { space: "r" });
+    expect(byClass(root, "activity-text")[0].children[0].text).toBe("idle · 12s ago · connecting…");
+    sockets[0].onopen();
+    expect(byClass(root, "activity-text")[0].children[0].text).toBe("idle · 12s ago");
+    sockets[0].onclose();
+    expect(byClass(root, "activity-text")[0].children[0].text).toBe("idle · 12s ago · disconnected, retrying in 1s");
+  } finally { Date.now = realNow; }
+  page.destroy();
+});
+
+test("a footer with no activity time shows only the state and connection", async () => {
+  reset();
+  const one = { ...SEATS, spaces: [{ id: "r", name: "r", kind: "colony", seats: [seat("lead@r", { state: "", last_activity: null })] }] };
+  const root = await mount(one, { space: "r" });
+  expect(byClass(root, "activity-text")[0].children[0].text).toBe("unknown · connecting…");
+  page.destroy();
+});
+
+test("a refresh that adds a seat rebuilds the grid; an unchanged refresh keeps the same cards", async () => {
+  reset();
+  let data = { ...SEATS, spaces: [{ id: "r", name: "r", kind: "colony", seats: [seat("lead@r")] }] };
+  const ctx = mk(data, { space: "r" }, { get: async () => data });
+  const root = await mountCtx(ctx);
+  const first = byClass(root, "terminal-card")[0];
+  pollNow();
+  await tick(20);
+  expect(byClass(root, "terminal-card")[0]).toBe(first);
+  data = { ...SEATS, spaces: [{ id: "r", name: "r", kind: "colony", seats: [seat("lead@r"), seat("impl@r")] }] };
+  pollNow();
+  await until(() => byClass(root, "terminal-card").length === 2);
+  expect(byClass(root, "terminal-card").map((c) => c.attrs["data-address"])).toEqual(["lead@r", "impl@r"]);
+  expect(text(root)).toContain("Agents · 2");
+  page.destroy();
+});
+
+test("a state change on a refresh updates the footer without rebuilding the card", async () => {
+  reset();
+  let data = { ...SEATS, spaces: [{ id: "r", name: "r", kind: "colony", seats: [seat("lead@r", { state: "idle" })] }] };
+  const ctx = mk(data, { space: "r" }, { get: async () => data });
+  const root = await mountCtx(ctx);
+  const card = byClass(root, "terminal-card")[0];
+  data = { ...SEATS, spaces: [{ id: "r", name: "r", kind: "colony", seats: [seat("lead@r", { state: "running" })] }] };
+  pollNow();
+  await until(() => text(byClass(root, "terminal-card")[0]).includes("running"));
+  expect(byClass(root, "terminal-card")[0]).toBe(card);
+  expect(text(card)).toContain("✻");
+  page.destroy();
+});
+
+test("a failed seats refresh says why in the footer and keeps the cards", async () => {
+  reset();
+  let fail = null;
+  const one = { ...SEATS, spaces: [{ id: "r", name: "r", kind: "colony", seats: [seat("lead@r")] }] };
+  const ctx = mk(one, { space: "r" }, { get: async () => { if (fail) throw fail; return one; } });
+  const root = await mountCtx(ctx);
+  fail = Object.assign(new Error("m"), { error: "db_locked" });
+  pollNow();
+  await until(() => text(root).includes("seats unavailable: db_locked"));
+  expect(byClass(root, "terminal-card").length).toBe(1);
+  fail = new Error("socket hang up");
+  pollNow();
+  await until(() => text(root).includes("seats unavailable: socket hang up"));
+  fail = "plain string";
+  pollNow();
+  await until(() => text(root).includes("seats unavailable: plain string"));
+  fail = null;
+  pollNow();
+  await until(() => !text(root).includes("seats unavailable"));
+  page.destroy();
+});
