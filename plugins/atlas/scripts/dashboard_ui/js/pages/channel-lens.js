@@ -43,7 +43,7 @@ export function MemberBoard({ rows, to, onTo, onOpen, nested } = {}) {
 }
 
 export function mountChannelLens(ctx, body) {
-  const S = { data: null, error: null, active: ctx.params.channel || null, detail: null, to: "all", dead: false, busy: false, tab: ctx.params.tab === "board" ? "board" : "messages" };
+  const S = { data: null, error: null, active: ctx.params.channel || null, detail: null, to: "all", dead: false, busy: false, again: false, tab: ctx.params.tab === "board" ? "board" : "messages" };
   const tabs = h("div", { class: "seg chan-tabs", role: "radiogroup", "aria-label": "Channel view" });
   const head = h("header", { class: "chan-head" });
   const log = h("div", { class: "chan-log" });
@@ -94,6 +94,7 @@ export function mountChannelLens(ctx, body) {
     list = null;
     composerKey = "";
     paint();
+    if (S.busy) S.again = true; // a refresh in flight is loading the previous channel: run once more for this one
     refresh();
   }
 
@@ -242,6 +243,7 @@ export function mountChannelLens(ctx, body) {
       S.busy = false;
     }
     paint();
+    if (S.again) { S.again = false; await refresh(); }
   }
 
   paint();

@@ -357,7 +357,7 @@ describe("mountChannelLens requests", () => {
     expect(byClass(host, "chan-page").length).toBe(1);
   });
 
-  test("a late detail answer for a channel that is no longer active is dropped, and the next refresh loads the active one", async () => {
+  test("a late detail answer for a channel that is no longer active is dropped, and the queued refresh loads the active one", async () => {
     const waiting = [];
     let live = false;
     const { host, lens } = await mount({
@@ -366,16 +366,34 @@ describe("mountChannelLens requests", () => {
     });
     fire(one(host, "chan-pick"), "change", { target: { value: "c@d" } });
     await settle();
-    fire(one(host, "chan-pick"), "change", { target: { value: "a@b" } }); // ignored refresh: one is already running
+    fire(one(host, "chan-pick"), "change", { target: { value: "a@b" } }); // queued: reloads a@b when the running refresh ends
     await settle();
     expect(waiting.map((w) => w[0])).toEqual(["c@d"]);
+    live = true;
     waiting[0][1]({ channel: { name: "c@d" }, messages: [{ ts: 1_700_000_000_000, from: "x", to: "all", body: "from-cd" }] });
     await flush();
-    expect(txt(one(host, "chan-log"))).not.toContain("from-cd");
-    live = true;
-    await lens.refresh();
     expect(txt(one(host, "chan-log"))).toContain("live-a@b");
     expect(txt(one(host, "chan-log"))).not.toContain("from-cd");
+  });
+
+  test("picking a channel while a refresh is in flight loads the picked channel once that refresh ends", async () => {
+    let gate = null;
+    let release;
+    const msg = (name) => ({ channel: { name }, messages: [{ ts: 1_700_000_000_000, from: "x", to: "all", body: "msgs-of-" + name }] });
+    const { host, lens, calls } = await mount({
+      channels: [ch("a@b"), ch("c@d")], current: "a@b",
+      detailFn: (name) => (gate && name === "a@b" ? gate : msg(name)),
+    });
+    gate = new Promise((r) => { release = () => r(msg("a@b")); });
+    const inFlight = lens.refresh();
+    await settle();
+    fire(one(host, "chan-pick"), "change", { target: { value: "c@d" } });
+    await settle();
+    release();
+    await inFlight;
+    await flush();
+    expect(calls.some((c) => c[0] === "channels/c%40d")).toBe(true);
+    expect(txt(one(host, "chan-log"))).toContain("msgs-of-c@d");
   });
 
   test("a late failure for a channel that is no longer active is dropped too", async () => {
