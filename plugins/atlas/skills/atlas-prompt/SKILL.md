@@ -113,4 +113,4 @@ the judge, no summary of changes. If the user asks what changed, explain then.
 
 ## Evals
 
-Measured with `evals/run_eval.py` against `evals/cases.json` and `evals/trigger_cases.json`; results in `docs/audits/2026-11-05_atlas-prompt-eval.md`.
+Measured with `evals/run_eval.py` against `evals/cases.json` and `evals/trigger_cases.json` (unit tests: `evals/test_run_eval.py`); results in `docs/audits/2026-11-05_atlas-prompt-eval.md`.
