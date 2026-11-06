@@ -1,5 +1,6 @@
 // Golden tests for transcript/cards.tsx: worker cards, wave strips, channel bubbles.
 import { expect, test } from 'claude-code/testing'
+import { fitText, stateColor } from '../theme'
 import { bubbleTree, waveTree, workerCard, goalLine, resultLine, phaseOf } from './cards'
 import type { CallLike } from './cards'
 
@@ -107,4 +108,31 @@ test('denied dispatch: `✖ denied` with the first sentence of the reason, no ti
 
 test('goalLine stops at the next ALL-CAPS label on a one-line prompt', () => {
   expect(goalLine({ prompt: 'GOAL: do x. TOOLS: a. OUT OF SCOPE: b' })).toBe('do x.')
+})
+
+test('phaseOf colours a finished call by its worker state, not the idle fallback', () => {
+  const done = phaseOf(call({ isRunning: false }), 'dead')
+  expect(done.color).toBe(stateColor('dead'));
+  expect(done.color).not.toBe(stateColor('idle'));
+  expect(phaseOf(call({ isRunning: false }), 'finished').color).toBe(stateColor('finished'));
+})
+
+test('card rows are fixed-size boxes with 5-wide padded labels', () => {
+  const running = workerCard(call(), 'running', 60, undefined, '', { now: 'x' })!
+  for (const row of (running as El).children) expect(row.props.flexShrink).toBe(0)
+  const labelOf = (row: El): string => text(row.children[1])
+  const rows = (running as El).children
+  expect(labelOf(rows[1]!)).toBe(' goal  ')
+  expect(labelOf(rows[2]!)).toBe(' now   ')
+  const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished', 60)!
+  expect(labelOf((done as El).children[2]!)).toBe(' done  ')
+  const failed = workerCard(call({ isRunning: false, isErrored: true, output: 'boom' }), 'failed', 60)!
+  expect(labelOf((failed as El).children[2]!)).toBe(' fail  ')
+})
+
+test('bubble body lines are fitted to the columns less the 3-cell gutter', () => {
+  const long = 'abcdefghijklmnopqrstuvwxyz'
+  const b = bubbleTree(long, 'a', 'lead', 12)!
+  expect(text(b)).toContain(fitText(long, 9))
+  expect(text(b)).not.toContain(long)
 })

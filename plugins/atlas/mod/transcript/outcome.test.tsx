@@ -5,7 +5,8 @@ import type { AgentInfo, EngineInterface, On } from 'claude-code'
 import { registerRestyle } from '../restyle'
 import type { AtlasSnapshot } from '../contract'
 import { memState } from '../test_helpers'
-import { notifiedMs, outcomeText, reportOf } from './outcome'
+import { cardExtra, launchedId, notifiedMs, outcomeText, reportOf } from './outcome'
+import { spin } from '../theme'
 
 const SNAP = {
   root: null, sessionId: 's1', channel: 'c', todos: [], notes: [], members: [], squad: [], contextPct: 0, now: 0,
@@ -37,10 +38,10 @@ function sites(): Record<string, Hook> {
 const SENTINEL = { type: 'Text', props: {}, children: [] }
 const next = async () => SENTINEL
 
-function engine(agents: AgentInfo[], meta: Record<string, unknown> = {}): EngineInterface {
+function engine(agents: AgentInfo[], meta: Record<string, unknown> = {}, tick: number | null = 3): EngineInterface {
   return {
    env: { get: async () => undefined },
-   state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: {}, comms: [], stage: {}, meta } }),
+   state: memState({ 'atlas/snapshot': SNAP, ...(tick === null ? {} : { 'atlas/spinnerTick': tick }), 'atlas/orch': { activity: {}, comms: [], stage: {}, meta } }),
    agent: { list: async () => agents },
    session: { messages: async (a?: { agentId?: string }) => (a?.agentId ? CHILD : [{ role: 'user', text: NOTICE, toolUses: [] }]) },
   } as unknown as EngineInterface
@@ -104,3 +105,41 @@ test('task-notification of a non-atlas task keeps the engine row', async () => {
   const e = { surface: 'terminal', component: 'UserMessage', requestId: 'u2', props: { text: 'shell done', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'b9', status: 'completed' } } }
   expect(await sites().UserMessage!(engine([{ id: 'b9', type: 'general-purpose', description: 'x', status: 'completed' } as AgentInfo]), e, next)).toBe(SENTINEL)
 })
+
+test('notifiedMs finds a notice that starts at offset 0 of its text', () => {
+  expect(notifiedMs(['<task-id>a1</task-id><duration_ms>5</duration_ms>'], 'a1')).toBe(5);
+});
+
+test('launchedId needs both the async_launched status and a string agentId', () => {
+  expect(launchedId({ status: 'async_launched', agentId: 'a1' })).toBe('a1');
+  expect(launchedId({ status: 'completed', agentId: 'a1' })).toBe('');
+  expect(launchedId({ status: 'async_launched' })).toBe('');
+  expect(launchedId({ status: 'async_launched', agentId: 7 })).toBe('');
+  expect(launchedId(undefined)).toBe('');
+});
+
+test('cardExtra is empty for a call that launched nothing and for a non-atlas worker', async () => {
+  const memo = new Map();
+  expect(await cardExtra(engine([]), { status: 'done' }, [], memo)).toEqual({});
+  const other = { id: 'b9', type: 'general-purpose', description: 'x', status: 'running' } as AgentInfo;
+  expect(await cardExtra(engine([other]), { status: 'async_launched', agentId: 'b9' }, [other], memo)).toEqual({});
+});
+
+test('cardExtra spins from tick 0 when the spinner atom was never written', async () => {
+  const e = launched('running');
+  const extra = await cardExtra(engine([e.agent], {}, null), e.props.output, [e.agent], new Map());
+  expect(extra).toEqual({ mark: spin(0, 'implement') });
+  expect(spin(0, 'implement')).not.toBe(spin(1, 'implement'));
+});
+
+test('an outcome is memoized only once its duration is known', async () => {
+  const e = launched('completed');
+  const memo = new Map();
+  const known = await cardExtra(engine([e.agent]), e.props.output, [e.agent], memo);
+  expect(known.outcome).toBe('done · STATUS: DONE · 29s');
+  expect([...memo.keys()]).toEqual(['a1:completed']);
+  const noDuration = { ...engine([e.agent]), session: { messages: async (a?: { agentId?: string }) => (a?.agentId ? CHILD : []) } } as unknown as EngineInterface;
+  const fresh = new Map();
+  expect((await cardExtra(noDuration, e.props.output, [e.agent], fresh)).outcome).toBe('done · STATUS: DONE');
+  expect(fresh.size).toBe(0);
+});

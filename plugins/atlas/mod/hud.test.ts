@@ -464,3 +464,41 @@ describe('inline renderer budget (viewport less the rows below the AbovePrompt s
     }
   });
 });
+
+describe('hud mutation guards', () => {
+  const two: HudAgent[] = [AGENTS[0]!, AGENTS[1]!];
+  test('selectCollapsed counts exactly two hidden items as plural "todos"', () => {
+    const tasks = ['a', 'b', 'c', 'd'].map((x) => todo(x, x, 'pending'));
+    expect(selectCollapsed(tasks, () => false, 2)).toEqual({ items: [tasks[0], tasks[1]], summary: '… 2 more todos' });
+  });
+
+  test('the one-row summary follows an agent-owned pending item, not a blocked or unowned one', () => {
+    const owned = (id: string, status: string, owner: string): TodoItem => ({ ...todo(id, `Item ${id}`, status), owner } as TodoItem);
+    const todos = [todo('u', 'Item u', 'pending'), owned('b', 'blocked', 'verifier-eval'), owned('p', 'pending', 'docs-curator-gate')];
+    const out = lines(hudRows({ todos, agents: two }, { cols: 100, maxRows: 4 }));
+    expect(out[0]).toBe('TODO · 0/3 · Item p');
+  });
+
+  test('a pending item owned by a running agent takes the accent in the tree', () => {
+    const owned = { ...todo('p', 'Owned work', 'pending'), owner: 'verifier-eval' } as TodoItem;
+    const rows = hudRows({ todos: [todo('a', 'First', 'in_progress'), owned], agents: [AGENTS[0]!] }, { cols: 120, maxRows: 40 });
+    const row = rows.find((r) => text(r).includes('Owned work'))!;
+    expect(row.find((s) => s.t.includes('Owned work'))!.color).toBe(M.violet);
+    const plain = hudRows({ todos: [todo('a', 'First', 'in_progress'), todo('p', 'Owned work', 'pending')], agents: [AGENTS[0]!] }, { cols: 120, maxRows: 40 });
+    expect(plain.find((r) => text(r).includes('Owned work'))!.find((s) => s.t.includes('Owned work'))!.color).toBe(M.grey);
+  });
+
+  test('the closing tail stays unlit while nothing is closed', () => {
+    const rows = hudRows({ todos: [todo('a', 'First', 'pending'), todo('b', 'Second', 'pending')], agents: [] }, { cols: 80, maxRows: 40 });
+    const tail = rows[rows.length - 1]!;
+    expect(tail.map((s) => s.color)).not.toContain(M.violet);
+    expect(text(tail)).toBe(' └─────');
+  });
+
+  test('the agent name is bold', () => {
+    const rows = hudRows({ todos: [], agents: [AGENTS[0]!] }, { cols: 140, maxRows: 40 });
+    const seg = rows.flat().find((s) => s.t === 'verifier-eval')!;
+    expect(seg.bold).toBe(true);
+  });
+
+});

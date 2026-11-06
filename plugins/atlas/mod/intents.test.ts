@@ -204,3 +204,21 @@ describe('validation edges', () => {
     expect(intentToArgv({ t: 'steer', text: 'ok' }, CTX).ok).toBe(false);
   });
 });
+
+describe('rejection messages quote at most the first 32 characters', () => {
+  const LONG = 'a;bcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOP';
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ t: 'todo.claim', id: 't1', owner: LONG }, 'owner'],
+    [{ t: 'note', owner: 'ok', to: LONG, text: 'hi' }, 'to'],
+    [{ t: 'inspect', agent: LONG }, 'agent'],
+    [{ t: 'steer', paneId: LONG, text: 'hi' }, 'paneId'],
+    [{ t: 'todo.phase', id: 't1', phase: LONG }, 'phase'],
+    [{ t: 'todo.phase', id: LONG, phase: 'implement' }, 'id'],
+  ];
+  for (const [intent, label] of cases) {
+    test(`bad ${label}`, () => {
+      expect(intentToArgv(intent, CTX)).toEqual({ ok: false, error: `bad ${label}: ${LONG.slice(0, 32)}` });
+    });
+  }
+});
+
