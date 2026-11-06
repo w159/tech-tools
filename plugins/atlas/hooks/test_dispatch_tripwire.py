@@ -1210,6 +1210,7 @@ class InProcessTest(unittest.TestCase):
         self.assertIn("additionalContext", out)
         self.assertIn("STOP", out)
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_ip_post_edit_to_target_nags(self):
         out = self._run_main(self._post("Edit", {"file_path": "src/foo.py"}))
         self.assertIn("STOP", out)
@@ -3100,6 +3101,7 @@ class ToolkitGapOmpTest(unittest.TestCase):
         )
 
 
+@unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
 class FootprintArmingTest(unittest.TestCase):
     """An UNFLAGGED run whose main thread edits FOOTPRINT_FILES distinct target-code
     files is multi-file code work that prompt arming missed: the PostToolUse hook
@@ -3541,6 +3543,7 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         finally:
             conn.close()
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_counted_calls_still_count(self):
         # Every counted call is logged as an inline op. The orchestrator's own
         # docs/ writes are logged too but sanctioned, so only the raw count moves
@@ -3587,6 +3590,7 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         )
         self.assertEqual(self._raw_count(), 0)
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_edit_and_write_still_trip_the_deny(self):
         # Sanctioned (docs/) writes are exempt from the count by design, so use
         # mutating Bash to reach the threshold, then confirm an Edit/Write is denied.

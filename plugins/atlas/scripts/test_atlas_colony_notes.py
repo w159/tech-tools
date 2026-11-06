@@ -102,6 +102,10 @@ class NoteCliEnvDefaultsTests(unittest.TestCase):
 class LeadAndStartNoteTests(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
+        # cmd_spawn_team exports ATLAS_LEAD_NAME into os.environ; snapshot/restore so it cannot leak.
+        env_patch = mock.patch.dict(os.environ)
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
         for k in (
             "CLAUDE_SESSION_ID",
             "ATLAS_SESSION_ID",
@@ -223,3 +227,8 @@ class LeadAndStartNoteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ZZEnvLeakGuardTests(unittest.TestCase):
+    def test_colony_notes_tests_leave_atlas_lead_name_unset(self):
+        self.assertNotIn("ATLAS_LEAD_NAME", os.environ)

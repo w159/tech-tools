@@ -651,6 +651,7 @@ class RealCollisionTest(_Root):
             dispatch_tripwire.main()
         return out.getvalue()
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_stop_message_and_inbox_share_one_document(self):
         # baseline: without the worker env the tripwire speaks alone
         alone = json.loads(

@@ -98,6 +98,7 @@ class StopAndInboxMergeTest(twi.RealCollisionTest):
     """The tripwire's own STOP and an inbox delivery share ONE document. A worker no
     longer gets a STOP, so the collision is forced by treating the call as a lead's."""
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_stop_message_and_inbox_share_one_document(self):
         self.note("human", "Alpha", "ping during an edit")
         with patch.object(dispatch_tripwire, "_is_worker", return_value=False):

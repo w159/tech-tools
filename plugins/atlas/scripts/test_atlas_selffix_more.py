@@ -8,6 +8,7 @@ import fcntl
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -785,8 +786,13 @@ class CleanupAndStart(GitBase):
         seq = iter([False, False, True])
         with mock.patch.object(sf, "_worker_launch", lambda top, f, wt: {"ok": True, "target": "s:w"}), \
                 mock.patch.object(sf, "_is_live", lambda t: next(seq)), \
-                mock.patch.object(sf, "LAUNCH_CONFIRM_S", 100), mock.patch.object(sf.time, "sleep") as sl:
+                mock.patch.object(sf, "LAUNCH_CONFIRM_S", 100), \
+                mock.patch.object(sf, "time", mock.Mock(wraps=time)) as fake_time:
+            # patch sf's own `time` handle, not time.sleep on the shared module: a stray thread's sleeps
+            # elsewhere in the worker process would otherwise land in the call list
+            fake_time.sleep = mock.Mock()
             out = sf._start(self.conn, self.row(fid), self.repo)
+        sl = fake_time.sleep
         self.assertTrue(out.endswith("running at s:w"))
         self.assertEqual([c.args for c in sl.call_args_list], [(0.5,), (0.5,)])
 
@@ -841,9 +847,12 @@ class SandboxReal(GitBase):
 
     def test_temp_dirs_removed(self):
         wt, br = self.make_branch(1)
-        before = set(os.listdir(tempfile.gettempdir()))
-        self.sandbox(br, [sys.executable, "-c", "pass"])
-        left = [d for d in set(os.listdir(tempfile.gettempdir())) - before if d.startswith("atlas-selffix-verify-")]
+        # private temp root: under xdist another worker's live sandbox shares the global temp dir
+        private = tempfile.mkdtemp(prefix="selffix-tmp-")
+        self.addCleanup(shutil.rmtree, private, True)
+        with mock.patch.object(tempfile, "tempdir", private):
+            self.sandbox(br, [sys.executable, "-c", "pass"])
+        left = [d for d in os.listdir(private) if d.startswith("atlas-selffix-verify-")]
         self.assertEqual(left, [])
         self.assertNotIn("sandbox", git(self.repo, "worktree", "list"))
 

@@ -196,6 +196,7 @@ class TmpLeakGuardTest(_HookTestCase):
         open(src, "w").close()
         return src
 
+    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_omp_conversion_of_a_real_session_ingests_into_the_default_db(self):
         # omp's bridge always converts into the temp dir; the retained source decides.
         env, default_db = self._env(ATLAS_SOURCE_TRANSCRIPT=self._durable_source())
@@ -534,6 +535,7 @@ class HarnessAgentLabelTest(_HookTestCase):
         self.assertEqual(self._agent_label(), "claude")
 
 
+@unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
 class DurableTranscriptPathTest(_HookTestCase):
     """omp's bridge ingests a temp conversion; the row must keep the retained original."""
 
