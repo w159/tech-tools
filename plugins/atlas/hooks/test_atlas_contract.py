@@ -1904,7 +1904,10 @@ class TestIsolationContract(unittest.TestCase):
             try:
                 atlas_faults.record("contract-test", RuntimeError("boom"))
             finally:
-                os.environ["ATLAS_HOME"] = old
+                if old is None:
+                    os.environ.pop("ATLAS_HOME", None)
+                else:
+                    os.environ["ATLAS_HOME"] = old
             lines = Path(home, "hook-faults.jsonl").read_text().splitlines()
             self.assertEqual(len(lines), 1)
             self.assertEqual(json.loads(lines[0])["hook"], "contract-test")
