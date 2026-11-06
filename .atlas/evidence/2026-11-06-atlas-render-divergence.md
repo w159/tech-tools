@@ -116,15 +116,33 @@ check orphaned cache dirs, does NOT compare the Claude cache against the omp
 cache, and does NOT compare the running session's pinned version against the
 registry. So `atlas-doctor` can pass while sessions still render differently.
 
+## Finding 7 - shape C is MODEL PROSE, not an ATLAS renderer
+
+The `ATLAS | 🔧 implement 1/8 | 3 implementers running (...)` line is a text
+block the model wrote inside its own reply:
+
+```
+~/.claude/projects/-Users-jerry-MEGA-Projects-Web-gwh-doc-analyzer/aa162b87-74f3-43b7-8ec9-c126522987e1.jsonl:784
+  type: assistant   role: assistant
+  block text: ATLAS | 🔧 implement 1/8 | 3 implementers running (backend Sentry,
+                frontend Sentry, backfills); S5 queued until one returns
+```
+
+So shape C is not a third renderer. It is the model narrating an ATLAS line,
+which happens where the host gives it no band to render - omp applies the
+atlas **output style** instead (`plugins/atlas/omp/style.ts:23` points at
+`output-styles/atlas-orchestrator.md`, with a tool-name translation addendum),
+and `plugins/atlas/omp/mission-panel.ts:131-137` paints phase pills only in the
+Mission Control widget, never in the message header. omp has no call into
+`mod/band.tsx` or `mod/restyle.tsx`, so an omp session can never draw shape A
+or shape B.
+
+Note that shape A and shape C came from the SAME session
+(`gwh-doc-analyzer`, `aa162b87`): one session can show the band and the raw
+prose line at different moments, depending on which host is rendering.
+
 ## Unverified
 
-- The third workspace (shape C) was not identified. No transcript on disk
-  contains `implementers running` as rendered output outside this lead session.
-  Best candidate by content (Penny, Telegram, n8n, Teams, `~/.hermes/backups`):
-  `~/MEGA/Projects/Agentic/agent-penny`, Claude session
-  `34ec55a5-4d80-406a-8975-ed550c0f6046` (last write Nov 3, atlas 16.9.0 cited,
-  no live pid). Second candidate: omp `gwh-hr-platform` session
-  `01a1a15e-9bbc-750f-99d1-567d09868ee5` (pid 2130).
 - The exact atlas path loaded by the omp binary is not directly observable
   (compiled binary, `lsof` shows no open atlas files).
 
