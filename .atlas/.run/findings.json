@@ -10414,7 +10414,7 @@
     "surface": "backend",
     "category": "correctness",
     "severity": "medium",
-    "title": "Root cause of divergent ATLAS rendering across three sessions: the three shapes are three different things - the mod's AbovePrompt band (mod/band.tsx), the mod's message-header restyle pills (mod/restyle.tsx), and a plain ATLAS line the model wrote as prose in its own reply (proven in a Claude Code transcript, aa162b87 line 784); on top of that each session pins its own atlas plugin tree at start (pid 1983 runs 17.1.0 since Nov 5 16:47 while the registry moved to 17.2.0 on Nov 6 07:56, and 17.1.0 carries .orphaned_at) and each workspace renders its own .atlas state; the mod renderer files are byte-identical between 17.1.0 and 17.2.0, so the shape difference is a draw site, not a version. Image 1's workspace and host remain unproven - no transcript matches its Penny/Telegram/n8n content and 1/5 count.",
+    "title": "ATLAS render divergence across three sessions: surface-by-surface verification finds NO behavioural difference established - the three screenshots show different draw sites of one system (AbovePrompt band, message-header pills, assistant prose) that coexist, no gate suppresses a surface in one session while another shows it (ATLAS_MOD unset everywhere, ATLAS_DASHBOARD=off gates only the web dashboard), and the version pin cannot cause a shape difference because band.tsx, restyle.tsx, register.ts, theme.ts and hooks.json are byte-identical between 17.1.0 and 17.2.0; the pin explains code-tree skew and per-PROCESS resolution only, and content differences come from per-workspace .atlas state. Image 1's workspace and host remain unproven.",
     "evidence": [
       ".atlas/evidence/2026-11-06-atlas-render-divergence.md",
       "ls ~/.claude/plugins/cache/tech-tools/atlas/*/.in_use -> 17.1.0/.in_use/1983 (Nov 5 16:51), 17.2.0/.in_use/58350 (Nov 6 08:56); ps shows pid 1983 = claude resume 41e6b90d cwd gwh-firstrespondersapp started Nov 5 16:47 and pid 58350 = claude session-id aa162b87 cwd gwh-doc-analyzer started Nov 6 08:47; 17.1.0/.orphaned_at exists",
@@ -10447,6 +10447,27 @@
     "blast_radius": "module",
     "status": "verified",
     "verified_at": "2026-11-06T20:51:59+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-render-divergence-verdict",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Surface-by-surface verification verdict: no ATLAS behavioural difference is established between the three sessions; the version pin is refuted as the cause (identical renderer sources and hooks.json across 17.1.0 and 17.2.0), the band and header-pill surfaces coexist by design, and two earlier claims are corrected - commit c06754b6 did NOT make ATLAS_MOD a per-render read (installed 17.2.0 restyle.tsx:232-239 reads it once per registration) and the missing prompt.submit hook was a naming artifact (the hook is UserPromptSubmit, firing 51 times in 5fa73dfc and 23 times in aa162b87)",
+    "evidence": [
+      ".atlas/evidence/2026-11-06-atlas-render-divergence.md Finding 9",
+      "ATLAS_MOD unset in every session; ATLAS_DASHBOARD=off gates only the web dashboard; ATLAS_QUIET is not a code gate; no surface is suppressed in one session and present in another",
+      "grep -o 'hookName[^,]*' on both transcripts: UserPromptSubmit 51 (5fa73dfc) and 23 (aa162b87)",
+      "shasum identical for ~/.claude/plugins/cache/tech-tools/atlas/{17.1.0,17.2.0}/mod/{band.tsx,restyle.tsx,register.ts,theme.ts} and hooks/hooks.json",
+      "shadowing user copy ~/.omp/agent/extensions/usage-statusline.ts sha256 831b02773687d8de... vs plugin copy 164538e2ea74b5c0..."
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -o 'hookName[^,]*' ~/.claude/projects/-Users-jerry-MEGA-Projects-Web-gwh-firstrespondersapp/5fa73dfc-*.jsonl ~/.claude/projects/-Users-jerry-MEGA-Projects-Web-gwh-doc-analyzer/aa162b87-*.jsonl | sort | uniq -c | grep UserPromptSubmit",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-06T21:05:02+00:00",
     "verified_by": "atlas:verifier"
   }
 ]

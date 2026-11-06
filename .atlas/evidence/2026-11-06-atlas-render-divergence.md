@@ -74,9 +74,12 @@ So the shapes are different DRAW SITES of one mod, not different code versions:
 - `plugins/atlas/mod/band.tsx:259` - `const wave = c.cols >= MID ? lastWave(c, all) : ''`
   with `MID = 120`: below 120 columns the band collapses to `◆ ATLAS · idle`.
 - `plugins/atlas/mod/band.tsx:239-241` - no workers -> no wave text.
-- commit `c06754b6` changed `ATLAS_MOD` from read-once-at-session-start to
-  read-per-render (`restyle.tsx:236-238`), so the toggle now takes effect
-  mid-session; before that, the value was frozen for the session's lifetime.
+- `ATLAS_MOD` is read ONCE PER REGISTRATION (one per session), not per render: the installed
+  17.2.0 `mod/restyle.tsx:232-239` still says "read once per registration (one per session); a
+  mid-session flip to off is picked up on reload", and `ready()` caches `cache.envOff` in the
+  registration's cache. (An earlier version of this note claimed commit `c06754b6` made this a
+  per-render read; `git show c06754b6 -- plugins/atlas/mod/restyle.tsx` shows no such hunk, so that
+  claim was wrong.)
 
 ## Finding 4 - per-workspace state isolation explains the CONTENT, not the shape
 
@@ -194,6 +197,38 @@ version then) and has held it ever since; pid 58350 started after the 17.2.0 ins
 and holds 17.2.0. The divergence is the two sessions having started on either side of
 the Nov 6 07:56 install - not the machine's state, and not a reboot's failure to
 help.
+
+## Finding 9 - surface-by-surface verification: no behavioural difference is established
+
+A dedicated comparison of the same surfaces across the sessions, plus a reproduction of the
+render gates, changed the conclusion. What it established:
+
+- **No gate suppresses a surface in one session while another shows it.** `ATLAS_MOD` is unset in
+  every session (so the mod is on), `ATLAS_DASHBOARD=off` gates only the web dashboard, and
+  `ATLAS_QUIET` is not a code gate.
+- **Band and pills coexist.** They are independent draw sites - the band at the AbovePrompt/bottom
+  slot, the pills on the AssistantMessage header - so a screenshot that shows only one of them is
+  not evidence of a behavioural difference.
+- **The version pin cannot cause a shape difference.** `band.tsx`, `restyle.tsx`, `register.ts`,
+  `theme.ts` and `hooks/hooks.json` are byte-identical in 17.1.0 and 17.2.0.
+- **Renderer outputs differ only by state**, not by code: the workspaces carry different
+  `.atlas/` state, so the counts, board rows and verified ages differ.
+
+Two leads raised during that verification did not survive it:
+
+- "the mod's prompt.submit hook never fired in 5fa73dfc" was a naming artifact - the hook is
+  `UserPromptSubmit`, and it fires in BOTH sessions (51 times in 5fa73dfc, 23 times in aa162b87).
+- the `c06754b6` per-render claim above was wrong (see Finding 2).
+
+So the honest statement is: **no ATLAS behavioural difference is established between the three
+sessions.** The screenshots show different surfaces of one system, different content, and different
+viewports. What remains unexplained is why one session showed a prose line instead of a band or
+pills, and which workspace and host that session was.
+
+Additional health finding found during the same pass: the omp plugin statusline is shadowed by a
+divergent user copy - `~/.omp/agent/extensions/usage-statusline.ts` (sha256 `831b02773687d8de...`,
+43,789 bytes) differs from the plugin's own `omp/usage-statusline.ts` (sha256
+`164538e2ea74b5c0...`).
 
 ## Unverified
 

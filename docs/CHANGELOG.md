@@ -1,40 +1,45 @@
 # Changelog
 
-## ATLAS render divergence across sessions: root cause - 2026-11-06
+## ATLAS render divergence across sessions: what is and is not established - 2026-11-06
 
-- The three different ATLAS renderings seen in three sessions are **three different things**, not
-  three states of one feature: the mod's AbovePrompt band (`plugins/atlas/mod/band.tsx`), the mod's
-  message-header restyle pills (`plugins/atlas/mod/restyle.tsx`), and a plain ATLAS line the model
-  wrote as prose inside its own reply (proven: an `assistant` text block in
-  `~/.claude/projects/-Users-jerry-MEGA-Projects-Web-gwh-doc-analyzer/aa162b87-74f3-43b7-8ec9-c126522987e1.jsonl:784`).
-- The divergence has one proven cause, read off the running machine: **a plugin update never
-  reaches a session that is already running.** The plugin tree is resolved once, at process start,
-  and held for that process's life - so any restart, a reboot included, re-resolves the registry
-  and picks up the current version. pid 1983 (`gwh-firstrespondersapp`) started Nov 5 16:47 on atlas
-  17.1.0 (`~/.claude/plugins/cache/tech-tools/atlas/17.1.0/.in_use/1983`; that tree now carries
-  `.orphaned_at`) and has held it ever since; pid 58350 (`gwh-doc-analyzer`) started Nov 6 08:47 on
-  17.2.0, seventeen minutes after the 07:56 install. `ps` start times show the machine has not
-  rebooted since Nov 5 16:47, and the CLI's `✓ Update installed · Restart to update` is the symptom
-  of an update landing under a live session.
-- The mod renderer files are byte-identical between 17.1.0 and 17.2.0, so the shape difference is a
-  draw site, not a version. The stale `~/.omp/plugins/cache/plugins/tech-tools___atlas___8.0.1`
-  directory is unreachable (unreferenced by registry and lock; `omp/plugin-path.ts:14-22` semver-
-  compares siblings) and is not the cause. Per-workspace `.atlas/` state explains the differing
-  counts (`5/7` vs `3/7`), not the shape.
-- Separate health finding, **not** a cause of the divergence: every session here ran a tree from the
-  plugin cache, never this checkout, and the installed plugin (17.2.0, upstream commit `92c78c0`)
-  was pulled from the marketplace clone while this repo sits on branch
-  `claude/gateway-broker-mode-main` at atlas 16.4.1. So local edits under `plugins/atlas/` are not
-  in the running plugin, and re-publishing from here would install a lower-numbered tree than the
-  one sessions are running. `atlas-doctor --hook` reports this as
-  `omp-bridge: omp runs 17.2.0 but this plugin is 16.4.2: omp enforcement is stale`.
+- The three screenshots show **different surfaces of the same system, not three different
+  behaviours**: the mod's AbovePrompt band (`plugins/atlas/mod/band.tsx`), the mod's message-header
+  pills (`plugins/atlas/mod/restyle.tsx`), and a plain ATLAS line written as prose inside a message.
+  A surface-by-surface comparison found **no gate that suppresses a surface in one session while
+  another shows it** - `ATLAS_MOD` is unset everywhere, `ATLAS_DASHBOARD=off` gates only the web
+  dashboard, and `ATLAS_QUIET` is not a code gate. Band and pills are independent draw sites and
+  can coexist in one session (bottom band vs message header), so a screenshot showing only one of
+  them is not evidence of a behavioural difference.
+- **No root cause is claimed.** The version pin is not one: `band.tsx`, `restyle.tsx`, `register.ts`,
+  `theme.ts` and `hooks/hooks.json` are byte-identical between 17.1.0 and 17.2.0, so a session
+  pinned to the older tree cannot draw a different surface. What the pin does explain is code-tree
+  skew and the CLI's `✓ Update installed · Restart to update` prompt: the tree is resolved once per
+  PROCESS and held for that process's life, so any restart - a reboot included - re-resolves it
+  (`ps` start times show pid 1983 alive since Nov 5 16:47 on 17.1.0 and pid 58350 since Nov 6 08:47
+  on 17.2.0).
+- Content differences between the screenshots are explained by per-workspace `.atlas` state (counts
+  `5/7` vs `3/7`, `idle` vs `implement`) and by message content; the `✗` in the pills is the model's
+  own glyph.
+- Corrections made while verifying: an earlier claim that commit `c06754b6` moved `ATLAS_MOD` from a
+  read-once to a per-render read was wrong (the installed 17.2.0 `restyle.tsx:232-239` still reads
+  it "once per registration (one per session)"), and an earlier lead - "the mod's prompt.submit hook
+  never fired" - was a naming artifact (the hook is `UserPromptSubmit`, and it fires in both
+  sessions: 51 times in 5fa73dfc, 23 times in aa162b87).
+- Health findings, none of them the cause: `atlas-doctor --hook` warns `codex-wiring` and
+  `omp-bridge: omp runs 17.2.0 but this plugin is 16.4.2`; the installed plugin (17.2.0, upstream
+  commit `92c78c0`) came from the marketplace clone while this repo is on branch
+  `claude/gateway-broker-mode-main` at atlas 16.4.1, so local edits are not in the running plugin
+  and a republish from here would install a lower-numbered tree; and a divergent user copy of the
+  omp statusline at `~/.omp/agent/extensions/usage-statusline.ts` (sha256 `831b0277...`, 43,789
+  bytes) shadows the plugin's own copy (`164538e2...`).
 - Recorded in `.atlas/evidence/2026-11-06-atlas-render-divergence.md` with the command output;
-  findings `atlas-render-divergence` and `atlas-render-divergence-verify` (both verified) in
-  `.atlas/.run/findings.json`. Checked with `python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q`
-  (111 passed, 3 skipped, 122 subtests) and `python3 plugins/atlas/scripts/atlas_doctor.py --hook`.
-- Still unproven: which workspace and host produced the third screenshot's raw ATLAS line. The only
-  transcript hit (`gwh-doc-analyzer`/`aa162b87`) carries different content and a different count, so
-  an earlier same-session claim was retracted.
+  findings `atlas-render-divergence`, `atlas-render-divergence-verify` and
+  `atlas-render-divergence-verdict` in `.atlas/.run/findings.json`. Checked with
+  `python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q` (111 passed, 3 skipped) and
+  `python3 plugins/atlas/scripts/atlas_doctor.py --hook`.
+- Still unproven: which workspace and host produced the third screenshot's raw ATLAS line (the only
+  transcript hit carries different content and a different count), and therefore why that session
+  produced a prose line instead of a band or pills.
 
 ## CIPP connector: remote MCP with OAuth client id - 2026-10-28
 
