@@ -146,7 +146,7 @@ different content (Penny memory, Telegram, n8n, Teams, S1-S5 stages) and a `1/5`
 count. Image 1's workspace and host stay UNPROVEN, so the host-based
 attribution above is a capability statement, not an identification of image 1.
 
-## Finding 8 - the installed plugin and this repo are different trees
+## Finding 8 - HEALTH FINDING, not a cause of the observed divergence
 
 ```
 ~/.omp/plugins/cache/marketplaces/tech-tools   -> git clone, HEAD 92c78c0 "atlas 17.2.0", cloned Nov 6 07:56
@@ -157,17 +157,43 @@ python3 plugins/atlas/scripts/atlas_doctor.py --hook
   -> ATLAS-DOCTOR WARNING: ... omp-bridge: omp runs 17.2.0 but this plugin is 16.4.2: omp enforcement is stale
 ```
 
-The plugin that sessions actually run comes from the upstream marketplace clone
-(commit `92c78c0`), not from this checkout. Consequences:
+**This is NOT the cause of the divergence between the three sessions.** Every session
+in this investigation executed a tree from the plugin CACHE
+(`~/.claude/plugins/cache/tech-tools/atlas/<version>`), never this checkout, and no
+session was shown loading it. The repo/cache split therefore explains nothing about
+the screenshots; it is a separate health problem:
 
 - Edits under `plugins/atlas/` in this repo are not in the running plugin.
-- Re-publishing or re-installing from this branch would install a **lower-numbered** tree
-  (16.4.x) than the 17.2.0 already in the caches, and every semver-newest-wins resolver
-  (`omp/plugin-path.ts:14-22`, and the Claude Code shim's cache fallback) would keep preferring
-  the other tree. That is a split-brain waiting to happen and is the concrete reason the
-  version strings across the machine do not line up.
-- `atlas-doctor --hook` already reports it (`omp-bridge: omp runs 17.2.0 but this plugin is
-  16.4.2`), so the tool is not blind to the mismatch - it is blind to the *session* skew.
+- Re-publishing or re-installing from this branch would install a **lower-numbered**
+  tree (16.4.x) than the 17.2.0 already in the caches, and every semver-newest-wins
+  resolver (`omp/plugin-path.ts:14-22`, and the Claude Code shim's cache fallback)
+  would keep preferring the other tree. That is a future risk, not an observed cause.
+- `atlas-doctor --hook` already reports the mismatch (`omp-bridge: omp runs 17.2.0 but
+  this plugin is 16.4.2`), so the tool is not blind to it - it is blind to the
+  *session* skew.
+
+## Correction to Finding 1 - the pin is per PROCESS, not per machine
+
+An earlier version of this note said "rebooting the machine does not help; only
+restarting the session does". That was wrong. The plugin tree is resolved once, at
+process start, and held for that process's life - so **any** restart, a reboot
+included, re-resolves the registry and picks up the current version (17.2.0 today).
+What is not enough is *resuming* a conversation whose process is still alive.
+
+The process start times say the machine has not rebooted since the long-running
+session began:
+
+```
+ps -axo pid,lstart,command | grep claude
+  1983   Nov 5 16:47  claude resume 41e6b90d   cwd gwh-firstrespondersapp
+  58350  Nov 6 08:47  claude session-id aa162b87   cwd gwh-doc-analyzer
+```
+
+pid 1983 has been alive since Nov 5 16:47, so it pinned 17.1.0 (the registered
+version then) and has held it ever since; pid 58350 started after the 17.2.0 install
+and holds 17.2.0. The divergence is the two sessions having started on either side of
+the Nov 6 07:56 install - not the machine's state, and not a reboot's failure to
+help.
 
 ## Unverified
 
