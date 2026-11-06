@@ -44,7 +44,7 @@ except ImportError:  # hooks dir absent from a trimmed install: nothing is ever 
     worker_inbox = None
 
 NAME_RE = re.compile(
-    r"^[A-Za-z0-9_.:-]{1,64}$"
+    r"[A-Za-z0-9_.:-]{1,64}"
 )  # ':' so herdr pane ids (wA:p1) are addressable
 EXIT_RE = re.compile(r"^exit (-?\d+)(?: \[failed: (.*)\])?")
 HUMAN = "human"
@@ -56,7 +56,7 @@ CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def _valid(name: str | None) -> bool:
-    return bool(name) and bool(NAME_RE.match(name))
+    return bool(name) and bool(NAME_RE.fullmatch(name))
 
 
 def _epoch(value) -> float:

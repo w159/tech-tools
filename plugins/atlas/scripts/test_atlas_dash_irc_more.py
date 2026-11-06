@@ -816,3 +816,8 @@ def test_routes_table():
         ("POST", r"/api/v2/channels"), ("GET", r"/api/v2/channels/([^/?#]+)"),
     ]
     assert irc.HUMAN == "human" and irc.INTERACTIVE_AGENTS == ("claude", "omp")
+
+
+def test_valid_rejects_trailing_newline():
+    assert irc._valid("name")
+    assert not irc._valid("name\n")
