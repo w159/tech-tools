@@ -17,8 +17,9 @@ beforeEach(async () => {
   answers = { improve: { findings: [] }, post: { ok: true }, put: {} };
   savedNow = Date.now;
   Date.now = () => NOW;
-  globalThis.setTimeout = (fn, ms) => { timeouts.push({ fn, ms, live: true }); return timeouts.length; };
-  globalThis.clearTimeout = (id) => { if (timeouts[id - 1]) timeouts[id - 1].live = false; };
+  // A Node-like handle: a timer of another test file (omp/proc.ts) can fire while this stub is installed and calls .unref() on what it gets.
+  globalThis.setTimeout = (fn, ms) => { const t = { fn, ms, live: true }; timeouts.push(t); return { unref() { return this; }, ref() { return this; }, hasRef: () => true, t }; };
+  globalThis.clearTimeout = (h) => { if (h && h.t) h.t.live = false; };
   wrap = document.createElement("div");
   dom.body.appendChild(wrap);
   const insp = document.createElement("div");
@@ -58,6 +59,13 @@ const aria = (el, label) => el.querySelector(`[aria-label="${label}"]`);
 const frows = (el) => [...card(el, "Findings").querySelectorAll("tbody tr")];
 const drawer = () => document.querySelector(".drawer");
 const getsOf = () => calls.filter((c) => c[0] === "GET /api/v2/improve");
+
+test("the stubbed setTimeout hands back a Node-like handle, so a foreign timer firing mid-test cannot throw on .unref()", () => {
+  const handle = globalThis.setTimeout(() => {}, 5);
+  expect(() => handle.unref()).not.toThrow();
+  globalThis.clearTimeout(handle);
+  expect(timeouts[0].live).toBe(false);
+});
 
 describe("improve page", () => {
   test("identity", () => { expect([page.id, page.title, page.icon, page.group]).toEqual(["improve", "Self-improvement", "trending-up", "Improve"]); });
