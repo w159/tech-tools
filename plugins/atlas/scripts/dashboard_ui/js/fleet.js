@@ -150,6 +150,19 @@ export function FleetStrip({ agents, onOpen, max } = {}) {
 
 // ---- 9.2 agent row / 9.3 agent card -----------------------------------------------------------------
 
+// Actions menu for one agent: only the actions the hosting page wired up (agents.js passes all five).
+function agentMenuItems(rec, actions) {
+  const a = actions || {};
+  const item = (label, iconName, run, extra) => (run ? { label, icon: iconName, onSelect: () => run(rec), ...extra } : null);
+  return [
+    item("Open terminal", "terminal", a.onTerminal),
+    item("Message", "message", a.onMessage),
+    item("Send prompt", "send", a.onPrompt),
+    item("Assign task", "plus", a.onAssign),
+    item("Stop", "stop", a.onStop, { danger: true }),
+  ];
+}
+
 function menuButton(rec, actions) {
   const b = h("button", { class: "btn btn-ghost btn-icon row-menu", type: "button", "aria-label": "Actions for " + rec.title, "aria-haspopup": "menu", title: "Actions", onClick: (e) => { e.stopPropagation(); openMenu(b, agentMenuItems(rec, actions), { placement: "end", label: "Actions for " + rec.title }); } }, icon("more"));
   return b;
@@ -406,10 +419,13 @@ export function openAgentInspector(rec, opts) {
     if (fresh) node.update(fresh);
   });
   node._onCloseExtra = () => {
-    if (offStore) offStore();
-    offStore = null;
-    openInspectorNode = null;
-    openInspectorKey = null;
+    // Replacing an open inspector closes the old one after the new one subscribed: only the current node may tear down the shared state.
+    if (openInspectorNode === node) {
+      if (offStore) offStore();
+      offStore = null;
+      openInspectorNode = null;
+      openInspectorKey = null;
+    }
     if (o.onClose) o.onClose();
   };
   const prevClose = node._onClose;
