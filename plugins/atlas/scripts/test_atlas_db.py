@@ -710,6 +710,13 @@ class UncoveredPathsTest(unittest.TestCase):
         self.assertEqual(peak, 2)
         self.assertEqual(waves, 2)
 
+    def test_dispatch_waves_window_start_moves_one_dispatch_at_a_time(self):
+        """After a long gap the window must start at the first dispatch inside
+        it, so the pair at 20s and 21s still counts as one wave of two."""
+        self.assertEqual(
+            atlas_db._dispatch_waves([0.0, 20.0, 21.0], window_s=10.0), (2, 1)
+        )
+
     def test_dispatch_waves_empty(self):
         self.assertEqual(atlas_db._dispatch_waves([], window_s=10.0), (0, 0))
 
