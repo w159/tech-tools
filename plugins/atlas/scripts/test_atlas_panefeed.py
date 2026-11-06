@@ -448,3 +448,23 @@ class NonAssistantEventTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TickerState(unittest.TestCase):
+    def test_ticker_and_flush_read_only_initialised_state(self):
+        from unittest import mock
+
+        feed = pf.Feed("w1", out=io.StringIO(), live=True, clock=lambda: 1000.0)
+        beats = []
+
+        def fake_sleep(_secs):
+            beats.append(1)
+            if len(beats) >= 9:
+                feed.state = "done"
+
+        with mock.patch.object(pf.time, "sleep", fake_sleep):
+            feed._ticker()
+        self.assertGreaterEqual(len(beats), 9)
+        feed.flush()
+        self.assertFalse(feed.dirty)
+        self.assertEqual(feed.painted_at, 1000.0)

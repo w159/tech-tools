@@ -511,7 +511,9 @@ class Feed:
         self.usage: dict = {}
         self.lock = threading.Lock()
         self.painted_size: tuple | None = None
-        self.painted_at = 0.0  # monotonic time of the last _paint, for the event-paint throttle
+        self.clock = clock or time.monotonic
+        self.painted_at = 0.0  # self.clock() time of the last _paint, for the event-paint throttle
+        self.dirty = False  # rows added since the last _paint that the ticker must still flush
         self.calls_file = calls_file  # <name>.tool.json: claude workers' call times for the omp widget sparkline
 
     def _size(self) -> tuple:
@@ -556,7 +558,7 @@ class Feed:
 
     def _flush(self) -> None:
         """Caller holds the lock."""
-        if self.dirty and self.clock() - self.last_paint >= PAINT_INTERVAL_S:
+        if self.dirty and self.clock() - self.painted_at >= PAINT_INTERVAL_S:
             self._paint()
 
     def _paint(self, spare: int = 0) -> None:
@@ -578,7 +580,8 @@ class Feed:
             out = ESC + "2J" + out
             self.painted_size = (width, height)
         self._write(out)
-        self.painted_at = time.monotonic()
+        self.painted_at = self.clock()
+        self.dirty = False
 
     def _write(self, text: str) -> None:
         self.out.write(text)
@@ -588,9 +591,10 @@ class Feed:
         with self.lock:
             self.rows.extend(rows)
             if self.live:
+                self.dirty = True
                 # ponytail: event paints are at least MIN_PAINT_GAP apart; the 4 Hz ticker (max ~4 repaints/s
                 # on its own) and finish() flush the trailing row. Ceiling: a row can wait up to 0.25 s.
-                if time.monotonic() - self.painted_at >= MIN_PAINT_GAP:
+                if self.clock() - self.painted_at >= MIN_PAINT_GAP:
                     self._paint()
             else:
                 width = self._size()[0]
