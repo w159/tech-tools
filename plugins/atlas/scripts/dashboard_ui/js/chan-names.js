@@ -33,7 +33,7 @@ export function projectLabel(root, chans) {
 
 // Presence of a channel member: pane state when a herdr pane exists, else what the channel API reports.
 const PRESENCE = { working: "running", input: "waiting for input", idle: "idle", parked: "parked", done: "exited", fail: "failed", unknown: "no pane" };
-export const presenceWord = (state) => PRESENCE[state] || "no pane";
+export const presenceWord = (state) => (Object.hasOwn(PRESENCE, state) ? PRESENCE[state] : "no pane");
 
 // Todo counts for one owner. Items (atlas_dash_work._todo_view statuses: open|in_progress|done|blocked) are the source of truth:
 // each counts once, blocked is its own bucket. Server owner counts (pending|in_progress|completed, blocked still inside

@@ -91,6 +91,7 @@ test("presenceWord: maps every known state, unknown or missing states read 'no p
   expect(presenceWord("whatever")).toBe("no pane");
   expect(presenceWord(undefined)).toBe("no pane");
   expect(presenceWord("")).toBe("no pane");
+  for (const k of ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]) expect(presenceWord(k)).toBe("no pane");
 });
 
 test("todoSummary: only non-zero buckets, in active/open/blocked/done order", () => {
