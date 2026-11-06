@@ -158,6 +158,7 @@ class GitChangedTest(Tmp):
     def test_short_or_empty_entries_ignored_and_trailing_rename_safe(self):
         self.assertEqual(self._run(""), set())
         self.assertEqual(self._run("R  only.py"), {"/top/only.py"})
+        self.assertEqual(self._run("R  only.py\0"), {"/top/only.py"})
         self.assertEqual(self._run("ab\0"), set())
 
     def test_git_unavailable_is_empty(self):

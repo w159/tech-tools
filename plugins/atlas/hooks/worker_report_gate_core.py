@@ -132,7 +132,7 @@ def git_changed(cwd):
             changed.add(os.path.join(top, e[3:]))
             if e[0] in "RC" or e[1] in "RC":
                 i += 1
-                if i < len(entries):
+                if i < len(entries) and entries[i]:
                     changed.add(os.path.join(top, entries[i]))
         i += 1
     return changed
