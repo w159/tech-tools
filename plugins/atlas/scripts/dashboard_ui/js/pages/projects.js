@@ -37,8 +37,8 @@ function prefsOf() {
   return (S.ctx.prefs && typeof S.ctx.prefs === 'object') ? S.ctx.prefs : {};
 }
 
-function notify(msg, kind) {
-  if (S && S.ctx && typeof S.ctx.toast === 'function') S.ctx.toast(msg, { kind });
+function notify(st, msg, kind) {
+  if (st && st.ctx && typeof st.ctx.toast === 'function') st.ctx.toast(msg, { kind });
 }
 
 async function fetchProjects() {
@@ -47,14 +47,16 @@ async function fetchProjects() {
 
 async function refresh() {
   if (!S || S.inFlight || S.destroyed) return;
-  S.inFlight = true;
+  const st = S; // the page can be destroyed (S nulled) while the read is in flight
+  st.inFlight = true;
   try {
-    S.data = await fetchProjects();
-    S.error = null;
+    const data = await fetchProjects();
+    st.data = data;
+    st.error = null;
   } catch (err) {
-    S.error = err;
+    st.error = err;
   } finally {
-    S.inFlight = false;
+    st.inFlight = false;
   }
   draw();
 }
@@ -62,23 +64,24 @@ async function refresh() {
 // Toggle membership of `root` in a prefs array key, sending only that key.
 async function toggleIn(key, root, label, onMsg, offMsg) {
   if (S.busy) return;
+  const st = S;
   const current = new Set(prefsOf()[key] || []);
   const adding = !current.has(root);
   if (adding) current.add(root); else current.delete(root);
-  S.busy = true;
+  st.busy = true;
   try {
-    const res = await S.ctx.api.put('/api/v2/prefs', { [key]: [...current] });
+    const res = await st.ctx.api.put('/api/v2/prefs', { [key]: [...current] });
     const next = res && res.state ? res.state : res;
     if (next && typeof next === 'object') {
-      S.ctx.prefs = next;
-      if (S.ctx.store) S.ctx.store.set('prefs', next);
+      st.ctx.prefs = next;
+      if (st.ctx.store) st.ctx.store.set('prefs', next);
     }
-    notify(`${label} ${adding ? onMsg : offMsg}`, 'ok');
+    notify(st, `${label} ${adding ? onMsg : offMsg}`, 'ok');
   } catch (err) {
     const d = describeError(err);
-    notify([d.title, d.body].filter(Boolean).join(': '), 'fail');
+    notify(st, [d.title, d.body].filter(Boolean).join(': '), 'fail');
   }
-  S.busy = false;
+  st.busy = false;
   draw();
 }
 
