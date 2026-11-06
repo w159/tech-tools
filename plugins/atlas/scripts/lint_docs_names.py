@@ -240,7 +240,7 @@ def _slugify(text: str) -> str:
     docs-ssot naming rule specifies: a colon in a composed name makes the whole
     repo un-checkout-able on Windows."""
     out = re.sub(r"[^a-z0-9._-]+", "-", str(text).lower())
-    out = re.sub(r"-{2,}", "-", out).strip("-.")
+    out = re.sub(r"-{2,}", "-", out).strip("-._")
     return out or "untitled"
 
 

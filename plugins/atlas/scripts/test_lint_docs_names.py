@@ -1149,3 +1149,14 @@ class CliModes(_Tree):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SlugifyUnderscoreEdges(unittest.TestCase):
+    def test_edge_underscores_are_stripped_so_the_dated_name_complies(self):
+        for raw, want in (("_foo", "foo"), ("foo_", "foo"), ("__x__", "x"), ("_", "untitled")):
+            slug = lint_docs_names._slugify(raw)
+            self.assertEqual(slug, want, raw)
+            self.assertEqual(lint_docs_names.violations(["docs/plans/2026-01-01_%s.md" % slug]), [])
+
+    def test_inner_underscores_survive(self):
+        self.assertEqual(lint_docs_names._slugify("a_b"), "a_b")
