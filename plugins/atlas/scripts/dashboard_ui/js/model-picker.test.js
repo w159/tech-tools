@@ -155,6 +155,12 @@ test("filterModels: defaults show everything, a null list is empty, the needle i
   expect(names(filterModels([{ name: 42 }], { q: "4" }))).toEqual([42]);
 });
 
+test("filterModels: a null or undefined needle means no filter, not the text 'null'", () => {
+  const list = [{ name: "a" }, { name: "nullable" }];
+  expect(names(filterModels(list, { q: null }))).toEqual(["a", "nullable"]);
+  expect(names(filterModels(list, { q: undefined }))).toEqual(["a", "nullable"]);
+});
+
 test("filterModels: a model without a cloud flag is local; scope and search combine", () => {
   const list = [{ name: "a" }, { name: "b", cloud: true }, { name: "c", cloud: 0 }, { name: "ab-cloud", cloud: 1 }];
   expect(names(filterModels(list, { scope: "local" }))).toEqual(["a", "c"]);

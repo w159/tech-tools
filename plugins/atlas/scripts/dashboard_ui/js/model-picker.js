@@ -10,7 +10,7 @@ const SORTS = [['latest', 'Latest'], ['size', 'Size'], ['name', 'Name'], ['popul
 const canGenerate = (m) => !Array.isArray(m.capabilities) || m.capabilities.includes('completion');
 
 export function filterModels(models, { scope = 'all', q = '', showAll = true } = {}) {
-  const needle = String(q).trim().toLowerCase();
+  const needle = String(q ?? "").trim().toLowerCase();
   return (models || []).filter((m) => (showAll || canGenerate(m)) && (scope === 'all' || (scope === 'cloud') === !!m.cloud) && (!needle || String(m.name).toLowerCase().includes(needle)));
 }
 
