@@ -646,25 +646,35 @@ class GitignoreSecretContract(unittest.TestCase):
         "plugins/atlas/.env",
     )
 
+    def setUp(self):
+        # Probe a scratch repo that holds a copy of the real .gitignore, so the
+        # verdict depends on the file's rules alone and not on how the checkout
+        # around it is laid out (a symlinked mirror, a worktree, a sparse tree).
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.scratch = Path(tmp.name)
+        (self.scratch / ".gitignore").write_bytes(
+            (REPO_ROOT / ".gitignore").resolve().read_bytes()
+        )
+        subprocess.run(
+            ["git", "init", "-q", str(self.scratch)], check=True, env=GIT_ENV
+        )
+
+    def _ignored(self, path):
+        return subprocess.run(
+            ["git", "-C", str(self.scratch), "check-ignore", "-q", path],
+            env=GIT_ENV,
+        ).returncode == 0
+
     def test_secret_shapes_are_ignored_under_every_allowlisted_tree(self):
-        leaked = [
-            p
-            for p in self.PROBES
-            if subprocess.run(
-                ["git", "-C", str(REPO_ROOT), "check-ignore", "-q", p]
-            ).returncode
-            != 0
-        ]
+        leaked = [p for p in self.PROBES if not self._ignored(p)]
         self.assertEqual(leaked, [], "these secret shapes are trackable: %s" % leaked)
 
     def test_real_docs_are_still_trackable(self):
         """The blanket patterns must not swallow the docs they sit next to."""
         for path in ("docs/CHANGELOG.md", "README.md", ".atlas/findings/INDEX.md"):
-            self.assertNotEqual(
-                subprocess.run(
-                    ["git", "-C", str(REPO_ROOT), "check-ignore", "-q", path]
-                ).returncode,
-                0,
+            self.assertFalse(
+                self._ignored(path),
                 "%s is ignored: an over-broad secret pattern" % path,
             )
 
