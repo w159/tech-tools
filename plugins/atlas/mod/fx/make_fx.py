@@ -50,7 +50,7 @@ def fail(t, total):
 def advance(t, total):
     freqs = (400, 500, 625, 781)
     step = total / len(freqs)
-    idx = t // step
+    idx = int(t // step)
     if idx >= len(freqs):
         idx = len(freqs) - 1
     local = t - idx * step
