@@ -21,6 +21,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -107,6 +108,67 @@ class FramingTests(unittest.TestCase):
     def test_capture_route_rejects_bad_target(self):
         ctx = types.SimpleNamespace(query={"target": "x;y"}, groups=())
         self.assertEqual(T._capture(ctx)[0], 400)
+
+
+    def test_capture_route_reports_model_unavailable_as_501_not_ok(self):
+        ctx = types.SimpleNamespace(query={"target": "%1"}, groups=())
+
+        def boom():
+            raise ImportError("no model")
+
+        with mock.patch.object(T, "_model", boom):
+            code, body = T._capture(ctx)
+        self.assertEqual(code, 501)
+        self.assertIs(body["ok"], False)
+        self.assertEqual((body["error"], body["why"]), ("model_unavailable", "no model"))
+
+
+class PtyHelperTests(unittest.TestCase):
+    def test_winsize_sets_rows_cols_and_zero_pixel_dimensions(self):
+        import fcntl
+        import pty
+        import termios
+
+        master, slave = pty.openpty()
+        try:
+            T._winsize(master, 100, 30)
+            rows, cols, xpix, ypix = struct.unpack(
+                "HHHH", fcntl.ioctl(slave, termios.TIOCGWINSZ, b"\0" * 8)
+            )
+        finally:
+            os.close(master)
+            os.close(slave)
+        self.assertEqual((rows, cols, xpix, ypix), (30, 100, 0, 0))
+
+    def test_client_resize_message_sets_window_size_and_defaults_missing_dims(self):
+        import fcntl
+        import pty
+        import termios
+
+        master, slave = pty.openpty()
+        try:
+            def size():
+                r, c, _x, _y = struct.unpack("HHHH", fcntl.ioctl(slave, termios.TIOCGWINSZ, b"\0" * 8))
+                return c, r
+
+            T._client_msg(master, b'{"t":"resize","cols":132,"rows":41}')
+            self.assertEqual(size(), (132, 41))
+            T._client_msg(master, b'{"t":"resize"}')
+            self.assertEqual(size(), (80, 24))
+            T._client_msg(master, b'{"t":"resize","cols":5000,"rows":1}')
+            self.assertEqual(size(), (1000, 2))
+        finally:
+            os.close(master)
+            os.close(slave)
+
+    def test_deny_closes_the_connection_and_sends_the_json_error(self):
+        sent = []
+        handler = types.SimpleNamespace(
+            close_connection=False, _json=lambda code, body: sent.append((code, body))
+        )
+        T._deny(handler, 403, "bad_ticket")
+        self.assertIs(handler.close_connection, True)
+        self.assertEqual(sent, [(403, {"ok": False, "error": "bad_ticket"})])
 
 
 # --- end to end ------------------------------------------------------------------

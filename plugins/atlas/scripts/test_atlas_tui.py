@@ -578,6 +578,96 @@ class FirstPaint(unittest.TestCase):
         self.assertTrue(any("lead-01" in f for _, f in frames[1:]))
 
 
+class MutantKillers(unittest.TestCase):
+    def test_clock_stamp_and_bad_values(self):
+        self.assertEqual([T._ts(v) for v in (0, 3661, None, "x")], ["00:00:00", "01:01:01", "--:--:--", "--:--:--"])
+
+    def test_age_unit_boundaries(self):
+        self.assertEqual(
+            [T._age(x) for x in (0, 59, 60, 3599, 3600, 86399, 86400)],
+            ["0s", "59s", "1m", "59m", "1h", "23h", "1d"],
+        )
+
+    def test_explorer_top_scrolls_the_cursor_into_the_last_visible_row(self):
+        rows = list(range(20))
+        self.assertEqual(T._explorer_top(rows, {"cursor": 10}, 5), 6)
+        self.assertEqual(T._explorer_top(rows, {"cursor": 0}, 5), 0)
+        self.assertEqual(T._explorer_top(rows, {"cursor": 99}, 5), 15)
+        self.assertEqual(T._explorer_top(rows[:4], {"cursor": 3}, 5), 0)
+
+    def test_narrow_pod_names_use_the_default_pod_column_width(self):
+        snap = copy.deepcopy(SNAP)
+        for x in snap["seats"]:
+            x["pod"] = "ab"
+        for c in snap["colonies"]:
+            for p in c["pods"]:
+                p["id"] = "ab"
+        wide = "\n".join(T.render(snap, T.new_ui(colony="lead-01"), 180, 50))
+        self.assertEqual(len(re.search(r"┃ (POD +)SEAT", wide).group(1)), 9)
+
+    def test_chat_filter_keeps_the_seats_traffic_and_broadcasts(self):
+        snap = {
+            "colonies": [{"id": "c", "channel": "ch"}],
+            "chat": {"ch": [
+                {"seq": 3, "from": "a", "to": "b"},
+                {"seq": 1, "from": "x", "to": "y"},
+                {"seq": 2, "from": "x", "to": "all"},
+            ]},
+        }
+        self.assertEqual([r["seq"] for r in T._chat_rows(snap, {}, "c")], [1, 2, 3])
+        self.assertEqual([r["seq"] for r in T._chat_rows(snap, {"chat_filter": "a"}, "c")], [2, 3])
+        self.assertEqual([r["seq"] for r in T._chat_rows(snap, {"chat_filter": "q"}, "c")], [2])
+
+    def test_open_seat_reports_unknown_names_and_binds_known_ones(self):
+        ui = {}
+        self.assertEqual(T._open_seat(SNAP, ui, "ghost"), "")
+        self.assertEqual(ui["status"], "no seat ghost")
+        self.assertEqual(T._open_seat(SNAP, ui, "ex-1"), "ex-1")
+        self.assertEqual((ui["seat"], ui["focus"], ui["_bridge"]), ("ex-1", "pane", ("lead-01", "ex-1")))
+
+    def test_own_session_is_blank_outside_tmux_and_trims_the_tmux_answer(self):
+        self.assertEqual(T._own_session({}), "")
+        ok = mock.Mock(returncode=0, stdout="atlas-x\n")
+        bad = mock.Mock(returncode=1, stdout="junk\n")
+        with mock.patch.object(T, "_run_tmux", return_value=ok):
+            self.assertEqual(T._own_session({"TMUX": "/s"}), "atlas-x")
+        with mock.patch.object(T, "_run_tmux", return_value=bad):
+            self.assertEqual(T._own_session({"TMUX": "/s"}), "")
+
+    def test_keyname_maps_enter_codes(self):
+        self.assertEqual([T._keyname(c, curses) for c in (10, 13, 9, 127, 8)], ["enter", "enter", "tab", "backspace", "backspace"])
+
+    def test_lead_harness_is_blank_when_the_import_fails(self):
+        fake = mock.Mock(_lead_harness=lambda env: "omp")
+        with mock.patch.dict(sys.modules, {"atlas_mux": fake}):
+            self.assertEqual(T._lead_harness_safe({}), "omp")
+        boom = mock.Mock(_lead_harness=mock.Mock(side_effect=RuntimeError("x")))
+        with mock.patch.dict(sys.modules, {"atlas_mux": boom}):
+            self.assertEqual(T._lead_harness_safe({}), "")
+
+    def test_loop_draws_plain_lines_with_attr_zero_and_finished_lines_dim(self):
+        calls = []
+
+        class Done(Exception):
+            pass
+
+        scr = mock.Mock()
+        scr.getmaxyx.return_value = (40, 120)
+        scr.addstr.side_effect = lambda y, x, s, *a: calls.append((s, a[0] if a else None))
+        scr.getch.side_effect = lambda: (_ for _ in ()).throw(Done()) if calls else -1
+        model = mock.Mock(snapshot=lambda root, all_projects: SNAP)
+        args = mock.Mock(project="/p", all=False)
+        with (
+            mock.patch.multiple(curses, curs_set=mock.DEFAULT, start_color=mock.DEFAULT, use_default_colors=mock.DEFAULT),
+            mock.patch.object(T, "_model", return_value=model),
+            mock.patch.object(T, "render", lambda snap, ui, w, h: ["plain row", "row ✓ finished"]),
+            mock.patch.object(T, "hitmap", lambda *a, **k: []),
+            self.assertRaises(Done),
+        ):
+            T.loop(scr, args)
+        self.assertEqual(calls[:2], [("plain row", 0), ("row ✓ finished", curses.A_DIM)])
+
+
 class Cli(unittest.TestCase):
     def test_once_fixture(self):
         import json

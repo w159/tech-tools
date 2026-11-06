@@ -48,6 +48,56 @@ def test_python_symbols_scopes_kinds_and_consts(tmp_path):
     assert syms["helper"]["line"] == 9 and syms["helper"]["end"] == 10
 
 
+def test_python_constants_inside_class_bodies_are_not_symbols(tmp_path):
+    p = tmp_path / "m.py"
+    p.write_text("TOP = 1\n\nclass Box:\n    INNER = 2\n\n    def m(self):\n        LOCAL = 3\n")
+    names = {s["name"] for s in inv.py_symbols(p, "m.py")}
+    assert names == {"TOP", "Box", "Box.m"}
+
+
+def test_find_typescript_returns_the_module_dir_from_node_path(tmp_path, monkeypatch):
+    mod = tmp_path / "nm" / "typescript"
+    mod.mkdir(parents=True)
+    (mod / "package.json").write_text("{}")
+    monkeypatch.setattr(inv.shutil, "which", lambda name: "/usr/bin/node")
+    monkeypatch.setenv("NODE_PATH", str(tmp_path / "nm"))
+
+    def no_npm(*a, **k):
+        raise OSError("no npm")
+
+    monkeypatch.setattr(inv.subprocess, "run", no_npm)
+    assert inv.find_typescript() == str(mod)
+
+
+def test_markdown_kind_rows_count_each_symbol_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(inv, "find_typescript", lambda: None)
+    md = inv.markdown(inv.build(_plugin(tmp_path), False))
+    rows = [ln for ln in md.splitlines() if ln.startswith(("| class |", "| const |", "| function |", "| interface |", "| method |", "| type |"))]
+    assert rows == ["| class | 2 |", "| const | 1 |", "| function | 6 |", "| interface | 1 |", "| method | 1 |", "| type | 1 |"]
+
+
+def test_find_typescript_is_none_without_node(monkeypatch):
+    monkeypatch.setattr(inv.shutil, "which", lambda name: None)
+    assert inv.find_typescript() is None
+
+
+def test_markdown_area_rows_start_every_counter_at_zero(tmp_path, monkeypatch):
+    monkeypatch.setattr(inv, "find_typescript", lambda: None)
+    md = inv.markdown(inv.build(_plugin(tmp_path), True))
+    rows = [ln for ln in md.splitlines() if ln.startswith(("| omp |", "| scripts |", "| mod |"))]
+    assert rows == ["| mod | 1 | 2 | 0 | 0 | 0 | 1 |", "| omp | 1 | 0 | 0 | 1 | 2 | 0 |",
+                    "| scripts | 1 | 3 | 1 | 1 | 1 | 3 |"]
+
+
+def test_cli_help_uses_the_first_docstring_line_as_description(capsys):
+    with pytest.raises(SystemExit) as ex:
+        inv.main(["--help"])
+    assert ex.value.code == 0
+    first = inv.__doc__.split("\n", 1)[0]
+    out = " ".join(capsys.readouterr().out.split())
+    assert first in out
+
+
 def test_python_syntax_error_is_reported_not_raised(tmp_path):
     p = tmp_path / "bad.py"
     p.write_text("def (:\n")

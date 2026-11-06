@@ -520,6 +520,51 @@ class GateProbeAgreementTests(unittest.TestCase):
         self.assertEqual(m["value"], 0, m.get("detail"))
         self.assertEqual(self.gates["gate_probes_correct"]["value"], self.gates["gate_probes_total"]["value"])
 
+    def test_report_gate_probe_blocks_every_nonsense_report_and_passes_valid_ones(self):
+        from scorecard import probe_gates
+
+        got = {m["name"]: m for m in probe_gates.probe_report_gate(core.Ctx(ROOT, work=self.tmp))}
+        self.assertGreaterEqual(set(got), {"worker_report_nonsense_total", "worker_report_nonsense_accepted", "worker_report_valid_blocked"})
+        self.assertEqual(got["worker_report_nonsense_accepted"]["value"], 0, got["worker_report_nonsense_accepted"])
+        self.assertEqual(got["worker_report_valid_blocked"]["value"], 0, got["worker_report_valid_blocked"])
+        self.assertEqual(got["worker_report_nonsense_accepted"]["state"], "ok")
+
+    def test_fallow_gate_case_records_a_clean_exit_and_no_faults(self):
+        from scorecard import probe_gates
+
+        g = probe_gates.Gates(core.Ctx(ROOT, work=self.tmp))
+        g.fallow_gate()
+        self.assertTrue(g.results)
+        for r in g.results:
+            self.assertEqual((r["rc"], r["faults"]), (0, 0), r)
+
+    def test_probes_without_a_sandbox_report_skipped_for_each_declared_metric(self):
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from scorecard import probe_gates
+
+        ctx = core.Ctx(ROOT, work=self.tmp)
+        for name, fn, declared, _slow in probe_gates.PROBES:
+            if name == "credwatch":
+                continue
+            with mock.patch.object(probe_gates, "Gates", lambda c: SimpleNamespace(proj=None)):
+                out = fn(ctx)
+            self.assertEqual([m["name"] for m in out], declared, name)
+            self.assertEqual({m["state"] for m in out}, {"skipped"}, name)
+
+    def test_probe_registry_declares_four_fast_probes_with_their_metrics(self):
+        from scorecard import probe_gates
+
+        self.assertEqual(
+            [(n, d, slow) for n, _f, d, slow in probe_gates.PROBES],
+            [
+                ("gate_correctness", ["gate_probes_correct", "gate_probes_mismatch"], False),
+                ("dispatch_spec", ["dispatch_spec_decoy_denied", "dispatch_spec_empty_denied"], False),
+                ("report_gate", ["worker_report_nonsense_accepted", "worker_report_valid_blocked"], False),
+                ("credwatch", ["credwatch_false_positives"], False),
+            ],
+        )
 
 @unittest.skipUnless(__import__("shutil").which("tmux"), "needs a real tmux")
 class IrcProbeReceiptTests(unittest.TestCase):

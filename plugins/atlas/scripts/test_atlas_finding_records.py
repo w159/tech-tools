@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -226,6 +227,58 @@ class BackfillTest(Base):
         )
         atlas_finding.backfill_findings(self.root, apply=True)
         self.assertEqual(len(self.records()), 2)
+
+
+    def test_rebuild_index_replaces_only_the_marked_block_and_keeps_trailing_text(self):
+        self.seed(sample_entries())
+        atlas_finding.backfill_findings(self.root, apply=True)
+        idx = os.path.join(self.fdir(), "INDEX.md")
+        with open(idx, "a", encoding="utf-8") as fh:
+            fh.write("\nTAIL-NOTE\n")
+        atlas_finding.rebuild_index(self.root)
+        text = open(idx, encoding="utf-8").read()
+        self.assertEqual(text.count(atlas_finding._MARK[0]), 1)
+        self.assertEqual(text.count(atlas_finding._MARK[1]), 1)
+        # The end marker must be consumed whole: nothing of it is left dangling before the tail.
+        self.assertTrue(text.endswith(atlas_finding._MARK[1] + "\n\nTAIL-NOTE\n"), text[-120:])
+
+    def test_save_creates_missing_parent_directories(self):
+        target = Path(self.root) / "deep" / "er" / "findings.json"
+        atlas_finding.save(target, [{"id": "Z"}])
+        self.assertEqual(json.loads(target.read_text(encoding="utf-8")), [{"id": "Z"}])
+
+
+    def test_quarantine_moves_the_file_aside_or_returns_none_when_it_cannot(self):
+        led = Path(self.root) / "led.json"
+        led.write_text("{not json", encoding="utf-8")
+        moved = atlas_finding._quarantine(led)
+        self.assertIsNotNone(moved)
+        self.assertFalse(led.exists())
+        self.assertEqual(moved.read_text(encoding="utf-8"), "{not json")
+        self.assertTrue(moved.name.startswith("led.json.corrupt-"))
+        self.assertIsNone(atlas_finding._quarantine(Path(self.root) / "absent.json"))
+
+    def test_build_entry_defaults_empty_optionals_to_empty_values(self):
+        import argparse
+
+        ns = argparse.Namespace(
+            id="X", surface="s", category="c", severity="high", title="t", evidence=None,
+            doc_ref=None, reproduction=None, proposed_fix=None, blast_radius="b", status="open", by="me",
+        )
+        e = atlas_finding.build_entry(ns)
+        self.assertEqual((e["evidence"], e["doc_refs"], e["reproduction"], e["proposed_fix"]), ([], [], "", ""))
+        ns.evidence, ns.doc_ref, ns.reproduction, ns.proposed_fix = "ev", ["d"], "rep", "fix"
+        e = atlas_finding.build_entry(ns)
+        self.assertEqual((e["evidence"], e["doc_refs"], e["reproduction"], e["proposed_fix"]), ("ev", ["d"], "rep", "fix"))
+
+    def test_recent_lists_newest_record_first(self):
+        t1, t2 = "2026-09-01T00:00:00+00:00", "2026-10-05T00:00:00+00:00"
+        self.seed([
+            {"id": "OLD", "status": "verified", "title": "old", "verified_at": t1},
+            {"id": "NEW", "status": "verified", "title": "new", "verified_at": t2},
+        ])
+        atlas_finding.backfill_findings(self.root, apply=True)
+        self.assertEqual([r["id"] for r in atlas_finding.recent(self.root)], ["NEW", "OLD"])
 
 
 class DoctorTest(Base):

@@ -28,6 +28,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import atlas_packs  # noqa: E402
@@ -68,6 +69,31 @@ def make_repo(*, with_config=None) -> Path:
 
 def ids(packs: list) -> list:
     return [p["id"] for p in packs]
+
+
+class HelperUnits(unittest.TestCase):
+    def test_scalar_unquotes_strips_and_parses_booleans(self):
+        self.assertEqual(atlas_packs._scalar("  'a b' "), "a b")
+        self.assertEqual(atlas_packs._scalar('"x"'), "x")
+        self.assertEqual(atlas_packs._scalar("True"), True)
+        self.assertEqual(atlas_packs._scalar("false"), False)
+        self.assertEqual(atlas_packs._scalar("plain"), "plain")
+        self.assertEqual(atlas_packs._scalar("'mixed\""), "'mixed\"")
+
+    def test_cache_base_is_reusable_and_requires_a_writable_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"ATLAS_PACKS_CACHE_ROOT": os.path.join(tmp, "c")}):
+                first = atlas_packs._cache_base(tmp)
+                self.assertEqual(first, os.path.join(tmp, "c"))
+                self.assertEqual(atlas_packs._cache_base(tmp), first)  # existing dir is fine
+                with mock.patch.object(atlas_packs.os, "access", lambda *a, **k: False):
+                    self.assertIsNone(atlas_packs._cache_base(tmp))
+
+    def test_contained_child_dirs_is_empty_for_an_unreadable_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            escaped = []
+            self.assertEqual(atlas_packs._contained_child_dirs(os.path.join(tmp, "gone"), tmp, escaped), [])
+            self.assertEqual(escaped, [])
 
 
 class AbsentPacksKey(unittest.TestCase):

@@ -392,6 +392,88 @@ class TestPlugins(ControlTestCase):
         self.assertIn("atlas-orchestrate", wiring["skills"])
 
 
+    def test_enabling_a_plugin_writes_the_flag_and_host_enable_is_allowed(self):
+        res = self.mod.set_plugin_enabled("armada@tech-tools", True)
+        self.assertTrue(res["ok"], res)
+        self.assertIs(self.read_settings()["enabledPlugins"]["armada@tech-tools"], True)
+        # Only DISABLING the host plugin is refused; enabling it must go through.
+        res = self.mod.set_plugin_enabled("atlas@tech-tools", True)
+        self.assertTrue(res["ok"], res)
+        self.assertIs(self.read_settings()["enabledPlugins"]["atlas@tech-tools"], True)
+
+
+class TestStoreAndYaml(ControlTestCase):
+    def test_store_file_is_two_space_indented_sorted_json(self):
+        self.mod._write_store({"B": "2", "A": "1"}, {"A": 5})
+        text = (Path(self.tmp.name) / "atlas-home" / "settings.json").read_text(encoding="utf-8")
+        self.assertEqual(
+            text,
+            '{\n  "changed": {\n    "A": 5\n  },\n  "env": {\n    "A": "1",\n    "B": "2"\n  }\n}\n',
+        )
+
+    def test_yaml_block_reads_only_the_named_top_level_block(self):
+        text = "other:\n  x: 1\nmodelRoles:\n  default: m1\n  # c\n\n  smol: \"m2\"\nnext:\n  default: no\n"
+        self.assertEqual(self.mod._yaml_block(text, "modelRoles"), {"default": "m1", "smol": "m2"})
+        self.assertEqual(self.mod._yaml_block(text, "other"), {"x": "1"})
+        self.assertEqual(self.mod._yaml_block(text, "absent"), {})
+
+
+class TestPluginOrderAndMisc(ControlTestCase):
+    def test_enabled_plugins_sort_before_disabled_ones(self):
+        self.mod.set_plugin_enabled("atlas@tech-tools", True)
+        self.mod.set_plugin_enabled("armada@tech-tools", False)
+        keys = [p["key"] for p in self.mod.installed_plugins()]
+        self.assertEqual(keys, ["atlas@tech-tools", "armada@tech-tools"])
+
+    def test_count_dir_is_zero_for_a_missing_directory(self):
+        self.assertEqual(self.mod._count_dir(Path(self.tmp.name) / "nope"), 0)
+
+    def test_set_block_appends_after_a_newline_and_replaces_in_place(self):
+        block = f"{self.mod.MANAGED_BEGIN}\nX=1\n{self.mod.MANAGED_END}\n"
+        self.assertEqual(self.mod._set_block("abc", "X=1"), "abc\n" + block)
+        self.assertEqual(self.mod._set_block("abc\n", "X=1"), "abc\n" + block)
+        self.assertEqual(self.mod._set_block("", "X=1"), block)
+        again = self.mod._set_block("head\n" + block + "tail\n", "Y=2")
+        self.assertEqual(again, f"head\n{self.mod.MANAGED_BEGIN}\nY=2\n{self.mod.MANAGED_END}\ntail\n")
+
+    def test_is_fixture_project_branches(self):
+        fx = self.mod.is_fixture_project
+        with mock.patch.dict(os.environ, {"HOME": "/home/jerry"}):
+            for junk in (None, "", "/", "/home/jerry", "/home/u/proj/node_modules/x", "/home/u/.cache/x",
+                         "/home/u/atlas-work", "/var/folders/ab/x", "/private/tmp/x", "/tmp/x",
+                         "/home/u/demo", "/home/u/Library/outputs"):
+                self.assertTrue(fx(junk, must_exist=False), junk)
+            for real in ("/home/u/proj", "/home/u/Projects/demo", "/srv/app"):
+                self.assertFalse(fx(real, must_exist=False), real)
+            self.assertTrue(fx("/home/u/proj", must_exist=True))  # not a directory on this host
+            self.assertTrue(fx("/home/u/worktrees/x", must_exist=False))
+            self.assertTrue(fx("/home/u/p/.run", must_exist=False))
+
+    def test_cli_main_dispatches_each_subcommand(self):
+        import contextlib
+        import io
+
+        def run(argv):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = self.mod.main(argv)
+            return rc, buf.getvalue()
+
+        with mock.patch.object(self.mod, "behavior_state", lambda: {"w": "behavior"}), \
+                mock.patch.object(self.mod, "ecosystem_inventory", lambda: {"w": "eco"}), \
+                mock.patch.object(self.mod, "test_connector", lambda n: {"w": "conn", "n": n}):
+            self.assertEqual(json.loads(run([])[1]), {"w": "behavior"})
+            self.assertEqual(json.loads(run(["behavior"])[1]), {"w": "behavior"})
+            rc, out = run(["ecosystem"])
+            self.assertEqual((rc, json.loads(out)), (0, {"w": "eco"}))
+            self.assertEqual(json.loads(run(["test", "cipp"])[1]), {"w": "conn", "n": "cipp"})
+            self.assertEqual(run(["--help"])[0], 0)
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(run(["test"])[0], 2)
+            self.assertIn("usage: atlas_control.py", err.getvalue())
+
+
 class TestEnvBlock(ControlTestCase):
     def test_parses_comments_quotes_and_export_prefixes(self):
         parsed = self.mod.parse_env_block(

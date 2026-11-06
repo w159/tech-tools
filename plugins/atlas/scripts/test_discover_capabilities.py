@@ -362,6 +362,50 @@ class RulesTests(unittest.TestCase):
         self.assertIn(".kilo", discover_capabilities.SKIP_DIRS)
 
 
+class MutantKillers(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.proj = tempfile.mkdtemp()
+        for patch in (
+            mock.patch.dict(os.environ, {"HOME": self.home}),
+            mock.patch.object(discover_capabilities.shutil, "which", return_value=None),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.home, ignore_errors=True)
+        shutil.rmtree(self.proj, ignore_errors=True)
+
+    def _main(self, argv):
+        buf = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as cm:
+                discover_capabilities.main()
+        return cm.exception.code, buf.getvalue()
+
+    def test_help_prints_usage_and_exits_zero(self):
+        code, out = self._main(["prog", "--help"])
+        self.assertEqual(code, 0)
+        self.assertIn("usage: discover_capabilities.py", out)
+        self.assertNotIn("JSON:", out)
+
+    def test_loop_library_note_is_always_recommended_and_json_is_two_space_indented(self):
+        code, out = self._main(["prog", self.proj])
+        self.assertEqual(code, 0)
+        payload = out.split("JSON:\n", 1)[1]
+        self.assertIn("loop-library (atlas-loop)", [r["id"] for r in json.loads(payload)["recommendations"]])
+        self.assertTrue(payload.startswith('{\n  "context": {'), payload[:40])
+
+    def test_project_mcp_json_is_read_even_when_the_user_file_is_missing(self):
+        write(os.path.join(self.proj, ".mcp.json"), json.dumps({"mcpServers": {"alpha": {}, "beta": {}}}))
+        self.assertEqual(discover_capabilities._mcp_server_names(self.proj), {"alpha", "beta"})
+        write(os.path.join(self.home, ".claude.json"), json.dumps({"mcpServers": {"gamma": {}}}))
+        self.assertEqual(discover_capabilities._mcp_server_names(self.proj), {"alpha", "beta", "gamma"})
+
+
 class InstalledTests(unittest.TestCase):
     """Recommendations skip what the machine already has (the real host is never read)."""
 

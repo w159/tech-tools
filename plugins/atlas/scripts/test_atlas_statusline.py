@@ -256,5 +256,48 @@ class StatuslineTest(unittest.TestCase):
         self.assertIn("atlas_statusline.py", sl_cfg["command"])
 
 
+    def test_uninstall_message_names_what_happened(self):
+        settings = os.path.join(self.tmp, "settings.json")
+        args = ["--settings", settings, "--home", self.tmp]
+        with open(settings, "w") as f:
+            json.dump({"statusLine": {"type": "command", "command": "mine"}}, f)
+        self.run_main(["install"] + args)
+        self.assertIn("restored previous statusLine", self.run_main(["uninstall"] + args))
+        self.assertEqual(jload(settings)["statusLine"]["command"], "mine")
+        self.assertIn("removed statusLine", self.run_main(["uninstall"] + args))
+
+
+class PureHelperTests(unittest.TestCase):
+    def test_cell_widths(self):
+        self.assertEqual((sl.cw("a"), sl.cw("日"), sl.cw("\u200b"), sl.cw("\u0301")), (1, 2, 0, 0))
+        self.assertEqual(sl.vw("\x1b[31m日本a\x1b[0m"), 5)
+
+    def test_cost_formatting_boundaries(self):
+        self.assertEqual(
+            [sl.fmt_cost(c) for c in (0, 0.001, 0.0099, 0.01, 1.234, 99.999, 100, 123.9)],
+            ["$0.00", "<$0.01", "<$0.01", "$0.01", "$1.23", "$100.00", "$100", "$123"],
+        )
+
+    def test_percent_color_thresholds(self):
+        self.assertEqual([sl.pct_color(p) for p in (0, 50, 51, 75, 76, 100)],
+                         [sl.GREEN, sl.GREEN, sl.YELLOW, sl.YELLOW, sl.RED, sl.RED])
+
+    def test_context_color_thresholds(self):
+        self.assertEqual([sl.ctx_color(p) for p in (0, 60, 61, 85, 86, 100)],
+                         [sl.GREEN, sl.GREEN, sl.YELLOW, sl.YELLOW, sl.RED, sl.RED])
+
+    def test_heat_color_interpolates_between_adjacent_stops(self):
+        def rgb(esc):
+            return tuple(int(v) for v in re.findall(r"\d+", esc)[-3:])
+
+        self.assertEqual(rgb(sl.heat_color(0.0)), sl.HEAT[0])
+        # f=0.5 sits at x=1.5: halfway between stops 1 and 2
+        a, b = sl.HEAT[1], sl.HEAT[2]
+        want = tuple(round(a[k] + (b[k] - a[k]) * 0.5) for k in range(3))
+        self.assertEqual(rgb(sl.heat_color(0.5)), want)
+        self.assertEqual(rgb(sl.heat_color(5.0)), rgb(sl.heat_color(0.9999)))
+        self.assertEqual(rgb(sl.heat_color(-1)), sl.HEAT[0])
+
+
 if __name__ == "__main__":
     unittest.main()

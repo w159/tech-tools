@@ -450,6 +450,43 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class MutantKillers(unittest.TestCase):
+    def test_hex_colors_decode_all_three_channels(self):
+        self.assertEqual(pf._hx("#cba6f7"), (0xCB, 0xA6, 0xF7))
+        self.assertEqual(pf.PANEL, (0x11, 0x11, 0x1B))
+        self.assertEqual(pf.BASE, (0x1E, 0x1E, 0x2E))
+
+    def test_seg_is_not_bold_by_default(self):
+        self.assertEqual(pf.seg("x"), ("x", None, None, False))
+        self.assertEqual(pf.seg("x", pf.RED, pf.BASE, True), ("x", pf.RED, pf.BASE, True))
+
+    def test_goal_is_the_first_line_of_the_first_task_section(self):
+        self.assertEqual(pf.goal_of("intro\n# Task\nfirst goal\nmore\n# Task\nsecond\n"), "first goal")
+        self.assertEqual(pf.goal_of("\n\n  only line  \nnext"), "only line")
+
+    def test_success_result_row_reports_exit_zero_and_failure_exit_one(self):
+        ok = plain("".join(t for t, *_ in pf._result_row({"subtype": "success", "duration_ms": 2500}, 0)))
+        bad = plain("".join(t for t, *_ in pf._result_row({"subtype": "error_max_turns"}, 0)))
+        self.assertIn("2.5s · exit 0", ok)
+        self.assertIn("0.0s · exit 1", bad)
+
+    def test_cached_tokens_show_from_exactly_ten_thousand(self):
+        self.assertIn("10.0k cached", plain(pf.status_row("done", 0, 5, 1, 10, 120, cached=10000)))
+        self.assertNotIn("cached", plain(pf.status_row("done", 0, 5, 1, 10, 120, cached=9999)))
+
+    def test_render_event_defaults_to_a_100_column_row(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.object(pf.shutil, "get_terminal_size", lambda fallback=(0, 0): os.terminal_size(fallback)):
+            rows = pf.render_event({"type": "result", "subtype": "success", "duration_ms": 1000})
+        self.assertEqual([len(plain(r)) for r in rows], [100])
+
+    def test_progress_bar_partial_cell_uses_eighths_of_the_fraction(self):
+        bar = pf.progress_bar(0.19, 10)
+        self.assertEqual("".join(t for t, *_ in bar), "█" + pf.EIGHTHS[7] + " " * 8)
+
+
 class TickerState(unittest.TestCase):
     def test_ticker_and_flush_read_only_initialised_state(self):
         from unittest import mock

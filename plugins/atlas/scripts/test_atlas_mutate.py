@@ -6,6 +6,7 @@ import _test_isolation  # noqa: F401  (must be first: redirects ATLAS_HOME)
 
 import ast
 import json
+import types
 import shutil
 import sys
 import textwrap
@@ -254,6 +255,82 @@ def test_context_mirror_symlinks_siblings_and_leaves_original_unchanged(tmp_path
     assert copy == tmp_path / "mirror" / "plug" and not copy.is_symlink()
     assert (tmp_path / "mirror" / "shared").is_symlink()
     assert (copy / "src.py").is_file() and not (copy / "src.py").is_symlink()
+
+
+def test_int_site_replaces_with_the_next_integer():
+    site = next(x for x in m.py_sites("LIMIT = 41\n") if x["desc"] == "41 -> 42")
+    assert site["text"] == "42"
+    assert m.apply_site("LIMIT = 41\n", site) == "LIMIT = 42\n"
+
+
+def test_site_spans_cover_exactly_the_node_text_on_multibyte_and_multiline_sources():
+    src = "ä = 'é'\nx = 1 == 2\ny = ('ü' == 'ü')\nz = (3 ==\n     4)\nw = 5 == 6"
+    spans = [src[x["start"]:x["end"]] for x in m.py_sites(src) if x["desc"] == "Eq -> !="]
+    assert spans == ["1 == 2", "'ü' == 'ü'", "3 ==\n     4", "5 == 6"]
+
+
+def test_find_typescript_asks_npm_with_captured_text_output(tmp_path, monkeypatch):
+    mod = tmp_path / "global" / "typescript"
+    mod.mkdir(parents=True)
+    (mod / "package.json").write_text("{}")
+    real_path = m.Path
+
+    class OnlyUnderTmp(type(real_path())):
+        def exists(self):
+            return str(self).startswith(str(tmp_path)) and super().exists()
+
+    seen = {}
+
+    def fake_run(argv, **kw):
+        seen["argv"], seen["kw"] = argv, kw
+        return types.SimpleNamespace(stdout=kw["capture_output"] and str(tmp_path / "global") + "\n")
+
+    monkeypatch.setattr(m, "Path", OnlyUnderTmp)
+    monkeypatch.setenv("NODE_PATH", "")
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    assert m.find_typescript() == str(mod)
+    assert seen["argv"] == ["npm", "root", "-g"]
+    assert seen["kw"]["capture_output"] is True and seen["kw"]["text"] is True
+
+
+def test_ts_sites_runs_node_with_a_120_second_timeout(monkeypatch):
+    seen = {}
+
+    def fake_run(argv, **kw):
+        seen["kw"] = kw
+        return types.SimpleNamespace(returncode=0, stdout="[]", stderr="")
+
+    monkeypatch.setattr(m, "find_typescript", lambda: "/ts")
+    monkeypatch.setattr(m.shutil, "which", lambda name: "/usr/bin/node")
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    assert m.ts_sites("const a = 1;\n", "f.ts") == []
+    assert seen["kw"]["timeout"] == 120 and seen["kw"]["env"]["MUT_FILE"] == "f.ts"
+
+
+def test_mirror_context_creates_missing_parents_and_reuses_an_existing_destination(tmp_path):
+    ancestor = tmp_path / "anc"
+    root = ancestor / "a" / "b"
+    root.mkdir(parents=True)
+    (root / "f.py").write_text("x = 1\n")
+    (ancestor / "a" / "side.txt").write_text("s")
+    copy = m.mirror_context(ancestor, root, tmp_path / "deep" / "er" / "mirror")
+    assert (copy / "f.py").read_text() == "x = 1\n"
+    assert (tmp_path / "deep" / "er" / "mirror" / "a" / "side.txt").is_symlink()
+    pre = tmp_path / "pre"
+    pre.mkdir()
+    again = m.mirror_context(ancestor, root, pre)
+    assert (again / "f.py").is_file()
+
+
+def test_mirror_context_keeps_symlinks_in_the_copied_root_as_symlinks(tmp_path):
+    ancestor = tmp_path / "anc"
+    root = ancestor / "plug"
+    root.mkdir(parents=True)
+    (root / "real.txt").write_text("data")
+    (root / "link.txt").symlink_to("real.txt")
+    copy = m.mirror_context(ancestor, root, tmp_path / "mirror")
+    assert (copy / "link.txt").is_symlink() and (copy / "link.txt").readlink().as_posix() == "real.txt"
+    assert not (copy / "real.txt").is_symlink()
 
 
 def test_context_must_contain_root(tmp_path, capsys):
