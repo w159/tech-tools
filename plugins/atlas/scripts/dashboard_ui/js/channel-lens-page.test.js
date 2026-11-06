@@ -580,6 +580,14 @@ describe("mountChannelLens composer", () => {
     expect(byTag(none.host, "textarea")[0].disabled).toBe(true);
   });
 
+  test("the composer is the plain one-box form: no Send-as mode switch", async () => {
+    const { host } = await mount({ channels: [CHAN], current: "a@b" });
+    const comp = one(host, "chan-composer");
+    expect(byClass(comp, "seg").length).toBe(0);
+    expect(byTag(comp, "button").map(txt)).toEqual(["Send"]);
+    expect(txt(comp)).not.toContain("Prompt agent");
+  });
+
   test("a reachable channel enables the textarea and buttons", async () => {
     const { host } = await mount({ channels: [CHAN], current: "a@b" });
     const ta = byTag(host, "textarea")[0];
