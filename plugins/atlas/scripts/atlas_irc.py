@@ -1016,12 +1016,27 @@ def _own_failures(xml_path) -> list:
     return found
 
 
+def _is_pytest_cmd(cmd: str) -> bool:
+    """True when the unit check invokes pytest: a token whose basename is pytest/py.test (`pytest`, `/venv/bin/pytest`)
+    or the module after `-m`. A path or argument that merely contains "pytest" (a /tmp/atlas-pytest-x dir) is not one."""
+    try:
+        toks = shlex.split(cmd)
+    except ValueError:
+        toks = cmd.split()
+    for i, t in enumerate(toks):
+        if os.path.basename(t) in ("pytest", "py.test"):
+            return True
+        if t == "-m" and i + 1 < len(toks) and toks[i + 1] == "pytest":
+            return True
+    return False
+
+
 def _early_check(d, nick: str, needs) -> int | None:
     """While a need is not DONE, run the unit check once per owned-files digest (quiet, junit-xml via
     PYTEST_ADDOPTS, EARLY_CHECK_TIMEOUT_S) and return 1 after printing the failures that do not depend on
     unfinished peers; None to carry on to the normal wait. ATLAS_CREW_EARLY_CHECK=off disables it."""
     cmd = os.environ.get("ATLAS_CREW_UNIT_CHECK") or ""
-    if (os.environ.get("ATLAS_CREW_EARLY_CHECK") or "").lower() == "off" or "pytest" not in cmd:
+    if (os.environ.get("ATLAS_CREW_EARLY_CHECK") or "").lower() == "off" or not _is_pytest_cmd(cmd):
         return None
     if all(has_done(d, p) for p in needs if p != nick):
         return None

@@ -197,6 +197,28 @@ class SpeculateTests(unittest.TestCase):
         self.assertNotIn("peer_digests", self.done_rec())
 
 
+class IsPytestCmdTests(unittest.TestCase):
+    def test_pytest_invocations_are_detected(self):
+        for cmd in ("pytest -q", "python3 -m pytest -q t.py", "/venv/bin/pytest t.py", "cd x && uv run pytest"):
+            self.assertTrue(atlas_irc._is_pytest_cmd(cmd), cmd)
+
+    def test_a_path_containing_pytest_is_not_a_pytest_command(self):
+        for cmd in ("echo run >> /tmp/atlas-pytest-tmp-x/counter", "make -C /srv/pytest-plugin check"):
+            self.assertFalse(atlas_irc._is_pytest_cmd(cmd), cmd)
+
+    def test_early_check_does_not_run_a_non_pytest_check_whose_path_contains_pytest(self):
+        with tempfile.TemporaryDirectory(prefix="atlas-pytest-x-") as tmp:
+            tmp = Path(tmp)
+            counter = tmp / "counter"
+            d = atlas_irc.init_bus(tmp / "irc", "#t", ["me", "peer"], lead="lead")
+            (tmp / "me.py").write_text("x = 1\n")
+            env = {"ATLAS_CREW_ROOT": str(tmp), "ATLAS_CREW_OWNS": json.dumps(["me.py"]),
+                   "ATLAS_CREW_UNIT_CHECK": f"echo run >> {counter}"}
+            with mock.patch.dict(os.environ, env):
+                self.assertIsNone(atlas_irc._early_check(d, "me", ["peer"]))
+            self.assertFalse(counter.exists())
+
+
 class EarlyCheckTests(unittest.TestCase):
     """The early own-code check: needs pending, pytest failures that are not stub/import errors surface now."""
 
