@@ -4,6 +4,10 @@
 
 - atlas 17.2.0: reliability pass. Mutation-hardened tests for the remaining Python and TS/JS files (Python 63.5% -> 88.4% killed over 66 files, TS/JS 38.4% -> 96.9% over 26 files, 64.6% -> 88.1% over a 69-file sample), product bugs fixed, and pytest and bun runs that clean up their temp dirs. pytest 8451 passed, bun 3320 pass, 0 fail. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-06_atlas-reliability.md.
 
+## marketplace 5.7.0 - 2026-11-06
+
+- marketplace 5.7.0: atlas 17.2.0, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 17.1.0 - 2026-11-05
 
 - atlas 17.1.0: atlas-prompt rebuilt (auto-invoked, right-sized output, independent judge checks every rewrite keeps the original's goals and limits; 67 of 68 goals kept vs 52, 1 added item vs 169), new `atlas_inventory.py`, `atlas_mutate.py` and `atlas_parity_rig.py`, no false "unhealthy" doctor warnings under Codex and omp, mod `tsc` clean against Claude Code 2.1.318 types, fixes for a parked-worker crash and a truncated "needs evidence" verdict, and hardened tests. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-05_atlas-prompt-eval.md, _atlas-mutation.md, _atlas-parity.md and _atlas-inventory.md.
