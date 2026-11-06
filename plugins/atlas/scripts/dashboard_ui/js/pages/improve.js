@@ -94,14 +94,16 @@ async function fetchImprove() {
 
 async function refresh() {
   if (!S || S.inFlight || S.destroyed) return;
-  S.inFlight = true;
+  const st = S; // the page can be destroyed (S nulled) while the read is in flight
+  st.inFlight = true;
   try {
-    S.data = await fetchImprove();
-    S.error = null;
+    const data = await fetchImprove();
+    st.data = data;
+    st.error = null;
   } catch (err) {
-    S.error = err;
+    st.error = err;
   } finally {
-    S.inFlight = false;
+    st.inFlight = false;
   }
   draw();
 }
@@ -111,24 +113,27 @@ async function refresh() {
 async function mutate(finding, path, payload, okMsg) {
   const key = `${finding.id}:${path}`;
   if (S.busy.has(key)) return;
-  S.busy.add(key);
+  const st = S;
+  st.busy.add(key);
   draw();
   try {
-    const res = await S.ctx.api.post(path, payload);
+    const res = await st.ctx.api.post(path, payload);
+    if (S !== st) return; // destroyed meanwhile
     if (res && res.ok === false) throw Object.assign(new Error(res.error), res);
-    if (res && res.state && typeof res.state === 'object' && Array.isArray(res.state.findings)) S.data = res.state;
+    if (res && res.state && typeof res.state === 'object' && Array.isArray(res.state.findings)) st.data = res.state;
     notify(res && res.next ? `${okMsg}. ${res.next}` : okMsg, 'ok');
     if (!(res && res.state && Array.isArray(res.state.findings))) {
-      S.busy.delete(key);
-      S.inFlight = false;
+      st.busy.delete(key);
+      st.inFlight = false;
       await refresh();
       return;
     }
   } catch (err) {
+    if (S !== st) return;
     const d = describeError(err);
     notify([d.title, d.body].filter(Boolean).join(': '), 'fail');
   }
-  S.busy.delete(key);
+  st.busy.delete(key);
   draw();
 }
 
@@ -496,30 +501,36 @@ const FIX_TONE = { queued: 'info', running: 'info', verifying: 'info', ready: 'o
 async function selffixOp(op, id, okMsg) {
   const key = `selffix:${op}:${id || ''}`;
   if (S.busy.has(key)) return;
-  S.busy.add(key);
+  const st = S;
+  st.busy.add(key);
   draw();
   try {
-    const res = await S.ctx.api.post('/api/v2/improve/selffix', { op, id });
+    const res = await st.ctx.api.post('/api/v2/improve/selffix', { op, id });
+    if (S !== st) return; // destroyed meanwhile
     if (res && res.ok === false) throw Object.assign(new Error(res.error), res);
     notify(okMsg, 'ok');
   } catch (err) {
+    if (S !== st) return;
     const d = describeError(err);
     notify([d.title, d.body].filter(Boolean).join(': '), 'fail');
   }
-  S.busy.delete(key);
-  S.inFlight = false;
+  st.busy.delete(key);
+  st.inFlight = false;
   await refresh();
 }
 
 async function setSelffixPref(patch) {
+  const st = S;
   try {
-    await S.ctx.api.put('/api/v2/prefs', { selffix: patch });
+    await st.ctx.api.put('/api/v2/prefs', { selffix: patch });
+    if (S !== st) return; // destroyed meanwhile
     notify('Self-fix settings saved', 'ok');
   } catch (err) {
+    if (S !== st) return;
     const d = describeError(err);
     notify([d.title, d.body].filter(Boolean).join(': '), 'fail');
   }
-  S.inFlight = false;
+  st.inFlight = false;
   await refresh();
 }
 
