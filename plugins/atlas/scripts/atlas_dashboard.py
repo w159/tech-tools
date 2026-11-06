@@ -3299,12 +3299,12 @@ def _self_heal_loop():
 def _cache_install_scripts() -> list[str]:
     """Atlas installs in the standard omp/claude caches, for the ui_missing hint."""
     pats = [
-        Path.home() / ".omp" / "plugins" / "cache" / "plugins" / "*atlas*",
-        Path.home() / ".claude" / "plugins" / "cache" / "*" / "atlas" / "*",
+        ".omp/plugins/cache/plugins/*atlas*",
+        ".claude/plugins/cache/*/atlas/*",
     ]
     out: list[str] = []
-    for base in pats:
-        for d in Path(base).parent.glob(base.name):
+    for pat in pats:
+        for d in Path.home().glob(pat):
             if (d / "scripts" / "atlas_dashboard.py").is_file():
                 out.append(str(d / "scripts" / "atlas_dashboard.py"))
     return out
