@@ -146,6 +146,29 @@ different content (Penny memory, Telegram, n8n, Teams, S1-S5 stages) and a `1/5`
 count. Image 1's workspace and host stay UNPROVEN, so the host-based
 attribution above is a capability statement, not an identification of image 1.
 
+## Finding 8 - the installed plugin and this repo are different trees
+
+```
+~/.omp/plugins/cache/marketplaces/tech-tools   -> git clone, HEAD 92c78c0 "atlas 17.2.0", cloned Nov 6 07:56
+~/.claude/plugins/installed_plugins.json       -> atlas@tech-tools 17.2.0, gitCommitSha 92c78c03afb0af6522dde5c289c111a5342a704b
+~/.omp/plugins/installed_plugins.json          -> atlas@tech-tools 17.2.0, installedAt 2026-11-06T12:56:26Z
+this repo                                       -> branch claude/gateway-broker-mode-main, plugins/atlas version 16.4.1 (HEAD), 16.4.2 (working tree)
+python3 plugins/atlas/scripts/atlas_doctor.py --hook
+  -> ATLAS-DOCTOR WARNING: ... omp-bridge: omp runs 17.2.0 but this plugin is 16.4.2: omp enforcement is stale
+```
+
+The plugin that sessions actually run comes from the upstream marketplace clone
+(commit `92c78c0`), not from this checkout. Consequences:
+
+- Edits under `plugins/atlas/` in this repo are not in the running plugin.
+- Re-publishing or re-installing from this branch would install a **lower-numbered** tree
+  (16.4.x) than the 17.2.0 already in the caches, and every semver-newest-wins resolver
+  (`omp/plugin-path.ts:14-22`, and the Claude Code shim's cache fallback) would keep preferring
+  the other tree. That is a split-brain waiting to happen and is the concrete reason the
+  version strings across the machine do not line up.
+- `atlas-doctor --hook` already reports it (`omp-bridge: omp runs 17.2.0 but this plugin is
+  16.4.2`), so the tool is not blind to the mismatch - it is blind to the *session* skew.
+
 ## Unverified
 
 - The exact atlas path loaded by the omp binary is not directly observable

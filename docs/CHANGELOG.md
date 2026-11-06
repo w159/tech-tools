@@ -1,5 +1,38 @@
 # Changelog
 
+## ATLAS render divergence across sessions: root cause - 2026-11-06
+
+- The three different ATLAS renderings seen in three sessions are **three different things**, not
+  three states of one feature: the mod's AbovePrompt band (`plugins/atlas/mod/band.tsx`), the mod's
+  message-header restyle pills (`plugins/atlas/mod/restyle.tsx`), and a plain ATLAS line the model
+  wrote as prose inside its own reply (proven: an `assistant` text block in
+  `~/.claude/projects/-Users-jerry-MEGA-Projects-Web-gwh-doc-analyzer/aa162b87-74f3-43b7-8ec9-c126522987e1.jsonl:784`).
+- The divergence has two proven causes, both read off the running machine:
+  1. **A plugin update never reaches a running session.** Each session pins its own atlas tree at
+     start: pid 1983 (`gwh-firstrespondersapp`) started Nov 5 16:47 on atlas 17.1.0
+     (`~/.claude/plugins/cache/tech-tools/atlas/17.1.0/.in_use/1983`; that tree now carries
+     `.orphaned_at`), pid 58350 (`gwh-doc-analyzer`) started Nov 6 08:47 on 17.2.0. The CLI's
+     `✓ Update installed · Restart to update` is the symptom - rebooting the machine does not help,
+     only restarting the session does.
+  2. **Version strings across trees do not line up.** The installed plugin (17.2.0, upstream commit
+     `92c78c0`) was pulled from the marketplace clone on Nov 6 07:56, while this repo sits on branch
+     `claude/gateway-broker-mode-main` at atlas 16.4.1 - so local edits under `plugins/atlas/` are
+     not in the running plugin, and re-publishing from here would install a *lower-numbered* tree
+     than the one sessions are running. `atlas-doctor --hook` reports exactly this as
+     `omp-bridge: omp runs 17.2.0 but this plugin is 16.4.2: omp enforcement is stale`.
+- The mod renderer files are byte-identical between 17.1.0 and 17.2.0, so the shape difference is a
+  draw site, not a version. The stale `~/.omp/plugins/cache/plugins/tech-tools___atlas___8.0.1`
+  directory is unreachable (unreferenced by registry and lock; `omp/plugin-path.ts:14-22` semver-
+  compares siblings) and is not the cause. Per-workspace `.atlas/` state explains the differing
+  counts (`5/7` vs `3/7`), not the shape.
+- Recorded in `.atlas/evidence/2026-11-06-atlas-render-divergence.md` with the command output;
+  findings `atlas-render-divergence` and `atlas-render-divergence-verify` (both verified) in
+  `.atlas/.run/findings.json`. Checked with `python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q`
+  (111 passed, 3 skipped, 122 subtests) and `python3 plugins/atlas/scripts/atlas_doctor.py --hook`.
+- Still unproven: which workspace and host produced the third screenshot's raw ATLAS line. The only
+  transcript hit (`gwh-doc-analyzer`/`aa162b87`) carries different content and a different count, so
+  an earlier same-session claim was retracted.
+
 ## CIPP connector: remote MCP with OAuth client id - 2026-10-28
 
 - The CIPP connector is now a **remote MCP server configured by the instance URL and the app
