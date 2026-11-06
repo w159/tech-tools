@@ -55,10 +55,18 @@ SERVER_NAME = "atlas.irc"
 
 
 def _dir(d) -> Path:
-    p = Path(d or os.environ.get("ATLAS_IRC_DIR") or "")
-    if not str(p):
+    raw = d or os.environ.get("ATLAS_IRC_DIR") or ""
+    if not str(raw):
         raise SystemExit("atlas_irc: no bus dir (--dir or ATLAS_IRC_DIR)")
-    return p
+    return Path(raw)
+
+
+def _bus_channel(d) -> str | None:
+    """The channel a bus's members.json names, or None when it has none (members() would invent "#team")."""
+    try:
+        return json.loads((Path(d) / "members.json").read_text(encoding="utf-8")).get("channel") or None
+    except (OSError, ValueError, AttributeError):
+        return None
 
 
 def members(d) -> dict:
@@ -86,7 +94,7 @@ def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str |
     text = text[:MAX_TEXT]
     p = Path(d) / "log.jsonl"
     p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p, "a+", encoding="utf-8") as fh:
+    with open(p, "a+", encoding="utf-8", errors="replace") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX)
         try:
             fh.seek(0)
@@ -496,7 +504,7 @@ def cmd_say(a) -> int:
     nick = _env_nick(a)
     to = (
         a.to
-        or members(d).get("channel")
+        or _bus_channel(d)
         or os.environ.get("ATLAS_IRC_CHANNEL")
         or "#team"
     )
@@ -860,7 +868,7 @@ def _announce_done(d, nick: str, text: str, peer_digests: dict | None = None) ->
     extra = {"digest": _owned_digest(root, _env_owns()), "test_digest": test_inputs_digest(root, os.environ.get("ATLAS_CREW_UNIT_CHECK") or "")}
     if peer_digests is not None:
         extra["peer_digests"] = peer_digests
-    post(d, nick, members(d).get("channel") or os.environ.get("ATLAS_IRC_CHANNEL") or "#team", f"DONE {nick}: {text}", kind="done",
+    post(d, nick, _bus_channel(d) or os.environ.get("ATLAS_IRC_CHANNEL") or "#team", f"DONE {nick}: {text}", kind="done",
          extra=extra)
     print(f"posted DONE for {nick}")
 

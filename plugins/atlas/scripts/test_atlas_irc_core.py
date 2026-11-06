@@ -981,3 +981,34 @@ def test_main_dispatches(bus, capsys):
     assert irc.main(["--dir", str(bus), "say", "--as", "a", "hi"]) == 0
     assert "sent #1" in capsys.readouterr().out
     assert irc.main(["--dir", str(bus), "tail", "--once"]) == 0
+
+
+def test_post_survives_invalid_utf8_in_log(tmp_path):
+    d = tmp_path / "bus"
+    d.mkdir()
+    (d / "log.jsonl").write_bytes(b'{"seq": 4, "text": "ok"}\n\xff\xfe broken\n')
+    rec = irc.post(d, "a", "b", "hi")
+    assert rec["seq"] == 5
+
+
+def test_dir_empty_setting_reaches_no_bus_branch(monkeypatch):
+    monkeypatch.setenv("ATLAS_IRC_DIR", "")
+    with pytest.raises(SystemExit, match="no bus dir"):
+        irc._dir("")
+    with pytest.raises(SystemExit, match="no bus dir"):
+        irc._dir(None)
+
+
+def test_dir_explicit_current_dir_still_allowed():
+    assert irc._dir(Path(".")) == Path(".")
+
+
+def test_say_falls_back_to_env_channel_when_bus_has_no_members(tmp_path, monkeypatch):
+    d = tmp_path / "bus"
+    d.mkdir()
+    monkeypatch.setenv("ATLAS_IRC_NICK", "a")
+    monkeypatch.setenv("ATLAS_IRC_CHANNEL", "#envchan")
+    a = argparse.Namespace(dir=str(d), to=None, text=["hello"], as_=None)
+    assert irc.cmd_say(a) == 0
+    rec = json.loads((d / "log.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert rec["to"] == "#envchan"
