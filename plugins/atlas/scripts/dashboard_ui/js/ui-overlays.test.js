@@ -695,6 +695,7 @@ describe("command palette", () => {
     for (let i = 0; i < 10; i++) key("ArrowDown");
     expect(input().getAttribute("aria-activedescendant")).toBe("pal-4");
     key("ArrowUp");
+    expect(input().getAttribute("aria-activedescendant")).toBe("pal-3");
     key("ArrowUp");
     key("ArrowUp");
     key("ArrowUp");
