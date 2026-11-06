@@ -451,6 +451,16 @@ describe("mountChannelLens header", () => {
     expect(byTag(none.host, "button").some((b) => txt(b) === "Go to current")).toBe(false);
   });
 
+  test("Go to current falls back to the default channel when the 'current' channel is not in the list", async () => {
+    const { host, calls } = await mount({ channels: [MAIN, SUB], current: "ghost@x", params: { channel: SUB.name } });
+    expect(txt(one(host, "sr-only"))).toBe(SUB.name);
+    byTag(host, "button").find((b) => txt(b) === "Go to current").click();
+    await flush();
+    expect(txt(one(host, "sr-only"))).toBe("demo@feat");
+    expect(calls[calls.length - 1][0]).toBe("channels/demo%40feat");
+    expect(byTag(one(host, "chan-pick"), "option").find((o) => o.selected).value).toBe("demo@feat");
+  });
+
   test("the channel picker lists every channel (subchannels indented, current marked) and switching resets recipient and reloads", async () => {
     const { host, calls } = await mount({ channels: [MAIN, SUB], current: "demo@feat" });
     const pick = one(host, "chan-pick");
