@@ -10435,7 +10435,7 @@
     "surface": "backend",
     "category": "correctness",
     "severity": "medium",
-    "title": "Independent check of the run that documented the ATLAS render divergence: the atlas plugin contract suite passes (111 passed, 3 skipped, 122 subtests) and atlas-doctor --hook runs clean of new breakage - the only doctor warnings are pre-existing (13 files need renaming, 3 global memory entries to migrate)",
+    "title": "Independent check of the run that documented the ATLAS render divergence: the atlas plugin contract suite passes (111 passed, 3 skipped, 122 subtests) and atlas-doctor --hook reports only pre-existing warnings - codex-wiring (hooks must be ./hooks/hooks.json), omp-bridge (omp runs 17.2.0 but this plugin is 16.4.2), 13 files need renaming and 3 global memory entries to migrate - none caused by this run",
     "evidence": [
       "python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q -> 111 passed, 3 skipped, 122 subtests passed in 6.56s",
       "python3 plugins/atlas/scripts/atlas_doctor.py --hook -> warns codex-wiring (hooks must be ./hooks/hooks.json) and omp-bridge (omp runs 17.2.0 but this plugin is 16.4.2); both are pre-existing repo state, not caused by this run",
