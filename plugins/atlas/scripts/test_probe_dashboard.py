@@ -440,6 +440,11 @@ def test_herd_counts_only_bun_or_node_running_managed_ts(herd_ctx, monkeypatch):
     assert m["herd_extra_instances"]["direction"] == "lower"
 
 
+def test_herd_ps_blank_lines_are_skipped(herd_ctx, monkeypatch):
+    monkeypatch.setattr(pd, "run", lambda *a, **k: {"rc": 0, "out": "1 bun /m/managed.ts\n\n   \n2 bash\n", "err": "", "ms": 1})
+    assert byname(pd.probe_herd(herd_ctx))["herd_managed_instances"]["value"] == 1
+
+
 def test_herd_zero_and_one_instance_have_no_extras(herd_ctx, monkeypatch):
     monkeypatch.setattr(pd, "run", lambda *a, **k: ps_table("bash"))
     assert byname(pd.probe_herd(herd_ctx))["herd_extra_instances"]["value"] == 0

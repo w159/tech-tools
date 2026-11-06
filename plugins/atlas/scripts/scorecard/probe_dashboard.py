@@ -290,6 +290,8 @@ def probe_herd(ctx):
         return [skipped(n, "ps failed", "processes", group="herd") for n in names]
     count = 0
     for ln in ps["out"].splitlines():
+        if not ln.strip():
+            continue
         argv = (ln.strip().split(None, 1) + [""])[1].split()
         if (
             len(argv) > 1
