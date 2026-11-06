@@ -388,6 +388,15 @@ describe("AgentCard", () => {
     expect(foot.querySelector("span.agent-pane").textContent).toBe("pane-9");
   });
 
+  test("the footer age scales from now through seconds, minutes, hours and days", () => {
+    const age = (sec) => mk(rec("a", { since: Date.now() - sec * 1000 })).querySelector("footer span.num.dim").textContent;
+    expect(age(1)).toBe("for now");
+    expect(age(30)).toBe("for 30s");
+    expect(age(600)).toBe("for 10m");
+    expect(age(3 * 3600 + 120)).toBe("for 3h");
+    expect(age(2 * 86400 + 7200)).toBe("for 2d");
+  });
+
   test("singular wording for one task and one subagent; an approximate age says so", () => {
     const card = mk(rec("a", { tasks: [{}], sinceApprox: true, children: [rec("k", { title: "Kid", state: "idle" })] }));
     const foot = card.querySelector("footer").textContent;
@@ -842,6 +851,22 @@ describe("Inspector terminal tab", () => {
     expect(f.dataset.src).toBe(f.getAttribute("src"));
     expect(n.textContent).toContain("The terminal owns every key. Ctrl+Shift+\\ returns focus to the page.");
     expect(all(term(n), "button").map((b) => b.textContent)).toEqual(["Open in Colony", "Open terminal"]);
+  });
+
+  test("served through the host gateway, the pane frame keeps the herdr path but takes the page protocol and host", async () => {
+    const origQuery = document.querySelector;
+    const origLoc = globalThis.location;
+    document.querySelector = (sel) => (String(sel).includes("atlas-base") ? { content: "/atlas/" } : null);
+    globalThis.location = { ...origLoc, protocol: "https:", host: "box.ts.net", href: "https://box.ts.net/atlas/" };
+    try {
+      const gw = await import("./fleet.js?gateway");
+      const n = mount(gw.Inspector({ agent: rec("a", { deep_link: "http://127.0.0.1:9000/pane/7?x=1" }), tab: "terminal" }));
+      const u = new URL(n.querySelector("iframe.pane-frame").getAttribute("src"));
+      expect([u.protocol, u.host, u.pathname, u.searchParams.get("x"), u.searchParams.get("chrome")]).toEqual(["https:", "box.ts.net", "/pane/7", "1", "pane"]);
+    } finally {
+      document.querySelector = origQuery;
+      globalThis.location = origLoc;
+    }
   });
 
   test("the theme comes from the document, else the system preference", () => {

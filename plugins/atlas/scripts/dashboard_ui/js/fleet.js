@@ -267,6 +267,7 @@ const GATEWAY = Boolean(((document.querySelector('meta[name="atlas-base"]') || {
 function toHost(u) {
   if (GATEWAY) {
     u.protocol = location.protocol;
+    u.port = ""; // a host without a port would otherwise keep the loopback port
     u.host = location.host;
   }
   return u;

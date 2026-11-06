@@ -1151,6 +1151,33 @@ describe("connectors", () => {
     expect(connRow("vanta").querySelector("button[data-cred-action=\"save\"]").disabled).toBe(false);
   });
 
+  test("a redraw puts focus and the caret back on the input that had them", async () => {
+    await mountPage();
+    const before = credInput("pg-cred-vanta-VANTA_ID");
+    typeInto(before, "xyz");
+    before.id = "pg-cred-vanta-VANTA_ID";
+    before.selectionStart = 1;
+    before.selectionEnd = 2;
+    document.activeElement = before;
+    const proto = Object.getPrototypeOf(before);
+    const hadRange = Object.getOwnPropertyDescriptor(proto, "setSelectionRange");
+    const restored = [];
+    proto.setSelectionRange = function (a, b) { restored.push([this.attrs.id, a, b]); };
+    routes["POST /api/connectors/test"] = { ok: true };
+    try {
+      btn("Test", connRow("vanta")).click();
+      await flush();
+    } finally {
+      if (hadRange) Object.defineProperty(proto, "setSelectionRange", hadRange); else delete proto.setSelectionRange;
+    }
+    const after = credInput("pg-cred-vanta-VANTA_ID");
+    expect(after).not.toBe(before);
+    expect(focusLog.at(-1)).toEqual(["pg-cred-vanta-VANTA_ID", { preventScroll: true }]);
+    expect(document.activeElement).not.toBe(before);
+    expect(document.activeElement.attrs.id).toBe("pg-cred-vanta-VANTA_ID");
+    expect(restored).toEqual([["pg-cred-vanta-VANTA_ID", 1, 2]]);
+  });
+
   test("saving sends only the changed keys, re-reads the connectors and reports the saved keys", async () => {
     await mountPage();
     typeInto(credInput("pg-cred-vanta-VANTA_ID"), "xyz");

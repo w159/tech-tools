@@ -128,6 +128,17 @@ describe("operate DOM stub", () => {
     expect(buttonsOf(root)).toEqual(["Go"]);
   });
 
+  test("removeEventListener keeps registered listeners (the stub does not unregister)", () => {
+    const n = el("button");
+    let hits = 0;
+    const f = () => { hits += 1; };
+    n.addEventListener("click", f);
+    n.removeEventListener("click", f);
+    n.click();
+    expect(hits).toBe(1);
+    expect(n.listeners.click).toEqual([f]);
+  });
+
   test("contains and closest are inert (false / null) and focus is callable", () => {
     const n = el("div");
     expect(n.contains(n)).toBe(false);

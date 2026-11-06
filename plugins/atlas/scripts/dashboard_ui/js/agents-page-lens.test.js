@@ -587,6 +587,17 @@ describe("members view and lens switching", () => {
     await tick();
     expect(node.textContent).toContain("daemon down");
   });
+
+  test("a board that loads but throws while rendering shows the same error state, not a blank page", async () => {
+    const data = { phases: [] };
+    Object.defineProperty(data, "counts", { get() { throw Object.assign(new Error("render blew up"), { error: "render blew up" }); } });
+    ctx = mkCtx({ params: { lens: "board" }, get: async () => data });
+    const node = await mount();
+    await tick();
+    await tick();
+    expect(node.textContent).toContain("render blew up");
+    expect(node.querySelector("#work-root")).toBeNull();
+  });
 });
 
 describe("live events", () => {
