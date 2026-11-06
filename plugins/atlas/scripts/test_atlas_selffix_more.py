@@ -21,6 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import atlas_db  # noqa: E402
 import atlas_selffix as sf  # noqa: E402
 
+_REAL_HOME = sf._home
+
 
 def git(cwd, *args):
     p = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
@@ -252,6 +254,17 @@ class EvidenceAndState(Base):
     def test_rebaseline_without_changes_writes_nothing(self):
         self.assertEqual(sf.rebaseline_units(self.conn), [])
         self.assertFalse((self.home / "selffix-state.json").exists())
+
+
+class RealHome(unittest.TestCase):
+    def test_atlas_home_env_wins_else_dot_atlas(self):
+        with mock.patch.dict(os.environ, {"ATLAS_HOME": "/custom/h"}):
+            self.assertEqual(_REAL_HOME(), Path("/custom/h"))
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_HOME"}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(Path, "home", return_value=Path("/u")):
+            self.assertEqual(_REAL_HOME(), Path("/u/.atlas"))
+        with mock.patch.dict(os.environ, {"ATLAS_HOME": ""}), mock.patch.object(Path, "home", return_value=Path("/u")):
+            self.assertEqual(_REAL_HOME(), Path("/u/.atlas"))
 
 
 class Db(Base):
