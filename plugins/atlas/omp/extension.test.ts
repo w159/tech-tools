@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { SESSION_MARKER } from "./hook-bridge";
+import { runCaptureSync } from "./proc";
 import atlasOmpExtension from "./index";
 import { STYLE_BEGIN } from "./style";
 
@@ -49,7 +50,21 @@ beforeAll(() => {
 	atlasOmpExtension(pi);
 });
 
-afterAll(() => {
+/**
+ * The extension's run-state sink fires `omp_runstate.py begin` without handing the test a handle (fire-and-forget by
+ * design). Wait until no such child for this fixture is alive, so no child or kill timer outlives the file.
+ */
+async function waitForRunstateChildren(): Promise<void> {
+	const pattern = `omp_runstate[.]py .*--cwd ${proj}`;
+	let quiet = 0;
+	for (let i = 0; i < 200 && quiet < 2; i++) {
+		quiet = runCaptureSync(["pgrep", "-f", pattern]).code === 0 ? 0 : quiet + 1;
+		await new Promise(r => setTimeout(r, 50));
+	}
+}
+
+afterAll(async () => {
+	await waitForRunstateChildren();
 	process.chdir(originalCwd);
 	for (const key of ENV_KEYS) {
 		if (saved[key] === undefined) delete process.env[key];

@@ -132,7 +132,7 @@ test("only the task tool is revised", () => {
 	expect(out?.input?.schemaMode).toBe("strict");
 });
 
-test("the default export wires the worker report handler into the tool_call chain", () => {
+test("the default export wires the worker report handler into the tool_call chain", async () => {
 	const chain: Handler[] = [];
 	const api = {
 		on: (name: string, handler: Handler) => { if (name === "tool_call") chain.push(handler); },
@@ -145,9 +145,12 @@ test("the default export wires the worker report handler into the tool_call chai
 	const proj = mkdtempSync(join(tmpdir(), "wr-proj-"));
 	try {
 		const ctx = { cwd: proj, agent: { kind: "main", id: "Main" } };
-		const revised = chain
-			.map(handler => handler({ toolName: "task", input: { tasks: [{ agent: "implementer", task: "x" }, { agent: "task", task: "y" }] } }, ctx))
-			.find(out => out?.input);
+		// The chain includes the hook bridge's async handler, which spawns real hook children: await every
+		// handler so none outlives this test (a leaked child's kill timer fires inside later, timer-stubbing tests).
+		const outs = await Promise.all(
+			chain.map(handler => handler({ toolName: "task", input: { tasks: [{ agent: "implementer", task: "x" }, { agent: "task", task: "y" }] } }, ctx)),
+		);
+		const revised = outs.find(out => out?.input);
 		const tasks = revised?.input?.tasks as Record<string, unknown>[];
 		expect(tasks[0].schemaMode).toBe("strict");
 		expect(tasks[0].outputSchema).toBeDefined();

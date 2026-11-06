@@ -846,8 +846,8 @@ test("before_agent_start hands the run-state sink each main turn, never a sub tu
 
 // ── Agent guard: disallowedTools of atlas agents enforced on omp (omp/agent-guard.ts) ──
 
-test("the default export wires the agent guard: an explorer edit is blocked through the registered tool_call chain", () => {
-	type Chain = (event: { toolName: string; toolCallId: string; input: Record<string, unknown> }, ctx: unknown) => Result;
+test("the default export wires the agent guard: an explorer edit is blocked through the registered tool_call chain", async () => {
+	type Chain = (event: { toolName: string; toolCallId: string; input: Record<string, unknown> }, ctx: unknown) => Result | Promise<Result>;
 	const chain: Chain[] = [];
 	const api = {
 		on: (name: string, handler: Chain) => { if (name === "tool_call") chain.push(handler); },
@@ -856,22 +856,23 @@ test("the default export wires the agent guard: an explorer edit is blocked thro
 	};
 	extension(api as unknown as ExtensionAPI);
 	// omp's emitToolCall: handlers run in registration order and the first `block` wins.
-	const emit = (agent: Context["agent"] & { name: string }, toolName: string, input: Record<string, unknown>): Result => {
+	// Every handler is awaited: the chain includes the hook bridge, whose real hook children must not outlive the test.
+	const emit = async (agent: Context["agent"] & { name: string }, toolName: string, input: Record<string, unknown>): Promise<Result> => {
 		for (const handler of chain) {
-			const out = handler({ toolName, toolCallId: "t1", input }, { cwd: join(root, "project"), agent });
+			const out = await handler({ toolName, toolCallId: "t1", input }, { cwd: join(root, "project"), agent });
 			if (out?.block) return out;
 		}
 		return undefined;
 	};
 	const explorer = { kind: "sub" as const, id: "0-explorer", name: "explorer" };
-	const blocked = emit(explorer, "edit", { path: "src/a.ts" });
+	const blocked = await emit(explorer, "edit", { path: "src/a.ts" });
 	expect(blocked?.block).toBe(true);
 	expect(blocked?.reason).toContain("agents/explorer.md");
-	expect(emit(explorer, "write", { path: "agent://Main", content: "report" })?.block).toBeUndefined();
-	expect(emit({ kind: "sub", id: "0-implementer", name: "implementer" }, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
-	expect(emit({ kind: "main", id: "Main", name: "main" }, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
+	expect((await emit(explorer, "write", { path: "agent://Main", content: "report" }))?.block).toBeUndefined();
+	expect((await emit({ kind: "sub", id: "0-implementer", name: "implementer" }, "edit", { path: "src/a.ts" }))?.block).toBeUndefined();
+	expect((await emit({ kind: "main", id: "Main", name: "main" }, "edit", { path: "src/a.ts" }))?.block).toBeUndefined();
 	process.env.ATLAS_TRIPWIRE_HARD = "off";
-	expect(emit(explorer, "edit", { path: "src/a.ts" })?.block).toBeUndefined();
+	expect((await emit(explorer, "edit", { path: "src/a.ts" }))?.block).toBeUndefined();
 });
 
 test("extension load exports ~/.atlas/settings.json env into process.env; the store wins over an exported var", () => {
