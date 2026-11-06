@@ -24,6 +24,11 @@ import atlas_selffix as sf  # noqa: E402
 _REAL_HOME = sf._home
 
 
+# Product code runs plain `git commit` / `git merge`: give it an identity so no global git config is needed.
+GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+
 def git(cwd, *args):
     p = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
                        cwd=cwd, capture_output=True, text=True, check=True)
@@ -59,6 +64,9 @@ class Base(unittest.TestCase):
 class GitBase(Base):
     def setUp(self):
         super().setUp()
+        env = mock.patch.dict(os.environ, GIT_ENV)
+        env.start()
+        self.addCleanup(env.stop)
         self.repo = os.path.join(self.tmp, "repo")
         os.makedirs(self.repo)
         git(self.repo, "init", "-q", "-b", "main")

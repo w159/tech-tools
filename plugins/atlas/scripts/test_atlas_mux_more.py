@@ -219,6 +219,8 @@ class SpawnClaudeBg(TmpCase):
                 mock.patch.object(todo, "set_member_handles") as handles, \
                 mock.patch.object(todo, "leave") as leave, \
                 mock.patch.dict(os.environ, env or {}), contextlib.redirect_stdout(out):
+            if not (env and "ATLAS_LEAD_NAME" in env):
+                os.environ.pop("ATLAS_LEAD_NAME", None)   # an inherited or leaked lead name would beat the channel lead
             rc = mux._spawn_claude_bg(args, self.root, "main", model, level, "sess1")
         return rc, (json.loads(out.getvalue()) if out.getvalue() else {}), c, handles, leave
 
