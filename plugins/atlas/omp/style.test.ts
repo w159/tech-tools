@@ -333,3 +333,72 @@ test("omp todo section: `todo` records the plan, Atlas mirrors it, no atlas_todo
 	expect(section).not.toContain("LEDGER");
 	expect(section).not.toContain("not callable");
 });
+
+test("loadStyleBody strips exactly the frontmatter block and nothing of the body", () => {
+	const write = (name: string, body: string): string => {
+		const path = join(dir, name);
+		writeFileSync(path, body);
+		return path;
+	};
+	expect(loadStyleBody(write("fm.md", "---\nname: x\n---\nBODY line\nmore\n"))).toBe("BODY line\nmore");
+	expect(loadStyleBody(write("plain.md", "  just text \n"))).toBe("just text");
+	expect(loadStyleBody(write("open.md", "---\nname: x\nno close"))).toBeUndefined();
+	expect(loadStyleBody(write("empty.md", "---\nname: x\n---\n\n"))).toBeUndefined();
+	expect(loadStyleBody(join(dir, "absent.md"))).toBeUndefined();
+});
+
+test("loadToolNames rejects a contract whose claudeToOmp or mcp section is not an object with string prefix and separator", () => {
+	const load = (body: unknown) => {
+		const path = join(dir, `names-${Math.random().toString(16).slice(2)}.json`);
+		writeFileSync(path, JSON.stringify(body));
+		return loadToolNames(path);
+	};
+	const mcp = { prefix: "xd://mcp__", separator: "_" };
+	expect(load({ claudeToOmp: { Bash: "bash" }, mcp })).toEqual({ claudeToOmp: { Bash: "bash" }, bareTools: {}, mcp });
+	expect(load({ claudeToOmp: { Bash: "bash" }, bareTools: { ctx_read: "d" }, mcp })?.bareTools).toEqual({ ctx_read: "d" });
+	expect(load({ claudeToOmp: { Bash: "bash" }, bareTools: ["x"], mcp })?.bareTools).toEqual({});
+	expect(load({ claudeToOmp: null, mcp })).toBeUndefined();
+	expect(load({ claudeToOmp: "Bash", mcp })).toBeUndefined();
+	expect(load({ claudeToOmp: { Bash: "bash" }, mcp: null })).toBeUndefined();
+	expect(load({ claudeToOmp: { Bash: "bash" }, mcp: "x" })).toBeUndefined();
+	expect(load({ claudeToOmp: { Bash: "bash" }, mcp: { prefix: "p" } })).toBeUndefined();
+	expect(load({ claudeToOmp: { Bash: "bash" }, mcp: { prefix: 1, separator: "_" } })).toBeUndefined();
+	expect(load({ claudeToOmp: { Bash: "bash" }, mcp: { prefix: "p", separator: 2 } })).toBeUndefined();
+	expect(load({ claudeToOmp: { Bash: "bash" } })).toBeUndefined();
+	expect(load(null)).toBeUndefined();
+});
+
+test("the minimal header rule lists only phases that carry both an id and a glyph", () => {
+	const contractPath = join(dir, "contract.json");
+	writeFileSync(contractPath, JSON.stringify({ headerTemplate: "H | <phase>", phases: [{ id: "alpha", glyph: "A" }, { id: "noglyph" }, { glyph: "Z" }, { id: 7, glyph: "N" }, { id: "beta", glyph: "B" }] }));
+	const handlers: Record<string, Handler> = {};
+	registerStyle({ on: (name: string, h: Handler) => { handlers[name] = h; } } as unknown as Pick<ExtensionAPI, "on">, { env: { ATLAS_STYLE: "off" }, contractPath, addendumPath: join(dir, "none.md") });
+	const rule = handlers.before_agent_start({ systemPrompt: ["base"], prompt: "hi" }, { agent: { kind: "main" } })?.systemPrompt?.[1] ?? "";
+	expect(rule).toContain("`H | <phase>`, phase and glyph one of: A alpha, B beta.");
+	expect(rule).not.toContain("undefined");
+});
+
+
+test("translateToolNames prefers the longest key whichever order the contract lists them", () => {
+	const mcp = { prefix: "xd://mcp__", separator: "_" };
+	const a = translateToolNames("use Bash(git) then Bash", { claudeToOmp: { Bash: "bash", "Bash(git)": "gitbash" }, bareTools: {}, mcp });
+	const b = translateToolNames("use Bash(git) then Bash", { claudeToOmp: { "Bash(git)": "gitbash", Bash: "bash" }, bareTools: {}, mcp });
+	expect(a).toBe("use gitbash then bash");
+	expect(b).toBe("use gitbash then bash");
+});
+
+test("headerTemplate falls back to the literal unless the contract carries a non-empty string template", () => {
+	const fallback = "ATLAS | <glyph> <phase> | <state>";
+	const read = (body: unknown): string => {
+		const path = join(dir, `tpl-${Math.random().toString(16).slice(2)}.json`);
+		writeFileSync(path, JSON.stringify(body));
+		return headerTemplate(path);
+	};
+	expect(read({ headerTemplate: "X | <phase>" })).toBe("X | <phase>");
+	expect(read({ headerTemplate: "" })).toBe(fallback);
+	expect(read({ headerTemplate: 5 })).toBe(fallback);
+	expect(read({ other: "x" })).toBe(fallback);
+	expect(read(null)).toBe(fallback);
+	expect(read("str")).toBe(fallback);
+	expect(headerTemplate(join(dir, "absent.json"))).toBe(fallback);
+});

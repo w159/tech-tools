@@ -1,6 +1,7 @@
 import { fx } from "../contracts/todo-tree-fixture";
 import { expect, test } from "bun:test";
 import { renderPanel, visibleWidth, type PanelModel } from "./mission-panel";
+import { C, seg } from "./panel-paint";
 import { type PanelTodo, todoLines } from "./todo-panel";
 
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
@@ -83,4 +84,38 @@ test("renderPanel places the board under the rail within the width and line budg
 test("phase tree from the shared fixture: same rows as mod", () => {
 	const rows = todoLines(fx.items, { width: 60, tick: 0, spin: "⠋", expanded: true, maxLines: 20 }).map(l => strip(l).trimEnd());
 	expect(rows).toEqual(fx.rows);
+});
+
+test("collapsed bar draws the partial cell after the filled ones, and the count is bold", () => {
+	const five: PanelTodo[] = [
+		{ content: "a", status: "completed" },
+		{ content: "b", status: "completed" },
+		{ content: "c", status: "in_progress" },
+		{ content: "d", status: "pending" },
+		{ content: "e", status: "pending" },
+	];
+	const raw = todoLines(five, { ...opts, tick: 2 })[0]!;
+	const cells = [...strip(raw)].slice(" board ".length, " board ".length + 24); // width 100 -> 24 cells, 9.6 lit
+	expect(cells.slice(0, 9).filter(c => c === "█").length).toBeGreaterThanOrEqual(8); // one is repainted by the pulse
+	expect(cells[9]).toBe("▌"); // 0.6 of a cell -> the 4/8 block
+	expect(cells[10]).toBe(" ");
+	expect(raw).toMatch(/\x1b\[1m(?:\x1b\[[0-9;]*m)* 2\/5 /);
+});
+
+test("expanded rows colour done text muted and open text plain", () => {
+	const lines = todoLines(todos, { ...opts, expanded: true });
+	expect(lines[0]).toContain(seg("map the auth flow", C.MUT));
+	expect(lines[2]).toContain(seg("add ttl config", C.TXT));
+	expect(lines[2]).not.toContain(seg("add ttl config", C.MUT));
+});
+
+test("expanded row: text takes 60% of the room when there is evidence, evidence gets the rest", () => {
+	const long = "0123456789abcdefghijklmnopqrstuvwxyz0123";
+	const row = (content: string, evidence: string, width: number) => strip(todoLines([{ content, status: "pending", evidence }], { ...opts, width, expanded: true })[0]!);
+	// head is 16 columns, so width 47 leaves room 30 and the text cell is floor(30 * 0.6) = 18 wide
+	expect(row(long, "ev", 47)).toContain(`${long.slice(0, 17)}…  ev`);
+	// short content, long evidence: room 20, text 3 -> evidence cell is 20 - 3 - 2 = 15 wide
+	expect(row("abc", "x".repeat(30), 37).endsWith(`abc  ${"x".repeat(14)}…`)).toBe(true);
+	// no room left after the text: the evidence tail is just its two spaces, never a stray ellipsis
+	expect(row(long, "x".repeat(30), 29).endsWith("…  ")).toBe(true);
 });

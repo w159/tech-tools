@@ -14,6 +14,7 @@ import {
 	HANDLER_BUDGET_MS,
 	SESSION_MARKER,
 	TOOL_CALL_BUDGET_MS,
+	claudeLifecyclePayload,
 	claudeNamesFor,
 	claudeNamesForCall,
 	loadBridgedHooks,
@@ -335,6 +336,12 @@ test("the hooks of one event share the handler budget (concurrently); SessionSta
 test("the bridge's budgets sit below omp's 30 s handler timeouts", () => {
 	expect(TOOL_CALL_BUDGET_MS).toBeLessThanOrEqual(20_000);
 	expect(HANDLER_BUDGET_MS).toBeLessThan(30_000);
+	expect(HANDLER_BUDGET_MS).toBe(25_000); // omp cuts a handler at 30 s and delivers nothing; the bridge stays 5 s under
+});
+
+test("claudeLifecyclePayload passes a transcript path through and defaults it to an empty string", () => {
+	expect(claudeLifecyclePayload("SessionEnd", { sessionId: "s", cwd: "/p", transcriptPath: "/t.jsonl" }).transcript_path).toBe("/t.jsonl");
+	expect(claudeLifecyclePayload("SessionEnd", { sessionId: "s", cwd: "/p" }).transcript_path).toBe("");
 });
 
 async function withAtlasHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
@@ -393,7 +400,27 @@ test("a 3-item task batch with every hook hanging shares ONE budget: later items
 		expect(await handlers.tool_call({ toolName: "task", input: batch }, ctx())).toBeUndefined();
 		expect(Date.now() - started).toBeLessThan(700); // baseline: 3 x the full per-hook slot
 		expect(logOf("hang_task.py").length).toBe(1); // items 2 and 3 never started a hook
-		expect(faultsIn(home).map(f => f.type)).toEqual(["BridgeTimeout", "BridgeBudget", "BridgeBudget"]);
+		expect(faultsIn(home).map(f => [f.hook, f.type])).toEqual([["hang_task.py", "BridgeTimeout"], ["hang_task.py", "BridgeBudget"], ["hang_task.py", "BridgeBudget"]]);
+	});
+});
+
+test("a hook that throws, or that returns only after its whole slot, leaves a BridgeTimeout row", async () => {
+	await withAtlasHome(async home => {
+		const gate = hookScript("slot_hook.py", {});
+		const hooks = writeConfig({ PreToolUse: [{ matcher: "Bash", hooks: [{ command: `python3 "${gate}"`, timeout: 2 }] }] }, ["slot_hook.py"]);
+		let clock = 1_000;
+		const throwing: HookRunner = async () => { throw new Error("runner crashed"); };
+		const a = harness(hooks, {}, throwing, { now: () => clock });
+		expect(await a.handlers.tool_call({ toolName: "bash", input: { command: "ls" } }, a.ctx())).toBeUndefined();
+		expect(faultsIn(home).map(f => f.type)).toEqual(["BridgeTimeout"]); // no time passed, but the runner never produced output
+		const late: HookRunner = async () => { clock += 2_000; return ""; };
+		const b = harness(hooks, {}, late, { now: () => clock });
+		expect(await b.handlers.tool_call({ toolName: "bash", input: { command: "ls" } }, b.ctx())).toBeUndefined();
+		expect(faultsIn(home).map(f => f.type)).toEqual(["BridgeTimeout", "BridgeTimeout"]); // output arrived, but only after the full 2000 ms slot
+		const prompt: HookRunner = async () => { clock += 1_999; return ""; };
+		const c = harness(hooks, {}, prompt, { now: () => clock });
+		await c.handlers.tool_call({ toolName: "bash", input: { command: "ls" } }, c.ctx());
+		expect(faultsIn(home)).toHaveLength(2); // one ms inside the slot: no fault
 	});
 });
 
@@ -408,6 +435,37 @@ test("a deny from a hook that finishes later still wins by hooks.json order; hoo
 	const started = Date.now();
 	expect(await handlers.tool_call({ toolName: "bash", input: { command: "ls" } }, ctx())).toEqual({ block: true, reason: "A first" });
 	expect(Date.now() - started).toBeLessThan(120);
+});
+
+test("parseHookOutput: a block decision needs its reason, a system message must be non-blank text", () => {
+	const parse = (o: unknown) => parseHookOutput(JSON.stringify(o));
+	expect(parse({ decision: "block", reason: "why" })).toEqual({ context: "why" });
+	expect(parse({ decision: "block" })).toEqual({});
+	expect(parse({ decision: "allow", reason: "why" })).toEqual({});
+	expect(parse({ decision: "block", reason: 7 })).toEqual({});
+	expect(parse({ hookSpecificOutput: { additionalContext: "a" }, decision: "block", reason: "b" })).toEqual({ context: "a\nb" });
+	expect(parse({ systemMessage: "note" })).toEqual({ systemMessage: "note" });
+	expect(parse({ systemMessage: "   " })).toEqual({});
+	expect(parse({ systemMessage: 3 })).toEqual({});
+	expect(parse({ hookSpecificOutput: { permissionDecision: "deny" } })).toEqual({ deny: "denied by atlas hook" });
+	expect(parse({ hookSpecificOutput: { additionalContext: "  " } })).toEqual({});
+});
+
+test("claudeNamesFor maps through the contract, appends a valid alias, and fails open to the omp name", () => {
+	const write = (name: string, body: unknown): string => {
+		const path = join(dir, name);
+		writeFileSync(path, typeof body === "string" ? body : JSON.stringify(body));
+		return path;
+	};
+	const map = { claudeToOmp: { Bash: "bash", Edit: "edit", MultiEdit: "edit", "mcp__x": "edit", lower: "edit" }, ompAliases: { edit: "Patch", bash: "not-valid" } };
+	expect(claudeNamesFor("edit", write("map.json", map))).toEqual(["Edit", "MultiEdit", "Patch"]);
+	expect(claudeNamesFor("bash", write("map2.json", map))).toEqual(["Bash"]);
+	expect(claudeNamesFor("zzz", write("map3.json", map))).toEqual(["zzz"]);
+	expect(claudeNamesFor("edit", write("nomap.json", { other: 1 }))).toEqual(["edit"]);
+	expect(claudeNamesFor("edit", write("strmap.json", { claudeToOmp: "x" }))).toEqual(["edit"]);
+	expect(claudeNamesFor("edit", write("nullmap.json", { claudeToOmp: null }))).toEqual(["edit"]);
+	expect(claudeNamesFor("edit", write("bad.json", "{nope"))).toEqual(["edit"]);
+	expect(claudeNamesFor("edit", join(dir, "absent.json"))).toEqual(["edit"]);
 });
 
 test("permissionDecision ask fails closed as a deny; allow stays an allow", () => {
@@ -717,8 +775,10 @@ test("SessionStart systemMessage (the first-run telemetry notice) is shown once 
 test("no UI, a throwing notify, or no systemMessage never breaks the turn", async () => {
 	const boot = hookScript("notice_boot2.py", { systemMessage: "note", ...context("SessionStart", "posture") });
 	const { handlers, ctx } = harness(writeConfig({ SessionStart: [{ hooks: [{ command: `python3 "${boot}"` }] }] }, ["notice_boot2.py"]));
-	const headless = { ...ctx(), hasUI: false, ui: { notify: () => { throw new Error("must not be called"); } } } as Ctx;
+	let headlessCalls = 0;
+	const headless = { ...ctx(), hasUI: false, ui: { notify: () => void headlessCalls++ } } as Ctx;
 	expect((await handlers.before_agent_start({ prompt: "a", systemPrompt: ["base"] }, headless))?.systemPrompt?.length).toBe(2);
+	expect(headlessCalls).toBe(0);
 	await handlers.session_switch({}, ctx());
 	const throwing = { ...ctx(), ui: { notify: () => { throw new Error("toast failed"); } } } as Ctx;
 	expect((await handlers.before_agent_start({ prompt: "b", systemPrompt: ["base"] }, throwing))?.systemPrompt?.length).toBe(2);

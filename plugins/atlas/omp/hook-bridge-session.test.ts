@@ -99,6 +99,12 @@ test("omp-minted connector names are re-split so the hooks.json matcher and the 
 	expect(h.payloads[0].payload.tool_response).toBe("HTTP 401 Unauthorized");
 });
 
+test("claudeMcpName needs at least one tool character after the server prefix", () => {
+	const server = CONNECTOR_SERVERS[0]!;
+	expect(claudeMcpName(`mcp__${server}_x`)).toBe(`mcp__${server}__x`);
+	expect(claudeMcpName(`mcp__${server}_`)).toBe(`mcp__${server}_`);
+});
+
 test("claudeMcpName splits on the longest known server, accepts the xd:// form, and leaves the rest alone", () => {
 	expect(claudeMcpName("mcp__falcon-mcp_falcon_get_host_details")).toBe("mcp__falcon-mcp__falcon_get_host_details");
 	expect(claudeMcpName("xd://mcp__plaid_get_sandbox_access_token")).toBe("mcp__plaid__get_sandbox_access_token");

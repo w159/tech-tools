@@ -135,3 +135,36 @@ test("snapshotDirty from a subdirectory counts a shell edit to a dirty file at t
 	write(root, "src/calc.py", "def add(a, b):\n    return a + b\n");
 	expect(newShellEdits(before, snapshotDirty(sub))).toEqual(["base.py", "src/calc.py"]);
 });
+
+test("tracker re-probes a non-git root only after the 60s negative window, on the injected clock", () => {
+	const dir = fs.realpathSync(fs.mkdtempSync(nodePath.join(os.tmpdir(), "atlas-ttl-")));
+	made.push(dir);
+	let now = 1_000;
+	const tracker = createShellEditTracker(() => now);
+	tracker.capture(dir); // not a git tree yet: remembered as failed at t=1000
+	run(["git", "init", "-q"], dir);
+	write(dir, "src/before.py", "1\n");
+	now = 1_000 + 59_999;
+	tracker.capture(dir); // still inside the window: no probe, so still no baseline
+	write(dir, "src/during.py", "1\n");
+	expect(tracker.stop(dir)).toEqual([]);
+	now = 1_000 + 60_000;
+	tracker.capture(dir); // window over: baseline now holds before.py and during.py
+	write(dir, "src/after.py", "1\n");
+	expect(tracker.stop(dir)).toEqual(["src/after.py"]);
+});
+
+test("tracker stop with no root yields nothing even when the process cwd is a dirty repo", () => {
+	const baseRepo = repo();
+	const otherRepo = repo();
+	write(otherRepo, "src/other.py", "x = 1\n");
+	const tracker = createShellEditTracker();
+	tracker.capture(baseRepo);
+	const cwd = process.cwd();
+	process.chdir(otherRepo);
+	try {
+		expect(tracker.stop(undefined)).toEqual([]);
+	} finally {
+		process.chdir(cwd);
+	}
+});

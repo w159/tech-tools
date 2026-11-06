@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { YAML } from "bun";
 import {
@@ -200,4 +201,35 @@ test.skipIf(!existsSync(OMP_RESOLVER))("a user-set modelRole overrides the defau
 	expect(await resolveTier("runner", { "atlas-mechanic": "openai/gpt-5-mini" })).toBe("gpt-5-mini");
 	expect(await resolveTier("implementer", { "atlas-worker": "anthropic/claude-opus-5-5" })).toBe("claude-opus-5-5");
 	expect(await resolveTier("verifier", { "atlas-verifier": "openai/gpt-5-mini", default: "anthropic/claude-opus-5-5" })).toBe("gpt-5-mini");
+});
+
+test("frontmatter must open with exactly --- and parse to a map", () => {
+	expect(() => renderGeneratedAgent("a.md", "----\nname: runner\ndescription: d\n---\nbody")).toThrow();
+	expect(() => renderGeneratedAgent("a.md", "---\n---\nbody")).toThrow("did not parse to a map");
+	expect(() => renderGeneratedAgent("a.md", "no frontmatter")).toThrow("no frontmatter");
+	expect(() => renderGeneratedAgent("a.md", "---\nname: x\n")).toThrow("not closed");
+});
+
+test("generateAgents creates a missing output dir, writes once, then reports no change", () => {
+	const root = mkdtempSync(path.join(tmpdir(), "atlas-gen-agents-"));
+	try {
+		const agentsDir = path.join(root, "agents");
+		const outDir = path.join(root, "nested", "out");
+		mkdirSync(agentsDir);
+		writeFileSync(path.join(agentsDir, "runner.md"), "---\nname: runner\ndescription: Runs things.\n---\n\nBody.\n");
+		writeFileSync(path.join(agentsDir, "skipped.md"), "---\nname: \"\"\ndescription: nameless\n---\nBody.\n");
+		writeFileSync(path.join(agentsDir, "notes.txt"), "ignored");
+		expect(generateAgents({ agentsDir, outDir })).toEqual({ written: ["runner.md"] });
+		expect(readdirSync(outDir)).toEqual(["runner.md"]);
+		expect(generateAgents({ agentsDir, outDir })).toEqual({ written: [] });
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("the generator script reports an up-to-date tree", () => {
+	const r = Bun.spawnSync([process.execPath, path.join(import.meta.dir, "gen-agents.ts")]);
+	expect(r.exitCode).toBe(0);
+	const count = readdirSync(path.join(import.meta.dir, "agents")).filter(f => f.endsWith(".md")).length;
+	expect(r.stdout.toString().trim()).toBe(`omp agent files up to date (${count} files)`);
 });

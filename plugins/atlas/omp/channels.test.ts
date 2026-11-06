@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
@@ -198,4 +198,42 @@ test("openLeadChannel: ATLAS_CHANNELS=off skips; a missing script records the st
 	expect(added.length).toBe(1); // faultOnce: one row even across repeated session starts
 	expect(added[0]).toContain("atlas omp install is stale");
 	expect(added[0]).toContain("omp plugin upgrade atlas");
+});
+
+test("defaultRun failure keeps at most the first 300 characters of stderr", () => {
+	const dir = repo();
+	try {
+		const faults = join(process.env.ATLAS_HOME as string, "hook-faults.jsonl");
+		reviseForChannel(
+			{ tasks: [{ agent: "x", task: "t" }] },
+			{ cwd: dir, env: {}, run: (_a, cwd) => defaultRun(["sh", "-c", "head -c 400 /dev/zero | tr '\\0' 'z' >&2; exit 4"], cwd) },
+		);
+		const last = readFileSync(faults, "utf8").trim().split("\n").pop() as string;
+		expect(last).toContain("exit 4");
+		expect(last).toContain(`stderr: ${"z".repeat(300)}`);
+		expect(last).not.toContain("z".repeat(301));
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("an unnamed item gets <agent>-<4 hex> and the dispatch todo is titled by the GOAL line, else the first 80 chars", () => {
+	const cwd = repo();
+	const realRandom = Math.random;
+	Math.random = () => 0.123456789;
+	try {
+		const revised = reviseForChannel(
+			{ tasks: [{ agent: "implementer", task: "intro\nGOAL:  ship the thing \nmore" }, { agent: "explorer", name: "Beta", task: `${"w ".repeat(60)}` }] },
+			{ cwd, sessionId: "sess123456", env: {} },
+		);
+		const tasks = revised?.tasks as Record<string, string>[];
+		expect(tasks[0].name).toBe(`implementer-${(0.123456789).toString(16).slice(2, 6)}`);
+		const items = todo("list", "--root", cwd).items as { owner?: string; content?: string }[];
+		expect(items.find(i => i.owner === tasks[0].name)?.content).toBe("ship the thing");
+		expect(items.find(i => i.owner === "Beta")?.content).toBe("w ".repeat(60).replace(/\s+/g, " ").trim().slice(0, 80).trim());
+		expect(items.find(i => i.owner === "Beta")?.content?.length).toBe(79);
+	} finally {
+		Math.random = realRandom;
+		rmSync(cwd, { recursive: true, force: true });
+	}
 });

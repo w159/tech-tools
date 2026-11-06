@@ -338,6 +338,69 @@ test("recall gate persistence: an unusable marker dir fails open to the in-memor
 	});
 });
 
+test("recall gate persistence: without gateMarkerDir the marker lands in <tmpdir>/atlas-recall-gate", () => {
+	withMarkerDir(tmp => {
+		const old = process.env.TMPDIR;
+		process.env.TMPDIR = tmp;
+		try {
+			const handlers: Record<string, Handler> = {};
+			const api = { on: (name: string, h: Handler) => { handlers[name] = h; } };
+			registerMandates(api as unknown as Pick<ExtensionAPI, "on">, { activeTools: () => MEM_TOOLS, env: {} });
+			const ctx = { agent: { kind: "main" as const }, sessionManager: { getSessionId: () => "sess-default" } };
+			handlers.tool_call({ toolName: "mcp__claude_mem_mcp_search_search", input: { query: "x" } }, ctx);
+			expect(readdirSync(join(tmp, "atlas-recall-gate"))).toEqual(["recall-sess-default"]);
+			// a fresh process (own in-memory flag) reads the same default-dir marker
+			const again: Record<string, Handler> = {};
+			registerMandates({ on: (n: string, h: Handler) => { again[n] = h; } } as unknown as Pick<ExtensionAPI, "on">, { activeTools: () => MEM_TOOLS, env: {} });
+			expect(again.tool_call({ toolName: "read", input: { path: "a.ts" } }, ctx)).toBeUndefined();
+		} finally {
+			if (old === undefined) delete process.env.TMPDIR;
+			else process.env.TMPDIR = old;
+		}
+	});
+});
+
+test("git commit parse: a leading comment line, a quoted subcommand and a command past the shlex cap", () => {
+	expect(matchGitCommit("# note\ngit commit -m x")).toBe(true);
+	expect(matchGitCommit("git 'commit' -m x")).toBe(true);
+	expect(matchGitCommit('git "commit" -m x')).toBe(true);
+	const head = `git${" ".repeat(2048 - 3 - 6)}commit`; // exactly SEGMENT_HEAD chars
+	const pad = `echo ${"y".repeat(17_000)};`;
+	expect(matchGitCommit(`${pad}${head}`)).toBe(true);
+	expect(matchGitCommit(`${pad}${head}x`)).toBe(true); // the 2049th char is cut off, leaving a real commit
+});
+
+test("git commit parse: unbalanced quotes fall back to the regex split; the long-command path keeps bash word rules", () => {
+	expect(matchGitCommit('git commit -m "unterminated')).toBe(true);
+	expect(matchGitCommit('git "" commit')).toBe(false); // an empty quoted word is still a word (shlex keeps it)
+	const pad = `echo ${"y".repeat(17_000)};`;
+	expect(matchGitCommit(`${pad}git commit#x`)).toBe(false); // no punctuation mode: `#` mid-word stays in the word
+	// only the first 4096 separators split; the remainder is one segment whose head is `echo`
+	expect(matchGitCommit(`${"aaaa;".repeat(4096)}echo a; git commit`)).toBe(false);
+	expect(matchGitCommit(`${"aaaa;".repeat(4095)}echo a; git commit`)).toBe(true);
+});
+
+test("loadMandates needs every string field of the contract", () => {
+	const dir = mkdtempSync(join(tmpdir(), "atlas-mandates-"));
+	try {
+		const base = { commitNudge: "a", recall: "b", recallGate: "c", recallGateExample: "d" };
+		const load = (name: string, body: unknown): ReturnType<typeof loadMandates> => {
+			const path = join(dir, name);
+			writeFileSync(path, JSON.stringify(body));
+			return loadMandates(path);
+		};
+		expect(load("ok.json", base)).toEqual(base);
+		for (const field of Object.keys(base)) {
+			expect(load(`${field}.json`, { ...base, [field]: 7 })).toBeUndefined();
+			const { [field]: _gone, ...rest } = base as Record<string, string>;
+			expect(load(`${field}-missing.json`, rest)).toBeUndefined();
+		}
+		expect(load("null.json", null)).toBeUndefined();
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
 // Parity with hooks/bash_advisor.py `_match_git_commit`: the same strings go through both implementations.
 const PARITY_COMMANDS = [
 	...contract.gitCommitCases.match,
