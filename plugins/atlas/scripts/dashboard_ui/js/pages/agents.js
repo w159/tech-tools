@@ -51,7 +51,12 @@ const SORT = {
   now: (a, b) => nowLine(a).text.localeCompare(nowLine(b).text),
   age: (a, b) => b.since - a.since,
   subs: (a, b) => (a.children || []).length - (b.children || []).length,
-  channel: (a, b) => ((channelOf(a, S.chans) || {}).full || "~").localeCompare((channelOf(b, S.chans) || {}).full || "~"),
+  channel: (a, b) => {
+    const ka = (channelOf(a, S.chans) || {}).full;
+    const kb = (channelOf(b, S.chans) || {}).full;
+    if (!ka || !kb) return (ka ? 0 : 1) - (kb ? 0 : 1); // no channel sorts last
+    return ka.localeCompare(kb);
+  },
 };
 
 function lensBar(ctx) {

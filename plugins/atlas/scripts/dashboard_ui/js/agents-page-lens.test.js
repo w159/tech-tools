@@ -467,6 +467,16 @@ describe("list view", () => {
     expect(rows(node)).toEqual(["c", "b", "a"]);
   });
 
+  test("sorting by channel puts agents with no channel last", async () => {
+    store = stateOf([rec("orphan", { project: "/o" }), rec("b", { project: "/b" }), rec("a", { project: "/a" })]);
+    ctx = mkCtx({ channels: [{ name: "b@x", project: "/b", members: [{ name: "b" }] }, { name: "a@x", project: "/a", members: [{ name: "a" }] }] });
+    const node = await mount();
+    await clickView(node, "List");
+    await tick();
+    node.querySelectorAll("button.th-btn").find((b) => b.textContent.startsWith("Channel")).click();
+    expect(rows(node)).toEqual(["a", "b", "orphan"]);
+  });
+
   test("a larger list sorts by subagent count and by channel, both ways, whatever the store order", async () => {
     const keys = ["d", "b", "e", "a", "c"];
     const kids = { d: 3, b: 1, e: 4, a: 0, c: 2 };
