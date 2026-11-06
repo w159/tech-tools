@@ -168,7 +168,7 @@ export default {
     root.appendChild(h("h2", { class: "ov-h" }, "Right now", h("span", { class: "dim" }, " — click a card for the detail page")));
     root.appendChild(glance(d, ctx, attention));
     root.appendChild(h("h2", { class: "ov-h" }, "Last 7 days", h("span", { class: "dim" }, " — counted from the Atlas database")));
-    root.appendChild(kpis.length ? h("div", { class: "kpi-grid" }, kpis.map((k) => weekKpi(k, ctx))) : null);
+    if (kpis.length) root.appendChild(h("div", { class: "kpi-grid" }, kpis.map((k) => weekKpi(k, ctx))));
     root.appendChild(h("div", { class: "ov-grid" }, attentionCard(d, attention, ctx, () => this.reload(ctx)), sideColumn(d.trend, runs)));
     if (!kpis.length && !attention.length && !runs.length) root.appendChild(emptyOverview());
     return root;

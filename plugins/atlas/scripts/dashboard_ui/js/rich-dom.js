@@ -151,6 +151,15 @@ export class RNode {
   setAttribute(k, v) { this._attrs.set(k, String(v)); }
   removeAttribute(k) { this._attrs.delete(k); }
   hasAttribute(k) { return this._attrs.has(k); }
+  isEqualNode(o) {
+    if (!o || o.nodeType !== this.nodeType) return false;
+    if (this.nodeType === 3) return this.nodeValue === o.nodeValue;
+    if (this.tagName !== o.tagName) return false;
+    const a = this.attributes, b = o.attributes;
+    if (a.length !== b.length || a.some((x) => o.getAttribute(x.name) !== x.value)) return false;
+    if (this.childNodes.length !== o.childNodes.length) return false;
+    return this.childNodes.every((c, i) => c.isEqualNode(o.childNodes[i]));
+  }
   _detach(c) { if (c.parentNode) c.parentNode.removeChild(c); }
   appendChild(c) { this._detach(c); c.parentNode = this; this.childNodes.push(c); return c; }
   append(...cs) { cs.forEach((c) => this.appendChild(typeof c === "string" ? DOC.createTextNode(c) : c)); }
