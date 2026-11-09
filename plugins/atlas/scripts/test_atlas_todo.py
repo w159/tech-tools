@@ -55,6 +55,25 @@ class BoardBasics(unittest.TestCase):
         self.assertEqual(len(board["items"]), 1)
         self.assertEqual(atlas_todo.counts(board, "s1")["needed"], 1)
 
+
+    def test_upsert_work_state_keeps_identity_and_clears_metadata(self):
+        first = atlas_todo.upsert_work_state(
+            self.root,
+            "release",
+            {"task": "ship", "status": "doing", "details": "wait"},
+            "s1",
+        )["item"]
+        second = atlas_todo.upsert_work_state(
+            self.root,
+            "release",
+            {"task": "ship", "status": "done", "details": None},
+            "s1",
+        )["item"]
+        self.assertEqual(second["id"], first["id"])
+        self.assertEqual(second["status"], "completed")
+        self.assertNotIn("details", second)
+        self.assertFalse(atlas_todo.upsert_work_state(self.root, "release", [], "s1")["ok"])
+
     def test_mirror_replaces_session_items_and_keeps_manual(self):
         atlas_todo.add(self.root, "human note", origin="manual")
         atlas_todo.mirror(

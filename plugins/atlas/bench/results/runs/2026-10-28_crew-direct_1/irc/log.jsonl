@@ -1,0 +1,10 @@
+{"seq": 1, "ts": 1793182222.006, "from": "lead", "to": "#crew-06102205d2", "text": "Kickoff. Goal: Implement pkg/*.py per SPEC.md | owners: cli: pkg/cli.py; manifest: pkg/manifest.py; ranges: pkg/ranges.py; registry: pkg/registry.py; resolver: pkg/resolver.py; semver: pkg/semver.py", "kind": "kickoff"}
+{"seq": 2, "ts": 1793182244.02, "from": "semver", "to": "#crew-06102205d2", "text": "DONE semver: check passes", "kind": "done"}
+{"seq": 3, "ts": 1793182244.359, "from": "ranges", "to": "#crew-06102205d2", "text": "DONE ranges: check passes", "kind": "done"}
+{"seq": 4, "ts": 1793182244.525, "from": "manifest", "to": "#crew-06102205d2", "text": "DONE manifest: check passes", "kind": "done"}
+{"seq": 5, "ts": 1793182244.793, "from": "registry", "to": "#crew-06102205d2", "text": "DONE registry: check passes", "kind": "done"}
+{"seq": 6, "ts": 1793182245.1, "from": "resolver", "to": "#crew-06102205d2", "text": "DONE resolver: check passes", "kind": "done"}
+{"seq": 7, "ts": 1793182245.495, "from": "cli", "to": "cli", "text": "unverified cli: `python3 -m pytest -q tests/test_cli.py` exited 1", "kind": "unverified"}
+{"seq": 8, "ts": 1793182251.135, "from": "cli", "to": "resolver", "text": "tests/test_cli.py expects ResolveError message 'no version of core satisfies: >=9.0.0' (colon after satisfies); yours is 'no version of core satisfies >=9.0.0'. Can you add the colon? Still matches your tests."}
+{"seq": 9, "ts": 1793182357.941, "from": "cli", "to": "#crew-06102205d2", "text": "DONE cli: check passes", "kind": "done"}
+{"seq": 10, "ts": 1793182358.9, "from": "lead", "to": "#crew-06102205d2", "text": "Crew finished: global check exit 0.", "kind": "final"}

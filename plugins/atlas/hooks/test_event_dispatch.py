@@ -33,17 +33,17 @@ FORMER = (
     ("PreToolUse", "Edit|edit|MultiEdit", "edit_read_nudge"),
     (
         "PreToolUse",
-        "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task",
+        "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task|collaboration\\.spawn_agent",
         "dispatch_tripwire",
     ),
-    ("PostToolUse", "TodoWrite|Agent|Task|Bash", "todo_capture"),
+    ("PostToolUse", "TodoWrite|Agent|Task|collaboration\\.spawn_agent|Bash|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write", "todo_capture"),
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "format_after_edit"),
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "docs_drift_watch"),
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "delegation_prewarn"),
     ("PostToolUse", "Read|read|mcp__.*ctx_read", "edit_read_nudge"),
     (
         "PostToolUse",
-        "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|NotebookEdit|Skill",
+        "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|collaboration\\.spawn_agent|MultiEdit|NotebookEdit|Skill",
         "dispatch_tripwire",
     ),
     (
@@ -57,9 +57,10 @@ STANDALONE = {"fallow_gate", "format_after_edit"}  # keep their own hooks.json p
 
 TOOLS = (
     "Edit edit MultiEdit Write NotebookEdit Read read Grep Glob Bash Agent Task Skill TodoWrite "
-    "WebFetch WebSearch BashOutput Editor ReadMe mcp__lean-ctx__ctx_read mcp__x__ctx_read_all "
+    "collaboration.spawn_agent collaboration.followup_task collaboration.send_message collaboration.wait_agent WebFetch WebSearch BashOutput Editor ReadMe mcp__lean-ctx__ctx_read mcp__x__ctx_read_all "
     "mcp__plugin_armada_falcon__falcon_status mcp__falcon-mcp__x mcp__cipp_x mcp__connectwise__y "
-    "mcp__plaid__z mcp__gcloud__a mcp__other__thing xd://x"
+    "mcp__plaid__z mcp__gcloud__a mcp__other__thing mcp__mcp_search__work_state_write "
+    "mcp__mcp_search_work_state_write xd://x"
 ).split() + ["", None]
 
 
@@ -121,7 +122,9 @@ class BindingTableTest(unittest.TestCase):
             self.assertEqual(len(groups), 1, event)
             (g,) = groups
             self.assertEqual(g["matcher"], ed.outer_matcher(event))
-            (h,) = g["hooks"]
+            h = next(
+                hook for hook in g["hooks"] if "event_dispatch.py" in hook["command"]
+            )
             self.assertTrue(h["command"].endswith('event_dispatch.py" %s' % event))
             self.assertGreaterEqual(h["timeout"], ed.BUDGET_S[event])
             for tool in TOOLS:

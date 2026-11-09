@@ -1,0 +1,91 @@
+{
+ "ok": true,
+ "run": "crew-061900cb1d",
+ "check": "python3 -m pytest -q",
+ "check_exit": 0,
+ "check_tail": "............ [ 50%]\n........................................................................ [ 75%]\n.......................................................................  [100%]\n287 passed in 0.06s\n",
+ "wall_s": 28.0,
+ "rounds": [
+  {
+   "round": 0,
+   "all_exited": true,
+   "check_exit": 0,
+   "t": 28.0
+  }
+ ],
+ "workers": [
+  {
+   "name": "cli",
+   "exit": 0,
+   "wall_s": 27.6,
+   "turns": 6,
+   "tokens": 38295,
+   "cost_usd": 0.089,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "manifest",
+   "exit": 0,
+   "wall_s": 16.9,
+   "turns": 2,
+   "tokens": 6376,
+   "cost_usd": 0.0437,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "ranges",
+   "exit": 0,
+   "wall_s": 16.6,
+   "turns": 3,
+   "tokens": 13572,
+   "cost_usd": 0.0718,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "registry",
+   "exit": 0,
+   "wall_s": 17.1,
+   "turns": 2,
+   "tokens": 6093,
+   "cost_usd": 0.0381,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "resolver",
+   "exit": 0,
+   "wall_s": 17.3,
+   "turns": 2,
+   "tokens": 6237,
+   "cost_usd": 0.04,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "semver",
+   "exit": 0,
+   "wall_s": 9.1,
+   "turns": 2,
+   "tokens": 6215,
+   "cost_usd": 0.0414,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  }
+ ],
+ "tokens_workers": {
+  "total": 76788,
+  "cost_usd": 0.324
+ },
+ "irc": {
+  "messages": 8,
+  "from_workers": 1,
+  "direct_worker_to_worker": 1,
+  "ready": 0,
+  "human_or_irc_client": 0
+ },
+ "transcripts": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-0crnkrrr/work/.atlas/.run/crew/crew-061900cb1d/logs",
+ "channel_log": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-0crnkrrr/work/.atlas/.run/crew/crew-061900cb1d/irc/log.jsonl"
+}

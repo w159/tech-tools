@@ -1,0 +1,137 @@
+{
+ "hooks": {
+  "PostToolUse": [
+   {
+    "matcher": "*",
+    "hooks": [
+     {
+      "type": "command",
+      "command": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-f67oe_td/shim/python3 /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/crew_worker.py PostToolUse",
+      "timeout": 10
+     }
+    ]
+   }
+  ],
+  "PreToolUse": [
+   {
+    "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+    "hooks": [
+     {
+      "type": "command",
+      "command": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-f67oe_td/shim/python3 /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/crew_worker.py PreToolUse",
+      "timeout": 10
+     }
+    ]
+   }
+  ],
+  "Stop": [
+   {
+    "matcher": "*",
+    "hooks": [
+     {
+      "type": "command",
+      "command": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-f67oe_td/shim/python3 /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks/crew_worker.py Stop",
+      "timeout": 620
+     }
+    ]
+   }
+  ]
+ },
+ "permissions": {
+  "allow": [
+   "Bash(irc *)",
+   "Bash(python3 *)",
+   "Bash(python *)",
+   "Bash(pytest *)",
+   "Bash(uv *)",
+   "Bash(npm *)",
+   "Bash(npx *)",
+   "Bash(yarn *)",
+   "Bash(pnpm *)",
+   "Bash(bun *)",
+   "Bash(node *)",
+   "Bash(go *)",
+   "Bash(cargo *)",
+   "Bash(make *)",
+   "Bash(ls *)",
+   "Bash(cat *)",
+   "Bash(head *)",
+   "Bash(tail *)",
+   "Bash(wc *)",
+   "Bash(grep *)",
+   "Bash(rg *)",
+   "Bash(find *)",
+   "Bash(sed *)",
+   "Bash(awk *)",
+   "Bash(printf *)",
+   "Bash(cut *)",
+   "Bash(tr *)",
+   "Bash(uniq *)",
+   "Bash(cmp *)",
+   "Bash(test *)",
+   "Bash(echo *)",
+   "Bash(cd *)",
+   "Bash(pwd *)",
+   "Bash(mkdir *)",
+   "Bash(touch *)",
+   "Bash(diff *)",
+   "Bash(sort *)",
+   "Bash(git status *)",
+   "Bash(git diff *)",
+   "Bash(git log *)",
+   "Bash(git show *)",
+   "Bash(true *)",
+   "Bash(sleep *)",
+   "Bash(timeout *)",
+   "Bash(irc)",
+   "Bash(python3)",
+   "Bash(python)",
+   "Bash(pytest)",
+   "Bash(uv)",
+   "Bash(npm)",
+   "Bash(npx)",
+   "Bash(yarn)",
+   "Bash(pnpm)",
+   "Bash(bun)",
+   "Bash(node)",
+   "Bash(go)",
+   "Bash(cargo)",
+   "Bash(make)",
+   "Bash(ls)",
+   "Bash(cat)",
+   "Bash(head)",
+   "Bash(tail)",
+   "Bash(wc)",
+   "Bash(grep)",
+   "Bash(rg)",
+   "Bash(find)",
+   "Bash(sed)",
+   "Bash(awk)",
+   "Bash(printf)",
+   "Bash(cut)",
+   "Bash(tr)",
+   "Bash(uniq)",
+   "Bash(cmp)",
+   "Bash(test)",
+   "Bash(echo)",
+   "Bash(cd)",
+   "Bash(pwd)",
+   "Bash(mkdir)",
+   "Bash(touch)",
+   "Bash(diff)",
+   "Bash(sort)",
+   "Bash(git status)",
+   "Bash(git diff)",
+   "Bash(git log)",
+   "Bash(git show)",
+   "Bash(true)",
+   "Bash(sleep)",
+   "Bash(timeout)",
+   "Edit",
+   "Write",
+   "Read",
+   "Grep",
+   "Glob"
+  ]
+ }
+}

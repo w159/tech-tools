@@ -1,0 +1,145 @@
+{
+ "run_id": "crew-06102205d2",
+ "root": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-direct-26lm56_r/work",
+ "plan": {
+  "goal": "Implement pkg/*.py per SPEC.md",
+  "check": "python3 -m pytest -q",
+  "context": [
+   "SPEC.md#pkgkit"
+  ],
+  "workers": [
+   {
+    "name": "cli",
+    "owns": [
+     "pkg/cli.py"
+    ],
+    "tests": [
+     "tests/test_cli.py"
+    ],
+    "task": "Implement pkg/cli.py per the spec section 'cli'.",
+    "context": [
+     "SPEC.md#cli",
+     "Interfaces of the peer files you import (code against these; their owners implement them, do not read the files):\n# manifest owns pkg/manifest.py\ndef validate_name(name): ...\ndef parse_manifest(text): ...\ndef dump_manifest(m): ...\ndef add_dependency(m, name, range_text): ...\ndef remove_dependency(m, name): ...\n# ranges owns pkg/ranges.py\ndef parse_range(text): ...\ndef valid_range(text): ...\ndef satisfies(version, range_text): ...\ndef max_satisfying(versions, range_text): ...\n# registry owns pkg/registry.py\nclass Registry:\n    def __init__(self): ...\n    def publish(self, name, version, deps=None): ...\n    def versions(self, name): ...\n    def deps(self, name, version): ...\n    def has(self, name, version=None): ...\n    def names(self): ...\n    def yank(self, name, version): ...\n    def to_dict(self): ...\n    @classmethod\n    def from_dict(cls, data): ...\n# resolver owns pkg/resolver.py\nclass ResolveError(Exception):\ndef resolve(reg, root_deps): ...\ndef install_order(reg, resolved): ...\ndef explain(reg, resolved): ...\ndef dependents(reg, resolved, name): ...\n# semver owns pkg/semver.py\ndef parse(text): ...\ndef format(v): ...\ndef is_valid(text): ...\ndef compare(a, b): ...\ndef bump(text, part): ...\ndef sort_versions(versions): ...\n",
+     "pkg/cli.py"
+    ],
+    "check": "irc check",
+    "unit_check": "python3 -m pytest -q tests/test_cli.py",
+    "needs": [
+     "manifest",
+     "ranges",
+     "registry",
+     "resolver",
+     "semver"
+    ]
+   },
+   {
+    "name": "manifest",
+    "owns": [
+     "pkg/manifest.py"
+    ],
+    "tests": [
+     "tests/test_manifest.py"
+    ],
+    "task": "Implement pkg/manifest.py per the spec section 'manifest'.",
+    "context": [
+     "SPEC.md#manifest",
+     "Interfaces of the peer files you import (code against these; their owners implement them, do not read the files):\n# ranges owns pkg/ranges.py\ndef parse_range(text): ...\ndef valid_range(text): ...\ndef satisfies(version, range_text): ...\ndef max_satisfying(versions, range_text): ...\n# semver owns pkg/semver.py\ndef parse(text): ...\ndef format(v): ...\ndef is_valid(text): ...\ndef compare(a, b): ...\ndef bump(text, part): ...\ndef sort_versions(versions): ...\n",
+     "pkg/manifest.py"
+    ],
+    "check": "irc check",
+    "unit_check": "python3 -m pytest -q tests/test_manifest.py",
+    "needs": [
+     "ranges",
+     "semver"
+    ]
+   },
+   {
+    "name": "ranges",
+    "owns": [
+     "pkg/ranges.py"
+    ],
+    "tests": [
+     "tests/test_ranges.py"
+    ],
+    "task": "Implement pkg/ranges.py per the spec section 'ranges'.",
+    "context": [
+     "SPEC.md#ranges",
+     "Interfaces of the peer files you import (code against these; their owners implement them, do not read the files):\n# semver owns pkg/semver.py\ndef parse(text): ...\ndef format(v): ...\ndef is_valid(text): ...\ndef compare(a, b): ...\ndef bump(text, part): ...\ndef sort_versions(versions): ...\n",
+     "pkg/ranges.py"
+    ],
+    "check": "irc check",
+    "unit_check": "python3 -m pytest -q tests/test_ranges.py",
+    "needs": [
+     "semver"
+    ]
+   },
+   {
+    "name": "registry",
+    "owns": [
+     "pkg/registry.py"
+    ],
+    "tests": [
+     "tests/test_registry.py"
+    ],
+    "task": "Implement pkg/registry.py per the spec section 'registry'.",
+    "context": [
+     "SPEC.md#registry",
+     "Interfaces of the peer files you import (code against these; their owners implement them, do not read the files):\n# manifest owns pkg/manifest.py\ndef validate_name(name): ...\ndef parse_manifest(text): ...\ndef dump_manifest(m): ...\ndef add_dependency(m, name, range_text): ...\ndef remove_dependency(m, name): ...\n# semver owns pkg/semver.py\ndef parse(text): ...\ndef format(v): ...\ndef is_valid(text): ...\ndef compare(a, b): ...\ndef bump(text, part): ...\ndef sort_versions(versions): ...\n",
+     "pkg/registry.py"
+    ],
+    "check": "irc check",
+    "unit_check": "python3 -m pytest -q tests/test_registry.py",
+    "needs": [
+     "manifest",
+     "semver"
+    ]
+   },
+   {
+    "name": "resolver",
+    "owns": [
+     "pkg/resolver.py"
+    ],
+    "tests": [
+     "tests/test_resolver.py"
+    ],
+    "task": "Implement pkg/resolver.py per the spec section 'resolver'.",
+    "context": [
+     "SPEC.md#resolver",
+     "Interfaces of the peer files you import (code against these; their owners implement them, do not read the files):\n# ranges owns pkg/ranges.py\ndef parse_range(text): ...\ndef valid_range(text): ...\ndef satisfies(version, range_text): ...\ndef max_satisfying(versions, range_text): ...\n# registry owns pkg/registry.py\nclass Registry:\n    def __init__(self): ...\n    def publish(self, name, version, deps=None): ...\n    def versions(self, name): ...\n    def deps(self, name, version): ...\n    def has(self, name, version=None): ...\n    def names(self): ...\n    def yank(self, name, version): ...\n    def to_dict(self): ...\n    @classmethod\n    def from_dict(cls, data): ...\n",
+     "pkg/resolver.py"
+    ],
+    "check": "irc check",
+    "unit_check": "python3 -m pytest -q tests/test_resolver.py",
+    "needs": [
+     "ranges",
+     "registry"
+    ]
+   },
+   {
+    "name": "semver",
+    "owns": [
+     "pkg/semver.py"
+    ],
+    "tests": [
+     "tests/test_semver.py"
+    ],
+    "task": "Implement pkg/semver.py per the spec section 'semver'.",
+    "context": [
+     "SPEC.md#semver",
+     "pkg/semver.py"
+    ],
+    "check": "irc check",
+    "unit_check": "python3 -m pytest -q tests/test_semver.py",
+    "needs": []
+   }
+  ]
+ },
+ "model": null,
+ "effort": null,
+ "settings": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-direct-26lm56_r/work/.atlas/.run/crew/crew-06102205d2/worker-settings.json",
+ "session": "atlas-crew-06102205d2",
+ "tmux": true,
+ "started": 1793182222.004792,
+ "fix_rounds": 2,
+ "timeout": 3600
+}

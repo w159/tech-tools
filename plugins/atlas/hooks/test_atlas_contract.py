@@ -182,7 +182,7 @@ class WiringContract(unittest.TestCase):
         """Saved dashboard knobs must reach already-running sessions: each entry applies
         the Atlas store before it imports any atlas module (core modules read knobs)."""
         entries = sorted({p for p in _script_paths() if p.suffix == ".py"})
-        self.assertEqual(len(entries), 18, [p.name for p in entries])
+        self.assertEqual(len(entries), 19, [p.name for p in entries])
         call = "atlas_env.apply_store_env()"
         bad = []
         for path in entries:
@@ -1743,7 +1743,7 @@ class TodoBoardContract(unittest.TestCase):
             for ev, name, m in _dispatched()
             if ev == "PostToolUse" and name == "todo_capture"
         ]
-        self.assertEqual(matchers, ["TodoWrite|Agent|Task|Bash"])
+        self.assertEqual(matchers, ["TodoWrite|Agent|Task|collaboration\\.spawn_agent|Bash|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write"])
 
     def test_gate_falls_back_to_board_and_ledger(self):
         src = (HOOKS_DIR / "completion_gate_core.py").read_text(encoding="utf-8")

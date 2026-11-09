@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 16.4.1, armada 2.2.1, programmer 1.0.1 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 16.4.2, armada 2.3.0, programmer 1.0.1 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -20,7 +20,7 @@ Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in 
 
 | What | Count | Source |
 |---|---|---|
-| Skills | 39 (3 manual) | `plugins/atlas/skills/` |
+| Skills | 40 (4 manual) | `plugins/atlas/skills/` |
 | Role agents (`atlas:*`) | 14 | `plugins/atlas/agents/` |
 | Hooks | 18 programs, 22 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 70 non-test Python files | `plugins/atlas/scripts/` |

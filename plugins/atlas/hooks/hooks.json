@@ -38,6 +38,11 @@
             "type": "command",
             "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/event_dispatch.py\" PreToolUse",
             "timeout": 35
+          },
+          {
+            "type": "command",
+            "command": "test -z \"${ATLAS_CREW_WORKER:-}\" || python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/crew_worker.py\" PreToolUse",
+            "timeout": 10
           }
         ]
       },
@@ -54,7 +59,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "TodoWrite|Agent|Task|Bash|Edit|Write|MultiEdit|NotebookEdit|Read|read|mcp__.*ctx_read|Grep|Glob|Skill|mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*",
+        "matcher": "TodoWrite|Agent|Task|collaboration\\.spawn_agent|Bash|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write|Edit|Write|MultiEdit|NotebookEdit|Read|read|mcp__.*ctx_read|Grep|Glob|Skill|mcp__plugin_armada_.*|mcp__falcon-mcp__.*|mcp__cipp.*|mcp__connectwise.*|mcp__plaid__.*|mcp__gcloud__.*",
         "hooks": [
           {
             "type": "command",
@@ -73,12 +78,27 @@
             "async": true
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "test -z \"${ATLAS_CREW_WORKER:-}\" || python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/crew_worker.py\" PostToolUse",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "command": "test -z \"${ATLAS_CREW_WORKER:-}\" || python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/crew_worker.py\" Stop",
+            "timeout": 620
+          },
           {
             "type": "command",
             "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/completion_gate.py\"",

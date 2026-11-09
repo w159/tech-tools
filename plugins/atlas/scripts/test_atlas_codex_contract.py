@@ -13,6 +13,18 @@ class CodexContract(unittest.TestCase):
         self.assertEqual(g.render(), g.render())
         self.assertLess(len(g.render()), 3000)
 
+    def test_codex_manifest_wires_skills_hooks_and_version(self):
+        import json
+
+        codex = json.loads((g.ROOT / ".codex-plugin" / "plugin.json").read_text())
+        claude = json.loads((g.ROOT / ".claude-plugin" / "plugin.json").read_text())
+        self.assertEqual(codex["name"], "atlas")
+        self.assertEqual(codex["version"], claude["version"])
+        self.assertEqual(codex["skills"], "./skills/")
+        self.assertEqual(codex["hooks"], "./hooks/hooks.json")
+        self.assertTrue((g.ROOT / codex["skills"]).is_dir())
+        self.assertTrue((g.ROOT / codex["hooks"]).is_file())
+
     def test_write_check_and_outside_survives(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:

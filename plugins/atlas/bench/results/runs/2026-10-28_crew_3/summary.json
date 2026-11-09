@@ -1,0 +1,91 @@
+{
+ "ok": true,
+ "run": "crew-061808b577",
+ "check": "python3 -m pytest -q",
+ "check_exit": 0,
+ "check_tail": "............ [ 50%]\n........................................................................ [ 75%]\n.......................................................................  [100%]\n287 passed in 0.07s\n",
+ "wall_s": 37.1,
+ "rounds": [
+  {
+   "round": 0,
+   "all_exited": true,
+   "check_exit": 0,
+   "t": 37.1
+  }
+ ],
+ "workers": [
+  {
+   "name": "cli",
+   "exit": 0,
+   "wall_s": 36.7,
+   "turns": 8,
+   "tokens": 57803,
+   "cost_usd": 0.115,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "manifest",
+   "exit": 0,
+   "wall_s": 20.2,
+   "turns": 3,
+   "tokens": 13686,
+   "cost_usd": 0.0745,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "ranges",
+   "exit": 0,
+   "wall_s": 19.7,
+   "turns": 3,
+   "tokens": 13776,
+   "cost_usd": 0.0754,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "registry",
+   "exit": 0,
+   "wall_s": 20.3,
+   "turns": 2,
+   "tokens": 6073,
+   "cost_usd": 0.0378,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "resolver",
+   "exit": 0,
+   "wall_s": 20.7,
+   "turns": 2,
+   "tokens": 6258,
+   "cost_usd": 0.0404,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "semver",
+   "exit": 0,
+   "wall_s": 19.5,
+   "turns": 3,
+   "tokens": 13755,
+   "cost_usd": 0.0769,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  }
+ ],
+ "tokens_workers": {
+  "total": 111351,
+  "cost_usd": 0.42
+ },
+ "irc": {
+  "messages": 9,
+  "from_workers": 2,
+  "direct_worker_to_worker": 1,
+  "ready": 0,
+  "human_or_irc_client": 0
+ },
+ "transcripts": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-ot5dvo9u/work/.atlas/.run/crew/crew-061808b577/logs",
+ "channel_log": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-ot5dvo9u/work/.atlas/.run/crew/crew-061808b577/irc/log.jsonl"
+}

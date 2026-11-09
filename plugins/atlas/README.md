@@ -8,10 +8,10 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 16.4.1 (`.claude-plugin/plugin.json`)                                                                                |
+| Version    | 16.4.2 (`.claude-plugin/plugin.json`)                                                                                |
 | License    | Apache-2.0                                                                                                           |
-| Ships      | 40 skills, 14 agents, 18 hook programs / 22 bindings, 8 JSON contracts                                               |
-| Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
+| Ships      | 40 skills, 14 agents, 19 hook programs / 25 bindings, 8 JSON contracts                                               |
+| Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                            |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 13 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
 
@@ -392,15 +392,15 @@ fork, so their judgment starts clean.
 
 ## Hooks
 
-18 hook programs / 22 bindings, wired from `hooks/hooks.json` when the plugin is
+19 hook programs / 25 bindings, wired from `hooks/hooks.json` when the plugin is
 enabled. `hooks/event_dispatch.py` runs the PreToolUse and PostToolUse hooks in
 one process per tool event, each with its original matcher and a time slice;
 `hooks/stop_tail.py` does the same for four Stop hooks. Measured on 16.0.0,
 median Pre+Post blocking time per Bash call fell from 289 ms to 174 ms
 ([evidence](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md)).
 
-Most hooks fail open on an internal error. Five deny or block on purpose:
-`dispatch_tripwire.py`, `recall_gate.py`, `completion_gate.py`,
+Most hooks fail open on an internal error. Six deny or block on purpose:
+`dispatch_tripwire.py`, `recall_gate.py`, `completion_gate.py`, `crew_worker.py`,
 `worker_report_gate.py`, and `fallow_gate.py` (when the fallow CLI returns
 `verdict: fail` or is older than `FALLOW_GATE_MIN_VERSION`, default 2.85.0;
 fail-open when the CLI is absent).
@@ -421,6 +421,7 @@ fail-open when the CLI is absent).
 | `delegation_prewarn.py`         | PostToolUse                                                        | Once per session, warns that an inline code edit will trip gate condition (m)                                                                                                                                                                                                                                                                                                                                                                |
 | `connector_credential_watch.py` | PostToolUse                                                        | On the first 401 or 403 from an armada connector, says to restart the server instead of retrying (`ATLAS_CONNECTOR_WATCH=off`)                                                                                                                                                                                                                                                                                                               |
 | `format_after_edit.py`          | PostToolUse (Edit, Write)                                          | Runs the repo's formatter                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `crew_worker.py`                | PreToolUse, PostToolUse, Stop                                      | In crew workers only, delivers IRC context, enforces file leases and the check/report gate; guarded by `ATLAS_CREW_WORKER` elsewhere                                                                                                                |
 | `completion_gate.py`            | Stop                                                               | Blocks a premature "done" (conditions a to q above)                                                                                                                                                                                                                                                                                                                                                                                          |
 | `stop_tail.py`                  | Stop                                                               | Runs `ingest_session.py`, `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in one interpreter                                                                                                                                                                                                                                                                                                                                        |
 | `ingest_session.py`             | SubagentStop, SessionEnd, PreCompact (and Stop via `stop_tail.py`) | Mirrors the transcript into the observability DB (`ATLAS_INGEST=off`)                                                                                                                                                                                                                                                                                                                                                                        |

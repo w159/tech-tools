@@ -283,7 +283,7 @@ Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026
 - [planned] Live TUI check under tmux if the verifier reports gaps.
 - [planned] herdr transport attach from the TUI.
 - [planned] Re-run one W1 explorer brief on haiku to validate the tier (an ASSUMED item in `docs/plans/2026-10-20_atlas-tiering-design.md`).
-- [planned] Codex hooks and `.codex/agents` parity (found in stage D3; the contract block shipped in 12.6.0, enforcement did not).
+- [in-progress] Codex parity: atlas 16.4.2 source now ships a `.codex-plugin` manifest for skills and hooks, doctor validation, translated/role-sandboxed mux workers, allowlisted worker environments, and `atlas_crew.py --harness codex` with conditional IRC/check hooks. Unit coverage exists; live reinstall + hook-trust + tmux/IRC verification is pending. Native custom-role registration and a Codex-native mod/widget remain open; the Atlas TUI/dashboard is the current Codex UI surface.
 
 Unreleased, test-verified in source (see `docs/CHANGELOG.md` Unreleased). The herdr autostart, Start button, reap and tmux items below were verified live during the OpenRig work; the rest keep their live check pending.
 

@@ -111,6 +111,29 @@ FORWARDED_ENV = (
     # only when it is truthy (see _bg_brief)
     "ATLAS_TASKS_MIRROR",
 )
+
+# A worker gets shell/runtime basics and explicit Atlas pins, never the lead's ambient credentials.
+WORKER_ENV = (
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "TERM",
+    "COLORTERM",
+    "CODEX_HOME",
+    "CLAUDE_CONFIG_DIR",
+    "XDG_CONFIG_HOME",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "ATLAS_OWNER_TOKEN",
+)
+WORKER_EXTRA_ENV = "ATLAS_WORKER_FORWARD_ENV"
+ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # Read/navigation MCP tools a pane claude worker may call without a prompt (live 12.3.1: unlisted MCP tools were
 # denied in -p mode and workers fell back from mcp__lean-ctx__ctx_shell to Bash).
 WORKER_MCP_ALLOW = (
@@ -215,6 +238,26 @@ def clean_env(env: dict | None = None) -> dict:
             and "cmux.app" not in p.lower()
         )
     return out
+
+
+def worker_env(env: dict | None = None) -> dict:
+    """Least-privilege environment for model workers.
+
+    Provider credentials are forwarded only when their names are explicitly
+    listed in ATLAS_WORKER_FORWARD_ENV.
+    """
+    source = clean_env(env)
+    extras = {
+        name.strip()
+        for name in source.get(WORKER_EXTRA_ENV, "").split(",")
+        if ENV_NAME_RE.match(name.strip())
+    }
+    allowed = set(WORKER_ENV) | set(FORWARDED_ENV) | extras
+    return {
+        key: value
+        for key, value in source.items()
+        if key in allowed or key.startswith("LC_")
+    }
 
 
 TMUX_TIMEOUT_S = 10
@@ -538,6 +581,24 @@ def _tier(
     )
 
 
+_CODEX_TOOL_SEARCH = re.compile(r'ToolSearch\("select:([^"]*)"\)')
+
+
+def _codex_body(body: str) -> str:
+    """Translate Claude-only agent vocabulary before it reaches a Codex worker."""
+    out = _CODEX_TOOL_SEARCH.sub(
+        lambda match: "Use the equivalent Codex tools available for: "
+        + match.group(1).replace("mcp__plugin_", "mcp__"),
+        body,
+    )
+    return (
+        out.replace("ToolSearch", "Codex tool discovery")
+        .replace("SendMessage", "collaboration.send_message")
+        .replace("TodoWrite", "the available work-state/todo tool")
+        .replace("mcp__plugin_", "mcp__")
+    )
+
+
 def harness_argv(
     harness: str,
     role: str,
@@ -551,14 +612,15 @@ def harness_argv(
     tools_profile: str | None = None,
 ) -> list:
     if harness == "codex":
-        # exec --json: one JSON event per line (atlas_panefeed renders them); workspace-write lets the worker edit
+        # exec --json: one JSON event per line (atlas_panefeed renders them).
+        sandbox = "read-only" if tools_profile == "read" else "workspace-write"
         argv = [
             "codex",
             "exec",
             "--json",
             "--skip-git-repo-check",
             "-s",
-            "workspace-write",
+            sandbox,
         ]
         if cwd:
             argv += ["-C", cwd]
@@ -566,9 +628,10 @@ def harness_argv(
             argv += ["-m", model]
         if level:
             argv += ["-c", f"model_reasoning_effort={level}"]
+        codex_body = _codex_body(body)
         brief = (
-            f"You are the atlas:{role} worker.\n\n{body.strip()}\n\n# Task\n{prompt}"
-            if body.strip()
+            f"You are the atlas:{role} worker.\n\n{codex_body.strip()}\n\n# Task\n{prompt}"
+            if codex_body.strip()
             else prompt
         )
         return argv + [brief]
@@ -1101,8 +1164,7 @@ def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> 
         args.permission_mode or "dontAsk",
         _bg_brief(prompt, root, args.name, chan, lead),
     ]
-    env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
-    env.update({k: os.environ[k] for k in FORWARDED_ENV if os.environ.get(k)})
+    env = dict(worker_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
     # subprocess env= keeps the token out of argv; it is never in FORWARDED_ENV or the brief
     env["ATLAS_OWNER_TOKEN"] = atlas_todo.issue_owner_token(root, args.name)
     res = _claude(*argv, env=env, cwd=os.path.abspath(args.cwd) if args.cwd else root)
@@ -1173,7 +1235,16 @@ def _spawn_registered(args, root: str, chan) -> int:
     if use == "claude-bg":
         if args.harness == "claude":
             return _spawn_claude_bg(args, root, chan, model, level, session)
-        use = _pane_transport()  # claude --bg is claude-only: omp workers keep panes
+        if args.harness == "codex":
+            atlas_todo.leave(root, chan, args.name)
+            return _emit(
+                {
+                    "ok": False,
+                    "error": "codex requires tmux or herdr for background workers; claude-bg is Claude-only",
+                },
+                1,
+            )
+        use = _pane_transport()  # omp workers keep panes
     # Session creation, the name check and new-window run under one lock (_open_window):
     # parallel spawns of one run raced check-then-create and 7 of 8 failed.
     worker = [
@@ -1305,7 +1376,7 @@ def cmd_run_worker(args) -> int:
             os.path.abspath(args.cwd or root),
             getattr(args, "tools_profile", None),
         )
-    env = dict(clean_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
+    env = dict(worker_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
     channel = (os.environ.get("ATLAS_CHANNEL") or "").strip()
     lead = (os.environ.get("ATLAS_LEAD_NAME") or "").strip()
     if not channel:

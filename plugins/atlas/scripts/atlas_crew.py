@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""atlas_crew -- a team of lean Claude workers in tmux that talk over an IRC channel.
+"""atlas_crew -- a team of lean coding-agent workers in tmux that talk over an IRC channel.
 
 The lead writes a plan (JSON) that splits the work by FILE OWNERSHIP, then runs it:
 
@@ -58,22 +58,28 @@ NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
 # Bash writes and reads files (heredoc, cat, sed); Edit patches. Each extra tool schema is re-sent on
 # every call (Read+Write cost about 1k tokens per call, measured).
 WORKER_TOOLS = "Bash,Edit"
-# Env a worker must not inherit: the lead's session identity (workers would write their transcript
-# under the lead's session id) and host-injected context that bloats every worker turn.
-SCRUB_ENV = (
-    "CLAUDE_CODE_SESSION_ID",
-    "CLAUDE_CODE_REMOTE_SESSION_ID",
-    "CLAUDE_MEMORY_STORES",
-    "CLAUDE_COWORK_MEMORY_PATH_OVERRIDE",
-    "CLAUDE_CODE_POST_TURN_MEMORY",
-    "CLAUDE_CODE_POST_TURN_MEMORY_CONFIG",
-    "CLAUDE_CODE_ENABLE_CFC",
-    "CLAUDE_CODE_ENABLE_REMOTE_RECAP",
-    "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION",
-    "TMUX",
-    "TMUX_PANE",
+# A worker gets only shell/runtime basics plus the Atlas values pinned below. Ambient
+# provider and project credentials require an explicit comma-separated opt-in.
+WORKER_ENV = (
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "LANG",
+    "TERM",
+    "COLORTERM",
+    "CODEX_HOME",
+    "CLAUDE_CONFIG_DIR",
+    "XDG_CONFIG_HOME",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
 )
-SCRUB_PREFIX = ("ATLAS_WORKER_", "CMUX_")
+WORKER_EXTRA_ENV = "ATLAS_WORKER_FORWARD_ENV"
+ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # Bash commands a worker may run without a prompt (compound commands are matched part by part).
 DEV_BASH = (
     "irc",
@@ -124,16 +130,16 @@ DEV_BASH = (
 
 BASE_PROMPT = """\
 You are an expert software engineer running non-interactively in a git repository (your working
-directory). Use the tools to read, write and run code. Prefer Bash heredocs for whole-file writes,
+directory). Use the tools to read, write and run code. Prefer shell heredocs for whole-file writes,
 run the code to verify it, and stay terse: no explanations, plans or summaries unless asked.
 
 """
 
 PROTOCOL = """\
-You are one worker of an Atlas crew: several Claude sessions building one deliverable in parallel,
+You are one worker of an Atlas crew: several coding-agent sessions building one deliverable in parallel,
 each owning different files. You talk to the others on the team IRC channel.
 
-Channel commands (run them with Bash):
+Channel commands (run them in the shell):
   irc say "text"                      post to the whole team
   irc say --to <nick> "text"          message one peer
   irc need [--done] <peer> [<peer> ...]
@@ -151,7 +157,7 @@ Messages from peers are pushed to you automatically after your tool calls as [ir
 Rules:
 1. Edit only the files you own; edits elsewhere are blocked. Need a change in a peer's file? Ask its owner.
 2. Write your file(s), then run `irc check` exactly as is (never piped, chained or wrapped) in the SAME
-   Bash call. It waits for the peers you import, runs your unit check and posts DONE only if it
+   shell command. It waits for the peers you import, runs your unit check and posts DONE only if it
    passes; DONE is never your word. Do not announce READY: your peers already hold your interface.
 3. Code against the interfaces you were handed. `irc check` waits for the peers you import; do not run
    tests that import peers outside it.
@@ -161,8 +167,8 @@ Rules:
    scratch files under .atlas/tmp/ (anything outside the project needs an approval nobody can give).
 7. Your context below already holds your spec section, your stub and the interfaces of the peer files
    you import. Do not re-read them, and read peers' files or tests only to debug a failure.
-8. Every tool call re-sends your whole context, so use few, large calls. Usual shape: ONE Bash
-   call that writes your file(s) with a heredoc, then runs your check; then Edit only what fails.
+8. Every tool call re-sends your whole context, so use few, large calls. Usual shape: ONE shell
+   command that writes your file(s) with a heredoc, then runs your check; then edit only what fails.
 9. You are finished when your check passes. The team gate re-runs it when you stop; you cannot
    stop while it fails. Then reply with one line: files, check result.
 """
@@ -316,10 +322,17 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
 
 
 def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
+    """Least-privilege worker environment; ambient credentials require explicit opt-in."""
+    extras = {
+        name.strip()
+        for name in os.environ.get(WORKER_EXTRA_ENV, "").split(",")
+        if ENV_NAME_RE.fullmatch(name.strip())
+    }
+    allowed = set(WORKER_ENV) | extras
     env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in SCRUB_ENV and not k.startswith(SCRUB_PREFIX)
+        key: value
+        for key, value in os.environ.items()
+        if key in allowed or key.startswith("LC_")
     }
     owners = {p: x["name"] for x in plan["workers"] for p in x["owns"]}
     stubs = {p: str(rundir / "stubs" / p) for p in w["owns"] if (rundir / "stubs" / p).is_file()}
@@ -338,8 +351,10 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
             "ATLAS_CREW_UNIT_CHECK": w.get("unit_check") or "",
             "ATLAS_CREW_MAX_BLOCKS": str(plan.get("max_blocks") or 3),
             "PATH": f"{rundir / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
-            # the worker's own hooks are the crew hooks; atlas's lead-side gates stay off in workers
+            # Atlas lead-side gates exempt leaf workers; the crew hooks own their policy.
             "ATLAS_CREW_WORKER": w["name"],
+            "ATLAS_WORKER_NAME": w["name"],
+            "ATLAS_MANDATES": "off",
             # no background shells: a stray `cat > f` with no input was moved to the background at
             # the 2-minute timeout and kept the finished worker alive for 9 minutes (live run).
             # With this set, a timed-out command is killed and its error goes back to the worker.
@@ -405,7 +420,19 @@ def worker_settings(rundir: Path) -> str:
     return str(p)
 
 
-def worker_argv(model, effort, settings, sid, prompt, resume=None, name=None) -> list:
+def worker_argv(model, effort, settings, sid, prompt, resume=None, name=None, harness="claude") -> list:
+    if harness == "codex":
+        argv = ["codex", "exec"]
+        if resume:
+            argv += ["resume", resume, "--json"]
+        else:
+            argv += ["--json", "--sandbox", "workspace-write"]
+        if model:
+            argv += ["--model", model]
+        if effort:
+            argv += ["--config", f'model_reasoning_effort="{effort}"']
+        return [*argv, BASE_PROMPT + PROTOCOL + prompt]
+
     argv = ["claude", "-p", "--output-format", "stream-json", "--verbose"]
     argv += ["--resume", resume] if resume else ["--session-id", sid]
     if model:
@@ -460,12 +487,32 @@ def _result_ok(log_path) -> bool:
     except OSError:
         return False
     for line in reversed(lines):
-        if '"type":"result"' in line.replace(" ", ""):
-            try:
-                return not json.loads(line).get("is_error")
-            except ValueError:
-                return False
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get("type") == "result":
+            return not event.get("is_error")
+        if event.get("type") == "turn.completed":
+            return True
+        if event.get("type") in ("turn.failed", "error"):
+            return False
     return False
+
+
+def _codex_thread_id(log_path) -> str | None:
+    try:
+        lines = Path(log_path).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get("type") == "thread.started" and event.get("thread_id"):
+            return str(event["thread_id"])
+    return None
 
 
 def cmd_worker(a) -> int:
@@ -476,9 +523,10 @@ def cmd_worker(a) -> int:
     w = next(x for x in plan["workers"] if x["name"] == a.name)
     root = meta["root"]
     rnd = a.round
+    harness = meta.get("harness", "claude")
     sid_file = rundir / "sid" / f"{a.name}"
     if rnd == 0:
-        sid = str(uuid.uuid4())
+        sid = "" if harness == "codex" else str(uuid.uuid4())
         sid_file.parent.mkdir(parents=True, exist_ok=True)
         sid_file.write_text(sid)
         prompt = (rundir / "prompts" / f"{a.name}.md").read_text(encoding="utf-8")
@@ -491,7 +539,16 @@ def cmd_worker(a) -> int:
         resume = sid
     model = w.get("model") or meta.get("model")
     effort = w.get("effort") or meta.get("effort")
-    argv = worker_argv(model, effort, meta["settings"], sid, prompt, resume=resume, name=f"{meta['run_id']}-{a.name}")
+    argv = worker_argv(
+        model,
+        effort,
+        meta["settings"],
+        sid,
+        prompt,
+        resume=resume,
+        name=f"{meta['run_id']}-{a.name}",
+        harness=harness,
+    )
     env = worker_env(rundir, plan, w, root)
     if rnd:
         # a fix round gets a fresh gate budget
@@ -532,7 +589,12 @@ def cmd_worker(a) -> int:
             for line in proc.stdout:
                 log.write(line)
                 log.flush()
-                if reaper is None and '"type":"result"' in line.replace(" ", ""):
+                event_type = ""
+                try:
+                    event_type = json.loads(line).get("type")
+                except ValueError:
+                    pass
+                if reaper is None and event_type in ("result", "turn.completed"):
                     # the turn is over; a process still alive after the grace period is held open
                     # by something left running (a shell, a watcher), not by work
                     reaper = threading.Timer(RESULT_GRACE_S, _reap, (proc, log_path))
@@ -552,8 +614,12 @@ def cmd_worker(a) -> int:
                 if code != 0 and _result_ok(log_path):
                     code = 0  # reaped after a successful result: the work finished
         except FileNotFoundError:
-            log.write("claude not found on PATH\n")
+            log.write(f"{harness} not found on PATH\n")
             code = 127
+    if harness == "codex":
+        sid = _codex_thread_id(log_path) or sid
+        if sid:
+            sid_file.write_text(sid)
     if feed is not None:
         try:
             feed.finish(code)
@@ -864,6 +930,7 @@ def cmd_run(a) -> int:
         "plan": plan,
         "model": a.model,
         "effort": a.effort,
+        "harness": a.harness,
         "settings": worker_settings(rundir),
         "session": f"atlas-{run_id}",
         "tmux": tmux,
@@ -1128,11 +1195,22 @@ def usage_of(log: Path) -> dict:
         return {**t, "total": 0}
     with fh:
         for line in fh:
-            if '"type":"result"' not in line.replace(" ", ""):
-                continue
             try:
                 e = json.loads(line)
             except ValueError:
+                continue
+            if e.get("type") == "turn.completed":
+                usage = e.get("usage") or {}
+                t["results"] += 1
+                t["turns"] += 1
+                t.update(
+                    input=max(usage.get("input_tokens", 0) - usage.get("cached_input_tokens", 0), 0),
+                    cache_write=0,
+                    cache_read=usage.get("cached_input_tokens", 0),
+                    output=usage.get("output_tokens", 0),
+                )
+                continue
+            if e.get("type") != "result":
                 continue
             t["results"] += 1
             t["cost_usd"] = float(e.get("total_cost_usd") or 0)
@@ -1284,6 +1362,7 @@ def parser():
     r.add_argument("--root")
     r.add_argument("--model")
     r.add_argument("--effort")
+    r.add_argument("--harness", choices=("claude", "codex"), default="claude")
     r.add_argument("--run-id")
     r.add_argument("--fix-rounds", type=int, default=2)
     r.add_argument("--timeout", type=float, default=3600)

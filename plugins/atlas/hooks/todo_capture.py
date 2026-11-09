@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: mirror every TodoWrite call to the project todo board.
+"""PostToolUse hook: mirror TodoWrite and Codex work-state calls to the project board.
 
 TodoWrite rewrites the WHOLE list on every call, so tool_input.todos IS the
 current plan. Mirroring it into <project>/.atlas/.run/todos.json makes the
 session's progress visible to the dashboard (Work tab) and readable by the
 completion gate and subagents, without depending on the transcript.
 
-It also gives one advisory when an atlas:* worker is dispatched (Agent/Task, or
-`atlas_mux.py spawn|spawn-team`) onto a board with no item for the session: TodoWrite is
+It also gives one advisory when a worker is dispatched (Agent/Task,
+`collaboration.spawn_agent`, or `atlas_mux.py spawn|spawn-team`) onto a board with no
+item for the session: TodoWrite is
 not available to every model family, so the band would read `tasks 0/0` while workers run.
 The advisory carries the exact `atlas_todo.py set` command, once per session.
 
@@ -31,10 +32,18 @@ import atlas_hook_guard  # noqa: E402
 import atlas_todo  # noqa: E402
 
 
+WORK_STATE_TOOLS = {
+    "mcp__mcp_search__work_state_write",
+    "mcp__mcp_search_work_state_write",
+}
+
+
 def _is_dispatch(data: dict) -> bool:
     tool, inp = data.get("tool_name"), data.get("tool_input") or {}
     if tool in ("Agent", "Task"):
         return str(inp.get("subagent_type") or "").startswith("atlas:")
+    if tool == "collaboration.spawn_agent":
+        return True
     if tool == "Bash":
         cmd = str(inp.get("command") or "")
         return "atlas_mux.py" in cmd and (" spawn " in cmd or " spawn-team " in cmd)
@@ -75,7 +84,26 @@ def main() -> int:
     if os.environ.get("ATLAS_TODO", "").lower() in ("0", "off", "false", "no"):
         return 0
     data = atlas_hook_guard.load_payload("todo_capture")
-    if data.get("tool_name") != "TodoWrite":
+    tool_name = data.get("tool_name")
+    if tool_name in WORK_STATE_TOOLS:
+        tool_input = data.get("tool_input") or {}
+        if not isinstance(tool_input, dict):
+            return 0
+        fields = tool_input.get("fields")
+        if not isinstance(fields, dict) or not fields.get("task"):
+            return 0
+        cwd = data.get("cwd") or os.getcwd()
+        try:
+            atlas_todo.upsert_work_state(
+                cwd,
+                tool_input.get("list"),
+                fields,
+                data.get("session_id") or "",
+            )
+        except Exception as exc:
+            atlas_faults.record("todo_capture", exc, cwd)
+        return 0
+    if tool_name != "TodoWrite":
         try:
             _nudge_if_board_empty(data)
         except Exception as exc:

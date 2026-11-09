@@ -11,9 +11,11 @@ From a Claude session the entry point is the manual skill `/atlas:atlas-crew`,
 which takes the flags below (`/atlas:atlas-crew --spec SPEC.md --files 'pkg/*.py'
 --tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q'`). Its body runs
 `atlas_crew.py run $ARGUMENTS --wait 100` as pre-executed shell, so the crew is
-running before the lead's first model call and the lead is one turn. If the
-summary has not appeared after 100 s it prints only the start line; run
-`atlas_crew.py wait --run <id>` as below. The direct call:
+running before the lead's first model call and the lead is one turn. Codex does
+not execute that dynamic skill line: run the direct command once with
+`--harness codex`; Atlas's Codex plugin hooks provide the same IRC delivery,
+lease and check gate. If the summary has not appeared after 100 s it prints only
+the start line; run `atlas_crew.py wait --run <id>` as below. The direct call:
 
 ```bash
 # spec-driven: one worker per file, each gets only its own spec section
@@ -22,6 +24,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run \
   --check 'python3 -m pytest -q' --model <model> --effort <effort> --wait 580
 # hand-written plan (see "Plan" below)
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run --plan plan.json --wait 580
+# Codex: add --harness codex to either run command
 ```
 
 Set the Bash timeout to 600000. `--wait` prints the final JSON summary; if it
@@ -47,7 +50,7 @@ starting anything.
 | No sleeping  | PreToolUse denies `sleep N` with N >= 3 s; workers wait with `irc wait --from <peer> --timeout <s>` or `irc check`. |
 | Fix rounds   | After all workers exit, the supervisor runs the global check and resumes only the owners of failing tests (`--fix-rounds`, default 2).                                      |
 | Early exit   | PostToolUse ends the worker's session right after a Bash call whose check posted DONE and whose check, re-run by the hook, passes: no final model turn. |
-| Lean workers | Each worker is `claude -p` with its own session id, `--strict-mcp-config`, project settings only, tools `Bash,Edit`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` and a short replacement system prompt. |
+| Lean workers | Claude uses `claude -p` with its own session id, project settings only, tools `Bash,Edit`, and a short replacement system prompt. Codex uses `codex exec --json`, persists the emitted thread id for fix-round resume, and receives the same protocol in its prompt. |
 
 The lead's context holds the start line and one summary: per-worker tokens,
 cost, wall time, gate refusals, and channel counts (messages, READY

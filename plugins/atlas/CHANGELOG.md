@@ -1,5 +1,15 @@
 # Changelog
 
+## 16.4.2 - 2026-11-03
+
+### Added
+
+- Codex compatibility manifest (`.codex-plugin/plugin.json`) exposes Atlas skills and lifecycle hooks from the same source tree; Atlas Doctor now reports `codex-wiring` and verifies the Codex and Claude manifest versions agree.
+
+### Changed
+
+- The generated Codex operating-contract block now describes plugin-enforced skills and hooks while retaining `AGENTS.md` as the visible fallback until hook trust is granted.
+
 ## 16.4.1 - 2026-10-28
 
 ### Fixed

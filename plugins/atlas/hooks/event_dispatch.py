@@ -53,18 +53,18 @@ BINDINGS = {
         ("edit_read_nudge", "Edit|edit|MultiEdit", 8),
         (
             "dispatch_tripwire",
-            "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task",
+            "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task|collaboration\\.spawn_agent",
             14,
         ),
     ),
     "PostToolUse": (
-        ("todo_capture", "TodoWrite|Agent|Task|Bash", 8),
+        ("todo_capture", "TodoWrite|Agent|Task|collaboration\\.spawn_agent|Bash|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write", 8),
         ("docs_drift_watch", "Edit|Write|MultiEdit|NotebookEdit", 13),
         ("delegation_prewarn", "Edit|Write|MultiEdit|NotebookEdit", 8),
         ("edit_read_nudge", "Read|read|mcp__.*ctx_read", 8),
         (
             "dispatch_tripwire",
-            "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|NotebookEdit|Skill",
+            "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|collaboration\\.spawn_agent|MultiEdit|NotebookEdit|Skill",
             14,
         ),
         (

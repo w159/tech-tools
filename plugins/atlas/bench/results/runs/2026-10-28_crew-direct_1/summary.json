@@ -1,0 +1,91 @@
+{
+ "ok": true,
+ "run": "crew-06102205d2",
+ "check": "python3 -m pytest -q",
+ "check_exit": 0,
+ "check_tail": "............ [ 50%]\n........................................................................ [ 75%]\n.......................................................................  [100%]\n287 passed in 0.07s\n",
+ "wall_s": 136.9,
+ "rounds": [
+  {
+   "round": 0,
+   "all_exited": true,
+   "check_exit": 0,
+   "t": 136.9
+  }
+ ],
+ "workers": [
+  {
+   "name": "cli",
+   "exit": 0,
+   "wall_s": 136.1,
+   "turns": 7,
+   "tokens": 49807,
+   "cost_usd": 0.1195,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "manifest",
+   "exit": 0,
+   "wall_s": 22.7,
+   "turns": 3,
+   "tokens": 14035,
+   "cost_usd": 0.0818,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "ranges",
+   "exit": 0,
+   "wall_s": 22.5,
+   "turns": 2,
+   "tokens": 6482,
+   "cost_usd": 0.0476,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "registry",
+   "exit": 0,
+   "wall_s": 22.9,
+   "turns": 2,
+   "tokens": 5937,
+   "cost_usd": 0.0365,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "resolver",
+   "exit": 0,
+   "wall_s": 23.2,
+   "turns": 2,
+   "tokens": 6210,
+   "cost_usd": 0.0409,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "semver",
+   "exit": 0,
+   "wall_s": 22.1,
+   "turns": 3,
+   "tokens": 13596,
+   "cost_usd": 0.0771,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  }
+ ],
+ "tokens_workers": {
+  "total": 96067,
+  "cost_usd": 0.4034
+ },
+ "irc": {
+  "messages": 9,
+  "from_workers": 2,
+  "direct_worker_to_worker": 2,
+  "ready": 0,
+  "human_or_irc_client": 0
+ },
+ "transcripts": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-direct-26lm56_r/work/.atlas/.run/crew/crew-06102205d2/logs",
+ "channel_log": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-direct-26lm56_r/work/.atlas/.run/crew/crew-06102205d2/irc/log.jsonl"
+}

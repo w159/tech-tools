@@ -249,6 +249,60 @@ class TripwireTest(unittest.TestCase):
         conn2.close()
         self.assertGreater(rows[0], 0, "dispatch not logged after run finalized")
 
+    def test_codex_spawn_agent_logs_dispatch_and_marks_orchestration(self):
+        import atlas_db
+
+        self._fresh_unmarked_session("sess-codex")
+        payload = {
+            "session_id": "sess-codex",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "collaboration.spawn_agent",
+            "tool_input": {
+                "agent_type": "implementer",
+                "task_name": "codex-fix",
+                "message": TOOLS_BLOCK + SPEC_BLOCK,
+            },
+        }
+        r = run_hook(payload, self.env)
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(self._is_orchestrating("sess-codex"))
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        run_id = atlas_db.current_or_last_run_id(conn, "sess-codex")
+        rows = conn.execute(
+            "SELECT agent_type FROM dispatches WHERE run_id=?", (run_id,)
+        ).fetchall()
+        conn.close()
+        self.assertEqual([row[0] for row in rows], ["implementer"])
+
+    def test_codex_non_spawn_collaboration_tools_do_not_count_as_dispatches(self):
+        import atlas_db
+
+        self._fresh_unmarked_session("sess-followup")
+        for tool in (
+            "collaboration.followup_task",
+            "collaboration.send_message",
+            "collaboration.wait_agent",
+        ):
+            run_hook(
+                {
+                    "session_id": "sess-followup",
+                    "hook_event_name": "PostToolUse",
+                    "tool_name": tool,
+                    "tool_input": {"target": "worker", "message": "continue"},
+                },
+                self.env,
+            )
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        run_id = atlas_db.current_or_last_run_id(conn, "sess-followup")
+        count = conn.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (run_id,)
+        ).fetchone()[0]
+        conn.close()
+        self.assertEqual(count, 0)
+        self.assertFalse(self._is_orchestrating("sess-followup"))
+
     def test_hooks_json_matcher_includes_dispatch_tools(self):
         import json
         import os

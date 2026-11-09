@@ -26,7 +26,7 @@ export interface TodoItem {
 }
 
 export interface ChannelNote {
-  ts: string;
+  ts: number;                              // epoch seconds (float), as on the board and in types/index.d.ts
   seq: number;
   owner: string;
   to?: string;

@@ -58,14 +58,14 @@
       },
       {
         "script": "dispatch_tripwire.py",
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task|collaboration\\.spawn_agent",
         "timeout": 15
       }
     ],
     "PostToolUse": [
       {
         "script": "todo_capture.py",
-        "matcher": "TodoWrite|Agent|Task|Bash",
+        "matcher": "TodoWrite|Agent|Task|collaboration\\.spawn_agent|Bash|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write",
         "timeout": 10
       },
       {
@@ -85,7 +85,7 @@
       },
       {
         "script": "dispatch_tripwire.py",
-        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|MultiEdit|NotebookEdit|Skill",
+        "matcher": "Read|Grep|Glob|Edit|Write|Bash|Agent|Task|collaboration\\.spawn_agent|MultiEdit|NotebookEdit|Skill",
         "timeout": 15
       },
       {

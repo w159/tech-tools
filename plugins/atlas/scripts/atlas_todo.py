@@ -347,6 +347,76 @@ def mirror(
         return counts(board, session_id)
 
 
+_WORK_STATE_STATUSES = {
+    "todo": "pending",
+    "doing": "in_progress",
+    "done": "completed",
+    "dropped": "completed",
+}
+
+
+def upsert_work_state(
+    root: Optional[str], list_name: str, fields: dict, session_id: str
+) -> dict:
+    """Mirror one incremental Codex work-state task without replacing its list."""
+    if not isinstance(fields, dict):
+        return {"ok": False, "error": "list_and_task_required"}
+    list_name = str(list_name or "").strip()
+    task = str(fields.get("task") or "").strip()
+    if not list_name or not task:
+        return {"ok": False, "error": "list_and_task_required"}
+    with _file_lock(board_path(root)):
+        board = _locked_load(root)
+        item = next(
+            (
+                existing
+                for existing in board["items"]
+                if existing.get("session_id") == session_id
+                and existing.get("origin") == "codex-work-state"
+                and existing.get("work_state_list") == list_name
+                and existing.get("work_state_task") == task
+            ),
+            None,
+        )
+        now = _now()
+        if item is None:
+            item = {
+                "id": _new_id(),
+                "content": task,
+                "status": "pending",
+                "owner": None,
+                "claimed_at": None,
+                "origin": "codex-work-state",
+                "session_id": session_id,
+                "created_at": now,
+                "updated_at": now,
+                "evidence": None,
+                "completed_at": None,
+                "archived": False,
+                "work_state_list": list_name,
+                "work_state_task": task,
+                "work_state_status": "todo",
+            }
+            board["items"].append(item)
+
+        raw_status = fields.get("status")
+        if raw_status in _WORK_STATE_STATUSES:
+            item["work_state_status"] = raw_status
+            item["status"] = _WORK_STATE_STATUSES[raw_status]
+            item["completed_at"] = now if item["status"] == "completed" else None
+        for key in ("details", "evidence", "work_product"):
+            if key not in fields:
+                continue
+            if fields[key] is None:
+                item.pop(key, None)
+            else:
+                item[key] = fields[key]
+        item["updated_at"] = now
+        board["last_session_id"] = session_id
+        save(root, board)
+        return {"ok": True, "item": item, "counts": counts(board, session_id)}
+
+
 def add(
     root: Optional[str],
     content: str,

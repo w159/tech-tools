@@ -51,6 +51,7 @@ def __getattr__(name):
 
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
+CODEX_DISPATCH_TOOL = "collaboration.spawn_agent"
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # PreToolUse deny tier: the Nth UNSANCTIONED inline op with no intervening dispatch
 # is denied. 6 prior ops means this call is the 7th -> deny. Sanctioned writes (the
@@ -2274,6 +2275,23 @@ def _inject_name(payload, out):
         return out
 
 
+def _normalize_codex_dispatch(payload):
+    """Translate Codex collaboration.spawn_agent into the existing Agent contract."""
+    if payload.get("tool_name") != CODEX_DISPATCH_TOOL:
+        return
+    tinput = payload.get("tool_input")
+    if not isinstance(tinput, dict):
+        tinput = {}
+    else:
+        tinput = dict(tinput)
+    tinput.setdefault("subagent_type", tinput.get("agent_type", ""))
+    tinput.setdefault("name", tinput.get("task_name", ""))
+    tinput.setdefault("prompt", tinput.get("message", ""))
+    payload["tool_name"] = "Agent"
+    payload["tool_input"] = tinput
+    payload["_atlas_codex_dispatch"] = True
+
+
 def main():
     raw = sys.stdin.read()
     try:
@@ -2286,6 +2304,7 @@ def main():
         _record_fault(exc)
         return
     payload = payload if isinstance(payload, dict) else {}
+    _normalize_codex_dispatch(payload)
     if isinstance(payload, dict) and isinstance(payload.get("cwd"), str):
         _PAYLOAD_CWD[0] = payload["cwd"]
     if payload.get("hook_event_name") == "SubagentStart":
@@ -2528,7 +2547,7 @@ def _run(payload):
                     wave_id=atlas_db.next_wave_id(conn, dispatch_run_id),
                 )
             agent_type = str(tinput.get("subagent_type", ""))
-            if agent_type.startswith(("atlas:", "atlas-")):
+            if payload.get("_atlas_codex_dispatch") or agent_type.startswith(("atlas:", "atlas-")):
                 # Dispatching an atlas squad agent is unambiguous orchestration.
                 _arm_orchestrating(conn, atlas_db, session, payload.get("cwd"))
             if str(tinput.get("isolation", "")).strip() == "worktree":

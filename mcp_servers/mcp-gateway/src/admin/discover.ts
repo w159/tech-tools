@@ -42,11 +42,11 @@ export interface OrgModel {
   warnings: string[];
 }
 
-export const UNSET = "(unset)";
-export const SUPPRESSED = "other (suppressed)";
+const UNSET = "(unset)";
+const SUPPRESSED = "other (suppressed)";
 // Cells smaller than this identify individuals (the only "Chief Compliance
 // Officer", the only person in an office). 0 turns suppression off.
-export const DEFAULT_MIN_CELL = 5;
+const DEFAULT_MIN_CELL = 5;
 
 export interface DiscoverOptions {
   minCell?: number;

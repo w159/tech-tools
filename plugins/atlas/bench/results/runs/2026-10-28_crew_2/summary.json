@@ -1,0 +1,91 @@
+{
+ "ok": true,
+ "run": "crew-061714147a",
+ "check": "python3 -m pytest -q",
+ "check_exit": 0,
+ "check_tail": "arning: 'maxsplit' is passed as positional argument\n    core = re.split(r\"[-+]\", canon, 1)[0]\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n287 passed, 77 warnings in 0.07s\n",
+ "wall_s": 37.1,
+ "rounds": [
+  {
+   "round": 0,
+   "all_exited": true,
+   "check_exit": 0,
+   "t": 37.1
+  }
+ ],
+ "workers": [
+  {
+   "name": "cli",
+   "exit": 0,
+   "wall_s": 36.7,
+   "turns": 7,
+   "tokens": 38535,
+   "cost_usd": 0.0867,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "manifest",
+   "exit": 0,
+   "wall_s": 17.6,
+   "turns": 2,
+   "tokens": 6360,
+   "cost_usd": 0.0435,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "ranges",
+   "exit": 0,
+   "wall_s": 17.2,
+   "turns": 2,
+   "tokens": 6360,
+   "cost_usd": 0.0438,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "registry",
+   "exit": 0,
+   "wall_s": 18.0,
+   "turns": 2,
+   "tokens": 6025,
+   "cost_usd": 0.0369,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "resolver",
+   "exit": 0,
+   "wall_s": 18.2,
+   "turns": 2,
+   "tokens": 6251,
+   "cost_usd": 0.0403,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "semver",
+   "exit": 0,
+   "wall_s": 16.8,
+   "turns": 3,
+   "tokens": 13663,
+   "cost_usd": 0.0753,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  }
+ ],
+ "tokens_workers": {
+  "total": 77194,
+  "cost_usd": 0.3265
+ },
+ "irc": {
+  "messages": 8,
+  "from_workers": 1,
+  "direct_worker_to_worker": 1,
+  "ready": 0,
+  "human_or_irc_client": 0
+ },
+ "transcripts": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-f67oe_td/work/.atlas/.run/crew/crew-061714147a/logs",
+ "channel_log": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-f67oe_td/work/.atlas/.run/crew/crew-061714147a/irc/log.jsonl"
+}

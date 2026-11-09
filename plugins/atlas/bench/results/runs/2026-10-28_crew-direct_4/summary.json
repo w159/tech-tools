@@ -1,0 +1,91 @@
+{
+ "ok": true,
+ "run": "crew-0616306720",
+ "check": "python3 -m pytest -q",
+ "check_exit": 0,
+ "check_tail": "............ [ 50%]\n........................................................................ [ 75%]\n.......................................................................  [100%]\n287 passed in 0.07s\n",
+ "wall_s": 31.0,
+ "rounds": [
+  {
+   "round": 0,
+   "all_exited": true,
+   "check_exit": 0,
+   "t": 31.0
+  }
+ ],
+ "workers": [
+  {
+   "name": "cli",
+   "exit": 0,
+   "wall_s": 30.5,
+   "turns": 6,
+   "tokens": 38645,
+   "cost_usd": 0.0878,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "manifest",
+   "exit": 0,
+   "wall_s": 21.8,
+   "turns": 3,
+   "tokens": 13765,
+   "cost_usd": 0.0751,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "ranges",
+   "exit": 0,
+   "wall_s": 21.6,
+   "turns": 3,
+   "tokens": 13629,
+   "cost_usd": 0.0729,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "registry",
+   "exit": 0,
+   "wall_s": 22.0,
+   "turns": 2,
+   "tokens": 6030,
+   "cost_usd": 0.0369,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "resolver",
+   "exit": 0,
+   "wall_s": 22.3,
+   "turns": 2,
+   "tokens": 6265,
+   "cost_usd": 0.0405,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  },
+  {
+   "name": "semver",
+   "exit": 0,
+   "wall_s": 21.1,
+   "turns": 3,
+   "tokens": 13647,
+   "cost_usd": 0.0749,
+   "gate_refusals": 0,
+   "own_check_passed": true
+  }
+ ],
+ "tokens_workers": {
+  "total": 91981,
+  "cost_usd": 0.3881
+ },
+ "irc": {
+  "messages": 8,
+  "from_workers": 1,
+  "direct_worker_to_worker": 1,
+  "ready": 0,
+  "human_or_irc_client": 0
+ },
+ "transcripts": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-direct-6vic4l_z/work/.atlas/.run/crew/crew-0616306720/logs",
+ "channel_log": "/private/var/folders/t4/3yydl26s5mqb99t84qw3_wrm0000gn/T/bench-crew-direct-6vic4l_z/work/.atlas/.run/crew/crew-0616306720/irc/log.jsonl"
+}

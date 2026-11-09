@@ -1,0 +1,10 @@
+{"seq": 1, "ts": 1793182688.217, "from": "lead", "to": "#crew-061808b577", "text": "Kickoff. Goal: Implement pkg/*.py per SPEC.md | owners: cli: pkg/cli.py; manifest: pkg/manifest.py; ranges: pkg/ranges.py; registry: pkg/registry.py; resolver: pkg/resolver.py; semver: pkg/semver.py", "kind": "kickoff"}
+{"seq": 2, "ts": 1793182707.544, "from": "semver", "to": "#crew-061808b577", "text": "DONE semver: check passes", "kind": "done"}
+{"seq": 3, "ts": 1793182707.799, "from": "ranges", "to": "#crew-061808b577", "text": "DONE ranges: check passes", "kind": "done"}
+{"seq": 4, "ts": 1793182708.189, "from": "manifest", "to": "#crew-061808b577", "text": "DONE manifest: check passes", "kind": "done"}
+{"seq": 5, "ts": 1793182708.41, "from": "registry", "to": "#crew-061808b577", "text": "DONE registry: check passes", "kind": "done"}
+{"seq": 6, "ts": 1793182708.785, "from": "resolver", "to": "#crew-061808b577", "text": "DONE resolver: check passes", "kind": "done"}
+{"seq": 7, "ts": 1793182708.978, "from": "cli", "to": "cli", "text": "unverified cli: `python3 -m pytest -q tests/test_cli.py` exited 1", "kind": "unverified"}
+{"seq": 8, "ts": 1793182724.538, "from": "cli", "to": "#crew-061808b577", "text": "resolver msg 'no version of X satisfies R' lacks colon test_cli expects; cli normalizes to 'satisfies: R'."}
+{"seq": 9, "ts": 1793182724.725, "from": "cli", "to": "#crew-061808b577", "text": "DONE cli: check passes", "kind": "done"}
+{"seq": 10, "ts": 1793182725.293, "from": "lead", "to": "#crew-061808b577", "text": "Crew finished: global check exit 0.", "kind": "final"}

@@ -209,6 +209,20 @@ class GatewayTests(unittest.TestCase):
 
 
 class HookTests(unittest.TestCase):
+    def test_global_hook_binding_is_inert_outside_a_crew_worker(self):
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch.object(sys, "argv", ["crew_worker.py", "PreToolUse"]),
+            mock.patch.object(sys, "stdin", io.StringIO("not-json")),
+            mock.patch.object(crew_worker, "pre_tool_use") as pre,
+            mock.patch.object(crew_worker, "post_tool_use") as post,
+            mock.patch.object(crew_worker, "stop") as stop,
+        ):
+            self.assertEqual(crew_worker.main(), 0)
+        pre.assert_not_called()
+        post.assert_not_called()
+        stop.assert_not_called()
+
     def _env(self, tmp, **extra):
         d = _bus(tmp, nicks=("semver", "ranges"))
         env = {
@@ -722,6 +736,65 @@ class WorkerLaunchTests(unittest.TestCase):
         named = atlas_crew.worker_argv("sonnet", None, "/s.json", "sid-1", "P", name="crew-x-a")
         self.assertEqual(named[named.index("--name") + 1], "crew-x-a")
 
+    def test_codex_worker_is_noninteractive_and_resumable(self):
+        argv = atlas_crew.worker_argv(
+            "gpt-6-sol", "high", "/unused.json", "unused", "PROMPT", harness="codex"
+        )
+        self.assertEqual(argv[:2], ["codex", "exec"])
+        self.assertIn("--json", argv)
+        self.assertEqual(argv[argv.index("--sandbox") + 1], "workspace-write")
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-6-sol")
+        self.assertIn('model_reasoning_effort="high"', argv)
+        self.assertNotIn("--settings", argv)
+        self.assertIn("coding-agent sessions", argv[-1])
+        self.assertNotIn("Claude sessions", argv[-1])
+        resumed = atlas_crew.worker_argv(
+            None, None, "/unused.json", "unused", "FIX", resume="thread-1", harness="codex"
+        )
+        self.assertEqual(resumed[:4], ["codex", "exec", "resume", "thread-1"])
+
+    def test_codex_result_thread_and_usage_are_understood(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "codex.log"
+            log.write_text(
+                json.dumps({"type": "thread.started", "thread_id": "thread-1"})
+                + "\n"
+                + json.dumps(
+                    {
+                        "type": "turn.completed",
+                        "usage": {
+                            "input_tokens": 30,
+                            "cached_input_tokens": 20,
+                            "output_tokens": 5,
+                        },
+                    }
+                )
+                + "\n"
+            )
+            self.assertTrue(atlas_crew._result_ok(log))
+            self.assertEqual(atlas_crew._codex_thread_id(log), "thread-1")
+            usage = atlas_crew.usage_of(log)
+        self.assertEqual(usage["total"], 35)
+        self.assertEqual(usage["turns"], 1)
+
+    def test_crew_hooks_are_available_to_codex_plugin_workers(self):
+        hooks = json.loads((Path(atlas_crew.PLUGIN_ROOT) / "hooks" / "hooks.json").read_text())
+        commands = {
+            event: [h["command"] for group in hooks["hooks"][event] for h in group["hooks"]]
+            for event in ("PreToolUse", "PostToolUse", "Stop")
+        }
+        for event, event_commands in commands.items():
+            command = next(c for c in event_commands if "crew_worker.py" in c)
+            self.assertIn("ATLAS_CREW_WORKER", command)
+            self.assertIn(event, command)
+
+    def test_run_parser_defaults_to_claude_and_accepts_codex(self):
+        self.assertEqual(atlas_crew.parser().parse_args(["run", "--plan", "p"]).harness, "claude")
+        self.assertEqual(
+            atlas_crew.parser().parse_args(["run", "--plan", "p", "--harness", "codex"]).harness,
+            "codex",
+        )
+
     def test_worker_env_drops_the_leads_session_identity(self):
         plan = {
             "workers": [{"name": "a", "owns": ["a.py"], "task": "t", "check": "true"}]
@@ -732,6 +805,16 @@ class WorkerLaunchTests(unittest.TestCase):
             "TMUX": "x",
             "KEEP": "1",
             "PATH": "/usr/bin",
+            "HOME": "/home/worker",
+            "LANG": "en_US.UTF-8",
+            "LC_CTYPE": "UTF-8",
+            "TMPDIR": "/tmp/crew",
+            "CODEX_HOME": "/codex",
+            "CLAUDE_CONFIG_DIR": "/claude",
+            "AWS_SECRET_ACCESS_KEY": "aws-secret",
+            "GITHUB_TOKEN": "github-secret",
+            "NPM_TOKEN": "npm-secret",
+            "STRIPE_API_KEY": "stripe-secret",
         }
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -741,9 +824,44 @@ class WorkerLaunchTests(unittest.TestCase):
         self.assertNotIn("CLAUDE_CODE_SESSION_ID", env)
         self.assertNotIn("CLAUDE_CODE_REMOTE_SESSION_ID", env)
         self.assertNotIn("TMUX", env)
-        self.assertEqual(env["KEEP"], "1")
+        for secret in (
+            "KEEP",
+            "AWS_SECRET_ACCESS_KEY",
+            "GITHUB_TOKEN",
+            "NPM_TOKEN",
+            "STRIPE_API_KEY",
+        ):
+            self.assertNotIn(secret, env)
+        for required in (
+            "HOME",
+            "LANG",
+            "LC_CTYPE",
+            "TMPDIR",
+            "CODEX_HOME",
+            "CLAUDE_CONFIG_DIR",
+        ):
+            self.assertEqual(env[required], lead_env[required])
         self.assertEqual(env["ATLAS_IRC_NICK"], "a")
+        self.assertEqual(env["ATLAS_WORKER_NAME"], "a")
+        self.assertEqual(env["ATLAS_MANDATES"], "off")
         self.assertTrue(env["PATH"].startswith(str(Path(tmp) / "bin")))
+
+    def test_worker_env_forwards_only_explicit_named_credentials(self):
+        plan = {
+            "workers": [{"name": "a", "owns": ["a.py"], "task": "t", "check": "true"}]
+        }
+        lead_env = {
+            "PATH": "/usr/bin",
+            "GITHUB_TOKEN": "explicit-token",
+            "NPM_TOKEN": "implicit-token",
+            "ATLAS_WORKER_FORWARD_ENV": " GITHUB_TOKEN, NOT-AN-ENV ",
+        }
+        with mock.patch.dict(os.environ, lead_env, clear=True):
+            env = atlas_crew.worker_env(Path("/r"), plan, plan["workers"][0], "/root")
+        self.assertEqual(env["GITHUB_TOKEN"], "explicit-token")
+        self.assertNotIn("NPM_TOKEN", env)
+        self.assertNotIn("NOT-AN-ENV", env)
+        self.assertNotIn("ATLAS_WORKER_FORWARD_ENV", env)
 
     def test_worker_that_lingers_after_its_result_is_reaped_as_success(self):
         # live: a finished worker held open by a stray background shell for 9 minutes
