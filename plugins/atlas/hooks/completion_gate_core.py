@@ -542,48 +542,81 @@ def _board_open_todos(root: Path, session_id: str) -> int:
         return 0
 
 
-def _ledger_open_todos(transcript_path: str) -> int:
-    """Open items from the last `LEDGER | n/m | ...` line in the transcript.
+_LEDGER_RE = None
 
-    Last-resort fallback for runs where TodoWrite is unavailable AND no board
-    was written: the orchestrator's status-header ledger is the only record of
-    remaining work. open = m - n, clamped at 0. Fail-open on everything.
+
+def _ledger_counts(transcript_path: str) -> list:
+    """[(n, m)] for every `LEDGER | n/m | ...` line the orchestrator itself wrote.
+
+    Only assistant entries count. The Atlas output style quotes an example
+    ledger (`LEDGER | 3/5 | now: wire the gate ...`), and Claude Code stores the
+    style in the transcript as an attachment entry; read raw, that example
+    reported 2 phantom open todos to (i) and a phantom plan to (k) in every
+    session that ran with the style. A line that is not a JSON entry (a plain
+    log) is still read as text. Fail-open: an unreadable file yields [].
     """
+    global _LEDGER_RE
     if not transcript_path:
-        return 0
+        return []
+    import json
     import re
 
-    pattern = re.compile(r"LEDGER\s*\|\s*(\d+)\s*/\s*(\d+)")
-    last = None
+    if _LEDGER_RE is None:
+        _LEDGER_RE = re.compile(r"LEDGER\s*\|\s*(\d+)\s*/\s*(\d+)")
+    out = []
     try:
         with open(transcript_path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 if "LEDGER |" not in line and "LEDGER|" not in line:
                     continue
-                m = pattern.search(line)
-                if m:
-                    last = (int(m.group(1)), int(m.group(2)))
+                text = line
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    entry = None
+                if isinstance(entry, dict):
+                    if entry.get("type") != "assistant":
+                        continue
+                    msg = entry.get("message")
+                    content = msg.get("content") if isinstance(msg, dict) else None
+                    if isinstance(content, str):
+                        text = content
+                    elif isinstance(content, list):
+                        text = "\n".join(
+                            str(b.get("text") or "")
+                            for b in content
+                            if isinstance(b, dict) and b.get("type") == "text"
+                        )
+                    # an assistant entry of another shape: read the raw line
+                out.extend((int(a), int(b)) for a, b in _LEDGER_RE.findall(text))
     except (OSError, UnicodeDecodeError):
+        return []
+    return out
+
+
+def _ledger_open_todos(transcript_path: str) -> int:
+    """Open items from the last `LEDGER | n/m | ...` line the orchestrator wrote.
+
+    Last-resort fallback for runs where TodoWrite is unavailable AND no board
+    was written: the orchestrator's status-header ledger is the only record of
+    remaining work. open = m - n, clamped at 0. Fail-open on everything.
+    """
+    counts = _ledger_counts(transcript_path)
+    if not counts:
         return 0
-    if not last:
-        return 0
-    return max(0, last[1] - last[0])
+    n, m = counts[-1]
+    return max(0, m - n)
 
 
 def _has_ledger_line(transcript_path: str) -> bool:
-    """True when the transcript carries a `LEDGER | n/m | ...` line.
+    """True when the orchestrator wrote a `LEDGER | n/m | ...` line.
 
     Presence, not arithmetic: a fully drained ledger (`5/5`) reports zero open
     items but still proves a plan existed, so (k) must not read it through
-    _ledger_open_todos. Fail-open True.
+    _ledger_open_todos. An example quoted in a system or style entry is not a
+    plan (see _ledger_counts).
     """
-    if not transcript_path:
-        return False
-    try:
-        with open(transcript_path, encoding="utf-8", errors="replace") as fh:
-            return any("LEDGER |" in line for line in fh)
-    except (OSError, UnicodeDecodeError):
-        return True
+    return bool(_ledger_counts(transcript_path))
 
 
 def _has_todo_plan(transcript_path: str, root: Path, session_id: str) -> bool:
@@ -2363,9 +2396,11 @@ def _phases_reason_part(missing: list, contract: dict | None, session_id: str) -
         f"`phase` field (omp todo phases) or as a `{prefix}` content prefix (Claude "
         f"TodoWrite), for example `[{missing[0]}] <step>`. Two ways to fix it: (1) re-tag "
         "your items with that prefix in TodoWrite, or (2) run "
-        f'python3 "{todo_script}" scaffold '
+        f'python3 "{todo_script}" scaffold --phases {",".join(missing)} '
         f'--task "<title>" --session {session_id or "<id>"} '
-        "and then retry Stop. (This check blocks once per session.)"
+        "and then retry Stop. Add only the missing phases, and mark an item "
+        "completed only for work this run actually did and checked; never tick a "
+        "phase to satisfy this check. (This check blocks once per session.)"
     )
 
 

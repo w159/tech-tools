@@ -119,7 +119,7 @@ function gradBar(left: string, right: string, w: number, a: Rgb, b: Rgb): string
 	return `\x1b[1m${fg(BASE)}${cells.map((ch, i) => bg(lerp(a, b, i / Math.max(1, w - 1))) + ch).join("")}${RST}`;
 }
 
-type RailMode = "full" | "short";
+type RailMode = "full" | "short" | "mark"; // twin: mod/band.tsx RailMode
 type RailLook = { tick: number; spin: string; idle: boolean };
 
 /** The current phase: a shimmering filled pill with the phase spinner (a steady ◆ when idle). */
@@ -131,18 +131,20 @@ function currentPill(name: string, col: Rgb, m: RailLook): string {
 function pill(i: number, cur: number, m: RailLook, mode: RailMode): string {
 	const [name, col] = PHASES[i]!;
 	const label = mode === "full" ? name : name.slice(0, 3);
-	if (i < cur) return seg(` ✓ ${label} `, BASE, lerp(col, PANEL, 0.45));
-	if (i > cur) return seg(` ${label} `, MUT, PANEL2);
+	if (i < cur) return seg(mode === "mark" ? " ✓ " : ` ✓ ${label} `, BASE, lerp(col, PANEL, 0.45));
+	if (i > cur) return seg(mode === "mark" ? " · " : ` ${label} `, MUT, PANEL2);
 	return currentPill(name, col, m);
 }
 
-/** Chevron pills; abbreviated names when the full rail does not fit. */
+/** Chevron pills: full names, then three letters, then marks only, the widest that fits (twin: mod/band.tsx railRow). */
 function rail(phase: string, w: number, m: RailLook): string {
 	const cur = Math.max(0, PHASES.findIndex(p => p[0] === phase));
 	const build = (mode: RailMode) =>
 		seg(" ") + PHASES.map((p, i) => pill(i, cur, m, mode) + seg(i < PHASES.length - 1 ? "▶" : " ", i < cur ? p[1] : DIM)).join("");
 	const full = build("full");
-	return visibleWidth(full) <= w ? full : build("short");
+	if (visibleWidth(full) <= w) return full;
+	const short = build("short");
+	return visibleWidth(short) <= w ? short : build("mark");
 }
 
 

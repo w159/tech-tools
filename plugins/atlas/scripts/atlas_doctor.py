@@ -4056,9 +4056,44 @@ def redact_history(conn, apply=False, batch=500):
     return counts
 
 
+def _status(r: dict) -> str:
+    return "PASS" if r["ok"] else ("WARN" if r.get("severity") == "warn" else "FAIL")
+
+
+def _not_applicable(r: dict) -> bool:
+    """A passing check that did not run here: `skipped: ...`, `...; skipped`, `(n/a)`."""
+    d = str(r.get("detail") or "")
+    return bool(r["ok"]) and (d.startswith("skipped") or d.endswith("skipped") or "(n/a)" in d)
+
+
+def render_report(results: list, failed: list, plugin: str, verbose: bool = False) -> list:
+    """The human report: FAIL, then WARN, then PASS rows; passing checks that did
+    not apply here fold into one SKIP line (--verbose lists them); the verdict
+    line carries the counts. The old flat list printed 35 rows with problems
+    wherever the check order put them and 7 'skipped' rows reading PASS."""
+    order = {"FAIL": 0, "WARN": 1, "PASS": 2}
+    shown = [r for r in results if verbose or not _not_applicable(r)]
+    folded = [r for r in results if not verbose and _not_applicable(r)]
+    lines = [
+        f"{_status(r)}  {r['check']:20} {r['detail']}"
+        for r in sorted(shown, key=lambda r: order[_status(r)])
+    ]
+    if folded:
+        names = ", ".join(r["check"] for r in folded)
+        lines.append(f"SKIP  {len(folded)} not applicable here ({names}); --verbose lists them")
+    counts = {k: sum(1 for r in results if _status(r) == k) for k in order}
+    tally = f"{counts['PASS'] - len([r for r in results if _not_applicable(r)])} pass, {counts['WARN']} warn, {counts['FAIL']} fail"
+    tally += f", {sum(1 for r in results if _not_applicable(r))} n/a"
+    lines.append(("HEALTHY" if not failed else f"{len(failed)} PROBLEM(S)") + f" - {plugin} ({tally})")
+    return lines
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="atlas plugin health check")
     ap.add_argument("--fix", action="store_true", help="repair what CHECK finds")
+    ap.add_argument(
+        "--verbose", action="store_true", help="list every check, including the not-applicable ones"
+    )
     ap.add_argument(
         "--hook",
         action="store_true",
@@ -4397,14 +4432,8 @@ def main(argv=None):
             )
         return 0
 
-    for r in results:
-        status = (
-            "PASS" if r["ok"] else ("WARN" if r.get("severity") == "warn" else "FAIL")
-        )
-        print(f"{status}  {r['check']:20} {r['detail']}")
-    print(
-        ("HEALTHY" if not failed else f"{len(failed)} PROBLEM(S)") + f" - {args.plugin}"
-    )
+    for line in render_report(results, failed, args.plugin, verbose=args.verbose):
+        print(line)
     return 0 if not failed else 1
 
 

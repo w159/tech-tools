@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.3.0 - 2026-11-10
+
+- atlas 17.3.0: usage review and terminal UI pass. Telemetry has 1 submission (2026-W45), too few to rank, so the fixes come from a measured live session and hook replay: the output style's example LEDGER line no longer reads as open work or a plan, the (o) hint no longer invites ticking phases, `atlas_finding.py` records the real writer instead of `atlas:verifier`, native tools are not routing misses without lean-ctx, `env | grep X` is not an env dump. UI: the band rail and sidebar rail keep phase names when they fit (Claude Code and omp share goldens), one merged toast per turn, and a shorter doctor report with a verdict line. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-10_atlas-usage-and-ui.md.
+
+## marketplace 5.8.0 - 2026-11-10
+
+- marketplace 5.8.0: atlas 17.3.0, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 17.2.0 - 2026-11-06
 
 - atlas 17.2.0: reliability pass. Mutation-hardened tests for the remaining Python and TS/JS files (Python 63.5% -> 88.4% killed over 66 files, TS/JS 38.4% -> 96.9% over 26 files, 64.6% -> 88.1% over a 69-file sample), product bugs fixed, and pytest and bun runs that clean up their temp dirs. pytest 8451 passed, bun 3320 pass, 0 fail. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-06_atlas-reliability.md.

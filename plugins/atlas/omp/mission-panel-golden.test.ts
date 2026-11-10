@@ -2,7 +2,7 @@
 // Twin: mod/band-golden.test.ts. Both compare against contracts/band-golden.ts.
 import { expect, test } from "bun:test";
 import { fx, trimRows } from "../contracts/band-fixture";
-import { golden } from "../contracts/band-golden";
+import { golden, railGolden } from "../contracts/band-golden";
 import { renderPanel, type PanelModel } from "./mission-panel";
 
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
@@ -46,3 +46,10 @@ const textRows = (rows: string[]) => trimRows(rows).filter(r => r !== "");
 test("renders the shared fixture to the golden rows (plain text, 120 columns, tick 0)", () => {
 	expect(textRows(renderPanel(model).map(strip))).toEqual(golden);
 });
+
+// The rail keeps the widest form that fits: full names, three letters, then marks (twin: mod/band-golden.test.ts).
+for (const [cols, want] of Object.entries(railGolden)) {
+	test(`rail tier at ${cols} columns`, () => {
+		expect(strip(renderPanel({ ...model, width: Number(cols) })[1]!).trimEnd()).toBe(want);
+	});
+}

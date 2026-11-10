@@ -3,8 +3,8 @@
 import { describe, expect, test } from "claude-code/testing";
 import type { ClientElements } from "claude-code";
 import { fx, trimRows } from "../contracts/band-fixture";
-import { golden } from "../contracts/band-golden";
-import { bandTree } from "./band";
+import { golden, railGolden } from "../contracts/band-golden";
+import { bandTree, railRow } from "./band";
 import { liveWorkers } from "./data/live";
 import { busySnap } from "./live_fixture";
 import { spin } from "./theme";
@@ -112,4 +112,15 @@ describe("band golden rows", () => {
     expect(rows.map((r) => r.replace(spin(0, "implement"), "◆"))).toEqual(golden);
     expect(trimRows((tree.props.children as Node[]).map(text)).filter((r) => r === "")).toHaveLength(2);
   });
+});
+
+describe("band rail tiers", () => {
+  // The rail keeps the widest form that fits: full names, three letters, then marks (twin: omp mission-panel-golden).
+  for (const [cols, want] of Object.entries(railGolden)) {
+    test(`${cols} columns`, () => {
+      // The rail itself: below 80 columns the band folds to one narrow row, while omp keeps drawing its rail.
+      const rail = railRow(snapshot(), fx.phase, 0, Number(cols), false).map((r) => r.t).join("").trimEnd();
+      expect(rail).toBe(want);
+    });
+  }
 });

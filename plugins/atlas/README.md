@@ -84,8 +84,10 @@ it Atlas falls back to `claude --bg` workers.
    python3 "$ATLAS/scripts/atlas_doctor.py"
    ```
 
-   The last line is `HEALTHY - atlas` or a count of problems. `--fix` repairs what
-   the check finds.
+   Problems print first, checks that do not apply on this machine fold into one
+   `SKIP` line (`--verbose` lists them), and the last line is `HEALTHY - atlas` or
+   a count of problems, with the pass, warn, fail and n/a counts. `--fix` repairs
+   what the check finds.
 
 5. Optional: preview the team Atlas would launch for a task, without starting it:
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## 17.3.0 - 2026-11-10
+
+Usage review and terminal UI pass. Telemetry is too thin to rank anything (2026-W45: 1 submission, below the 3-install publish threshold; 2026-W44: 0), so every item below comes from a measured live Claude Code session, a hook replay of that session, or the live gate and doctor output. Audit: `docs/audits/2026-11-10_atlas-usage-and-ui.md`.
+
+### Fixed
+
+- Completion gate: the `LEDGER | 3/5` example inside the Atlas output style (stored in the transcript as an `output_style_instructions` attachment) no longer counts as the run's ledger. It used to report 2 phantom open todos for (i) and satisfy the (k) plan check with no plan. Only assistant messages and plain text lines are read now.
+- Gate (o) hint: it names only the missing phases (`scaffold --phases implement,verify`) and says never to tick a phase to satisfy the check. In the live run the old hint led the model to scaffold six phases and mark research through validate complete for a two-line task.
+- `atlas_finding.py`: `verified_by` defaults to the caller (`--by`, else `$ATLAS_WORKER_NAME`, else `lead`), not `atlas:verifier`. A lead recording its own check was labelled as an independent verifier. The verifier agent prompts (Claude Code and omp) now pass `--by atlas:verifier`.
+- Gates view (`atlas_gates.py`, the sidebar "core" count): native Bash, Read, Grep and Glob calls are not routing misses when lean-ctx is not configured for the project, because native tools are then the only route. The live session showed 5 such false failures.
+- `bash_advisor.py`: `env | grep PATTERN` is no longer flagged as a full environment dump. It is still flagged for `grep -v`/`-L`, a pattern naming a secret (token, secret, pass, key, auth, cred), an empty grep or `||`.
+
+### Changed
+
+- Band rail (Claude Code `mod/band.tsx`, omp `omp/mission-panel.ts`, shared goldens in `contracts/band-golden.ts`): picks the widest form that fits, full names, then three-letter names, then marks only. At 92 columns it used to drop to marks (`✓ ▶ ✓ ▶ ✓ ▶ IMPLEMENT ▶ · ▶ ·`) although the full rail fits.
+- Sidebar route view: the rail keeps the current phase's name when the full rail does not fit (inner width 44 and 54 used to show glyphs only); `done` marks every phase complete; an empty phase says `nothing in <phase> · N open in other phases` or `all N done` instead of `nothing planned`.
+- Turn-complete toasts: one merged toast per turn (`first  (+N: rest)`, capped at 100 characters) instead of one per change, so a busy turn no longer floods the host notice area.
+- `atlas_doctor.py`: prints FAIL, then WARN, then PASS, folds not-applicable checks into one SKIP line, and ends with a verdict and counts (`HEALTHY - atlas (20 pass, 5 warn, 0 fail, 10 n/a)`). `--verbose` lists every line. Output in this repo went from 36 lines to 27.
+
+### Tests
+
+- New or changed: `hooks/test_completion_gate.py` (style-attachment ledger, assistant ledger, plan check, (o) hint), `scripts/test_atlas_finding.py` (writer default, verifier prompts), `hooks/test_atlas_gates.py` (no lean-ctx), `hooks/test_bash_advisor_more.py` (filtered env), `scripts/test_atlas_doctor.py` (report render), `mod/band-golden.test.ts` and `omp/mission-panel-golden.test.ts` (rail tiers at 92, 56, 40 columns), `mod/pane/sidebar-route.test.ts`, `mod/notify.test.ts`. Each new test failed on the old code.
+
 ## 17.2.0 - 2026-11-06
 
 Reliability pass: mutation-hardened tests for the files 17.1.0 left at baseline, product bugs fixed along the way, and test runs that no longer leak temp dirs. Audit: `docs/audits/2026-11-06_atlas-reliability.md`.

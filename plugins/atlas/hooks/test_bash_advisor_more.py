@@ -536,6 +536,18 @@ class SecretsMore(unittest.TestCase):
         self.assertIsNone(ba._match_secrets("env FOO=1 make"))
         self.assertIsNone(ba._match_secrets("printenv HOME"))
 
+    def test_env_filtered_by_grep_is_not_a_dump(self):
+        """`env | grep` prints only the selected names (live run 2026-11-10 was
+        warned for `env | grep -iE "^(CI|ATLAS|DO_NOT)"`)."""
+        self.assertIsNone(ba._match_secrets('env | grep -iE "^(CI|ATLAS|DO_NOT)"'))
+        self.assertIsNone(ba._match_secrets("printenv | rg PATH"))
+        dump = "the full environment dump"
+        self.assertEqual(ba._match_secrets("env | grep -v PATH"), dump)  # inverted: prints the rest
+        self.assertEqual(ba._match_secrets("env | grep -iv path"), dump)
+        self.assertEqual(ba._match_secrets("env | grep -i token"), dump)  # selects secrets
+        self.assertEqual(ba._match_secrets("env | grep"), dump)  # no pattern: an error, still flagged
+        self.assertEqual(ba._match_secrets("env || grep x"), dump)  # || is not a pipe
+
     def test_cli_tokens(self):
         for c in ("gh auth token", "az account get-access-token", "gcloud auth print-access-token",
                   "gcloud auth print-identity-token"):

@@ -2483,6 +2483,60 @@ class TodoBoardDrainTest(GateConditionIJTest):
         )
         self.assertNotIn('"decision": "block"', r2.stdout)
 
+    def _style_attachment_transcript(self, extra=()):
+        """A transcript whose only LEDGER text is the output style's quoted
+        example, stored as Claude Code stores it: an attachment entry."""
+        t = os.path.join(self.tmp, "t.jsonl")
+        style = {
+            "type": "attachment",
+            "attachment": {
+                "type": "output_style_instructions",
+                "content": "fallback:\n\n    LEDGER | 3/5 | now: wire the gate | left: contract test, docs\n",
+            },
+        }
+        with open(t, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(style) + "\n")
+            for entry in extra:
+                fh.write(json.dumps(entry) + "\n")
+        return t
+
+    def test_style_example_ledger_is_not_open_work(self):
+        """The output style's example `LEDGER | 3/5` is not the orchestrator's
+        ledger: a drained board must pass (live run 2026-11-10 showed 2
+        phantom open todos on the gates view)."""
+        self._satisfy_everything_else()
+        self._seed_board([{"content": "wire the gate", "status": "completed"}])
+        t = self._style_attachment_transcript()
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertNotIn("(i) Todo list not drained", r.stdout)
+
+    def test_assistant_ledger_still_counts_in_json_transcript(self):
+        """A LEDGER line the assistant wrote in a JSON transcript is read."""
+        self._satisfy_everything_else()
+        said = {
+            "type": "assistant",
+            "message": {"role": "assistant", "content": [
+                {"type": "text", "text": "ATLAS | implement | x\nLEDGER | 1/3 | now: a | left: b"},
+            ]},
+        }
+        t = self._style_attachment_transcript([said])
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertIn("(i) Todo list not drained: 2 item(s)", r.stdout)
+
+    def test_style_example_ledger_is_not_a_plan(self):
+        """(k): the quoted example proves no plan was made."""
+        self._satisfy_everything_else()
+        atlas_todo.mirror(self.tmp, [], "sess-orch")
+        t = self._style_attachment_transcript()
+        r = _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
+        )
+        self.assertIn("(k) No plan was ever made", r.stdout)
+
     def test_board_replan_blocks_after_drained_todowrite(self):
         """A CLI re-plan on the board after a drained TodoWrite is open work:
         the board is consulted even when the transcript shows a drained list."""
@@ -3438,7 +3492,10 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertIn("verify", out)
         self.assertIn("TodoWrite", out)
         self.assertIn("[<phase>] ", out)
-        self.assertIn("scaffold --task", out)
+        # Only the missing required phases: a bare scaffold made all six, and the
+        # 2026-11-10 live run then ticked research/theory/test/validate it never ran.
+        self.assertIn("scaffold --phases implement,verify --task", out)
+        self.assertIn("never tick a phase to satisfy this check", out)
         self.assertIn("--session", out)
         self.assertNotIn("CLAUDE_PLUGIN_ROOT", out)
         m = re.search(r'python3 \\"([^"\\]*atlas_todo\.py)\\" scaffold', out)

@@ -31,13 +31,13 @@ One JSON object per verdict, built by `build_entry()`. Defaults come from the ar
 | `blast_radius` | string | `"module"` (`--blast-radius`) |
 | `status` | enum | required (`--status`) |
 | `verified_at` | string | UTC ISO-8601, seconds precision, stamped at write time |
-| `verified_by` | string | `"atlas:verifier"` (`--by`) |
+| `verified_by` | string | `--by`; default `$ATLAS_WORKER_NAME`, else `"lead"` |
 
 The `status` enum is `verified | rejected | needs-evidence | open` (`STATUSES`). Only `verified` satisfies the completion gate.
 
 ## The verified stamp
 
-Every appended entry carries two fields set at write time, not by the caller: `verified_at` (UTC timestamp) and `verified_by` (writer identity, default `atlas:verifier`). An entry with `status: "verified"` plus its stamp is the machine-checkable proof the completion gate consumes.
+Every appended entry carries two fields set at write time, not by the caller: `verified_at` (UTC timestamp) and `verified_by` (writer identity: `--by`, else the tmux worker name in `$ATLAS_WORKER_NAME`, else `lead`; the `atlas:verifier` agent passes `--by atlas:verifier`, so a row the lead stamps from its own test run no longer reads as independent verification). An entry with `status: "verified"` plus its stamp is the machine-checkable proof the completion gate consumes.
 
 ## Append-only intent
 
@@ -80,7 +80,8 @@ Older ledgers may hold a different shape (for example `batch`, `claim`, `verifie
 python3 atlas_finding.py --id S3 --status verified \
     --title "budget read path sums all income rows" \
     --evidence "backend/tests/test_budget.py::test_multi_income" \
-    --reproduction "pytest backend/tests/test_budget.py -q"
+    --reproduction "pytest backend/tests/test_budget.py -q" \
+    --by atlas:verifier
 ```
 
 The command exits 0 on success and prints the written entry. It exits 1 on a bad status, a missing project root, or an unwritable path, because a silent failure here would let a run pass the gate without a recorded verdict.

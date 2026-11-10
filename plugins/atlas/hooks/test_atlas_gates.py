@@ -9,6 +9,7 @@ _iso_sys.path.insert(
 )
 import _test_isolation  # noqa: F401,E402
 import json
+import shutil
 import os
 import sqlite3
 import subprocess
@@ -117,7 +118,7 @@ class AtlasGatesTest(unittest.TestCase):
         self.assertIn("error", groups["routing"])
         self.assertNotIn("error", groups["completion"])
 
-    def _native_bash_ok(self, agent):
+    def _native_bash_ok(self, agent, lean_ctx=True):
         self.conn.execute(
             "INSERT INTO session_logs (session_id, agent) VALUES (?,?)",
             (SESSION, agent),
@@ -128,12 +129,26 @@ class AtlasGatesTest(unittest.TestCase):
             (SESSION,),
         )
         self.conn.commit()
-        _, doc = _run(self.db, self.root)
+        env = {}
+        if lean_ctx:  # a reachable replacement: binary on PATH + server in .mcp.json
+            bindir = Path(tempfile.mkdtemp())
+            self.addCleanup(shutil.rmtree, bindir, ignore_errors=True)
+            exe = bindir / "lean-ctx"
+            exe.write_text("#!/bin/sh\n")
+            exe.chmod(0o755)
+            env["PATH"] = f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}"
+            Path(self.root, ".mcp.json").write_text(json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}))
+        _, doc = _run(self.db, self.root, env)
         routing = next(g for g in doc["groups"] if g["id"] == "routing")
         return {ln["id"]: ln["ok"] for ln in routing["lines"]}
 
     def test_native_bash_counts_in_claude_session(self):
         self.assertFalse(self._native_bash_ok("claude")["native-Bash"])
+
+    def test_native_bash_is_the_route_without_lean_ctx(self):
+        """No lean-ctx here: a native call is the only route, not a miss (the band
+        read "gates ✖" for it in the 2026-11-10 live run)."""
+        self.assertTrue(self._native_bash_ok("claude", lean_ctx=False)["native-Bash"])
 
     def test_native_bash_ignored_in_omp_session(self):
         ok = self._native_bash_ok("omp")

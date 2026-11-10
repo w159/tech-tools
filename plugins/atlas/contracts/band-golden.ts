@@ -9,3 +9,11 @@ export const golden: string[] = [
   "  #lead-eed839  14:05 lead → explorer-1: map the auth flow   14:06 impl-auth → lead: need a decision on the token ttl",
   " tasks ███                1/6   ✔ completion   ✖ tripwire   ✔ routing",
 ];
+
+// The phase rail (row 2) at narrower widths, same fixture: the widest form that fits. 92 columns used to drop every
+// name to `·`/`✓` on the Claude band (a fixed `cols < 100` switch) while omp kept them.
+export const railGolden: Record<number, string> = {
+  92: "  ✓ research ▶ ✓ theory ▶ ✓ test ▶ ◆ IMPLEMENT ▶ verify ▶ done",
+  56: "  ✓ res ▶ ✓ the ▶ ✓ tes ▶ ◆ IMPLEMENT ▶ ver ▶ don",
+  40: "  ✓ ▶ ✓ ▶ ✓ ▶ ◆ IMPLEMENT ▶ · ▶ ·",
+};

@@ -81,19 +81,22 @@ function titleRow(c: Ctx, all: LiveWorker[], shown: LiveWorker[]): Segment[] {
 
 // ---- phase rail ----------------------------------------------------------------------
 
-const pastPill = (id: string, compact: boolean): Segment => ({ t: compact ? ' ✓ ' : ` ✓ ${id} `, color: M.base, bg: mix(phaseHue(id), M.panel, 0.45) });
-const futurePill = (id: string, compact: boolean): Segment => ({ t: compact ? ' · ' : ` ${id} `, color: M.muted, bg: M.panel2 });
+/** How much of each name a pill keeps: the whole name, its first three letters, or none (twin: omp RailMode). */
+type RailMode = 'full' | 'short' | 'mark';
+const label = (id: string, mode: RailMode): string => (mode === 'full' ? id : mode === 'short' ? id.slice(0, 3) : '');
+const pastPill = (id: string, mode: RailMode): Segment => ({ t: mode === 'mark' ? ' ✓ ' : ` ✓ ${label(id, mode)} `, color: M.base, bg: mix(phaseHue(id), M.panel, 0.45) });
+const futurePill = (id: string, mode: RailMode): Segment => ({ t: mode === 'mark' ? ' · ' : ` ${label(id, mode)} `, color: M.muted, bg: M.panel2 });
 /** The current phase: bright hue, its white mix cycling with the tick while workers run; the phase's spinner frame
- * leads the label while running, a steady ◆ when idle (twin: omp currentPill). */
+ * leads the label while running, a steady ◆ when idle (twin: omp currentPill). It always keeps its full name. */
 const nowPill = (id: string, tick: number, animate: boolean): Segment => {
   const shimmer = animate ? 0.25 + 0.25 * ((tick % 4) / 3) : 0.15;
   return { t: ` ${animate ? spin(tick, id) : '◆'} ${id.toUpperCase()} `, color: M.base, bg: mix(phaseHue(id), M.white, shimmer), bold: true };
 };
 
 /** Pill for one phase; `rel` is its position against the current phase (0 current, <0 past, >0 future). */
-function pill(id: string, rel: number, tick: number, compact: boolean, animate: boolean): Segment {
-  if (rel < 0) return pastPill(id, compact);
-  return rel > 0 ? futurePill(id, compact) : nowPill(id, tick, animate);
+function pill(id: string, rel: number, tick: number, mode: RailMode, animate: boolean): Segment {
+  if (rel < 0) return pastPill(id, mode);
+  return rel > 0 ? futurePill(id, mode) : nowPill(id, tick, animate);
 }
 
 const railIds = (s: LiveSnapshot): string[] => s.contract.phases.map((p) => p.id as string).filter((id) => !RAIL_SKIP.has(id));
@@ -105,11 +108,17 @@ export function railPhase(s: LiveSnapshot, lastPhase?: string | null): string {
   return ids.includes(s.phase) ? s.phase : lastPhase && ids.includes(lastPhase) ? lastPhase : ids[0] ?? s.phase;
 }
 
-function railRow(s: LiveSnapshot, phase: string, tick: number, compact: boolean, animate: boolean): Segment[] {
+/** The widest rail that fits `cols`: full names, then three letters, then marks only. A fixed `cols < 100` switch
+ * used to drop every name straight to `·`/`✓` at 92 columns, where three-letter names fit with room to spare. */
+export function railRow(s: LiveSnapshot, phase: string, tick: number, cols: number, animate: boolean): Segment[] {
   const ids = railIds(s);
   const at = ids.indexOf(phase);
-  const cells = ids.flatMap((id, i) => [pill(id, i - at, tick, compact, animate), seg(i < ids.length - 1 ? '▶' : ' ', i < at ? phaseHue(id) : M.dim)]);
-  return [seg(' '), ...cells];
+  const build = (mode: RailMode): Segment[] => [seg(' '), ...ids.flatMap((id, i) => [pill(id, i - at, tick, mode, animate), seg(i < ids.length - 1 ? '▶' : ' ', i < at ? phaseHue(id) : M.dim)])];
+  const fits = (row: Segment[]): boolean => row.reduce((n, r) => n + textWidth(r.t), 0) <= cols;
+  const full = build('full');
+  if (fits(full)) return full;
+  const short = build('short');
+  return fits(short) ? short : build('mark');
 }
 
 // ---- lanes -------------------------------------------------------------------------
@@ -293,7 +302,7 @@ function idleRows(els: ClientElements, c: Ctx, all: LiveWorker[], maxRows: numbe
   const controls = idleControls(els, c, maxRows, on);
   const core = maxRows >= 3 + controls.length ? coreRow(c) : []; // the controls keep their row; the core takes what is left
   const fixed = 2 + core.length + controls.length;
-  return [title, padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, false), c.cols), ...core, ...boardRows(c, maxRows, fixed), ...controls];
+  return [title, padRow(railRow(c.s, c.rail, c.tick, c.cols, false), c.cols), ...core, ...boardRows(c, maxRows, fixed), ...controls];
 }
 
 /** <80 columns or <3 rows: the title row alone, phase and counts in it. */
@@ -307,7 +316,7 @@ function fullRows(els: ClientElements, c: Ctx, all: LiveWorker[], shown: LiveWor
   const core = maxRows >= 4 ? coreRow(c) : []; // title, rail, core and one lane
   const board = boardRows(c, maxRows - 3 - core.length, 2); // keep title, rail, core and one lane
   const plan = planRows(maxRows - board.length - core.length, shown.length, c.s.comms.length > 0);
-  const head: Row[] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols < 100, true), c.cols), ...core, ...board];
+  const head: Row[] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols, true), c.cols), ...core, ...board];
   const lanes: Row[] = shown.slice(0, plan.lanes).map((w) => lane(w, c));
   const extras: Row[] = [...(plan.more ? [padRow([seg(`   +${shown.length - plan.lanes} more`, M.muted)], c.cols)] : []), ...(plan.ticker ? [ticker(c)] : [])];
   // omp breathe(): spare rows become a blank under the board, then a blank between the lanes and the extras; the first to go under budget.

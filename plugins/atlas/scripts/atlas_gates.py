@@ -153,7 +153,26 @@ def tripwire_group(session: str) -> dict:
     return g
 
 
-def routing_group(session: str) -> dict:
+def _routed(root) -> bool:
+    """True when native Read/Grep/Glob/Bash have a routed replacement here: the
+    lean-ctx binary on PATH and a lean-ctx MCP server configured for `root` (the
+    tripwire's own reachability test). Without one, a native call is the only
+    route and not a routing miss; counting it made the band read "gates ✖" on
+    every project without lean-ctx. root None keeps the strict count. Unreadable
+    config fails toward counting."""
+    if root is None:
+        return True
+    try:
+        import shutil
+
+        import dispatch_tripwire_core as dt
+
+        return bool(shutil.which("lean-ctx")) and dt._lean_ctx_server_key(Path(root)) is not None
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def routing_group(session: str, root=None) -> dict:
     g = {"id": "routing", "title": "Tool routing", "lines": []}
     conn = _ro_conn()
     try:
@@ -172,12 +191,14 @@ def routing_group(session: str) -> dict:
     for name, keys in _CONTEXT_SERVERS:
         n = sum(1 for k, s, t, d in rows if k == "mcp" and (s or "").lower() in keys)
         g["lines"].append(_line(name, f"{name} calls", True, f"{n} {_ROUTING_NOTE}"))
+    routed = _routed(root)
     for tool in native:
         n = sum(1 for k, s, t, d in rows if k == "builtin" and t == tool)
+        detail = f"{n} {_ROUTING_NOTE}"
+        if not routed:
+            detail += "; lean-ctx is not configured here, so native is the route"
         g["lines"].append(
-            _line(
-                f"native-{tool}", f"Native {tool} calls", n == 0, f"{n} {_ROUTING_NOTE}"
-            )
+            _line(f"native-{tool}", f"Native {tool} calls", n == 0 or not routed, detail)
         )
     denies = sum(1 for r in rows if r[3])
     g["lines"].append(
@@ -194,7 +215,7 @@ def build(session: str, root: str, transcript: str = "") -> dict:
             lambda: completion_group(session, Path(root), transcript),
         ),
         ("tripwire", "Dispatch tripwire", lambda: tripwire_group(session)),
-        ("routing", "Tool routing", lambda: routing_group(session)),
+        ("routing", "Tool routing", lambda: routing_group(session, root)),
     )
     groups = []
     for gid, title, fn in jobs:

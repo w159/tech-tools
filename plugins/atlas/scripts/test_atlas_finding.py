@@ -56,6 +56,31 @@ class AtlasFindingCli(unittest.TestCase):
         self.assertEqual(items[0]["status"], "verified")
         self.assertIn("verified_at", items[0])
 
+    def test_writer_defaults_to_the_caller_not_the_verifier(self):
+        """A row the lead stamps from its own test run must not read as an
+        independent atlas:verifier verdict (live run 2026-11-10)."""
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_WORKER_NAME"}
+        base = ["--status", "verified", "--title", "t"]
+        for args, extra, want in (
+            (["--id", "L1"], {}, "lead"),
+            (["--id", "W1"], {"ATLAS_WORKER_NAME": "impl-auth"}, "impl-auth"),
+            (["--id", "V1", "--by", "atlas:verifier"], {}, "atlas:verifier"),
+        ):
+            r = subprocess.run(
+                [sys.executable, str(SCRIPT), *args, *base],
+                cwd=str(self.root), capture_output=True, text=True, env={**env, **extra},
+            )
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(_findings(self.root)[-1]["verified_by"], want)
+
+    def test_verifier_prompts_pass_their_identity(self):
+        """Both verifier definitions stamp --by atlas:verifier explicitly."""
+        here = Path(__file__).resolve().parent.parent
+        for rel in ("agents/verifier.md", "omp/agents/verifier.md"):
+            self.assertIn("--by atlas:verifier", (here / rel).read_text(), rel)
+
     def test_appends_rather_than_overwrites(self):
         _run(["--id", "S1", "--status", "open", "--title", "a"], self.root)
         _run(["--id", "S2", "--status", "verified", "--title", "b"], self.root)

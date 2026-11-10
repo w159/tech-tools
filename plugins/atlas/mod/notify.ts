@@ -1,4 +1,4 @@
-// notify.ts — turn-boundary notifications: toast workers spawning/finishing/failing/blocked,
+// notify.ts - turn-boundary notifications: one toast per turn for workers spawning/finishing/failing/blocked,
 // notes addressed to the lead or the human, completed todos, and phase advances
 // (advance.wav when sound is on); the one prompt.suggest: reply to a blocked worker, else the in-progress todo.
 import { atom, read } from 'claude-code';
@@ -23,6 +23,18 @@ const workersOf = (s: AtlasSnapshot): LiveWorker[] =>
 	liveWorkers({ activity: {}, comms: [], todoGroups: [], ...s, squad: (s.squad ?? []).filter((a) => a?.name) } as LiveSnapshot, s.now);
 
 const fit = (text: string, n: number): string => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
+
+/** Widest merged toast: a terminal row, so the host never has to wrap it. */
+export const TOAST_MAX = 100;
+
+/** One toast for a turn's events: the first (most urgent) in full, the rest folded in. A burst of separate toasts in
+ * one turn left the stack before the host drew them, and the host then printed
+ * "$.ui.toast: a toast left the stack before it was ever drawn" into the transcript. */
+export function mergeToasts(texts: readonly string[]): string | null {
+	if (texts.length === 0) return null;
+	if (texts.length === 1) return texts[0]!;
+	return fit(`${texts[0]}  (+${texts.length - 1}: ${texts.slice(1).join(' · ')})`, TOAST_MAX);
+}
 
 /** Pure diff of successive snapshots; null prev (first sight) yields nothing. Never throws. */
 export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): NotifyEvent[] {
@@ -94,25 +106,26 @@ export function registerNotify(
 		try {
 			const snap = await read($, snapshotState);
 			if (snap) {
+				const texts: string[] = [];
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {
 						case 'agent-spawn':
-							$.ui.toast(`▸ ${ev.name} spawned`);
+							texts.push(`▸ ${ev.name} spawned`);
 							break;
 						case 'agent-complete':
-							$.ui.toast(`✓ ${ev.name}${ev.age ? ` ${ev.age}` : ''}${ev.lastLine ? ` · ${fit(ev.lastLine, 40)}` : ''}`);
+							texts.push(`✓ ${ev.name}${ev.age ? ` ${ev.age}` : ''}${ev.lastLine ? ` · ${fit(ev.lastLine, 40)}` : ''}`);
 							break;
 						case 'agent-fail':
-							$.ui.toast(`✗ ${ev.name} ${ev.lastLine}`.trimEnd());
+							texts.push(`✗ ${ev.name} ${ev.lastLine}`.trimEnd());
 							break;
 						case 'agent-blocked':
-							$.ui.toast(`⏸ ${ev.name} blocked: ${ev.lastLine}`.trimEnd());
+							texts.push(`⏸ ${ev.name} blocked: ${ev.lastLine}`.trimEnd());
 							break;
 						case 'note':
-							$.ui.toast(`${ev.sender}: ${ev.preview}`);
+							texts.push(`${ev.sender}: ${ev.preview}`);
 							break;
 						case 'todo-done':
-							$.ui.toast(`✓ ${ev.text}`);
+							texts.push(`✓ ${ev.text}`);
 							break;
 						case 'phase':
 							if (deps.soundEnabled()) {
@@ -121,6 +134,8 @@ export function registerNotify(
 							break;
 					}
 				}
+				const merged = mergeToasts(texts);
+				if (merged) $.ui.toast(merged);
 				lastSnapshot = snap;
 				const suggestion = nextStepSuggestion(snap);
 				if (suggestion) void $.prompt.suggest({ text: suggestion });

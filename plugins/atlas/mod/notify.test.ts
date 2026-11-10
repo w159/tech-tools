@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { AtlasSnapshot, ChannelNote, SquadAgent, TodoItem } from './contract';
 import type { EngineInterface, On } from 'claude-code';
 import { memState } from './test_helpers';
-import { diffSnapshots, nextStepSuggestion, registerNotify } from './notify';
+import { diffSnapshots, mergeToasts, nextStepSuggestion, registerNotify, TOAST_MAX } from './notify';
 
 function snap(over: Partial<AtlasSnapshot> = {}): AtlasSnapshot {
 	return {
@@ -247,19 +247,27 @@ describe('registerNotify toasts', () => {
 			done: act({ startedAt: 0, lastLine: 'all green' }), bad: act({ lastLine: 'boom' }), wait: act({ lastLine: 'which path?', mood: 'blocked' }), quiet: act(), new: act(),
 		});
 		const { toasts } = await run(prev, next);
-		expect(toasts).toEqual([
+		// One toast per turn: a burst of six left the stack undrawn and the host printed a notice into the transcript.
+		expect(toasts).toEqual([mergeToasts([
 			'⏸ wait blocked: which path?',
 			'✗ bad boom',
 			'▸ new spawned',
 			'✓ done 1m30s · all green',
 			'impl-auth: ship it',
 			'✓ build it',
-		]);
+		])!]);
+		expect(toasts[0]!.startsWith('⏸ wait blocked: which path?  (+5: ✗ bad boom · ▸ new spawned')).toBe(true);
 	});
 	test('trailing blanks are trimmed from fail and blocked toasts; complete without age or line is bare', async () => {
 		const prev = withActivity({ squad: [agent('a', 'running'), agent('b', 'running'), agent('c', 'running')] }, { a: act(), b: act(), c: act() });
 		const next = withActivity({ squad: [agent('a', 'failed'), agent('b', 'input'), agent('c', 'finished')] }, { a: act(), b: act({ mood: 'blocked' }), c: act() });
-		expect((await run(prev, next)).toasts).toEqual(['⏸ b blocked:', '✗ a', '✓ c']);
+		expect((await run(prev, next)).toasts).toEqual(['⏸ b blocked:  (+2: ✗ a · ✓ c)']);
+	});
+	test('mergeToasts: one passes through, many fold into one row of at most TOAST_MAX', () => {
+		expect(mergeToasts([])).toBeNull();
+		expect(mergeToasts(['✓ a'])).toBe('✓ a');
+		expect(mergeToasts(['x'.repeat(80), 'y'.repeat(80)])!.length).toBe(TOAST_MAX);
+		expect(mergeToasts(['x'.repeat(80), 'y'.repeat(80)])!.endsWith('…')).toBe(true);
 	});
 	test('the last line in a completion toast is cut at 40 cells with an ellipsis', async () => {
 		const at = async (line: string) => {

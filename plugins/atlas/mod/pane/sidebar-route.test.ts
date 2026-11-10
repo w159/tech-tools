@@ -149,10 +149,22 @@ describe('route items', () => {
     const one = snapOf({ todoGroups: groupWith([item('a', 'only one', 'pending')]) });
     expect(rowsOf(one, 60).map(text).slice(1)).toEqual(['⚒ implement 0/1', '○ only one']);
   });
-  test('no items, or no group for the phase, says nothing planned', () => {
+  test('an empty board says nothing planned', () => {
     expect(rowsOf(snapOf({ todoGroups: groupWith([]) }), 60).map(text).at(-1)).toBe('nothing planned');
-    expect(rowsOf(snapOf({ todoGroups: groupWith([item('a', 'x', 'pending')], 'verify') }), 60).map(text).at(-1)).toBe('nothing planned');
     expect(rowsOf(snapOf({ todoGroups: groupWith([]) }), 60)).toHaveLength(2);
+  });
+  test('an empty phase with work elsewhere points at it instead of "nothing planned"', () => {
+    const elsewhere = snapOf({ todoGroups: groupWith([item('a', 'x', 'pending')], 'verify') });
+    expect(rowsOf(elsewhere, 60).map(text).at(-1)).toBe('nothing in implement · 1 open in other phases');
+    const drained = snapOf({ phase: 'done', todoGroups: groupWith([item('a', 'x', 'completed')], 'verify') });
+    expect(rowsOf(drained, 60).map(text).at(-1)).toBe('✓ all 1 done');
+  });
+  test('phase done ticks every rail phase (it used to read all hollow)', () => {
+    expect(text(rowsOf(snapOf({ phase: 'done' }), 30)[0]!)).toBe('?✓ ─ ※✓ ─ ⚗✓ ─ ☑✓ ─ ⚒✓ ─ ✓✓');
+  });
+  test('a mid-width rail keeps the current phase named', () => {
+    expect(text(rowsOf(snapOf(), 54)[0]!)).toBe('?✓ ─ ※✓ ─ ⚗✓ ─ ☑✓ ─ ⚒ implement ◉ ─ ✓○');
+    expect(text(rowsOf(snapOf(), 30)[0]!)).toBe('?✓ ─ ※✓ ─ ⚗✓ ─ ☑✓ ─ ⚒◉ ─ ✓○');
   });
   test('the blocked reason shows from 15 spare cells, otherwise a bare tag', () => {
     // title 20 + owner 12 + 2 = 34 used: 49 cells leave 15 spare

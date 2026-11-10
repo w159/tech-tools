@@ -3182,3 +3182,35 @@ class RedactHistoryTest(_DbFixture):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RenderReportTest(unittest.TestCase):
+    """The human report: problems first, not-applicable rows folded, counts on the verdict."""
+
+    ROWS = [
+        {"check": "registered", "ok": True, "detail": "atlas loaded"},
+        {"check": "rollback", "ok": True, "detail": "skipped: plugin-dir load has no marketplace install"},
+        {"check": "omp-model-roles", "ok": True, "detail": "no omp config; skipped"},
+        {"check": "cmux-socket", "ok": True, "detail": "cmux browser is macOS-only (n/a)"},
+        {"check": "docs-naming", "ok": False, "severity": "warn", "detail": "13 file(s) need renaming"},
+        {"check": "hooks-wired", "ok": False, "detail": "missing hook"},
+    ]
+
+    def test_order_fold_and_tally(self):
+        import atlas_doctor
+
+        failed = [self.ROWS[-1]]
+        lines = atlas_doctor.render_report(self.ROWS, failed, "atlas")
+        self.assertTrue(lines[0].startswith("FAIL  hooks-wired"))
+        self.assertTrue(lines[1].startswith("WARN  docs-naming"))
+        self.assertTrue(lines[2].startswith("PASS  registered"))
+        self.assertEqual(lines[3], "SKIP  3 not applicable here (rollback, omp-model-roles, cmux-socket); --verbose lists them")
+        self.assertEqual(lines[4], "1 PROBLEM(S) - atlas (1 pass, 1 warn, 1 fail, 3 n/a)")
+
+    def test_verbose_lists_every_row(self):
+        import atlas_doctor
+
+        lines = atlas_doctor.render_report(self.ROWS, [], "atlas", verbose=True)
+        self.assertEqual(len(lines), len(self.ROWS) + 1)
+        self.assertFalse(any(ln.startswith("SKIP") for ln in lines))
+        self.assertEqual(lines[-1], "HEALTHY - atlas (1 pass, 1 warn, 1 fail, 3 n/a)")

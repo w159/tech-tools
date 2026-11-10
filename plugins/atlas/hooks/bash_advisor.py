@@ -216,7 +216,16 @@ _SECRETS = [
     ),
     (
         # Bare `env` / `printenv` with no arguments dumps the whole environment.
-        lre(r"(?:^|[;&|(`]\s*|\bsudo\s+)(?:env|printenv)\s*(?=$|[;&|)`])"),
+        # Piped straight into a selecting grep/rg it prints only the matched names
+        # (`env | grep -E '^(CI|ATLAS)'`): not a dump, unless the filter inverts
+        # (-v, -L) or itself selects secret-looking names.
+        lre(
+            r"(?:^|[;&|(`]\s*|\bsudo\s+)(?:env|printenv)\s*(?=$|[;&|)`])"
+            r"(?!\s*\|(?!\|)\s*(?:e?grep|rg)\b"
+            r"(?![^\n;&|]*\s-[A-Za-z]*[vL])"
+            r"(?![^\n;&|]*(?i:TOKEN|SECRET|PASS|KEY|AUTH|CRED))"
+            r"[^\n;&|]*\S)"
+        ),
         "the full environment dump",
     ),
     (

@@ -105,6 +105,15 @@ def save(path: Path, findings: list) -> None:
     os.replace(tmp, path)
 
 
+def _writer(by: str | None) -> str:
+    """Who stamped the row. Defaulting to atlas:verifier labelled the lead's own
+    test records as independent verification; the honest default is the caller:
+    the tmux worker's name when one is set, else the lead."""
+    if by and by.strip():
+        return by.strip()
+    return (os.environ.get("ATLAS_WORKER_NAME") or "").strip() or "lead"
+
+
 def build_entry(args: argparse.Namespace) -> dict:
     return {
         "id": args.id,
@@ -119,7 +128,7 @@ def build_entry(args: argparse.Namespace) -> dict:
         "blast_radius": args.blast_radius,
         "status": args.status,
         "verified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "verified_by": args.by,
+        "verified_by": _writer(args.by),
     }
 
 
@@ -321,7 +330,12 @@ def main(argv: list | None = None) -> int:
     p.add_argument("--category", default="correctness")
     p.add_argument("--severity", default="medium")
     p.add_argument("--blast-radius", dest="blast_radius", default="module")
-    p.add_argument("--by", default="atlas:verifier")
+    p.add_argument(
+        "--by",
+        default=None,
+        help="writer identity; default: $ATLAS_WORKER_NAME, else 'lead'. "
+        "atlas:verifier passes --by atlas:verifier explicitly",
+    )
     p.add_argument("--root", help="project root; defaults to detection from cwd")
     args = p.parse_args(argv)
 

@@ -13,22 +13,38 @@ const DONE_MIN_COLS = 80;
 const phaseGlyph = (s: LiveSnapshot, id: string): string => contractGlyph(s.contract.phases.find((p) => p.id === id)?.glyph ?? glyph.ring);
 const stateOf = (i: number, cur: number, mark: string) => (i < cur ? { g: '✓', color: C.ok } : i === cur ? { g: mark, color: C.focus } : { g: '○', color: C.muted });
 
-/** `◎ research ✓ ─ … ─ ⚒ implement ◉`; when that overflows, `◎✓ ─ … ─ ⚒◉` (glyph + state only). */
+/** `◎ research ✓ ─ … ─ ⚒ implement ◉`; when that overflows, `◎✓ ─ … ─ ⚒ implement ◉ ─ ✓○` (only the current phase
+ * named); when even that overflows, `◎✓ ─ … ─ ⚒◉` (glyph + state only). */
 function railRuns(s: LiveSnapshot, phases: string[], cur: number, cols: number, tick?: number): Segment[] {
   // The current mark pulses through the phase's frames while the spinner ticks; static ◉ when no tick is supplied.
-  const mark = tick === undefined ? '◉' : spin(tick, phases[cur]);
-  const build = (full: boolean): Segment[] =>
+  const mark = tick === undefined ? '◉' : spin(tick, phases[cur] ?? s.phase);
+  const build = (named: (i: number) => boolean): Segment[] =>
     phases.flatMap((p, i): Segment[] => {
       const st = stateOf(i, cur, mark);
       const bold = i === cur;
       return [
         ...(i ? [{ t: ' ─ ', color: i <= cur ? C.ok : C.muted }] : []),
-        { t: full ? `${phaseGlyph(s, p)} ${p} ` : phaseGlyph(s, p), color: i === cur ? C.focus : undefined, bold },
+        { t: named(i) ? `${phaseGlyph(s, p)} ${p} ` : phaseGlyph(s, p), color: i === cur ? C.focus : undefined, bold },
         { t: st.g, color: st.color, bold },
       ];
     });
-  const full = build(true);
-  return full.reduce((n, r) => n + textWidth(r.t), 0) <= cols ? full : build(false);
+  const fits = (r: Segment[]): boolean => r.reduce((n, x) => n + textWidth(x.t), 0) <= cols;
+  const full = build(() => true);
+  if (fits(full)) return full;
+  const current = build((i) => i === cur);
+  return fits(current) ? current : build(() => false);
+}
+
+/** Rail position: the phase's index; `done` (off the todo rail) is past every phase, so the rail reads all ✓. */
+const railIndex = (phases: string[], phase: string): number => (phase === 'done' && !phases.includes('done') ? phases.length : phases.indexOf(phase));
+
+/** What to say when the current phase has no items: the board elsewhere, not a bare "nothing planned". */
+function emptyLine(s: LiveSnapshot): Segment[] {
+  const items = s.todoGroups.flatMap((g) => g.items);
+  const open = items.filter((it) => it.status !== 'completed').length;
+  if (items.length === 0) return [{ t: 'nothing planned', color: C.faint }];
+  if (open === 0) return [{ t: '✓ ', color: C.ok }, { t: `all ${items.length} done`, color: C.muted }];
+  return [{ t: `nothing in ${s.phase}`, color: C.faint }, { t: ` · ${open} open in other phases`, color: C.muted }];
 }
 
 /** Why an owner is blocked, from their live line; blocked owners per liveWorkers only. */
@@ -68,9 +84,9 @@ export function routeRows(els: ClientElements, m: SidebarModel, on: SidebarHandl
   const s = m.snapshot;
   const phases = s.contract.todoPhases.map(String);
   if (phases.length === 0) return [];
-  const rail = rowOf(els, railRuns(s, phases, phases.indexOf(s.phase), inner, m.tick), inner);
+  const rail = rowOf(els, railRuns(s, phases, railIndex(phases, s.phase), inner, m.tick), inner);
   const group = s.todoGroups.find((g) => g.phase === s.phase);
-  if (!group || group.items.length === 0) return [rail, rowOf(els, [{ t: 'nothing planned', color: C.faint }], inner)];
+  if (!group || group.items.length === 0) return [rail, rowOf(els, emptyLine(s), inner)];
   const shown = group.items.filter((it) => it.status !== 'completed' || inner >= DONE_MIN_COLS);
   const doneN = group.items.filter((it) => it.status === 'completed').length;
   return [
