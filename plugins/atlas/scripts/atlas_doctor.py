@@ -1750,6 +1750,56 @@ def behaviour_checks(add, plugin_name, version, now=None):
     )
 
 
+def check_source_checkout_stale(installed_ver, cwd=None):
+    """Class A: cwd is inside an atlas marketplace SOURCE checkout whose plugin
+    version is lower than the installed one, so edits here never reach users.
+    Read-only; --fix never acts on it. Returns (ok, detail)."""
+    d = os.path.abspath(cwd or os.getcwd())
+    while True:
+        mkt = os.path.join(d, ".claude-plugin", "marketplace.json")
+        if os.path.isfile(mkt):
+            break
+        if os.path.dirname(d) == d:
+            return True, "cwd is not a marketplace source checkout"
+        d = os.path.dirname(d)
+    try:
+        listed = [p.get("name") for p in _load_json(mkt).get("plugins", [])]
+        src_ver = _load_json(os.path.join(d, "plugins", "atlas", ".claude-plugin", "plugin.json"))["version"]
+    except Exception:  # not an atlas source tree (or unreadable): nothing to prove
+        return True, "cwd is not an atlas source checkout"
+    if "atlas" not in listed:
+        return True, "marketplace does not list atlas"
+    if ver_tuple(src_ver) >= ver_tuple(installed_ver):
+        return True, f"source {src_ver} >= installed {installed_ver}"
+    return False, (
+        f"{d} has atlas {src_ver} but installed is {installed_ver}; base work on the remote "
+        "default branch (git fetch && git rebase origin/<default>), edits here do not reach installed users"
+    )
+
+
+def _source_checkout_check(add, installed_ver):
+    ok, detail = check_source_checkout_stale(installed_ver)
+    add("source-checkout-stale", ok, detail, severity="warn")
+
+
+def check_operating_contract(plugin_root):
+    """Class D: the mod falls back to an empty contract (no stepper, no header
+    pill) when contracts/operating-contract.json is unusable. Returns (ok, detail)."""
+    path = os.path.join(plugin_root, "contracts", "operating-contract.json")
+    fix = "update or reinstall the plugin (/plugin update atlas)"
+    try:
+        c = _load_json(path)
+        pat = c.get("headerFirstLinePattern")
+        if not (isinstance(pat, str) and pat):
+            return False, f"{path} has no headerFirstLinePattern; {fix}"
+        re.compile(pat)
+        if not (isinstance(c.get("phases"), list) and c["phases"]):
+            return False, f"{path} has empty phases; {fix}"
+    except Exception as e:
+        return False, f"{path} unusable ({e}); {fix}"
+    return True, f"{len(c['phases'])} phases, header pattern compiles"
+
+
 def run_checks(plugin_name="atlas"):
     """Install checks plus behavioural (runtime) checks."""
     results, ctx = install_checks(plugin_name)
@@ -1770,6 +1820,10 @@ def run_checks(plugin_name="atlas"):
 
 def _content_checks(add, ctx, ip, clone, plugin_name):
     """C6-C13: checks on the plugin tree at `ip` that need no marketplace."""
+    # C5b: the mod reads this file; unusable => thin band, no stepper/pill
+    c_ok, c_detail = check_operating_contract(ip)
+    add("operating-contract", c_ok, c_detail)
+
     # C6: every hook the plugin declares must exist in the installed copy
     hooks_file = os.path.join(ip, "hooks", "hooks.json")
     if os.path.exists(hooks_file):
@@ -1892,6 +1946,7 @@ def install_checks(plugin_name="atlas"):
         add("config-readable", False, f"cannot read plugin config: {config_err}")
         return results, ctx
     add("registered", True, f"{key} at {reg['version']}")
+    _source_checkout_check(add, reg["version"])
     mkt_name = key.split("@", 1)[1]
     mkt = markets.get(mkt_name, {})
     ctx.update(key=key, reg=reg, mkt_name=mkt_name, mkt=mkt)

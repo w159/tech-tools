@@ -11,7 +11,7 @@ The Atlas mod is an in-process UI plugin module for Claude Code mods (Claude Cod
 - Claude Code 2.1.287 or newer (mods). On older versions the `modules` key is ignored and the rest of the plugin keeps working.
 - The mod is wired by the `modules` entry in `hooks/hooks.json`, in the same file as the existing hook bindings. `register(on, options)` in `mod/register.ts` is the entry point; `claude plugin validate --json plugins/atlas` passes (success true, 0 errors).
 - The mod runs in-process. Hook modules get no Node APIs: every file, process and network call goes through the mods `$` API.
-- Lifecycle: `session.start` reads the kill switch, builds the first snapshot, and (interactive sessions only) starts every mod clock and registers the three commands (`register.ts:495-543`). The pane opens itself only when the terminal is fullscreen and wide enough (`shouldDock`); otherwise it stays closed until `/atlas-cc`.
+- Lifecycle: `session.start` runs `boot` in `register.ts`. It reads the kill switch, builds the first snapshot, and (interactive sessions only) starts every mod clock and registers the four commands (`/atlas-cc`, `/atlas-say`, `/atlas-core`, `/atlas-todo`). Commands and the long timers register once per loaded copy of the mod. A `/clear` raises `session.end` (reason clear) and no `session.start`, so `boot` also runs on `classic.SessionStart` with source `clear`; module state keeps the interactive flag across the clear. Without that second trigger the band, the todo board and the `/atlas-cc` pane stay blank or stale after `/clear`. The pane opens itself only when the terminal is fullscreen and wide enough (`shouldDock`); otherwise it stays closed until `/atlas-cc`.
 - Where it runs: the CLI and the Desktop Code tab. Rendering is text-first everywhere. `claude -p` and the Agent SDK run mod hooks but draw nothing, so every `ui.*` call no-ops cleanly there.
 - Kill switch: `ATLAS_MOD=off` disables the mod (band, sidebar, restyles, routing). The plugin's hooks and CLIs are unaffected.
 
@@ -193,10 +193,19 @@ Colocated `*.test.ts` files use the `claude-code/testing` kit. `scripts/sprite_r
 - The `atlasView` atom defaults to `route`, matching the tab strip order; closing the pane resets it to `route` so `/atlas-cc` reopens on the first tab (`register.ts` `viewState`).
 - The turn receipt duration is `min(host durationMs, now - turnStart)`. The mod stamps `turnStart` from `$.clock.now()` at turn start (`restyle.tsx` `ReceiptTracker.turnStart`, `durationTree`); the host figure was seen reading 9m02s for a 77s turn. Without a clock the host figure is used.
 
+## Failure reporting and the core report (17.4.1)
+
+- **Failures are visible.** `reportFailure` (`mod/register.ts`) writes the debug log and shows one toast per distinct message, cut at 200 characters. Toast texts: `atlas: boot failed: ...`, `atlas: rebuild failed: ...`, `atlas: <component> <module> <phase>: <reason>` (a `ui.fault`, a tree the host refused), `atlas: core tick failed: ...`. A new boot clears the set, so a new session toasts again.
+- **Header pill.** `headerPhaseOf` in `mod/restyle.tsx` is the only header parser (`register.ts` re-exports it). It returns no phase, and so no pill, when `headerFirstLinePattern` is empty, the first line does not match, or the phase is not one of the eight. The pill never falls back to the snapshot phase.
+- **Todo board read errors.** A `todos.json` that exists but is corrupt or unreadable keeps the last good rows and toasts `atlas: todos.json is corrupt, showing the last good board` (or `unreadable`). A missing file is an empty board (`mod/data/todos.ts`).
+- **`/atlas-core`.** One finding counts once, by its latest entry (`latestPerId` in `mod/data/core.ts`). The line reads `VERDICTS  <n> findings: <v> verified, <r> refuted, <o> open  |  <c> claims this run, <u> unchecked`. Entries without `id` or `title` use `batch` and `claim`. Row caps in `mod/core-row.ts`: 12 verdict rows (refuted and open first), 3 unchecked rows, 8 worker rows, then `... N more`.
+
 ## Honesty and known defects
 
 - **Claude-Code-only.** Both surfaces are drawn by the `ui.render` mod dispatch on the `AbovePrompt` and `Pane` components. omp has no such vocabulary and keeps its own `atlas-channel` widget (`omp/channel-view.ts`).
 - **Fullscreen docked placement** (>= 110 columns, fullscreen terminal) is exercised by `shouldDock`'s unit tests; a live capture of the docked pane itself (as opposed to the inline `/atlas-cc` pane) is not in `.atlas/evidence/`.
+- **`/clear` fix not observed live.** The reboot on `classic.SessionStart` is verified with the mod test kit (`mod/register-clear.test.ts`); the render after `/clear` in an installed terminal has not been observed.
+- **Native subagent rows** at the bottom of the terminal are drawn by the host and cannot be restyled; only the atlas cards in the transcript are ours.
 - Live evidence of the redesigned surfaces: `.atlas/evidence/mod-cc-2026-10-13/live-160x45.md` (band, team awaiting-reply row, idle band, header pill, pane tab strip at 100x30).
 
 ## See also

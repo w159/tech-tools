@@ -4161,8 +4161,10 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
         self.assertEqual([], self._events())
 
     def test_automation_guard_keeps_the_default_off_under_pytest(self):
-        self.assertEqual((False, "CI or test run (set ATLAS_ANALYTICS=on to count it)"), self.A.state())
-        code, out, _ = self._spawn_team()
+        # pytest sets PYTEST_CURRENT_TEST itself; unittest does not, so supply it.
+        with mock.patch.dict(os.environ, {"PYTEST_CURRENT_TEST": "t"}):
+            self.assertEqual((False, "CI or test run (set ATLAS_ANALYTICS=on to count it)"), self.A.state())
+            code, out, _ = self._spawn_team()
         self.assertEqual(0, code, out)
         self.assertFalse(pathlib.Path(self.home, "analytics").exists())
 
@@ -4218,7 +4220,8 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
 
     def test_wait_records_nothing_when_off(self):
         self.assertEqual([], self._wait_keys())
-        self._wait(lambda n: 0)
+        with mock.patch.dict(os.environ, {"PYTEST_CURRENT_TEST": "t"}):  # unittest does not set it
+            self._wait(lambda n: 0)
         self.assertFalse(pathlib.Path(self.home, "analytics").exists())
 
     def test_wait_outcome_and_every_key_is_in_the_schema(self):

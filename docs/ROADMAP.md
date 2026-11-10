@@ -183,6 +183,17 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas 17.4.1 follow-ups (added 2026-11-10)
+
+The shipped fixes are in `plugins/atlas/CHANGELOG.md` (17.4.1).
+
+- [planned] Observe the `/clear` fix on an installed build: band, todo board and `/atlas-cc` pane after `/clear`. Verified so far only with the mod test kit.
+- [planned] Run `tsc -p plugins/atlas/mod` in a tree that has the host types; the mod type check has not been measured.
+- [planned] Gate (n) blocks once per session and fails open, while the stated rule says "no exemption". Decide which one changes.
+- [planned] Cards label a returned agent `done` without a verified finding.
+- [planned] `scripts/atlas_irc.py` and `scripts/atlas_statusline.py` print ANSI color without a TTY check.
+- [planned] Dead-code and token-use passes are not started.
+
 ### Atlas 17.0.0 follow-ups (added 2026-11-05)
 
 Source: `docs/audits/2026-11-05_atlas-17.0.0-feature-review.md`. The release itself is in `plugins/atlas/CHANGELOG.md`.

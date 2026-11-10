@@ -19,6 +19,7 @@ import re
 import shlex
 import shutil
 import sqlite3
+import subprocess
 import time
 from urllib.parse import urlparse
 
@@ -93,6 +94,34 @@ def _canonical_archive_base(stray_parent):
     return canonical, os.path.join(canonical, ".atlas", "archive")
 
 
+def _git_owned(atlas_dir):
+    """True when moving `atlas_dir` could damage a git work tree: it is the
+    `.atlas` at the top of a work tree (main or linked), or git tracks a file
+    under it (a move shows up as mass deletions). One or two git calls per
+    candidate. Fails safe: git missing, timing out or erroring for any reason
+    other than "not a repository" counts as owned, so doubt never moves."""
+    parent = os.path.dirname(atlas_dir)
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-C", parent, *args],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+    try:
+        top = git("rev-parse", "--show-toplevel")
+        if top.returncode != 0:
+            return "not a git repository" not in top.stderr
+        if os.path.realpath(top.stdout.strip()) == os.path.realpath(parent):
+            return True
+        tracked = git("ls-files", "-z", "--", os.path.basename(atlas_dir))
+        return tracked.returncode != 0 or bool(tracked.stdout)
+    except (OSError, subprocess.SubprocessError):
+        return True
+
+
 def check_atlas_layout(root, home=None):
     """Misplaced runtime-state paths for project `root`.
 
@@ -120,7 +149,7 @@ def check_atlas_layout(root, home=None):
             continue
         if ".atlas" in dirnames:
             dirnames.remove(".atlas")
-            if cur != root:
+            if cur != root and not _git_owned(os.path.join(cur, ".atlas")):
                 _, base = _canonical_archive_base(cur)
                 add("stray", os.path.join(cur, ".atlas"), root, base)
         dirnames[:] = [d for d in dirnames if not _pruned(d)]
@@ -132,13 +161,15 @@ def check_atlas_layout(root, home=None):
         for cur, dirnames, _files in os.walk(own):
             if ".atlas" in dirnames:
                 dirnames.remove(".atlas")
-                add("nested", os.path.join(cur, ".atlas"), root, base)
-            # archive holds already-quarantined strays; never re-flag them
+                if not _git_owned(os.path.join(cur, ".atlas")):
+                    add("nested", os.path.join(cur, ".atlas"), root, base)
+            # archive holds already-quarantined strays; never re-flag them;
+            # wt/ holds linked git worktrees, each with its own tracked .atlas
             dirnames[:] = [
                 d
                 for d in dirnames
                 if not _pruned(d)
-                and not (cur == own and d == "archive")
+                and not (cur == own and d in ("archive", "wt"))
                 and cur.count(os.sep) - top < _NESTED_DEPTH
             ]
 

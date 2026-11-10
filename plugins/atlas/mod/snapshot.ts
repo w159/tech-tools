@@ -6,7 +6,7 @@ import type {
   AtlasSnapshot, ChannelMember, ChannelNote, Contract, FsLike, Persona, PhaseId, SquadAgent,
 } from './contract';
 import { boardRoot, leadChannelName } from './data/root';
-import { computeCounts, currentPhase, groupTodos, readTodos, type TodosCache } from './data/todos';
+import { computeCounts, currentPhase, groupTodos, readTodos, type TodosCache, type TodosError } from './data/todos';
 import { NoteReader, readRoster } from './data/channels';
 import { loadContract, loadPersonas } from './data/personas';
 import { deriveOrchestration, EMPTY_ORCH, type Orch, type WtRow } from './data/orchestration';
@@ -37,6 +37,8 @@ export class SnapshotBuilder {
   private members: ChannelMember[] = [];
   private notes: NoteReader | null = null;
   private todoCache: TodosCache | undefined; // mtime cache kept on the instance across builds
+  /** Set by build() when todos.json exists but could not be used (last good items stay); register.ts toasts it. */
+  todoError: TodosError | undefined;
   private mergedAt: Record<string, number> = {}; // first time an agent was seen merged (stable comms ts)
   private finishedAt: Record<string, number> = {}; // first time a worker was seen finished (frozen elapsed)
 
@@ -136,6 +138,7 @@ export class SnapshotBuilder {
     const memberNames = this.members.map((m) => m.name);
     const read = await readTodos(this.fs, this.root, this.sessionId, memberNames, this.contract, this.todoCache);
     this.todoCache = read.cache;
+    this.todoError = read.error;
     const notes: ChannelNote[] = this.channel !== null && this.notes !== null
       ? await this.notes.read(this.channel)
       : [];

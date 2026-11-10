@@ -76,7 +76,7 @@ class Base(unittest.TestCase):
         self.msg("assistant", "working on it", 2)
         self.msg("user", None, 3)  # tool_result row: no text, not a prompt
         self.msg("assistant", "sidechain chatter", 3.5, sidechain=1)
-        last1 = self.msg("assistant", "ATLAS | done | table\nit\u2014works", 4)
+        last1 = self.msg("assistant", "ATLAS | \U0001f3c1 done | table\nit\u2014works", 4)
         self.msg("user", "<system-reminder>hook text</system-reminder>", 5)
         self.msg("user", "no, per-day rows please", 6, prompt=True)
         last2 = self.msg("assistant", "here are rows", 7)
@@ -117,13 +117,23 @@ class ExchangeTests(Base):
 class MetricTests(unittest.TestCase):
     def test_metrics(self):
         m = turn_scoring._metrics(
-            "intro\nATLAS | verify | ok\na\u2014b \u201cq\u201d\u2026"
+            "ATLAS | \u2705 verify | ok\na\u2014b \u201cq\u201d\u2026"
         )
         self.assertEqual(m["header_present"], 1.0)
         self.assertEqual(m["banned_punct"], 4.0)
         m = turn_scoring._metrics("no ATLAS | header mid-line")
         self.assertEqual(m["header_present"], 0.0)
         self.assertEqual(m["reply_chars"], 26.0)
+
+    def test_header_must_be_valid_and_on_first_line(self):
+        # Scored with the contract's headerFirstLinePattern, not "any line
+        # starting ATLAS |": line 3 and a phase-less form both score 0.
+        late = "intro\nmore\nATLAS | \u2705 verify | ok"
+        self.assertEqual(turn_scoring._metrics(late)["header_present"], 0.0)
+        loose = "ATLAS | verify | ok"
+        self.assertEqual(turn_scoring._metrics(loose)["header_present"], 0.0)
+        good = "\nATLAS | \U0001f3c1 done | shipped"
+        self.assertEqual(turn_scoring._metrics(good)["header_present"], 1.0)
 
 
 class ScoreTests(Base):

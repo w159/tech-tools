@@ -233,6 +233,23 @@ describe('core model: context accounting and defaults', () => {
     expect(hasCore(coreModel(emptyIn({ matrix: '{}', teams: [{ name: 't.json', text: team([]) }] })))).toBe(true);
   });
 
+  test('one id appearing three times counts once, by its latest entry', () => {
+    const findings = JSON.stringify([
+      { id: 'x', status: 'verified', title: 'first', verified_at: '2026-01-01T00:00:00Z' },
+      { id: 'x', status: 'rejected', title: 'second', verified_at: '2026-01-02T00:00:00Z' },
+      { id: 'x', status: 'verified', title: 'third', verified_at: '2026-01-03T00:00:00Z' },
+      { id: 'y', status: 'needs-evidence', title: 'y' },
+    ]);
+    const m = coreModel(emptyIn({ findings }));
+    expect(m.verdicts.map((r) => [r.id, r.title])).toEqual([['x', 'third'], ['y', 'y']]);
+    expect(m.ledger).toMatchObject({ verified: 1, refuted: 0, pending: 1 });
+  });
+  test('an entry without id or title falls back to batch and claim', () => {
+    const findings = JSON.stringify([{ batch: 'batch-1', claim: 'fixed the thing', status: 'verified' }, { status: 'verified' }]);
+    const m = coreModel(emptyIn({ findings }));
+    expect(m.verdicts.map((r) => [r.id, r.title])).toEqual([['batch-1', 'fixed the thing'], ['', '']]);
+  });
+
   test('tok formats at the 1000 and 1,000,000 boundaries', () => {
     expect([tok(0), tok(912), tok(999.6), tok(1000), tok(58800), tok(999999), tok(1_000_000), tok(1_250_000)]).toEqual(['0', '912', '1000', '1.0k', '58.8k', '1000.0k', '1.0M', '1.3M']);
   });

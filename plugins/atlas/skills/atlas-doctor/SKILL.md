@@ -42,6 +42,8 @@ proceeding.
 - [Phase 5 - MEASURE](#phase-5---measure)
 - [Phase 6 - REFRESH](#phase-6---refresh)
 - [Display checks](#display-checks)
+- `references/display-checks.md`, section "Mod surfaces missing or empty": decision procedure when the mod band, header pill or stepper is absent
+- `references/repair-lessons.md`: stale source checkout, Python drift, machine-dependent tests, blocking foreign hooks, clean baselines
 - [Report](#report)
 
 ## Phase 1 - ENRICH
@@ -174,6 +176,7 @@ if the regression is real and ongoing.
 ### Measurement-first gate
 
 Do not apply a change you cannot measure; define the metric and baseline first. Read `${CLAUDE_SKILL_DIR}/references/measurement-gate.md` for the full detail.
+Judge a fix only against a baseline taken on the clean remote default branch (stash, run, pop, compare failing test names, not counts); see lesson I in `${CLAUDE_SKILL_DIR}/references/repair-lessons.md`.
 
 ## Phase 6 - REFRESH
 
@@ -196,7 +199,7 @@ configuration, not plugin damage), run in every mode, and are repaired by
 Check ids (concern and `--fix` behavior per id in `references/display-checks.md`; read it
 when one of them is WARN): `display-todo-tools`, `display-mod`, `display-todo-mirror`,
 `display-statusline`, `display-harness`, `display-omp-todo`, `display-hud`,
-`display-renderer`.
+`display-renderer`. Install-level WARN/FAIL ids `source-checkout-stale` (read-only, never auto-fixed) and `operating-contract` are covered in the same reference.
 
 ## Report
 

@@ -19,6 +19,9 @@ export const DEPT: Record<string, string> = {
 /** Reusable read result: items already filtered + phase-stamped for one (root, session, members) caller. */
 export interface TodosCache { mtimeMs: number; items: TodoItem[] }
 
+/** Why a todos.json that exists could not be used; a missing file is a true empty board, not an error. */
+export type TodosError = 'corrupt' | 'unreadable';
+
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -45,7 +48,7 @@ function resolvePhase(item: TodoItem, contract: Contract): PhaseId | undefined {
  * Read and slice the board's todos. Keep non-archived items that are open
  * (status 'pending' or 'in_progress', any session: the backlog) or belong to
  * this session (so completed counts stay session-scoped). `phase` is stamped on every returned item from the field
- * or the content prefix. Missing or corrupt file => empty list, never throws.
+ * or the content prefix. Missing file => empty list; a corrupt or unreadable one keeps the previous items and sets `error`. Never throws.
  * Cache is reused verbatim (no re-filter, no re-read) while stat mtimeMs is
  * unchanged; it is only valid for the same root/session/memberNames context.
  */
@@ -56,20 +59,29 @@ export async function readTodos(
   memberNames: string[],
   contract: Contract,
   cache?: TodosCache,
-): Promise<{ items: TodoItem[]; cache: TodosCache }> {
+): Promise<{ items: TodoItem[]; cache: TodosCache; error?: TodosError }> {
   const path = `${root.replace(/\/+$/, '')}/.atlas/.run/todos.json`;
   const st = await fs.stat(path).catch(() => undefined);
   if (cache && cache.mtimeMs === (st ? st.mtimeMs : 0)) return { items: cache.items, cache };
 
-  // stat undefined => file missing (FsLike read would throw); skip the read.
+  // stat undefined => file missing (the true empty board); skip the read.
   const raw = st === undefined ? undefined : await fs.read(path).catch(() => undefined);
   let parsed: TodoItem[] = [];
-  if (raw !== undefined) {
+  let error: TodosError | undefined;
+  if (st !== undefined && raw === undefined) error = 'unreadable';
+  else if (raw !== undefined) {
     try {
       const data = JSON.parse(raw) as { items?: unknown };
       if (Array.isArray(data?.items)) parsed = data.items as TodoItem[];
-    } catch { // corrupt JSON => empty list
+      else error = 'corrupt';
+    } catch {
+      error = 'corrupt';
     }
+  }
+  // A file that exists but cannot be used keeps the last good items on screen (cached under the bad mtime so it is not re-read).
+  if (error !== undefined && st !== undefined) {
+    const items = cache?.items ?? [];
+    return { items, cache: { mtimeMs: st.mtimeMs, items }, error };
   }
   // Unphased items stay unphased (grouped as 'unsorted'); never defaulted to a real phase.
   const items = parsed

@@ -1,5 +1,36 @@
 # Changelog
 
+## 17.4.1 - 2026-11-10
+
+Mod survival and visibility pass. The band, the todo board and the `/atlas-cc` pane went blank or stale after `/clear`, mod failures left no trace outside the debug log, and the completion gate let a `done` reply through while work was open.
+
+### Fixed
+
+- The mod survives `/clear`. The host raises `session.end` (reason clear) and no `session.start`, so the band, the todo board and the `/atlas-cc` pane went blank or stale. `mod/register.ts` now runs its boot again on `classic.SessionStart` with source `clear`. Boot is one module-level function; commands and the long timers register once.
+- Mod failures are visible. `reportFailure` in `mod/register.ts` shows one toast per distinct failure besides the debug log: `atlas: boot failed: ...`, `atlas: rebuild failed: ...`, `atlas: <component> <module> <phase>: <reason>` and a core tick failure. Toast text is cut at 200 characters.
+- Header pill: one parser, `headerPhaseOf` in `mod/restyle.tsx`. No pill is drawn when the contract pattern is empty or the header's phase is not one of the eight phases. The pill no longer falls back to the snapshot phase.
+- Todo board read errors: a corrupt or unreadable `.atlas/.run/todos.json` keeps the last good board and shows `atlas: todos.json is corrupt|unreadable, showing the last good board` (`mod/data/todos.ts`, `mod/register.ts`). A missing file is still an empty board.
+- `/atlas-core` report (`mod/core-row.ts`, `mod/data/core.ts`): one finding counts once, by its latest entry. The line reads `VERDICTS  <n> findings: <v> verified, <r> refuted, <o> open  |  <c> claims this run, <u> unchecked`. Entries without `id` or `title` fall back to `batch` and `claim`. The report shows at most 12 verdict rows (refuted and open first), 3 unchecked rows and 8 worker rows, then `... N more`. On this repo's ledger the report was about 580 lines (estimate) and is now 26 lines (measured).
+- Completion gate condition (r), done claim: a reply whose header phase is `done` is blocked while a dispatched subagent runs or a todo is open, with or without a code change (`hooks/completion_gate_core.py`). Off switch `ATLAS_GATE_DONE=off`; contract switch `doneClaim` in `contracts/operating-contract.json`; control knob in `scripts/atlas_control.py`. `scripts/turn_scoring.py` scores the header with the contract pattern on the first line of the final reply. Scorecard probes updated in `scripts/scorecard/probe_gates.py`.
+- `hooks/fallow_gate.py` on Python 3.15: the hand-written JSON scanner context lacked `array_hook`, so the Bash prefilter never skipped. It does now.
+- `scripts/doctor_layout.py` no longer treats a git work tree's own `.atlas`, anything git tracks, or `.atlas/wt/` as stray. It had moved a worktree's 1133 tracked files to the archive.
+
+### Added
+
+- `atlas_doctor.py` checks `source-checkout-stale` (warn) and `operating-contract` (fail).
+- Doctor skill references: a new section in `skills/atlas-doctor/references/display-checks.md` ("Mod surfaces missing or empty") and a new `skills/atlas-doctor/references/repair-lessons.md`.
+- Tests: `mod/register-clear.test.ts` and `mod/register-faults.test.ts`, plus cases in the existing mod, gate, doctor and turn-scoring tests.
+
+### Changed
+
+- Tests made portable or isolated, with no behaviour change: BSD `sed -i` in `hooks/test_completion_gate.py`, the real settings read in `hooks/test_bash_advisor_more.py`, `PYTEST_CURRENT_TEST` assumptions in `scripts/test_atlas_git.py` and `scripts/test_atlas_mux.py`, and six mod tests (a timezone-dependent golden input, stale assertions after the 17.4.0 redesign, a missing contract in the test boot, a read-only `Date.now`).
+
+### Known limits
+
+- These fixes are verified against the mod test kit and the Python suites. The live terminal render after `/clear` has not been observed yet.
+- Native subagent rows at the bottom of the terminal are drawn by the host and cannot be restyled.
+- Gate (n) still blocks once per session and fails open.
+
 ## 17.4.0 - 2026-11-10
 
 Terminal UI redesign. The 17.3.0 display showed task progress three times, gate results three times and unlabelled jargon, and the Claude Code band and the omp panel had drifted apart twice. Spec: `docs/specs/2026-11-10_atlas-terminal-ui.md`. Audit: `docs/audits/2026-11-10_atlas-terminal-ui-redesign.md`.

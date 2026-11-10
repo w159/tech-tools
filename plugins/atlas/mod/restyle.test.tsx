@@ -154,6 +154,26 @@ test('headerless or summary replies return null (engine-drawn)', () => {
   expect(assistantTree(snap(), { text: 'ATLAS | 🔧 implement 3/5 | x', isSummary: true })).toBeNull()
 })
 
+const withPattern = (headerFirstLinePattern: string, over: Partial<AtlasSnapshot> = {}): AtlasSnapshot => {
+  const base = snap(over)
+  return { ...base, contract: { ...base.contract, headerFirstLinePattern } }
+}
+
+test('an empty contract pattern draws no pill on a plain reply', () => {
+  expect(assistantTree(withPattern(''), { text: 'Hello', isFirstOfReply: true })).toBeNull()
+})
+
+test('a header with no valid phase draws no pill, never the snapshot phase', () => {
+  const loose = withPattern('^ATLAS \\|', { phase: 'verify' })
+  expect(assistantTree(loose, { text: 'ATLAS | x mystery | state', isFirstOfReply: true })).toBeNull()
+})
+
+test('the pill shows the phase the header states, not a phase word in its sentence', () => {
+  const text = stringsOf(assistantTree(snap({ phase: 'verify' }), { text: 'ATLAS | 🔧 implement 2/9 | text containing the word verify', isFirstOfReply: true }))
+  expect(text).toContain('IMPLEMENT')
+  expect(text).not.toContain('VERIFY')
+})
+
 // ---- TurnDuration receipt ----
 
 test('turn receipt: done delta, workers, ctx', () => {
@@ -350,10 +370,11 @@ test('header pills: tail shows from 60 columns up, only the two pills below, and
   expect(pillsOf(t, 0).length).toBeGreaterThan(2) // unknown width draws it whole
 })
 
-test('assistantTree: phase falls back to the snapshot, bad pattern and empty text give null, layout follows the body', () => {
+test('assistantTree: an unknown phase word gives null (no snapshot fallback), bad pattern and empty text give null, layout follows the body', () => {
   const loose = { ...snap().contract, headerFirstLinePattern: '^ATLAS \\|' }
   const s = snap({ phase: 'verify', contract: loose })
-  const tree = assistantTree(s, { text: 'ATLAS | ✅ underway | state' }, 120)!
+  expect(assistantTree(s, { text: 'ATLAS | ✅ underway | state' }, 120)).toBeNull()
+  const tree = assistantTree(s, { text: 'ATLAS | ✅ verify | state' }, 120)!
   expect(tree.type).toBe('Box')
   expect(stringsOf(tree)).toContain('VERIFY')
   expect((tree as { props: Record<string, unknown> }).props.flexDirection).toBe('row')

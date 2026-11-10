@@ -357,7 +357,10 @@ class PonytailInstalled(unittest.TestCase):
             with open(os.path.join(d, ".claude", "settings.json"), "w") as f:
                 json.dump({"enabledPlugins": {"ponytail@mk": True}}, f)
             self.assertTrue(ba._ponytail_installed(d))
-        with tempfile.TemporaryDirectory() as d:
+        # plugin_enabled also reads ~/.claude/settings.json; point HOME at an empty dir so the
+        # developer's real ponytail install cannot leak in.
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as home, \
+                mock.patch.dict(os.environ, {"HOME": home}):
             self.assertFalse(ba._ponytail_installed(d))
 
 

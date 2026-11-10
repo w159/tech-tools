@@ -99,11 +99,18 @@ const VERDICT_WORD: Record<Verdict["status"], string> = {
   "needs-evidence": "needs evidence",
 };
 
+/** Row caps keep the report on one terminal screen; the ledger file holds the rest. */
+const MAX_VERDICT_ROWS = 12;
+const MAX_UNCHECKED_ROWS = 3;
+const MAX_WORKER_ROWS = 8;
+
 /** The /atlas-core text: the four sections as plain lines. One line when there is nothing to report. */
 export function coreReport(m: CoreModel | null): string {
   if (!hasCore(m)) return "atlas core: no verdicts, workers or teams recorded yet";
   const { header: h, evidence: e, verifiedDone: v, openGates } = m.contract;
   const l = m.ledger;
+  const findings = l.verified + l.refuted + l.pending;
+  const unlabeled = m.verdicts.filter((x) => !x.id && !x.title).length;
   const out: string[] = [
     "CONTRACT",
     `  header    ${tally(h.ok, h.total)} replies opened with the ATLAS header`,
@@ -111,16 +118,29 @@ export function coreReport(m: CoreModel | null): string {
     `  verified  ${tally(v.ok, v.total)} done items have a verified finding`,
     `  gates     ${openGates ? `${openGates} open` : "all clear"}`,
     "",
-    `VERDICTS  ${l.claimed} claim${l.claimed === 1 ? "" : "s"}, ${l.verified} verified, ${l.refuted} refuted, ${l.pending} open, ${l.unchecked} unchecked`,
+    `VERDICTS  ${findings} finding${findings === 1 ? "" : "s"}: ${l.verified} verified, ${l.refuted} refuted, ${l.pending} open${unlabeled ? ` (${unlabeled} unlabeled)` : ""}  |  ${l.claimed} claim${l.claimed === 1 ? "" : "s"} this run, ${l.unchecked} unchecked`,
   ];
-  for (const x of m.verdicts) out.push(`  ${VERDICT_WORD[x.status]}  ${x.id}  ${x.title}`);
-  for (const c of m.claims) if (c.status === "DONE" && c.matched === null) out.push(`  unchecked  ${c.owner} claims DONE, no verdict yet`);
+  // attention first (refuted, open), then verified; newest first within each (file order is append order)
+  const newest = m.verdicts.filter((x) => x.id || x.title).reverse();
+  const shown = [...newest.filter((x) => x.status !== "verified"), ...newest.filter((x) => x.status === "verified")];
+  for (const x of shown.slice(0, MAX_VERDICT_ROWS)) out.push(`  ${[VERDICT_WORD[x.status], x.id, x.title].filter(Boolean).join("  ")}`);
+  if (shown.length > MAX_VERDICT_ROWS) out.push(`  ... ${shown.length - MAX_VERDICT_ROWS} more (full ledger: .atlas/.run/findings.json)`);
+  const lonely = m.claims.filter((c) => c.status === "DONE" && c.matched === null);
+  for (const c of lonely.slice(0, MAX_UNCHECKED_ROWS)) out.push(`  unchecked  ${c.owner} claims DONE, no verdict yet`);
+  if (lonely.length > MAX_UNCHECKED_ROWS) out.push(`  ... ${lonely.length - MAX_UNCHECKED_ROWS} more unchecked`);
   if (!m.verdicts.length && !l.unchecked) out.push("  no verdict recorded yet");
   const ratio = ratioText(m.offload.ratio);
-  out.push("", `OFFLOAD  ${tok(m.offload.kept)} kept in tmux, ${tok(m.offload.returned)} returned${ratio ? ` (${ratio})` : ""}`);
-  for (const w of m.offload.workers)
+  const nw = m.offload.workers.length;
+  out.push("", `OFFLOAD  ${tok(m.offload.kept)} kept in tmux, ${tok(m.offload.returned)} returned${ratio ? ` (${ratio})` : ""}, all ${nw} recorded worker${nw === 1 ? "" : "s"}`);
+  // workers have no timestamp: the list is name-sorted, so the tail is the newest by spawn order
+  const live = [...m.offload.workers].reverse().filter((w) => w.peak > 0 || w.kept > 0 || w.returned > 0);
+  for (const w of live.slice(0, MAX_WORKER_ROWS))
     out.push(`  ${w.name}  ${w.model ?? "?"}  peak ${tok(w.peak)}  kept ${tok(w.kept)}  returned ${tok(w.returned)}  cost ${w.costUsd === null ? "?" : `$${w.costUsd.toFixed(2)}`}`);
-  if (!m.offload.workers.length) out.push("  no workers yet");
+  const hidden = live.length - MAX_WORKER_ROWS;
+  const empty = nw - live.length;
+  if (hidden > 0 || empty > 0)
+    out.push(`  ... ${[hidden > 0 ? `${hidden} more` : "", empty > 0 ? `${empty} with no data` : ""].filter(Boolean).join(", ")}`);
+  if (!nw) out.push("  no workers yet");
   out.push("", "ROUTE");
   for (const r of m.routes) {
     out.push(`  ${r.cls}/${r.effort}  ${r.name || r.teamId}  ${r.isolation}, max ${r.maxParallel}`);

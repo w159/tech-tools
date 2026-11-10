@@ -767,14 +767,40 @@ class Gates:
             G,
             "allow: in-flight subagent in background_tasks",
             "allow",
+            # Non-`done` phase: the silence rule covers it; a `done` header is (r).
             cg(
                 stop(
                     sC,
+                    msg="ATLAS | s verify | subagent running",
                     background_tasks=[
                         {"type": "subagent", "status": "running", "id": "a"}
                     ],
                 )
             ),
+        )
+        # (r): a `done` header while a subagent runs is blocked on the claim itself.
+        sR = sid()
+        self.mkrun(sR, edit=False)
+        self.rec(
+            G,
+            "block: (r) done header + in-flight subagent",
+            "block",
+            cg(
+                stop(
+                    sR,
+                    background_tasks=[
+                        {"type": "subagent", "status": "running", "id": "a"}
+                    ],
+                )
+            ),
+        )
+        sR2 = sid()
+        self.mkrun(sR2, edit=False)
+        self.rec(
+            G,
+            "allow: (r) done header, nothing running, no open todos",
+            "allow",
+            cg(stop(sR2)),
         )
         self.rec(
             G,

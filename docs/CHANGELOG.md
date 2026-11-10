@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.4.1 - 2026-11-10
+
+- atlas 17.4.1: mod survival and visibility pass. The mod boots again on `/clear` (`classic.SessionStart`, source `clear`), mod failures show one toast each, the header pill uses one parser and never falls back to the snapshot phase, a corrupt `todos.json` keeps the last good board, and `/atlas-core` counts one finding once and caps its rows (about 580 lines before, 26 after). Completion gate condition (r) blocks a `done` reply while work is open (`ATLAS_GATE_DONE=off` disables it). Also: `fallow_gate.py` on Python 3.15, two new doctor checks (`source-checkout-stale`, `operating-contract`), and a doctor layout fix for git work trees. Verified against the mod test kit and Python suites; the live render after `/clear` is not observed yet. Details in plugins/atlas/CHANGELOG.md.
+
+## marketplace 5.9.1 - 2026-11-10
+
+- marketplace 5.9.1: atlas 17.4.1. armada and programmer are unchanged.
+
 ## atlas 17.4.0 - 2026-11-10
 
 - atlas 17.4.0: terminal UI redesign. The Claude Code band and the omp mission panel share one layout module and one golden, so they print the same text. New rows: a header with `N of M tasks`, a stepper, worker rows in plain words (`running`, `thinking`, `starting`, `waiting`, `failed`, `finished`), the newest message, a `checks` footer, and labelled groups on the idle core row. Removed: the gradient title bar, per-phase hues, worker faces and unlabelled sparklines, and the HUD Subagents block on Claude Code. The sidebar has a tab bar and a vertical route list; the other views and the board panel use the Catppuccin Mocha tones; toasts are plain sentences; the doctor report lists failures and warnings first, then one line each for passing and not-applicable checks, then a verdict. Also: the message row skips join and leave notices, the task count falls back to board rows, workers are named from a `<slug>: ` Agent description prefix, and the sidebar team summary counts failed workers. Details in plugins/atlas/CHANGELOG.md; evidence in docs/audits/2026-11-10_atlas-terminal-ui-redesign.md.

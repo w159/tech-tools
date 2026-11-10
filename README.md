@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.4.0, armada 2.2.3, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.4.1, armada 2.2.3, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -201,7 +201,7 @@ The lead sees each note on its next tool call:
 ### 4. The Stop gate
 
 When the agent tries to finish, `completion_gate.py` checks the definition of
-done (17 conditions, (a)-(q): evidence under `.atlas/evidence/`, a verified finding,
+done (18 conditions, (a)-(r): evidence under `.atlas/evidence/`, a verified finding,
 current docs, drained todos, a dispatch for any shipped code, and more). If
 something is missing it blocks the stop and says what to do:
 

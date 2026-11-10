@@ -134,8 +134,8 @@ export function meterColor(pct: number): string {
 }
 
 /** 1 when the wall-clock blink is "on" for the given period, else 0 (1 Hz breathing at 500 ms). */
-export function blink(periodMs = 500): 0 | 1 {
- return (Math.floor(Date.now() / periodMs) % 2) as 0 | 1;
+export function blink(periodMs = 500, nowMs: number = Date.now()): 0 | 1 {
+ return (Math.floor(nowMs / periodMs) % 2) as 0 | 1;
 }
 
 /** Braille spinner frames (one cell each). */

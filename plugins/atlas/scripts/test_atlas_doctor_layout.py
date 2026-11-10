@@ -601,5 +601,47 @@ class ProjectIdentityTest(LayoutBase):
         self.assertEqual(self.conn.total_changes, before)
 
 
+class GitWorktreeGuardTest(LayoutBase):
+    """A repo that tracks .atlas/ and keeps linked worktrees in .atlas/wt/."""
+
+    def git(self, *args, cwd=None):
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=cwd or self.repo,
+            check=True,
+            capture_output=True,
+        )
+
+    def setUp(self):
+        super().setUp()
+        shutil.rmtree(os.path.join(self.repo, ".git"))  # replace the fake .git
+        self.git("init", "-q")
+        touch(os.path.join(self.repo, ".atlas", "keep.txt"))
+        self.git("add", "-A")
+        self.git("commit", "-qm", "init")
+        self.wt = os.path.join(self.repo, ".atlas", "wt", "w1")
+        self.git("worktree", "add", "-q", self.wt, "-b", "w1")
+
+    def test_worktree_own_atlas_is_not_moved_from_main_root(self):
+        self.assertTrue(os.path.isdir(os.path.join(self.wt, ".atlas")))
+        self.assertEqual(self.kinds(), [])
+
+    def test_worktree_own_atlas_is_not_moved_from_worktree_root(self):
+        self.assertEqual(self.kinds(self.wt), [])
+
+    def test_untracked_stray_is_still_archived(self):
+        touch(os.path.join(self.repo, "plugins", "x", ".atlas", "a"))
+        self.assertEqual(self.kinds(), [("stray", "plugins/x/.atlas")])
+        moves = doctor_layout.fix_atlas_layout(
+            doctor_layout.check_atlas_layout(self.repo), self.repo, today=TODAY
+        )
+        self.assertEqual([m["status"] for m in moves], ["moved"])
+
+    def test_dir_with_tracked_files_is_never_moved(self):
+        touch(os.path.join(self.repo, "plugins", "y", ".atlas", "t"))
+        self.git("add", "-f", "plugins/y/.atlas/t")
+        self.assertEqual(self.kinds(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

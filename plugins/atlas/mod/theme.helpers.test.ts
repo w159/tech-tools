@@ -82,12 +82,10 @@ test('barParts: widths, rounding and out-of-range input', () => {
 });
 
 describe('blink', () => {
-  const realNow = Date.now;
-  const at = (ms: number, period?: number): 0 | 1 => {
-    Date.now = () => ms;
-    try { return blink(period); } finally { Date.now = realNow; }
-  };
+  // The host freezes Date.now (readonly), so the clock is passed in; the default is the wall clock.
+  const at = (ms: number, period?: number): 0 | 1 => blink(period, ms);
   test('toggles every period using the wall clock', () => {
+    expect([0, 1]).toContain(blink()); // default argument reads Date.now()
     expect(at(0)).toBe(0);
     expect(at(499)).toBe(0);
     expect(at(500)).toBe(1);

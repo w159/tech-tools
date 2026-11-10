@@ -63,6 +63,7 @@ def _scan_json(raw: str) -> object:
         strict = False
         object_hook = None
         object_pairs_hook = None
+        array_hook = None  # Python 3.15's C scanner reads this attribute; older ones ignore it
         parse_float = float
         parse_int = int
 

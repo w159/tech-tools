@@ -18,6 +18,7 @@
   "switches": {
     "header": "ATLAS_GATE_HEADER",
     "phasedTodo": "ATLAS_GATE_PHASES",
-    "colonyChannel": "ATLAS_GATE_COLONY"
+    "colonyChannel": "ATLAS_GATE_COLONY",
+    "doneClaim": "ATLAS_GATE_DONE"
   }
 }

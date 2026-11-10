@@ -144,6 +144,43 @@ describe('readTodos', () => {
     expect(third.items.map(i => i.id)).toEqual(['ok']);
   });
 
+  test('corrupt JSON after a good read keeps the previous items and reports corrupt', async () => {
+    const files = board([item({ id: 'a' })]);
+    const { fs } = memFs(files);
+    const good = await readTodos(fs, '/r', 's1', [], CONTRACT);
+    expect(good.error).toBeUndefined();
+    files[PATH] = '{not json';
+    files.__tick = '5';
+    const bad = await readTodos(fs, '/r', 's1', [], CONTRACT, good.cache);
+    expect(bad.items.map(i => i.id)).toEqual(['a']);
+    expect(bad.error).toBe('corrupt');
+  });
+
+  test('a file that exists but cannot be read keeps the previous items and reports unreadable', async () => {
+    const files = board([item({ id: 'a' })]);
+    const { fs } = memFs(files);
+    const good = await readTodos(fs, '/r', 's1', [], CONTRACT);
+    files.__tick = '5';
+    const broken: FsLike = { ...fs, read: async () => { throw new Error('EACCES'); } };
+    const bad = await readTodos(broken, '/r', 's1', [], CONTRACT, good.cache);
+    expect(bad.items.map(i => i.id)).toEqual(['a']);
+    expect(bad.error).toBe('unreadable');
+  });
+
+  test('a missing file is an empty board with no error', async () => {
+    const { fs } = memFs({});
+    const r = await readTodos(fs, '/r', 's1', [], CONTRACT);
+    expect(r.items).toEqual([]);
+    expect(r.error).toBeUndefined();
+  });
+
+  test('corrupt on the very first read => empty items plus the error', async () => {
+    const { fs } = memFs({ __tick: '0', [PATH]: '{not json' });
+    const r = await readTodos(fs, '/r', 's1', [], CONTRACT);
+    expect(r.items).toEqual([]);
+    expect(r.error).toBe('corrupt');
+  });
+
   test('non-array items field => empty', async () => {
     const { fs } = memFs({ [PATH]: JSON.stringify({ version: 1, items: 5 }) });
     const { items } = await readTodos(fs, '/r', 's1', [], CONTRACT);

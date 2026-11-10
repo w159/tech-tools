@@ -18,7 +18,9 @@ still lists an in-flight subagent, workflow, or teammate dispatch (see
 work is still running, so the gate does not fire once per wave-Stop. A
 long-running `shell` or `monitor` task does not suppress it.
 
-Sixteen conditions must ALL hold before the gate passes (else block ONCE):
+Eighteen conditions, (a) through (r), must ALL hold before the gate passes (else
+block ONCE). (q), unmerged worker branches, is documented on
+`_unmerged_worker_branches`; the rest are listed here:
   (a) At least one file exists under `.atlas/evidence/` with an mtime at or
       after THIS RUN's start (via `_run_started_at`). Scoped like (f)/(g):
       only checked when THIS RUN shipped non-docs code (_nondocs_changed on
@@ -111,6 +113,14 @@ Sixteen conditions must ALL hold before the gate passes (else block ONCE):
       traffic (`agent://` event paths, SendMessage tool calls) recorded for the
       run -- the exact sources are listed in `_colony_channel_used`. Kill switch
       ATLAS_GATE_COLONY=off. Fails open on any read error.
+  (r) Done claim: when the final reply's header phase is `done` and a
+      dispatched subagent/workflow/teammate is still running (see
+      `_has_in_flight_dispatch`) or any known todo surface (TodoWrite,
+      board, LEDGER) has open items, block. Checked BEFORE the in-flight
+      silence and independent of shipped code; a header with any other phase
+      keeps the old behavior. Re-blocks each Stop (subject to the loop cap).
+      Kill switch ATLAS_GATE_DONE=off. Skips sidechains, stop_hook_active,
+      and fails open on an unreadable contract or any error.
 
 (n), (o), and (p) ask the model to repair presentation, not to produce work, so
 each blocks AT MOST ONCE per session: an O_EXCL marker `<cond>-<session>` under
@@ -1022,6 +1032,7 @@ _GISTS: dict[str, str] = {
     "o": "required phases missing; add the phase markers",
     "p": "colony channel unused; post one board note per worker",
     "q": "unmerged worker branches; verify each, then atlas_wt.py merge <agent>",
+    "r": "done claimed too early; change the header phase or finish the open work",
 }
 
 
@@ -1554,6 +1565,19 @@ def main() -> int:
             elif not missing_delegation:
                 _record_pass()
             return 0  # only (m) applies to unflagged runs
+        # (r) runs before the in-flight silence: a `done` header is a
+        # completion claim even while agents run. Same loop cap as the rest.
+        done_reason = _done_claim_reason(data, root, session)
+        if done_reason:
+            count, loop_exhausted = _block_loop_state(session, ["r"])
+            if not loop_exhausted:
+                _record_gate_block(session, ["r"])
+                _record_analytics("gate.r.block")
+                notice = _block_loop_notice(count, ["r"])
+                if notice:
+                    done_reason += "\n" + notice
+                print(json.dumps({"decision": "block", "reason": done_reason}))
+                return 0
         if _has_in_flight_dispatch(data):
             return 0  # dispatched subagent/workflow/teammate still running -- not a completion claim yet
         # (a)/(b)/(f)/(g) share one signal: did THIS RUN's own activity ship
@@ -1718,6 +1742,7 @@ _CONDITION_NAMES: dict[str, str] = {
     "o": "required phases missing",
     "p": "colony channel unused",
     "q": "unmerged worker branches",
+    "r": "done claimed with running agents or open todos",
 }
 
 
@@ -2196,6 +2221,7 @@ _CONTRACT_PATH = (
 _SWITCH_HEADER = "ATLAS_GATE_HEADER"
 _SWITCH_PHASES = "ATLAS_GATE_PHASES"
 _SWITCH_COLONY = "ATLAS_GATE_COLONY"
+_SWITCH_DONE = "ATLAS_GATE_DONE"
 
 
 def _contract_doc() -> dict | None:
@@ -2312,6 +2338,60 @@ def _status_header_would_block(data: dict, contract: dict | None) -> bool:
         return re.match(contract["headerFirstLinePattern"], first.strip()) is None
     except Exception:
         return False
+
+
+def _done_claim_reason(data: dict, root: Path, session: str) -> str:
+    """(r) Block text when the reply's own header says `done` but a dispatched
+    agent is still running or a todo is open; "" otherwise. The output style
+    forbids `done` while either holds. Unlike (i) this does not need shipped
+    code, and unlike the in-flight silence it fires on the claim itself.
+    Fails open ("") on the kill switch, an unreadable contract, a sidechain,
+    stop_hook_active, a non-string/headerless reply, or any error."""
+    try:
+        contract = _contract_doc()
+        if contract is None or _switch_off(
+            _switch_name(contract, "doneClaim", _SWITCH_DONE)
+        ):
+            return ""
+        if data.get("stop_hook_active") or _payload_is_sidechain(data):
+            return ""
+        text = data.get("last_assistant_message")
+        if not isinstance(text, str):
+            return ""
+        first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
+        m = re.match(contract["headerFirstLinePattern"], first)
+        # Phase is the first of the pattern's phase words after the glyph.
+        if not m or first.split()[3] != "done":
+            return ""
+        running = sum(
+            1
+            for t in data.get("background_tasks") or []
+            if isinstance(t, dict)
+            and str(t.get("type", "")).lower() in _IN_FLIGHT_DISPATCH_TYPES
+            and str(t.get("status", "")).lower() not in _TERMINAL_TASK_STATUSES
+        )
+        transcript = str(data.get("transcript_path") or "")
+        open_todos = (
+            _open_todos(transcript)
+            or _board_open_todos(root, session)
+            or _ledger_open_todos(transcript)
+        )
+        if not running and not open_todos:
+            return ""
+        parts = []
+        if running:
+            parts.append(f"{running} running agent(s)")
+        if open_todos:
+            parts.append(f"{open_todos} open todo item(s)")
+        return (
+            "  (r) Done claimed too early: the reply header says `done` but there "
+            f"are {' and '.join(parts)}. `done` is forbidden until nothing is "
+            "running and nothing remains. -> Change the header phase to "
+            "`verify`, `implement` or `blocked`, or wait for the agents and "
+            "finish or close the todo items, then retry Stop."
+        )
+    except Exception:
+        return ""
 
 
 def _header_reason_part(contract: dict | None) -> str:

@@ -54,6 +54,13 @@ test('press a member, type, submit: the note goes to that member and the draft c
   expect((await ui.find({ key: 'msg' }))?.text ?? '').toBe('');
 });
 
+const CONTRACT = JSON.stringify({
+  phases: ['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done', 'blocked'].map((id) => ({ id, glyph: '.' })),
+  todoPhases: ['research', 'theory', 'test', 'validate', 'implement', 'verify'],
+  headerFirstLinePattern: '^ATLAS',
+  itemPhasePrefix: '[<phase>] ',
+});
+
 /** Boot the real module on a fake board whose host agent list is `agents`. */
 async function boot(on: On, agents: unknown[], env: Record<string, string> = {}) {
   const clock = mock.clock(on);
@@ -62,7 +69,11 @@ async function boot(on: On, agents: unknown[], env: Record<string, string> = {})
   on('session.start', async (_$, e) => ({ cwd: (e as { cwd: string }).cwd }) as never);
   on('ui.log', async () => ({ value: undefined }) as never);
   on('fs.exists', async (_$, e) => ({ value: String((e as { path: string }).path).endsWith('/.atlas') }) as never);
-  on('fs.read', async () => { throw new Error('no such file'); });
+  // The band's stepper comes from the operating contract; without it the rail has no phases to draw.
+  on('fs.read', async (_$, e) => {
+    if (String((e as { path: string }).path).endsWith('/contracts/operating-contract.json')) return { value: CONTRACT } as never;
+    throw new Error('no such file');
+  });
   on('fs.stat', async () => { throw new Error('no such file'); });
   on('fs.list', async () => ({ value: [] }) as never);
   on('agent.list', async () => ({ value: agents }) as never);
@@ -82,11 +93,13 @@ test('hotkey tab c sets the view to channel', async ($, on) => {
     plugin: 'atlas', surface: 'terminal', component: 'Pane', requestId: 'atlas',
     props: { title: 'Atlas', isFocused: true, bodyColumns: 56, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} } as never,
   });
-  expect((await ui.find({ key: 'tab:route' }))?.props.dimColor).toBe(false); // route is the default tab
+  // The active tab is its label drawn bold (the rest muted), not a dimColor flag on the button.
+  const isActive = async (tab: string) => (await ui.find({ key: `tab:${tab}` }))?.children?.[0]?.props.bold;
+  expect(await isActive('route')).toBe(true); // route is the default tab
   expect((await ui.find({ key: 'tab:channel' }))?.props.hotkey).toBe('c');
   await ui.press({ key: 'tab:channel' });
-  expect((await ui.find({ key: 'tab:channel' }))?.props.dimColor).toBe(false);
-  expect((await ui.find({ key: 'tab:route' }))?.props.dimColor).toBe(true);
+  expect(await isActive('channel')).toBe(true);
+  expect(await isActive('route')).toBe(false);
 });
 
 /** The team view's worker row as drawn after `ms` more mocked time (a working row carries the spinner frame). */
@@ -169,7 +182,8 @@ test('at a starved maxRows the band folds to its one summary row', async ($, on)
   const two = await abovePromptText($, 2);
   expect(two).not.toContain('Subagents');
   expect(two).toContain('ATLAS');
-  expect(two).not.toContain('research'); // no stepper: the summary row alone
+  expect(two).toContain('research · 1 working'); // the summary row names the phase and the count (spec: terminal-ui, below 80 cols)
+  expect(two).not.toContain('theory'); // no stepper: it would name every phase
 });
 
 test('ATLAS_HUD=off draws no HUD rows (the band is unaffected)', async ($, on) => {
@@ -185,5 +199,5 @@ test('with the docked pane open (measured: viewport 143, bodyColumns 138) the ba
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const shown = await abovePromptText($, 18, 138);
   expect(shown).toContain('ATLAS');
-  expect(shown).toContain('research'); // the stepper is drawn: the full tier, not the one-row summary
+  expect(shown).toContain('theory'); // the stepper names every phase: the full tier, not the one-row summary
 });

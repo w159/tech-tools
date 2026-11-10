@@ -136,15 +136,31 @@ export function parseFindings(text: string): Verdict[] {
     const at = Date.parse(str(r.verified_at));
     return [
       {
-        id: String(r.id ?? ""),
+        // batch-style entries carry `batch` and `claim` instead of `id` and `title`
+        id: String(r.id ?? "") || str(r.batch),
         status: r.status,
-        title: str(r.title),
+        title: str(r.title) || str(r.claim),
         by: str(r.verified_by) || "verifier",
         at: Number.isNaN(at) ? 0 : at,
         evidence: ev,
       },
     ];
   });
+}
+
+/** One finding per id, by its latest entry: findings.json is append-only, so a later `verified_at` (else a later
+ * position) wins. Entries with no id are kept apart (they cannot be told from each other). Order = append order. */
+export function latestPerId(all: readonly Verdict[]): Verdict[] {
+  const byId = new Map<string, Verdict>();
+  const anon: Verdict[] = [];
+  for (const v of all) {
+    if (v.id === "") { anon.push(v); continue; }
+    const prev = byId.get(v.id);
+    if (prev && v.at !== 0 && v.at < prev.at) continue;
+    byId.delete(v.id); // re-insert so the map keeps the latest entry's position
+    byId.set(v.id, v);
+  }
+  return [...byId.values(), ...anon];
 }
 
 /** Claims from report notes, oldest first: one per claimant report with a STATUS line. */
@@ -348,9 +364,11 @@ function teamRoles(teams: readonly { text: string }[]): Record<string, string> {
 }
 
 export function coreModel(input: CoreInput): CoreModel {
-  const verdicts = parseFindings(input.findings);
+  const entries = parseFindings(input.findings);
+  // the ledger counts findings, not file entries: one id is one finding, whatever its history
+  const verdicts = latestPerId(entries);
   const roles = teamRoles(input.teams);
-  const claims = pairClaims(claimsOf(input.reports, roles), verdicts);
+  const claims = pairClaims(claimsOf(input.reports, roles), entries);
   const workers = Object.keys(input.logs)
     .sort()
     .map((name) =>

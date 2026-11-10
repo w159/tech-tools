@@ -2907,6 +2907,10 @@ class NonMarketplaceLoadTest(unittest.TestCase):
             os.path.join(root, "hooks", "hooks.json"),
             {"hooks": {"SessionStart": [{"hooks": [{"command": "x ${CLAUDE_PLUGIN_ROOT}/scripts/a.py"}]}]}},
         )
+        write_json(
+            os.path.join(root, "contracts", "operating-contract.json"),
+            {"headerFirstLinePattern": "^ATLAS", "phases": ["research"]},
+        )
         for rel, body in (
             ("scripts/a.py", ""),
             ("agents/x.md", "---\nname: x\n---\n"),
@@ -3263,3 +3267,96 @@ class RenderReportTest(unittest.TestCase):
         self.assertTrue(lines[5].startswith("\x1b[2m") and lines[5].endswith("\x1b[0m"))
         self.assertTrue(lines[7].startswith("\x1b[1m1 problem(s) need attention\x1b[0m"))
         self.assertEqual(lines[0], "Atlas doctor  ·  atlas")
+
+
+class SourceCheckoutStaleTest(unittest.TestCase):
+    """Class A: edits in a marketplace source checkout older than the installed
+    plugin never reach users."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def _checkout(self, version, lists_atlas=True):
+        write_json(
+            os.path.join(self.tmp, ".claude-plugin", "marketplace.json"),
+            {"plugins": [{"name": "atlas" if lists_atlas else "other"}]},
+        )
+        write_json(
+            os.path.join(self.tmp, "plugins", "atlas", ".claude-plugin", "plugin.json"),
+            {"name": "atlas", "version": version},
+        )
+        sub = os.path.join(self.tmp, "plugins", "atlas", "scripts")
+        os.makedirs(sub, exist_ok=True)
+        return sub
+
+    def test_lower_version_warns_naming_both_versions(self):
+        cwd = self._checkout("16.4.2")
+        ok, detail = atlas_doctor.check_source_checkout_stale("17.4.0", cwd)
+        self.assertFalse(ok)
+        self.assertIn("16.4.2", detail)
+        self.assertIn("17.4.0", detail)
+        self.assertIn("default branch", detail)
+
+    def test_equal_version_is_quiet(self):
+        cwd = self._checkout("17.4.0")
+        self.assertTrue(atlas_doctor.check_source_checkout_stale("17.4.0", cwd)[0])
+
+    def test_higher_version_is_quiet(self):
+        cwd = self._checkout("18.0.0")
+        self.assertTrue(atlas_doctor.check_source_checkout_stale("17.4.0", cwd)[0])
+
+    def test_non_source_cwd_is_quiet(self):
+        self.assertTrue(atlas_doctor.check_source_checkout_stale("17.4.0", self.tmp)[0])
+
+    def test_marketplace_without_atlas_is_quiet(self):
+        cwd = self._checkout("16.4.2", lists_atlas=False)
+        self.assertTrue(atlas_doctor.check_source_checkout_stale("17.4.0", cwd)[0])
+
+    def test_wired_as_warn_in_install_checks(self):
+        cwd = self._checkout("16.4.2")
+        with mock.patch.object(atlas_doctor, "check_source_checkout_stale",
+                               return_value=(False, "x")) as m:
+            results = []
+            atlas_doctor._source_checkout_check(
+                lambda c, ok, d, severity="fail": results.append((c, ok, severity)), "17.4.0")
+        self.assertEqual(results, [("source-checkout-stale", False, "warn")])
+        m.assert_called_once()
+
+
+class OperatingContractTest(unittest.TestCase):
+    """Class D: an unreadable contract leaves the mod with no stepper or pill."""
+
+    GOOD = {"headerFirstLinePattern": r"^ATLAS \| \S+ (research|done)", "phases": ["research", "done"]}
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.path = os.path.join(self.root, "contracts", "operating-contract.json")
+
+    def test_good_contract_passes(self):
+        write_json(self.path, self.GOOD)
+        self.assertTrue(atlas_doctor.check_operating_contract(self.root)[0])
+
+    def test_missing_file_fails_with_reinstall_hint(self):
+        ok, detail = atlas_doctor.check_operating_contract(self.root)
+        self.assertFalse(ok)
+        self.assertIn("reinstall the plugin", detail)
+
+    def test_bad_json_fails(self):
+        os.makedirs(os.path.dirname(self.path))
+        with open(self.path, "w") as f:
+            f.write("{nope")
+        self.assertFalse(atlas_doctor.check_operating_contract(self.root)[0])
+
+    def test_empty_phases_fails(self):
+        write_json(self.path, {**self.GOOD, "phases": []})
+        self.assertFalse(atlas_doctor.check_operating_contract(self.root)[0])
+
+    def test_bad_regex_fails(self):
+        write_json(self.path, {**self.GOOD, "headerFirstLinePattern": "("})
+        self.assertFalse(atlas_doctor.check_operating_contract(self.root)[0])
+
+    def test_empty_pattern_fails(self):
+        write_json(self.path, {**self.GOOD, "headerFirstLinePattern": ""})
+        self.assertFalse(atlas_doctor.check_operating_contract(self.root)[0])

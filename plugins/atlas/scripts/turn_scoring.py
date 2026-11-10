@@ -21,6 +21,7 @@ Env: ATLAS_TYPESAFE_MAX_CALLS (default 200), plus typesafe_client's.
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -37,7 +38,24 @@ EARLIER_CAP = 800
 EARLIER_N = 5
 REPLY_CAP = 8000
 DIGEST_CAP = 1500
-HEADER_RE = re.compile(r"^ATLAS \|", re.M)
+def _load_header_re():
+    """The contract's headerFirstLinePattern, so `header_present` agrees with
+    the (n) gate. Falls back to the loose telemetry regex only when the
+    contract file is unreadable."""
+    try:
+        path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..",
+            "contracts",
+            "operating-contract.json",
+        )
+        with open(path, encoding="utf-8") as fh:
+            return re.compile(json.load(fh)["headerFirstLinePattern"])
+    except (OSError, ValueError, KeyError, TypeError, re.error):
+        return re.compile(r"^ATLAS \|")
+
+
+HEADER_RE = _load_header_re()
 PUNCT_RE = re.compile("[\u2014\u2013\u2018\u2019\u201c\u201d\u2026]")
 
 METRICS = ("header_present", "banned_punct", "reply_chars")
@@ -240,9 +258,15 @@ def _scrub(text):
     return session_ingest.redact_secrets(text or "")
 
 
-def _metrics(text):
+def _metrics(text, final=None):
+    # The header is judged on the FINAL reply's first non-empty line, matching
+    # the (n) gate; `text` may join several assistant messages of one turn.
+    first = next(
+        (ln for ln in (text if final is None else final).splitlines() if ln.strip()),
+        "",
+    )
     return {
-        "header_present": 1.0 if HEADER_RE.search(text) else 0.0,
+        "header_present": 1.0 if HEADER_RE.match(first.strip()) else 0.0,
         "banned_punct": float(len(PUNCT_RE.findall(text))),
         "reply_chars": float(len(text)),
     }
@@ -317,7 +341,7 @@ def build_exchanges(conn, session_id):
                 "message_uuid": t["uuid"],
                 "ts": t["last_ts"],
                 "state": state,
-                "metrics": _metrics("\n".join(t["texts"])),
+                "metrics": _metrics("\n".join(t["texts"]), t["texts"][-1]),
             }
         )
     return out

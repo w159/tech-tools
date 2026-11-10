@@ -684,13 +684,15 @@ class AnalyticsTests(Base):
     def test_automation_guard_keeps_the_default_off_under_pytest(self):
         import atlas_analytics
 
-        atlas_analytics._reset()
-        self.assertEqual((False, "CI or test run (set ATLAS_ANALYTICS=on to count it)"), atlas_analytics.state())
-        repo, _ = make_repo()
-        sh(repo, "git", "branch", "atlas/a")
-        g.ensure_branch(repo, "work")
-        g.clean(repo, dict(g.load_policy(repo)))
-        self.assertFalse((Path(os.environ["ATLAS_HOME"]) / "analytics").exists())
+        # pytest sets PYTEST_CURRENT_TEST itself; unittest does not, so supply it.
+        with mock.patch.dict(os.environ, {"PYTEST_CURRENT_TEST": "t"}):
+            atlas_analytics._reset()
+            self.assertEqual((False, "CI or test run (set ATLAS_ANALYTICS=on to count it)"), atlas_analytics.state())
+            repo, _ = make_repo()
+            sh(repo, "git", "branch", "atlas/a")
+            g.ensure_branch(repo, "work")
+            g.clean(repo, dict(g.load_policy(repo)))
+            self.assertFalse((Path(os.environ["ATLAS_HOME"]) / "analytics").exists())
 
 
 FAKE_GH = """#!%s

@@ -194,7 +194,7 @@ describe('core report lines', () => {
     m.ledger = { claimed: 1, verified: 1, refuted: 1, pending: 1, unchecked: 1 };
     m.offload = { workers: [], kept: 0, returned: 0, ratio: 12 };
     const r = coreReport(m).split('\n');
-    expect(r).toContain('VERDICTS  1 claim, 1 verified, 1 refuted, 1 open, 1 unchecked');
+    expect(r).toContain('VERDICTS  3 findings: 1 verified, 1 refuted, 1 open  |  1 claim this run, 1 unchecked');
     expect(r).toContain('  verified  a  ta');
     expect(r).toContain('  REFUTED  b  tb');
     expect(r).toContain('  needs evidence  c  tc');
@@ -202,7 +202,7 @@ describe('core report lines', () => {
     expect(r.join('\n')).not.toContain('paired claims');
     expect(r.join('\n')).not.toContain('failed claims');
     expect(r).not.toContain('  no verdict recorded yet');
-    expect(r).toContain('OFFLOAD  0 kept in tmux, 0 returned (12x)');
+    expect(r).toContain('OFFLOAD  0 kept in tmux, 0 returned (12x), all 0 recorded workers');
     expect(r).toContain('  no workers yet');
     // an unchecked claim alone also suppresses the empty note
     m.verdicts = [];
@@ -223,6 +223,55 @@ describe('core report lines', () => {
   test('no ratio means no parenthesis on the offload line', () => {
     const m = blank();
     m.verdicts = [{ id: 'a', status: 'verified', title: 'ta', by: 'b', at: 1, evidence: '' }];
-    expect(coreReport(m)).toContain('OFFLOAD  0 kept in tmux, 0 returned\n');
+    expect(coreReport(m)).toContain('OFFLOAD  0 kept in tmux, 0 returned, all 0 recorded workers\n');
+  });
+});
+
+describe('core report is bounded', () => {
+  const verdictRows = (r: string): string[] => r.slice(r.indexOf('VERDICTS'), r.indexOf('OFFLOAD')).split('\n').filter((l) => /^ {2}(verified|REFUTED|needs evidence) {2}/.test(l));
+  const v = (id: string, status: 'verified' | 'rejected' | 'needs-evidence', at: number, title = `t-${id}`) => ({ id, status, title, by: 'b', at, evidence: '' });
+
+  test('40 distinct findings print at most 12 rows, refuted and open first, then a more line', () => {
+    const m = blank();
+    m.verdicts = [
+      ...Array.from({ length: 36 }, (_, i) => v(`ok${i}`, 'verified', 100 + i)),
+      v('bad1', 'rejected', 1), v('bad2', 'rejected', 2), v('open1', 'needs-evidence', 3), v('bad3', 'rejected', 4),
+    ];
+    m.ledger = { claimed: 0, verified: 36, refuted: 3, pending: 1, unchecked: 0 };
+    const out = coreReport(m);
+    const rows = verdictRows(out);
+    expect(rows).toHaveLength(12);
+    expect(rows.slice(0, 4).every((l) => !l.startsWith('  verified'))).toBe(true);
+    expect(rows[4]).toBe('  verified  ok35  t-ok35'); // newest verified first
+    expect(out).toContain('  ... 28 more (full ledger: .atlas/.run/findings.json)');
+  });
+  test('the counts on the VERDICTS line sum to the findings total', () => {
+    const m = blank();
+    m.verdicts = [v('a', 'verified', 1), v('b', 'rejected', 2), v('c', 'needs-evidence', 3), v('d', 'verified', 4)];
+    m.ledger = { claimed: 0, verified: 2, refuted: 1, pending: 1, unchecked: 0 };
+    expect(coreReport(m)).toContain('VERDICTS  4 findings: 2 verified, 1 refuted, 1 open  |  0 claims this run, 0 unchecked');
+  });
+  test('an entry with no id and no title is counted as unlabeled, not printed as a blank row', () => {
+    const m = blank();
+    m.verdicts = [v('a', 'verified', 1), v('', 'verified', 2, '')];
+    m.ledger = { claimed: 0, verified: 2, refuted: 0, pending: 0, unchecked: 0 };
+    const out = coreReport(m);
+    expect(verdictRows(out)).toEqual(['  verified  a  t-a']);
+    expect(out).toContain('1 unlabeled');
+    expect(out.split('\n').filter((l) => /^ {2}(verified|REFUTED|needs evidence) *$/.test(l))).toEqual([]); // no empty row
+  });
+  test('30 workers of which 10 carry no data print at most 8 rows and a more line', () => {
+    const m = blank();
+    m.verdicts = [v('a', 'verified', 1)];
+    m.offload.workers = [
+      ...Array.from({ length: 20 }, (_, i) => worker(`w${String(i).padStart(2, '0')}`)),
+      ...Array.from({ length: 10 }, (_, i) => worker(`z${i}`, { peak: 0, kept: 0, returned: 0, model: null, costUsd: null })),
+    ] as any;
+    const out = coreReport(m);
+    const rows = out.split('\n').filter((l) => /^ {2}[wz]\d+ {2}/.test(l));
+    expect(rows).toHaveLength(8);
+    expect(rows.some((l) => l.includes('peak 0'))).toBe(false);
+    expect(out).toContain('  ... 12 more, 10 with no data');
+    expect(out).toContain('all 30 recorded workers');
   });
 });

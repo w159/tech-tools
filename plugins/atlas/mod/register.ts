@@ -8,8 +8,8 @@
 import { atom, read, update } from 'claude-code';
 import type { EngineInterface, On, PluginOptions } from 'claude-code';
 import { SnapshotBuilder } from './snapshot';
-import type { AgentState, AtlasSnapshot, FsLike, PhaseId, SquadAgent } from './contract';
-import { PHASES, intentToArgv } from './intents';
+import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
+import { intentToArgv } from './intents';
 import { bandTree, railPhase, type BandHandlers } from './band';
 import { hudAgents, hudBudget, hudCompactRows, hudRows, isRunning } from './hud';
 import { rowOf } from './runs';
@@ -21,7 +21,7 @@ import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data
 import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { registerDiscipline } from './discipline';
-import { PHASE_RE, registerRestyle } from './restyle';
+import { headerPhaseOf, registerRestyle } from './restyle';
 import { mergeToasts, registerNotify } from './notify';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { TeamTool } from './orchestra-types';
@@ -48,6 +48,22 @@ export const shouldDock = (v: { isFullscreen?: boolean; columns: number }): bool
 const toastUnplaced = ($: EngineInterface) => (r: { isPlaced: boolean; reason?: string }): void => {
 	if (!r.isPlaced && r.reason) $.ui.toast(`atlas: ${r.reason}`, { timeoutMs: 6000 });
 };
+
+/** Messages already toasted this session; `--debug` is the only place the debug log shows, so a failure also needs one visible line. */
+const shownFailures = new Set<string>();
+const MAX_FAILURE_CHARS = 200;
+
+/** Debug-log a failure and toast it once per distinct message. Module level (a `$` closure inside register() is refused by the host); never throws. */
+function reportFailure($: EngineInterface, message: string): void {
+	try {
+		$.ui.log(message, { to: 'debug' });
+		if (shownFailures.has(message)) return;
+		shownFailures.add(message);
+		$.ui.toast(message.slice(0, MAX_FAILURE_CHARS), { timeoutMs: 6000 });
+	} catch {
+		// reporting must never break the hook or boot that is already failing
+	}
+}
 
 // ---- session state ($.state: per-session, versioned, survives module reload) --
 // Contract in types/index.d.ts. Render hooks read these (a write redraws exactly
@@ -118,21 +134,8 @@ function folderOf(cwd: string): string {
 	return cut < 0 ? stripped : stripped.slice(cut + 1);
 }
 
-/** PhaseId the answer's header first line pins (`ATLAS | <glyph> <phase>[ n/m] | <state>`), else null. */
-export function headerPhaseOf(answer: string, snapshot: AtlasSnapshot | null): PhaseId | null {
-	const pattern = snapshot?.contract.headerFirstLinePattern ?? '';
-	if (pattern === '') return null;
-	const firstLine = answer.split('\n', 1)[0] ?? '';
-	let re: RegExp;
-	try {
-		re = new RegExp(pattern);
-	} catch {
-		return null;
-	}
-	if (!re.test(firstLine)) return null;
-	const phase = PHASE_RE.exec(firstLine)?.[1];
-	return phase !== undefined && (PHASES as readonly string[]).includes(phase) ? (phase as PhaseId) : null;
-}
+// The one header parser lives in restyle.tsx; re-exported so existing importers keep working.
+export { headerPhaseOf };
 
 /** AgentStatus (d.ts EngineInterface $.agent.list) -> band AgentState. */
 const LIST_STATE: Record<string, AgentState> = {
@@ -428,8 +431,10 @@ async function rebuild($: EngineInterface): Promise<void> {
 		});
 		// The snapshot write redraws the band, pane and restyles that read it.
 		await update($, snapshotState, () => snap);
+		// The board keeps its last good rows; say why they may be stale.
+		if (builder.todoError !== undefined) reportFailure($, `atlas: todos.json is ${builder.todoError}, showing the last good board`);
 	} catch (err) {
-		$.ui.log(`atlas: rebuild failed: ${String(err)}`, { to: 'debug' });
+		reportFailure($, `atlas: rebuild failed: ${String(err)}`);
 		// keep the last good snapshot
 	}
 }
@@ -750,13 +755,86 @@ export async function coreTick($: EngineInterface): Promise<void> {
 		if (JSON.stringify(model) === JSON.stringify(await read($, coreState)) && !first) return;
 		await update($, coreState, () => model);
 	} catch (err) {
-		$.ui.log(`atlas: core tick failed: ${String(err)}`, { to: 'debug' });
+		reportFailure($, `atlas: core tick failed: ${String(err)}`);
 	}
 }
 
 /** Script groups plus the header group built from the last answer. */
 async function gateGroups($: EngineInterface): Promise<GateGroup[]> {
 	return [...(await read($, gatesState)).filter((g) => g.id !== 'header'), headerGroup(await read($, lastHeaderState))];
+}
+
+// A /clear raises session.end (reason 'clear') and no session.start, yet resets the
+// session's $.state atoms and changes the session id, so the classic SessionStart
+// (source 'clear') below runs the same boot again. `booted` keeps the interactive
+// flag across the clear (module scope survives it, the atoms do not); `wired` keeps
+// commands and the long-lived timers from being registered a second time.
+let booted: { interactive: boolean } | null = null;
+let wired = false;
+async function boot($: EngineInterface, cwd: string, interactive: boolean): Promise<void> {
+	shownFailures.clear(); // a new session may toast its failures again
+	try {
+		booted = { interactive };
+		const modOn = (await $.env.get('ATLAS_MOD').catch(() => undefined)) !== 'off';
+		await update($, isModOn, () => modOn);
+		// A fresh session is unmeasured again, whatever an earlier one measured,
+		// and its agents are its own.
+		await update($, usageState, () => ({ tokens: null, contextPct: null }));
+		await update($, taskAgentsState, () => []);
+		await update($, paneOpenedState, () => false);
+		paneChecked = false;
+		dockWanted = false;
+		if (!modOn) return;
+		await update($, isInteractive, () => interactive);
+		builder = new SnapshotBuilder(engineFs($), $.plugin.root);
+		const sessionId = await $.session.id();
+		sessionUuid = sessionId;
+		nameMemo = {};
+		muxStdout = '';
+		muxAgents = [];
+		muxFirstSeen = {};
+		muxCalls = {};
+		resetCore();
+		await update($, headerTallyState, () => ({ ok: 0, total: 0 }));
+		const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
+		await builder.init(cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(cwd), await gitBranch($, cwd));
+		await rebuild($);
+		if (interactive) {
+			if (!wired) {
+				wired = true;
+				await $.command.register({ name: 'atlas-cc', description: 'Open and focus the Atlas sidebar' });
+				await $.command.register({ name: 'atlas-say', description: 'Post a note to the lead channel', argumentHint: '<message>' });
+				await $.command.register({ name: 'atlas-core', description: 'Show the Atlas core: contract, verdicts, offload, routes' });
+				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
+				$.clock.every(REBUILD_MS, () => {
+					void rebuildTick($);
+				});
+				$.clock.every(HERDR_MS, () => {
+					void herdrTick($);
+				});
+				$.clock.every(MUX_MS, () => {
+					void muxTick($);
+					void coreTick($);
+				});
+				$.clock.every(GATES_MS, () => {
+					void runGates($);
+				});
+			}
+			void runGates($);
+			void coreTick($);
+			// The tick only runs while a worker is live, so an idle session redraws nothing.
+			tickTimer?.cancel();
+			tickTimer = $.clock.every(TICK_MS, () => {
+				void (async () => {
+					const snap = await read($, snapshotState);
+					if (snap && activeCount(liveWorkers(snap, Date.now())) > 0) await update($, spinnerTickState, (n) => n + 1);
+				})().catch(() => undefined);
+			});
+		}
+	} catch (err) {
+		// a failed boot must not block the session
+		reportFailure($, `atlas: boot failed: ${String(err)}`);
+	}
 }
 
 // ---- entrypoint -------------------------------------------------------------
@@ -783,70 +861,19 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	registerRestyle(on); // its turn.start also drops the previous turn's header phase
 	registerNotify(on, { soundEnabled: () => options.atlas_mod_sound === true });
 	soundOn = () => options.atlas_mod_sound === true;
+	// A reload drops the old copy's timers and commands, so the next boot wires them afresh.
+	booted = null;
+	wired = false;
 
 	// Session boot: read the kill switch, resolve the board, build the first
 	// snapshot, start timers and register commands — interactive sessions only;
 	// headless (-p / SDK) stays inert.
 	on('session.start', async ($, e, next) => {
-		try {
-			const modOn = (await $.env.get('ATLAS_MOD').catch(() => undefined)) !== 'off';
-			await update($, isModOn, () => modOn);
-			// A fresh session is unmeasured again, whatever an earlier one measured,
-			// and its agents are its own.
-			await update($, usageState, () => ({ tokens: null, contextPct: null }));
-			await update($, taskAgentsState, () => []);
-			await update($, paneOpenedState, () => false);
-			paneChecked = false;
-			dockWanted = false;
-			if (!modOn) return next(e);
-			const interactive = e.isInteractive;
-			await update($, isInteractive, () => interactive);
-			builder = new SnapshotBuilder(engineFs($), $.plugin.root);
-			const sessionId = await $.session.id();
-			sessionUuid = sessionId;
-			nameMemo = {};
-			muxStdout = '';
-			muxAgents = [];
-			muxFirstSeen = {};
-			muxCalls = {};
-			resetCore();
-			await update($, headerTallyState, () => ({ ok: 0, total: 0 }));
-			const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
-			await builder.init(e.cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(e.cwd), await gitBranch($, e.cwd));
-			await rebuild($);
-			if (interactive) {
-				await $.command.register({ name: 'atlas-cc', description: 'Open and focus the Atlas sidebar' });
-				await $.command.register({ name: 'atlas-say', description: 'Post a note to the lead channel', argumentHint: '<message>' });
-				await $.command.register({ name: 'atlas-core', description: 'Show the Atlas core: contract, verdicts, offload, routes' });
-				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
-				$.clock.every(REBUILD_MS, () => {
-					void rebuildTick($);
-				});
-				$.clock.every(HERDR_MS, () => {
-					void herdrTick($);
-				});
-				$.clock.every(MUX_MS, () => {
-					void muxTick($);
-					void coreTick($);
-				});
-				$.clock.every(GATES_MS, () => {
-					void runGates($);
-				});
-				void runGates($);
-				void coreTick($);
-				// The tick only runs while a worker is live, so an idle session redraws nothing.
-				tickTimer?.cancel();
-				tickTimer = $.clock.every(TICK_MS, () => {
-					void (async () => {
-						const snap = await read($, snapshotState);
-						if (snap && activeCount(liveWorkers(snap, Date.now())) > 0) await update($, spinnerTickState, (n) => n + 1);
-					})().catch(() => undefined);
-				});
-			}
-		} catch (err) {
-			// a failed boot must not block the session
-			$.ui.log(`atlas: boot failed: ${String(err)}`, { to: 'debug' });
-		}
+		await boot($, e.cwd, e.isInteractive);
+		return next(e);
+	});
+	on('classic.SessionStart', async ($, e, next) => {
+		if (e.source === 'clear' && booted !== null) await boot($, e.cwd, booted.interactive);
 		return next(e);
 	});
 
@@ -946,9 +973,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		}, sidebarHandlers($, e.surface));
 	});
 
-	// A tree this plugin drew was refused: surface it in the debug log.
+	// A tree this plugin drew was refused: surface it in the debug log and once as a toast.
 	on('ui.fault', ($, e, next) => {
-		$.ui.log(`atlas: ${e.component} ${e.module} ${e.phase}: ${e.reason}`, { to: 'debug' });
+		reportFailure($, `atlas: ${e.component} ${e.module} ${e.phase}: ${e.reason}`);
 		return next(e);
 	});
 

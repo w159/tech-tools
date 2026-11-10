@@ -2823,6 +2823,76 @@ class InFlightDispatchOrchestrationTest(GateOrchestrationTest):
         self.assertIn('"decision": "block"', r.stdout)
 
 
+class DoneHeaderClaimTest(GateOrchestrationTest):
+    """(r) A reply headed `done` while a dispatched agent runs or a todo is
+    open contradicts the status header's own phase. Keyed on the claim, so a
+    non-`done` header keeps the old in-flight silence."""
+
+    DONE = "ATLAS | \U0001f3c1 done | shipped"
+    VERIFY = "ATLAS | ✅ verify | waiting on agents"
+    RUNNING = [{"id": "1", "type": "subagent", "status": "running"}]
+
+    def _stop(self, text, env=None, **extra):
+        payload = {"session_id": "sess-orch", "cwd": self.tmp}
+        payload["last_assistant_message"] = text
+        payload.update(extra)
+        return _run_gate(payload, env or self.env)
+
+    def _open_todo_transcript(self):
+        return _todo_transcript(
+            os.path.join(self.tmp, "t.jsonl"),
+            [{"content": "ship it", "status": "in_progress"}],
+        )
+
+    def test_done_header_with_running_subagent_blocks(self):
+        r = self._stop(self.DONE, background_tasks=self.RUNNING)
+        self.assertIn('"decision": "block"', r.stdout)
+        reason = json.loads(r.stdout)["reason"]
+        self.assertIn("(r)", reason)
+        self.assertIn("1 running agent", reason)
+
+    def test_done_header_with_open_todo_and_no_code_change_blocks(self):
+        r = self._stop(self.DONE, transcript_path=self._open_todo_transcript())
+        self.assertIn('"decision": "block"', r.stdout)
+        reason = json.loads(r.stdout)["reason"]
+        self.assertIn("(r)", reason)
+        self.assertIn("1 open todo", reason)
+
+    def test_verify_header_with_running_subagent_stays_silent(self):
+        r = self._stop(self.VERIFY, background_tasks=self.RUNNING)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_verify_header_with_open_todo_and_no_code_change_stays_silent(self):
+        r = self._stop(self.VERIFY, transcript_path=self._open_todo_transcript())
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_done_header_with_nothing_open_passes(self):
+        r = self._stop(self.DONE)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_done_header_with_running_shell_only_passes(self):
+        shell = [{"id": "2", "type": "shell", "status": "running"}]
+        r = self._stop(self.DONE, background_tasks=shell)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_sidechain_payload_is_skipped(self):
+        r = self._stop(
+            self.DONE,
+            background_tasks=self.RUNNING,
+            transcript_path="/session/subagents/agent-1.jsonl",
+        )
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_stop_hook_active_fails_open(self):
+        r = self._stop(self.DONE, background_tasks=self.RUNNING, stop_hook_active=True)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+    def test_kill_switch_allows(self):
+        env = dict(self.env, ATLAS_GATE_DONE="off")
+        r = self._stop(self.DONE, env=env, background_tasks=self.RUNNING)
+        self.assertEqual(r.stdout.strip(), "", r.stdout)
+
+
 class AtlasFindingHintTest(unittest.TestCase):
     """Defect 2: the (b)/(g) block-reason hints tell the orchestrator to run
     atlas_finding.py without --title, which argparse rejects outright
@@ -4172,9 +4242,9 @@ class StopGateArmingTest(unittest.TestCase):
         return session_boot.write_dirty_snapshot(str(self.root), self.SESSION)
 
     def sed_edit(self):
-        subprocess.run(
-            ["sed", "-i", "s/a - b/a + b/", str(self.root / "src/calc.py")], check=True
-        )
+        # In-place edit without `sed -i`: BSD sed (macOS) needs a suffix argument, GNU sed does not.
+        calc = self.root / "src/calc.py"
+        calc.write_text(calc.read_text().replace("a - b", "a + b", 1))
 
     def gate(self):
         return _run_gate(
@@ -4237,10 +4307,9 @@ class StopGateArmingTest(unittest.TestCase):
         self.repo(docs=True)
         self.start(orchestrating=True)
         self.snapshot()
-        subprocess.run(
-            ["sed", "-i", "s/guide/guide2/", str(self.root / "docs/guide.md")],
-            check=True,
-        )
+        # In-place edit without `sed -i`: BSD sed (macOS) needs a suffix argument, GNU sed does not.
+        guide = self.root / "docs/guide.md"
+        guide.write_text(guide.read_text().replace("guide", "guide2", 1))
         out = self.gate()
         for frag in ("CHANGELOG.md is missing", "ROADMAP.md is missing"):
             self.assertNotIn(frag, out)

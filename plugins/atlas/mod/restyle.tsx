@@ -6,6 +6,7 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from './contract'
+import { PHASES } from './intents'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
 import { contractGlyph, fitText, formatDuration, glyph, MOCHA, phaseHue, textWidth } from './theme'
 import { MARK as BRAND_MARK, shortTool } from './band'
@@ -39,6 +40,22 @@ const txt = (props: ElemProps, ...children: RenderNode[]): RenderElement => ({ t
 // Width-safe brand mark (1 cell everywhere).
 const MARK = '▸'
 export const PHASE_RE = /\b(research|theory|test|validate|implement|verify|done|blocked)\b/
+
+/** The one header parser: PhaseId the answer's first line pins (`ATLAS | <glyph> <phase>[ n/m] | <state>`), else null. */
+export function headerPhaseOf(answer: string, snapshot: AtlasSnapshot | null): PhaseId | null {
+ const pattern = snapshot?.contract.headerFirstLinePattern ?? ''
+ if (pattern === '') return null
+ const firstLine = answer.split('\n', 1)[0] ?? ''
+ let re: RegExp
+ try {
+  re = new RegExp(pattern)
+ } catch {
+  return null
+ }
+ if (!re.test(firstLine)) return null
+ const phase = PHASE_RE.exec(firstLine)?.[1]
+ return phase !== undefined && (PHASES as readonly string[]).includes(phase) ? (phase as PhaseId) : null
+}
 
 /** The persona behind an `atlas:<name>` subagentType, from the snapshot's roster. */
 export function personaFor(snap: AtlasSnapshot, subagentType?: string): Persona | undefined {
@@ -192,11 +209,9 @@ function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, se
 export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0): RenderElement | null {
  if (props.isSummary || !props.text) return null
  const first = props.text.split('\n', 1)[0] ?? ''
- let re: RegExp
- try { re = new RegExp(snap.contract.headerFirstLinePattern) } catch { return null }
- if (!re.test(first)) return null
+ const phase = headerPhaseOf(props.text, snap)
+ if (phase === null) return null
  const [, mid = '', ...tail] = first.split('|')
- const phase = (PHASE_RE.exec(mid)?.[1] ?? snap.phase) as PhaseId
  const nm = /(\d+)\s*\/\s*(\d+)/.exec(mid)
  const rest = props.text.slice(first.length).replace(/^\n/, '')
  const kids = headerPills(mid, phase, nm, tail.join('|').trim(), columns)
