@@ -2,7 +2,7 @@
 //   contract  header 3/4 · evidence none
 //   verdicts  every verifier verdict (verified / refuted / needs evidence) and which claim each one checked
 //   offload   per tmux worker: model, context held, context kept past its brief, report size, cost
-//   route     per team: class/effort -> scope-matrix seats -> the model each seat actually ran
+//   route     per route (tmux team or in-process dispatches): class/effort -> scope-matrix seats -> the model each seat ran
 // Labels are dim lowercase, figures plain; only what is off takes colour (partial amber, refuted or drifted red), each beside a word.
 // Pure like the other views; a press on a verdict row opens its evidence, a press on a gate row its lines.
 import type { ClientElements, RenderElement } from "claude-code";
@@ -121,12 +121,18 @@ function ranSegments(s: CoreModel["routes"][number]["seats"][number]): Segment[]
   ];
 }
 
+/** The route label: what the rows show, never "decision model" (that names the prompt classifier only). */
+export const ROUTE_LABEL = "route: class/effort -> seats -> model";
+
 function routeRows(els: ClientElements, m: CoreModel, cols: number): RenderElement[] {
   const rows = m.routes.slice(-6).reverse().flatMap((r) => [
     line(els, `core:r:${r.teamId}`, [
       { t: "  " },
       { t: `${r.cls}/${r.effort}`, bold: true, color: T.text },
-      { t: `  ${r.name || r.teamId}  ${r.isolation}, max ${r.maxParallel}`, color: T.muted },
+      {
+        t: `  ${r.name || r.teamId}  ${[r.transport ?? "tmux", r.isolation].filter(Boolean).join(", ")}, max ${r.maxParallel}`,
+        color: T.muted,
+      },
       ...(r.drift.length ? [{ t: "  ✗ drift", color: T.bad }] : []),
     ], cols),
     ...r.seats.map((s, i) =>
@@ -137,7 +143,15 @@ function routeRows(els: ClientElements, m: CoreModel, cols: number): RenderEleme
         ...ranSegments(s),
       ], cols)),
   ]);
-  return [head(els, "route", [{ t: "which model each seat ran", color: T.muted }], cols), ...rows];
+  const label = line(els, "core:h:route", [
+    { t: "route: ", color: T.dim, bold: true },
+    { t: ROUTE_LABEL.slice("route: ".length), color: T.muted },
+  ], cols);
+  return [
+    label,
+    ...(rows.length ? rows : [line(els, "core:r:none", [{ t: "  no team this session", color: T.muted }], cols)]),
+    ...(m.inProcess ? [] : [line(els, "core:r:inproc", [{ t: "  in-process dispatches are not shown here", color: T.muted }], cols)]),
+  ];
 }
 
 const blank = (els: ClientElements, key: string): RenderElement =>

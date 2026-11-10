@@ -28,7 +28,7 @@ If ANY is yes: your first move is to author a Workflow (see
 `references/workflow-template.md`) OR dispatch a parallel wave in ONE message.
 You may NOT proceed inline. This is a checklist, not a judgment call - the
 `dispatch_tripwire.py` hook advises at 4 inline ops (`ATLAS_TRIPWIRE_THRESHOLD`) and, in orchestration
-sessions, DENIES the 7th unsanctioned inline op since the last dispatch, or any `Edit`/`Write`/
+sessions, DENIES the 7th unsanctioned inline op since the last dispatch (a shell call running `atlas_mux.py spawn-team` or `atlas_crew.py run` resets that count), or any `Edit`/`Write`/
 `NotebookEdit` to non-docs paths (escape: `ATLAS_TRIPWIRE_HARD=off`), regardless. `docs/` and `.atlas/`
 writes and URI writes (`agent://`, `xd://`) are not counted.
 
@@ -75,13 +75,14 @@ If the message is genuinely ambiguous between "correction" and "new scope", that
 a decision, and decisions go to `AskUserQuestion` - not to a guess.
 
 
-## Completion gate: contract-visibility conditions (n), (o), (p)
+## Completion gate: contract-visibility conditions (n), (o), (p), (s)
 
-The `completion_gate.py` Stop hook (full list in `references/hooks-automation.md`) also checks three conditions on how the run is presented. Each applies to orchestrating sessions only, and fails open. (o) and (p) block at most once per session; (n) re-blocks every header-less Stop, under the usual loop cap:
+The `completion_gate.py` Stop hook (full list in `references/hooks-automation.md`) also checks four conditions on how the run is presented. Each applies to orchestrating sessions only, and fails open. (o), (p) and (s) block at most once per session; (n) re-blocks every header-less Stop, under the usual loop cap:
 
 - **(n) Status header.** The final reply starts, on its first non-empty line, with the header matching `headerFirstLinePattern` in `contracts/operating-contract.json` (`ATLAS | <glyph> <phase> | <state>`). Kill switch `ATLAS_GATE_HEADER=off`.
 - **(o) Phased todo.** When this run shipped non-docs code, the session's todo/board items cover every phase in `requiredTodoPhasesWhenCodeShipped` (`implement`, `verify`); an item's phase is its `phase` field or a `[<phase>] ` content prefix. Kill switch `ATLAS_GATE_PHASES=off`.
-- **(p) Colony channel.** When this run dispatched two or more atlas workers, the channel shows use: a board note on this run's lead channel, at or after the run start, owned by a registered or departed member that is not a lead, or IRC/SendMessage traffic. A lead's own note, another lead's channel and a non-member's note do not count. Kill switch `ATLAS_GATE_COLONY=off`.
+- **(p) Colony channel.** When this session's tmux team records and crew runs hold two or more members, the channel shows use: a board note on a team's channel or a crew IRC line, written by one of those members and not by a lead, at or after the run start. A crew counts only when its `run.json` `lead_session` equals the session id; a crew with an empty `lead_session` belongs to no session. A lead's own note, another lead's channel, a non-member's note, the lead's SendMessage traffic and in-process dispatches do not count. Does not apply to a team or crew worker session. Kill switch `ATLAS_GATE_COLONY=off`.
+- **(s) Team gate.** When the run made two or more in-process working-role dispatches (any agent type except the closing roles planner, verifier, completeness-critic, docs-curator, docs-auditor) and the session has no team or crew record, the Stop blocks once per session and names the count and the `atlas_mux.py spawn-team` command. Skipped when tmux is not on PATH and in team or crew worker sessions. `ATLAS_TEAM_GATE=off` turns the block into a stderr advisory; `ATLAS_GATE_COLONY=off` skips it.
 - **(r) Done claim.** A reply whose header phase is `done` is blocked while a dispatched agent is running or a todo is open (TodoWrite, board or LEDGER), even when no code shipped. Any other phase is unaffected. Kill switch `ATLAS_GATE_DONE=off`.
 
 Related switches: `ATLAS_GATE=off` disables the whole gate; `ATLAS_GATE_REPORT=off` disables the `worker_report_gate.py` SubagentStop check that every `atlas:*` worker's final message is the `REPORT:` container.

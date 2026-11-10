@@ -721,6 +721,9 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 		todos: snap.todos ?? [],
 		header: await read($, headerTallyState),
 		openGates: openGateCount(await gateGroups($)),
+			// same channels teamsOf gets in muxRuns; dispatches are the orchestration spawn rows this mod already holds
+			channels: [snap.channel ?? '', `lead-${(snap.sessionId ?? '').slice(0, 6)}`], // a snapshot without a session id (older fixtures) matches no lead channel
+			dispatches: Object.values((await read($, orchState)).meta),
 	});
 }
 

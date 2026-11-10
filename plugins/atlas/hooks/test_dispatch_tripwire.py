@@ -52,7 +52,7 @@ def run_hook(payload, env):
         input=json.dumps(payload),
         capture_output=True,
         text=True,
-        env=env,
+        env=env if env is None or "ATLAS_TEAM_GATE" in env else dict(env, ATLAS_TEAM_GATE="off"),
     )
     return p
 
@@ -2506,7 +2506,7 @@ class ColonyDenyTest(unittest.TestCase):
 
     def _denied(self, r):
         out = r.stdout.strip()
-        return bool(out) and json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "deny"
+        return bool(out) and json.loads(out).get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
 
     def test_tier_model_matching_resolver_is_accepted(self):
         self.assertFalse(self._denied(self._tier("atlas:explorer", "audit/medium", model="haiku")))
@@ -3363,7 +3363,12 @@ class ModelPinRepresentationTest(unittest.TestCase):
 
     def _allowed(self, r):
         self.assertEqual(r.returncode, 0)
-        self.assertEqual(r.stdout.strip(), "")
+        out = r.stdout.strip()
+        # ATLAS_TEAM_GATE=off may print the team advisory; an allowed dispatch carries no deny.
+        if out:
+            self.assertNotEqual(
+                json.loads(out).get("hookSpecificOutput", {}).get("permissionDecision"), "deny"
+            )
 
     def test_omitted_model_passes(self):
         self._allowed(self._dispatch())
@@ -4484,7 +4489,8 @@ class ScopeGateTest(unittest.TestCase):
         self.assertIn("spawn-team", note)
         # Budget: the advisory names the command, it does not repeat the absolute path (was 366 chars).
         self.assertIn("tmux panes", note)
-        self.assertLess(len(note), 260)
+        burst = note.split("\n[atlas] ADVISORY (ATLAS_TEAM_GATE=off)")[0]
+        self.assertLess(len(burst), 260)
 
     def test_c_background_agent_post_does_not_free_the_slot(self):
         sess = self._burst_session()
@@ -4701,6 +4707,250 @@ class RoleBlockAndIsDenyUnitTest(unittest.TestCase):
         self.assertIs(self.dt._is_deny("not json"), False)
         self.assertIs(self.dt._is_deny("{}"), False)
         self.assertIs(self.dt._is_deny(""), False)
+
+
+class TeamGateTest(unittest.TestCase):
+    """dispatch_denied:team: the 2nd in-process working-role dispatch of a run whose resolved team has 2+
+    working seats is denied when tmux is on PATH. Closing roles are never counted; no tmux or
+    ATLAS_TEAM_GATE=off keeps the advisory path."""
+
+    setUp = TripwireTest.setUp
+    _decision = ScopeGateTest._decision
+
+    def _bin(self, with_tmux):
+        d = tempfile.mkdtemp(dir=self.tmp)
+        if with_tmux:
+            fake = os.path.join(d, "tmux")
+            with open(fake, "w") as fh:
+                fh.write("#!/bin/sh\nexit 0\n")
+            os.chmod(fake, 0o755)
+        return d
+
+    def _env(self, with_tmux=True, **extra):
+        env = dict(self.env, PATH=self._bin(with_tmux), ATLAS_BURST_SECS="0", **extra)
+        env["ATLAS_TEAM_GATE"] = "on"
+        env.update(extra)
+        return env
+
+    def _dispatch(self, agent, scope, env):
+        spec = SPEC_BLOCK.replace("SCOPE: fix/medium\n", "")
+        payload = {
+            "session_id": "sess-1",
+            "cwd": self.tmp,
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Agent",
+            "tool_input": {
+                "subagent_type": agent,
+                "name": COLONY_NAME,
+                "prompt": TOOLS_BLOCK + spec + f"SCOPE: {scope}\n",
+            },
+        }
+        return self._decision(run_hook(payload, env))
+
+    def _friction(self):
+        import atlas_db
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        try:
+            return [r[0] for r in conn.execute("SELECT category FROM friction_events")]
+        finally:
+            conn.close()
+
+    def test_second_working_dispatch_is_denied_with_the_team_command(self):
+        env = self._env()
+        self.assertIsNone(self._dispatch("atlas:explorer", "audit/medium", env)[0])
+        decision, reason = self._dispatch("atlas:explorer", "audit/medium", env)
+        self.assertEqual(decision, "deny")
+        self.assertIn("spawn-team --class audit --effort medium", reason)
+        self.assertIn("atlas_crew.py", reason)
+        self.assertIn("dispatch_denied:team", self._friction())
+        self.assertIn("SCOPE: audit/low", reason)
+        self.assertIn("Ways out: run that team or crew command", reason)
+        self.assertLess(len(reason.encode("utf-8")), 600, reason)
+        reason.encode("ascii")
+
+    def test_deny_length_does_not_depend_on_the_plugin_root(self):
+        env = self._env(CLAUDE_PLUGIN_ROOT="/" + "r" * 199)
+        self._dispatch("atlas:explorer", "audit/medium", env)
+        decision, reason = self._dispatch("atlas:explorer", "audit/medium", env)
+        self.assertEqual(decision, "deny")
+        self.assertNotIn("r" * 199, reason)
+        self.assertIn("${CLAUDE_PLUGIN_ROOT}/scripts/", reason)
+        self.assertIn("atlas_crew.py run --spec", reason)
+        self.assertLess(len(reason.encode("utf-8")), 600, reason)
+
+    def _launch(self, env):
+        cmd = 'python3 "/opt/plug/atlas/scripts/atlas_mux.py" spawn-team --class audit --effort medium --paths a'
+        payload = {
+            "session_id": "sess-1",
+            "cwd": self.tmp,
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": cmd},
+        }
+        run_hook(payload, env)
+
+    def test_second_explorer_is_denied_without_a_team_launch(self):
+        env = self._env()
+        self.assertIsNone(self._dispatch("atlas:explorer", "audit/medium", env)[0])
+        self.assertEqual(self._dispatch("atlas:explorer", "audit/medium", env)[0], "deny")
+
+    def test_team_launched_this_run_allows_the_second_explorer(self):
+        env = self._env()
+        self.assertIsNone(self._dispatch("atlas:explorer", "audit/medium", env)[0])
+        self._launch(env)
+        decision, reason = self._dispatch("atlas:explorer", "audit/medium", env)
+        self.assertIsNone(decision)
+        self.assertNotIn("in-process working dispatch", reason or "")
+
+    def test_closing_role_after_a_working_role_is_allowed(self):
+        env = self._env()
+        self.assertIsNone(self._dispatch("atlas:implementer", "implement/medium", env)[0])
+        self.assertIsNone(self._dispatch("atlas:verifier", "implement/medium", env)[0])
+        self.assertIsNone(self._dispatch("atlas:verifier", "implement/medium", env)[0])
+
+    def test_no_tmux_keeps_the_advisory(self):
+        env = self._env(with_tmux=False)
+        self._dispatch("atlas:explorer", "audit/medium", env)
+        decision, note = self._dispatch("atlas:explorer", "audit/medium", env)
+        self.assertIsNone(decision)
+        self.assertIn("ADVISORY (no tmux)", note)
+
+    def test_team_gate_off_allows(self):
+        env = self._env(ATLAS_TEAM_GATE="off")
+        self._dispatch("atlas:explorer", "audit/medium", env)
+        decision, note = self._dispatch("atlas:explorer", "audit/medium", env)
+        self.assertIsNone(decision)
+        self.assertIn("[atlas] ADVISORY (ATLAS_TEAM_GATE=off)", note)
+        self.assertIn("spawn-team --class audit --effort medium", note)
+
+    def test_single_seat_team_is_not_denied(self):
+        env = self._env()
+        self._dispatch("atlas:implementer", "fix/low", env)
+        self.assertIsNone(self._dispatch("atlas:implementer", "fix/low", env)[0])
+
+
+class TeamGateUnitTest(unittest.TestCase):
+    """_scope_gate in-process with a pinned clock: the 2nd explorer 30 s later (outside the burst window,
+    so no concurrent deny) is denied with code `team`."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        env = {"ATLAS_BURST_SECS": "10", "ATLAS_HARNESS": "", "ATLAS_TOOLKIT_LOAD": "", "ATLAS_TEAM_GATE": "on"}
+        p = patch.dict(os.environ, env)
+        p.start()
+        self.addCleanup(p.stop)
+        self.denied = []
+
+    def _gate(self, now, agent="atlas:explorer", scope="audit/medium", tmux="/usr/bin/tmux"):
+        tinput = {"subagent_type": agent, "prompt": f"SCOPE: {scope}\n"}
+        self.denied = []
+        with patch("time.time", return_value=now), patch("shutil.which", return_value=tmux), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.dt._scope_gate(lambda code, text: self.denied.append(code), tinput, self.root, "team-unit", "run-1")
+        return self.denied, out.getvalue()
+
+    def test_second_explorer_thirty_seconds_later_is_denied(self):
+        self.assertEqual(self._gate(1000.0)[0], [])
+        self.assertEqual(self._gate(1030.0)[0], ["team"])
+
+    def test_team_launch_in_this_run_allows_the_second_explorer(self):
+        self.assertEqual(self._gate(1000.0)[0], [])
+        self.dt._mark_team_launched(self.root, "team-unit", "run-1")
+        denied, out = self._gate(1030.0)
+        self.assertEqual(denied, [])
+        self.assertNotIn("in-process working dispatch", out)
+
+    def test_team_launch_in_another_run_does_not_carry_over(self):
+        self.dt._mark_team_launched(self.root, "team-unit", "run-0")
+        self.assertEqual(self._gate(1000.0)[0], [])
+        self.assertEqual(self._gate(1030.0)[0], ["team"])
+
+    def test_new_run_key_restarts_the_count(self):
+        self._gate(1000.0)
+        tinput = {"subagent_type": "atlas:explorer", "prompt": "SCOPE: audit/medium\n"}
+        with patch("time.time", return_value=1030.0), patch("shutil.which", return_value="/usr/bin/tmux"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.dt._scope_gate(lambda c, t: self.denied.append(c), tinput, self.root, "team-unit", "run-2")
+        self.assertEqual(self.denied, [])
+
+    def test_gate_off_is_advisory_with_the_spawn_command(self):
+        with patch.dict(os.environ, {"ATLAS_TEAM_GATE": "off"}):
+            self._gate(1000.0)
+            denied, out = self._gate(1030.0)
+        self.assertEqual(denied, [])
+        self.assertIn("[atlas] ADVISORY (ATLAS_TEAM_GATE=off)", out)
+        self.assertIn("spawn-team --class audit --effort medium", out)
+
+    def test_no_tmux_is_advisory(self):
+        self._gate(1000.0, tmux=None)
+        denied, out = self._gate(1030.0, tmux=None)
+        self.assertEqual(denied, [])
+        self.assertIn("ADVISORY (no tmux)", out)
+
+    def test_working_role_helper(self):
+        for role in ("planner", "verifier", "completeness-critic", "docs-curator", "docs-auditor"):
+            self.assertFalse(self.dt._is_working_role("atlas:" + role), role)
+        self.assertTrue(self.dt._is_working_role("atlas:explorer"))
+        self.assertTrue(self.dt._is_working_role("atlas-implementer"))
+        self.assertFalse(self.dt._is_working_role("general-purpose"))
+
+    def test_resolved_scope_fallback_and_fail_open(self):
+        tinput = {"subagent_type": "atlas:explorer", "prompt": "no scope line"}
+        fake = type(sys)("prompt_optimizer_core")
+        fake.resolved_scope = lambda session, root=None: {"task_class": "audit", "effort": "high", "working_seats": 3}
+        with patch.dict(sys.modules, {"prompt_optimizer_core": fake}):
+            self.assertEqual(self.dt._working_seats(tinput, self.root, "s"), ("audit", "high", 3))
+        broken = type(sys)("prompt_optimizer_core")
+        with patch.dict(sys.modules, {"prompt_optimizer_core": broken}):
+            self.assertIsNone(self.dt._working_seats(tinput, self.root, "s"))
+
+
+class ShellTeamLaunchResetTest(unittest.TestCase):
+    """2026-11-10: the lead ran one team and one crew and still got `STOP - 4 inline ops, no dispatch`.
+    A Bash or ctx_shell call that runs atlas_mux.py spawn-team or atlas_crew.py run is a dispatch."""
+
+    setUp = ReadOnlyInvestigationTest.setUp
+    tearDown = ReadOnlyInvestigationTest.tearDown
+    _call = ReadOnlyInvestigationTest._call
+    _count = ReadOnlyInvestigationTest._count
+
+    CREW = 'python3 "/opt/plug/atlas/scripts/atlas_crew.py" run --spec s.md --files "a/*.py" --goal "g"'
+    SPAWN = 'python3 "/opt/plug/atlas/scripts/atlas_mux.py" spawn-team --class audit --effort medium --paths a'
+
+    def _saturate(self):
+        for _ in range(4):
+            self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
+        self.assertEqual(self._count(), 4)
+
+    def test_launchers_reset_the_count_and_next_op_is_op_one(self):
+        for tool, cmd in (
+            ("Bash", self.CREW),
+            ("mcp__lean-ctx__ctx_shell", self.SPAWN),
+            ("mcp__lean-ctx__ctx_shell", self.CREW),
+        ):
+            self._saturate()
+            r = self._call("PreToolUse", tool, {"command": cmd})
+            self.assertNotIn('"permissionDecision": "deny"', r.stdout, cmd)
+            self._call("PostToolUse", tool, {"command": cmd})
+            self.assertEqual(self._count(), 0, (tool, cmd))
+            self._call("PostToolUse", "Bash", {"command": "touch b.txt"})
+            self.assertEqual(self._count(), 1, (tool, cmd))
+            for _ in range(3):
+                self._call("PostToolUse", "Bash", {"command": "touch c.txt"})
+            self._call("PostToolUse", tool, {"command": cmd})
+
+    def test_other_crew_verbs_are_not_a_dispatch(self):
+        self._saturate()
+        self._call("PostToolUse", "Bash", {"command": 'python3 "/x/atlas_crew.py" plan --spec s'})
+        self.assertGreaterEqual(self._count(), 4)
 
 
 if __name__ == "__main__":

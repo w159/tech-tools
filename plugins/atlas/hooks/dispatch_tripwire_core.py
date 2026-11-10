@@ -488,6 +488,7 @@ def _burst_note(root, session):
             concurrent = bool(live) and not _omp_harness()
             # a denied dispatch never ran: it must not hold the slot
             st["open"] = live if concurrent else live + [now]
+            st["slot"] = None if concurrent else now
     except Exception as exc:
         _record_fault(exc)
         return False, ""
@@ -509,6 +510,142 @@ def _burst_note(root, session):
         "with `atlas_mux.py spawn-team` (full command: the SessionStart team flow), then `wait` and `reap` "
         "(omp: the atlas_team tool)."
     )
+
+
+# Closing roles run after the work and stay in-process; every other atlas role is a working role.
+# completion_gate_core._is_working_role mirrors this set.
+CLOSING_ROLES = frozenset(
+    {"planner", "verifier", "completeness-critic", "docs-curator", "docs-auditor"}
+)
+CREW_RUN_CMD = (
+    f'python3 "{_OWN_SCRIPTS / "atlas_crew.py"}" run --spec S --files G --goal "..."'
+)
+
+
+def _is_working_role(subagent_type):
+    """True for an atlas: (or atlas-) role that is not a closing role."""
+    agent = str(subagent_type or "")
+    for prefix in ("atlas:", "atlas-"):
+        if agent.startswith(prefix):
+            role = agent[len(prefix) :]
+            return bool(role) and role not in CLOSING_ROLES
+    return False
+
+
+def _working_seats(tinput, root, session):
+    """(class, effort, working seats) for this dispatch: the SCOPE line whose team holds the role (else the
+    first that resolves), else prompt_optimizer_core.resolved_scope for the session. None when unknown."""
+    role = str(tinput.get("subagent_type") or "").split(":", 1)[-1]
+    try:
+        resolve, _classes, _known, (class_alias, effort_alias) = _scope_matrix()
+        first = None
+        for cls, effort in _SCOPE_LINE.findall(str(tinput.get("prompt") or "")):
+            cls = class_alias.get(cls.lower(), cls)
+            effort = effort_alias.get(effort.lower(), effort)
+            try:
+                team = resolve(cls, effort)["team"]
+            except ValueError:
+                continue
+            seats = sum(
+                int(t.get("count", 1)) for t in team if t["role"] not in CLOSING_ROLES
+            )
+            if role in [t["role"] for t in team]:
+                return cls, effort, seats
+            first = first or (cls, effort, seats)
+        if first:
+            return first
+    except Exception as exc:
+        _record_fault(exc)
+    try:
+        import prompt_optimizer_core
+
+        got = prompt_optimizer_core.resolved_scope(session, str(root) if root else None)
+        if got:
+            return str(got["task_class"]), str(got["effort"]), int(got["working_seats"])
+    except Exception:  # route's resolver absent or unreadable: fail open
+        pass
+    return None
+
+
+def _run_key(conn, run_id):
+    """Identity of the current run: DB file, run id and the user prompt that opened it."""
+    db, prompt = "", 0
+    with contextlib.suppress(Exception):
+        db = str(conn.execute("PRAGMA database_list").fetchone()[2])
+    with contextlib.suppress(Exception):
+        import atlas_db
+
+        prompt = conn.execute(
+            "SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND tool=?",
+            (run_id, atlas_db.PROMPT_BOUNDARY_TOOL),
+        ).fetchone()[0]
+    return f"{db}|{run_id}|{prompt}"
+
+
+def _team_note(root, session, tinput, run_key):
+    """(deny, text) for a working-role atlas: dispatch. The 2nd in-process working dispatch of a run whose
+    resolved team has 2+ working seats is denied when tmux is on PATH (advisory without tmux);
+    ATLAS_TEAM_GATE=off keeps the old behaviour. Closing roles are never counted. Fail-open."""
+    import shutil
+
+    if not run_key or not _is_working_role(tinput.get("subagent_type")):
+        return False, ""
+    off = os.environ.get("ATLAS_TEAM_GATE", "on").strip().lower() == "off"
+    try:
+        with _name_state(root, session) as st:
+            team = st.get("team") or {}
+            if team.get("run") != run_key:
+                team = {"run": run_key, "working": 0}
+            prior = int(team.get("working", 0))
+            if team.get("launched"):
+                prior = 0  # this run already ran a tmux team or crew: no in-process count
+            scope = _working_seats(tinput, root, session) if prior else None
+            many = bool(scope) and scope[2] >= 2
+            tmux = many and bool(shutil.which("tmux"))
+            blocked = tmux and not off and not _omp_harness()
+            if blocked:
+                slot = st.get("slot")
+                if slot is not None and st.get("open") and st["open"][-1] == slot:
+                    st["open"].pop()  # a denied dispatch never ran: free the burst slot it took
+                st["slot"] = None
+            else:
+                team["working"] = prior + 1
+            st["team"] = team
+    except Exception as exc:
+        _record_fault(exc)
+        return False, ""
+    if not many:
+        return False, ""
+    cls, effort, seats = scope
+    if blocked:
+        head = "DENY"
+    elif off:
+        head = "[atlas] ADVISORY (ATLAS_TEAM_GATE=off)"
+    else:
+        head = "[atlas] ADVISORY (no tmux)" if not tmux else "[atlas] ADVISORY (omp)"
+    return blocked, (
+        f"{head} - 2nd in-process working dispatch this run; SCOPE {cls}/{effort} = {seats} working seats. "
+        "Run a team (scripts under ${CLAUDE_PLUGIN_ROOT}/scripts/):\n"
+        f"  atlas_mux.py spawn-team --class {cls} --effort {effort} --paths a,b --task-file T\n"
+        'or a crew:\n  atlas_crew.py run --spec S --files G --goal "..."\n'
+        f"Ways out: run that team or crew command, or, if the task really needs one worker, declare "
+        f"the smaller scope (SCOPE: {cls}/low)."
+    )
+
+
+def _mark_team_launched(root, session, run_key):
+    """Record that this run launched a tmux team or crew, so _team_note stops counting. Fail-open."""
+    if not run_key:
+        return
+    try:
+        with _name_state(root, session) as st:
+            team = st.get("team") or {}
+            if team.get("run") != run_key:
+                team = {"run": run_key, "working": 0}
+            team["launched"] = True
+            st["team"] = team
+    except Exception as exc:
+        _record_fault(exc)
 
 
 def _omp_harness():
@@ -535,7 +672,7 @@ def _close_dispatch(payload):
         _record_fault(exc)
 
 
-def _scope_gate(deny, tinput, root, session):
+def _scope_gate(deny, tinput, root, session, run_key=None):
     """Last dispatch check: SCOPE deny (ATLAS_SCOPE_GATE=off downgrades it to advisory), then the concurrent
     in-process deny / burst advisory (ATLAS_MUX=off downgrades the deny to advisory)."""
     problem = _scope_problem(tinput)
@@ -551,6 +688,11 @@ def _scope_gate(deny, tinput, root, session):
         blocked, text = _burst_note(root, session)
         if blocked:
             deny("mux", text)
+            return
+        notes.append(text)
+        blocked, text = _team_note(root, session, tinput, run_key)
+        if blocked:
+            deny("team", text)
             return
         notes.append(text)
     note = "\n".join(n for n in notes if n)
@@ -1313,6 +1455,12 @@ _MUX_TEAM_VERBS = ("spawn-team", "wait", "reap")
 _SHELL_OPS = {"&&", "||", ";", "|", "&", ";;", "|&"}
 
 
+def _is_shell_tool(tool):
+    """Bash, or lean-ctx's ctx_shell under any MCP server prefix."""
+    tool = str(tool or "")
+    return tool == "Bash" or tool == "ctx_shell" or tool.endswith("__ctx_shell")
+
+
 def _team_mux_verb(tool, tinput):
     """'spawn-team' / 'wait' / 'reap' / 'resolve' when a Bash call is solely an atlas_mux.py team call
     or an atlas_resolve.py lookup
@@ -1321,7 +1469,7 @@ def _team_mux_verb(tool, tinput):
     so the inline-op gate must treat it as one (live-230: it denied the launcher itself)."""
     import shlex
 
-    command = (tinput or {}).get("command") if tool == "Bash" else None
+    command = (tinput or {}).get("command") if _is_shell_tool(tool) else None
     if not isinstance(command, str):
         return ""
     # lean-ctx's PreToolUse rewrites Bash to `lean-ctx -c '<cmd>'`; PostToolUse sees the wrapped form.
@@ -1362,6 +1510,8 @@ def _team_mux_verb(tool, tinput):
         script = seg[1].rsplit("/", 1)[-1] if is_python and len(seg) > 1 else ""
         if script == "atlas_mux.py" and len(seg) > 2 and seg[2] in _MUX_TEAM_VERBS:
             verb = "spawn-team" if "spawn-team" in (verb, seg[2]) else seg[2]
+        elif script == "atlas_crew.py" and len(seg) > 2 and seg[2] == "run":
+            verb = "spawn-team"  # a crew launch is a team dispatch
         elif (
             script == "atlas_resolve.py"
         ):  # the read-only resolver step that precedes spawn-team
@@ -1586,7 +1736,7 @@ def _pre_tool_use(
                 + _role_block(str((tinput or {}).get("subagent_type"))),
             )
         else:
-            _scope_gate(deny, tinput or {}, root, session)
+            _scope_gate(deny, tinput or {}, root, session, _run_key(conn, run_id))
         return
     # (b) Editing production target code inline is the sharpest violation.
     if tool in EDIT_TOOLS and not _is_orchestration_path(path, cwd):
@@ -2557,6 +2707,18 @@ def _run(payload):
         if run_id is None:
             return  # no run yet for inline ops; boot hook will create one
 
+        verb = _team_mux_verb(tool, tinput)
+        if verb == "spawn-team":
+            # A team or crew launch (Bash or ctx_shell) is a dispatch: the is_inline_op=0 marker resets
+            # the count even when the launcher could not attribute its own wave rows to this run.
+            atlas_db.log_event(conn, run_id, "atlas_mux:spawn-team", "main", 0)
+            _arm_orchestrating(conn, atlas_db, session, payload.get("cwd"))
+            _mark_team_launched(
+                find_root(Path(payload.get("cwd") or os.getcwd())), session, _run_key(conn, run_id)
+            )
+        if verb:
+            return  # wait/reap only observe the team: not inline work, not a dispatch
+
         if tool not in INLINE_TOOLS and tool not in EDIT_TOOLS:
             return
 
@@ -2565,15 +2727,6 @@ def _run(payload):
             # threshold. Logging it with is_inline_op=0 would be worse: that value is
             # the dispatch marker, so it would reset the count.
             return
-
-        verb = _team_mux_verb(tool, tinput)
-        if verb == "spawn-team":
-            # A team launch is a dispatch: the is_inline_op=0 marker resets the count even when
-            # spawn-team could not attribute its own wave rows to this run.
-            atlas_db.log_event(conn, run_id, "atlas_mux:spawn-team", "main", 0)
-            _arm_orchestrating(conn, atlas_db, session, payload.get("cwd"))
-        if verb:
-            return  # wait/reap only observe the team: not inline work, not a dispatch
 
         if _in_subagent(payload):
             return  # subagents share the lead's session_id; their ops are not the lead's inline work

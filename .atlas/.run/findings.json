@@ -10287,5 +10287,212 @@
     "status": "verified",
     "verified_at": "2026-11-10T08:02:31+00:00",
     "verified_by": "lead-test-run"
+  },
+  {
+    "id": "colony-routing-S1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "prompt_optimizer: nudge max 383B<700, multi-file build -> atlas_crew.py run",
+    "evidence": [
+      "/tmp/v7b68/run4.sh; pytest 433 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -i SCEN=ee ./run4.sh; pytest test_prompt_optimizer.py test_dispatch_tripwire.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T09:03:51+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-routing-S2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "tripwire: 2nd explorer denied dispatch_denied team; impl->ver allowed; no tmux advisory; run resets per prompt",
+    "evidence": [
+      "/tmp/v7b68/run4.sh; pytest 433 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "env -i SCEN=ee ./run4.sh; pytest test_prompt_optimizer.py test_dispatch_tripwire.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T09:03:51+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "reverify-gate-p-s-owner",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "(p)/(s) session ownership by run.json lead_session; worker sessions exempt",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate_core.py _team_records, _is_worker_session; /tmp/reverify/drive.py 1a 1b 1c 1d 2"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/reverify/drive.py 1a|1b|2 (real completion_gate.py on stdin)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T09:18:10+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "reverify-crew-lead-session",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_crew writes lead_session; gate reads same key",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_crew.py:1032; completion_gate_core.py meta.get(lead_session); 4 tests pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest -q scripts/test_atlas_crew.py -k 'lead_session or session_flag'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T09:18:10+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "reverify-team-note",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "_team_note deny 577 B names ways out; ATLAS_TEAM_GATE=off allows with advisory",
+    "evidence": [
+      "plugins/atlas/hooks/dispatch_tripwire_core.py:585; /tmp/reverify/trip.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/reverify/trip.py on|off",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T09:18:10+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "reverify-optimizer-clear",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "non-arming prompt clears stored scope",
+    "evidence": [
+      "plugins/atlas/hooks/prompt_optimizer_core.py:722; /tmp/reverify/po.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/reverify/po.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T09:18:10+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "reverify-mod-routes",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dispatchRoutes drops SCOPE-less dispatches: no ROUTE row with '-' and sidebar says 'no team this session' despite dispatches",
+    "evidence": [
+      "plugins/atlas/mod/data/core.ts dispatchRoutes (SCOPE_RE continue); /tmp/reverify/probe.test.ts prints NOSCOPE rows= 0"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun test /tmp/reverify/probe.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-10T09:18:10+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "colony-routing-17.4.3-suites",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Colony routing change: full suites green on the 17.4.2 worktree after fix round 2",
+    "evidence": [
+      "unittest discover -s plugins/atlas/hooks: Ran 2816, OK (skipped=4)",
+      "unittest discover -s plugins/atlas/scripts: Ran 4281, OK (skipped=1)",
+      "bun test: 3400 pass 0 fail 157 files; tsc -p mod exit 0; ruff F401,F811,F841,F821 clean; claude plugin validate passed (run before the last two test-only and docs-only edits)"
+    ],
+    "doc_refs": [],
+    "reproduction": "PATH=.atlas/.run/venv/bin:$PATH python3 -m unittest discover -s plugins/atlas/hooks",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T10:03:11+00:00",
+    "verified_by": "lead"
+  },
+  {
+    "id": "release-gate-17.4.3-critic",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "17.4.3 diff hygiene: no stray files, banned unicode, attribution strings, abs paths, secrets, symlinks; one advisory",
+    "evidence": [
+      "/tmp/release-gate/crit.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T10:10:56+00:00",
+    "verified_by": "atlas:completeness-critic"
+  },
+  {
+    "id": "release-gate-17.4.3-ts-plugin",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "17.4.3 bun/tsc/plugin validate/release_notes/attribution/version pins pass",
+    "evidence": [
+      "/tmp/release-gate/bun.txt,/tmp/release-gate/tsc.txt,/tmp/release-gate/rn.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun test; npx tsc --noEmit -p mod; claude plugin validate plugins/atlas; release_notes.py 17.4.3; check_attribution.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T10:11:31+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "release-17.4.3-py-suites",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "17.4.3 gate: hooks 2816 OK, scripts 4281 OK, ruff clean",
+    "evidence": [
+      "/tmp/release-gate/hooks.log /tmp/release-gate/scripts.log /tmp/release-gate/ruff.log"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/hooks; python3 -m unittest discover -s plugins/atlas/scripts; ruff check --select F401,F811,F841,F821 plugins/atlas/hooks plugins/atlas/scripts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T10:20:30+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "reverify-mod-routes-fixed",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ROUTE: SCOPE-less in-process dispatches now yield a -/- row (closes rejected reverify-mod-routes)",
+    "evidence": [
+      "plugins/atlas/mod/data/core.test.ts:306",
+      "bun test by verifier-49ce on the bumped tree: 3400 pass, 0 fail, 157 files"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod/data/core.test.ts mod/pane/sidebar-core.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T10:25:17+00:00",
+    "verified_by": "lead"
   }
 ]

@@ -317,6 +317,229 @@ ENGINE_NUDGE = (
     "atlas:atlas-orchestrate skill and dispatch wave 1 to subagents instead of working inline."
 )
 
+# ---- routing: prompt -> (class, effort) -> resolved team -> next command ----
+_CLOSING_ROLES = frozenset(
+    {"planner", "verifier", "completeness-critic", "docs-curator", "docs-auditor"}
+)
+# Classes whose workers only read: they size a tmux team, not a writing crew.
+_READ_ONLY_CLASSES = frozenset({"audit", "verify", "db", "db-audit", "ui-test"})
+_MATRIX_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "scope-matrix.json"
+)
+_NUDGE_MAX_BYTES = 700
+_WORD_RE = re.compile(r"[a-z][a-z-]*")
+_FILE_REF_RE = re.compile(
+    r"[\w./-]+\.(?:py|ts|tsx|js|jsx|go|rs|java|rb|php|sql|json|ya?ml|toml|sh|"
+    r"c|cc|cpp|h|hpp|css|scss|html|vue|svelte|md)\b",
+    re.IGNORECASE,
+)
+_SYMBOL_REF_RE = re.compile(
+    r"`[^`\s]+`|\b[A-Za-z]\w*_\w+\b|\b[a-z]+[A-Z]\w*\b|\b\w+\(\)"
+    r"|\b(?:class|def|function|interface|struct|enum)\s+\w+"
+)
+_HIGH_EFFORT_RE = re.compile(
+    r"\b(?:whole|entire|full)\s+(?:repo|repository|codebase|project|tree|plugin)\b"
+    r"|\b(?:audit|review|check|scan|sweep)\s+(?:all|every|everything)\b"
+    r"|\b(?:across|throughout)\s+(?:the\s+)?(?:whole\s+)?"
+    r"(?:repo|repository|codebase|project|tree|plugins?|surfaces|modules|services)\b"
+    r"|\b(?:all|every)\s+(?:the\s+)?(?:files|modules|hooks|surfaces|plugins|packages|"
+    r"services|scripts|components|endpoints)\b"
+    r"|\bmany\s+(?:files|surfaces|modules)\b|\b(?:repo|codebase)-wide\b",
+    re.IGNORECASE,
+)
+
+
+def _scope_vocab() -> dict:
+    with open(_MATRIX_PATH) as f:
+        matrix = json.load(f)
+    vocab = {c: c for c in matrix.get("classes", {})}
+    for alias, target in (matrix.get("class_aliases") or {}).items():
+        vocab.setdefault(alias, target)
+    return vocab
+
+
+_ACTION_VERBS = frozenset(
+    "add audit build change convert create delete document fix implement "
+    "migrate move refactor remove rename replace review rewrite test update "
+    "upgrade write".split()
+)
+
+
+def classify_scope(prompt: str) -> tuple[str, str]:
+    """Keyword (task_class, effort) for a prompt.
+
+    ponytail: keyword heuristic over scope-matrix class names and aliases, and
+    a count of distinct action verbs (2+ jobs is never low); the ceiling is
+    word matching (no intent, no negation). Upgrade path: ask the
+    local decision model (prompt_decision) for class/effort and keep this as the
+    fallback when it is off, slow or unsure.
+    """
+    text = prompt or ""
+    files = {m.lower() for m in _FILE_REF_RE.findall(text)}
+    rest = _FILE_REF_RE.sub(" ", text)
+    rest = _CODE_ANCHOR.sub(" ", rest)
+    symbols = {m.lower() for m in _SYMBOL_REF_RE.findall(rest)}
+    words_text = _SYMBOL_REF_RE.sub(" ", rest).lower()
+    task_class = "implement"
+    try:
+        vocab = _scope_vocab()
+    except Exception:
+        vocab = {}
+    for word in _WORD_RE.findall(words_text):
+        word = word.strip("-")
+        hit = vocab.get(word) or (vocab.get(word[:-1]) if word.endswith("s") else None)
+        if hit:
+            task_class = hit
+            break
+    if _HIGH_EFFORT_RE.search(text) or len(files) >= 4:
+        effort = "high"
+    elif (
+        len(files) <= 1
+        and len(symbols) <= 1
+        and (files or symbols)
+        and len(text) <= 240
+        and len(_ACTION_VERBS.intersection(_WORD_RE.findall(words_text))) <= 1
+    ):
+        effort = "low"
+    else:
+        effort = "medium"
+    return task_class, effort
+
+
+def _working_seats(team: list) -> int:
+    return sum(
+        int(s.get("count", 1) or 1)
+        for s in team
+        if s.get("role") and s["role"] not in _CLOSING_ROLES
+    )
+
+
+def _scope_root(cwd) -> str:
+    base = cwd or os.getcwd()
+    try:
+        import atlas_paths
+
+        return atlas_paths.project_root(base) or base
+    except Exception:
+        return base
+
+
+def _scope_file(session_id: str, root: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", session_id)[:128]
+    return os.path.join(root, ".atlas", ".run", "atlas-scope", safe + ".json")
+
+
+def _store_scope(session_id: str, cwd, record: dict | None) -> None:
+    try:
+        path = _scope_file(session_id, _scope_root(cwd))
+        if record is None:
+            if os.path.exists(path):
+                os.remove(path)
+            return
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(record, f)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def resolved_scope(session_id: str, root: str | None = None) -> dict | None:
+    """The scope arm_orchestration resolved for this session, else None.
+
+    Keys: task_class, effort, working_seats. Never raises."""
+    try:
+        sid = (session_id or "").strip()
+        if not sid:
+            return None
+        base = root or os.getcwd()
+        for cand in dict.fromkeys((base, _scope_root(base))):
+            path = _scope_file(sid, cand)
+            if not os.path.isfile(path):
+                continue
+            with open(path) as f:
+                rec = json.load(f)
+            return {
+                "task_class": str(rec["task_class"]),
+                "effort": str(rec["effort"]),
+                "working_seats": int(rec["working_seats"]),
+            }
+    except Exception:
+        return None
+    return None
+
+
+def _route_nudge(task_class: str, effort: str, team: list) -> str:
+    seats = ", ".join(
+        "%s x%d (%s)" % (s["role"], int(s.get("count", 1) or 1), s.get("model") or "default")
+        for s in team
+    )
+    working = [s for s in team if s.get("role") not in _CLOSING_ROLES]
+    n = _working_seats(team)
+    scope = "%s/%s" % (task_class, effort)
+    if n >= 2 and task_class in _READ_ONLY_CLASSES:
+        nxt = (
+            "Next: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py spawn-team "
+            "--class %s --effort %s --task '<task>' (tmux team; not in-process "
+            "atlas:* calls)." % (task_class, effort)
+        )
+    elif n >= 2:
+        nxt = (
+            "Next: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py run "
+            "--spec <spec.md> --files '<glob>' --check '<test cmd>' "
+            "(tmux crew; not in-process atlas:* calls)."
+        )
+    else:
+        role = (working or team)[0]["role"]
+        nxt = (
+            "Next: one in-process atlas:%s call with SCOPE: %s is the right size."
+            % (role, scope)
+        )
+    head = (
+        "[atlas-orchestrate] Session armed: use the atlas:atlas-orchestrate skill "
+        "and dispatch, not inline work."
+    )
+    msg = " ".join((head, "Route %s -> %s." % (scope, seats), nxt))
+    if len(msg.encode()) >= _NUDGE_MAX_BYTES:
+        msg = " ".join((head, "Route %s." % scope, nxt))
+    if len(msg.encode()) >= _NUDGE_MAX_BYTES:
+        raise ValueError("route nudge too long")
+    return msg
+
+
+def _routed_nudge(data: dict, prompt: str) -> str:
+    session = (data.get("session_id") or "").strip()
+    cwd = data.get("cwd")
+    try:
+        import atlas_resolve
+
+        task_class, effort = classify_scope(prompt)
+        res = atlas_resolve.resolve(task_class, effort)
+        team = list(res["team"])
+        task_class, effort = res["task_class"], res["effort"]
+        msg = _route_nudge(task_class, effort, team)
+    except Exception as exc:
+        try:
+            atlas_hook_guard.fault("prompt_optimizer", "route resolve failed: %s" % exc)
+        except Exception:
+            pass
+        _store_scope(session, cwd, None)
+        return ENGINE_NUDGE
+    _store_scope(
+        session,
+        cwd,
+        {
+            "task_class": task_class,
+            "effort": effort,
+            "working_seats": _working_seats(team),
+            "team": team,
+            "ts": time.time(),
+        },
+    )
+    return msg
+
+
 # Bare acknowledgements / greetings - always trivial regardless of other signals.
 _TRIVIAL_ACKS = {
     "thanks",
@@ -511,6 +734,20 @@ def _is_harness_event(prompt: str) -> bool:
 
 
 def arm_orchestration(data: dict, prompt: str) -> str | None:
+    """Arm via _arm_orchestration; a prompt that does not arm clears the
+    stored scope so resolved_scope never reports the previous run."""
+    nudge = _arm_orchestration(data, prompt)
+    if nudge is None:
+        try:
+            session = (data.get("session_id") or "").strip()
+            if session:
+                _store_scope(session, data.get("cwd"), None)
+        except Exception:
+            pass
+    return nudge
+
+
+def _arm_orchestration(data: dict, prompt: str) -> str | None:
     """Flag this session's run as an atlas orchestration run when the prompt is
     substantive engineering work, and return the engine nudge. Trivial or
     conversational prompts return None and touch nothing. Fully self-guarded: any
@@ -563,7 +800,7 @@ def arm_orchestration(data: dict, prompt: str) -> str | None:
             "prompt_optimizer", "orchestration arm failed (gates inert): %s" % exc
         )
         return None
-    return ENGINE_NUDGE
+    return _routed_nudge(data, prompt)
 
 
 def optimizer_framing(optimized: str) -> str:

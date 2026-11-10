@@ -1222,10 +1222,13 @@ class GateConditionMatrixTest(GateEndToEndTest):
         for f in atlas_todo.notes_dir(self.proj).glob("*.jsonl"):
             f.unlink()
 
-    def test_condition_p_blocks_when_workers_dispatched_and_channel_silent(self):
+    def test_condition_p_ignores_inprocess_dispatches_without_team_record(self):
+        # (p) counts only members of tmux team / crew records (_team_records);
+        # in-process dispatch rows are not colony workers. One closing-role
+        # dispatch is also below (s)'s 2+ working-role threshold.
         out = self._satisfied()
         self._no_channel_traffic()
-        self.assertEqual(self._letters(self.gate(out)), ["p"])
+        self.assertEqual(self._letters(self.gate(out)), [])
 
     def test_condition_p_passes_when_worker_posted_to_lead_subchannel(self):
 

@@ -39,6 +39,18 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-10 | reverify-team-note | verified | _team_note deny 577 B names ways out; ATLAS_TEAM_GATE=off allows with advisory | [2026-11-10_reverify-team-note.md](2026-11-10_reverify-team-note.md) |
+| 2026-11-10 | reverify-optimizer-clear | verified | non-arming prompt clears stored scope | [2026-11-10_reverify-optimizer-clear.md](2026-11-10_reverify-optimizer-clear.md) |
+| 2026-11-10 | reverify-mod-routes | rejected | dispatchRoutes drops SCOPE-less dispatches: no ROUTE row with '-' and sidebar says 'no team this session' despite dispatches | [2026-11-10_reverify-mod-routes.md](2026-11-10_reverify-mod-routes.md) |
+| 2026-11-10 | reverify-mod-routes-fixed | verified | ROUTE: SCOPE-less in-process dispatches now yield a -/- row (closes rejected reverify-mod-routes) | [2026-11-10_reverify-mod-routes-fixed.md](2026-11-10_reverify-mod-routes-fixed.md) |
+| 2026-11-10 | reverify-gate-p-s-owner | verified | (p)/(s) session ownership by run.json lead_session; worker sessions exempt | [2026-11-10_reverify-gate-p-s-owner.md](2026-11-10_reverify-gate-p-s-owner.md) |
+| 2026-11-10 | reverify-crew-lead-session | verified | atlas_crew writes lead_session; gate reads same key | [2026-11-10_reverify-crew-lead-session.md](2026-11-10_reverify-crew-lead-session.md) |
+| 2026-11-10 | release-gate-17.4.3-ts-plugin | verified | 17.4.3 bun/tsc/plugin validate/release_notes/attribution/version pins pass | [2026-11-10_release-gate-17-4-3-ts-plugin.md](2026-11-10_release-gate-17-4-3-ts-plugin.md) |
+| 2026-11-10 | release-gate-17.4.3-critic | verified | 17.4.3 diff hygiene: no stray files, banned unicode, attribution strings, abs paths, secrets, symlinks; one advisory | [2026-11-10_release-gate-17-4-3-critic.md](2026-11-10_release-gate-17-4-3-critic.md) |
+| 2026-11-10 | release-17.4.3-py-suites | verified | 17.4.3 gate: hooks 2816 OK, scripts 4281 OK, ruff clean | [2026-11-10_release-17-4-3-py-suites.md](2026-11-10_release-17-4-3-py-suites.md) |
+| 2026-11-10 | colony-routing-S2 | verified | tripwire: 2nd explorer denied dispatch_denied team; impl->ver allowed; no tmux advisory; run resets per prompt | [2026-11-10_colony-routing-s2.md](2026-11-10_colony-routing-s2.md) |
+| 2026-11-10 | colony-routing-S1 | verified | prompt_optimizer: nudge max 383B<700, multi-file build -> atlas_crew.py run | [2026-11-10_colony-routing-s1.md](2026-11-10_colony-routing-s1.md) |
+| 2026-11-10 | colony-routing-17.4.3-suites | verified | Colony routing change: full suites green on the 17.4.2 worktree after fix round 2 | [2026-11-10_colony-routing-17-4-3-suites.md](2026-11-10_colony-routing-17-4-3-suites.md) |
 | 2026-11-10 | ATLAS-17.4.2-followups | verified | atlas 17.4.2: report-only doctor, every-reply header gate with scoped loop cap and burst-breaker fix, finished/failed card labels, payload cuts with byte measures, dead code removed; suites green; not observed live | [2026-11-10_atlas-17-4-2-followups.md](2026-11-10_atlas-17-4-2-followups.md) |
 | 2026-11-10 | ATLAS-17.4.1-mod-survival | verified | atlas 17.4.1: mod re-boots after /clear, failures visible, one header parser, todo read errors, bounded /atlas-core, gate (r) early done, fallow_gate on Python 3.15, doctor checks and worktree guard; suites green; live terminal render after /clear not yet observed | [2026-11-10_atlas-17-4-1-mod-survival.md](2026-11-10_atlas-17-4-1-mod-survival.md) |
 | 2026-10-30 | t9597f35a | verified | No new test failures on changed tree vs head (pytest, plugin test, bun) | [2026-10-30_t9597f35a.md](2026-10-30_t9597f35a.md) |

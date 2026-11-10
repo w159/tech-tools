@@ -982,6 +982,19 @@ def save_stubs(rundir: Path, plan: dict, root: str) -> None:
                 shutil.copyfile(src, dst)
 
 
+# Same order as atlas_mux.SESSION_ENV (the spawn-team --session fallback).
+LEAD_SESSION_ENV = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "ATLAS_SESSION_ID")
+
+
+def lead_session(flag=None) -> str:
+    """The lead session id owning a run: --session, else the first set LEAD_SESSION_ENV var, else the empty string."""
+    try:
+        sid = flag or next((os.environ[k] for k in LEAD_SESSION_ENV if os.environ.get(k)), "")
+        return str(sid or "")
+    except Exception:
+        return ""
+
+
 def cmd_run(a) -> int:
     root = os.path.realpath(a.root or os.getcwd())
     try:
@@ -1016,6 +1029,7 @@ def cmd_run(a) -> int:
         "effort": a.effort,
         "settings": worker_settings(rundir),
         "session": f"atlas-{run_id}",
+        "lead_session": lead_session(getattr(a, "session", None)),
         "tmux": tmux,
         "started": time.time(),
         "fix_rounds": a.fix_rounds,
@@ -1111,6 +1125,7 @@ def cmd_run(a) -> int:
                 "attach": f"tmux attach -t {meta['session']}" if tmux else None,
                 "irc": f"irc gateway: 127.0.0.1:$(cat {rundir / 'irc' / 'port'}) channel #{run_id}",
                 "next": f"atlas_crew.py wait --run {run_id} --root {root}",
+                **({"warning": "no lead session id: pass --session <id> or the completion gate will not credit this crew"} if not meta["lead_session"] else {}),
             }
         )
     )
@@ -1709,6 +1724,7 @@ def parser():
     r.add_argument("--model")
     r.add_argument("--effort")
     r.add_argument("--run-id")
+    r.add_argument("--session", help="lead session id stamped into run.json as lead_session")
     r.add_argument("--fix-rounds", type=int, default=2)
     r.add_argument("--timeout", type=float, default=3600)
     r.add_argument("--no-tmux", action="store_true")

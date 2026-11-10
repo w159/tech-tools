@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { coreMatrix } from '../contracts/core-fixture';
-import { coreTick, register, resetCore } from './register';
+import { buildCore, coreTick, register, resetCore } from './register';
 import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
@@ -25,7 +25,8 @@ function captureOn() {
 const ROOT = '/proj';
 const RUN = `${ROOT}/.atlas/.run`;
 const verdict = (id: string, status: string, at: string) => ({ id, status, title: `title ${id}`, evidence: ['ev'], verified_at: at, verified_by: 'atlas:verifier' });
-const team = JSON.stringify({ team_id: 'tx', name: 'x', class: 'fix', effort: 'low', isolation: 'shared', max_parallel: 1, created: 1, members: [{ name: 'implementer-1', role: 'implementer' }] });
+const team = JSON.stringify({ team_id: 'tx', channel: 'proj@main/lead-sess-c', // a spawn-team record is on its lead's channel
+ name: 'x', class: 'fix', effort: 'low', isolation: 'shared', max_parallel: 1, created: 1, members: [{ name: 'implementer-1', role: 'implementer' }] });
 const assistant = (id: string, cacheRead: number) => JSON.stringify({ type: 'assistant', message: { id, model: 'claude-sonnet-5-5', usage: { input_tokens: 1, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: 0 } } });
 
 function stubEngine() {
@@ -38,7 +39,7 @@ function stubEngine() {
   const mtimes: Record<string, number> = {};
   const rec = { toasts: [] as string[], status: [] as (string | undefined)[], plays: [] as string[], reads: [] as string[], commands: [] as string[] };
   const state = memState({
-    'atlas/snapshot': { root: ROOT, todos: [], contract: { headerFirstLinePattern: '^ATLAS \\| \\S+ (research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)? \\| \\S' } },
+    'atlas/snapshot': { root: ROOT, todos: [], sessionId: 'sess-core', contract: { headerFirstLinePattern: '^ATLAS \\| \\S+ (research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)? \\| \\S' } },
     'atlas/isModOn': true,
     'atlas/isInteractive': true,
   });
@@ -179,6 +180,18 @@ describe('coreTick', () => {
     await coreTick(s.$);
     expect((await s.state.get({ plugin: 'atlas', key: 'core' })).version).toBe(v1);
     expect((await s.state.get({ plugin: 'atlas', key: 'core' })).value).toMatchObject({ ledger: { verified: 1 } });
+  });
+
+  test('buildCore hands the pane this session\'s channels and in-process dispatches', async () => {
+    const s = await session(false);
+    const onLead = (id: string, channel: string) => JSON.stringify({ ...JSON.parse(team), team_id: id, channel });
+    s.files[`${RUN}/teams/mine.json`] = onLead('mine', 'proj@main/lead-abcdef');
+    s.files[`${RUN}/teams/other.json`] = onLead('other', 'proj@main/lead-zzzzzz');
+    await s.state.set({ plugin: 'atlas', key: 'snapshot' }, { root: ROOT, todos: [], sessionId: 'abcdef1234', channel: 'proj@main' });
+    await s.state.set({ plugin: 'atlas', key: 'orch' }, { activity: {}, comms: [], stage: {}, meta: { 'implementer-w': { name: 'implementer-w', scope: 'fix/low', model: 'sonnet', at: 5 } } });
+    const m = await buildCore(s.$);
+    expect(m?.inProcess).toBe(true);
+    expect(m?.routes.map((r) => r.transport).sort()).toEqual(['in-process', 'tmux']); // the other session's team is not a route
   });
 
   test('no board root: no state', async () => {

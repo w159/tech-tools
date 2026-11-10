@@ -1,8 +1,16 @@
 // The core model over the captured run (contracts/core-fixture.ts) and small synthetic inputs for the edge cases.
+// ROUTE row trace (2026-11-10), every input of CoreModel.routes:
+//   - CoreInput.teams: register.ts buildCore reads every .atlas/.run/teams/*.json (all sessions; `channels` narrows it)
+//   - CoreInput.matrix: <plugin>/contracts/scope-matrix.json (class/effort aliases applied)
+//   - CoreInput.logs: .atlas/.run/logs/*.log (the model each tmux member ran) and the team records' member roles
+//   - CoreInput.dispatches (optional): in-process Agent/Task dispatches (orchestration SpawnMeta); absent => tmux only.
+//     A dispatch with no or a malformed SCOPE is bucketed under class `-`, effort `-` (no seats), never dropped.
+// Fixtures: live_fixture.ts, contracts/core-fixture.ts and mod/fixtures/* are imported only by tests and golden files,
+// none is reachable in production. With no team the pane draws `no team this session`.
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
 import type { TodoItem } from '../contract';
-import { claimsOf, coreModel, hasCore, pairClaims, offloadOf, parseFindings, roleOfName, tok, type CoreInput } from './core';
+import { claimsOf, coreModel, dispatchRoutes, hasCore, pairClaims, offloadOf, parseFindings, roleOfName, tok, type CoreInput } from './core';
 
 const input = (over: Partial<CoreInput> = {}): CoreInput => ({
   ...coreFixture,
@@ -43,8 +51,10 @@ describe('core model on the captured run', () => {
     expect(m.routes).toHaveLength(3);
     for (const r of m.routes) {
       expect(r.drift).toEqual([]);
+      expect(r.transport).toBe('tmux');
       for (const s of r.seats) expect(s.ran).toEqual(['claude-sonnet-5-5']);
     }
+    expect(m.inProcess).toBe(false);
   });
   test('contract carries the header tally and the open gates', () => {
     expect(m.contract.header).toEqual({ ok: 3, total: 4 });
@@ -252,5 +262,64 @@ describe('core model: context accounting and defaults', () => {
 
   test('tok formats at the 1000 and 1,000,000 boundaries', () => {
     expect([tok(0), tok(912), tok(999.6), tok(1000), tok(58800), tok(999999), tok(1_000_000), tok(1_250_000)]).toEqual(['0', '912', '1000', '1.0k', '58.8k', '1000.0k', '1.0M', '1.3M']);
+  });
+});
+
+describe('routes: transport and session', () => {
+  const emptyIn = (over: Partial<CoreInput>): CoreInput =>
+    ({ findings: '', teams: [], matrix: '', logs: {}, reports: [], todos: [], header: { ok: 0, total: 0 }, openGates: 0, ...over });
+  const matrix = JSON.stringify({
+    class_aliases: { bug: 'fix' },
+    classes: { fix: { low: { team: [{ role: 'implementer', model: 'sonnet' }, { role: 'verifier', model: 'haiku' }] } } },
+  });
+  const rec = (channel: string, created: number) =>
+    ({ name: `${channel}.json`, text: JSON.stringify({ class: 'fix', effort: 'low', channel, created, members: [] }) });
+
+  test('with channels, a previous session team record is no route', () => {
+    const teams = [rec('crew/lead-aaaaaa', 1), rec('crew/lead-bbbbbb', 2)];
+    const m = coreModel(emptyIn({ matrix, teams, channels: ['lead-bbbbbb'] }));
+    expect(m.routes.map((r) => r.teamId)).toEqual(['crew/lead-bbbbbb']);
+    expect(coreModel(emptyIn({ matrix, teams, channels: ['lead-cccccc'] })).routes).toEqual([]);
+    expect(coreModel(emptyIn({ matrix, teams })).routes).toHaveLength(2);
+  });
+
+  test('in-process dispatches become in-process routes per SCOPE, seats ran the dispatch model', () => {
+    const dispatches = [
+      { name: 'impl-a', type: 'atlas:implementer', scope: 'bug/low', model: 'claude-opus-5-5', at: 2 },
+      { name: 'ver-a', type: 'atlas:verifier', scope: 'fix/low', model: 'claude-haiku-5', at: 3 },
+      { name: 'loose', type: 'atlas:explorer', at: 1 },
+    ];
+    const m = coreModel(emptyIn({ matrix, dispatches }));
+    expect(m.inProcess).toBe(true);
+    expect(m.routes.map((r) => [r.teamId, r.transport, r.cls, r.effort, r.maxParallel])).toEqual([
+      ['in-process:-/-', 'in-process', '-', '-', 1],
+      ['in-process:bug/low', 'in-process', 'bug', 'low', 1],
+      ['in-process:fix/low', 'in-process', 'fix', 'low', 1],
+    ]);
+    expect(m.routes[0]!.seats).toEqual([]);
+    expect(m.routes[1]!.seats.map((s) => s.ran)).toEqual([['claude-opus-5-5'], []]);
+    expect(m.routes[1]!.drift).toEqual(['implementer ran claude-opus-5-5, seat is sonnet']);
+    expect(m.routes[2]!.drift).toEqual([]);
+    expect(dispatchRoutes([], matrix)).toEqual([]);
+  });
+
+  test('SCOPE-less or malformed-SCOPE dispatches are bucketed under -/- with no seats, never dropped', () => {
+    const rs = dispatchRoutes([
+      { name: 'a', type: 'atlas:implementer', model: 'sonnet', at: 1 },
+      { name: 'b', type: 'atlas:explorer', at: 2 },
+    ], matrix);
+    expect(rs.map((r) => [r.teamId, r.transport, r.cls, r.effort, r.maxParallel])).toEqual([
+      ['in-process:-/-', 'in-process', '-', '-', 2],
+    ]);
+    expect(rs[0]!.seats).toEqual([]);
+    expect(rs[0]!.drift).toEqual([]);
+    const bad = dispatchRoutes([{ type: 'atlas:verifier', scope: 'not a scope', at: 1 }], matrix);
+    expect(bad.map((r) => r.teamId)).toEqual(['in-process:-/-']);
+  });
+
+  test('tmux and in-process routes sit side by side; no dispatches handed in means inProcess false', () => {
+    const m = coreModel(emptyIn({ matrix, teams: [rec('lead-x', 1)], dispatches: [{ type: 'atlas:implementer', scope: 'fix/low' }] }));
+    expect(m.routes.map((r) => r.transport)).toEqual(['tmux', 'in-process']);
+    expect(coreModel(emptyIn({ matrix, teams: [rec('lead-x', 1)] })).inProcess).toBe(false);
   });
 });

@@ -85,7 +85,7 @@ class PromptClassifierTest(unittest.TestCase):
         out = json.loads(r.stdout)
         ctx = out["hookSpecificOutput"]["additionalContext"]
         self.assertIn("atlas-orchestrate", ctx)
-        self.assertIn("dispatch wave 1", ctx)
+        self.assertIn("Route ", ctx)
 
     # 1b. An error report (stack trace) is substantive too.
     def test_error_report_arms(self):

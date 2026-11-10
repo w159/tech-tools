@@ -1,0 +1,18 @@
+Colony routing enforcement (atlas 17.4.3 unreleased). Tree: detached worktree at 623affaf plus uncommitted changes. Run by the lead on 2026-11-10.
+
+== python3 -m unittest discover -s plugins/atlas/hooks (final run, after all edits)
+Ran 2816 tests in 216.407s
+OK (skipped=4)
+== python3 -m unittest discover -s plugins/atlas/scripts (final run, after all edits)
+Ran 4281 tests in 341.535s
+OK (skipped=1)
+== bun test, from plugins/atlas (before the last test-only and docs-only edits)
+ 3400 pass
+ 9 skip
+ 0 fail
+Ran 3409 tests across 157 files. [44.55s]
+== exit codes: tsc -p mod, ruff F401,F811,F841,F821, claude plugin validate
+tsc_exit=0
+ruff_exit=0
+validate_exit=0
+== earlier failures found by these runs and fixed: test_prompt_classifier (old nudge words), test_omp_transcript gate (p) matrix (old contract), test_validate_skills (SKILL.md 14054 B > 14000)

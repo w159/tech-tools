@@ -28,6 +28,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import atlas_db  # noqa: E402
 import atlas_todo  # noqa: E402
 import completion_gate  # noqa: E402
+
+for _worker_var in ("ATLAS_WORKER_NAME", "ATLAS_CREW_WORKER"):
+    os.environ.pop(_worker_var, None)  # the gate skips (p)/(s) in worker sessions
 from completion_gate import (
     _check_findings,
     _docs_drift,
@@ -80,6 +83,21 @@ def _lead_channel(root, session_id="sess-orch", members=()):
     `members` registered lead-side, as a dispatch/launch does; returns its name."""
     lead = "lead-" + atlas_todo._sanitize_owner(session_id)[:6]
     return atlas_todo.open_lead_channel(root, lead, list(members))["name"]
+
+
+def _team_record(root, session_id, channel, members, team_id="t-p", archive=False):
+    """A tmux team record (atlas_mux shape) for `session_id`'s lead on `channel`."""
+    teams = Path(root) / ".atlas" / ".run" / "teams"
+    if archive:
+        teams = teams / "archive"
+    teams.mkdir(parents=True, exist_ok=True)
+    rec = {
+        "team_id": team_id,
+        "lead": atlas_todo.lead_name(session_id),
+        "channel": channel,
+        "members": [{"name": n, "role": "explorer"} for n in members],
+    }
+    (teams / f"{team_id}.json").write_text(json.dumps(rec), encoding="utf-8")
 
 
 def _seed_report_notes(root, owners=("worker-a", "worker-b"), session_id="sess-orch"):
@@ -3430,10 +3448,12 @@ class ContractVisibilityTest(unittest.TestCase):
         c.commit()
         c.close()
 
-    def _two_workers(self):
-        # atlas:explorer ships nothing, so (g) stays out of the picture; the
-        # setUp dispatch plus this one make two atlas workers.
-        self._dispatch("atlas:explorer")
+    def _two_workers(self, members=("worker-a", "worker-b")):
+        # A real colony: a tmux team record for SID_A with two members on the
+        # run's lead channel. In-process dispatches no longer count for (p).
+        _team_record(
+            self.tmp, self.SID_A, _lead_channel(self.tmp, self.SID_A, []), members
+        )
 
     def _irc_event(self, peer="agent://worker-a"):
         """IRC (SendMessage) traffic: the harness routes peer messages
@@ -3879,9 +3899,8 @@ class ContractVisibilityTest(unittest.TestCase):
             )
         self.assertIn("(p)", self.say())
 
-    def test_p_passes_with_irc_traffic_logged_under_another_run_of_the_session(self):
-        """Baseline: 2 of 8 live (p) blocks had agent:// writes in the session
-        but under a sibling run id, so the single-run lookup missed them."""
+    def test_p_lead_irc_event_under_another_run_does_not_count(self):
+        """agent:// writes are the lead's traffic, not a member's line."""
         self._two_workers()
         c = atlas_db.connect(self.env["ATLAS_DB"])
         c.execute(
@@ -3894,14 +3913,51 @@ class ContractVisibilityTest(unittest.TestCase):
         atlas_db.log_event(c, other, "Write", "main", 1, "agent://worker-a")
         c.commit()
         c.close()
-        self.assertEqual(self.say(), "")
+        self.assertIn("(p)", self.say())
 
-    def test_p_passes_with_irc_traffic(self):
+    def test_p_lead_irc_event_does_not_count(self):
         self._two_workers()
         self._irc_event()
+        self.assertIn("(p)", self.say())
+
+    def test_p_passes_with_crew_member_irc_line(self):
+        crew = Path(self.tmp, ".atlas", ".run", "crew", "crew-x")
+        (crew / "irc").mkdir(parents=True)
+        (crew / "run.json").write_text(
+            json.dumps(
+                {
+                    "run_id": "crew-x",
+                    "lead_session": self.SID_A,
+                    "started": time.time(),
+                    "plan": {"workers": [{"name": "w1"}, {"name": "w2"}]},
+                }
+            ),
+            encoding="utf-8",
+        )
+        log = crew / "irc" / "log.jsonl"
+        log.write_text(
+            json.dumps({"seq": 1, "ts": time.time(), "from": "lead", "to": "#c", "text": "go"})
+            + "\n",
+            encoding="utf-8",
+        )
+        self.assertIn("(p)", self.say())
+        with open(log, "a", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps({"seq": 2, "ts": time.time(), "from": "w1", "to": "#c", "text": "DONE"})
+                + "\n"
+            )
+        self._clear_marker("p")
         self.assertEqual(self.say(), "")
 
-    def test_p_passes_with_sendmessage_tool_call(self):
+    def _clear_marker(self, letter):
+        path = completion_gate._contract_marker(letter, self.SID_A)
+        marker_dir = self.env.get("ATLAS_CONTRACT_GATE_DIR")
+        if marker_dir:
+            path = os.path.join(marker_dir, os.path.basename(path))
+        if os.path.exists(path):
+            os.remove(path)
+
+    def test_p_sendmessage_tool_call_does_not_count(self):
         self._two_workers()
         import sqlite3
 
@@ -3913,7 +3969,7 @@ class ContractVisibilityTest(unittest.TestCase):
         )
         conn.commit()
         conn.close()
-        self.assertEqual(self.say(), "")
+        self.assertIn("(p)", self.say())
 
     def test_p_note_outside_run_window_does_not_count(self):
         self._two_workers()
@@ -3925,10 +3981,189 @@ class ContractVisibilityTest(unittest.TestCase):
         self._worker_note(owner="lead")
         self.assertIn("(p)", self.say())
 
-    def test_p_ignores_non_atlas_dispatches(self):
+    def test_p_ignores_inprocess_dispatches(self):
+        """In-process dispatches are not colony workers: (p) stays silent;
+        (s) is the backstop that names them."""
         self._dispatch("Explore")
         self._dispatch("Explore")
+        out = self.say()
+        self.assertNotIn("(p)", out)
+        if shutil.which("tmux"):
+            self.assertIn("(s)", out)
+
+    def test_p_lead_only_board_note_no_longer_satisfies(self):
+        self._two_workers()
+        self._worker_note(owner="lead")
+        self._worker_note(owner="lead-" + atlas_todo._sanitize_owner(self.SID_A)[:6])
+        self.assertIn("(p)", self.say())
+
+    # -- (s) team gate --------------------------------------------------------
+
+    def _only_dispatches(self, *agent_types):
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        c.execute(
+            "DELETE FROM dispatches WHERE run_id IN (SELECT id FROM runs WHERE session_id=?)",
+            (self.SID_A,),
+        )
+        c.commit()
+        c.close()
+        for agent_type in agent_types:
+            self._dispatch(agent_type)
+
+    @unittest.skipUnless(shutil.which("tmux"), "tmux missing: (s) stands down")
+    def test_s_two_inprocess_explorers_without_team_blocks(self):
+        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        out = self.say()
+        self.assertIn('"decision": "block"', out)
+        reason = json.loads(out)["reason"]
+        self.assertIn("(s)", reason)
+        self.assertIn("2 in-process working-role dispatches", reason)
+        self.assertIn("spawn-team", reason)
+        self.assertIn("atlas_mux.py", reason)
+        self.assertNotIn("(p)", reason)
+        self.assertEqual(self.say(), "")  # one-shot
+
+    def test_s_team_record_with_member_board_line_passes(self):
+        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        self._two_workers()
+        self._worker_note(owner="worker-a")
         self.assertEqual(self.say(), "")
+
+    def test_s_implementer_plus_verifier_inprocess_passes(self):
+        self._only_dispatches("atlas:implementer", "atlas:verifier")
+        out = self.say()
+        self.assertNotIn("(s)", out)
+        self.assertNotIn("(p)", out)
+
+    def test_s_kill_switch_is_advisory(self):
+        self._only_dispatches("atlas:explorer", "Explore")
+        self.env["ATLAS_TEAM_GATE"] = "off"
+        res = self.gate({"last_assistant_message": self.OK})
+        self.assertNotIn("(s)", res.stdout)
+        if shutil.which("tmux"):
+            self.assertIn("ATLAS_TEAM_GATE=off", res.stderr)
+            self.assertIn("spawn-team", res.stderr)
+
+    def test_s_stands_down_without_tmux(self):
+        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        with mock.patch.dict(os.environ, {"ATLAS_DB": self.env["ATLAS_DB"]}):
+            with mock.patch.object(completion_gate, "_tmux_available", return_value=False):
+                self.assertEqual(
+                    completion_gate._team_gate(Path(self.tmp), "sess-no-tmux", None),
+                    (None, False),
+                )
+
+    def _crew(self, run_id, lead_session=None, members=("w1", "w2")):
+        crew = Path(self.tmp, ".atlas", ".run", "crew", run_id)
+        (crew / "irc").mkdir(parents=True, exist_ok=True)
+        meta = dict(
+            run_id=run_id,
+            started=time.time(),
+            plan=dict(workers=[dict(name=m) for m in members]),
+        )
+        if lead_session is not None:
+            meta["lead_session"] = lead_session
+        (crew / "run.json").write_text(json.dumps(meta), encoding="utf-8")
+        return crew
+
+    def _workers(self, sid):
+        return completion_gate._colony_workers_dispatched(
+            sid, self.tmp, self._run_start(sid) - 10
+        )
+
+    def test_crew_counts_only_for_its_lead_session_both_directions(self):
+        self._crew("crew-a", lead_session=self.SID_A)
+        self.assertEqual(self._workers(self.SID_A), 2)
+        self.assertEqual(self._workers(self.SID_B), 0)
+        self._crew("crew-b", lead_session=self.SID_B, members=("x1", "x2", "x3"))
+        self.assertEqual(self._workers(self.SID_A), 2)
+        self.assertEqual(self._workers(self.SID_B), 3)
+
+    def test_crew_without_lead_session_belongs_to_no_session(self):
+        self._crew("crew-none")
+        self._crew("crew-empty", lead_session="")
+        for sid in (self.SID_A, self.SID_B):
+            self.assertEqual(self._workers(sid), 0, sid)
+            self.assertEqual(
+                completion_gate._team_records(self.tmp, sid, self._run_start(sid) - 10),
+                [],
+            )
+
+    def test_other_sessions_crew_does_not_fail_p_either_direction(self):
+        self._crew("crew-b", lead_session=self.SID_B)
+        self.assertNotIn("(p)", self.say())
+        self.prepare_run(self.SID_B)
+        out = self.gate({"last_assistant_message": self.OK}, sid=self.SID_B).stdout
+        self.assertIn("(p)", out)
+
+    def test_ownerless_crew_does_not_fail_p(self):
+        self._crew("crew-none")
+        self._crew("crew-empty", lead_session="")
+        self.assertNotIn("(p)", self.say())
+
+    @unittest.skipUnless(shutil.which("tmux"), "tmux missing: (s) stands down")
+    def test_other_sessions_crew_does_not_suppress_s(self):
+        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        self._crew("crew-b", lead_session=self.SID_B)
+        self._crew("crew-none")
+        self.assertIn("(s)", self.say())
+
+    @unittest.skipUnless(shutil.which("tmux"), "tmux missing: (s) stands down")
+    def test_own_crew_suppresses_s(self):
+        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        crew = self._crew("crew-a", lead_session=self.SID_A)
+        line = dict(seq=1, ts=time.time(), to="c", text="DONE")
+        line["from"] = "w1"
+        (crew / "irc" / "log.jsonl").write_text(json.dumps(line) + chr(10), encoding="utf-8")
+        self.assertEqual(self.say(), "")
+
+    def test_worker_session_never_gets_p(self):
+        self._two_workers()
+        for var in ("ATLAS_WORKER_NAME", "ATLAS_CREW_WORKER"):
+            self.env[var] = "worker-a"
+            self.assertNotIn("(p)", self.say(), var)
+            del self.env[var]
+        self.assertIn("(p)", self.say())
+
+    def test_worker_session_never_gets_s(self):
+        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        for var in ("ATLAS_WORKER_NAME", "ATLAS_CREW_WORKER"):
+            self.env[var] = "w1"
+            self.assertNotIn("(s)", self.say(), var)
+            del self.env[var]
+            env = dict(ATLAS_DB=self.env["ATLAS_DB"])
+            env[var] = "w1"
+            with mock.patch.dict(os.environ, env):
+                with mock.patch.object(completion_gate, "_tmux_available", return_value=True):
+                    self.assertEqual(
+                        completion_gate._team_gate(Path(self.tmp), self.SID_A, None),
+                        (None, False),
+                    )
+
+    def test_blank_worker_marker_is_not_a_worker(self):
+        with mock.patch.dict(os.environ, dict(ATLAS_WORKER_NAME="  ", ATLAS_CREW_WORKER="")):
+            self.assertFalse(completion_gate._is_worker_session())
+        with mock.patch.dict(os.environ, dict(ATLAS_CREW_WORKER="w1")):
+            self.assertTrue(completion_gate._is_worker_session())
+
+    def test_docstring_names_s_as_one_shot(self):
+        doc = completion_gate.__doc__ or ""
+        self.assertIn("(o), (p) and (s) once per session", doc)
+        self.assertIn("Nineteen conditions, (a) through (s)", doc)
+
+    def test_working_role_rule(self):
+        for role in ("atlas:explorer", "atlas:implementer", "Explore", "general-purpose", "atlas-explorer"):
+            self.assertTrue(completion_gate._is_working_role(role), role)
+        for role in (
+            "atlas:planner",
+            "atlas:verifier",
+            "atlas:completeness-critic",
+            "atlas:docs-curator",
+            "atlas:docs-auditor",
+            "",
+            None,
+        ):
+            self.assertFalse(completion_gate._is_working_role(role), role)
 
     def test_p_is_one_shot_per_session(self):
         self._two_workers()
@@ -3946,8 +4181,15 @@ class ContractVisibilityTest(unittest.TestCase):
 
     def test_p_fails_open_when_the_dispatch_count_cannot_be_read(self):
         self._two_workers()
-        with mock.patch("atlas_db.connect", side_effect=RuntimeError("DB down")):
-            self.assertIsNone(completion_gate._colony_workers_dispatched(self.SID_A))
+        self.assertEqual(
+            completion_gate._colony_workers_dispatched(self.SID_A, self.tmp), 2
+        )
+        with mock.patch.object(
+            completion_gate, "_team_records", side_effect=RuntimeError("disk gone")
+        ):
+            self.assertIsNone(
+                completion_gate._colony_workers_dispatched(self.SID_A, self.tmp)
+            )
 
 
 class BlockLoopCapTest(unittest.TestCase):
@@ -4141,6 +4383,7 @@ class ColonyRunScopeTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.chan = _lead_channel(self.tmp, "sess-p", members=("worker-a",))
+        _team_record(self.tmp, "sess-p", self.chan, ("worker-a",), team_id="tp0")
 
     def _note(self, ts):
         target = atlas_todo.notes_dir(str(self.tmp))

@@ -1,8 +1,15 @@
-// The core view (g): four section heads, the REFUTED verdict row, a press toggles it, the expanded row shows its evidence.
+// coreRows over a fake element table: the four pillar sections from the captured run, a press opening a verdict's evidence, rows that fit.
+// ROUTE row trace (2026-11-10): its only input is CoreModel.routes (+ inProcess), built by data/core.ts coreModel from
+// CoreInput.teams (register.ts buildCore reads every .atlas/.run/teams/*.json, all sessions unless `channels` is passed),
+// the plugin's contracts/scope-matrix.json and the tmux pane logs. No in-process reader feeds it yet (register.ts passes
+// no `dispatches`), so the pane says `in-process dispatches are not shown here`. live_fixture.ts and
+// contracts/core-fixture.ts are imported only by tests and golden files: no fixture reaches production.
+// With no route the pane used to draw just the head; it now prints `no team this session`, and only when there are
+// neither tmux rows nor in-process dispatch rows (SCOPE-less dispatches show as a `-/-` row).
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
-import { coreModel, type CoreModel } from '../data/core';
+import { coreModel, dispatchRoutes, type CoreModel } from '../data/core';
 import { busySnap } from '../live_fixture';
 import { TONE_HEX as T } from '../mission-layout';
 import { textWidth } from '../theme';
@@ -31,7 +38,7 @@ const rows = (m: SidebarModel, inner = 70): Node[] => coreRows(els, m, on, inner
 describe('core view', () => {
   test('all four section heads, dim lowercase labels', () => {
     const out = rows(model()).map(textOf).join('\n');
-    for (const h of ['contract  ', 'verdicts  ', 'offload  ', 'route  ']) expect(out).toContain(h);
+    for (const h of ['contract  ', 'verdicts  ', 'offload  ', 'route: ']) expect(out).toContain(h);
     expect(out).not.toMatch(/CONTRACT|VERDICTS|OFFLOAD|ROUTE/);
   });
   test('the rejected verdict row reads refuted, the verified one verified', () => {
@@ -107,6 +114,7 @@ describe('core view: contract row', () => {
   test('section heads are bold and every row Box holds its size', () => {
     const rs = withCore(withVerdict());
     expect(kids(keyed(rs, 'core:h:contract'))[0]!.props.bold).toBe(true);
+    expect(kids(keyed(rs, 'core:h:route'))[0]!.props.bold).toBe(true);
     for (const r of rs.filter((x) => x.kind === 'Box')) expect(r.props.flexShrink).toBe(0);
   });
   test('blank spacers are one-space rows between the four sections', () => {
@@ -188,7 +196,7 @@ describe('core view: verdict rows', () => {
   });
   test('no verdicts and no claims shows the none row', () => {
     const c = empty();
-    c.routes = [{ teamId: 't', name: '', cls: 'fix', effort: 'low', isolation: 'shared', maxParallel: 1, seats: [], drift: [] }];
+    c.routes = [{ teamId: 't', name: '', cls: 'fix', effort: 'low', isolation: 'shared', maxParallel: 1, seats: [], drift: [], transport: 'tmux' }];
     expect(textOf(keyed(withCore(c), 'core:v:none'))).toBe('  no verdict recorded yet');
   });
 });
@@ -229,7 +237,7 @@ describe('core view: offload rows', () => {
 
 describe('core view: route rows', () => {
   const route = (teamId: string, over: Record<string, unknown> = {}) =>
-    ({ teamId, name: 'meanfix', cls: 'fix', effort: 'low', isolation: 'shared', maxParallel: 1, seats: [], drift: [], ...over });
+    ({ teamId, name: 'meanfix', cls: 'fix', effort: 'low', isolation: 'shared', maxParallel: 1, seats: [], drift: [], transport: 'tmux', ...over });
   const seat = (over: Record<string, unknown> = {}) => ({ role: 'implementer', count: 1, model: 'sonnet', effort: 'medium', ran: [], ...over });
   test('route line and its seat lines, name falls back to the team id', () => {
     const c = empty();
@@ -237,8 +245,8 @@ describe('core view: route rows', () => {
     const rs = withCore(c);
     const keys = rs.map((r) => r.props.key);
     expect(keys.indexOf('core:r:t2')).toBeLessThan(keys.indexOf('core:r:t1'));
-    expect(textOf(keyed(rs, 'core:r:t1'))).toBe('  fix/low  meanfix  shared, max 1');
-    expect(textOf(keyed(rs, 'core:r:t2'))).toBe('  fix/low  t2  shared, max 1');
+    expect(textOf(keyed(rs, 'core:r:t1'))).toBe('  fix/low  meanfix  tmux, shared, max 1');
+    expect(textOf(keyed(rs, 'core:r:t2'))).toBe('  fix/low  t2  tmux, shared, max 1');
     expect(textOf(keyed(rs, 'core:r:t1:0'))).toBe('    → 1× implementer sonnet/medium  not run yet');
     expect(kids(keyed(rs, 'core:r:t1'))[1]!.props.bold).toBe(true);
     expect(kids(keyed(rs, 'core:r:t1'))[2]!.props.bold).toBeFalsy();
@@ -258,7 +266,7 @@ describe('core view: route rows', () => {
       seat({ model: 'Sonnet', ran: ['claude-sonnet-5-5', 'claude-haiku-5-5'] }),
     ] }), route('t2', { seats: [seat({ ran: ['claude-haiku-5-5'] }), seat({ ran: ['claude-sonnet-5-5'] })] })] as any;
     const rs = withCore(c);
-    expect(textOf(keyed(rs, 'core:r:t1'))).toBe('  fix/low  meanfix  shared, max 1  ✗ drift');
+    expect(textOf(keyed(rs, 'core:r:t1'))).toBe('  fix/low  meanfix  tmux, shared, max 1  ✗ drift');
     expect(textOf(keyed(rs, 'core:r:t1:0'))).toBe('    → 1× implementer sonnet/medium  ran claude-sonnet-5-5 ✓ as planned');
     expect(textOf(keyed(rs, 'core:r:t1:1'))).toBe('    → 1× implementer sonnet/medium  ran claude-haiku-5-5 ✗ drift');
     expect(textOf(keyed(rs, 'core:r:t1:2'))).toBe('    → 1× implementer inherit/medium  ran claude-opus-5 ✓ as planned');
@@ -275,5 +283,41 @@ describe('core view: route rows', () => {
     const c = empty();
     c.routes = [route('t1')] as any;
     expect(textOf(keyed(withCore(c), 'core:r:t1'))).not.toContain('drift');
+  });
+  test('the label reads route: class/effort -> seats -> model, never decision model', () => {
+    const c = empty();
+    c.routes = [route('t1')] as any;
+    const rs = withCore(c);
+    expect(textOf(keyed(rs, 'core:h:route'))).toBe('route: class/effort -> seats -> model');
+    expect(rs.map(textOf).join('\n')).not.toContain('decision model');
+  });
+  test('no route prints no team this session and no stale team row', () => {
+    const c = { ...empty(), verdicts: [verdict('v', 'verified')] as any };
+    const rs = withCore(c);
+    expect(textOf(keyed(rs, 'core:r:none'))).toBe('  no team this session');
+    expect(rs.map((r) => r.props.key).filter((k) => /^core:r:t/.test(k))).toEqual([]);
+  });
+  test('a session with only SCOPE-less dispatches shows a -/- row, not no team this session', () => {
+    const c = empty();
+    c.inProcess = true;
+    c.routes = dispatchRoutes([
+      { name: 'a', type: 'atlas:implementer', model: 'sonnet', at: 1 },
+      { name: 'b', type: 'atlas:explorer', at: 2 },
+    ], coreMatrix);
+    const rs = withCore(c);
+    const keys = rs.map((r) => r.props.key);
+    expect(keys).not.toContain('core:r:none');
+    expect(keys).not.toContain('core:r:inproc');
+    expect(textOf(keyed(rs, 'core:r:in-process:-/-'))).toBe('  -/-  in-process  in-process, max 2');
+  });
+  test('without in-process rows the pane says they are not shown; with them it shows the transport', () => {
+    const c = empty();
+    c.routes = [route('t1')] as any;
+    expect(textOf(keyed(withCore(c), 'core:r:inproc'))).toBe('  in-process dispatches are not shown here');
+    c.inProcess = true;
+    c.routes = [route('in-process:fix/low', { name: 'in-process', transport: 'in-process', isolation: '', maxParallel: 2 })] as any;
+    const rs = withCore(c);
+    expect(rs.map((r) => r.props.key)).not.toContain('core:r:inproc');
+    expect(textOf(keyed(rs, 'core:r:in-process:fix/low'))).toBe('  fix/low  in-process  in-process, max 2');
   });
 });

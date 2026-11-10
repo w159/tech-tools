@@ -19,8 +19,8 @@ work is still running, so the gate does not fire once per wave-Stop. A
 long-running `shell` or `monitor` task does not suppress it. Two conditions
 are about the reply itself and are checked even then: (n) and (r).
 
-Eighteen conditions, (a) through (r), must ALL hold before the gate passes. A
-failing one blocks the Stop: (o) and (p) once per session, every other one,
+Nineteen conditions, (a) through (s), must ALL hold before the gate passes. A
+failing one blocks the Stop: (o), (p) and (s) once per session, every other one,
 (n) included, on each Stop up to the loop cap. (q), unmerged worker branches, is documented on
 `_unmerged_worker_branches`; the rest are listed here:
   (a) At least one file exists under `.atlas/evidence/` with an mtime at or
@@ -113,13 +113,24 @@ failing one blocks the Stop: (o) and (p) once per session, every other one,
       field, else a `[<phase>] ` content prefix. Kill switch
       ATLAS_GATE_PHASES=off. Fails open on a missing contract or an
       unreadable board.
-  (p) Colony channel: when THIS RUN dispatched two or more atlas workers
-      (`dispatches` rows whose agent_type starts `atlas:` or `atlas-`), the
-      channel must show use: a board note under .atlas/.run/board/ on this run's
-      lead channel, authored by a registered member that is not a lead, inside the run window, or IRC/SendMessage
-      traffic (`agent://` event paths, SendMessage tool calls) recorded for the
-      run -- the exact sources are listed in `_colony_channel_used`. Kill switch
-      ATLAS_GATE_COLONY=off. Fails open on any read error.
+  (p) Colony channel: when THIS SESSION's real colonies (tmux team records
+      under .atlas/.run/teams/, live and archived, plus crew runs under
+      .atlas/.run/crew/) hold two or more members, the channel must show use:
+      a board note on a team's channel or a crew IRC line, written by one of
+      those members (never a lead), inside the run window -- the exact sources
+      are listed in `_colony_channel_used`. In-process dispatches are not
+      colony workers. Kill switch ATLAS_GATE_COLONY=off. Fails open on any
+      read error.
+  (s) Team gate: when THIS RUN made two or more in-process working-role
+      dispatches (`dispatches` rows of any agent type whose role, after an
+      `atlas:`/`atlas-` prefix, is not planner, verifier, completeness-critic,
+      docs-curator or docs-auditor) and no team or crew record exists for the
+      session, block once and name the count and the spawn-team command.
+      Skipped when tmux is missing; ATLAS_TEAM_GATE=off turns the block into
+      a stderr advisory; ATLAS_GATE_COLONY=off skips it. Fails open.
+      (p) and (s) never apply to a tmux team or crew WORKER session
+      (ATLAS_WORKER_NAME or ATLAS_CREW_WORKER set; see `_is_worker_session`):
+      a worker is a leaf and its lead owns the colony.
   (r) Done claim: when the final reply's header phase is `done` and a
       dispatched subagent/workflow/teammate is still running (see
       `_has_in_flight_dispatch`) or any known todo surface (TodoWrite,
@@ -1064,6 +1075,7 @@ def _reason(
     unmerged_branches: list | None = None,
     session_id: str = "",
     colony_workers: int | None = None,
+    team_inprocess: int = 0,
     repeat: list | None = None,
     delegation_paths: list | None = None,
     solo_delegation_note: str = "",
@@ -1253,6 +1265,8 @@ def _reason(
         emit("p", _colony_reason_part(colony_workers))
     if unmerged_branches:
         emit("q", _unmerged_reason_part(unmerged_branches))
+    if team_inprocess:
+        emit("s", _team_reason_part(team_inprocess))
     body = "\n".join(text for _, text in tagged)
     if tagged and all(letter in delta for letter, _ in tagged):
         # F8: every failing letter was fully stated this session -- ship the
@@ -1439,15 +1453,18 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     colony_failing = False
     if (
         not sidechain
+        and not _is_worker_session()
         and not _switch_off(_SWITCH_COLONY)
         and not _contract_block_used("p", session, root)
     ):
-        colony_workers = _colony_workers_dispatched(session)
+        colony_workers = _colony_workers_dispatched(session, root, started)
         colony_failing = (
             colony_workers is not None
             and colony_workers >= 2
             and not _colony_channel_used(root, session, started)
         )
+    team_inprocess, team_advisory = (None, False) if sidechain else _team_gate(root, session, started)
+    team_failing = bool(team_inprocess) and not team_advisory
     wt_unmerged = [] if sidechain else _unmerged_worker_branches(root)
     failed = [
         letter
@@ -1469,6 +1486,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
             ("o", bool(phases_missing)),
             ("p", colony_failing),
             ("q", bool(wt_unmerged)),
+            ("s", team_failing),
         )
         if failing
     ]
@@ -1490,6 +1508,8 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
         "colony_failing": colony_failing,
         "colony_workers": colony_workers,
         "wt_unmerged": wt_unmerged,
+        "team_inprocess": team_inprocess if team_failing else 0,
+        "team_advisory": team_inprocess if team_advisory else 0,
         "missing_delegation": missing_delegation,
         "started": started,
         "failed": failed,
@@ -1641,6 +1661,14 @@ def main() -> int:
         name_violations, header_failing = ev["name_violations"], ev["header_failing"]
         phases_missing, colony_failing = ev["phases_missing"], ev["colony_failing"]
         colony_workers, wt_unmerged = ev["colony_workers"], ev["wt_unmerged"]
+        team_inprocess = ev.get("team_inprocess") or 0
+        if ev.get("team_advisory"):
+            with contextlib.suppress(Exception):
+                sys.stderr.write(
+                    "[atlas] completion-gate advisory (ATLAS_TEAM_GATE=off): "
+                    + _team_reason_part(ev["team_advisory"]).strip()
+                    + "\n"
+                )
         failed = ev["failed"]
         if not failed:
             # Silence on pass is the contract: the gate speaks only when it blocks.
@@ -1656,12 +1684,12 @@ def main() -> int:
             _record_analytics(f"gate.{letter.lower()}.block")
         # F8: mark every failing letter. The first Stop per letter ships the
         # full clause (computed below, BEFORE these markers exist); later
-        # Stops ship a one-line delta. (o)/(p) keep their original one-shot
+        # Stops ship a one-line delta. (o)/(p)/(s) keep their original one-shot
         # semantics -- a marked letter never blocks again. (n) re-blocks, with
         # the template-only short clause after its first full one.
         repeat = _repeat_letters(failed, session, root)
         for letter in failed:
-            if letter in ("o", "p"):
+            if letter in ("o", "p", "s"):
                 _mark_contract_block(
                     letter, session
                 )  # one-shot: never block on this letter again
@@ -1688,6 +1716,7 @@ def main() -> int:
             unmerged_branches=wt_unmerged,
             session_id=session,
             colony_workers=colony_workers,
+            team_inprocess=team_inprocess,
             repeat=repeat,
             delegation_paths=delegation_paths,
             solo_delegation_note=solo_delegation_note,
@@ -1782,6 +1811,7 @@ _CONDITION_NAMES: dict[str, str] = {
     "p": "colony channel unused",
     "q": "unmerged worker branches",
     "r": "done claimed with running agents or open todos",
+    "s": "in-process workers without a tmux team",
 }
 
 
@@ -2260,7 +2290,7 @@ def _unpaired_implementer_dispatches(session_id: str) -> int:
 # (n) status header, (o) phased todo, (p) colony channel -- the contract-
 # visibility conditions. contracts/operating-contract.json is the single source
 # for the phase ids/glyphs, the header pattern, the required phases and the
-# kill-switch names. (o) and (p) are one-shot per session (marker file,
+# kill-switch names. (o), (p) and (s) are one-shot per session (marker file,
 # O_EXCL); (n) re-blocks every header-less Stop up to the loop cap. Each is
 # switchable off and fails open on any error or missing input.
 # --------------------------------------------------------------------------
@@ -2284,6 +2314,13 @@ _SWITCH_HEADER = "ATLAS_GATE_HEADER"
 _SWITCH_PHASES = "ATLAS_GATE_PHASES"
 _SWITCH_COLONY = "ATLAS_GATE_COLONY"
 _SWITCH_DONE = "ATLAS_GATE_DONE"
+_SWITCH_TEAM = "ATLAS_TEAM_GATE"
+
+# Closing roles: every other dispatch is a working role (the same set
+# dispatch_tripwire_core uses for its team deny).
+CLOSING_ROLES = frozenset(
+    {"planner", "verifier", "completeness-critic", "docs-curator", "docs-auditor"}
+)
 
 
 def _contract_doc() -> dict | None:
@@ -2352,13 +2389,13 @@ def _mark_contract_block(cond: str, session_id: str, root: Path | None = None) -
 
 def _repeat_letters(failed: list, session: str, root: Path | None = None) -> list:
     """F8: failing letters whose FULL clause already shipped this session.
-    (o)/(p) are excluded: their own one-shot markers suppress any
+    (o)/(p)/(s) are excluded: their own one-shot markers suppress any
     re-block, so they can never be repeats. (n) repeats as a short form
     that still carries the header template."""
     return [
         letter
         for letter in failed
-        if letter not in ("o", "p")
+        if letter not in ("o", "p", "s")
         and _contract_block_used("seen-" + letter, session, root)
     ]
 
@@ -2573,86 +2610,118 @@ def _phases_reason_part(missing: list, contract: dict | None, session_id: str) -
     )
 
 
-def _colony_workers_dispatched(session_id: str) -> int | None:
-    """(p) How many atlas workers THIS RUN dispatched, or None when unknown.
+def _is_working_role(agent_type) -> bool:
+    role = str(agent_type or "").strip()
+    for prefix in ("atlas:", "atlas-"):
+        if role.startswith(prefix):
+            role = role[len(prefix):]
+            break
+    return bool(role) and role not in CLOSING_ROLES
 
-    Source: the `dispatches` table (atlas_db.log_dispatch), one row per Task/
-    Agent dispatch with `agent_type` = the dispatch's `subagent_type`
-    (dispatch_tripwire.py PostToolUse). An atlas worker is a row whose
-    agent_type starts with `atlas:` or `atlas-` -- the same prefix test
-    dispatch_tripwire uses to arm orchestration. Run = current-or-latest run
-    of the session. None (fail-open) on any DB error or when no run exists."""
-    conn = None
+
+def _team_records(root, session_id: str, started: float | None = None) -> list:
+    """This session's real colonies: [{"kind", "id", "channel", "members", "irc"}].
+
+    Teams: `.atlas/.run/teams/*.json` and `archive/*.json` whose `lead` is this
+    session's lead name or whose `source.session` is the session id. Crews:
+    `.atlas/.run/crew/<run>/run.json` whose `lead_session` equals the session
+    id. A crew with no or empty `lead_session` belongs to no session: a time
+    window would credit the crew of another session in the same root. `started`
+    is kept for call compatibility. Unreadable records are skipped; other errors raise."""
+    import atlas_todo
+
+    lead = atlas_todo.lead_name(session_id)
+    run = Path(root) / ".atlas" / ".run"
+    out = []
+    teams = run / "teams"
+    for rec_path in sorted([*teams.glob("*.json"), *teams.glob("archive/*.json")]):
+        try:
+            team = json.loads(rec_path.read_text(encoding="utf-8"))
+            source = team.get("source") or {}
+            if team.get("lead") != lead and (
+                not session_id or source.get("session") != session_id
+            ):
+                continue
+            out.append(
+                {
+                    "kind": "team",
+                    "id": str(team.get("team_id") or rec_path.stem),
+                    "channel": team.get("channel"),
+                    "members": {m["name"] for m in team.get("members") or []},
+                    "irc": None,
+                }
+            )
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            continue
+    for meta_path in sorted((run / "crew").glob("*/run.json")):
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            owner = str(meta.get("lead_session") or "").strip()
+            if not owner or not session_id or owner != session_id:
+                continue
+            out.append(
+                {
+                    "kind": "crew",
+                    "id": str(meta.get("run_id") or meta_path.parent.name),
+                    "channel": None,
+                    "members": {
+                        w["name"] for w in (meta.get("plan") or {}).get("workers") or []
+                    },
+                    "irc": meta_path.parent / "irc" / "log.jsonl",
+                }
+            )
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            continue
+    return out
+
+
+def _colony_workers_dispatched(
+    session_id: str, root=None, started: float | None = None
+) -> int | None:
+    """(p) How many colony workers THIS SESSION runs, or None when unknown.
+
+    Members of this session's tmux team and crew records (`_team_records`),
+    deduplicated by (record, name). In-process Agent/Task dispatches are not
+    colony workers. None (fail-open) on any error."""
     try:
-        import atlas_db
-
-        conn = atlas_db.connect()
-        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
-            conn, session_id
+        recs = _team_records(
+            Path(root) if root is not None else Path.cwd(), session_id, started
         )
-        if rid is None:
-            return None
-        return conn.execute(
-            "SELECT COUNT(*) FROM dispatches WHERE run_id=? "
-            "AND (agent_type LIKE 'atlas:%' OR agent_type LIKE 'atlas-%')",
-            (rid,),
-        ).fetchone()[0]
+        return len({(r["kind"], r["id"], m) for r in recs for m in r["members"]})
     except Exception:
         return None
-    finally:
-        if conn is not None:
-            conn.close()
 
 
 def _colony_channel_used(root: Path, session_id: str, started: float | None) -> bool:
-    """(p) Did the colony channel carry anything during THIS RUN? Reads exactly
-    these evidence sources, any one of which is enough:
+    """(p) Did a colony member write on the channel during THIS RUN? Exactly
+    these sources count, any one is enough:
 
-      1. Board notes: every `<root>/.atlas/.run/board/*.jsonl` line (the file
-         format atlas_todo.note writes: {"ts","owner","to","item","text"[,"kind"]})
-         whose `ts` is at or after the run start, whose `channel` is one of this run's
-         lead channels (`<main>/<lead_name(session)>`) and whose `owner` is a
-         registered or departed member of it that is not a lead (`is_lead_name`):
-         a lead's own note, another lead's channel and a stranger's report never count.
-      2. IRC traffic recorded in `events`: a row of the current-or-latest run
-         whose `path` is an `agent://` URI (omp routes SendMessage as a Write to
-         `agent://<peer>`; dispatch_tripwire logs it with that path).
-      3. IRC / SendMessage recorded in `tool_calls` (ingested transcripts,
-         including workers' sidechains): a row of this session at or after the
-         run start whose tool_name is `SendMessage`, or whose input_summary
-         carries an `agent://` URI.
+      1. Board notes: a `<root>/.atlas/.run/board/*.jsonl` line (atlas_todo.note
+         format) whose `channel` is a team record's channel, whose `owner` is a
+         member of that record and not a lead (`is_lead_name`), with `ts` at or
+         after the run start.
+      2. Crew IRC: a `<crew run>/irc/log.jsonl` line whose `from` is a member of
+         that crew and not a lead, inside the run window.
 
-    Nothing else counts (the dispatch report itself is not the channel). When
-    the run start is unknown the window is open-ended (any note counts), the
-    same fail-open rule (a)/(b) use. Any read error returns True: an
-    unreadable surface never manufactures a block."""
+    A lead's own note, another lead's channel, a stranger's report and the
+    lead's SendMessage traffic never count. When the run start is unknown the
+    window is open-ended. Any read error returns True: an unreadable surface
+    never manufactures a block."""
     try:
         since = started if started is not None else 0.0
         import atlas_todo
 
+        recs = _team_records(root, session_id, started)
+        chans: dict = {}
+        for r in recs:
+            if r["channel"]:
+                chans.setdefault(r["channel"], set()).update(r["members"])
+
+        def _ok(owner, ts) -> bool:
+            return not atlas_todo.is_lead_name(owner) and float(ts or "nan") >= since
+
         notes_dir = atlas_todo.notes_dir(str(root))
-        # Only this run's lead channel(s) count, and only notes owned by a registered
-        # (or departed) member that is not a lead: a lead's own note, another lead's
-        # channel, or a stranger's report never clears (p).
-        lead = atlas_todo.lead_name(session_id)
-        chans = {
-            n: {m["name"] for m in c["members"]} | set(c.get("departed") or {})
-            for n, c in atlas_todo._reg_read(str(root))["channels"].items()
-            if c.get("kind") == "lead" and c.get("lead") == lead
-        }
-        # `atlas_mux reap` closes a tmux team's channel (it leaves the registry) and archives the team
-        # record, so a reaped team's members are known only from that record (live-230: 12 notes, (p) fired).
-        teams = Path(root) / ".atlas" / ".run" / "teams"
-        for rec_path in [*teams.glob("*.json"), *teams.glob("archive/*.json")]:
-            try:
-                team = json.loads(rec_path.read_text(encoding="utf-8"))
-                if team.get("lead") == lead and team.get("channel"):
-                    chans.setdefault(team["channel"], set()).update(
-                        m["name"] for m in team["members"]
-                    )
-            except (OSError, ValueError, TypeError, KeyError, AttributeError):
-                continue
-        if notes_dir.is_dir():
+        if chans and notes_dir.is_dir():
             for path in sorted(notes_dir.glob("*" + atlas_todo.NOTE_FILE_SUFFIX)):
                 try:
                     lines = path.read_text(encoding="utf-8").splitlines()
@@ -2664,41 +2733,121 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
                         if (
                             isinstance(rec, dict)
                             and rec.get("owner") in chans.get(rec.get("channel"), ())
-                            and not atlas_todo.is_lead_name(rec.get("owner"))
-                            and float(rec.get("ts") or "nan") >= since
+                            and _ok(rec.get("owner"), rec.get("ts"))
                         ):
                             return True
                     except (ValueError, TypeError):
                         continue
+        for r in recs:
+            if r["irc"] is None or not r["irc"].is_file():
+                continue
+            try:
+                lines = r["irc"].read_text(encoding="utf-8").splitlines()
+            except OSError:
+                continue
+            for line in lines:
+                try:
+                    rec = json.loads(line)
+                    if (
+                        isinstance(rec, dict)
+                        and rec.get("from") in r["members"]
+                        and _ok(rec.get("from"), rec.get("ts"))
+                    ):
+                        return True
+                except (ValueError, TypeError):
+                    continue
+        return False
+    except Exception:
+        return True
+
+
+def _inprocess_working_dispatches(session_id: str) -> int | None:
+    """(s) In-process working-role dispatches of THIS RUN (`dispatches` rows of
+    any agent type, `_is_working_role`). None on any DB error or no run."""
+    conn = None
+    try:
         import atlas_db
 
         conn = atlas_db.connect()
-        try:
-            if conn.execute(
-                "SELECT 1 FROM events WHERE path LIKE 'agent://%' AND ts>=? "
-                "AND run_id IN (SELECT id FROM runs WHERE session_id=?) LIMIT 1",
-                (since, session_id),
-            ).fetchone():
-                return True
-            return bool(
-                conn.execute(
-                    "SELECT 1 FROM tool_calls WHERE session_id=? AND ts>=? AND "
-                    "(tool_name='SendMessage' OR input_summary LIKE '%agent://%') LIMIT 1",
-                    (session_id, since),
-                ).fetchone()
-            )
-        finally:
-            conn.close()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return None
+        rows = conn.execute(
+            "SELECT agent_type FROM dispatches WHERE run_id=?", (rid,)
+        ).fetchall()
+        return sum(1 for (agent_type,) in rows if _is_working_role(agent_type))
     except Exception:
-        return True
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _is_worker_session() -> bool:
+    """A tmux team worker (ATLAS_WORKER_NAME non-blank, the same rule as
+    dispatch_tripwire_core._is_worker) or a crew worker (ATLAS_CREW_WORKER
+    non-blank, set by atlas_crew.worker_env). (p) and (s) never apply to one."""
+    try:
+        import worker_inbox
+
+        if worker_inbox.is_worker_env():
+            return True
+    except Exception:
+        if (os.environ.get("ATLAS_WORKER_NAME") or "").strip():
+            return True
+    return bool((os.environ.get("ATLAS_CREW_WORKER") or "").strip())
+
+
+def _tmux_available() -> bool:
+    import shutil
+
+    return shutil.which("tmux") is not None
+
+
+def _team_gate(root, session_id: str, started: float | None) -> tuple:
+    """(s) `(count, advisory)`: count is the in-process working-role dispatch
+    count when the backstop fires (2+, no team or crew record, tmux present,
+    not yet blocked this session), else None. advisory is True when
+    ATLAS_TEAM_GATE=off turns the block into an advisory. Fail-open."""
+    try:
+        if (
+            not session_id
+            or _is_worker_session()
+            or _switch_off(_SWITCH_COLONY)
+            or _contract_block_used("s", session_id, root)
+        ):
+            return None, False
+        count = _inprocess_working_dispatches(session_id)
+        if count is None or count < 2 or not _tmux_available():
+            return None, False
+        if _team_records(root, session_id, started):
+            return None, False
+        return count, _switch_off(_SWITCH_TEAM)
+    except Exception:
+        return None, False
+
+
+def _team_reason_part(count: int) -> str:
+    mux = SCRIPTS_DIR / "atlas_mux.py"
+    return (
+        f"  (s) Team gate: this run made {count} in-process working-role dispatches "
+        "(Agent/Task) and no tmux team or crew record exists for this session. Two or "
+        "more workers run as a tmux team, not as in-process subagents. -> For the next "
+        f'batch of work spawn a team: python3 "{mux}" spawn-team --class C --effort E '
+        '--paths a,b --task "...", then retry Stop. (This check blocks once per '
+        "session; ATLAS_TEAM_GATE=off makes it an advisory.)\n"
+        f'     (s) try: python3 "{mux}" spawn-team --class C --effort E --paths a,b --task "..."'
+    )
 
 
 def _colony_reason_part(workers: int | None) -> str:
     count = workers if workers is not None else "two or more"
     return (
-        f"  (p) Colony channel: this run dispatched {count} atlas workers but the colony "
-        "channel carried nothing -- no worker board note under .atlas/.run/board/ "
-        "and no IRC/SendMessage traffic was recorded for the run. Workers that "
+        f"  (p) Colony channel: this session's teams/crews hold {count} workers but the colony "
+        "channel carried nothing from them -- no member board note under .atlas/.run/board/ "
+        "and no member IRC line was recorded for the run. Workers that "
         "never report on the channel leave the lead synthesizing from nothing. "
         "-> Post one handoff note per worker: "
         f'`python3 "{SCRIPTS_DIR / "atlas_todo.py"}" note --owner <worker> --to lead "<summary>"`, '

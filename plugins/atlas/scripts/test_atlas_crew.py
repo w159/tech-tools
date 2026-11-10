@@ -1546,6 +1546,56 @@ class SupervisorOverlapTests(unittest.TestCase):
         self.assertIn(" z ", launched[0] + " ")
 
 
+    def _run_meta(self, tmp, env, **extra):
+        plan = {"workers": [{"name": "z", "owns": ["z.py"], "task": "t"}]}
+        Path(tmp, "p.json").write_text(json.dumps(plan))
+        keep = {k: v for k, v in os.environ.items() if k not in atlas_crew.LEAD_SESSION_ENV}
+        keep.update(env, ATLAS_CREW_TMUX="off")
+        with mock.patch.dict(os.environ, keep, clear=True), mock.patch.object(atlas_crew, "_launch", lambda *x: None), \
+             mock.patch.object(atlas_crew.subprocess, "Popen"), contextlib.redirect_stdout(io.StringIO()):
+            atlas_crew.cmd_run(types.SimpleNamespace(plan=str(Path(tmp, "p.json")), root=tmp, run_id="crew-s", model=None,
+                                                     effort=None, fix_rounds=0, timeout=60, no_tmux=True, wait=0, spec=None,
+                                                     files=None, **extra))
+        return json.loads(Path(tmp, ".atlas/.run/crew/crew-s/run.json").read_text())
+
+    def test_run_json_stamps_lead_session_from_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            meta = self._run_meta(tmp, {"CLAUDE_CODE_SESSION_ID": "env-sid"}, session="flag-sid")
+        self.assertEqual(meta["lead_session"], "flag-sid")
+
+    def test_run_json_stamps_lead_session_from_env(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            meta = self._run_meta(tmp, {"CLAUDE_CODE_SESSION_ID": "env-sid"})
+        self.assertEqual(meta["lead_session"], "env-sid")
+
+    def test_run_json_lead_session_empty_when_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            meta = self._run_meta(tmp, {}, session=None)
+        self.assertEqual(meta["lead_session"], "")
+
+    def _run_out(self, tmp, env, **extra):
+        buf = io.StringIO()
+        real = contextlib.redirect_stdout
+        with mock.patch.object(contextlib, "redirect_stdout", lambda _b: real(buf)):
+            self._run_meta(tmp, env, **extra)
+        return json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def test_run_warns_when_no_lead_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self._run_out(tmp, {}, session=None)
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["warning"], "no lead session id: pass --session <id> or the completion gate will not credit this crew")
+
+    def test_run_no_warning_with_lead_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self._run_out(tmp, {}, session="flag-sid")
+        self.assertTrue(out["ok"])
+        self.assertNotIn("warning", out)
+
+    def test_parser_accepts_session_flag(self):
+        self.assertEqual(atlas_crew.parser().parse_args(["run", "--session", "s1"]).session, "s1")
+
+
 class ShardedCheckTests(unittest.TestCase):
     """The supervisor's final pytest check runs as parallel shards plus a rest shard."""
 

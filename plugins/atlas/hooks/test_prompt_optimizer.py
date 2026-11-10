@@ -562,7 +562,9 @@ class ArmOrchestrationTest(unittest.TestCase):
         nudge = po.arm_orchestration(
             {"session_id": "s1", "cwd": self.tmp}, "refactor the db module now please"
         )
-        self.assertEqual(nudge, po.ENGINE_NUDGE)
+        self.assertTrue(nudge.startswith("[atlas-orchestrate]"))
+        self.assertIn("atlas:atlas-orchestrate", nudge)
+        self.assertIn("Route implement/", nudge)
 
     def test_nudge_names_the_skill_and_stays_short(self):
         # Pins the action (skill name, dispatch), not the prose; was 333 chars.
@@ -624,6 +626,94 @@ class ArmOrchestrationTest(unittest.TestCase):
                     "refactor the db module now please",
                 )
             )
+
+
+class RouteScopeTest(unittest.TestCase):
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, {}, clear=False)
+        self.env.start()
+        self.tmp = tempfile.mkdtemp()
+        os.environ["ATLAS_DB"] = os.path.join(self.tmp, "atlas.db")
+        os.environ["ATLAS_DECISION"] = "off"
+
+    def tearDown(self):
+        self.env.stop()
+
+    def _arm(self, sid, prompt):
+        return po.arm_orchestration({"session_id": sid, "cwd": self.tmp}, prompt)
+
+    def test_multi_file_build_routes_to_crew(self):
+        nudge = self._arm(
+            "m1",
+            "build the export flow across plugins/atlas/hooks/a.py, "
+            "plugins/atlas/scripts/b.py and plugins/atlas/mod/c.ts",
+        )
+        self.assertIn("atlas_crew.py run", nudge)
+        self.assertIn("implement/", nudge)
+        self.assertLess(len(nudge.encode()), 700)
+        scope = po.resolved_scope("m1", self.tmp)
+        self.assertEqual(scope["task_class"], "implement")
+        self.assertGreaterEqual(scope["working_seats"], 2)
+        self.assertEqual(set(scope), {"task_class", "effort", "working_seats"})
+
+    def test_one_symbol_lookup_is_single_in_process(self):
+        nudge = self._arm("l1", "investigate how resolve_substantive works")
+        self.assertIn("one in-process atlas:explorer call with SCOPE: audit/low", nudge)
+        self.assertNotIn("atlas_crew.py", nudge)
+        self.assertNotIn("spawn-team", nudge)
+        self.assertEqual(
+            po.resolved_scope("l1", self.tmp),
+            {"task_class": "audit", "effort": "low", "working_seats": 1},
+        )
+
+    def test_read_only_team_uses_spawn_team(self):
+        nudge = self._arm("r1", "audit every hook across the whole repo for leaks")
+        self.assertIn("atlas_mux.py spawn-team --class audit --effort high", nudge)
+        self.assertLess(len(nudge.encode()), 700)
+
+    def test_resolver_exception_keeps_old_nudge(self):
+        prompt = "build the export flow across a.py, b.py and c.ts"
+        self._arm("e1", prompt)
+        self.assertIsNotNone(po.resolved_scope("e1", self.tmp))
+        import atlas_resolve
+
+        with mock.patch.object(atlas_resolve, "resolve", side_effect=RuntimeError("x")):
+            nudge = self._arm("e1", prompt)
+        self.assertEqual(nudge, po.ENGINE_NUDGE)
+        self.assertIsNone(po.resolved_scope("e1", self.tmp))
+
+    def test_unarmed_s1_clears_stale_scope(self):
+        self._arm("s1", "build the export flow across a.py, b.py and c.ts")
+        self.assertIsNotNone(po.resolved_scope("s1", self.tmp))
+        self.assertIsNone(self._arm("s1", "ok thanks"))
+        self.assertIsNone(po.resolved_scope("s1", self.tmp))
+
+    def test_unarmed_s2_clears_stale_scope(self):
+        self._arm("s2", "build the export flow across a.py, b.py and c.ts")
+        self.assertIsNotNone(po.resolved_scope("s2", self.tmp))
+        self.assertIsNone(self._arm("s2", "/atlas:status"))
+        self.assertIsNone(po.resolved_scope("s2", self.tmp))
+
+    def test_resolved_scope_missing_or_empty(self):
+        self.assertIsNone(po.resolved_scope("nope", self.tmp))
+        self.assertIsNone(po.resolved_scope("", self.tmp))
+
+    def test_classify_scope(self):
+        self.assertEqual(po.classify_scope("please make it nicer"), ("implement", "medium"))
+        self.assertEqual(po.classify_scope("fix the bug in parse_args"), ("fix", "low"))
+        self.assertEqual(po.classify_scope("fix the bug in foo.py"), ("fix", "low"))
+        multi = po.classify_scope(
+            "Refactor backend/services/auth.py to use JWT, fix the failing login "
+            "test, and add rate limiting to the API."
+        )
+        self.assertIn(multi[1], ("medium", "high"))
+        self.assertEqual(po.classify_scope("review the whole codebase"), ("audit", "high"))
+        self.assertEqual(
+            po.classify_scope("update tests in plugins/x/test_a.py and b.py")[0], "test"
+        )
+        self.assertEqual(
+            po.classify_scope("rename foo in plugins/x/test_a.py")[0], "implement"
+        )
 
 
 class FramingEmitSkipTest(unittest.TestCase):

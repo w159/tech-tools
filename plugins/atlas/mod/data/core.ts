@@ -2,7 +2,8 @@
 //   contract  - the operating contract: reply headers that matched, done items that carry evidence, open gates
 //   verdicts  - the adversarial ledger: worker claims (STATUS: DONE reports) against verifier verdicts (findings.json)
 //   offload   - context kept out of the lead: each tmux worker's context growth past its brief vs the report it sent back
-//   routes    - the decision model: class/effort -> scope-matrix seats -> the model each worker actually ran
+//   routes    - route: class/effort -> scope-matrix seats -> the model each worker actually ran, per transport
+//               (`tmux` team records, `in-process` Agent/Task dispatches when the caller hands them in)
 // Pure: strings in, plain values out (no `$`, no Node), so the Claude band, the pane, /atlas-core and the omp
 // mission panel all render the same numbers. Plan: docs/plans/2026-10-27_atlas-core-mods.md.
 import type { TodoItem } from "../contract";
@@ -43,6 +44,8 @@ export type Seat = {
   effort: string;
   ran: string[];
 };
+/** How the lead ran the route's workers: a tmux team (spawn-team record) or in-process Agent/Task dispatches. */
+export type Transport = "tmux" | "in-process";
 export type Route = {
   teamId: string;
   name: string;
@@ -52,6 +55,8 @@ export type Route = {
   maxParallel: number;
   seats: Seat[];
   drift: string[];
+  /** Always set by this module; optional only so older persisted CoreState rows (no field) still type as Route (read as tmux). */
+  transport?: Transport;
 };
 export type Tally = { ok: number; total: number };
 
@@ -78,9 +83,13 @@ export type CoreModel = {
     ratio: number | null;
   };
   routes: Route[];
+  /** True when the caller handed in the in-process dispatches, so `routes` covers them; absent or false: tmux only. */
+  inProcess?: boolean;
 };
 
 export type ReportNote = { owner: string; text: string; at: number };
+/** One in-process Agent/Task dispatch as the worker cards hold it (orchestration SpawnMeta). */
+export type Dispatch = { name?: string; type?: string; scope?: string; model?: string; at?: number };
 export type CoreInput = {
   findings: string;
   teams: { name: string; text: string }[];
@@ -90,6 +99,10 @@ export type CoreInput = {
   todos: readonly TodoItem[];
   header: Tally;
   openGates: number;
+  /** This session's channels (board, `lead-<sid6>`): when given, only team records on one of them are routes. */
+  channels?: readonly string[];
+  /** This session's in-process dispatches; when given they become `in-process` routes. */
+  dispatches?: readonly Dispatch[];
 };
 
 /** Roles whose STATUS: DONE is a claim another model must check; judges (verifier, critics, auditors) are not. */
@@ -297,17 +310,32 @@ function seatsOf(
   }));
 }
 
-/** One route per team record: the matrix cell the class/effort picked, and the model each member's log shows it ran. */
+const driftOf = (seats: readonly Seat[]): string[] =>
+  seats.flatMap((s) =>
+    s.ran
+      .filter((m) => !ranAs(s.model, m))
+      .map((m) => `${s.role} ran ${m}, seat is ${s.model}`),
+  );
+
+/** `a/b/lead-01a122` -> `lead-01a122`: channels compare by their last path segment, as the mux team reader does. */
+const lastSegment = (channel: unknown): string =>
+  typeof channel === "string" ? channel.split("/").pop() ?? "" : "";
+
+/** One tmux route per team record: the matrix cell the class/effort picked, and the model each member's log shows it
+ * ran. With `channels`, a record on none of them (another session's team) is no route. */
 export function routesOf(
   teams: readonly { name: string; text: string }[],
   matrixText: string,
   offload: readonly Offload[],
+  channels?: readonly string[],
 ): Route[] {
   const matrix = parse(matrixText);
+  const wanted = channels ? new Set(channels.map(lastSegment).filter(Boolean)) : null;
   const created = (t: { text: string }): number => num((parse(t.text) as any)?.created);
   return [...teams].sort((x, y) => created(x) - created(y)).flatMap((t): Route[] => {
     const r = parse(t.text) as any;
     if (!r || typeof r !== "object" || !r.class) return [];
+    if (wanted && !wanted.has(lastSegment(r.channel))) return [];
     const members: string[] = Array.isArray(r.members)
       ? r.members.map((m: any) => str(m?.name))
       : [];
@@ -328,11 +356,6 @@ export function routesOf(
       ...s,
       ran: ranBy(s.role, s.seat),
     }));
-    const drift = seats.flatMap((s) =>
-      s.ran
-        .filter((m) => !ranAs(s.model, m))
-        .map((m) => `${s.role} ran ${m}, seat is ${s.model}`),
-    );
     return [
       {
         teamId: str(r.team_id) || t.name.replace(/\.json$/, ""),
@@ -342,9 +365,46 @@ export function routesOf(
         isolation: str(r.isolation),
         maxParallel: num(r.max_parallel) || 1,
         seats,
-        drift,
+        drift: driftOf(seats),
+        transport: "tmux",
       },
     ];
+  });
+}
+
+const SCOPE_RE = /^\s*([\w-]+)\/(\w+)\s*$/;
+/** The bucket for dispatches with no or a malformed SCOPE: class `-`, effort `-`, no seats. */
+const NO_SCOPE = "-/-";
+
+/** One in-process route per SCOPE (`class/effort`) the lead's Agent/Task dispatches carried, in first-dispatch order:
+ * the matrix seats for that cell and the model each dispatch of a seat's role ran. A dispatch with no or a malformed
+ * SCOPE lands in the `-/-` route (no seats), so every dispatch is represented. */
+export function dispatchRoutes(dispatches: readonly Dispatch[], matrixText: string): Route[] {
+  const matrix = parse(matrixText);
+  const groups = new Map<string, Dispatch[]>();
+  for (const d of [...dispatches].sort((a, b) => num(a.at) - num(b.at))) {
+    const m = SCOPE_RE.exec(str(d.scope));
+    const key = m ? `${m[1]}/${m[2]}` : NO_SCOPE;
+    groups.set(key, [...(groups.get(key) ?? []), d]);
+  }
+  return [...groups.entries()].map(([key, ds]): Route => {
+    const [cls, effort] = key.split("/") as [string, string];
+    const roleOf = (d: Dispatch): string => str(d.type).replace(/^atlas:/, "") || roleOfName(str(d.name));
+    const seats = (key === NO_SCOPE ? [] : seatsOf(matrix, cls, effort)).map((s) => ({
+      ...s,
+      ran: ds.filter((d) => roleOf(d) === s.role && str(d.model)).map((d) => str(d.model)),
+    }));
+    return {
+      teamId: `in-process:${key}`,
+      name: "in-process",
+      cls,
+      effort,
+      isolation: "",
+      maxParallel: ds.length,
+      seats,
+      drift: driftOf(seats),
+      transport: "in-process",
+    };
   });
 }
 
@@ -410,7 +470,11 @@ export function coreModel(input: CoreInput): CoreModel {
       returned,
       ratio: returned > 0 && kept > 0 ? kept / returned : null,
     },
-    routes: routesOf(input.teams, input.matrix, workers),
+    routes: [
+      ...routesOf(input.teams, input.matrix, workers, input.channels),
+      ...(input.dispatches ? dispatchRoutes(input.dispatches, input.matrix) : []),
+    ],
+    inProcess: input.dispatches !== undefined,
   };
 }
 

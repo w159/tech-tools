@@ -166,6 +166,7 @@ blocks, it names the letters:
 | g      | implementer work not independently verified      | p      | colony channel unused                      |
 | h      | ROADMAP not reconciled                           | q      | unmerged worker branches                   |
 | i      | open todos                                       | r      | `done` header while work is open           |
+|        |                                                  | s      | 2+ in-process workers, no tmux team or crew |
 
 The gate arms inside a project: a directory with `docs/`, or one under a
 project marker (`.git`, `.claude`, `.atlas`, `package.json`, `pyproject.toml`,
@@ -206,7 +207,17 @@ another subagent.
 
 A long task run inline fills the main context window with file reads and tool
 output. Atlas moves that work out in two shapes: a crew for a parallel build,
-and a team for read-only work.
+and a team for read-only work. When the prompt optimizer arms a session it
+names the resolved team and the next command; the dispatch tripwire denies the
+2nd in-process working-role dispatch of a run whose scope has 2+ working seats
+(`dispatch_denied:team`, tmux on PATH, closing roles exempt), and completion gate
+(s) blocks once when a run ends with 2+ in-process working-role dispatches and no
+team or crew record. A lead can still declare `SCOPE: <class>/low` to stay
+in-process. `atlas_crew.py run` stamps `lead_session` into `run.json` (`--session`,
+else the first set of `CLAUDE_CODE_SESSION_ID`, `CLAUDE_SESSION_ID`,
+`ATLAS_SESSION_ID`, else empty, with a `warning` field in the output) so gate (p)
+can tie a crew to its session. The deny is skipped once the run has launched a
+team or crew.
 
 ### Crew: a parallel build that talks over IRC
 
@@ -314,7 +325,11 @@ judgment:
    label can arm a regex miss; a confident conversation label vetoes a regex
    arm, and only when the prompt also names an engineering object. Timeout, low
    confidence or `ATLAS_DECISION=off` keeps the regex answer. The default
-   endpoint is local; `ATLAS_DECISION_URL` and `ATLAS_DECISION_MODEL` change it.
+   endpoint is local; `ATLAS_DECISION_URL` and `ATLAS_DECISION_MODEL` change it. The class and
+   effort in the arming nudge do not come from this model: `classify_scope` in
+   `hooks/prompt_optimizer_core.py` is a first-match keyword heuristic over the
+   scope-matrix class names and aliases (so "do not audit, just implement x"
+   classifies as audit). Moving it onto the decision model is open work.
 2. Which team, at what cost. `scripts/atlas_resolve.py <class> <effort>` reads
    `contracts/scope-matrix.json` and returns the roles, counts, model tier,
    effort and isolation for the task. It is deterministic: the same input gives
@@ -434,7 +449,7 @@ fail-open when the CLI is absent).
 | `bash_advisor.py`               | PreToolUse (Bash)                                                  | Warns on catastrophic commands; never denies                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `git_guard.py`                  | PreToolUse (Bash, Write, Agent, Task, mcp__*)                      | Keeps commits and pushes off protected branches (the default branch, `production`, `release/*`, GitHub-protected) while other branches are in use, caps local branches and linked worktrees, and turns every pull-request creation into a permission prompt. Policy: `.atlas/git-policy.json`, `scripts/atlas_git.py policy` (`ATLAS_GIT_GUARD=off`)                                                                                         |
 | `edit_read_nudge.py`            | PreToolUse, PostToolUse                                            | Nudges when an edit targets a file read only through `ctx_read`                                                                                                                                                                                                                                                                                                                                                                              |
-| `dispatch_tripwire.py`          | PreToolUse, PostToolUse, SubagentStart                             | Routes native Grep and Glob to lean-ctx where it is configured; counts inline work and denies past the threshold in orchestration runs; names an unnamed `atlas:*` dispatch (denies it instead with `ATLAS_AUTONAME=off`); denies model-overriding `atlas:*` dispatches, dispatches missing the GOAL / DELIVERABLE / SUCCESS CRITERIA / OUT OF SCOPE / STOP CONDITIONS spec or bundling more than one GOAL, and any nested subagent dispatch |
+| `dispatch_tripwire.py`          | PreToolUse, PostToolUse, SubagentStart                             | Routes native Grep and Glob to lean-ctx where it is configured; counts inline work and denies past the threshold in orchestration runs; names an unnamed `atlas:*` dispatch (denies it instead with `ATLAS_AUTONAME=off`); denies model-overriding `atlas:*` dispatches, dispatches missing the GOAL / DELIVERABLE / SUCCESS CRITERIA / OUT OF SCOPE / STOP CONDITIONS spec or bundling more than one GOAL, and any nested subagent dispatch; denies the 2nd in-process working-role dispatch of a run whose scope has 2+ working seats when tmux is on PATH (`dispatch_denied:team`) |
 | `fallow_gate.py`                | PreToolUse (Bash)                                                  | Runs `fallow audit` on `git commit` and `git push` and denies on `verdict: fail` or a CLI below the minimum version (`ATLAS_FALLOW=off`)                                                                                                                                                                                                                                                                                                     |
 | `todo_capture.py`               | PostToolUse                                                        | Mirrors TodoWrite plans to the durable board (`ATLAS_TODO=off`)                                                                                                                                                                                                                                                                                                                                                                              |
 | `docs_drift_watch.py`           | PostToolUse                                                        | Warns as soon as code ships without a `docs/CHANGELOG.md` entry (debounced per session)                                                                                                                                                                                                                                                                                                                                                      |
@@ -480,7 +495,11 @@ python3 "$ATLAS/scripts/atlas_statusline.py" uninstall
 In-terminal mod. `mod/register.ts`, wired by the `modules` entry in
 `hooks/hooks.json`, draws a one-row band above the prompt (phase, progress,
 live workers, gate count) and a sidebar with route, team, channel and gates
-views; `/atlas-cc` opens it. Gate readings come from
+views; `/atlas-cc` opens it. The route view is labelled `route: class/effort -> seats -> model`,
+lists this session's tmux team records and in-process dispatches (each row shows
+its transport, `tmux` or `in-process`; a dispatch without a `SCOPE:` line shows as
+class `-`, effort `-`), and prints `no team this session` only with no tmux rows
+and no dispatch rows. Gate readings come from
 `scripts/atlas_gates.py --session <id> --root <repo> --json`, which shares its
 evaluation with the Stop hook. `ATLAS_MOD=off` disables it. Detail:
 [docs/architecture/atlas-mod.md](../../docs/architecture/atlas-mod.md).
@@ -622,8 +641,9 @@ switches:
 | Variable                                                       | Default                  | Effect                                                        |
 | -------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------- |
 | `ATLAS_GATE`                                                   | on                       | `off` disables the completion gate                            |
-| `ATLAS_GATE_HEADER`, `ATLAS_GATE_PHASES`, `ATLAS_GATE_COLONY`  | on                       | Turn off gate conditions n, o, p individually                 |
+| `ATLAS_GATE_HEADER`, `ATLAS_GATE_PHASES`, `ATLAS_GATE_COLONY`  | on                       | Turn off gate conditions n, o, p individually (p also skips s) |
 | `ATLAS_WT_GATE`                                                | on                       | `off` disables condition (q)                                  |
+| `ATLAS_TEAM_GATE`                                              | on                       | `off` turns `dispatch_denied:team` and gate (s) into advisories |
 | `ATLAS_TRIPWIRE`, `ATLAS_TRIPWIRE_HARD`                        | on                       | `off` disables the tripwire, or only its deny tier            |
 | `ATLAS_ENGINE_ARM`                                             | on                       | `off` stops prompts from arming orchestration                 |
 | `ATLAS_DECISION`, `ATLAS_DECISION_URL`, `ATLAS_DECISION_MODEL` | on, loopback, `nimble`   | Local decision model                                          |

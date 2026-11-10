@@ -1,5 +1,34 @@
 # Changelog
 
+## 17.4.3 - 2026-11-10
+
+Colony routing enforcement. Over 14 days `~/.atlas/atlas.db` held 813 lead-level in-process Agent/Task calls, at most 8 `atlas_mux.py spawn-team` commands and 0 Workflow runs: 2+ worker jobs were run as in-process subagents, not as tmux teams or crews. The prompt optimizer now classifies the prompt and names the resolved team and the next command, the tripwire denies the 2nd in-process working-role dispatch when the scope is a team, completion gate (p) counts real team and crew members, a new gate (s) backs the deny at Stop, and the mod route row shows what the lead actually ran. Plan: `docs/plans/2026-11-10_colony-routing-enforcement.md`.
+
+### Fixed
+
+- Arming nudge names the route (`hooks/prompt_optimizer_core.py`). New `classify_scope(prompt)` (keyword heuristic over the scope-matrix class names and aliases) picks a class and effort (effort is `low` only for a single file or symbol, a short prompt and one action verb; 2+ jobs is never `low`); `atlas_resolve.resolve` gives the team; the nudge names class, effort, seats with models and the next command (`atlas_crew.py run` for a writing class with 2+ working seats, `atlas_mux.py spawn-team` for a read-only one, one in-process `atlas:<role>` call with `SCOPE:` for a single seat). The resolved scope is stored per session under `.atlas/.run/atlas-scope/` and read through `resolved_scope(session_id, root)`; a resolver error returns the old nudge and a prompt that does not arm clears the stored scope. Cap 700 bytes (`_NUDGE_MAX_BYTES`); the largest nudge measured was 383 bytes.
+- New deny `dispatch_denied:team` (`hooks/dispatch_tripwire_core.py` `_team_note`): the 2nd in-process working-role dispatch of a run is denied when the scope (the dispatch's `SCOPE:` line, else `resolved_scope`) has 2+ working seats and tmux is on PATH. Closing roles (planner, verifier, completeness-critic, docs-curator, docs-auditor) are never counted. No tmux, omp, or `ATLAS_TEAM_GATE=off`: the same text as an advisory. The run boundary is the user prompt. A denied dispatch frees its burst slot. Once the run has launched a team or crew (a shell call running `atlas_mux.py spawn-team` or `atlas_crew.py run`) the deny is skipped for that run. The deny text names the scripts under the literal `${CLAUDE_PLUGIN_ROOT}/scripts/`, so its length does not depend on the install path.
+- A shell call running `atlas_mux.py spawn-team` or `atlas_crew.py run` resets the inline-op counter like a dispatch (`hooks/dispatch_tripwire_core.py`). A lead that ran one team and one crew still got `STOP - 4 inline ops, no dispatch`.
+- Completion gate (p) measures real colonies (`hooks/completion_gate_core.py` `_team_records`, `_colony_workers_dispatched`, `_colony_channel_used`). It counts members of this session's tmux team records (live and archived) and crew runs, and only a board note on a team's channel or a crew IRC line written by one of those members counts as channel use. A lead's note, the lead's SendMessage and in-process dispatches no longer count.
+- New completion gate condition (s), team gate: 2+ in-process working-role dispatches in the run and no team or crew record for the session blocks once per session, naming the count and the `spawn-team` command. Skipped with no tmux; `ATLAS_TEAM_GATE=off` makes it a stderr advisory; `ATLAS_GATE_COLONY=off` skips it. The gate now has nineteen conditions, (a) through (s).
+- Gates (p) and (s) never apply to a team or crew worker session (`ATLAS_WORKER_NAME` or `ATLAS_CREW_WORKER` set): a worker is a leaf and its lead owns the colony.
+- `atlas_crew.py run` writes `lead_session` into `run.json` (`--session`, else the first set of `CLAUDE_CODE_SESSION_ID`, `CLAUDE_SESSION_ID`, `ATLAS_SESSION_ID`, else an empty string). Gate (p) counts a crew only when it equals the session id; a crew with an empty `lead_session` belongs to no session. When no session id resolves, `atlas_crew.py run` prints a `warning` field in its output saying to pass `--session <id>`.
+- Mod route row (`mod/data/core.ts`, `mod/pane/sidebar-core.tsx`, `mod/register.ts`): each route carries a transport, `tmux` or `in-process`; team records are limited to this session's channels; in-process dispatches become routes, grouped by `SCOPE:` line, and a dispatch with no or a malformed `SCOPE:` shows as class `-`, effort `-` with no seats; the pane prints `no team this session` only with no tmux rows and no dispatch rows; the label is `route: class/effort -> seats -> model`. "Decision model" now names only the prompt classifier (README `ATLAS_DECISION`).
+
+### Changed
+
+- `plugins/atlas/README.md`: gate table row (s), `dispatch_denied:team` in the tripwire row, `ATLAS_TEAM_GATE` in the settings table, the classifier note under Decision models, the mod route view text.
+- `skills/atlas-orchestrate/SKILL.md`, `references/laws-and-gates.md`, `references/hooks-automation.md`, `references/subagent-kit.md` and `output-styles/atlas-orchestrator.md`: the team deny, gates (p) and (s), the counter reset and the arming nudge.
+- Root `CLAUDE.md`: session-gate, dispatch-gate and completion-gate text for the same.
+
+### Known limits
+
+- The audit and a first crew run were done by mistake on a stale 16.4.2 checkout and redone on 17.4.2.
+- `classify_scope` is a first-match keyword heuristic: "do not audit, just implement x" classifies as audit. Upgrading it to the local decision model is on the ROADMAP.
+- A lead can still declare `SCOPE: x/low` to stay in-process.
+- Nothing here has been observed in an installed plugin in a live terminal; the change is covered by hook and mod unit tests only. A fresh verifier drove the real hook entry scripts in a temp root and confirmed the first-round claims; the second fix round (items above on launched runs, the literal script path, the crew warning, `low` effort and the `-/-` route) has unit-test evidence only.
+- Open follow-ups: prune `.atlas/.run/atlas-scope/*.json`, `NO_COLOR` support (not built).
+
 ## 17.4.2 - 2026-11-10
 
 Follow-up pass on 17.4.1. The session-start doctor moved files without being asked, the status header gate blocked once per session while the rule said every reply, worker cards said `done` for an agent that had only returned, and atlas put more text into the model's context than the model needed. Measurements: `docs/audits/2026-11-10_atlas-payload-budget.md`.

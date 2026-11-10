@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.4.3 - 2026-11-10
+
+- atlas 17.4.3: colony routing enforcement. The arming nudge names the resolved team and the next command. A 2nd in-process working-role dispatch is denied (`dispatch_denied:team`) when the scope resolves to 2+ working seats and tmux is present; `ATLAS_TEAM_GATE=off` makes it advisory. Completion gate (p) counts only tmux team and crew members and their own channel lines; new condition (s) blocks once when 2+ working dispatches ran in-process with no team record. `atlas_crew.py` stamps `lead_session` in run.json. The sidepanel ROUTE section shows this session only, each row marked `tmux` or `in-process`. Reason: 14 days of `~/.atlas/atlas.db` showed 813 in-process Agent/Task calls against at most 8 spawn-team commands. Verified by full hooks (2816) and scripts (4281) suites, bun (3400 pass), tsc, ruff and plugin validate on a 17.4.2 worktree; evidence in .atlas/evidence/2026-11-10_colony-routing-suites.txt. Not observed in an installed plugin yet. Details in plugins/atlas/CHANGELOG.md; plan in docs/plans/2026-11-10_colony-routing-enforcement.md.
+
+## marketplace 5.9.3 - 2026-11-10
+
+- marketplace 5.9.3: atlas 17.4.3. armada and programmer are unchanged.
+
 ## atlas 17.4.2 - 2026-11-10
 
 - atlas 17.4.2: follow-up pass on 17.4.1. The session-start doctor only reports misplaced `.atlas` paths and never moves files; layout repair refuses the home directory and other non-project roots, and `--fix` prints each move as source -> destination. Completion gate condition (n) blocks every reply without a valid status header, also while a subagent runs, with a short repeat message and a loop count that resets after a corrected reply. Mod cards say `finished`, not `done`, and rows fit the card width. Less text reaches the model: a role-aware channel brief (read-only roles 2102 to 695 bytes), a shorter orchestrate nudge and second-dispatch advisory, and compact default output with `--json` for the full form on `atlas_finding.py`, `atlas_mux.py spawn-team|wait|reap` and `atlas_irc.py who`. New `bench_hooks.py --bytes`. Unused Python imports and dead exports removed; bun test bugs fixed. Not observed in a live terminal yet. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-10_atlas-payload-budget.md.
