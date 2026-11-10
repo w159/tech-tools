@@ -13,7 +13,8 @@ import { type PanelModel, renderPanel } from "./mission-panel";
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const fixtureModel = () => coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
 
-const panel = (width: number, core: PanelModel["core"], workers = 2): PanelModel => ({
+/** The core row shows on the idle panel only (a running panel spends its rows on workers). */
+const panel = (width: number, core: PanelModel["core"], workers = 0): PanelModel => ({
 	width,
 	maxLines: 10,
 	phase: "implement",
@@ -27,8 +28,9 @@ const panel = (width: number, core: PanelModel["core"], workers = 2): PanelModel
 	gates: [],
 	channel: "demo@master/lead-1",
 	core,
+	idle: workers ? undefined : { workers: 3, secs: 91, failed: 0 },
 });
-const coreRow = (rows: string[]) => rows.map(strip).find((r) => r.includes("CONTRACT"));
+const coreRow = (rows: string[]) => rows.map(strip).find((r) => r.includes("contract  "));
 
 for (const cols of [160, 120] as const) {
 	test(`panel core row equals coreGolden[${cols}] after ANSI strip`, () => {
@@ -38,16 +40,24 @@ for (const cols of [160, 120] as const) {
 	});
 }
 
-test("the core row sits right under the phase rail and keeps every worker lane", () => {
+test("the core row sits right under the stepper on the idle panel", () => {
+	const rows = renderPanel(panel(160, fixtureModel())).map(strip);
+	expect(rows[1]).toContain("research");
+	expect(rows[2]).toContain("contract  ");
+});
+
+test("a running panel keeps its rows for workers: no core row", () => {
 	const rows = renderPanel(panel(160, fixtureModel(), 5)).map(strip);
-	expect(rows[2]).toContain("CONTRACT");
+	expect(coreRow(rows)).toBeUndefined();
 	expect(rows.filter((r) => r.includes("implementer-")).length).toBe(5);
 });
 
-test("chips draw as filled labels in the mocha hex of their hue", () => {
-	const row = renderPanel(panel(160, fixtureModel())).find((r) => r.includes("CONTRACT"))!;
-	expect(row).toContain("\x1b[48;2;203;166;247m"); // violet #cba6f7 behind CONTRACT
-	expect(row).toContain("\x1b[48;2;250;179;135m"); // peach #fab387 behind VERDICT
+test("labels are dim and only what is off takes colour (mocha hex as foreground)", () => {
+	const row = renderPanel(panel(160, fixtureModel())).find((r) => r.includes("contract  "))!;
+	expect(row).toContain("\x1b[38;2;88;91;112m"); // dim #585b70 behind the labels
+	expect(row).toContain("\x1b[38;2;243;139;168m"); // bad #f38ba8: the refuted claim
+	expect(row).toContain("\x1b[38;2;166;227;161m"); // ok #a6e3a1: the verified claim
+	expect(row).not.toContain("\x1b[48;2;203;166;247m"); // no filled chip backgrounds
 });
 
 test("no core row without core data", () => {

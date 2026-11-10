@@ -1412,6 +1412,7 @@ class StatusKillTests(Base):
     def test_status_board_only_lists_this_runs_workers(self):
         rc, data, _, err = self._spawn()
         self.assertEqual(0, rc, (data, err))
+        _wait_exit(self.root, "Alpha")  # the worker's board file is written asynchronously
         other = pathlib.Path(self.root, ".atlas/.run/board/Stranger.jsonl")
         other.parent.mkdir(parents=True, exist_ok=True)
         other.write_text(json.dumps({"text": "exit 0"}) + "\n")

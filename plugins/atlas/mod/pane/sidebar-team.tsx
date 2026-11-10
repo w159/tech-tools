@@ -1,11 +1,12 @@
-// Sidebar team view: an aligned worker table (failures first, never folded), the lead summary row and the message field.
+// Sidebar team view: one row per worker (failures first, never folded) in plain words, the lead summary row and the message field.
+// Colour only for state, each coloured mark beside a word; a spinner only on a worker with a tool in flight.
 import type { ClientElements, RenderElement } from 'claude-code';
 import type { SquadAgent } from '../contract';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { fitRuns, rowOf, type Segment } from '../runs';
-import { chartRoom as C, fitText, spin, textWidth } from '../theme';
+import { isMessageKind, type Tone, TONE_HEX as T } from '../mission-layout';
+import { fitText, spin, textWidth } from '../theme';
 import { liveWorkers, type LiveWorker } from '../data/live';
-import { personaColor } from '../data/personas';
 import { scrub } from './chrome';
 import { pad, type SidebarHandlers, type SidebarModel } from './sidebar-types';
 
@@ -18,7 +19,7 @@ const STATE_MOOD: Record<string, Mood> = { running: 'working', spawning: 'workin
 
 /** A member's bubble is its own words only: never another member's comms, and the lead's channel traffic is not its line. */
 const saidBy = (s: LiveSnapshot, name: string): string =>
-  isLeadName(name) ? '' : [...s.comms].reverse().find((c) => c.from === name)?.text ?? '';
+  isLeadName(name) ? '' : [...s.comms].reverse().find((c) => c.from === name && isMessageKind(c.kind))?.text ?? '';
 
 const defaultText = (tool: string | null | undefined, state: string): string => tool || (state === 'running' ? 'working' : state);
 
@@ -74,58 +75,57 @@ const NOBODY_HINT = 'nobody dispatched yet, ask the lead to start a worker';
 /** A dispatch edge younger than this marks a worker as spawned this turn. */
 const SPAWN_MS = 90_000;
 
-const STATE_LOOK = { failed: ['✗', C.fail], blocked: ['⏸', C.warn], done: ['✓', C.ok], working: ['', C.live], parked: ['·', C.muted] } as const;
-
 /** 3s / 40s / 2m / 1h. */
 function shortAge(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
 }
 
-const nowText = (w: LiveWorker): string =>
-  w.state === 'blocked' ? 'awaits lead reply' : w.state === 'failed' ? 'failed' : w.state === 'done' ? 'done' : w.state === 'parked' ? 'parked' : w.tool || 'working';
+/** What a worker is doing, in words: `Edit auth/middleware.ts`, `thinking`, `starting`, `waiting for lead reply`, `failed`, `finished`. */
+type Look = { mark: string; tone: Tone; text: string; spinning: boolean };
+function lookOf(w: LiveWorker, starting: boolean): Look {
+  if (w.state === 'failed') return { mark: '✗', tone: 'bad', text: 'failed', spinning: false };
+  if (w.state === 'blocked') return { mark: '⏸', tone: 'warn', text: 'waiting for lead reply', spinning: false };
+  if (w.state === 'done') return { mark: '✓', tone: 'ok', text: 'finished', spinning: false };
+  if (w.state === 'parked') return { mark: '·', tone: 'muted', text: 'parked', spinning: false };
+  if (w.tool) return { mark: '', tone: 'accent', text: scrub(w.target ? `${w.tool} ${w.target}` : w.tool).replace(/\s+/g, ' '), spinning: true };
+  if (starting && !w.lastTool) return { mark: '◌', tone: 'muted', text: 'starting', spinning: false };
+  return { mark: '', tone: 'muted', text: w.lastTool ? `thinking, last ${w.lastTool}` : 'thinking', spinning: true };
+}
 
 const cell = (t: string, w: number, right = false): string => {
   const f = fitText(t, w);
   return right ? ' '.repeat(Math.max(0, w - textWidth(f))) + f : pad(f, w);
 };
 
-type Col = { id: 'name' | 'role' | 'now' | 'age' | 'tools'; head: string; cap: number; min: number; right?: boolean; w: number };
-
-function layout(ws: LiveWorker[], now: number, tools: (w: LiveWorker) => number, inner: number): { cols: Col[]; gap: number; last: number } {
-  const ids: Col['id'][] = inner >= 70 ? ['name', 'role', 'now', 'age', 'tools'] : inner >= 50 ? ['name', 'now', 'age'] : ['name', 'now'];
-  const text: Record<Col['id'], (w: LiveWorker) => string> = {
-    name: (w) => w.name, role: (w) => w.role, now: nowText, age: (w) => shortAge(now - w.startedAt), tools: (w) => String(tools(w)),
-  };
-  const spec: Record<Col['id'], [string, number, number, boolean?]> = {
-    name: ['agent', 14, 5], role: ['role', 12, 4], now: ['now', 18, 3], age: ['age', 4, 3, true], tools: ['tools', 5, 5, true],
-  };
-  const cols = ids.map((id): Col => {
-    const [head, cap, min, right] = spec[id];
-    return { id, head, cap, min, right, w: Math.min(cap, Math.max(textWidth(head), ...ws.map((w) => textWidth(text[id](w))))) };
-  });
-  const gap = inner >= 70 ? 2 : 1;
-  const left = () => inner - 3 - cols.reduce((n, c) => n + c.w + gap, 0);
-  const shrinkable = ['now', 'name', 'role'] as const;
-  while (left() < 8) {
-    const c = shrinkable.map((id) => cols.find((x) => x.id === id)).filter((x): x is Col => !!x && x.w > x.min).sort((a, b) => b.w - a.w)[0];
-    if (!c) break;
-    c.w--;
-  }
-  return { cols, gap, last: Math.max(0, left()) };
-}
+const NAME_CAP = 14;
+const ROLE_CAP = 12;
+const AGE_W = 4;
+const ROLE_MIN_INNER = 50;
 
 function leadRow(els: ClientElements, ws: LiveWorker[], cols: number): RenderElement {
   const n = (s: LiveWorker['state']) => ws.filter((w) => w.state === s).length;
-  const running = n('working');
+  // `running` always reads (a zero says nothing is working); the other counts appear only when they are not zero.
+  const parts: [string, Tone][] = [[`${n('working')} running`, 'muted']];
+  if (n('done')) parts.push([`${n('done')} finished`, 'muted']);
+  if (n('blocked')) parts.push([`${n('blocked')} blocked`, 'warn']);
+  if (n('failed')) parts.push([`${n('failed')} failed`, 'bad']);
   return rowOf(els, [
-    { t: '●', color: running ? C.live : C.muted },
-    { t: ' lead', bold: true },
-    { t: `  running ${running} · ${n('done')} done · ${n('blocked')} blocked`, color: C.muted },
+    { t: 'lead', bold: true, color: T.text },
+    ...parts.reduce<Segment[]>((out, [t, tone], i) => {
+      const color = T[tone];
+      const last = out[out.length - 1];
+      const lead = i ? ' · ' : '  ';
+      if (last && last.color === color && !last.bold) last.t += lead + t; // adjacent runs of one colour stay one segment
+      else if (color === T.muted) out.push({ t: lead + t, color });
+      else if (last && last.color === T.muted) { last.t += lead; out.push({ t, color }); }
+      else out.push({ t: lead, color: T.muted }, { t, color });
+      return out;
+    }, []),
   ], cols);
 }
 
-function messageInput(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number): RenderElement {
+function messageInput(els: ClientElements, m: SidebarModel, on: SidebarHandlers): RenderElement {
   return els.Input({
     key: 'msg',
     label: '▸ to ' + (m.ui.recipient ?? 'lead'),
@@ -142,45 +142,51 @@ export function teamSummary(s: LiveSnapshot): string {
   return working ? `lead is conducting ${working}` : 'lead is idle';
 }
 
+/** One worker row: `⠋ impl-auth  implementer  Edit auth/middleware.ts  1m10s`. Columns line up across rows; the activity
+ * takes the width the name, role and age leave and is cut with an ellipsis when it does not fit. */
+function workerSegments(w: LiveWorker, look: Look, tick: number, age: string, inner: number, widths: { name: number; role: number; now: number }): Segment[] {
+  const roleW = widths.role;
+  const showRole = inner >= ROLE_MIN_INNER;
+  const fixed = 2 + AGE_W + 2 + (showRole ? roleW + 2 : 0);
+  const nameW = Math.max(4, Math.min(widths.name, inner - fixed - 8));
+  const nowW = Math.max(0, Math.min(widths.now, inner - fixed - nameW - 2));
+  return [
+    { t: look.spinning ? spin(tick) : look.mark, color: T[look.tone], bold: !look.spinning && look.tone !== 'muted' },
+    { t: ' ' },
+    { t: cell(scrub(w.name), nameW) + '  ', color: T.text, bold: true },
+    ...(showRole ? [{ t: cell(w.role, roleW) + '  ', color: T.muted }] : []),
+    { t: cell(look.text, nowW) + '  ', color: look.tone === 'accent' ? T.text : T[look.tone] },
+    { t: cell(age, AGE_W, true), color: T.muted },
+  ];
+}
+
 export function teamRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number): RenderElement[] {
   const s = m.snapshot;
   const ws = liveWorkers(s, s.now);
   const toolCount = (w: LiveWorker): number => s.activity[w.name]?.toolCount ?? 0;
   const spawned = (w: LiveWorker): boolean => s.comms.some((c) => c.kind === 'dispatch' && c.to === w.name && s.now - c.ts <= SPAWN_MS);
-  const { cols, gap, last } = layout(ws, s.now, toolCount, inner);
-  const sp = ' '.repeat(gap);
+  const widths = {
+    name: Math.min(NAME_CAP, Math.max(4, ...ws.map((w) => textWidth(scrub(w.name))))),
+    role: Math.min(ROLE_CAP, Math.max(4, ...ws.map((w) => textWidth(w.role)))),
+    now: Math.max(0, ...ws.map((w) => textWidth(lookOf(w, spawned(w)).text))),
+  };
   const rows: RenderElement[] = [];
-  if (inner >= 50 && ws.length) {
-    const h = (t: string, w: number, right = false): Segment => ({ t: cell(t, w, right) + sp, color: C.muted });
-    rows.push(rowOf(els, [{ t: 'st ', color: C.muted }, ...cols.map((c) => h(c.head, c.w, c.right)), ...(last ? [{ t: fitText('last line', last), color: C.muted }] : [])], inner));
-  }
-  if (!ws.length) rows.push(rowOf(els, [{ t: NOBODY_HINT, color: C.muted }], inner));
+  if (!ws.length) rows.push(rowOf(els, [{ t: NOBODY_HINT, color: T.muted }], inner));
   for (const w of ws) {
-    const [g, color] = STATE_LOOK[w.state];
     const key = `worker:${w.name}`;
     const open = m.ui.expanded === key;
-    const val: Record<Col['id'], string> = { name: w.name, role: w.role, now: nowText(w), age: shortAge(s.now - w.startedAt), tools: String(toolCount(w)) };
-    const parts: Segment[] = [
-      { t: w.state === 'working' ? spin(m.tick ?? 0) : g, color, bold: w.state !== 'working' },
-      { t: spawned(w) ? '▸ ' : '  ', color: C.focus },
-      ...cols.flatMap((c): Segment[] => [{
-        t: cell(c.id === 'name' ? scrub(val.name) : val[c.id], c.w, c.right) + sp,
-        color: c.id === 'name' ? personaColor(w.role) : c.id === 'now' && w.state !== 'working' ? color : c.id === 'role' || c.id === 'age' || c.id === 'tools' ? C.muted : undefined,
-        bold: c.id === 'name',
-      }]),
-      ...(last ? [{ t: fitText(scrub(w.lastLine).replace(/\s+/g, ' '), last), color: C.muted }] : []),
-    ];
+    const look = lookOf(w, spawned(w));
     rows.push(els.Button({
       key,
       plain: true,
       onPress: () => { on.selectRecipient(w.name); on.toggle(key); },
-      children: fitRuns(els, parts, inner),
+      children: fitRuns(els, workerSegments(w, look, m.tick ?? 0, shortAge(s.now - w.startedAt), inner, widths), inner),
     }));
     if (open) {
-      rows.push(rowOf(els, [{ t: '  ' + fitText(scrub(w.lastLine).replace(/\s+/g, ' ') || w.state, inner - 2), color: C.muted }], inner));
-      rows.push(rowOf(els, [{ t: '  ' + fitText(`since ${shortAge(s.now - w.startedAt)} ago · ${toolCount(w)} tools`, inner - 2), color: C.muted }], inner));
+      rows.push(rowOf(els, [{ t: '  ' + fitText(scrub(w.lastLine).replace(/\s+/g, ' ') || w.state, inner - 2), color: T.muted }], inner));
+      rows.push(rowOf(els, [{ t: '  ' + fitText(`running ${shortAge(s.now - w.startedAt)} · ${toolCount(w)} tool calls`, inner - 2), color: T.muted }], inner));
     }
   }
-  rows.push(leadRow(els, ws, inner), messageInput(els, m, on, inner));
+  rows.push(leadRow(els, ws, inner), messageInput(els, m, on));
   return rows;
 }

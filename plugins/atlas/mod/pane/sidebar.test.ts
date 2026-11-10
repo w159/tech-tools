@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../live_fixture';
+import { TONE_HEX } from '../mission-layout';
 import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } from './sidebar';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -36,23 +37,26 @@ const tree = (over: Partial<SidebarModel> = {}, view: SidebarModel['ui']['view']
   }, on) as unknown as Node;
 
 describe('sidebar shell', () => {
-  test('four plain hotkey tabs r/t/c/g with their labels', () => {
+  test('four plain hotkey tabs r/t/c/g with their labels, no glyphs', () => {
     const t = tree();
     const tabs = (['route', 'team', 'channel', 'gates'] as const).map((v) => tab(t, v).props);
     expect(tabs.map((b) => b.hotkey)).toEqual(['r', 't', 'c', 'g']);
-    expect(tabs.map((b) => b.label)).toEqual(['◎ route', '● team', '✉ channel', '◈ core ✗1']);
+    expect(tabs.map((b) => b.label)).toEqual(['route', 'team', 'channel', 'gates 1 failing']);
     expect(tabs.every((b) => b.plain === true)).toBe(true);
   });
 
-  test('the g tab reads ◈ core when no gate is open', () => {
-    expect(tab(tree({}, 'team', []), 'gates').props.label).toBe('◈ core');
+  test('the g tab reads plain gates when no gate is open', () => {
+    expect(tab(tree({}, 'team', []), 'gates').props.label).toBe('gates');
   });
 
-  test('the current tab is bold, the others dim; pressing a tab sets that view', () => {
+  test('the active tab is accent and bold, the others muted; pressing a tab sets that view', () => {
     const t = tree({}, 'channel');
-    expect(tab(t, 'channel').props.dimColor).toBe(false);
-    expect(all(tab(t, 'channel')).some((n) => n.kind === 'Text' && n.props.bold === true)).toBe(true);
-    expect(tab(t, 'team').props.dimColor).toBe(true);
+    const head = (v: string) => kids(tab(t, v))[0]!.props;
+    expect(head('channel')).toMatchObject({ color: TONE_HEX.accent, bold: true });
+    expect(head('team')).toMatchObject({ color: TONE_HEX.muted, bold: false });
+    expect(head('route').color).toBe(TONE_HEX.muted);
+    expect(TONE_HEX.accent).toBe('#cba6f7');
+    expect(TONE_HEX.muted).toBe('#9399b2');
     tab(t, 'route').props.onPress();
     expect(calls).toContain('view:route');
   });

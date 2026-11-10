@@ -33,8 +33,12 @@ export const TOAST_MAX = 100;
 export function mergeToasts(texts: readonly string[]): string | null {
 	if (texts.length === 0) return null;
 	if (texts.length === 1) return texts[0]!;
-	return fit(`${texts[0]}  (+${texts.length - 1}: ${texts.slice(1).join(' · ')})`, TOAST_MAX);
+	return fit(`${texts[0]} (${texts.length - 1} more: ${texts.slice(1).join(' ')})`, TOAST_MAX);
 }
+
+/** A toast is a plain sentence: no glyph prefix, no code, one closing full stop. */
+const sentence = (text: string): string => (/[.!?…]$/.test(text) ? text : `${text}.`);
+const withLine = (head: string, line: string): string => sentence(line ? `${head}: ${line}` : head);
 
 /** Pure diff of successive snapshots; null prev (first sight) yields nothing. Never throws. */
 export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): NotifyEvent[] {
@@ -110,22 +114,22 @@ export function registerNotify(
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {
 						case 'agent-spawn':
-							texts.push(`▸ ${ev.name} spawned`);
+							texts.push(sentence(`${ev.name} started`));
 							break;
 						case 'agent-complete':
-							texts.push(`✓ ${ev.name}${ev.age ? ` ${ev.age}` : ''}${ev.lastLine ? ` · ${fit(ev.lastLine, 40)}` : ''}`);
+							texts.push(withLine(`${ev.name} finished${ev.age ? ` after ${ev.age}` : ''}`, ev.lastLine ? fit(ev.lastLine, 40) : ''));
 							break;
 						case 'agent-fail':
-							texts.push(`✗ ${ev.name} ${ev.lastLine}`.trimEnd());
+							texts.push(withLine(`${ev.name} failed`, ev.lastLine.trimEnd()));
 							break;
 						case 'agent-blocked':
-							texts.push(`⏸ ${ev.name} blocked: ${ev.lastLine}`.trimEnd());
+							texts.push(withLine(`${ev.name} is blocked`, ev.lastLine.trimEnd()));
 							break;
 						case 'note':
-							texts.push(`${ev.sender}: ${ev.preview}`);
+							texts.push(withLine(`Note from ${ev.sender}`, ev.preview));
 							break;
 						case 'todo-done':
-							texts.push(`✓ ${ev.text}`);
+							texts.push(withLine('Task done', ev.text));
 							break;
 						case 'phase':
 							if (deps.soundEnabled()) {

@@ -4,8 +4,8 @@ import type { ClientElements } from 'claude-code';
 import { busySnap } from '../live_fixture';
 import type { ChannelNote } from '../contract';
 import type { LiveSnapshot } from '../orchestra-types';
-import { personaStyle } from '../sprites/api';
-import { chartRoom as C, textWidth } from '../theme';
+import { TONE_HEX as T } from '../mission-layout';
+import { textWidth } from '../theme';
 import { channelRows } from './sidebar-channel';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 
@@ -33,28 +33,32 @@ const header = (r: Node[]): string => textOf(r[0]!);
 const noteTexts = (r: Node[]): Node[][] => r.slice(1, -1).map(kids);
 
 describe('header', () => {
-  test('channel name, nick count and unread count', () => {
+  test('channel name, people count and unread count', () => {
     const r = rowsFor([note(1, 'lead', 'impl', 'go'), note(2, 'impl', 'lead', 'ok'), note(3, 'impl', 'lead', 'done')]);
-    // lead + impl wrote; the busy fixture's 3 live workers count as nicks too
-    expect(header(r)).toBe('#lead-1  5 nicks  2 unread');
+    // lead + impl wrote; the busy fixture's 3 live workers count as people too
+    expect(header(r)).toBe('#lead-1  5 people · 2 unread');
     expect(kids(r[0]!)[0]!.props.bold).toBe(true);
-    expect(kids(r[0]!)[1]!.props.color).toBe(C.muted);
+    expect(kids(r[0]!)[1]!.props.color).toBe(T.muted);
   });
   test('no unread part when the lead spoke last; no lead notes means everything is unread', () => {
-    expect(header(rowsFor([note(1, 'impl', 'lead', 'x'), note(2, 'lead-9', undefined, 'y')]))).toBe('#lead-1  5 nicks');
-    expect(header(rowsFor([note(1, 'impl', 'lead', 'x'), note(2, 'impl', 'lead', 'y')]))).toBe('#lead-1  4 nicks  2 unread');
-    expect(header(rowsFor([]))).toBe('#lead-1  3 nicks');
+    expect(header(rowsFor([note(1, 'impl', 'lead', 'x'), note(2, 'lead-9', undefined, 'y')]))).toBe('#lead-1  5 people');
+    expect(header(rowsFor([note(1, 'impl', 'lead', 'x'), note(2, 'impl', 'lead', 'y')]))).toBe('#lead-1  4 people · 2 unread');
+    expect(header(rowsFor([]))).toBe('#lead-1  3 people');
+  });
+  test('one person reads "1 person"', () => {
+    const only = [{ name: 'lead' }] as unknown as LiveSnapshot['members'];
+    expect(header(rowsFor([note(1, 'lead', 'all', 'a')], { squad: [], members: only }))).toBe('#lead-1  1 person');
   });
   test('channel falls back to #channel', () => {
-    expect(header(rowsFor([], { channel: null as unknown as string }))).toBe('#channel  3 nicks');
+    expect(header(rowsFor([], { channel: null as unknown as string }))).toBe('#channel  3 people');
   });
-  test('nicks = distinct note owners + open members + live (non-done) workers', () => {
+  test('people = distinct note owners + open members + live (non-done) workers', () => {
     const squad = (state: string) => [{ name: 'w1', persona: 'explorer', state, source: 'task', task: 't' }] as LiveSnapshot['squad'];
     const members = [{ name: 'm1' }, { name: 'm2', ended_at: 5 }, { name: 'impl' }] as unknown as LiveSnapshot['members'];
     // owners: lead, impl -> 2; members add m1 (m2 ended, impl dup) -> 3; live worker w1 -> 4
-    expect(header(rowsFor([note(1, 'lead', 'all', 'a'), note(2, 'impl', 'all', 'b')], { squad: squad('running'), members }))).toContain('4 nicks');
-    expect(header(rowsFor([note(1, 'lead', 'all', 'a'), note(2, 'impl', 'all', 'b')], { squad: squad('finished'), members }))).toContain('3 nicks');
-    expect(header(rowsFor([note(1, 'lead', 'all', 'a')], { squad: squad('failed'), members: [] }))).toContain('2 nicks');
+    expect(header(rowsFor([note(1, 'lead', 'all', 'a'), note(2, 'impl', 'all', 'b')], { squad: squad('running'), members }))).toContain('4 people');
+    expect(header(rowsFor([note(1, 'lead', 'all', 'a'), note(2, 'impl', 'all', 'b')], { squad: squad('finished'), members }))).toContain('3 people');
+    expect(header(rowsFor([note(1, 'lead', 'all', 'a')], { squad: squad('failed'), members: [] }))).toContain('2 people');
   });
 });
 
@@ -75,7 +79,7 @@ describe('note segments', () => {
   test('time column only from inner width 50; invalid timestamps read --:--', () => {
     const at = (inner: number, ts = TS) => noteTexts(rowsFor([note(1, 'impl', 'lead', 'x', undefined, ts)], {}, inner))[0]!;
     expect(textOf(at(50)[0]!)).toBe('05:07 ');
-    expect(at(50)[0]!.props.color).toBe(C.muted);
+    expect(at(50)[0]!.props.color).toBe(T.muted);
     expect(at(49)).toHaveLength(4); // nick, mark, recipient, text: no time
     expect(textOf(at(49)[0]!).trim()).toBe('impl');
     expect(textOf(at(50, 'garbage')[0]!)).toBe('--:-- ');
@@ -83,7 +87,7 @@ describe('note segments', () => {
     expect(textOf(at(50, new Date(2026, 0, 2, 0, 0).toISOString())[0]!)).toBe('00:00 ');
   });
 
-  test('nick column is bold, padded to the widest owner (4..10), cut with an ellipsis, coloured by persona', () => {
+  test('nick column is bold, padded to the widest owner (4..10), cut with an ellipsis, plain text colour for everyone', () => {
     const squad = [{ name: 'explorer-1', persona: 'explorer', state: 'running', source: 'task', task: 't' }] as LiveSnapshot['squad'];
     const nick = (owner: string, over: Partial<LiveSnapshot> = {}) => noteTexts(rowsFor([note(1, owner, 'lead', 'x')], { squad, ...over }, 40))[0]![0]!;
     expect(nick('ab').props.children).toBe('ab   '); // min width 4 + 1 space
@@ -91,12 +95,7 @@ describe('note segments', () => {
     expect(nick('abcde').props.children).toBe('abcde ');
     expect(nick('abcdefghij').props.children).toBe('abcdefghij ');
     expect(nick('abcdefghijklmno').props.children).toBe('abcdefghi… '); // max width 10
-    expect(nick('explorer-1').props.color).toBe(personaStyle('explorer').color);
-    expect(nick('lead-1').props.color).toBe(personaStyle('lead').color);
-    expect(nick('lead').props.color).toBe(personaStyle('lead').color);
-    expect(nick('ghost').props.color).toBe(personaStyle('unknown').color);
-    expect(personaStyle('explorer').color).not.toBe(personaStyle('unknown').color);
-    expect(personaStyle('lead').color).not.toBe(personaStyle('unknown').color);
+    for (const owner of ['explorer-1', 'lead-1', 'lead', 'ghost']) expect(nick(owner).props.color).toBe(T.text);
   });
 
   test('nick width follows the widest owner of the visible window only', () => {
@@ -105,28 +104,29 @@ describe('note segments', () => {
     expect(out[0]![0]!.props.children).toBe('ab   ');
   });
 
-  test('marks: blocked ⚠, handoff/done ✓, lead-owned ─▶, to all/none/lead ▶, to a peer ↔; colours follow', () => {
-    const mark = (n: ChannelNote) => noteTexts(rowsFor([n], {}, 40))[0]!.find((p) => /^(⚠|✓|─▶|▶|↔) $/.test(String(p.props.children)))!.props;
-    expect(mark(note(1, 'impl', 'lead', 'x', 'blocked'))).toMatchObject({ children: '⚠ ', color: C.warn });
-    expect(mark(note(1, 'lead', 'impl', 'x', 'blocked'))).toMatchObject({ children: '⚠ ', color: C.warn });
-    expect(mark(note(1, 'impl', 'lead', 'x', 'handoff'))).toMatchObject({ children: '✓ ', color: C.ok });
-    expect(mark(note(1, 'impl', 'lead', 'x', 'done'))).toMatchObject({ children: '✓ ', color: C.ok });
-    expect(mark(note(1, 'lead', 'impl', 'x'))).toMatchObject({ children: '─▶ ', color: C.muted });
-    expect(mark(note(1, 'lead-3', 'impl', 'x', 'handoff'))).toMatchObject({ children: '✓ ', color: C.ok });
-    expect(mark(note(1, 'impl', undefined, 'x'))).toMatchObject({ children: '▶ ', color: C.muted });
-    expect(mark(note(1, 'impl', 'all', 'x'))).toMatchObject({ children: '▶ ', color: C.muted });
-    expect(mark(note(1, 'impl', 'lead', 'x'))).toMatchObject({ children: '▶ ', color: C.muted });
-    expect(mark(note(1, 'impl', 'lead-2', 'x'))).toMatchObject({ children: '▶ ', color: C.muted });
-    expect(mark(note(1, 'impl', 'review', 'x'))).toMatchObject({ children: '↔ ', color: C.muted });
-    expect(mark(note(1, 'impl', 'leader', 'x'))).toMatchObject({ children: '↔ ', color: C.muted }); // not a lead id
-    expect(mark(note(1, 'leadership', 'review', 'x'))).toMatchObject({ children: '↔ ', color: C.muted });
+  test('marks: blocked ⚠ blocked, handoff/done ✓ with the word, lead-owned ─▶, to all/none/lead ▶, to a peer ↔; colours follow', () => {
+    const mark = (n: ChannelNote) => noteTexts(rowsFor([n], {}, 60))[0]!.find((p) => /^(⚠ blocked|✓ handoff|✓ done|─▶|▶|↔) $/.test(String(p.props.children)))!.props;
+    expect(mark(note(1, 'impl', 'lead', 'x', 'blocked'))).toMatchObject({ children: '⚠ blocked ', color: T.warn });
+    expect(mark(note(1, 'lead', 'impl', 'x', 'blocked'))).toMatchObject({ children: '⚠ blocked ', color: T.warn });
+    expect(mark(note(1, 'impl', 'lead', 'x', 'handoff'))).toMatchObject({ children: '✓ handoff ', color: T.ok });
+    expect(mark(note(1, 'impl', 'lead', 'x', 'done'))).toMatchObject({ children: '✓ done ', color: T.ok });
+    expect(mark(note(1, 'lead', 'impl', 'x'))).toMatchObject({ children: '─▶ ', color: T.muted });
+    expect(mark(note(1, 'lead-3', 'impl', 'x', 'handoff'))).toMatchObject({ children: '✓ handoff ', color: T.ok });
+    expect(mark(note(1, 'impl', undefined, 'x'))).toMatchObject({ children: '▶ ', color: T.muted });
+    expect(mark(note(1, 'impl', 'all', 'x'))).toMatchObject({ children: '▶ ', color: T.muted });
+    expect(mark(note(1, 'impl', 'lead', 'x'))).toMatchObject({ children: '▶ ', color: T.muted });
+    expect(mark(note(1, 'impl', 'lead-2', 'x'))).toMatchObject({ children: '▶ ', color: T.muted });
+    expect(mark(note(1, 'impl', 'review', 'x'))).toMatchObject({ children: '↔ ', color: T.muted });
+    expect(mark(note(1, 'impl', 'leader', 'x'))).toMatchObject({ children: '↔ ', color: T.muted }); // not a lead id
+    expect(mark(note(1, 'leadership', 'review', 'x'))).toMatchObject({ children: '↔ ', color: T.muted });
     expect(mark(note(1, 'impl', 'review', 'x', 'say'))).toMatchObject({ children: '↔ ' });
   });
 
   test('recipient segment appears for a named target, muted, and not for all/none', () => {
     const parts = (to: string | undefined) => noteTexts(rowsFor([note(1, 'impl', to, 'hello')], {}, 40))[0]!.map((p) => p.props.children);
     expect(parts('review')).toEqual(['impl ', '↔ ', 'review ', 'hello']);
-    expect(noteTexts(rowsFor([note(1, 'impl', 'review', 'hello')], {}, 40))[0]![2]!.props.color).toBe(C.muted);
+    expect(noteTexts(rowsFor([note(1, 'impl', 'review', 'hello')], {}, 40))[0]![2]!.props.color).toBe(T.muted);
+    expect(noteTexts(rowsFor([note(1, 'impl', 'review', 'hello')], {}, 40))[0]![3]!.props.color).toBe(T.text);
     expect(parts('all')).toEqual(['impl ', '▶ ', 'hello']);
     expect(parts(undefined)).toEqual(['impl ', '▶ ', 'hello']);
     expect(parts('lead')).toEqual(['impl ', '▶ ', 'lead ', 'hello']);

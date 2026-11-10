@@ -4,7 +4,7 @@
 // file, computeCounts, currentPhase precedence.
 import { describe, expect, test } from 'claude-code/testing';
 import type { Contract, FsLike, TodoItem } from '../contract';
-import { DEPT, computeCounts, currentPhase, groupTodos, isPlanItem, readTodos, routeCounts } from './todos';
+import { DEPT, computeCounts, currentPhase, groupTodos, isPlanItem, planCounts, readTodos, routeCounts } from './todos';
 
 const CONTRACT: Contract = {
   phases: [],
@@ -389,4 +389,15 @@ describe('currentPhase', () => {
     expect(currentPhase([item({ id: 'a', status: 'completed' })], null))
       .toEqual({ phase: 'research', source: 'default' });
   });
+});
+
+describe('planCounts', () => {
+  const t = (id: string, status: string, origin?: string) => ({ id, status, content: id, origin }) as any;
+  test('dispatch rows are excluded while a real plan exists', () => {
+    expect(planCounts([t('a', 'completed'), t('b', 'pending'), t('d', 'pending', 'dispatch')])).toEqual({ done: 1, total: 2 });
+  });
+  test('only dispatch rows: they count, so the header matches the TODO tree', () => {
+    expect(planCounts([t('d0', 'in_progress', 'dispatch'), t('d1', 'completed', 'dispatch')])).toEqual({ done: 1, total: 2 });
+  });
+  test('empty board: 0 of 0', () => { expect(planCounts([])).toEqual({ done: 0, total: 0 }); });
 });

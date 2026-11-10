@@ -27,6 +27,11 @@ export interface Orch {
 
 export interface SpawnMeta { name?: string; type?: string; at?: number; scope?: string; model?: string } // at: spawn time (ms); scope: prompt `SCOPE:` value; model: the spawn's `model`, else the parent's (what `inherit` resolves to)
 
+/** The worker name a lead puts in front of an Agent description (`readme-explorer: compare README and AGENTS`): the host's
+ * Agent call carries no `name` for a plain subagent, so this prefix is the only place the lead's own name survives. A
+ * hyphenated slug only; plain prose with a colon is not a name. */
+export const descriptionName = (description: string | undefined): string | undefined => /^\s*([a-z0-9]+(?:[-_.][a-z0-9]+)+):\s/i.exec(description ?? '')?.[1];
+
 export const EMPTY_ORCH: Orch = { activity: {}, comms: [], stage: {}, meta: {} };
 
 const firstLine = (text: string): string => {
@@ -106,7 +111,7 @@ export const detailOf = (tool: string, input: unknown): string | undefined => {
 };
 
 const CALL_WINDOW_MS = 60_000;
-const MAX_CALLS = 48; // ring cap: the sparkline only shows the last minute
+const MAX_CALLS = 48; // ring cap: only the last minute of calls is kept
 
 /** Tool start times within the last minute, `now` appended, capped at MAX_CALLS. */
 export const pushCall = (calls: readonly number[] | undefined, now: number): number[] =>

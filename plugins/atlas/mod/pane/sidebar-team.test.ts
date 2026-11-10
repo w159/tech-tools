@@ -2,7 +2,8 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../live_fixture';
-import { textWidth } from '../theme';
+import { TONE_HEX as T } from '../mission-layout';
+import { spin, textWidth } from '../theme';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 import type { LiveSnapshot } from '../orchestra-types';
 import type { SquadAgent } from '../contract';
@@ -37,14 +38,23 @@ describe('team table', () => {
       expect(at('impl-auth')).toBeLessThan(at('runner-1'));
       expect(at('runner-1')).toBeLessThan(at('explorer-1'));
       expect(t[at('runner-1')]).toContain('✗');
-      expect(t.at(-1)).toContain('running 1 · 0 done · 1 blocked');
+      expect(t.at(-1)).toBe('lead  1 running · 1 blocked · 1 failed');
       expect(t.join('\n')).not.toContain('more');
     });
   }
-  test('header only from 50 cells', () => {
-    expect(textOf(rows(44)[0]!)).not.toContain('agent');
-    expect(textOf(rows(80)[0]!)).toMatch(/^st\s+agent\s+role\s+now\s+age\s+tools\s+last line/);
-    expect(textOf(rows(60)[0]!)).not.toContain('role');
+  test('no header row; the role column appears from 50 cells', () => {
+    for (const inner of [44, 60, 80]) expect(textOf(rows(inner)[0]!)).not.toMatch(/agent|last line|tools/);
+    expect(textOf(rows(80)[0]!)).toContain('implementer');
+    expect(textOf(rows(60)[0]!)).toContain('implementer');
+    expect(textOf(rows(44)[0]!)).not.toContain('implementer');
+  });
+  test('state is a mark plus a word, coloured by state only', () => {
+    const byKey = (k: string) => kids(rows(80).find((n) => n.props.key === k)!);
+    const blocked = byKey('worker:impl-auth');
+    expect(blocked[0]!.props).toMatchObject({ children: '⏸', color: T.warn });
+    expect(blocked.map((n) => n.props.children).join('')).toContain('waiting for lead reply');
+    expect(byKey('worker:runner-1')[0]!.props).toMatchObject({ children: '✗', color: T.bad });
+    expect(byKey('worker:explorer-1')[0]!.props).toMatchObject({ children: spin(3), color: T.accent });
   });
   test('Enter toggles a 2-line detail and selects the worker', () => {
     const base = rows(80).length;
@@ -55,7 +65,7 @@ describe('team table', () => {
   });
   test('message input keeps the recipient', () => {
     const i = rows(80, { recipient: 'runner-1' }).find((n) => n.kind === 'Input')!;
-    expect(i.props.label).toBe("▸ to runner-1");
+    expect(i.props.label).toBe('▸ to runner-1');
   });
 });
 
@@ -172,10 +182,9 @@ describe('roster (mates)', () => {
   test('a parked worker renders a row with the muted dot instead of throwing', () => {
     const s = world({ squad: [sq('pk', 'parked')], activity: { pk: act() } as any });
     const t = rowTexts(s, 80);
-    expect(t[1]).toMatch(/^· {2}pk /);
-    expect(t[1]).toContain('parked');
-    const b = (teamRows(els, { ...model(), snapshot: s }, on, 80) as unknown as Node[])[1]!;
-    expect(kids(b)[0]!.props.color).toBeDefined();
+    expect(t[0]).toMatch(/^· pk +runner +parked +\d+[smh]$/);
+    const b = (teamRows(els, { ...model(), snapshot: s }, on, 80) as unknown as Node[])[0]!;
+    expect(kids(b)[0]!.props).toMatchObject({ children: '·', color: T.muted });
   });
 });
 
@@ -191,88 +200,138 @@ describe('team summary and lead row', () => {
       squad: [sq('a', 'running'), sq('b', 'finished'), sq('c', 'finished'), sq('d', 'input'), sq('e', 'stuck')],
       activity: { a: act({ mood: 'working' }) } as any,
     });
-    expect(rowTexts(s, 80).at(-1)).toBe('● lead  running 1 · 2 done · 2 blocked');
+    expect(rowTexts(s, 80).at(-1)).toBe('lead  1 running · 2 finished · 2 blocked');
   });
-  test('no workers shows the hint and a muted lead dot', () => {
+  test('no workers shows the hint and a plain lead summary', () => {
     const r = teamRows(els, model(), on, 80);
     expect(r.length).toBeGreaterThan(0);
     const t = rowTexts(world(), 80);
-    expect(t).toEqual(['nobody dispatched yet, ask the lead to start a worker', '● lead  running 0 · 0 done · 0 blocked']);
+    expect(t).toEqual(['nobody dispatched yet, ask the lead to start a worker', 'lead  0 running']);
+    const lead = kids(teamRows(els, { ...model(), snapshot: world() }, on, 80).at(-2) as unknown as Node);
+    expect(lead.map((n) => n.props.color)).toEqual([T.text, T.muted]);
+    expect(kids(teamRows(els, model(), on, 80).at(-2) as unknown as Node)[2]!.props.color).toBe(T.warn); // one blocked worker turns its count amber
   });
 });
 
 describe('team table cells', () => {
   const full = (): LiveSnapshot => world({
-    squad: [sq('explorer-1', 'running', { persona: 'explorer' }), sq('impl-auth', 'input', { persona: 'implementer' }), sq('runner-1', 'failed'), sq('fin', 'finished'), sq('pk', 'parked')],
+    squad: [
+      sq('explorer-1', 'running', { persona: 'explorer' }), sq('impl-auth', 'input', { persona: 'implementer' }), sq('runner-1', 'failed'),
+      sq('fin', 'finished'), sq('pk', 'parked'), sq('th', 'running'), sq('st', 'running'),
+    ],
     activity: {
-      'explorer-1': act({ tool: 'Grep', mood: 'working', toolCount: 9, startedAt: NOW - 42_000, lastLine: 'found 3 call sites' }),
+      'explorer-1': act({ tool: 'Grep', target: 'src/auth', mood: 'working', toolCount: 9, startedAt: NOW - 42_000, lastLine: 'found 3 call sites' }),
       'impl-auth': act({ mood: 'blocked', toolCount: 3, startedAt: NOW - 59_000 }),
       'runner-1': act({ mood: 'failed', toolCount: 12, startedAt: NOW - 125_000 }),
       fin: act({ mood: 'done', toolCount: 1, startedAt: NOW - 3599_000 }),
       pk: act({ toolCount: 0, startedAt: NOW - 3600_000 }),
+      th: act({ mood: 'working', lastTool: 'Edit', startedAt: NOW - 70_000 }),
+      st: act({ mood: 'working', startedAt: NOW - 3_000 }),
     } as any,
+    comms: [{ seq: 1, ts: NOW - 3000, from: 'lead', to: 'st', text: 'go', kind: 'dispatch' }] as any,
   });
-  test('exact rows at 80 cells: left-aligned text, right-aligned age and tools', () => {
-    const t = rowTexts(full(), 80);
-    expect(t[0]).toBe('st agent       role         now                age  tools  last line');
-    expect(t[1]).toBe('⏸  impl-auth   implementer  awaits lead reply  59s      3  ');
-    expect(t[2]).toBe('✗  runner-1    runner       failed              2m     12  ');
-    expect(t[3]).toBe('⠸  explorer-1  explorer     Grep               42s      9  found 3 call sites');
+  test('exact rows at 80 cells: mark, name, role, activity in words, age', () => {
+    expect(rowTexts(full(), 80)).toEqual([
+      '⏸ impl-auth   implementer  waiting for lead reply   59s',
+      '✗ runner-1    runner       failed                    2m',
+      '⠸ explorer-1  explorer     Grep src/auth            42s',
+      '⠸ th          runner       thinking, last Edit       1m',
+      '◌ st          runner       starting                  3s',
+      '· pk          runner       parked                    1h',
+      '✓ fin         runner       finished                 59m',
+      'lead  3 running · 1 finished · 1 blocked · 1 failed',
+    ]);
   });
-  test('state labels and age units: done, parked, 59m, 1h', () => {
-    const t = rowTexts(full(), 80).join('\n');
-    expect(t).toContain('✓  fin         runner       done               59m      1  ');
-    expect(t).toMatch(/·  pk {10}runner {7}parked +1h {6}0 {2}/);
+  test('below 50 cells the role column is dropped and the activity is cut with an ellipsis', () => {
+    expect(rowTexts(full(), 44).slice(0, 3)).toEqual([
+      '⏸ impl-auth   waiting for lead reply   59s',
+      '✗ runner-1    failed                    2m',
+      '⠸ explorer-1  Grep src/auth            42s',
+    ]);
+    expect(rowTexts(full(), 30)[0]).toBe('⏸ impl-auth   waiting f…   59s');
   });
-  test('the worker row fills the pane exactly when the last line is long', () => {
-    const s = world({ squad: [sq('a', 'running')], activity: { a: act({ tool: 'Grep', lastLine: 'y'.repeat(300), startedAt: NOW - 1000 }) } as any });
-    for (const inner of [44, 60, 80, 100]) expect(textWidth(rowTexts(s, inner)[inner >= 50 ? 1 : 0]!)).toBe(inner);
+  test('only a worker with a tool in flight or thinking spins; every other state is a static mark', () => {
+    const marks = (tick: number) => rowTexts(world({ ...full() }), 80, tick).map((r) => r[0]);
+    expect(marks(0)).toEqual(['⏸', '✗', spin(0), spin(0), '◌', '·', '✓', 'l']);
+    expect(marks(3)).toEqual(['⏸', '✗', spin(3), spin(3), '◌', '·', '✓', 'l']);
   });
-  test('the name cell is bold, the others are not', () => {
-    const b = (teamRows(els, model(), on, 80) as unknown as Node[]).find((n) => n.props.key === 'worker:explorer-1')!;
-    const cells = kids(b);
-    expect(cells[2]!.props.bold).toBe(true);
-    expect(cells[3]!.props.bold).toBe(false);
-    expect(cells[4]!.props.bold).toBe(false);
+  test('thinking is muted, a running tool is accent, starting is muted ◌', () => {
+    const b = (k: string) => kids((teamRows(els, { ...model(), snapshot: full() }, on, 80) as unknown as Node[]).find((n) => n.props.key === `worker:${k}`)!);
+    expect(b('th')[0]!.props.color).toBe(T.muted);
+    expect(b('explorer-1')[0]!.props.color).toBe(T.accent);
+    expect(b('st')[0]!.props).toMatchObject({ children: '◌', color: T.muted });
   });
-  test('the dispatch marker lasts 90 seconds', () => {
-    const at = (ms: number) => world({
-      squad: [sq('a', 'running')], activity: { a: act({ tool: 'Grep' }) } as any,
+  test('the activity word takes the state tone; the name is bold text, the role and age muted', () => {
+    const b = kids((teamRows(els, { ...model(), snapshot: full() }, on, 80) as unknown as Node[]).find((n) => n.props.key === 'worker:impl-auth')!);
+    expect(b[2]!.props).toMatchObject({ bold: true, color: T.text });
+    expect(b[3]!.props).toMatchObject({ color: T.muted });
+    expect(b[4]!.props).toMatchObject({ color: T.warn });
+    expect(b[5]!.props).toMatchObject({ color: T.muted });
+    expect(b[2]!.props.bold).toBe(true);
+    expect(b[3]!.props.bold).toBeFalsy();
+  });
+  test('the worker row never exceeds the pane, however long the activity is', () => {
+    const s = world({ squad: [sq('a', 'running')], activity: { a: act({ tool: 'Grep', target: 'y'.repeat(300), startedAt: NOW - 1000 }) } as any });
+    for (const inner of [44, 60, 80, 100]) expect(textWidth(rowTexts(s, inner)[0]!)).toBeLessThanOrEqual(inner);
+    expect(rowTexts(s, 44)[0]).toBe(`⠸ a     Grep ${'y'.repeat(24)}…    1s`);
+  });
+  test('starting lasts 90 seconds after the dispatch, and only before the worker has used a tool', () => {
+    const at = (ms: number, over: Record<string, unknown> = {}) => world({
+      squad: [sq('a', 'running')], activity: { a: act({ mood: 'working', ...over }) } as any,
       comms: [{ seq: 1, ts: NOW - ms, from: 'lead', to: 'a', text: 'go', kind: 'dispatch' }] as any,
     });
-    expect(rowTexts(at(90_000), 80)[1]!.slice(0, 2)).toBe('⠸▸');
-    expect(rowTexts(at(90_001), 80)[1]!.slice(0, 2)).toBe('⠸ ');
-    expect(rowTexts(at(1), 80)[1]![2]).toBe(' ');
+    expect(rowTexts(at(90_000), 80)[0]).toContain('◌ a');
+    expect(rowTexts(at(90_000), 80)[0]).toContain('starting');
+    expect(rowTexts(at(90_001), 80)[0]).toContain('thinking');
+    expect(rowTexts(at(90_001), 80)[0]!.startsWith('⠸')).toBe(true);
+    expect(rowTexts(at(1, { lastTool: 'Edit' }), 80)[0]).toContain('thinking, last Edit');
   });
-  test('a dispatch to another worker or a plain message does not mark this worker', () => {
+  test('a dispatch to another worker or a plain message does not mark this worker starting', () => {
     const s = world({
-      squad: [sq('a', 'running')], activity: { a: act({ tool: 'Grep' }) } as any,
+      squad: [sq('a', 'running')], activity: { a: act({ mood: 'working' }) } as any,
       comms: [
         { seq: 1, ts: NOW - 1, from: 'lead', to: 'other', text: 'go', kind: 'dispatch' },
         { seq: 2, ts: NOW - 1, from: 'lead', to: 'a', text: 'hi', kind: 'say' },
       ] as any,
     });
-    expect(rowTexts(s, 80)[1]).not.toContain('▸');
+    expect(rowTexts(s, 80)[0]).not.toContain('starting');
   });
-  test('column caps: name 14, role 12, now 18, tools 5', () => {
+  test('column caps: name 14, role 12; the age keeps a right-aligned 4-cell column', () => {
     const s = world({
       squad: [sq('n'.repeat(30), 'running', { persona: 'r'.repeat(30) })],
-      activity: { ['n'.repeat(30)]: act({ tool: 'T'.repeat(40), toolCount: 123456, lastLine: 'z' }) } as any,
+      activity: { ['n'.repeat(30)]: act({ tool: 'T', toolCount: 123456, lastLine: 'z' }) } as any,
     });
-    const [head, row] = rowTexts(s, 120);
-    expect(head).toBe('st agent           role          now                 age  tools  last line');
-    expect(row!.slice(3, 3 + 14)).toBe('n'.repeat(13) + '…');
-    expect(row!.slice(3 + 16, 3 + 16 + 12)).toBe('r'.repeat(11) + '…');
-    expect(row).toMatch(/ T{17}… {3}1s {2}1234… {2}z$/);
+    const row = rowTexts(s, 120)[0]!;
+    expect(row).toBe(`⠸ ${'n'.repeat(13)}…  ${'r'.repeat(11)}…  T    1s`);
   });
-  test('narrow panes shrink now, then name, then role, never below their minimum', () => {
+  test('narrow panes cut the name to four cells at most', () => {
     const s = world({
       squad: [sq('n'.repeat(30), 'running', { persona: 'r'.repeat(30) })],
-      activity: { ['n'.repeat(30)]: act({ tool: 'T'.repeat(40), lastLine: 'z'.repeat(50) }) } as any,
+      activity: { ['n'.repeat(30)]: act({ tool: 'T'.repeat(40) }) } as any,
     });
-    const row = rowTexts(s, 72)[1]!;
-    expect(textWidth(row)).toBe(72);
-    expect(row.slice(3 + 16 + 14)).toBe('T'.repeat(16) + '…   1s      0  ' + 'z'.repeat(7) + '…');
-    expect(rowTexts(s, 20)[0]).toBe('⠸  nnnn… TT… zzzzzz…');
+    const row = rowTexts(s, 72)[0]!;
+    expect(textWidth(row)).toBeLessThanOrEqual(72);
+    expect(rowTexts(s, 20)[0]).toBe('⠸ nnn…  TTTTT…    1s');
+  });
+});
+
+describe('lead summary row', () => {
+  const lead = (squad: SquadAgent[], activity: Record<string, unknown> = {}) => {
+    const m = { ...model(), snapshot: { ...busySnap({ squad, activity: activity as any }), now: NOW } } as SidebarModel;
+    return textOf((teamRows(els, m, on, 80) as unknown as Node[]).filter((n) => n.kind !== 'Input').at(-1)!);
+  };
+  test('failed is counted and zero counts drop, except running', () => {
+    expect(lead([sq('a', 'failed')])).toBe('lead  0 running · 1 failed');
+    expect(lead([sq('a', 'finished'), sq('b', 'finished')])).toBe('lead  0 running · 2 finished');
+    expect(lead([sq('a', 'running'), sq('b', 'input')])).toBe('lead  1 running · 1 blocked');
+    expect(lead([])).toBe('lead  0 running');
+  });
+  test('a worker line is never a presence event', () => {
+    const comms = [
+      { seq: 1, ts: NOW - 3, from: 'a', to: 'lead', text: 'real words', kind: 'say' },
+      { seq: 2, ts: NOW - 1, from: 'a', to: 'all', text: 'joined', kind: 'join' },
+    ] as any;
+    const m = mates({ ...busySnap({ squad: [sq('a', 'parked')], activity: {}, comms }), now: NOW });
+    expect(m.find((x) => x.name === 'a')!.line).toBe('real words');
   });
 });

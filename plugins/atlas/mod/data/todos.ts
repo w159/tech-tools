@@ -169,6 +169,14 @@ export function currentPhase(
   return { phase: 'research', source: 'default' };
 }
 
+/** done/total over the board rows: the lead's plan (dispatch rows excluded) while one exists, else every row, so a board
+ * holding only dispatch rows still reads `0 of 2` like the TODO tree under it. Twin basis of routeCounts for flat rows. */
+export function planCounts(items: readonly { status: string }[]): { done: number; total: number } {
+  const plan = items.filter(isPlanItem);
+  const basis = plan.length ? plan : items;
+  return { done: basis.filter((i) => i.status === 'completed').length, total: basis.length };
+}
+
 /** done/total over the lead's plan: every group's items (contract phases and unsorted, so label phases count) except advisor notes and dispatch rows; same basis as computeCounts. */
 export function routeCounts(groups: readonly TodoGroup[], _contract?: Contract): { done: number; total: number } {
   const items = groups.filter((g) => g.phase !== 'advisor').flatMap((g) => g.items).filter(isPlanItem);

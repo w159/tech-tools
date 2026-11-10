@@ -118,7 +118,8 @@ class TodoToolsTest(DisplayBase):
             code = d.main(["--plugin", "atlas"])
         text = out.getvalue()
         self.assertEqual(1, code, text)
-        self.assertRegex(text, r"(?m)^FAIL  display-todo-tools")
+        self.assertRegex(text, r"(?m)^\s*✗ FAIL  display-todo-tools")
+        self.assertRegex(text, r"(?m)^\d+ problem\(s\) need attention")
         self.assertNotIn("HEALTHY", text)
         with open(self.settings) as f:
             self.assertEqual(f.read(), "{ not json")  # never overwritten

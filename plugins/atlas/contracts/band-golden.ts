@@ -1,19 +1,34 @@
-// Golden rows for contracts/band-fixture.ts at 120 columns (plain text, trailing spaces trimmed).
-// A .ts module because the mod test host cannot read files; see band-fixture.ts for the per-row decisions.
+// Golden rows for contracts/band-fixture.ts at 120 columns, tick 0 (plain text, trailing spaces trimmed). The Claude
+// band (mod/band-golden.test.ts) and the omp mission panel (omp/mission-panel-golden.test.ts) both assert these exact
+// rows, blank spacer rows included: the text comes from mod/mission-layout.ts, so the two harnesses print the same.
+// A .ts module because the mod test host cannot read files. See band-fixture.ts for the row decisions.
+
+/** Running: header, stepper, workers (running, then thinking), the newest message, the checks footer. */
 export const golden: string[] = [
-  " ◆ ATLAS  ·  mission control  ·  tech-tools@main  ·  wave 1  ·  implement/medium           ◷ 01:15   2 live   ✖ 1 gates",
-  "  ✓ research ▶ ✓ theory ▶ ✓ test ▶ ◆ IMPLEMENT ▶ verify ▶ done",
-  " board ████                     1/6 ⠋ impl-auth: edit auth middleware",
-  "  RUN   ◔_◔ explorer-1              explorer     Grep        src/auth                 ██████▉      ▁▁▂▁▄▂▁▆▂▄▂▄   1m15s",
-  "  THINK •~• impl-auth               implementer  Edit        auth/middleware.ts       ██████▍      ▁▁▁▁▂▁▂▂▁▄▂▂   1m10s",
-  "  #lead-eed839  14:05 lead → explorer-1: map the auth flow   14:06 impl-auth → lead: need a decision on the token ttl",
-  " tasks ███                1/6   ✔ completion   ✖ tripwire   ✔ routing",
+  " ◆ ATLAS   tech-tools@main  ·  implement/medium                                   1 of 6 tasks ━━━━━━━━━━━━━━━━   01:15",
+  " ✓ research ─ ✓ theory ─ ✓ test ─ ⠋ implement ─ ○ verify ─ ○ done",
+  "",
+  " ⠋ explorer-1  explorer     Grep  src/auth                                                                        1m15s",
+  " ⠋ impl-auth   implementer  thinking   last Edit auth/middleware.ts                                               1m10s",
+  "",
+  " impl-auth → lead-eed839   need a decision on the token ttl                                                       14:06",
+  " checks  ✓ completion  ✗ tripwire  ✓ routing"
 ];
 
-// The phase rail (row 2) at narrower widths, same fixture: the widest form that fits. 92 columns used to drop every
-// name to `·`/`✓` on the Claude band (a fixed `cols < 100` switch) while omp kept them.
+/** Idle: the run is closed, the stepper carries the last run, the core row follows (core-golden.ts), then the footer.
+ * The Claude band adds its key buttons to the footer only when handlers are wired; the golden test wires none. */
+export const idleGolden: string[] = [
+  " ◆ ATLAS   tech-tools@main  ·  idle                                                       6 of 6 tasks ━━━━━━━━━━━━━━━━",
+  " ✓ research ─ ✓ theory ─ ✓ test ─ ✓ implement ─ ✓ verify ─ ✓ done                  last run  3 workers · 1m31s · all ok",
+  " contract  header 3/4   verdicts  1 verified · 1 refuted   offload  17.9k → 608 (30x)   route  verify/low ✓",
+  " checks  ✓ completion  ✗ tripwire  ✓ routing"
+];
+
+// The stepper (row 2) at narrower widths, same fixture, spinner frame at tick 0: the widest form that fits. Full names,
+// then three letters, then marks; the current step keeps its name. Below 80 columns the band folds to one row, so the
+// tests draw the stepper alone (railRow on the band, railText on omp).
 export const railGolden: Record<number, string> = {
-  92: "  ✓ research ▶ ✓ theory ▶ ✓ test ▶ ◆ IMPLEMENT ▶ verify ▶ done",
-  56: "  ✓ res ▶ ✓ the ▶ ✓ tes ▶ ◆ IMPLEMENT ▶ ver ▶ don",
-  40: "  ✓ ▶ ✓ ▶ ✓ ▶ ◆ IMPLEMENT ▶ · ▶ ·",
+  92: " ✓ research ─ ✓ theory ─ ✓ test ─ ⠋ implement ─ ○ verify ─ ○ done",
+  56: " ✓ res ─ ✓ the ─ ✓ tes ─ ⠋ implement ─ ○ ver ─ ○ don",
+  40: " ✓ ─ ✓ ─ ✓ ─ ⠋ implement ─ ○ ─ ○",
 };

@@ -2,21 +2,20 @@
 // mission panel) both render `fx` at 120 columns, tick 0, strip colour, trim trailing spaces, and must produce
 // `golden` from band-golden.ts exactly. A .ts module because the mod test host loads only code files (no fs).
 //
-// Canonical text per row (the richer of the two twins wins, then both renderers follow it):
-//   title    `◆ ATLAS  ·  mission control  ·  <project>@<branch>  ·  wave N  ·  <scope>` left, `◷ mm:ss   N live   ✖ N gates` right.
-//            Mark `◆` (one cell), separator `  ·  ` everywhere, wave and scope both shown (Claude form), the open-gate
-//            count joins the right side (omp form); a clean run shows `✔ gates`.
-//   rail     identical already: `research ▶ theory ▶ ...`, past `✓ id`, current `◆ ID`, future `id`.
-//   board    one collapsed todo row from the shared todo panels (parity covered by todo-tree-fixture).
-//   lanes    `RUN` / `THINK` chips (a worker between calls reads THINK, tool and target dimmed), role character,
-//            name, role, tool, target, elapsed bar, tool-call sparkline, age.
-//   ticker   `#<lead>` chip then the last two notes as `hh:mm from -> to: text`.
-//   footer   `tasks <bar> done/total` then one chip per gate group (`✔ completion`, `✖ tripwire`, `✔ routing`).
+// The text comes from mod/mission-layout.ts, which both adapters call, so parity is structural; the goldens pin it.
+// Rows (docs/specs/2026-11-10_atlas-terminal-ui.md):
+//   header   `◆ ATLAS   <project>@<branch>  ·  <scope>` left, `N of M tasks <bar>   mm:ss` right.
+//   stepper  `✓ research ─ ✓ theory ─ ✓ test ─ ⠋ implement ─ ○ verify ─ ○ done`; the spinner is spin(tick).
+//   workers  status mark, name, role (100+ columns), activity in words (`Grep  src/auth`, `thinking   last Edit ...`),
+//            elapsed. Failed and waiting sort first.
+//   message  `from → to   text   hh:mm`, the newest channel message only; the lead reads as `lead-<sid6>`.
+//   footer   `checks  ✓ completion  ✗ tripwire  ✓ routing`.
+//   idle     header reads `idle`, the stepper carries `last run  N workers · 1m31s · all ok`, the core row follows
+//            (contracts/core-golden.ts), then the footer.
 //
 // Excluded from the compared rows (shown in one harness only, see each test):
-//   - Claude hotkey footer buttons (`r: route ...`): rendered only when handlers are passed, the test passes none.
-//   - Claude `ctx N%` stat: omp has no context-percent source; the fixture carries none.
-//   - Lane spinners (character frames animate with tick): both tests render at tick 0.
+//   - Claude key buttons (`r: route ...`): drawn only while idle and only when handlers are passed; the test passes none.
+//   - The board slot (the expanded todo list): both fixtures keep it folded.
 
 /** Local wall-clock 14:05 so `hh:mm` ticker stamps are timezone independent (both renderers print local time). */
 const at = (min: number, sec = 0): number =>
@@ -85,6 +84,20 @@ export const fx = {
     { id: "tripwire", ok: false },
     { id: "routing", ok: true },
   ],
+};
+
+/** The idle variant: the wave finished 30 s ago (past the 15 s linger), every task done, the run closed. */
+export const idleFx = {
+  ...fx,
+  phase: "done",
+  todos: fx.todos.map((t) => ({ ...t, status: "completed" })),
+  // Three workers from one wave: 91 s from first start to last finish.
+  finished: [
+    { name: "explorer-1", role: "explorer", startedAgoSecs: 121, endedAgoSecs: 30 },
+    { name: "impl-auth", role: "implementer", startedAgoSecs: 118, endedAgoSecs: 30 },
+    { name: "verifier-2", role: "verifier", startedAgoSecs: 115, endedAgoSecs: 30 },
+  ],
+  lastRun: { workers: 3, secs: 91, failed: 0 },
 };
 
 /** Colour stripped, trailing spaces trimmed: what both golden tests compare. */

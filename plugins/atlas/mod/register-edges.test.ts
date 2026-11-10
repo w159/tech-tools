@@ -287,7 +287,7 @@ describe('core cache and gates', () => {
     await coreTick(s.$);
     expect(findingsReads(s)).toBe(2);
     expect((await stateOf(s, 'core')).verdicts.map((v: { status: string }) => v.status)).toEqual(['rejected']);
-    expect(s.rec.toasts).toEqual(['✖ REFUTED a: title a']);
+    expect(s.rec.toasts).toEqual(['A verifier refuted a: title a.']);
   });
 
   test('coreTick builds only for an interactive session with the mod on', async () => {

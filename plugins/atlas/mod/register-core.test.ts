@@ -77,10 +77,16 @@ describe('coreTick', () => {
     expect(s.rec.status).toEqual([]); // the core never sets a status-line entry
     s.files[`${RUN}/findings.json`] = JSON.stringify([verdict('a', 'verified', '2026-10-27T08:00:00+00:00'), verdict('b', 'rejected', '2026-10-27T08:05:00+00:00'), verdict('c', 'needs-evidence', '2026-10-27T08:06:00+00:00'), verdict('d', 'verified', '2026-10-27T08:07:00+00:00')]);
     await coreTick(s.$);
-    expect(s.rec.toasts).toEqual(['✖ REFUTED b: title b', '? c needs evidence', '✔ verified d: title d']);
+    // One toast per read, plain sentences: no glyph prefix, no code.
+    expect(s.rec.toasts).toHaveLength(1);
+    const [toast] = s.rec.toasts;
+    expect(toast!.startsWith('A verifier refuted b: title b.')).toBe(true);
+    expect(toast).toContain('c needs evidence.');
+    expect(toast).toContain('A verifier confirmed d: title d.');
+    expect(toast).not.toMatch(/[✖✔?⇆]/);
     await coreTick(s.$);
     await coreTick(s.$);
-    expect(s.rec.toasts).toHaveLength(3);
+    expect(s.rec.toasts).toHaveLength(1);
     expect(s.rec.status).toEqual([]);
   });
 
@@ -101,7 +107,7 @@ describe('coreTick', () => {
     s.files[`${RUN}/logs/implementer-1.log`] += `\n${JSON.stringify({ type: 'result', total_cost_usd: 0.1, modelUsage: { 'claude-sonnet-5-5': { costUSD: 0.1 } } })}`;
     await coreTick(s.$);
     await coreTick(s.$);
-    expect(s.rec.toasts).toEqual(['⇆ implementer-1 done: 4.0k kept in tmux, 0 back']);
+    expect(s.rec.toasts).toEqual(['implementer-1 finished: 4.0k kept in tmux, 0 came back.']);
   });
 
   test('an unchanged log is not read again', async () => {

@@ -27,6 +27,7 @@ import { atlasKnob } from "./knobs";
 import { createCoreSource } from "./core-source";
 import { openGateCount } from "../mod/gates";
 import type { CoreModel } from "../mod/data/core";
+import { planCounts } from "../mod/data/todos";
 
 export const WIDGET_KEY = "atlas-channel";
 const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
@@ -55,6 +56,7 @@ interface Note {
 	channel?: string;
 	seq?: number;
 	ts?: number;
+	kind?: string;
 }
 export interface ViewDeps {
 	env?: Record<string, string | undefined>;
@@ -202,7 +204,7 @@ function memberRoles(members: unknown): Record<string, string> {
 /** A board note as a ticker entry: one line, cut to 100 code points. */
 function panelNote(n: Note): PanelNote {
 	const text = (n.text ?? "").replace(/\s+/g, " ").trim();
-	return { from: n.owner ?? "?", to: n.to ?? "all", text: [...text].length > 100 ? `${[...text].slice(0, 99).join("")}…` : text, ts: n.ts };
+	return { from: n.owner ?? "?", to: n.to ?? "all", text: [...text].length > 100 ? `${[...text].slice(0, 99).join("")}…` : text, ts: n.ts, kind: n.kind };
 }
 
 // ---- per-lane current tool -------------------------------------------------------------------------------------------
@@ -367,7 +369,7 @@ export function registerLaneToolRecorder(pi: Pick<ExtensionAPI, "on">, env: Reco
 			mkdirSync(dir, { recursive: true });
 			const file = nodePath.join(dir, `${name}.tool.json`);
 			const ts = Date.now() / 1000;
-			const calls = [...callTimes(readRecord(file)), ...(active ? [ts] : [])].slice(-MAX_CALLS); // sparkline history
+			const calls = [...callTimes(readRecord(file)), ...(active ? [ts] : [])].slice(-MAX_CALLS); // tool-call history
 			writeFileSync(file, JSON.stringify({ ...laneToolOf(String(event.toolName), event.input), active, ts, calls }));
 		} catch {
 			// fail soft: a lane without a tool still renders "working"
@@ -395,14 +397,13 @@ export function sessionTodos(root: string, sessionId?: string): BoardRow[] {
 
 export function todoSummary(root: string, sessionId?: string): { done: number; total: number; phase?: string } {
 	const items = sessionTodos(root, sessionId);
-	const open = items.filter(i => i.status !== "completed");
 	const phase = items.find(i => i.status === "in_progress")?.phase;
-	return { done: items.length - open.length, total: items.length, phase };
+	return { ...planCounts(items), phase }; // twin of the mod band: dispatch rows leave the count unless they are the whole board
 }
 
 /** The same session slice as rows for the board panel. */
 const todoItems = (root: string, sessionId?: string): PanelTodo[] =>
-	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined, phase: i.phase ?? undefined }));
+	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined, phase: i.phase ?? undefined, origin: i.origin }));
 
 /** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */
 const PHASE_WORDS: Array<[string, RegExp]> = [

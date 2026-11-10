@@ -36,14 +36,14 @@ export const fx = {
     }
   ],
   "rows": [
-    " I. Research 1/2",
-    "   ✔  explorer-1  map the auth flow",
-    "   ○              list token callers",
-    " II. Implement 0/1",
-    "   ⠋  impl-auth   edit auth middleware",
-    " III. Verify 0/1",
-    "   ○              run the suites",
-    " IV. Other 0/1",
-    "   ✖  impl-ttl    wait on token decision"
+    " research  1 of 2",
+    "   ✓ map the auth flow · explorer-1",
+    "   ○ list token callers",
+    " implement  0 of 1",
+    "   ◉ edit auth middleware · impl-auth",
+    " verify  0 of 1",
+    "   ○ run the suites",
+    " other  0 of 1",
+    "   ⏸ wait on token decision · impl-ttl  blocked"
   ]
 };

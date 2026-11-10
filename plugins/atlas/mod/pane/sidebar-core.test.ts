@@ -4,6 +4,7 @@ import type { ClientElements } from 'claude-code';
 import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
 import { coreModel, type CoreModel } from '../data/core';
 import { busySnap } from '../live_fixture';
+import { TONE_HEX as T } from '../mission-layout';
 import { textWidth } from '../theme';
 import { coreRows } from './sidebar-core';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
@@ -28,13 +29,14 @@ const model = (expanded: string | null = null, withCore = true): SidebarModel =>
 const rows = (m: SidebarModel, inner = 70): Node[] => coreRows(els, m, on, inner) as unknown as Node[];
 
 describe('core view', () => {
-  test('all four section heads', () => {
+  test('all four section heads, dim lowercase labels', () => {
     const out = rows(model()).map(textOf).join('\n');
-    for (const h of ['CONTRACT', 'VERDICTS', 'OFFLOAD', 'ROUTE']) expect(out).toContain(h);
+    for (const h of ['contract  ', 'verdicts  ', 'offload  ', 'route  ']) expect(out).toContain(h);
+    expect(out).not.toMatch(/CONTRACT|VERDICTS|OFFLOAD|ROUTE/);
   });
-  test('the rejected verdict row reads REFUTED, the verified one verified', () => {
+  test('the rejected verdict row reads refuted, the verified one verified', () => {
     const out = rows(model()).map(textOf);
-    expect(out.find((r) => r.includes('mean-iterable'))).toContain('REFUTED');
+    expect(out.find((r) => r.includes('mean-iterable'))).toContain('refuted');
     expect(out.find((r) => r.includes('mean-fix'))).toContain('verified');
   });
   test('pressing a verdict row toggles its key; expanded it shows the evidence', () => {
@@ -70,50 +72,45 @@ const verdict = (id: string, status: 'verified' | 'rejected' | 'needs-evidence',
   ({ id, status, title: `title of ${id}`, by: 'atlas:verifier', at: 1, evidence: 'ran it', ...over });
 const claim = (owner: string, over: Record<string, unknown> = {}) => ({ owner, role: 'implementer', status: 'DONE', at: 5, matched: null, ...over });
 
-describe('core view: contract rows', () => {
-  test('tallies, marks and padded labels', () => {
-    const c = empty();
+describe('core view: contract row', () => {
+  const contract = (c: CoreModel) => keyed(withCore(c), 'core:h:contract');
+  const withVerdict = (): CoreModel => ({ ...empty(), verdicts: [verdict('v1', 'verified')] as any });
+  test('one line of plain figures: `contract  header 3/4 · evidence 2/2 · verified none`', () => {
+    const c = withVerdict();
     c.contract = { header: { ok: 3, total: 4 }, evidence: { ok: 2, total: 2 }, verifiedDone: { ok: 0, total: 0 }, openGates: 0 };
-    c.verdicts = [verdict('v1', 'verified')];
-    const rs = withCore(c);
-    expect(textOf(keyed(rs, 'core:h:CONTRACT'))).toBe('CONTRACT  the operating contract, live');
-    expect(textOf(keyed(rs, 'core:c:hdr'))).toBe('  ✗ header    3/4 replies opened with the ATLAS header');
-    expect(textOf(keyed(rs, 'core:c:ev'))).toBe('  ✓ evidence  2/2 done items carry evidence');
-    expect(textOf(keyed(rs, 'core:c:vd'))).toBe('  - verified  - done items have a verified finding');
-    expect(textOf(keyed(rs, 'core:c:gates'))).toBe('  ✓ gates     all clear');
+    expect(textOf(contract(c))).toBe('contract  header 3/4 · evidence 2/2 · verified none');
   });
-  test('an empty tally reads "-" for every row, not a pass or a fail', () => {
-    const c = empty();
-    c.verdicts = [verdict('v1', 'verified')];
-    const rs = withCore(c);
-    for (const k of ['hdr', 'ev', 'vd']) expect(textOf(keyed(rs, `core:c:${k}`)).slice(2, 4)).toBe('- ');
+  test('only a partial tally takes colour (amber); complete stays plain text, empty is muted', () => {
+    const c = withVerdict();
+    c.contract = { header: { ok: 3, total: 4 }, evidence: { ok: 2, total: 2 }, verifiedDone: { ok: 0, total: 0 }, openGates: 0 };
+    const parts = kids(contract(c));
+    expect(parts[0]!.props).toMatchObject({ children: 'contract  ', color: T.dim, bold: true });
+    expect(parts[1]!.props).toMatchObject({ children: 'header 3/4', color: T.warn });
+    expect(parts[3]!.props).toMatchObject({ children: 'evidence 2/2', color: T.text });
+    expect(parts[5]!.props).toMatchObject({ children: 'verified none', color: T.muted });
   });
-  test('a verified tally that is complete passes, a partial one fails', () => {
-    const c = empty();
+  test('a partial verified tally is amber, a complete one plain', () => {
+    const c = withVerdict();
     c.contract.verifiedDone = { ok: 2, total: 2 };
     c.contract.evidence = { ok: 1, total: 3 };
-    c.verdicts = [verdict('v1', 'verified')];
-    const rs = withCore(c);
-    expect(textOf(keyed(rs, 'core:c:vd'))).toBe('  ✓ verified  2/2 done items have a verified finding');
-    expect(textOf(keyed(rs, 'core:c:ev'))).toBe('  ✗ evidence  1/3 done items carry evidence');
+    expect(textOf(contract(c))).toBe('contract  header none · evidence 1/3 · verified 2/2');
+    const parts = kids(contract(c));
+    expect(parts[3]!.props.color).toBe(T.warn);
+    expect(parts[5]!.props.color).toBe(T.text);
   });
-  test('one open gate already fails the gates row', () => {
-    const c = empty();
+  test('open gates are not repeated here: the gate groups below carry them', () => {
+    const c = withVerdict();
     c.contract.openGates = 1;
-    c.verdicts = [verdict('v1', 'verified')];
-    expect(textOf(keyed(withCore(c), 'core:c:gates'))).toBe('  ✗ gates     1 open, listed under GATES');
+    expect(textOf(contract(c))).not.toContain('gate');
+    expect(withCore(c).map((r) => r.props.key)).not.toContain('core:c:gates');
   });
   test('section heads are bold and every row Box holds its size', () => {
-    const c = empty();
-    c.verdicts = [verdict('v1', 'verified')];
-    const rs = withCore(c);
-    expect(kids(keyed(rs, 'core:h:CONTRACT'))[0]!.props.bold).toBe(true);
+    const rs = withCore(withVerdict());
+    expect(kids(keyed(rs, 'core:h:contract'))[0]!.props.bold).toBe(true);
     for (const r of rs.filter((x) => x.kind === 'Box')) expect(r.props.flexShrink).toBe(0);
   });
   test('blank spacers are one-space rows between the four sections', () => {
-    const c = empty();
-    c.verdicts = [verdict('v1', 'verified')];
-    const rs = withCore(c);
+    const rs = withCore(withVerdict());
     for (const k of ['core:b1', 'core:b2', 'core:b3']) expect(textOf(keyed(rs, k))).toBe(' ');
     expect(rs.map((r) => r.props.key).filter((k) => /^core:b/.test(k))).toEqual(['core:b1', 'core:b2', 'core:b3']);
   });
@@ -125,8 +122,12 @@ describe('core view: verdict rows', () => {
     c.verdicts = [verdict('exactly-16-chars!', 'verified'), verdict('short', 'rejected'), verdict('maybe', 'needs-evidence')] as any;
     const rs = withCore(c);
     expect(textOf(keyed(rs, 'core:v:exactly-16-chars!'))).toBe('  ✓ exactly-16-cha… verified       title of exactly-16-chars!');
-    expect(textOf(keyed(rs, 'core:v:short'))).toBe(`  ✗ ${'short'.padEnd(16)}${'REFUTED'.padEnd(14)} title of short`);
+    expect(textOf(keyed(rs, 'core:v:short'))).toBe(`  ✗ ${'short'.padEnd(16)}${'refuted'.padEnd(14)} title of short`);
     expect(textOf(keyed(rs, 'core:v:maybe'))).toBe(`  ? ${'maybe'.padEnd(16)}needs evidence title of maybe`);
+    const tone = (k: string) => kids(keyed(rs, k)).map((n) => n.props.color);
+    expect(tone('core:v:short')).toEqual([T.bad, T.text, T.bad, T.muted]);
+    expect(tone('core:v:exactly-16-chars!')).toEqual([T.ok, T.text, T.ok, T.muted]);
+    expect(tone('core:v:maybe')).toEqual([T.warn, T.text, T.warn, T.muted]);
     const bold = (k: string) => kids(keyed(rs, k)).map((n) => n.props.bold);
     expect(bold('core:v:short')[2]).toBe(true);
     expect(bold('core:v:exactly-16-chars!')[2]).toBeFalsy();
@@ -140,13 +141,17 @@ describe('core view: verdict rows', () => {
     expect(keys).toContain('core:v:v1');
     expect(keys).toContain('core:v:v8');
   });
-  test('the ledger note pluralizes claims', () => {
+  test('the ledger figures drop zero open and unchecked counts and colour only what is off', () => {
     const c = empty();
     c.verdicts = [verdict('v', 'verified')] as any;
     c.ledger = { claimed: 1, verified: 1, refuted: 0, pending: 0, unchecked: 0 };
-    expect(textOf(keyed(withCore(c), 'core:h:VERDICTS'))).toBe('VERDICTS  1 claim, 1 verified, 0 refuted, 0 open, 0 unchecked');
+    expect(textOf(keyed(withCore(c), 'core:h:verdicts'))).toBe('verdicts  1 verified · 0 refuted');
+    const quiet = kids(keyed(withCore(c), 'core:h:verdicts'));
+    expect([quiet[1]!.props.color, quiet[3]!.props.color]).toEqual([T.ok, T.muted]);
     c.ledger = { claimed: 2, verified: 1, refuted: 1, pending: 3, unchecked: 4 };
-    expect(textOf(keyed(withCore(c), 'core:h:VERDICTS'))).toBe('VERDICTS  2 claims, 1 verified, 1 refuted, 3 open, 4 unchecked');
+    expect(textOf(keyed(withCore(c), 'core:h:verdicts'))).toBe('verdicts  1 verified · 1 refuted · 3 open · 4 unchecked');
+    const off = kids(keyed(withCore(c), 'core:h:verdicts'));
+    expect([off[3]!.props.color, off[5]!.props.color, off[7]!.props.color]).toEqual([T.bad, T.warn, T.warn]);
   });
   test('expanded detail names the matched claim owner, the verifier and the evidence', () => {
     const c = empty();
@@ -158,7 +163,7 @@ describe('core view: verdict rows', () => {
     expect(text('core:v:a', 0)).toBe('      no worker claim before it');
     expect(text('core:v:a', 1)).toBe('      by atlas:verifier');
     expect(text('core:v:a', 2)).toBe('      evidence: none recorded');
-    expect(text('core:v:b', 0)).toBe('      checks the DONE claim of w1');
+    expect(text('core:v:b', 0)).toBe('      checks the done claim of w1');
     expect(text('core:v:b', 1)).toBe('      by someone');
     expect(text('core:v:b', 2)).toBe('      evidence: ran it');
   });
@@ -171,7 +176,8 @@ describe('core view: verdict rows', () => {
     expect(keys).toContain('core:u:lonely:9');
     expect(keys).not.toContain('core:u:matched:8');
     expect(keys).not.toContain('core:u:failed:7');
-    expect(textOf(keyed(rs, 'core:u:lonely:9'))).toBe(`  ⚠ ${'lonely'.padEnd(16)}claims DONE, no verdict yet`);
+    expect(textOf(keyed(rs, 'core:u:lonely:9'))).toBe(`  ⚠ ${'lonely'.padEnd(16)}unchecked: says done, no verdict yet`);
+    expect(kids(keyed(rs, 'core:u:lonely:9'))[2]!.props.color).toBe(T.warn);
   });
   test('no verdicts but an unchecked claim shows the claim, not the "none" row', () => {
     const c = empty();
@@ -194,22 +200,22 @@ describe('core view: offload rows', () => {
     const c = empty();
     c.offload = { workers: [worker('impl-1')] as any, kept: 2000, returned: 500, ratio: 4 };
     const rs = withCore(c);
-    expect(textOf(keyed(rs, 'core:o:impl-1'))).toBe(`  ${'impl-1'.padEnd(18)}${'sonnet-5-5'.padEnd(12)}${'58.8k'.padStart(6)} held ${'912'.padStart(6)} kept${'1.2M'.padStart(6)} back  $0.16`);
-    expect(textOf(keyed(rs, 'core:h:OFFLOAD'))).toBe('OFFLOAD  2.0k kept in tmux, 500 returned, 4.0x');
+    expect(textOf(keyed(rs, 'core:o:impl-1'))).toBe(`  ${'impl-1'.padEnd(18)}${'sonnet-5-5'.padEnd(12)}${'58.8k'.padStart(6)} held ${'912'.padStart(6)} kept ${'1.2M'.padStart(6)} back  $0.16`);
+    expect(textOf(keyed(rs, 'core:h:offload'))).toBe('offload  2.0k kept in tmux → 500 back (4.0x)');
   });
   test('missing model reads "?", missing cost is blank, ratio of 10+ rounds', () => {
     const c = empty();
     c.offload = { workers: [worker('w', { model: null, costUsd: null })] as any, kept: 1, returned: 1, ratio: 12.6 };
     const rs = withCore(c);
-    expect(textOf(keyed(rs, 'core:o:w'))).toBe(`  ${'w'.padEnd(18)}${'?'.padEnd(12)}${'58.8k'.padStart(6)} held ${'912'.padStart(6)} kept${'1.2M'.padStart(6)} back`);
-    expect(textOf(keyed(rs, 'core:h:OFFLOAD'))).toBe('OFFLOAD  1 kept in tmux, 1 returned, 13x');
+    expect(textOf(keyed(rs, 'core:o:w'))).toBe(`  ${'w'.padEnd(18)}${'?'.padEnd(12)}${'58.8k'.padStart(6)} held ${'912'.padStart(6)} kept ${'1.2M'.padStart(6)} back`);
+    expect(textOf(keyed(rs, 'core:h:offload'))).toBe('offload  1 kept in tmux → 1 back (13x)');
   });
   test('ratio exactly 10 rounds, null shows no ratio', () => {
     const c = empty();
     c.offload = { workers: [worker('w')] as any, kept: 1, returned: 1, ratio: 10 };
-    expect(textOf(keyed(withCore(c), 'core:h:OFFLOAD'))).toBe('OFFLOAD  1 kept in tmux, 1 returned, 10x');
+    expect(textOf(keyed(withCore(c), 'core:h:offload'))).toBe('offload  1 kept in tmux → 1 back (10x)');
     c.offload.ratio = null;
-    expect(textOf(keyed(withCore(c), 'core:h:OFFLOAD'))).toBe('OFFLOAD  1 kept in tmux, 1 returned');
+    expect(textOf(keyed(withCore(c), 'core:h:offload'))).toBe('offload  1 kept in tmux → 1 back');
   });
   test('only the last 8 workers show', () => {
     const c = empty();
@@ -253,14 +259,17 @@ describe('core view: route rows', () => {
     ] }), route('t2', { seats: [seat({ ran: ['claude-haiku-5-5'] }), seat({ ran: ['claude-sonnet-5-5'] })] })] as any;
     const rs = withCore(c);
     expect(textOf(keyed(rs, 'core:r:t1'))).toBe('  fix/low  meanfix  shared, max 1  ✗ drift');
-    expect(textOf(keyed(rs, 'core:r:t1:0'))).toBe('    → 1× implementer sonnet/medium  ran claude-sonnet-5-5 ✓');
-    expect(textOf(keyed(rs, 'core:r:t1:1'))).toBe('    → 1× implementer sonnet/medium  ran claude-haiku-5-5 ✗');
-    expect(textOf(keyed(rs, 'core:r:t1:2'))).toBe('    → 1× implementer inherit/medium  ran claude-opus-5 ✓');
-    expect(textOf(keyed(rs, 'core:r:t1:3'))).toBe('    → 1× implementer Sonnet/medium  ran claude-sonnet-5-5, claude-haiku-5-5 ✗');
-    // the verdict mark is red in a drifting route, green otherwise
-    const markColor = (k: string) => kids(keyed(rs, k)).at(-1)!.props.color;
-    expect(markColor('core:r:t1:0')).toBe(markColor('core:r:t1:1'));
-    expect(markColor('core:r:t2:0')).not.toBe(markColor('core:r:t1:0'));
+    expect(textOf(keyed(rs, 'core:r:t1:0'))).toBe('    → 1× implementer sonnet/medium  ran claude-sonnet-5-5 ✓ as planned');
+    expect(textOf(keyed(rs, 'core:r:t1:1'))).toBe('    → 1× implementer sonnet/medium  ran claude-haiku-5-5 ✗ drift');
+    expect(textOf(keyed(rs, 'core:r:t1:2'))).toBe('    → 1× implementer inherit/medium  ran claude-opus-5 ✓ as planned');
+    expect(textOf(keyed(rs, 'core:r:t1:3'))).toBe('    → 1× implementer Sonnet/medium  ran claude-sonnet-5-5, claude-haiku-5-5 ✗ drift');
+    // the mark and its word are green when the seat ran the planned model, red when it did not
+    const mark = (k: string) => kids(keyed(rs, k)).at(-1)!.props;
+    expect(mark('core:r:t1:0')).toMatchObject({ children: ' ✓ as planned', color: T.ok });
+    expect(mark('core:r:t1:1')).toMatchObject({ children: ' ✗ drift', color: T.bad });
+    expect(mark('core:r:t1:2')).toMatchObject({ children: ' ✓ as planned', color: T.ok });
+    expect(mark('core:r:t2:0')).toMatchObject({ children: ' ✗ drift', color: T.bad });
+    expect(mark('core:r:t2:1')).toMatchObject({ children: ' ✓ as planned', color: T.ok });
   });
   test('a route without drift has no drift flag', () => {
     const c = empty();

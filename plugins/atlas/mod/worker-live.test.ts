@@ -57,7 +57,7 @@ describe('a listed running subagent', () => {
     expect(promptName('TOOLS: Bash\nname: nope')).toBeUndefined();
   });
 
-  test('is one working worker under the dispatch name, counted as a channel nick', async () => {
+  test('is one working worker under the dispatch name, counted as a person in the channel header', async () => {
     const snap = await run('name: probe-slow\nTASK: sleep', 'running');
     const ws = liveWorkers(snap, 1_760_000_000_000);
     expect(ws.map((w) => [w.name, w.state])).toEqual([['probe-slow', 'working']]);
@@ -70,6 +70,6 @@ describe('a listed running subagent', () => {
       return n.kind === 'Text' ? String(c ?? '') : (Array.isArray(c) ? c : c == null ? [] : [c]).map((x) => textOf(x as Node)).join('');
     };
     const rows = channelRows(els, { snapshot: snap, gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'channel' }, columns: 80, rows: 20 }, {} as SidebarHandlers, 78);
-    expect(textOf(rows[0] as unknown as Node)).toContain('1 nicks');
+    expect(textOf(rows[0] as unknown as Node)).toContain('1 person');
   });
 });

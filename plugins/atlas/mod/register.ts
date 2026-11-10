@@ -22,10 +22,10 @@ import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { registerDiscipline } from './discipline';
 import { PHASE_RE, registerRestyle } from './restyle';
-import { registerNotify } from './notify';
+import { mergeToasts, registerNotify } from './notify';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { TeamTool } from './orchestra-types';
-import { EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
+import { descriptionName, EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
 
 const REBUILD_MS = 1500;
 const WT_MS = 5000;
@@ -91,7 +91,7 @@ let lastRailPhase: string | null = null; // last phase the band lit, kept throug
 let muxStdout = '';
 let muxAgents: (SquadAgent & TeamTool)[] = [];
 let muxFirstSeen: Record<string, number> = {}; // team worker name -> first mux sight (ms), its lane's start
-let muxCalls: Record<string, { uses: number; calls: number[] }> = {}; // team worker name -> pane-log tool_use count and call times (sparkline)
+let muxCalls: Record<string, { uses: number; calls: number[] }> = {}; // team worker name -> pane-log tool_use count and call times (tool-call history)
 let sessionUuid = '';
 /** raw host agent id -> display name, kept across rebuilds: a finished agent drops out of the host list but its id must keep resolving. */
 let nameMemo: Record<string, string> = {};
@@ -167,12 +167,14 @@ export function mapListed(
 	taken: Record<string, string> = {},
 ): { id: string; agent: SquadAgent }[] {
 	const labels = new Map<string, number>();
-	return listed.map((a) => {
+	const personas = listed.map((a) => personaOf(a, taskAgents.find((t) => t.name === a.id), meta[a.id]));
+	return listed.map((a, i) => {
 		const recorded = taskAgents.find((t) => t.name === a.id);
 		const spawned = meta[a.id];
-		const persona = personaOf(a, recorded, spawned);
+		const persona = personas[i]!;
+		const crowded = personas.filter((p) => p === persona).length > 1; // two of one role: the task tells them apart
 		const task = (typeof a.description === 'string' && a.description !== '' ? a.description : recorded?.task) || undefined;
-		const base = baseLabel(a, spawned, persona, task);
+		const base = baseLabel(a, spawned, persona, task, crowded);
 		const n = (labels.get(base) ?? 0) + 1;
 		labels.set(base, n);
 		const heldByOther = Object.entries(taken).some(([id, label]) => id !== a.id && label === base);
@@ -208,11 +210,12 @@ function personaOf(a: ListedRow, recorded: SquadAgent | undefined, spawned: Spaw
 const teammateName = (teammateId: string | undefined): string | undefined => teammateId?.split('@')[0];
 
 /** Display label before duplicate-suffixing: spawn name, teammate name, a specific persona, the task slug, then weaker fallbacks. */
-function baseLabel(a: ListedRow, spawned: SpawnMeta | undefined, persona: string, task: string | undefined): string {
+function baseLabel(a: ListedRow, spawned: SpawnMeta | undefined, persona: string, task: string | undefined, crowded = false): string {
 	return firstText(
 		spawned?.name,
 		teammateName(a.teammateId),
-		GENERIC_PERSONAS.has(persona) ? '' : persona,
+		descriptionName(task),
+		GENERIC_PERSONAS.has(persona) || crowded ? '' : persona,
 		slugOf(task),
 		persona === 'unknown' ? '' : persona,
 		listedLabel(a.type),
@@ -716,17 +719,21 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 	});
 }
 
-/** Toasts for what moved since the last read: new verdicts, workers whose offload finished. The first read toasts nothing. */
+/** Toasts for what moved since the last read: new verdicts, workers whose offload finished. The first read toasts nothing.
+ * Plain sentences, merged into one toast per read (notify.ts mergeToasts), no codes or glyph prefixes. */
 function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null): void {
 	if (seen === null) return;
+	const texts: string[] = [];
 	for (const v of m.verdicts) {
 		if (seen.has(`${v.id}:${v.status}`)) continue;
 		if (v.status === 'rejected') {
-			$.ui.toast(`✖ REFUTED ${v.id}: ${v.title}`);
+			texts.push(`A verifier refuted ${v.id}: ${v.title}.`);
 			if (soundOn()) void $.audio.play({ asset: 'mod/fx/fail.wav' }).catch(() => {});
-		} else $.ui.toast(v.status === 'verified' ? `✔ verified ${v.id}: ${v.title}` : `? ${v.id} needs evidence`);
+		} else texts.push(v.status === 'verified' ? `A verifier confirmed ${v.id}: ${v.title}.` : `${v.id} needs evidence.`);
 	}
-	for (const w of m.offload.workers) if (w.finished && !coreFinished[w.name]) $.ui.toast(`⇆ ${w.name} done: ${tok(w.kept)} kept in tmux, ${tok(w.returned)} back`);
+	for (const w of m.offload.workers) if (w.finished && !coreFinished[w.name]) texts.push(`${w.name} finished: ${tok(w.kept)} kept in tmux, ${tok(w.returned)} came back.`);
+	const toast = mergeToasts(texts);
+	if (toast) $.ui.toast(toast);
 }
 
 /** MUX_MS tick (interactive sessions, never from a render): rebuild the core, toast what moved, store it when it changed. */
@@ -897,10 +904,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const columns = e.props.bodyColumns; // measured live: with the docked pane open, viewport.columns is the transcript's own width (143) and bodyColumns is that less the engine's five (138)
 		const live = liveWorkers(snapshot, Date.now());
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
-		const hudIn = { todos: snapshot.todos ?? [], agents: hudAgents(live, snapshot.squad), root: snapshot.root };
+		// The HUD keeps the TODO tree only: the band's worker rows replace its Subagents block (agents: []).
+		const agents = hudAgents(live, snapshot.squad);
+		const hudIn = { todos: snapshot.todos ?? [], agents: [], root: snapshot.root };
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents / Waiting rows
-		const running = hudIn.agents.some(isRunning);
-		const runningCount = hudIn.agents.filter(isRunning).length;
+		const running = agents.some(isRunning);
+		const runningCount = agents.filter(isRunning).length;
 		const report = await readStatuslineRows($, snapshot.root);
 		const slotRows = e.props.maxRows ?? 0;
 		const budget = e.props.maxRows === undefined ? 0 : effectiveRows(slotRows, e.viewport, report?.rows ?? null, runningCount); // no slot reported: nothing to cap

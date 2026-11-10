@@ -1,312 +1,143 @@
-// Sidebar core view (hotkey g): the four Atlas pillars in detail, then the gate groups that enforce them.
-//   CONTRACT  reply headers, done items with evidence, open gates
-//   VERDICTS  every verifier verdict (verified / REFUTED / needs evidence) and which claim each one checked
-//   OFFLOAD   per tmux worker: model, context held, context kept past its brief, report size, cost
-//   ROUTE     per team: class/effort -> scope-matrix seats -> the model each seat actually ran
+// Sidebar core view (hotkey g): the four Atlas pillars in plain words, then the gate groups that enforce them.
+//   contract  header 3/4 · evidence none
+//   verdicts  every verifier verdict (verified / refuted / needs evidence) and which claim each one checked
+//   offload   per tmux worker: model, context held, context kept past its brief, report size, cost
+//   route     per team: class/effort -> scope-matrix seats -> the model each seat actually ran
+// Labels are dim lowercase, figures plain; only what is off takes colour (partial amber, refuted or drifted red), each beside a word.
 // Pure like the other views; a press on a verdict row opens its evidence, a press on a gate row its lines.
 import type { ClientElements, RenderElement } from "claude-code";
 import { type CoreModel, type Verdict, hasCore, tok } from "../data/core";
+import { TONE_HEX as T } from "../mission-layout";
 import { fitRuns, type Segment } from "../runs";
-import { chartRoom as C, fitText, textWidth } from "../theme";
+import { fitText, textWidth } from "../theme";
 import { scrub } from "./chrome";
 import { gateRows } from "./sidebar-gates";
 import type { SidebarHandlers, SidebarModel } from "./sidebar-types";
 
-const line = (
-  els: ClientElements,
-  key: string,
-  parts: Segment[],
-  cols: number,
-): RenderElement =>
-  els.Box({
-    key,
-    flexShrink: 0,
-    flexDirection: "row",
-    children: fitRuns(els, parts, cols),
-  });
-const head = (
-  els: ClientElements,
-  title: string,
-  note: string,
-  cols: number,
-): RenderElement =>
-  line(
-    els,
-    `core:h:${title}`,
-    [
-      { t: title, bold: true },
-      { t: note ? `  ${note}` : "", color: C.muted },
-    ],
-    cols,
-  );
+const line = (els: ClientElements, key: string, parts: Segment[], cols: number): RenderElement =>
+  els.Box({ key, flexShrink: 0, flexDirection: "row", children: fitRuns(els, parts, cols) });
+/** A section head: the dim lowercase label, then its figures. */
+const head = (els: ClientElements, title: string, figures: Segment[], cols: number): RenderElement =>
+  line(els, `core:h:${title}`, [{ t: `${title}  `, color: T.dim, bold: true }, ...figures], cols);
 const padTo = (t: string, n: number): string => {
   const f = fitText(t, n);
   return f + " ".repeat(Math.max(0, n - textWidth(f)));
 };
-const tally = (ok: number, total: number): string =>
-  total ? `${ok}/${total}` : "-";
-const mark = (ok: boolean, none: boolean): Segment =>
-  none
-    ? { t: "- ", color: C.muted }
-    : ok
-      ? { t: "✓ ", color: C.ok }
-      : { t: "✗ ", color: C.fail };
+const tally = (ok: number, total: number): string => (total ? `${ok}/${total}` : "none");
+/** Colour only what is off: a partial tally is amber, a complete or empty one stays plain. */
+const tallyTone = (ok: number, total: number): string => (!total ? T.muted : ok === total ? T.text : T.warn);
+const sep: Segment = { t: " · ", color: T.dim };
+const joinSep = (parts: Segment[]): Segment[] => parts.flatMap((p, i) => (i ? [sep, p] : [p]));
 
-function contractRows(
-  els: ClientElements,
-  m: CoreModel,
-  cols: number,
-): RenderElement[] {
-  const { header: h, evidence: e, verifiedDone: v, openGates } = m.contract;
-  const row = (
-    id: string,
-    ok: boolean,
-    none: boolean,
-    label: string,
-    text: string,
-  ) =>
-    line(
-      els,
-      `core:c:${id}`,
-      [
-        { t: "  " },
-        mark(ok, none),
-        { t: padTo(label, 10) },
-        { t: text, color: C.muted },
-      ],
-      cols,
-    );
-  return [
-    head(els, "CONTRACT", "the operating contract, live", cols),
-    row(
-      "hdr",
-      h.ok === h.total,
-      !h.total,
-      "header",
-      `${tally(h.ok, h.total)} replies opened with the ATLAS header`,
-    ),
-    row(
-      "ev",
-      e.ok === e.total,
-      !e.total,
-      "evidence",
-      `${tally(e.ok, e.total)} done items carry evidence`,
-    ),
-    row(
-      "vd",
-      v.ok === v.total,
-      !v.total,
-      "verified",
-      `${tally(v.ok, v.total)} done items have a verified finding`,
-    ),
-    row(
-      "gates",
-      openGates === 0,
-      false,
-      "gates",
-      openGates ? `${openGates} open, listed under GATES` : "all clear",
-    ),
-  ];
+/** `contract  header 3/4 · evidence none · verified 2/2`; open gates are listed under the gate groups below. */
+function contractRows(els: ClientElements, m: CoreModel, cols: number): RenderElement[] {
+  const { header: h, evidence: e, verifiedDone: v } = m.contract;
+  const part = (name: string, t: { ok: number; total: number }): Segment => ({ t: `${name} ${tally(t.ok, t.total)}`, color: tallyTone(t.ok, t.total) });
+  return [head(els, "contract", joinSep([part("header", h), part("evidence", e), part("verified", v)]), cols)];
 }
 
-const VERDICT_LOOK: Record<
-  Verdict["status"],
-  { g: string; word: string; color: string }
-> = {
-  verified: { g: "✓", word: "verified", color: C.ok },
-  rejected: { g: "✗", word: "REFUTED", color: C.fail },
-  "needs-evidence": { g: "?", word: "needs evidence", color: C.warn },
+const VERDICT_LOOK: Record<Verdict["status"], { g: string; word: string; color: string }> = {
+  verified: { g: "✓", word: "verified", color: T.ok },
+  rejected: { g: "✗", word: "refuted", color: T.bad },
+  "needs-evidence": { g: "?", word: "needs evidence", color: T.warn },
 };
 
 /** Widest verdict word, so no word is ever cut. */
-const VERDICT_WORD_W = Math.max(
-  ...Object.values(VERDICT_LOOK).map((l) => textWidth(l.word)),
-);
+const VERDICT_WORD_W = Math.max(...Object.values(VERDICT_LOOK).map((l) => textWidth(l.word)));
 /** Id cell: 15 cells of id plus one gap, so a cut id never touches the word. */
 const VERDICT_ID_W = 15;
 
-function verdictRows(
-  els: ClientElements,
-  m: CoreModel,
-  model: SidebarModel,
-  on: SidebarHandlers,
-  cols: number,
-): RenderElement[] {
+function verdictRows(els: ClientElements, m: CoreModel, model: SidebarModel, on: SidebarHandlers, cols: number): RenderElement[] {
   const l = m.ledger;
-  const note = `${l.claimed} claim${l.claimed === 1 ? "" : "s"}, ${l.verified} verified, ${l.refuted} refuted, ${l.pending} open, ${l.unchecked} unchecked`;
+  const figures = joinSep([
+    { t: `${l.verified} verified`, color: l.verified ? T.ok : T.muted },
+    { t: `${l.refuted} refuted`, color: l.refuted ? T.bad : T.muted },
+    ...(l.pending ? [{ t: `${l.pending} open`, color: T.warn }] : []),
+    ...(l.unchecked ? [{ t: `${l.unchecked} unchecked`, color: T.warn }] : []),
+  ]);
   const rows = m.verdicts.slice(-8).flatMap((v): RenderElement[] => {
     const look = VERDICT_LOOK[v.status];
     const key = `core:v:${v.id}`;
     const checked = m.claims.find((c) => c.matched === v.id);
     const parts: Segment[] = [
       { t: `  ${look.g} `, color: look.color },
-      { t: `${padTo(scrub(v.id), VERDICT_ID_W)} ` },
-      {
-        t: padTo(look.word, VERDICT_WORD_W),
-        color: look.color,
-        bold: v.status === "rejected",
-      },
-      { t: ` ${scrub(v.title)}`, color: C.muted },
+      { t: `${padTo(scrub(v.id), VERDICT_ID_W)} `, color: T.text },
+      { t: padTo(look.word, VERDICT_WORD_W), color: look.color, bold: v.status === "rejected" },
+      { t: ` ${scrub(v.title)}`, color: T.muted },
     ];
     const open = model.ui.expanded === key;
     const detail = open
       ? [
-          checked
-            ? `checks the DONE claim of ${checked.owner}`
-            : "no worker claim before it",
+          checked ? `checks the done claim of ${checked.owner}` : "no worker claim before it",
           `by ${v.by}`,
           `evidence: ${scrub(v.evidence) || "none recorded"}`,
         ]
       : [];
     return [
-      els.Button({
-        key,
-        plain: true,
-        onPress: () => on.toggle(key),
-        children: fitRuns(els, parts, cols),
-      }),
-      ...detail.map((t, i) =>
-        line(els, `${key}:${i}`, [{ t: `      ${t}`, color: C.muted }], cols),
-      ),
+      els.Button({ key, plain: true, onPress: () => on.toggle(key), children: fitRuns(els, parts, cols) }),
+      ...detail.map((t, i) => line(els, `${key}:${i}`, [{ t: `      ${t}`, color: T.muted }], cols)),
     ];
   });
   const unchecked = m.claims
     .filter((c) => c.status === "DONE" && c.matched === null)
     .map((c) =>
-      line(
-        els,
-        `core:u:${c.owner}:${c.at}`,
-        [
-          { t: "  ⚠ ", color: C.warn },
-          { t: padTo(c.owner, 16) },
-          { t: "claims DONE, no verdict yet", color: C.warn },
-        ],
-        cols,
-      ),
-    );
+      line(els, `core:u:${c.owner}:${c.at}`, [
+        { t: "  ⚠ ", color: T.warn },
+        { t: padTo(c.owner, 16), color: T.text },
+        { t: "unchecked: says done, no verdict yet", color: T.warn },
+      ], cols));
   return [
-    head(els, "VERDICTS", note, cols),
+    head(els, "verdicts", figures, cols),
     ...(rows.length || unchecked.length
       ? [...rows, ...unchecked]
-      : [
-          line(
-            els,
-            "core:v:none",
-            [{ t: "  no verdict recorded yet", color: C.muted }],
-            cols,
-          ),
-        ]),
+      : [line(els, "core:v:none", [{ t: "  no verdict recorded yet", color: T.muted }], cols)]),
   ];
 }
 
-function offloadRows(
-  els: ClientElements,
-  m: CoreModel,
-  cols: number,
-): RenderElement[] {
+function offloadRows(els: ClientElements, m: CoreModel, cols: number): RenderElement[] {
   const o = m.offload;
-  const ratio =
-    o.ratio === null
-      ? ""
-      : `, ${o.ratio >= 10 ? Math.round(o.ratio) : o.ratio.toFixed(1)}x`;
-  const rows = o.workers
-    .slice(-8)
-    .map((w) =>
-      line(
-        els,
-        `core:o:${w.name}`,
-        [
-          { t: "  " },
-          { t: padTo(w.name, 18) },
-          {
-            t: padTo((w.model ?? "?").replace(/^claude-/, ""), 12),
-            color: C.muted,
-          },
-          { t: `${tok(w.peak).padStart(6)} held ` },
-          { t: `${tok(w.kept).padStart(6)} kept`, color: C.ok },
-          { t: `${tok(w.returned).padStart(6)} back`, color: C.live },
-          {
-            t: w.costUsd === null ? "" : `  $${w.costUsd.toFixed(2)}`,
-            color: C.muted,
-          },
-        ],
-        cols,
-      ),
-    );
+  const ratio = o.ratio === null ? "" : ` (${o.ratio >= 10 ? Math.round(o.ratio) : o.ratio.toFixed(1)}x)`;
+  const rows = o.workers.slice(-8).map((w) =>
+    line(els, `core:o:${w.name}`, [
+      { t: "  " },
+      { t: padTo(w.name, 18), color: T.text },
+      { t: padTo((w.model ?? "?").replace(/^claude-/, ""), 12), color: T.muted },
+      { t: `${tok(w.peak).padStart(6)} held ${tok(w.kept).padStart(6)} kept ${tok(w.returned).padStart(6)} back`, color: T.text },
+      { t: w.costUsd === null ? "" : `  $${w.costUsd.toFixed(2)}`, color: T.muted },
+    ], cols));
   return [
-    head(
-      els,
-      "OFFLOAD",
-      `${tok(o.kept)} kept in tmux, ${tok(o.returned)} returned${ratio}`,
-      cols,
-    ),
+    head(els, "offload", [{ t: `${tok(o.kept)} kept in tmux → ${tok(o.returned)} back`, color: T.text }, { t: ratio, color: T.muted }], cols),
     ...rows,
   ];
 }
 
-function routeRows(
-  els: ClientElements,
-  m: CoreModel,
-  cols: number,
-): RenderElement[] {
-  const rows = m.routes
-    .slice(-6)
-    .reverse()
-    .flatMap((r) => [
-      line(
-        els,
-        `core:r:${r.teamId}`,
-        [
-          { t: "  " },
-          { t: `${r.cls}/${r.effort}`, bold: true },
-          {
-            t: `  ${r.name || r.teamId}  ${r.isolation}, max ${r.maxParallel}`,
-            color: C.muted,
-          },
-          ...(r.drift.length ? [{ t: "  ✗ drift", color: C.fail }] : []),
-        ],
-        cols,
-      ),
-      ...r.seats.map((s, i) =>
-        line(
-          els,
-          `core:r:${r.teamId}:${i}`,
-          [
-            { t: "    → ", color: C.muted },
-            { t: `${s.count}× ${s.role} ` },
-            { t: `${s.model}/${s.effort}`, color: C.live },
-            ...(s.ran.length
-              ? [
-                  {
-                    t: `  ran ${[...new Set(s.ran)].join(", ")}`,
-                    color: C.muted,
-                  },
-                  {
-                    t: s.ran.every(
-                      (x) =>
-                        x.toLowerCase().includes(s.model.toLowerCase()) ||
-                        s.model === "inherit",
-                    )
-                      ? " ✓"
-                      : " ✗",
-                    color: r.drift.length ? C.fail : C.ok,
-                  },
-                ]
-              : [{ t: "  not run yet", color: C.muted }]),
-          ],
-          cols,
-        ),
-      ),
-    ]);
+/** `ran sonnet ✓ as planned`, `ran haiku ✗ drift`, `not run yet`. */
+function ranSegments(s: CoreModel["routes"][number]["seats"][number]): Segment[] {
+  if (!s.ran.length) return [{ t: "  not run yet", color: T.muted }];
+  const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === "inherit");
   return [
-    head(
-      els,
-      "ROUTE",
-      "decision model: class/effort -> seats -> model run",
-      cols,
-    ),
-    ...rows,
+    { t: `  ran ${[...new Set(s.ran)].join(", ")}`, color: T.muted },
+    same ? { t: " ✓ as planned", color: T.ok } : { t: " ✗ drift", color: T.bad },
   ];
+}
+
+function routeRows(els: ClientElements, m: CoreModel, cols: number): RenderElement[] {
+  const rows = m.routes.slice(-6).reverse().flatMap((r) => [
+    line(els, `core:r:${r.teamId}`, [
+      { t: "  " },
+      { t: `${r.cls}/${r.effort}`, bold: true, color: T.text },
+      { t: `  ${r.name || r.teamId}  ${r.isolation}, max ${r.maxParallel}`, color: T.muted },
+      ...(r.drift.length ? [{ t: "  ✗ drift", color: T.bad }] : []),
+    ], cols),
+    ...r.seats.map((s, i) =>
+      line(els, `core:r:${r.teamId}:${i}`, [
+        { t: "    → ", color: T.muted },
+        { t: `${s.count}× ${s.role} `, color: T.text },
+        { t: `${s.model}/${s.effort}`, color: T.text },
+        ...ranSegments(s),
+      ], cols)),
+  ]);
+  return [head(els, "route", [{ t: "which model each seat ran", color: T.muted }], cols), ...rows];
 }
 
 const blank = (els: ClientElements, key: string): RenderElement =>
@@ -322,7 +153,7 @@ export function coreRows(
   const core = m.core;
   const gates = gateRows(els, m, on, inner);
   const gateBlock = gates.length
-    ? [head(els, "GATES", "what the Stop gate will check", inner), ...gates]
+    ? [head(els, "gates", [{ t: "what the Stop gate will check", color: T.muted }], inner), ...gates]
     : [];
   if (!hasCore(core))
     return [
@@ -333,7 +164,7 @@ export function coreRows(
             line(
               els,
               "core:none",
-              [{ t: "no verdicts, workers or gates yet", color: C.muted }],
+              [{ t: "no verdicts, workers or gates yet", color: T.muted }],
               inner,
             ),
           ]),

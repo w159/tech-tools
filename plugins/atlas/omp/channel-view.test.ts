@@ -12,7 +12,8 @@ import { expect, test } from "bun:test";
 const CHAN = "repo@main/lead-abc";
 const plain = (ls?: string[]) => (ls ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
 /** A lane row: state chip, glyph, then the worker name. */
-const lane = (name: string) => new RegExp(`(START|RUN|THINK)\\s+\\S{3} ${name}\\s`);
+/** A worker row: its status mark (spinner, hollow dot, tick or cross) then the name. */
+const lane = (name: string) => new RegExp(`[\u2800-\u28ff\u25cc\u25cb\u2717\u2713] ${name}\\s`);
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "chan-view-"));
@@ -66,7 +67,7 @@ test("task returns first (async spawn): widget keeps polling, shows late notes, 
 	const { calls, ui, timers, view } = harness();
 	f.note("lead-abc", "A", "scope: do the thing");
 	view.open(ui, { channel: CHAN, members: ["A", "B"], cwd: f.root }); // the task tool call itself returns right after this
-	expect(plain(calls[0])).toContain("lead-abc → A: scope: do the thing");
+	expect(plain(calls[0])).toContain("lead-abc → A   scope: do the thing");
 	expect(plain(calls[0])).toMatch(lane("A"));
 	expect(timers.iv).toBeDefined();
 
@@ -78,8 +79,8 @@ test("task returns first (async spawn): widget keeps polling, shows late notes, 
 	f.note("A", "B", "touching shared.ts"); // child <-> child, written after the tool ended
 	f.note("B", "lead-abc", "start: reading it"); // child -> lead
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("A → B: touching shared.ts");
-	expect(plain(calls.at(-1))).toContain("B → lead-abc: start: reading it");
+	expect(plain(calls.at(-1))).toContain("B → lead-abc   start: reading it"); // one message row: the newest
+	expect(plain(calls.at(-1))).not.toContain("touching shared.ts");
 
 	f.finish(["A"]);
 	for (let i = 0; i < 5; i++) timers.iv?.();
@@ -89,7 +90,7 @@ test("task returns first (async spawn): widget keeps polling, shows late notes, 
 
 	f.finish(["A", "B"]);
 	timers.iv?.(); // quiet poll 1
-	expect(plain(calls.at(-1))).toContain("last wave: 2 workers");
+	expect(plain(calls.at(-1))).toContain("last run  2 workers");
 	timers.iv?.(); // quiet poll 2
 	expect(timers.iv).toBeDefined();
 	timers.iv?.(); // quiet poll 3
@@ -278,7 +279,7 @@ test("a linked-worktree cwd reads the MAIN repo board, where atlas_todo.py write
 	view.stop();
 });
 
-test("widget never exceeds omp's 10-line cap with 6 workers and 8 notes; footer is the last line", () => {
+test("widget never exceeds omp's 10-line cap with 6 workers and 8 notes; the header is first, the newest message last", () => {
 	const names = Array.from({ length: 6 }, (_, i) => `w${i}`);
 	const root = atlasFixture(names.map(name => ({ name, joined: 1 })), [{ status: "pending", phase: "verify" }]);
 	for (let i = 0; i < 8; i++) appendFileSync(join(root, ".atlas", ".run", "board", "a.jsonl"), `${JSON.stringify({ ts: i, seq: i + 1, owner: "a", to: "all", text: `n${i}`, channel: CHAN })}\n`);
@@ -286,7 +287,8 @@ test("widget never exceeds omp's 10-line cap with 6 workers and 8 notes; footer 
 	view.open(ui, { channel: CHAN, members: names, cwd: root });
 	expect(calls[0]!.length).toBeLessThanOrEqual(10);
 	expect(plain([calls[0]![0]!])).toContain("ATLAS");
-	expect(plain([calls[0]!.at(-1)!])).toContain("tasks");
+	expect(plain([calls[0]![0]!])).toContain("of 1 tasks");
+	expect(plain([calls[0]!.at(-1)!])).toContain("a → all   n7"); // no checks reported yet: the message row closes the panel
 	view.stop();
 });
 
@@ -315,23 +317,20 @@ const model = (over: Partial<PanelModel> = {}): PanelModel => ({
 });
 const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complete SGR sequence
 
-test("panel: gradient title, chevron rail, state + tool chips, eighth-block bars, sparkline, ticker, gate chips", () => {
+test("panel: header, stepper, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toContain("◆ ATLAS  ·  mission control  ·  tech-tools@main  ·  wave 3  ·  audit/medium");
-	expect(p[0]).toContain("◷ 02:41   3 live   ✖ 1 gates");
-	expect(new Set(lines[0]!.match(/48;2;\d+;\d+;\d+/g)).size).toBeGreaterThan(20); // per-cell gradient
-	expect(p[1]).toContain(" ✓ research ▶ ✓ theory ▶ ✓ test ▶ ⣾ IMPLEMENT ▶ verify ▶ done");
-	expect(p[3]).toMatch(/ RUN {3}◔o◔ explorer-a324 +explorer +ctx_search +dispatch_tripwire\.py/);
-	expect(p[3]).toMatch(/█+[▏▎▍▌▋▊▉]? *[▁▂▃▄▅▆▇█]{12} +1m12s *$/);
-	expect(p[4]).toMatch(/ THINK •-• implementer-band +implementer +Edit +mod\/band\.tsx/);
-	expect(p[5]).toMatch(/ START ◉-◉ verifier-ui +verifier +working/);
-	expect(p[2]).toBe(" ".repeat(120)); // spacer under the rail
+	expect(p[0]).toMatch(/^ ◆ ATLAS {3}tech-tools@main {2}· {2}audit\/medium +5 of 9 tasks ━{16} +02:41 $/);
+	expect(p[1]).toContain(" ✓ research ─ ✓ theory ─ ✓ test ─ ⠙ implement ─ ○ verify ─ ○ done");
+	expect(p[2]).toBe(" ".repeat(120)); // breathing row under the stepper; the spinner frame is spin(tick 1)
+	expect(p[3]).toMatch(/^ ⠙ explorer-a324 {5}explorer {5}ctx_search {2}dispatch_tripwire\.py +1m12s $/);
+	expect(p[4]).toMatch(/^ ⠙ implementer-band {2}implementer {2}thinking {3}last Edit mod\/band\.tsx +48s $/);
+	expect(p[5]).toMatch(/^ ◌ verifier-ui {7}verifier {5}starting +12s $/);
 	expect(p[6]).toBe(" ".repeat(120));
-	expect(p[7]).toContain("#lead-a47cc5  explorer-a324 → implementer-band: found 3 call sites   implementer-band → all: band.tsx compiles");
-	expect(p[8]).toMatch(/tasks █+.* 5\/9 {3}✔ completion {3}✔ tripwire {3}✖ routing/);
+	expect(p[7]).toMatch(/^ implementer-band → all {3}band\.tsx compiles +$/);
+	expect(p[8]).toBe(" checks  ✗ routing".padEnd(120)); // groups with no lines yet are not shown
 	expect(lines).toHaveLength(9);
-	expect(lines[8]).toContain("48;2;243;139;168m ✖ routing"); // filled red chip
+	expect(lines[8]).toContain("\x1b[38;2;243;139;168m"); // bad
 });
 
 test("panel: <= maxLines, visible width exactly `width` at 60..200, no broken escapes, whatever the load", () => {
@@ -346,50 +345,51 @@ test("panel: <= maxLines, visible width exactly `width` at 60..200, no broken es
 	}
 });
 
-test("panel with 6 workers: 5 lanes + '+1 more' + ticker fill 10 lines; short budgets drop the ticker first", () => {
+test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers into `+N more`, the message gives way last-but-one, the footer last", () => {
 	const six = Array.from({ length: 6 }, (_, i) => ({ name: `w${i}`, secs: 5 }));
 	const full = renderPanel(model({ workers: six }));
 	expect(full).toHaveLength(10);
-	expect(plain(full)).toContain("+1 more");
-	expect(plain(full)).toContain("#lead-a47cc5");
-	const tight = plain(renderPanel(model({ workers: six, maxLines: 8 })));
-	expect(tight).not.toContain("#lead");
-	expect(tight).toMatch(lane("w4"));
-	expect(tight).toContain("tasks");
+	expect(plain(full)).not.toContain("more");
+	expect(plain(full)).toContain("implementer-band → all");
+	const eight = plain(renderPanel(model({ workers: six, maxLines: 8 })));
+	expect(eight).toContain("+3 more");
+	expect(eight).toMatch(lane("w2"));
+	expect(eight).toContain("checks");
+	const five = plain(renderPanel(model({ workers: six, maxLines: 5 })));
+	expect(five).not.toContain("implementer-band → all"); // the message is the first row to go
+	expect(five).toContain("checks");
 });
 
-test("panel idle: 2 lines, dim gradient title with the last-wave summary (Claude band wording), completed rail", () => {
-	const idle = renderPanel(model({ workers: [], idle: { workers: 3, secs: 70, failed: 0 }, gates: [] }));
+test("panel idle: header says idle, the stepper carries the last run, the whole thing is two rows", () => {
+	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
-	expect(plain([idle[0]!])).toMatch(/^ ◆ ATLAS {2}· {2}idle {2}· {2}last wave: 3 workers · 1m10s · ✔ ok +$/);
-	expect(plain([idle[1]!])).toContain("✓ research ▶ ✓ theory ▶ ✓ test ▶ ✓ implement ▶ ✓ verify ▶ ◆ DONE");
-	expect(idle[0]).toContain("48;2;88;91;112m"); // #585b70 dim gradient start
+	expect(plain([idle[0]!])).toMatch(/^ ◆ ATLAS {3}tech-tools@main {2}· {2}idle +5 of 9 tasks ━{16} $/);
+	expect(plain([idle[1]!])).toMatch(/^ ✓ research ─ ✓ theory ─ ✓ test ─ ✓ implement ─ ✓ verify ─ ✓ done +last run {2}3 workers · 1m10s · all ok $/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
-	expect(failed).toContain("last wave: 2 workers · 9s · ✖ 1 failed");
+	expect(failed).toContain("last run  2 workers · 9s · 1 failed");
 });
 
-test("narrow lanes abbreviate roles and names at a hyphen, never mid-word", () => {
+test("long worker names and roles are cut with an ellipsis in their columns, never run together", () => {
 	const workers = [{ name: "completeness-critic-f08e", role: "completeness-critic", secs: 24, tool: { tool: "write", target: "x", active: false } }];
 	const out = plain(renderPanel(model({ workers, width: 160 })));
-	expect(out).toMatch(/critic-f08e +critic +write/);
-	expect(out).not.toMatch(/complete\S*…/);
+	expect(out).toMatch(/completeness-criti… completenes… thinking {3}last write x/);
 });
 
-test("panel at 60 columns abbreviates the rail and still shows every lane's name and tool", () => {
+test("panel at 60 columns is the one-row summary", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
-	expect(p[1]).toContain("✓ res ▶ ✓ the ▶ ✓ tes ▶ ⣾ IMPLEMENT ▶ ver ▶ don");
-	expect(p[3]).toMatch(/RUN {3}◔o◔ explorer-… +ctx_search/);
+	expect(p).toHaveLength(1);
+	expect(p[0]!.trim()).toBe("◆ ATLAS  implement · 5/9 tasks · 3 working · 1 failing");
 });
 
-test("lanes wear the role character: running cycles with the tick, thinking and START differ from running", () => {
+test("worker marks: a running worker's spinner follows the tick, thinking has a grey one, starting is a hollow dot; no faces", () => {
 	const lane = (tick: number, tool?: { tool: string; target: string; active: boolean }) =>
 		plain([renderPanel(model({ tick, workers: [{ name: "explorer-a324", secs: 5, tool }] }))[3]!]);
 	const run = { tool: "ctx_search", target: "x", active: true };
-	expect(lane(0, run)).toContain("◔_◔");
-	expect(lane(1, run)).toContain("◔o◔");
-	expect(lane(0, { ...run, active: false })).toContain("◔~◔");
-	expect(lane(0)).toContain("◔~◔");
-	expect(lane(0, run)).not.toMatch(/[⠋⣾]/);
+	expect(lane(0, run)).toMatch(/^ ⠋ explorer-a324 +explorer +ctx_search {2}x/);
+	expect(lane(1, run)).toMatch(/^ ⠙ explorer-a324/);
+	expect(lane(0, { ...run, active: false })).toMatch(/^ ⠋ explorer-a324 +explorer +thinking {3}last ctx_search x/);
+	expect(lane(0)).toMatch(/^ ◌ explorer-a324 +explorer +starting/);
+	expect(lane(0, run)).not.toMatch(/[◔•◉]/);
 });
 
 test("sparkBuckets: tool calls per 10s bucket over the last 2 minutes, oldest first", () => {
@@ -448,10 +448,10 @@ test("team lanes: last tool_use from each worker's stream-json log, mcp prefix s
 	const { calls, ui, timers, view } = harness();
 	view.open(ui, { channel: CHAN, members: ["audit-1", "audit-2", "audit-3"], cwd: f.root });
 	const out = plain(calls.at(-1));
-	expect(out).toMatch(/THINK .* audit-1 .*Bash\s+echo hi/); // answered: between calls
+	expect(out).toMatch(/audit-1 .*thinking {3}last Bash echo hi/); // answered: between calls
 	expect(out).toMatch(/ctx_search\s+where is the widget/);
 	expect(out).not.toContain("mcp__");
-	expect(out).toMatch(/RUN .* audit-3 .*Edit\s+mission-panel\.ts/); // in flight
+	expect(out).toMatch(/⠋ audit-3 .*Edit {2}mission-panel\.ts/); // in flight
 	const widths = (calls.at(-1) ?? []).map(l => [...stripAnsi(l)].length);
 	expect(new Set(widths).size).toBe(1); // ANSI in a lane never skews the frame
 
@@ -462,7 +462,7 @@ test("team lanes: last tool_use from each worker's stream-json log, mcp prefix s
 
 	live(f.root, ["audit-1", "audit-2", "audit-3"], ["audit-1", "audit-2", "audit-3"]);
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("last wave: 3 workers");
+	expect(plain(calls.at(-1))).toContain("last run  3 workers");
 	writeFileSync(join(f.root, ".atlas", ".run", "channels.json"), JSON.stringify({ version: 1, channels: {} })); // atlas_team reap drops the channel
 	timers.iv?.();
 	expect(plain(calls.at(-1))).not.toMatch(lane("audit-\\d")); // finished stays finished: lanes never resurrect
@@ -476,7 +476,7 @@ test("a team reaped between polls (channel gone after it was seen) ends every la
 	expect(plain(calls.at(-1))).toMatch(lane("w1"));
 	writeFileSync(join(f.root, ".atlas", ".run", "channels.json"), JSON.stringify({ version: 1, channels: {} }));
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("last wave: 2 workers");
+	expect(plain(calls.at(-1))).toContain("last run  2 workers");
 });
 
 test("reap after the view cleared re-mounts the idle panel with the last wave, which lingers then clears", () => {
@@ -497,7 +497,8 @@ test("reap after the view cleared re-mounts the idle panel with the last wave, w
 	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root, reaped: true });
 	const out = plain(calls.at(-1));
 	expect(calls.at(-1)).toHaveLength(2);
-	expect(out).toContain("idle  ·  last wave: 2 workers · 1m10s · ✖ 1 failed");
+	expect(out).toContain("·  idle");
+	expect(out).toContain("last run  2 workers · 1m10s · 1 failed");
 	expect(out).not.toMatch(lane("w\\d"));
 	for (let i = 0; i < 3; i++) timers.iv?.();
 	expect(timers.to).toBeDefined(); // linger window, panel still up
@@ -518,19 +519,19 @@ test("rail phase: active todo phase, else the latest ATLAS header phase of the c
 		handlers.message_end?.forEach(h => h({ message: { role: "assistant", content: [{ type: "text", text }] } }, ctx));
 	const railOf = () => plain([calls.at(-1)![1]!]);
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/RESEARCH/);
+	expect(railOf()).toMatch(/⠋ research/);
 	say("ATLAS | ⛭ implement 1/3 | running the team\nbody");
 	say("no header on this follow-up message");
 	say("ATLAS | x verify | sub", { cwd: root, agent: { kind: "sub" } }); // a sub's header never moves the lead's rail
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/IMPLEMENT/);
+	expect(railOf()).toMatch(/⠋ implement/);
 	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn: the old header no longer counts
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/RESEARCH/);
+	expect(railOf()).toMatch(/⠋ research/);
 	writeFileSync(join(root, ".atlas", ".run", "todos.json"), JSON.stringify({ version: 1, items: [{ status: "in_progress", phase: "test" }] }));
 	say("ATLAS | ⛭ verify | x");
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/TEST/); // the active todo outranks the header
+	expect(railOf()).toMatch(/⠋ test/); // the active todo outranks the header
 	view.stop();
 });
 
@@ -584,13 +585,13 @@ test("team lanes take class/effort and roles from the live team record; channels
 	const { calls, ui, view } = harness({ ATLAS_PROJECT_ROOT: root });
 	view.open(ui, { channel: CHAN, members: ["explorer-127a"], cwd: root });
 	const out = plain(calls.at(-1));
-	expect(out).toMatch(/repo@main {2}· {2}wave \d+ {2}· {2}audit\/medium/);
+	expect(out).toMatch(/repo@main {2}· {2}audit\/medium/);
 	expect(out).toMatch(/explorer-127a +scout /);
 	expect(out).not.toContain("subagent");
 	view.stop();
 });
 
-test("claude team lane: role + tool from the stream log, sparkline from panefeed's calls-only <name>.tool.json", () => {
+test("claude team lane: role + tool from the stream log; panefeed's calls-only <name>.tool.json adds no graph", () => {
 	const root = atlasFixture([{ name: "lead-abc", role: "lead" }, { name: "explorer-127a", role: "subagent", joined: 1 }], [{ status: "pending", phase: "research" }]);
 	mkdirSync(join(root, ".atlas", ".run", "teams"), { recursive: true });
 	writeFileSync(join(root, ".atlas", ".run", "teams", "t1.json"), JSON.stringify({ channel: CHAN, class: "audit", effort: "medium", members: [{ name: "explorer-127a", role: "scout" }] }));
@@ -604,8 +605,8 @@ test("claude team lane: role + tool from the stream log, sparkline from panefeed
 	timers.clock = nowS * 1000; // the harness clock starts at 0, which would age every call out of the window
 	view.open(ui, { channel: CHAN, members: ["explorer-127a"], cwd: root });
 	const lane = plain(calls.at(-1)).split("\n").find(l => l.includes("explorer-127a")) ?? "";
-	expect(lane).toMatch(/RUN .*explorer-127a +scout +Read +dispatch\.py/);
-	expect(lane).toMatch(/[▂▃▄▅▆▇█]/); // a non-empty sparkline bucket
+	expect(lane).toMatch(/⠋ explorer-127a +scout +Read {2}dispatch\.py/);
+	expect(lane).not.toMatch(/[▁▂▃▄▅▆▇█]/); // the tool-call history is kept but no graph is drawn
 	view.stop();
 });
 
@@ -613,13 +614,13 @@ test("D2 age rolls over to hours and days", async () => {
 	const { age } = await import("./mission-panel");
 	expect([age(5), age(61), age(3599), age(3600), age(86399), age(540092)]).toEqual(["5s", "1m01s", "59m59s", "1h00m", "23h59m", "6d06h"]);
 });
-test("D3 saturated bar is an empty track and a 6-day lane fits the width", () => {
+test("D3 a 6-day lane fits the width and never grows past the time column", () => {
 	const plainOf = (l: string) => l.replace(/\x1b\[[0-9;]*m/g, "");
 	const workers = [{ name: "a-1", secs: 540092 }, ...[1, 2, 3].map(i => ({ name: `explorer-t${i}`, secs: 500, tool: { tool: "Edit", target: "x.ts", active: false } }))];
 	const lines = renderPanel(model({ workers, width: 100, maxLines: 14 }));
 	for (const l of lines) expect(visibleWidth(l)).toBeLessThanOrEqual(100);
-	expect(lines.map(plainOf).filter(l => /START|THINK/.test(l)).join("\n")).not.toContain("█");
-	expect(lines.map(plainOf).some(l => l.includes("6d06h"))).toBe(true);
+	expect(lines.map(plainOf).some(l => /a-1 .*150h1m $/.test(l))).toBe(true);
+	expect(lines.map(plainOf).filter(l => /starting|thinking/.test(l)).join("\n")).not.toMatch(/[█▏▎▍▌▋▊▉]/); // no bars
 });
 test("D4 roleOf of a plain name is task", async () => {
 	const { roleOf } = await import("./mission-panel");
@@ -702,7 +703,7 @@ test("a registry that becomes unreadable after the channel was seen does not end
 	timers.iv?.();
 	expect(plain(calls.at(-1))).toMatch(lane("w1")); // unreadable is not proof of a reap
 	expect(plain(calls.at(-1))).toMatch(lane("w2"));
-	expect(plain(calls.at(-1))).not.toContain("last wave");
+	expect(plain(calls.at(-1))).not.toContain("last run");
 	rmSync(join(f.root, ".atlas", ".run", "channels.json"));
 	timers.iv?.();
 	expect(plain(calls.at(-1))).toMatch(lane("w1"));
@@ -719,17 +720,17 @@ test("the last-wave summary counts from epoch-second registry clocks and shows n
 	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root });
 	writeFileSync(join(run, "channels.json"), JSON.stringify({ version: 1, channels: {} })); // reaped before anyone's ended_at was read
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("idle  ·  last wave: 2 workers · 1m30s");
+	expect(plain(calls.at(-1))).toContain("last run  2 workers · 1m30s");
 	expect(plain(calls.at(-1))).not.toContain("failed");
 
 	const bare = fixture(); // reaped mount with no registry rows at all: just the roster size
 	const h = harness();
 	h.view.open(h.ui, { channel: CHAN, members: ["a", "b", "c"], cwd: bare.root, reaped: true });
-	expect(plain(h.calls.at(-1))).toContain("last wave: 3 workers");
+	expect(plain(h.calls.at(-1))).toContain("last run  3 workers");
 	expect(plain(h.calls.at(-1))).not.toContain("failed");
 });
 
-test("gates: the session id (or '-') reaches the cache, open failures reach the core row, and no reading yet still renders it", () => {
+test("gates: the session id (or '-') reaches the cache; reported groups become the checks footer, none reported shows no footer", () => {
 	const f = fixture();
 	writeFileSync(join(f.root, ".atlas", ".run", "findings.json"), JSON.stringify([{ id: "F1", status: "verified", title: "t" }]));
 	const refreshes: Array<[string, string]> = [];
@@ -742,15 +743,15 @@ test("gates: the session id (or '-') reaches the cache, open failures reach the 
 		view.open(h.ui, { channel: CHAN, members: ["A"], cwd: f.root, sessionId });
 		return plain(h.calls.at(-1));
 	};
-	expect(open("sess-9")).toMatch(/✔/); // nothing read yet: core row still present, gates clear
-	expect(open("sess-9")).toContain("CONTRACT");
+	expect(open("sess-9")).not.toContain("checks"); // nothing read yet: no footer, the panel still renders
+	expect(open("sess-9")).toContain("ATLAS");
 	expect(refreshes.at(-1)).toEqual(["sess-9", f.root]);
 	open();
 	expect(refreshes.at(-1)).toEqual(["-", f.root]);
 	read = [group(false), group(true)];
-	expect(open("sess-9")).toMatch(/✖\s?1/);
+	expect(open("sess-9")).toMatch(/checks {2}✗ completion/);
 	read = [group(true)];
-	expect(open("sess-9")).not.toMatch(/✖\s?\d+ gates|✖1/);
+	expect(open("sess-9")).toMatch(/checks {2}✓ completion/);
 });
 
 test("stopping while a linger is pending cancels it; stopping an idle view cancels nothing", () => {
@@ -796,11 +797,11 @@ test("only the lead's assistant text pins the rail: user messages and non-text c
 	send({ role: "assistant", content: "ATLAS | ⛭ verify | plain string content" });
 	send({ role: "assistant", content: [{ type: "tool_use", text: "ATLAS | ⛭ verify | x" }] });
 	send(null);
-	expect(railOf()).toMatch(/RESEARCH/);
+	expect(railOf()).toMatch(/⠋ research/);
 	send({ role: "assistant", content: header });
-	expect(railOf()).toMatch(/VERIFY/);
+	expect(railOf()).toMatch(/⠋ verify/);
 	send({ role: "assistant", content: [{ type: "text", text: "ATLAS | ⛭ bogus-phase | x" }] }); // not a rail phase: ignored
-	expect(railOf()).toMatch(/VERIFY/);
+	expect(railOf()).toMatch(/⠋ verify/);
 	view.stop();
 });
 
@@ -868,4 +869,17 @@ test("boardRoot: ATLAS_PROJECT_ROOT wins, else the nearest ancestor with .atlas,
 	expect(boardRoot(wt, {})).toBe(wt);
 	writeFileSync(join(wt, ".git"), "not a gitdir pointer\n");
 	expect(boardRoot(wt, {})).toBe(wt);
+});
+
+test("todo summary: dispatch rows leave the plan count, but count when they are all the board has", () => {
+	const withPlan = atlasFixture(
+		[{ name: "lead-abc", role: "lead", joined: 1 }],
+		[{ status: "completed" }, { status: "pending" }, { status: "in_progress", origin: "dispatch" }, { status: "completed", origin: "dispatch" }],
+	);
+	expect(todoSummary(withPlan)).toEqual({ done: 1, total: 2, phase: undefined });
+	const onlyDispatch = atlasFixture(
+		[{ name: "lead-abc", role: "lead", joined: 1 }],
+		[{ status: "in_progress", origin: "dispatch" }, { status: "pending", origin: "dispatch" }],
+	);
+	expect(todoSummary(onlyDispatch)).toEqual({ done: 0, total: 2, phase: undefined });
 });

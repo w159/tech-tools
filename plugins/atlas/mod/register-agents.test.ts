@@ -221,6 +221,33 @@ describe('syncAgentsFromList dispatch identity', () => {
   });
 });
 
+describe('syncAgentsFromList names without an Agent call name', () => {
+  test('a `<slug>: summary` description names the worker; two explorers never read explorer / explorer-xxxx', () => {
+    const out = syncAgentsFromList(
+      [
+        { id: 'aaaa1111', description: 'readme-explorer: compare README, AGENTS, CONTRIBUTING', type: 'atlas:explorer', status: 'running' },
+        { id: 'a843bbbb', description: 'license-explorer: name license and plugin purpose', type: 'atlas:explorer', status: 'running' },
+      ],
+      [],
+    );
+    expect(out.map((a) => a.name)).toEqual(['readme-explorer', 'license-explorer']);
+  });
+  test('same persona twice with different descriptions: the task slugs tell them apart', () => {
+    const out = syncAgentsFromList(
+      [
+        { id: 'aaaa1111', description: 'Map band rows', type: 'atlas:explorer', status: 'running' },
+        { id: 'bbbb2222', description: 'Map pane rows', type: 'atlas:explorer', status: 'running' },
+      ],
+      [],
+    );
+    expect(out.map((a) => a.name)).toEqual(['map-band-rows', 'map-pane-rows']);
+  });
+  test('the Agent call name still wins over a description prefix', () => {
+    const out = syncAgentsFromList([{ id: 'aaaa1111', description: 'readme-explorer: x', type: 'atlas:explorer', status: 'running' }], [], { aaaa1111: { name: 'given-name', type: 'atlas:explorer' } });
+    expect(out.map((a) => a.name)).toEqual(['given-name']);
+  });
+});
+
 describe('stale workers', () => {
   test('host status completed/failed/killed wins over a spawn-recorded running entry', () => {
     const stale = { name: 'a1', persona: 'explorer', state: 'running' as const, source: 'task' as const };

@@ -4066,25 +4066,71 @@ def _not_applicable(r: dict) -> bool:
     return bool(r["ok"]) and (d.startswith("skipped") or d.endswith("skipped") or "(n/a)" in d)
 
 
-def render_report(results: list, failed: list, plugin: str, verbose: bool = False) -> list:
-    """The human report: FAIL, then WARN, then PASS rows; passing checks that did
-    not apply here fold into one SKIP line (--verbose lists them); the verdict
-    line carries the counts. The old flat list printed 35 rows with problems
-    wherever the check order put them and 7 'skipped' rows reading PASS."""
-    order = {"FAIL": 0, "WARN": 1, "PASS": 2}
-    shown = [r for r in results if verbose or not _not_applicable(r)]
-    folded = [r for r in results if not verbose and _not_applicable(r)]
-    lines = [
-        f"{_status(r)}  {r['check']:20} {r['detail']}"
-        for r in sorted(shown, key=lambda r: order[_status(r)])
-    ]
-    if folded:
-        names = ", ".join(r["check"] for r in folded)
-        lines.append(f"SKIP  {len(folded)} not applicable here ({names}); --verbose lists them")
-    counts = {k: sum(1 for r in results if _status(r) == k) for k in order}
-    tally = f"{counts['PASS'] - len([r for r in results if _not_applicable(r)])} pass, {counts['WARN']} warn, {counts['FAIL']} fail"
-    tally += f", {sum(1 for r in results if _not_applicable(r))} n/a"
-    lines.append(("HEALTHY" if not failed else f"{len(failed)} PROBLEM(S)") + f" - {plugin} ({tally})")
+def render_report(
+    results: list,
+    failed: list,
+    plugin: str,
+    verbose: bool = False,
+    width: int = 100,
+    color: bool = False,
+) -> list:
+    """The human report: a title, FAIL rows, WARN rows, one folded line for the
+    passing checks, one for the not-applicable ones (--verbose lists every row),
+    then the verdict with the counts. Details wrap to `width` at the detail
+    column; `color` wraps the mark and status word in ANSI, nothing else."""
+    import textwrap
+
+    reset = "\x1b[0m"
+
+    def paint(code: str, text: str) -> str:
+        return f"{code}{text}{reset}" if color else text
+
+    red, yellow, green, dim, bold = "\x1b[31m", "\x1b[33m", "\x1b[32m", "\x1b[2m", "\x1b[1m"
+    na = [r for r in results if _not_applicable(r)]
+    passed = [r for r in results if _status(r) == "PASS" and not _not_applicable(r)]
+    warns = [r for r in results if _status(r) == "WARN"]
+    fails = [r for r in results if _status(r) == "FAIL"]
+    check_w = 20
+    lead = len("  ✗ FAIL  ") + check_w + 2
+    detail_w = max(20, width - lead)
+
+    def row(mark: str, word: str, code: str, r: dict) -> list:
+        wrapped = textwrap.wrap(
+            str(r.get("detail") or ""), width=detail_w, break_long_words=False, break_on_hyphens=False
+        ) or [""]
+        head = f"  {paint(code, f'{mark} {word}')}  {r['check']:{check_w}}  "
+        out = [(head + wrapped[0]).rstrip()]
+        out += [" " * lead + w for w in wrapped[1:]]
+        return out
+
+    def fold(text: str) -> list:
+        return textwrap.wrap(
+            text, width=width, initial_indent="  ", subsequent_indent="    ",
+            break_long_words=False, break_on_hyphens=False,
+        )
+
+    lines = [f"Atlas doctor  ·  {plugin}", ""]
+    for r in fails:
+        lines += row("✗", "FAIL", red, r)
+    for r in warns:
+        lines += row("!", "WARN", yellow, r)
+    if verbose:
+        for r in results:
+            if _status(r) == "PASS" and not _not_applicable(r):
+                lines += row("✓", "PASS", green, r)
+        for r in na:
+            lines += row("·", "SKIP", dim, r)
+    else:
+        if passed:
+            noun = "check passes" if len(passed) == 1 else "checks pass"
+            summary = fold(f"✓ {len(passed)} {noun}: " + ", ".join(r["check"] for r in passed))
+            summary[0] = summary[0].replace("✓", paint(green, "✓"), 1)
+            lines += summary
+        if na:
+            lines.append(paint(dim, f"  · {len(na)} not applicable here; --verbose lists them"))
+    tally = f"{len(passed)} pass, {len(warns)} warnings, {len(fails)} failures, {len(na)} not applicable"
+    verdict = "Healthy" if not failed else f"{len(failed)} problem(s) need attention"
+    lines += ["", f"{paint(bold, verdict)}  ·  {tally}"]
     return lines
 
 
@@ -4432,7 +4478,11 @@ def main(argv=None):
             )
         return 0
 
-    for line in render_report(results, failed, args.plugin, verbose=args.verbose):
+    width = min(shutil.get_terminal_size((100, 24)).columns, 120)
+    color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    for line in render_report(
+        results, failed, args.plugin, verbose=args.verbose, width=width, color=color
+    ):
         print(line)
     return 0 if not failed else 1
 

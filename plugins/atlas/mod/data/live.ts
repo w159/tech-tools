@@ -16,7 +16,7 @@ export interface LiveWorker {
   /** The current (else last) call's intent, as omp's tool preview shows it. */
   detail?: string | null;
   lastLine: string;
-  /** Tool start times over the last minute (sparkline). */
+  /** Tool start times over the last minute (tool-call history). */
   calls: number[];
   /** Dispatch `SCOPE:` value (`audit/medium`), when the prompt carried one. */
   scope: string | null;

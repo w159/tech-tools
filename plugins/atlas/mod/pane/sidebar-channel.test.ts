@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap } from '../live_fixture';
+import { TONE_HEX as T } from '../mission-layout';
 import { textWidth } from '../theme';
 import { channelRows } from './sidebar-channel';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
@@ -40,21 +41,44 @@ describe('channelRows', () => {
       const text = rows.slice(0, -1).map(textOf);
       for (const t of text) expect(textWidth(t)).toBeLessThanOrEqual(inner);
       expect(text[0]).toContain('#tech-tools@main/lead-1');
-      expect(text[0]).toContain('5 unread');
+      expect(text[0]).toContain('6 people · 5 unread');
       const log = text.slice(1);
       expect(log).toHaveLength(6);
       expect(log[0]).toContain('─▶');
       expect(log[1]).toContain('▶');
       expect(log[2]).toContain('↔');
-      expect(log[3]).toContain('⚠');
-      expect(log[4]).toContain('✓');
+      expect(log[3]).toContain('⚠ blocked');
+      expect(log[4]).toContain('✓ handoff');
       expect(log[5]).toContain('last word');
       expect(/\d\d:\d\d/.test(log[0]!)).toBe(inner >= 50);
       const input = rows[rows.length - 1]!;
       expect(input.kind).toBe('Input');
-      expect(input.props.label).toBe("▸ to lead");
+      expect(input.props.label).toBe('▸ to lead');
       input.props.onSubmit('hi');
       expect(sent).toContain('s:hi');
     });
   }
+});
+
+describe('channelRows colour', () => {
+  const log = (inner = 80) => (channelRows(els, model(inner), on, inner) as unknown as Node[]).slice(1, -1);
+  const part = (row: Node, i: number) => kids(row)[i]!.props;
+  test('names and text are plain tones, never a per-persona hue', () => {
+    for (const row of log()) {
+      expect(part(row, 1)).toMatchObject({ color: T.text, bold: true });
+      expect(kids(row).at(-1)!.props.color).toBe(T.text);
+    }
+  });
+  test('direction arrows are muted; blocked is amber and handoff green, each beside its word', () => {
+    const rows = log();
+    expect(part(rows[0]!, 2)).toMatchObject({ children: '─▶ ', color: T.muted });
+    expect(part(rows[2]!, 2)).toMatchObject({ children: '↔ ', color: T.muted });
+    expect(part(rows[3]!, 2)).toMatchObject({ children: '⚠ blocked ', color: T.warn });
+    expect(part(rows[4]!, 2)).toMatchObject({ children: '✓ handoff ', color: T.ok });
+  });
+  test('the header reads people and unread in words, muted', () => {
+    const head = (channelRows(els, model(80), on, 80) as unknown as Node[])[0]!;
+    expect(textOf(head)).toBe('#tech-tools@main/lead-1  6 people · 5 unread');
+    expect(part(head, 1).color).toBe(T.muted);
+  });
 });

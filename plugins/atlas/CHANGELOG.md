@@ -1,5 +1,32 @@
 # Changelog
 
+## 17.4.0 - 2026-11-10
+
+Terminal UI redesign. The 17.3.0 display showed task progress three times, gate results three times and unlabelled jargon, and the Claude Code band and the omp panel had drifted apart twice. Spec: `docs/specs/2026-11-10_atlas-terminal-ui.md`. Audit: `docs/audits/2026-11-10_atlas-terminal-ui-redesign.md`.
+
+### Changed
+
+- Band and omp mission panel: one shared layout module (`mod/mission-layout.ts`) now produces the rows, and `mod/band.tsx` (Claude Code) and `omp/mission-panel.ts` (omp) only paint them, so both print the same text. One golden, `contracts/band-golden.ts`, asserts that on both.
+- Header row shows `N of M tasks` with a thin bar (green when complete) and the elapsed clock while running. The stepper reads `✓ done ─ ⠋ current ─ ○ next`; names shorten to three letters and then to marks when the width is tight, and the current step keeps its name.
+- Worker rows say what each worker is doing in plain words: `running`, `thinking`, `starting`, `waiting`, `failed`, `finished`. Failed and waiting workers sort first, and a finished worker stays for 15 seconds. The newest channel message takes one row, and a `checks` footer lists the gates once.
+- Idle core row has labelled groups (`contract`, `verdicts`, `offload`, `route`) instead of `CONTRACT hdr 2/2 ev 7/7` codes. Evidence joins the contract group only when the row has room, at about 123 columns and up. Below 80 columns the band is one line.
+- Claude Code HUD: the Subagents block is gone, because the band's worker rows show the same agents with more detail. omp draws its own subagent block, which Atlas does not control.
+- Sidebar: a tab bar with the active tab accented, where the gates tab carries the failing count, and a vertical route list with the current phase's items nested under it. The other sidebar views and the board panel use the Catppuccin Mocha tones, and the omp board panel matches the Claude Code one.
+- Turn-complete toasts are plain sentences.
+- Message row skips presence messages (join, leave, exit, merge), so the newest row no longer reads `explorer-a843 -> all joined`.
+- Header task count falls back to the board rows when the route total is 0, so a dispatch-only board shows its count instead of none. The sidebar route view lists rows with no phase under the current phase instead of `nothing planned`, and the omp todo summary uses the same count.
+- Worker names: a plain Agent call carries no name, so the band showed the role. A `<slug>: ` prefix on the Agent description now names the worker, and two workers with the same role show their task slugs.
+- Sidebar team summary counts failed workers and leaves out zero counts.
+- `atlas_doctor.py`: failures and warnings first with wrapped details, one line for passing checks, one line for checks that do not apply, then a verdict line. Colour appears only on a terminal and never when `NO_COLOR` is set.
+
+### Removed
+
+- The gradient title bar, the per-phase hues, the per-worker faces and the sparkline with no label. Violet is the one accent and marks what is happening now; green, amber and red always come with a word.
+
+### Tests
+
+- New or changed: `mod/mission-layout` and `mod/band*.test.ts`, `mod/band-golden.test.ts` and `omp/mission-panel-golden.test.ts` (shared golden), `mod/core-row.test.ts` and `omp/core-row.test.ts`, `mod/notify.test.ts`, the `mod/pane/sidebar*.test.ts` files, `omp/channel-view.test.ts`, `omp/todo-panel.test.ts` and `scripts/test_atlas_doctor.py`. `bun test mod omp` ends at 1720 pass and 2 fail; the 2 are `omp/gen-agents.test.ts` (`replaceTabs` is not exported by the installed `@oh-my-pi/pi-tui`), which fail the same way on 17.3.0.
+
 ## 17.3.0 - 2026-11-10
 
 Usage review and terminal UI pass. Telemetry is too thin to rank anything (2026-W45: 1 submission, below the 3-install publish threshold; 2026-W44: 0), so every item below comes from a measured live Claude Code session, a hook replay of that session, or the live gate and doctor output. Audit: `docs/audits/2026-11-10_atlas-usage-and-ui.md`.

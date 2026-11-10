@@ -36,6 +36,7 @@ const cases: Record<string, SidebarModel> = {
   teamCustomName: v('team', {}, { ...busy, members: [], squad: [{ ...busy.squad[0]!, name: 'selffix-worker', persona: 'unknown' }] }),
   channel: v('channel'),
   route: v('route'),
+  routeSpinning: v('route', { tick: 3 }),
   gates: v('gates'),
   gatesExpanded: v('gates', { ui: ui({ view: 'gates', expanded: 'gate:verify' }) }),
   cols38: v('team', { columns: 38 }),
@@ -51,3 +52,13 @@ const cases: Record<string, SidebarModel> = {
 
 export const serializeGolden = (): string =>
   JSON.stringify(Object.fromEntries(Object.entries(cases).map(([k, m]) => [k, sidebarTree(els, m, on)])), null, 1);
+
+type Node = { kind: string; props: { flexDirection?: string; children?: unknown } };
+const kidsOf = (n: Node): Node[] => {
+  const c = n.props.children;
+  return (Array.isArray(c) ? c : c == null ? [] : [c]).filter((x): x is Node => typeof x === 'object' && x !== null);
+};
+const flat = (n: Node): string => (n.kind === 'Text' ? String(n.props.children ?? '') : kidsOf(n).map(flat).join(n.kind === 'Box' && n.props.flexDirection !== 'row' ? '\n' : ''));
+
+/** One golden case as the plain text a terminal would show (rows joined by newlines). */
+export const goldenText = (name: string): string => flat(sidebarTree(els, cases[name]!, on) as unknown as Node);

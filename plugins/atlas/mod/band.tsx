@@ -1,34 +1,29 @@
-// band.tsx: the AbovePrompt "Mission Control" panel, a filled truecolor band: a gradient title bar,
-// the phase rail as chevron pills, one lane per live worker (state chip, spinner, tool chip, eighth-block
-// elapsed bar, tool-call sparkline), an IRC ticker and a footer of task bar + gate chips. Pure: `register.ts`
-// hands it the snapshot, live workers, gate groups, columns, the row budget, the spinner tick.
-// Tiers: >=120 full, 80-119 no role/target, <80 title row only; maxRows collapses lanes first, then the
-// ticker, then the footer (planRows).
+// band.tsx: the AbovePrompt "Mission Control" band on Claude Code. A thin adapter over mission-layout.ts, the layout
+// the omp mission panel draws too: it turns the snapshot, live workers and gate groups into a MissionModel, paints
+// each layout run as a Segment in the shared tone palette, fills the board slot with the todo list and appends the
+// key buttons to the footer. Pure: `register.ts` hands it the snapshot, workers, gates, columns, row budget and tick.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
-import { activeCount, callBuckets, type LiveWorker } from './data/live';
-import { routeCounts } from './data/todos';
-import { groupOpenCount, openGateCount } from './gates';
+import type { LiveWorker } from './data/live';
+import { planCounts, routeCounts } from './data/todos';
+import { groupOpenCount } from './gates';
+import { isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines, PANEL_BG, RAISED_BG, stepperRuns, TONE_HEX } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
-import { chip, eighthBar, gradientBar, merge, nickColor, padRow, seg, sparkline } from './paint';
-import { charFrame, type CharState } from './roles';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
-import { fitText, formatDuration, MOCHA as M, mix, phaseHue, spin, textWidth } from './theme';
+import { textWidth } from './theme';
+
+export { planRows } from './mission-layout';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
 export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; core?: CoreModel | null; team?: string; leadName?: string };
-// `team` (omp: the team record's `<class>/<effort>`) is the title's only scope label; `leadName` (omp: `lead-<sid6>`) names the lead in the ticker. Both absent: not shown / `lead`.
+// `team` (omp: the team record's `<class>/<effort>`) is the header's scope label; `leadName` (omp: `lead-<sid6>`)
+// names the lead in the message row. Both absent: not shown / `lead`.
 
-const FULL = 120;
-const MID = 80;
-const REF_MS = 120_000; // an elapsed bar fills over two minutes
-const TICKER_ROWS = 2;
-const BAR_W = 28; // elapsed bar cells at most
-const TARGET_W = 24; // target column at its narrowest (full tier)
 const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
+const LINGER_MS = 15_000; // a finished worker keeps its row, ticked, this long
 const RAIL_SKIP = new Set(['validate', 'blocked']);
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
@@ -38,19 +33,26 @@ export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void
 /** The band's controls: hotkeys press only while the band holds the keyboard (ctrl+x, Tab, or a click), and are unique within it. */
 export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = [
   { id: 'route', key: 'r', label: 'route' }, { id: 'team', key: 't', label: 'team' }, { id: 'channel', key: 'c', label: 'channel' },
-  { id: 'gates', key: 'g', label: 'core' }, { id: 'board', key: 'o', label: 'board' },
+  { id: 'gates', key: 'g', label: 'gates' }, { id: 'board', key: 'o', label: 'board' },
 ];
-const BAND_HINT = `click or ctrl+x Tab, then ${BAND_BUTTONS.map((b) => b.key).join(' ')} `;
+/** How to give the band the keyboard; shown after the keys when it fits. */
+export const BAND_HINT = 'ctrl+x tab';
+const buttonWidth = (b: { label: string }): number => 3 + textWidth(b.label) + 2; // engine draws `k: label`, two cells between buttons
+const KEYS_W = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0);
 
-type Ctx = { s: LiveSnapshot; rail: string; cols: number; tick: number; full: boolean; now: number; done: number; total: number; open: number; gates: GateGroup[]; todoExpanded: boolean; core: CoreModel | null; team?: string; leadName?: string };
+/** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
+export const shortTool = (tool: string): string => tool.replace(/^mcp__.*__/, '');
 
-const padTo = (t: string, n: number): string => { const f = fitText(t, n); return f + ' '.repeat(Math.max(0, n - textWidth(f))); };
-const clock = (ms: number): string => {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  return s >= 3600 ? formatDuration(ms) : `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-};
+const railIds = (s: LiveSnapshot): string[] => s.contract.phases.map((p) => p.id as string).filter((id) => !RAIL_SKIP.has(id));
 
-// ---- title bar ---------------------------------------------------------------------
+/** The lit step: the snapshot phase when it is on the rail; for `blocked` (or any off-rail phase) the last rail phase
+ * the caller saw, else the first, so a blocked reply never leaves the rail with nothing lit. */
+export function railPhase(s: LiveSnapshot, lastPhase?: string | null): string {
+  const ids = railIds(s);
+  return ids.includes(s.phase) ? s.phase : lastPhase && ids.includes(lastPhase) ? lastPhase : ids[0] ?? s.phase;
+}
+
+// ---- model --------------------------------------------------------------------------
 
 /** Spawn clusters among the run's workers, oldest first. ponytail: a 10 s gap heuristic, swap for the dispatch
  * batch id once the host exposes one. */
@@ -62,279 +64,107 @@ function waves(ws: readonly LiveWorker[]): LiveWorker[][] {
     return acc;
   }, []);
 }
-const waveOf = (ws: readonly LiveWorker[]): number => waves(ws).length;
 
 /** `<folder>@<branch>` of the board channel; without a board, the project folder. */
 const boardOf = (s: LiveSnapshot): string => (s.channel ? s.channel.split('/')[0]! : (s.root ?? '').replace(/\/+$/, '').split('/').pop() || 'atlas');
-/** `✖ 2 gates` while any gate is open, `✔ gates` when every reported group is clean, nothing before gates report (twin: omp gatesBrief). */
-const gatesBrief = (c: Ctx): string => (!c.gates.some(hasGateData) ? '' : c.open ? `✖ ${c.open} gates` : '✔ gates');
-const statsOf = (c: Ctx, shown: LiveWorker[]): string => {
-  const since = Math.min(...shown.map((w) => w.startedAt));
-  const parts = [`◷ ${clock(c.now - since)}`, `${activeCount(shown)} live`, gatesBrief(c)];
-  return `${parts.filter(Boolean).join('   ')} `;
-};
 
-function titleRow(c: Ctx, all: LiveWorker[], shown: LiveWorker[]): Segment[] {
-  const left = [`${MARK} ATLAS`, ...(c.full ? ['mission control'] : []), boardOf(c.s), `wave ${waveOf(all)}`, ...(c.team ? [c.team] : [])].join('  ·  ');
-  return withChips(c, titleChips(c), (w) => gradientBar(left, statsOf(c, shown), w, M.violet, M.sky));
+/** A working worker reads running with a tool in flight, thinking between calls, starting before its first tool. */
+function workerState(w: LiveWorker): WorkerState {
+  if (w.state === 'working') return w.tool ? 'running' : w.lastTool ? 'thinking' : 'starting';
+  return w.state === 'blocked' ? 'waiting' : w.state === 'failed' ? 'failed' : 'done';
 }
 
-// ---- phase rail ----------------------------------------------------------------------
-
-/** How much of each name a pill keeps: the whole name, its first three letters, or none (twin: omp RailMode). */
-type RailMode = 'full' | 'short' | 'mark';
-const label = (id: string, mode: RailMode): string => (mode === 'full' ? id : mode === 'short' ? id.slice(0, 3) : '');
-const pastPill = (id: string, mode: RailMode): Segment => ({ t: mode === 'mark' ? ' ✓ ' : ` ✓ ${label(id, mode)} `, color: M.base, bg: mix(phaseHue(id), M.panel, 0.45) });
-const futurePill = (id: string, mode: RailMode): Segment => ({ t: mode === 'mark' ? ' · ' : ` ${label(id, mode)} `, color: M.muted, bg: M.panel2 });
-/** The current phase: bright hue, its white mix cycling with the tick while workers run; the phase's spinner frame
- * leads the label while running, a steady ◆ when idle (twin: omp currentPill). It always keeps its full name. */
-const nowPill = (id: string, tick: number, animate: boolean): Segment => {
-  const shimmer = animate ? 0.25 + 0.25 * ((tick % 4) / 3) : 0.15;
-  return { t: ` ${animate ? spin(tick, id) : '◆'} ${id.toUpperCase()} `, color: M.base, bg: mix(phaseHue(id), M.white, shimmer), bold: true };
-};
-
-/** Pill for one phase; `rel` is its position against the current phase (0 current, <0 past, >0 future). */
-function pill(id: string, rel: number, tick: number, mode: RailMode, animate: boolean): Segment {
-  if (rel < 0) return pastPill(id, mode);
-  return rel > 0 ? futurePill(id, mode) : nowPill(id, tick, animate);
-}
-
-const railIds = (s: LiveSnapshot): string[] => s.contract.phases.map((p) => p.id as string).filter((id) => !RAIL_SKIP.has(id));
-
-/** The lit pill: the snapshot phase when it is on the rail; for `blocked` (or any off-rail phase) the last rail phase
- * the caller saw, else the first, so a blocked reply never leaves the rail with nothing lit. */
-export function railPhase(s: LiveSnapshot, lastPhase?: string | null): string {
-  const ids = railIds(s);
-  return ids.includes(s.phase) ? s.phase : lastPhase && ids.includes(lastPhase) ? lastPhase : ids[0] ?? s.phase;
-}
-
-/** The widest rail that fits `cols`: full names, then three letters, then marks only. A fixed `cols < 100` switch
- * used to drop every name straight to `·`/`✓` at 92 columns, where three-letter names fit with room to spare. */
-export function railRow(s: LiveSnapshot, phase: string, tick: number, cols: number, animate: boolean): Segment[] {
-  const ids = railIds(s);
-  const at = ids.indexOf(phase);
-  const build = (mode: RailMode): Segment[] => [seg(' '), ...ids.flatMap((id, i) => [pill(id, i - at, tick, mode, animate), seg(i < ids.length - 1 ? '▶' : ' ', i < at ? phaseHue(id) : M.dim)])];
-  const fits = (row: Segment[]): boolean => row.reduce((n, r) => n + textWidth(r.t), 0) <= cols;
-  const full = build('full');
-  if (fits(full)) return full;
-  const short = build('short');
-  return fits(short) ? short : build('mark');
-}
-
-// ---- lanes -------------------------------------------------------------------------
-
-const STATE_CHIP: Record<LiveWorker['state'], [string, string]> = {
-  working: ['RUN', M.green], blocked: ['WAIT', M.yellow], failed: ['FAIL', M.red], done: ['DONE', M.teal], parked: ['PARK', M.muted],
-};
-
-/** A working lane reads RUN with a tool in flight, THINK between calls, START before its first tool (twin: omp laneLook). */
-function laneChip(w: LiveWorker): [string, string] {
-  if (w.state !== 'working' || w.tool) return STATE_CHIP[w.state];
-  return w.lastTool ? ['THINK', M.yellow] : ['START', M.sky];
-}
-
-const CHAR_STATE: Partial<Record<LiveWorker['state'], CharState>> = { failed: 'failed', done: 'done' };
-
-/** The lane's three-cell character (roles.ts): running with a tool in flight, thinking between calls. */
-function laneChar(w: LiveWorker, c: Ctx): string {
-  const state: CharState = w.state === 'working' ? (w.tool ? 'running' : 'thinking') : CHAR_STATE[w.state] ?? 'blocked';
-  return charFrame(w.role, state, c.tick);
-}
-
-/** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
-export const shortTool = (tool: string): string => tool.replace(/^mcp__.*__/, '');
-
-/** The tool in flight; between calls the last one, dimmed, so the cell never blanks out. */
-function laneTool(w: LiveWorker): string {
+function missionWorker(w: LiveWorker, now: number): MissionWorker {
+  const state = workerState(w);
   const tool = w.tool ?? w.lastTool;
-  if (tool) return shortTool(tool);
-  return w.state === 'blocked' ? 'queued' : 'starting';
+  const end = state === 'done' || state === 'failed' ? w.since : now;
+  return { name: w.name, role: w.role, state, tool: tool ? shortTool(tool) : undefined, target: w.target ?? undefined, secs: Math.max(0, Math.round((end - w.startedAt) / 1000)) };
 }
-
-const roleCell = (w: LiveWorker, c: Ctx): Segment[] => (c.full ? [seg(padTo(w.role, 12), M.muted)] : []);
-const targetCell = (w: LiveWorker, c: Ctx, width: number): Segment => (c.full ? seg(` ${padTo(w.target ?? '', width)} `, M.text) : seg(' '));
-
-/** Lane head: state chip, role character, name, role, tool chip (dim between calls), target. */
-function laneHead(w: LiveWorker, c: Ctx, color: string, targetWidth = TARGET_W): Segment[] {
-  const [word, hue] = laneChip(w);
-  const tool = seg(` ${padTo(laneTool(w), 10)} `, w.tool ? color : M.muted, M.panel2, true);
-  return [seg(' '), chip(word.padEnd(5), hue), seg(laneChar(w, c), color), seg(` ${padTo(w.name, c.full ? 23 : 17)} `, M.text, M.panel, true), ...roleCell(w, c), tool, targetCell(w, c, targetWidth)];
-}
-
-const runsWidth = (parts: Segment[]): number => textWidth(parts.map((p) => p.t).join(''));
-
-/** One worker lane: head, elapsed bar sized to the room left (28 cells at most, the target takes the rest),
- * sparkline of its tool calls, age. */
-function lane(w: LiveWorker, c: Ctx): Segment[] {
-  const color = laneChip(w)[1];
-  const elapsed = c.now - w.startedAt;
-  const tail = [seg('  '), ...sparkline(callBuckets(w.calls, c.now), color), seg(`  ${formatDuration(elapsed).padStart(6)}`, M.muted)];
-  let head = laneHead(w, c, color);
-  let room = c.cols - runsWidth(head) - runsWidth(tail) - 1;
-  if (c.full && room > BAR_W) [head, room] = [laneHead(w, c, color, TARGET_W + room - BAR_W), BAR_W];
-  const bar = room >= 5 ? eighthBar(elapsed / REF_MS, Math.min(BAR_W, room), mix(color, M.panel, 0.1), mix(color, M.white, 0.35)) : [];
-  return padRow([...head, ...bar, ...tail], c.cols);
-}
-
-// ---- ticker and footer -------------------------------------------------------------
 
 const hhmm = (ts: number): string => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-const nick = (name: string): Segment => seg(name, nickColor(name), M.panel, true);
-
-/** Last two channel messages as `hh:mm from → to: text`, led by the channel chip. */
-function ticker(c: Ctx): Segment[] {
-  const channel = c.leadName ?? c.s.channel?.split('/').pop() ?? 'lead';
-  const named = (n: string): string => (c.leadName && n === 'lead' ? c.leadName : n); // comms collapse the lead's name to `lead`; omp shows the board's own
-  const msgs = c.s.comms.slice(-TICKER_ROWS).flatMap((m, i) => [
-    seg(`${i ? '   ' : ''}${hhmm(m.ts)} `, M.dim), nick(named(m.from)), seg(' → ', M.muted), nick(named(m.to)), seg(`: ${m.text.replace(/\s+/g, ' ')}`, M.text),
-  ]);
-  return padRow([seg(' '), chip(`#${channel}`, M.violet), seg(' '), ...msgs], c.cols);
-}
-
-const gateChip = (g: GateGroup): Segment[] => [groupOpenCount(g) || g.error ? chip(`✖ ${g.id}`, M.red) : chip(`✔ ${g.id}`, M.green), seg(' ')];
 const hasGateData = (g: GateGroup): boolean => g.lines.length > 0 || !!g.error;
 
-const taskBar = (c: Ctx, barW: number): Segment[] => [seg(' '), seg('tasks ', M.muted), ...(barW ? eighthBar(c.done / Math.max(1, c.total), barW, M.green, M.teal) : []), seg(` ${c.done}/${c.total}  `, M.text)];
-const buttonWidth = (b: { label: string }): number => 3 + textWidth(b.label) + 2; // engine draws `k: label`, two cells between buttons
+function lastRun(all: readonly LiveWorker[], now: number): MissionModel['lastRun'] {
+  const wave = waves(all).pop();
+  if (!wave) return undefined;
+  const end = Math.max(...wave.map((w) => (w.state === 'done' || w.state === 'failed' ? w.since : now)));
+  return { workers: wave.length, secs: Math.max(0, Math.round((end - Math.min(...wave.map((w) => w.startedAt))) / 1000)), failed: wave.filter((w) => w.state === 'failed').length };
+}
 
-/** Task bar, gate chips, then the five control Buttons (a row of real clickable keys), the hint flush right when it fits.
- * Gate chips go first when the row is tight, then the bar. Without handlers: the bar and chips only. */
-function footer(els: ClientElements, c: Ctx, on?: BandHandlers): Segment[] | RenderElement {
-  const chips = c.gates.filter(hasGateData).flatMap(gateChip);
-  if (!on) return padRow([...taskBar(c, 18), ...chips], c.cols);
-  const keysW = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0);
-  const left = [taskBar(c, 18).concat(chips), taskBar(c, 18), taskBar(c, 0)].find((l) => runsWidth(l) + keysW <= c.cols) ?? taskBar(c, 0);
-  const hint = textWidth(BAND_HINT) + 1 <= c.cols - runsWidth(left) - keysW ? BAND_HINT : '';
+function missionModel(b: BandModel & { maxRows: number }): MissionModel {
+  const s = b.snapshot;
+  const now = s.now;
+  const all = b.live.filter((w) => w.state !== 'parked'); // parked workers are resting
+  const active = all.filter((w) => w.state !== 'done');
+  const lingering = all.filter((w) => w.state === 'done' && now - w.since <= LINGER_MS);
+  const shown = active.length ? [...active, ...lingering] : []; // a finished worker lingers only while the wave runs
+  const routed = routeCounts(s.todoGroups, s.contract);
+  const { done, total } = routed.total ? routed : planCounts(s.todos); // a board of only dispatch rows still counts: the header matches the TODO tree
+  const gates = b.gates.filter((g) => g.id !== 'header' && hasGateData(g)); // the header check is the mod's own group; omp never shows it
+  const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
+  const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
+  const working = active.filter((w) => w.state === 'working' || w.state === 'blocked');
+  return {
+    cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick,
+    project: boardOf(s), scope: b.team,
+    phases: railIds(s), phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked',
+    done, total,
+    workers: shown.map((w) => missionWorker(w, now)),
+    note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts) } : undefined,
+    checks: gates.length ? gates.map((g) => ({ id: g.id, ok: !groupOpenCount(g) && !g.error })) : null,
+    elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
+    lastRun: lastRun(all, now),
+    core: coreCells(b.core, Math.max(1, b.columns)),
+    boardRows: b.todoExpanded && s.todos.length ? s.todos.length + 1 : 0,
+  };
+}
+
+// ---- paint --------------------------------------------------------------------------
+
+const seg = (x: Run, bg: string): Segment => ({ t: x.t, color: TONE_HEX[x.tone], bg, ...(x.bold ? { bold: true } : {}) });
+const segs = (l: Line): Segment[] => l.runs.map((x) => seg(x, l.raised ? RAISED_BG : PANEL_BG));
+
+/** The stepper alone, for the tier goldens. */
+export function railRow(s: LiveSnapshot, phase: string, tick: number, cols: number, animate: boolean): Segment[] {
+  const m: MissionModel = { cols, maxRows: 2, tick, project: '', phases: railIds(s), phase, blocked: s.phase === 'blocked', done: 0, total: 0, workers: [], checks: null };
+  return stepperRuns(m, cols, animate).map((x) => seg(x, PANEL_BG));
+}
+
+/** The footer with its key buttons (a row of real clickable keys) and, when it fits, the focus hint after them. */
+function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers): RenderElement {
+  const left = segs(l);
+  const used = left.reduce((n, x) => n + textWidth(x.t), 0);
+  const hint = used + KEYS_W + textWidth(BAND_HINT) + 3 <= cols ? BAND_HINT : '';
   const press = (id: SidebarView | 'board'): (() => void) => (id === 'board' ? on.toggleTodos : () => on.openView(id));
   const buttons = BAND_BUTTONS.map((b) => els.Button({
     key: `band:${b.id}`, plain: true, hotkey: b.key, label: b.label, onPress: press(b.id),
-    children: [els.Text({ color: M.text, backgroundColor: M.panel, children: b.label })],
+    children: [els.Text({ color: TONE_HEX.muted, backgroundColor: PANEL_BG, children: b.label })],
   }));
-  const gap = c.cols - runsWidth(left) - keysW - textWidth(hint);
-  const sep = (i: number): RenderElement => els.Text({ backgroundColor: M.panel, children: i ? '  ' : '' });
+  const tail = hint ? `  ${hint} ` : ' ';
+  const gap = cols - used - KEYS_W - textWidth(tail) + 2; // the last button carries no trailing two-cell gap
+  const sep = (i: number): RenderElement => els.Text({ backgroundColor: PANEL_BG, children: i ? '  ' : '' });
   return els.Box({
     flexDirection: 'row', flexShrink: 0,
-    children: [...fitRuns(els, left, c.cols), ...buttons.flatMap((b, i) => [sep(i), b]), els.Text({ backgroundColor: M.panel, children: ' '.repeat(Math.max(0, gap)) + hint })],
+    children: [...fitRuns(els, left, cols), els.Text({ backgroundColor: PANEL_BG, children: ' '.repeat(Math.max(0, gap)) }), ...buttons.flatMap((b, i) => [sep(i), b]), els.Text({ color: TONE_HEX.dim, backgroundColor: PANEL_BG, children: tail })],
   });
 }
 
-// ---- row budget --------------------------------------------------------------------
-
-/** Whether the ticker and footer stay: drop the ticker first, then the footer, until `need` lane rows fit. */
-function chrome(room: number, need: number, hasTicker: boolean): [boolean, boolean] {
-  for (const [t, f] of [[hasTicker, true], [false, true], [false, false]] as const) if (room - +t - +f >= need) return [t, f];
-  return [false, false];
-}
-
-/** Hidden workers beat the ticker: trade it for the "+N more" row. */
-const tradesTicker = (kept: boolean, nLanes: number, slots: number): boolean => kept && nLanes > slots && slots < 2;
-const needsMore = (nLanes: number, slots: number): boolean => nLanes > slots && slots >= 2;
-
-/** How many lanes, ticker and footer rows fit `maxRows` (title + rail are fixed). */
-export function planRows(maxRows: number, nLanes: number, hasTicker: boolean): { lanes: number; ticker: boolean; footer: boolean; more: boolean } {
-  const room = Math.max(0, maxRows - 2);
-  const [kept, footer] = chrome(room, Math.min(1, nLanes), hasTicker);
-  const ticker = kept && !tradesTicker(kept, nLanes, room - 1 - +footer);
-  const slots = room - +ticker - +footer;
-  const more = needsMore(nLanes, slots);
-  return { lanes: more ? slots - 1 : Math.min(nLanes, slots), ticker, footer, more };
-}
-
-// ---- assembly ----------------------------------------------------------------------
-
 type Row = Segment[] | RenderElement;
 const panel = (els: ClientElements, rows: Row[], cols: number): RenderElement =>
-  els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: M.panel, children: rows.map((r) => (Array.isArray(r) ? rowOf(els, r, cols) : r)) });
+  els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: PANEL_BG, children: rows.map((r) => (Array.isArray(r) ? rowOf(els, r, cols) : r)) });
 
-/** `last wave: N workers · 4m12s · ✔ ok` over the most recent spawn burst only, empty when no worker ever ran. */
-function lastWave(c: Ctx, all: LiveWorker[]): string {
-  const wave = waves(all).pop();
-  if (!wave) return '';
-  const failed = wave.filter((w) => w.state === 'failed').length;
-  const parts = [`last wave: ${wave.length} worker${wave.length === 1 ? '' : 's'}`, formatDuration(c.now - Math.min(...wave.map((w) => w.startedAt))), failed ? `✖ ${failed} failed` : '✔ ok'];
-  return parts.filter(Boolean).join(' · ');
-}
-
-/** Title chips on the right: a red `BLOCKED` when the last reply declared the blocked phase, then `extra`. */
-const titleChips = (c: Ctx, extra: Segment[] = []): Segment[] => [...(c.s.phase === 'blocked' ? [chip('BLOCKED', M.red)] : []), ...extra];
-
-/** A gradient bar `make(width)` narrowed so `chips` and one trailing cell fit after it; bar alone when they would not. */
-function withChips(c: Ctx, chips: Segment[], make: (width: number) => Segment[]): Segment[] {
-  const room = c.cols - runsWidth(chips) - 1;
-  return chips.length && room >= 40 ? [...make(room), ...chips, seg(' ')] : make(c.cols);
-}
-
-/** Idle title: always calm (grey into teal), `idle · last wave ...` when wide. Open gates are one amber chip, never
- * "blocked": gates.ts reports what is open, not whether the next Stop is refused. */
-function idleTitle(c: Ctx, all: LiveWorker[]): Segment[] {
-  const wave = c.cols >= MID ? lastWave(c, all) : '';
-  const chips = titleChips(c, c.open ? [chip(`gates ✖${c.open}`, M.peach)] : []);
-  return withChips(c, chips, (w) => gradientBar(`${MARK} ATLAS  ·  ${['idle', wave].filter(Boolean).join('  ·  ')}`, '', w, M.grey, mix(M.teal, M.panel, 0.55), M.text));
-}
-
-/** Board rows (todo-panel.tsx) under the rail: one collapsed bar, or the list capped to what `maxRows` leaves after
- * the fixed rows and a few lanes. Empty without a board or without the room. */
-function boardRows(c: Ctx, maxRows: number, fixed: number): Segment[][] {
-  const room = maxRows - fixed;
-  if (!c.s.todos.length || room < 1) return [];
-  return todoRows(c.s.todos, boardOpts(c, room));
-}
-
-/** Expanded list when the board is open and 4+ rows are free (3 reserved for the rail), else one collapsed row. */
-function boardOpts(c: Ctx, room: number): Parameters<typeof todoRows>[1] {
-  const list = c.todoExpanded && room >= 4;
-  return { cols: c.cols, tick: c.tick, expanded: list, maxRows: list ? room - 3 : 1 };
-}
-
-/** The Atlas core row under the rail (contract, verdicts, offload, route chips): none without core data or width. */
-function coreRow(c: Ctx): Segment[][] {
-  const cells = coreCells(c.core, c.cols);
-  return cells.length ? [padRow(cells.map((x) => (x.chip ? chip(x.t, M[x.hue]) : seg(x.t, M[x.hue]))), c.cols)] : [];
-}
-
-/** The control row while idle, so the keys stay reachable. */
-const idleControls = (els: ClientElements, c: Ctx, maxRows: number, on?: BandHandlers): Row[] => (on && maxRows >= 3 && c.cols >= MID ? [footer(els, c, on)] : []);
-
-/** Idle: the dim title and the settled rail, then the board when there is one, then the control buttons. */
-function idleRows(els: ClientElements, c: Ctx, all: LiveWorker[], maxRows: number, on?: BandHandlers): Row[] {
-  const title = idleTitle(c, all);
-  if (maxRows < 2) return [title];
-  const controls = idleControls(els, c, maxRows, on);
-  const core = maxRows >= 3 + controls.length ? coreRow(c) : []; // the controls keep their row; the core takes what is left
-  const fixed = 2 + core.length + controls.length;
-  return [title, padRow(railRow(c.s, c.rail, c.tick, c.cols, false), c.cols), ...core, ...boardRows(c, maxRows, fixed), ...controls];
-}
-
-/** <80 columns or <3 rows: the title row alone, phase and counts in it. */
-function narrowRow(c: Ctx, shown: LiveWorker[]): Segment[] {
-  const left = [`${MARK} ATLAS`, `${c.s.phase} ${c.done}/${c.total}`, `${activeCount(shown)} working`, ...(c.open ? [`✖${c.open}`] : [])].join(' · ');
-  return gradientBar(left, '', c.cols, M.violet, M.sky);
-}
-
-/** Title, rail, as many lanes as fit, then "+N more", ticker and footer per `planRows`. */
-function fullRows(els: ClientElements, c: Ctx, all: LiveWorker[], shown: LiveWorker[], maxRows: number): Row[] {
-  const core = maxRows >= 4 ? coreRow(c) : []; // title, rail, core and one lane
-  const board = boardRows(c, maxRows - 3 - core.length, 2); // keep title, rail, core and one lane
-  const plan = planRows(maxRows - board.length - core.length, shown.length, c.s.comms.length > 0);
-  const head: Row[] = [titleRow(c, all, shown), padRow(railRow(c.s, c.rail, c.tick, c.cols, true), c.cols), ...core, ...board];
-  const lanes: Row[] = shown.slice(0, plan.lanes).map((w) => lane(w, c));
-  const extras: Row[] = [...(plan.more ? [padRow([seg(`   +${shown.length - plan.lanes} more`, M.muted)], c.cols)] : []), ...(plan.ticker ? [ticker(c)] : [])];
-  // omp breathe(): spare rows become a blank under the board, then a blank between the lanes and the extras; the first to go under budget.
-  const spare = maxRows - head.length - lanes.length - extras.length - +plan.footer;
-  const blank = (): Row => padRow([seg(' ')], c.cols);
-  const rows = [...head, ...(spare >= 1 ? [blank()] : []), ...lanes, ...(spare >= 2 && extras.length ? [blank()] : []), ...extras, ...(plan.footer ? [footer(els, c)] : [])];
-  return rows.map((r) => (Array.isArray(r) ? merge(r) : r));
-}
-
-export function bandTree(els: ClientElements, { snapshot: s, live, gates, columns, tick, maxRows = 12, lastPhase = null, todoExpanded = false, core = null, team, leadName }: BandModel, on?: BandHandlers): RenderElement {
-  gates = gates.filter((g) => g.id !== 'header'); // the header check is the mod's own group; omp's gates row never shows it
-  const { done, total } = routeCounts(s.todoGroups, s.contract);
-  const all = live.filter((w) => w.state !== 'parked'); // parked workers are resting
-  const shown = all.filter((w) => w.state !== 'done');
-  const cols = Math.max(1, columns);
-  if (maxRows < 1) return panel(els, [], cols); // the HUD can take the whole slot: draw nothing rather than a title row past the budget
-  const c: Ctx = { s, rail: railPhase(s, lastPhase), cols, tick, full: cols >= FULL, now: s.now, done, total, open: openGateCount(gates), gates, todoExpanded, core, team, leadName };
-  if (!shown.length) return panel(els, idleRows(els, c, all, maxRows, on), cols);
-  if (cols < MID || maxRows < 3) return panel(els, [narrowRow(c, shown)], cols);
-  return panel(els, fullRows(els, c, all, shown, maxRows), cols);
+export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): RenderElement {
+  const cols = Math.max(1, b.columns);
+  const maxRows = b.maxRows ?? 12;
+  if (maxRows < 1) return panel(els, [], cols); // the HUD can take the whole slot: draw nothing rather than a row past the budget
+  const m = missionModel({ ...b, maxRows });
+  const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
+  const keys = !!on && idle && cols >= 80; // keys while idle; omp has none, a running band keeps its rows for workers
+  const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
+  const rows: Row[] = lines.flatMap((l): Row[] => {
+    if (l.board) return todoRows(b.snapshot.todos, { cols, tick: b.tick, expanded: true, maxRows: l.board });
+    if (l.keys && on) return [keysRow(els, l, cols, on)];
+    return [segs(l)];
+  });
+  return panel(els, rows, cols);
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.4.0 - 2026-11-10
+
+- atlas 17.4.0: terminal UI redesign. The Claude Code band and the omp mission panel share one layout module and one golden, so they print the same text. New rows: a header with `N of M tasks`, a stepper, worker rows in plain words (`running`, `thinking`, `starting`, `waiting`, `failed`, `finished`), the newest message, a `checks` footer, and labelled groups on the idle core row. Removed: the gradient title bar, per-phase hues, worker faces and unlabelled sparklines, and the HUD Subagents block on Claude Code. The sidebar has a tab bar and a vertical route list; the other views and the board panel use the Catppuccin Mocha tones; toasts are plain sentences; the doctor report lists failures and warnings first, then one line each for passing and not-applicable checks, then a verdict. Also: the message row skips join and leave notices, the task count falls back to board rows, workers are named from a `<slug>: ` Agent description prefix, and the sidebar team summary counts failed workers. Details in plugins/atlas/CHANGELOG.md; evidence in docs/audits/2026-11-10_atlas-terminal-ui-redesign.md.
+
+## marketplace 5.9.0 - 2026-11-10
+
+- marketplace 5.9.0: atlas 17.4.0, armada 2.2.3, programmer 1.0.3.
+
 ## atlas 17.3.0 - 2026-11-10
 
 - atlas 17.3.0: usage review and terminal UI pass. Telemetry has 1 submission (2026-W45), too few to rank, so the fixes come from a measured live session and hook replay: the output style's example LEDGER line no longer reads as open work or a plan, the (o) hint no longer invites ticking phases, `atlas_finding.py` records the real writer instead of `atlas:verifier`, native tools are not routing misses without lean-ctx, `env | grep X` is not an env dump. UI: the band rail and sidebar rail keep phase names when they fit (Claude Code and omp share goldens), one merged toast per turn, and a shorter doctor report with a verdict line. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-10_atlas-usage-and-ui.md.

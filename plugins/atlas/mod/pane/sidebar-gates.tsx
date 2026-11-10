@@ -1,22 +1,24 @@
-// Sidebar gates view: one summary row per gate group, expandable into its lines.
+// Sidebar gates view: one summary row per gate group (`✗ tripwire  2 failing`), expandable into its lines.
+// Red and green mark state only, each beside its word.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { groupOpenCount } from '../gates';
 import { fitRuns, type Segment } from '../runs';
-import { chartRoom as C, fitText } from '../theme';
+import { TONE_HEX as T } from '../mission-layout';
+import { fitText } from '../theme';
 import { scrub } from './chrome';
 import type { GateGroup, GateLine, SidebarHandlers, SidebarModel } from './sidebar-types';
 
-const okMark = (ok: boolean): { g: string; color: string } => (ok ? { g: '✓', color: C.ok } : { g: '✗', color: C.fail });
+const okMark = (ok: boolean): { g: string; color: string } => (ok ? { g: '✓', color: T.ok } : { g: '✗', color: T.bad });
 
 /** A dimmed detail line under an expanded item. */
 const noteLine = (els: ClientElements, text: string, cols: number): RenderElement =>
-  els.Box({ flexShrink: 0, children: els.Text({ color: C.muted, children: fitText(`     ${text}`, cols) }) });
+  els.Box({ flexShrink: 0, children: els.Text({ color: T.muted, children: fitText(`     ${text}`, cols) }) });
 
 function lineRows(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ln: GateLine, cols: number): RenderElement[] {
   const key = `gate:${ln.id}`;
   const isOpen = m.ui.expanded === key;
   const mark = okMark(ln.ok);
-  const parts: Segment[] = [{ t: `  ${mark.g} `, color: mark.color }, { t: scrub(ln.label) }];
+  const parts: Segment[] = [{ t: `  ${mark.g} `, color: mark.color }, { t: scrub(ln.label), color: T.text }];
   const onPress = () => (isOpen && ln.fix ? on.copy(ln.fix) : on.toggle(key));
   const extra = isOpen ? [ln.detail, ln.fix ? `fix: ${ln.fix} (press to copy)` : undefined].filter((x): x is string => !!x) : [];
   return [
@@ -29,7 +31,7 @@ const groupOk = (g: GateGroup): boolean => groupOpenCount(g) === 0;
 const groupKey = (g: GateGroup): string => `group:${g.id}`;
 const oneLine = (t: string | undefined): string => (t ? scrub(t).replace(/\s+/g, ' ') : '');
 
-/** `✗ completion  2 open  <first fix>` / `✓ header  ok  <detail>`; an unavailable source says so instead. */
+/** `✗ completion  2 failing  <first fix>` / `✓ header  passing  <detail>`; an unavailable source says so instead. */
 function groupRow(els: ClientElements, on: SidebarHandlers, g: GateGroup, cols: number): RenderElement {
   const bad = groupOpenCount(g);
   const mark = okMark(groupOk(g));
@@ -39,9 +41,9 @@ function groupRow(els: ClientElements, on: SidebarHandlers, g: GateGroup, cols: 
     key: groupKey(g), plain: true, onPress: () => on.toggle(groupKey(g)),
     children: fitRuns(els, [
       { t: `${mark.g} `, color: mark.color },
-      { t: scrub(g.title) },
-      { t: bad ? `  ${bad} open` : '  ok', color: bad ? C.fail : C.ok },
-      { t: tail ? `  ${tail}` : '', color: C.muted },
+      { t: scrub(g.title), color: T.text },
+      { t: bad ? `  ${bad} failing` : '  passing', color: bad ? T.bad : T.ok },
+      { t: tail ? `  ${tail}` : '', color: T.muted },
     ], cols),
   });
 }

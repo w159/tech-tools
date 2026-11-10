@@ -1,7 +1,8 @@
-// Sidebar shell geometry: the tab strip fills exactly the inner width, the board toggle, label compaction and the column clamp.
+// Sidebar shell geometry: the tab bar fills exactly the inner width, the board toggle, failing-count compaction and the column clamp.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../live_fixture';
+import { TONE_HEX } from '../mission-layout';
 import { textWidth } from '../theme';
 import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } from './sidebar';
 
@@ -41,18 +42,18 @@ describe('tab strip geometry', () => {
   });
 
   test('the hint needs a gap of at least 2 cells', () => {
-    // 4 plain labels: 7+6+9+6 + 4*6 - 3 = 49 cells; hint is 35 cells -> gap 2 at inner 86.
+    // 4 plain labels: 5+4+7+5 = 21, + 4 hotkey prefixes of 3, + 3 gaps of 2 = 39 cells; hint is 35 cells -> gap 2 at inner 76.
     expect(textWidth(HINT)).toBe(35);
-    expect(textOf(strip(tree(87))).endsWith(HINT)).toBe(true); // inner 86: gap 2
-    expect(textOf(strip(tree(86))).endsWith(HINT)).toBe(false); // inner 85: gap 1
-    expect(textOf(strip(tree(86)))).not.toContain('press');
+    expect(textOf(strip(tree(77))).endsWith(HINT)).toBe(true); // inner 76: gap 2
+    expect(textOf(strip(tree(76))).endsWith(HINT)).toBe(false); // inner 75: gap 1
+    expect(textOf(strip(tree(76)))).not.toContain('press');
   });
 
   test('the strip width is exact for every open-gate digit count', () => {
     for (const n of [1, 9, 10]) {
       const t = strip(tree(110, plain, open(n)));
       expect([n, textWidth(textOf(t))]).toEqual([n, 109 - 12]);
-      expect(textOf(t)).toContain(`core ✗${n}`);
+      expect(textOf(t)).toContain(`gates ${n} failing`);
     }
   });
 
@@ -77,50 +78,46 @@ describe('board toggle', () => {
     expect(textOf(strip(tree(120)))).not.toContain(' o ·');
   });
 
-  test('wired: a plain dim hotkey button after a separator, pressing it calls the handler, hint lists o', () => {
+  test('wired: a plain muted hotkey button after a gap, pressing it calls the handler, hint lists o', () => {
     const t = tree(120, withBoard);
     const b = todosBtn(t)!;
-    expect(b.props).toMatchObject({ plain: true, hotkey: 'o', dimColor: true, label: '▤ board' });
-    expect(textOf(b)).toBe('▤ board');
+    expect(b.props).toMatchObject({ plain: true, hotkey: 'o', label: 'board' });
+    expect(kids(b)[0]!.props.color).toBe(TONE_HEX.muted);
+    expect(textOf(b)).toBe('board');
     calls.length = 0;
     b.props.onPress();
     expect(calls).toEqual(['todos']);
     const ks = kids(strip(t));
-    expect(textOf(ks[ks.indexOf(b) - 1]!)).toBe(' │ ');
-    expect(ks.indexOf(b)).toBe(8); // four tabs, three separators, the board separator, then the board
+    expect(textOf(ks[ks.indexOf(b) - 1]!)).toBe('  ');
+    expect(ks.indexOf(b)).toBe(8); // four tabs, three gaps, the board gap, then the board
     expect(textOf(strip(t)).endsWith(HINT_O)).toBe(true);
     expect(textWidth(textOf(strip(t)))).toBe(119 - 5 * 3); // five prefixed buttons
   });
 
-  test('labels go compact (no glyphs) once strip + 13 exceeds the inner width', () => {
-    // plain labels 49 cells + 13 for the board = 62: inner 62 fits, inner 61 compacts.
-    const full = tree(63, withBoard);
-    const tight = tree(62, withBoard);
-    expect(textOf(kids(strip(full))[0]!)).toBe('◎ route');
-    expect(textOf(todosBtn(full)!)).toBe('▤ board');
-    expect(textOf(kids(strip(tight))[0]!)).toBe('route');
-    expect(textOf(todosBtn(tight)!)).toBe('board');
-    expect(todosBtn(tight)!.props.label).toBe('board');
-    // without the board the same width needs no compaction
-    expect(textOf(kids(strip(tree(62)))[0]!)).toBe('◎ route');
-    expect(textOf(kids(strip(tree(50)))[0]!)).toBe('◎ route'); // inner 49 == strip width: fits
-    expect(textOf(kids(strip(tree(49)))[0]!)).toBe('route'); // inner 48: compact
+  test('the failing count folds to a bare number once bar + board exceeds the inner width', () => {
+    // gates 2 failing: labels 5+4+7+15 = 31, + 12 prefixes + 6 gaps = 49; the board adds 2+3+5 = 10 -> 59.
+    const gatesLabel = (columns: number, on: SidebarHandlers) => kids(strip(tree(columns, on, open(2)))).find((n) => n.props.key === 'tab:gates')!.props.label;
+    expect(gatesLabel(60, withBoard)).toBe('gates 2 failing'); // inner 59 fits
+    expect(gatesLabel(59, withBoard)).toBe('gates 2'); // inner 58 compacts
+    expect(gatesLabel(50, plain)).toBe('gates 2 failing'); // without the board inner 49 fits
+    expect(gatesLabel(49, plain)).toBe('gates 2');
   });
 
-  test('compact labels for every tab', () => {
-    const labels = kids(strip(tree(40, withBoard))).filter((n) => n.kind === 'Button').map((n) => n.props.label);
-    expect(labels).toEqual(['route', 'team', 'channel', 'core', 'board']);
-    const open2 = kids(strip(tree(40, withBoard, open(2)))).filter((n) => n.kind === 'Button').map((n) => n.props.label);
-    expect(open2).toEqual(['route', 'team', 'channel', 'core ✗2', 'board']);
+  test('labels per tab: names only, the gates tab carries the count in words; no glyph or code', () => {
+    const labels = kids(strip(tree(120, withBoard))).filter((n) => n.kind === 'Button').map((n) => n.props.label);
+    expect(labels).toEqual(['route', 'team', 'channel', 'gates', 'board']);
+    const open2 = kids(strip(tree(120, withBoard, open(2)))).filter((n) => n.kind === 'Button').map((n) => n.props.label);
+    expect(open2).toEqual(['route', 'team', 'channel', 'gates 2 failing', 'board']);
+    expect(textOf(strip(tree(120, withBoard, open(2))))).not.toMatch(/[✗◈◎●✉▤│]/u);
   });
 });
 
 describe('view switch', () => {
   test('each view mounts its own body', () => {
-    expect(textOf(tree(100, plain, none, 'channel'))).toContain('#lead-1  3 nicks');
-    for (const v of ['route', 'team', 'gates'] as const) expect(textOf(tree(100, plain, none, v))).not.toContain('nicks');
-    expect(textOf(tree(100, plain, open(1), 'gates'))).toContain('g  1 open');
-    expect(textOf(tree(100, plain, open(1), 'team'))).not.toContain('g  1 open');
+    expect(textOf(tree(100, plain, none, 'channel'))).toContain('#lead-1  3 people');
+    for (const v of ['route', 'team', 'gates'] as const) expect(textOf(tree(100, plain, none, v))).not.toContain('people');
+    expect(textOf(tree(100, plain, open(1), 'gates'))).toContain('g  1 failing');
+    expect(textOf(tree(100, plain, open(1), 'team'))).not.toContain('g  1 failing');
   });
 
   test('pressing a tab sets its view; only the current tab is highlighted', () => {
@@ -129,9 +126,19 @@ describe('view switch', () => {
     for (const v of ['route', 'team', 'channel', 'gates']) kids(strip(t)).find((n) => n.props.key === `tab:${v}`)!.props.onPress();
     expect(calls).toEqual(['view:route', 'view:team', 'view:channel', 'view:gates']);
     const cur = kids(strip(t)).find((n) => n.props.key === 'tab:gates')!;
-    expect(kids(cur)[0]!.props).toMatchObject({ bold: true, inverse: true });
+    expect(kids(cur)[0]!.props).toMatchObject({ bold: true, color: TONE_HEX.accent });
     const other = kids(strip(t)).find((n) => n.props.key === 'tab:route')!;
-    expect(kids(other)[0]!.props.bold).toBeUndefined();
+    expect(kids(other)[0]!.props.color).toBe(TONE_HEX.muted);
+    expect(kids(other)[0]!.props.bold).toBe(false);
     expect(kids(other)[0]!.props.inverse).toBeUndefined();
+  });
+
+  test('the failing count is red beside the word failing, even on the active tab', () => {
+    const t = tree(100, plain, open(3), 'gates');
+    const g = kids(strip(t)).find((n) => n.props.key === 'tab:gates')!;
+    expect(kids(g).map((n) => [n.props.children, n.props.color])).toEqual([['gates', TONE_HEX.accent], [' 3 failing', TONE_HEX.bad]]);
+    const off = kids(strip(tree(100, plain, open(3), 'team'))).find((n) => n.props.key === 'tab:gates')!;
+    expect(kids(off).map((n) => [n.props.children, n.props.color])).toEqual([['gates', TONE_HEX.muted], [' 3 failing', TONE_HEX.bad]]);
+    expect(kids(strip(tree(100, plain, none, 'gates'))).find((n) => n.props.key === 'tab:gates')!.props.label).toBe('gates');
   });
 });

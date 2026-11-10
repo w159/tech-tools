@@ -148,31 +148,31 @@ async function abovePromptText($: Engine, maxRows: number, bodyColumns = 160): P
   return text;
 }
 
-test('the band draws the Subagents block and Waiting line above itself; ATLAS_HUD=off removes them', async ($, on) => {
+test('the band shows the worker rows; the HUD above it keeps the TODO tree and drops the Subagents block', async ($, on) => {
   await boot(on, [AGENT]);
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const shown = await abovePromptText($, 30);
-  expect(shown).toContain('Subagents');
-  expect(shown).toContain('1 running');
-  expect(shown).toContain('Waiting on implementer agent');
-  expect(shown.indexOf('Subagents')).toBeLessThan(shown.indexOf('ATLAS'));
-  const tight = await abovePromptText($, 7); // the band gives up rows first: the Subagents block stays
-  expect(tight).toContain('Subagents');
+  expect(shown).not.toContain('Subagents');
+  expect(shown).not.toContain('Waiting on');
+  expect(shown).toContain('ATLAS');
+  expect(shown).toContain('implementer'); // the band's worker row carries the role
+  const tight = await abovePromptText($, 7);
+  expect(tight).not.toContain('Subagents');
   expect(tight).toContain('ATLAS');
 });
 
-test('at a starved maxRows the HUD wins every row and the band draws none', async ($, on) => {
+test('at a starved maxRows the band folds to its one summary row', async ($, on) => {
   await boot(on, [AGENT]);
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const two = await abovePromptText($, 2);
-  expect(two).toContain('Subagents');
-  expect(two).not.toContain('ATLAS');
-  expect(two).not.toContain('mission control');
+  expect(two).not.toContain('Subagents');
+  expect(two).toContain('ATLAS');
+  expect(two).not.toContain('research'); // no stepper: the summary row alone
 });
 
-test('ATLAS_HUD=off draws no HUD rows', async ($, on) => {
+test('ATLAS_HUD=off draws no HUD rows (the band is unaffected)', async ($, on) => {
   await boot(on, [AGENT], { ATLAS_HUD: 'off' });
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
@@ -184,6 +184,6 @@ test('with the docked pane open (measured: viewport 143, bodyColumns 138) the ba
   on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const shown = await abovePromptText($, 18, 138);
-  expect(shown).toContain('mission control');
-  expect(shown).toContain('1 live');
+  expect(shown).toContain('ATLAS');
+  expect(shown).toContain('research'); // the stepper is drawn: the full tier, not the one-row summary
 });

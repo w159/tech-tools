@@ -20,9 +20,9 @@ describe('core row', () => {
   test('never wider than the columns, 40 to 200', () => {
     for (let cols = 40; cols <= 200; cols++) expect(cellsWidth(coreCells(model, cols))).toBeLessThanOrEqual(cols);
   });
-  test('chips lead each group', () => {
-    const chips = coreCells(model, 160).filter((c) => c.chip).map((c) => c.t);
-    expect(chips).toEqual(['CONTRACT', 'VERDICT', 'OFFLOAD', 'ROUTE']);
+  test('a dim lowercase label leads each group', () => {
+    const labels = coreCells(model, 160).filter((c) => c.tone === 'dim' && c.t.trim() !== '·').map((c) => c.t.trim());
+    expect(labels).toEqual(['contract', 'verdicts', 'offload', 'route']);
   });
 });
 
@@ -64,31 +64,30 @@ const route = (over: Record<string, unknown> = {}) =>
 const seat = (over: Record<string, unknown> = {}) => ({ role: 'implementer', count: 1, model: 'sonnet', effort: 'medium', ran: [], ...over });
 const worker = (name: string, over: Record<string, unknown> = {}) =>
   ({ name, role: 'implementer', model: 'claude-sonnet-5-5', brief: 0, peak: 58_800, kept: 7_000, returned: 151, costUsd: 0.159, finished: true, ...over });
-const hueOf = (cells: ReturnType<typeof coreCells>, text: string) => cells.find((x) => x.t === text)?.hue;
+const toneOf = (cells: ReturnType<typeof coreCells>, text: string) => cells.find((x) => x.t === text)?.tone;
 
 describe('core row cells', () => {
   test('ratio: exactly 10 rounds, below 10 keeps a decimal', () => {
     expect([ratioText(10), ratioText(9.96), ratioText(9.94), ratioText(0)]).toEqual(['10x', '10.0x', '9.9x', '0.0x']);
   });
-  test('cellsWidth counts chips with their padding and starts from zero', () => {
+  test('cellsWidth sums the run widths and starts from zero; cellsText joins them', () => {
     expect(cellsWidth([])).toBe(0);
-    expect(cellsWidth([{ t: 'ab', hue: 'text' }])).toBe(2);
-    expect(cellsWidth([{ t: 'ab', hue: 'text' }, { t: 'XY', hue: 'red', chip: true }])).toBe(6);
-    expect(cellsText([{ t: 'ab', hue: 'text' }, { t: 'XY', hue: 'red', chip: true }])).toBe('ab XY ');
+    expect(cellsWidth([{ t: 'ab', tone: 'text' }])).toBe(2);
+    expect(cellsWidth([{ t: 'ab', tone: 'text' }, { t: 'XY', tone: 'bad' }])).toBe(4);
+    expect(cellsText([{ t: 'ab', tone: 'text' }, { t: 'XY', tone: 'bad' }])).toBe('abXY');
   });
-  test('contract tallies are muted when empty, green when complete, yellow when partial', () => {
+  test('contract tallies are muted when empty, plain when complete, amber when partial; gates are not repeated here', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     m.contract = { header: { ok: 0, total: 0 }, evidence: { ok: 2, total: 2 }, verifiedDone: { ok: 0, total: 0 }, openGates: 0 };
     const empty = coreCells(m, 300);
-    expect(hueOf(empty, 'header -')).toBe('muted');
-    expect(hueOf(empty, 'evidence 2/2')).toBe('green');
-    expect(hueOf(empty, '✔ gates')).toBe('green');
+    expect(toneOf(empty, 'header none')).toBe('muted');
+    expect(toneOf(empty, 'evidence 2/2')).toBe('text');
     m.contract = { header: { ok: 1, total: 3 }, evidence: { ok: 0, total: 2 }, verifiedDone: { ok: 0, total: 0 }, openGates: 2 };
     const part = coreCells(m, 300);
-    expect(hueOf(part, 'header 1/3')).toBe('yellow');
-    expect(hueOf(part, 'evidence 0/2')).toBe('yellow');
-    expect(hueOf(part, '✖ 2 gates')).toBe('red');
+    expect(toneOf(part, 'header 1/3')).toBe('warn');
+    expect(toneOf(part, 'evidence 0/2')).toBe('warn');
+    expect(cellsText(part)).not.toMatch(/gates/); // the footer's checks row owns gate results
   });
   test('compact forms at the narrowest width that fits all four groups', () => {
     const m = blank();
@@ -98,17 +97,18 @@ describe('core row cells', () => {
     m.offload = { workers: [worker('w')] as any, kept: 7000, returned: 151, ratio: 46.4 };
     m.routes = [route({ seats: [seat()] }) as any];
     let narrow = 0;
-    for (let cols = 20; cols < 300; cols++) if (coreCells(m, cols).some((x) => x.t === 'ROUTE')) { narrow = cols; break; }
-    expect(trim(cellsText(coreCells(m, narrow)))).toBe('  CONTRACT  hdr - ev - ✖1   VERDICT  ✔1 ✖0 ?0 ⚠0   OFFLOAD  7.0k→151 46x   ROUTE  fix/low sonnet …');
+    for (let cols = 20; cols < 300; cols++) if (coreCells(m, cols).some((x) => x.t === 'route  ')) { narrow = cols; break; }
+    expect(narrow).toBe(104);
+    expect(trim(cellsText(coreCells(m, narrow)))).toBe(' contract  header none   verdicts  1 verified · 0 refuted   offload  7.0k → 151 (46x)   route  fix/low …');
   });
   test('below the four compact groups: contract and verdict only, below that nothing', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     m.routes = [route() as any];
     let four = 0;
-    for (let cols = 20; cols < 300; cols++) if (coreCells(m, cols).some((x) => x.t === 'ROUTE')) { four = cols; break; }
+    for (let cols = 20; cols < 300; cols++) if (coreCells(m, cols).some((x) => x.t === 'route  ')) { four = cols; break; }
     const two = coreCells(m, four - 1);
-    expect(two.filter((x) => x.chip).map((x) => x.t)).toEqual(['CONTRACT', 'VERDICT']);
+    expect(two.filter((x) => x.tone === 'dim' && x.t.trim() !== '·').map((x) => x.t.trim())).toEqual(['contract', 'verdicts']);
     expect(cellsWidth(two)).toBeLessThanOrEqual(four - 1);
     expect(coreCells(m, cellsWidth(two) - 1)).toEqual([]);
     expect(coreCells(m, cellsWidth(two)).length).toBeGreaterThan(0);
@@ -121,7 +121,7 @@ describe('core row cells', () => {
     m.offload = { workers: [worker('a'), worker('b')] as any, kept: 14_000, returned: 302, ratio: 3.2 };
     m.routes = [route({ teamId: 't2' }), route({ seats: [seat({ count: 2 }), seat({ role: 'verifier', model: 'haiku' })] })] as any;
     expect(trim(cellsText(coreCells(m, 500)))).toBe(
-      '  CONTRACT  header 1/1 · evidence 1/1 · ✔ gates   VERDICT  2 claims · ✔ 1 verified · ✖ 1 refuted · ? 1 open · ⚠ 1 unchecked   OFFLOAD  14.0k kept in 2 workers → 302 back (3.2x)   ROUTE  fix/low → 2× implementer sonnet, verifier haiku … +1',
+      ' contract  header 1/1 · evidence 1/1   verdicts  2 claims · 1 verified · 1 refuted · 1 open · 1 unchecked   offload  14.0k kept in 2 workers → 302 back (3.2x)   route  fix/low → 2× implementer sonnet, verifier haiku … +1 more',
     );
   });
   test('claims and workers are singular for one', () => {
@@ -139,25 +139,25 @@ describe('core row cells', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     const zero = coreCells(m, 500);
-    for (const t of ['✔ 0 verified', '✖ 0 refuted', '? 0 open', '⚠ 0 unchecked']) expect(hueOf(zero, t)).toBe('muted');
+    for (const t of ['0 verified', '0 refuted', '0 open', '0 unchecked']) expect(toneOf(zero, t)).toBe('muted');
     m.ledger = { claimed: 4, verified: 1, refuted: 1, pending: 1, unchecked: 1 };
     const some = coreCells(m, 500);
-    expect([hueOf(some, '✔ 1 verified'), hueOf(some, '✖ 1 refuted'), hueOf(some, '? 1 open'), hueOf(some, '⚠ 1 unchecked')]).toEqual(['green', 'red', 'yellow', 'yellow']);
+    expect([toneOf(some, '1 verified'), toneOf(some, '1 refuted'), toneOf(some, '1 open'), toneOf(some, '1 unchecked')]).toEqual(['ok', 'bad', 'warn', 'warn']);
   });
-  test('offload without workers says so; ROUTE without a team says so', () => {
+  test('offload without workers says so; route without a team says so', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     m.ledger.verified = 1;
     const t = cellsText(coreCells(m, 500));
-    expect(t).toContain('OFFLOAD  no workers yet');
-    expect(t).toContain('ROUTE  no team yet');
+    expect(t).toContain('offload  none yet');
+    expect(t).toContain('route  no team yet');
   });
   test('route marks: drift, ran, not yet; seats fall back to "?"', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
-    const at = (r: unknown) => { m.routes = [r as any]; return cellsText(coreCells(m, 500)).split('ROUTE  ')[1]!.trim(); };
-    expect(at(route({ seats: [seat()], drift: ['x'] }))).toBe('fix/low → implementer sonnet ✖ drift');
-    expect(at(route({ seats: [seat({ ran: ['claude-sonnet-5-5'] })] }))).toBe('fix/low → implementer sonnet ✔');
+    const at = (r: unknown) => { m.routes = [r as any]; return cellsText(coreCells(m, 500)).split('route  ')[1]!.trim(); };
+    expect(at(route({ seats: [seat()], drift: ['x'] }))).toBe('fix/low → implementer sonnet ✗ drift');
+    expect(at(route({ seats: [seat({ ran: ['claude-sonnet-5-5'] })] }))).toBe('fix/low → implementer sonnet ✓');
     expect(at(route({ seats: [seat()] }))).toBe('fix/low → implementer sonnet …');
     expect(at(route())).toBe('fix/low → ? …');
   });
@@ -170,7 +170,7 @@ describe('core report lines', () => {
     m.contract = { header: { ok: 1, total: 2 }, evidence: { ok: 0, total: 0 }, verifiedDone: { ok: 3, total: 3 }, openGates: 2 };
     const r = coreReport(m).split('\n');
     expect(r).toContain('  header    1/2 replies opened with the ATLAS header');
-    expect(r).toContain('  evidence  - done items carry evidence');
+    expect(r).toContain('  evidence  none done items carry evidence');
     expect(r).toContain('  verified  3/3 done items have a verified finding');
     expect(r).toContain('  gates     2 open');
     expect(r).toContain('  no verdict recorded yet');
