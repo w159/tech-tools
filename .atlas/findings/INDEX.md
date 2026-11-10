@@ -39,6 +39,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-10 | ATLAS-17.4.2-followups | verified | atlas 17.4.2: report-only doctor, every-reply header gate with scoped loop cap and burst-breaker fix, finished/failed card labels, payload cuts with byte measures, dead code removed; suites green; not observed live | [2026-11-10_atlas-17-4-2-followups.md](2026-11-10_atlas-17-4-2-followups.md) |
 | 2026-11-10 | ATLAS-17.4.1-mod-survival | verified | atlas 17.4.1: mod re-boots after /clear, failures visible, one header parser, todo read errors, bounded /atlas-core, gate (r) early done, fallow_gate on Python 3.15, doctor checks and worktree guard; suites green; live terminal render after /clear not yet observed | [2026-11-10_atlas-17-4-1-mod-survival.md](2026-11-10_atlas-17-4-1-mod-survival.md) |
 | 2026-10-30 | t9597f35a | verified | No new test failures on changed tree vs head (pytest, plugin test, bun) | [2026-10-30_t9597f35a.md](2026-10-30_t9597f35a.md) |
 | 2026-10-30 | t7a5c1943-omp | verified | omp 16.10.0 board-only lead shows TODO tree + Subagents; 16.9.0 shows Subagents only | [2026-10-30_t7a5c1943-omp.md](2026-10-30_t7a5c1943-omp.md) |

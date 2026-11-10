@@ -150,7 +150,7 @@ export function parseFindings(text: string): Verdict[] {
 
 /** One finding per id, by its latest entry: findings.json is append-only, so a later `verified_at` (else a later
  * position) wins. Entries with no id are kept apart (they cannot be told from each other). Order = append order. */
-export function latestPerId(all: readonly Verdict[]): Verdict[] {
+function latestPerId(all: readonly Verdict[]): Verdict[] {
   const byId = new Map<string, Verdict>();
   const anon: Verdict[] = [];
   for (const v of all) {

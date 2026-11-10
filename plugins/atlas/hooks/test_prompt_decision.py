@@ -5,7 +5,6 @@ import sys as _iso_sys
 
 _iso_sys.path.insert(0, _iso_os.path.join(_iso_os.path.dirname(_iso_os.path.abspath(__file__)), "..", "scripts"))
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
-import io
 import json
 import os
 import sys

@@ -564,6 +564,12 @@ class ArmOrchestrationTest(unittest.TestCase):
         )
         self.assertEqual(nudge, po.ENGINE_NUDGE)
 
+    def test_nudge_names_the_skill_and_stays_short(self):
+        # Pins the action (skill name, dispatch), not the prose; was 333 chars.
+        self.assertIn("atlas:atlas-orchestrate", po.ENGINE_NUDGE)
+        self.assertIn("dispatch", po.ENGINE_NUDGE)
+        self.assertLess(len(po.ENGINE_NUDGE), 200)
+
     def test_db_failure_fail_open(self):
         with mock.patch("prompt_optimizer.atlas_db", create=True, side_effect=None):
             # Force import inside arm_orchestration to fail by making the path insert fail.

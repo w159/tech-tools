@@ -773,7 +773,21 @@ def test_cmd_read_limit_and_width(bus, capsys):
 
 def test_cmd_who(bus, capsys):
     assert irc.cmd_who(ns(dir=str(bus))) == 0
+    assert capsys.readouterr().out == "#t lead boss, 2 members\na\nb\n"
+    assert irc.cmd_who(ns(dir=str(bus), json=True)) == 0
     assert json.loads(capsys.readouterr().out) == {"channel": "#t", "members": ["a", "b"], "lead": "boss"}
+
+
+def test_cmd_who_caps_the_list_and_counts_the_rest(tmp_path, capsys):
+    names = [f"w{i}" for i in range(irc.WHO_CAP + 5)]
+    irc.init_bus(tmp_path / "irc", "#big", names, "boss")
+    assert irc.cmd_who(ns(dir=str(tmp_path / "irc"))) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == f"#big lead boss, {len(names)} members"
+    assert lines[1:-1] == names[: irc.WHO_CAP]
+    assert lines[-1] == "+5 more (who --json lists all)"
+    assert irc.main(["--dir", str(tmp_path / "irc"), "who", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["members"] == names
 
 
 def test_cmd_tail_once(bus, capsys):
@@ -977,7 +991,7 @@ def test_parser_wiring():
 
 def test_main_dispatches(bus, capsys):
     assert irc.main(["--dir", str(bus), "who"]) == 0
-    assert json.loads(capsys.readouterr().out)["channel"] == "#t"
+    assert capsys.readouterr().out.startswith("#t lead boss")
     assert irc.main(["--dir", str(bus), "say", "--as", "a", "hi"]) == 0
     assert "sent #1" in capsys.readouterr().out
     assert irc.main(["--dir", str(bus), "tail", "--once"]) == 0

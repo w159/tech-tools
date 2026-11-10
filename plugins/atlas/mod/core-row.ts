@@ -6,7 +6,6 @@ import { type CoreModel, type Route, type Verdict, hasCore, tok } from "./data/c
 import { type Run, runsText, runsWidth, type Tone } from "./mission-layout";
 
 /** Core cells are layout runs: a tone, not a colour (mission-layout.ts TONE_HEX paints them on both harnesses). */
-export type Hue = Tone;
 export type Cell = Run;
 
 const c = (t: string, tone: Tone = "text"): Cell => ({ t, tone });

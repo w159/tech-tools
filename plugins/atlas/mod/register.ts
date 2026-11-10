@@ -20,7 +20,7 @@ import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
-import { registerDiscipline } from './discipline';
+import { reinforceLine, registerDiscipline } from './discipline';
 import { headerPhaseOf, registerRestyle } from './restyle';
 import { mergeToasts, registerNotify } from './notify';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
@@ -855,7 +855,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	registerDiscipline(on, {
 		reinforce: (snapshot) =>
 			snapshot?.contract.headerFirstLinePattern
-				? `atlas contract: open replies with a header line matching ${snapshot.contract.headerFirstLinePattern} (phase: ${snapshot.phase})`
+				? reinforceLine(snapshot.contract.headerTemplate, snapshot.phase)
 				: null,
 	});
 	registerRestyle(on); // its turn.start also drops the previous turn's header phase

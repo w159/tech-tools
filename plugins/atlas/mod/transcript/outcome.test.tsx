@@ -66,7 +66,7 @@ test('reportOf takes the SubagentHandback STATUS line, else the last assistant t
 test('notifiedMs reads duration_ms of the notification naming the agent; outcomeText joins word, line, duration', () => {
   expect(notifiedMs(['hello', NOTICE], 'a1')).toBe(29046)
   expect(notifiedMs([NOTICE], 'zz')).toBeUndefined()
-  expect(outcomeText({ status: 'completed', line: 'STATUS: DONE', durationMs: 29046 })).toBe('done · STATUS: DONE · 29s')
+  expect(outcomeText({ status: 'completed', line: 'STATUS: DONE', durationMs: 29046 })).toBe('finished · STATUS: DONE · 29s')
   expect(outcomeText({ status: 'failed', line: '' })).toBe('failed')
 })
 
@@ -78,11 +78,15 @@ test('background launch card: live worker spins as running, never a stale comple
   expect(text).not.toContain('✓')
 })
 
-test('background launch card: ended worker shows a done row: STATUS line · duration', async () => {
+test('background launch card: ended worker shows a finished row: STATUS line · duration', async () => {
   const e = launched('completed')
   const out = strings(await sites().ToolUse!(engine([e.agent]), e, next))
-  expect(out).toContain(' done  ')
+  expect(out).toContain(' finished ')
+  expect(out).not.toContain(' done ')
   expect(out).toContain('STATUS: DONE · 29s')
+  expect(out.match(/finished/g)).toEqual(['finished'])
+  const row = (JSON.parse(out) as { children: Array<{ children: Array<{ children: string[] }> }> }).children[2]!
+  expect(row.children.map((c) => c.children.join('')).join('').trimEnd()).toBe('▌ finished STATUS: DONE · 29s')
 })
 
 test('a call still being written reads pending, not completed', async () => {
@@ -98,7 +102,7 @@ test('task-notification of an atlas worker that left the host list draws its res
   const text = strings(await sites().UserMessage!(engine([], { a1: { name: 'wave-a', type: 'atlas:explorer' } }), e, next))
   expect(text).toContain('wave-a')
   expect(text).toContain('explorer')
-  expect(text).toContain('done · STATUS: DONE · 29s')
+  expect(text).toContain('finished · STATUS: DONE · 29s')
 })
 
 test('task-notification of a non-atlas task keeps the engine row', async () => {
@@ -136,10 +140,10 @@ test('an outcome is memoized only once its duration is known', async () => {
   const e = launched('completed');
   const memo = new Map();
   const known = await cardExtra(engine([e.agent]), e.props.output, [e.agent], memo);
-  expect(known.outcome).toBe('done · STATUS: DONE · 29s');
+  expect(known).toEqual({ ended: 'finished', outcome: 'STATUS: DONE · 29s' });
   expect([...memo.keys()]).toEqual(['a1:completed']);
   const noDuration = { ...engine([e.agent]), session: { messages: async (a?: { agentId?: string }) => (a?.agentId ? CHILD : []) } } as unknown as EngineInterface;
   const fresh = new Map();
-  expect((await cardExtra(noDuration, e.props.output, [e.agent], fresh)).outcome).toBe('done · STATUS: DONE');
+  expect(await cardExtra(noDuration, e.props.output, [e.agent], fresh)).toEqual({ ended: 'finished', outcome: 'STATUS: DONE' });
   expect(fresh.size).toBe(0);
 });

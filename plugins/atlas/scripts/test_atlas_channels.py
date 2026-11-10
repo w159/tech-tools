@@ -379,6 +379,23 @@ class ChannelModel(unittest.TestCase):
         self.assertRegex(brief, r"result to l\b")
         # the post command itself is still there
         self.assertIn(" note ", brief)
+        self.assertIn("dispatch prompt wins", brief)
+
+    def test_read_only_brief_has_post_and_inbox_but_no_claims(self):
+        todo.open_lead_channel(self.root, "L", ["A", "B"])
+        chan = f"{self.main}/L"
+        writer = todo.channel_brief(self.root, chan, "L", "A", "implementer")
+        for role in sorted(todo.READ_ONLY_ROLES):
+            brief = todo.channel_brief(self.root, chan, "L", "A", role)
+            self.assertIn(" note ", brief, role)
+            self.assertIn("--to L", brief, role)
+            self.assertIn(" inbox ", brief, role)
+            self.assertIn("dispatch prompt wins", brief, role)
+            for banned in ("conflicts", "claim-paths", "release-paths", "REQUIRED"):
+                self.assertNotIn(banned, brief, (role, banned))
+            self.assertLess(len(brief), len(writer) / 2, role)  # at most half the writer brief
+        for banned in ("conflicts", "claim-paths", "release-paths"):
+            self.assertIn(banned, writer)
 
     def test_cli_channels_open_notes_and_briefs(self):
         rc, out = cli(

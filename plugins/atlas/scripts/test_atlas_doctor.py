@@ -3314,7 +3314,7 @@ class SourceCheckoutStaleTest(unittest.TestCase):
         self.assertTrue(atlas_doctor.check_source_checkout_stale("17.4.0", cwd)[0])
 
     def test_wired_as_warn_in_install_checks(self):
-        cwd = self._checkout("16.4.2")
+        self._checkout("16.4.2")
         with mock.patch.object(atlas_doctor, "check_source_checkout_stale",
                                return_value=(False, "x")) as m:
             results = []

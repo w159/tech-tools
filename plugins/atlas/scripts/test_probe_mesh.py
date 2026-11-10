@@ -24,6 +24,10 @@ def ctx(tmp_path):
     c = core.Ctx(ROOT, quick=False, work=str(tmp_path / "w"))
     c.tmux_real = None
     yield c
+    # Tests set tmux_real to a stand-in path to reach the tmux branches with
+    # _tmux stubbed. No server was started, and close() would execute that
+    # path (kill-server): FileNotFoundError wherever tmux lives elsewhere.
+    c.tmux_real = None
     c.close()
 
 
@@ -297,6 +301,7 @@ def test_probe_irc_quick_uses_20_messages(irc_env, monkeypatch, tmp_path):
     try:
         pm.probe_irc(q)
     finally:
+        q.tmux_real = None  # stand-in path: nothing to kill, never execute it
         q.close()
     assert seen["SC_N"] == "20"
 

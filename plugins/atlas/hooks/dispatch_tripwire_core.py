@@ -505,8 +505,8 @@ def _burst_note(root, session):
     if now - float(last or 0) >= window:
         return False, ""
     return False, (
-        f"[atlas] ADVISORY - 2nd atlas dispatch within {window:g} s: this is a team. Run it as tmux panes:\n"
-        f"  {SPAWN_TEAM_CMD}\nthen `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T` "
+        f"[atlas] ADVISORY - 2nd atlas dispatch within {window:g} s: this is a team. Run it as tmux panes "
+        "with `atlas_mux.py spawn-team` (full command: the SessionStart team flow), then `wait` and `reap` "
         "(omp: the atlas_team tool)."
     )
 
@@ -2224,7 +2224,8 @@ def _channel_dispatch(payload):
                 board_line = f"\nBOARD ITEM: {res['item']['id']}"
     else:
         board_line = ""
-    brief = atlas_todo.channel_brief(root, chan["name"], lead, name)
+    role = str(tinput.get("subagent_type") or "").split(":")[-1]
+    brief = atlas_todo.channel_brief(root, chan["name"], lead, name, role)
     return {**tinput, "prompt": f"{prompt}\n\n{brief}{board_line}"}
 
 

@@ -2717,7 +2717,7 @@ class TeamCapTests(unittest.TestCase):
         cell = dict(self.CELL, team=[{"role": "explorer", "count": 9}])
         buf = io.StringIO()
         with mock.patch.object(atlas_mux.atlas_resolve, "resolve", return_value=cell), contextlib.redirect_stdout(buf):
-            code = atlas_mux.main(["spawn-team", "--class", "audit", "--effort", "low", "--dry-run", "--root", tempfile.mkdtemp()])
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "audit", "--effort", "low", "--dry-run", "--root", tempfile.mkdtemp()])
         out = json.loads(buf.getvalue().strip().splitlines()[-1])
         self.assertEqual(2, code)
         self.assertFalse(out["ok"])
@@ -2746,7 +2746,7 @@ class WaitKillOnTimeoutTests(unittest.TestCase):
                 contextlib.redirect_stdout(buf):
             if "ATLAS_WAIT_KILL" not in env:
                 os.environ.pop("ATLAS_WAIT_KILL", None)
-            code = atlas_mux.main(["wait", "--team", "kw", "--root", tempfile.mkdtemp(), "--timeout", "0.2", "--poll", "0.05", *extra])
+            code = atlas_mux.main(["wait", "--json", "--team", "kw", "--root", tempfile.mkdtemp(), "--timeout", "0.2", "--poll", "0.05", *extra])
         return code, json.loads(buf.getvalue().strip().splitlines()[-1]), calls
 
     def test_default_leaves_the_panes_running(self):
@@ -3002,6 +3002,7 @@ class TeamLiveTmuxTests(unittest.TestCase):
             )
             code, out = self.run_mux(
                 "spawn-team",
+                "--json",
                 "--class",
                 "audit",
                 "--effort",
@@ -3047,7 +3048,7 @@ class TeamLiveTmuxTests(unittest.TestCase):
             self.assertEqual(
                 {f"{n} [{r}]" for n, r in want.items()}, set(titles) - {""}
             )
-            code, _ = self.run_mux("reap", "--team", "tlive", "--root", root)
+            code, _ = self.run_mux("reap", "--json", "--team", "tlive", "--root", root)
             self.assertEqual(0, code)
             gone = subprocess.run(
                 ["tmux", "has-session", "-t", "atlas-tlive"],
@@ -3158,6 +3159,7 @@ class TeamHardeningTests(unittest.TestCase):
             code = self.mux.main(
                 [
                     "wait",
+                    "--json",
                     "--team",
                     "hw",
                     "--root",
@@ -3207,7 +3209,7 @@ class ReapMembersAndStatusArgsTests(unittest.TestCase):
             contextlib.redirect_stdout(buf),
         ):
             self.assertEqual(
-                0, atlas_mux.main(["reap", "--team", "rt", "--root", root])
+                0, atlas_mux.main(["reap", "--json", "--team", "rt", "--root", root])
             )
         for chan_rec in todo._reg_read(root)["channels"].values():
             for m in chan_rec["members"]:
@@ -3239,7 +3241,7 @@ class ReapMembersAndStatusArgsTests(unittest.TestCase):
             contextlib.redirect_stdout(io.StringIO()),
         ):
             self.assertEqual(
-                0, atlas_mux.main(["reap", "--team", "rg", "--root", root])
+                0, atlas_mux.main(["reap", "--json", "--team", "rg", "--root", root])
             )
         r.assert_called_once_with("rg")
         h.assert_called_once_with("rg")
@@ -3293,7 +3295,7 @@ class DefaultTransportAndMemberTaskTests(unittest.TestCase):
 
         buf = io.StringIO()
         with mock.patch.dict(os.environ, {"ATLAS_MUX": "off"}), contextlib.redirect_stdout(buf):
-            code = atlas_mux.main(["spawn-team", "--class", "audit", "--effort", "low", "--task", "t",
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "audit", "--effort", "low", "--task", "t",
                                    "--root", tempfile.mkdtemp()])
         self.assertEqual(2, code)
         self.assertIn("ATLAS_MUX=off", json.loads(buf.getvalue())["error"])
@@ -3338,7 +3340,7 @@ class DefaultTransportAndMemberTaskTests(unittest.TestCase):
             buf = io.StringIO()
             env = {k: v for k, v in os.environ.items() if k != "ATLAS_MUX"}
             with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(buf):
-                code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--paths",
+                code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--paths",
                                        "plugins/atlas", "--task-file", tf, "--dry-run", "--root", d])
             self.assertEqual(0, code)
             rec = json.loads(buf.getvalue())["team"]
@@ -3380,7 +3382,7 @@ class WorktreeIsolationTests(unittest.TestCase):
         with mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                 mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-wt")), \
                 contextlib.redirect_stdout(buf):
-            code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--task", "t",
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", "t",
                                    "--root", self.repo, *extra])
         return code, json.loads(buf.getvalue().strip().splitlines()[-1]), seen
 
@@ -3454,7 +3456,7 @@ class TeamFlowFixTests(unittest.TestCase):
         with mock.patch.dict(os.environ, e), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                 mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-tf")), \
                 contextlib.redirect_stdout(buf):
-            code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--task", "t",
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", "t",
                                    "--root", root or self.repo, "--poll", "0.01", *extra])
         return code, json.loads(buf.getvalue().strip().splitlines()[-1])
 
@@ -3472,7 +3474,7 @@ class TeamFlowFixTests(unittest.TestCase):
         # the verifier launched and has finished; the two implementers' worktrees failed and never will
         with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "claude-bg"}), contextlib.redirect_stdout(buf), \
                 mock.patch.object(atlas_mux, "_exited", lambda root, name: name.startswith("verifier")):
-            wcode = atlas_mux.main(["wait", "--team", out["team_id"], "--root", self.repo, "--timeout", "30", "--poll", "0.05"])
+            wcode = atlas_mux.main(["wait", "--json", "--team", out["team_id"], "--root", self.repo, "--timeout", "30", "--poll", "0.05"])
         got = json.loads(buf.getvalue().strip().splitlines()[-1])
         self.assertLess(got["elapsed_s"], 5, got)
         self.assertEqual(1, wcode)
@@ -3638,7 +3640,7 @@ class TeamSeatTests(unittest.TestCase):
             with mock.patch.dict(os.environ, e), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                     mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-seat")), \
                     contextlib.redirect_stdout(io.StringIO()):
-                atlas_mux.main(["spawn-team", "--class", "db-audit", "--effort", "medium", "--task", "t",
+                atlas_mux.main(["spawn-team", "--json", "--class", "db-audit", "--effort", "medium", "--task", "t",
                                 "--root", root, "--poll", "0.01", "--harness", harness])
             rec = json.loads(next(pathlib.Path(root).rglob("t*.json")).read_text())
         return rec, seen
@@ -3665,7 +3667,7 @@ class ColonyNameSourceTests(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             code = atlas_mux.main(
-                ["spawn-team", "--class", "audit", "--effort", "low", "--task", "t", "--dry-run", *extra]
+                ["spawn-team", "--json", "--class", "audit", "--effort", "low", "--task", "t", "--dry-run", *extra]
             )
         return code, json.loads(buf.getvalue().strip().splitlines()[-1])
 
@@ -4081,7 +4083,7 @@ class WorktreeReapTests(unittest.TestCase):
         fail = subprocess.CompletedProcess([], 1, "", "")
         with mock.patch.object(atlas_mux, "_tmux", return_value=fail), mock.patch.object(atlas_mux, "_kill_notes"), \
                 contextlib.redirect_stdout(buf):
-            self.assertEqual(0, atlas_mux.main(["reap", "--team", "tr", "--root", self.repo]))
+            self.assertEqual(0, atlas_mux.main(["reap", "--json", "--team", "tr", "--root", self.repo]))
         out = json.loads(buf.getvalue().strip().splitlines()[-1])
 
         self.assertEqual(["implementer-3"], out["worktrees_removed"])
@@ -4115,7 +4117,7 @@ class WorktreeReapTests(unittest.TestCase):
             buf = io.StringIO()
             with mock.patch.object(atlas_mux, "_tmux", return_value=fail), mock.patch.object(atlas_mux, "_kill_notes"), \
                     contextlib.redirect_stdout(buf):
-                self.assertEqual(0, atlas_mux.main(["reap", "--team", "t2", "--root", self.repo]))
+                self.assertEqual(0, atlas_mux.main(["reap", "--json", "--team", "t2", "--root", self.repo]))
             out = json.loads(buf.getvalue().strip().splitlines()[-1])
             self.assertEqual([], out["worktrees_kept"])
         self.assertFalse(os.path.exists(plan["implementer-1"]["path"]))
@@ -4194,7 +4196,7 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
                 mock.patch.object(atlas_mux.atlas_todo, "notes", return_value=notes), \
                 mock.patch.object(atlas_mux, "_exited", lambda root, name: exit_of(name) is not None), \
                 contextlib.redirect_stdout(buf):
-            wcode = atlas_mux.main(["wait", "--team", team, "--root", self.repo, "--timeout", timeout, "--poll", "0.01"])
+            wcode = atlas_mux.main(["wait", "--json", "--team", team, "--root", self.repo, "--timeout", timeout, "--poll", "0.01"])
         return wcode, json.loads(buf.getvalue().strip().splitlines()[-1])
 
     def _wait_keys(self):
@@ -4243,3 +4245,100 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
 
         got = [atlas_mux._size_bucket(n) for n in (1, 2, 3, 4, 5, 8, 9, 20)]
         self.assertEqual(["1", "2", "3-4", "3-4", "5-8", "5-8", "9+", "9+"], got)
+
+
+class BriefOutputTests(unittest.TestCase):
+    """spawn-team, wait and reap print a short summary on the CLI (it stays in the lead's context);
+    --json keeps the full object, and a caller that builds its own namespace gets the JSON too."""
+
+    def run_wait(self, *extra):
+        import atlas_mux
+
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}, {"name": "b", "role": "r"}], "created": 0.0, "transport": "tmux"}
+        notes = [{"owner": "a", "text": "STATUS: DONE\nexit 0", "ts": 12.5}]
+        buf = io.StringIO()
+        with mock.patch.object(atlas_mux, "_load_team", return_value=rec), \
+                mock.patch.object(atlas_mux, "_team_panes", return_value=[]), \
+                mock.patch.object(atlas_mux, "_exited", lambda root, n: n == "a"), \
+                mock.patch.object(atlas_mux, "_record_wait"), \
+                mock.patch.object(atlas_mux.atlas_todo, "notes", return_value=notes), \
+                contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["wait", "--team", "kw", "--root", tempfile.mkdtemp(), "--timeout", "0.1", "--poll", "0.05", *extra])
+        return code, buf.getvalue()
+
+    def test_wait_prints_one_line_per_member_and_json_keeps_the_object(self):
+        code, out = self.run_wait()
+        self.assertEqual(1, code)
+        lines = out.splitlines()
+        self.assertTrue(lines[0].startswith("team kw: 1/2 finished"), out)
+        self.assertEqual(["  a exit 0 12.5s STATUS: DONE", "  b running"], lines[1:])
+        _, full = self.run_wait("--json")
+        self.assertEqual(["a", "b"], [m["name"] for m in json.loads(full)["members"]])
+        self.assertLess(len(out), len(full))
+
+    def test_wait_names_dead_and_never_launched_members(self):
+        import atlas_mux
+
+        out = atlas_mux._brief_wait({"ok": False, "team_id": "t", "elapsed_s": 2.0, "notes_worker_to_worker": 3, "killed_on_timeout": True, "members": [
+            {"name": "a", "exit": None, "dead_without_report": True, "duration_s": None, "last_status": None},
+            {"name": "b", "exit": None, "dead_without_report": True, "never_launched": True, "launch_error": "worktree: boom", "duration_s": None, "last_status": None},
+        ]})
+        self.assertIn("  a dead without report", out)
+        self.assertIn("  b never launched: worktree: boom", out)
+        self.assertIn("worker-to-worker notes: 3", out)
+        self.assertIn("killed on timeout", out)
+
+    def test_spawn_team_names_members_failures_and_the_next_command(self):
+        import atlas_mux
+
+        out = atlas_mux._brief_spawn_team({
+            "ok": False, "team_id": "t1", "session": "atlas-t1", "transport": "tmux", "transport_note": "tmux not on PATH: fell back to claude-bg",
+            "wave_logged": True, "run_id": "r", "channel": "p@main/lead-abc", "max_parallel": 2, "worktrees": {},
+            "members": [
+                {"ok": True, "name": "implementer-1", "agent": "implementer", "model": "sonnet", "worktree": {"path": "/x", "branch": "worker/t1-implementer-1"}},
+                {"ok": False, "name": "verifier-2", "error": "worktree: fatal"},
+            ],
+        })
+        lines = out.splitlines()
+        self.assertEqual("team t1 FAILED: 1/2 spawned on tmux, session atlas-t1, channel p@main/lead-abc, max_parallel 2", lines[0])
+        self.assertEqual("  implementer-1 implementer sonnet worktree worker/t1-implementer-1", lines[1])
+        self.assertEqual("  verifier-2 FAILED: worktree: fatal", lines[2])
+        self.assertIn("note: tmux not on PATH: fell back to claude-bg", lines)
+        self.assertEqual("next: atlas_mux.py wait --team t1", lines[-1])
+        self.assertNotIn("/x", out)
+
+    def test_dry_run_is_brief_on_the_cli_and_json_with_the_flag(self):
+        import atlas_mux
+
+        def run(*extra):
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = atlas_mux.main(["spawn-team", "--class", "audit", "--effort", "low", "--task", "t", "--dry-run", "--team-id", "td", "--root", tempfile.mkdtemp(), *extra])
+            return code, buf.getvalue()
+
+        code, out = run()
+        self.assertEqual(0, code)
+        self.assertTrue(out.startswith("dry-run team td audit/low: "), out)
+        team = json.loads(run("--json")[1])["team"]
+        self.assertEqual([f"  {m['name']} {m['role']}" for m in team["members"]], out.splitlines()[1:])
+
+    def test_reap_reports_kept_worktrees_with_the_merge_command(self):
+        import atlas_mux
+
+        out = atlas_mux._brief_reap({
+            "ok": True, "team_id": "t1", "record": "live", "already_reaped": False, "members": ["a", "b"], "session": "atlas-t1", "killed": True,
+            "session_left": False, "channels_reaped": 1, "prompts_removed": 2, "worktrees": {}, "worktrees_removed": ["a"],
+            "worktrees_kept": [{"member": "b", "path": "/x/wt", "branch": "worker/t1-b", "ahead": 2, "dirty": True}], "archived": "/x/archive/t1.json",
+        })
+        self.assertEqual([
+            "reaped t1 (live): 2 members, session killed, 2 prompts removed, 1 channels reaped",
+            "worktrees removed: a",
+            "worktree kept: b worker/t1-b (2 ahead, dirty), merge with atlas_wt.py merge t1-b",
+        ], out.splitlines())
+
+    def test_a_namespace_without_the_flag_keeps_json(self):
+        import atlas_mux
+
+        self.assertIsNone(atlas_mux._brief_for(argparse.Namespace(), atlas_mux._brief_wait))
+        self.assertIs(atlas_mux._brief_wait, atlas_mux._brief_for(atlas_mux._parser().parse_args(["wait", "--team", "t"]), atlas_mux._brief_wait))
+        self.assertIsNone(atlas_mux._brief_for(atlas_mux._parser().parse_args(["reap", "--team", "t", "--json"]), atlas_mux._brief_reap))

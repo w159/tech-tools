@@ -1719,7 +1719,6 @@ def _nudge_card(h):
     except (OSError, ValueError):
         pass
     nudge_run = scan["last_run"].get("nudge")
-    nudge_last = _newest(_iso(nudge_ts), _iso(nudge_run))
     return (
         _sub(
             "nudge",

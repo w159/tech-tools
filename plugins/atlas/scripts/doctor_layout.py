@@ -4,8 +4,10 @@
 Runtime state belongs in <project root>/.atlas. Older walkers left stray
 `.atlas` dirs in subdirectories, nested `.atlas/.run/.atlas`, a `.atlas` on a
 container folder of repos, and project-scope files in ~/.atlas/.run. Nothing
-here deletes data: strays are MOVED into an archive folder, collisions and
-errors are skipped and reported, and a second run finds nothing to do.
+here deletes data: under an explicit `atlas_doctor.py --fix`, strays are MOVED
+into an archive folder (each move printed as source -> destination), collisions
+and errors are skipped and reported, and a second run finds nothing to do. The
+SessionStart hook only REPORTS misplaced paths and never touches a file.
 
 Also holds the read-only docs-naming count and the project-identity check
 (projects rows that are git subdirs, inside .atlas, worktree/temp, or missing)
@@ -122,15 +124,41 @@ def _git_owned(atlas_dir):
         return True
 
 
+def _tilde(path):
+    """`path` with the user's home directory shown as `~`, so a report never
+    carries the absolute home path (and the username in it)."""
+    home = os.path.expanduser("~")
+    for p, h in ((path, home), (os.path.realpath(path), os.path.realpath(home))):
+        h = h.rstrip(os.sep)
+        if p == h or p.startswith(h + os.sep):
+            return "~" + p[len(h) :]
+    return path
+
+
+def layout_refusal(root):
+    """Why layout work must not run with `root` as the project, else ''.
+    HOME, ~/Downloads and bare temp roots hold other projects: walking one
+    would flag every project below it as a stray."""
+    if not atlas_paths._is_non_project(root):
+        return ""
+    return (
+        f"{_tilde(root)} is a home, Downloads or temp folder, not a project; "
+        "run it from inside a project"
+    )
+
+
 def check_atlas_layout(root, home=None):
     """Misplaced runtime-state paths for project `root`.
 
     Returns [{"kind", "path", "root", "archive_base", "rel"}] with kind one of
     stray (a .atlas below the root), nested (a .atlas inside a .atlas),
     container (a .atlas on a folder of repos, at root or an ancestor) and
-    home_run (project-scope files in ~/.atlas/.run)."""
+    home_run (project-scope files in ~/.atlas/.run). A non-project root
+    (see layout_refusal) is never walked and yields []."""
     root = os.path.abspath(root)
     found = []
+    if layout_refusal(root):
+        return found
 
     def add(kind, path, base_root, archive_base):
         found.append(
@@ -210,9 +238,13 @@ def fix_atlas_layout(findings, root, apply=True, today=None, home=None):
     a stray/nested source must be inside `root`; only home_run sources may
     live outside it, and only inside `home`/.run; every destination must be
     inside `root` or `home`. Containers sit in an ancestor of the project, so
-    they are never moved here: status "manual" carries the command to run."""
+    they are never moved here: status "manual" carries the command to run.
+    A non-project `root` (layout_refusal) moves nothing, a destination inside
+    its own source is skipped, and a move that fails while copying leaves the
+    source whole and removes the partial archive copy."""
     stamp = today or time.strftime("%Y-%m-%d")
     home = home or atlas_home()
+    refusal = layout_refusal(root)
     moves = []
     for f in findings:
         slug = _slug(f["rel"] if f["kind"] != "home_run" else "run-" + f["rel"])
@@ -224,7 +256,9 @@ def fix_atlas_layout(findings, root, apply=True, today=None, home=None):
             if f["kind"] == "home_run"
             else _inside(f["path"], root)
         )
-        if f["kind"] == "container":
+        if refusal:
+            move.update(status="skipped", reason=refusal)
+        elif f["kind"] == "container":
             move.update(
                 status="manual",
                 reason=f"ancestor folder, not moved automatically; run: "
@@ -232,18 +266,47 @@ def fix_atlas_layout(findings, root, apply=True, today=None, home=None):
             )
         elif not src_ok or not (_inside(dest, root) or _inside(dest, home)):
             move.update(status="skipped", reason="outside project")
+        elif _inside(dest, f["path"]):
+            move.update(
+                status="skipped", reason="archive destination is inside the source"
+            )
         elif not os.path.lexists(f["path"]):
             move.update(status="skipped", reason="source already gone")
         elif os.path.lexists(dest):
             move.update(status="skipped", reason="archive destination exists")
         elif apply:
+            before = _entry_count(f["path"])
             try:
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 shutil.move(f["path"], dest)
                 move["status"] = "moved"
             except OSError as exc:
                 move.update(status="error", reason=str(exc))
+                # Across filesystems shutil.move copies, then deletes the
+                # source. An unchanged source means the copy is what failed:
+                # drop the partial copy, or it blocks every later run as
+                # "archive destination exists". A shrunken source means the
+                # copy finished and the archive now holds the only full set.
+                if _entry_count(f["path"]) == before:
+                    _remove_partial(dest)
     return moves
+
+
+def _entry_count(path):
+    """Files plus directories below `path` (0 for a file or a missing path)."""
+    return sum(len(d) + len(n) for _cur, d, n in os.walk(path))
+
+
+def _remove_partial(dest):
+    """Delete a half-written archive copy. `dest` did not exist before the
+    move that created it, so nothing here predates that move."""
+    if os.path.isdir(dest) and not os.path.islink(dest):
+        shutil.rmtree(dest, ignore_errors=True)
+    elif os.path.lexists(dest):
+        try:
+            os.unlink(dest)
+        except OSError:
+            pass  # reported already as the move's own error
 
 
 def layout_summary(findings):
@@ -251,16 +314,29 @@ def layout_summary(findings):
 
 
 def hook_layout(cwd):
-    """SessionStart repair for the payload cwd's project. Returns '' when
-    nothing was moved or failed, else one short line."""
+    """SessionStart report for the payload cwd's project. READ-ONLY: it never
+    moves, renames or deletes; only `atlas_doctor.py --fix` does. Returns ''
+    when nothing is misplaced (or cwd resolves to HOME or another non-project
+    root, which is never walked), else one short line naming the paths:
+    project-relative ones first, then those outside the project with the home
+    directory written as `~` (this line lands in the model context)."""
     root = atlas_paths.project_root(cwd)
-    moves = fix_atlas_layout(check_atlas_layout(root), root)
-    moved = sum(m["status"] == "moved" for m in moves)
-    bad = sum(m["status"] == "error" for m in moves)
-    if not (moved or bad):
+    if layout_refusal(root):
         return ""
-    line = f"atlas layout: moved {moved} stray .atlas path(s) to archive"
-    return line + (f"; {bad} failed" if bad else "")
+    names = []
+    for f in check_atlas_layout(root):
+        rel = os.path.relpath(f["path"], root)
+        outside = rel.startswith("..")
+        names.append((outside, _tilde(f["path"]) if outside else rel))
+    found = sorted(names)
+    if not found:
+        return ""
+    shown = [name for _outside, name in found[:5]]
+    more = f" (+{len(found) - 5} more)" if len(found) > 5 else ""
+    return (
+        f"atlas layout: {len(found)} misplaced .atlas path(s): "
+        f"{', '.join(shown)}{more}; run atlas_doctor.py --fix to archive them"
+    )
 
 
 # --- project memory (findings records, global memory tagged with the project) --

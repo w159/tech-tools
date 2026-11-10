@@ -50,7 +50,7 @@ The phase comes from the last header in `turn.complete` (matched with the contra
 - **Wave strip** (`waveTree`): a tool group of 2+ calls that are all atlas `Agent`/`Task` dispatches renders as a wave header plus one worker card per call, side by side when the width allows.
 - **Channel bubble** (`bubbleTree`): a message another agent sent renders as a bar-edged `#atlas <from> > lead` bubble (up to 8 lines) instead of raw text.
 
-Since 12.3.0 worker cards are filled stripe cards with a state chip and goal, now and done rows (the done row is the first result line); background-agent notification rows use the same style, and a background batch also gets a wave strip. The reply header is drawn as brand and phase pills with no pipe. Limit: the engine folds 2+ background dispatches into one "N background agents launched" row that a plugin cannot restyle; each result still shows on its own notification row.
+Since 12.3.0 worker cards are filled stripe cards with a state chip and goal, now and finished rows (the finished row is the first result line; since 17.4.2 the label is `finished`, or `fail`, `failed` or `killed`, never `done`, and the label column width is defined once in `cards.tsx`); background-agent notification rows use the same style, and a background batch also gets a wave strip. The reply header is drawn as brand and phase pills with no pipe. Limit: the engine folds 2+ background dispatches into one "N background agents launched" row that a plugin cannot restyle; each result still shows on its own notification row.
 
 ### The sidebar (`mod/pane/sidebar.tsx`)
 
@@ -84,10 +84,10 @@ The gates tab label is `✗ N` (error color) when gates are open, else `✓ gate
 
 ### Context discipline (`mod/discipline.ts`)
 
-Gated by `ATLAS_MOD!=off` plus an interactive session; every hook fails open and only ever adds model-only context or a rate-limited toast. Wired by `registerDiscipline(on, { reinforce })` in `register.ts:483-488`:
+Gated by `ATLAS_MOD!=off` plus an interactive session; every hook fails open and only ever adds model-only context or a rate-limited toast. Wired by `registerDiscipline(on, { reinforce })` in `register.ts`. The `reinforce` line is `atlas contract: open replies with <headerTemplate> (phase: <phase>)` from `reinforceLine`; it carries the template from the operating contract, not the regex:
 
 - **Heavy inline calls.** A `Read`/`Grep`/`Glob`/`Bash` call whose tool-result text is 4000+ characters, with no `Task`/`Agent` dispatch yet this turn, counts as one heavy inline call; the 4th in a turn toasts a delegate-to-role suggestion.
-- **Contract drift.** A first line that does not match `headerFirstLinePattern` toasts a missing-header warning.
+- **Contract drift.** A first line that does not match `headerFirstLinePattern` toasts a missing-header warning. The phase is read with the shared parser `headerPhaseOf` (`mod/restyle.tsx`).
 - **Vague-prompt sharpening.** A short, path-free, test-word-free composer prompt gets an `atlas facts: …` line appended to the model's context for that turn only.
 
 ## Data plane

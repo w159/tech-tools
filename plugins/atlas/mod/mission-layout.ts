@@ -88,7 +88,7 @@ function spread(left: Run[], right: Run[], cols: number): Run[] {
   return fitRuns(left, cols);
 }
 /** Cut runs to `cols` cells, the overflowing run ellipsized; pad to `cols`. */
-export function fitRuns(runs: readonly Run[], cols: number): Run[] {
+function fitRuns(runs: readonly Run[], cols: number): Run[] {
   const out: Run[] = [];
   let left = cols;
   for (const x of runs) {
@@ -107,7 +107,7 @@ const clock = (secs: number): string => {
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
 /** A thin progress bar: violet while open, green once complete, dim track. */
-export function progressBar(done: number, total: number, width = BAR_W): Run[] {
+function progressBar(done: number, total: number, width = BAR_W): Run[] {
   const full = total > 0 ? Math.round((Math.min(done, total) / total) * width) : 0;
   const tone: Tone = total > 0 && done >= total ? 'ok' : 'accent';
   return [r('━'.repeat(full), tone), r('━'.repeat(width - full), 'dim')];
@@ -235,7 +235,7 @@ function noteLine(n: MissionNote, cols: number): Line {
 
 /** `checks  ✓ completion  ✗ tripwire  ✓ routing`; when that does not fit, `checks  ✗ tripwire` (failures only) or
  * `checks  ✓ all 3 pass`. Failing names take the text tone so they stand out; passing names stay muted. */
-export function checkRuns(checks: readonly MissionCheck[] | null, room: number): Run[] {
+function checkRuns(checks: readonly MissionCheck[] | null, room: number): Run[] {
   if (!checks?.length) return [];
   const one = (c: MissionCheck): Run[] => [c.ok ? r('✓', 'ok') : r('✗', 'bad', true), r(` ${c.id}`, c.ok ? 'muted' : 'text')];
   const join = (cs: readonly MissionCheck[]): Run[] => cs.flatMap((c, i) => [...(i ? [r('  ')] : []), ...one(c)]);

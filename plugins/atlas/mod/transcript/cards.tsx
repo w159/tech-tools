@@ -47,10 +47,14 @@ const colorOf = (s: AgentState): string => { try { return stateColor(s) || BRAND
 const LIVE: ReadonlySet<AgentState> = new Set<AgentState>(['running', 'spawning', 'input'])
 const isLive = (c: CallLike, s: AgentState): boolean => c.isRunning || LIVE.has(s)
 
-/** First matching flag wins (errored, then interrupted, then running or a live worker); none means finished. */
-export function phaseOf(c: CallLike, s: AgentState): { mark: string; color: string; state: AgentState } {
+/** End words of a background worker that did not succeed (`CardExtra.ended`): its launch call itself returned clean. */
+const ENDED_BAD: ReadonlySet<string> = new Set(['failed', 'killed'])
+
+/** First matching flag wins (errored or a worker that ended failed / killed, then interrupted, then running or a
+ * live worker); none means finished. */
+export function phaseOf(c: CallLike, s: AgentState, ended = ''): { mark: string; color: string; state: AgentState } {
  const phases: Array<[boolean, { mark: string; color: string; state: AgentState }]> = [
-  [c.isErrored, { mark: '✗', color: BRAND.fail, state: 'failed' }],
+  [c.isErrored || ENDED_BAD.has(ended), { mark: '✗', color: BRAND.fail, state: 'failed' }],
   [c.isInterrupted, { mark: '⏸', color: BRAND.input, state: 'dead' }],
   [isLive(c, s), { mark: glyph.dot, color: BRAND.working, state: 'running' }],
  ]
@@ -74,19 +78,29 @@ function cardRow(hue: string, bg: string, width: number, runs: Run[]): RenderEle
 }
 
 /** Result text: the worker's outcome when known, else the call's own result; '' while running. */
-const resultText = (c: CallLike, outcome = ''): string => (c.isRunning ? '' : (outcome || callResult(c)).replace(/^done · /, '')) // the row label already says done
+// The outcome carries no lifecycle word: the row label is the only place that says finished / fail / killed.
+const resultText = (c: CallLike, outcome = ''): string => (c.isRunning ? '' : outcome || callResult(c))
 const callResult = (c: CallLike): string => (c.isInterrupted ? 'interrupted' : resultLine(c.output))
 
 const fitter = (width: number) => (s: string, pad: number) => (width > pad ? fitText(s, width - pad) : s)
-const label = (word: string): Run => ({ t: ` ${word.padEnd(5)} `, color: M.muted, bg: M.panel })
 
-/** Card extras: `mark` replaces the status glyph (a spinner frame), `outcome` is the worker's result line,
+/** Label column: the widest label word (`finished`). */
+const LABEL_W = 8
+/** Cells a labelled row spends outside its text: stripe, label with its two margins, one right margin. */
+const LABEL_PAD = 1 + (1 + LABEL_W + 1) + 1
+const label = (word: string): Run => ({ t: ` ${word.padEnd(LABEL_W)} `, color: M.muted, bg: M.panel })
+/** `▌ label    text`: the one place a labelled row is laid out, so its text is always fitted against the label's real width. */
+const labelRow = (hue: string, width: number, word: string, text: string, color: string): RenderElement =>
+ cardRow(hue, M.panel, width, [label(word), { t: fitter(width)(text, LABEL_PAD), color, bg: M.panel }])
+
+/** Card extras: `mark` replaces the status glyph (a spinner frame), `outcome` is the worker's result line
+ * without its lifecycle word, `ended` that word (`finished`, `failed`, `killed`: the end row's label),
  * `now` what a running worker is doing (tool, target, age), `wave` the strip number it was dispatched in. */
-export interface CardExtra { mark?: string; outcome?: string; now?: string; wave?: number }
+export interface CardExtra { mark?: string; outcome?: string; ended?: string; now?: string; wave?: number }
 
 /** `now` row of a running worker: what it is doing, else the host status word. */
 const nowRow = (word: string, extra: CardExtra, hue: string, width: number): RenderElement =>
- cardRow(hue, M.panel, width, [label('now'), { t: fitter(width)(extra.now || word || 'running', 9), color: M.muted, bg: M.panel }])
+ labelRow(hue, width, 'now', extra.now || word || 'running', M.muted)
 
 /** First sentence of a PreToolUse hook's DENY text, null when the call was not denied: a denied dispatch never ran. */
 function denyReason(c: CallLike): string | null {
@@ -97,13 +111,14 @@ function denyReason(c: CallLike): string | null {
 /** `deny` row with the hook's first sentence; null when the call was not denied. */
 function denyRow(c: CallLike, hue: string, width: number): RenderElement | null {
  const deny = denyReason(c)
- return deny === null ? null : cardRow(hue, M.panel, width, [label('deny'), { t: fitter(width)(deny, 9), color: hue, bg: M.panel }])
+ return deny === null ? null : labelRow(hue, width, 'deny', deny, hue)
 }
 
-/** The deny row, else `done`/`fail` with the result once settled; null when there is none. */
+/** The deny row, else the result once settled under the worker's own end word (else `finished`/`fail`); null when there is neither. */
 function endRow(c: CallLike, state: AgentState, extra: CardExtra, hue: string, width: number): RenderElement | null {
  const r = resultText(c, extra.outcome)
- return denyRow(c, hue, width) ?? (r ? cardRow(hue, M.panel, width, [label(state === 'failed' ? 'fail' : 'done'), { t: fitter(width)(r, 9), color: hue, bg: M.panel }]) : null)
+ const word = extra.ended ?? (state === 'failed' ? 'fail' : 'finished')
+ return denyRow(c, hue, width) ?? (r || extra.ended ? labelRow(hue, width, word, r, hue) : null)
 }
 
 /** `role · tier · wave N`; a denied call has no tier, it never resolved one. */
@@ -125,12 +140,12 @@ export function workerCard(c: CallLike, state: AgentState, width = 0, name?: str
  if (!isAtlasWorker(c)) return null
  const i = inputOf(c)
  const role = typeOf(i).slice('atlas:'.length)
- const phase = phaseOf(c, state)
+ const phase = phaseOf(c, state, extra.ended)
  const hue = cardHue(phase.state)
  const running = phase.state === 'running'
  return cardBox(width, [
   headRow(i, role, name, markOf(phase, extra), hue, width, metaOf(c, role, extra.wave)),
-  cardRow(hue, M.panel, width, [label('goal'), { t: fitter(width)(goalLine(i), 9), color: M.text, bg: M.panel }]),
+  labelRow(hue, width, 'goal', goalLine(i), M.text),
   running ? nowRow(word, extra, hue, width) : endRow(c, phase.state, extra, hue, width),
  ])
 }
@@ -143,7 +158,7 @@ const waveLayout = (columns: number, count: number): { side: boolean; w: number 
 }
 const waveHeader = (calls: ReadonlyArray<CallLike>, n: number) => {
  const live = calls.filter((c) => c.isRunning).length
- return t({ color: BRAND.accent, bold: true }, `WAVE ${n} · ${calls.length} workers${live ? ` · ${live} running` : ' · done'}`)
+ return t({ color: BRAND.accent, bold: true }, `WAVE ${n} · ${calls.length} workers${live ? ` · ${live} running` : ' · finished'}`)
 }
 
 /** WAVE strip: 2+ calls, all atlas Agent/Task. */

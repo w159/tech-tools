@@ -14,7 +14,7 @@ function fakePi() {
 
 test("spawn argv carries class, effort, task, paths and the omp harness", () => {
 	expect(teamArgv({ action: "spawn", class: "audit", effort: "medium", task: "t", paths: ["a", "b"] }, ROOT)).toEqual([
-		"python3", "/p/atlas/scripts/atlas_mux.py", "spawn-team", "--class", "audit", "--effort", "medium", "--task", "t", "--harness", "omp", "--paths", "a,b",
+		"python3", "/p/atlas/scripts/atlas_mux.py", "spawn-team", "--json", "--class", "audit", "--effort", "medium", "--task", "t", "--harness", "omp", "--paths", "a,b",
 	]);
 });
 

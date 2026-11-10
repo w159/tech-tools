@@ -337,6 +337,7 @@ def main(argv: list | None = None) -> int:
         "atlas:verifier passes --by atlas:verifier explicitly",
     )
     p.add_argument("--root", help="project root; defaults to detection from cwd")
+    p.add_argument("--json", action="store_true", help="also print the written entry as JSON")
     args = p.parse_args(argv)
 
     root = Path(args.root) if args.root else find_root(Path.cwd())
@@ -358,7 +359,11 @@ def main(argv: list | None = None) -> int:
     except OSError as exc:
         print("atlas_finding: could not write %s: %s" % (path, exc), file=sys.stderr)
         return 1
-    print("wrote %s -> %s" % (path, json.dumps(entry)))
+    # The caller passed every field, so the default confirms in one line (the output stays in its context).
+    if args.json:
+        print("wrote %s -> %s" % (path, json.dumps(entry)))
+    else:
+        print("wrote %s [%s] -> %s" % (entry["id"], entry["status"], path))
     if entry["status"] in TERMINAL:
         try:  # fail open: the ledger write above is the gate's source of truth
             if sync_record(root, findings, entry["id"]):

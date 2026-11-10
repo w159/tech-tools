@@ -1228,7 +1228,6 @@ class GateConditionMatrixTest(GateEndToEndTest):
         self.assertEqual(self._letters(self.gate(out)), ["p"])
 
     def test_condition_p_passes_when_worker_posted_to_lead_subchannel(self):
-        import atlas_todo
 
         out = self._satisfied()
         self._no_channel_traffic()

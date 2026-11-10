@@ -1,4 +1,4 @@
-import { test, expect, afterEach } from "bun:test";
+import { test, expect, afterEach, afterAll } from "bun:test";
 
 // Minimal DOM stand-in (same pattern as terminal.test.js; no DOM lib is installed).
 class N {
@@ -8,6 +8,10 @@ class N {
   setAttribute(k, v) { this.attrs[k] = v; }
   addEventListener(k, fn) { this.listeners[k] = fn; }
 }
+// bun runs every test file in one process: put the globals back afterwards, or the next file's static imports
+// (api.js reads document.querySelector while it is evaluated) meet this stub, which has no querySelector.
+const SAVED_GLOBALS = { Node: globalThis.Node, document: globalThis.document };
+afterAll(() => Object.assign(globalThis, SAVED_GLOBALS));
 globalThis.Node = N;
 globalThis.document = { createElement: (t) => new N(t), createTextNode: (t) => ({ text: t }) };
 

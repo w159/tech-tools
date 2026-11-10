@@ -77,7 +77,7 @@ a decision, and decisions go to `AskUserQuestion` - not to a guess.
 
 ## Completion gate: contract-visibility conditions (n), (o), (p)
 
-The `completion_gate.py` Stop hook (full list in `references/hooks-automation.md`) also checks three conditions on how the run is presented. Each applies to orchestrating sessions only, fails open, and blocks at most once per session:
+The `completion_gate.py` Stop hook (full list in `references/hooks-automation.md`) also checks three conditions on how the run is presented. Each applies to orchestrating sessions only, and fails open. (o) and (p) block at most once per session; (n) re-blocks every header-less Stop, under the usual loop cap:
 
 - **(n) Status header.** The final reply starts, on its first non-empty line, with the header matching `headerFirstLinePattern` in `contracts/operating-contract.json` (`ATLAS | <glyph> <phase> | <state>`). Kill switch `ATLAS_GATE_HEADER=off`.
 - **(o) Phased todo.** When this run shipped non-docs code, the session's todo/board items cover every phase in `requiredTodoPhasesWhenCodeShipped` (`implement`, `verify`); an item's phase is its `phase` field or a `[<phase>] ` content prefix. Kill switch `ATLAS_GATE_PHASES=off`.

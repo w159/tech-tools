@@ -12,7 +12,6 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import atlas_dash_colony as colony  # noqa: E402
-import atlas_dash_irc  # noqa: E402
 import atlas_herdr  # noqa: E402
 import atlas_todo  # noqa: E402
 

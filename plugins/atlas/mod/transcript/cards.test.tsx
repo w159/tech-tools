@@ -1,6 +1,6 @@
 // Golden tests for transcript/cards.tsx: worker cards, wave strips, channel bubbles.
 import { expect, test } from 'claude-code/testing'
-import { fitText, stateColor } from '../theme'
+import { fitText, stateColor, textWidth } from '../theme'
 import { bubbleTree, waveTree, workerCard, goalLine, resultLine, phaseOf } from './cards'
 import type { CallLike } from './cards'
 
@@ -117,17 +117,17 @@ test('phaseOf colours a finished call by its worker state, not the idle fallback
   expect(phaseOf(call({ isRunning: false }), 'finished').color).toBe(stateColor('finished'));
 })
 
-test('card rows are fixed-size boxes with 5-wide padded labels', () => {
+test('card rows are fixed-size boxes with 8-wide padded labels; a returned worker reads finished, never done', () => {
   const running = workerCard(call(), 'running', 60, undefined, '', { now: 'x' })!
   for (const row of (running as El).children) expect(row.props.flexShrink).toBe(0)
   const labelOf = (row: El): string => text(row.children[1])
   const rows = (running as El).children
-  expect(labelOf(rows[1]!)).toBe(' goal  ')
-  expect(labelOf(rows[2]!)).toBe(' now   ')
+  expect(labelOf(rows[1]!)).toBe(' goal     ')
+  expect(labelOf(rows[2]!)).toBe(' now      ')
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished', 60)!
-  expect(labelOf((done as El).children[2]!)).toBe(' done  ')
+  expect(labelOf((done as El).children[2]!)).toBe(' finished ')
   const failed = workerCard(call({ isRunning: false, isErrored: true, output: 'boom' }), 'failed', 60)!
-  expect(labelOf((failed as El).children[2]!)).toBe(' fail  ')
+  expect(labelOf((failed as El).children[2]!)).toBe(' fail     ')
 })
 
 test('bubble body lines are fitted to the columns less the 3-cell gutter', () => {
@@ -135,4 +135,61 @@ test('bubble body lines are fitted to the columns less the 3-cell gutter', () =>
   const b = bubbleTree(long, 'a', 'lead', 12)!
   expect(text(b)).toContain(fitText(long, 9))
   expect(text(b)).not.toContain(long)
+})
+
+const LONG = 'word '.repeat(60).trim()
+const DENIED = `Error: PreToolUse:Agent hook error: DENY - ${LONG}.`
+const longCall = (over: Partial<CallLike> = {}): CallLike =>
+  call({ input: { subagent_type: 'atlas:implementer', name: 'impl-a', prompt: `GOAL: ${LONG}`, model: 'sonnet' }, ...over })
+const rowWidths = (card: unknown): number[] => (card as El).children.map((row) => textWidth(text(row)))
+
+test('goal, now, deny and finished rows with long text never exceed the card width', () => {
+  for (const width of [40, 60, 80, 120]) {
+    const cards = [
+      workerCard(longCall(), 'running', width, undefined, '', { now: LONG }),
+      workerCard(longCall({ isRunning: false, isErrored: true, output: DENIED }), 'failed', width),
+      workerCard(longCall({ isRunning: false, output: LONG }), 'finished', width),
+      workerCard(longCall({ isRunning: false, isErrored: true, output: LONG }), 'failed', width),
+    ]
+    for (const card of cards) {
+      expect((card as El).children.length).toBe(3)
+      for (const w of rowWidths(card)) expect([width, w]).toEqual([width, width])
+    }
+  }
+})
+
+test('side-by-side wave cards with long text fit the columns between them', () => {
+  for (const columns of [80, 120, 160]) {
+    const w = waveTree([longCall(), longCall({ isRunning: false, output: LONG })], 1, columns)!
+    const strip = (w as El).children[1]!
+    expect(strip.props.flexDirection).toBe('row')
+    const widest = strip.children.map((card) => Math.max(...rowWidths(card)))
+    expect(widest.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(columns)
+    strip.children.forEach((card, i) => expect(widest[i]).toBeLessThanOrEqual(card.props.width as number))
+  }
+})
+
+test('a wave whose workers all returned is headed finished, never done', () => {
+  const calls = [call({ isRunning: false, output: 'STATUS: DONE' }), call({ isRunning: false, output: 'STATUS: DONE' })]
+  expect(text((waveTree(calls, 3, 160) as El).children[0])).toBe('WAVE 3 · 2 workers · finished')
+  expect(text((waveTree([call(), calls[0]!], 3, 160) as El).children[0])).toBe('WAVE 3 · 2 workers · 1 running')
+})
+
+test('the lifecycle word of a worker outcome is the row label, not repeated in the row text', () => {
+  const launch = call({ isRunning: false, output: { status: 'async_launched', agentId: 'a1' } })
+  const rowOf = (ended: string, outcome: string): string => text((workerCard(launch, 'finished', 60, undefined, '', { ended, outcome }) as El).children[2]).trimEnd()
+  expect(rowOf('finished', 'STATUS: DONE · 29s')).toBe('▌ finished STATUS: DONE · 29s')
+  expect(rowOf('killed', '')).toBe('▌ killed')
+})
+
+test('a killed or failed background worker card has the failure mark and hue in its head; a finished one keeps the success mark', () => {
+  const launch = call({ isRunning: false, output: { status: 'async_launched', agentId: 'a1' } })
+  const card = (ended: string) => workerCard(launch, 'finished', 60, undefined, '', { ended, outcome: '' })!
+  for (const ended of ['killed', 'failed']) {
+    expect([ended, text(chip(card(ended)))]).toEqual([ended, ' ✗ impl-a '])
+    expect([ended, chip(card(ended)).props.backgroundColor, stripe(card(ended))]).toEqual([ended, '#f38ba8', '#f38ba8'])
+    expect(text((card(ended) as El).children[2]).trimEnd()).toBe(`▌ ${ended}`)
+  }
+  expect(text(chip(card('finished')))).toBe(' ✓ impl-a ')
+  expect(stripe(card('finished'))).toBe('#94e2d5')
 })

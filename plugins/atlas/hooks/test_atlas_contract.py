@@ -1894,7 +1894,6 @@ class TestIsolationContract(unittest.TestCase):
         self.assertEqual(missing, [], "test modules missing `import _test_isolation`")
 
     def test_helper_redirects_state_away_from_real_home(self):
-        import _test_isolation
 
         real = os.path.join(_test_isolation.REAL_HOME, ".atlas")
         for var, value in _test_isolation.ISOLATED_ENV.items():

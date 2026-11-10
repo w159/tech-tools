@@ -5,7 +5,6 @@ import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import time
 import unittest

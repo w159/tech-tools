@@ -165,7 +165,7 @@ blocks, it names the letters:
 | f      | docs drift (no CHANGELOG entry for shipped code) | o      | required phases missing                    |
 | g      | implementer work not independently verified      | p      | colony channel unused                      |
 | h      | ROADMAP not reconciled                           | q      | unmerged worker branches                   |
-| i      | open todos                                       |        |                                            |
+| i      | open todos                                       | r      | `done` header while work is open           |
 
 The gate arms inside a project: a directory with `docs/`, or one under a
 project marker (`.git`, `.claude`, `.atlas`, `package.json`, `pyproject.toml`,
@@ -173,8 +173,10 @@ project marker (`.git`, `.claude`, `.atlas`, `package.json`, `pyproject.toml`,
 `$HOME`, outside `/tmp` and other scratch roots. `ATLAS_GATES=always|off`
 overrides the detection (`scripts/atlas_scope.py`). In a session not flagged as an orchestration run only (m) applies; a flagged run
 gets every condition. The docs checks (c, d, e, f, h) need `docs/` and apply
-only when the run shipped code. The gate stays silent while subagents, workflows or teammates are
-still running. `ATLAS_GATE=off` disables it.
+only when the run shipped code. While subagents, workflows or teammates are still running the gate
+checks only the reply itself: (n) blocks a reply without the status header and (r) blocks a `done`
+header. (n) blocks every such reply, up to the loop cap (`ATLAS_GATE_BLOCK_LOOP`, default 3).
+`ATLAS_GATE=off` disables it.
 
 Codex runs no Claude Code hooks, so `scripts/atlas_codex_contract.py --write`
 renders the same contract into a fenced block in the repo `AGENTS.md`, which
@@ -269,6 +271,9 @@ python3 "$ATLAS/scripts/atlas_mux.py" wait --team <team_id>
 # Kill the tmux session and archive the team record
 python3 "$ATLAS/scripts/atlas_mux.py" reap --team <team_id>
 ```
+
+Each of the three prints a few lines of text (team id, one line per member, the
+next command). Add `--json` for the full JSON object.
 
 - Each worker is its own headless process (`claude -p --agent atlas:<role>`,
   `omp -p`, or `codex exec`) in tmux session `atlas-<team_id>`, one pane per
@@ -422,7 +427,7 @@ fail-open when the CLI is absent).
 | Hook                            | Event                                                              | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `session_boot.py`               | SessionStart                                                       | Activates the runtime, reports missing companions, surfaces lessons, carries the todo board over, repairs an existing `docs/` tree                                                                                                                                                                                                                                                                                                           |
-| `atlas_doctor.py --hook`        | SessionStart                                                       | Warn-only health check: downgrade, forked marketplace, missing hooks or assets                                                                                                                                                                                                                                                                                                                                                               |
+| `atlas_doctor.py --hook`        | SessionStart                                                       | Warn-only health check: downgrade, forked marketplace, missing hooks or assets, misplaced `.atlas` paths (report only; `--fix` moves them)                                                                                                                                                                                                                                                                                                                                                               |
 | `prompt_optimizer.py`           | UserPromptSubmit                                                   | Optional prompt rewrite; arms orchestration for engineering prompts (see [Decision models](#decision-models))                                                                                                                                                                                                                                                                                                                                |
 | `event_dispatch.py`             | PreToolUse, PostToolUse                                            | One process per tool event that runs the hooks below in-process                                                                                                                                                                                                                                                                                                                                                                              |
 | `recall_gate.py`                | PreToolUse                                                         | With claude-mem enabled, denies tool calls until one real claude-mem recall happens (`ATLAS_MANDATES=off`)                                                                                                                                                                                                                                                                                                                                   |

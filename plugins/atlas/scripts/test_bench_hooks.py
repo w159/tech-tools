@@ -57,6 +57,39 @@ class HelperTests(unittest.TestCase):
         self.assertTrue(bh.matches("Edit|Write", "Edit"))
         self.assertTrue(bh.matches("Edit|Write", "Write"))
 
+    def test_model_bytes_counts_only_what_the_model_receives(self):
+        self.assertEqual(bh.model_bytes(""), 0)
+        self.assertEqual(bh.model_bytes("plain é"), len("plain é".encode()))
+        self.assertEqual(bh.model_bytes(json.dumps({"decision": "block", "reason": "abcd"})), 4)
+        # systemMessage is user-facing; additionalContext and the deny reason are model-facing
+        doc = {"systemMessage": "x" * 50, "hookSpecificOutput": {"additionalContext": "ab", "permissionDecisionReason": "cde"}}
+        self.assertEqual(bh.model_bytes(json.dumps(doc)), 5)
+
+    def test_model_bytes_counts_only_the_growth_of_a_rewritten_prompt(self):
+        doc = {"hookSpecificOutput": {"updatedInput": {"prompt": "x" * 30}}}
+        self.assertEqual(bh.model_bytes(json.dumps(doc), prompt_len=10), 20)
+        self.assertEqual(bh.model_bytes(json.dumps(doc), prompt_len=99), 0)
+
+    def test_byte_payloads_cover_dispatch_and_repeat_stop(self):
+        labels = [lab for lab, *_ in bh.byte_payloads("/w")]
+        for needed in ("dispatch explorer", "dispatch implementer", "Stop headerless #1", "Stop headerless #2"):
+            self.assertIn(needed, labels)
+        self.assertIn("dispatch explorer #2", labels)
+
+    def test_byte_payload_sessions_are_unique_per_tag(self):
+        sids = lambda tag: {pl["session_id"] for _, _, _, pl in bh.byte_payloads("/w", tag) if "Agent" == pl.get("tool_name")}
+        self.assertFalse(sids("a") & sids("b"))
+
+    def test_dispatch_parts_splits_brief_board_and_advisory(self):
+        prompt = "GOAL: x."
+        grown = prompt + "\n\nCHANNEL: c (you are a).\nPost: x\nBOARD ITEM: t1"
+        out = json.dumps({"hookSpecificOutput": {"updatedInput": {"prompt": grown}, "additionalContext": "note"}})
+        brief, board, advisory = bh.dispatch_parts(out, prompt)
+        self.assertEqual(brief, len("CHANNEL: c (you are a).\nPost: x".encode()))
+        self.assertEqual(board, len("\nBOARD ITEM: t1".encode()))
+        self.assertEqual(advisory, 4)
+        self.assertEqual(bh.dispatch_parts("not json", prompt), (0, 0, 0))
+
     def test_matches_requires_full_match_and_a_tool(self):
         self.assertFalse(bh.matches("Edit", "EditNotebook"))
         self.assertFalse(bh.matches("Edit", "MultiEdit"))
@@ -175,6 +208,34 @@ class MainTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 bh.main()
         self.assertEqual(op.call_args[0][0], str(src / "hooks" / "hooks.json"))
+
+
+class BytesModeIsDeterministicTests(unittest.TestCase):
+    """Real hook processes, no mocks: two runs in a row print identical bytes, so the burst
+    advisory and concurrent deny cannot leak from one run (or scenario) into the next."""
+
+    def _run(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            bh.main_bytes(str(Path(bh.__file__).resolve().parent.parent))
+        return buf.getvalue()
+
+    def test_two_runs_print_the_same_table_and_the_advisory_only_on_the_second_dispatch(self):
+        a, b = self._run(), self._run()
+        self.assertEqual(a, b)
+        parts = {}
+        label = None
+        for line in a.splitlines():
+            if line.startswith("dispatch"):
+                label = line[:26].strip()
+            elif "of which" in line and label:
+                brief, board, advisory = line.split()[-3:]
+                parts[label] = (int(brief), int(board), int(advisory))
+        self.assertGreater(parts["dispatch explorer"][0], 0)  # the brief is always appended
+        self.assertEqual(parts["dispatch explorer"][2], 0)
+        self.assertEqual(parts["dispatch implementer"][2], 0)
+        self.assertGreater(parts["dispatch explorer #2"][2], 0)
+        self.assertLess(parts["dispatch explorer"][0], parts["dispatch implementer"][0] / 2)
 
 
 if __name__ == "__main__":

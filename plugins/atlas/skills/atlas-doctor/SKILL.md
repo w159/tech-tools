@@ -188,6 +188,19 @@ extraction, HOLD / DRIFTED / GONE verification, Apply / Skip / Modify decision).
 the product code a lesson points at to make a citation true; a contradiction is its own
 finding for Phase 3.
 
+## Layout: report at session start, move only on --fix
+
+The SessionStart hook (`--hook`) reports misplaced `.atlas` paths (strays below
+the project root, nested `.atlas`, container `.atlas`, project files in
+`~/.atlas/.run`) as one line naming up to 5 paths, and never moves, renames or
+deletes a file. It skips HOME and other non-project roots entirely. Only an
+explicit `atlas_doctor.py --fix` archives them, printing each move as
+`FIX: layout moved: <source> -> <destination>`. The report lists project paths
+first and writes the home directory as `~/`. `--fix` also refuses a non-project
+root (`FIX: layout repair skipped: <root> is a home, Downloads or temp folder,
+not a project; run it from inside a project`) and skips a move whose archive
+destination is inside its own source.
+
 ## Display checks
 
 `atlas_doctor.py` also answers "why do I not see the TODO tree, Subagents block,

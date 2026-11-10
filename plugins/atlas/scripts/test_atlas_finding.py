@@ -56,6 +56,17 @@ class AtlasFindingCli(unittest.TestCase):
         self.assertEqual(items[0]["status"], "verified")
         self.assertIn("verified_at", items[0])
 
+    def test_confirms_in_one_short_line_and_json_prints_the_entry(self):
+        """The caller passed every field: the default names id, status and path and does not echo the record."""
+        args = ["--id", "S1", "--status", "verified", "--title", "budget sums income", "--evidence", "a.py:1"]
+        r = _run(args, self.root)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertRegex(r.stdout, r"\Awrote S1 \[verified\] -> \S*findings\.json\n\Z")
+        self.assertNotIn("budget sums income", r.stdout)
+        full = _run(args + ["--json"], self.root).stdout
+        entry = json.loads(full.split(" -> ", 1)[1])
+        self.assertEqual(("S1", "verified", ["a.py:1"]), (entry["id"], entry["status"], entry["evidence"]))
+
     def test_writer_defaults_to_the_caller_not_the_verifier(self):
         """A row the lead stamps from its own test run must not read as an
         independent atlas:verifier verdict (live run 2026-11-10)."""

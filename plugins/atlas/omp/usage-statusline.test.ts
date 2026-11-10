@@ -207,7 +207,7 @@ test("a fresh mount renders: project and model first, spacer rows around, meters
 	expect(rows[1]).toBe("​");
 	expect(rows.at(-1)).toBe("​");
 	expect(strip(rows[2])).toBe("📚  ctx  51% ▅▅▅▅▅▅▅▁▁▁▁▁▁▁  513.3k / 1M       │  💰  session      $0.50     1.7k tok  cache 33%");
-	expect(strip(rows[3])).toBe("⏳  5h   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                     │  🔌  anthropic    $0.50     1.7k tok  claude-opus-5-5");
+	expect(strip(rows[3])).toBe("⏳  5h   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                    │  🔌  anthropic    $0.50     1.7k tok  claude-opus-5-5"); // U+23F3 is 2 cells wide, so the rule lines up with the 7d row below
 	expect(strip(rows[4])).toBe("📅  7d   --% ▁▁▁▁▁▁▁▁▁▁▁▁▁▁                    │"); // the rule runs the full height, the right cell is just empty
 	expect(m.widgets[0][2]).toEqual({ placement: "belowEditor" });
 	expect(m.statuses[0]).toEqual(["zzz-usage-statusline-spacer", "​"]);

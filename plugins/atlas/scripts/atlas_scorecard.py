@@ -18,7 +18,6 @@ metric's direction and threshold and exits 1 on any regression.
 import argparse
 import importlib
 import json
-import os
 import platform
 import signal
 import subprocess

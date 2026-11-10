@@ -24,7 +24,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run \
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run --plan plan.json --wait 580
 ```
 
-Set the Bash timeout to 600000. `--wait` prints the final JSON summary; if it
+Set the Bash timeout to 600000. `--wait` prints the final JSON summary on one line; if it
 prints only the start line, run `atlas_crew.py wait --run <id>` until it does.
 Do not read worker logs while it runs. If `check_exit` is 0 the build is done;
 otherwise read `check_tail` and route what remains.

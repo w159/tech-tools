@@ -189,6 +189,59 @@ class BreakerTest(_GuardTestCase):
         self.assertIn("circuit breaker", err.getvalue())
         self.assertEqual(out.getvalue(), "")
 
+    def _stops(self, session_id, schedule):
+        """Fire the capture hook and the gate for each (seconds, active) Stop
+        in `schedule`; returns the gate's should_run verdict per FRESH Stop."""
+        clock = [0.0]
+        gate_runs = []
+        with (
+            mock.patch.object(guard, "_now", lambda: clock[0]),
+            mock.patch("sys.stderr", io.StringIO()),
+        ):
+            for seconds, active in schedule:
+                clock[0] = seconds
+                payload = {"session_id": session_id, "stop_hook_active": active}
+                guard.should_run(payload, "ingest_session", kind="capture")
+                ran = guard.should_run(payload, "completion_gate")
+                if not active:
+                    gate_runs.append(ran)
+        return gate_runs
+
+    def test_forced_continuation_of_a_blocked_stop_does_not_count(self):
+        """A blocked Stop is always answered by one forced continuation. Six
+        blocked turns in 120 s are six Stop cycles, not twelve: the gate stays
+        armed until the fresh-Stop threshold itself is reached."""
+        schedule = []
+        for turn in range(6):
+            schedule += [(turn * 20.0, False), (turn * 20.0 + 8, True)]
+        self.assertEqual(self._stops("cont-burst", schedule), [True] * 5 + [False])
+
+    def test_blocked_turns_under_the_fresh_stop_threshold_never_trip(self):
+        """Block plus continuation every 25 s: five fresh Stops per window."""
+        schedule = []
+        for turn in range(10):
+            schedule += [(turn * 25.0, False), (turn * 25.0 + 8, True)]
+        self.assertEqual(self._stops("cont-steady", schedule), [True] * 10)
+        self.assertNotIn("breaker_tripped", guard._load_state("cont-steady"))
+
+    def test_fresh_stops_still_trip_with_capture_hooks_wired(self):
+        schedule = [(i * 13.0, False) for i in range(6)]
+        self.assertEqual(self._stops("fresh-burst", schedule), [True] * 5 + [False])
+
+    def test_unbroken_continuation_chain_still_trips(self):
+        """The incident's shape: one Stop, then hook-forced continuations every
+        13 s with no fresh Stop between. Only the first continuation is free."""
+        schedule = [(0.0, False)] + [(i * 13.0, True) for i in range(1, 8)]
+        self._stops("cont-chain", schedule)
+        self.assertTrue(guard._load_state("cont-chain").get("breaker_tripped"))
+
+    def test_emit_hooks_on_a_continuation_leave_the_burst_count_alone(self):
+        payload = {"session_id": "emit-cont", "stop_hook_active": True}
+        with mock.patch.object(guard, "_now", side_effect=[0.0] * 4):
+            for hook in ("nudge", "completion_gate"):
+                self.assertFalse(guard.should_run(payload, hook))
+        self.assertEqual(guard._load_state("emit-cont"), {})
+
 
 class EmitDedupeTest(_GuardTestCase):
     def test_same_message_twice_same_session_emits_once(self):

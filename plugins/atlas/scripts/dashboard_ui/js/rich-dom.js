@@ -88,7 +88,7 @@ function matchChain(n, chain, i = chain.length - 1) {
   return false;
 }
 
-export class RNode {
+class RNode {
   constructor(nodeType, tagName) {
     this.nodeType = nodeType;
     this.tagName = tagName;
@@ -322,4 +322,3 @@ export function fire(node, type, props = {}) {
   return ev;
 }
 
-export const walk = (n, out = []) => { out.push(n); n.childNodes.forEach((c) => walk(c, out)); return out; };

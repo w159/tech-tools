@@ -16,10 +16,12 @@ The gate also stays silent whenever the Stop payload's `background_tasks`
 still lists an in-flight subagent, workflow, or teammate dispatch (see
 `_has_in_flight_dispatch`): a turn is not a completion claim while dispatched
 work is still running, so the gate does not fire once per wave-Stop. A
-long-running `shell` or `monitor` task does not suppress it.
+long-running `shell` or `monitor` task does not suppress it. Two conditions
+are about the reply itself and are checked even then: (n) and (r).
 
-Eighteen conditions, (a) through (r), must ALL hold before the gate passes (else
-block ONCE). (q), unmerged worker branches, is documented on
+Eighteen conditions, (a) through (r), must ALL hold before the gate passes. A
+failing one blocks the Stop: (o) and (p) once per session, every other one,
+(n) included, on each Stop up to the loop cap. (q), unmerged worker branches, is documented on
 `_unmerged_worker_branches`; the rest are listed here:
   (a) At least one file exists under `.atlas/evidence/` with an mtime at or
       after THIS RUN's start (via `_run_started_at`). Scoped like (f)/(g):
@@ -98,8 +100,13 @@ block ONCE). (q), unmerged worker branches, is documented on
       fills it from session_stop) must start, on its first non-empty line, with
       the header matching `headerFirstLinePattern` in
       contracts/operating-contract.json (`ATLAS | <glyph> <phase> | <state>`).
-      Kill switch ATLAS_GATE_HEADER=off. Fails open on missing/empty text and
-      on stop_hook_active.
+      Re-blocks every header-less Stop (subject to the loop cap below), not
+      just the first, and like (r) is checked BEFORE the in-flight silence.
+      A stop_hook_active continuation is never blocked; a main-thread one
+      whose first line matches the header resets a loop count that names (n)
+      alone, so the cap only counts header-less Stops nobody corrected and a
+      mixed count such as `a,n` still reaches it. Kill switch
+      ATLAS_GATE_HEADER=off. Fails open on missing/empty text.
   (o) Phased todo: when THIS RUN shipped non-docs code, this session's board
       items (every status, non-manual) must cover each phase in the contract's
       `requiredTodoPhasesWhenCodeShipped`. An item's phase is its `phase`
@@ -122,12 +129,12 @@ block ONCE). (q), unmerged worker branches, is documented on
       Kill switch ATLAS_GATE_DONE=off. Skips sidechains, stop_hook_active,
       and fails open on an unreadable contract or any error.
 
-(n), (o), and (p) ask the model to repair presentation, not to produce work, so
+(o) and (p) ask the model to repair presentation, not to produce work, so
 each blocks AT MOST ONCE per session: an O_EXCL marker `<cond>-<session>` under
 CONTRACT_GATE_MARKER_DIR (tmp dir `atlas-contract-gate`, overridable with
 ATLAS_CONTRACT_GATE_DIR) records the block, and a marked condition counts as
 satisfied. They are evaluated only for orchestrating sessions, never for a
-sidechain, and not while a dispatch is in flight. Conditions (a)-(m) re-block
+sidechain, and not while a dispatch is in flight. Conditions (a)-(n) re-block
 on every Stop until they hold. So a stuck run cannot wedge, the loop cap
 allows the Stop after BLOCK_LOOP_LIMIT identical consecutive blocks
 (default 3; tunable with ATLAS_GATE_BLOCK_LOOP, clamped to 1-7 -- the
@@ -1072,7 +1079,9 @@ def _reason(
     tagged: list[tuple[str, str]] = []
 
     def emit(letter: str, text: str) -> None:
-        if letter in delta:
+        if letter == "n" and letter in delta:
+            tagged.append((letter, _header_reason_part(_contract_doc(), short=True)))
+        elif letter in delta:
             tagged.append(
                 (letter, f"  ({letter}) still open: {_GISTS.get(letter, letter)}")
             )
@@ -1252,6 +1261,10 @@ def _reason(
             "[atlas] Definition-of-done gate re-check (full instructions were sent "
             "earlier this session):\n" + body
         )
+    if tagged and all(letter == "n" for letter, _ in tagged):
+        # A missing header is fixed by re-sending the reply; the done-gap guidance
+        # below is about unwritten records and does not apply.
+        return "[atlas] Definition-of-done gate:\n" + body
     return (
         "[atlas] Definition-of-done gate: the following condition(s) are not met:\n"
         + body
@@ -1406,15 +1419,16 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     # orchestrating, non-sidechain sessions only (this point is past the
     # unflagged early return), is skipped while a dispatch is in flight
     # (past the in-flight return above), honors its own kill switch, fails
-    # open on any error, and blocks AT MOST ONCE per session: a letter whose
-    # marker already exists counts as satisfied, and the marker is created
-    # when the block that names it is emitted (below).
+    # open on any error. (o) and (p) block AT MOST ONCE per session: a letter
+    # whose marker already exists counts as satisfied, and the marker is
+    # created when the block that names it is emitted (below). (n) re-blocks
+    # every header-less Stop, under the same loop cap as (a)-(m); main() also
+    # checks it on its own at the in-flight return (`_reply_lacks_header`).
     sidechain = _payload_is_sidechain(data)
     contract = None if sidechain else _contract_doc()
     header_failing = (
         not sidechain
         and _status_header_would_block(data, contract)
-        and not _contract_block_used("n", session, root)
     )
     phases_missing = (
         []
@@ -1521,6 +1535,15 @@ def main() -> int:
         # returns False while stop_hook_active is set (the standard anti-loop
         # guard), so a failing gate blocks once per turn and re-blocks on the
         # next fresh Stop until the conditions are met or the loop cap is hit.
+        # The reply a (n) block asked for arrives as that silenced
+        # continuation, so it never reaches the reset on the passing path
+        # below. Reset here, or the (n) count accrues across unrelated turns
+        # and the 4th header-less turn of a session is allowed unsaid. Only a
+        # continuation that PROVES the correction resets: header-less, empty,
+        # non-string or sidechain text leaves the count alone, or a chain
+        # nobody corrected would never reach the cap.
+        if data.get("stop_hook_active") and _reply_has_header(data):
+            _block_loop_reset(str(data.get("session_id") or ""), "n")
         if not atlas_hook_guard.should_run(data, "completion_gate"):
             return 0
         cwd = Path(data.get("cwd") or os.getcwd())
@@ -1579,7 +1602,30 @@ def main() -> int:
                 print(json.dumps({"decision": "block", "reason": done_reason}))
                 return 0
         if _has_in_flight_dispatch(data):
-            return 0  # dispatched subagent/workflow/teammate still running -- not a completion claim yet
+            # Dispatched subagent/workflow/teammate still running: not a
+            # completion claim yet, so every condition stays silent except
+            # (n). The header is a property of the reply text, so like (r) it
+            # is checked here, under the same loop cap and block wording.
+            if not _reply_lacks_header(data):
+                if _reply_has_header(data):  # a fail-open allow proves nothing
+                    _block_loop_reset(session, "n")
+                return 0
+            count, loop_exhausted = _block_loop_state(session, ["n"])
+            if loop_exhausted:
+                _note_loop_allowed(count, ["n"])
+            else:
+                _record_gate_block(session, ["n"])
+                _record_analytics("gate.n.block")
+                repeat = _repeat_letters(["n"], session, root)
+                _mark_contract_block("seen-n", session, root)
+                header_reason = _reason(
+                    False, False, False, missing_header=True, repeat=repeat
+                )
+                notice = _block_loop_notice(count, ["n"])
+                if notice:
+                    header_reason += "\n" + notice
+                print(json.dumps({"decision": "block", "reason": header_reason}))
+            return 0
         # (a)/(b)/(f)/(g) share one signal: did THIS RUN's own activity ship
         # non-docs code? Scoped to run_written_paths (atlas_db events +
         # tool_calls), not the whole working tree -- a dirty tree left by an
@@ -1603,26 +1649,19 @@ def main() -> int:
             return 0
         count, loop_exhausted = _block_loop_state(session, failed)
         if loop_exhausted:
-            # F4: the allowed Stop is stated, not silent. The model-facing
-            # statement was the FINAL block notice emitted below; this line
-            # keeps the bypass observable in hook logs.
-            with contextlib.suppress(Exception):
-                sys.stderr.write(
-                    "[atlas] completion-gate: allowed the Stop after "
-                    f"{count} identical blocks; still open: "
-                    f"{_gate_block_snippet(failed)}\n"
-                )
+            _note_loop_allowed(count, failed)
             return 0
         _record_gate_block(data.get("session_id", ""), failed)
         for letter in failed:
             _record_analytics(f"gate.{letter.lower()}.block")
         # F8: mark every failing letter. The first Stop per letter ships the
         # full clause (computed below, BEFORE these markers exist); later
-        # Stops ship a one-line delta. (n)/(o)/(p) keep their original
-        # one-shot semantics -- a marked letter never blocks again.
+        # Stops ship a one-line delta. (o)/(p) keep their original one-shot
+        # semantics -- a marked letter never blocks again. (n) re-blocks, with
+        # the template-only short clause after its first full one.
         repeat = _repeat_letters(failed, session, root)
         for letter in failed:
-            if letter in ("n", "o", "p"):
+            if letter in ("o", "p"):
                 _mark_contract_block(
                     letter, session
                 )  # one-shot: never block on this letter again
@@ -1780,17 +1819,38 @@ def _block_loop_limit() -> int:
         return BLOCK_LOOP_LIMIT
 
 
-def _block_loop_reset(session_id: str) -> None:
+def _block_loop_reset(session_id: str, letter: str = "") -> None:
     """Delete the `gate-loop-<session>` marker after a passing Stop so the cap
-    counts consecutive blocks, not blocks across the whole session. Never raises."""
+    counts consecutive blocks, not blocks across the whole session. With
+    `letter`, only when the counted block named that letter and no other: a
+    Stop that satisfies one condition without the others being evaluated must
+    not restart their count. A signature such as `a,n` keeps accruing when
+    only the header is fixed, or (a) would never reach the cap. Never raises."""
     try:
         path = os.path.join(
             atlas_hook_guard._state_dir(),
             "gate-loop-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session_id),
         )
+        if letter:
+            with open(path, encoding="utf-8") as fh:
+                counted = fh.read().strip().rpartition(" ")[0].split(",")
+            if counted != [letter]:
+                return
         os.remove(path)
     except Exception:
         pass
+
+
+def _note_loop_allowed(count: int, failed: list) -> None:
+    """F4: the Stop the loop cap allows is stated, not silent. The model-facing
+    statement was the FINAL block notice; this stderr line keeps the bypass
+    observable in hook logs. Never raises."""
+    with contextlib.suppress(Exception):
+        sys.stderr.write(
+            "[atlas] completion-gate: allowed the Stop after "
+            f"{count} identical blocks; still open: "
+            f"{_gate_block_snippet(failed)}\n"
+        )
 
 
 def _block_loop_state(session_id: str, failed: list) -> tuple[int, bool]:
@@ -2200,11 +2260,13 @@ def _unpaired_implementer_dispatches(session_id: str) -> int:
 # (n) status header, (o) phased todo, (p) colony channel -- the contract-
 # visibility conditions. contracts/operating-contract.json is the single source
 # for the phase ids/glyphs, the header pattern, the required phases and the
-# kill-switch names. Each condition is one-shot per session (marker file,
-# O_EXCL), switchable off, and fails open on any error or missing input.
+# kill-switch names. (o) and (p) are one-shot per session (marker file,
+# O_EXCL); (n) re-blocks every header-less Stop up to the loop cap. Each is
+# switchable off and fails open on any error or missing input.
 # --------------------------------------------------------------------------
 
-# Per-session "already blocked once" markers. Tests point this at a temp dir in
+# Per-session markers: "already blocked once" for (o)/(p), and the "seen-<letter>"
+# ones that shorten a repeat block. Tests point this at a temp dir in
 # process (like recall_gate.GATE_MARKER_DIR) or via ATLAS_CONTRACT_GATE_DIR for
 # the subprocess-level tests.
 CONTRACT_GATE_MARKER_DIR = os.environ.get("ATLAS_CONTRACT_GATE_DIR") or os.path.join(
@@ -2244,8 +2306,9 @@ def _switch_off(name: str) -> bool:
 def _contract_marker(cond: str, session_id: str, root: Path | None = None) -> str:
     # `root` scopes the F8 delta-namespace markers ("seen-<letter>") to one
     # workspace: sessions are per-root, and test harnesses reuse session ids
-    # across temp roots. The (n)/(o)/(p) one-shot letters keep the original
+    # across temp roots. The (o)/(p) one-shot letters keep the original
     # session-only keying -- their cross-process semantics must not change.
+    # (n) re-blocks and has no one-shot marker, only its "seen-n" delta one.
     digest = ""
     if cond.startswith("seen-") and root is not None:
         digest = "-" + hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:8]
@@ -2289,12 +2352,13 @@ def _mark_contract_block(cond: str, session_id: str, root: Path | None = None) -
 
 def _repeat_letters(failed: list, session: str, root: Path | None = None) -> list:
     """F8: failing letters whose FULL clause already shipped this session.
-    (n)/(o)/(p) are excluded: their own one-shot markers suppress any
-    re-block, so they can never be repeats."""
+    (o)/(p) are excluded: their own one-shot markers suppress any
+    re-block, so they can never be repeats. (n) repeats as a short form
+    that still carries the header template."""
     return [
         letter
         for letter in failed
-        if letter not in ("n", "o", "p")
+        if letter not in ("o", "p")
         and _contract_block_used("seen-" + letter, session, root)
     ]
 
@@ -2336,6 +2400,32 @@ def _status_header_would_block(data: dict, contract: dict | None) -> bool:
         if not first:
             return False
         return re.match(contract["headerFirstLinePattern"], first.strip()) is None
+    except Exception:
+        return False
+
+
+def _reply_lacks_header(data: dict) -> bool:
+    """(n) on the reply text alone, for the two places main() decides before
+    evaluate(): the in-flight return and the stop_hook_active continuation.
+    True when a non-sidechain reply would fail the header check on a fresh
+    Stop. Fails open (False) exactly as `_status_header_would_block` does."""
+    return not _payload_is_sidechain(data) and _status_header_would_block(
+        dict(data, stop_hook_active=False), _contract_doc()
+    )
+
+
+def _reply_has_header(data: dict) -> bool:
+    """(n) proven satisfied: a main-thread reply whose first non-empty line
+    matches the contract header pattern. The only evidence that may reset the
+    (n) loop count. Everything `_reply_lacks_header` fails open on (missing,
+    empty or non-string text, a sidechain, any error) is False here too: an
+    allowed Stop is not a corrected one."""
+    try:
+        text = data.get("last_assistant_message")
+        if _payload_is_sidechain(data) or not isinstance(text, str):
+            return False
+        first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
+        return re.match(_contract_doc()["headerFirstLinePattern"], first) is not None
     except Exception:
         return False
 
@@ -2394,23 +2484,22 @@ def _done_claim_reason(data: dict, root: Path, session: str) -> str:
         return ""
 
 
-def _header_reason_part(contract: dict | None) -> str:
+def _header_reason_part(contract: dict | None, short: bool = False) -> str:
     # Contract is the single source; literal only as the unreadable-contract fallback.
     template = (
         (contract or {}).get("headerTemplate") or "ATLAS | <glyph> <phase> | <state>"
     ).replace("<state>", "<one-line state>")
+    if short:  # repeat block: rule name plus the template; SessionStart has the rest
+        return "  (n) still open: first line of your final reply must be `%s`. Re-send, then retry Stop." % template
     phases = ", ".join(
-        f"{p.get('id')} {p.get('glyph')}"
+        str(p.get("id"))
         for p in ((contract or {}).get("phases") or [])
         if isinstance(p, dict)
     )
     return (
-        "  (n) Status header: your final reply does not start with the atlas status "
-        "header, so the user's terminal shows no phase or state line. The first "
-        "non-empty line must be `%s`. "
-        "Phases and glyphs: %s. -> Re-send your final reply with that header as its "
-        "first line and nothing else changed, then retry Stop. (This check blocks "
-        "once per session.)"
+        "  (n) Status header missing: the first non-empty line of your final reply "
+        "must be `%s`. Phases: %s. -> Re-send the reply with that line first and "
+        "nothing else changed, then retry Stop."
         % (template, phases or "see contracts/operating-contract.json")
     )
 

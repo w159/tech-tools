@@ -8,7 +8,7 @@ import shutil
 
 from . import core
 from .core import metric, run, skipped, timing
-from .probe_hooks import CMD, failing_ids, suite_metrics
+from .probe_hooks import CMD, failing_ids
 
 BRIDGE_TS = r"""
 import { registerHookBridge, runHook } from "%(bridge)s";

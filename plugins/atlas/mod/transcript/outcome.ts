@@ -44,11 +44,14 @@ export function notifiedMs(texts: readonly string[], agentId: string): number | 
  return undefined
 }
 
-/** `done · STATUS: DONE · 29s` (failed / killed keep their word). */
+/** `finished · STATUS: DONE · 29s` (failed / killed keep their word). A returned worker is finished, not verified. */
 export function outcomeText(o: Outcome): string {
- const word = o.status === 'completed' || o.status === 'idle' ? 'done' : o.status
- return [word, o.line, o.durationMs !== undefined ? formatDuration(o.durationMs) : ''].filter(Boolean).join(' · ')
+ return [endedWord(o), outcomeDetail(o)].filter(Boolean).join(' · ')
 }
+/** The lifecycle word, owned here: the notification row leads with it, the card uses it as its row label. */
+const endedWord = (o: Outcome): string => (o.status === 'completed' || o.status === 'idle' ? 'finished' : o.status)
+/** `STATUS: DONE · 29s`: the report line and duration, without the lifecycle word. */
+const outcomeDetail = (o: Outcome): string => [o.line, o.durationMs !== undefined ? formatDuration(o.durationMs) : ''].filter(Boolean).join(' · ')
 
 const rows = (r: unknown): Msg[] => (Array.isArray(r) ? (r as Msg[]) : [])
 
@@ -88,7 +91,8 @@ export async function cardExtra($: EngineInterface, output: unknown, agents: rea
  const who = id ? await whoIs($, id, agents) : undefined
  if (!who) return {}
  if (!ENDED.has(who.status)) return { mark: spin(await read($, spinnerTick), 'implement') }
- return { outcome: outcomeText(await workerOutcome($, who, memo)) }
+ const o = await workerOutcome($, who, memo)
+ return { ended: endedWord(o), outcome: outcomeDetail(o) }
 }
 
 /** Notification row for a background atlas worker; null leaves any other task's row to the engine. */

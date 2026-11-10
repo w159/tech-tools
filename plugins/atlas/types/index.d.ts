@@ -16,6 +16,7 @@ export interface Contract {
   phases: Phase[];
   todoPhases: PhaseId[];
   headerFirstLinePattern: string;
+  headerTemplate?: string; // human form of the status header (operating-contract headerTemplate)
   itemPhasePrefix: string; // e.g. "[<phase>] "
 }
 

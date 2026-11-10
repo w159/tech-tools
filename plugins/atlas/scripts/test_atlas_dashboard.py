@@ -756,7 +756,6 @@ class WorkBoardApiTest(unittest.TestCase):
 
     def _server(self):
         import threading
-        import urllib.request
         from http.server import ThreadingHTTPServer
 
         httpd = ThreadingHTTPServer((self.mod.LOOPBACK, 0), self.mod.Handler)
@@ -877,7 +876,6 @@ class WorkBoardApiTest(unittest.TestCase):
         self.assertTrue(c["content"].lstrip().startswith("---"))
 
     def test_agent_save_writes_override_and_reset_removes_it(self):
-        import atlas_todo
 
         base = self._server()
         body = "---\nname: verifier\ndescription: test override\n---\n\nBody.\n"

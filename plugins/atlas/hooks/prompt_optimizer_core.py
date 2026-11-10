@@ -313,10 +313,8 @@ def run_optimizer(prompt: str) -> str | None:
 # multiple steps) is present. mark_orchestrating stays the single writer of the flag.
 
 ENGINE_NUDGE = (
-    "[atlas-orchestrate] This prompt reads as substantive, multi-step engineering work, so "
-    "this session has been armed as an atlas orchestration run. It qualifies for the "
-    "atlas-orchestrate loop: invoke the atlas:atlas-orchestrate skill and dispatch wave 1 to "
-    "subagents (explorer / implementer / verifier) instead of doing the work inline."
+    "[atlas-orchestrate] Session armed as an orchestration run: invoke the "
+    "atlas:atlas-orchestrate skill and dispatch wave 1 to subagents instead of working inline."
 )
 
 # Bare acknowledgements / greetings - always trivial regardless of other signals.

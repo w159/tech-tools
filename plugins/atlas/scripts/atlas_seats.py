@@ -180,7 +180,7 @@ def _delegate(name):
 for _n in _NAMES:
     globals()[_n] = _delegate(_n)
 
-_status = status  # the delegating function bound above
+_status = status  # noqa: F821 -- bound by the globals() loop above (status is in _NAMES)
 
 
 def _forced() -> bool:

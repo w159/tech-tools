@@ -3,7 +3,6 @@ synthetic DB. Measures every /api/v2 GET route, 8-client concurrency, auth guard
 tick cost and herd endpoint latency. Only the dashboard we start is ever stopped."""
 
 import http.client
-import json
 import re
 import subprocess
 import threading

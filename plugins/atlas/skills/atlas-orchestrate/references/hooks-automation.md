@@ -125,10 +125,12 @@ Encodes the skill's hardest rule -- *a change is not done until observed behavio
 an independent agent verified it* -- as a `Stop` hook. Prose alone doesn't enforce it (the
 orchestrator rationalizes "I'll mark it unverified and move on"); this is the machine backstop.
 
-- **Scoped.** Engages only when a `docs/` directory is found at or above the working dir (walked
-  up to 6 levels). Conditions (a)-(l) and (n)-(p) additionally require an orchestration flag in
-  the atlas DB (set by an orchestration skill or `atlas:*` dispatch); condition (m)
-  deliberately checks unarmed runs too. Without docs/ every condition is silent.
+- **Scoped.** Engages when a `docs/` directory is found at or above the working dir (walked
+  up to 6 levels), or when the working dir is inside a project (`atlas_scope.gates_armed`: a git,
+  `.claude`, `.atlas` or package project outside scratch roots). Every condition except (m)
+  additionally requires an orchestration flag in the atlas DB (set by an orchestration skill or
+  `atlas:*` dispatch); condition (m) deliberately checks unarmed runs too. Without docs/ the
+  docs conditions (c)-(f) and (h) are skipped; outside a project every condition is silent.
 - **What satisfies it.** All eighteen conditions (a)-(r) must hold:
   - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured), at any depth, so nested dated folders such as `.atlas/evidence/<date>-<slug>/` count. Only checked when this run wrote non-docs code; files older than the run start do not count.
   - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
@@ -188,8 +190,11 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     `done` (condition (r) below).
   - (n) Status header: for an orchestrating, non-sidechain session the final reply must start, on
     its first non-empty line, with the header matching `headerFirstLinePattern` in
-    `contracts/operating-contract.json` (`ATLAS | <glyph> <phase> | <state>`). Kill switch
-    `ATLAS_GATE_HEADER=off`.
+    `contracts/operating-contract.json` (`ATLAS | <glyph> <phase> | <state>`). Re-blocks every header-less Stop
+    (subject to the loop cap), also while a dispatch is in flight; the glyph is not checked. The first
+    block carries the full text, a repeat in the same session is one line. A main-thread forced
+    continuation whose first non-empty line matches the header resets a loop count that names (n)
+    alone; a mixed count such as `a,n` keeps accruing. Kill switch `ATLAS_GATE_HEADER=off`.
   - (o) Phased todo: when this run shipped non-docs code, the session's board items must cover each
     phase in `requiredTodoPhasesWhenCodeShipped` (`implement`, `verify`). Kill switch
     `ATLAS_GATE_PHASES=off`.
@@ -200,15 +205,17 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     ids of the same session counts. Kill switch `ATLAS_GATE_COLONY=off`.
   - (q) Unmerged worker branches: `worker/*` branches that still hold commits not merged into the base, or a dirty worker worktree (`atlas_wt.py status`), must be verified and merged (`atlas_wt.py merge <agent>`) before the run is done. Not limited to code-shipping runs; sidechains are exempt. Kill switch `ATLAS_WT_GATE=off`. Fails open on a read error.
   - (r) Done claim: when the final reply's header phase is `done` and a dispatched subagent/workflow/teammate is still running, or any todo surface (TodoWrite, board, LEDGER) has open items, block, whether or not code shipped. Runs before the in-flight silence; any other header phase keeps that silence. Kill switch `ATLAS_GATE_DONE=off`. Sidechains and `stop_hook_active` are skipped; fails open.
-  (n)-(p) ask for a presentation repair, so each blocks at most once per session. All three fail open.
+  (o) and (p) ask for a presentation repair, so each blocks at most once per session; (n) re-blocks every header-less Stop. All three fail open.
   The block message names exactly which condition(s) are missing and, for (p), the one fix command.
-- **Re-blocks, never a wedge.** Blocks every Stop until (a)-(m) and (q) hold, except: a Stop that is already a
+- **Re-blocks, never a wedge.** Blocks every Stop until (a)-(n), (q) and (r) hold, except: a Stop that is already a
   forced continuation (`stop_hook_active`) is allowed, and after >5 Stop events in 120 s the circuit
-  breaker silences the gate for the session. On omp the bridge additionally allows at most 3
+  breaker silences the gate for the session (the one forced continuation that answers a fresh Stop
+  is not counted; a chain of continuations is). On omp the bridge additionally allows at most 3
   consecutive blocks (`MAX_STOP_BLOCKS` in `omp/stop-bridge.ts`). Fail-open on any error. Disable
   entirely with `ATLAS_GATE=off`. Block-loop limit: `BLOCK_LOOP_LIMIT=3` (tunable with
-  `ATLAS_GATE_BLOCK_LOOP`, clamped to 1-7); after N identical consecutive blocks the next Stop
-  is allowed and `gate_block_loop` friction is recorded.
+  `ATLAS_GATE_BLOCK_LOOP`, clamped to 1-7); after N identical consecutive blocks every later
+  identical Stop is allowed, until a Stop passes or the failing letters change, and
+  `gate_block_loop` friction is recorded.
 - **On by default when docs/ exists** (via the plugin's hooks.json; a plain `install_hooks.py --apply`
   does not install it, add `--select completion-gate`). Disable with `ATLAS_GATE=off`. (Note: it coexists with codebase-brain's
   `validate_gate.py` Stop hook -- that one is message-text based, this one is artifact based;

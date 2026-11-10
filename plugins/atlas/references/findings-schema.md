@@ -84,4 +84,4 @@ python3 atlas_finding.py --id S3 --status verified \
     --by atlas:verifier
 ```
 
-The command exits 0 on success and prints the written entry. It exits 1 on a bad status, a missing project root, or an unwritable path, because a silent failure here would let a run pass the gate without a recorded verdict.
+The command exits 0 on success and prints one line, `wrote <id> [<status>] -> <path>`. `--json` prints the written entry instead (`wrote <path> -> <entry JSON>`). It exits 1 on a bad status, a missing project root, or an unwritable path, because a silent failure here would let a run pass the gate without a recorded verdict.

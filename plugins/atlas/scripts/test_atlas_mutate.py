@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import _test_isolation  # noqa: F401  (must be first: redirects ATLAS_HOME)
 
-import ast
 import json
 import types
 import shutil

@@ -276,6 +276,12 @@ test("loadBridgedHooks stays turn-only; the session-end family loads through its
  */
 async function withSandbox<T>(body: (root: string) => Promise<T>): Promise<T> {
 	let scratch = join(import.meta.dir, "..", "..", "..", ".scratch");
+	// A checkout that is an atlas worktree (<repo>/.atlas/wt/<name>) has a `.atlas` path component, and atlas_paths
+	// cuts every path at the first one: the fixture would resolve to the enclosing <repo>, so the one-shot spec-advisory
+	// marker lands in that real repo and survives, and src/a.py reads as runtime state instead of target code. Use the
+	// enclosing checkout's own .scratch for that layout.
+	const atlasAt = scratch.indexOf("/.atlas/");
+	if (atlasAt >= 0) scratch = join(scratch.slice(0, atlasAt), ".scratch");
 	// A checkout that itself lives under a system temp root (CI staging in /tmp) would put the fixture back inside the
 	// exempt scratch space; fall back to a dot-dir under the real home for that layout only (read before HOME is pinned).
 	if ([tmpdir(), "/tmp", "/private/tmp"].some(r => scratch.startsWith(`${r}/`))) scratch = join(homedir(), ".atlas-test-scratch");

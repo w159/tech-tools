@@ -10,7 +10,6 @@ import os
 import sys
 import tempfile
 import unittest
-from contextlib import nullcontext
 from pathlib import Path
 from unittest import mock
 

@@ -326,7 +326,7 @@ class SelffixHardeningTest(SelffixTest):
         self.assertEqual(self.state(fid), "ready")
 
     def test_verify_env_is_scrubbed_of_secrets(self):
-        fid = self._ready_candidate("src/a.py")
+        self._ready_candidate("src/a.py")
         seen = {}
 
         def run(cmd, **kw):

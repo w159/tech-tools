@@ -964,7 +964,7 @@ class RewriteReferencesEdges(_Tree):
             (str(self.root), ["node_modules", "src", ".git"], ["lint_docs_names.py", "a.md", "test_lint_docs_names.py", "b.py", "img.png"]),
             (str(self.root / "src"), [], ["c.ts"]),
         ]
-        with mock.patch.object(lint_docs_names.os, "walk", return_value=iter(walk)) as w:
+        with mock.patch.object(lint_docs_names.os, "walk", return_value=iter(walk)):
             names = [p.name for p in lint_docs_names._text_files(self.root)]
         self.assertEqual(names, ["a.md", "b.py", "c.ts"])
         self.assertEqual(walk[0][1], ["src"])

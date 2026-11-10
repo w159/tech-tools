@@ -44,7 +44,8 @@ except ImportError:  # Windows has no fcntl
 # fires more than STOP_BURST_LIMIT times within STOP_BURST_WINDOW seconds,
 # every atlas Stop hook goes silent for the rest of the session. The real
 # incident cycled every 13 seconds, so this must trip within the first
-# minute or two of that cadence.
+# minute or two of that cadence. The single forced continuation that answers
+# a fresh Stop is not a burst event of its own (`_answers_fresh_stop`).
 STOP_BURST_LIMIT = 5
 STOP_BURST_WINDOW = 120  # seconds
 
@@ -200,6 +201,27 @@ def _record_stop_event(state, now):
         events.append(now)
     cutoff = now - STOP_BURST_WINDOW
     state["stop_events"] = [t for t in events if t >= cutoff]
+
+
+def _answers_fresh_stop(state, payload, now):
+    """True for the one forced continuation (stop_hook_active) that answers a
+    fresh Stop. A blocked Stop always produces exactly that continuation, and
+    no atlas emit hook acts on it, so it belongs to the Stop cycle already
+    recorded: counting it made every blocked turn cost two burst events and
+    three blocked turns disarm the gate. A continuation that follows another
+    continuation with no fresh Stop between is a chain (the incident's shape)
+    and returns False, so it is counted like a fresh Stop.
+
+    Tracks the chain in state["continuation_at"] (time of the first
+    continuation since the last fresh Stop); sibling hooks of that same
+    continuation arrive within STOP_EVENT_DEDUP_SECONDS of it. Callers hold
+    `_locked(session_id)`, as for `_record_stop_event`.
+    """
+    if not payload.get("stop_hook_active"):
+        state.pop("continuation_at", None)
+        return False
+    first = state.setdefault("continuation_at", now)
+    return (now - first) < STOP_EVENT_DEDUP_SECONDS
 
 
 def read_payload():
@@ -364,7 +386,10 @@ def should_run(payload, hook_name, window_seconds=None, kind="emit"):
         with _locked(session_id):
             state = _load_state(session_id)
             now = _now()
-            _record_stop_event(state, now)
+            if _answers_fresh_stop(state, payload, now):
+                state.setdefault("stop_events", [])
+            else:
+                _record_stop_event(state, now)
 
             if (
                 state.get("breaker_tripped")

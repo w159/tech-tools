@@ -1242,8 +1242,20 @@ def cmd_serve(a) -> int:
     return 0
 
 
+WHO_CAP = 20  # names `who` lists before "+N more"; --json prints them all
+
+
 def cmd_who(a) -> int:
-    print(json.dumps(members(_dir(a.dir))))
+    team = members(_dir(a.dir))
+    if getattr(a, "json", False):
+        print(json.dumps(team))
+        return 0
+    names = [str(n) for n in team.get("members") or []]
+    print(f"{team.get('channel', '?')} lead {team.get('lead', '?')}, {len(names)} members")
+    for n in names[:WHO_CAP]:
+        print(n)
+    if len(names) > WHO_CAP:
+        print(f"+{len(names) - WHO_CAP} more (who --json lists all)")
     return 0
 
 
@@ -1301,7 +1313,8 @@ def parser() -> argparse.ArgumentParser:
     )
     v.add_argument("--port", type=int, default=0)
     v.set_defaults(fn=cmd_serve)
-    o = sub.add_parser("who", help="team members")
+    o = sub.add_parser("who", help="team members, one per line")
+    o.add_argument("--json", action="store_true", help="the full {channel, members, lead} object")
     o.set_defaults(fn=cmd_who)
     return ap
 

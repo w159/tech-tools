@@ -995,7 +995,7 @@ class CheckRunning(GitBase):
     def test_dead_pane_live_branch_verifies(self):
         wt, br = self.make_branch(1)
         fid, f = self.row_for(fix_target="s:w", fix_branch=br, fix_worktree=wt)
-        with mock.patch.object(sf, "_is_live", lambda t: False), mock.patch.object(sf, "_verify", return_value="V") as v:
+        with mock.patch.object(sf, "_is_live", lambda t: False), mock.patch.object(sf, "_verify", return_value="V"):
             self.assertEqual(sf._check_running(self.conn, f, self.repo), "V")
 
 
@@ -1345,7 +1345,7 @@ class TickEdges(GitBase):
         empty = os.path.join(self.tmp, "empty")
         os.makedirs(empty)
         git(empty, "init", "-q", "-b", "main")
-        fid = self.finding(1)
+        self.finding(1)
         with mock.patch.object(sf, "resolve_target", return_value=(empty, "x", "")), \
                 mock.patch.object(sf, "_start") as start:
             res = self.tick()
@@ -1518,7 +1518,7 @@ class Cli(Base):
         a = self.finding(1)
         b = self.finding(2, target_path="label")
         c = self.finding(3)
-        d = self.finding(4)
+        self.finding(4)
         with mock.patch.object(sf, "prefs", lambda: {"max_concurrent": 1}), \
                 mock.patch.object(sf, "resolve_target", lambda f: ("/top", "x", "") if f["target_path"] == "src/a.py" else (None, None, "why")):
             rc, out = self.run_main([])

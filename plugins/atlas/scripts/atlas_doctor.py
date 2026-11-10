@@ -3936,23 +3936,31 @@ def layout_checks(root):
     def add(cid, ok, detail):
         out.append({"check": cid, "ok": ok, "detail": detail, "severity": "warn"})
 
-    found = doctor_layout.check_atlas_layout(root)
-    add(
-        "atlas-layout",
-        not found,
-        "all runtime state is at the project root"
-        if not found
-        else f"{len(found)} misplaced (--fix archives, never deletes):\n      "
-        + "\n      ".join(doctor_layout.layout_summary(found)),
-    )
-    bad = doctor_layout.docs_naming_violations(root)
-    add(
-        "docs-naming",
-        not bad,
-        "docs names conform"
-        if not bad
-        else f"{len(bad)} file(s) need renaming; run atlas_doctor.py --fix",
-    )
+    # A non-project root (HOME, Downloads, temp) is never walked and --fix
+    # refuses it: report both checks as not applicable, never as passed or
+    # as needing a --fix.
+    refusal = doctor_layout.layout_refusal(root)
+    if refusal:
+        add("atlas-layout", True, f"not applicable (n/a): {refusal}")
+        add("docs-naming", True, f"not applicable (n/a): {refusal}")
+    else:
+        found = doctor_layout.check_atlas_layout(root)
+        add(
+            "atlas-layout",
+            not found,
+            "all runtime state is at the project root"
+            if not found
+            else f"{len(found)} misplaced (--fix archives, never deletes):\n      "
+            + "\n      ".join(doctor_layout.layout_summary(found)),
+        )
+        bad = doctor_layout.docs_naming_violations(root)
+        add(
+            "docs-naming",
+            not bad,
+            "docs names conform"
+            if not bad
+            else f"{len(bad)} file(s) need renaming; run atlas_doctor.py --fix",
+        )
     missing, tagged = doctor_layout.project_memory_status(root)
     add(
         "project-memory",
@@ -3984,14 +3992,16 @@ def layout_checks(root):
 
 
 def hook_layout_notes(cwd):
-    """SessionStart: auto-repair .atlas layout, report (never fix) docs naming.
-    Returns printable lines; empty when clean."""
+    """SessionStart: report (never fix) .atlas layout, docs naming and project
+    memory; only --fix moves anything. Returns printable lines; empty when clean."""
     lines = []
     try:
         line = doctor_layout.hook_layout(cwd)
         if line:
             lines.append(line)
-        n = len(doctor_layout.docs_naming_violations(cwd))
+        # --fix refuses a non-project root, so never advise it there
+        refused = doctor_layout.layout_refusal(atlas_paths.project_root(cwd))
+        n = 0 if refused else len(doctor_layout.docs_naming_violations(cwd))
         if n:
             lines.append(
                 f"docs naming: {n} files need renaming; run atlas_doctor.py --fix"
@@ -4009,8 +4019,7 @@ def hook_layout_notes(cwd):
     return lines
 
 
-def fix_layout_all(root):
-    """--fix: archive stray .atlas, apply docs renames, re-point project rows."""
+def _fix_project_layout(root):
     for m in doctor_layout.fix_atlas_layout(
         doctor_layout.check_atlas_layout(root), root
     ):
@@ -4027,6 +4036,17 @@ def fix_layout_all(root):
             print(f"FIX: {line}")
     except Exception as e:
         print(f"FIX: project memory failed: {e}")
+
+
+def fix_layout_all(root):
+    """--fix: archive stray .atlas, apply docs renames, re-point project rows.
+    The project-scoped repairs are skipped, with the reason, when `root` is
+    HOME or another non-project folder."""
+    refusal = doctor_layout.layout_refusal(root)
+    if refusal:
+        print(f"FIX: layout repair skipped: {refusal}")
+    else:
+        _fix_project_layout(root)
     db = atlas_db.db_path()
     if os.path.exists(db):
         conn = atlas_db.connect()

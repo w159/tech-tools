@@ -3,7 +3,6 @@
 probe_dashboard_api and probe_herd run their metric logic against a scripted Dash / ps table."""
 
 import http.server
-import json
 import sys
 import threading
 from pathlib import Path

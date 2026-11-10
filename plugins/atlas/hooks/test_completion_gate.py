@@ -3324,9 +3324,10 @@ class SoloModeSurfaceTest(unittest.TestCase):
 class ContractVisibilityTest(unittest.TestCase):
     """Conditions (n)/(o)/(p) -- the contract-visibility conditions.
 
-    Each blocks AT MOST ONCE per session (an O_EXCL marker file under the
-    contract-gate marker dir, isolated from the real one via
-    ATLAS_CONTRACT_GATE_DIR) and each is switchable off individually.
+    (o) and (p) block AT MOST ONCE per session (an O_EXCL marker file under
+    the contract-gate marker dir, isolated from the real one via
+    ATLAS_CONTRACT_GATE_DIR); (n) blocks every header-less reply up to the
+    loop limit. Each is switchable off individually.
 
     The base fixture models a run that satisfies (a)-(m): code shipped as a
     mixed diff (code change + CHANGELOG touch, both logged as this run's own
@@ -3481,11 +3482,10 @@ class ContractVisibilityTest(unittest.TestCase):
         reason = json.loads(out)["reason"]  # the model sees the decoded text
         self.assertIn("(n)", reason)
         self.assertIn("ATLAS | <glyph> <phase> | <one-line state>", reason)
-        self.assertIn("research 🔍", reason)
-        self.assertIn("done 🏁", reason)
-        self.assertIn("blocked ⛔", reason)
+        self.assertIn("research", reason)  # phase ids; glyphs come from SessionStart
+        self.assertIn("blocked", reason)
         self.assertIn("re-send", reason.lower())
-        self.assertIn("nothing else changed", reason)
+        self.assertNotIn("SMALLEST deterministic action", reason)  # no done-gap footer
         import sqlite3
 
         conn = sqlite3.connect(self.env["ATLAS_DB"])
@@ -3524,14 +3524,208 @@ class ContractVisibilityTest(unittest.TestCase):
             "",
         )
 
-    def test_n_is_one_shot_per_session(self):
+    def test_n_reblocks_every_headerless_stop(self):
         self.assertIn("(n)", self.say("All done."))
-        self.assertEqual(
-            self.say("All done."), ""
-        )  # same session: already blocked once
-        self.prepare_run(self.SID_B)  # a different session is on its first block
+        self.assertIn("(n)", self.say("All done."))  # second Stop, same session
+        self.prepare_run(self.SID_B)  # sessions count independently
         out = self.gate({"last_assistant_message": "All done."}, sid=self.SID_B).stdout
         self.assertIn("(n)", out)
+
+    def test_n_loop_limit_allows_and_records_friction(self):
+        for _ in range(3):  # BLOCK_LOOP_LIMIT default
+            self.assertIn("(n)", self.say("All done."))
+        self.assertEqual(self.say("All done."), "")
+        import sqlite3
+
+        conn = sqlite3.connect(self.env["ATLAS_DB"])
+        rows = conn.execute(
+            "SELECT gate_letter FROM friction_events WHERE category='gate_block_loop'"
+            " AND session_id=?",
+            (self.SID_A,),
+        ).fetchall()
+        conn.close()
+        self.assertEqual(rows, [("n",)])
+
+    def test_n_valid_header_after_block_passes(self):
+        self.assertIn("(n)", self.say("All done."))
+        self.assertEqual(self.say(), "")
+
+    RUNNING = [{"id": "1", "type": "subagent", "status": "running"}]
+
+    def _loop_friction_letters(self):
+        import sqlite3
+
+        conn = sqlite3.connect(self.env["ATLAS_DB"])
+        rows = conn.execute(
+            "SELECT gate_letter FROM friction_events WHERE category='gate_block_loop'"
+            " AND session_id=?",
+            (self.SID_A,),
+        ).fetchall()
+        conn.close()
+        return rows
+
+    def test_n_blocks_every_headerless_turn_after_a_corrected_continuation(self):
+        """The corrected re-send arrives as a stop_hook_active Stop. It must
+        reset the loop count, or the 4th header-less turn of a session slips
+        through with nothing said."""
+        for turn in range(1, 6):
+            self.assertIn("(n)", self.say("All done."), f"turn {turn} not blocked")
+            self.assertEqual(self.say(stop_hook_active=True), "")
+        self.assertEqual(self._loop_friction_letters(), [])
+
+    def test_n_uncorrected_chain_blocks_to_the_limit_then_allows(self):
+        """A model that never fixes the header still escapes: a header-less
+        continuation does not reset the count, and the loop row is written once."""
+        for _ in range(3):  # BLOCK_LOOP_LIMIT default
+            self.assertIn("(n)", self.say("All done."))
+            self.assertEqual(self.say("Still no header.", stop_hook_active=True), "")
+        self.assertEqual(self.say("All done."), "")
+        self.assertEqual(self.say("All done."), "")
+        self.assertEqual(self._loop_friction_letters(), [("n",)])
+
+    def test_valid_header_continuation_leaves_other_conditions_counting(self):
+        """The (n) reset is scoped to (n): a run stuck on (a) still reaches
+        the loop cap although every continuation carries a valid header."""
+        os.remove(os.path.join(self.tmp, ".atlas", "evidence", "run.txt"))
+        for _ in range(3):
+            self.assertIn("(a)", self.say())
+            self.assertEqual(self.say(stop_hook_active=True), "")
+        self.assertEqual(self.say(), "")
+
+    def test_mixed_signature_header_fix_keeps_the_count_accruing(self):
+        """Signature "a,n": (a) cannot be fixed, the header is dropped on every
+        fresh Stop and corrected in every continuation. The correction may
+        reset a count that is exactly "n", never one that also names (a), or
+        the cap is never reached and the session blocks on every turn."""
+        os.remove(os.path.join(self.tmp, ".atlas", "evidence", "run.txt"))
+        outs = []
+        for _ in range(8):
+            outs.append(self.say("All done."))
+            self.assertEqual(self.say(stop_hook_active=True), "")
+        for out in outs[:3]:  # BLOCK_LOOP_LIMIT default
+            self.assertIn("(a)", out)
+            self.assertIn("(n)", out)
+        self.assertEqual(outs[3:], [""] * 5)
+        self.assertEqual(self._loop_friction_letters(), [("a,n",)])
+
+    def _drop_loop_marker(self):
+        path = os.path.join(self.env["ATLAS_HOOKSTATE_DIR"], "gate-loop-" + self.SID_A)
+        if os.path.exists(path):
+            os.remove(path)
+
+    def test_n_continuation_without_a_matched_header_does_not_reset_the_count(self):
+        """Only a main-thread continuation whose first non-empty line matches
+        the header pattern resets the (n) count. Empty, missing or non-string
+        text and a subagent's continuation prove nothing, so the chain still
+        reaches the cap."""
+        shapes = {
+            "empty text": {"last_assistant_message": ""},
+            "whitespace text": {"last_assistant_message": " \n\n "},
+            "missing text": {},
+            "non-string text": {"last_assistant_message": 5},
+            "sidechain agent_id": {"last_assistant_message": self.OK, "agent_id": "w1"},
+            "sidechain transcript": {
+                "last_assistant_message": self.OK,
+                "transcript_path": "/session/subagents/agent-1.jsonl",
+            },
+        }
+        for label, continuation in shapes.items():
+            with self.subTest(continuation=label):
+                self._drop_loop_marker()
+                for _ in range(3):  # BLOCK_LOOP_LIMIT default
+                    self.assertIn("(n)", self.say("All done."))
+                    self.gate(dict(continuation, stop_hook_active=True))
+                self.assertEqual(self.say("All done."), "")
+
+    def test_n_in_flight_reply_without_a_matched_header_does_not_reset_the_count(self):
+        for text in ("Done.", "Done.", "", "Done."):
+            self.say(text, background_tasks=self.RUNNING)
+        self.assertEqual(self.say("Done.", background_tasks=self.RUNNING), "")
+
+    def test_n_in_flight_loop_limit_allow_is_stated_on_stderr(self):
+        for _ in range(3):  # BLOCK_LOOP_LIMIT default
+            self.say("Done.", background_tasks=self.RUNNING)
+        r = self.gate(
+            {"last_assistant_message": "Done.", "background_tasks": self.RUNNING}
+        )
+        self.assertEqual(r.stdout, "")
+        self.assertIn("completion-gate: allowed the Stop after", r.stderr)
+        self.assertIn("status header missing", r.stderr)
+
+    def test_n_fifth_and_later_identical_stop_allows(self):
+        for _ in range(3):
+            self.assertIn("(n)", self.say("All done."))
+        for nth in (4, 5, 6):
+            self.assertEqual(self.say("All done."), "", f"Stop {nth} not allowed")
+        self.assertEqual(self._loop_friction_letters(), [("n",)])
+
+    def test_n_blocks_headerless_reply_while_subagent_in_flight(self):
+        """(n) is a property of the reply text, so like (r) it is checked
+        before the in-flight silence."""
+        out = self.say("Done.", background_tasks=self.RUNNING)
+        self.assertIn('"decision": "block"', out)
+        reason = json.loads(out)["reason"]
+        self.assertIn("(n) Status header missing", reason)
+        self.assertNotIn("(r)", reason)
+
+    def test_n_valid_header_in_flight_is_allowed(self):
+        self.assertEqual(
+            self.say("ATLAS | 🔧 implement | explorer running", background_tasks=self.RUNNING),
+            "",
+        )
+
+    def test_n_in_flight_keeps_every_other_condition_silent(self):
+        self._research_only_plan()  # (o) would fail on a Stop with nothing running
+        self.assertEqual(self.say(background_tasks=self.RUNNING), "")
+        reason = json.loads(self.say("Done.", background_tasks=self.RUNNING))["reason"]
+        self.assertIn("(n)", reason)
+        self.assertNotIn("(o)", reason)
+
+    def test_n_valid_header_in_flight_resets_the_loop_count(self):
+        for text in ("Done.", "Done.", None, "Done.", "Done.", "Done."):
+            out = self.say(text, background_tasks=self.RUNNING)
+            if text is None:
+                self.assertEqual(out, "")
+            else:
+                self.assertIn("(n)", out)
+
+    def test_n_in_flight_loop_limit_allows(self):
+        for _ in range(3):
+            self.assertIn("(n)", self.say("Done.", background_tasks=self.RUNNING))
+        self.assertEqual(self.say("Done.", background_tasks=self.RUNNING), "")
+
+    def test_n_fails_open_on_non_string_last_assistant_message(self):
+        for value in (5, None, ["All done."], {"text": "All done."}):
+            with self.subTest(value=value):
+                self.assertEqual(self.gate({"last_assistant_message": value}).stdout, "")
+
+    def test_n_sidechain_identified_by_agent_id_exempt(self):
+        self.assertEqual(self.say("All done.", agent_id="agent-1"), "")
+
+    def test_n_accepts_unknown_glyph_with_valid_phase(self):
+        self.assertEqual(self.say("ATLAS | X verify | ok"), "")
+
+    def test_n_accepts_count_form_header(self):
+        self.assertEqual(self.say("ATLAS | 🔧 implement 2/9 | ok"), "")
+
+    def test_n_fails_open_when_the_header_check_raises(self):
+        reply = {"last_assistant_message": "All done."}
+        for contract in ({"switches": {}}, {"headerFirstLinePattern": "("}):
+            with self.subTest(contract=contract):
+                self.assertFalse(
+                    completion_gate._status_header_would_block(reply, contract)
+                )
+
+    def test_n_block_message_stays_short(self):
+        first = json.loads(self.say("All done."))["reason"]
+        repeat = json.loads(self.say("All done."))["reason"]
+        # Budget: was 1633 chars before the glyph table and done-gap footer were dropped.
+        self.assertLess(len(first), 520)
+        self.assertLess(len(repeat), 260)
+        self.assertNotIn("once per session", first)
+        # The repeat still carries the one thing needed to fix the reply: the template.
+        self.assertIn("ATLAS | <glyph> <phase> | <one-line state>", repeat)
+        self.assertIn("(n)", repeat)
 
     def test_n_kill_switch_and_global_off(self):
         self.env["ATLAS_GATE_HEADER"] = "off"
@@ -3799,6 +3993,22 @@ class BlockLoopCapTest(unittest.TestCase):
                 for _ in range(lim)
             ]
             self.assertEqual(got, [False] * lim)
+
+    def test_letter_scoped_reset_only_clears_a_count_that_names_the_letter_alone(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        with mock.patch.dict(os.environ, {"ATLAS_HOOKSTATE_DIR": tmp}):
+            state = completion_gate._block_loop_state
+            self.assertEqual(state("s-letter", ["c"])[0], 1)
+            completion_gate._block_loop_reset("s-letter", "n")  # (c) keeps counting
+            self.assertEqual(state("s-letter", ["c"])[0], 2)
+            self.assertEqual(state("s-letter", ["c", "n"])[0], 1)
+            completion_gate._block_loop_reset("s-letter", "n")  # (c) still open
+            self.assertEqual(state("s-letter", ["c", "n"])[0], 2)
+            self.assertEqual(state("s-letter", ["n"])[0], 1)
+            completion_gate._block_loop_reset("s-letter", "n")  # exactly "n": cleared
+            self.assertEqual(state("s-letter", ["n"])[0], 1)
+            completion_gate._block_loop_reset("s-missing", "n")  # no marker: no raise
 
     def test_env_override_moves_exhaustion_point(self):
         tmp = tempfile.mkdtemp()

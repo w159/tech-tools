@@ -2,8 +2,21 @@
 // headless gate silence it, and toasts are rate-limited.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { BIG_TURN_TOKENS, HEAVY_CHARS, HEAVY_LIMIT, TOAST_GAP_MS, factsLine, isVague, registerDiscipline } from './discipline';
+import { BIG_TURN_TOKENS, HEAVY_CHARS, HEAVY_LIMIT, TOAST_GAP_MS, factsLine, isVague, reinforceLine, registerDiscipline } from './discipline';
 import { memState } from './test_helpers';
+
+describe('reinforceLine', () => {
+  test('carries the contract template and phase, never the regex', () => {
+    const line = reinforceLine('ATLAS | <glyph> <phase> | <state>', 'verify');
+    expect(line).toContain('ATLAS | <glyph> <phase> | <state>');
+    expect(line).toContain('verify');
+    expect(line).not.toContain('\\S');
+    expect(line.length).toBeLessThan(110);
+  });
+  test('names the header in words when the contract carries no template', () => {
+    expect(reinforceLine(undefined, 'research')).toContain('the ATLAS status header');
+  });
+});
 
 type Hook = ($: EngineInterface, e: unknown, next: (i: unknown) => Promise<unknown>) => Promise<unknown>;
 const PATTERN = '^ATLAS \\| \\S+ \\w+';

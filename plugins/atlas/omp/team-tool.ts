@@ -38,7 +38,8 @@ const muxArgv = (pluginRoot: string, ...rest: string[]): string[] => ["python3",
 function spawnArgv(p: TeamParams, pluginRoot: string, sessionId?: string): string[] {
 	const harness = p.harness ?? "omp";
 	if (!["omp", "claude", "codex"].includes(harness)) throw new Error(`atlas_team: harness must be omp, claude or codex, got ${harness}`);
-	const argv = muxArgv(pluginRoot, "spawn-team", "--class", need(p.class, "class"), "--effort", need(p.effort, "effort"), "--task", need(p.task, "task"), "--harness", harness);
+	// --json: lastTeamView parses the spawn result (channel + members) to mount the widget; wait and reap print the short summary.
+	const argv = muxArgv(pluginRoot, "spawn-team", "--json", "--class",need(p.class, "class"), "--effort", need(p.effort, "effort"), "--task", need(p.task, "task"), "--harness", harness);
 	// --session pins the team wave and channel to this lead; without it mux falls back to the latest run (possibly a stale worker's).
 	return argv.concat(p.paths?.length ? ["--paths", p.paths.join(",")] : [], p.name ? ["--name", p.name] : [], sessionId ? ["--session", sessionId] : []);
 }
@@ -137,7 +138,7 @@ function teamToolDef(T: any, pluginRoot: string, run: TeamRunner, env: Record<st
 		label: "Atlas team",
 		description:
 			"Run parallel workers as a tmux team. action=spawn {class, effort, task, paths?} sizes a team from the resolver and returns {team_id}; " +
-			"action=wait {team, timeout?} blocks until every worker exits and returns each STATUS; action=reap {team} archives and kills the session. Returns the JSON.",
+			"action=wait {team, timeout?} blocks until every worker exits and returns each STATUS; action=reap {team} archives and kills the session. spawn returns JSON; wait and reap return a short text summary.",
 		parameters: T.Object({
 			action: T.Union([T.Literal("spawn"), T.Literal("wait"), T.Literal("reap")]),
 			class: T.Optional(T.String()),

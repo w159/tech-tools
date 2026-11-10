@@ -1975,6 +1975,21 @@ class RunDirHelpers(unittest.TestCase):
             code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
         self.assertEqual((code, buf.getvalue()), (0, '{"ok": true}\n'))
 
+    def test_cmd_wait_prints_an_indented_summary_as_one_json_line(self):
+        rundir, _ = self._run()
+        summary = {"ok": True, "run": "r1", "workers": [{"name": "a", "exit": 0}]}
+        (rundir / "summary.json").write_text(json.dumps(summary, indent=1))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
+        self.assertEqual(1, len(buf.getvalue().splitlines()))
+        self.assertEqual(summary, json.loads(buf.getvalue()))
+
+    def test_summary_line_shows_a_malformed_file_as_written(self):
+        rundir, _ = self._run()
+        (rundir / "summary.json").write_text('{"ok": tr')
+        self.assertEqual('{"ok": tr', atlas_crew._summary_line(rundir / "summary.json"))
+
     def test_cmd_wait_times_out_with_status_and_a_hint(self):
         self._run()
         buf = io.StringIO()

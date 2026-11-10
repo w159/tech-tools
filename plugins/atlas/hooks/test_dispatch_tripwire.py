@@ -4482,6 +4482,9 @@ class ScopeGateTest(unittest.TestCase):
         )
         self.assertIsNone(decision)
         self.assertIn("spawn-team", note)
+        # Budget: the advisory names the command, it does not repeat the absolute path (was 366 chars).
+        self.assertIn("tmux panes", note)
+        self.assertLess(len(note), 260)
 
     def test_c_background_agent_post_does_not_free_the_slot(self):
         sess = self._burst_session()

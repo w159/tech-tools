@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
-import { installRichDom, restoreRichDom, fire, walk } from "./rich-dom.js";
+import { installRichDom, restoreRichDom, fire } from "./rich-dom.js";
 
 let dom;
 let C;

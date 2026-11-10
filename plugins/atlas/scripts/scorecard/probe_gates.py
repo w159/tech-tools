@@ -823,6 +823,30 @@ class Gates:
             "block",
             cg(stop(sE, msg="all done, nothing else")),
         )
+        self.rec(
+            G,
+            "deny: second header-less Stop in the same session",
+            "block",
+            cg(stop(sE, msg="all done, nothing else")),
+        )
+        # (n) is checked before the in-flight silence, like (r): a running
+        # subagent does not excuse a header-less reply.
+        sE3 = sid()
+        self.mkrun(sE3, edit=False)
+        self.rec(
+            G,
+            "deny: header-less Stop with an in-flight subagent",
+            "block",
+            cg(
+                stop(
+                    sE3,
+                    msg="Done.",
+                    background_tasks=[
+                        {"type": "subagent", "status": "running", "id": "a"}
+                    ],
+                )
+            ),
+        )
         sE2 = sid()
         self.mkrun(sE2, edit=False)
         self.rec(G, "allow: header present", "allow", cg(stop(sE2)))

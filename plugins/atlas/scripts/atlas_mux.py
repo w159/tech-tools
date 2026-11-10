@@ -181,9 +181,82 @@ FAIL_SIGNS = (
 )
 
 
-def _emit(obj: dict, code: int = 0) -> int:
-    print(json.dumps(obj))
+def _emit(obj: dict, code: int = 0, brief=None) -> int:
+    print(brief(obj) if brief else json.dumps(obj))
     return code
+
+
+def _brief_for(args, render):
+    """`render` for a CLI call without --json, else None (the full JSON object). The output of spawn-team,
+    wait and reap stays in the calling model's context, so the CLI default is a few lines. A caller that
+    builds its own namespace (no `json` attribute) is a program and keeps the JSON."""
+    return None if getattr(args, "json", True) else render
+
+
+def _brief_spawn_team(out: dict) -> str:
+    if out.get("dry_run"):
+        team = out["team"]
+        head = (
+            f"dry-run team {team['team_id']} {team['class']}/{team['effort']}: {len(team['members'])} members, "
+            f"max_parallel {team['max_parallel']}, isolation {team['isolation']}, "
+            f"scope {', '.join(team['file_scope']) or 'whole project'}"
+        )
+        return "\n".join([head] + [f"  {m['name']} {m['role']}" for m in team["members"]])
+    rows = out["members"]
+    started = sum(1 for r in rows if r.get("ok"))
+    lines = [
+        f"team {out['team_id']} {'ok' if out['ok'] else 'FAILED'}: {started}/{len(rows)} spawned on {out['transport']}, "
+        f"session {out['session']}, channel {out['channel']}, max_parallel {out['max_parallel']}"
+    ]
+    for r in rows:
+        if not r.get("ok"):
+            lines.append(f"  {r.get('name', '?')} FAILED: {r.get('error') or 'spawn failed'}")
+            continue
+        branch = (r.get("worktree") or {}).get("branch")
+        lines.append(f"  {r['name']} {r['agent']} {r.get('model') or 'default'}" + (f" worktree {branch}" if branch else ""))
+    if out.get("transport_note"):
+        lines.append(f"note: {out['transport_note']}")
+    if not out.get("wave_logged"):
+        lines.append("note: wave not logged to the run")
+    lines.append(f"next: atlas_mux.py wait --team {out['team_id']}")
+    return "\n".join(lines)
+
+
+def _brief_wait(out: dict) -> str:
+    rows = out["members"]
+    done = sum(1 for m in rows if m["exit"] is not None)
+    lines = [f"team {out['team_id']}: {done}/{len(rows)} finished after {out['elapsed_s']}s" + ("" if out["ok"] else ", NOT finished")]
+    for m in rows:
+        if m.get("never_launched"):
+            state = f"never launched: {m.get('launch_error')}"
+        elif m["exit"] is not None:
+            state = f"exit {m['exit']} {m['duration_s']}s"
+        else:
+            state = "dead without report" if m["dead_without_report"] else "running"
+        lines.append(f"  {m['name']} {state}" + (f" {m['last_status']}" if m.get("last_status") else ""))
+    if out.get("notes_worker_to_worker"):
+        lines.append(f"worker-to-worker notes: {out['notes_worker_to_worker']}")
+    if out.get("killed_on_timeout"):
+        lines.append("killed on timeout")
+    return "\n".join(lines)
+
+
+def _brief_reap(out: dict) -> str:
+    session = "session STILL PRESENT" if out["session_left"] else ("session killed" if out["killed"] else "no live session")
+    lines = [
+        f"reaped {out['team_id']} ({'already reaped' if out['already_reaped'] else out['record']}): "
+        f"{len(out['members'])} members, {session}, {out['prompts_removed']} prompts removed, "
+        f"{out['channels_reaped'] or 0} channels reaped"
+    ]
+    if out["worktrees_removed"]:
+        lines.append(f"worktrees removed: {', '.join(out['worktrees_removed'])}")
+    for k in out["worktrees_kept"]:  # holding work: the lead merges these
+        state = ", ".join(
+            s for s in (f"{k['ahead']} ahead" if k.get("ahead") else "", "dirty" if k.get("dirty") else "", str(k.get("error") or "")) if s
+        )
+        agent = k["branch"].removeprefix("worker/")  # atlas_wt.py names a worktree by agent, branch worker/<agent>
+        lines.append(f"worktree kept: {k['member']} {k['branch']} ({state or 'kept'}), merge with atlas_wt.py merge {agent}")
+    return "\n".join(lines)
 
 
 def _session(run: str) -> str:
@@ -2254,7 +2327,7 @@ def cmd_spawn_team(args) -> int:
         rec["name"] = team_name
     rec["worktrees"] = worktree_plan(rec, root)
     if args.dry_run:
-        return _emit({"ok": True, "dry_run": True, "team": rec})
+        return _emit({"ok": True, "dry_run": True, "team": rec}, brief=_brief_for(args, _brief_spawn_team))
     path = _team_dir(root) / f"{rec['team_id']}.json"
     if path.exists():
         return _emit(
@@ -2359,6 +2432,7 @@ def cmd_spawn_team(args) -> int:
             "worktrees": rec["worktrees"],
         },
         0 if not failed else 1,
+        _brief_for(args, _brief_spawn_team),
     )
 
 
@@ -2438,6 +2512,7 @@ def cmd_wait(args) -> int:
             **({"killed_on_timeout": True} if killed_on_timeout else {}),
         },
         0 if finished else 1,
+        _brief_for(args, _brief_wait),
     )
 
 
@@ -2596,7 +2671,8 @@ def cmd_reap(args) -> int:
             # holding work: left for the lead to merge (atlas_wt.py merge worker/<team>-<member>)
             "worktrees_kept": wt_kept,
             "archived": str(archived_path) if state != "recovered" else None,
-        }
+        },
+        brief=_brief_for(args, _brief_reap),
     )
 
 
@@ -2682,8 +2758,11 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--dry-run", action="store_true")
     st.add_argument("--root")
     st.add_argument("--poll", type=float, default=1.0)
+    json_help = "print the full JSON object instead of the short summary"
+    st.add_argument("--json", action="store_true", help=json_help)
     for name in ("wait", "reap"):
         sp = sub.add_parser(name)
+        sp.add_argument("--json", action="store_true", help=json_help)
         sp.add_argument("--team", required=True)
         sp.add_argument("--root")
         sp.add_argument("--timeout", type=float, default=600)

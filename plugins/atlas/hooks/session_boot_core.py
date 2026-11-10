@@ -406,11 +406,11 @@ def status_contract_lines(active_style=""):
     style = (active_style or "").strip()
     if not style or style == ATLAS_OUTPUT_STYLE:
         return [
-            f"Every substantive reply opens `{header_template()}` ({_STATUS_GLYPHS})."
+            f"Every user-visible reply opens `{header_template()}` ({_STATUS_GLYPHS})."
         ]
     return [
         f"STYLE OVERRIDE: outputStyle is {style!r}, not {ATLAS_OUTPUT_STYLE!r}; it may suppress the atlas style. "
-        f"Every substantive reply opens `{header_template()}` ({_STATUS_GLYPHS}); "
+        f"Every user-visible reply opens `{header_template()}` ({_STATUS_GLYPHS}); "
         "before done re-read the request and show evidence; build only what was named; "
         "without TodoWrite add `LEDGER | n/m | now: ... | left: ...`."
     ]

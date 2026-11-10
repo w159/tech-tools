@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.4.2 - 2026-11-10
+
+- atlas 17.4.2: follow-up pass on 17.4.1. The session-start doctor only reports misplaced `.atlas` paths and never moves files; layout repair refuses the home directory and other non-project roots, and `--fix` prints each move as source -> destination. Completion gate condition (n) blocks every reply without a valid status header, also while a subagent runs, with a short repeat message and a loop count that resets after a corrected reply. Mod cards say `finished`, not `done`, and rows fit the card width. Less text reaches the model: a role-aware channel brief (read-only roles 2102 to 695 bytes), a shorter orchestrate nudge and second-dispatch advisory, and compact default output with `--json` for the full form on `atlas_finding.py`, `atlas_mux.py spawn-team|wait|reap` and `atlas_irc.py who`. New `bench_hooks.py --bytes`. Unused Python imports and dead exports removed; bun test bugs fixed. Not observed in a live terminal yet. Details in plugins/atlas/CHANGELOG.md; measurements in docs/audits/2026-11-10_atlas-payload-budget.md.
+
+## marketplace 5.9.2 - 2026-11-10
+
+- marketplace 5.9.2: atlas 17.4.2. armada and programmer are unchanged.
+
 ## atlas 17.4.1 - 2026-11-10
 
 - atlas 17.4.1: mod survival and visibility pass. The mod boots again on `/clear` (`classic.SessionStart`, source `clear`), mod failures show one toast each, the header pill uses one parser and never falls back to the snapshot phase, a corrupt `todos.json` keeps the last good board, and `/atlas-core` counts one finding once and caps its rows (about 580 lines before, 26 after). Completion gate condition (r) blocks a `done` reply while work is open (`ATLAS_GATE_DONE=off` disables it). Also: `fallow_gate.py` on Python 3.15, two new doctor checks (`source-checkout-stale`, `operating-contract`), and a doctor layout fix for git work trees. Verified against the mod test kit and Python suites; the live render after `/clear` is not observed yet. Details in plugins/atlas/CHANGELOG.md.

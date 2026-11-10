@@ -319,7 +319,6 @@ class DoctorTest(Base):
         self.assertTrue(any("memory migration: ok" in l for l in out))
 
     def test_fix_passes_home_and_db_path_to_real_migration(self):
-        import atlas_memory
 
         home = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, home, True)

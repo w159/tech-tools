@@ -279,13 +279,83 @@ class HookTest(LayoutBase):
         ):
             self.assertEqual(self.hook(), "")
 
-    def test_moved_stray_prints_exactly_one_short_line(self):
-        touch(os.path.join(self.repo, "frontend", ".atlas", "a"))
+    def _quiet_hook(self):
         with mock.patch.object(
             doctor_layout, "docs_naming_violations", return_value=[]
         ):
-            out = self.hook()
-        self.assertEqual(out, "atlas layout: moved 1 stray .atlas path(s) to archive\n")
+            return self.hook()
+
+    def _no_moves(self):
+        boom = OSError("hook must not move files")
+        return (
+            mock.patch.object(doctor_layout.shutil, "move", side_effect=boom),
+            mock.patch.object(os, "rename", side_effect=boom),
+            mock.patch.object(os, "replace", side_effect=boom),
+        )
+
+    def test_stray_is_reported_with_its_path_and_never_moved(self):
+        stray = os.path.join(self.repo, "plugins", "x", ".atlas", ".run", "todos.json.lock")
+        touch(stray)
+        a, b, c = self._no_moves()
+        with a, b, c:
+            out = self._quiet_hook()
+        self.assertEqual(
+            out,
+            "atlas layout: 1 misplaced .atlas path(s): "
+            "plugins/x/.atlas; run atlas_doctor.py --fix to archive them\n",
+        )
+        self.assertTrue(os.path.exists(stray))
+
+    def test_report_lists_at_most_five_paths_then_plus_n_more(self):
+        for i in range(7):
+            touch(os.path.join(self.repo, f"p{i}", ".atlas", "a"))
+        out = self._quiet_hook()
+        self.assertIn("7 misplaced", out)
+        self.assertIn("p0/.atlas, p1/.atlas, p2/.atlas, p3/.atlas, p4/.atlas", out)
+        self.assertIn(" (+2 more); run atlas_doctor.py --fix", out)
+        self.assertNotIn("p5/.atlas", out)
+
+    def test_home_run_project_files_are_reported_not_moved(self):
+        run = os.path.join(self.atlas_home, ".run")
+        touch(os.path.join(run, "findings.json"), "{}")
+        a, b, c = self._no_moves()
+        with a, b, c:
+            out = self._quiet_hook()
+        self.assertIn("misplaced", out)
+        self.assertIn("findings.json", out)
+        self.assertTrue(os.path.exists(os.path.join(run, "findings.json")))
+        self.assertFalse(os.path.exists(os.path.join(self.atlas_home, "archive")))
+
+    def test_cwd_equal_to_home_does_no_walk_and_reports_nothing(self):
+        touch(os.path.join(self.home, "proj", ".atlas", "a"))
+        with mock.patch.object(
+            doctor_layout, "check_atlas_layout", side_effect=AssertionError("walked")
+        ):
+            self.assertEqual(doctor_layout.hook_layout(self.home), "")
+
+    def test_non_git_project_with_real_nested_data_is_reported_not_moved(self):
+        plain = os.path.join(self.tmp, "plain")
+        os.makedirs(os.path.join(plain, ".atlas"))
+        data = os.path.join(plain, "sub", ".atlas", "evidence", "e1.md")
+        touch(data)
+        a, b, c = self._no_moves()
+        with a, b, c:
+            line = doctor_layout.hook_layout(plain)
+        self.assertIn("sub/.atlas", line)
+        self.assertTrue(os.path.exists(data))
+
+    def test_fix_still_moves_the_stray_and_reports_source_and_destination(self):
+        touch(os.path.join(self.repo, "frontend", ".atlas", "a"))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            atlas_doctor.fix_layout_all(self.repo)
+        out = buf.getvalue()
+        self.assertIn(
+            f"FIX: layout moved: {os.path.join(self.repo, 'frontend', '.atlas')} -> "
+            f"{os.path.join(self.repo, '.atlas', 'archive')}",
+            out,
+        )
+        self.assertFalse(os.path.exists(os.path.join(self.repo, "frontend", ".atlas")))
 
     def test_docs_naming_is_reported_not_fixed_in_hook(self):
         with (
@@ -641,6 +711,162 @@ class GitWorktreeGuardTest(LayoutBase):
         touch(os.path.join(self.repo, "plugins", "y", ".atlas", "t"))
         self.git("add", "-f", "plugins/y/.atlas/t")
         self.assertEqual(self.kinds(), [])
+
+
+class ReportPathsTest(LayoutBase):
+    """The SessionStart line goes into the model context: no absolute home
+    path, project strays first, at most five paths."""
+
+    def line(self):
+        return doctor_layout.hook_layout(self.repo)
+
+    def seed_home_run(self):
+        run = os.path.join(self.atlas_home, ".run")
+        for name in ("board", "findings.json", "todos.json"):
+            touch(os.path.join(run, name, "x") if name == "board" else os.path.join(run, name))
+
+    def test_home_run_paths_print_with_tilde_never_the_absolute_home(self):
+        self.seed_home_run()
+        touch(os.path.join(self.repo, "sub", ".atlas", "a"))
+        line = self.line()
+        self.assertNotIn(self.home, line)
+        self.assertNotIn(os.path.realpath(self.home), line)
+        self.assertIn("~/.atlas/.run/findings.json", line)
+
+    def test_project_strays_are_listed_before_home_run_files(self):
+        self.seed_home_run()
+        touch(os.path.join(self.repo, "sub", ".atlas", "a"))
+        self.assertIn(
+            "4 misplaced .atlas path(s): sub/.atlas, ~/.atlas/.run/board, "
+            "~/.atlas/.run/findings.json, ~/.atlas/.run/todos.json; run",
+            self.line(),
+        )
+
+    def test_home_run_files_do_not_push_project_strays_past_the_cap(self):
+        self.seed_home_run()
+        for i in range(4):
+            touch(os.path.join(self.repo, f"p{i}", ".atlas", "a"))
+        self.assertIn(
+            "7 misplaced .atlas path(s): p0/.atlas, p1/.atlas, p2/.atlas, "
+            "p3/.atlas, ~/.atlas/.run/board (+2 more); run",
+            self.line(),
+        )
+
+
+class NonProjectRootTest(LayoutBase):
+    """Layout repair never runs with HOME (or another non-project root) as the
+    project: the walk would treat every project below it as a stray."""
+
+    def setUp(self):
+        super().setUp()
+        self.data = os.path.join(self.home, "Documents", "notes", ".atlas", "a")
+        touch(self.data)
+
+    def test_check_does_not_walk_a_non_project_root(self):
+        with mock.patch.object(
+            doctor_layout.os, "walk", side_effect=AssertionError("walked")
+        ):
+            self.assertEqual(doctor_layout.check_atlas_layout(self.home), [])
+
+    def test_fix_refuses_findings_handed_in_for_a_non_project_root(self):
+        finding = {
+            "kind": "stray",
+            "path": os.path.dirname(self.data),
+            "root": self.home,
+            "archive_base": os.path.join(self.atlas_home, "archive"),
+            "rel": "Documents/notes/.atlas",
+        }
+        moves = doctor_layout.fix_atlas_layout([finding], self.home, today=TODAY)
+        self.assertEqual([m["status"] for m in moves], ["skipped"])
+        self.assertIn("run it from inside a project", moves[0]["reason"])
+        self.assertTrue(os.path.exists(self.data))
+
+    def test_fix_entry_prints_one_refusal_line_and_touches_nothing(self):
+        buf = io.StringIO()
+        with (
+            contextlib.redirect_stdout(buf),
+            mock.patch.object(doctor_layout, "fix_docs_naming") as docs,
+            mock.patch.object(doctor_layout, "fix_project_memory") as memory,
+        ):
+            atlas_doctor.fix_layout_all(self.home)
+        self.assertEqual(
+            buf.getvalue(),
+            "FIX: layout repair skipped: ~ is a home, Downloads or temp folder, "
+            "not a project; run it from inside a project\n",
+        )
+        docs.assert_not_called()
+        memory.assert_not_called()
+        self.assertTrue(os.path.exists(self.data))
+
+    REFUSAL = (
+        "not applicable (n/a): ~ is a home, Downloads or temp folder, "
+        "not a project; run it from inside a project"
+    )
+
+    def test_checks_at_a_non_project_root_are_not_applicable_not_passed(self):
+        # the tree is never walked, so "all runtime state is at the project
+        # root" would be a claim about nothing; --fix refuses this root too
+        with mock.patch.object(
+            doctor_layout, "docs_naming_violations", return_value=[("a", "b")] * 2
+        ):
+            rows = {r["check"]: r for r in atlas_doctor.layout_checks(self.home)}
+        for cid in ("atlas-layout", "docs-naming"):
+            self.assertEqual((cid, rows[cid]["detail"]), (cid, self.REFUSAL))
+            self.assertTrue(atlas_doctor._not_applicable(rows[cid]), cid)
+
+    def test_hook_at_a_non_project_root_never_advises_a_fix_that_refuses(self):
+        with mock.patch.object(
+            doctor_layout, "docs_naming_violations", return_value=[("a", "b")] * 2
+        ):
+            lines = atlas_doctor.hook_layout_notes(self.home)
+        self.assertEqual([ln for ln in lines if "docs naming" in ln or "layout" in ln], [])
+
+    def test_destination_is_never_inside_the_source_being_moved(self):
+        # a non-git project: the stray's own folder resolves as its project
+        # root, so its archive would sit inside the directory being moved
+        plain = os.path.join(self.tmp, "plain")
+        os.makedirs(os.path.join(plain, ".atlas"))
+        data = os.path.join(plain, "sub", ".atlas", "evidence", "e1.md")
+        touch(data)
+        found = doctor_layout.check_atlas_layout(plain)
+        self.assertEqual([f["kind"] for f in found], ["stray"])
+        with mock.patch.object(doctor_layout.shutil, "move") as move:
+            moves = doctor_layout.fix_atlas_layout(found, plain, today=TODAY)
+        move.assert_not_called()
+        self.assertEqual(
+            [(m["status"], m["reason"]) for m in moves],
+            [("skipped", "archive destination is inside the source")],
+        )
+        self.assertTrue(os.path.exists(data))
+
+
+class PartialMoveTest(LayoutBase):
+    def test_copy_failing_midway_leaves_source_whole_and_no_partial_archive(self):
+        import errno
+
+        src = os.path.join(self.repo, "frontend", ".atlas")
+        touch(os.path.join(src, "a"), "one")
+        touch(os.path.join(src, "b"), "two")
+        real_copyfile = shutil.copyfile
+        copied = []
+
+        def copyfile(s, d, **kw):
+            if copied:
+                raise OSError("disk full")
+            copied.append(s)
+            return real_copyfile(s, d, **kw)
+
+        with (
+            mock.patch.object(os, "rename", side_effect=OSError(errno.EXDEV, "xdev")),
+            mock.patch.object(shutil, "copyfile", copyfile),
+        ):
+            moves = doctor_layout.fix_atlas_layout(
+                doctor_layout.check_atlas_layout(self.repo), self.repo, today=TODAY
+            )
+        self.assertEqual(len(copied), 1)  # the copy really started
+        self.assertEqual(moves[0]["status"], "error")
+        self.assertEqual(sorted(os.listdir(src)), ["a", "b"])
+        self.assertFalse(os.path.lexists(moves[0]["dest"]))
 
 
 if __name__ == "__main__":

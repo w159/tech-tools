@@ -2005,18 +2005,45 @@ def _item_counts(items: List[dict]) -> dict:
     return out
 
 
-def channel_brief(root: Optional[str], channel: str, lead: str, name: str) -> str:
+# Roles that never edit files: their brief carries no path-claim or conflict lines.
+READ_ONLY_ROLES = frozenset(
+    (
+        "explorer",
+        "verifier",
+        "completeness-critic",
+        "docs-auditor",
+        "planner",
+        "db-prober",
+        "ui-runtime-tester",
+    )
+)
+
+
+def channel_brief(
+    root: Optional[str], channel: str, lead: str, name: str, role: str = ""
+) -> str:
     """The CHANNEL block appended to a subagent's brief: where it posts, how it
-    reads its inbox, who its siblings are. Short on purpose."""
+    reads its inbox, who its siblings are. Short on purpose. A read-only `role`
+    gets the post and inbox commands only; the lead's prompt wins on conflict."""
     script = os.path.abspath(__file__)
     chan = get_channel(root, channel) or {"members": []}
     sibs = [m["name"] for m in chan["members"] if m["name"] not in (name, lead)]
     base = f'python3 "{script}"'
     rt = _resolve_base(root)
-    return (
+    head = (
         f"CHANNEL: {channel} (you are {name}; lead {lead}; siblings: "
-        f"{', '.join(sibs) or 'none yet'}).\n"
-        f'Post: {base} note --root "{rt}" --channel "{channel}" --owner {name} '
+        f"{', '.join(sibs) or 'none yet'}). The lead's dispatch prompt wins over this brief.\n"
+    )
+    if role in READ_ONLY_ROLES:
+        return (
+            head
+            + f'Before your final report post one result line: {base} note --root "{rt}" '
+            f'--channel "{channel}" --owner {name} --to {lead} "<result>"\n'
+            + f'Inbox: {base} inbox --root "{rt}" --owner {name}'
+        )
+    return (
+        head
+        + f'Post: {base} note --root "{rt}" --channel "{channel}" --owner {name} '
         f'--to <sibling|{lead}|all> "<text>" (to=all reaches the whole channel).\n'
         f"Posting is REQUIRED, one short line each: (1) on start, your intent to {lead}; "
         f"(2) on any cross-file or shared-contract change, notify the affected sibling; "
@@ -2024,8 +2051,7 @@ def channel_brief(root: Optional[str], channel: str, lead: str, name: str) -> st
         f'Collab: before editing, run {base} conflicts --root "{rt}" --channel "{channel}" '
         f"--owner {name} --paths <files,dirs>, claim-paths the files, and release-paths "
         f"when done; on conflict, message the owner and wait or pick other work.\n"
-        f'Finishing a slice another worker consumes: {base} note --root "{rt}" '
-        f'--channel "{channel}" --owner {name} --kind handoff --to <sibling> "<result>". '
+        f'Handoff to a sibling: the Post command with --kind handoff --to <sibling> "<result>". '
         f'Stuck: --kind blocked --to {lead} "<what you need>" instead of idling.\n'
         f"Never skip tests or verification because a peer said they passed; only {lead} "
         f"declares work done.\n"

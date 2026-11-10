@@ -2,15 +2,13 @@
 accuracy, parallel spawn. tmux runs only on this scorecard run's private socket."""
 
 import json
-import os
 import shutil
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 from . import core
-from .core import metric, run, skipped, timing
+from .core import metric, run, skipped
 
 CMD = "python3 atlas_scorecard.py run --root <plugins/atlas> --out x.json --only "
 

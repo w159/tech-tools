@@ -185,14 +185,17 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
 
 ### Atlas 17.4.1 follow-ups (added 2026-11-10)
 
-The shipped fixes are in `plugins/atlas/CHANGELOG.md` (17.4.1).
+The shipped fixes are in `plugins/atlas/CHANGELOG.md` (17.4.1 and 17.4.2).
 
-- [planned] Observe the `/clear` fix on an installed build: band, todo board and `/atlas-cc` pane after `/clear`. Verified so far only with the mod test kit.
-- [planned] Run `tsc -p plugins/atlas/mod` in a tree that has the host types; the mod type check has not been measured.
-- [planned] Gate (n) blocks once per session and fails open, while the stated rule says "no exemption". Decide which one changes.
-- [planned] Cards label a returned agent `done` without a verified finding.
+- [planned] Observe the `/clear` fix on an installed build: band, todo board and `/atlas-cc` pane after `/clear`. Verified so far only with the mod test kit. The same live check covers the 17.4.2 surfaces: `finished` cards, the every-reply header gate and the session-start doctor line.
 - [planned] `scripts/atlas_irc.py` and `scripts/atlas_statusline.py` print ANSI color without a TTY check.
-- [planned] Dead-code and token-use passes are not started.
+- [planned] `bench_hooks.py --bytes` does not measure the worker inbox wrapper, `docs_drift_watch`, `nudge` or `connector_credential_watch`; they need live board, drift or connector state the bench does not build.
+- [planned] Completion gate (r) returns before the other conditions are evaluated, so a blocked `done` reply hides other failing letters. An (r) block also restarts the (n) loop count.
+- [planned] Dashboard page helpers that `fallow dupes` reports as duplicated (802 lines) were left in place by the 17.4.2 dead-code pass.
+- [planned] Doctor layout: a stray whose archive destination would sit inside the stray itself is reported but never archived by `--fix`. Decide its archive base.
+- [planned] Worker card head row overflows: `plugins/atlas/mod/transcript/cards.tsx` `headRow` (about lines 125-127) fits the meta text against a fixed pad of 24 and does not fit the name chip. Proof: name `implementer-root-cause-2` in a 40-column card gives row widths 45/40/40. Below about 15 columns the label rows are left unfitted as well.
+- [planned] Wide-character table: `plugins/atlas/mod/theme.ts` (about line 172) counts U+2705 and U+26A0 U+FE0F as one cell each, so a row that contains either is one cell too wide.
+- [planned] A running worker can read as ended: `plugins/atlas/mod/transcript/outcome.ts` (about lines 22 and 78) shows `finished` when `agent.list()` throws, when the worker's row is absent, or when its status is `idle`.
 
 ### Atlas 17.0.0 follow-ups (added 2026-11-05)
 

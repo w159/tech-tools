@@ -1,5 +1,54 @@
 # Changelog
 
+## 17.4.2 - 2026-11-10
+
+Follow-up pass on 17.4.1. The session-start doctor moved files without being asked, the status header gate blocked once per session while the rule said every reply, worker cards said `done` for an agent that had only returned, and atlas put more text into the model's context than the model needed. Measurements: `docs/audits/2026-11-10_atlas-payload-budget.md`.
+
+### Fixed
+
+- Doctor at session start only reports. `atlas_doctor.py --hook` prints one line, `atlas layout: N misplaced .atlas path(s): <up to 5 paths> (+M more); run atlas_doctor.py --fix to archive them`, and never moves, renames or deletes a file (`scripts/doctor_layout.py` `hook_layout`). Project paths are listed first. Paths outside the project show the home directory as `~/`. In 17.4.1 the hook archived the paths itself.
+- Layout repair refuses a root that is not a project. With the home directory, Downloads or a temp folder as root, `--hook` prints no layout or docs-naming line and does not walk it, and `--fix` prints `FIX: layout repair skipped: <root> is a home, Downloads or temp folder, not a project; run it from inside a project` and skips layout, docs rename and project memory (`layout_refusal`).
+- `--fix` skips a move whose archive destination is inside its own source (`archive destination is inside the source`). A move that fails while copying leaves the source whole and removes the partial archive copy. Each move prints `FIX: layout moved: <source> -> <destination>`.
+- Completion gate condition (n) blocks every reply without a valid status header, up to the loop cap (`ATLAS_GATE_BLOCK_LOOP`, default 3). It is also checked while a dispatched subagent runs (`hooks/completion_gate_core.py`). 17.4.1 blocked once per session and stayed silent while a subagent ran.
+- Gate loop cap for (n): it counts consecutive header-less Stops. The forced continuation after a block is never blocked, and one whose first line matches the header pattern resets the count, so a corrected reply does not use up the cap for later turns. The reset applies only when the counted block was (n) alone: with another condition open at the same time (for example `a,n`) the count keeps growing, so the cap still frees the session. An empty or sidechain continuation does not reset the count.
+- Stop burst breaker (`scripts/atlas_hook_guard.py`): the one forced continuation that answers a fresh Stop no longer counts toward the burst. Every blocked reply produces two Stop events, so three blocked turns inside 120 seconds tripped the breaker and switched the whole completion gate off for the session. Fresh Stops count as before, and an unbroken chain of continuations still trips it.
+- Worker cards, background launch cards, notification rows and wave headers say `finished` where they said `done` (`mod/transcript/cards.tsx`, `mod/transcript/outcome.ts`). A failed or killed background worker's row is labelled `failed` or `killed`. A returned worker is finished, not verified.
+- A failed or killed background worker's card head shows the failure mark `✗` and the red hue, the same as an errored call (`phaseOf` in `mod/transcript/cards.tsx`). It showed `✓` on teal above a `killed` row.
+- Doctor at a non-project root (home, Downloads, temp): the `atlas-layout` and `docs-naming` checks report `not applicable (n/a): <reason>` and count as not applicable (`layout_checks` in `scripts/atlas_doctor.py`). `atlas-layout` reported `all runtime state is at the project root` for a tree it never walked. `--hook` no longer prints `docs naming: N files need renaming; run atlas_doctor.py --fix` there, because `--fix` refuses that root.
+- Card rows no longer overflow the card width. The label column width is defined once (`LABEL_W`, `LABEL_PAD` in `cards.tsx`) and every labelled row is built by `labelRow`.
+- `mod/discipline.ts` reads the header phase with the shared parser `headerPhaseOf`; its own `PHASE_RE` use is gone.
+- Tests: the omp and dashboard bun suites had failures in this tree, all test bugs. `scripts/dashboard_ui/js/model-picker.test.js` leaked a global `document` stub, `omp/test-omp-stubs.ts` stubbed `@oh-my-pi/pi-tui` for modules that need the real package, and `omp/hook-bridge-session.test.ts` fixtures broke only in a checkout under `.atlas/wt/`. `scripts/test_probe_mesh.py` no longer runs a hardcoded `/usr/bin/tmux` in teardown.
+
+### Changed
+
+- Session start text says "Every user-visible reply opens" the header (`hooks/session_boot_core.py`).
+- Gate (n) wording: the first block carries the template, the phase ids and the re-send instruction (1671 bytes in 17.4.1, 321 now). A repeat block in the same session is one line (221 bytes).
+- Channel brief is role-aware (`scripts/atlas_todo.py` `channel_brief`). Read-only roles (explorer, verifier, completeness-critic, docs-auditor, planner, db-prober, ui-runtime-tester) get the channel line, one post command and the inbox command, with no claim or conflict lines: 2102 bytes before, 695 now. The writer brief is 2117 before, 1916 now. Every brief starts with "The lead's dispatch prompt wins over this brief."
+- Shorter orchestrate nudge (333 to 159 bytes, `hooks/prompt_optimizer_core.py`) and second-dispatch advisory (366 to 213 bytes, `hooks/dispatch_tripwire_core.py`).
+- Mod per-prompt reminder carries the header template from the operating contract, not the regex (165 to 83 bytes, `reinforceLine` in `mod/discipline.ts`).
+- Compact default stdout, with `--json` for the previous full form: `atlas_finding.py` write (664 to 122 bytes), `atlas_mux.py spawn-team` (2594 to 495), `wait` (686 to 246), `reap` (1200 to 235), `atlas_irc.py who` (capped at 20 names; 808 to 508 for 30 members). `atlas_crew.py wait` and `run --wait` print the summary as one JSON line with the same keys (2301 to 1957). The byte counts come from fixtures with mocked tmux. `omp/team-tool.ts` passes `--json` for spawn.
+- `.fallowrc.json` `entry` lists four bun preload or test files: `omp/test-omp-stubs.ts`, `mod/test-shim.ts`, `scripts/dashboard_ui/js/test-dom-baseline.js`, `scripts/sprite_review.test.ts`.
+
+### Added
+
+- `bench_hooks.py --bytes [--show]`: bytes each hook puts into the model's context, per hook and scenario, with a whitelisted child env so two runs print the same table.
+- Scorecard probe for a header-less Stop with a subagent in flight (`scripts/scorecard/probe_gates.py`).
+- Tests for each fix above: gate (n) loop and in-flight cases, doctor report paths, non-project roots and partial moves, card widths and labels, brief output of the scripts.
+
+### Removed
+
+- Unused imports, redefinitions and dead locals in `hooks/` and `scripts/`: `ruff check --select F401,F811,F841` reported 34 findings on 17.4.1 and reports none now.
+- Dead TypeScript and JavaScript: `latestPerId` (`mod/data/core.ts`), `fitRuns`, `progressBar` and `checkRuns` (`mod/mission-layout.ts`) and `RNode` (`scripts/dashboard_ui/js/rich-dom.js`) are no longer exported. The `walk` function in `rich-dom.js` and the `Hue` type in `mod/core-row.ts` are deleted. `fallow dead-code` reports 2 findings under `plugins/atlas`, both duplicate export names.
+
+### Known limits
+
+- Nothing in this release has been observed in a live terminal yet. It is verified against the mod test kit, the bun suites and the Python suites.
+- Native subagent rows at the bottom of the terminal are drawn by the host and cannot be restyled.
+- The every-reply header gate costs 221 bytes on each repeat block. 17.4.1 blocked once per session, so a repeat cost 0.
+- `bench_hooks.py --bytes` does not measure the worker inbox wrapper, `docs_drift_watch`, `nudge` or `connector_credential_watch`.
+- Condition (r) returns before the other conditions are evaluated, so a blocked `done` reply does not list them. A loop signature that alternates between turns (for example `a,n` then `a`) restarts the count.
+- At a non-project root the doctor's project-memory line can still advise `--fix`, which skips project memory there.
+
 ## 17.4.1 - 2026-11-10
 
 Mod survival and visibility pass. The band, the todo board and the `/atlas-cc` pane went blank or stale after `/clear`, mod failures left no trace outside the debug log, and the completion gate let a `done` reply through while work was open.

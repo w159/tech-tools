@@ -8,7 +8,7 @@
 import { atom, read, update } from 'claude-code';
 import type { On, EngineInterface } from 'claude-code';
 import type { AtlasSnapshot } from './contract';
-import { PHASE_RE } from './restyle';
+import { headerPhaseOf } from './restyle';
 import type { HeaderCheck } from './gates';
 import { EMPTY_ORCH, LEAD, onToolEnd, onToolStart } from './data/orchestration';
 
@@ -184,18 +184,17 @@ const orZero = (n: number | undefined): number => n ?? 0;
 /** New context this turn: uncached input plus freshly cached tokens. */
 const grewTokens = (usage: TurnUsage): number => orZero(usage?.input_tokens) + orZero(usage?.cache_creation_input_tokens);
 
-const phaseOf = (firstLine: string): string | null => PHASE_RE.exec(firstLine)?.[1] ?? null;
-
-function headerCheck(pattern: string, answer: string): NonNullable<HeaderCheck> {
+function headerCheck(snapshot: AtlasSnapshot, pattern: string, answer: string): NonNullable<HeaderCheck> {
   const firstLine = answer.split('\n', 1)[0] ?? '';
   const matched = new RegExp(pattern).test(firstLine);
-  return { matched, phase: matched ? phaseOf(firstLine) : null };
+  return { matched, phase: matched ? headerPhaseOf(answer, snapshot) : null };
 }
 
 async function checkHeader($: EngineInterface, answer: string): Promise<void> {
-  const pattern = (await read($, snapshotState))?.contract.headerFirstLinePattern;
-  if (!pattern) return;
-  const check = headerCheck(pattern, answer);
+  const snapshot = await read($, snapshotState);
+  const pattern = snapshot?.contract.headerFirstLinePattern;
+  if (!snapshot || !pattern) return;
+  const check = headerCheck(snapshot, pattern, answer);
   await update($, lastHeaderState, () => check);
   if (!check.matched) await toastOnce($, 'atlas: reply is missing the ATLAS | <phase> | <state> header');
 }
@@ -216,6 +215,11 @@ async function auditTurn($: EngineInterface, e: { answer: string; usage?: TurnUs
 }
 
 // ---- hooks ------------------------------------------------------------------------
+
+/** The per-prompt contract reminder: the human header template, not the regex. */
+export function reinforceLine(template: string | undefined, phase: string): string {
+  return `atlas contract: open replies with ${template || 'the ATLAS status header'} (phase: ${phase})`;
+}
 
 export interface DisciplineDeps {
   /** Contract reminder appended to every prompt (null = none). */

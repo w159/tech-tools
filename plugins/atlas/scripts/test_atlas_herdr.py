@@ -309,7 +309,6 @@ class RouteTests(unittest.TestCase):
 
 
 import json  # noqa: E402
-import os  # noqa: E402
 import socket  # noqa: E402
 
 AGENT_LIST = {

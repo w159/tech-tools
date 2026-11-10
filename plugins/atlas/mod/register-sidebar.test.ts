@@ -94,7 +94,7 @@ test('hotkey tab c sets the view to channel', async ($, on) => {
     props: { title: 'Atlas', isFocused: true, bodyColumns: 56, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} } as never,
   });
   // The active tab is its label drawn bold (the rest muted), not a dimColor flag on the button.
-  const isActive = async (tab: string) => (await ui.find({ key: `tab:${tab}` }))?.children?.[0]?.props.bold;
+  const isActive = async (tab: string) => ((await ui.find({ key: `tab:${tab}` }))?.children?.[0] as { props: { bold?: boolean } } | undefined)?.props.bold;
   expect(await isActive('route')).toBe(true); // route is the default tab
   expect((await ui.find({ key: 'tab:channel' }))?.props.hotkey).toBe('c');
   await ui.press({ key: 'tab:channel' });

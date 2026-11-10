@@ -105,6 +105,7 @@ export async function loadContract(fs: FsLike, pluginRoot: string): Promise<Cont
     phases?: { id?: string; glyph?: string }[];
     todoPhases?: string[];
     headerFirstLinePattern?: string;
+    headerTemplate?: string;
     itemPhasePrefix?: string;
   };
   try {
@@ -116,6 +117,7 @@ export async function loadContract(fs: FsLike, pluginRoot: string): Promise<Cont
     phases: (json.phases ?? []).map((p) => ({ id: (p.id ?? 'research') as PhaseId, glyph: contractGlyph(p.glyph ?? '') })),
     todoPhases: (json.todoPhases ?? []) as PhaseId[],
     headerFirstLinePattern: json.headerFirstLinePattern ?? '',
+    ...(typeof json.headerTemplate === 'string' && json.headerTemplate ? { headerTemplate: json.headerTemplate } : {}),
     itemPhasePrefix: json.itemPhasePrefix ?? '[<phase>] ',
   };
 }

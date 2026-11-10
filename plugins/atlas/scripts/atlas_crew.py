@@ -1097,7 +1097,7 @@ def cmd_run(a) -> int:
         end = time.time() + a.wait
         while time.time() < end:
             if (rundir / "summary.json").exists():
-                print((rundir / "summary.json").read_text())
+                print(_summary_line(rundir / "summary.json"))
                 return 0
             time.sleep(0.5)
     print(
@@ -1621,6 +1621,16 @@ def _known_run(a) -> Path | None:
     return None
 
 
+def _summary_line(path: Path) -> str:
+    """summary.json as one JSON line: the file is indented for people, and `run --wait` / `wait` print it
+    into the lead's context, where the indentation is about a third of the bytes. Same keys either way."""
+    text = path.read_text(encoding="utf-8")
+    try:
+        return json.dumps(json.loads(text))
+    except ValueError:  # half-written or hand-edited: show what is there
+        return text
+
+
 def cmd_wait(a) -> int:
     rundir = _known_run(a)
     if rundir is None:
@@ -1629,7 +1639,7 @@ def cmd_wait(a) -> int:
     while time.time() < end:
         s = rundir / "summary.json"
         if s.exists():
-            print(s.read_text())
+            print(_summary_line(s))
             return 0
         time.sleep(2)
     print(

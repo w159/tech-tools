@@ -1,9 +1,6 @@
-import io
 import os
 import sys
-import json
 import datetime
-import contextlib
 import subprocess
 
 import pytest
