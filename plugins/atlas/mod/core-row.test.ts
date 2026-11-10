@@ -213,10 +213,10 @@ describe('core report lines', () => {
   test('routes: seats, ran models once each, not run yet, fallback name', () => {
     const m = blank();
     m.verdicts = [{ id: 'a', status: 'verified', title: 'ta', by: 'b', at: 1, evidence: '' }];
-    m.routes = [route({ name: '', seats: [seat({ ran: ['m1', 'm1', 'm2'] }), seat({ count: 2, role: 'verifier', model: 'haiku', effort: 'low' })], drift: ['why'] })] as any;
+    m.routes = [route({ name: '', seats: [seat({ count: 3, ran: ['m1', 'm1', 'm2'] }), seat({ count: 2, role: 'verifier', model: 'haiku', effort: 'low' })], drift: ['why'] })] as any;
     const r = coreReport(m).split('\n');
     expect(r).toContain('  fix/low  t1  shared, max 1');
-    expect(r).toContain('    1x implementer sonnet/medium  ran m1, m2');
+    expect(r).toContain('    3x implementer sonnet/medium  ran m1, m2');
     expect(r).toContain('    2x verifier haiku/low  not run yet');
     expect(r).toContain('    DRIFT why');
   });
@@ -273,5 +273,24 @@ describe('core report is bounded', () => {
     expect(rows.some((l) => l.includes('peak 0'))).toBe(false);
     expect(out).toContain('  ... 12 more, 10 with no data');
     expect(out).toContain('all 30 recorded workers');
+  });
+});
+
+describe('D7 / D4 shared core row and report', () => {
+  const none = { ...model, verdicts: [], claims: [], ledger: { claimed: 1, verified: 0, refuted: 0, pending: 0, unchecked: 0 } } as CoreModel;
+  test('D7: the band row and the report say `no verdicts yet`, never 0 verified · 0 refuted', () => {
+    const row = cellsText(coreCells(none, 160));
+    expect(row).toContain('no verdicts yet');
+    expect(row).not.toMatch(/0 verified|0 refuted/);
+    const rep = coreReport(none);
+    expect(rep).toContain('VERDICTS  no verdicts yet');
+    expect(rep).not.toContain('0 findings');
+  });
+  test('D4: the report shows ran 3 / planned 1 for three explorers on a one-explorer seat', () => {
+    const m = { ...model, routes: [{ teamId: 't', name: 'x', cls: 'audit', effort: 'low', isolation: '', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process',
+      seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['claude-haiku-5', 'claude-haiku-5', 'claude-haiku-5'] }] }] } as CoreModel;
+    const rep = coreReport(m);
+    expect(rep).toContain('ran 3 / planned 1 (claude-haiku-5)');
+    expect(rep).toContain('DRIFT explorer ran 3, seat plans 1');
   });
 });

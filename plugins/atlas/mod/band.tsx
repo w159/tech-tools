@@ -7,7 +7,7 @@ import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
 import type { LiveWorker } from './data/live';
-import { planCounts, routeCounts } from './data/todos';
+import { ownTodos, todoCounts } from './data/todos';
 import { groupOpenCount } from './gates';
 import { isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines, PANEL_BG, RAISED_BG, stepperRuns, TONE_HEX } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
@@ -98,8 +98,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const active = all.filter((w) => w.state !== 'done');
   const lingering = all.filter((w) => w.state === 'done' && now - w.since <= LINGER_MS);
   const shown = active.length ? [...active, ...lingering] : []; // a finished worker lingers only while the wave runs
-  const routed = routeCounts(s.todoGroups, s.contract);
-  const { done, total } = routed.total ? routed : planCounts(s.todos); // a board of only dispatch rows still counts: the header matches the TODO tree
+  const { done, total } = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
   const gates = b.gates.filter((g) => g.id !== 'header' && hasGateData(g)); // the header check is the mod's own group; omp never shows it
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
   const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
@@ -115,7 +114,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
     lastRun: lastRun(all, now),
     core: coreCells(b.core, Math.max(1, b.columns)),
-    boardRows: b.todoExpanded && s.todos.length ? s.todos.length + 1 : 0,
+    boardRows: b.todoExpanded && ownTodos(s.todos, s.sessionId).length ? ownTodos(s.todos, s.sessionId).length + 1 : 0,
   };
 }
 
@@ -162,7 +161,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const keys = !!on && idle && cols >= 80; // keys while idle; omp has none, a running band keeps its rows for workers
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
   const rows: Row[] = lines.flatMap((l): Row[] => {
-    if (l.board) return todoRows(b.snapshot.todos, { cols, tick: b.tick, expanded: true, maxRows: l.board });
+    if (l.board) return todoRows(ownTodos(b.snapshot.todos, b.snapshot.sessionId), { cols, tick: b.tick, expanded: true, maxRows: l.board });
     if (l.keys && on) return [keysRow(els, l, cols, on)];
     return [segs(l)];
   });

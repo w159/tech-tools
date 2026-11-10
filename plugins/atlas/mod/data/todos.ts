@@ -4,6 +4,7 @@
 // poll key is stat mtimeMs (plan §2, docs/plans/2026-10-09_atlas-mod.md).
 import type { AtlasSnapshot, Contract, FsLike, PhaseCount, PhaseId, TodoItem } from '../contract';
 import type { TodoGroup } from '../orchestra-types';
+import { contractGlyph } from '../theme';
 
 /** Phase -> department label (the single copy; pane/board.tsx imports it). */
 export const DEPT: Record<string, string> = {
@@ -99,8 +100,35 @@ const createdAt = (it: BoardItem): number => Number(it.created_at) || 0;
 const isLive = (it: BoardItem, sessionId: string): boolean =>
   it.session_id === sessionId || (it.status !== 'completed' && it.origin !== 'carried');
 
-/** The lead's own plan: hook-added dispatch rows (one per subagent dispatch) are bookkeeping, not plan items. */
-export const isPlanItem = (it: object): boolean => (it as { origin?: string }).origin !== 'dispatch';
+/** A stub row carries no work: empty content, or the literal `placeholder` some boards hold. It never counts. */
+export const isStubRow = (it: object): boolean => {
+  const c = (it as { content?: unknown }).content;
+  if (typeof c !== 'string') return false; // no content field at all (a bare status object) is not a stub
+  const t = c.trim().toLowerCase();
+  return t === '' || t === 'placeholder';
+};
+
+/** The lead's own plan: hook-added dispatch rows (one per subagent dispatch) are bookkeeping, advisor notes are not
+ * operating-contract work, and stub rows hold no work; none of them is a plan item. */
+export const isPlanItem = (it: object): boolean => {
+  const origin = (it as { origin?: string }).origin;
+  return origin !== 'dispatch' && origin !== 'advisor' && !isStubRow(it);
+};
+
+/** This session's own rows: carried rows are re-stamped with the session id at boot yet belong to an earlier plan, and
+ * another session's rows (a different session id; the open backlog readTodos keeps for the board) are not this run's work. Without a session id
+ * the caller has already scoped the rows. */
+const ownRow = (it: object, sessionId?: string): boolean => {
+  const r = it as { origin?: string; session_id?: string };
+  return r.origin !== 'carried' && (sessionId === undefined || r.session_id === undefined || r.session_id === sessionId);
+};
+
+/** This session's rows as the board lists them (dispatch rows included; carried and other sessions' rows left out). */
+export const ownTodos = <T extends object>(items: readonly T[], sessionId?: string): T[] => items.filter((it) => ownRow(it, sessionId));
+
+/** The one count basis: this session's plan items. Every surface (band, HUD, board, side panel, snapshot.counts) counts this set. */
+export const planBasis = <T extends object>(items: readonly T[], sessionId?: string): T[] =>
+  items.filter((it) => ownRow(it, sessionId) && isPlanItem(it));
 
 /** Advisor notes are not operating-contract work: they never join phase groups or progress. */
 const isAdvisor = (it: BoardItem): boolean => it.origin === 'advisor';
@@ -123,7 +151,7 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
     id: it.id, content: clip(it.content, 160), status: it.status, owner: it.owner ?? null, evidence: it.evidence ? clip(it.evidence, 200) : null,
     live: isLive(it, sessionId), ...(it.origin ? { origin: it.origin } : {}),
   });
-  const contractItems = items.filter(it => !notOwn(it));
+  const contractItems = items.filter(it => !notOwn(it) && !isStubRow(it)); // a stub row holds no work: no group shows it
   const groups: TodoGroup[] = [];
   for (const phase of order) {
     const mine = contractItems.filter(it => {
@@ -137,7 +165,7 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
     groups.push({
       phase,
       dept: phase === 'unsorted' ? 'UNSORTED' : (DEPT[phase] ?? phase.toUpperCase()),
-      glyph: phase === 'unsorted' ? '·' : (contract.phases.find(p => p.id === phase)?.glyph ?? '·'),
+      glyph: phase === 'unsorted' ? '·' : contractGlyph(contract.phases.find(p => p.id === phase)?.glyph ?? '·'),
       items: rows,
       done: rows.filter(r => r.status === 'completed').length,
       total: rows.length,
@@ -152,45 +180,64 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
   return groups;
 }
 
-/** AtlasSnapshot['counts']: done/total overall and per contract.todoPhases phase. */
-export function computeCounts(all: TodoItem[], contract: Contract): AtlasSnapshot['counts'] {
-  const items = all.filter(isPlanItem);
+/** AtlasSnapshot['counts']: done/total overall and per contract.todoPhases phase, over the shared plan basis. */
+export function computeCounts(all: TodoItem[], contract: Contract, sessionId?: string): AtlasSnapshot['counts'] {
+  const items = planBasis(all, sessionId);
   const byPhase: Record<string, PhaseCount> = {};
   for (const p of contract.todoPhases) byPhase[p] = { done: 0, total: 0 };
-  let done = 0;
   for (const it of items) {
-    if (it.status === 'completed') done++;
     const phase = resolvePhase(it, contract);
     if (phase === undefined) continue; // unstamped, no valid prefix: totals only
     const c = byPhase[phase] ??= { done: 0, total: 0 };
     c.total++;
     if (it.status === 'completed') c.done++;
   }
-  return { done, total: items.length, byPhase };
+  const { done, total } = planCounts(all, sessionId);
+  return { done, total, byPhase };
 }
 
-/** Current phase: header > first in_progress item's phase > 'research'. */
+/** Phase of the plan itself: the in_progress row's phase; every plan row completed => 'done'; else the last completed
+ * row's phase (the run has moved past it). undefined when the plan names no phase. Shared with omp. */
+export function planPhase<T extends { status?: string; phase?: string }>(items: readonly T[], sessionId?: string): string | undefined {
+  const plan = planBasis(items, sessionId);
+  const active = plan.find((it) => it.status === 'in_progress');
+  if (active) return active.phase;
+  if (plan.length > 0 && plan.every((it) => it.status === 'completed')) return 'done';
+  return [...plan].reverse().find((it) => it.status === 'completed' && it.phase)?.phase;
+}
+
+/** Current phase: the active todo > a finished plan (`done`) > the reply header > the last completed row's phase > 'research' (nothing has run). */
 export function currentPhase(
   items: TodoItem[],
   headerPhase: PhaseId | null,
+  sessionId?: string,
 ): { phase: PhaseId; source: 'header' | 'todo' | 'default' } {
   // The run's own active todo is the live phase; the reply header is the lead's claim for this turn only.
-  const active = items.find(it => it.status === 'in_progress');
+  const plan = planBasis(items, sessionId);
+  const active = plan.find((it) => it.status === 'in_progress');
   if (active?.phase) return { phase: active.phase, source: 'todo' };
+  if (!active && plan.length > 0 && plan.every((it) => it.status === 'completed')) return { phase: 'done', source: 'todo' };
   if (headerPhase) return { phase: headerPhase, source: 'header' };
-  return { phase: 'research', source: 'default' };
+  const last = planPhase(plan);
+  return last ? { phase: last as PhaseId, source: 'todo' } : { phase: 'research', source: 'default' };
 }
 
-/** done/total over the board rows: the lead's plan (dispatch rows excluded) while one exists, else every row, so a board
- * holding only dispatch rows still reads `0 of 2` like the TODO tree under it. Twin basis of routeCounts for flat rows. */
-export function planCounts(items: readonly { status: string }[]): { done: number; total: number } {
-  const plan = items.filter(isPlanItem);
-  const basis = plan.length ? plan : items;
+/** done/total over the shared plan basis (this session's plan items; dispatch, advisor, carried and stub rows leave it).
+ * A board holding only dispatch rows still reads `0 of 2` like the TODO tree under it. The one count function: band, HUD,
+ * board, side panel and snapshot.counts all come through here. */
+export function planCounts(items: readonly { status: string }[], sessionId?: string): { done: number; total: number } {
+  const plan = planBasis(items, sessionId);
+  const basis = plan.length ? plan : items.filter((it) => ownRow(it, sessionId) && !isStubRow(it) && (it as { origin?: string }).origin === 'dispatch');
   return { done: basis.filter((i) => i.status === 'completed').length, total: basis.length };
 }
 
-/** done/total over the lead's plan: every group's items (contract phases and unsorted, so label phases count) except advisor notes and dispatch rows; same basis as computeCounts. */
+/** The snapshot's count: planCounts over its todos; a snapshot that carries only groups (no flat rows) counts the groups. */
+export function todoCounts(s: { todos: readonly { status: string }[]; todoGroups: readonly TodoGroup[]; sessionId?: string }): { done: number; total: number } {
+  return s.todos.length ? planCounts(s.todos, s.sessionId) : routeCounts(s.todoGroups);
+}
+
+/** done/total over group rows (groupTodos already left stubs and advisor notes out; dispatch rows are skipped here). */
 export function routeCounts(groups: readonly TodoGroup[], _contract?: Contract): { done: number; total: number } {
-  const items = groups.filter((g) => g.phase !== 'advisor').flatMap((g) => g.items).filter(isPlanItem);
+  const items = groups.filter((g) => g.phase !== 'advisor').flatMap((g) => g.items).filter((it) => it.origin !== 'dispatch');
   return { done: items.filter((i) => i.status === 'completed').length, total: items.length };
 }

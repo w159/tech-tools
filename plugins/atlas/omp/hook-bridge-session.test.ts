@@ -373,6 +373,11 @@ async function thresholdScenario(leanCtx: boolean) {
 	});
 }
 
+// Each REAL test spawns python3 hook processes (dozens for the threshold scenario). bun's 5 s default timed out
+// under load (pytest -n 8 beside bun: 2 of 27 failed, the same file alone passed). The per-test timeout is explicit
+// so a loaded host cannot fail it, and `bun test --timeout N` cannot lower it; the assertions are unchanged.
+const REAL_HOOK_TEST_TIMEOUT_MS = 60_000;
+
 for (const leanCtx of [false, true]) {
 	test(`REAL tripwire through the bridge (lean-ctx ${leanCtx ? "configured" : "not configured"}): the inline-op threshold denies and a dispatch resets it`, async () => {
 		const r = await thresholdScenario(leanCtx);
@@ -383,7 +388,7 @@ for (const leanCtx of [false, true]) {
 		expect(r.dispatch.blocked).toBe(false);
 		expect(r.afterReset.blocked).toBe(false);
 		expect(r.grep.text + (r.grep.blocked ? r.grep.text : "")).not.toMatch(/native Grep is disabled/);
-	});
+	}, REAL_HOOK_TEST_TIMEOUT_MS);
 }
 
 // The tests above inject fake hook runners, so none of them would notice the REAL dispatch_tripwire.py
@@ -458,7 +463,7 @@ test("REAL dispatch_tripwire through the bridge: first spec-less call is advisor
 		await expectFirstOffenseIsAdvisory(fire);
 		await expectSecondOffenseAndEdges(fire);
 	});
-});
+}, REAL_HOOK_TEST_TIMEOUT_MS);
 
 // omp has no ToolSearch: its tools are xd:// devices. The Claude tripwire asks every atlas dispatch for a `ToolSearch`
 // load step, so a faithful omp lead could never satisfy it and was pushed into writing Claude-only wording (and into
@@ -490,7 +495,7 @@ test("REAL dispatch_tripwire through the bridge: an omp-shaped TOOLS block passe
 		expect(unscoped).toContain("atlas_resolve.py");
 		expect(String((await fire({ tasks: [{ name: "V", agent: "verifier", task: OMP_TOOLS + SPEC }] }))?.reason)).toContain("resolves to team ['implementer']");
 	});
-});
+}, REAL_HOOK_TEST_TIMEOUT_MS);
 
 // A `write` to an `xd://` URI is an MCP DEVICE CALL in omp, not a file edit. The bridge classified it by tool name only
 // (`Write`), so the REAL tripwire denied the claude-mem recall that atlas's own recall gate demands, and every lean-ctx
@@ -541,7 +546,7 @@ test("REAL dispatch_tripwire through the bridge: device writes are never 'inline
 		expect(await fire("write", { path: "xd://mcp__lean_ctx_ctx_search", content: '{"pattern":"x"}' })).toBeUndefined();
 		expect(String((await fire("write", { path: "src/a.py", content: "x" }))?.reason)).toContain("never edit target code inline"); // a real file edit is still denied
 	});
-});
+}, REAL_HOOK_TEST_TIMEOUT_MS);
 
 // omp's `task` tool takes a batch-level `context` (shared `# Goal`/contract) plus per-item `task`, and gives every child
 // BOTH. The bridge built the tripwire's `prompt` from `task` alone, so a well-formed omp dispatch whose spec and TOOLS
@@ -580,4 +585,4 @@ test("REAL dispatch_tripwire through the bridge: spec and TOOLS carried by the b
 		expect(String((await fire({ tasks: items }))?.reason)).toContain("missing the code-nav TOOLS block"); // same items, no context: still denied
 		expect(String((await fire({ context: SHARED, tasks: [{ name: "C", agent: "implementer", task: "GOAL: and also rewrite billing\n# Target\nsrc/c.py" }] }))?.reason)).toContain("2 GOAL: blocks");
 	});
-});
+}, REAL_HOOK_TEST_TIMEOUT_MS);

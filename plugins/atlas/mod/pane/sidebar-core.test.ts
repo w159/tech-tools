@@ -260,17 +260,17 @@ describe('core view: route rows', () => {
   test('seats that ran: unique models, tick when they match (or inherit), cross when not, drift flag', () => {
     const c = empty();
     c.routes = [route('t1', { drift: ['x'], seats: [
-      seat({ ran: ['claude-sonnet-5-5', 'claude-sonnet-5-5'] }),
+      seat({ count: 2, ran: ['claude-sonnet-5-5', 'claude-sonnet-5-5'] }),
       seat({ ran: ['claude-haiku-5-5'] }),
       seat({ model: 'inherit', ran: ['claude-opus-5'] }),
       seat({ model: 'Sonnet', ran: ['claude-sonnet-5-5', 'claude-haiku-5-5'] }),
     ] }), route('t2', { seats: [seat({ ran: ['claude-haiku-5-5'] }), seat({ ran: ['claude-sonnet-5-5'] })] })] as any;
     const rs = withCore(c);
     expect(textOf(keyed(rs, 'core:r:t1'))).toBe('  fix/low  meanfix  tmux, shared, max 1  ✗ drift');
-    expect(textOf(keyed(rs, 'core:r:t1:0'))).toBe('    → 1× implementer sonnet/medium  ran claude-sonnet-5-5 ✓ as planned');
+    expect(textOf(keyed(rs, 'core:r:t1:0'))).toBe('    → 2× implementer sonnet/medium  ran claude-sonnet-5-5 ✓ as planned');
     expect(textOf(keyed(rs, 'core:r:t1:1'))).toBe('    → 1× implementer sonnet/medium  ran claude-haiku-5-5 ✗ drift');
     expect(textOf(keyed(rs, 'core:r:t1:2'))).toBe('    → 1× implementer inherit/medium  ran claude-opus-5 ✓ as planned');
-    expect(textOf(keyed(rs, 'core:r:t1:3'))).toBe('    → 1× implementer Sonnet/medium  ran claude-sonnet-5-5, claude-haiku-5-5 ✗ drift');
+    expect(textOf(keyed(rs, 'core:r:t1:3'))).toBe('    → 1× implementer Sonnet/medium  ran 2 / planned 1 (claude-sonnet-5-5, claude-haiku-5-5) ✗ drift');
     // the mark and its word are green when the seat ran the planned model, red when it did not
     const mark = (k: string) => kids(keyed(rs, k)).at(-1)!.props;
     expect(mark('core:r:t1:0')).toMatchObject({ children: ' ✓ as planned', color: T.ok });
@@ -319,5 +319,33 @@ describe('core view: route rows', () => {
     const rs = withCore(c);
     expect(rs.map((r) => r.props.key)).not.toContain('core:r:inproc');
     expect(textOf(keyed(rs, 'core:r:in-process:fix/low'))).toBe('  fix/low  in-process  in-process, max 2');
+  });
+});
+
+describe('D4 / D7 sidebar core rows', () => {
+  const planned = (ran: string[], count = 1) => ({
+    ...empty(),
+    routes: [{ teamId: 'in-process:audit/low', name: 'in-process', cls: 'audit', effort: 'low', isolation: '', maxParallel: ran.length, drift: [], transport: 'in-process',
+      seats: [{ role: 'explorer', count, model: 'haiku', effort: 'low', ran }] }] as any,
+  });
+  test('D4: 3 explorers ran against a 1-explorer seat: the row says ran 3 / planned 1, never `as planned`', () => {
+    const out = withCore(planned(['claude-haiku-5', 'claude-haiku-5', 'claude-haiku-5'])).map(textOf).join('\n');
+    expect(out).toContain('ran 3 / planned 1');
+    expect(out).not.toContain('as planned');
+    expect(out).toContain('✗ drift');
+  });
+  test('D4: one explorer on the planned model still reads as planned', () => {
+    expect(withCore(planned(['claude-haiku-5'])).map(textOf).join('\n')).toContain('✓ as planned');
+  });
+  test('D7: with no verdicts the head says `no verdicts yet`, not 0 verified / 0 refuted', () => {
+    const head = textOf(keyed(withCore(planned(['claude-haiku-5'])), 'core:h:verdicts'));
+    expect(head).toBe('verdicts  no verdicts yet');
+    expect(head).not.toMatch(/0 verified|0\/0/);
+  });
+  test('D7: unchecked done claims still show beside the empty ledger', () => {
+    const c = empty();
+    c.claims = [claim('w1')] as any;
+    c.ledger = { claimed: 1, verified: 0, refuted: 0, pending: 0, unchecked: 1 };
+    expect(textOf(keyed(withCore(c), 'core:h:verdicts'))).toBe('verdicts  no verdicts yet · 1 unchecked');
   });
 });

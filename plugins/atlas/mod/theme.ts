@@ -225,7 +225,9 @@ export const chartRoom = {
  * (fg + bg), so they stay legible whatever the terminal theme is. */
 export const spriteTile = '#1b1f27';
 
-const CONTRACT_GLYPH: Record<string, string> = { '🔍': '◎', '💡': '◇', '🧪': '⚗', '📋': '☰', '🔧': '⚒', '✅': '✓', '🏁': '⚑', '⛔': '■' };
+/** The one done mark: every surface (band, HUD, board, side panel, omp) takes it from here. */
+export const DONE_GLYPH = '✓';
+const CONTRACT_GLYPH: Record<string, string> = { '🔍': '◎', '💡': '◇', '🧪': '⚗', '📋': '☰', '🔧': '⚒', '✅': DONE_GLYPH, '🏁': '⚑', '⛔': '■' };
 
 /** Map an operating-contract phase emoji to a single-cell glyph; other single-cell glyphs pass through, anything else becomes '·'. */
 export function contractGlyph(raw: string): string {

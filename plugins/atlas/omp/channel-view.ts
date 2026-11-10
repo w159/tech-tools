@@ -27,7 +27,7 @@ import { atlasKnob } from "./knobs";
 import { createCoreSource } from "./core-source";
 import { openGateCount } from "../mod/gates";
 import type { CoreModel } from "../mod/data/core";
-import { planCounts } from "../mod/data/todos";
+import { planCounts, planPhase } from "../mod/data/todos";
 
 export const WIDGET_KEY = "atlas-channel";
 const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
@@ -392,13 +392,13 @@ export function sessionTodos(root: string, sessionId?: string): BoardRow[] {
 	} catch {
 		// no board yet: zeroes
 	}
-	return items.filter(i => !i.archived && i.origin !== "advisor" && (!sessionId || i.session_id === sessionId));
+	return items.filter(i => !i.archived && i.origin !== "advisor" && i.origin !== "carried" && (!sessionId || i.session_id === sessionId));
 }
 
 export function todoSummary(root: string, sessionId?: string): { done: number; total: number; phase?: string } {
 	const items = sessionTodos(root, sessionId);
-	const phase = items.find(i => i.status === "in_progress")?.phase;
-	return { ...planCounts(items), phase }; // twin of the mod band: dispatch rows leave the count unless they are the whole board
+	// the mod's shared count basis (planCounts) and phase (planPhase): a finished plan reads `done`, never the research default
+	return { ...planCounts(items as { status: string }[], sessionId), phase: planPhase(items as { status?: string; phase?: string }[], sessionId) };
 }
 
 /** The same session slice as rows for the board panel. */

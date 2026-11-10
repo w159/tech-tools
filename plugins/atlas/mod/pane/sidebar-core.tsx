@@ -9,7 +9,7 @@ import type { ClientElements, RenderElement } from "claude-code";
 import { type CoreModel, type Verdict, hasCore, tok } from "../data/core";
 import { TONE_HEX as T } from "../mission-layout";
 import { fitRuns, type Segment } from "../runs";
-import { fitText, textWidth } from "../theme";
+import { DONE_GLYPH, fitText, textWidth } from "../theme";
 import { scrub } from "./chrome";
 import { gateRows } from "./sidebar-gates";
 import type { SidebarHandlers, SidebarModel } from "./sidebar-types";
@@ -37,7 +37,7 @@ function contractRows(els: ClientElements, m: CoreModel, cols: number): RenderEl
 }
 
 const VERDICT_LOOK: Record<Verdict["status"], { g: string; word: string; color: string }> = {
-  verified: { g: "✓", word: "verified", color: T.ok },
+  verified: { g: DONE_GLYPH, word: "verified", color: T.ok },
   rejected: { g: "✗", word: "refuted", color: T.bad },
   "needs-evidence": { g: "?", word: "needs evidence", color: T.warn },
 };
@@ -49,7 +49,11 @@ const VERDICT_ID_W = 15;
 
 function verdictRows(els: ClientElements, m: CoreModel, model: SidebarModel, on: SidebarHandlers, cols: number): RenderElement[] {
   const l = m.ledger;
-  const figures = joinSep([
+  const none = l.verified + l.refuted + l.pending === 0; // an empty ledger reads as such, not as 0 verified / 0 refuted
+  const figures = none ? joinSep([
+    { t: "no verdicts yet", color: T.muted },
+    ...(l.unchecked ? [{ t: `${l.unchecked} unchecked`, color: T.warn }] : []),
+  ]) : joinSep([
     { t: `${l.verified} verified`, color: l.verified ? T.ok : T.muted },
     { t: `${l.refuted} refuted`, color: l.refuted ? T.bad : T.muted },
     ...(l.pending ? [{ t: `${l.pending} open`, color: T.warn }] : []),
@@ -111,13 +115,16 @@ function offloadRows(els: ClientElements, m: CoreModel, cols: number): RenderEle
   ];
 }
 
-/** `ran sonnet ✓ as planned`, `ran haiku ✗ drift`, `not run yet`. */
+/** `ran sonnet ✓ as planned`, `ran haiku ✗ drift`, `ran 3 / planned 1 ✗ drift`, `not run yet`. The count is judged as well as the model. */
 function ranSegments(s: CoreModel["routes"][number]["seats"][number]): Segment[] {
   if (!s.ran.length) return [{ t: "  not run yet", color: T.muted }];
   const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === "inherit");
+  const over = s.ran.length > s.count;
   return [
-    { t: `  ran ${[...new Set(s.ran)].join(", ")}`, color: T.muted },
-    same ? { t: " ✓ as planned", color: T.ok } : { t: " ✗ drift", color: T.bad },
+    over
+      ? { t: `  ran ${s.ran.length} / planned ${s.count} (${[...new Set(s.ran)].join(", ")})`, color: T.bad }
+      : { t: `  ran ${[...new Set(s.ran)].join(", ")}`, color: T.muted },
+    same && !over ? { t: " ✓ as planned", color: T.ok } : { t: " ✗ drift", color: T.bad },
   ];
 }
 

@@ -29,6 +29,14 @@ class TmpCase(unittest.TestCase):
         self._t = tempfile.TemporaryDirectory()
         self.addCleanup(self._t.cleanup)
         self.root = os.path.realpath(self._t.name)
+        # atlas "installed": a claude worker argv carries no --plugin-dir (a bare host would add one, D4)
+        cfg = os.path.join(self.root, "claude-config", "plugins")
+        os.makedirs(cfg)
+        with open(os.path.join(cfg, "installed_plugins.json"), "w") as fh:
+            fh.write('{"version":2,"plugins":{"atlas@tech-tools":[{}]}}')
+        p = mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": os.path.dirname(cfg)})
+        p.start()
+        self.addCleanup(p.stop)
 
 
 class ClaudeWrapper(unittest.TestCase):

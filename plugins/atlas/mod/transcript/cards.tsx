@@ -5,7 +5,7 @@
 import type { RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from '../contract'
 import type { AgentState } from '../contract'
-import { fitText, glyph, MOCHA as M, stateColor, textWidth } from '../theme'
+import { DONE_GLYPH, fitText, glyph, MOCHA as M, stateColor, textWidth } from '../theme'
 
 export interface CallLike { tool: string; input: unknown; output?: unknown; isRunning: boolean; isErrored: boolean; isInterrupted: boolean }
 type AgentInput = { subagent_type?: string; subagentType?: string; name?: string; description?: string; prompt?: string; model?: string; effort?: string }
@@ -58,7 +58,7 @@ export function phaseOf(c: CallLike, s: AgentState, ended = ''): { mark: string;
   [c.isInterrupted, { mark: '⏸', color: BRAND.input, state: 'dead' }],
   [isLive(c, s), { mark: glyph.dot, color: BRAND.working, state: 'running' }],
  ]
- return phases.find(([on]) => on)?.[1] ?? { mark: '✓', color: s === 'finished' ? BRAND.ok : colorOf(s), state: 'finished' }
+ return phases.find(([on]) => on)?.[1] ?? { mark: DONE_GLYPH, color: s === 'finished' ? BRAND.ok : colorOf(s), state: 'finished' }
 }
 
 const tierOf = (i: AgentInput): string => [i.model, i.effort].filter(Boolean).join('·')

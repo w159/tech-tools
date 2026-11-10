@@ -180,3 +180,19 @@ describe('line press', () => {
     expect(calls).toEqual(['toggle:gate:b']);
   });
 });
+
+describe('D8 long gate text wraps instead of cutting to `Subagent…`', () => {
+  const long: GateGroup = { id: 'routing', title: 'Routing', lines: [
+    { id: 'r1', label: 'dispatch', ok: false, fix: 'Subagent dispatch needs a TOOLS line naming ToolSearch and lean-ctx' },
+  ] };
+  test('D8: at 56 cells the key words survive and every row fits', () => {
+    const out = rows([long], null, 56);
+    const text = out.map(textOf).join(' ');
+    expect(text).toContain('ToolSearch');
+    expect(text).toContain('lean-ctx');
+    for (const r of out) expect(textWidth(textOf(r))).toBeLessThanOrEqual(56);
+  });
+  test('D8: a tail that fits stays on the one summary row', () => {
+    expect(rows([long], null, 120)).toHaveLength(1);
+  });
+});

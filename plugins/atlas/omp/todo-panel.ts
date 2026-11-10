@@ -7,7 +7,7 @@
  */
 import { isPlanItem } from "../mod/data/todos";
 import { TONE_HEX } from "../mod/mission-layout";
-import { fitText, textWidth } from "../mod/theme";
+import { DONE_GLYPH, fitText, textWidth } from "../mod/theme";
 import { hx, seg } from "./panel-paint";
 
 export interface PanelTodo {
@@ -37,7 +37,7 @@ const paint = (parts: Part[], width: number): string => {
 const partsWidth = (parts: Part[]): number => parts.reduce((n, p) => n + textWidth(p.t), 0);
 
 /** Status mark and its tone. Unknown statuses read as pending. */
-const MARK: Record<string, [string, keyof typeof TONE_HEX]> = { completed: ["✓", "ok"], in_progress: ["◉", "accent"], blocked: ["⏸", "warn"], pending: ["○", "muted"] };
+const MARK: Record<string, [string, keyof typeof TONE_HEX]> = { completed: [DONE_GLYPH, "ok"], in_progress: ["◉", "accent"], blocked: ["⏸", "warn"], pending: ["○", "muted"] };
 const markOf = (status: string): Part => {
 	const [g, tone] = MARK[status] ?? MARK.pending!;
 	return part(g, tone);

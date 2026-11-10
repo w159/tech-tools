@@ -7,7 +7,7 @@ import { isPlanItem } from './data/todos';
 import { PANEL_BG, TONE_HEX as T } from './mission-layout';
 import { padRow } from './paint';
 import type { Segment } from './runs';
-import { fitText, textWidth } from './theme';
+import { DONE_GLYPH, fitText, textWidth } from './theme';
 
 /** `tick` is accepted for the band's call signature; nothing here moves, because nothing on the board is a spinner. */
 export type TodoPanelOpts = { cols: number; tick: number; expanded: boolean; maxRows: number };
@@ -16,7 +16,7 @@ const seg = (t: string, color: string = T.text, bold?: boolean): Segment => ({ t
 const pad = (parts: Segment[], cols: number): Segment[] => padRow(parts, cols, PANEL_BG);
 
 /** Status mark and its tone. Unknown statuses read as pending. */
-const MARK: Record<string, [string, string]> = { completed: ['✓', T.ok], in_progress: ['◉', T.accent], blocked: ['⏸', T.warn], pending: ['○', T.muted] };
+const MARK: Record<string, [string, string]> = { completed: [DONE_GLYPH, T.ok], in_progress: ['◉', T.accent], blocked: ['⏸', T.warn], pending: ['○', T.muted] };
 const markOf = (status: string): Segment => {
   const [g, color] = MARK[status] ?? MARK.pending!;
   return seg(g, color);

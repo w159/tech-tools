@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandTree, planRows, railPhase, railRow, shortTool } from './band';
+import { computeCounts, groupTodos } from './data/todos';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
 import { PANEL_BG, RAISED_BG, TONE_HEX } from './mission-layout';
@@ -437,5 +438,21 @@ describe('header counts the open work the TODO tree shows', () => {
     const todos = rowsOf([{ id: 'd0', status: 'in_progress' }, { id: 'd1', status: 'pending' }]);
     const { rows } = panel(160, { snapshot: busySnap({ todos: todos as any, todoGroups: [] }) });
     expect(rows[0]).toContain('0 of 2 tasks');
+  });
+});
+
+describe('D2 the header count is the snapshot count', () => {
+  const r = (id: string, over: Record<string, unknown> = {}) => ({ id, content: `work ${id}`, status: 'pending', session_id: 's', ...over });
+  const items = [
+    r('a', { status: 'completed', phase: 'implement' }), r('b', { phase: 'implement' }),
+    r('m', { origin: 'manual' }), // unphased session row: no group holds it, the count must
+    r('ph', { content: 'placeholder', session_id: 'old' }), r('old', { session_id: 'older' }),
+    r('adv', { origin: 'advisor' }), r('car', { origin: 'carried' }),
+  ];
+  test('D2: band `N of M tasks` equals computeCounts on the same board (1 of 3), whatever the groups drop', () => {
+    const contract = busySnap().contract;
+    const snapshot = busySnap({ todos: items as any, todoGroups: groupTodos(items as any, contract, 's'), counts: computeCounts(items as any, contract, 's') });
+    expect(snapshot.counts).toMatchObject({ done: 1, total: 3 });
+    expect(panel(160, { snapshot }).rows[0]).toContain('1 of 3 tasks');
   });
 });

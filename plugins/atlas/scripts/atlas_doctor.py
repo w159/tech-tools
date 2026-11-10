@@ -4231,7 +4231,14 @@ def render_report(
         if na:
             lines.append(paint(dim, f"  · {len(na)} not applicable here; --verbose lists them"))
     tally = f"{len(passed)} pass, {len(warns)} warnings, {len(fails)} failures, {len(na)} not applicable"
-    verdict = "Healthy" if not failed else f"{len(failed)} problem(s) need attention"
+    # A warning never fails the run, but "Healthy" above a WARN row misreports it (baseline D7): name the warnings.
+    verdict = (
+        f"{len(failed)} problem(s) need attention"
+        if failed
+        else f"{len(warns)} warning(s) to review"
+        if warns
+        else "Healthy"
+    )
     lines += ["", f"{paint(bold, verdict)}  ·  {tally}"]
     return lines
 

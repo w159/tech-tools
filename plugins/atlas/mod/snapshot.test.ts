@@ -108,9 +108,9 @@ describe('SnapshotBuilder', () => {
     const snap = await b.build(live());
     expect(snap.counts).toEqual({
       done: 0,
-      total: 4,
+      total: 2, // t3/t4 are another session's backlog: listed on the board, not this run's count
       byPhase: {
-        research: { done: 0, total: 1 }, // t3/t4 are unphased: totals only, no phase bucket
+        research: { done: 0, total: 1 },
         theory: { done: 0, total: 1 },
         test: { done: 0, total: 0 },
         validate: { done: 0, total: 0 },

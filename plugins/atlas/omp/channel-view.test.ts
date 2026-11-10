@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WIDGET_KEY, boardRoot, createChannelView, sessionTodos, laneCalls, laneTool, sparkBuckets, liveWorkers, registerLaneToolRecorder, spinFrame, todoSummary, finishedMembers, formatNote, readChannelNotes, registerChannelView } from "./channel-view";
+import { WIDGET_KEY, boardRoot, createChannelView, sessionTodos, laneCalls, laneTool, sparkBuckets, liveWorkers, registerLaneToolRecorder, spinFrame, todoSummary, railPhase, finishedMembers, formatNote, readChannelNotes, registerChannelView } from "./channel-view";
 import { createGatesCache, renderPanel, visibleWidth, type PanelModel } from "./mission-panel";
 import { isTerminalYield, registerStopBridge } from "./stop-bridge";
 import { registerWorkerReport } from "./worker-report";
@@ -882,4 +882,28 @@ test("todo summary: dispatch rows leave the plan count, but count when they are 
 		[{ status: "in_progress", origin: "dispatch" }, { status: "pending", origin: "dispatch" }],
 	);
 	expect(todoSummary(onlyDispatch)).toEqual({ done: 0, total: 2, phase: undefined });
+});
+
+test("D1/D2 todo summary: a placeholder stub and other sessions' open rows leave the count (parity with the mod)", () => {
+	const root = atlasFixture(
+		[{ name: "lead-abc", role: "lead", joined: 1 }],
+		[
+			{ status: "completed", session_id: "s1", content: "a" },
+			{ status: "completed", session_id: "s1", content: "b" },
+			{ status: "in_progress", session_id: "s1", content: "c", phase: "implement" },
+			{ status: "pending", session_id: "s1", content: "placeholder" },
+			{ status: "pending", session_id: "s1", content: "carried over", origin: "carried" },
+		],
+	);
+	expect(todoSummary(root, "s1")).toEqual({ done: 2, total: 3, phase: "implement" });
+});
+
+test("D3 todo summary: every plan row done reads the done phase, not research", () => {
+	const root = atlasFixture(
+		[{ name: "lead-abc", role: "lead", joined: 1 }],
+		[{ status: "completed", content: "a", phase: "implement" }, { status: "completed", content: "b", phase: "verify" }],
+	);
+	const sum = todoSummary(root);
+	expect(sum).toEqual({ done: 2, total: 2, phase: "done" });
+	expect(railPhase(sum.phase, "research")).toBe("done");
 });

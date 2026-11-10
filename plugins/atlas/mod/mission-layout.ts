@@ -8,7 +8,7 @@
 //   - Colour carries state only (ok, warn, bad) plus one violet accent for "now"; structure is muted and dim grey.
 //   - Every glyph is paired with a word; motion (spinners) marks only what is running right now.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { fitText, formatDuration, spin, textWidth } from './theme';
+import { DONE_GLYPH, fitText, formatDuration, spin, textWidth } from './theme';
 
 /** A run's role, not its colour: each harness maps tones to its own palette (TONE_HEX is the shared one). */
 export type Tone = 'text' | 'muted' | 'dim' | 'accent' | 'ok' | 'warn' | 'bad';
@@ -142,7 +142,7 @@ const stepName = (id: string, mode: StepMode): string => (mode === 'full' ? id :
 function step(id: string, rel: number, m: MissionModel, mode: StepMode, animate: boolean): Run[] {
   const named = (t: string, tone: Tone, bold = false): Run[] => (t ? [r(' '), r(t, tone, bold)] : []);
   const finished = m.phase === 'done';
-  if (rel < 0 || (finished && rel === 0)) return [r('✓', 'ok'), ...named(stepName(id, rel === 0 ? 'full' : mode), rel === 0 ? 'text' : 'muted', rel === 0)];
+  if (rel < 0 || (finished && rel === 0)) return [r(DONE_GLYPH, 'ok'), ...named(stepName(id, rel === 0 ? 'full' : mode), rel === 0 ? 'text' : 'muted', rel === 0)];
   if (rel > 0) return [r('○', 'dim'), ...named(stepName(id, mode), 'dim')];
   if (m.blocked) return [r('!', 'warn', true), r(' '), r(id, 'warn', true)];
   return [r(animate ? spin(m.tick) : '●', 'accent'), r(' '), r(id, 'accent', true)];
@@ -184,7 +184,7 @@ function mark(w: MissionWorker, tick: number): Run {
     case 'starting': return r('◌', 'muted');
     case 'waiting': return r('○', 'warn');
     case 'failed': return r('✗', 'bad', true);
-    case 'done': return r('✓', 'ok');
+    case 'done': return r(DONE_GLYPH, 'ok');
   }
 }
 
@@ -237,13 +237,13 @@ function noteLine(n: MissionNote, cols: number): Line {
  * `checks  ✓ all 3 pass`. Failing names take the text tone so they stand out; passing names stay muted. */
 function checkRuns(checks: readonly MissionCheck[] | null, room: number): Run[] {
   if (!checks?.length) return [];
-  const one = (c: MissionCheck): Run[] => [c.ok ? r('✓', 'ok') : r('✗', 'bad', true), r(` ${c.id}`, c.ok ? 'muted' : 'text')];
+  const one = (c: MissionCheck): Run[] => [c.ok ? r(DONE_GLYPH, 'ok') : r('✗', 'bad', true), r(` ${c.id}`, c.ok ? 'muted' : 'text')];
   const join = (cs: readonly MissionCheck[]): Run[] => cs.flatMap((c, i) => [...(i ? [r('  ')] : []), ...one(c)]);
   const failing = checks.filter((c) => !c.ok);
   const forms: Run[][] = [
     join(checks),
-    failing.length ? [...join(failing), r(`  ${checks.length - failing.length} ok`, 'muted')] : [r('✓', 'ok'), r(` all ${checks.length} pass`, 'muted')],
-    failing.length ? [r('✗', 'bad', true), r(` ${plural(failing.length, 'failing')}`, 'text')] : [r('✓', 'ok')],
+    failing.length ? [...join(failing), r(`  ${checks.length - failing.length} ok`, 'muted')] : [r(DONE_GLYPH, 'ok'), r(` all ${checks.length} pass`, 'muted')],
+    failing.length ? [r('✗', 'bad', true), r(` ${plural(failing.length, 'failing')}`, 'text')] : [r(DONE_GLYPH, 'ok')],
   ];
   const label = [r(' checks  ', 'dim')];
   for (const f of forms) if (runsWidth(label) + runsWidth(f) <= room) return [...label, ...f];

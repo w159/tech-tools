@@ -20,7 +20,7 @@ How to dispatch a subagent so it stays small, focused, and returns only what you
 
 Pass paths and goals, not file contents. The subagent's prompt is its entire system prompt; every extra sentence is context it spends before starting.
 
-This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` dispatch whose prompt omits `GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:` or `REPORT:`, and denies one that carries more than a single `GOAL:`. A dispatch with no finish line is the one that runs for an hour; two GOALs in one prompt is a wave crammed into one context instead of delegated. The mechanical agent `atlas:runner` additionally requires a numbered `STEPS:` block (see "Mechanical tier" below).
+This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` dispatch whose prompt omits `GOAL:`, `DELIVERABLE:` (or `DELIVERABLES:` / `DELIVERABLE(S):`), `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:` or `REPORT:`, and denies one that carries more than a single `GOAL:`. A dispatch with no finish line is the one that runs for an hour; two GOALs in one prompt is a wave crammed into one context instead of delegated. The mechanical agent `atlas:runner` additionally requires a numbered `STEPS:` block (see "Mechanical tier" below).
 
 **Dispatch contract (enforced by `hooks/dispatch_tripwire_core.py`; every denial is friction row `dispatch_denied:<code>`).** One line per requirement:
 
@@ -28,7 +28,7 @@ This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` d
 - `TOOLS:` block naming `ToolSearch` and a code-nav token (code `toolkit`, `_toolkit_gap`); shared rule: name the code-navigation tools the harness provides.
 - `SCOPE: <class>/<effort>` line (code `scope`): `DENY - this dispatch to <agent> has no `SCOPE: <class>/<effort>` line.` (`:445`).
 - 2nd in-process working-role dispatch of a run (code `team`, `_team_note`): `DENY - 2nd in-process working dispatch this run; SCOPE <class>/<effort> = N working seats, a team.` plus the `atlas_mux.py spawn-team` and `atlas_crew.py run` commands. Only when the scope (the dispatch's `SCOPE:` line, else the scope the prompt optimizer stored) has 2+ working seats and tmux is on PATH. Closing roles are never counted, and a run that already launched a team or crew is skipped. No tmux, omp or `ATLAS_TEAM_GATE=off`: the same text as an advisory.
-- `GOAL:`, `DELIVERABLE:`/`DELIVERABLES:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (code `spec`, `REQUIRED_SPEC_BLOCKS` `:69`): `DENY - this <tool> dispatch to <agent> is unbounded: missing <labels>.` A missing `REPORT:` alone is injected, not denied; the first spec offense per session is an advisory.
+- `GOAL:`, `DELIVERABLE:`/`DELIVERABLES:`/`DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (code `spec`, `REQUIRED_SPEC_BLOCKS` `:69`): `DENY - this <tool> dispatch to <agent> is unbounded: missing <labels>.` A missing `REPORT:` alone is injected, not denied; the first spec offense per session is an advisory.
 - A single `GOAL:` (code `multi_goal`): `DENY - this <tool> dispatch carries N GOAL: blocks.` (`:1342`).
 - `atlas:runner` only: numbered `STEPS:` (`:644`): `DENY - an atlas:runner dispatch must carry numbered STEPS:`.
 - Never pass `model` (or `effort`); agents pin their own model in frontmatter. Passing one is denied: `DENY - this <tool> dispatch to <agent> overrides model with '<m>'.` (code `model_override`; `effort_override` for effort).

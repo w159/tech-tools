@@ -668,9 +668,9 @@ class AtlasDoctorTest(unittest.TestCase):
                 rc = atlas_doctor.main([])
         out = buf.getvalue()
         self.assertIn("WARN  context-tooling", out)
-        # HEALTHY still prints - a warn-severity check alone must not flip
-        # the summary line or the exit code.
-        self.assertIn("Healthy  ·", out)
+        # a warn-severity check alone must not flip the exit code, and the headline names the warning (D7)
+        self.assertRegex(out, r"\d+ warning\(s\) to review  ·")
+        self.assertNotIn("Healthy", out)
         self.assertEqual(rc, 0)
 
     def test_trash_dirs_capped(self):
@@ -3282,6 +3282,16 @@ class RenderReportTest(unittest.TestCase):
         lines = atlas_doctor.render_report(self.ROWS[:4], [], "atlas")
         self.assertEqual(lines[-1], "Healthy  ·  1 pass, 0 warnings, 0 failures, 3 not applicable")
 
+    def test_d7_warnings_are_not_headlined_healthy(self):
+        """Baseline D7: four WARN rows printed the headline "Healthy". A warning does not fail the run (exit code
+        stays 0) but the headline must name it."""
+        import atlas_doctor
+
+        warn = {"check": "display-statusline", "ok": False, "severity": "warn", "detail": "statusLine unset"}
+        lines = atlas_doctor.render_report([*self.ROWS[:4], warn], [], "atlas")
+        self.assertEqual(lines[-1], "1 warning(s) to review  ·  1 pass, 1 warnings, 0 failures, 3 not applicable")
+        self.assertNotIn("Healthy", lines[-1])
+
     def test_verbose_lists_each_pass_and_skip_row(self):
         import atlas_doctor
 
@@ -3290,7 +3300,7 @@ class RenderReportTest(unittest.TestCase):
         for name in ("rollback", "omp-model-roles", "cmux-socket"):
             self.assertTrue(any(ln.startswith(f"  · SKIP  {name}") for ln in lines), name)
         self.assertFalse(any("checks pass" in ln or "not applicable here" in ln for ln in lines))
-        self.assertEqual(lines[-1], "Healthy  ·  1 pass, 1 warnings, 1 failures, 3 not applicable")
+        self.assertEqual(lines[-1], "1 warning(s) to review  ·  1 pass, 1 warnings, 1 failures, 3 not applicable")
 
     def test_wrapping_stays_within_width_and_keeps_words(self):
         import atlas_doctor

@@ -203,7 +203,7 @@ describe('syncAgentsFromList identity', () => {
       ],
       [{ name: 'pending01', persona: 'verifier', state: 'running', source: 'task' }],
     );
-    expect(out.map((a) => a.name)).toEqual(['explorer', 'explorer-bbbb', 'pending01']);
+    expect(out.map((a) => a.name)).toEqual(['explorer', 'explorer #2', 'pending01']);
   });
 });
 

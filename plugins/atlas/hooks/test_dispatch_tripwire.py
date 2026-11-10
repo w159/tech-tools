@@ -493,6 +493,43 @@ class TripwireTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertEqual(r.stdout.strip(), "")
 
+    def test_pre_allows_deliverable_s_label_and_deny_names_accepted_forms(self):
+        """CLAUDE.md documents the label as DELIVERABLE(S):. The gate used to
+        reject it ("missing DELIVERABLE:") and the next-label scan did not see it
+        as a block boundary. All three spellings must satisfy the check."""
+        for label in ("DELIVERABLE", "DELIVERABLES", "DELIVERABLE(S)"):
+            spec = (
+                "GOAL: map the auth path.\n"
+                + label
+                + ": a report written to .atlas/evidence/auth-map.md\n"
+                "SUCCESS CRITERIA: every auth entrypoint listed with file:line\n"
+                "OUT OF SCOPE: no edits, no migrations\n"
+                "STOP CONDITIONS: halt and report if the router cannot be located\n"
+                "REPORT: return the structured result\n"
+            )
+            r = run_hook(
+                self._pre_payload(
+                    "Agent",
+                    {"subagent_type": "atlas:explorer", "prompt": TOOLS_BLOCK + spec},
+                ),
+                self.env,
+            )
+            self.assertEqual(r.returncode, 0, label)
+            self.assertNotIn("deny", r.stdout, label)
+            self.assertNotIn("unbounded", r.stdout, label)
+        # The deny for a missing deliverable names every accepted spelling.
+        r = run_hook(
+            self._pre_payload(
+                "Agent",
+                {
+                    "subagent_type": "atlas:implementer",
+                    "prompt": TOOLS_BLOCK + "GOAL: fix the auth bug.\n",
+                },
+            ),
+            self.env,
+        )
+        self.assertIn("DELIVERABLE(S):", r.stdout)
+
     def test_pre_deny_atlas_dispatch_missing_the_bounding_spec(self):
         """A dispatch that names the toolset but gives the agent no finish line
         -- the exact shape that produced 30-60 minute subagent sessions. The
@@ -4811,9 +4848,9 @@ class TeamGateTest(unittest.TestCase):
 
     def test_first_working_dispatch_is_denied_with_the_team_command(self):
         env = self._env()
-        decision, reason = self._dispatch("atlas:explorer", "audit/medium", env)
+        decision, reason = self._dispatch("atlas:implementer", "fix/medium", env)
         self.assertEqual(decision, "deny")
-        self.assertIn("atlas_mux.py spawn-team --class audit --effort medium --paths a,b --task-file T", reason)
+        self.assertIn("atlas_mux.py spawn-team --class fix --effort medium --paths a,b --task-file T", reason)
         self.assertIn('atlas_crew.py run --spec S --files G --goal "..."', reason)
         self.assertIn("dispatch_denied:team", self._friction())
         self.assertNotIn("SCOPE: audit/low", reason)
@@ -4823,7 +4860,7 @@ class TeamGateTest(unittest.TestCase):
 
     def test_deny_length_does_not_depend_on_the_plugin_root(self):
         env = self._env(CLAUDE_PLUGIN_ROOT="/" + "r" * 199)
-        decision, reason = self._dispatch("atlas:explorer", "audit/medium", env)
+        decision, reason = self._dispatch("atlas:implementer", "fix/medium", env)
         self.assertEqual(decision, "deny")
         self.assertNotIn("r" * 199, reason)
         self.assertIn("${CLAUDE_PLUGIN_ROOT}/scripts/", reason)
@@ -4831,7 +4868,7 @@ class TeamGateTest(unittest.TestCase):
         self.assertLess(len(reason.encode("utf-8")), 600, reason)
 
     def _launch(self, env):
-        cmd = 'python3 "/opt/plug/atlas/scripts/atlas_mux.py" spawn-team --class audit --effort medium --paths a'
+        cmd = 'python3 "/opt/plug/atlas/scripts/atlas_mux.py" spawn-team --class fix --effort medium --paths a'
         payload = {
             "session_id": "sess-1",
             "cwd": self.tmp,
@@ -4843,13 +4880,13 @@ class TeamGateTest(unittest.TestCase):
 
     def test_every_working_dispatch_is_denied(self):
         env = self._env()
-        self.assertEqual(self._dispatch("atlas:explorer", "audit/medium", env)[0], "deny")
-        self.assertEqual(self._dispatch("atlas:explorer", "audit/medium", env)[0], "deny")
+        self.assertEqual(self._dispatch("atlas:implementer", "fix/medium", env)[0], "deny")
+        self.assertEqual(self._dispatch("atlas:implementer", "fix/medium", env)[0], "deny")
 
     def test_team_launched_this_run_still_denies_in_process_workers(self):
         env = self._env()
         self._launch(env)
-        self.assertEqual(self._dispatch("atlas:explorer", "audit/medium", env)[0], "deny")
+        self.assertEqual(self._dispatch("atlas:implementer", "fix/medium", env)[0], "deny")
 
     def test_closing_roles_are_allowed(self):
         env = self._env()
@@ -4859,22 +4896,22 @@ class TeamGateTest(unittest.TestCase):
 
     def test_omp_keeps_the_advisory(self):
         env = self._env(ATLAS_HARNESS="omp")
-        self.assertIsNone(self._dispatch("atlas:explorer", "audit/medium", env)[0])
+        self.assertIsNone(self._dispatch("atlas:implementer", "fix/medium", env)[0])
 
     def test_no_tmux_keeps_the_advisory(self):
         env = self._env(with_tmux=False)
-        self._dispatch("atlas:explorer", "audit/medium", env)
-        decision, note = self._dispatch("atlas:explorer", "audit/medium", env)
+        self._dispatch("atlas:implementer", "fix/medium", env)
+        decision, note = self._dispatch("atlas:implementer", "fix/medium", env)
         self.assertIsNone(decision)
         self.assertIn("ADVISORY (no tmux)", note)
 
     def test_team_gate_off_allows(self):
         env = self._env(ATLAS_TEAM_GATE="off")
-        self._dispatch("atlas:explorer", "audit/medium", env)
-        decision, note = self._dispatch("atlas:explorer", "audit/medium", env)
+        self._dispatch("atlas:implementer", "fix/medium", env)
+        decision, note = self._dispatch("atlas:implementer", "fix/medium", env)
         self.assertIsNone(decision)
         self.assertIn("[atlas] ADVISORY (ATLAS_TEAM_GATE=off)", note)
-        self.assertIn("spawn-team --class audit --effort medium", note)
+        self.assertIn("spawn-team --class fix --effort medium", note)
 
     def test_single_seat_scope_is_denied(self):
         env = self._env()
@@ -4909,7 +4946,7 @@ class TeamGateUnitTest(unittest.TestCase):
         self.addCleanup(p.stop)
         self.denied = []
 
-    def _gate(self, now, agent="atlas:explorer", scope="audit/medium", tmux="/usr/bin/tmux"):
+    def _gate(self, now, agent="atlas:implementer", scope="fix/medium", tmux="/usr/bin/tmux"):
         tinput = {"subagent_type": agent, "prompt": f"SCOPE: {scope}\n"}
         self.denied = []
         with patch("time.time", return_value=now), patch("shutil.which", return_value=tmux), \
@@ -4917,7 +4954,20 @@ class TeamGateUnitTest(unittest.TestCase):
             self.dt._scope_gate(lambda code, text: self.denied.append(code), tinput, self.root, "team-unit", "run-1")
         return self.denied, out.getvalue()
 
-    def test_first_explorer_is_denied(self):
+    def test_read_only_audit_dispatch_is_not_denied(self):
+        """D11: explorer and db-prober carry disallowedTools Write/Edit, so they cannot change target code and
+        cannot contend with a teammate over files. A lone read-only audit dispatch must run in-process even
+        with tmux on PATH, and it must not eat the advisory counter either."""
+        for agent in ("atlas:explorer",):
+            denied, out = self._gate(1000.0, agent=agent, scope="audit/medium")
+            self.assertEqual(denied, [], agent)
+            self.assertNotIn("in-process working dispatch", out, agent)
+        self.assertTrue(self.dt._is_read_only_role("atlas:db-prober"))
+        self.assertFalse(self.dt._is_read_only_role("atlas:implementer"))
+        # A real editing seat is still denied afterwards.
+        self.assertEqual(self._gate(1030.0)[0], ["team"])
+
+    def test_first_implementer_is_denied(self):
         self.assertEqual(self._gate(1000.0)[0], ["team"])
         self.assertEqual(self._gate(1030.0)[0], ["team"])
 
@@ -4953,7 +5003,7 @@ class TeamGateUnitTest(unittest.TestCase):
             denied, out = self._gate(1030.0)
         self.assertEqual(denied, [])
         self.assertIn("[atlas] ADVISORY (ATLAS_TEAM_GATE=off)", out)
-        self.assertIn("spawn-team --class audit --effort medium", out)
+        self.assertIn("spawn-team --class fix --effort medium", out)
 
     def test_no_tmux_is_advisory(self):
         self._gate(1000.0, tmux=None)
@@ -4969,7 +5019,7 @@ class TeamGateUnitTest(unittest.TestCase):
         self.assertFalse(self.dt._is_working_role("general-purpose"))
 
     def test_resolved_scope_fallback_and_fail_open(self):
-        tinput = {"subagent_type": "atlas:explorer", "prompt": "no scope line"}
+        tinput = {"subagent_type": "atlas:implementer", "prompt": "no scope line"}
         fake = type(sys)("prompt_optimizer_core")
         fake.resolved_scope = lambda session, root=None: {"task_class": "audit", "effort": "high", "working_seats": 3}
         with patch.dict(sys.modules, {"prompt_optimizer_core": fake}):

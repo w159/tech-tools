@@ -17,6 +17,7 @@ import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
+import { ownTodos } from './data/todos';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -162,7 +163,7 @@ const slugOf = (task: string | undefined): string =>
 type ListedRow = { id: string; teammateId?: string; description?: string; type?: string; status: string };
 
 /** One squad row per host list row, keyed by the row's unique agent id (never by position). `taken` is the
- * id -> label memo of earlier rebuilds: a label another id already holds gets this id's suffix, so a worker
+ * id -> label memo of earlier rebuilds: a label another id already holds gets this id's ordinal (`#2`), so a worker
  * that dropped out of the list can never share a name (and so an activity/lifecycle key) with a new one. */
 export function mapListed(
 	listed: readonly ListedRow[],
@@ -170,7 +171,7 @@ export function mapListed(
 	meta: Record<string, SpawnMeta> = {},
 	taken: Record<string, string> = {},
 ): { id: string; agent: SquadAgent }[] {
-	const labels = new Map<string, number>();
+	const used = new Set<string>();
 	const personas = listed.map((a) => personaOf(a, taskAgents.find((t) => t.name === a.id), meta[a.id]));
 	return listed.map((a, i) => {
 		const recorded = taskAgents.find((t) => t.name === a.id);
@@ -179,13 +180,15 @@ export function mapListed(
 		const crowded = personas.filter((p) => p === persona).length > 1; // two of one role: the task tells them apart
 		const task = (typeof a.description === 'string' && a.description !== '' ? a.description : recorded?.task) || undefined;
 		const base = baseLabel(a, spawned, persona, task, crowded);
-		const n = (labels.get(base) ?? 0) + 1;
-		labels.set(base, n);
-		const heldByOther = Object.entries(taken).some(([id, label]) => id !== a.id && label === base);
+		const heldByOther = (label: string): boolean => Object.entries(taken).some(([id, held]) => id !== a.id && held === label);
+		// A true collision reads as a short ordinal (`alpha-explorer #2`), never a host id.
+		let name = base;
+		for (let n = 2; used.has(name) || heldByOther(name); n++) name = `${base} #${n}`;
+		used.add(name);
 		return {
 			id: a.id,
 			agent: {
-				name: n === 1 && !heldByOther ? base : `${base}-${a.id.slice(0, 4)}`,
+				name,
 				persona,
 				state: LIST_STATE[a.status] ?? 'running',
 				source: 'task' as const,
@@ -938,7 +941,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		// The HUD keeps the TODO tree only: the band's worker rows replace its Subagents block (agents: []).
 		const agents = hudAgents(live, snapshot.squad);
-		const hudIn = { todos: snapshot.todos ?? [], agents: [], root: snapshot.root };
+		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents: [], root: snapshot.root };
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents / Waiting rows
 		const running = agents.some(isRunning);
 		const runningCount = agents.filter(isRunning).length;

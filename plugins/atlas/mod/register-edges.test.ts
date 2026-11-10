@@ -36,6 +36,25 @@ describe('mapListed labels', () => {
   });
 });
 
+describe('D5 duplicate labels read as ordinals, never a host id', () => {
+  test('D5: two explorers with no description are `explorer` and `explorer #2`', () => {
+    const out = mapListed([row({ id: 'aaaa1111', type: 'atlas:explorer' }), row({ id: 'bbbb2222', type: 'atlas:explorer' }), row({ id: 'cccc3333', type: 'atlas:explorer' })], []);
+    expect(out.map((m) => m.agent.name)).toEqual(['explorer', 'explorer #2', 'explorer #3']);
+  });
+  test('D5: a label an earlier id still holds gives the new id the next ordinal', () => {
+    const out = mapListed([row({ id: 'dddd4444', type: 'atlas:explorer' })], [], {}, { aaaa1111: 'explorer', bbbb2222: 'explorer #2' });
+    expect(out[0]!.agent.name).toBe('explorer #3');
+  });
+  test('D5: the dispatch name is the label, with no suffix when names differ', () => {
+    const out = mapListed([row({ id: 'aaaa1111', type: 'atlas:explorer', description: 'alpha-explorer: map x' }), row({ id: 'bbbb2222', type: 'atlas:explorer', description: 'beta-explorer: map y' })], []);
+    expect(out.map((m) => m.agent.name)).toEqual(['alpha-explorer', 'beta-explorer']);
+  });
+  test('D5: a true collision on a dispatch name is `alpha-explorer #2`', () => {
+    const out = mapListed([row({ id: 'aaaa1111', type: 'atlas:explorer', description: 'alpha-explorer: a' }), row({ id: 'bbbb2222', type: 'atlas:explorer', description: 'alpha-explorer: b' })], []);
+    expect(out.map((m) => m.agent.name)).toEqual(['alpha-explorer', 'alpha-explorer #2']);
+  });
+});
+
 describe('HUD row arithmetic', () => {
   test('hudStarvedAtFullLine is true only when strictly fewer rows show than wanted', () => {
     const shownAt = (cap: number): number => cap;

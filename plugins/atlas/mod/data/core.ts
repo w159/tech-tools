@@ -311,11 +311,13 @@ function seatsOf(
 }
 
 const driftOf = (seats: readonly Seat[]): string[] =>
-  seats.flatMap((s) =>
-    s.ran
+  seats.flatMap((s) => [
+    ...s.ran
       .filter((m) => !ranAs(s.model, m))
       .map((m) => `${s.role} ran ${m}, seat is ${s.model}`),
-  );
+    // more workers ran than the seat plans: drift whatever the model
+    ...(s.ran.length > s.count ? [`${s.role} ran ${s.ran.length}, seat plans ${s.count}`] : []),
+  ]);
 
 /** `a/b/lead-01a122` -> `lead-01a122`: channels compare by their last path segment, as the mux team reader does. */
 const lastSegment = (channel: unknown): string =>

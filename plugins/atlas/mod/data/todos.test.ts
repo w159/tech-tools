@@ -4,7 +4,9 @@
 // file, computeCounts, currentPhase precedence.
 import { describe, expect, test } from 'claude-code/testing';
 import type { Contract, FsLike, TodoItem } from '../contract';
+import { contractGlyph } from '../theme';
 import { DEPT, computeCounts, currentPhase, groupTodos, isPlanItem, planCounts, readTodos, routeCounts } from './todos';
+import * as todosMod from './todos';
 
 const CONTRACT: Contract = {
   phases: [],
@@ -423,7 +425,7 @@ describe('currentPhase', () => {
 
   test('falls back to research with default source', () => {
     expect(currentPhase([], null)).toEqual({ phase: 'research', source: 'default' });
-    expect(currentPhase([item({ id: 'a', status: 'completed' })], null))
+    expect(currentPhase([item({ id: 'a', status: 'pending' })], null))
       .toEqual({ phase: 'research', source: 'default' });
   });
 });
@@ -437,4 +439,68 @@ describe('planCounts', () => {
     expect(planCounts([t('d0', 'in_progress', 'dispatch'), t('d1', 'completed', 'dispatch')])).toEqual({ done: 1, total: 2 });
   });
   test('empty board: 0 of 0', () => { expect(planCounts([])).toEqual({ done: 0, total: 0 }); });
+});
+
+// ---- mod data fixes D1-D3, D9 (ui-rootcause) ----
+const row = (over: Record<string, unknown>) => ({ id: 'x', content: 'real work', status: 'pending', session_id: 's1', ...over }) as any;
+
+describe('D1 phantom rows leave the plan basis', () => {
+  const real = [row({ id: 'a', status: 'completed' }), row({ id: 'b', status: 'completed' }), row({ id: 'c', status: 'in_progress' })];
+  test('D1: a placeholder stub row does not count: 2 of 3, not 2 of 4', () => {
+    const stub = row({ id: 'ph', content: 'placeholder', session_id: 'other' });
+    expect(planCounts([...real, stub], 's1')).toEqual({ done: 2, total: 3 });
+    expect(isPlanItem(stub)).toBe(false);
+  });
+  test('D1: another session\'s open row does not inflate this session\'s total', () => {
+    const old = row({ id: 'old', content: 'last week\'s leftover', session_id: 'older', status: 'pending' });
+    expect(planCounts([...real, old], 's1')).toEqual({ done: 2, total: 3 });
+    expect(computeCounts([...real, old], CONTRACT, 's1').total).toBe(3);
+  });
+  test('D1: an empty-content row is a stub too', () => {
+    expect(planCounts([...real, row({ id: 'e', content: '  ' })], 's1').total).toBe(3);
+  });
+});
+
+describe('D2 one count basis', () => {
+  test('D2: computeCounts, planCounts and todoCounts agree on a mixed board', () => {
+    const items = [
+      row({ id: 'a', status: 'completed', phase: 'implement' }),
+      row({ id: 'b', status: 'pending', origin: 'manual' }), // unphased manual row: groups drop it, the count must keep it
+      row({ id: 'c', status: 'pending', origin: 'advisor' }),
+      row({ id: 'd', status: 'pending', origin: 'dispatch' }),
+      row({ id: 'e', status: 'pending', origin: 'carried' }),
+    ];
+    const snap = { todos: items, todoGroups: groupTodos(items, CONTRACT, 's1'), sessionId: 's1' };
+    const c = computeCounts(items, CONTRACT, 's1');
+    expect((todosMod as any).todoCounts(snap)).toEqual({ done: c.done, total: c.total });
+    expect(planCounts(items, 's1')).toEqual({ done: c.done, total: c.total });
+    expect(c.total).toBe(2);
+  });
+});
+
+describe('D3 phase after completion', () => {
+  const done = (id: string, phase: string) => ({ ...item({ id, status: 'completed' }), phase }) as TodoItem;
+  test('D3: every plan row completed => done, never research', () => {
+    expect(currentPhase([done('a', 'research'), done('b', 'implement')], null)).toEqual({ phase: 'done', source: 'todo' });
+  });
+  test('D3: a stale header cannot pull a finished run back', () => {
+    expect(currentPhase([done('a', 'implement')], 'research').phase).toBe('done');
+  });
+  test('D3: nothing in progress, work pending, no header => the last completed row\'s phase, not research', () => {
+    const items = [done('a', 'research'), done('c', 'implement'), { ...item({ id: 'b', status: 'pending' }), phase: 'verify' } as TodoItem];
+    expect(currentPhase(items, null)).toEqual({ phase: 'implement', source: 'todo' });
+  });
+  test('D3: dispatch and stub rows do not hold a finished run open', () => {
+    const items = [done('a', 'verify'), row({ id: 'd', origin: 'dispatch', status: 'in_progress' }), row({ id: 'p', content: 'placeholder' })];
+    expect(currentPhase(items, null).phase).toBe('done');
+  });
+});
+
+describe('D9 one glyph path', () => {
+  test('D9: group glyphs go through contractGlyph, so the done glyph is one mark', () => {
+    const c: Contract = { ...CONTRACT, phases: [{ id: 'implement', glyph: '🔧' }, { id: 'verify', glyph: '✅' }] };
+    const g = groupTodos([row({ id: 'a', phase: 'implement' }), row({ id: 'b', phase: 'verify' })], c, 's1');
+    expect(g.map(x => x.glyph)).toEqual([contractGlyph('🔧'), contractGlyph('✅')]);
+    expect(g[1]!.glyph).toBe('✓');
+  });
 });

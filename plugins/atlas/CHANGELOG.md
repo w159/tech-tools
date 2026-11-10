@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Reliability baseline (17.5.0) fixes, each with a test that fails on the old code:
+  - Dispatch gate accepts `DELIVERABLE:`, `DELIVERABLES:` and `DELIVERABLE(S):` (the spelling CLAUDE.md documents) and a `DELIVERABLE(S):` line ends the previous block; the spec deny names all three. Test: `test_pre_allows_deliverable_s_label_and_deny_names_accepted_forms` (`hooks/test_dispatch_tripwire.py`).
+  - Team deny skips read-only roles (`READ_ONLY_ROLES`: explorer, db-prober; their agent files disallow Write/Edit), so a lone `SCOPE: audit/*` explorer dispatch is no longer denied with tmux on PATH. Editing roles are still denied. Test: `test_read_only_audit_dispatch_is_not_denied`.
+  - Claude pane and claude-bg workers can run their board note command without a prompt: `worker_allow` always carries `Bash(python3 <atlas_todo.py> note *)`, no wider. Test: `test_d2_every_profile_may_run_the_board_note_command_and_nothing_wider` (`scripts/test_atlas_mux.py`).
+  - `atlas_mux.py wait` reports `ok:false`, `outcome:"failed"` (and exit 1) when a member exited non-zero, and each failed member carries its `failure` reason. Tests: `test_d3_wait_is_not_ok_when_a_member_exited_nonzero`, `test_d3_wait_is_ok_when_every_member_exited_zero`.
+  - Claude workers get `--plugin-dir <plugin root>` when atlas is not in `installed_plugins.json`; `spawn-team` fails up front with a clear message when neither an install nor a plugin tree exists, and a worker whose `--agent atlas:<role>` is not found exits with the reason "agent atlas:<role> not found ... pass --plugin-dir". Tests: `test_d4_*`.
+  - `atlas_doctor.py` headline reads `N warning(s) to review` instead of `Healthy` when any WARN row prints. Test: `test_d7_warnings_are_not_headlined_healthy`.
+  - `omp/hook-bridge-session.test.ts`: the REAL-hook tests carry an explicit 60 s timeout, so a loaded host (pytest -n 8 beside bun) no longer times them out at bun's 5 s default.
+- Mod data layer (UI root causes D1-D9), each with a test that fails on the old code:
+  - One count basis: `planBasis`/`planCounts`/`todoCounts` (`mod/data/todos.ts`) count this session's plan rows; stub (`placeholder`/empty), dispatch, advisor, carried and other-session rows leave it. Band, HUD, board, side panel, `snapshot.counts` and omp `todoSummary` all read it (D1, D2).
+  - Phase after the last item completes reads `done`, not `research`; with work left and no header it keeps the last completed row's phase (D3).
+  - Route drift compares the ran count with the seat count: `ran 3 / planned 1 ✗ drift`, never `as planned` (D4). Duplicate subagent labels read `alpha-explorer #2`, not a host-id suffix (D5).
+  - An empty verdict ledger reads `no verdicts yet`, not `0 verified · 0 refuted` (D7). Long gate text wraps onto a second row instead of cutting to `Subagent…` (D8). One done glyph, `DONE_GLYPH` in `mod/theme.ts`, and group glyphs go through `contractGlyph` (D9).
+
 ## 17.5.0 - 2026-11-10
 
 Port and follow-up release. The lead ported the 28 commits main lacked from branch `claude/gateway-broker-mode-main` (MCP gateway broker mode with Entra-scoped roles, the CIPP URL-only remote connector with an OAuth client id, armada 2.3.0, gateway and CIPP evidence and findings, and the Codex-harness pieces in atlas scripts and hooks listed below). Crew waves then fixed the mod lead channel, the completion gate remediation paths, the team deny and the crew launch guard, and removed serena from atlas. The gateway and connector changes live in `mcp_servers/mcp-gateway/` and `plugins/armada/` (see `plugins/armada/CHANGELOG.md` 2.3.0 and `docs/CHANGELOG.md`).

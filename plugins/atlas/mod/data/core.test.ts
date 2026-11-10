@@ -323,3 +323,17 @@ describe('routes: transport and session', () => {
     expect(coreModel(emptyIn({ matrix, teams: [rec('lead-x', 1)] })).inProcess).toBe(false);
   });
 });
+
+describe('D4 route count drift', () => {
+  const matrix = JSON.stringify({ classes: { audit: { low: { team: [{ role: 'explorer', model: 'haiku' }] } } } });
+  const dispatch = (n: number) => ({ name: `ex-${n}`, type: 'atlas:explorer', scope: 'audit/low', model: 'claude-haiku-5', at: n });
+  test('D4: three explorer dispatches against a one-explorer seat are drift, though the model matches', () => {
+    const [r] = dispatchRoutes([dispatch(1), dispatch(2), dispatch(3)], matrix);
+    expect(r!.seats[0]).toMatchObject({ count: 1 });
+    expect(r!.seats[0]!.ran).toHaveLength(3);
+    expect(r!.drift).toEqual(['explorer ran 3, seat plans 1']);
+  });
+  test('D4: as many dispatches as seats is no drift', () => {
+    expect(dispatchRoutes([dispatch(1)], matrix)[0]!.drift).toEqual([]);
+  });
+});

@@ -2,10 +2,10 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import type { LiveSnapshot, TodoGroup } from '../orchestra-types';
 import { liveWorkers } from '../data/live';
-import { isPlanItem } from '../data/todos';
+import { isPlanItem, ownTodos } from '../data/todos';
 import { TONE_HEX as T } from '../mission-layout';
 import { fitRuns, rowOf, type Segment } from '../runs';
-import { fitText, spin, textWidth } from '../theme';
+import { DONE_GLYPH, fitText, spin, textWidth } from '../theme';
 import { scrub } from './chrome';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 
@@ -20,7 +20,7 @@ const railIndex = (phases: string[], phase: string): number => (phase === 'done'
 /** One row per phase: `✓ research`, `⠋ implement 1/3` (accent, bold, with its done count), `○ verify`.
  * The spinner turns only while a tick is supplied; static `⠋` otherwise. */
 function phaseRuns(phase: string, i: number, cur: number, count: string, tick?: number): Segment[] {
-  if (i < cur) return [{ t: '✓', color: T.ok }, { t: ` ${phase}`, color: T.muted }];
+  if (i < cur) return [{ t: DONE_GLYPH, color: T.ok }, { t: ` ${phase}`, color: T.muted }];
   if (i > cur) return [{ t: '○', color: T.muted }, { t: ` ${phase}`, color: T.muted }];
   return [{ t: tick === undefined ? '⠋' : spin(tick), color: T.accent, bold: true }, { t: ` ${phase}`, color: T.accent, bold: true }, { t: count, color: T.muted }];
 }
@@ -42,7 +42,7 @@ const blockedReason = (s: LiveSnapshot, owner: string | null): string | null => 
 
 function itemSegments(s: LiveSnapshot, it: Todo, cols: number): Segment[] {
   const reason = it.status === 'completed' ? null : blockedReason(s, it.owner);
-  const mark = it.status === 'completed' ? { g: '✓', color: T.ok }
+  const mark = it.status === 'completed' ? { g: DONE_GLYPH, color: T.ok }
     : reason !== null ? { g: '⏸', color: T.warn }
     : it.status === 'in_progress' ? { g: '◉', color: T.accent } : { g: '○', color: T.muted };
   const owner = it.owner ? ` · ${fitText(scrub(it.owner), 12)}` : '';
@@ -76,8 +76,9 @@ const nested = (segs: Segment[]): Segment[] => [{ t: INDENT }, ...segs];
 function phaseItems(s: LiveSnapshot, group: TodoGroup | undefined): Todo[] {
   const own = group?.items ?? [];
   const held = new Set(s.todoGroups.flatMap((g) => g.items.map((it) => it.id)));
-  const loose = s.todos.filter((t) => !held.has(t.id) && (!t.phase || !s.contract.todoPhases.includes(t.phase)));
-  const planned = s.todos.some(isPlanItem);
+  const mine = ownTodos(s.todos, s.sessionId);
+  const loose = mine.filter((t) => !held.has(t.id) && (!t.phase || !s.contract.todoPhases.includes(t.phase)));
+  const planned = mine.some(isPlanItem);
   const extra = loose.filter((t) => planned ? isPlanItem(t) : true).map((t): Todo => ({ id: t.id, content: t.content, status: t.status, owner: t.owner ?? null, evidence: t.evidence ?? null, live: true }));
   return [...own, ...extra];
 }

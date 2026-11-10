@@ -70,7 +70,7 @@ DENY_THRESHOLD = 6
 # versions; only a deny makes it true.
 REQUIRED_SPEC_BLOCKS = (
     ("GOAL:",),
-    ("DELIVERABLE:", "DELIVERABLES:"),
+    ("DELIVERABLE:", "DELIVERABLES:", "DELIVERABLE(S):"),
     ("SUCCESS CRITERIA:", "SUCCESS CRITERION:"),
     ("OUT OF SCOPE:",),
     ("STOP CONDITIONS:", "STOP CONDITION:"),
@@ -284,7 +284,9 @@ _LABEL_SUFFIX = r"[ \t]*[*_]*[ \t]*:[*_]*"
 # not truncate it. The START label stays clause-anchored above.
 from atlas_lazyre import lre  # noqa: E402
 _NEXT_LABEL_LINE_RE = lre(
-    r"(?m)^[ \t]*(?:[>#*_-]+[ \t]*)*" + r"[A-Z][A-Z &/-]{2,}" + _LABEL_SUFFIX
+    r"(?m)^[ \t]*(?:[>#*_-]+[ \t]*)*"
+    + r"[A-Z][A-Z &/-]{2,}(?:\(S\))?"  # (S): CLAUDE.md spells DELIVERABLE(S):
+    + _LABEL_SUFFIX
 )
 
 
@@ -524,6 +526,22 @@ CREW_RUN_CMD = (
 )
 
 
+# D11: roles whose agent definition disallows Write/Edit (agents/explorer.md, agents/db-prober.md). They
+# are "working" for the delegation mandate (completion_gate_core counts them as delegated work) but not for
+# the team deny: the deny exists so editing subagents run as a tmux team with isolated files, and a
+# read-only role cannot edit, cannot conflict with a teammate, and is the cheapest lookup there is. Denying
+# a lone `SCOPE: audit/*` explorer forced a tmux team for a grep. verifier is already in CLOSING_ROLES.
+READ_ONLY_ROLES = frozenset({"explorer", "db-prober"})
+
+
+def _is_read_only_role(subagent_type):
+    agent = str(subagent_type or "")
+    for prefix in ("atlas:", "atlas-"):
+        if agent.startswith(prefix):
+            return agent[len(prefix) :] in READ_ONLY_ROLES
+    return False
+
+
 def _is_working_role(subagent_type):
     """True for an atlas: (or atlas-) role that is not a closing role."""
     agent = str(subagent_type or "")
@@ -588,11 +606,13 @@ def _team_note(root, session, tinput, run_key):
     """(deny, text) for a working-role atlas: dispatch. With tmux on PATH every in-process working dispatch is
     denied (the first one and a one-seat scope too): working subagents run as a tmux team or crew. Without tmux,
     under omp or with ATLAS_TEAM_GATE=off the 2nd in-process working dispatch of a run whose resolved team has
-    2+ working seats gets an advisory. Closing roles are never counted or denied. Fail-open."""
+    2+ working seats gets an advisory. Closing roles and read-only roles (READ_ONLY_ROLES) are never counted or denied. Fail-open."""
     import shutil
 
     if not run_key or not _is_working_role(tinput.get("subagent_type")):
         return False, ""
+    if _is_read_only_role(tinput.get("subagent_type")):
+        return False, ""  # D11: neither denied nor counted toward the advisory
     off = os.environ.get("ATLAS_TEAM_GATE", "on").strip().lower() == "off"
     omp = _omp_harness()
     tmux = bool(shutil.which("tmux"))
@@ -1725,7 +1745,8 @@ def _pre_tool_use(
                     "spec",
                     "DENY - this {} dispatch to {} is unbounded: missing {}. Each block "
                     "is a line-start `LABEL: text` (labels in a shared batch context "
-                    "count for every task). Add exactly:\n{}\nThen re-dispatch.".format(
+                    "count for every task; DELIVERABLE:, DELIVERABLES: and "
+                    "DELIVERABLE(S): are all accepted). Add exactly:\n{}\nThen re-dispatch.".format(
                         tool,
                         unbounded[0],
                         ", ".join(unbounded[1]),

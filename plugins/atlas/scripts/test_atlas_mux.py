@@ -212,6 +212,17 @@ def _pairs(argv):
     return [list(pair) for pair in zip(argv, argv[1:], strict=False)]
 
 
+def installed_atlas_config(parent):
+    """A CLAUDE_CONFIG_DIR whose installed_plugins.json lists atlas, so worker_plugin_dir() is None and the
+    argv under test stays free of the --plugin-dir a bare host (no atlas install) gets. Returns the dir."""
+    cfg = pathlib.Path(parent) / "claude-config"
+    (cfg / "plugins").mkdir(parents=True, exist_ok=True)
+    (cfg / "plugins" / "installed_plugins.json").write_text(
+        json.dumps({"version": 2, "plugins": {"atlas@tech-tools": [{"scope": "user"}]}})
+    )
+    return str(cfg)
+
+
 # claude-bg --settings payload: cross-session inbound accept plus the two allow rules the
 # brief's mandatory actions need (the atlas_todo board-note Bash call, claude-mem MCP search)
 # and the MCP navigation list every claude worker gets (worker_allow with no tools_profile)
@@ -262,6 +273,10 @@ class Base(unittest.TestCase):
             if k not in ("ATLAS_CHANNEL", "ATLAS_LEAD_NAME", "ATLAS_WORKER_NAME")
         }
         self.env["PATH"] = self.bin_dir + os.pathsep + self.env["PATH"]
+        self.env["CLAUDE_CONFIG_DIR"] = installed_atlas_config(self.root)
+        env_patch = mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": self.env["CLAUDE_CONFIG_DIR"]})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
         self.env["FAKE_TMUX_STATE"] = self.state
         self.env["FAKE_HARNESS_LOG"] = os.path.join(self.state, "log")
         self.env["ATLAS_WORKER_FORWARD_ENV"] = ",".join(
@@ -492,7 +507,7 @@ class SpawnClaudeTests(Base):
                 "--disallowedTools",
                 "Agent,Task",
                 "--allowedTools",
-                ",".join(atlas_mux.WORKER_MCP_ALLOW),
+                ",".join(atlas_mux.worker_allow(None)),
                 "--permission-mode",
                 "acceptEdits",
                 "colonize the pane",
@@ -2186,7 +2201,10 @@ class ClaudeBgTests(Base):
     def test_spawn_claude_bg_settings_carry_tools_profile_allow_rules(self):
         """A claude-bg worker gets the same tools_profile-scoped allow rules as a pane worker
         (worker_allow), so dontAsk does not auto-deny its verification commands."""
+        import atlas_mux
+
         base = ["Bash(python3 *atlas_todo.py*)", "mcp__claude_mem_mcp_search"]
+        note_rule = f"Bash(python3 {atlas_mux._todo_script()} note *)"
         allow = self._bg_allow("--tools-profile", "exec")
         for rule in base + ["Bash(pytest *)", "Read", "mcp__lean-ctx__*"]:
             self.assertIn(rule, allow)
@@ -2195,7 +2213,7 @@ class ClaudeBgTests(Base):
         allow = self._bg_allow()
         for rule in base + ["mcp__lean-ctx__*"]:
             self.assertIn(rule, allow)
-        self.assertFalse([r for r in allow if r.startswith("Bash(") and r not in base], allow)
+        self.assertFalse([r for r in allow if r.startswith("Bash(") and r not in base + [note_rule]], allow)
         self.assertNotIn("Read", allow)
         # the navigation list names only installed servers: no symbol-tool rules for an uninstalled MCP server
         self.assertFalse([r for r in allow if "symbol" in r.lower()], allow)
@@ -3883,7 +3901,10 @@ class WorkerToolsProfileAllowTests(unittest.TestCase):
         allow = self.allow("read")
         for tool in ("mcp__lean-ctx__*", "Read", "Grep", "Glob"):
             self.assertIn(tool, allow)
-        self.assertFalse([t for t in allow if t.startswith("Bash")], allow)
+        import atlas_mux
+
+        # the only Bash rule a read worker gets is the board-note command (D2)
+        self.assertEqual([f"Bash(python3 {atlas_mux._todo_script()} note *)"], [t for t in allow if t.startswith("Bash")], allow)
         for tool in ("Edit", "Write", "MultiEdit"):
             self.assertNotIn(tool, allow)
 
@@ -3931,7 +3952,9 @@ class WorkerToolsProfileAllowTests(unittest.TestCase):
     def test_unset_profile_keeps_the_mcp_navigation_list_only(self):
         import atlas_mux
 
-        self.assertEqual(list(atlas_mux.WORKER_MCP_ALLOW), self.allow(None))
+        self.assertEqual(
+            [*atlas_mux.WORKER_MCP_ALLOW, f"Bash(python3 {atlas_mux._todo_script()} note *)"], self.allow(None)
+        )
 
     def test_run_worker_and_spawn_accept_a_tools_profile_flag(self):
         import atlas_mux
@@ -4257,7 +4280,7 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
     def test_wait_nonzero_exit_records_failed(self):
         self._enable()
         wcode, got = self._wait(lambda n: 1 if n.startswith("verifier") else 0)
-        self.assertEqual(0, wcode, got)  # ok means "every member reported"; the exit code decides the outcome
+        self.assertEqual(1, wcode, got)  # D3: a member that exited 1 makes the wait fail (ok:false, outcome failed)
         self.assertEqual(["team.outcome.failed", "team.wall.lt1m"], self._wait_keys())
 
     def test_wait_that_times_out_records_timeout(self):
@@ -4388,3 +4411,88 @@ class BriefOutputTests(unittest.TestCase):
         self.assertIsNone(atlas_mux._brief_for(argparse.Namespace(), atlas_mux._brief_wait))
         self.assertIs(atlas_mux._brief_wait, atlas_mux._brief_for(atlas_mux._parser().parse_args(["wait", "--team", "t"]), atlas_mux._brief_wait))
         self.assertIsNone(atlas_mux._brief_for(atlas_mux._parser().parse_args(["reap", "--team", "t", "--json"]), atlas_mux._brief_reap))
+
+
+class ReliabilityBaselineTests(unittest.TestCase):
+    """Atlas 17.5.0 reliability baseline: D2 worker note permission, D3 wait outcome, D4 plugin load."""
+
+    def test_d2_every_profile_may_run_the_board_note_command_and_nothing_wider(self):
+        """The worker protocol tells the worker to run `python3 <atlas_todo.py> note ...`. A read-profile worker had
+        no python3 rule, so claude -p denied it ("This command requires approval") and the note was never posted."""
+        import atlas_mux
+
+        rule = f"Bash(python3 {atlas_mux._todo_script()} note *)"
+        for profile in (None, "read", "edit", "exec"):
+            self.assertIn(rule, atlas_mux.worker_allow(profile), profile)
+        read = atlas_mux.worker_allow("read")
+        self.assertFalse([r for r in read if r.startswith("Bash(") and r != rule], read)
+
+    def _wait(self, notes):
+        import atlas_mux
+
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}], "created": time.time(), "transport": "tmux"}
+        buf = io.StringIO()
+        with mock.patch.object(atlas_mux, "_load_team", return_value=rec), \
+                mock.patch.object(atlas_mux, "_team_panes", return_value=[]), \
+                mock.patch.object(atlas_mux, "_exited", return_value=True), \
+                mock.patch.object(atlas_mux.atlas_todo, "notes", return_value=notes), \
+                contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["wait", "--json", "--team", "kw", "--root", tempfile.mkdtemp(), "--timeout", "1", "--poll", "0.01"])
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def test_d3_wait_is_not_ok_when_a_member_exited_nonzero(self):
+        now = time.time()
+        code, out = self._wait([{"owner": "a", "ts": now, "text": "STATUS: FAILED\nexit 1 [failed: agent not found]"}])
+        self.assertFalse(out["ok"])
+        self.assertEqual("failed", out["outcome"])
+        self.assertEqual(1, code)
+        self.assertEqual("agent not found", out["members"][0]["failure"])
+
+    def test_d3_wait_is_ok_when_every_member_exited_zero(self):
+        code, out = self._wait([{"owner": "a", "ts": time.time(), "text": "STATUS: DONE\nexit 0"}])
+        self.assertTrue(out["ok"])
+        self.assertEqual("done", out["outcome"])
+        self.assertEqual(0, code)
+
+    def test_d4_claude_worker_gets_plugin_dir_only_when_given(self):
+        import atlas_mux
+
+        argv = atlas_mux.harness_argv("claude", "explorer", "p", None, None, "", "acceptEdits", plugin_dir="/x/atlas")
+        i = argv.index("--plugin-dir")
+        self.assertEqual("/x/atlas", argv[i + 1])
+        self.assertLess(i, argv.index("--agent"))
+        self.assertNotIn("--plugin-dir", atlas_mux.harness_argv("claude", "explorer", "p", None, None, "", "acceptEdits"))
+
+    def test_d4_plugin_dir_is_needed_only_when_atlas_is_not_installed(self):
+        import atlas_mux
+
+        with tempfile.TemporaryDirectory() as cfg, mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": cfg}):
+            pathlib.Path(cfg, "plugins").mkdir()
+            inst = pathlib.Path(cfg, "plugins", "installed_plugins.json")
+            inst.write_text(json.dumps({"version": 2, "plugins": {}}))
+            got = atlas_mux.worker_plugin_dir()
+            self.assertTrue(got and (pathlib.Path(got) / ".claude-plugin" / "plugin.json").is_file(), got)
+            inst.write_text(json.dumps({"version": 2, "plugins": {"atlas@tech-tools": [{"scope": "user"}]}}))
+            self.assertIsNone(atlas_mux.worker_plugin_dir())
+
+    def test_d4_spawn_team_fails_up_front_when_the_worker_cannot_load_the_agent(self):
+        import atlas_mux
+
+        buf = io.StringIO()
+        with tempfile.TemporaryDirectory() as bare, mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": bare, "CLAUDE_PLUGIN_ROOT": bare}), \
+                contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "audit", "--effort", "low", "--task", "t",
+                                   "--team-id", "tnoplug", "--root", tempfile.mkdtemp()])
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertNotEqual(0, code)
+        self.assertFalse(out["ok"])
+        self.assertIn("atlas:", out["error"])
+        self.assertIn("--plugin-dir", out["error"])
+
+    def test_d4_agent_not_found_output_is_classified_with_a_clear_reason(self):
+        import atlas_mux
+
+        code, reason = atlas_mux._classify("error: --agent 'atlas:explorer' not found", 1)
+        self.assertEqual(1, code)
+        self.assertIn("atlas:explorer", reason)
+        self.assertIn("plugin", reason)

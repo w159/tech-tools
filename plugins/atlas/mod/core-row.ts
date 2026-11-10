@@ -34,6 +34,13 @@ function contract(m: CoreModel, full: boolean): Cell[] {
  * count and the zero tallies. */
 function verdict(m: CoreModel, full: boolean): Cell[] {
   const l = m.ledger;
+  if (!m.verdicts.length && l.verified + l.refuted + l.pending === 0) { // an empty ledger says so; it never reads 0 verified · 0 refuted
+    return [label("verdicts"), ...joinSep([
+      ...(full ? [c(`${l.claimed} claim${l.claimed === 1 ? "" : "s"}`, "muted")] : []),
+      c("no verdicts yet", "muted"),
+      ...(l.unchecked ? [c(`${l.unchecked} unchecked`, "warn")] : []),
+    ])];
+  }
   const parts = [
     ...(full ? [c(`${l.claimed} claim${l.claimed === 1 ? "" : "s"}`, "muted")] : []),
     c(`${l.verified} verified`, l.verified ? "ok" : "muted"),
@@ -117,7 +124,7 @@ export function coreReport(m: CoreModel | null): string {
     `  verified  ${tally(v.ok, v.total)} done items have a verified finding`,
     `  gates     ${openGates ? `${openGates} open` : "all clear"}`,
     "",
-    `VERDICTS  ${findings} finding${findings === 1 ? "" : "s"}: ${l.verified} verified, ${l.refuted} refuted, ${l.pending} open${unlabeled ? ` (${unlabeled} unlabeled)` : ""}  |  ${l.claimed} claim${l.claimed === 1 ? "" : "s"} this run, ${l.unchecked} unchecked`,
+    `VERDICTS  ${!m.verdicts.length && findings === 0 ? "no verdicts yet" : `${findings} finding${findings === 1 ? "" : "s"}: ${l.verified} verified, ${l.refuted} refuted, ${l.pending} open`}${unlabeled ? ` (${unlabeled} unlabeled)` : ""}  |  ${l.claimed} claim${l.claimed === 1 ? "" : "s"} this run, ${l.unchecked} unchecked`,
   ];
   // attention first (refuted, open), then verified; newest first within each (file order is append order)
   const newest = m.verdicts.filter((x) => x.id || x.title).reverse();
@@ -145,7 +152,8 @@ export function coreReport(m: CoreModel | null): string {
     out.push(`  ${r.cls}/${r.effort}  ${r.name || r.teamId}  ${r.isolation}, max ${r.maxParallel}`);
     for (const s of r.seats) {
       const ran = [...new Set(s.ran)];
-      out.push(`    ${s.count}x ${s.role} ${s.model}/${s.effort}  ${ran.length ? `ran ${ran.join(", ")}` : "not run yet"}`);
+      const ranText = !s.ran.length ? "not run yet" : s.ran.length > s.count ? `ran ${s.ran.length} / planned ${s.count} (${ran.join(", ")})` : `ran ${ran.join(", ")}`;
+      out.push(`    ${s.count}x ${s.role} ${s.model}/${s.effort}  ${ranText}`);
     }
     for (const d of r.drift) out.push(`    DRIFT ${d}`);
   }

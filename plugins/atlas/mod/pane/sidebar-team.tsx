@@ -5,7 +5,7 @@ import type { SquadAgent } from '../contract';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { fitRuns, rowOf, type Segment } from '../runs';
 import { isMessageKind, type Tone, TONE_HEX as T } from '../mission-layout';
-import { fitText, spin, textWidth } from '../theme';
+import { DONE_GLYPH, fitText, spin, textWidth } from '../theme';
 import { liveWorkers, type LiveWorker } from '../data/live';
 import { scrub } from './chrome';
 import { pad, type SidebarHandlers, type SidebarModel } from './sidebar-types';
@@ -86,7 +86,7 @@ type Look = { mark: string; tone: Tone; text: string; spinning: boolean };
 function lookOf(w: LiveWorker, starting: boolean): Look {
   if (w.state === 'failed') return { mark: '✗', tone: 'bad', text: 'failed', spinning: false };
   if (w.state === 'blocked') return { mark: '⏸', tone: 'warn', text: 'waiting for lead reply', spinning: false };
-  if (w.state === 'done') return { mark: '✓', tone: 'ok', text: 'finished', spinning: false };
+  if (w.state === 'done') return { mark: DONE_GLYPH, tone: 'ok', text: 'finished', spinning: false };
   if (w.state === 'parked') return { mark: '·', tone: 'muted', text: 'parked', spinning: false };
   if (w.tool) return { mark: '', tone: 'accent', text: scrub(w.target ? `${w.tool} ${w.target}` : w.tool).replace(/\s+/g, ' '), spinning: true };
   if (starting && !w.lastTool) return { mark: '◌', tone: 'muted', text: 'starting', spinning: false };

@@ -158,9 +158,14 @@ WORKER_EDIT_ALLOW = ("Edit", "Write", "MultiEdit")
 
 
 def worker_allow(tools_profile=None) -> tuple:
-    """--allowedTools entries for a claude worker: MCP navigation always; read tools, run commands and edit tools
-    widen with the member's tools_profile. An unknown or unset profile keeps the MCP navigation list only."""
-    allow = WORKER_MCP_ALLOW
+    """--allowedTools entries for a claude worker: MCP navigation and the board-note command always; read tools,
+    run commands and edit tools widen with the member's tools_profile. An unknown or unset profile keeps only
+    those two.
+
+    The note rule is the narrowest that covers the worker protocol line (`python3 <atlas_todo.py> note ...`):
+    one script path, one subcommand. Without it a read-profile worker had no python3 rule, `claude -p` denied the
+    protocol note ("This command requires approval") and the worker never posted to the board."""
+    allow = WORKER_MCP_ALLOW + (f"Bash(python3 {_todo_script()} note *)",)
     if tools_profile in ("read", "edit", "exec"):
         allow += WORKER_READ_ALLOW
     if tools_profile in ("edit", "exec"):
@@ -175,9 +180,14 @@ NOISE_RE = re.compile(
     r"^(Warning: MCP server .* its tools are unavailable|Extension error\b)"
 )
 # the LAST `exit N` line of a report note, wherever it sits (a bare `exit N` note is the one-line case)
+_EXIT_REASON_RE = re.compile(r"\[failed: ([^\]\n]*)\]")
 EXIT_NOTE_RE = re.compile(r"^exit (-?\d+)[^\n]*$(?![\s\S]*^exit -?\d)", re.M)
 # omp -p exits 0 on these, so run-worker classifies by output. First match wins.
 FAIL_SIGNS = (
+    (
+        re.compile(r"--agent '(atlas:[\w-]+)' not found"),
+        "agent {agent} not found: the atlas plugin is not loaded in the worker (install atlas or pass --plugin-dir)",
+    ),
     (re.compile(r"\bmodel\b[^\n]{0,60}\bnot found\b", re.I), "model not found"),
     (re.compile(r"(?<!\d)402(?!\d)"), "http 402"),
     (
@@ -241,12 +251,12 @@ def _brief_spawn_team(out: dict) -> str:
 def _brief_wait(out: dict) -> str:
     rows = out["members"]
     done = sum(1 for m in rows if m["exit"] is not None)
-    lines = [f"team {out['team_id']}: {done}/{len(rows)} finished after {out['elapsed_s']}s" + ("" if out["ok"] else ", NOT finished")]
+    lines = [f"team {out['team_id']}: {done}/{len(rows)} finished after {out['elapsed_s']}s" + ("" if out["ok"] else (", FAILED" if out.get("outcome") == "failed" else ", NOT finished"))]
     for m in rows:
         if m.get("never_launched"):
             state = f"never launched: {m.get('launch_error')}"
         elif m["exit"] is not None:
-            state = f"exit {m['exit']} {m['duration_s']}s"
+            state = f"exit {m['exit']} {m['duration_s']}s" + (f" ({m['failure']})" if m.get("failure") else "")
         else:
             state = "dead without report" if m["dead_without_report"] else "running"
         lines.append(f"  {m['name']} {state}" + (f" {m['last_status']}" if m.get("last_status") else ""))
@@ -691,6 +701,34 @@ def _codex_body(body: str) -> str:
     )
 
 
+class PluginNotLoadable(RuntimeError):
+    """A claude worker would start `--agent atlas:<role>` with no atlas plugin to resolve it."""
+
+
+def _installed_plugin_names() -> set:
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+    try:
+        data = json.loads(Path(cfg, "plugins", "installed_plugins.json").read_text(encoding="utf-8"))
+        return set((data.get("plugins") or {}).keys())
+    except (OSError, ValueError, AttributeError):
+        return set()
+
+
+def worker_plugin_dir() -> str | None:
+    """Directory to pass a claude worker as --plugin-dir, or None when atlas is installed (the worker loads the
+    install). Raises PluginNotLoadable when atlas is neither installed nor reachable as a plugin tree: the worker
+    would exit 1 with "--agent 'atlas:<role>' not found" while spawn-team reported ok (baseline D4)."""
+    if any(n.split("@", 1)[0] == "atlas" for n in _installed_plugin_names()):
+        return None
+    root = Path(os.environ.get("CLAUDE_PLUGIN_ROOT") or Path(__file__).resolve().parent.parent)
+    if (root / ".claude-plugin" / "plugin.json").is_file():
+        return str(root)
+    raise PluginNotLoadable(
+        "claude workers cannot load atlas:<role>: atlas is not in installed_plugins.json and no plugin tree was "
+        f"found at {root}. Install the atlas plugin, or run from the plugin tree so spawn passes --plugin-dir."
+    )
+
+
 def harness_argv(
     harness: str,
     role: str,
@@ -702,6 +740,7 @@ def harness_argv(
     omp_extension: str | None = None,
     cwd: str | None = None,
     tools_profile: str | None = None,
+    plugin_dir: str | None = None,
 ) -> list:
     if harness == "codex":
         # exec --json: one JSON event per line (atlas_panefeed renders them).
@@ -735,9 +774,10 @@ def harness_argv(
             "--output-format",
             "stream-json",
             "--verbose",
-            "--agent",
-            f"atlas:{role}",
         ]
+        if plugin_dir:
+            argv += ["--plugin-dir", plugin_dir]
+        argv += ["--agent", f"atlas:{role}"]
         if model:
             argv += ["--model", model]
         if level:
@@ -1224,6 +1264,7 @@ def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> 
         args.name,
         "--agent",
         f"atlas:{args.agent}",
+        *(["--plugin-dir", pd] if (pd := _claude_plugin_dir("claude")) else []),
         # accept cross-session inbound: the lead's SendMessage must not be parked on a
         # permission-class mismatch (the interactive lead runs the accepting side); the
         # allow rules cover the brief's two mandatory actions (board-note Bash call,
@@ -1435,11 +1476,23 @@ def _spawn_registered(args, root: str, chan) -> int:
 def _classify(output: str, code: int) -> tuple[int, str | None]:
     """(recorded exit code, failure reason). Output evidence beats a zero exit."""
     for pattern, reason in FAIL_SIGNS:
-        if pattern.search(output):
-            return 1, reason
+        m = pattern.search(output)
+        if m:
+            return 1, reason.format(agent=m.group(1) if m.groups() else "")
     if code != 0:
         return code, "nonzero exit"
     return 0, None
+
+
+def _claude_plugin_dir(harness: str) -> str | None:
+    """--plugin-dir for a claude worker; None for other harnesses, an installed atlas, or an unreachable tree
+    (spawn already refused that case up front, a direct run-worker just runs and fails with the classified reason)."""
+    if harness != "claude":
+        return None
+    try:
+        return worker_plugin_dir()
+    except PluginNotLoadable:
+        return None
 
 
 def cmd_run_worker(args) -> int:
@@ -1469,6 +1522,7 @@ def cmd_run_worker(args) -> int:
             args.omp_extension,
             os.path.abspath(args.cwd or root),
             getattr(args, "tools_profile", None),
+            _claude_plugin_dir(args.harness),
         )
     env = dict(worker_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
     channel = (os.environ.get("ATLAS_CHANNEL") or "").strip()
@@ -2392,6 +2446,13 @@ def cmd_spawn_team(args) -> int:
     rec["worktrees"] = worktree_plan(rec, root)
     if args.dry_run:
         return _emit({"ok": True, "dry_run": True, "team": rec}, brief=_brief_for(args, _brief_spawn_team))
+    if getattr(args, "harness", "claude") == "claude" and not (
+        getattr(args, "command_override", None) or os.environ.get("ATLAS_MUX_WORKER_CMD")
+    ):
+        try:
+            worker_plugin_dir()
+        except PluginNotLoadable as exc:
+            return _emit({"ok": False, "error": str(exc)}, 1)
     path = _team_dir(root) / f"{rec['team_id']}.json"
     if path.exists():
         return _emit(
@@ -2562,20 +2623,26 @@ def cmd_wait(args) -> int:
                 if found
                 else None,
                 "last_status": status,
+                **({"failure": why.group(1)} if found and (why := _EXIT_REASON_RE.search(found.group(0))) else {}),
             }
         )
     finished = all(m["exit"] is not None for m in members)
+    outcome = _wait_outcome(members, finished, timed_out)
     _record_wait(rec, members, finished, timed_out)
+    # ok means the team succeeded, not merely that every member reported: a member that exited 1 used to
+    # read ok:true (baseline D3). `outcome` is done | failed | timeout, the same value the analytics record.
+    ok = outcome == "done"
     return _emit(
         {
-            "ok": finished,
+            "ok": ok,
+            "outcome": outcome,
             "team_id": rec["team_id"],
             "members": members,
             "notes_worker_to_worker": w2w,
             "elapsed_s": round(time.time() - t0, 1),
             **({"killed_on_timeout": True} if killed_on_timeout else {}),
         },
-        0 if finished else 1,
+        0 if ok else 1,
         _brief_for(args, _brief_wait),
     )
 

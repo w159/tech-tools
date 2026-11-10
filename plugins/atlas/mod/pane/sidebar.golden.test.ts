@@ -59,7 +59,8 @@ describe('sidebar golden text: team, channel and gates in plain words', () => {
       'route  team  channel  gates 2 failing',
       'gates  what the Stop gate will check',
       '✗ Completion gate  1 failing  run the hooks suite',
-      '✗ Header contract  1 failing  unavailable: findings.json u…',
+      '✗ Header contract  1 failing',
+      '     unavailable: findings.json unreadable',
       '✓ Tool routing  passing',
     ]);
   });

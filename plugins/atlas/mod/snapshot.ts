@@ -146,14 +146,14 @@ export class SnapshotBuilder {
       ...crew.notes,
     ];
     const { panes } = parseHerdrStatus(live.herdrStdout ?? '');
-    const phase = currentPhase(read.items, live.headerPhase);
+    const phase = currentPhase(read.items, live.headerPhase, this.sessionId);
     const squad = mergeSquad(this.members, notes, panes, [...crew.agents, ...live.taskAgents, ...(live.mux ?? [])], live.now);
     return {
       ...orchestrate(notes, squad),
       ...passthrough,
       channel: this.channel,
       todos: read.items,
-      counts: computeCounts(read.items, this.contract),
+      counts: computeCounts(read.items, this.contract, this.sessionId),
       phase: phase.phase,
       phaseSource: phase.source,
       notes,
