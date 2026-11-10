@@ -102,7 +102,7 @@ npm run build
 ```
 
 An earlier review of this connector is kept at
-`docs/audits/2026-06-12-kaseya-spanning-backup-mcp-audit.md`.
+`docs/audits/2026-06-12_kaseya-spanning-backup-mcp-audit.md`.
 
 ## License
 

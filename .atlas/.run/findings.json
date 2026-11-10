@@ -11165,5 +11165,39 @@
     "status": "verified",
     "verified_at": "2026-11-10T12:18:39+00:00",
     "verified_by": "atlas:verifier (verifier-4fca, verifier-be89, verifier-f264)"
+  },
+  {
+    "id": "t3b3366-A",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "13 docs renamed, no live old-name refs, lint+contract tests pass",
+    "evidence": [
+      "lint_docs_names.py --all OK 682; 104+109 tests OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "lint_docs_names.py --all; unittest test_lint_docs*, test_atlas_contract",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T14:01:46+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "t3b3366-B",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "serena removed from osprey assets CLAUDE/rules/reference",
+    "evidence": [
+      "grep -rli serena empty; assets/CLAUDE.md, rules/mcp-tools.md, reference/mcp-tools-detail.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -rli serena CLAUDE.md AGENTS.md rules reference",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T14:01:46+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

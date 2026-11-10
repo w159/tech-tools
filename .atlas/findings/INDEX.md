@@ -69,6 +69,8 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-10 | v7480-mktdesc | rejected | marketplace atlas description differs from plugin.json (contract test fails) | [2026-11-10_v7480-mktdesc.md](2026-11-10_v7480-mktdesc.md) |
 | 2026-11-10 | v7480-crewts | rejected | crew.ts reports dead port28 gw-docs as running (pid file, no exit) | [2026-11-10_v7480-crewts.md](2026-11-10_v7480-crewts.md) |
 | 2026-11-10 | tf178d2-regressions | verified | 17.5.0 regression fixes: hooks 2822 OK, scripts only HEAD-known failures, bun 0 fail | [2026-11-10_tf178d2-regressions.md](2026-11-10_tf178d2-regressions.md) |
+| 2026-11-10 | t3b3366-B | verified | serena removed from osprey assets CLAUDE/rules/reference | [2026-11-10_t3b3366-b.md](2026-11-10_t3b3366-b.md) |
+| 2026-11-10 | t3b3366-A | verified | 13 docs renamed, no live old-name refs, lint+contract tests pass | [2026-11-10_t3b3366-a.md](2026-11-10_t3b3366-a.md) |
 | 2026-11-10 | sec3-completion-gate | rejected | Plan s3 completion gate: crew attribution crosses sessions | [2026-11-10_sec3-completion-gate.md](2026-11-10_sec3-completion-gate.md) |
 | 2026-11-10 | reverify-team-note | verified | _team_note deny 577 B names ways out; ATLAS_TEAM_GATE=off allows with advisory | [2026-11-10_reverify-team-note.md](2026-11-10_reverify-team-note.md) |
 | 2026-11-10 | reverify-optimizer-clear | verified | non-arming prompt clears stored scope | [2026-11-10_reverify-optimizer-clear.md](2026-11-10_reverify-optimizer-clear.md) |
